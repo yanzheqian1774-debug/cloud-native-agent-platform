@@ -57,3 +57,30 @@ cloud-native-agent-platform/
 ├── scripts/
 ├── tests/
 └── .github/
+
+## Local Development
+
+### Prerequisites
+
+- Python 3.12
+- uv
+- Git
+
+### Setup
+
+```bash
+make setup
+
+
+
+
+
+
+
+
+
+
+
+
+
+
