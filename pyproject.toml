@@ -1,0 +1,82 @@
+[project]
+name = "cloud-native-agent-platform"
+version = "0.1.0"
+description = "A Kubernetes-native, model-agnostic multi-agent platform."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Cloud Native Agent Platform Contributors" }
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0",
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.11",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "RUF",
+]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "gateway",
+    "operator",
+    "runtime",
+    "workflow",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "tests",
+    "gateway/tests",
+    "operator/tests",
+    "runtime/tests",
+    "workflow/tests",
+]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--showlocals",
+]
+markers = [
+    "unit: fast tests without external services",
+    "integration: tests involving multiple components",
+    "e2e: end-to-end tests requiring deployed infrastructure",
+]

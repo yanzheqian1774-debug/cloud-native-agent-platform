@@ -1,20 +1,57 @@
-.PHONY: help tree status lint test
+.DEFAULT_GOAL := help
+
+.PHONY: help setup sync lock format format-check lint test check clean tree status
 
 help:
+	@echo "Cloud Native Multi-Agent Platform"
+	@echo ""
 	@echo "Available commands:"
-	@echo "  make tree    Show project structure"
-	@echo "  make status  Show git status"
-	@echo "  make lint    Run lint checks"
-	@echo "  make test    Run tests"
+	@echo "  make setup         Install dependencies and Git hooks"
+	@echo "  make sync          Sync dependencies from uv.lock"
+	@echo "  make lock          Update the dependency lockfile"
+	@echo "  make format        Format Python code"
+	@echo "  make format-check  Verify Python formatting"
+	@echo "  make lint          Run Ruff lint checks"
+	@echo "  make test          Run pytest"
+	@echo "  make check         Run all local quality checks"
+	@echo "  make clean         Remove local Python caches"
+	@echo "  make tree          Show project structure"
+	@echo "  make status        Show Git status"
+
+setup:
+	uv sync
+	uv run pre-commit install
+
+sync:
+	uv sync --frozen
+
+lock:
+	uv lock
+
+format:
+	uv run ruff check . --fix
+	uv run ruff format .
+
+format-check:
+	uv run ruff format --check .
+
+lint:
+	uv run ruff check .
+
+test:
+	uv run pytest
+
+check: lint format-check test
+	@echo "All local quality checks passed."
+
+clean:
+	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+	find . -type d -name ".pytest_cache" -prune -exec rm -rf {} +
+	find . -type d -name ".ruff_cache" -prune -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
 
 tree:
-	tree -L 3
+	tree -a -L 3 -I ".git|.venv|__pycache__|.pytest_cache|.ruff_cache"
 
 status:
 	git status
-
-lint:
-	@echo "Lint tools will be configured in a later sprint."
-
-test:
-	@echo "Tests will be configured in a later sprint."
