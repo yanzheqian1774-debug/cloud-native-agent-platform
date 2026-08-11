@@ -1,0 +1,25 @@
+apiVersion: agentos.io/v1alpha1
+kind: Agent
+metadata:
+  name: researcher
+  namespace: agent-workloads
+  labels:
+    app.kubernetes.io/name: researcher
+    app.kubernetes.io/part-of: enterprise-agent-os
+spec:
+  runtime:
+    type: native
+
+  model:
+    provider: mock
+    name: mock-model
+
+  capabilities:
+    - web-search
+    - file-read
+
+  replicas: 1
+
+  resources:
+    cpu: "250m"
+    memory: "256Mi"

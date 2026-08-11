@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-system
+  labels:
+    app.kubernetes.io/name: enterprise-agent-os
+    app.kubernetes.io/part-of: enterprise-agent-os
+    agentos.io/plane: control
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent-workloads
+  labels:
+    app.kubernetes.io/name: enterprise-agent-os
+    app.kubernetes.io/part-of: enterprise-agent-os
+    agentos.io/plane: runtime
