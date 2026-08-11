@@ -9,11 +9,14 @@ authors = [
     { name = "Cloud Native Agent Platform Contributors" }
 ]
 dependencies = [
+    "fastapi>=0.141.1",
     "kubernetes>=36.0.3",
+    "uvicorn>=0.52.1",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "kopf>=1.37,<2.0",
     "kubernetes>=30,<40",
     "pre-commit>=4.0",
@@ -64,6 +67,7 @@ docstring-code-format = true
 [tool.pytest.ini_options]
 pythonpath = [
     "operator/src",
+    "runtime/src",
 ]
 minversion = "8.0"
 testpaths = [
