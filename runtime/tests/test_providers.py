@@ -46,10 +46,6 @@ def test_create_openai_compatible_provider(monkeypatch) -> None:
 
 @patch("agent_runtime.providers.openai_compatible.httpx.post")
 def test_openai_compatible_provider_generate(mock_post, monkeypatch) -> None:
-    from agent_runtime.providers.openai_compatible import (
-        OpenAICompatibleModelProvider,
-    )
-
     monkeypatch.setenv("MODEL_BASE_URL", "https://example.com/v1")
     monkeypatch.setenv("MODEL_API_KEY", "test-key")
     monkeypatch.setenv("MODEL_NAME", "test-model")
@@ -74,24 +70,33 @@ def test_openai_compatible_provider_generate(mock_post, monkeypatch) -> None:
     assert result == "real model response"
 
     response.raise_for_status.assert_called_once()
+    mock_post.assert_called_once()
 
-    mock_post.assert_called_once_with(
-        "https://example.com/v1/chat/completions",
-        headers={
-            "Authorization": "Bearer test-key",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": "test-model",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "hello",
-                }
-            ],
-        },
-        timeout=60.0,
-    )
+    call = mock_post.call_args
+
+    assert call.args[0] == "https://example.com/v1/chat/completions"
+
+    assert call.kwargs["headers"] == {
+        "Authorization": "Bearer test-key",
+        "Content-Type": "application/json",
+    }
+
+    assert call.kwargs["json"] == {
+        "model": "test-model",
+        "messages": [
+            {
+                "role": "user",
+                "content": "hello",
+            }
+        ],
+    }
+
+    timeout = call.kwargs["timeout"]
+
+    assert timeout.connect == 10.0
+    assert timeout.read == 300.0
+    assert timeout.write == 30.0
+    assert timeout.pool == 10.0
 
 
 @patch("agent_runtime.providers.openai_compatible.httpx.post")

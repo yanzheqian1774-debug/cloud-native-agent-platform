@@ -35,6 +35,13 @@ class OpenAICompatibleModelProvider(ModelProvider):
             }
         )
 
+        timeout = httpx.Timeout(
+            connect=10.0,
+            read=300.0,
+            write=30.0,
+            pool=10.0,
+        )
+
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={
@@ -45,7 +52,7 @@ class OpenAICompatibleModelProvider(ModelProvider):
                 "model": self.model,
                 "messages": messages,
             },
-            timeout=60.0,
+            timeout=timeout,
         )
 
         response.raise_for_status()
