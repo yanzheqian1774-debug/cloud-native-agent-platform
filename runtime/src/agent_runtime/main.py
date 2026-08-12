@@ -6,6 +6,8 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from agent_runtime.providers.factory import create_model_provider
+
 app = FastAPI(
     title="Enterprise Agent Runtime",
     version="0.1.0",
@@ -65,8 +67,10 @@ def invoke(request: InvokeRequest) -> InvokeResponse:
 
     runtime = runtime_info()
 
+    provider = create_model_provider()
+
     return InvokeResponse(
-        output=f"mock response: {request.input}",
+        output=provider.generate(request.input),
         agent=runtime["agent"],
         model=runtime["model"],
     )

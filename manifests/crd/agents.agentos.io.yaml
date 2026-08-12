@@ -61,6 +61,21 @@ spec:
                     endpoint:
                       type: string
 
+                    baseUrl:
+                      type: string
+
+                    secretRef:
+                      type: object
+                      required:
+                        - name
+                        - key
+                      properties:
+                        name:
+                          type: string
+
+                        key:
+                          type: string
+
                 capabilities:
                   type: array
                   items:

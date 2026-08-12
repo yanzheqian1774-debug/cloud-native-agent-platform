@@ -5,7 +5,10 @@ from typing import Any
 import kopf
 from kubernetes import client, config
 
-from agent_operator.resources import build_agent_deployment
+from agent_operator.resources import (
+    build_agent_deployment,
+    build_agent_service,
+)
 
 API_GROUP = "agentos.io"
 API_VERSION = "v1alpha1"
@@ -31,6 +34,11 @@ def create_agent(
         name=name,
         namespace=namespace,
         spec=spec,
+        owner=body,
+    )
+    create_service(
+        name=name,
+        namespace=namespace,
         owner=body,
     )
 
@@ -89,6 +97,29 @@ def create_deployment(
     apps_api.create_namespaced_deployment(
         namespace=namespace,
         body=deployment,
+    )
+
+
+def create_service(
+    name: str,
+    namespace: str,
+    owner: dict[str, Any] | None = None,
+) -> None:
+    service = build_agent_service(
+        name=name,
+        namespace=namespace,
+    )
+
+    if owner is not None:
+        kopf.adopt(service, owner=owner)
+
+    load_kubernetes_config()
+
+    core_api = client.CoreV1Api()
+
+    core_api.create_namespaced_service(
+        namespace=namespace,
+        body=service,
     )
 
 
