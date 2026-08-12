@@ -26,7 +26,7 @@ def test_build_agent_deployment() -> None:
     container = deployment["spec"]["template"]["spec"]["containers"][0]
 
     assert container["name"] == "agent"
-    assert container["image"] == "enterprise-agent-runtime:v0.1-dev"
+    assert container["image"] == "enterprise-agent-runtime:v0.1-identity-dev"
     assert container["imagePullPolicy"] == "IfNotPresent"
     assert container["ports"][0]["containerPort"] == 8080
 
@@ -97,3 +97,36 @@ def test_build_agent_deployment_with_openai_compatible_model() -> None:
         "name": "model-credentials",
         "key": "api-key",
     }
+
+
+def test_build_agent_deployment_with_identity_and_instructions() -> None:
+    deployment = build_agent_deployment(
+        name="researcher",
+        namespace="agent-workloads",
+        spec={
+            "runtime": {
+                "type": "native",
+            },
+            "model": {
+                "provider": "mock",
+                "name": "mock-model",
+            },
+            "identity": {
+                "role": "researcher",
+                "displayName": "Research Agent",
+            },
+            "instructions": {
+                "systemPrompt": ("You are a research agent managed by AgentOS."),
+            },
+        },
+    )
+
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+
+    env = {item["name"]: item for item in container["env"]}
+
+    assert env["AGENT_ROLE"]["value"] == "researcher"
+    assert env["AGENT_DISPLAY_NAME"]["value"] == "Research Agent"
+    assert env["AGENT_SYSTEM_PROMPT"]["value"] == (
+        "You are a research agent managed by AgentOS."
+    )

@@ -16,6 +16,25 @@ class OpenAICompatibleModelProvider(ModelProvider):
         self.model = os.environ["MODEL_NAME"]
 
     def generate(self, prompt: str) -> str:
+
+        system_prompt = os.getenv("AGENT_SYSTEM_PROMPT", "")
+        messages = []
+
+        if system_prompt:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                }
+            )
+
+        messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={
@@ -24,12 +43,7 @@ class OpenAICompatibleModelProvider(ModelProvider):
             },
             json={
                 "model": self.model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+                "messages": messages,
             },
             timeout=60.0,
         )
