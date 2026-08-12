@@ -1,0 +1,15 @@
+apiVersion: agentos.io/v1alpha1
+kind: Task
+metadata:
+  name: research-task
+  namespace: agent-workloads
+
+spec:
+  agentRef:
+    name: researcher-agent
+
+  input:
+    prompt: |
+      Analyze the architecture of Kubernetes-native Agent runtimes.
+
+  timeoutSeconds: 300
