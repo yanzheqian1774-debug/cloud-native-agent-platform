@@ -1,4 +1,7 @@
-from agent_operator.resources import build_agent_deployment
+from agent_operator.resources import (
+    build_agent_deployment,
+    build_agent_service,
+)
 
 
 def test_build_agent_deployment() -> None:
@@ -22,11 +25,8 @@ def test_build_agent_deployment() -> None:
 
     container = deployment["spec"]["template"]["spec"]["containers"][0]
 
-    # assert container["name"] == "agent"
-    # assert container["image"] == "nginx:1.27-alpine"
-    # assert container["imagePullPolicy"] == "IfNotPresent"
-
-    assert container["image"] == "enterprise-agent-runtime:v0.1"
+    assert container["name"] == "agent"
+    assert container["image"] == "enterprise-agent-runtime:v0.1-dev"
     assert container["imagePullPolicy"] == "IfNotPresent"
     assert container["ports"][0]["containerPort"] == 8080
 
@@ -40,3 +40,60 @@ def test_build_agent_deployment() -> None:
 
     assert container["livenessProbe"]["httpGet"]["path"] == "/healthz"
     assert container["readinessProbe"]["httpGet"]["path"] == "/readyz"
+
+
+def test_build_agent_service() -> None:
+    service = build_agent_service(
+        name="test-agent",
+        namespace="agent-workloads",
+    )
+
+    assert service["kind"] == "Service"
+    assert service["metadata"]["name"] == "test-agent"
+    assert service["metadata"]["namespace"] == "agent-workloads"
+
+    assert service["spec"]["type"] == "ClusterIP"
+
+    assert service["spec"]["selector"] == {
+        "agentos.io/agent": "test-agent",
+    }
+
+    port = service["spec"]["ports"][0]
+
+    assert port["name"] == "http"
+    assert port["port"] == 8080
+    assert port["targetPort"] == 8080
+    assert port["protocol"] == "TCP"
+
+
+def test_build_agent_deployment_with_openai_compatible_model() -> None:
+    deployment = build_agent_deployment(
+        name="real-agent",
+        namespace="agent-workloads",
+        spec={
+            "replicas": 1,
+            "runtime": {"type": "native"},
+            "model": {
+                "provider": "openai-compatible",
+                "name": "test-model",
+                "baseUrl": "https://example.com/v1",
+                "secretRef": {
+                    "name": "model-credentials",
+                    "key": "api-key",
+                },
+            },
+        },
+    )
+
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+
+    env = {item["name"]: item for item in container["env"]}
+
+    assert env["MODEL_PROVIDER"]["value"] == "openai-compatible"
+    assert env["MODEL_NAME"]["value"] == "test-model"
+    assert env["MODEL_BASE_URL"]["value"] == "https://example.com/v1"
+
+    assert env["MODEL_API_KEY"]["valueFrom"]["secretKeyRef"] == {
+        "name": "model-credentials",
+        "key": "api-key",
+    }

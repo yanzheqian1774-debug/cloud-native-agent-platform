@@ -18,6 +18,54 @@ def build_agent_deployment(
         "agentos.io/agent": name,
     }
 
+    model = spec["model"]
+
+    env = [
+        {
+            "name": "AGENT_NAME",
+            "value": name,
+        },
+        {
+            "name": "AGENT_NAMESPACE",
+            "value": namespace,
+        },
+        {
+            "name": "AGENT_RUNTIME",
+            "value": spec["runtime"]["type"],
+        },
+        {
+            "name": "MODEL_PROVIDER",
+            "value": model["provider"],
+        },
+        {
+            "name": "MODEL_NAME",
+            "value": model["name"],
+        },
+    ]
+
+    if "baseUrl" in model:
+        env.append(
+            {
+                "name": "MODEL_BASE_URL",
+                "value": model["baseUrl"],
+            }
+        )
+
+    if "secretRef" in model:
+        secret_ref = model["secretRef"]
+
+        env.append(
+            {
+                "name": "MODEL_API_KEY",
+                "valueFrom": {
+                    "secretKeyRef": {
+                        "name": secret_ref["name"],
+                        "key": secret_ref["key"],
+                    }
+                },
+            }
+        )
+
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -41,7 +89,7 @@ def build_agent_deployment(
                     "containers": [
                         {
                             "name": "agent",
-                            "image": "enterprise-agent-runtime:v0.1",
+                            "image": "enterprise-agent-runtime:v0.1-dev",
                             "imagePullPolicy": "IfNotPresent",
                             "ports": [
                                 {
@@ -50,28 +98,7 @@ def build_agent_deployment(
                                     "protocol": "TCP",
                                 }
                             ],
-                            "env": [
-                                {
-                                    "name": "AGENT_NAME",
-                                    "value": name,
-                                },
-                                {
-                                    "name": "AGENT_NAMESPACE",
-                                    "value": namespace,
-                                },
-                                {
-                                    "name": "AGENT_RUNTIME",
-                                    "value": spec["runtime"]["type"],
-                                },
-                                {
-                                    "name": "MODEL_PROVIDER",
-                                    "value": spec["model"]["provider"],
-                                },
-                                {
-                                    "name": "MODEL_NAME",
-                                    "value": spec["model"]["name"],
-                                },
-                            ],
+                            "env": env,
                             "livenessProbe": {
                                 "httpGet": {
                                     "path": "/healthz",
@@ -92,5 +119,42 @@ def build_agent_deployment(
                     ]
                 },
             },
+        },
+    }
+
+
+def build_agent_service(
+    name: str,
+    namespace: str,
+) -> dict[str, Any]:
+    """Build a Kubernetes Service for an Agent runtime."""
+
+    labels = {
+        "app.kubernetes.io/name": name,
+        "app.kubernetes.io/managed-by": "agent-operator",
+        "agentos.io/agent": name,
+    }
+
+    return {
+        "apiVersion": "v1",
+        "kind": "Service",
+        "metadata": {
+            "name": name,
+            "namespace": namespace,
+            "labels": labels,
+        },
+        "spec": {
+            "type": "ClusterIP",
+            "selector": {
+                "agentos.io/agent": name,
+            },
+            "ports": [
+                {
+                    "name": "http",
+                    "port": 8080,
+                    "targetPort": 8080,
+                    "protocol": "TCP",
+                }
+            ],
         },
     }

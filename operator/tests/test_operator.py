@@ -26,36 +26,52 @@ def test_reconcile_agent_status_sets_running(
     assert status_patch.status["phase"] == "Running"
 
 
+@patch("agent_operator.main.create_service")
 @patch("agent_operator.main.create_deployment")
 def test_create_agent_sets_pending_status(
     mock_create_deployment,
+    mock_create_service,
 ) -> None:
     status_patch = kopf.Patch()
+    spec = {
+        "runtime": {"type": "native"},
+        "model": {
+            "provider": "mock",
+            "name": "mock-model",
+        },
+        "replicas": 1,
+    }
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Agent",
+        "metadata": {
+            "name": "test-agent",
+            "namespace": "agent-workloads",
+            "uid": "test-uid",
+        },
+    }
 
     create_agent(
-        spec={
-            "runtime": {"type": "native"},
-            "model": {
-                "provider": "mock",
-                "name": "mock-model",
-            },
-            "replicas": 1,
-        },
-        body={
-            "apiVersion": "agentos.io/v1alpha1",
-            "kind": "Agent",
-            "metadata": {
-                "name": "test-agent",
-                "namespace": "agent-workloads",
-                "uid": "test-uid",
-            },
-        },
         name="test-agent",
         namespace="agent-workloads",
         patch=status_patch,
+        spec=spec,
+        body=body,
     )
 
-    mock_create_deployment.assert_called_once()
+    mock_create_deployment.assert_called_once_with(
+        name="test-agent",
+        namespace="agent-workloads",
+        spec=spec,
+        owner=body,
+    )
+
+    mock_create_service.assert_called_once_with(
+        name="test-agent",
+        namespace="agent-workloads",
+        owner=body,
+    )
 
     assert status_patch.status["phase"] == "Pending"
     assert status_patch.status["readyReplicas"] == 0
