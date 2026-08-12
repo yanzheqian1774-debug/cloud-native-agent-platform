@@ -115,7 +115,7 @@ def build_agent_deployment(
                     "containers": [
                         {
                             "name": "agent",
-                            "image": "enterprise-agent-runtime:v0.1-identity-dev",
+                            "image": "enterprise-agent-runtime:v0.1-dev",
                             "imagePullPolicy": "IfNotPresent",
                             "ports": [
                                 {
