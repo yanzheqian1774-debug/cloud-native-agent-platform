@@ -94,6 +94,20 @@ spec:
 
                     memory:
                       type: string
+                identity:
+                  type: object
+                  properties:
+                    role:
+                      type: string
+
+                    displayName:
+                      type: string
+
+                instructions:
+                  type: object
+                  properties:
+                    systemPrompt:
+                      type: string
 
             status:
               type: object

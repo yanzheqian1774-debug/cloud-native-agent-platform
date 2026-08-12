@@ -3,6 +3,9 @@ from unittest.mock import Mock, patch
 import pytest
 from agent_runtime.providers.factory import create_model_provider
 from agent_runtime.providers.mock import MockModelProvider
+from agent_runtime.providers.openai_compatible import (
+    OpenAICompatibleModelProvider,
+)
 
 
 def test_create_mock_model_provider(monkeypatch) -> None:
@@ -89,3 +92,47 @@ def test_openai_compatible_provider_generate(mock_post, monkeypatch) -> None:
         },
         timeout=60.0,
     )
+
+
+@patch("agent_runtime.providers.openai_compatible.httpx.post")
+def test_openai_compatible_provider_includes_system_prompt(
+    mock_post,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("MODEL_BASE_URL", "https://example.com/v1")
+    monkeypatch.setenv("MODEL_API_KEY", "test-key")
+    monkeypatch.setenv("MODEL_NAME", "test-model")
+    monkeypatch.setenv(
+        "AGENT_SYSTEM_PROMPT",
+        "You are a researcher.",
+    )
+
+    response = Mock()
+    response.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": "response",
+                }
+            }
+        ]
+    }
+
+    mock_post.return_value = response
+
+    provider = OpenAICompatibleModelProvider()
+
+    provider.generate("hello")
+
+    request = mock_post.call_args.kwargs["json"]
+
+    assert request["messages"] == [
+        {
+            "role": "system",
+            "content": "You are a researcher.",
+        },
+        {
+            "role": "user",
+            "content": "hello",
+        },
+    ]

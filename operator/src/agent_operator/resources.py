@@ -65,6 +65,32 @@ def build_agent_deployment(
                 },
             }
         )
+    identity = spec.get("identity", {})
+    instructions = spec.get("instructions", {})
+
+    if "role" in identity:
+        env.append(
+            {
+                "name": "AGENT_ROLE",
+                "value": identity["role"],
+            }
+        )
+
+    if "displayName" in identity:
+        env.append(
+            {
+                "name": "AGENT_DISPLAY_NAME",
+                "value": identity["displayName"],
+            }
+        )
+
+    if "systemPrompt" in instructions:
+        env.append(
+            {
+                "name": "AGENT_SYSTEM_PROMPT",
+                "value": instructions["systemPrompt"],
+            }
+        )
 
     return {
         "apiVersion": "apps/v1",
@@ -89,7 +115,7 @@ def build_agent_deployment(
                     "containers": [
                         {
                             "name": "agent",
-                            "image": "enterprise-agent-runtime:v0.1-dev",
+                            "image": "enterprise-agent-runtime:v0.1-identity-dev",
                             "imagePullPolicy": "IfNotPresent",
                             "ports": [
                                 {

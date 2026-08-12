@@ -21,12 +21,16 @@ def test_readyz() -> None:
 def test_runtime_info(monkeypatch) -> None:
     monkeypatch.setenv("AGENT_NAME", "researcher")
     monkeypatch.setenv("MODEL_NAME", "mock-model")
+    monkeypatch.setenv("AGENT_ROLE", "researcher")
+    monkeypatch.setenv("AGENT_DISPLAY_NAME", "Research Agent")
 
     response = client.get("/v1/info")
 
     assert response.status_code == 200
     assert response.json()["agent"] == "researcher"
     assert response.json()["model"] == "mock-model"
+    assert response.json()["role"] == "researcher"
+    assert response.json()["display_name"] == "Research Agent"
 
 
 def test_mock_invoke(monkeypatch) -> None:

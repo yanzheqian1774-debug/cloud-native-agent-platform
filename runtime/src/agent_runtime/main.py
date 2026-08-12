@@ -35,6 +35,8 @@ def runtime_info() -> dict[str, Any]:
         "agent": os.getenv("AGENT_NAME", "unknown"),
         "namespace": os.getenv("AGENT_NAMESPACE", "unknown"),
         "runtime": os.getenv("AGENT_RUNTIME", "native"),
+        "role": os.getenv("AGENT_ROLE", ""),
+        "display_name": os.getenv("AGENT_DISPLAY_NAME", ""),
         "model_provider": os.getenv("MODEL_PROVIDER", "mock"),
         "model": os.getenv("MODEL_NAME", "mock-model"),
     }
