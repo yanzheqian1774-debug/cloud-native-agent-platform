@@ -159,6 +159,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "kopf" },
     { name = "kubernetes" },
     { name = "uvicorn" },
 ]
@@ -166,7 +167,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "httpx" },
-    { name = "kopf" },
     { name = "kubernetes" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -179,6 +179,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "kopf", specifier = ">=1.37,<2.0" },
     { name = "kubernetes", specifier = ">=36.0.3" },
     { name = "uvicorn", specifier = ">=0.52.1" },
 ]
@@ -186,7 +187,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "kopf", specifier = ">=1.37,<2.0" },
     { name = "kubernetes", specifier = ">=30,<40" },
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.0" },
