@@ -6,6 +6,9 @@ from typing import Any
 import httpx
 import kopf
 
+from agent_operator.errors import TaskExecutionError, classify_http_error
+from agent_operator.retry import RetryExhaustedError, execute_with_retry
+
 
 def utc_now() -> str:
     """Return the current UTC time in Kubernetes-compatible format."""
@@ -26,26 +29,37 @@ def invoke_agent(
     agent_name: str,
     namespace: str,
     prompt: str,
-    timeout_seconds: int,
+    timeout_seconds: float,
 ) -> str:
     """Invoke an Agent Runtime through its Kubernetes Service."""
 
-    response = httpx.post(
-        build_agent_service_url(
-            agent_name=agent_name,
-            namespace=namespace,
-        ),
-        json={
-            "input": prompt,
-        },
-        timeout=float(timeout_seconds),
-    )
+    try:
+        response = httpx.post(
+            build_agent_service_url(
+                agent_name=agent_name,
+                namespace=namespace,
+            ),
+            json={
+                "input": prompt,
+            },
+            timeout=float(timeout_seconds),
+        )
 
-    response.raise_for_status()
+        response.raise_for_status()
 
-    payload = response.json()
+    except httpx.HTTPError as exc:
+        raise classify_http_error(exc) from exc
 
-    return payload["output"]
+    try:
+        payload = response.json()
+        return payload["output"]
+
+    except (KeyError, ValueError, TypeError) as exc:
+        raise TaskExecutionError(
+            reason="InvalidResponse",
+            message=f"invalid Agent Runtime response: {exc}",
+            retryable=False,
+        ) from exc
 
 
 @kopf.on.create("agentos.io", "v1alpha1", "tasks")
@@ -64,19 +78,34 @@ def create_task(
     patch.status["phase"] = "Running"
     patch.status["startedAt"] = utc_now()
 
-    try:
-        result = invoke_agent(
+    def operation(remaining_seconds: float) -> str:
+        return invoke_agent(
             agent_name=agent_name,
             namespace=namespace,
             prompt=prompt,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=remaining_seconds,
         )
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        patch.status["phase"] = "Failed"
-        patch.status["message"] = str(exc)
+
+    try:
+        result, attempts = execute_with_retry(
+            operation,
+            timeout_seconds=float(timeout_seconds),
+        )
+
+    except RetryExhaustedError as exc:
+        if exc.error.reason == "ExecutionTimeout":
+            patch.status["phase"] = "TimedOut"
+        else:
+            patch.status["phase"] = "Failed"
+        patch.status["reason"] = exc.error.reason
+        patch.status["message"] = exc.error.message
+        patch.status["retryable"] = exc.error.retryable
+        patch.status["attempts"] = exc.attempts
         patch.status["completedAt"] = utc_now()
         return
 
     patch.status["result"] = result
     patch.status["phase"] = "Succeeded"
+    patch.status["retryable"] = False
+    patch.status["attempts"] = attempts
     patch.status["completedAt"] = utc_now()

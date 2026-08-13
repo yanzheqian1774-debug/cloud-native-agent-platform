@@ -68,12 +68,35 @@ spec:
                     - Running
                     - Succeeded
                     - Failed
+                    - TimedOut
 
                 result:
                   type: string
 
+                reason:
+                  type: string
+                  enum:
+                    - RateLimited
+                    - UpstreamUnavailable
+                    - NetworkError
+                    - UpstreamTimeout
+                    - ExecutionTimeout
+                    - InvalidRequest
+                    - AuthenticationError
+                    - AuthorizationError
+                    - AgentNotFound
+                    - InvalidResponse
+                    - InternalError
+
                 message:
                   type: string
+
+                retryable:
+                  type: boolean
+
+                attempts:
+                  type: integer
+                  minimum: 0
 
                 startedAt:
                   type: string
