@@ -2,6 +2,7 @@ from unittest.mock import Mock, patch
 
 import httpx
 import kopf
+import pytest
 from agent_operator.errors import TaskExecutionError
 from agent_operator.retry import RetryExhaustedError
 from agent_operator.task_controller import (
@@ -9,6 +10,14 @@ from agent_operator.task_controller import (
     create_task,
     invoke_agent,
 )
+
+
+@pytest.fixture(autouse=True)
+def mock_task_status_writer():
+    with patch(
+        "agent_operator.task_controller.patch_task_status"
+    ) as mock_status_writer:
+        yield mock_status_writer
 
 
 def test_build_agent_service_url() -> None:
@@ -60,6 +69,7 @@ def test_create_task_sets_succeeded_status(
     status_patch = kopf.Patch()
 
     create_task(
+        name="test-task",
         spec={
             "agentRef": {
                 "name": "researcher-agent",
@@ -104,6 +114,7 @@ def test_create_task_sets_failed_status(
     status_patch = kopf.Patch()
 
     create_task(
+        name="test-task",
         spec={
             "agentRef": {
                 "name": "researcher-agent",
@@ -189,6 +200,7 @@ def test_create_task_retries_retryable_error_then_succeeds(
     status_patch = kopf.Patch()
 
     create_task(
+        name="test-task",
         spec={
             "agentRef": {
                 "name": "researcher-agent",
@@ -224,6 +236,7 @@ def test_create_task_fails_after_retry_exhaustion(
     status_patch = kopf.Patch()
 
     create_task(
+        name="test-task",
         spec={
             "agentRef": {
                 "name": "researcher-agent",
@@ -260,6 +273,7 @@ def test_create_task_sets_timed_out_status(
     status_patch = kopf.Patch()
 
     create_task(
+        name="test-task",
         spec={
             "agentRef": {
                 "name": "researcher-agent",
@@ -290,6 +304,7 @@ def test_create_task_passes_execution_timeout_to_retry(
     status_patch = kopf.Patch()
 
     create_task(
+        name="test-task",
         spec={
             "agentRef": {
                 "name": "researcher-agent",
@@ -304,3 +319,48 @@ def test_create_task_passes_execution_timeout_to_retry(
     )
 
     assert mock_execute_with_retry.call_args.kwargs["timeout_seconds"] == 45.0
+
+
+def test_create_task_persists_running_status_before_execution(
+    mock_task_status_writer,
+) -> None:
+    status_patch = kopf.Patch()
+    call_order = []
+
+    mock_task_status_writer.side_effect = lambda **_: call_order.append("running")
+
+    def invoke_side_effect(**_):
+        call_order.append("invoke")
+        return "task result"
+
+    with patch(
+        "agent_operator.task_controller.invoke_agent",
+        side_effect=invoke_side_effect,
+    ):
+        create_task(
+            spec={
+                "agentRef": {
+                    "name": "researcher-agent",
+                },
+                "input": {
+                    "prompt": "research this topic",
+                },
+                "timeoutSeconds": 60,
+            },
+            name="running-task",
+            namespace="agent-workloads",
+            patch=status_patch,
+        )
+
+    assert call_order == [
+        "running",
+        "invoke",
+    ]
+
+    call = mock_task_status_writer.call_args.kwargs
+
+    assert call["name"] == "running-task"
+    assert call["namespace"] == "agent-workloads"
+    assert call["status"]["phase"] == "Running"
+    assert call["status"]["attempts"] == 0
+    assert call["status"]["startedAt"]
