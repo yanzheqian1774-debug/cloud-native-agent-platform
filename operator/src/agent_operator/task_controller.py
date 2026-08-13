@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 import kopf
+from kubernetes import client, config
 
 from agent_operator.errors import TaskExecutionError, classify_http_error
 from agent_operator.retry import RetryExhaustedError, execute_with_retry
@@ -14,6 +15,31 @@ def utc_now() -> str:
     """Return the current UTC time in Kubernetes-compatible format."""
 
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def patch_task_status(
+    *,
+    name: str,
+    namespace: str,
+    status: dict[str, object],
+) -> None:
+    """Persist Task status immediately to the Kubernetes API."""
+
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+
+    api = client.CustomObjectsApi()
+
+    api.patch_namespaced_custom_object_status(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace=namespace,
+        plural="tasks",
+        name=name,
+        body={"status": status},
+    )
 
 
 def build_agent_service_url(
@@ -65,6 +91,7 @@ def invoke_agent(
 @kopf.on.create("agentos.io", "v1alpha1", "tasks")
 def create_task(
     spec: dict[str, Any],
+    name: str,
     namespace: str,
     patch: kopf.Patch,
     **_: Any,
@@ -75,8 +102,19 @@ def create_task(
     prompt = spec["input"]["prompt"]
     timeout_seconds = spec.get("timeoutSeconds", 300)
 
-    patch.status["phase"] = "Running"
-    patch.status["startedAt"] = utc_now()
+    started_at = utc_now()
+
+    patch_task_status(
+        name=name,
+        namespace=namespace,
+        status={
+            "phase": "Running",
+            "startedAt": started_at,
+            "attempts": 0,
+        },
+    )
+
+    patch.status["startedAt"] = started_at
 
     def operation(remaining_seconds: float) -> str:
         return invoke_agent(
