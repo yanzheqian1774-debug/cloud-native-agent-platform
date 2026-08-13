@@ -57,7 +57,34 @@ def test_task_crd_phase_lifecycle() -> None:
         "Running",
         "Succeeded",
         "Failed",
+        "TimedOut",
     ]
+
+
+def test_task_crd_reliability_status_fields() -> None:
+    crd = load_task_crd()
+
+    schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+    status = schema["properties"]["status"]["properties"]
+
+    assert status["reason"]["enum"] == [
+        "RateLimited",
+        "UpstreamUnavailable",
+        "NetworkError",
+        "UpstreamTimeout",
+        "ExecutionTimeout",
+        "InvalidRequest",
+        "AuthenticationError",
+        "AuthorizationError",
+        "AgentNotFound",
+        "InvalidResponse",
+        "InternalError",
+    ]
+
+    assert status["retryable"]["type"] == "boolean"
+
+    assert status["attempts"]["type"] == "integer"
+    assert status["attempts"]["minimum"] == 0
 
 
 def test_task_crd_has_status_subresource() -> None:
