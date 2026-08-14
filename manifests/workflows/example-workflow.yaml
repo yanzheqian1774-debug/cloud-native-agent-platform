@@ -1,0 +1,41 @@
+apiVersion: agentos.io/v1alpha1
+kind: Workflow
+metadata:
+  name: research-workflow
+  namespace: agent-workloads
+spec:
+  tasks:
+    - name: research
+      agentRef:
+        name: researcher-agent
+      input:
+        prompt: "Research Kubernetes-native AI Agent platforms."
+      timeoutSeconds: 300
+
+    - name: market
+      agentRef:
+        name: researcher-agent
+      input:
+        prompt: "Analyze the market landscape based on the research."
+      dependsOn:
+        - research
+      timeoutSeconds: 300
+
+    - name: technology
+      agentRef:
+        name: researcher-agent
+      input:
+        prompt: "Analyze the technical architecture based on the research."
+      dependsOn:
+        - research
+      timeoutSeconds: 300
+
+    - name: report
+      agentRef:
+        name: researcher-agent
+      input:
+        prompt: "Produce the final report."
+      dependsOn:
+        - market
+        - technology
+      timeoutSeconds: 300
