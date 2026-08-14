@@ -5,7 +5,8 @@ from typing import Any
 import kopf
 from kubernetes import client, config
 
-import agent_operator.task_controller  # noqa: F401
+import agent_operator.task_controller
+import agent_operator.workflow_controller  # noqa: F401
 from agent_operator.resources import (
     build_agent_deployment,
     build_agent_service,

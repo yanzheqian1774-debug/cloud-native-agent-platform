@@ -18,10 +18,12 @@ rules:
     resources:
       - agents
       - tasks
+      - workflows
     verbs:
       - get
       - list
       - watch
+      - create
       - patch
 
   - apiGroups:
@@ -29,6 +31,7 @@ rules:
     resources:
       - agents/status
       - tasks/status
+      - workflows/status
     verbs:
       - get
       - patch
