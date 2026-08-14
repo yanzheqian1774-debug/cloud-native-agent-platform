@@ -110,7 +110,12 @@ def create_task(
         status={
             "phase": "Running",
             "startedAt": started_at,
+            "completedAt": None,
             "attempts": 0,
+            "result": None,
+            "reason": None,
+            "message": None,
+            "retryable": None,
         },
     )
 
@@ -135,6 +140,8 @@ def create_task(
             patch.status["phase"] = "TimedOut"
         else:
             patch.status["phase"] = "Failed"
+
+        patch.status["result"] = None
         patch.status["reason"] = exc.error.reason
         patch.status["message"] = exc.error.message
         patch.status["retryable"] = exc.error.retryable
@@ -142,8 +149,10 @@ def create_task(
         patch.status["completedAt"] = utc_now()
         return
 
-    patch.status["result"] = result
     patch.status["phase"] = "Succeeded"
-    patch.status["retryable"] = False
+    patch.status["result"] = result
+    patch.status["reason"] = None
+    patch.status["message"] = None
+    patch.status["retryable"] = None
     patch.status["attempts"] = attempts
     patch.status["completedAt"] = utc_now()

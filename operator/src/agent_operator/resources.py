@@ -184,3 +184,41 @@ def build_agent_service(
             ],
         },
     }
+
+
+def build_workflow_task(
+    *,
+    workflow_name: str,
+    namespace: str,
+    task_spec: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a Task resource for a Workflow task."""
+
+    task_name = task_spec["name"]
+
+    spec: dict[str, Any] = {
+        "agentRef": {
+            "name": task_spec["agentRef"]["name"],
+        },
+        "input": {
+            "prompt": task_spec["input"]["prompt"],
+        },
+    }
+
+    if "timeoutSeconds" in task_spec:
+        spec["timeoutSeconds"] = task_spec["timeoutSeconds"]
+
+    return {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Task",
+        "metadata": {
+            "name": f"{workflow_name}-{task_name}",
+            "namespace": namespace,
+            "labels": {
+                "app.kubernetes.io/managed-by": "agent-operator",
+                "agentos.io/workflow": workflow_name,
+                "agentos.io/workflow-task": task_name,
+            },
+        },
+        "spec": spec,
+    }

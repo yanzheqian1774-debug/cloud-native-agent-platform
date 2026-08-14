@@ -1,6 +1,7 @@
 from agent_operator.resources import (
     build_agent_deployment,
     build_agent_service,
+    build_workflow_task,
 )
 
 
@@ -130,3 +131,42 @@ def test_build_agent_deployment_with_identity_and_instructions() -> None:
     assert env["AGENT_SYSTEM_PROMPT"]["value"] == (
         "You are a research agent managed by AgentOS."
     )
+
+
+def test_build_workflow_task() -> None:
+    resource = build_workflow_task(
+        workflow_name="research-workflow",
+        namespace="agent-workloads",
+        task_spec={
+            "name": "research",
+            "agentRef": {
+                "name": "researcher-agent",
+            },
+            "input": {
+                "prompt": "research this topic",
+            },
+            "timeoutSeconds": 300,
+        },
+    )
+
+    assert resource["apiVersion"] == "agentos.io/v1alpha1"
+    assert resource["kind"] == "Task"
+
+    assert resource["metadata"]["name"] == "research-workflow-research"
+    assert resource["metadata"]["namespace"] == "agent-workloads"
+
+    assert resource["metadata"]["labels"] == {
+        "app.kubernetes.io/managed-by": "agent-operator",
+        "agentos.io/workflow": "research-workflow",
+        "agentos.io/workflow-task": "research",
+    }
+
+    assert resource["spec"] == {
+        "agentRef": {
+            "name": "researcher-agent",
+        },
+        "input": {
+            "prompt": "research this topic",
+        },
+        "timeoutSeconds": 300,
+    }

@@ -88,7 +88,9 @@ def test_create_task_sets_succeeded_status(
     assert status_patch.status["startedAt"]
     assert status_patch.status["completedAt"]
     assert status_patch.status["attempts"] == 1
-    assert status_patch.status["retryable"] is False
+    assert status_patch.status["reason"] is None
+    assert status_patch.status["message"] is None
+    assert status_patch.status["retryable"] is None
 
     mock_invoke_agent.assert_called_once()
 
@@ -130,6 +132,7 @@ def test_create_task_sets_failed_status(
     assert status_patch.status["phase"] == "Failed"
     assert status_patch.status["reason"] == "AuthenticationError"
     assert status_patch.status["retryable"] is False
+    assert status_patch.status["result"] is None
     assert status_patch.status["attempts"] == 1
 
 
@@ -216,7 +219,9 @@ def test_create_task_retries_retryable_error_then_succeeds(
     assert status_patch.status["phase"] == "Succeeded"
     assert status_patch.status["result"] == "TASK_OK"
     assert status_patch.status["attempts"] == 2
-    assert status_patch.status["retryable"] is False
+    assert status_patch.status["reason"] is None
+    assert status_patch.status["message"] is None
+    assert status_patch.status["retryable"] is None
     assert mock_invoke_agent.call_count == 2
     mock_sleep.assert_called_once_with(1.0)
 
@@ -252,6 +257,7 @@ def test_create_task_fails_after_retry_exhaustion(
     assert status_patch.status["phase"] == "Failed"
     assert status_patch.status["reason"] == "UpstreamUnavailable"
     assert status_patch.status["retryable"] is True
+    assert status_patch.status["result"] is None
     assert status_patch.status["attempts"] == 3
     assert mock_invoke_agent.call_count == 3
     assert mock_sleep.call_count == 2
@@ -290,6 +296,7 @@ def test_create_task_sets_timed_out_status(
     assert status_patch.status["phase"] == "TimedOut"
     assert status_patch.status["reason"] == "ExecutionTimeout"
     assert status_patch.status["retryable"] is False
+    assert status_patch.status["result"] is None
     assert status_patch.status["attempts"] == 1
     assert status_patch.status["startedAt"]
     assert status_patch.status["completedAt"]
@@ -364,3 +371,8 @@ def test_create_task_persists_running_status_before_execution(
     assert call["status"]["phase"] == "Running"
     assert call["status"]["attempts"] == 0
     assert call["status"]["startedAt"]
+    assert call["status"]["completedAt"] is None
+    assert call["status"]["result"] is None
+    assert call["status"]["reason"] is None
+    assert call["status"]["message"] is None
+    assert call["status"]["retryable"] is None
