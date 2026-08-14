@@ -93,3 +93,29 @@ def build_workflow_graph(tasks: Sequence[Mapping[str, Any]]) -> WorkflowGraph:
     graph.topological_order()
 
     return graph
+
+
+def find_ready_tasks(
+    graph: WorkflowGraph,
+    task_phases: Mapping[str, str],
+) -> list[str]:
+    """Return workflow tasks whose dependencies have all succeeded.
+
+    Tasks already present in task_phases are considered already scheduled
+    and are therefore not returned.
+    """
+
+    ready: list[str] = []
+
+    for task_name in graph.task_names:
+        if task_name in task_phases:
+            continue
+
+        dependencies = graph.dependencies[task_name]
+
+        if all(
+            task_phases.get(dependency) == "Succeeded" for dependency in dependencies
+        ):
+            ready.append(task_name)
+
+    return ready
