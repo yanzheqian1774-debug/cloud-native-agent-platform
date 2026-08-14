@@ -2,6 +2,7 @@ import pytest
 from agent_operator.workflow_graph import (
     WorkflowValidationError,
     build_workflow_graph,
+    find_ready_tasks,
 )
 
 
@@ -186,3 +187,77 @@ def test_topological_order_is_stable_for_independent_tasks() -> None:
         "technology",
         "report",
     ]
+
+
+def test_find_ready_tasks_returns_root_tasks() -> None:
+    graph = build_workflow_graph(
+        [
+            {"name": "research"},
+            {"name": "market", "dependsOn": ["research"]},
+            {"name": "technology", "dependsOn": ["research"]},
+            {"name": "report", "dependsOn": ["market", "technology"]},
+        ]
+    )
+
+    assert find_ready_tasks(graph, {}) == ["research"]
+
+
+def test_find_ready_tasks_returns_tasks_with_succeeded_dependencies() -> None:
+    graph = build_workflow_graph(
+        [
+            {"name": "research"},
+            {"name": "market", "dependsOn": ["research"]},
+            {"name": "technology", "dependsOn": ["research"]},
+            {"name": "report", "dependsOn": ["market", "technology"]},
+        ]
+    )
+
+    assert find_ready_tasks(
+        graph,
+        {
+            "research": "Succeeded",
+        },
+    ) == ["market", "technology"]
+
+
+def test_find_ready_tasks_waits_for_all_dependencies() -> None:
+    graph = build_workflow_graph(
+        [
+            {"name": "research"},
+            {"name": "market", "dependsOn": ["research"]},
+            {"name": "technology", "dependsOn": ["research"]},
+            {"name": "report", "dependsOn": ["market", "technology"]},
+        ]
+    )
+
+    assert (
+        find_ready_tasks(
+            graph,
+            {
+                "research": "Succeeded",
+                "market": "Succeeded",
+                "technology": "Running",
+            },
+        )
+        == []
+    )
+
+
+def test_find_ready_tasks_returns_fan_in_task_when_all_dependencies_succeed() -> None:
+    graph = build_workflow_graph(
+        [
+            {"name": "research"},
+            {"name": "market", "dependsOn": ["research"]},
+            {"name": "technology", "dependsOn": ["research"]},
+            {"name": "report", "dependsOn": ["market", "technology"]},
+        ]
+    )
+
+    assert find_ready_tasks(
+        graph,
+        {
+            "research": "Succeeded",
+            "market": "Succeeded",
+            "technology": "Succeeded",
+        },
+    ) == ["report"]
