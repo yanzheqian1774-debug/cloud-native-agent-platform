@@ -261,3 +261,158 @@ def test_find_ready_tasks_returns_fan_in_task_when_all_dependencies_succeed() ->
             "technology": "Succeeded",
         },
     ) == ["report"]
+
+
+def test_build_workflow_graph_accepts_result_source_dependency() -> None:
+    tasks = [
+        {
+            "name": "research",
+            "dependsOn": [],
+            "input": {
+                "prompt": "research",
+            },
+        },
+        {
+            "name": "market",
+            "dependsOn": ["research"],
+            "input": {
+                "prompt": "market",
+                "from": [
+                    {
+                        "task": "research",
+                    }
+                ],
+            },
+        },
+    ]
+
+    graph = build_workflow_graph(tasks)
+
+    assert graph.task_names == (
+        "research",
+        "market",
+    )
+    assert graph.dependencies == {
+        "research": (),
+        "market": ("research",),
+    }
+    assert graph.topological_order() == [
+        "research",
+        "market",
+    ]
+
+
+def test_build_workflow_graph_rejects_unknown_result_source() -> None:
+    tasks = [
+        {
+            "name": "research",
+            "dependsOn": [],
+            "input": {
+                "prompt": "research",
+            },
+        },
+        {
+            "name": "market",
+            "dependsOn": [],
+            "input": {
+                "prompt": "market",
+                "from": [
+                    {
+                        "task": "missing-task",
+                    }
+                ],
+            },
+        },
+    ]
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="references unknown result source",
+    ):
+        build_workflow_graph(tasks)
+
+
+def test_build_workflow_graph_rejects_self_result_source() -> None:
+    tasks = [
+        {
+            "name": "research",
+            "dependsOn": [],
+            "input": {
+                "prompt": "research",
+                "from": [
+                    {
+                        "task": "research",
+                    }
+                ],
+            },
+        },
+    ]
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="cannot consume its own result",
+    ):
+        build_workflow_graph(tasks)
+
+
+def test_build_workflow_graph_rejects_duplicate_result_sources() -> None:
+    tasks = [
+        {
+            "name": "research",
+            "dependsOn": [],
+            "input": {
+                "prompt": "research",
+            },
+        },
+        {
+            "name": "market",
+            "dependsOn": ["research"],
+            "input": {
+                "prompt": "market",
+                "from": [
+                    {
+                        "task": "research",
+                    },
+                    {
+                        "task": "research",
+                    },
+                ],
+            },
+        },
+    ]
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="has duplicate result source",
+    ):
+        build_workflow_graph(tasks)
+
+
+def test_build_workflow_graph_rejects_result_source_not_in_dependencies() -> None:
+    tasks = [
+        {
+            "name": "research",
+            "dependsOn": [],
+            "input": {
+                "prompt": "research",
+            },
+        },
+        {
+            "name": "market",
+            "dependsOn": [],
+            "input": {
+                "prompt": "market",
+                "from": [
+                    {
+                        "task": "research",
+                    }
+                ],
+            },
+        },
+    ]
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="must also appear in dependsOn",
+    ):
+        build_workflow_graph(tasks)

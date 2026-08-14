@@ -1,5 +1,7 @@
 """Workflow controller for AgentOS."""
 
+from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any
 
 import kopf
@@ -90,15 +92,13 @@ def create_workflow(
     patch.status["taskCount"] = len(tasks)
 
 
-def list_workflow_task_phases(
+def list_workflow_task_states(
     *,
     workflow_name: str,
     namespace: str,
-) -> dict[str, str]:
-    """Return workflow task phases keyed by workflow task name."""
-
+) -> dict[str, dict[str, Any]]:
+    """List Workflow task execution states, including phase and result."""
     load_kubernetes_config()
-
     api = client.CustomObjectsApi()
 
     response = api.list_namespaced_custom_object(
@@ -109,19 +109,37 @@ def list_workflow_task_phases(
         label_selector=f"agentos.io/workflow={workflow_name}",
     )
 
-    phases: dict[str, str] = {}
+    states: dict[str, dict[str, Any]] = {}
 
     for item in response.get("items", []):
-        labels = item.get("metadata", {}).get("labels", {})
-        task_name = labels.get("agentos.io/workflow-task")
+        metadata = item.get("metadata", {})
+        labels = metadata.get("labels", {})
+        workflow_task_name = labels.get("agentos.io/workflow-task")
 
-        if not task_name:
+        if not workflow_task_name:
             continue
 
-        phase = item.get("status", {}).get("phase", "Pending")
-        phases[task_name] = phase
+        status = item.get("status", {})
 
-    return phases
+        states[workflow_task_name] = {
+            "phase": status.get("phase", "Pending"),
+            "result": status.get("result"),
+        }
+
+    return states
+
+
+def list_workflow_task_phases(
+    *,
+    workflow_name: str,
+    namespace: str,
+) -> dict[str, str]:
+    states = list_workflow_task_states(
+        workflow_name=workflow_name,
+        namespace=namespace,
+    )
+
+    return {task_name: state["phase"] for task_name, state in states.items()}
 
 
 def reconcile_workflow(
@@ -141,10 +159,14 @@ def reconcile_workflow(
 
     tasks_by_name = {task["name"]: task for task in tasks}
 
-    task_phases = list_workflow_task_phases(
+    task_states = list_workflow_task_states(
         workflow_name=name,
         namespace=namespace,
     )
+
+    task_phases = {
+        task_name: state["phase"] for task_name, state in task_states.items()
+    }
 
     ready_task_names = find_ready_tasks(
         graph,
@@ -154,10 +176,46 @@ def reconcile_workflow(
     created = 0
 
     for task_name in ready_task_names:
+        task_spec = tasks_by_name[task_name]
+
+        task_results: dict[str, str] = {}
+        missing_result = False
+
+        for source in task_spec.get("input", {}).get("from", []):
+            source_task = source["task"]
+
+            source_state = task_states.get(
+                source_task,
+                {},
+            )
+
+            source_result = source_state.get("result")
+
+            if source_result is None:
+                missing_result = True
+                break
+
+            task_results[source_task] = source_result
+
+        if missing_result:
+            continue
+
+        resolved_task_spec = deepcopy(task_spec)
+
+        resolved_task_spec["input"]["prompt"] = resolve_task_prompt(
+            task_spec=task_spec,
+            task_results=task_results,
+        )
+
+        resolved_task_spec["input"].pop(
+            "from",
+            None,
+        )
+
         if ensure_workflow_task(
             workflow_name=name,
             namespace=namespace,
-            task_spec=tasks_by_name[task_name],
+            task_spec=resolved_task_spec,
             owner=body,
         ):
             created += 1
@@ -165,7 +223,6 @@ def reconcile_workflow(
     return created
 
 
-@kopf.on.field(..., field="status.phase")
 def get_workflow(
     *,
     workflow_name: str,
@@ -235,3 +292,34 @@ def workflow_task_phase_changed(
         namespace=namespace,
         new_phase=new,
     )
+
+
+def resolve_task_prompt(
+    *,
+    task_spec: dict[str, Any],
+    task_results: Mapping[str, str],
+) -> str:
+    """Resolve a workflow task prompt with upstream task results."""
+    prompt = task_spec["input"]["prompt"]
+    sources = task_spec["input"].get("from", [])
+
+    if not sources:
+        return prompt
+
+    sections = [
+        prompt,
+        "",
+        "Previous task results:",
+    ]
+
+    for source in sources:
+        task_name = source["task"]
+        sections.extend(
+            [
+                "",
+                f"[{task_name}]",
+                task_results[task_name],
+            ]
+        )
+
+    return "\n".join(sections)

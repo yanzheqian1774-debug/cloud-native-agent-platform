@@ -59,11 +59,21 @@ spec:
                         type: object
                         required:
                           - prompt
-
                         properties:
                           prompt:
                             type: string
                             minLength: 1
+                          from:
+                            type: array
+                            default: []
+                            items:
+                              type: object
+                              required:
+                                - task
+                              properties:
+                                task:
+                                  type: string
+                                  minLength: 1
 
                       dependsOn:
                         type: array
