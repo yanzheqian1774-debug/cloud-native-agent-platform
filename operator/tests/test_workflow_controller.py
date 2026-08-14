@@ -7,8 +7,10 @@ from agent_operator.workflow_controller import (
     ensure_workflow_task,
     get_workflow,
     list_workflow_task_phases,
+    list_workflow_task_states,
     reconcile_workflow,
     reconcile_workflow_for_task,
+    resolve_task_prompt,
 )
 from kubernetes import client
 
@@ -33,13 +35,13 @@ def workflow_task(
     return task
 
 
-@patch("agent_operator.workflow_controller.list_workflow_task_phases")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 def test_create_workflow_creates_only_root_tasks(
     mock_ensure_workflow_task,
-    mock_list_workflow_task_phases,
+    mock_list_workflow_task_states,
 ) -> None:
-    mock_list_workflow_task_phases.return_value = {}
+    mock_list_workflow_task_states.return_value = {}
 
     status_patch = kopf.Patch()
 
@@ -83,13 +85,13 @@ def test_create_workflow_creates_only_root_tasks(
     assert status_patch.status["taskCount"] == 4
 
 
-@patch("agent_operator.workflow_controller.list_workflow_task_phases")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 def test_create_workflow_creates_multiple_root_tasks(
     mock_ensure_workflow_task,
-    mock_list_workflow_task_phases,
+    mock_list_workflow_task_states,
 ) -> None:
-    mock_list_workflow_task_phases.return_value = {}
+    mock_list_workflow_task_states.return_value = {}
     status_patch = kopf.Patch()
 
     create_workflow(
@@ -364,13 +366,16 @@ def test_list_workflow_task_phases_treats_existing_task_without_status_as_pendin
 
 
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
-@patch("agent_operator.workflow_controller.list_workflow_task_phases")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_creates_tasks_after_dependencies_succeed(
-    mock_list_workflow_task_phases,
+    mock_list_workflow_task_states,
     mock_ensure_workflow_task,
 ) -> None:
-    mock_list_workflow_task_phases.return_value = {
-        "research": "Succeeded",
+    mock_list_workflow_task_states.return_value = {
+        "research": {
+            "phase": "Succeeded",
+            "result": None,
+        },
     }
 
     mock_ensure_workflow_task.return_value = True
@@ -415,15 +420,24 @@ def test_reconcile_workflow_creates_tasks_after_dependencies_succeed(
 
 
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
-@patch("agent_operator.workflow_controller.list_workflow_task_phases")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_waits_for_all_dependencies(
-    mock_list_workflow_task_phases,
+    mock_list_workflow_task_states,
     mock_ensure_workflow_task,
 ) -> None:
-    mock_list_workflow_task_phases.return_value = {
-        "research": "Succeeded",
-        "market": "Succeeded",
-        "technology": "Running",
+    mock_list_workflow_task_states.return_value = {
+        "research": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+        "market": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+        "technology": {
+            "phase": "Running",
+            "result": None,
+        },
     }
 
     body = {
@@ -573,3 +587,460 @@ def test_get_workflow_reads_workflow_resource(
         plural="workflows",
         name="research-workflow",
     )
+
+
+def test_resolve_task_prompt_returns_original_prompt_without_sources() -> None:
+    task_spec = {
+        "input": {
+            "prompt": "Analyze market.",
+        }
+    }
+
+    result = resolve_task_prompt(
+        task_spec=task_spec,
+        task_results={},
+    )
+
+    assert result == "Analyze market."
+
+
+def test_resolve_task_prompt_preserves_source_order() -> None:
+    task_spec = {
+        "input": {
+            "prompt": "Write report.",
+            "from": [
+                {"task": "market"},
+                {"task": "technology"},
+            ],
+        }
+    }
+
+    result = resolve_task_prompt(
+        task_spec=task_spec,
+        task_results={
+            "technology": "Technology result",
+            "market": "Market result",
+        },
+    )
+
+    assert result.index("[market]") < result.index("[technology]")
+
+
+def test_list_workflow_task_states_returns_phase_and_result() -> None:
+    response = {
+        "items": [
+            {
+                "metadata": {
+                    "labels": {
+                        "agentos.io/workflow-task": "research",
+                    }
+                },
+                "status": {
+                    "phase": "Succeeded",
+                    "result": "Research result",
+                },
+            },
+            {
+                "metadata": {
+                    "labels": {
+                        "agentos.io/workflow-task": "market",
+                    }
+                },
+                "status": {
+                    "phase": "Running",
+                },
+            },
+        ]
+    }
+
+    with (
+        patch("agent_operator.workflow_controller.load_kubernetes_config"),
+        patch(
+            "agent_operator.workflow_controller.client.CustomObjectsApi"
+        ) as api_class,
+    ):
+        api = api_class.return_value
+        api.list_namespaced_custom_object.return_value = response
+
+        states = list_workflow_task_states(
+            workflow_name="research-workflow",
+            namespace="agent-workloads",
+        )
+
+    assert states == {
+        "research": {
+            "phase": "Succeeded",
+            "result": "Research result",
+        },
+        "market": {
+            "phase": "Running",
+            "result": None,
+        },
+    }
+
+    api.list_namespaced_custom_object.assert_called_once_with(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace="agent-workloads",
+        plural="tasks",
+        label_selector="agentos.io/workflow=research-workflow",
+    )
+
+
+def test_list_workflow_task_states_defaults_missing_status_to_pending() -> None:
+    response = {
+        "items": [
+            {
+                "metadata": {
+                    "labels": {
+                        "agentos.io/workflow-task": "research",
+                    }
+                },
+            }
+        ]
+    }
+
+    with (
+        patch("agent_operator.workflow_controller.load_kubernetes_config"),
+        patch(
+            "agent_operator.workflow_controller.client.CustomObjectsApi"
+        ) as api_class,
+    ):
+        api = api_class.return_value
+        api.list_namespaced_custom_object.return_value = response
+
+        states = list_workflow_task_states(
+            workflow_name="research-workflow",
+            namespace="agent-workloads",
+        )
+
+    assert states == {
+        "research": {
+            "phase": "Pending",
+            "result": None,
+        }
+    }
+
+
+def test_list_workflow_task_phases_extracts_phases_from_states() -> None:
+    with patch(
+        "agent_operator.workflow_controller.list_workflow_task_states"
+    ) as list_states:
+        list_states.return_value = {
+            "research": {
+                "phase": "Succeeded",
+                "result": "Research result",
+            },
+            "market": {
+                "phase": "Running",
+                "result": None,
+            },
+        }
+
+        phases = list_workflow_task_phases(
+            workflow_name="research-workflow",
+            namespace="agent-workloads",
+        )
+
+    assert phases == {
+        "research": "Succeeded",
+        "market": "Running",
+    }
+
+    list_states.assert_called_once_with(
+        workflow_name="research-workflow",
+        namespace="agent-workloads",
+    )
+
+
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_passes_upstream_result_to_downstream_task(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "research": {
+            "phase": "Succeeded",
+            "result": "Research result",
+        },
+    }
+
+    mock_ensure_workflow_task.return_value = True
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "research-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            {
+                "name": "research",
+                "agentRef": {
+                    "name": "research-agent",
+                },
+                "input": {
+                    "prompt": "Run research.",
+                },
+            },
+            {
+                "name": "market",
+                "agentRef": {
+                    "name": "market-agent",
+                },
+                "dependsOn": [
+                    "research",
+                ],
+                "input": {
+                    "prompt": "Analyze market.",
+                    "from": [
+                        {
+                            "task": "research",
+                        }
+                    ],
+                },
+            },
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="research-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 1
+
+    mock_ensure_workflow_task.assert_called_once()
+
+    created_task_spec = mock_ensure_workflow_task.call_args.kwargs["task_spec"]
+
+    assert created_task_spec["name"] == "market"
+
+    assert created_task_spec["input"]["prompt"] == (
+        "Analyze market.\n\nPrevious task results:\n\n[research]\nResearch result"
+    )
+
+    assert "from" not in (created_task_spec["input"])
+
+
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_waits_when_required_result_is_missing(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "research": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+    }
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "research-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            {
+                "name": "research",
+                "agentRef": {
+                    "name": "research-agent",
+                },
+                "input": {
+                    "prompt": "Run research.",
+                },
+            },
+            {
+                "name": "market",
+                "agentRef": {
+                    "name": "market-agent",
+                },
+                "dependsOn": [
+                    "research",
+                ],
+                "input": {
+                    "prompt": "Analyze market.",
+                    "from": [
+                        {
+                            "task": "research",
+                        }
+                    ],
+                },
+            },
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="research-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 0
+
+    mock_ensure_workflow_task.assert_not_called()
+
+
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_passes_multiple_results_in_declared_order(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "market": {
+            "phase": "Succeeded",
+            "result": "Market result",
+        },
+        "technology": {
+            "phase": "Succeeded",
+            "result": "Technology result",
+        },
+    }
+
+    mock_ensure_workflow_task.return_value = True
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "research-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            {
+                "name": "market",
+                "agentRef": {
+                    "name": "market-agent",
+                },
+                "input": {
+                    "prompt": "Market.",
+                },
+            },
+            {
+                "name": "technology",
+                "agentRef": {
+                    "name": "technology-agent",
+                },
+                "input": {
+                    "prompt": "Technology.",
+                },
+            },
+            {
+                "name": "report",
+                "agentRef": {
+                    "name": "report-agent",
+                },
+                "dependsOn": [
+                    "market",
+                    "technology",
+                ],
+                "input": {
+                    "prompt": "Write final report.",
+                    "from": [
+                        {
+                            "task": "market",
+                        },
+                        {
+                            "task": "technology",
+                        },
+                    ],
+                },
+            },
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="research-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 1
+
+    mock_ensure_workflow_task.assert_called_once()
+
+    created_task_spec = mock_ensure_workflow_task.call_args.kwargs["task_spec"]
+
+    prompt = created_task_spec["input"]["prompt"]
+
+    assert "[market]" in prompt
+    assert "Market result" in prompt
+
+    assert "[technology]" in prompt
+    assert "Technology result" in prompt
+
+    assert prompt.index("[market]") < prompt.index("[technology]")
+
+    assert "from" not in (created_task_spec["input"])
+
+
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_preserves_prompt_without_result_sources(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+) -> None:
+    mock_list_workflow_task_states.return_value = {}
+
+    mock_ensure_workflow_task.return_value = True
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "research-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            {
+                "name": "research",
+                "agentRef": {
+                    "name": "research-agent",
+                },
+                "input": {
+                    "prompt": "Run research.",
+                },
+            },
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="research-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 1
+
+    created_task_spec = mock_ensure_workflow_task.call_args.kwargs["task_spec"]
+
+    assert created_task_spec["input"]["prompt"] == "Run research."
+
+    assert "from" not in (created_task_spec["input"])

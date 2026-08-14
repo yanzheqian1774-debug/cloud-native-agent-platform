@@ -1,7 +1,7 @@
 apiVersion: agentos.io/v1alpha1
 kind: Workflow
 metadata:
-  name: research-workflow
+  name: result-passing-e2e
   namespace: agent-workloads
 
 spec:
@@ -11,8 +11,8 @@ spec:
         name: researcher-agent
       input:
         prompt: |
-          Research Kubernetes-native AI Agent platforms and summarize
-          the key architecture, product, and market implications.
+          Reply with exactly one short sentence:
+          Kubernetes-native Agent platforms use declarative control planes.
       timeoutSeconds: 300
 
     - name: market
@@ -22,7 +22,8 @@ spec:
         - research
       input:
         prompt: |
-          Analyze the market implications based on the research below.
+          Based on the previous result, reply with one short sentence
+          about the market implication.
         from:
           - task: research
       timeoutSeconds: 300
@@ -34,7 +35,8 @@ spec:
         - research
       input:
         prompt: |
-          Analyze the technical implications based on the research below.
+          Based on the previous result, reply with one short sentence
+          about the technical implication.
         from:
           - task: research
       timeoutSeconds: 300
@@ -47,7 +49,7 @@ spec:
         - technology
       input:
         prompt: |
-          Produce a final synthesis combining the market and technical analysis.
+          Combine the two previous results into one short final sentence.
         from:
           - task: market
           - task: technology

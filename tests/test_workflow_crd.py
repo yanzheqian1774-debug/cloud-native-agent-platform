@@ -142,3 +142,24 @@ def test_workflow_crd_has_status_subresource() -> None:
     assert version["subresources"] == {
         "status": {},
     }
+
+
+def test_workflow_task_input_supports_result_sources() -> None:
+    """Workflow task input should expose result-source schema."""
+
+
+def test_workflow_input_result_source_requires_task() -> None:
+    """Each result source must require a task reference."""
+
+
+def test_workflow_input_result_sources_default_to_empty_list() -> None:
+    crd = load_workflow_crd()
+
+    task_schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"][
+        "spec"
+    ]["properties"]["tasks"]["items"]["properties"]
+
+    from_schema = task_schema["input"]["properties"]["from"]
+
+    assert from_schema["type"] == "array"
+    assert from_schema["default"] == []

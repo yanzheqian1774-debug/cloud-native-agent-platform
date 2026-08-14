@@ -46,7 +46,9 @@ class WorkflowGraph:
         return ordered
 
 
-def build_workflow_graph(tasks: Sequence[Mapping[str, Any]]) -> WorkflowGraph:
+def build_workflow_graph(
+    tasks: Sequence[Mapping[str, Any]],
+) -> WorkflowGraph:
     """Validate workflow tasks and build their dependency graph."""
 
     if not tasks:
@@ -55,12 +57,26 @@ def build_workflow_graph(tasks: Sequence[Mapping[str, Any]]) -> WorkflowGraph:
     task_names: list[str] = []
     dependencies: dict[str, tuple[str, ...]] = {}
 
+    # Pass 1:
+    # Collect all task names and validate duplicate task names.
+    #
+    # We must collect every task name before validating result sources,
+    # because a task may reference another task declared later in the
+    # Workflow specification.
     for task in tasks:
         name = task["name"]
 
-        if name in dependencies:
+        if name in task_names:
             raise WorkflowValidationError(f"duplicate task name: {name}")
 
+        task_names.append(name)
+
+    task_name_set = set(task_names)
+
+    # Pass 2:
+    # Build and validate control-flow dependencies.
+    for task in tasks:
+        name = task["name"]
         task_dependencies = tuple(task.get("dependsOn", []))
 
         if len(task_dependencies) != len(set(task_dependencies)):
@@ -68,28 +84,65 @@ def build_workflow_graph(tasks: Sequence[Mapping[str, Any]]) -> WorkflowGraph:
                 f"task '{name}' contains duplicate dependencies"
             )
 
-        task_names.append(name)
+        for dependency in task_dependencies:
+            if dependency == name:
+                raise WorkflowValidationError(f"task '{name}' cannot depend on itself")
+
+            if dependency not in task_name_set:
+                raise WorkflowValidationError(
+                    f"task '{name}' depends on unknown task '{dependency}'"
+                )
+
         dependencies[name] = task_dependencies
 
-    known_tasks = set(task_names)
+    # Pass 3:
+    # Validate data-flow dependencies declared through input.from.
+    #
+    # A result source must:
+    # - reference an existing task
+    # - not reference the task itself
+    # - not be duplicated
+    # - also appear in dependsOn
+    for task in tasks:
+        task_name = task["name"]
+        task_dependencies = set(dependencies[task_name])
+        sources = task.get("input", {}).get("from", [])
 
-    for task_name, task_dependencies in dependencies.items():
-        for dependency in task_dependencies:
-            if dependency == task_name:
+        seen_sources: set[str] = set()
+
+        for source in sources:
+            source_task = source["task"]
+
+            if source_task == task_name:
                 raise WorkflowValidationError(
-                    f"task '{task_name}' cannot depend on itself"
+                    f"task {task_name!r} cannot consume its own result"
                 )
 
-            if dependency not in known_tasks:
+            if source_task not in task_name_set:
                 raise WorkflowValidationError(
-                    f"task '{task_name}' depends on unknown task '{dependency}'"
+                    f"task {task_name!r} references unknown result source "
+                    f"{source_task!r}"
                 )
+
+            if source_task in seen_sources:
+                raise WorkflowValidationError(
+                    f"task {task_name!r} has duplicate result source {source_task!r}"
+                )
+
+            if source_task not in task_dependencies:
+                raise WorkflowValidationError(
+                    f"result source {source_task!r} for task "
+                    f"{task_name!r} must also appear in dependsOn"
+                )
+
+            seen_sources.add(source_task)
 
     graph = WorkflowGraph(
         task_names=tuple(task_names),
         dependencies=dependencies,
     )
 
+    # Force cycle validation while building the graph.
     graph.topological_order()
 
     return graph
