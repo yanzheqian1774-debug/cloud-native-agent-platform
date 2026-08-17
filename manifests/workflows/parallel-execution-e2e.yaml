@@ -1,0 +1,58 @@
+apiVersion: agentos.io/v1alpha1
+kind: Workflow
+metadata:
+  name: parallel-s4-006-e2e
+  namespace: agent-workloads
+  labels:
+    agentos.io/test: s4-006
+    agentos.io/test-type: parallel-execution
+spec:
+  tasks:
+    - name: research
+      agentRef:
+        name: researcher-agent
+      input:
+        prompt: |
+          Identify three important current themes in enterprise AI adoption.
+          Keep the response concise and use no more than five bullet points.
+      timeoutSeconds: 180
+
+    - name: market
+      agentRef:
+        name: researcher-agent
+      dependsOn:
+        - research
+      input:
+        prompt: |
+          Based on the previous research result, analyze the market implications.
+          Keep the response concise.
+        from:
+          - task: research
+      timeoutSeconds: 180
+
+    - name: technology
+      agentRef:
+        name: researcher-agent
+      dependsOn:
+        - research
+      input:
+        prompt: |
+          Based on the previous research result, analyze the technology implications.
+          Keep the response concise.
+        from:
+          - task: research
+      timeoutSeconds: 180
+
+    - name: report
+      agentRef:
+        name: researcher-agent
+      dependsOn:
+        - market
+        - technology
+      input:
+        prompt: |
+          Combine the market and technology analyses into a concise executive summary.
+        from:
+          - task: market
+          - task: technology
+      timeoutSeconds: 180

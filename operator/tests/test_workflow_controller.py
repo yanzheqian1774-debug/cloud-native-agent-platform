@@ -421,6 +421,62 @@ def test_reconcile_workflow_creates_tasks_after_dependencies_succeed(
 
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_does_not_wait_for_running_sibling(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+) -> None:
+    """A running sibling must not block another ready sibling."""
+
+    mock_list_workflow_task_states.return_value = {
+        "research": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+        "market": {
+            "phase": "Running",
+            "result": None,
+        },
+    }
+
+    mock_ensure_workflow_task.return_value = True
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "research-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            workflow_task("research"),
+            workflow_task("market", ["research"]),
+            workflow_task("technology", ["research"]),
+            workflow_task("report", ["market", "technology"]),
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="research-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 1
+
+    mock_ensure_workflow_task.assert_called_once()
+
+    created_task_spec = mock_ensure_workflow_task.call_args.kwargs["task_spec"]
+
+    assert created_task_spec["name"] == "technology"
+
+
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_waits_for_all_dependencies(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
@@ -468,6 +524,66 @@ def test_reconcile_workflow_waits_for_all_dependencies(
 
     assert created == 0
     mock_ensure_workflow_task.assert_not_called()
+
+
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_creates_fan_in_task_when_all_dependencies_succeed(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+) -> None:
+    """A fan-in task becomes runnable after every dependency succeeds."""
+
+    mock_list_workflow_task_states.return_value = {
+        "research": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+        "market": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+        "technology": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+    }
+
+    mock_ensure_workflow_task.return_value = True
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "research-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            workflow_task("research"),
+            workflow_task("market", ["research"]),
+            workflow_task("technology", ["research"]),
+            workflow_task("report", ["market", "technology"]),
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="research-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 1
+
+    mock_ensure_workflow_task.assert_called_once()
+
+    created_task_spec = mock_ensure_workflow_task.call_args.kwargs["task_spec"]
+
+    assert created_task_spec["name"] == "report"
 
 
 @patch("agent_operator.workflow_controller.reconcile_workflow")
