@@ -56,12 +56,12 @@ def update_agent(
     patch: kopf.Patch,
     **_: Any,
 ) -> None:
-    replicas = spec.get("replicas", 1)
+    """Reconcile mutable Deployment state when an Agent spec changes."""
 
-    update_deployment_replicas(
+    reconcile_agent_deployment(
         name=name,
         namespace=namespace,
-        replicas=replicas,
+        spec=spec,
     )
 
 
@@ -185,11 +185,28 @@ def reconcile_agent_status(
         patch.status["phase"] = "Pending"
 
 
-def update_deployment_replicas(
+def reconcile_agent_deployment(
     name: str,
     namespace: str,
-    replicas: int,
+    spec: dict[str, Any],
 ) -> None:
+    """Reconcile mutable Deployment state from the Agent desired spec."""
+
+    desired = build_agent_deployment(
+        name=name,
+        namespace=namespace,
+        spec=spec,
+    )
+
+    desired_spec = desired["spec"]
+
+    patch_body = {
+        "spec": {
+            "replicas": desired_spec["replicas"],
+            "template": desired_spec["template"],
+        }
+    }
+
     load_kubernetes_config()
 
     apps_api = client.AppsV1Api()
@@ -197,9 +214,5 @@ def update_deployment_replicas(
     apps_api.patch_namespaced_deployment(
         name=name,
         namespace=namespace,
-        body={
-            "spec": {
-                "replicas": replicas,
-            }
-        },
+        body=patch_body,
     )

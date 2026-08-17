@@ -115,7 +115,10 @@ def build_agent_deployment(
                     "containers": [
                         {
                             "name": "agent",
-                            "image": "enterprise-agent-runtime:v0.1-dev",
+                            "image": spec["runtime"].get(
+                                "image",
+                                "enterprise-agent-runtime:v0.1-dev",
+                            ),
                             "imagePullPolicy": "IfNotPresent",
                             "ports": [
                                 {
