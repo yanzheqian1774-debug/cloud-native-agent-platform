@@ -3,12 +3,15 @@ from unittest.mock import Mock, patch
 import kopf
 import pytest
 from agent_operator.workflow_controller import (
+    aggregate_workflow_phase,
     build_skipped_task_status,
+    build_workflow_task_statuses,
     create_workflow,
     ensure_workflow_task,
     get_workflow,
     list_workflow_task_phases,
     list_workflow_task_states,
+    patch_workflow_status,
     patch_workflow_task_statuses,
     reconcile_workflow,
     reconcile_workflow_for_task,
@@ -37,11 +40,13 @@ def workflow_task(
     return task
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 def test_create_workflow_creates_only_root_tasks(
     mock_ensure_workflow_task,
     mock_list_workflow_task_states,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {}
 
@@ -83,15 +88,31 @@ def test_create_workflow_creates_only_root_tasks(
         owner=body,
     )
 
-    assert status_patch.status["phase"] == "Running"
-    assert status_patch.status["taskCount"] == 4
+    assert dict(status_patch) == {}
+
+    mock_patch_workflow_status.assert_called_once()
+
+    status_call = mock_patch_workflow_status.call_args.kwargs
+
+    assert status_call["workflow_name"] == "research-workflow"
+    assert status_call["namespace"] == "agent-workloads"
+    assert status_call["phase"] == "Running"
+    assert status_call["task_count"] == 4
+    assert status_call["task_statuses"] == {
+        "research": {"phase": "Pending"},
+        "market": {"phase": "Pending"},
+        "technology": {"phase": "Pending"},
+        "report": {"phase": "Pending"},
+    }
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 def test_create_workflow_creates_multiple_root_tasks(
     mock_ensure_workflow_task,
     mock_list_workflow_task_states,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {}
     status_patch = kopf.Patch()
@@ -128,6 +149,22 @@ def test_create_workflow_creates_multiple_root_tasks(
     assert created_names == {
         "market",
         "technology",
+    }
+
+    assert dict(status_patch) == {}
+
+    mock_patch_workflow_status.assert_called_once()
+
+    status_call = mock_patch_workflow_status.call_args.kwargs
+
+    assert status_call["workflow_name"] == "parallel-workflow"
+    assert status_call["namespace"] == "agent-workloads"
+    assert status_call["phase"] == "Running"
+    assert status_call["task_count"] == 3
+    assert status_call["task_statuses"] == {
+        "market": {"phase": "Pending"},
+        "technology": {"phase": "Pending"},
+        "report": {"phase": "Pending"},
     }
 
 
@@ -367,11 +404,13 @@ def test_list_workflow_task_phases_treats_existing_task_without_status_as_pendin
     }
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_creates_tasks_after_dependencies_succeed(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "research": {
@@ -421,11 +460,13 @@ def test_reconcile_workflow_creates_tasks_after_dependencies_succeed(
     }
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_does_not_wait_for_running_sibling(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     """A running sibling must not block another ready sibling."""
 
@@ -477,11 +518,13 @@ def test_reconcile_workflow_does_not_wait_for_running_sibling(
     assert created_task_spec["name"] == "technology"
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_waits_for_all_dependencies(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "research": {
@@ -528,11 +571,13 @@ def test_reconcile_workflow_waits_for_all_dependencies(
     mock_ensure_workflow_task.assert_not_called()
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_creates_fan_in_task_when_all_dependencies_succeed(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     """A fan-in task becomes runnable after every dependency succeeds."""
 
@@ -871,11 +916,13 @@ def test_list_workflow_task_phases_extracts_phases_from_states() -> None:
     )
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_passes_upstream_result_to_downstream_task(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "research": {
@@ -949,11 +996,13 @@ def test_reconcile_workflow_passes_upstream_result_to_downstream_task(
     assert "from" not in (created_task_spec["input"])
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_waits_when_required_result_is_missing(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "research": {
@@ -1015,11 +1064,13 @@ def test_reconcile_workflow_waits_when_required_result_is_missing(
     mock_ensure_workflow_task.assert_not_called()
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_passes_multiple_results_in_declared_order(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "market": {
@@ -1114,11 +1165,13 @@ def test_reconcile_workflow_passes_multiple_results_in_declared_order(
     assert "from" not in (created_task_spec["input"])
 
 
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_preserves_prompt_without_result_sources(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {}
 
@@ -1285,13 +1338,13 @@ def test_patch_workflow_task_statuses_is_noop_when_unchanged(
     mock_custom_objects_api.assert_not_called()
 
 
-@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_skips_failed_descendant_without_creating_task(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
-    mock_patch_workflow_task_statuses,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "architect": {
@@ -1339,24 +1392,51 @@ def test_reconcile_workflow_skips_failed_descendant_without_creating_task(
     )
 
     assert created == 0
-
     mock_ensure_workflow_task.assert_not_called()
 
-    mock_patch_workflow_task_statuses.assert_called_once()
+    mock_patch_workflow_status.assert_called_once()
 
-    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+    status_call = mock_patch_workflow_status.call_args.kwargs
+
+    assert status_call["workflow_name"] == "engineering-workflow"
+    assert status_call["namespace"] == "agent-workloads"
+    assert status_call["phase"] == "Running"
+    assert status_call["task_count"] == 4
+
+    statuses = status_call["task_statuses"]
+
+    assert statuses["architect"] == {
+        "phase": "Succeeded",
+        "taskRef": {
+            "name": "engineering-workflow-architect",
+        },
+    }
+
+    assert statuses["builder"] == {
+        "phase": "Failed",
+        "taskRef": {
+            "name": "engineering-workflow-builder",
+        },
+    }
+
+    assert statuses["tester"] == {
+        "phase": "Running",
+        "taskRef": {
+            "name": "engineering-workflow-tester",
+        },
+    }
 
     assert statuses["reviewer"]["phase"] == "Skipped"
     assert statuses["reviewer"]["reason"] == "DependencyFailed"
 
 
-@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_propagates_skips_transitively(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
-    mock_patch_workflow_task_statuses,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "architect": {
@@ -1394,7 +1474,21 @@ def test_reconcile_workflow_propagates_skips_transitively(
     assert created == 0
     mock_ensure_workflow_task.assert_not_called()
 
-    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+    mock_patch_workflow_status.assert_called_once()
+
+    status_call = mock_patch_workflow_status.call_args.kwargs
+
+    assert status_call["phase"] == "Failed"
+    assert status_call["task_count"] == 4
+
+    statuses = status_call["task_statuses"]
+
+    assert statuses["architect"] == {
+        "phase": "Failed",
+        "taskRef": {
+            "name": "engineering-workflow-architect",
+        },
+    }
 
     assert statuses["builder"]["phase"] == "Skipped"
     assert statuses["builder"]["reason"] == "DependencyFailed"
@@ -1406,13 +1500,13 @@ def test_reconcile_workflow_propagates_skips_transitively(
     assert statuses["publish"]["reason"] == "DependencySkipped"
 
 
-@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_preserves_independent_sibling(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
-    mock_patch_workflow_task_statuses,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "root": {
@@ -1455,22 +1549,39 @@ def test_reconcile_workflow_preserves_independent_sibling(
 
     assert created == 1
 
+    mock_ensure_workflow_task.assert_called_once()
+
     created_task = mock_ensure_workflow_task.call_args.kwargs["task_spec"]["name"]
 
     assert created_task == "independent-branch"
 
-    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+    mock_patch_workflow_status.assert_called_once()
+
+    status_call = mock_patch_workflow_status.call_args.kwargs
+
+    assert status_call["phase"] == "Running"
+    assert status_call["task_count"] == 4
+
+    statuses = status_call["task_statuses"]
+
+    assert statuses["root"]["phase"] == "Succeeded"
+    assert statuses["failed-branch"]["phase"] == "Failed"
+
+    assert statuses["independent-branch"] == {
+        "phase": "Pending",
+    }
 
     assert statuses["failed-descendant"]["phase"] == "Skipped"
+    assert statuses["failed-descendant"]["reason"] == "DependencyFailed"
 
 
-@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.patch_workflow_status")
 @patch("agent_operator.workflow_controller.ensure_workflow_task")
 @patch("agent_operator.workflow_controller.list_workflow_task_states")
 def test_reconcile_workflow_respects_existing_skipped_status(
     mock_list_workflow_task_states,
     mock_ensure_workflow_task,
-    mock_patch_workflow_task_statuses,
+    mock_patch_workflow_status,
 ) -> None:
     mock_list_workflow_task_states.return_value = {
         "root": {
@@ -1516,9 +1627,28 @@ def test_reconcile_workflow_respects_existing_skipped_status(
     assert created == 0
     mock_ensure_workflow_task.assert_not_called()
 
-    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+    mock_patch_workflow_status.assert_called_once()
 
-    assert "child" not in statuses
+    status_call = mock_patch_workflow_status.call_args.kwargs
+
+    assert status_call["phase"] == "Failed"
+    assert status_call["task_count"] == 3
+
+    statuses = status_call["task_statuses"]
+
+    assert statuses["root"] == {
+        "phase": "Failed",
+        "taskRef": {
+            "name": "engineering-workflow-root",
+        },
+    }
+
+    assert statuses["child"] == {
+        "phase": "Skipped",
+        "reason": "DependencyFailed",
+        "message": "already skipped",
+    }
+
     assert statuses["grandchild"]["phase"] == "Skipped"
     assert statuses["grandchild"]["reason"] == "DependencySkipped"
 
@@ -1623,3 +1753,209 @@ def test_reconcile_workflow_for_task_ignores_running_phase(
 
     mock_get_workflow.assert_not_called()
     mock_reconcile_workflow.assert_not_called()
+
+
+def test_aggregate_workflow_phase_returns_succeeded_when_all_tasks_succeed() -> None:
+    phase = aggregate_workflow_phase(
+        task_names=("architect", "builder", "reviewer"),
+        task_phases={
+            "architect": "Succeeded",
+            "builder": "Succeeded",
+            "reviewer": "Succeeded",
+        },
+    )
+
+    assert phase == "Succeeded"
+
+
+def test_aggregate_workflow_phase_returns_running_while_any_task_is_active() -> None:
+    phase = aggregate_workflow_phase(
+        task_names=("architect", "builder", "reviewer"),
+        task_phases={
+            "architect": "Succeeded",
+            "builder": "Failed",
+            "reviewer": "Running",
+        },
+    )
+
+    assert phase == "Running"
+
+
+def test_aggregate_workflow_phase_returns_running_for_unscheduled_task() -> None:
+    phase = aggregate_workflow_phase(
+        task_names=("architect", "builder"),
+        task_phases={
+            "architect": "Succeeded",
+        },
+    )
+
+    assert phase == "Running"
+
+
+def test_aggregate_workflow_phase_fails_when_terminal_graph_has_failure() -> None:
+    phase = aggregate_workflow_phase(
+        task_names=("architect", "builder", "tester", "reviewer"),
+        task_phases={
+            "architect": "Succeeded",
+            "builder": "Failed",
+            "tester": "TimedOut",
+            "reviewer": "Skipped",
+        },
+    )
+
+    assert phase == "Failed"
+
+
+def test_aggregate_workflow_phase_returns_failed_for_terminal_skipped_graph() -> None:
+    phase = aggregate_workflow_phase(
+        task_names=("root", "child"),
+        task_phases={
+            "root": "Failed",
+            "child": "Skipped",
+        },
+    )
+
+    assert phase == "Failed"
+
+
+def test_build_workflow_task_statuses_projects_task_cr_states() -> None:
+    statuses = build_workflow_task_statuses(
+        workflow_name="engineering",
+        task_names=("architect", "builder"),
+        task_states={
+            "architect": {
+                "phase": "Succeeded",
+                "result": "architecture",
+            },
+            "builder": {
+                "phase": "Running",
+                "result": None,
+            },
+        },
+        existing_statuses={},
+    )
+
+    assert statuses == {
+        "architect": {
+            "phase": "Succeeded",
+            "taskRef": {
+                "name": "engineering-architect",
+            },
+        },
+        "builder": {
+            "phase": "Running",
+            "taskRef": {
+                "name": "engineering-builder",
+            },
+        },
+    }
+
+
+def test_build_workflow_task_statuses_preserves_skipped_status() -> None:
+    skipped_status = {
+        "phase": "Skipped",
+        "reason": "DependencyFailed",
+        "message": "blocked",
+    }
+
+    statuses = build_workflow_task_statuses(
+        workflow_name="engineering",
+        task_names=("architect", "reviewer"),
+        task_states={
+            "architect": {
+                "phase": "Failed",
+                "result": None,
+            },
+        },
+        existing_statuses={
+            "reviewer": skipped_status,
+        },
+    )
+
+    assert statuses["reviewer"] == skipped_status
+
+
+def test_build_workflow_task_statuses_projects_unscheduled_task_as_pending() -> None:
+    statuses = build_workflow_task_statuses(
+        workflow_name="engineering",
+        task_names=("architect", "builder"),
+        task_states={
+            "architect": {
+                "phase": "Running",
+                "result": None,
+            },
+        },
+        existing_statuses={},
+    )
+
+    assert statuses["builder"] == {
+        "phase": "Pending",
+    }
+
+
+@patch("agent_operator.workflow_controller.client.CustomObjectsApi")
+@patch("agent_operator.workflow_controller.load_kubernetes_config")
+def test_patch_workflow_status_removes_stale_task_status(
+    mock_load_kubernetes_config,
+    mock_custom_objects_api,
+) -> None:
+    api = mock_custom_objects_api.return_value
+
+    changed = patch_workflow_status(
+        workflow_name="research-workflow",
+        namespace="agent-workloads",
+        body={
+            "status": {
+                "phase": "Running",
+                "taskCount": 3,
+                "tasks": {
+                    "research": {
+                        "phase": "Succeeded",
+                    },
+                    "market": {
+                        "phase": "Running",
+                    },
+                    "stale-task": {
+                        "phase": "Failed",
+                    },
+                },
+            }
+        },
+        phase="Running",
+        task_count=2,
+        task_statuses={
+            "research": {
+                "phase": "Succeeded",
+            },
+            "market": {
+                "phase": "Running",
+            },
+        },
+    )
+
+    assert changed is True
+
+    api.patch_namespaced_custom_object_status.assert_called_once_with(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace="agent-workloads",
+        plural="workflows",
+        name="research-workflow",
+        body={
+            "status": {
+                "phase": "Running",
+                "taskCount": 2,
+                "tasks": {
+                    "research": {
+                        "phase": "Succeeded",
+                    },
+                    "market": {
+                        "phase": "Running",
+                    },
+                    "stale-task": None,
+                },
+            }
+        },
+    )
+
+    mock_load_kubernetes_config.assert_called_once()
