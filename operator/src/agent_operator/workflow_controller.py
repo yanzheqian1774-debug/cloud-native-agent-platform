@@ -9,9 +9,11 @@ from kubernetes import client, config
 
 from agent_operator.resources import build_workflow_task
 from agent_operator.workflow_graph import (
+    TERMINAL_UNSUCCESSFUL_PHASES,
     WorkflowValidationError,
     build_workflow_graph,
     find_ready_tasks,
+    find_skipped_tasks,
 )
 
 
@@ -92,6 +94,82 @@ def create_workflow(
     patch.status["taskCount"] = len(tasks)
 
 
+def patch_workflow_task_statuses(
+    *,
+    workflow_name: str,
+    namespace: str,
+    body: dict[str, Any],
+    task_statuses: Mapping[str, dict[str, Any]],
+) -> bool:
+    """Patch changed Workflow node statuses.
+
+    Returns True when a status patch was written and False when the desired
+    node statuses already match the Workflow status.
+    """
+
+    current_statuses = body.get("status", {}).get("tasks", {})
+
+    changed_statuses = {
+        task_name: task_status
+        for task_name, task_status in task_statuses.items()
+        if current_statuses.get(task_name) != task_status
+    }
+
+    if not changed_statuses:
+        return False
+
+    load_kubernetes_config()
+
+    api = client.CustomObjectsApi()
+
+    api.patch_namespaced_custom_object_status(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace=namespace,
+        plural="workflows",
+        name=workflow_name,
+        body={
+            "status": {
+                "tasks": changed_statuses,
+            }
+        },
+    )
+
+    return True
+
+
+def build_skipped_task_status(
+    *,
+    task_name: str,
+    dependencies: tuple[str, ...],
+    task_phases: Mapping[str, str],
+) -> dict[str, str]:
+    """Build deterministic Workflow status for a skipped task."""
+
+    blockers = [
+        (dependency, task_phases.get(dependency))
+        for dependency in dependencies
+        if task_phases.get(dependency) in TERMINAL_UNSUCCESSFUL_PHASES
+    ]
+
+    has_direct_failure = any(phase in {"Failed", "TimedOut"} for _, phase in blockers)
+
+    reason = "DependencyFailed" if has_direct_failure else "DependencySkipped"
+
+    blocker_text = ", ".join(
+        f"{dependency} ({phase})" for dependency, phase in blockers
+    )
+
+    return {
+        "phase": "Skipped",
+        "reason": reason,
+        "message": (
+            f"Task {task_name!r} skipped because required dependencies "
+            f"cannot succeed: {blocker_text}"
+        ),
+    }
+
+
 def list_workflow_task_states(
     *,
     workflow_name: str,
@@ -167,6 +245,42 @@ def reconcile_workflow(
     task_phases = {
         task_name: state["phase"] for task_name, state in task_states.items()
     }
+
+    workflow_task_statuses = body.get("status", {}).get("tasks", {})
+
+    for task_name, task_status in workflow_task_statuses.items():
+        if task_name in task_phases:
+            continue
+
+        phase = task_status.get("phase")
+
+        if phase == "Skipped":
+            task_phases[task_name] = phase
+
+    skipped_task_names = find_skipped_tasks(
+        graph,
+        task_phases,
+    )
+
+    skipped_statuses: dict[str, dict[str, Any]] = {}
+
+    for task_name in skipped_task_names:
+        skipped_status = build_skipped_task_status(
+            task_name=task_name,
+            dependencies=graph.dependencies[task_name],
+            task_phases=task_phases,
+        )
+
+        skipped_statuses[task_name] = skipped_status
+        task_phases[task_name] = "Skipped"
+
+    if skipped_statuses:
+        patch_workflow_task_statuses(
+            workflow_name=name,
+            namespace=namespace,
+            body=body,
+            task_statuses=skipped_statuses,
+        )
 
     ready_task_names = find_ready_tasks(
         graph,
@@ -251,7 +365,11 @@ def reconcile_workflow_for_task(
 ) -> None:
     """Reconcile the owning Workflow after a Task phase change."""
 
-    if new_phase != "Succeeded":
+    if new_phase not in {
+        "Succeeded",
+        "Failed",
+        "TimedOut",
+    }:
         return
 
     labels = body.get("metadata", {}).get("labels", {})
@@ -285,7 +403,7 @@ def workflow_task_phase_changed(
     new: str | None,
     **_: Any,
 ) -> None:
-    """Reconcile a Workflow when one of its Tasks succeeds."""
+    """Reconcile a Workflow when one of its Tasks becomes terminal."""
 
     reconcile_workflow_for_task(
         body=body,

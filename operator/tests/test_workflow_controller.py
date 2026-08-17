@@ -3,11 +3,13 @@ from unittest.mock import Mock, patch
 import kopf
 import pytest
 from agent_operator.workflow_controller import (
+    build_skipped_task_status,
     create_workflow,
     ensure_workflow_task,
     get_workflow,
     list_workflow_task_phases,
     list_workflow_task_states,
+    patch_workflow_task_statuses,
     reconcile_workflow,
     reconcile_workflow_for_task,
     resolve_task_prompt,
@@ -1160,3 +1162,464 @@ def test_reconcile_workflow_preserves_prompt_without_result_sources(
     assert created_task_spec["input"]["prompt"] == "Run research."
 
     assert "from" not in (created_task_spec["input"])
+
+
+def test_build_skipped_task_status_uses_dependency_failed_reason() -> None:
+    status = build_skipped_task_status(
+        task_name="reviewer",
+        dependencies=("builder", "tester"),
+        task_phases={
+            "builder": "Failed",
+            "tester": "Running",
+        },
+    )
+
+    assert status == {
+        "phase": "Skipped",
+        "reason": "DependencyFailed",
+        "message": (
+            "Task 'reviewer' skipped because required dependencies "
+            "cannot succeed: builder (Failed)"
+        ),
+    }
+
+
+def test_build_skipped_task_status_uses_dependency_skipped_reason() -> None:
+    status = build_skipped_task_status(
+        task_name="publish",
+        dependencies=("reviewer",),
+        task_phases={
+            "reviewer": "Skipped",
+        },
+    )
+
+    assert status == {
+        "phase": "Skipped",
+        "reason": "DependencySkipped",
+        "message": (
+            "Task 'publish' skipped because required dependencies "
+            "cannot succeed: reviewer (Skipped)"
+        ),
+    }
+
+
+@patch("agent_operator.workflow_controller.client.CustomObjectsApi")
+@patch("agent_operator.workflow_controller.load_kubernetes_config")
+def test_patch_workflow_task_statuses_patches_changed_status(
+    mock_load_kubernetes_config,
+    mock_custom_objects_api,
+) -> None:
+    api = mock_custom_objects_api.return_value
+
+    changed = patch_workflow_task_statuses(
+        workflow_name="engineering-workflow",
+        namespace="agent-workloads",
+        body={
+            "status": {
+                "tasks": {},
+            }
+        },
+        task_statuses={
+            "reviewer": {
+                "phase": "Skipped",
+                "reason": "DependencyFailed",
+                "message": "blocked",
+            }
+        },
+    )
+
+    assert changed is True
+
+    mock_load_kubernetes_config.assert_called_once()
+
+    api.patch_namespaced_custom_object_status.assert_called_once_with(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace="agent-workloads",
+        plural="workflows",
+        name="engineering-workflow",
+        body={
+            "status": {
+                "tasks": {
+                    "reviewer": {
+                        "phase": "Skipped",
+                        "reason": "DependencyFailed",
+                        "message": "blocked",
+                    }
+                }
+            }
+        },
+    )
+
+
+@patch("agent_operator.workflow_controller.client.CustomObjectsApi")
+@patch("agent_operator.workflow_controller.load_kubernetes_config")
+def test_patch_workflow_task_statuses_is_noop_when_unchanged(
+    mock_load_kubernetes_config,
+    mock_custom_objects_api,
+) -> None:
+    status = {
+        "phase": "Skipped",
+        "reason": "DependencyFailed",
+        "message": "blocked",
+    }
+
+    changed = patch_workflow_task_statuses(
+        workflow_name="engineering-workflow",
+        namespace="agent-workloads",
+        body={
+            "status": {
+                "tasks": {
+                    "reviewer": status,
+                }
+            }
+        },
+        task_statuses={
+            "reviewer": status,
+        },
+    )
+
+    assert changed is False
+
+    mock_load_kubernetes_config.assert_not_called()
+    mock_custom_objects_api.assert_not_called()
+
+
+@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_skips_failed_descendant_without_creating_task(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+    mock_patch_workflow_task_statuses,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "architect": {
+            "phase": "Succeeded",
+            "result": "architecture",
+        },
+        "builder": {
+            "phase": "Failed",
+            "result": None,
+        },
+        "tester": {
+            "phase": "Running",
+            "result": None,
+        },
+    }
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "engineering-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+        "status": {
+            "phase": "Running",
+            "taskCount": 4,
+        },
+    }
+
+    spec = {
+        "tasks": [
+            workflow_task("architect"),
+            workflow_task("builder", ["architect"]),
+            workflow_task("tester", ["architect"]),
+            workflow_task("reviewer", ["builder", "tester"]),
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="engineering-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 0
+
+    mock_ensure_workflow_task.assert_not_called()
+
+    mock_patch_workflow_task_statuses.assert_called_once()
+
+    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+
+    assert statuses["reviewer"]["phase"] == "Skipped"
+    assert statuses["reviewer"]["reason"] == "DependencyFailed"
+
+
+@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_propagates_skips_transitively(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+    mock_patch_workflow_task_statuses,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "architect": {
+            "phase": "Failed",
+            "result": None,
+        },
+    }
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "engineering-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            workflow_task("architect"),
+            workflow_task("builder", ["architect"]),
+            workflow_task("reviewer", ["builder"]),
+            workflow_task("publish", ["reviewer"]),
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="engineering-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 0
+    mock_ensure_workflow_task.assert_not_called()
+
+    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+
+    assert statuses["builder"]["phase"] == "Skipped"
+    assert statuses["builder"]["reason"] == "DependencyFailed"
+
+    assert statuses["reviewer"]["phase"] == "Skipped"
+    assert statuses["reviewer"]["reason"] == "DependencySkipped"
+
+    assert statuses["publish"]["phase"] == "Skipped"
+    assert statuses["publish"]["reason"] == "DependencySkipped"
+
+
+@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_preserves_independent_sibling(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+    mock_patch_workflow_task_statuses,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "root": {
+            "phase": "Succeeded",
+            "result": None,
+        },
+        "failed-branch": {
+            "phase": "Failed",
+            "result": None,
+        },
+    }
+
+    mock_ensure_workflow_task.return_value = True
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "parallel-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+    }
+
+    spec = {
+        "tasks": [
+            workflow_task("root"),
+            workflow_task("failed-branch", ["root"]),
+            workflow_task("independent-branch", ["root"]),
+            workflow_task("failed-descendant", ["failed-branch"]),
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="parallel-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 1
+
+    created_task = mock_ensure_workflow_task.call_args.kwargs["task_spec"]["name"]
+
+    assert created_task == "independent-branch"
+
+    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+
+    assert statuses["failed-descendant"]["phase"] == "Skipped"
+
+
+@patch("agent_operator.workflow_controller.patch_workflow_task_statuses")
+@patch("agent_operator.workflow_controller.ensure_workflow_task")
+@patch("agent_operator.workflow_controller.list_workflow_task_states")
+def test_reconcile_workflow_respects_existing_skipped_status(
+    mock_list_workflow_task_states,
+    mock_ensure_workflow_task,
+    mock_patch_workflow_task_statuses,
+) -> None:
+    mock_list_workflow_task_states.return_value = {
+        "root": {
+            "phase": "Failed",
+            "result": None,
+        },
+    }
+
+    body = {
+        "apiVersion": "agentos.io/v1alpha1",
+        "kind": "Workflow",
+        "metadata": {
+            "name": "engineering-workflow",
+            "namespace": "agent-workloads",
+            "uid": "workflow-uid",
+        },
+        "status": {
+            "tasks": {
+                "child": {
+                    "phase": "Skipped",
+                    "reason": "DependencyFailed",
+                    "message": "already skipped",
+                }
+            }
+        },
+    }
+
+    spec = {
+        "tasks": [
+            workflow_task("root"),
+            workflow_task("child", ["root"]),
+            workflow_task("grandchild", ["child"]),
+        ]
+    }
+
+    created = reconcile_workflow(
+        spec=spec,
+        name="engineering-workflow",
+        namespace="agent-workloads",
+        body=body,
+    )
+
+    assert created == 0
+    mock_ensure_workflow_task.assert_not_called()
+
+    statuses = mock_patch_workflow_task_statuses.call_args.kwargs["task_statuses"]
+
+    assert "child" not in statuses
+    assert statuses["grandchild"]["phase"] == "Skipped"
+    assert statuses["grandchild"]["reason"] == "DependencySkipped"
+
+
+@patch("agent_operator.workflow_controller.reconcile_workflow")
+@patch("agent_operator.workflow_controller.get_workflow")
+def test_reconcile_workflow_for_task_reconciles_failed_phase(
+    mock_get_workflow,
+    mock_reconcile_workflow,
+) -> None:
+    workflow = {
+        "metadata": {
+            "name": "engineering-workflow",
+        },
+        "spec": {
+            "tasks": [
+                workflow_task("builder"),
+            ]
+        },
+    }
+
+    mock_get_workflow.return_value = workflow
+
+    reconcile_workflow_for_task(
+        body={
+            "metadata": {
+                "labels": {
+                    "agentos.io/workflow": "engineering-workflow",
+                }
+            }
+        },
+        namespace="agent-workloads",
+        new_phase="Failed",
+    )
+
+    mock_get_workflow.assert_called_once_with(
+        workflow_name="engineering-workflow",
+        namespace="agent-workloads",
+    )
+
+    mock_reconcile_workflow.assert_called_once_with(
+        spec=workflow["spec"],
+        name="engineering-workflow",
+        namespace="agent-workloads",
+        body=workflow,
+    )
+
+
+@patch("agent_operator.workflow_controller.reconcile_workflow")
+@patch("agent_operator.workflow_controller.get_workflow")
+def test_reconcile_workflow_for_task_reconciles_timed_out_phase(
+    mock_get_workflow,
+    mock_reconcile_workflow,
+) -> None:
+    workflow = {
+        "metadata": {
+            "name": "engineering-workflow",
+        },
+        "spec": {
+            "tasks": [
+                workflow_task("tester"),
+            ]
+        },
+    }
+
+    mock_get_workflow.return_value = workflow
+
+    reconcile_workflow_for_task(
+        body={
+            "metadata": {
+                "labels": {
+                    "agentos.io/workflow": "engineering-workflow",
+                }
+            }
+        },
+        namespace="agent-workloads",
+        new_phase="TimedOut",
+    )
+
+    mock_get_workflow.assert_called_once()
+
+    mock_reconcile_workflow.assert_called_once()
+
+
+@patch("agent_operator.workflow_controller.reconcile_workflow")
+@patch("agent_operator.workflow_controller.get_workflow")
+def test_reconcile_workflow_for_task_ignores_running_phase(
+    mock_get_workflow,
+    mock_reconcile_workflow,
+) -> None:
+    reconcile_workflow_for_task(
+        body={
+            "metadata": {
+                "labels": {
+                    "agentos.io/workflow": "engineering-workflow",
+                }
+            }
+        },
+        namespace="agent-workloads",
+        new_phase="Running",
+    )
+
+    mock_get_workflow.assert_not_called()
+    mock_reconcile_workflow.assert_not_called()
