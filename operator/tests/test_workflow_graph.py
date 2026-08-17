@@ -3,6 +3,7 @@ from agent_operator.workflow_graph import (
     WorkflowValidationError,
     build_workflow_graph,
     find_ready_tasks,
+    find_skipped_tasks,
 )
 
 
@@ -416,3 +417,216 @@ def test_build_workflow_graph_rejects_result_source_not_in_dependencies() -> Non
         match="must also appear in dependsOn",
     ):
         build_workflow_graph(tasks)
+
+
+def test_find_skipped_tasks_skips_failed_dependency() -> None:
+    graph = build_workflow_graph(
+        [
+            {
+                "name": "research",
+                "dependsOn": [],
+                "agentRef": {"name": "research-agent"},
+                "input": {"prompt": "research"},
+            },
+            {
+                "name": "report",
+                "dependsOn": ["research"],
+                "agentRef": {"name": "report-agent"},
+                "input": {"prompt": "report"},
+            },
+        ]
+    )
+
+    skipped = find_skipped_tasks(
+        graph,
+        {
+            "research": "Failed",
+        },
+    )
+
+    assert skipped == ["report"]
+
+
+def test_find_skipped_tasks_skips_timed_out_dependency() -> None:
+    graph = build_workflow_graph(
+        [
+            {
+                "name": "research",
+                "dependsOn": [],
+                "agentRef": {"name": "research-agent"},
+                "input": {"prompt": "research"},
+            },
+            {
+                "name": "report",
+                "dependsOn": ["research"],
+                "agentRef": {"name": "report-agent"},
+                "input": {"prompt": "report"},
+            },
+        ]
+    )
+
+    skipped = find_skipped_tasks(
+        graph,
+        {
+            "research": "TimedOut",
+        },
+    )
+
+    assert skipped == ["report"]
+
+
+def test_find_skipped_tasks_propagates_transitively() -> None:
+    graph = build_workflow_graph(
+        [
+            {
+                "name": "architect",
+                "dependsOn": [],
+                "agentRef": {"name": "architect-agent"},
+                "input": {"prompt": "architect"},
+            },
+            {
+                "name": "builder",
+                "dependsOn": ["architect"],
+                "agentRef": {"name": "builder-agent"},
+                "input": {"prompt": "builder"},
+            },
+            {
+                "name": "reviewer",
+                "dependsOn": ["builder"],
+                "agentRef": {"name": "reviewer-agent"},
+                "input": {"prompt": "reviewer"},
+            },
+            {
+                "name": "publish",
+                "dependsOn": ["reviewer"],
+                "agentRef": {"name": "publish-agent"},
+                "input": {"prompt": "publish"},
+            },
+        ]
+    )
+
+    skipped = find_skipped_tasks(
+        graph,
+        {
+            "architect": "Failed",
+        },
+    )
+
+    assert skipped == [
+        "builder",
+        "reviewer",
+        "publish",
+    ]
+
+
+def test_find_skipped_tasks_does_not_skip_independent_sibling() -> None:
+    graph = build_workflow_graph(
+        [
+            {
+                "name": "root",
+                "dependsOn": [],
+                "agentRef": {"name": "root-agent"},
+                "input": {"prompt": "root"},
+            },
+            {
+                "name": "failed-branch",
+                "dependsOn": ["root"],
+                "agentRef": {"name": "failed-agent"},
+                "input": {"prompt": "failed"},
+            },
+            {
+                "name": "independent-branch",
+                "dependsOn": ["root"],
+                "agentRef": {"name": "independent-agent"},
+                "input": {"prompt": "independent"},
+            },
+            {
+                "name": "failed-descendant",
+                "dependsOn": ["failed-branch"],
+                "agentRef": {"name": "descendant-agent"},
+                "input": {"prompt": "descendant"},
+            },
+        ]
+    )
+
+    skipped = find_skipped_tasks(
+        graph,
+        {
+            "root": "Succeeded",
+            "failed-branch": "Failed",
+            "independent-branch": "Running",
+        },
+    )
+
+    assert skipped == ["failed-descendant"]
+
+
+def test_find_skipped_tasks_skips_fan_in_immediately() -> None:
+    graph = build_workflow_graph(
+        [
+            {
+                "name": "root",
+                "dependsOn": [],
+                "agentRef": {"name": "root-agent"},
+                "input": {"prompt": "root"},
+            },
+            {
+                "name": "builder",
+                "dependsOn": ["root"],
+                "agentRef": {"name": "builder-agent"},
+                "input": {"prompt": "builder"},
+            },
+            {
+                "name": "tester",
+                "dependsOn": ["root"],
+                "agentRef": {"name": "tester-agent"},
+                "input": {"prompt": "tester"},
+            },
+            {
+                "name": "reviewer",
+                "dependsOn": ["builder", "tester"],
+                "agentRef": {"name": "reviewer-agent"},
+                "input": {"prompt": "reviewer"},
+            },
+        ]
+    )
+
+    skipped = find_skipped_tasks(
+        graph,
+        {
+            "root": "Succeeded",
+            "builder": "Failed",
+            "tester": "Running",
+        },
+    )
+
+    assert skipped == ["reviewer"]
+
+
+def test_find_skipped_tasks_never_skips_existing_task() -> None:
+    graph = build_workflow_graph(
+        [
+            {
+                "name": "root",
+                "dependsOn": [],
+                "agentRef": {"name": "root-agent"},
+                "input": {"prompt": "root"},
+            },
+            {
+                "name": "child",
+                "dependsOn": ["root"],
+                "agentRef": {"name": "child-agent"},
+                "input": {"prompt": "child"},
+            },
+        ]
+    )
+
+    skipped = find_skipped_tasks(
+        graph,
+        {
+            "root": "Failed",
+            "child": "Running",
+        },
+    )
+
+    assert skipped == []

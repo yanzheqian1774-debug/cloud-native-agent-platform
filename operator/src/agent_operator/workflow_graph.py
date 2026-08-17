@@ -172,3 +172,45 @@ def find_ready_tasks(
             ready.append(task_name)
 
     return ready
+
+
+TERMINAL_UNSUCCESSFUL_PHASES = frozenset(
+    {
+        "Failed",
+        "TimedOut",
+        "Skipped",
+    }
+)
+
+
+def find_skipped_tasks(
+    graph: WorkflowGraph,
+    task_phases: Mapping[str, str],
+) -> list[str]:
+    """Return unscheduled tasks blocked by unsuccessful dependencies.
+
+    A task becomes Skipped as soon as any dependency reaches a terminal
+    unsuccessful phase. Skips are propagated transitively in topological
+    order so the full blocked subgraph converges in one reconciliation pass.
+
+    Tasks already present in task_phases are treated as already scheduled or
+    terminal and are never converted to Skipped by this function.
+    """
+
+    effective_phases = dict(task_phases)
+    skipped: list[str] = []
+
+    for task_name in graph.topological_order():
+        if task_name in effective_phases:
+            continue
+
+        dependencies = graph.dependencies[task_name]
+
+        if any(
+            effective_phases.get(dependency) in TERMINAL_UNSUCCESSFUL_PHASES
+            for dependency in dependencies
+        ):
+            skipped.append(task_name)
+            effective_phases[task_name] = "Skipped"
+
+    return skipped

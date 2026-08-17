@@ -1,0 +1,201 @@
+apiVersion: agentos.io/v1alpha1
+kind: Workflow
+metadata:
+  name: engineering-s4-007-001
+  namespace: agent-workloads
+  labels:
+    agentos.io/team: engineering
+    agentos.io/project: cloud-native-agent-platform
+    agentos.io/task: s4-007
+    agentos.io/run-type: engineering
+spec:
+  tasks:
+    - name: architect
+      agentRef:
+        name: engineering-architect
+      input:
+        prompt: |
+          You are the Architect for the AgentOS Engineering Team.
+
+          Design S4-007: Workflow Failure / Skip Propagation.
+
+          Current implementation facts:
+
+          - Workflow Controller creates Task CRs and does not invoke models directly.
+          - Workflow DAG validation already exists.
+          - Root task scheduling exists.
+          - Dependency resolution exists.
+          - Result passing exists.
+          - Parallel fan-out/fan-in semantics exist.
+          - A downstream task is currently created only when every dependency has phase Succeeded.
+          - Task phases include:
+            Pending, Running, Succeeded, Failed, TimedOut.
+          - Workflow node status additionally supports Skipped.
+          - Current workflows may remain Running indefinitely when an upstream Task fails.
+          - S4-008 will separately implement Workflow status aggregation.
+          - Do not redesign S4-008 in this task.
+          - Do not introduce queues, external workflow engines, databases, or new CRDs.
+          - Preserve current Kubernetes-native reconciliation architecture.
+
+          S4-007 must answer:
+
+          1. Which upstream terminal phases cause downstream nodes to become Skipped?
+          2. When should a downstream node be marked Skipped?
+          3. How should transitive skip propagation work?
+          4. Should a skipped node have a Task CR?
+          5. Which Task status phase changes must trigger Workflow reconciliation?
+          6. How should the implementation remain idempotent under repeated reconciliation?
+          7. Which existing source files and tests are likely affected?
+          8. What belongs to S4-007 versus S4-008?
+
+          Produce an implementation-ready Engineering Packet with exactly these sections:
+
+          1. Goal
+          2. Current Behavior
+          3. Desired Behavior
+          4. Architecture Decision
+          5. State Transitions
+          6. Files Likely Affected
+          7. Implementation Plan
+          8. Acceptance Criteria
+          9. Risks
+          10. Open Questions
+
+          Base the proposal strictly on the supplied AgentOS facts.
+          Clearly mark any assumptions.
+          Do not provide hidden chain-of-thought.
+      timeoutSeconds: 300
+
+    - name: builder
+      agentRef:
+        name: engineering-builder
+      dependsOn:
+        - architect
+      input:
+        prompt: |
+          You are the Builder for the AgentOS Engineering Team.
+
+          Using the Architect result supplied below as authoritative design input,
+          produce a concrete implementation proposal for S4-007 Workflow Failure /
+          Skip Propagation.
+
+          Requirements:
+
+          - Preserve current architecture.
+          - Workflow Controller creates Task CRs only.
+          - Do not invoke models directly from Workflow Controller.
+          - Do not implement S4-008 Workflow status aggregation.
+          - Do not introduce new CRDs.
+          - Prefer pure helper functions where practical.
+          - Preserve deterministic and idempotent reconciliation.
+          - A skipped workflow node should not create an execution Task CR unless
+            the Architect explicitly justifies otherwise.
+          - Include exact function-level changes.
+          - Include exact unit-test cases to add or modify.
+          - Identify any existing handlers that must react to additional Task phases.
+
+          Produce:
+
+          1. Implementation Summary
+          2. Files To Change
+          3. Function-Level Changes
+          4. Proposed Algorithms
+          5. Unit Tests
+          6. Integration Test
+          7. Kubernetes E2E Test
+          8. Compatibility Notes
+          9. Known Technical Debt
+
+          Do not claim files or functions exist unless supported by the Architect
+          context or supplied AgentOS facts.
+          Do not provide hidden chain-of-thought.
+        from:
+          - task: architect
+      timeoutSeconds: 300
+
+    - name: tester
+      agentRef:
+        name: engineering-tester
+      dependsOn:
+        - architect
+      input:
+        prompt: |
+          You are the Tester for the AgentOS Engineering Team.
+
+          Independently derive the verification strategy for S4-007 Workflow
+          Failure / Skip Propagation using the Architect result supplied below.
+
+          Verify at minimum:
+
+          - Failed dependency causes blocked descendant to become Skipped.
+          - TimedOut dependency causes blocked descendant to become Skipped.
+          - Skip propagation is transitive.
+          - One failed sibling does not incorrectly skip an independent sibling.
+          - Fan-in node is skipped when one required dependency becomes terminal
+            unsuccessful.
+          - Repeated reconciliation remains idempotent.
+          - No Task CR is created for skipped workflow nodes.
+          - Existing successful dependency scheduling still works.
+          - Result passing behavior for successful paths is not regressed.
+          - S4-008 Workflow phase aggregation is not accidentally implemented here.
+
+          Produce:
+
+          1. Test Strategy
+          2. Unit Test Matrix
+          3. Controller Test Cases
+          4. Kubernetes E2E Scenario
+          5. Regression Risks
+          6. Pass / Fail Criteria
+
+          Do not provide hidden chain-of-thought.
+        from:
+          - task: architect
+      timeoutSeconds: 300
+
+    - name: reviewer
+      agentRef:
+        name: engineering-reviewer
+      dependsOn:
+        - builder
+        - tester
+      input:
+        prompt: |
+          You are the Reviewer for the AgentOS Engineering Team.
+
+          Review the Builder and Tester proposals supplied below for S4-007:
+          Workflow Failure / Skip Propagation.
+
+          Review against these non-negotiable architecture constraints:
+
+          - Workflow Controller creates Task CRs and never calls models directly.
+          - Do not introduce queues, databases, new CRDs, or external workflow engines.
+          - S4-007 handles failure / skip propagation only.
+          - S4-008 will handle Workflow phase aggregation separately.
+          - Reconciliation must be deterministic and idempotent.
+          - Independent siblings must continue independently.
+          - A downstream node that can no longer become runnable should become Skipped.
+          - Skipped nodes should live in Workflow status rather than creating execution
+            Task CRs unless there is a compelling reason.
+          - Existing S4-003 through S4-006 semantics must not regress.
+
+          Detect contradictions, over-design, missing edge cases, and assumptions.
+
+          Return exactly:
+
+          1. Decision: APPROVED or CHANGES_REQUIRED
+          2. Architecture Assessment
+          3. Builder Assessment
+          4. Tester Assessment
+          5. Required Changes
+          6. Final Recommended S4-007 Design
+          7. Final Acceptance Criteria
+          8. Implementation Order
+          9. Technical Debt Deferred To S4-008 Or Later
+
+          Use P0 / P1 / P2 severity where appropriate.
+          Do not provide hidden chain-of-thought.
+        from:
+          - task: builder
+          - task: tester
+      timeoutSeconds: 300

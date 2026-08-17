@@ -1,6 +1,6 @@
 """Workflow controller for AgentOS."""
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from typing import Any
 
@@ -9,9 +9,11 @@ from kubernetes import client, config
 
 from agent_operator.resources import build_workflow_task
 from agent_operator.workflow_graph import (
+    TERMINAL_UNSUCCESSFUL_PHASES,
     WorkflowValidationError,
     build_workflow_graph,
     find_ready_tasks,
+    find_skipped_tasks,
 )
 
 
@@ -75,8 +77,6 @@ def create_workflow(
 ) -> None:
     """Validate and reconcile a newly created Workflow."""
 
-    tasks = spec["tasks"]
-
     try:
         reconcile_workflow(
             spec=spec,
@@ -88,8 +88,141 @@ def create_workflow(
         patch.status["phase"] = "Failed"
         raise kopf.PermanentError(str(exc)) from exc
 
-    patch.status["phase"] = "Running"
-    patch.status["taskCount"] = len(tasks)
+
+def patch_workflow_task_statuses(
+    *,
+    workflow_name: str,
+    namespace: str,
+    body: dict[str, Any],
+    task_statuses: Mapping[str, dict[str, Any]],
+) -> bool:
+    """Patch changed Workflow node statuses.
+
+    Returns True when a status patch was written and False when the desired
+    node statuses already match the Workflow status.
+    """
+
+    current_statuses = body.get("status", {}).get("tasks", {})
+
+    changed_statuses = {
+        task_name: task_status
+        for task_name, task_status in task_statuses.items()
+        if current_statuses.get(task_name) != task_status
+    }
+
+    if not changed_statuses:
+        return False
+
+    load_kubernetes_config()
+
+    api = client.CustomObjectsApi()
+
+    api.patch_namespaced_custom_object_status(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace=namespace,
+        plural="workflows",
+        name=workflow_name,
+        body={
+            "status": {
+                "tasks": changed_statuses,
+            }
+        },
+    )
+
+    return True
+
+
+def patch_workflow_status(
+    *,
+    workflow_name: str,
+    namespace: str,
+    body: dict[str, Any],
+    phase: str,
+    task_count: int,
+    task_statuses: Mapping[str, dict[str, Any]],
+) -> bool:
+    """Patch the complete aggregated Workflow status when it changes."""
+
+    current_status = body.get("status", {})
+    current_task_statuses = current_status.get("tasks", {})
+
+    desired_task_statuses = dict(task_statuses)
+
+    desired_status = {
+        "phase": phase,
+        "taskCount": task_count,
+        "tasks": desired_task_statuses,
+    }
+
+    current_projection = {
+        "phase": current_status.get("phase"),
+        "taskCount": current_status.get("taskCount"),
+        "tasks": current_task_statuses,
+    }
+
+    if current_projection == desired_status:
+        return False
+
+    task_status_patch: dict[str, Any] = dict(desired_task_statuses)
+
+    stale_task_names = set(current_task_statuses) - set(desired_task_statuses)
+
+    for task_name in stale_task_names:
+        task_status_patch[task_name] = None
+
+    load_kubernetes_config()
+
+    api = client.CustomObjectsApi()
+
+    api.patch_namespaced_custom_object_status(
+        group="agentos.io",
+        version="v1alpha1",
+        namespace=namespace,
+        plural="workflows",
+        name=workflow_name,
+        body={
+            "status": {
+                "phase": phase,
+                "taskCount": task_count,
+                "tasks": task_status_patch,
+            }
+        },
+    )
+
+    return True
+
+
+def build_skipped_task_status(
+    *,
+    task_name: str,
+    dependencies: tuple[str, ...],
+    task_phases: Mapping[str, str],
+) -> dict[str, str]:
+    """Build deterministic Workflow status for a skipped task."""
+
+    blockers = [
+        (dependency, task_phases.get(dependency))
+        for dependency in dependencies
+        if task_phases.get(dependency) in TERMINAL_UNSUCCESSFUL_PHASES
+    ]
+
+    has_direct_failure = any(phase in {"Failed", "TimedOut"} for _, phase in blockers)
+
+    reason = "DependencyFailed" if has_direct_failure else "DependencySkipped"
+
+    blocker_text = ", ".join(
+        f"{dependency} ({phase})" for dependency, phase in blockers
+    )
+
+    return {
+        "phase": "Skipped",
+        "reason": reason,
+        "message": (
+            f"Task {task_name!r} skipped because required dependencies "
+            f"cannot succeed: {blocker_text}"
+        ),
+    }
 
 
 def list_workflow_task_states(
@@ -142,6 +275,32 @@ def list_workflow_task_phases(
     return {task_name: state["phase"] for task_name, state in states.items()}
 
 
+WORKFLOW_TERMINAL_TASK_PHASES = {
+    "Succeeded",
+    "Failed",
+    "TimedOut",
+    "Skipped",
+}
+
+
+def aggregate_workflow_phase(
+    *,
+    task_names: Iterable[str],
+    task_phases: Mapping[str, str],
+) -> str:
+    """Aggregate effective task phases into the Workflow phase."""
+
+    phases = [task_phases.get(task_name, "Pending") for task_name in task_names]
+
+    if phases and all(phase == "Succeeded" for phase in phases):
+        return "Succeeded"
+
+    if phases and all(phase in WORKFLOW_TERMINAL_TASK_PHASES for phase in phases):
+        return "Failed"
+
+    return "Running"
+
+
 def reconcile_workflow(
     *,
     spec: dict[str, Any],
@@ -167,6 +326,34 @@ def reconcile_workflow(
     task_phases = {
         task_name: state["phase"] for task_name, state in task_states.items()
     }
+
+    workflow_task_statuses = body.get("status", {}).get("tasks", {})
+
+    for task_name, task_status in workflow_task_statuses.items():
+        if task_name in task_phases:
+            continue
+
+        phase = task_status.get("phase")
+
+        if phase == "Skipped":
+            task_phases[task_name] = phase
+
+    skipped_task_names = find_skipped_tasks(
+        graph,
+        task_phases,
+    )
+
+    skipped_statuses: dict[str, dict[str, Any]] = {}
+
+    for task_name in skipped_task_names:
+        skipped_status = build_skipped_task_status(
+            task_name=task_name,
+            dependencies=graph.dependencies[task_name],
+            task_phases=task_phases,
+        )
+
+        skipped_statuses[task_name] = skipped_status
+        task_phases[task_name] = "Skipped"
 
     ready_task_names = find_ready_tasks(
         graph,
@@ -220,6 +407,35 @@ def reconcile_workflow(
         ):
             created += 1
 
+    effective_task_statuses = build_workflow_task_statuses(
+        workflow_name=name,
+        task_names=graph.task_names,
+        task_states=task_states,
+        existing_statuses=workflow_task_statuses,
+    )
+
+    for task_name, skipped_status in skipped_statuses.items():
+        effective_task_statuses[task_name] = skipped_status
+
+    effective_task_phases = {
+        task_name: task_status["phase"]
+        for task_name, task_status in effective_task_statuses.items()
+    }
+
+    workflow_phase = aggregate_workflow_phase(
+        task_names=graph.task_names,
+        task_phases=effective_task_phases,
+    )
+
+    patch_workflow_status(
+        workflow_name=name,
+        namespace=namespace,
+        body=body,
+        phase=workflow_phase,
+        task_count=len(tasks),
+        task_statuses=effective_task_statuses,
+    )
+
     return created
 
 
@@ -251,7 +467,11 @@ def reconcile_workflow_for_task(
 ) -> None:
     """Reconcile the owning Workflow after a Task phase change."""
 
-    if new_phase != "Succeeded":
+    if new_phase not in {
+        "Succeeded",
+        "Failed",
+        "TimedOut",
+    }:
         return
 
     labels = body.get("metadata", {}).get("labels", {})
@@ -285,7 +505,7 @@ def workflow_task_phase_changed(
     new: str | None,
     **_: Any,
 ) -> None:
-    """Reconcile a Workflow when one of its Tasks succeeds."""
+    """Reconcile a Workflow when one of its Tasks becomes terminal."""
 
     reconcile_workflow_for_task(
         body=body,
@@ -323,3 +543,39 @@ def resolve_task_prompt(
         )
 
     return "\n".join(sections)
+
+
+def build_workflow_task_statuses(
+    *,
+    workflow_name: str,
+    task_names: Iterable[str],
+    task_states: Mapping[str, dict[str, Any]],
+    existing_statuses: Mapping[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Build the complete Workflow node status projection."""
+
+    statuses: dict[str, dict[str, Any]] = {}
+
+    for task_name in task_names:
+        task_state = task_states.get(task_name)
+
+        if task_state is not None:
+            statuses[task_name] = {
+                "phase": task_state["phase"],
+                "taskRef": {
+                    "name": f"{workflow_name}-{task_name}",
+                },
+            }
+            continue
+
+        existing_status = existing_statuses.get(task_name)
+
+        if existing_status is not None and existing_status.get("phase") == "Skipped":
+            statuses[task_name] = deepcopy(existing_status)
+            continue
+
+        statuses[task_name] = {
+            "phase": "Pending",
+        }
+
+    return statuses

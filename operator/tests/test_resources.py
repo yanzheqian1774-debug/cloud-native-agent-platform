@@ -170,3 +170,50 @@ def test_build_workflow_task() -> None:
         },
         "timeoutSeconds": 300,
     }
+
+
+def test_build_agent_deployment_uses_declared_runtime_image() -> None:
+    spec = {
+        "runtime": {
+            "type": "native",
+            "image": "enterprise-agent-runtime:test-image",
+        },
+        "model": {
+            "provider": "mock",
+            "name": "mock-model",
+        },
+        "replicas": 1,
+    }
+
+    deployment = build_agent_deployment(
+        name="test-agent",
+        namespace="agent-workloads",
+        spec=spec,
+    )
+
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+
+    assert container["image"] == "enterprise-agent-runtime:test-image"
+
+
+def test_build_agent_deployment_uses_default_runtime_image() -> None:
+    spec = {
+        "runtime": {
+            "type": "native",
+        },
+        "model": {
+            "provider": "mock",
+            "name": "mock-model",
+        },
+        "replicas": 1,
+    }
+
+    deployment = build_agent_deployment(
+        name="test-agent",
+        namespace="agent-workloads",
+        spec=spec,
+    )
+
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+
+    assert container["image"] == "enterprise-agent-runtime:v0.1-dev"
