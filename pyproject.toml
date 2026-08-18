@@ -70,6 +70,7 @@ docstring-code-format = true
 pythonpath = [
     "operator/src",
     "runtime/src",
+    "console/backend/src",
 ]
 minversion = "8.0"
 testpaths = [
