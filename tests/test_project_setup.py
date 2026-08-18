@@ -46,6 +46,7 @@ def test_required_directories_exist() -> None:
         "runtime",
         "gateway",
         "workflow",
+        "console",
         "scripts",
         "tests",
     ]
