@@ -20,9 +20,14 @@ class WorkflowService:
     def list_workflows(self) -> WorkflowRunList:
         workflows = self._repository.list_workflows()
 
-        return WorkflowRunList(
-            items=[project_workflow_summary(workflow) for workflow in workflows]
+        items = [project_workflow_summary(workflow) for workflow in workflows]
+
+        items.sort(
+            key=lambda item: item.createdAt or "",
+            reverse=True,
         )
+
+        return WorkflowRunList(items=items)
 
     def get_workflow(
         self,
