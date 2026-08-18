@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
-import { NodeInspector } from "../components/NodeInspector";
-import { WorkflowDag } from "../components/WorkflowDag";
 import {
   Link,
   useParams,
 } from "react-router-dom";
 
 import { getWorkflow } from "../api/workflows";
+import { NodeInspector } from "../components/NodeInspector";
+import { WorkflowDag } from "../components/WorkflowDag";
+import {
+  formatEdgeType,
+  formatPhase,
+  formatTimestamp,
+} from "../i18n/presentation";
+import { useI18n } from "../i18n/useI18n";
 import type {
   WorkflowExecutionDetail,
   WorkflowNode,
@@ -19,11 +25,15 @@ function WorkflowDetailContent({
   namespace: string;
   name: string;
 }) {
+  const { locale, t } = useI18n();
+
   const [workflow, setWorkflow] =
     useState<WorkflowExecutionDetail | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] =
+    useState<string | null>(null);
+
   const [selectedNode, setSelectedNode] =
     useState<WorkflowNode | null>(null);
 
@@ -45,7 +55,7 @@ function WorkflowDetailContent({
           setError(
             loadError instanceof Error
               ? loadError.message
-              : "Failed to load workflow",
+              : t("workflow.loadFailed"),
           );
         }
       } finally {
@@ -60,12 +70,12 @@ function WorkflowDetailContent({
     return () => {
       cancelled = true;
     };
-  }, [namespace, name]);
+  }, [namespace, name, t]);
 
   if (loading) {
     return (
       <main className="page">
-        Loading workflow...
+        {t("workflow.loadingDetail")}
       </main>
     );
   }
@@ -77,11 +87,11 @@ function WorkflowDetailContent({
           className="back-link"
           to="/workflows"
         >
-          ← Workflow Runs
+          ← {t("nav.workflowRuns")}
         </Link>
 
         <div className="error">
-          {error ?? "Workflow not found"}
+          {error ?? t("workflow.notFound")}
         </div>
       </main>
     );
@@ -93,7 +103,7 @@ function WorkflowDetailContent({
         className="back-link"
         to="/workflows"
       >
-        ← Workflow Runs
+        ← {t("nav.workflowRuns")}
       </Link>
 
       <header className="detail-header">
@@ -108,46 +118,46 @@ function WorkflowDetailContent({
         <span
           className={`phase phase-${workflow.phase.toLowerCase()}`}
         >
-          {workflow.phase}
+          {formatPhase(workflow.phase, t)}
         </span>
       </header>
 
       <section className="workflow-summary">
         <div>
-          <span>Tasks</span>
+          <span>{t("workflow.tasks")}</span>
           <strong>{workflow.taskCount}</strong>
         </div>
 
         <div>
-          <span>Created</span>
+          <span>{t("workflow.created")}</span>
           <strong>
-            {workflow.createdAt
-              ? new Date(
-                  workflow.createdAt,
-                ).toLocaleString()
-              : "—"}
+            {formatTimestamp(
+              workflow.createdAt,
+              locale,
+              t,
+            )}
           </strong>
         </div>
 
         <div>
-          <span>Started</span>
+          <span>{t("workflow.started")}</span>
           <strong>
-            {workflow.startedAt
-              ? new Date(
-                  workflow.startedAt,
-                ).toLocaleString()
-              : "—"}
+            {formatTimestamp(
+              workflow.startedAt,
+              locale,
+              t,
+            )}
           </strong>
         </div>
 
         <div>
-          <span>Completed</span>
+          <span>{t("workflow.completed")}</span>
           <strong>
-            {workflow.completedAt
-              ? new Date(
-                  workflow.completedAt,
-                ).toLocaleString()
-              : "—"}
+            {formatTimestamp(
+              workflow.completedAt,
+              locale,
+              t,
+            )}
           </strong>
         </div>
       </section>
@@ -155,9 +165,14 @@ function WorkflowDetailContent({
       <section className="detail-section">
         <div className="section-heading">
           <div>
-            <h2>Execution DAG</h2>
+            <h2>
+              {t("workflow.executionDag")}
+            </h2>
+
             <p>
-              Workflow topology and current node execution state.
+              {t(
+                "workflow.executionDag.description",
+              )}
             </p>
           </div>
         </div>
@@ -176,7 +191,9 @@ function WorkflowDetailContent({
             <WorkflowDag
               nodes={workflow.nodes}
               edges={workflow.edges}
-              selectedNodeName={selectedNode?.name ?? null}
+              selectedNodeName={
+                selectedNode?.name ?? null
+              }
               onSelectNode={setSelectedNode}
             />
           </div>
@@ -184,7 +201,9 @@ function WorkflowDetailContent({
           {selectedNode ? (
             <NodeInspector
               node={selectedNode}
-              onClose={() => setSelectedNode(null)}
+              onClose={() =>
+                setSelectedNode(null)
+              }
             />
           ) : null}
         </div>
@@ -193,9 +212,14 @@ function WorkflowDetailContent({
       <section className="detail-section">
         <div className="section-heading">
           <div>
-            <h2>Dependencies</h2>
+            <h2>
+              {t("workflow.dependencies")}
+            </h2>
+
             <p>
-              Control and data dependencies declared by the workflow.
+              {t(
+                "workflow.dependencies.description",
+              )}
             </p>
           </div>
         </div>
@@ -204,22 +228,29 @@ function WorkflowDetailContent({
           <table className="workflow-table">
             <thead>
               <tr>
-                <th>Source</th>
-                <th>Target</th>
-                <th>Type</th>
+                <th>{t("workflow.source")}</th>
+                <th>{t("workflow.target")}</th>
+                <th>{t("workflow.type")}</th>
               </tr>
             </thead>
 
             <tbody>
-              {workflow.edges.map((edge, index) => (
-                <tr
-                  key={`${edge.source}-${edge.target}-${edge.type}-${index}`}
-                >
-                  <td>{edge.source}</td>
-                  <td>{edge.target}</td>
-                  <td>{edge.type}</td>
-                </tr>
-              ))}
+              {workflow.edges.map(
+                (edge, index) => (
+                  <tr
+                    key={`${edge.source}-${edge.target}-${edge.type}-${index}`}
+                  >
+                    <td>{edge.source}</td>
+                    <td>{edge.target}</td>
+                    <td>
+                      {formatEdgeType(
+                        edge.type,
+                        t,
+                      )}
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>
@@ -229,6 +260,7 @@ function WorkflowDetailContent({
 }
 
 export function WorkflowDetailPage() {
+  const { t } = useI18n();
   const { namespace, name } = useParams();
 
   if (!namespace || !name) {
@@ -238,11 +270,11 @@ export function WorkflowDetailPage() {
           className="back-link"
           to="/workflows"
         >
-          ← Workflow Runs
+          ← {t("nav.workflowRuns")}
         </Link>
 
         <div className="error">
-          Invalid workflow route
+          {t("workflow.invalidRoute")}
         </div>
       </main>
     );

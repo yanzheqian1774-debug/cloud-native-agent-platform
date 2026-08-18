@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 
 import {
+  formatAttempts,
+  formatEdgeType,
+  formatPhase,
+} from "../i18n/presentation";
+import { useI18n } from "../i18n/useI18n";
+import {
   buildDagLayout,
   DAG_NODE_HEIGHT,
   DAG_NODE_WIDTH,
@@ -28,6 +34,8 @@ export function WorkflowDag({
   selectedNodeName,
   onSelectNode,
 }: WorkflowDagProps) {
+  const { t } = useI18n();
+
   const layout = useMemo(
     () => buildDagLayout(nodes, edges),
     [nodes, edges],
@@ -47,7 +55,7 @@ export function WorkflowDag({
   if (layout.nodes.length === 0) {
     return (
       <div className="empty-state">
-        No workflow nodes found.
+        {t("workflow.noNodes")}
       </div>
     );
   }
@@ -93,6 +101,7 @@ export function WorkflowDag({
               source.x + DAG_NODE_WIDTH / 2;
             const sourceY =
               source.y + DAG_NODE_HEIGHT;
+
             const targetX =
               target.x + DAG_NODE_WIDTH / 2;
             const targetY = target.y;
@@ -126,7 +135,9 @@ export function WorkflowDag({
                   y={labelY}
                   textAnchor="middle"
                 >
-                  {edge.types.join(" + ")}
+                  {edge.types
+                    .map((type) => formatEdgeType(type, t))
+                    .join(" + ")}
                 </text>
               </g>
             );
@@ -166,7 +177,10 @@ export function WorkflowDag({
                     node.execution.phase,
                   )}
                 >
-                  {node.execution.phase}
+                  {formatPhase(
+                    node.execution.phase,
+                    t,
+                  )}
                 </span>
               </div>
 
@@ -175,13 +189,10 @@ export function WorkflowDag({
               </div>
 
               <div className="dag-visual-node-footer">
-                {node.execution.attempts === null
-                  ? "No task execution"
-                  : `${node.execution.attempts} attempt${
-                      node.execution.attempts === 1
-                        ? ""
-                        : "s"
-                    }`}
+                {formatAttempts(
+                  node.execution.attempts,
+                  t,
+                )}
               </div>
             </button>
           );

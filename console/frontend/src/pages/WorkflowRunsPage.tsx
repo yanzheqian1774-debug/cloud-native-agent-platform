@@ -2,10 +2,18 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { listWorkflows } from "../api/workflows";
+import {
+  formatPhase,
+  formatTimestamp,
+} from "../i18n/presentation";
+import { useI18n } from "../i18n/useI18n";
 import type { WorkflowRunSummary } from "../types/workflow";
 
 export function WorkflowRunsPage() {
-  const [workflows, setWorkflows] = useState<WorkflowRunSummary[]>([]);
+  const { locale, t } = useI18n();
+
+  const [workflows, setWorkflows] =
+    useState<WorkflowRunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +26,7 @@ export function WorkflowRunsPage() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Failed to load workflows",
+            : t("workflow.loadFailed"),
         );
       } finally {
         setLoading(false);
@@ -26,16 +34,20 @@ export function WorkflowRunsPage() {
     }
 
     void load();
-  }, []);
+  }, [t]);
 
   if (loading) {
-    return <main className="page">Loading workflows...</main>;
+    return (
+      <main className="page">
+        {t("workflow.loading")}
+      </main>
+    );
   }
 
   if (error) {
     return (
       <main className="page">
-        <h1>Workflow Runs</h1>
+        <h1>{t("workflow.title")}</h1>
         <div className="error">{error}</div>
       </main>
     );
@@ -45,55 +57,67 @@ export function WorkflowRunsPage() {
     <main className="page">
       <header className="page-header">
         <div>
-          <div className="eyebrow">AgentOS Console</div>
-          <h1>Workflow Runs</h1>
-          <p>
-            Inspect multi-agent workflow executions running on Kubernetes.
-          </p>
+          <div className="eyebrow">
+            {t("app.name")}
+          </div>
+
+          <h1>{t("workflow.title")}</h1>
+
+          <p>{t("workflow.description")}</p>
         </div>
       </header>
 
       <section className="panel">
         {workflows.length === 0 ? (
           <div className="empty-state">
-            No workflow executions found.
+            {t("workflow.empty")}
           </div>
         ) : (
           <table className="workflow-table">
             <thead>
               <tr>
-                <th>Workflow</th>
-                <th>Namespace</th>
-                <th>Status</th>
-                <th>Tasks</th>
-                <th>Created</th>
+                <th>{t("workflow.workflow")}</th>
+                <th>{t("workflow.namespace")}</th>
+                <th>{t("workflow.status")}</th>
+                <th>{t("workflow.tasks")}</th>
+                <th>{t("workflow.created")}</th>
               </tr>
             </thead>
 
             <tbody>
               {workflows.map((workflow) => (
-                <tr key={`${workflow.namespace}/${workflow.name}`}>
+                <tr
+                  key={`${workflow.namespace}/${workflow.name}`}
+                >
                   <td className="workflow-name">
                     <Link
                       className="workflow-link"
-                      to={`/workflows/${encodeURIComponent(workflow.namespace)}/${encodeURIComponent(workflow.name)}`}
+                      to={`/workflows/${encodeURIComponent(
+                        workflow.namespace,
+                      )}/${encodeURIComponent(workflow.name)}`}
                     >
                       {workflow.name}
                     </Link>
                   </td>
+
                   <td>{workflow.namespace}</td>
+
                   <td>
                     <span
                       className={`phase phase-${workflow.phase.toLowerCase()}`}
                     >
-                      {workflow.phase}
+                      {formatPhase(workflow.phase, t)}
                     </span>
                   </td>
+
                   <td>{workflow.taskCount}</td>
+
                   <td>
-                    {workflow.createdAt
-                      ? new Date(workflow.createdAt).toLocaleString()
-                      : "—"}
+                    {formatTimestamp(
+                      workflow.createdAt,
+                      locale,
+                      t,
+                    )}
                   </td>
                 </tr>
               ))}

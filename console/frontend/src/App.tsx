@@ -5,6 +5,7 @@ import {
   Routes,
 } from "react-router-dom";
 
+import { ConsoleShell } from "./components/ConsoleShell";
 import { WorkflowDetailPage } from "./pages/WorkflowDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
 import "./styles/app.css";
@@ -12,20 +13,29 @@ import "./styles/app.css";
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={<Navigate to="/workflows" replace />}
-        />
-        <Route
-          path="/workflows"
-          element={<WorkflowRunsPage />}
-        />
-        <Route
-          path="/workflows/:namespace/:name"
-          element={<WorkflowDetailPage />}
-        />
-      </Routes>
+      <ConsoleShell>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <Navigate
+                to="/workflows"
+                replace
+              />
+            }
+          />
+
+          <Route
+            path="/workflows"
+            element={<WorkflowRunsPage />}
+          />
+
+          <Route
+            path="/workflows/:namespace/:name"
+            element={<WorkflowDetailPage />}
+          />
+        </Routes>
+      </ConsoleShell>
     </BrowserRouter>
   );
 }
