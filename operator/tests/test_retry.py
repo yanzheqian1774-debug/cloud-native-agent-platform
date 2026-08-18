@@ -189,3 +189,128 @@ def test_execute_with_retry_times_out_before_backoff(
     assert exc_info.value.attempts == 1
     assert operation.call_count == 1
     mock_sleep.assert_not_called()
+
+
+@patch("agent_operator.retry.time.sleep")
+def test_execute_with_retry_uses_longer_backoff_for_rate_limit(mock_sleep) -> None:
+    operation = Mock(
+        side_effect=[
+            TaskExecutionError(
+                reason="RateLimited",
+                message="too many requests",
+                retryable=True,
+            ),
+            TaskExecutionError(
+                reason="RateLimited",
+                message="too many requests",
+                retryable=True,
+            ),
+            "result",
+        ]
+    )
+
+    result, attempts = execute_with_retry(
+        operation,
+        timeout_seconds=60,
+    )
+
+    assert result == "result"
+    assert attempts == 3
+    assert operation.call_count == 3
+
+    assert mock_sleep.call_args_list == [
+        call(5.0),
+        call(10.0),
+    ]
+
+
+@patch("agent_operator.retry.time.sleep")
+def test_execute_with_retry_preserves_larger_configured_rate_limit_backoff(
+    mock_sleep,
+) -> None:
+    operation = Mock(
+        side_effect=[
+            TaskExecutionError(
+                reason="RateLimited",
+                message="too many requests",
+                retryable=True,
+            ),
+            "result",
+        ]
+    )
+
+    result, attempts = execute_with_retry(
+        operation,
+        timeout_seconds=60,
+        initial_backoff_seconds=10.0,
+    )
+
+    assert result == "result"
+    assert attempts == 2
+    mock_sleep.assert_called_once_with(10.0)
+
+
+@patch("agent_operator.retry.time.sleep")
+def test_execute_with_retry_keeps_default_backoff_for_other_errors(
+    mock_sleep,
+) -> None:
+    operation = Mock(
+        side_effect=[
+            TaskExecutionError(
+                reason="UpstreamUnavailable",
+                message="temporarily unavailable",
+                retryable=True,
+            ),
+            TaskExecutionError(
+                reason="UpstreamUnavailable",
+                message="temporarily unavailable",
+                retryable=True,
+            ),
+            "result",
+        ]
+    )
+
+    result, attempts = execute_with_retry(
+        operation,
+        timeout_seconds=60,
+    )
+
+    assert result == "result"
+    assert attempts == 3
+
+    assert mock_sleep.call_args_list == [
+        call(1.0),
+        call(2.0),
+    ]
+
+
+@patch("agent_operator.retry.time.sleep")
+@patch("agent_operator.retry.time.monotonic")
+def test_execute_with_retry_rate_limit_respects_execution_deadline(
+    mock_monotonic,
+    mock_sleep,
+) -> None:
+    mock_monotonic.side_effect = [
+        100.0,
+        100.0,
+        127.0,
+    ]
+
+    operation = Mock(
+        side_effect=TaskExecutionError(
+            reason="RateLimited",
+            message="too many requests",
+            retryable=True,
+        )
+    )
+
+    with pytest.raises(RetryExhaustedError) as exc_info:
+        execute_with_retry(
+            operation,
+            timeout_seconds=30,
+        )
+
+    assert exc_info.value.error.reason == "ExecutionTimeout"
+    assert exc_info.value.attempts == 1
+    assert operation.call_count == 1
+    mock_sleep.assert_not_called()

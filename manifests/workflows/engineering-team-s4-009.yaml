@@ -1,0 +1,127 @@
+apiVersion: agentos.io/v1alpha1
+kind: Workflow
+metadata:
+  name: engineering-s4-009-001
+  namespace: agent-workloads
+  labels:
+    agentos.io/team: engineering
+    agentos.io/project: cloud-native-agent-platform
+    agentos.io/task: s4-009
+    agentos.io/run-type: real-e2e
+spec:
+  tasks:
+    - name: architect
+      agentRef:
+        name: engineering-architect
+      input:
+        prompt: |
+          This is the AgentOS S4-009 real Multi-Agent E2E validation.
+
+          Design a tiny implementation plan for an imaginary feature named
+          "Workflow Run Label".
+
+          Requirement:
+          A Workflow may have a human-readable run label used only for display.
+          Do not actually modify code.
+
+          Keep the response concise.
+          Each required Architect section should contain at most two short sentences.
+          Total response should be under 700 words.
+
+          The response MUST include this exact marker:
+          S4-009-ARCHITECT-PASS
+
+          The marker is required so downstream AgentOS result passing can be verified.
+      timeoutSeconds: 300
+
+    - name: builder
+      agentRef:
+        name: engineering-builder
+      dependsOn:
+        - architect
+      input:
+        prompt: |
+          This is the AgentOS S4-009 real Multi-Agent E2E validation.
+
+          Read the Architect result supplied by AgentOS below.
+
+          Produce a concise implementation proposal for the imaginary
+          "Workflow Run Label" feature.
+          Do not actually modify code.
+
+          Verification requirement:
+          If the Architect result contains:
+          S4-009-ARCHITECT-PASS
+
+          then your response MUST include both exact markers:
+          S4-009-BUILDER-PASS
+          ARCHITECT-RESULT-RECEIVED
+
+          Keep every required Builder section short.
+          Total response should be under 700 words.
+        from:
+          - task: architect
+      timeoutSeconds: 300
+
+    - name: tester
+      agentRef:
+        name: engineering-tester
+      dependsOn:
+        - architect
+      input:
+        prompt: |
+          This is the AgentOS S4-009 real Multi-Agent E2E validation.
+
+          Read the Architect result supplied by AgentOS below.
+
+          Produce a concise verification strategy for the imaginary
+          "Workflow Run Label" feature.
+          Do not execute commands.
+
+          Verification requirement:
+          If the Architect result contains:
+          S4-009-ARCHITECT-PASS
+
+          then your response MUST include both exact markers:
+          S4-009-TESTER-PASS
+          ARCHITECT-RESULT-RECEIVED
+
+          Keep every required Tester section short.
+          Total response should be under 700 words.
+        from:
+          - task: architect
+      timeoutSeconds: 300
+
+    - name: reviewer
+      agentRef:
+        name: engineering-reviewer
+      dependsOn:
+        - builder
+        - tester
+      input:
+        prompt: |
+          This is the AgentOS S4-009 real Multi-Agent E2E validation.
+
+          Review the Builder and Tester results supplied by AgentOS below.
+          This is an imaginary feature. Do not modify code.
+
+          Verification requirement:
+
+          If the Builder result contains:
+          S4-009-BUILDER-PASS
+
+          and the Tester result contains:
+          S4-009-TESTER-PASS
+
+          then your response MUST include these exact markers:
+          S4-009-REVIEWER-PASS
+          BUILDER-RESULT-RECEIVED
+          TESTER-RESULT-RECEIVED
+
+          Return APPROVED when there is no substantive contradiction.
+          Keep every required Reviewer section short.
+          Total response should be under 700 words.
+        from:
+          - task: builder
+          - task: tester
+      timeoutSeconds: 300

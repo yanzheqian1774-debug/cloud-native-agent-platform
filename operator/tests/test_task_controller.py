@@ -376,3 +376,28 @@ def test_create_task_persists_running_status_before_execution(
     assert call["status"]["reason"] is None
     assert call["status"]["message"] is None
     assert call["status"]["retryable"] is None
+
+
+@patch("agent_operator.task_controller.httpx.post")
+def test_invoke_agent_classifies_rate_limit_response(mock_post) -> None:
+    request = httpx.Request(
+        "POST",
+        "http://researcher-agent.agent-workloads.svc.cluster.local:8080/v1/invoke",
+    )
+    response = httpx.Response(
+        429,
+        request=request,
+    )
+
+    mock_post.return_value = response
+
+    with pytest.raises(TaskExecutionError) as exc_info:
+        invoke_agent(
+            agent_name="researcher-agent",
+            namespace="agent-workloads",
+            prompt="hello",
+            timeout_seconds=30,
+        )
+
+    assert exc_info.value.reason == "RateLimited"
+    assert exc_info.value.retryable is True

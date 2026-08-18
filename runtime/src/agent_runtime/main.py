@@ -3,7 +3,8 @@
 import os
 from typing import Any
 
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from agent_runtime.providers.factory import create_model_provider
@@ -65,14 +66,24 @@ def info() -> dict[str, Any]:
 
 @app.post("/v1/invoke")
 def invoke(request: InvokeRequest) -> InvokeResponse:
-    """Execute a mock Agent invocation."""
+    """Execute an Agent invocation."""
 
     runtime = runtime_info()
-
     provider = create_model_provider()
 
+    try:
+        output = provider.generate(request.input)
+
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"model provider returned HTTP {status_code}",
+        ) from exc
+
     return InvokeResponse(
-        output=provider.generate(request.input),
+        output=output,
         agent=runtime["agent"],
         model=runtime["model"],
     )

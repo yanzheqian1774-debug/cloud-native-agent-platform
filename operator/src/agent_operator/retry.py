@@ -8,6 +8,7 @@ from agent_operator.errors import TaskExecutionError, execution_timeout_error
 
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_INITIAL_BACKOFF_SECONDS = 1.0
+RATE_LIMIT_INITIAL_BACKOFF_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,25 @@ class RetryExhaustedError(Exception):
 
     error: TaskExecutionError
     attempts: int
+
+
+def calculate_backoff_seconds(
+    error: TaskExecutionError,
+    *,
+    attempt: int,
+    initial_backoff_seconds: float,
+) -> float:
+    """Return the backoff delay for a retryable task execution error."""
+
+    if error.reason == "RateLimited":
+        base_backoff_seconds = max(
+            initial_backoff_seconds,
+            RATE_LIMIT_INITIAL_BACKOFF_SECONDS,
+        )
+    else:
+        base_backoff_seconds = initial_backoff_seconds
+
+    return base_backoff_seconds * (2 ** (attempt - 1))
 
 
 def execute_with_retry(
@@ -55,7 +75,11 @@ def execute_with_retry(
                     attempts=attempt,
                 ) from exc
 
-            backoff_seconds = initial_backoff_seconds * (2 ** (attempt - 1))
+            backoff_seconds = calculate_backoff_seconds(
+                exc,
+                attempt=attempt,
+                initial_backoff_seconds=initial_backoff_seconds,
+            )
             remaining_seconds = deadline - time.monotonic()
 
             if remaining_seconds <= backoff_seconds:
