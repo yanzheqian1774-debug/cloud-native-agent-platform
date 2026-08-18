@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { listWorkflows } from "../api/workflows";
 import type { WorkflowRunSummary } from "../types/workflow";
@@ -73,7 +74,12 @@ export function WorkflowRunsPage() {
               {workflows.map((workflow) => (
                 <tr key={`${workflow.namespace}/${workflow.name}`}>
                   <td className="workflow-name">
-                    {workflow.name}
+                    <Link
+                      className="workflow-link"
+                      to={`/workflows/${encodeURIComponent(workflow.namespace)}/${encodeURIComponent(workflow.name)}`}
+                    >
+                      {workflow.name}
+                    </Link>
                   </td>
                   <td>{workflow.namespace}</td>
                   <td>

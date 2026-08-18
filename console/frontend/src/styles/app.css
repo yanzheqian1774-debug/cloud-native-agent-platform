@@ -126,3 +126,137 @@ h1 {
 .error {
   color: #b42318;
 }
+
+.workflow-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.workflow-link:hover {
+  text-decoration: underline;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  color: #475467;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: #101828;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.workflow-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 40px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.workflow-summary > div {
+  padding: 18px 20px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.workflow-summary > div:last-child {
+  border-right: 0;
+}
+
+.workflow-summary span,
+.node-metadata dt {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.workflow-summary strong {
+  font-size: 14px;
+}
+
+.detail-section {
+  margin-top: 40px;
+}
+
+.section-heading {
+  margin-bottom: 16px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.section-heading p {
+  margin: 6px 0 0;
+  color: #667085;
+}
+
+.dag-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.dag-node {
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.dag-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dag-node-agent {
+  margin-top: 8px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.node-metadata {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+}
+
+.node-metadata div {
+  min-width: 0;
+}
+
+.node-metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.phase-timedout {
+  background: #fff6ed;
+  color: #c4320a;
+}
+
+.phase-skipped {
+  background: #f2f4f7;
+  color: #475467;
+}
