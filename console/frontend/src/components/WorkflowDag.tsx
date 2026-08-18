@@ -14,6 +14,8 @@ import type {
 interface WorkflowDagProps {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  selectedNodeName: string | null;
+  onSelectNode: (node: WorkflowNode) => void;
 }
 
 function phaseClassName(phase: NodePhase): string {
@@ -23,6 +25,8 @@ function phaseClassName(phase: NodePhase): string {
 export function WorkflowDag({
   nodes,
   edges,
+  selectedNodeName,
+  onSelectNode,
 }: WorkflowDagProps) {
   const layout = useMemo(
     () => buildDagLayout(nodes, edges),
@@ -129,44 +133,59 @@ export function WorkflowDag({
           })}
         </svg>
 
-        {layout.nodes.map(({ node, x, y }) => (
-          <article
-            key={node.name}
-            className="dag-visual-node"
-            style={{
-              left: x,
-              top: y,
-              width: DAG_NODE_WIDTH,
-              height: DAG_NODE_HEIGHT,
-            }}
-          >
-            <div className="dag-visual-node-header">
-              <strong>{node.name}</strong>
+        {layout.nodes.map(({ node, x, y }) => {
+          const selected =
+            selectedNodeName === node.name;
 
-              <span
-                className={phaseClassName(
-                  node.execution.phase,
-                )}
-              >
-                {node.execution.phase}
-              </span>
-            </div>
+          return (
+            <button
+              key={node.name}
+              type="button"
+              className={[
+                "dag-visual-node",
+                selected
+                  ? "dag-visual-node-selected"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={{
+                left: x,
+                top: y,
+                width: DAG_NODE_WIDTH,
+                height: DAG_NODE_HEIGHT,
+              }}
+              onClick={() => onSelectNode(node)}
+              aria-pressed={selected}
+            >
+              <div className="dag-visual-node-header">
+                <strong>{node.name}</strong>
 
-            <div className="dag-visual-node-agent">
-              {node.agent.name}
-            </div>
+                <span
+                  className={phaseClassName(
+                    node.execution.phase,
+                  )}
+                >
+                  {node.execution.phase}
+                </span>
+              </div>
 
-            <div className="dag-visual-node-footer">
-              {node.execution.attempts === null
-                ? "No task execution"
-                : `${node.execution.attempts} attempt${
-                    node.execution.attempts === 1
-                      ? ""
-                      : "s"
-                  }`}
-            </div>
-          </article>
-        ))}
+              <div className="dag-visual-node-agent">
+                {node.agent.name}
+              </div>
+
+              <div className="dag-visual-node-footer">
+                {node.execution.attempts === null
+                  ? "No task execution"
+                  : `${node.execution.attempts} attempt${
+                      node.execution.attempts === 1
+                        ? ""
+                        : "s"
+                    }`}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { NodeInspector } from "../components/NodeInspector";
 import { WorkflowDag } from "../components/WorkflowDag";
 import {
   Link,
@@ -8,6 +9,7 @@ import {
 import { getWorkflow } from "../api/workflows";
 import type {
   WorkflowExecutionDetail,
+  WorkflowNode,
 } from "../types/workflow";
 
 function WorkflowDetailContent({
@@ -22,6 +24,8 @@ function WorkflowDetailContent({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedNode, setSelectedNode] =
+    useState<WorkflowNode | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,10 +162,32 @@ function WorkflowDetailContent({
           </div>
         </div>
 
-        <WorkflowDag
-          nodes={workflow.nodes}
-          edges={workflow.edges}
-        />
+        <div
+          className={[
+            "workflow-execution-layout",
+            selectedNode
+              ? "workflow-execution-layout-inspecting"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <div className="workflow-execution-main">
+            <WorkflowDag
+              nodes={workflow.nodes}
+              edges={workflow.edges}
+              selectedNodeName={selectedNode?.name ?? null}
+              onSelectNode={setSelectedNode}
+            />
+          </div>
+
+          {selectedNode ? (
+            <NodeInspector
+              node={selectedNode}
+              onClose={() => setSelectedNode(null)}
+            />
+          ) : null}
+        </div>
       </section>
 
       <section className="detail-section">

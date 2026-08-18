@@ -294,3 +294,341 @@ h1 {
   color: #98a2b3;
   font-size: 11px;
 }
+
+/* Workflow execution inspector layout */
+
+.workflow-execution-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.workflow-execution-layout-inspecting {
+  grid-template-columns: minmax(600px, 1fr) 340px;
+}
+
+.workflow-execution-main {
+  min-width: 0;
+}
+
+.dag-visual-node {
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dag-visual-node:hover {
+  border-color: #98a2b3;
+  box-shadow: 0 2px 6px rgb(16 24 40 / 8%);
+}
+
+.dag-visual-node:focus-visible {
+  outline: 2px solid #475467;
+  outline-offset: 3px;
+}
+
+.dag-visual-node-selected {
+  border-color: #344054;
+  box-shadow: 0 0 0 2px rgb(52 64 84 / 14%);
+}
+
+.node-inspector {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgb(16 24 40 / 6%);
+}
+
+.node-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.node-inspector-header .eyebrow {
+  margin-bottom: 8px;
+}
+
+.node-inspector-header h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.inspector-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #667085;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.inspector-close:hover {
+  color: #101828;
+  background: #f2f4f7;
+}
+
+.inspector-close:focus-visible {
+  outline: 2px solid #475467;
+  outline-offset: 2px;
+}
+
+.inspector-status-row {
+  margin-top: 20px;
+}
+
+.inspector-summary {
+  display: grid;
+  gap: 18px;
+  margin: 24px 0 0;
+}
+
+.inspector-summary > div {
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.inspector-summary > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.inspector-summary dt {
+  margin: 0 0 6px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspector-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #101828;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1000px) {
+  .workflow-execution-layout-inspecting {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .node-inspector {
+    position: static;
+  }
+}
+
+/* Node Inspector execution evidence */
+
+.inspector-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #eaecf0;
+}
+
+.inspector-section h3 {
+  margin: 0 0 16px;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.inspector-field {
+  margin-top: 18px;
+}
+
+.inspector-field:first-of-type {
+  margin-top: 0;
+}
+
+.inspector-field-label {
+  margin-bottom: 8px;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspector-evidence {
+  max-height: 260px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  color: #344054;
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inspector-evidence-empty {
+  color: #98a2b3;
+}
+
+.upstream-results {
+  display: grid;
+  gap: 14px;
+}
+
+.upstream-result-task {
+  margin-bottom: 6px;
+  color: #344054;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inspector-failure {
+  padding: 20px;
+  background: #fffbfa;
+  border: 1px solid #fecdca;
+  border-radius: 10px;
+}
+
+.inspector-failure h3 {
+  color: #b42318;
+}
+
+.inspector-failure .inspector-summary {
+  margin-top: 0;
+}
+
+/* Node Inspector layout refinement */
+
+.workflow-execution-layout-inspecting {
+  grid-template-columns: minmax(640px, 1fr) 400px;
+  align-items: start;
+}
+
+.node-inspector {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.inspector-evidence {
+  max-height: 180px;
+}
+
+.upstream-result .inspector-evidence {
+  max-height: 200px;
+}
+
+.inspector-failure .inspector-evidence {
+  max-height: 180px;
+}
+
+@media (max-width: 1180px) {
+  .workflow-execution-layout-inspecting {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+
+@media (max-width: 960px) {
+  .workflow-execution-layout-inspecting {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .node-inspector {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+.inspector-section .inspector-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.inspector-section .inspector-summary > div {
+  padding: 12px 0;
+}
+
+.inspector-section .inspector-summary > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.inspector-section:first-of-type .inspector-summary {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.inspector-failure {
+  margin-bottom: 4px;
+}
+
+.inspector-failure .inspector-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inspector-failure .inspector-summary > div {
+  padding-top: 0;
+  padding-bottom: 14px;
+}
+
+.inspector-failure .inspector-field {
+  margin-top: 8px;
+}
+
+/* Keep node identity visible while inspecting long execution evidence. */
+
+.node-inspector-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: -24px -24px 0;
+  padding: 24px 24px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.inspector-status-row {
+  position: sticky;
+  top: 81px;
+  z-index: 9;
+  margin: 0 -24px;
+  padding: 12px 24px 16px;
+  background: #ffffff;
+}
