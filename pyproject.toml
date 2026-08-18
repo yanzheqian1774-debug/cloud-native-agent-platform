@@ -79,6 +79,7 @@ testpaths = [
     "operator/tests",
     "runtime/tests",
     "workflow/tests",
+    "console/backend/tests",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
