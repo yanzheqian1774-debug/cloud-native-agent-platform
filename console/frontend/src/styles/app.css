@@ -208,49 +208,6 @@ h1 {
   color: #667085;
 }
 
-.dag-grid {
-  display: grid;
-  grid-template-columns:
-    repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-}
-
-.dag-node {
-  padding: 20px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-}
-
-.dag-node-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.dag-node-agent {
-  margin-top: 8px;
-  color: #667085;
-  font-size: 13px;
-}
-
-.node-metadata {
-  display: grid;
-  gap: 12px;
-  margin: 20px 0 0;
-}
-
-.node-metadata div {
-  min-width: 0;
-}
-
-.node-metadata dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-size: 13px;
-}
-
 .phase-timedout {
   background: #fff6ed;
   color: #c4320a;
@@ -259,4 +216,81 @@ h1 {
 .phase-skipped {
   background: #f2f4f7;
   color: #475467;
+}
+
+.workflow-dag-scroll {
+  overflow-x: auto;
+  padding: 8px 0 16px;
+}
+
+.workflow-dag {
+  position: relative;
+  min-width: 100%;
+  margin: 0 auto;
+}
+
+.dag-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dag-edge path {
+  fill: none;
+  stroke: #98a2b3;
+  stroke-width: 1.5;
+}
+
+.dag-edge marker path {
+  fill: #98a2b3;
+}
+
+.dag-edge text {
+  fill: #667085;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dag-visual-node {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 5%);
+}
+
+.dag-visual-node-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dag-visual-node-header strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dag-visual-node-agent {
+  margin-top: 10px;
+  overflow: hidden;
+  color: #667085;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dag-visual-node-footer {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  left: 16px;
+  color: #98a2b3;
+  font-size: 11px;
 }

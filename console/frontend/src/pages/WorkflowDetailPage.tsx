@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WorkflowDag } from "../components/WorkflowDag";
 import {
   Link,
   useParams,
@@ -7,57 +8,7 @@ import {
 import { getWorkflow } from "../api/workflows";
 import type {
   WorkflowExecutionDetail,
-  WorkflowNode,
 } from "../types/workflow";
-
-function WorkflowNodeCard({
-  node,
-}: {
-  node: WorkflowNode;
-}) {
-  return (
-    <article className="dag-node">
-      <div className="dag-node-header">
-        <strong>{node.name}</strong>
-
-        <span
-          className={`phase phase-${node.execution.phase.toLowerCase()}`}
-        >
-          {node.execution.phase}
-        </span>
-      </div>
-
-      <div className="dag-node-agent">
-        {node.agent.name}
-      </div>
-
-      <dl className="node-metadata">
-        <div>
-          <dt>Depends on</dt>
-          <dd>
-            {node.dependsOn.length > 0
-              ? node.dependsOn.join(", ")
-              : "—"}
-          </dd>
-        </div>
-
-        <div>
-          <dt>Input from</dt>
-          <dd>
-            {node.inputFrom.length > 0
-              ? node.inputFrom.join(", ")
-              : "—"}
-          </dd>
-        </div>
-
-        <div>
-          <dt>Attempts</dt>
-          <dd>{node.execution.attempts ?? "—"}</dd>
-        </div>
-      </dl>
-    </article>
-  );
-}
 
 function WorkflowDetailContent({
   namespace,
@@ -207,14 +158,10 @@ function WorkflowDetailContent({
           </div>
         </div>
 
-        <div className="dag-grid">
-          {workflow.nodes.map((node) => (
-            <WorkflowNodeCard
-              key={node.name}
-              node={node}
-            />
-          ))}
-        </div>
+        <WorkflowDag
+          nodes={workflow.nodes}
+          edges={workflow.edges}
+        />
       </section>
 
       <section className="detail-section">
