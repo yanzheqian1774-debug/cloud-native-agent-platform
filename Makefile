@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup sync lock format format-check lint test check clean tree status
+.PHONY: help setup sync lock format format-check lint test check clean tree status console-e2e
 
 help:
 	@echo "Cloud Native Multi-Agent Platform"
@@ -55,3 +55,6 @@ tree:
 
 status:
 	git status
+
+console-e2e:
+	./scripts/e2e/console-real-workflow.sh
