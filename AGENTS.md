@@ -14,25 +14,75 @@ Enterprise Agent Lifecycle Platform
 Technical Core:
 Kubernetes-native Agent Control Plane.
 
-## Source-of-Truth Hierarchy
+## Authority Model
 
-Coding Agents must distinguish product direction from current
-implementation.
+Do not treat repository guidance as one simple precedence list.
 
-Use this hierarchy:
+Use different authorities for different questions.
 
-1. Explicit Task / Acceptance Criteria
-2. Current source code and tests
-3. Approved ADRs
-4. docs/engineering/CURRENT_IMPLEMENTATION.md
-5. ARCHITECTURE.md
-6. PRODUCT.md
-7. ROADMAP.md
+### Task Authority — What should be changed?
 
-If these sources conflict, STOP when the conflict affects task scope,
-public behavior, compatibility, or architecture.
+The explicit Task and its Acceptance Criteria define the approved
+implementation scope.
 
-Do not silently choose one interpretation.
+A Task does NOT override:
+
+- Hard Rules;
+- Accepted architecture decisions;
+- frozen public Contracts;
+- compatibility requirements;
+- Architecture Gates.
+
+If a Task requires overriding one of these, STOP and escalate.
+
+### Implementation Authority — What does the system do today?
+
+Current source code and tests are the authority for implemented
+behavior.
+
+CURRENT_IMPLEMENTATION.md is a navigation aid and summary, not a
+replacement for source inspection.
+
+### Architecture Authority — What architecture is approved?
+
+Accepted ADRs define approved architecture decisions.
+
+An Accepted ADR may describe architecture that is not yet fully
+implemented.
+
+Therefore:
+
+Accepted != Implemented.
+
+Check both Decision Status and Implementation Status when available.
+
+### Product Direction Authority — Where is the product going?
+
+Use:
+
+- PRODUCT.md for product intent and boundaries;
+- ARCHITECTURE.md for target architecture;
+- ROADMAP.md for planned sequencing.
+
+These documents do not authorize implementation by themselves.
+
+### Conflict Rules
+
+If Task conflicts with an Accepted ADR:
+
+STOP and report the conflict.
+
+If current implementation conflicts with an Accepted ADR:
+
+STOP when the conflict affects the assigned task and report
+architecture/implementation drift.
+
+If Roadmap or target Architecture differs from source:
+
+source defines CURRENT behavior;
+Roadmap/Architecture defines intended direction.
+
+Do not silently refactor CURRENT behavior toward future architecture.
 
 ## Read First
 
@@ -46,6 +96,7 @@ Before significant work, read:
 - docs/engineering/CODEX_WORKFLOW.md
 - docs/engineering/DEFINITION_OF_DONE.md
 - docs/engineering/ARCHITECTURE_GATES.md
+- docs/engineering/DECISION_STATUS.md
 
 Then inspect task-specific source code, tests, and ADRs.
 
@@ -161,10 +212,18 @@ Run validation relevant to the change.
 
 Repository baseline commands include:
 
-    uv run ruff check .
-    uv run pytest
-    uv run pre-commit run --all-files
     make check
+
+For targeted debugging, individual non-mutating checks may also be
+run directly, for example:
+
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run pytest
+
+`pre-commit run --all-files` is not treated as a read-only validation
+gate because configured hooks may modify files. If it is run, inspect
+the resulting diff and rerun the non-mutating validation afterward.
 
 Frontend changes must additionally run the repository-defined frontend
 lint and build commands.

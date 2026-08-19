@@ -46,34 +46,46 @@ runtime/tests/
 
 ### workflow/
 
-Primary responsibility:
+Current status:
 
-workflow-related implementation that is separated from operator
-controller code.
+Placeholder / reserved subsystem directory.
 
-Inspect source before assuming ownership of a particular workflow
-behavior because some orchestration behavior may live in operator/.
+The directory does not currently own production workflow
+orchestration.
 
-Relevant tests are under:
+Current workflow orchestration is primarily implemented under:
 
-workflow/tests/
+- operator/src/agent_operator/workflow_controller.py;
+- related modules under operator/src/agent_operator/.
 
-when present.
+Current workflow behavior is primarily validated by:
+
+- operator/tests/;
+- tests/test_workflow_crd.py.
+
+Do not infer implementation ownership from the existence of the
+workflow/ directory.
 
 ### gateway/
 
-Primary responsibility:
+Current status:
 
-gateway/model-related integration owned by the current repository.
+Placeholder / reserved subsystem directory.
 
-Inspect current source before assuming future Model Plane capabilities
-exist.
+The directory does not currently implement the future Model Gateway.
 
-Relevant tests are under:
+Current model/provider execution integration is primarily implemented
+under:
 
-gateway/tests/
+- runtime/.
 
-when present.
+Current provider behavior is primarily validated under:
+
+- runtime/tests/.
+
+The Model Gateway and broader Model Plane described in
+ARCHITECTURE.md are future architecture unless current source proves
+otherwise.
 
 ### console/backend/
 
@@ -115,12 +127,17 @@ Inspect this area for:
 
 ### examples/
 
-Primary responsibility:
+Current status:
 
-runnable examples and early Solution scenarios where present.
+Placeholder / documentation-oriented area unless current contents prove
+otherwise.
 
-Examples must not be treated as production architecture unless
-explicitly documented.
+Current executable Kubernetes examples are primarily found under:
+
+- manifests/.
+
+Do not assume examples/ contains runnable Solution Gallery scenarios
+until such examples are explicitly added.
 
 ### adr/
 
@@ -161,6 +178,7 @@ Coding Agent control documents:
 - docs/engineering/TASK_TEMPLATE.md
 - docs/engineering/DEFINITION_OF_DONE.md
 - docs/engineering/ARCHITECTURE_GATES.md
+- docs/engineering/DECISION_STATUS.md
 - docs/engineering/BRANCH_WORKTREE.md
 
 ## Navigation Rule

@@ -11,15 +11,17 @@ mistaken for current product capabilities.
 The source code and tests remain the final authority for implementation
 details.
 
-## Current Release Phase
+## Current Release Planning Context
 
-The project is currently preparing:
+The current planning baseline targets:
 
 v0.1.0-alpha
 
-Current engineering phase:
+Planning phase:
 
 S4.5 — Alpha Release Hardening.
+
+This is planning metadata, not an implementation capability claim.
 
 The current goal is to make the existing Agent Control Plane core:
 

@@ -316,9 +316,9 @@ Current repository capabilities map approximately as follows:
 - Task CRD → execution contract / Control Plane;
 - Workflow CRD → orchestration contract / Control Plane;
 - operator/ → Control Plane;
-- workflow/ → Control Plane orchestration;
-- runtime/ → Native Runtime reference implementation;
-- gateway/ → Model integration;
+- workflow/ → currently a placeholder/reserved subsystem directory;
+- runtime/ → Native Runtime and current model/provider integration;
+- gateway/ → currently a placeholder/reserved subsystem directory;
 - console/ → Experience and basic Operations;
 - manifests → deployment / Resource Plane;
 - engineering workflow example → early Solution Gallery seed.

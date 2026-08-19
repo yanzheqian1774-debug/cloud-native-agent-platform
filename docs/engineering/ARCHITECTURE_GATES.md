@@ -50,6 +50,8 @@ STOP implementation and request an architecture decision for:
 - breaking public API changes;
 - frozen Contract changes;
 - Agent lifecycle semantic changes;
+- Task lifecycle semantic changes;
+- Workflow lifecycle semantic changes;
 - Runtime lifecycle semantic changes;
 - Agent Instance architecture;
 - State architecture;
