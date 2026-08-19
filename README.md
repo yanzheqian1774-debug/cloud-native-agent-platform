@@ -1,64 +1,32 @@
-# Cloud Native Multi-Agent Platform
+# Enterprise Agent Platform
 
-从零构建一个 Kubernetes Native、模型可插拔的多智能体平台。
+An open, cloud-native platform for making AI agents production-grade
+enterprise workloads. Its technical core is a Kubernetes-native Agent Control
+Plane.
 
-## 项目目标
+The current v0.1.0-alpha implementation focuses on the control-plane core. It
+includes:
 
-本项目将实现：
+- `Agent`, `Task`, and `Workflow` Kubernetes custom resources;
+- a Kubernetes operator for their current lifecycle behavior;
+- a native agent runtime with model-provider integration;
+- workflow DAG execution, including dependency, parallel, retry, failure,
+  skip, and timeout behavior where implemented; and
+- a basic Console for workflow execution visibility.
 
-- Agent CRD
-- Kubernetes Operator
-- Agent Runtime
-- Multi-Agent Workflow
-- API Gateway
-- Qwen OpenAI-Compatible API
-- 本地 kind 环境
-- 公有云部署
-- 日志、监控和 CI/CD
+Broader Enterprise Agent Platform capabilities described in the product,
+architecture, and roadmap documents are future direction unless the source and
+tests show that they are implemented.
 
-## 核心角色
+## Repository guide
 
-- orchestrator
-- researcher
-- architect
-- builder
-- tester
-- reviewer
-- writer
+- [PRODUCT.md](PRODUCT.md) defines product intent and boundaries.
+- [ARCHITECTURE.md](ARCHITECTURE.md) describes the target architecture.
+- [ROADMAP.md](ROADMAP.md) describes planned release sequencing.
+- [CURRENT_IMPLEMENTATION.md](docs/engineering/CURRENT_IMPLEMENTATION.md)
+  records the current implementation boundary.
 
-## 技术栈
-
-- macOS Apple Silicon
-- Docker Desktop
-- Kubernetes
-- kind
-- Python 3.12
-- uv
-- FastAPI
-- Kopf
-- Qwen
-- PostgreSQL
-- Redis
-
-## 项目结构
-
-```text
-cloud-native-agent-platform/
-├── docs/
-├── adr/
-├── architecture/
-├── examples/
-├── manifests/
-├── operator/
-├── runtime/
-├── gateway/
-├── workflow/
-├── helm/
-├── scripts/
-├── tests/
-└── .github/
-
-## Local Development
+## Local development
 
 ### Prerequisites
 
@@ -70,7 +38,18 @@ cloud-native-agent-platform/
 
 ```bash
 make setup
+```
 
+Run the repository checks with:
+
+```bash
+make check
+```
+
+## License
+
+This project is licensed under the Apache License 2.0. See
+[LICENSE](LICENSE) for the complete license text.
 
 
 
