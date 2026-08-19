@@ -6,10 +6,9 @@ import {
 
 import {
   DEFAULT_LOCALE,
-  messages,
   type Locale,
-  type MessageKey,
 } from "./messages";
+import { translate } from "./translate";
 import {
   I18nContext,
   type I18nContextValue,
@@ -26,12 +25,10 @@ export function I18nProvider({
     useState<Locale>(DEFAULT_LOCALE);
 
   const value = useMemo<I18nContextValue>(() => {
-    function t(key: MessageKey): string {
-      return (
-        messages[locale][key] ??
-        messages[DEFAULT_LOCALE][key] ??
-        key
-      );
+    function t(
+      key: Parameters<typeof translate>[1],
+    ): string {
+      return translate(locale, key);
     }
 
     return {
