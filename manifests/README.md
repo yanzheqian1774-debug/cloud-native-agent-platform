@@ -11,7 +11,8 @@ credential is required.
 - `kubectl`;
 - `kind`;
 - Python 3.12 and `uv` for repository validation and the optional Console; and
-- Node.js and npm for the Console frontend.
+- Node.js 24 (used by repository CI), or a compatible 20.19+/22.13+ release,
+  plus npm, for the Console frontend.
 
 Run all commands from the repository root. The commands below create and use a
 dedicated kind cluster named `agentos-dev`. If an existing `agentos-dev` cluster
@@ -61,6 +62,9 @@ Create the mock-backed Agent and wait for its runtime to become ready:
 
 ```bash
 kubectl --context kind-agentos-dev apply -f manifests/agents/researcher.yaml
+kubectl --context kind-agentos-dev -n agent-workloads wait \
+  --for=jsonpath='{.status.phase}'=Running \
+  agents.agentos.io/researcher-agent --timeout=120s
 kubectl --context kind-agentos-dev -n agent-workloads rollout status \
   deployment/researcher-agent --timeout=120s
 kubectl --context kind-agentos-dev -n agent-workloads get \

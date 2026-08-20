@@ -1,11 +1,11 @@
 # Workflow Execution Console
 
-The Workflow Execution Console provides a read-only view of AgentOS workflow
-execution.
+The Workflow Execution Console provides a read-only view of current Workflow
+and Task execution in the Kubernetes-native Agent Control Plane.
 
 ## Responsibilities
 
-The Console will provide:
+The current Console provides:
 
 - Workflow Runs
 - Workflow Detail
@@ -39,7 +39,7 @@ The Console Backend is a stateless, read-only projection layer.
 
 ## Source Layout
 
-The implementation will use:
+The implementation uses:
 
 console/
 ├── backend/
