@@ -46,6 +46,45 @@ Run the repository checks with:
 make check
 ```
 
+## Quick Start
+
+Get a deterministic first Agent result on a new local Kubernetes cluster. This
+path requires Git, a running Docker daemon, `kubectl`, and `kind`; it does not
+require an external model account or API key. An uncached image build also
+requires outbound access to the base-image registry and Python package
+artifacts. The current sub-15-minute validation is qualified-warm; the known
+INSTALL-001 external artifact-transfer blocker for fresh Operator builds is not
+closed by this path.
+
+The command builds the current Operator and Native Runtime images, creates a
+dedicated kind cluster named `agentos-quickstart`, installs the CRDs and
+Operator, creates the mock-backed `researcher-agent`, and runs `research-task`.
+It stops with an error rather than modifying a cluster that already has that
+name.
+
+```bash
+./scripts/quickstart.sh
+```
+
+Success ends with `FIRST VALUE: PASS`, a successful Task phase, and its
+deterministic `mock response`. To see Workflow dependencies and result
+propagation after First Value:
+
+```bash
+./scripts/quickstart.sh workflow
+```
+
+Delete only the Quick Start cluster when finished:
+
+```bash
+./scripts/quickstart.sh cleanup
+```
+
+The two local `:quickstart` image tags are retained as a build cache. See the
+[installation guide](manifests/README.md) for the expanded installation path
+and the [Golden Engineering Demo](examples/golden-engineering-demo/README.md)
+for failure/retry and Console observability.
+
 ## Install on a local Kubernetes cluster
 
 The current Alpha installation uses Docker, `kubectl`, and `kind`. Follow the
@@ -65,8 +104,6 @@ execution observability.
 
 This project is licensed under the Apache License 2.0. See
 [LICENSE](LICENSE) for the complete license text.
-
-
 
 
 
