@@ -1,3 +1,16 @@
+# Historical Architecture Exploration
+
+> **Status:** Historical and superseded as the repository architecture entry
+> point. This document preserves early conceptual exploration; it does not
+> describe the current v0.1.0-alpha implementation or the current product
+> identity. Use the root [Architecture](../ARCHITECTURE.md) for target
+> architecture, [Current Implementation](../docs/engineering/CURRENT_IMPLEMENTATION.md)
+> for implemented behavior, and the [ADR index](../adr/README.md) for accepted
+> decisions and known implementation drift.
+
+The names, diagrams, example integrations, APIs, and component boundaries below
+are historical concepts, not current capability claims.
+
 # Enterprise Agent OS Architecture
 
 ## Status

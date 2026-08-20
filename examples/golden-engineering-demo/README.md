@@ -27,6 +27,9 @@ Create the mock-backed Agent and wait for its Native Runtime:
 
 ```bash
 kubectl --context kind-agentos-dev apply -f manifests/agents/researcher.yaml
+kubectl --context kind-agentos-dev -n agent-workloads wait \
+  --for=jsonpath='{.status.phase}'=Running \
+  agents.agentos.io/researcher-agent --timeout=120s
 kubectl --context kind-agentos-dev -n agent-workloads rollout status \
   deployment/researcher-agent --timeout=120s
 kubectl --context kind-agentos-dev -n agent-workloads get \
