@@ -1,0 +1,36 @@
+apiVersion: agentos.io/v1alpha1
+kind: Workflow
+metadata:
+  name: golden-demo-failure
+  namespace: agent-workloads
+  labels:
+    agentos.io/demo: golden-engineering
+    agentos.io/path: failure-retry
+spec:
+  tasks:
+    - name: unavailable
+      agentRef:
+        name: golden-demo-unavailable-agent
+      input:
+        prompt: |
+          This invocation is expected to fail because its Agent Service does
+          not exist.
+      timeoutSeconds: 30
+
+    - name: independent
+      agentRef:
+        name: researcher-agent
+      input:
+        prompt: |
+          Confirm that an independent workflow branch can complete.
+      timeoutSeconds: 30
+
+    - name: blocked
+      agentRef:
+        name: researcher-agent
+      dependsOn:
+        - unavailable
+      input:
+        prompt: |
+          This node must not execute after its required dependency fails.
+      timeoutSeconds: 30
