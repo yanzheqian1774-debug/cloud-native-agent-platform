@@ -1,10 +1,10 @@
 apiVersion: agentos.io/v1alpha1
 kind: Agent
 metadata:
-  name: researcher
+  name: researcher-agent
   namespace: agent-workloads
   labels:
-    app.kubernetes.io/name: researcher
+    app.kubernetes.io/name: researcher-agent
     app.kubernetes.io/part-of: enterprise-agent-os
 spec:
   runtime:

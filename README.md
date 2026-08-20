@@ -46,11 +46,18 @@ Run the repository checks with:
 make check
 ```
 
+## Install on a local Kubernetes cluster
+
+The current Alpha installation uses Docker, `kubectl`, and `kind`. Follow the
+[local Kubernetes installation guide](manifests/README.md) to build the current
+Operator and Native Runtime images, install the CRDs and Operator, run the mock
+Agent/Task/Workflow examples, and inspect the result through Kubernetes or the
+read-only Console API.
+
 ## License
 
 This project is licensed under the Apache License 2.0. See
 [LICENSE](LICENSE) for the complete license text.
-
 
 
 
