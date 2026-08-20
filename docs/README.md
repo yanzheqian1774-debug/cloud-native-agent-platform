@@ -10,6 +10,11 @@ path to First Value.
 - [Golden Engineering Demo](../examples/golden-engineering-demo/README.md)
 - [Workflow Execution Console](../console/README.md)
 
+## Releases
+
+- [v0.1.0-alpha release notes](releases/v0.1.0-alpha.md)
+- [Changelog](../CHANGELOG.md)
+
 ## Product and architecture
 
 - [Current implementation boundary](engineering/CURRENT_IMPLEMENTATION.md)
