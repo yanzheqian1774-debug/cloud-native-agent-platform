@@ -54,11 +54,17 @@ Operator and Native Runtime images, install the CRDs and Operator, run the mock
 Agent/Task/Workflow examples, and inspect the result through Kubernetes or the
 read-only Console API.
 
+## Golden Engineering Demo
+
+The [Golden Engineering Demo](examples/golden-engineering-demo/README.md) uses
+the deterministic mock provider to demonstrate successful orchestration,
+dependency result propagation, real failure/retry behavior, and read-only
+execution observability.
+
 ## License
 
 This project is licensed under the Apache License 2.0. See
 [LICENSE](LICENSE) for the complete license text.
-
 
 
 
