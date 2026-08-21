@@ -7,7 +7,7 @@ ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT))
 
 from generic_caller import execute  # noqa: E402
-from providers import OpenClawProvider  # noqa: E402
+from providers import HermesProvider, OpenClawProvider  # noqa: E402
 from runtime_contract import RuntimeBinding  # noqa: E402
 
 
@@ -40,3 +40,19 @@ def test_generic_caller_has_no_runtime_specific_vocabulary() -> None:
 def test_binding_has_no_universal_runtime_instance() -> None:
     source = (ROOT / "runtime_contract.py").read_text().lower()
     assert "class runtimeinstance" not in source.replace(" ", "")
+
+
+def test_diagnostic_sanitizer_removes_both_credentials(tmp_path) -> None:
+    binding = RuntimeBinding("binding", "hermes", "experimental.hermes", "managed")
+    provider = HermesProvider(
+        binding,
+        name="unused",
+        data_dir=tmp_path,
+        gateway_key="gw-test",
+        model_key="model-test",
+    )
+    raw = 'Authorization: Bearer gw-test api_key="model-test" token=test-token'
+    sanitized = provider._sanitize_diagnostic(raw)
+    assert "gw-test" not in sanitized
+    assert "model-test" not in sanitized
+    assert "test-token" not in sanitized

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.error
@@ -166,6 +167,112 @@ class HermesProvider:
                 observed,
             ),
         )
+
+    def sanitized_preflight(self) -> dict[str, object]:
+        """Inspect active resolution without returning any credential material."""
+        resolver = """
+import json
+import os
+from pathlib import Path
+from hermes_cli.config import load_config_readonly, load_env
+from hermes_cli.runtime_provider import resolve_runtime_provider
+
+home = Path(os.environ["HERMES_HOME"])
+load_env()
+config = load_config_readonly()
+model = config.get("model", {})
+configured_provider = model.get("provider", "") if isinstance(model, dict) else ""
+configured_model = model.get("default", "") if isinstance(model, dict) else str(model)
+runtime = resolve_runtime_provider(
+    requested=configured_provider,
+    target_model=configured_model,
+)
+print(json.dumps({
+    "configured_provider": configured_provider,
+    "configured_model": configured_model,
+    "resolved_provider": runtime.get("provider"),
+    "resolved_model": configured_model,
+    "credential_present": bool(runtime.get("api_key")),
+    "projection_present": (home / ".env").is_file(),
+}))
+"""
+        completed = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "--user",
+                "hermes",
+                self.name,
+                "/opt/hermes/.venv/bin/python",
+                "-c",
+                resolver,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        payload = json.loads(completed.stdout)
+        allowed = {
+            "configured_provider",
+            "configured_model",
+            "resolved_provider",
+            "resolved_model",
+            "credential_present",
+            "projection_present",
+        }
+        return {key: payload.get(key) for key in allowed}
+
+    def diagnostic_submit(self, request: ExecutionRequest) -> dict[str, object]:
+        """Perform one request and retain only strictly sanitized evidence."""
+        started = time.monotonic_ns()
+        try:
+            payload = self._request(
+                "/v1/chat/completions",
+                method="POST",
+                body={
+                    "model": "hermes-agent",
+                    "messages": [{"role": "user", "content": request.input_text}],
+                    "stream": False,
+                },
+                timeout=180,
+            )
+            return {
+                "status": 200,
+                "body": self._sanitize_diagnostic(json.dumps(payload)),
+                "latency_ms": (time.monotonic_ns() - started) // 1_000_000,
+            }
+        except urllib.error.HTTPError as exc:
+            raw = exc.read(16_384).decode("utf-8", errors="replace")
+            sanitized = self._sanitize_diagnostic(raw)
+            native_id = None
+            try:
+                error_payload = json.loads(raw)
+                if isinstance(error_payload, dict):
+                    for key in ("request_id", "error_id", "id"):
+                        value = error_payload.get(key)
+                        if isinstance(value, str) and value:
+                            native_id = self._sanitize_diagnostic(value)
+                            break
+            except json.JSONDecodeError:
+                pass
+            return {
+                "status": exc.code,
+                "reason": self._sanitize_diagnostic(str(exc.reason)),
+                "body": sanitized,
+                "native_id": native_id,
+                "latency_ms": (time.monotonic_ns() - started) // 1_000_000,
+            }
+
+    def _sanitize_diagnostic(self, value: str) -> str:
+        sanitized = value.replace(self.gateway_key, "[REDACTED]")
+        sanitized = sanitized.replace(self.model_key, "[REDACTED]")
+        sanitized = re.sub(
+            r"(?i)(authorization|api[_-]?key|token|cookie|secret)"
+            r"([\"'=:\s]+)[^\s,;\"}]+",
+            r"\1\2[REDACTED]",
+            sanitized,
+        )
+        return sanitized[:4096]
 
     def submit(self, request: ExecutionRequest) -> Submission:
         started = time.monotonic_ns()
