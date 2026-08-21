@@ -59,3 +59,6 @@ zero token usage. See `evidence/checkpoint-a2-live.md`.
 
 Checkpoint B failure, workload-recovery, persistence, and instance-boundary
 evidence is recorded in `evidence/checkpoint-b-live.md`. ED-S5-001 remains open.
+
+Checkpoint C synthesis and the Hermes-derived, non-frozen Runtime Contract
+Candidate v0 are recorded in `evidence/checkpoint-c-synthesis.md`.
