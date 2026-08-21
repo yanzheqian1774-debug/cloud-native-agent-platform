@@ -1,6 +1,7 @@
 """Experimental Hermes-only provider prototype."""
 
 import json
+import os
 import subprocess
 import urllib.error
 import urllib.request
@@ -24,32 +25,105 @@ class HermesProvider:
     data_dir: Path
     api_key: str
     host_port: int
+    inference_provider: str | None = None
+    model: str | None = None
+    model_credential_env: str | None = None
+    last_invocation_evidence: dict | None = None
 
-    def provision(self) -> None:
+    def configure(self) -> None:
+        """Persist only non-secret Hermes model selection in spike storage."""
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        settings = []
+        if self.inference_provider:
+            settings.append(("model.provider", self.inference_provider))
+        if self.model:
+            settings.append(("model.default", self.model))
+        for key, value in settings:
+            subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{self.data_dir}:/opt/data",
+                    self.image,
+                    "config",
+                    "set",
+                    key,
+                    value,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+    def bind_model_credential(self) -> None:
+        """Write the credential only into disposable runtime storage."""
+        if not self.model_credential_env:
+            return
+        if not os.environ.get(self.model_credential_env):
+            raise ValueError("model credential environment variable is absent")
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        variable = self.model_credential_env
         subprocess.run(
             [
                 "docker",
                 "run",
-                "-d",
-                "--name",
-                self.name,
-                "--label",
-                "s5-spike-001=true",
+                "--rm",
                 "-v",
                 f"{self.data_dir}:/opt/data",
-                "-p",
-                f"127.0.0.1:{self.host_port}:8642",
                 "-e",
-                "API_SERVER_ENABLED=true",
-                "-e",
-                "API_SERVER_HOST=0.0.0.0",
-                "-e",
-                f"API_SERVER_KEY={self.api_key}",
+                variable,
                 self.image,
-                "gateway",
-                "run",
+                "sh",
+                "-lc",
+                (
+                    "umask 077; "
+                    f'printf "{variable}=%s\\n" "${variable}" > /opt/data/.env; '
+                    "chown hermes:hermes /opt/data/.env"
+                ),
             ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def provision(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        command = [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            self.name,
+            "--label",
+            "s5-spike-001=true",
+            "-v",
+            f"{self.data_dir}:/opt/data",
+            "-p",
+            f"127.0.0.1:{self.host_port}:8642",
+            "-e",
+            "API_SERVER_ENABLED=true",
+            "-e",
+            "API_SERVER_HOST=0.0.0.0",
+            "-e",
+            f"API_SERVER_KEY={self.api_key}",
+        ]
+        if self.inference_provider:
+            command.extend(
+                ["-e", f"HERMES_INFERENCE_PROVIDER={self.inference_provider}"]
+            )
+        if self.model:
+            command.extend(["-e", f"HERMES_MODEL={self.model}"])
+        if self.model_credential_env:
+            if not os.environ.get(self.model_credential_env):
+                raise ValueError("model credential environment variable is absent")
+            # Pass only the environment-variable name. Docker inherits its value
+            # from this process without putting the credential in argv.
+            command.extend(["-e", self.model_credential_env])
+        command.extend([self.image, "gateway", "run"])
+        subprocess.run(
+            command,
             check=True,
             capture_output=True,
             text=True,
@@ -64,8 +138,17 @@ class HermesProvider:
                 "messages": [{"role": "user", "content": request.input}],
                 "stream": False,
             },
+            timeout=180,
         )
         output = payload["choices"][0]["message"]["content"]
+        choice = payload["choices"][0]
+        self.last_invocation_evidence = {
+            "http_status": 200,
+            "runtime_id": payload.get("id"),
+            "runtime_model": payload.get("model"),
+            "finish_reason": choice.get("finish_reason"),
+            "usage": payload.get("usage"),
+        }
         return RuntimeResult(output=output, correlation_id=request.correlation_id)
 
     def health(self) -> RuntimeHealth:
@@ -139,6 +222,7 @@ class HermesProvider:
         *,
         method: str = "GET",
         body: dict | None = None,
+        timeout: float = 5,
     ) -> dict:
         data = None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(
@@ -150,5 +234,5 @@ class HermesProvider:
                 "Content-Type": "application/json",
             },
         )
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.load(response)

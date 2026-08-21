@@ -62,3 +62,6 @@ evidence is recorded in `evidence/checkpoint-b-live.md`. ED-S5-001 remains open.
 
 Checkpoint C synthesis and the Hermes-derived, non-frozen Runtime Contract
 Candidate v0 are recorded in `evidence/checkpoint-c-synthesis.md`.
+
+The ED-S5-001 real-model closure attempt is recorded in
+`evidence/ed-s5-001-closure.md`. The debt remains open.

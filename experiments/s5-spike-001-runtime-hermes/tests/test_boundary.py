@@ -27,6 +27,13 @@ def test_provider_translates_invocation(monkeypatch, tmp_path) -> None:
     result = provider.invoke(RuntimeRequest("hello", "corr-1"))
     assert result.output == "provider result"
     assert result.correlation_id == "corr-1"
+    assert provider.last_invocation_evidence == {
+        "http_status": 200,
+        "runtime_id": None,
+        "runtime_model": None,
+        "finish_reason": None,
+        "usage": None,
+    }
 
 
 def test_provider_distinguishes_container_and_gateway(monkeypatch, tmp_path) -> None:
@@ -63,3 +70,73 @@ def test_checkpoint_b_manifest_is_spike_isolated() -> None:
     assert "agentos.io" not in manifest
     assert "kind: Deployment" in manifest
     assert "emptyDir: {}" in manifest
+
+
+def test_model_credential_is_inherited_by_name(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KIMI_CN_API_KEY", "test-only-value")
+    calls = []
+
+    def capture(command, **kwargs):
+        calls.append(command)
+
+    monkeypatch.setattr("provider.hermes.subprocess.run", capture)
+    provider = HermesProvider(
+        "test",
+        "image",
+        tmp_path,
+        "gateway-key",
+        8642,
+        inference_provider="kimi-coding-cn",
+        model="kimi-k3",
+        model_credential_env="KIMI_CN_API_KEY",
+    )
+    provider.provision()
+    command = calls[0]
+    assert "KIMI_CN_API_KEY" in command
+    assert "test-only-value" not in command
+
+
+def test_provider_configures_non_secret_model_selection(monkeypatch, tmp_path) -> None:
+    calls = []
+
+    def capture(command, **kwargs):
+        calls.append(command)
+
+    monkeypatch.setattr("provider.hermes.subprocess.run", capture)
+    provider = HermesProvider(
+        "test",
+        "image",
+        tmp_path,
+        "gateway-key",
+        8642,
+        inference_provider="kimi-coding-cn",
+        model="kimi-k3",
+    )
+    provider.configure()
+    assert calls[0][-4:] == ["config", "set", "model.provider", "kimi-coding-cn"]
+    assert calls[1][-4:] == ["config", "set", "model.default", "kimi-k3"]
+
+
+def test_temporary_credential_binding_does_not_put_value_in_argv(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("KIMI_CN_API_KEY", "test-only-value")
+    calls = []
+
+    def capture(command, **kwargs):
+        calls.append(command)
+
+    monkeypatch.setattr("provider.hermes.subprocess.run", capture)
+    provider = HermesProvider(
+        "test",
+        "image",
+        tmp_path,
+        "gateway-key",
+        8642,
+        model_credential_env="KIMI_CN_API_KEY",
+    )
+    provider.bind_model_credential()
+    command = calls[0]
+    assert "KIMI_CN_API_KEY" in command
+    assert not any("test-only-value" in argument for argument in command)
+    assert "chown hermes:hermes /opt/data/.env" in command[-1]
