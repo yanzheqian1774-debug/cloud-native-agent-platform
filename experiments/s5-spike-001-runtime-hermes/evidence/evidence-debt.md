@@ -17,3 +17,11 @@ or expose credentials to close this debt.
 Status remains OPEN after the authorized closure attempt on 2026-08-22. A safe
 credential source was found and never exposed, but no request produced nonzero
 usage or meaningful model output. See `ed-s5-001-closure.md`.
+
+## Controlled retry #2
+
+Status remains OPEN after the one authorized retry on 2026-08-22. The
+remediation-approved profile `.env` binding completed, but the standalone
+gateway did not become available within 180 seconds. The mandatory preflight
+stopped before runtime provider/model resolution and before any inference
+request. See `ed-s5-001-controlled-retry-2.md`.

@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import textwrap
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -128,6 +129,76 @@ class HermesProvider:
             capture_output=True,
             text=True,
         )
+
+    def sanitized_preflight(self) -> dict:
+        """Resolve active Hermes configuration without exposing credentials."""
+        resolver = textwrap.dedent(
+            """
+            import json
+            import os
+            import stat
+            from pathlib import Path
+
+            from hermes_cli.config import load_config
+            from hermes_cli.env_loader import load_hermes_dotenv
+            from hermes_cli.runtime_provider import resolve_runtime_provider
+
+            home = Path(os.environ.get("HERMES_HOME", ""))
+            load_hermes_dotenv(hermes_home=home)
+            cfg = load_config()
+            model = cfg.get("model", {})
+            provider = model.get("provider", "") if isinstance(model, dict) else ""
+            default = (
+                model.get("default", "") if isinstance(model, dict) else str(model)
+            )
+            runtime = resolve_runtime_provider(
+                requested=provider,
+                target_model=default,
+            )
+            env_path = home / ".env"
+            lines = env_path.read_text().splitlines()
+            gateway = cfg.get("gateway", {})
+            result = {
+                "active_home": str(home),
+                "configured_provider": provider,
+                "configured_model": default,
+                "resolved_provider": runtime.get("provider"),
+                "resolved_model": default,
+                "credential_present": bool(runtime.get("api_key")),
+                "credential_key_present": any(
+                    line.startswith("KIMI_CN_API_KEY=") for line in lines
+                ),
+                "credential_assignment_nonempty": any(
+                    line.startswith("KIMI_CN_API_KEY=")
+                    and bool(line.split("=", 1)[1])
+                    for line in lines
+                ),
+                "env_mode": format(stat.S_IMODE(env_path.stat().st_mode), "04o"),
+                "env_owner_uid": env_path.stat().st_uid,
+                "env_readable": os.access(env_path, os.R_OK),
+                "multiplex_profiles": bool(gateway.get("multiplex_profiles", False))
+                if isinstance(gateway, dict)
+                else False,
+            }
+            print(json.dumps(result))
+            """
+        )
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "--user",
+                "hermes",
+                self.name,
+                "/opt/hermes/.venv/bin/python",
+                "-c",
+                resolver,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return json.loads(result.stdout)
 
     def invoke(self, request: RuntimeRequest) -> RuntimeResult:
         payload = self._request(

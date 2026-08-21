@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -140,3 +141,38 @@ def test_temporary_credential_binding_does_not_put_value_in_argv(
     assert "KIMI_CN_API_KEY" in command
     assert not any("test-only-value" in argument for argument in command)
     assert "chown hermes:hermes /opt/data/.env" in command[-1]
+
+
+def test_sanitized_preflight_never_returns_credential_value(
+    monkeypatch, tmp_path
+) -> None:
+    secret = "test-only-value"
+
+    def capture(command, **kwargs):
+        assert secret not in command
+
+        class Result:
+            stdout = json.dumps(
+                {
+                    "active_home": "/opt/data",
+                    "configured_provider": "kimi-coding-cn",
+                    "configured_model": "kimi-k3",
+                    "resolved_provider": "kimi-coding-cn",
+                    "resolved_model": "kimi-k3",
+                    "credential_present": True,
+                    "credential_key_present": True,
+                    "credential_assignment_nonempty": True,
+                    "env_mode": "0600",
+                    "env_owner_uid": 1000,
+                    "env_readable": True,
+                    "multiplex_profiles": False,
+                }
+            )
+
+        return Result()
+
+    monkeypatch.setattr("provider.hermes.subprocess.run", capture)
+    provider = HermesProvider("test", "image", tmp_path, "gateway-key", 8642)
+    result = provider.sanitized_preflight()
+    assert result["credential_present"] is True
+    assert secret not in json.dumps(result)

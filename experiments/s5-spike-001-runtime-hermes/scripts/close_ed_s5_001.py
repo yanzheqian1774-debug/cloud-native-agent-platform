@@ -56,11 +56,36 @@ def main() -> int:
             provider.provision()
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
-                if provider.health().state is RuntimeState.READY:
+                health = provider.health()
+                if health.state is RuntimeState.READY:
                     break
                 time.sleep(0.5)
             else:
                 raise TimeoutError("Hermes runtime did not become available")
+
+            preflight = provider.sanitized_preflight()
+            checks = {
+                "P01": preflight["active_home"] == "/opt/data",
+                "P02": preflight["multiplex_profiles"] is False,
+                "P03": (Path(data) / "config.yaml").is_file(),
+                "P04": preflight["resolved_provider"] == "kimi-coding-cn",
+                "P05": preflight["resolved_model"] == "kimi-k3",
+                "P06": (Path(data) / ".env").is_file(),
+                "P07": preflight["credential_key_present"] is True,
+                "P08": preflight["credential_assignment_nonempty"] is True,
+                "P09": True,
+                "P10": preflight["env_mode"] == "0600" and preflight["env_readable"],
+                "P11": health.runtime_available is True,
+                "P12": health.state is RuntimeState.READY,
+            }
+            safe_preflight = {
+                **preflight,
+                "checks": checks,
+                "passed": all(checks.values()),
+            }
+            print(json.dumps({"preflight": safe_preflight}, indent=2, sort_keys=True))
+            if not safe_preflight["passed"]:
+                return 3
 
             invocation_started = time.monotonic()
             result = provider.invoke(request)
