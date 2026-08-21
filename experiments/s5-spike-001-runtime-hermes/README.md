@@ -56,3 +56,6 @@ provisions and all five scoped health observations were performed. A real
 gateway invocation was attempted, but no model credential was present; Hermes
 returned HTTP 200 containing an authentication-failure assistant message and
 zero token usage. See `evidence/checkpoint-a2-live.md`.
+
+Checkpoint B failure, workload-recovery, persistence, and instance-boundary
+evidence is recorded in `evidence/checkpoint-b-live.md`. ED-S5-001 remains open.

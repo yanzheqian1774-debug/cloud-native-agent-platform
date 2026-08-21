@@ -1,0 +1,76 @@
+# Experimental, spike-only workload for S5-SPIKE-001 Checkpoint B.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: s5-spike-001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-checkpoint-b
+  namespace: s5-spike-001
+  labels:
+    s5-spike-001: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hermes-checkpoint-b
+  template:
+    metadata:
+      labels:
+        app: hermes-checkpoint-b
+        s5-spike-001: "true"
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: agentos-dev-worker2
+      containers:
+        - name: hermes
+          # The kind nodes are preloaded from the verified immutable digest.
+          # The tag is required because kind imports that local image name.
+          image: nousresearch/hermes-agent:v2026.8.18
+          imagePullPolicy: IfNotPresent
+          args: ["gateway", "run"]
+          env:
+            - name: API_SERVER_ENABLED
+              value: "true"
+            - name: API_SERVER_HOST
+              value: "0.0.0.0"
+            - name: API_SERVER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-api-auth
+                  key: api-key
+          ports:
+            - name: api
+              containerPort: 8642
+          startupProbe:
+            httpGet:
+              path: /health
+              port: api
+            periodSeconds: 1
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: api
+            periodSeconds: 1
+          volumeMounts:
+            - name: runtime-data
+              mountPath: /opt/data
+      volumes:
+        - name: runtime-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-checkpoint-b
+  namespace: s5-spike-001
+spec:
+  selector:
+    app: hermes-checkpoint-b
+  ports:
+    - name: api
+      port: 8642
+      targetPort: api

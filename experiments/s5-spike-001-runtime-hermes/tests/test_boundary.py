@@ -54,3 +54,12 @@ def test_detailed_health_does_not_claim_task_readiness(monkeypatch, tmp_path) ->
     assert health.runtime_available is True
     assert health.dependency_available is None
     assert health.task_ready is None
+
+
+def test_checkpoint_b_manifest_is_spike_isolated() -> None:
+    manifest = (SPIKE / "manifests" / "checkpoint-b-kubernetes.yaml").read_text()
+    assert "namespace: s5-spike-001" in manifest
+    assert 's5-spike-001: "true"' in manifest
+    assert "agentos.io" not in manifest
+    assert "kind: Deployment" in manifest
+    assert "emptyDir: {}" in manifest
