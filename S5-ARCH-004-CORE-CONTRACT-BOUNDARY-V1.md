@@ -7,19 +7,21 @@ TITLE: v0.2 Core Contract Boundary & Schema Map
 PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Core Contract
 MODE: Architecture -> Engineering Contract Translation
-LIFECYCLE: REVIEW
+LIFECYCLE: CLOSING
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: D — V0_2_API_SURFACE_AND_FINAL_CONVERGENCE
+CHECKPOINT: CLOSEOUT
 
-RESULT: **CORE_CONTRACT_BOUNDARY_RECOMMENDED**
+RESULT: **READY_TO_CLOSE**
 
 > The Human Checkpoint A Gate passed with representation constraints, the Human
 > Checkpoint B Gate passed with semantic constraints, and the Human Checkpoint
-> C Gate passed with freeze constraints. This artifact now records Checkpoint D
-> final convergence. Human Final Contract Boundary Gate is pending. It does not
-> define fields or schemas, freeze Contracts, change an ADR, or authorize
-> implementation.
+> C Gate passed with freeze constraints. The Human Final Contract Boundary Gate
+> accepted the object boundary, semantic ownership, relationship model, API
+> Surface Budget as a Schema-Draft boundary, and shared primitive boundary.
+> This artifact is now in closeout and awaits Human Close Confirmation. It does
+> not define fields or schemas, freeze Contracts, change an ADR, authorize
+> implementation, or authorize Schema Draft execution.
 
 ## 1. Executive Conclusion
 
@@ -2316,7 +2318,9 @@ new Agent Instance and Capability Definition still require later schema review.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Draft boundaries only; no CRD count or schema approved.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH SCHEMA VALIDATION — approved Contract Boundary /
+API Surface Budget for draft input, not five new CRDs; current Agent, Task, and
+Workflow compatibility must be analyzed explicitly.
 
 ### D02 — Agent Definition boundary
 
@@ -2329,7 +2333,7 @@ product projection.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Identity, references, desired boundaries may be drafted.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D03 — Agent Instance boundary
 
@@ -2342,7 +2346,7 @@ and Recovery Assessment.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Draft only; no AgentInstance CRD authorized yet.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D04 — Task boundary
 
@@ -2355,7 +2359,7 @@ compatibility while adding execution primitives later.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Draft compatibility-aware semantic additions only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D05 — Workflow boundary
 
@@ -2368,7 +2372,9 @@ approved migration.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Draft must disclose ambiguity and preserve compatibility.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH DEBT — Workflow remains first-class for v0.2;
+definition/execution conflation is evolution debt and no WorkflowExecution
+resource is authorized.
 
 ### D06 — Capability Definition boundary
 
@@ -2381,7 +2387,7 @@ Provider switching.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Semantic Contract boundary may be drafted, not frozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D07 — Runtime Binding representation
 
@@ -2394,7 +2400,7 @@ history/resource.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Embedded boundary only; no controller/CRD.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D08 — Capability Binding representation
 
@@ -2407,7 +2413,7 @@ Agent-specific intent.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Embedded boundary only; no CRD.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D09 — Model Binding thin boundary
 
@@ -2419,7 +2425,8 @@ requirements/policy association only.
 **v0.2 disposition:** THIN FOUNDATION.
 **Schema impact:** Only thin reference/intent boundary may be drafted.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT THIN — full Model policy, routing, and fallback remain
+outside this boundary pending separately authorized work.
 
 ### D10 — Provider Registry representation
 
@@ -2432,7 +2439,7 @@ dynamic marketplace.
 **v0.2 disposition:** REQUIRED internal foundation.
 **Schema impact:** Internal descriptor/resolution metadata only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D11 — Runtime Package representation
 
@@ -2444,7 +2451,7 @@ new lifecycle API.
 **v0.2 disposition:** REQUIRED internal foundation.
 **Schema impact:** Internal immutable package facts only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D12 — Platform Execution Identity representation
 
@@ -2457,7 +2464,7 @@ execution resource.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Embedded semantic boundary only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D13 — Shared execution primitive set
 
@@ -2471,7 +2478,8 @@ version/lifecycle coupling.
 **Schema impact:** May be drafted only as embedded primitives; exact vocabulary
 unfrozen.
 **Freeze impact:** Architecture acceptance only; no Contract freeze.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT BOUNDARY / NOT VOCABULARY — fields, enums,
+serialization, and compatibility guarantees remain unfrozen.
 
 ### D14 — Condition ownership model
 
@@ -2483,7 +2491,7 @@ share only truth/time/freshness/safe-diagnostic semantics.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Owner placement may be drafted; type/vocabulary unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D15 — Outcome ownership model
 
@@ -2496,7 +2504,7 @@ duplicate minimal envelope concepts.
 **v0.2 disposition:** REQUIRED.
 **Schema impact:** Owner/envelope boundary only; taxonomies unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D16 — Recovery Assessment model
 
@@ -2510,7 +2518,7 @@ is incomplete.
 **Schema impact:** Placement/predicate boundary may be drafted; vocabulary
 unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### D17 — Workspace / State / Knowledge thin references
 
@@ -2523,7 +2531,8 @@ claims.
 **v0.2 disposition:** THIN FOUNDATION.
 **Schema impact:** Reference boundary only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT THIN — no first-class resource promotion is
+authorized.
 
 ### D18 — Human Gate thin boundary
 
@@ -2536,7 +2545,8 @@ approval lifecycle.
 **v0.2 disposition:** THIN FOUNDATION.
 **Schema impact:** Thin references/evidence relationship only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT THIN — decision authority/evidence remains
+Governance-owned; waiting/resumption remains Task/Workflow execution state.
 
 ### D19 — v0.2 API Surface Budget
 
@@ -2551,7 +2561,8 @@ reserving later lifecycle domains.
 **v0.2 disposition:** FINAL BOUNDARY RECOMMENDATION.
 **Schema impact:** Defines draft budget, not approved public API.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH SCHEMA VALIDATION — five candidates, not a CRD
+count commitment or Contract freeze.
 
 ### D20 — Schema Draft handoff boundary
 
@@ -2566,7 +2577,49 @@ implementation.
 **v0.2 disposition:** NEXT-PHASE HANDOFF RECOMMENDATION.
 **Schema impact:** Draft-only, compatibility-aware, no implementation.
 **Freeze impact:** Explicitly none.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT DRAFT-ONLY — this closeout does not authorize Schema
+Draft execution; a separate formal session is required.
+
+## 67. Human Final Contract Boundary Gate and Closeout Record
+
+HUMAN DECISION: **PASS**
+
+| Accepted dimension | Final disposition |
+| --- | --- |
+| Object Boundary | ACCEPTED |
+| Semantic Ownership | ACCEPTED |
+| Relationship Model | ACCEPTED |
+| API Surface Budget | ACCEPTED AS SCHEMA-DRAFT BOUNDARY |
+| Shared Primitive Boundary | ACCEPTED |
+| Schema | NOT APPROVED / NOT CREATED / NOT FROZEN |
+| Contract Freeze | NO |
+| Production Implementation | NOT AUTHORIZED |
+| Schema Draft execution | NOT AUTHORIZED by this closeout; separate formal session required |
+
+The accepted Schema-Draft boundary contains five first-class resource
+candidates: Agent Definition, Agent Instance, Task, Workflow, and Capability
+Definition. Runtime and Capability Bindings remain embedded. Model Binding
+remains thin and embedded. Execution Identity remains an embedded Core value.
+Registries and Runtime Package remain internal metadata. Providers remain
+interfaces. Conditions, Outcomes, and Recovery Assessment remain domain-owned
+embedded state. Thin references and opaque native references retain the
+boundaries recorded above.
+
+Existing Agent, Task, and Workflow APIs must be analyzed before any replacement
+or evolution is proposed. The preferred strategy is evolve over replace unless
+evidence proves replacement necessary. Workflow definition/execution
+conflation remains recorded evolution debt; no WorkflowExecution resource is
+authorized.
+
+Evidence debt remains open and claim-scoped. In particular, ED-S5-001 remains
+open and affects Hermes Provider certification/readiness only; it does not
+block a separately authorized bounded Schema Draft. Runtime and Capability
+Contract conformance, certification, deferred/in-flight behavior, applicable
+recovery predicates, and production evidence retain the classifications in
+Section 64.
+
+Closeout does not create a schema, freeze a Contract or vocabulary, modify the
+Freeze Gate, authorize implementation, start the next phase, or merge PR #41.
 
 ## Contract and Change Boundary
 
@@ -2585,10 +2638,11 @@ Schema Draft is not Contract Freeze. This Checkpoint does not draft a schema.
 
 ## Checkpoint State
 
-LIFECYCLE: REVIEW
+LIFECYCLE: CLOSING
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: D — V0_2_API_SURFACE_AND_FINAL_CONVERGENCE
-RESULT: CORE_CONTRACT_BOUNDARY_RECOMMENDED
-NEXT_ACTION: WAIT_FOR_HUMAN_DECISION
-NEXT_GATE: Human Final Contract Boundary Gate
+CHECKPOINT: CLOSEOUT
+RESULT: READY_TO_CLOSE
+NEXT_PHASE_RECOMMENDATION: v0.2 Schema Draft / Contract Specification
+NEXT_ACTION: WAIT_FOR_HUMAN_CLOSE_CONFIRMATION
+REOPEN: NOT_APPLICABLE_UNTIL_CLOSED
