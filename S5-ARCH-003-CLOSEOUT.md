@@ -12,23 +12,31 @@ TRACK: Core Architecture
 
 MODE: Architecture / Convergence
 
-LIFECYCLE: CLOSING
+LIFECYCLE: CLOSED
 
-AUTHORIZATION: AUTHORIZED
+AUTHORIZATION: COMPLETED
 
 STATUS: PASS
 
 CHECKPOINT: CLOSEOUT
 
-RESULT: **READY_TO_CLOSE**
+RESULT: **SESSION_CLOSED**
 
 HUMAN_GATE: **PASS**
 
 ARCHITECTURE_BASELINE: **ACCEPTED**
 
-This artifact records the Human Architecture Final Gate disposition for the
-S5-ARCH-003 v0.2 Core Contract Convergence Review. It does not transition the
-session to `CLOSED`; Human Close Confirmation remains required.
+This artifact records the Human Architecture Final Gate disposition and Human
+Close Confirmation for the S5-ARCH-003 v0.2 Core Contract Convergence Review.
+The Human final decision is **PASS** and the session is closed.
+
+## Human Close Confirmation
+
+- transition: `CLOSING` -> `CLOSED`;
+- authorization: `AUTHORIZED` -> `COMPLETED`;
+- result: `READY_TO_CLOSE` -> `SESSION_CLOSED`;
+- Human final decision: **PASS**;
+- reopen: **PROHIBITED**.
 
 ## Upstream Governance
 
@@ -150,6 +158,11 @@ In particular:
 The final closeout commit is the commit containing this artifact and is
 reported in the session response and PR history.
 
+Final CI state before CLOSED-state recording:
+
+- Quality Gates: **PASS**;
+- Frontend Quality Gates: **PASS**.
+
 ## Validation
 
 Final validation must report:
@@ -162,15 +175,15 @@ Final validation must report:
 - Contract freeze state;
 - branch, final commit, PR/base, and working tree.
 
-The validation results are recorded in the final session response after the
-closeout commit is created.
+The validation results and immutable final commit are recorded in the final
+session response after the CLOSED-state commit is created.
 
 ## Final State
 
-- lifecycle: **CLOSING**;
-- authorization: **AUTHORIZED**;
+- lifecycle: **CLOSED**;
+- authorization: **COMPLETED**;
 - status: **PASS**;
 - checkpoint: **CLOSEOUT**;
-- result: **READY_TO_CLOSE**;
-- next action: **WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**;
-- transition to `CLOSED`: **NOT AUTHORIZED**.
+- result: **SESSION_CLOSED**;
+- next action: **NONE**;
+- reopen: **PROHIBITED**.
