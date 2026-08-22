@@ -8,12 +8,12 @@ PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Runtime
 MODE: Architecture
 
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: CLOSEOUT
 
-RESULT: READY_TO_CLOSE
+RESULT: SESSION_CLOSED
 
 DISPOSITION:
 
@@ -88,6 +88,12 @@ Certification Gate remains subject to a future Human Contract Gate.
 
 ## Next action
 
-**WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**
+**NONE**
 
-This session remains in `CLOSING`; it does not transition itself to `CLOSED`.
+## Human Close Confirmation
+
+The Human Close Confirmation transitioned the session from `CLOSING` to
+`CLOSED` with authorization `COMPLETED`, status `PASS`, checkpoint `CLOSEOUT`,
+and result `SESSION_CLOSED`.
+
+Reopening this session is **PROHIBITED**.

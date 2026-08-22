@@ -6,12 +6,12 @@ TITLE: Runtime Provider & Certified Runtime Package Architecture
 PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Runtime
 MODE: Architecture
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: CLOSEOUT
 
-RESULT: HUMAN_FINAL_GATE_PASS
+RESULT: SESSION_CLOSED
 
 DISPOSITION:
 
@@ -610,3 +610,10 @@ This proposal is derived from:
 
 Evidence from experiments is architecture input only. It is not a claim that
 Hermes or OpenClaw is implemented or supported in Production/Core.
+
+## 22. Human Close Confirmation
+
+The Human Close Confirmation records this session as **CLOSED / COMPLETED /
+PASS** with result **SESSION_CLOSED**. The accepted architecture baseline and
+unfrozen Runtime Contract disposition are unchanged. Reopening this session is
+prohibited.
