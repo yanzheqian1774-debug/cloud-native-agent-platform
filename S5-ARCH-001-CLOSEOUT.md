@@ -8,12 +8,12 @@ PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Core Architecture
 MODE: Architecture / Retrospective Baseline Reconciliation
 
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: CLOSEOUT
 
-RESULT: READY_TO_CLOSE
+RESULT: SESSION_CLOSED
 
 ## Governance History
 
@@ -171,9 +171,16 @@ Final closeout validation is recorded in the commit/PR report:
 - secret hygiene: required
 - working tree: required clean after commit
 
-## Next Action
+## Human Close Confirmation
 
-**WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**
+The Human Close Confirmation accepted the final closeout and transitioned the
+session from `CLOSING / AUTHORIZED / PASS / READY_TO_CLOSE` to
+`CLOSED / COMPLETED / PASS / SESSION_CLOSED`.
 
-The session remains `CLOSING`. Do not transition to `CLOSED` without explicit
-Human Close Confirmation.
+PR #38 remains unmerged. No merge, rebase, retarget, squash, or PR closure was
+performed. Git integration remains separate from architecture session
+chronology.
+
+**NEXT_ACTION: NONE**
+
+Reopening this session is **PROHIBITED**.
