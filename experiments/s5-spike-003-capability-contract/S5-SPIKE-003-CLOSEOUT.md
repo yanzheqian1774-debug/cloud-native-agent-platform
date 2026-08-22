@@ -8,13 +8,13 @@ PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Capability
 MODE: Spike / Experimental
 
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: CLOSEOUT
 
 RESULT:
-READY_TO_CLOSE
+SESSION_CLOSED
 
 DISPOSITION:
 
@@ -30,6 +30,15 @@ The Human Final Spike Review accepted the bounded evidence and convergence
 inputs from Checkpoints A–C. H-CAP-01 is **SUPPORTED**. This closeout records
 the review result; it does not extend the experiment, decide architecture,
 freeze a Contract, or authorize production implementation.
+
+## Human Close Confirmation
+
+**PASS** — `SESSION_CLOSED`.
+
+The Human Close Confirmation accepted the final bounded evidence, carried the
+listed evidence debt forward without blocking closure, and transitioned the
+session from `CLOSING` to `CLOSED`. Authorization is completed. Reopening this
+session is prohibited.
 
 ## Checkpoints
 
@@ -206,7 +215,7 @@ All S5-SPIKE-003 artifacts remain under
 
 ## Next Action
 
-**WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**
+**NONE**
 
-The session remains `LIFECYCLE: CLOSING`. It must not transition itself to
-`CLOSED`.
+The session is `LIFECYCLE: CLOSED`, `AUTHORIZATION: COMPLETED`, and must not be
+reopened.
