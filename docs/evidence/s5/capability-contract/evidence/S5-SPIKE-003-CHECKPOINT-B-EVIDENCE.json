@@ -1,0 +1,32 @@
+{
+  "session_id": "S5-SPIKE-003",
+  "checkpoint": "B",
+  "rest_unavailable": {
+    "status": "failed",
+    "invocation_id": "platform-invocation-rest-unavailable",
+    "correlation_id": "s5-spike-003-b-rest-unavailable",
+    "error_class": "provider_unavailable"
+  },
+  "mcp_protocol": {
+    "status": "failed",
+    "invocation_id": "platform-invocation-mcp-protocol",
+    "correlation_id": "s5-spike-003-b-mcp-protocol",
+    "error_class": "provider_protocol_error"
+  },
+  "rest_remote_failure": {
+    "status": "failed",
+    "invocation_id": "platform-invocation-rest-remote",
+    "correlation_id": "s5-spike-003-b-rest-remote",
+    "error_class": "remote_execution_failure"
+  },
+  "mcp_remote_failure": {
+    "status": "failed",
+    "invocation_id": "platform-invocation-mcp-remote",
+    "correlation_id": "s5-spike-003-b-mcp-remote",
+    "error_class": "remote_execution_failure"
+  },
+  "lifecycle": {
+    "rest": "inline_outcome",
+    "mcp": "accepted_then_observed"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "session_id": "S5-SPIKE-003",
+  "checkpoint": "A",
+  "rest": {
+    "status": "succeeded",
+    "correlation_id": "s5-spike-003-rest",
+    "output": {
+      "item_id": 1,
+      "summary": "delectus aut autem",
+      "completed": false
+    }
+  },
+  "mcp": {
+    "status": "succeeded",
+    "correlation_id": "s5-spike-003-mcp",
+    "output": {
+      "item_id": 1,
+      "summary": "delectus aut autem",
+      "completed": false
+    }
+  },
+  "deny": {
+    "status": "denied",
+    "correlation_id": "s5-spike-003-deny",
+    "error_code": "capability_not_authorized",
+    "provider_start_count_unchanged": true
+  }
+}
