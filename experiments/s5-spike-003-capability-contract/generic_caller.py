@@ -1,6 +1,7 @@
 """Agent-facing experiment code with no REST/MCP semantic knowledge."""
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 from capability_contract import (
     CapabilityBinding,
@@ -8,6 +9,8 @@ from capability_contract import (
     CapabilityProvider,
     CapabilityRequest,
     CapabilityResult,
+    ErrorClass,
+    ExecutionIdentity,
     ResultStatus,
 )
 
@@ -37,13 +40,16 @@ def execute(
     policy: BindingPolicy,
     input_data: dict[str, object],
     correlation_id: str,
+    invocation_id: str | None = None,
 ) -> CapabilityResult:
+    execution = ExecutionIdentity(invocation_id or str(uuid4()), correlation_id)
     decision = policy.authorize(agent_id, binding)
     if not decision.allowed:
         return CapabilityResult(
             status=ResultStatus.DENIED,
+            invocation_id=execution.invocation_id,
             correlation_id=correlation_id,
-            error_code="capability_not_authorized",
+            error_class=ErrorClass.AUTHORIZATION_DENIED,
             message=decision.reason,
         )
 
@@ -53,7 +59,9 @@ def execute(
         ),
         operation=binding.operation,
         input=input_data,
-        correlation_id=correlation_id,
+        execution=execution,
     )
-    handle = provider.start(request)
-    return provider.result(handle)
+    submission = provider.submit(request)
+    if submission.outcome is not None:
+        return submission.outcome
+    return provider.observe(submission.handle)

@@ -3,6 +3,8 @@
 import json
 import sys
 
+MODE = sys.argv[1] if len(sys.argv) > 1 else "success"
+
 
 def response(message: dict[str, object]) -> dict[str, object]:
     method = message["method"]
@@ -27,6 +29,18 @@ def response(message: dict[str, object]) -> dict[str, object]:
             ]
         }
     elif method == "tools/call":
+        if MODE == "protocol_error":
+            return {
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "error": {"code": -32603, "message": "native protocol failure"},
+            }
+        if MODE == "tool_error":
+            result = {
+                "content": [{"type": "text", "text": "native tool failure"}],
+                "isError": True,
+            }
+            return {"jsonrpc": "2.0", "id": message["id"], "result": result}
         params = message["params"]
         assert isinstance(params, dict)
         arguments = params["arguments"]

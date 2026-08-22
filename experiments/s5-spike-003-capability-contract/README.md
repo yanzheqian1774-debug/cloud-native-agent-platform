@@ -19,3 +19,11 @@ uv run python experiments/s5-spike-003-capability-contract/run_checkpoint_a.py
 The generic caller knows capability identity, binding, authorization, request,
 and normalized result semantics. REST and MCP translation remain behind their
 provider boundaries.
+
+Checkpoint B adds platform-owned execution identity, opaque native diagnostic
+references, normalized REST/MCP failure classes, and acceptance with inline or
+deferred outcome. Run its deterministic evidence path with:
+
+```bash
+uv run python experiments/s5-spike-003-capability-contract/run_checkpoint_b.py
+```

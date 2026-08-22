@@ -34,6 +34,14 @@ class CapabilityRequest:
     capability: CapabilityIdentity
     operation: str
     input: dict[str, Any]
+    execution: ExecutionIdentity
+
+
+@dataclass(frozen=True)
+class ExecutionIdentity:
+    """Platform-owned identity created before authorization/provider work."""
+
+    invocation_id: str
     correlation_id: str
 
 
@@ -49,13 +57,34 @@ class ResultStatus(StrEnum):
     FAILED = "failed"
 
 
+class ErrorClass(StrEnum):
+    AUTHORIZATION_DENIED = "authorization_denied"
+    INPUT_INVALID = "input_invalid"
+    PROVIDER_UNAVAILABLE = "provider_unavailable"
+    PROVIDER_PROTOCOL_ERROR = "provider_protocol_error"
+    REMOTE_EXECUTION_FAILURE = "remote_execution_failure"
+    TIMEOUT = "timeout"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True)
 class CapabilityResult:
     status: ResultStatus
+    invocation_id: str
     correlation_id: str
     output: dict[str, Any] | None = None
-    error_code: str | None = None
+    error_class: ErrorClass | None = None
     message: str | None = None
+    diagnostic_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class CapabilitySubmission:
+    """Accepted work may contain an inline outcome or require observation."""
+
+    execution: ExecutionIdentity
+    handle: InvocationHandle
+    outcome: CapabilityResult | None = None
 
 
 class CapabilityProvider(Protocol):
@@ -63,6 +92,6 @@ class CapabilityProvider(Protocol):
 
     provider_ref: str
 
-    def start(self, request: CapabilityRequest) -> InvocationHandle: ...
+    def submit(self, request: CapabilityRequest) -> CapabilitySubmission: ...
 
-    def result(self, handle: InvocationHandle) -> CapabilityResult: ...
+    def observe(self, handle: InvocationHandle) -> CapabilityResult: ...

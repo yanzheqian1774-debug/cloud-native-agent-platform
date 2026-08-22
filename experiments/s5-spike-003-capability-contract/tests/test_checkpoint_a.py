@@ -11,6 +11,7 @@ from capability_contract import (  # noqa: E402
     Capability,
     CapabilityBinding,
     CapabilityIdentity,
+    ErrorClass,
     ResultStatus,
 )
 from generic_caller import BindingPolicy, execute  # noqa: E402
@@ -82,7 +83,7 @@ def test_discoverable_binding_can_be_denied_without_provider_invocation() -> Non
         correlation_id="deny-1",
     )
     assert result.status is ResultStatus.DENIED
-    assert result.error_code == "capability_not_authorized"
+    assert result.error_class is ErrorClass.AUTHORIZATION_DENIED
     assert provider.start_count == 0
 
 
