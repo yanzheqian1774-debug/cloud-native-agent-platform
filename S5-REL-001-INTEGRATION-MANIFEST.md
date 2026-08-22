@@ -4,7 +4,9 @@ SESSION_ID: S5-REL-001
 
 INTEGRATED_BY: S5-REL-001
 
-FINAL_SESSION_STATUS: `REVIEW / PASS / INTEGRATION_READY_FOR_HUMAN_GATE`
+FINAL_SESSION_STATUS: `CLOSED / COMPLETED / PASS / CLOSEOUT / SESSION_CLOSED`
+
+CLOSEOUT_ARTIFACT: `S5-REL-001-CLOSEOUT.md`
 
 This manifest records artifact-level extraction from historical PRs #33–#38.
 The integration commit is not the original evidence commit. Source branches and
@@ -92,8 +94,17 @@ Experimental source imported: `0`.
 - Architecture continuity: `CONTINUOUS_WITH_REFINEMENTS`.
 - Retroactive-fiction check: `PASS`.
 
-## Historical PR recommendation after integration verification
+## Historical PR final disposition
 
-Subject to a separate Human Gate, recommend `CLOSE_WITHOUT_MERGE` for #33, #34,
-#35, #36, #37, and #38 after this integration PR is verified and merged. No
-historical PR is closed by S5-REL-001 artifact integration.
+| PR | Final state | Disposition |
+|---:|---|---|
+| #33 | `CLOSED / UNMERGED` | `CLOSED_WITHOUT_MERGE`; `EARLY_CLOSURE_STATE_DRIFT` recorded; not closed by S5-REL-001; not reopened |
+| #34 | `CLOSED / UNMERGED` | `CLOSED_WITHOUT_MERGE` after provenance comment |
+| #35 | `CLOSED / UNMERGED` | `CLOSED_WITHOUT_MERGE` after provenance comment |
+| #36 | `CLOSED / UNMERGED` | `CLOSED_WITHOUT_MERGE` after provenance comment |
+| #37 | `CLOSED / UNMERGED` | `CLOSED_WITHOUT_MERGE` after provenance comment |
+| #38 | `CLOSED / UNMERGED` | `CLOSED_WITHOUT_MERGE` after provenance comment |
+
+Historical branches remain preserved. PR #39 integrated the durable artifacts
+and was merged as main commit `c75961c4aaa0a17ca48ccdb542c0e413d49b1a4f`.
+See `S5-REL-001-CLOSEOUT.md` for the final session record.
