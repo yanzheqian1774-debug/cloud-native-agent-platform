@@ -14,3 +14,8 @@ identity, Provider-owned binding-to-realization mapping, and runtime-owned
 native realization identity. The Checkpoint B router and Checkpoint C recovery
 coordinator are deterministic, in-memory evidence harnesses, not production
 scheduling or reconciliation controllers.
+
+The Human Final Spike Gate passed after Checkpoint C. See
+`S5-SPIKE-004-CLOSEOUT.md` for the accepted convergence inputs, evidence debt,
+and closeout state. The session remains `CLOSING` pending Human close
+confirmation.
