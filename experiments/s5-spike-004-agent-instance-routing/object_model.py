@@ -41,6 +41,16 @@ class RuntimeRealization:
     revision: int
 
 
+@dataclass(frozen=True)
+class NativeDispatch:
+    execution_id: str
+    instance_id: str
+    realization_id: str
+    native_kind: str
+    native_id: str
+    payload: str
+
+
 class ExperimentalRuntimeProvider:
     """Provider-owned mapping from bindings to native realizations."""
 
@@ -86,4 +96,27 @@ class ExperimentalRuntimeProvider:
             realization_id=realization_id,
             native_kind=native_kind,
             native_id=native_id,
+        )
+
+    def translate(
+        self,
+        binding: RuntimeBinding,
+        *,
+        execution_id: str,
+        payload: str,
+    ) -> NativeDispatch:
+        """Translate a selected binding; never select a platform Instance."""
+        if binding.provider_id != self.provider_id:
+            raise ValueError("binding belongs to a different provider")
+        active = self.active(binding)
+        if not active:
+            raise ValueError("binding has no active realization")
+        target = active[0]
+        return NativeDispatch(
+            execution_id=execution_id,
+            instance_id=binding.instance_id,
+            realization_id=target.realization_id,
+            native_kind=target.native_kind,
+            native_id=target.native_id,
+            payload=payload,
         )
