@@ -10,13 +10,14 @@ MODE: Architecture -> Engineering Contract Translation
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: B — RELATIONSHIP_AND_CARDINALITY
+CHECKPOINT: C — EXECUTION_CONDITION_OUTCOME_RECOVERY
 
-RESULT: **RELATIONSHIP_MODEL_RECOMMENDED**
+RESULT: **EXECUTION_BOUNDARY_RECOMMENDED**
 
-> The Human Checkpoint A Gate passed with representation constraints. This
-> artifact now records the Checkpoint B relationship and cardinality
-> recommendation. Human Checkpoint B Gate is pending. It does not define field
+> The Human Checkpoint A Gate passed with representation constraints, and the
+> Human Checkpoint B Gate passed with semantic constraints. This artifact now
+> records the Checkpoint C execution, condition, outcome, and recovery boundary
+> recommendation. Human Checkpoint C Gate is pending. It does not define field
 > schemas, freeze Contracts, change an ADR, or authorize implementation.
 
 ## 1. Executive Conclusion
@@ -121,7 +122,7 @@ change the candidate's primary semantic class.
 | Model | Model Gateway / Router | Model routing implementation boundary | DEFERRED | DEFER_V0_3_PLUS | DEFERRED |
 | Model | Model Policy | Enterprise routing/fallback intent | POLICY_REFERENCE | REFERENCE | V0_2_THIN_FOUNDATION |
 | Execution | Platform Execution Identity | One logical execution of requested work | CORE_VALUE_OBJECT | EMBEDDED_VALUE | V0_2_REQUIRED |
-| Execution | Execution Correlation | Bounded propagated correlation context | CORE_VALUE_OBJECT | EMBEDDED_VALUE | V0_2_REQUIRED |
+| Execution | Execution Correlation | Bounded propagated correlation context | REFERENCE | Relationship primitive (Checkpoint C recommendation) | V0_2_REQUIRED |
 | Execution | Execution Reference | Reference to Execution Identity plus subordinate context | REFERENCE | REFERENCE | V0_2_REQUIRED |
 | Observation | Agent Instance Status | Current normalized observed projection | STATUS | EMBEDDED_VALUE | V0_2_REQUIRED |
 | Observation | Agent Instance Condition | Instance-domain condition | CONDITION | EMBEDDED_VALUE | V0_2_REQUIRED |
@@ -146,14 +147,14 @@ change the candidate's primary semantic class.
 | Classification | Members | Boundary rule |
 | --- | --- | --- |
 | CORE_RESOURCE | Agent Definition, Agent Instance, Task, Workflow, Capability Definition | Independently identified Control Plane semantics; first-class resource recommendation does not define a CRD schema |
-| CORE_VALUE_OBJECT | Platform Execution Identity, Execution Correlation | Embedded platform-owned semantics with no independently reconciled desired state |
+| CORE_VALUE_OBJECT | Platform Execution Identity | Embedded platform-owned semantic with no independently reconciled desired state |
 | BINDING | Runtime Binding, Capability Binding, Model Binding | Domain-owned associations; no generic Binding schema |
 | REGISTRY_METADATA | Runtime Provider Registry, Runtime Package, Capability Provider Registry | Immutable/versioned resolver facts; repository/startup metadata is sufficient for v0.2 |
 | PROVIDER_INTERFACE | Runtime Provider, Capability Provider, future Model Provider | Replaceable translation boundary; never a platform semantic resource |
 | STATUS | Agent Instance Status, Recovery Assessment | Observed/derived projections; no desired state or independent lifecycle |
 | CONDITION | Agent Instance Condition, Runtime Condition | Domain-owned truth assertions using only minimal shared shape candidates |
 | OUTCOME | Task, Workflow, and Capability Outcomes | Domain-owned results using only minimal normalized envelope candidates |
-| REFERENCE | Execution, Workspace, State, and Knowledge references | Identifies or links to another owner without importing its lifecycle |
+| REFERENCE | Execution correlation/native references and Workspace, State, and Knowledge references | Identifies or links without importing another lifecycle; correlation does not require a separate object |
 | OPAQUE_NATIVE_ID | Realization, run, session, Pod, container, Gateway, invocation IDs | Bounded correlation evidence only; never routing or platform identity |
 | POLICY_REFERENCE | Policy, Permission, Human Gate, and Model Policy references | Governance/routing owner remains outside the referring object |
 | DEFERRED | Model Gateway / Router | Boundary requires S5-SPIKE-005 evidence |
@@ -297,7 +298,8 @@ not independent desired state or reconciliation.
   metadata, and Runtime Package metadata;
 - Capability Definition, Capability Binding, Capability Provider interface,
   and Capability Provider Registry metadata;
-- Platform Execution Identity, Execution Correlation, and Execution Reference;
+- Platform Execution Identity, Execution correlation relationship, and
+  Execution Reference;
 - Agent Instance Status/Condition, Runtime Condition, Task/Workflow/Capability
   Outcomes, and Recovery Assessment;
 - bounded opaque native ID references required for correlation and evidence.
@@ -1001,7 +1003,7 @@ for scaling, routing, and recovery.
 **Schema impact:** Later schema must express exact Definition reference; no
 field is defined here.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B02 — Definition vs Instance Binding ownership
 
@@ -1016,7 +1018,7 @@ authority and supports Provider resolution.
 **Schema impact:** Later schema must separate desired intent from effective
 observation; serialization is undecided.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B03 — Runtime Binding final representation
 
@@ -1031,7 +1033,7 @@ Binding reuse/history object.
 **Schema impact:** Later Definition and Instance schemas require distinct
 desired/effective placement, not a RuntimeBinding CRD.
 **Freeze impact:** None; Runtime Contract remains unfrozen.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B04 — Capability Binding final representation
 
@@ -1045,7 +1047,7 @@ managed reusable grant object.
 **Schema impact:** Later Agent Definition schema must support `0:N` semantic
 Bindings and effective resolution without protocol leakage.
 **Freeze impact:** None; Capability Contract remains unfrozen.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B05 — Agent Instance -> Runtime realization cardinality
 
@@ -1058,7 +1060,7 @@ and recovery correlation.
 **Schema impact:** Later status must allow bounded opaque references; no native
 schema enters Core.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B06 — Shared Gateway relationship
 
@@ -1070,7 +1072,7 @@ or replaces logical Instance identity.
 topology visibility.
 **Schema impact:** At most bounded opaque realization evidence later.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B07 — Runtime Provider resolution relationship
 
@@ -1085,7 +1087,8 @@ metadata/versioning overhead.
 **Schema impact:** Later Contract must express resolution inputs/results; none
 are defined here.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH CONSTRAINT — registry remains INTERNAL_METADATA,
+not a public API resource.
 
 ### B08 — Capability Provider resolution relationship
 
@@ -1098,7 +1101,8 @@ Capability.
 domain resolution metadata.
 **Schema impact:** Later Capability Contract work; no registry CRD implied.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH CONSTRAINT — registry remains INTERNAL_METADATA,
+not a public API resource.
 
 ### B09 — Capability Definition -> Binding relationship
 
@@ -1111,7 +1115,7 @@ as a permission grant across Agents.
 Binding intent.
 **Schema impact:** Later version/reference/cardinality representation only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B10 — Execution Identity propagation relationship
 
@@ -1124,7 +1128,7 @@ per domain.
 standalone execution lifecycle/query API.
 **Schema impact:** Later shared primitive placement; no Execution CRD.
 **Freeze impact:** None; shared execution schema remains unfrozen.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B11 — Native ID correlation relationship
 
@@ -1136,7 +1140,7 @@ Execution Identity at `0:N`; they never replace it.
 retention needs.
 **Schema impact:** Later bounded opaque-reference shape only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B12 — Logical routing ownership relationship
 
@@ -1149,7 +1153,7 @@ native realization.
 platform routing policy.
 **Schema impact:** No algorithm or scheduler schema is defined.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B13 — Runtime Binding lifecycle/deletion consequence
 
@@ -1162,7 +1166,8 @@ of native objects.
 mechanics.
 **Schema impact:** Later ownership/provenance semantics; no fields here.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH CONSTRAINT — reconciliation belongs to the
+owning platform object; no RuntimeBinding resource or controller is implied.
 
 ### B14 — Capability Binding lifecycle/deletion consequence
 
@@ -1175,7 +1180,7 @@ deletion.
 side-effect rules.
 **Schema impact:** Later policy and invocation semantics only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B15 — Agent Definition deletion consequence
 
@@ -1188,7 +1193,7 @@ retirement.
 **Schema impact:** Later deletion/reference policy; implementation mechanics
 remain undefined.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### B16 — Agent Instance termination consequence
 
@@ -1201,12 +1206,630 @@ cascade native state.
 in-flight execution and grace-period policy.
 **Schema impact:** Later lifecycle/deletion vocabulary; no implementation here.
 **Freeze impact:** None.
+**Human Decision:** ACCEPT WITH CONSTRAINT — external realizations default to
+DETACH or Provider-specific safe cleanup and are never unconditionally deleted.
+
+## 28. Execution Semantic Map
+
+```text
+Desired State (domain owner)
+        |
+        v
+Task / Workflow execution state
+  OWNS Platform Execution Identity
+        |
+        | ROUTES_TO
+        v
+Agent Instance
+  OBSERVES Instance Conditions
+  OWNS effective Runtime Binding
+        |
+        v
+Runtime Provider interaction
+  normalizes Runtime Conditions / interaction result
+  CORRELATES native Runtime IDs
+        |
+        | optionally invokes
+        v
+Capability Provider invocation
+  authorizes before handoff
+  normalizes Capability Outcome
+  CORRELATES native invocation IDs
+        |
+        v
+Task Outcome / Workflow Outcome
+
+Native change or failure
+  -> Provider-normalized evidence
+  -> Agent Instance reconciliation
+  -> Recovery Assessment
+```
+
+Execution state, observed conditions, outcomes, and recovery assessments are
+not synonyms. Acceptance and running describe execution progress. Conditions
+describe observed propositions. Outcomes describe domain completion meaning.
+Recovery Assessment answers whether promised logical semantics were restored
+and verified.
+
+## 29. Execution Identity Boundary
+
+Platform Execution Identity remains `CORE_VALUE_OBJECT / EMBEDDED_VALUE`.
+
+| Responsibility | Boundary |
+| --- | --- |
+| Generation ownership | Execution-owning Task/Workflow Control Plane creates it before routing or Provider handoff |
+| Scope | One logical performance of requested work, not Task, Workflow, Agent Instance, Provider request, or native realization identity |
+| Stability | Stable across logical routing, Provider translation, native retries that preserve intent, realization replacement, and inline/deferred completion |
+| Task relationship | A Task may own multiple logical Executions over explicit re-execution; an Execution belongs to one owning Task or Workflow-node context |
+| Workflow relationship | Workflow/node coordinates Execution identity and preserves node/aggregate ownership; Workflow identity does not replace it |
+| Agent Instance relationship | Execution is routed to one logical Instance at a time; Instance does not own Execution identity |
+| Parent/child | Independently retryable or fan-out child work may have a child identity related to a parent; attempts remain subordinate context |
+| Runtime propagation | Runtime Provider propagates the identity and returns subordinate native correlation evidence |
+| Capability propagation | Capability Provider receives the same identity plus domain-local invocation context and returns subordinate native correlation evidence |
+| Authorization | Identity enables correlation but grants no authority; every domain applies its own authorization/policy |
+| Persistence | Embedded with the owning execution context; no independent desired state or reconciler |
+
+No universal Execution resource or TaskExecution resource is justified. Exact
+generation algorithm, serialized representation, uniqueness scope, replay, and
+retention remain later Contract work.
+
+## 30. Execution Correlation Analysis
+
+Execution Correlation is a **relationship primitive**, not another Core value
+object. Platform Execution Identity plus bounded opaque native correlation
+references are sufficient for the proven needs.
+
+```text
+Platform Execution Identity
+  CORRELATES_WITH 0:N Runtime realization/run/session references
+  CORRELATES_WITH 0:N Capability invocation/job references
+  may relate to parent/child Platform Execution Identity
+```
+
+Creating a separate Execution Correlation object would duplicate identity and
+introduce lifecycle, ownership, retention, and consistency questions without
+independent semantics. Correlation context may carry bounded propagation
+metadata, but it does not create authority, guarantee native idempotency, or
+import Provider-native structure into Core.
+
+## 31. Task Outcome Boundary
+
+Task Outcome remains `OUTCOME / EMBEDDED_VALUE`, owned by the Task domain.
+
+- Submission accepted and execution running are mutable **execution states**,
+  not terminal Task Outcomes.
+- Terminal success means the Task's requested work satisfied Task-domain
+  completion semantics, not merely that a Provider call returned successfully.
+- Terminal failure means Task-domain completion failed after applying its
+  applicable attempt/retry semantics.
+- Cancellation and timeout are distinct Task-domain dispositions only where
+  their Contracts support them.
+- Unknown is legitimate when the platform cannot determine terminal
+  disposition; it must not be silently converted to failure or success.
+- Provider results and native exit states are evidence. The Task domain owns
+  the normalized Task meaning.
+
+No exact category names are frozen. A Task may have multiple logical Executions
+over explicit re-execution, but this does not create a TaskExecution resource.
+
+## 32. Workflow Outcome Boundary
+
+Workflow Outcome remains `OUTCOME / EMBEDDED_VALUE`, owned by the Workflow
+domain. It is not a generic Execution Outcome and cannot be derived by merely
+copying the last Task Outcome.
+
+| Concern | Workflow-domain meaning |
+| --- | --- |
+| Node outcomes | Inputs to DAG/coordination semantics; each retains Task/node ownership |
+| Aggregate outcome | Workflow's conclusion over dependency, skip, failure, and completion policy |
+| Partial completion | Some nodes may complete while the aggregate remains running, blocked, failed, or otherwise unresolved |
+| Human Gate | Waiting is mutable Workflow execution state; approval/rejection is governance evidence consumed by Workflow policy |
+| Retry/recovery | Node re-execution and recovery evidence affect aggregation but do not replace Workflow ownership |
+| Unknown | Used when aggregate disposition cannot be determined from available evidence |
+
+Exact aggregation, partial-completion, retry, and Human Gate vocabularies remain
+unfrozen and are not expanded into workflow-engine design here.
+
+## 33. Runtime Condition Boundary
+
+Runtime Condition is an embedded observed proposition owned by the Runtime
+domain Control Plane and normalized by the Runtime Provider from native
+evidence.
+
+Candidate concepts supported by existing evidence include Runtime availability,
+infrastructure availability where relevant, dependency readiness where the
+Provider can establish it, Binding/configuration usability, and applicability.
+`TaskReady` remains rejected as a Runtime Condition because Task readiness is
+owned by the Task/Workflow domain.
+
+Runtime Condition does not expose Provider-native health vocabulary and does
+not equate Pod readiness, Gateway liveness, or process existence with platform
+Runtime availability. The Provider observes and normalizes; the platform owns
+the semantic condition type and its interpretation.
+
+The candidate truth meanings `TRUE`, `FALSE`, `UNKNOWN`, and `NOT_APPLICABLE`
+are semantically useful but not frozen names or representation.
+
+## 34. Agent Instance Condition Boundary
+
+Agent Instance Condition is an embedded observed proposition owned by the Agent
+Instance Control Plane. It derives logical meaning from desired state, effective
+Binding resolution, Runtime Conditions, routing policy, governance, and recovery
+evidence without simply mirroring native health.
+
+It must be able to answer, at semantic level:
+
+- whether the logical Instance is eligible to participate in routing;
+- whether its effective Runtime Binding is usable;
+- whether required realization evidence is available;
+- whether promised Instance semantics are degraded;
+- whether recovery is required, unresolved, or verified.
+
+An alive Pod, Gateway, or runtime process is neither necessary nor sufficient
+for every Agent Instance condition. Provider evidence is input; the Agent
+Instance reconciler owns the final condition meaning.
+
+## 35. Capability Outcome Boundary
+
+Capability Outcome remains `OUTCOME / EMBEDDED_VALUE`, owned by the Capability
+domain and normalized by the Capability Provider where native interaction
+occurs.
+
+| Failure stage | Ownership boundary |
+| --- | --- |
+| Authorization denial | Platform governance/Capability domain before Provider or native handoff; proves no native execution occurred |
+| Input validation failure | Capability Contract/domain before or during Provider validation; not a Runtime failure |
+| Provider unavailable | Capability resolution/Provider boundary; Capability invocation cannot be handed off |
+| Provider protocol failure | Provider normalizes transport/protocol evidence into Capability-domain failure |
+| Remote execution failure | Provider normalizes native business/execution evidence without exposing protocol types |
+| Timeout | Capability-domain disposition subject to handoff and cancellation knowledge; retry safety is not assumed |
+| Unknown | Platform cannot determine native or terminal business disposition from available evidence |
+
+Business output and Capability-specific failure meaning never become Runtime
+Outcome. Candidate normalized error categories from S5-SPIKE-003 remain
+unfrozen.
+
+## 36. Runtime Interaction vs Capability Invocation
+
+| Concern | Runtime Interaction | Capability Invocation | Shared? |
+| --- | --- | --- | --- |
+| Primary semantic | Carry/observe Agent execution through selected Runtime Binding | Invoke a governed enterprise Capability operation | No |
+| Submission | Handoff to resolved Runtime Provider/realization context | Handoff only after Capability authorization and validation | Minimal submission disposition only |
+| Acceptance | Runtime domain accepts responsibility for interaction | Capability domain/Provider accepts responsibility for invocation | Minimal accepted/rejected-before-handoff distinction only |
+| Inline/deferred | May complete inline or return Runtime observation correlation | May return business result inline or deferred observation correlation | Completion disposition only |
+| Observation | Runtime conditions and interaction state | Capability invocation/business outcome state | No |
+| Streaming | Runtime/session semantics, if declared | Capability operation/protocol semantics, if declared | DOMAIN_SPECIFIC / DEFERRED |
+| Cancellation | Runtime/native lifecycle semantics | Capability side-effect and operation semantics | No |
+| Authorization | Runtime eligibility, Instance selection, Binding/policy | Explicit Capability/operation permission before handoff | Policy precedence only; decisions remain domain-specific |
+| Native correlation | Runtime realization/run/session evidence | Invocation/request/job evidence | Opaque correlation-reference semantics only |
+| Terminal outcome | Runtime interaction result/observation | Capability business outcome | No |
+| Retry safety | Runtime interaction/replay knowledge | Capability idempotency/side-effect knowledge | No |
+
+D32 Option C is preserved: structurally similar envelopes do not imply shared
+lifecycle, authorization, cancellation, retry, streaming, payload, or outcome
+meaning.
+
+## 37. Recovery Assessment Boundary
+
+Recovery Assessment remains `STATUS / EMBEDDED_VALUE`, owned by the Agent
+Instance Control Plane. It answers whether the platform-owned logical workload
+has restored and verified its promised semantics. It does not answer merely
+whether a native process restarted.
+
+### Evidence layers
+
+| Evidence | Owner | What it proves |
+| --- | --- | --- |
+| Process restarted | Kubernetes/runtime-native supervision | A native process action occurred; not semantic recovery |
+| Infrastructure restored | Infrastructure/Kubernetes | Required substrate became available; not Instance usability |
+| Runtime available | Runtime Provider normalization / Runtime domain | Runtime-domain predicates are satisfied to the supported evidence level |
+| Effective Binding usable | Instance reconciler using registry/Provider evidence | Selected Instance association can be translated and observed |
+| Agent Instance semantically usable | Agent Instance Control Plane | Required logical routing and promised Instance predicates are satisfied |
+| Execution state recovered | Task/Workflow domain | In-flight work resumed, restarted, failed, or remains unknown according to its Contract |
+| State restored | State owner/Provider where explicitly supported | Promised continuity predicate only; no universal portability implication |
+
+### Minimum assessment evidence
+
+The Control Plane may conclude recovery only when applicable evidence supports:
+
+1. desired logical state is restored;
+2. the same stable Agent Instance identity is retained;
+3. effective Runtime Binding is resolved and usable;
+4. required Runtime and Agent Instance conditions are acceptable;
+5. logical routing eligibility is restored;
+6. execution identity continuity/disposition is established where in-flight
+   execution is within the recovery promise; and
+7. state continuity is verified only when that Instance/Provider explicitly
+   promised it.
+
+If applicable evidence disproves a predicate, the assessment is not recovered.
+If required evidence cannot be obtained, the assessment remains unknown. The
+spike-local labels `RECOVERED`, `NOT_RECOVERED`, and `RECOVERY_UNKNOWN` describe
+useful meanings but remain unfrozen vocabulary.
+
+## 38. Unknown / N/A Semantics
+
+Unknown is a legitimate platform state, not an error-handling shortcut.
+
+| Meaning | Semantic rule |
+| --- | --- |
+| True | Available evidence establishes the proposition |
+| False | Available evidence establishes that the proposition is not satisfied |
+| Unknown | The platform cannot currently determine the proposition from available/fresh evidence |
+| Not applicable | The proposition does not apply to the selected Provider, ownership mode, or domain context |
+
+The four-way condition truth meaning is safe as a minimal shared primitive
+because its epistemic semantics are identical across Runtime and Agent Instance
+conditions. Condition types and causes remain domain-owned. Outcome `unknown`
+uses the same evidence-insufficiency principle but remains a domain outcome
+category rather than a universal Status value. Not-applicable is not a substitute
+for unsupported behavior, and unknown is never coerced into false.
+
+Exact names, representation, transition rules, and staleness thresholds remain
+unfrozen.
+
+## 39. Human Gate Thin Execution Boundary
+
+Human Gate remains a thin governance foundation split across two owners:
+
+- Policy/Governance `OWNS` the gate reference, decision authority, decision
+  evidence, and approved/rejected meaning.
+- Task/Workflow `OWNS` mutable execution state such as waiting for a referenced
+  decision, resuming after approval, or applying domain policy after rejection.
+
+Waiting for human decision is not a terminal Task or Workflow Outcome. Approval
+is not execution success. Rejection is governance evidence that may cause a
+Task/Workflow-domain terminal or non-terminal transition according to policy.
+The platform must not invoke a gated Capability before authorization is
+satisfied.
+
+This boundary creates no Human Feedback architecture, new Workflow subsystem,
+gate resource, or detailed approval lifecycle.
+
+## 40. Desired / Execution / Observation / Outcome Matrix
+
+| Concept | Owner | Source of truth | Nature | Control Plane responsibility | Provider responsibility |
+| --- | --- | --- | --- | --- | --- |
+| Desired State | Owning domain Control Plane | Kubernetes Control Plane | Mutable intent until lifecycle policy fixes it | Validate, authorize, reconcile toward semantics | Translate supported intent; never redefine it |
+| Execution State | Task/Workflow or domain interaction owner | Owning Control Plane execution context | Mutable progress; may reach terminal disposition | Coordinate submission, routing, waiting, retry/recovery policy | Report handoff/observation evidence within declared capability |
+| Observed Condition | Runtime or Agent Instance domain | Control Plane status from observed evidence | Mutable truth assertion with freshness/applicability | Define type/meaning and record honest truth | Observe, normalize, timestamp, and bound native evidence |
+| Outcome | Task, Workflow, or Capability domain | Owning domain record/status | Domain completion meaning; terminality explicitly known or unknown | Interpret domain semantics and persist normalized result | Normalize native result only for its domain |
+| Recovery Assessment | Agent Instance Control Plane | Embedded Instance status/evidence boundary | Mutable derived assessment; may remain unknown | Evaluate promised predicates and own final logical assessment | Perform declared native actions and normalize evidence |
+
+Desired state is not inferred from observation. Provider acceptance is not Task
+success. A condition is not an outcome. A recovery assessment may depend on
+conditions and execution evidence but does not replace either.
+
+## 41. Provider Normalization Boundary
+
+### Runtime Provider
+
+```text
+native health / events / interaction results
+  -> Runtime Provider translation, redaction, classification
+  -> platform Runtime Conditions / Runtime interaction result
+  -> Agent Instance reconciler consumes evidence
+```
+
+The Runtime Provider owns native observation, freshness reporting, translation,
+bounded safe diagnostics, and opaque references. The platform owns Runtime
+condition meaning, Instance condition derivation, routing eligibility, and
+Recovery Assessment.
+
+### Capability Provider
+
+```text
+native protocol / result / error
+  -> Capability Provider translation, redaction, classification
+  -> Capability Outcome
+  -> Task / Workflow consumes domain result
+```
+
+The Capability Provider does not process an invocation denied before handoff
+and cannot broaden permission. It normalizes protocol and remote evidence but
+does not redefine Capability identity, business success, or Task/Workflow
+completion.
+
+For both domains, raw exceptions, secret-bearing diagnostics, native schemas,
+and unbounded payloads do not cross into Core status.
+
+## 42. Shared Primitive Matrix
+
+| Candidate | Disposition | Minimum shared semantic | Explicitly not shared |
+| --- | --- | --- | --- |
+| Platform Execution Identity | SHARED_CORE_PRIMITIVE | One stable logical execution identity propagated end to end | Independent resource, authorization, domain payload |
+| Correlation reference | SHARED_CORE_PRIMITIVE | Relationship from platform identity to bounded opaque evidence reference | Separate Correlation object, native schema |
+| Timestamp semantics | SHARED_CORE_PRIMITIVE | Observation/decision time and evidence freshness meaning | Domain transition policy, clock/storage representation |
+| Condition truth state | SHARED_CORE_PRIMITIVE | True, false, unknown, and not-applicable meanings | Condition types, predicates, reason taxonomy |
+| Error category | DOMAIN_SPECIFIC | Runtime and Capability classify errors under their own semantics | Universal error taxonomy; only bounded safe diagnostic shape is shared |
+| Terminality | SHARED_CORE_PRIMITIVE | Whether a result/disposition is terminal, non-terminal, or not determinable | Domain success/failure meaning and progress states |
+| Outcome status | DOMAIN_SPECIFIC | Task, Workflow, Capability, and Runtime retain their own result meaning | Universal Outcome/Result object or exact enum |
+| Retry metadata | DOMAIN_SPECIFIC | Owner records retryability only when safely knowable | Cross-domain retry promise, idempotency assumption |
+| Native reference | SHARED_CORE_PRIMITIVE | Bounded opaque reference semantics for correlation/evidence/cleanup | Native value structure, routing identity, authority |
+| Submission disposition | SHARED_CORE_PRIMITIVE | Rejected before handoff versus accepted by responsible domain | Authorization reason, Runtime/Capability acceptance meaning |
+| Completion disposition | SHARED_CORE_PRIMITIVE | Inline terminal result versus deferred observation relationship | Deferred durability/availability guarantee |
+| Safe diagnostic shape | SHARED_CORE_PRIMITIVE | Stable bounded reason, safe message, observation context, optional opaque evidence reference | Domain reason vocabulary, raw native diagnostics |
+| Streaming | DEFERRED | No proven identical cross-domain semantics | Universal stream abstraction |
+| Cancellation | DOMAIN_SPECIFIC | Runtime and Capability define effects independently | Universal cancellation guarantee |
+
+### D32 special review
+
+**D32 Option C remains COHERENT.** Existing evidence supports only the minimal
+shared set above. It does not require a universal execution abstraction.
+
+The final Checkpoint C shared set is:
+
+1. Platform Execution Identity;
+2. opaque correlation/native reference semantics;
+3. observation/decision time and freshness semantics;
+4. four-way condition truth meaning;
+5. submission disposition;
+6. inline/deferred completion disposition;
+7. terminality;
+8. bounded safe diagnostic shape.
+
+Runtime Interaction and Capability Invocation retain distinct authorization,
+payload, observation, cancellation, retry, streaming, and terminal outcome
+semantics. Exact vocabulary and serialization remain unfrozen.
+
+## 43. Checkpoint C Recommendations
+
+1. Keep Platform Execution Identity embedded and owned by the Task/Workflow
+   execution context; do not create Execution or TaskExecution resources.
+2. Treat Execution Correlation as a relationship primitive, not another value
+   object. Use Execution Identity plus bounded opaque native references.
+3. Keep Task, Workflow, and Capability Outcomes embedded and domain-owned.
+   Acceptance/running are execution states, not terminal outcomes.
+4. Keep Runtime and Agent Instance Conditions distinct. Share only four-way
+   truth meaning and minimal observation semantics; never mirror native health
+   directly as Instance readiness.
+5. Keep Runtime Interaction and Capability Invocation separate. Share only the
+   D32 minimal primitives; keep authorization, payload, retry, cancellation,
+   streaming, observation, and result meaning domain-specific.
+6. Keep Recovery Assessment embedded in Agent Instance status and require
+   predicate-based semantic verification. Restart or replacement is evidence,
+   not recovery.
+7. Preserve unknown and not-applicable as honest meanings; never coerce missing
+   evidence into false or success.
+8. Keep Human Gate decision authority in Governance and waiting/resumption in
+   Task/Workflow execution state. Do not create Human Feedback architecture.
+9. Preserve native IDs as `0:N` opaque correlation evidence with no authority
+   or routing role.
+10. Confirm D32 Option C as coherent and carry exact vocabularies,
+    serialization, retry/idempotency, deferred durability, and state continuity
+    into later authorized Contract work.
+
+## 44. Human Decision Table — Checkpoint C
+
+### C01 — Platform Execution Identity responsibility
+
+**Recommendation:** Execution-owning Task/Workflow Control Plane creates and
+owns one embedded identity for one logical execution before routing; Providers
+propagate but never replace it.
+**Evidence:** D31, AP-S5-011, S5-SPIKE-003/004.
+**Alternatives:** Provider-native identity; universal Execution resource.
+**Trade-off:** Stable end-to-end correlation with a small API surface versus no
+independent execution resource lifecycle.
+**Schema impact:** Later placement/generation rules only; no fields defined.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C02 — Execution Correlation representation
+
+**Recommendation:** Relationship primitive, not a separate Core value object;
+Execution Identity plus bounded opaque native references is sufficient.
+**Evidence:** `0:N` native correlation accepted at Checkpoint B.
+**Alternatives:** Separate Execution Correlation object; Provider-native graph.
+**Trade-off:** Avoids duplicate lifecycle and consistency surface while leaving
+retention/query mechanics for later.
+**Schema impact:** Later bounded reference semantics only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C03 — Task Outcome ownership
+
+**Recommendation:** Task-domain `OUTCOME / EMBEDDED_VALUE`; acceptance/running
+remain execution state and Provider results remain evidence.
+**Evidence:** D36 and current Task lifecycle separation.
+**Alternatives:** Generic Execution Outcome; TaskExecution resource.
+**Trade-off:** Preserves Task retry/completion meaning versus duplicated minimal
+envelope concepts.
+**Schema impact:** Exact categories and representation remain later work.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C04 — Workflow Outcome ownership
+
+**Recommendation:** Workflow-domain `OUTCOME / EMBEDDED_VALUE`, aggregating
+node/dependency semantics without becoming generic Execution Outcome.
+**Evidence:** D36 and current Workflow DAG/failure/skip behavior.
+**Alternatives:** Copy final Task Outcome; universal Outcome.
+**Trade-off:** Correct aggregate meaning versus domain-specific aggregation
+rules.
+**Schema impact:** No aggregation enum or fields defined.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C05 — Runtime Condition ownership
+
+**Recommendation:** Runtime-domain embedded condition, Provider-normalized from
+native evidence and platform-defined in meaning; `TaskReady` excluded.
+**Evidence:** D36, S5-ARCH-002, Runtime evidence.
+**Alternatives:** Raw Provider health; universal Status.
+**Trade-off:** Honest portability versus normalization effort and unknown states.
+**Schema impact:** Condition vocabulary remains unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C06 — Agent Instance Condition ownership
+
+**Recommendation:** Agent Instance Control Plane owns embedded logical
+conditions for routing eligibility, effective Binding usability, degradation,
+and recovery; native readiness is evidence only.
+**Evidence:** D30, D34–D36, S5-SPIKE-004.
+**Alternatives:** Mirror Pod/Gateway/Runtime condition directly.
+**Trade-off:** Accurate logical health versus derived reconciliation complexity.
+**Schema impact:** Names and predicates remain unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C07 — Capability Outcome ownership
+
+**Recommendation:** Capability-domain `OUTCOME / EMBEDDED_VALUE`; Provider
+normalizes only after handoff, while authorization denial remains a pre-handoff
+platform result.
+**Evidence:** D36 and S5-SPIKE-003 denial/inline/deferred/failure evidence.
+**Alternatives:** Runtime Outcome; universal Provider Result.
+**Trade-off:** Preserves business and authorization meaning versus separate
+domain normalization.
+**Schema impact:** Error and result vocabulary remains unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C08 — Shared Condition truth primitive
+
+**Recommendation:** `SHARED_CORE_PRIMITIVE` for true, false, unknown, and
+not-applicable meanings; exact names/representation not frozen.
+**Evidence:** D36 and cross-runtime observation evidence.
+**Alternatives:** Per-domain incompatible truth models; Boolean only.
+**Trade-off:** Honest consistent epistemic state versus an additional primitive
+requiring careful applicability/freshness rules.
+**Schema impact:** Semantic meaning only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C09 — Shared error category
+
+**Recommendation:** `DOMAIN_SPECIFIC`; share only a bounded safe diagnostic
+shape, not one Runtime/Capability/Task error taxonomy.
+**Evidence:** D32 Option C and pre-handoff Capability denial counterexample.
+**Alternatives:** Universal error enum; completely unstructured diagnostics.
+**Trade-off:** Preserves retry/authorization meaning while retaining consistent
+safe observability envelope.
+**Schema impact:** Exact categories and diagnostic representation unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C10 — Terminality sharing
+
+**Recommendation:** `SHARED_CORE_PRIMITIVE` limited to terminal, non-terminal,
+or not-determinable meaning and inline/deferred completion disposition.
+**Evidence:** D32 Option C, S5-SPIKE-003/004.
+**Alternatives:** Universal progress state; duplicated terminality rules.
+**Trade-off:** Consistent orchestration boundary without shared domain outcomes.
+**Schema impact:** Exact representation unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C11 — Runtime Interaction boundary
+
+**Recommendation:** Runtime-domain interaction Contract owns Binding/realization
+context, observation, cancellation, retry, streaming, and terminal Runtime
+meaning; only minimal D32 primitives are shared.
+**Evidence:** S5-ARCH-002 and D32 comparison.
+**Alternatives:** Universal Runtime/Capability interaction.
+**Trade-off:** Runtime portability without erasing lifecycle semantics.
+**Schema impact:** Runtime Contract remains future/unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C12 — Capability Invocation boundary
+
+**Recommendation:** Capability-domain Contract owns authorization, semantic
+input/output, operation, Provider handoff, side-effect/retry, observation, and
+terminal business meaning.
+**Evidence:** S5-SPIKE-003 and D32/D36.
+**Alternatives:** Runtime Interaction alias; protocol-native invocation in Core.
+**Trade-off:** Governance and business portability versus separate Contract
+evolution.
+**Schema impact:** Capability Contract remains future/unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C13 — Recovery Assessment responsibility
+
+**Recommendation:** Agent Instance Control Plane owns embedded predicate-based
+assessment of restored logical semantics; Providers supply normalized evidence.
+**Evidence:** D35, D36, AP-S5-001, S5-SPIKE-004.
+**Alternatives:** Restart success; Provider-owned recovery status; resource.
+**Trade-off:** Honest semantic recovery versus multi-layer evidence gathering.
+**Schema impact:** Vocabulary/history representation unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C14 — Recovery evidence minimum
+
+**Recommendation:** Require desired state, stable Instance identity, usable
+effective Binding, acceptable Runtime/Instance conditions, restored routing
+eligibility, and applicable execution continuity; State only when explicitly
+promised.
+**Evidence:** D35 and S5-SPIKE-004 recovery predicates.
+**Alternatives:** Pod/process replacement alone; universal State restoration.
+**Trade-off:** Verifiable promises without false portability versus potentially
+unknown assessment where evidence is incomplete.
+**Schema impact:** Predicate serialization deferred.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C15 — UNKNOWN semantics
+
+**Recommendation:** Preserve unknown as insufficient evidence, distinct from
+false and not-applicable; never coerce it into failure or success.
+**Evidence:** D36 observation model and heterogeneous Provider limits.
+**Alternatives:** Boolean conditions; fail-closed semantic conflation.
+**Trade-off:** Honest uncertainty versus consumers needing explicit handling.
+**Schema impact:** Exact names/transitions/staleness unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C16 — Human Gate execution-state boundary
+
+**Recommendation:** Governance owns reference/decision evidence; Task/Workflow
+owns waiting and resumption execution state. Approval is not success, and
+rejection is consumed under domain policy.
+**Evidence:** Thin v0.2 governance direction and D36 ownership separation.
+**Alternatives:** Human Gate as Outcome; broad Human Feedback subsystem.
+**Trade-off:** Minimal enforceable gate boundary versus deferred feedback and
+approval lifecycle.
+**Schema impact:** No gate resource or state enum defined.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C17 — Native ID representation
+
+**Recommendation:** `OPAQUE_NATIVE_ID / REFERENCE`, stored only as bounded
+`0:N` correlation, debugging, observability, or ownership-safe cleanup evidence.
+**Evidence:** D31, AP-S5-011, Checkpoint B B11.
+**Alternatives:** Platform identity; routable native target in Core.
+**Trade-off:** Useful diagnostics without native coupling versus bounded mapping
+and retention obligations.
+**Schema impact:** Native structures never enter Core; reference shape deferred.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### C18 — Final D32 shared primitive set
+
+**Recommendation:** Share only Execution Identity, opaque correlation/native
+reference semantics, observation/decision time and freshness, four-way
+condition truth, submission disposition, inline/deferred completion
+disposition, terminality, and bounded safe diagnostic shape.
+**Evidence:** D32 Option C and combined S5-ARCH-002/S5-SPIKE-003/004 evidence.
+**Alternatives:** Universal execution/result Contract; no shared primitives.
+**Trade-off:** Consistent Control Plane integration without coupling Runtime and
+Capability lifecycle or versioning.
+**Schema impact:** Semantic set only; all names and serialization unfrozen.
+**Freeze impact:** None; D32 remains coherent and Contracts remain unfrozen.
 **Human Decision:** PENDING.
 
 ## Contract and Change Boundary
 
 CONTRACT_FREEZE: **NO**
 FREEZE_GATE: `G-S5-RUNTIME-FREEZE-01 = FAIL / UNCHANGED`
+RUNTIME_CONTRACT: **NOT FROZEN**
+CAPABILITY_CONTRACT: **NOT FROZEN**
+CONDITION_VOCABULARY: **NOT FROZEN**
+OUTCOME_VOCABULARY: **NOT FROZEN**
+RECOVERY_VOCABULARY: **NOT FROZEN**
 PRODUCTION_CORE_CHANGE: **0**
 ADR_CHANGE: **0**
 SCHEMA_CHANGE: **0**
@@ -1218,7 +1841,7 @@ Schema Draft is not Contract Freeze. This Checkpoint does not draft a schema.
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: B — RELATIONSHIP_AND_CARDINALITY
-RESULT: RELATIONSHIP_MODEL_RECOMMENDED
+CHECKPOINT: C — EXECUTION_CONDITION_OUTCOME_RECOVERY
+RESULT: EXECUTION_BOUNDARY_RECOMMENDED
 NEXT_ACTION: WAIT_FOR_HUMAN_DECISION
-NEXT_GATE: Human Checkpoint B Gate
+NEXT_GATE: Human Checkpoint C Gate
