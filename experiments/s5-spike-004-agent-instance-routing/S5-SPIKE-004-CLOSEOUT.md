@@ -12,23 +12,31 @@ TRACK: Agent Instance
 
 MODE: Spike / Experimental
 
-LIFECYCLE: CLOSING
+LIFECYCLE: CLOSED
 
-AUTHORIZATION: AUTHORIZED
+AUTHORIZATION: COMPLETED
 
 STATUS: PASS
 
 CHECKPOINT: CLOSEOUT
 
-RESULT: **READY_TO_CLOSE**
+RESULT: **SESSION_CLOSED**
 
 DISPOSITION:
 
 - **AGENT_INSTANCE_ROUTING_RECOVERY_DISCOVERY_COMPLETE**
 - **READY_FOR_ARCHITECTURE_CONVERGENCE**
 
-This artifact records the Human Final Spike Gate. It does not transition the
-session to `CLOSED`; Human close confirmation remains required.
+This artifact records the Human Final Spike Gate and subsequent Human Close
+Confirmation. The final Human decision is **PASS**.
+
+## Human Close Confirmation
+
+- transition: `CLOSING` -> `CLOSED`;
+- authorization: `AUTHORIZED` -> `COMPLETED`;
+- result: `READY_TO_CLOSE` -> `SESSION_CLOSED`;
+- Human final decision: **PASS**;
+- reopen: **PROHIBITED**.
 
 ## Checkpoint Final State
 
@@ -143,7 +151,8 @@ semantic placement; this closeout does not start that architecture task.
 
 - Branch: `codex/s5-spike-004-agent-instance-routing`;
 - Checkpoint C commit: `eba8711`;
-- closeout commit: the commit containing this artifact;
+- closeout commit: `63a607d`;
+- final CLOSED-state commit: the commit containing this metadata update;
 - PR: `#35`, draft, targeting `main`;
 - working tree before closeout artifact creation: clean and synchronized with
   `origin/codex/s5-spike-004-agent-instance-routing`.
@@ -161,6 +170,7 @@ semantic placement; this closeout does not start that architecture task.
   scan; native identifiers are synthetic and no credentials are present;
 - Production/Core diff: **0 files**.
 
-## Next Action
+## Final State
 
-**WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**
+- next action: **NONE**;
+- reopen: **PROHIBITED**.
