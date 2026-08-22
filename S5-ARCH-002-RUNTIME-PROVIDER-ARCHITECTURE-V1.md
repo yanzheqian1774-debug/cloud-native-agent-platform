@@ -6,15 +6,25 @@ TITLE: Runtime Provider & Certified Runtime Package Architecture
 PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Runtime
 MODE: Architecture
+LIFECYCLE: CLOSING
+AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: FINAL
+CHECKPOINT: CLOSEOUT
+
+RESULT: HUMAN_FINAL_GATE_PASS
+
+DISPOSITION:
+
+- ARCHITECTURE_BASELINE_ACCEPTED
+- RUNTIME_CONTRACT_NOT_FROZEN
 
 ## 1. Status and scope
 
-This document proposes **Runtime Provider Plugin Architecture v1** and a
-**Runtime Contract Candidate v1.1** for Human Final Gate review. It is an
-architecture artifact, not an implementation authorization, accepted ADR, or
-frozen Contract.
+The Human Final Gate accepted **Runtime Provider Plugin Architecture v1** and
+**Runtime Contract Candidate v1.1** as the architecture baseline. This is not
+an implementation authorization, accepted ADR modification, or frozen
+Contract. Runtime Contract schema implementation and S5-DEV remain outside
+this session.
 
 The proposal applies the accepted human direction D22–D29:
 
@@ -479,18 +489,19 @@ identical generic Contract consumer has not yet been executed unchanged against
 both Provider implementations, and neither third-party Runtime has produced a
 successful real-model completion in the available evidence.
 
-## 16. Architecture principle candidate disposition
+## 16. Architecture principle disposition
 
 | Candidate | Disposition | Rationale |
 |---|---|---|
-| AP-S5-005 Runtime Provider Isolation | **RECOMMEND ACCEPT** | Both spikes required materially different native details while Core changes remained zero; boundary rules prevent leakage |
-| AP-S5-006 Independent Provider Evolution | **RECOMMEND ACCEPT** | Provider and Runtime Package versions vary independently; Registry and compatibility tuple make that explicit |
-| AP-S5-007 Governed Extension | **RECOMMEND ACCEPT** | Registry metadata, integrity, policy eligibility, conformance, and certification prevent arbitrary extensions from implying trust |
-| AP-S5-008 Certification by Combination | **RECOMMEND ACCEPT** | Evidence cannot justify family-wide certification; exact Platform/Contract/Provider/Runtime tuple is required |
-| AP-S5-009 Runtime Native Configuration Reconciliation | **RECOMMEND ACCEPT WITH QUALIFICATION** | Required when a Provider owns native configuration convergence; external/preconfigured Providers may declare no reconciler and reduced guarantees |
+| AP-S5-005 Runtime Provider Isolation | **ACCEPT / ARCHITECTURE BASELINE** | Both spikes required materially different native details while Core changes remained zero; boundary rules prevent leakage |
+| AP-S5-006 Independent Provider Evolution | **ACCEPT / ARCHITECTURE BASELINE** | Provider and Runtime Package versions vary independently; Registry and compatibility tuple make that explicit |
+| AP-S5-007 Governed Extension | **ACCEPT / ARCHITECTURE BASELINE** | Registry metadata, integrity, policy eligibility, conformance, and certification prevent arbitrary extensions from implying trust |
+| AP-S5-008 Certification by Combination | **ACCEPT / ARCHITECTURE BASELINE** | Evidence cannot justify family-wide certification; exact Platform/Contract/Provider/Runtime tuple is required |
+| AP-S5-009 Runtime Native Configuration Reconciliation | **ACCEPT / CONDITIONAL ARCHITECTURE BASELINE** | Required when a Provider owns or manages native configuration convergence; not universally required for externally managed/Connected Runtime configuration |
 
-These are recommendations to the Human Final Gate. This document does not
-freeze or promote them to accepted ADR principles.
+These dispositions were accepted by the Human Final Gate as architecture
+baseline. This closeout does not modify accepted ADR files or freeze the
+Runtime Contract.
 
 ## 17. Open questions
 
@@ -521,7 +532,7 @@ freeze or promote them to accepted ADR principles.
 |---|---|
 | ED-S5-001 remains open; Hermes real-model completion absent | Hermes cannot be certified; successful outcome/usage/correlation path unproven |
 | OpenClaw successful real-model completion absent | Deferred successful terminal outcome and dependency recovery remain unproven |
-| Identical generic consumer not run unchanged against both Providers | Provider extension test is partial, not complete |
+| Contract Conformance gap: identical generic consumer not run unchanged against both Providers | New evidence gap recorded separately; ED-S5-002 remains closed and its history is unchanged |
 | No third Runtime family | Candidate may still contain two-runtime coincidences |
 | No out-of-process prototype | Serialization/failure isolation is an architecture constraint, not demonstrated behavior |
 | No signed registry/package artifacts | Supply-chain and revocation model remains conceptual |
@@ -530,9 +541,24 @@ freeze or promote them to accepted ADR principles.
 | No credential-consumption success in final Hermes gate | Projection cannot be equated with effective client authentication |
 | No production Provider SDK/conformance harness | Conformance model is proposed, not implemented |
 
-## 19. Runtime Freeze Gate amendment proposal
+### 18.1 Evidence governance disposition
 
-Amend the future Runtime Contract freeze gate so freeze requires all of:
+- ED-S5-001 remains **OPEN / CARRIED FORWARD / PROVIDER CERTIFICATION DEBT**.
+- Hermes remains **EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE**; it is not
+  described as unsupported.
+- ED-S5-002 remains **CLOSED** and is not reopened.
+- The unchanged-consumer gap is separate Contract Conformance evidence debt
+  and does not retroactively alter ED-S5-002.
+
+## 19. Runtime Freeze Gate amendment proposal — not adopted at this gate
+
+The architecture proposal offered the following possible future amendment for
+Human consideration. The Human Final Gate did **not** amend the existing gate.
+`G-S5-RUNTIME-FREEZE-01` remains unchanged and **FAIL**. The Runtime Contract
+remains not frozen. Any separation of a Contract Architecture/Conformance Gate
+from a Provider Certification Gate requires a future Human Contract Gate.
+
+The unadopted proposal was that a future freeze gate require all of:
 
 1. a human-accepted ADR for Provider/Core ownership and Contract scope;
 2. an explicit Contract registry entry with version, status, owner,
@@ -560,18 +586,16 @@ Certification of every capability is not required to freeze a minimal
 Contract; unsupported capabilities must instead be honestly declarable. A
 single Provider or Runtime-family success is insufficient.
 
-## 20. Recommendation for Human Final Gate
+## 20. Human Final Gate disposition
 
-**Recommend PASS of S5-ARCH-002 as a non-frozen architecture proposal:** accept
-Runtime Provider Architecture v1, accept the separation of Runtime Provider and
-Runtime Package, adopt Candidate v1.1 as the next review baseline, and accept
-AP-S5-005 through AP-S5-009 with the qualification recorded above.
+**HUMAN_FINAL_GATE_PASS:** Runtime Provider Architecture v1, separation of
+Runtime Provider and Runtime Package, Runtime Contract Candidate v1.1 as the
+architecture baseline, D22–D29, and AP-S5-005 through AP-S5-009 with the
+recorded qualification are accepted.
 
-Do **not** freeze the Runtime Contract or authorize broad S5-DEV yet. Authorize
-one bounded next architecture/contract session to turn Candidate v1.1 into
-reviewable schemas and a conformance test plan, with the unchanged-consumer
-Hermes/OpenClaw test as an explicit entry gate. Hermes remains experimental and
-not currently certifiable; do not reopen S5-TEST-004 or create S5-TEST-005.
+The Runtime Contract is not frozen. Broad S5-DEV, Runtime Contract schema
+implementation, a new session, S5-TEST-004 reopening, and S5-TEST-005 creation
+are not authorized by this closeout.
 
 ## 21. Evidence basis
 
