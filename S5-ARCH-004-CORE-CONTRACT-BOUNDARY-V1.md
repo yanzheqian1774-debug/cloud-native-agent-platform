@@ -10,15 +10,16 @@ MODE: Architecture -> Engineering Contract Translation
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: C — EXECUTION_CONDITION_OUTCOME_RECOVERY
+CHECKPOINT: D — V0_2_API_SURFACE_AND_FINAL_CONVERGENCE
 
-RESULT: **EXECUTION_BOUNDARY_RECOMMENDED**
+RESULT: **CORE_CONTRACT_BOUNDARY_RECOMMENDED**
 
-> The Human Checkpoint A Gate passed with representation constraints, and the
-> Human Checkpoint B Gate passed with semantic constraints. This artifact now
-> records the Checkpoint C execution, condition, outcome, and recovery boundary
-> recommendation. Human Checkpoint C Gate is pending. It does not define field
-> schemas, freeze Contracts, change an ADR, or authorize implementation.
+> The Human Checkpoint A Gate passed with representation constraints, the Human
+> Checkpoint B Gate passed with semantic constraints, and the Human Checkpoint
+> C Gate passed with freeze constraints. This artifact now records Checkpoint D
+> final convergence. Human Final Contract Boundary Gate is pending. It does not
+> define fields or schemas, freeze Contracts, change an ADR, or authorize
+> implementation.
 
 ## 1. Executive Conclusion
 
@@ -1612,7 +1613,7 @@ propagate but never replace it.
 independent execution resource lifecycle.
 **Schema impact:** Later placement/generation rules only; no fields defined.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C02 — Execution Correlation representation
 
@@ -1624,7 +1625,7 @@ Execution Identity plus bounded opaque native references is sufficient.
 retention/query mechanics for later.
 **Schema impact:** Later bounded reference semantics only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C03 — Task Outcome ownership
 
@@ -1636,7 +1637,7 @@ remain execution state and Provider results remain evidence.
 envelope concepts.
 **Schema impact:** Exact categories and representation remain later work.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C04 — Workflow Outcome ownership
 
@@ -1648,7 +1649,7 @@ node/dependency semantics without becoming generic Execution Outcome.
 rules.
 **Schema impact:** No aggregation enum or fields defined.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C05 — Runtime Condition ownership
 
@@ -1659,7 +1660,7 @@ native evidence and platform-defined in meaning; `TaskReady` excluded.
 **Trade-off:** Honest portability versus normalization effort and unknown states.
 **Schema impact:** Condition vocabulary remains unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C06 — Agent Instance Condition ownership
 
@@ -1671,7 +1672,7 @@ and recovery; native readiness is evidence only.
 **Trade-off:** Accurate logical health versus derived reconciliation complexity.
 **Schema impact:** Names and predicates remain unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C07 — Capability Outcome ownership
 
@@ -1684,7 +1685,7 @@ platform result.
 domain normalization.
 **Schema impact:** Error and result vocabulary remains unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C08 — Shared Condition truth primitive
 
@@ -1696,7 +1697,8 @@ not-applicable meanings; exact names/representation not frozen.
 requiring careful applicability/freshness rules.
 **Schema impact:** Semantic meaning only.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH FREEZE CONSTRAINT — architecture-level truth
+semantics only; exact names, representation, and compatibility are unfrozen.
 
 ### C09 — Shared error category
 
@@ -1708,7 +1710,7 @@ shape, not one Runtime/Capability/Task error taxonomy.
 safe observability envelope.
 **Schema impact:** Exact categories and diagnostic representation unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C10 — Terminality sharing
 
@@ -1719,7 +1721,8 @@ or not-determinable meaning and inline/deferred completion disposition.
 **Trade-off:** Consistent orchestration boundary without shared domain outcomes.
 **Schema impact:** Exact representation unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT WITH FREEZE CONSTRAINT — semantic boundary only;
+exact vocabulary and representation are unfrozen.
 
 ### C11 — Runtime Interaction boundary
 
@@ -1731,7 +1734,7 @@ meaning; only minimal D32 primitives are shared.
 **Trade-off:** Runtime portability without erasing lifecycle semantics.
 **Schema impact:** Runtime Contract remains future/unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C12 — Capability Invocation boundary
 
@@ -1744,7 +1747,7 @@ terminal business meaning.
 evolution.
 **Schema impact:** Capability Contract remains future/unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C13 — Recovery Assessment responsibility
 
@@ -1755,7 +1758,7 @@ assessment of restored logical semantics; Providers supply normalized evidence.
 **Trade-off:** Honest semantic recovery versus multi-layer evidence gathering.
 **Schema impact:** Vocabulary/history representation unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C14 — Recovery evidence minimum
 
@@ -1769,7 +1772,7 @@ promised.
 unknown assessment where evidence is incomplete.
 **Schema impact:** Predicate serialization deferred.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C15 — UNKNOWN semantics
 
@@ -1780,7 +1783,7 @@ false and not-applicable; never coerce it into failure or success.
 **Trade-off:** Honest uncertainty versus consumers needing explicit handling.
 **Schema impact:** Exact names/transitions/staleness unfrozen.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C16 — Human Gate execution-state boundary
 
@@ -1793,7 +1796,7 @@ rejection is consumed under domain policy.
 approval lifecycle.
 **Schema impact:** No gate resource or state enum defined.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C17 — Native ID representation
 
@@ -1805,7 +1808,7 @@ approval lifecycle.
 and retention obligations.
 **Schema impact:** Native structures never enter Core; reference shape deferred.
 **Freeze impact:** None.
-**Human Decision:** PENDING.
+**Human Decision:** ACCEPT.
 
 ### C18 — Final D32 shared primitive set
 
@@ -1819,6 +1822,750 @@ disposition, terminality, and bounded safe diagnostic shape.
 Capability lifecycle or versioning.
 **Schema impact:** Semantic set only; all names and serialization unfrozen.
 **Freeze impact:** None; D32 remains coherent and Contracts remain unfrozen.
+**Human Decision:** ACCEPT WITH FREEZE CONSTRAINT — architecture boundary
+acceptance only; no fields, enums, schema, serialization, or Contract freeze.
+
+## 45. Final Executive Conclusion
+
+S5-ARCH-004 converges the accepted v0.2 architecture into a preliminary Core
+Contract boundary with five first-class resource candidates:
+
+1. Agent Definition;
+2. Agent Instance;
+3. Task;
+4. Workflow; and
+5. Capability Definition.
+
+Runtime Binding and Capability Binding remain first-class semantic boundaries
+but are `EMBEDDED_BINDING`, not API resources. Model Binding is a thin embedded
+foundation. Runtime and Capability Provider registries plus Runtime Package are
+internal metadata; Providers are interfaces. Platform Execution Identity is an
+embedded Core value object. Conditions, outcomes, and Recovery Assessment are
+embedded and domain-owned. Workspace, State/Memory, Knowledge, Policy,
+Permission, and Human Gate remain thin references or decision evidence.
+
+This is object-boundary, semantic-ownership, relationship, and shared-primitive
+boundary acceptance. It is not an approved CRD count, schema freeze, Contract
+freeze, Provider certification, or implementation authorization. The next
+Schema Draft may design only within the handoff in Section 59 and must return to
+a Human/Architecture Gate before public API or Contract approval.
+
+## 46. Final Core Object Map
+
+```text
+Digital Employee (product/business projection only)
+  projects
+    Agent Definition (technical desired logical definition)
+      OWNS embedded desired Runtime Binding intent
+      OWNS 1:N embedded Capability Binding intents
+        each BINDS_TO one Capability Definition
+      OWNS thin embedded Model Binding
+      REFERENCES Workspace / State / Knowledge / Policy
+      referenced by 1:N Agent Instances
+        each Agent Instance
+          REFERENCES one exact Agent Definition identity/version
+          OWNS derived effective Runtime Binding projection
+          OBSERVES Agent Instance Conditions
+          OBSERVES embedded Recovery Assessment
+          CORRELATES_WITH 0:N opaque native realization references
+
+Task / Workflow node
+  OWNS embedded Platform Execution Identity
+  OWNS domain execution state and Outcome
+  may wait on Human Gate decision evidence
+  ROUTES_TO one eligible Agent Instance
+    effective Runtime Binding RESOLVES_THROUGH internal Runtime Registry
+      Runtime Provider REALIZES/addresses opaque native realization
+    Capability Binding RESOLVES_THROUGH internal Capability Registry
+      Capability Provider INVOKES opaque native capability
+      Capability Outcome remains Capability-domain owned
+
+Platform Execution Identity
+  CORRELATES_WITH 0:N Runtime-native IDs
+  CORRELATES_WITH 0:N Capability-native invocation IDs
+```
+
+The corrected map makes logical routing precede Runtime Provider translation
+and places Capability invocation in Task/Workflow execution context. Runtime
+Provider does not own Capability invocation, Agent identity, or enterprise
+Model/Capability semantics.
+
+## 47. Final Classification Matrix
+
+| Candidate | Final classification | Representation | v0.2 disposition |
+| --- | --- | --- | --- |
+| Agent Definition | CORE_RESOURCE | FIRST_CLASS_RESOURCE | V0_2_REQUIRED |
+| Agent Instance | CORE_RESOURCE | FIRST_CLASS_RESOURCE | V0_2_REQUIRED |
+| Task | CORE_RESOURCE | FIRST_CLASS_RESOURCE | V0_2_REQUIRED |
+| Workflow | CORE_RESOURCE | FIRST_CLASS_RESOURCE | V0_2_REQUIRED |
+| Capability Definition | CORE_RESOURCE | FIRST_CLASS_RESOURCE | V0_2_REQUIRED |
+| Runtime Binding | BINDING | EMBEDDED_BINDING | V0_2_REQUIRED |
+| Capability Binding | BINDING | EMBEDDED_BINDING | V0_2_REQUIRED |
+| Model Binding | BINDING | THIN EMBEDDED BINDING | V0_2_THIN_FOUNDATION |
+| Platform Execution Identity | CORE_VALUE_OBJECT | EMBEDDED_VALUE | V0_2_REQUIRED |
+| Execution Correlation | REFERENCE | Relationship primitive | V0_2_REQUIRED |
+| Runtime Provider Registry | REGISTRY_METADATA | INTERNAL_METADATA | V0_2_REQUIRED |
+| Capability Provider Registry | REGISTRY_METADATA | INTERNAL_METADATA | V0_2_REQUIRED |
+| Runtime Package | REGISTRY_METADATA | INTERNAL_METADATA | V0_2_REQUIRED |
+| Runtime / Capability Provider | PROVIDER_INTERFACE | PROVIDER_INTERFACE_ONLY | V0_2_REQUIRED |
+| Agent Instance Status | STATUS | EMBEDDED_VALUE | V0_2_REQUIRED |
+| Runtime / Agent Instance Condition | CONDITION | EMBEDDED_VALUE | V0_2_REQUIRED |
+| Task / Workflow / Capability Outcome | OUTCOME | EMBEDDED_VALUE | V0_2_REQUIRED |
+| Recovery Assessment | STATUS | EMBEDDED_VALUE | V0_2_REQUIRED |
+| Workspace / State / Knowledge | REFERENCE | Thin reference | V0_2_THIN_FOUNDATION |
+| Policy / Permission / Human Gate | POLICY_REFERENCE | Thin reference/evidence | V0_2_THIN_FOUNDATION |
+| Provider/native identifiers | OPAQUE_NATIVE_ID | Bounded opaque reference | V0_2_REQUIRED |
+
+## 48. Final API Surface Budget
+
+Every first-class resource remains expensive. `Conditional` means the semantic
+exists but details depend on lifecycle/policy rather than weakening identity.
+
+| Candidate | Identity | Lifecycle | Desired state | Reconciled | Independent reference | Authorization | Observability | Embedding sufficient | Proof | Final recommendation |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | --- | --- |
+| Agent Definition | YES | YES | YES | YES | YES | YES | YES | NO | P1, P2, P3, P4, P5 | FIRST_CLASS_RESOURCE |
+| Agent Instance | YES | YES | YES | YES | YES | YES | YES | NO | P3, P4, P6, P7 | FIRST_CLASS_RESOURCE |
+| Task | YES | YES | YES | YES | YES | YES | YES | NO | P1, P5, P6, P7 | FIRST_CLASS_RESOURCE |
+| Workflow | YES | YES | YES | YES | YES | CONDITIONAL | YES | NO | P1, P5, P6, P7 | FIRST_CLASS_RESOURCE |
+| Capability Definition | YES | YES | CONDITIONAL | YES | YES | YES | YES | NO | P1, P2, P5, P7 | FIRST_CLASS_RESOURCE |
+
+The final public resource candidate count is five, not seven. This count is an
+architecture recommendation, not a target and not approval to create or modify
+five CRDs. Runtime/Capability Bindings, Provider registries, Runtime Package,
+Execution Identity, status objects, and thin foundations fail independent
+lifecycle/reconciliation or embedding-insufficiency tests and therefore do not
+enter the public resource budget.
+
+## 49. Agent Definition and Agent Instance Boundaries
+
+### Agent Definition
+
+Agent Definition owns desired logical identity, role/purpose, authoritative
+desired Runtime/Capability/Model Binding intent, Workspace/State/Knowledge and
+policy references, and desired Instance policy. It is independently reusable,
+versionable, referenced, authorized, observed, and reconciled. Embedding it in
+Instance or Task would duplicate authority and couple business semantics to
+execution.
+
+### Agent Instance
+
+Agent Instance owns stable running logical identity, desired lifecycle,
+effective Runtime Binding projection, logical routing eligibility, Instance
+conditions, and Recovery Assessment. It derives effective resolution from one
+exact Definition identity/version plus policy and registry facts. It observes
+Provider/native realization evidence.
+
+Agent Instance never owns Agent Definition authority, Provider implementation,
+Runtime Package publication, native realization identity, native state format,
+enterprise Model identity/routing policy, Capability identity, credentials, or
+governance authority. Desired authority is not duplicated across Definition
+and Instance.
+
+## 50. Task and Workflow Boundary
+
+### Task
+
+Task retains first-class status because it has independent durable work
+identity, desired/execution lifecycle, Control Plane reconciliation, routing,
+retry/timeout semantics, outcome, authorization context, and observability.
+Task embeds Platform Execution Identity per logical execution context; it does
+not require a TaskExecution resource for v0.2.
+
+### Workflow
+
+Workflow retains first-class status because DAG intent, dependency coordination,
+node creation/observation, aggregate lifecycle/outcome, independent references,
+and observability cannot be faithfully embedded into one Task or Agent.
+
+Current implementation places reusable-looking DAG definition in Workflow
+desired state and one execution's aggregate/node status on the same resource.
+This conflates Workflow definition and Workflow execution concerns and may
+become a future schema/versioning problem when reuse, repeated runs, Catalog, or
+publish lifecycle is required. It does not invalidate Workflow as a v0.2
+resource and does not authorize a new WorkflowDefinition or WorkflowExecution
+resource. Schema Draft must record the ambiguity and preserve current
+compatibility unless a separate architecture decision authorizes a split.
+
+## 51. Capability Definition Boundary
+
+Capability Definition remains a first-class resource candidate because it owns:
+
+- provider-independent enterprise semantic identity and version context;
+- operation and input/output Contract ownership at semantic level;
+- reuse across Agent Definitions;
+- risk classification and policy-attachment boundary;
+- independent discovery/Catalog identity without making discovery authority;
+- authorization target and audit meaning; and
+- stable Agent-side semantics across Capability Provider switching.
+
+Embedding Capability definitions inside Agents would duplicate semantic and
+version authority, prevent independent reuse/governance, couple Agents to
+Provider/protocol configuration, and weaken Golden Demo P2. MCP, REST, gRPC,
+endpoint, tool, and native result details remain behind Capability Providers.
+Exact operation/version/schema rules remain Contract-freeze debt.
+
+## 52. Binding Boundaries
+
+| Binding | Owner and representation | Required semantics | Explicitly absent |
+| --- | --- | --- | --- |
+| Runtime Binding | Definition owns embedded desired intent; Instance owns derived effective projection | Runtime requirements, ownership mode, Provider/Package constraints, credential/workspace/state/policy references, opaque Provider extension point | RuntimeBinding CRD, independent controller, shared Binding authority, native topology in Core |
+| Capability Binding | Agent Definition owns `1:N` embedded governed intents; Instance/invocation owns derived effective resolution | Capability target/version context, allowed semantic use, Provider constraints, risk/policy/permission/Human Gate/credential references, opaque Provider extension point | CapabilityBinding CRD, reusable permission grant, discovery-as-authority, protocol semantics |
+| Model Binding | Definition owns thin embedded intent | Enterprise model requirements and policy association sufficient to prevent Runtime ownership leakage | Full Model Policy, routing/fallback, gateway design, Provider topology |
+
+Runtime and Capability Bindings are first-class semantic boundaries but not
+first-class API resources. Changing an embedded Binding reconciles the owning
+platform object and does not imply a Binding controller.
+
+## 53. Provider, Registry, and Runtime Package Boundaries
+
+| Candidate | Final representation | Public v0.2 API exposure | Rationale |
+| --- | --- | --- | --- |
+| Runtime Provider | PROVIDER_INTERFACE_ONLY | NO resource | Versioned adaptation code, not desired platform state |
+| Capability Provider | PROVIDER_INTERFACE_ONLY | NO resource | Versioned invocation/normalization code, not Capability identity |
+| Runtime Provider Registry | INTERNAL_METADATA | NO | Deterministic domain resolution from immutable compatibility facts; no lifecycle service required |
+| Capability Provider Registry | INTERNAL_METADATA | NO | Domain-specific Provider resolution and policy eligibility; no public Registry object required |
+| Runtime Package | INTERNAL_METADATA | NO | Deployable distribution/version/integrity and compatibility facts; package release is not Control Plane lifecycle |
+
+Schema Draft may define internal metadata/descriptor contracts only where
+needed for deterministic v0.2 resolution. It may not create Registry or
+RuntimePackage CRDs, a dynamic marketplace, or a universal Registry. Product
+discoverability may consume curated projections without making metadata a new
+source of truth.
+
+## 54. Thin Foundation Boundaries
+
+| Foundation | Why needed in v0.2 | Intentionally deferred | Over-design to avoid |
+| --- | --- | --- | --- |
+| Model Binding | Preserves enterprise model identity/policy ownership and prevents Runtime Provider from owning routing intent; supports P1/P3 | Full model identity catalog, routing, fallback, credentials, gateway/provider policy pending S5-SPIKE-005 | Model CRDs, universal gateway schema, Provider-native model fields in Core |
+| Workspace Reference | Preserves “where Agent works” separate from Capability/State; supports P1 and scoped recovery predicates | Independent lifecycle, portability, sharing, Provider boundary | Workspace resource based only on strategic importance |
+| State / Memory Reference | Preserves “what Agent remembers” separate from Runtime; bounds P6 claims | State Contract, lifecycle, migration, continuity classes, portability | Claiming restart/replacement restores portable state |
+| Knowledge Reference | Preserves “what Agent knows” separate from Capability/State; supports governed P1 context | Knowledge lifecycle, indexing, retrieval Provider, versioning | Knowledge CRD or treating all knowledge as an MCP tool |
+| Policy Reference | Keeps eligibility/governance authority external to Provider; supports P5/P7 | Full policy engine, tenancy, policy language | Embedding policy engine or Provider-owned authority |
+| Permission Reference | Preserves explicit invocation authorization; supports P5 | Enterprise RBAC/grant lifecycle and multi-tenancy | Treating Binding/discovery as permission |
+| Human Gate Reference / decision evidence | Supports thin wait/approve/reject flow for P5 | Advanced approval lifecycle, feedback, learning, escalation | Human Feedback subsystem or Gate CRD |
+
+## 55. Execution Primitive Boundary
+
+| Category | Members |
+| --- | --- |
+| SHARED_CORE_VALUE | Embedded Platform Execution Identity; four-way Condition truth meaning; submission/completion disposition; terminality; observation/decision time and freshness; bounded safe diagnostic semantics |
+| DOMAIN_SPECIFIC_VALUE | Runtime Interaction result/conditions; Capability Invocation/Outcome; Task Outcome; Workflow Outcome; Recovery Assessment; domain error and retry meaning |
+| OPAQUE_NATIVE_REFERENCE | Runtime realization/run/session, Pod/container/Gateway, Capability invocation/job, and deferred native observation references |
+| INTERNAL_PROVIDER_METADATA | Provider identity/version, compatibility/capability declarations, Runtime Package facts, certification/evidence references |
+
+Schema Draft may serialize the semantic categories above only as embedded
+values/references within approved owners. It must not create Universal
+Execution, Result, Status, Invocation, Error, or Provider Result objects. Exact
+names, fields, enums, compatibility, and serialization are not approved here.
+
+## 56. Final Status / Condition / Outcome Ownership
+
+| Semantic | Owner | Class / representation | Terminal nature | Shared dependencies | v0.2 disposition |
+| --- | --- | --- | --- | --- | --- |
+| Agent Instance Status | Agent Instance Control Plane | STATUS / EMBEDDED_VALUE | Mutable projection | observation time, conditions, opaque refs | REQUIRED |
+| Agent Instance Condition | Agent Instance Control Plane | CONDITION / EMBEDDED_VALUE | Mutable proposition | four-way truth, time/freshness, safe diagnostics | REQUIRED |
+| Runtime Condition | Runtime domain; Provider-normalized | CONDITION / EMBEDDED_VALUE | Mutable proposition | four-way truth, time/freshness, safe diagnostics | REQUIRED |
+| Task Outcome | Task domain | OUTCOME / EMBEDDED_VALUE | Domain terminal or honestly unknown | Execution Identity, terminality, safe diagnostics | REQUIRED |
+| Workflow Outcome | Workflow domain | OUTCOME / EMBEDDED_VALUE | Aggregate terminal or honestly unknown | terminality, node references, safe diagnostics | REQUIRED |
+| Capability Outcome | Capability domain; Provider-normalized after handoff | OUTCOME / EMBEDDED_VALUE | Invocation terminal/deferred/unknown under domain semantics | Execution Identity, completion disposition, terminality, safe diagnostics | REQUIRED |
+| Recovery Assessment | Agent Instance Control Plane | STATUS / EMBEDDED_VALUE | Mutable derived assessment | condition truth, time/freshness, opaque evidence | REQUIRED |
+| Human Gate decision evidence | Governance owner; consumed by Task/Workflow | POLICY_REFERENCE / embedded evidence reference | Decision evidence may be final; waiting state is mutable execution state | time/decision evidence; no universal Outcome | THIN FOUNDATION |
+
+## 57. Final Relationship, Lifecycle, and Provider Responsibility Map
+
+The Checkpoint B cardinality model remains final for this session:
+
+- Definition -> Instance: `1:N`; Instance references exactly one Definition
+  identity/version.
+- Definition -> desired Runtime Binding template: one authoritative current
+  intent; Instance -> effective Runtime Binding: one derived current projection.
+- Definition -> Capability Binding: `1:N`; each Binding targets one Capability
+  Definition/version context.
+- Instance -> realization: `1:N temporal`, `0:N active`; shared Gateway `N:1`
+  is possible and opaque.
+- Task/Workflow node -> logical Execution: `1:N temporal`; Execution -> native
+  Runtime/Capability IDs: `0:N` correlation.
+
+Lifecycle consequences remain:
+
+- block Definition deletion while Instances reference it;
+- cascade only embedded values after an owner is legitimately deleted;
+- reconcile Binding changes through the owning object;
+- deny future invocation when a Capability Binding is removed;
+- mark unavailable Provider/package/reference dependencies degraded;
+- terminate Instance through ownership-safe reconciliation;
+- detach external realizations by default and never delete them unconditionally.
+
+Providers validate/translate desired intent, interact with native systems,
+normalize/redact evidence, and return bounded domain results. Core owns identity,
+desired semantics, logical routing, policy precedence, domain condition/outcome
+meaning, and final Recovery Assessment. Native systems own execution mechanics,
+native identity/state/protocol, and native supervision. Providers never broaden
+authority or redefine platform semantics.
+
+## 58. Product / Technical Mapping and Golden Demo Traceability
+
+```text
+Business view                Technical view
+Digital Employee role  -->  Agent Definition
+running employee       -->  Agent Instance
+business assignment    -->  Task / Workflow
+enterprise ability     -->  Capability Definition + embedded Binding
+execution environment  -->  embedded Runtime Binding -> Provider -> native Runtime
+```
+
+Digital Employee is a product projection and may compose catalog, ownership,
+experience, and governance views. It is not a second technical identity and
+does not justify a DigitalEmployee CRD.
+
+| Proof | Required objects/primitives |
+| --- | --- |
+| P1 Business task execution | Agent Definition, Agent Instance, Task/Workflow, Execution Identity, Runtime Binding/Provider, Capability Definition/Binding/Provider |
+| P2 Capability Provider portability | Capability Definition, embedded Capability Binding, internal registry, Provider interface, Capability Outcome |
+| P3 Runtime Provider portability | Agent Definition/Instance, embedded Runtime Binding, internal Registry/Package metadata, Runtime Provider interface |
+| P4 Stable logical Agent Instance identity | Agent Instance, `1:N temporal` opaque realizations, logical routing |
+| P5 Human Gate/governance | Policy/Permission/Human Gate references, Task/Workflow waiting state, pre-invocation authorization |
+| P6 Failure -> verified Recovery | Conditions, Execution Identity, opaque evidence, Agent Instance Recovery Assessment |
+| P7 Observability | Domain status/conditions/outcomes, time/freshness, safe diagnostics, native correlation references |
+
+Every v0.2 Required or Thin Foundation item supports at least one P1–P7 proof
+or an accepted Control Plane invariant.
+
+## 59. Final Three-Bucket Scope
+
+### V0.2 REQUIRED
+
+- five first-class resource candidates: Agent Definition, Agent Instance, Task,
+  Workflow, Capability Definition;
+- embedded Runtime and Capability Bindings;
+- Runtime/Capability Provider interfaces, internal domain registry metadata,
+  and internal Runtime Package metadata;
+- embedded Platform Execution Identity and minimal D32 shared semantics;
+- Agent Instance Status/Conditions, Runtime Conditions, Task/Workflow/Capability
+  Outcomes, and Recovery Assessment;
+- bounded opaque native correlation references.
+
+### V0.2 THIN FOUNDATION
+
+- thin embedded Model Binding;
+- Workspace, State/Memory, and Knowledge references;
+- Policy, Permission, and Human Gate references/decision evidence.
+
+### DEFERRED
+
+| Item | Reason now | Promotion trigger/evidence |
+| --- | --- | --- |
+| Full Model Policy/routing and fallback | S5-SPIKE-005 not complete; semantics would be invented | Authorized model spike establishing identity, routing, fallback, credential, gateway, and policy ownership |
+| First-class Workspace resource | Independent lifecycle/reconciliation/sharing unproven | Cross-Agent/runtime workspace lifecycle and authorization evidence |
+| First-class State resource / portability | State ownership, continuity classes, migration, and portability unproven | State Contract evidence across replacement/runtime boundaries |
+| First-class Knowledge resource | Lifecycle, versioning, retrieval Provider, and authorization unproven | Multiple knowledge sources/providers requiring independent management |
+| Human Feedback learning | Outside thin Human Gate proof | Authorized product/architecture work proving feedback/learning lifecycle |
+| Advanced Human Gate lifecycle | v0.2 needs reference/decision boundary only | Multi-stage approval, escalation, expiry, audit, and reassignment evidence |
+| Multi-tenancy | Requires identity/RBAC/persistence architecture | Authorized tenant/governance architecture decision |
+| HA / fleet management | Not required for v0.2 contract proof | Scale/availability requirements and scheduler/control ownership evidence |
+| Out-of-process Providers | Interface must remain serializable but transport not required | Isolation/deployment/security evidence requiring process boundary |
+| Dynamic Provider marketplace | Internal metadata is sufficient | Publication, trust, install, update, policy, and lifecycle requirements |
+| Runtime Package resource | Package metadata lacks Control Plane lifecycle | Independent desired-state/reconciliation/use cases beyond publication metadata |
+| Public Provider Registry resource | Internal deterministic resolution is sufficient | External management/discovery requiring independent API lifecycle and authorization |
+| Advanced scheduling / cross-cluster / GPU scheduling | Outside logical routing and v0.2 proof | v0.5-scale placement evidence and architecture decisions |
+
+## 60. Rejected Abstractions
+
+| Abstraction | Disposition | Reason |
+| --- | --- | --- |
+| Universal Execution | REJECT_ARCHITECTURALLY under D32 | Runtime/Capability/Task/Workflow lifecycles are not semantically identical |
+| Universal Execution Status / Universal Result | REJECT_ARCHITECTURALLY under D36 | Erases condition/outcome ownership and retry/authorization meaning |
+| Universal Provider | REJECT_ARCHITECTURALLY under D33 | Runtime realization and Capability invocation responsibilities differ |
+| Universal Binding | REJECT_ARCHITECTURALLY under D33 | Runtime, Capability, and Model associations have different semantics |
+| Universal Registry | REJECT_ARCHITECTURALLY under D33 | Domain compatibility/policy dimensions must remain explicit |
+| Universal Runtime Instance | REJECT_ARCHITECTURALLY under D30 | Pod, process, Gateway, session, and endpoint do not share one logical lifecycle |
+| Execution CRD | REJECT_V0_2 | Embedded identity has no independent desired state/reconciliation; future contrary evidence would require architecture review |
+| RuntimeBinding CRD | REJECT_V0_2 | Binding lifecycle/reconciliation follows Definition/Instance owner |
+| CapabilityBinding CRD | REJECT_V0_2 | Agent-owned governed intent lacks independent lifecycle and shared authority would be unsafe |
+| RuntimePackage CRD | REJECT_V0_2 | Publication metadata is sufficient; no Control Plane lifecycle proven |
+| DigitalEmployee CRD | REJECT_ARCHITECTURALLY under current product boundary | Business projection is not another technical semantic identity |
+| MCP-as-Capability semantic | REJECT_ARCHITECTURALLY | MCP is one Provider/protocol mechanism, not enterprise Capability identity |
+
+`REJECT_ARCHITECTURALLY` means contradictory to the accepted current baseline,
+not impossible forever; reversing it requires an explicit future architecture
+decision rather than incidental schema work.
+
+## 61. Schema Draft Handoff
+
+The next phase is authorized to **draft**, not freeze, the following boundaries:
+
+| Owner/object | Schema Draft may design |
+| --- | --- |
+| Agent Definition | Technical identity/version relationship, role/purpose boundary, desired Instance policy, embedded desired Runtime/Capability/Model Binding boundaries, thin Workspace/State/Knowledge/Policy references |
+| Agent Instance | Stable identity and Definition reference, desired lifecycle boundary, derived effective Runtime Binding projection, logical eligibility/status ownership, Conditions, Recovery Assessment, bounded opaque realization references |
+| Task | Independent requested-work identity, Agent/Instance routing references, desired/execution-state separation, embedded Execution Identity, Task Outcome, policy/Human Gate references |
+| Workflow | Independent identity, DAG/node relationship, execution-state and aggregate Outcome ownership, Task/Execution references, current definition/execution conflation disclosure |
+| Capability Definition | Enterprise semantic identity/version/operation boundary, input/output Contract ownership boundary, risk/policy/authorization references, Provider-independent discovery identity |
+| Runtime Binding | Embedded desired intent versus derived effective projection, Provider/Package constraints, ownership/configuration/credential/workspace/state/policy reference boundaries, opaque Provider extension point |
+| Capability Binding | Embedded Capability reference and allowed-use boundary, Provider constraints, risk/policy/permission/Human Gate/credential references, opaque Provider extension point |
+| Provider metadata | Internal version/compatibility/capability/limitation/integrity/certification-evidence descriptors needed for deterministic domain resolution |
+| Execution primitives | Embedded identity, correlation/reference relationship, time/freshness, truth, submission/completion disposition, terminality, bounded safe diagnostics |
+| Domain observation | Owner-specific status, Condition, Outcome, Recovery Assessment, and opaque native-reference placement without universalization |
+
+Schema Draft must make desired/effective, semantic/native, and owner/reference
+boundaries mechanically unambiguous. It must document compatibility with current
+Agent, Task, and Workflow APIs and flag every proposed public API change for the
+applicable Architecture Gate. It may not implement any draft.
+
+## 62. Schema Draft Prohibitions
+
+The next phase must not silently introduce:
+
+- any first-class resource beyond the five candidates;
+- Universal Execution, Status, Result, Invocation, Provider, Binding, Registry,
+  or Runtime Instance abstractions;
+- Execution, RuntimeBinding, CapabilityBinding, RuntimePackage,
+  DigitalEmployee, Workspace, State, Knowledge, Provider, or Registry CRDs;
+- public Provider Registry APIs or dynamic marketplace lifecycle;
+- frozen Condition, Outcome, error, terminality, or recovery enums;
+- frozen Runtime, Capability, State, Model, or shared Execution Contracts;
+- full Model policy/routing/fallback or S5-SPIKE-005 work;
+- State portability, universal recovery continuity, or unsupported HA claims;
+- Provider-native topology/protocol/error/configuration fields in Core;
+- Hermes-specific Core fields or Golden Demo dependence on Hermes
+  certification;
+- a Workflow definition/execution split without a separate architecture
+  decision and compatibility plan;
+- production CRD, controller, Provider, Runtime, frontend, database, or API
+  implementation.
+
+## 63. Contract Freeze Impact
+
+| Acceptance dimension | State after S5-ARCH-004 |
+| --- | --- |
+| Object boundary | RECOMMENDED for Human Final Contract Boundary Gate |
+| Semantic ownership | RECOMMENDED; A–C accepted constraints preserved |
+| Relationship/cardinality | RECOMMENDED; detailed serialization absent |
+| Shared primitive boundary | ARCHITECTURE BOUNDARY ACCEPTED at Checkpoint C |
+| Schema | NOT DRAFTED / NOT FROZEN |
+| Runtime Contract | NOT FROZEN |
+| Capability Contract | NOT FROZEN |
+| Condition/Outcome/Recovery vocabulary | NOT FROZEN |
+| Provider certification | UNAFFECTED; combination-specific evidence still required |
+| `G-S5-RUNTIME-FREEZE-01` | FAIL / UNCHANGED |
+
+Architecture/object acceptance does not establish compatibility policy,
+serialized fields, public API stability, implementation conformance, Provider
+certification, or production readiness.
+
+## 64. Final Evidence Debt
+
+| Debt | Classification | Effect on next work |
+| --- | --- | --- |
+| ED-S5-001 Hermes Provider certification | PROVIDER_CERTIFICATION_BLOCKER; PRODUCTION_READINESS_BLOCKER for Hermes only | Does not block Schema Draft, Core boundary, Native/OpenClaw Golden Demo |
+| Runtime Contract conformance | CONTRACT_FREEZE_BLOCKER; PRODUCTION_READINESS_BLOCKER | Draft may define testable boundary; freeze waits for conformance evidence |
+| Third-party Managed Runtime certification | PROVIDER_CERTIFICATION_BLOCKER; PRODUCTION_READINESS_BLOCKER for that combination | Not a Core Schema Draft blocker |
+| Third-party MCP evidence | CONTRACT_FREEZE_BLOCKER for broad Capability claims; PROVIDER_CERTIFICATION_BLOCKER | Deterministic spike supports boundary, not broad certification |
+| Deferred/side-effecting Capability evidence | CONTRACT_FREEZE_BLOCKER; PRODUCTION_READINESS_BLOCKER for those profiles | Retry/cancel/idempotency vocabulary must remain unfrozen |
+| Durable deferred execution | CONTRACT_FREEZE_BLOCKER; PRODUCTION_READINESS_BLOCKER | Completion disposition may be drafted without durability claim |
+| In-flight execution behavior | CONTRACT_FREEZE_BLOCKER; PRODUCTION_READINESS_BLOCKER | Termination/rebinding/recovery semantics remain bounded |
+| Recovery predicate completeness | CONTRACT_FREEZE_BLOCKER; PRODUCTION_READINESS_BLOCKER | Schema Draft may place Assessment but cannot freeze vocabulary |
+| State portability | POST_V0_2; CONTRACT_FREEZE_BLOCKER for any portability claim | Thin State reference only |
+| Multi-tenancy | POST_V0_2; PRODUCTION_READINESS_BLOCKER for enterprise multi-tenant claims | Do not invent tenant fields during Schema Draft |
+| Human Feedback | POST_V0_2 | Thin Human Gate boundary only |
+| Workspace boundary maturity | POST_V0_2; SCHEMA_DRAFT_BLOCKER only for promotion beyond thin reference | Thin reference is draftable now |
+| State boundary maturity | POST_V0_2; SCHEMA_DRAFT_BLOCKER only for promotion beyond thin reference | Thin reference is draftable now |
+| Model Binding/routing | POST_V0_2 for full routing; SCHEMA_DRAFT_BLOCKER beyond thin Binding | Requires S5-SPIKE-005 |
+| Out-of-process Providers | POST_V0_2; CONTRACT_FREEZE_BLOCKER only if freeze promises that deployment mode | Keep interfaces serializable without transport commitment |
+
+Debt is claim-scoped. Not every item blocks the next Schema Draft, and no item
+is silently closed by this convergence.
+
+## 65. Open Questions
+
+1. Exact identity/version/reference and compatibility rules for all five
+   candidate resources.
+2. Whether current Workflow definition/execution conflation remains acceptable
+   through v0.2 or requires a separately approved future migration.
+3. Exact Instance lifecycle, deletion, rollout, and Definition-version adoption
+   semantics.
+4. Runtime/Capability Binding effective-projection provenance and migration
+   history without duplicated desired authority.
+5. Execution identity generation, hierarchy, retry/replay/idempotency,
+   persistence, and retention.
+6. Exact Condition, Outcome, diagnostic, terminality, and Recovery vocabulary.
+7. Deferred observation durability, cancellation, streaming, and in-flight
+   termination/recovery semantics.
+8. Capability operation/version/input-output compatibility and risk granularity.
+9. Model routing/fallback, State portability, and Workspace/Knowledge lifecycle
+   pending their required evidence.
+10. Multi-tenant policy, credential, audit, native evidence access, and advanced
+    Human Gate lifecycle.
+
+These are Schema Draft, Contract-freeze, certification, production-readiness,
+or post-v0.2 questions. None requires reopening accepted A–C decisions for this
+Checkpoint D recommendation.
+
+## 66. Final Human Decision Table — Checkpoint D
+
+### D01 — v0.2 first-class resource set
+
+**Recommendation:** Agent Definition, Agent Instance, Task, Workflow, and
+Capability Definition only.
+**Evidence:** Final API Surface Budget; D30; current Task/Workflow lifecycle;
+S5-SPIKE-003 Capability identity evidence.
+**Alternatives:** Retain only current resources; add Binding/Execution/Registry
+resources.
+**Trade-off:** Minimum faithful semantic surface with five expensive resources;
+new Agent Instance and Capability Definition still require later schema review.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Draft boundaries only; no CRD count or schema approved.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D02 — Agent Definition boundary
+
+**Recommendation:** First-class desired technical logical definition owning
+authoritative Binding intent and thin references; Digital Employee remains a
+product projection.
+**Evidence:** Product principles, current Agent resource, A01/B02.
+**Alternatives:** Instance/native-owned definition; DigitalEmployee API.
+**Trade-off:** Stable reuse/governance versus version/migration design cost.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Identity, references, desired boundaries may be drafted.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D03 — Agent Instance boundary
+
+**Recommendation:** First-class stable running logical identity owning desired
+lifecycle, effective Runtime Binding projection, conditions, routing eligibility,
+and Recovery Assessment.
+**Evidence:** D30, D34–D36, S5-SPIKE-004, A02/B01/B05.
+**Alternatives:** Derive from Pod/Gateway/session; embed in Definition.
+**Trade-off:** New lifecycle surface versus required routing/recovery identity.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Draft only; no AgentInstance CRD authorized yet.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D04 — Task boundary
+
+**Recommendation:** Retain first-class durable requested-work lifecycle with
+embedded Execution Identity/state and Task Outcome.
+**Evidence:** Current source/tests, D31/D36, P1/P6/P7.
+**Alternatives:** Embed work in Workflow/Instance; introduce TaskExecution.
+**Trade-off:** Independent orchestration/observation versus preserving current
+compatibility while adding execution primitives later.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Draft compatibility-aware semantic additions only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D05 — Workflow boundary
+
+**Recommendation:** Retain first-class DAG/coordination lifecycle and aggregate
+Outcome; record current definition/execution conflation without redesign.
+**Evidence:** Current CRD/controller/tests and D36.
+**Alternatives:** Embed DAG in Task; split Definition/Execution now.
+**Trade-off:** Preserves proven behavior and scope; future reuse may require an
+approved migration.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Draft must disclose ambiguity and preserve compatibility.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D06 — Capability Definition boundary
+
+**Recommendation:** First-class provider-independent enterprise Capability
+identity/version/operation and governance target.
+**Evidence:** S5-SPIKE-003, D33/D36, P2 portability.
+**Alternatives:** Embedded Agent tools; MCP-native semantics.
+**Trade-off:** New versioned/governed API surface versus essential reuse and
+Provider switching.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Semantic Contract boundary may be drafted, not frozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D07 — Runtime Binding representation
+
+**Recommendation:** First-class semantic `BINDING / EMBEDDED_BINDING`; desired
+Definition intent plus derived Instance effective projection.
+**Evidence:** B02/B03/B13 accepted.
+**Alternatives:** RuntimeBinding resource; native configuration in Core.
+**Trade-off:** Small API and clear ownership versus no independent Binding
+history/resource.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Embedded boundary only; no controller/CRD.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D08 — Capability Binding representation
+
+**Recommendation:** Agent-owned `BINDING / EMBEDDED_BINDING`, `1:N`, with
+authorization re-evaluated per invocation.
+**Evidence:** B04/B09/B14 and S5-SPIKE-003.
+**Alternatives:** CapabilityBinding resource; reusable permission grant.
+**Trade-off:** Avoids shared authority and excess API surface versus repeated
+Agent-specific intent.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Embedded boundary only; no CRD.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D09 — Model Binding thin boundary
+
+**Recommendation:** Thin embedded Binding carrying enterprise model
+requirements/policy association only.
+**Evidence:** D33 and Runtime/Core ownership; S5-SPIKE-005 remains pending.
+**Alternatives:** Full routing schema; Runtime-owned model configuration.
+**Trade-off:** Prevents ownership leakage without inventing model architecture.
+**v0.2 disposition:** THIN FOUNDATION.
+**Schema impact:** Only thin reference/intent boundary may be drafted.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D10 — Provider Registry representation
+
+**Recommendation:** Separate Runtime and Capability `INTERNAL_METADATA`
+registries with no public resource/API.
+**Evidence:** D33, S5-ARCH-002, B07/B08 constraints.
+**Alternatives:** Universal/public Registry; Core family branching.
+**Trade-off:** Deterministic replaceability with low operations cost versus no
+dynamic marketplace.
+**v0.2 disposition:** REQUIRED internal foundation.
+**Schema impact:** Internal descriptor/resolution metadata only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D11 — Runtime Package representation
+
+**Recommendation:** `INTERNAL_METADATA`; no RuntimePackage CRD.
+**Evidence:** S5-ARCH-002 and A06.
+**Alternatives:** Collapse into Provider; public resource.
+**Trade-off:** Preserves Package/Provider compatibility separation without a
+new lifecycle API.
+**v0.2 disposition:** REQUIRED internal foundation.
+**Schema impact:** Internal immutable package facts only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D12 — Platform Execution Identity representation
+
+**Recommendation:** `CORE_VALUE_OBJECT / EMBEDDED_VALUE`, owned by execution
+context and correlated to `0:N` native references.
+**Evidence:** D31, AP-S5-011, B10/B11, C01/C02/C17.
+**Alternatives:** Execution CRD; Provider-native identity.
+**Trade-off:** Stable correlation with minimal API versus no independent
+execution resource.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Embedded semantic boundary only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D13 — Shared execution primitive set
+
+**Recommendation:** D32 Option C minimal set from Section 55; all other
+interaction/outcome semantics remain domain-specific.
+**Evidence:** C08/C10/C18 accepted with freeze constraints.
+**Alternatives:** Universal Execution Contract; no shared primitives.
+**Trade-off:** Consistent Control Plane integration without cross-domain
+version/lifecycle coupling.
+**v0.2 disposition:** REQUIRED semantic boundary.
+**Schema impact:** May be drafted only as embedded primitives; exact vocabulary
+unfrozen.
+**Freeze impact:** Architecture acceptance only; no Contract freeze.
+**Human Decision:** PENDING.
+
+### D14 — Condition ownership model
+
+**Recommendation:** Runtime and Agent Instance Conditions remain domain-owned;
+share only truth/time/freshness/safe-diagnostic semantics.
+**Evidence:** D36, C05/C06/C08.
+**Alternatives:** Raw native health; universal Status.
+**Trade-off:** Honest portable observation versus derived condition work.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Owner placement may be drafted; type/vocabulary unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D15 — Outcome ownership model
+
+**Recommendation:** Task, Workflow, and Capability Outcomes remain separate
+embedded domain values; Runtime interaction result remains Runtime-specific.
+**Evidence:** D32/D36 and C03/C04/C07/C09.
+**Alternatives:** Universal Outcome/Provider Result.
+**Trade-off:** Preserves business, retry, and authorization meaning versus
+duplicate minimal envelope concepts.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Owner/envelope boundary only; taxonomies unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D16 — Recovery Assessment model
+
+**Recommendation:** Agent Instance-owned `STATUS / EMBEDDED_VALUE`, derived from
+applicable semantic predicates; restart is not recovery.
+**Evidence:** D35/D36, AP-S5-001, C13/C14/C15.
+**Alternatives:** Provider recovery status; Pod restart result; resource.
+**Trade-off:** Verifiable logical semantics versus honest unknown when evidence
+is incomplete.
+**v0.2 disposition:** REQUIRED.
+**Schema impact:** Placement/predicate boundary may be drafted; vocabulary
+unfrozen.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D17 — Workspace / State / Knowledge thin references
+
+**Recommendation:** Thin references only; independent resources and State
+portability deferred to evidence triggers in Section 59.
+**Evidence:** Product separation, A14–A16, D35 constraints.
+**Alternatives:** Promote strategic concepts to resources; omit boundaries.
+**Trade-off:** Preserves semantic ownership without unsupported lifecycle
+claims.
+**v0.2 disposition:** THIN FOUNDATION.
+**Schema impact:** Reference boundary only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D18 — Human Gate thin boundary
+
+**Recommendation:** Governance owns decision reference/evidence; Task/Workflow
+owns waiting/resumption state; approval is not execution success.
+**Evidence:** C16 and P5.
+**Alternatives:** Human Gate Outcome/resource; Human Feedback subsystem.
+**Trade-off:** Minimum governable execution boundary versus deferred advanced
+approval lifecycle.
+**v0.2 disposition:** THIN FOUNDATION.
+**Schema impact:** Thin references/evidence relationship only.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D19 — v0.2 API Surface Budget
+
+**Recommendation:** Five first-class resource candidates, two embedded Binding
+types, one embedded Core execution identity, domain-embedded status/outcomes,
+internal registry/package metadata, Provider interfaces, and thin references.
+**Evidence:** A–C accepted decisions and final resource tests.
+**Alternatives:** Seven-resource candidate count; expansive Registry/Package/
+Execution APIs; current resources only.
+**Trade-off:** Minimum sufficient v0.2 portability/governance surface while
+reserving later lifecycle domains.
+**v0.2 disposition:** FINAL BOUNDARY RECOMMENDATION.
+**Schema impact:** Defines draft budget, not approved public API.
+**Freeze impact:** None.
+**Human Decision:** PENDING.
+
+### D20 — Schema Draft handoff boundary
+
+**Recommendation:** Authorize only the owners/categories in Section 61 and
+enforce all prohibitions in Section 62; every public API change returns through
+Architecture Gates and Human approval.
+**Evidence:** Final convergence and unresolved freeze/certification debt.
+**Alternatives:** Implement directly; freeze Contracts from architecture prose;
+restart open architecture domains during schema work.
+**Trade-off:** Constrained, reviewable draft work versus additional gate before
+implementation.
+**v0.2 disposition:** NEXT-PHASE HANDOFF RECOMMENDATION.
+**Schema impact:** Draft-only, compatibility-aware, no implementation.
+**Freeze impact:** Explicitly none.
 **Human Decision:** PENDING.
 
 ## Contract and Change Boundary
@@ -1841,7 +2588,7 @@ Schema Draft is not Contract Freeze. This Checkpoint does not draft a schema.
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: C — EXECUTION_CONDITION_OUTCOME_RECOVERY
-RESULT: EXECUTION_BOUNDARY_RECOMMENDED
+CHECKPOINT: D — V0_2_API_SURFACE_AND_FINAL_CONVERGENCE
+RESULT: CORE_CONTRACT_BOUNDARY_RECOMMENDED
 NEXT_ACTION: WAIT_FOR_HUMAN_DECISION
-NEXT_GATE: Human Checkpoint C Gate
+NEXT_GATE: Human Final Contract Boundary Gate
