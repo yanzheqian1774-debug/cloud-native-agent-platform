@@ -7,17 +7,18 @@ TITLE: v0.2 Core Schema Draft & Compatibility Map
 PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Core Architecture / Contract
 MODE: Architecture / Schema Draft
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: F — SESSION_FINALIZATION
-RESULT: **READY_TO_CLOSE**
+RESULT: **SESSION_CLOSED**
+REOPEN: **PROHIBITED**
 
 > Checkpoints A-E established and converged Core Schema Candidate v0. The Human
-> Final Schema Candidate Gate passed with constraints. Checkpoint F records the
-> accepted Candidate, preserves evidence debt and independent freeze/readiness
-> states, and prepares the session for Human Close Confirmation. It does not
-> close S5-ARCH-005, merge PR #42, or authorize implementation.
+> Final Schema Candidate Gate passed with constraints, and the Human Close
+> Confirmation passed at verified head `0efd8e41e538619fcc198ebeebf31e813b808e0a`.
+> Checkpoint F closes S5-ARCH-005 without merging PR #42, freezing a Contract or
+> schema, certifying a Provider, or authorizing implementation.
 
 ## 1. Source-of-Truth Baseline
 
@@ -4496,19 +4497,21 @@ Purpose:
 PR #42 remains unmerged. No S5-REL-004 artifact or execution is created by
 this finalization.
 
-## 116. Session Finalization State
+## 116. Human Close Confirmation and Final Session State
 
 HUMAN_FINAL_SCHEMA_CANDIDATE_GATE: **RECORDED / PASS_WITH_CONSTRAINTS**
+HUMAN_CLOSE_CONFIRMATION: **PASS**
 CORE_SCHEMA_CANDIDATE: **ACCEPTED**
 E01_E20: **DISPOSITIONED_WITHOUT_OVERCLAIM**
 CANDIDATE_SCOPE: **UNCHANGED**
 EVIDENCE_DEBT: **PRESERVED**
 
-LIFECYCLE: **CLOSING**
-AUTHORIZATION: **AUTHORIZED**
+LIFECYCLE: **CLOSED**
+AUTHORIZATION: **COMPLETED**
 STATUS: **PASS**
 CHECKPOINT: **F — SESSION_FINALIZATION**
-RESULT: **READY_TO_CLOSE**
+RESULT: **SESSION_CLOSED**
+REOPEN: **PROHIBITED**
 
 CORE_SCHEMA_FREEZE: **NO**
 RUNTIME_CONTRACT_FREEZE: **NO**
@@ -4526,8 +4529,8 @@ CRD_CHANGE: **0**
 ADR_CHANGE: **0**
 UNRELATED_CHANGE: **0**
 
-NEXT_ACTION: **WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**
-NEXT_GATE: **Human S5-ARCH-005 Close Confirmation**
+NEXT_ACTION: **START_S5_REL_004_AFTER_SEPARATE_AUTHORIZATION**
+NEXT_GATE: **S5-REL-004 Checkpoint A Authorization**
 
-S5-ARCH-005 is not closed. `AUTHORIZATION` remains `AUTHORIZED`; the result is
-not `SESSION_CLOSED`.
+S5-ARCH-005 is closed and must not be reopened. PR #42 remains unmerged and
+S5-REL-004 has not started.
