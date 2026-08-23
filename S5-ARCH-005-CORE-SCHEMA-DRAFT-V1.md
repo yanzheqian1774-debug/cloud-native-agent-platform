@@ -7,17 +7,17 @@ TITLE: v0.2 Core Schema Draft & Compatibility Map
 PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Core Architecture / Contract
 MODE: Architecture / Schema Draft
-LIFECYCLE: REVIEW
+LIFECYCLE: CLOSING
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: E — FINAL_SCHEMA_CANDIDATE_CONVERGENCE
-RESULT: **CORE_SCHEMA_CANDIDATE_V0_RECOMMENDED**
+CHECKPOINT: F — SESSION_FINALIZATION
+RESULT: **READY_TO_CLOSE**
 
-> Checkpoints A-D established the compatibility baseline, logical resource
-> candidates, connected semantic model, and bounded migration path. Their Human
-> Gates passed for Schema Candidate use. Checkpoint E converges those records
-> into Core Schema Candidate v0. It does not approve a CRD, freeze a Contract or
-> schema, authorize implementation, edit an ADR, or close S5-ARCH-005.
+> Checkpoints A-E established and converged Core Schema Candidate v0. The Human
+> Final Schema Candidate Gate passed with constraints. Checkpoint F records the
+> accepted Candidate, preserves evidence debt and independent freeze/readiness
+> states, and prepares the session for Human Close Confirmation. It does not
+> close S5-ARCH-005, merge PR #42, or authorize implementation.
 
 ## 1. Source-of-Truth Baseline
 
@@ -4265,3 +4265,269 @@ NEXT_GATE: **Human Final Schema Candidate Gate**
 
 S5-ARCH-005 remains open. This Checkpoint does not close the session or begin
 implementation.
+
+# Checkpoint F — Session Finalization
+
+## 107. Human Final Schema Candidate Gate
+
+HUMAN DECISION: **PASS WITH CONSTRAINTS**
+
+| State | Finalization record |
+| --- | --- |
+| Human Final Schema Candidate Gate | `RECORDED / PASS_WITH_CONSTRAINTS` |
+| v0.2 Core Schema Candidate v0 | `ACCEPTED` |
+| Candidate character | implementation-neutral, representation-neutral, Provider-neutral, compatibility-aware |
+| Five logical resource candidates | `ACCEPTED` |
+| Five CRDs | `NOT_APPROVED / UNDECIDED` |
+| Schema/Contract freeze | `NO` |
+| API/CRD/implementation authorization | `NOT_GRANTED` |
+| Provider certification | `NOT_GRANTED` |
+| Production readiness | `NOT_GRANTED` |
+| Golden Demo acceptance | `NOT_GRANTED` |
+
+Candidate acceptance does not convert Candidate stability into frozen
+stability. Serialization, API representation, persistence, conversion,
+implementation, certification, readiness, and release decisions remain under
+their independent Human Gates.
+
+## 108. Accepted Candidate Boundary and Preserved Constraints
+
+### 108.1 First-class logical resources
+
+1. Agent Definition;
+2. Agent Instance;
+3. Task;
+4. Workflow;
+5. Capability Definition.
+
+No sixth resource is added. `WorkflowExecution`, universal `Execution`,
+universal `Status/Outcome/Recovery`, Binding resources, Provider resources, and
+Registry resources remain outside the Candidate.
+
+### 108.2 Embedded, value, interface, metadata, and thin boundaries
+
+| Boundary | Accepted disposition |
+| --- | --- |
+| Runtime Binding | `DOMAIN_SPECIFIC_EMBEDDED_BINDING` |
+| Capability Binding | `DOMAIN_SPECIFIC_EMBEDDED_BINDING` |
+| Model Binding | `THIN_EMBEDDED_FOUNDATION` |
+| Platform Execution Identity | `CORE_VALUE_OBJECT / EMBEDDED_VALUE` |
+| Runtime Provider Registry | `INTERNAL_METADATA` |
+| Capability Provider Registry | `INTERNAL_METADATA` |
+| Runtime Package | `INTERNAL_METADATA` |
+| Runtime Provider | `PROVIDER_INTERFACE` |
+| Capability Provider | `PROVIDER_INTERFACE` |
+| Workspace/State/Knowledge/Policy/Permission/Human Gate | `THIN_FOUNDATION` |
+
+### 108.3 Identity and targeting constraints
+
+- Agent Definition owns authoritative desired logical definition.
+- Agent Instance owns a distinct stable Platform running identity and exactly
+  one Definition reference.
+- Definition-to-Instance is `1:N`; Instance-to-native realization is `1:N`
+  temporal and `0:N` active where supported.
+- current Agent name/scope remains the Definition-facing compatibility address;
+  a compatibility Instance receives a separately minted durable identity.
+- Task retains a Definition-facing logical target; selected Instance is
+  Control Plane-resolved/effective routing evidence.
+- Definition identity, Instance identity, Kubernetes UID, replica, Pod,
+  container, Gateway, Hermes/OpenClaw session/run, and all native execution IDs
+  remain distinct.
+
+### 108.4 Domain ownership constraints
+
+- Runtime and Agent Instance Conditions remain separately owned.
+- Task, Workflow, and Capability Outcomes remain separately owned.
+- Recovery Assessment remains Agent Instance-owned and embedded.
+- four-way truth is accepted as semantic boundary; exact vocabulary and
+  serialization are not frozen.
+- Provider/native results and IDs are evidence, never automatic Platform
+  semantic conclusions or identity.
+- discovery is not authorization; denial may terminate before Provider handoff.
+- restart, replacement, or process running does not establish semantic recovery.
+- Provider-family/transport fields remain outside stable Core.
+
+## 109. E01-E20 Human Decision Ledger
+
+Each disposition preserves the exact subject in Section 103 and retains linked
+debt. `ACCEPTED_AS_CANDIDATE` means logical Candidate acceptance only.
+
+| ID | Subject | Human disposition | Preserved constraint/evidence debt |
+| --- | --- | --- | --- |
+| E01 | final five-resource logical Candidate | `ACCEPTED_AS_CANDIDATE` | representation and CRD count undecided |
+| E02 | embedded Binding disposition | `ACCEPTED_AS_CANDIDATE` | Runtime/Capability embedded; Model remains thin; no Binding CRDs |
+| E03 | Platform Execution Identity | `ACCEPTED_WITH_EVIDENCE_DEBT` | propagation concept accepted; retry/backfill/combined conformance unfrozen |
+| E04 | relationship map | `ACCEPTED_AS_CANDIDATE` | logical cardinalities accepted; persistence/reference serialization undecided |
+| E05 | authority map | `ACCEPTED_AS_CANDIDATE` | Core/Provider/native ownership fixed as Candidate boundary |
+| E06 | reference model | `ACCEPTED_WITH_EVIDENCE_DEBT` | typed/opaque separation accepted; field names, resolution errors, serialization unfrozen |
+| E07 | Condition boundary | `ACCEPTED_WITH_EVIDENCE_DEBT` | shared structure/four-way truth accepted; concepts/reasons/serialization not frozen |
+| E08 | Outcome boundary | `ACCEPTED_WITH_EVIDENCE_DEBT` | domain ownership accepted; taxonomies, side effects, deferred behavior unfrozen |
+| E09 | Recovery Assessment | `ACCEPTED_WITH_EVIDENCE_DEBT` | placement/predicate semantics accepted; applicability, thresholds, profiles unresolved |
+| E10 | compatibility and migration strategy | `ACCEPTED_WITH_EVIDENCE_DEBT` | staged Option B accepted; mapping, backfill, translation and implementation unproven |
+| E11 | mixed-version authority and rollback | `ACCEPTED_WITH_EVIDENCE_DEBT` | one desired authority/bounded rollback accepted; mixed-mode and in-flight evidence absent |
+| E12 | Provider extension boundary | `ACCEPTED_AS_CANDIDATE` | opaque refs/internal metadata/bounded evidence only; no Provider-family Core fields |
+| E13 | Hermes debt scope | `BLOCKED` | Hermes certification/readiness blocked by ED-S5-001; Core Candidate unaffected |
+| E14 | Candidate stability classification | `ACCEPTED_AS_CANDIDATE` | exact stable/debt/thin/deferred/blocked classes retained; none means frozen |
+| E15 | implementation readiness map | `ACCEPTED_WITH_EVIDENCE_DEBT` | prototype/conformance handoff accepted; no implementation or production authorization |
+| E16 | conformance matrix | `ACCEPTED_WITH_EVIDENCE_DEBT` | evidence plan accepted; conformance/certification/demo tests not completed |
+| E17 | freeze readiness gates | `BLOCKED` | Core/Runtime/Capability freeze and production gates not ready; Candidate Gate alone accepted |
+| E18 | Golden Demo traceability | `ACCEPTED_WITH_EVIDENCE_DEBT` | product trace accepted; Demo not run/accepted and certification labels mandatory |
+| E19 | ADR impact | `DEFERRED` | ADR-0003/0004/0005 work occurs only in separately authorized sessions |
+| E20 | next engineering sequence | `ACCEPTED_AS_CANDIDATE` | sequencing recommendation accepted; no step authorized by this session |
+
+No disposition is ambiguous. The ledger does not approve serialization,
+implementation, certification, production, or merge.
+
+## 110. Candidate Classification Verification
+
+The exact Section 94 classifications remain authoritative:
+
+- `CANDIDATE_STABLE` denotes an accepted Candidate semantic boundary only;
+- `CANDIDATE_WITH_EVIDENCE_DEBT` retains named conformance, vocabulary,
+  migration, or Provider debt;
+- `THIN_FOUNDATION` prevents unauthorized lifecycle/schema expansion;
+- `DEFERRED` remains outside v0.2 supported claims;
+- `BLOCKED` cannot advance until its named gate/evidence changes.
+
+No area is relabeled as frozen, implemented, certified, production-ready, or
+Demo-accepted. Claim-scoped debt in Sections 64, 84, 95, and 99 remains open.
+
+## 111. Independent Freeze, Certification, and Readiness State
+
+| Gate/state | Finalization status |
+| --- | --- |
+| Core Schema Candidate | `ACCEPTED` |
+| Core Schema Freeze | `NO` |
+| Runtime Contract Freeze | `NO` |
+| Capability Contract Freeze | `NO` |
+| Runtime Freeze Gate `G-S5-RUNTIME-FREEZE-01` | `FAIL / UNCHANGED` |
+| Provider Certification | `NOT_GRANTED` |
+| Production Readiness | `NOT_GRANTED` |
+| Golden Demo Acceptance | `NOT_GRANTED` |
+| Hermes | `EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE` |
+| ED-S5-001 | `OPEN` |
+
+ED-S5-001 blocks only applicable Hermes Provider/package certification and
+readiness claims. It does not block the accepted Core Schema Candidate and does
+not justify Hermes-specific Core fields.
+
+## 112. ADR Impact Finalization
+
+| ADR | Preserved impact | Change in this session |
+| --- | --- | --- |
+| ADR-0003 | `CLARIFY_LATER` | none |
+| ADR-0004 | `AMEND_LATER` | none |
+| ADR-0005 | `CLARIFY_LATER` | none |
+
+ADR work remains Human-owned and separately authorized. `ADR_CHANGE: 0`.
+
+## 113. Unresolved Evidence Debt at Finalization
+
+All previously recorded debt remains. Principal open categories are:
+
+- normative schema field names/types/requiredness/defaults/serialization and
+  API/persistence/CRD representation;
+- Runtime and Capability Contract conformance/freeze;
+- durable Agent-to-Definition/Instance identity mapping, legacy Task/Workflow
+  execution identity backfill, deletion/recreation/adoption, and lossless
+  conversion;
+- routing eligibility inputs/freshness, explicit targeting authorization,
+  deterministic selection, rerouting, and in-flight behavior;
+- exact Condition/Outcome/Recovery vocabularies, thresholds, transition rules,
+  side-effect/idempotency, deferred/cancel behavior, and stateful/external
+  profiles;
+- mixed-version implementation, bounded fallback/rollback, cleanup ownership,
+  secret isolation, and Console old-client tolerance;
+- Native/OpenClaw/REST/MCP Provider conformance and combination-specific
+  certification, third-party MCP, and out-of-process Provider evidence;
+- Hermes ED-S5-001 and certification/readiness;
+- State portability, Model routing/fallback, multi-tenancy, and broader
+  governance remain deferred.
+
+Evidence debt is claim-scoped and does not reopen the accepted Candidate
+boundary. It blocks only the applicable freeze, migration, certification,
+production, Provider, or product claim.
+
+## 114. Final Consistency and Provenance Record
+
+The finalized Candidate remains derived from:
+
+1. validated `origin/main` baseline
+   `c8e1768d8cbd014b7eb243531a40bbecb7895586`;
+2. durable S5-ARCH-004 accepted Core Contract Boundary;
+3. durable S5-SPIKE-003 Capability evidence;
+4. durable S5-SPIKE-004 Agent Instance/routing evidence;
+5. accepted ADRs interpreted with implementation-status separation;
+6. current Agent/Task/Workflow CRDs, controllers, Runtime, Console, tests, and
+   examples;
+7. Human Checkpoint A-D Gates and Human Final Schema Candidate Gate.
+
+The S5-ARCH-001/002/003 main-tree traceability gap remains recorded debt. No
+historical artifact is reconstructed and no pending/non-durable decision is
+promoted over S5-ARCH-004. Checkpoints A-E history remains in this artifact.
+
+Consistency result:
+
+- first-class Candidate count remains five;
+- no Provider/native fields enter Core;
+- no current API field is silently reinterpreted;
+- no universal execution/status/outcome/recovery object is introduced;
+- no schema/Contract is frozen;
+- no representation, implementation, certification, readiness, or merge is
+  authorized;
+- no contradiction with the accepted A-E record was found.
+
+## 115. Next Integration Recommendation
+
+Recommended next session, not started here:
+
+SESSION
+ID: S5-REL-004
+TITLE: S5-ARCH-005 Core Schema Candidate Integration
+
+Purpose:
+
+- pre-merge verification of PR #42;
+- exact-head Human Merge Gate;
+- merge into main;
+- post-merge source-of-truth validation;
+- durable Core Schema Candidate baseline verification.
+
+PR #42 remains unmerged. No S5-REL-004 artifact or execution is created by
+this finalization.
+
+## 116. Session Finalization State
+
+HUMAN_FINAL_SCHEMA_CANDIDATE_GATE: **RECORDED / PASS_WITH_CONSTRAINTS**
+CORE_SCHEMA_CANDIDATE: **ACCEPTED**
+E01_E20: **DISPOSITIONED_WITHOUT_OVERCLAIM**
+CANDIDATE_SCOPE: **UNCHANGED**
+EVIDENCE_DEBT: **PRESERVED**
+
+LIFECYCLE: **CLOSING**
+AUTHORIZATION: **AUTHORIZED**
+STATUS: **PASS**
+CHECKPOINT: **F — SESSION_FINALIZATION**
+RESULT: **READY_TO_CLOSE**
+
+CORE_SCHEMA_FREEZE: **NO**
+RUNTIME_CONTRACT_FREEZE: **NO**
+CAPABILITY_CONTRACT_FREEZE: **NO**
+PROVIDER_CERTIFICATION: **NOT_GRANTED**
+PRODUCTION_READINESS: **NOT_GRANTED**
+GOLDEN_DEMO_ACCEPTANCE: **NOT_GRANTED**
+`G-S5-RUNTIME-FREEZE-01`: **FAIL / UNCHANGED**
+HERMES: **EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE**
+ED-S5-001: **OPEN**
+
+PRODUCTION_CORE_CHANGE: **0**
+EXISTING_SCHEMA_CHANGE: **0**
+CRD_CHANGE: **0**
+ADR_CHANGE: **0**
+UNRELATED_CHANGE: **0**
+
+NEXT_ACTION: **WAIT_FOR_HUMAN_CLOSE_CONFIRMATION**
+NEXT_GATE: **Human S5-ARCH-005 Close Confirmation**
+
+S5-ARCH-005 is not closed. `AUTHORIZATION` remains `AUTHORIZED`; the result is
+not `SESSION_CLOSED`.
