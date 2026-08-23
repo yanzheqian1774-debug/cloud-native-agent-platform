@@ -7,21 +7,22 @@ TITLE: v0.2 Core Contract Boundary & Schema Map
 PHASE: S5 / v0.2 CONNECT & MANAGE
 TRACK: Core Contract
 MODE: Architecture -> Engineering Contract Translation
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: CLOSEOUT
 
-RESULT: **READY_TO_CLOSE**
+RESULT: **SESSION_CLOSED**
 
 > The Human Checkpoint A Gate passed with representation constraints, the Human
 > Checkpoint B Gate passed with semantic constraints, and the Human Checkpoint
 > C Gate passed with freeze constraints. The Human Final Contract Boundary Gate
 > accepted the object boundary, semantic ownership, relationship model, API
 > Surface Budget as a Schema-Draft boundary, and shared primitive boundary.
-> This artifact is now in closeout and awaits Human Close Confirmation. It does
-> not define fields or schemas, freeze Contracts, change an ADR, authorize
-> implementation, or authorize Schema Draft execution.
+> The Human Close Confirmation passed and S5-ARCH-004 is formally closed. This
+> artifact does not define fields or schemas, freeze Contracts, change an ADR,
+> authorize implementation, or authorize Schema Draft execution. Reopen is
+> prohibited.
 
 ## 1. Executive Conclusion
 
@@ -2584,6 +2585,8 @@ Draft execution; a separate formal session is required.
 
 HUMAN DECISION: **PASS**
 
+HUMAN CLOSE CONFIRMATION: **PASS**
+
 | Accepted dimension | Final disposition |
 | --- | --- |
 | Object Boundary | ACCEPTED |
@@ -2618,8 +2621,10 @@ Contract conformance, certification, deferred/in-flight behavior, applicable
 recovery predicates, and production evidence retain the classifications in
 Section 64.
 
-Closeout does not create a schema, freeze a Contract or vocabulary, modify the
-Freeze Gate, authorize implementation, start the next phase, or merge PR #41.
+The Human Close Confirmation transitions `CLOSING / AUTHORIZED /
+READY_TO_CLOSE` to `CLOSED / COMPLETED / SESSION_CLOSED`. Closeout does not
+create a schema, freeze a Contract or vocabulary, modify the Freeze Gate,
+authorize implementation, start the next phase, or merge PR #41.
 
 ## Contract and Change Boundary
 
@@ -2638,11 +2643,12 @@ Schema Draft is not Contract Freeze. This Checkpoint does not draft a schema.
 
 ## Checkpoint State
 
-LIFECYCLE: CLOSING
-AUTHORIZATION: AUTHORIZED
+LIFECYCLE: CLOSED
+AUTHORIZATION: COMPLETED
 STATUS: PASS
 CHECKPOINT: CLOSEOUT
-RESULT: READY_TO_CLOSE
-NEXT_PHASE_RECOMMENDATION: v0.2 Schema Draft / Contract Specification
-NEXT_ACTION: WAIT_FOR_HUMAN_CLOSE_CONFIRMATION
-REOPEN: NOT_APPLICABLE_UNTIL_CLOSED
+RESULT: SESSION_CLOSED
+NEXT_PHASE: v0.2 Schema Draft / Contract Specification
+RECOMMENDED_NEXT_SESSION: S5-ARCH-005 — v0.2 Core Schema Draft & Compatibility Map
+NEXT_ACTION: NONE
+REOPEN: PROHIBITED
