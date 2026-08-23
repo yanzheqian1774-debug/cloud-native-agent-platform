@@ -10,12 +10,14 @@ MODE: Architecture / Schema Draft
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: A — SCHEMA_PRINCIPLES_AND_COMPATIBILITY_BASELINE
-RESULT: **SCHEMA_BASELINE_RECOMMENDED**
+CHECKPOINT: B — RESOURCE_SCHEMA_DRAFT
+RESULT: **RESOURCE_SCHEMA_DRAFT_RECOMMENDED**
 
-> This Checkpoint establishes constraints for later Schema Draft work. It does
-> not draft resource fields, approve a Kubernetes CRD, freeze a Contract or
-> vocabulary, change an ADR, authorize implementation, or begin Checkpoint B.
+> Checkpoint A established the compatibility and design baseline. The Human
+> Checkpoint A Gate passed and accepted A01-A14 for Schema Draft use. Checkpoint
+> B adds implementation-neutral logical schema candidates. It does not approve
+> a Kubernetes CRD, freeze a Contract/schema/vocabulary, change an ADR,
+> authorize implementation, or begin Checkpoint C.
 
 ## 1. Source-of-Truth Baseline
 
@@ -770,3 +772,997 @@ EXISTING_SCHEMA_CHANGE: **0**
 CRD_CHANGE: **0**
 NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
 NEXT_GATE: **Human Checkpoint A Gate**
+
+# Checkpoint B — Resource Schema Draft
+
+## 22. Human Checkpoint A Gate Record
+
+HUMAN DECISION: **PASS**
+
+| Dimension | Checkpoint B authority |
+| --- | --- |
+| A01-A14 | `ACCEPTED_FOR_SCHEMA_DRAFT` |
+| Contract | `NOT_CONTRACT_FROZEN` |
+| Schema | `NOT_SCHEMA_FROZEN` |
+| CRDs | `NOT_CRD_APPROVED` |
+| Traceability gap | `TRACEABILITY_DEBT / DOES_NOT_BLOCK_CHECKPOINT_B` |
+| Authorized result | `LOGICAL_SCHEMA_CANDIDATE` only |
+
+Checkpoint A Sections 1-21 remain the historical baseline. The Gate did not
+authorize reconstruction of S5-ARCH-001/002/003, reopening a closed session,
+or implementation. This section and those below are the distinct Checkpoint B
+record.
+
+## 23. Logical Schema Notation
+
+The pseudo-schemas below describe meaning, not JSON, OpenAPI, Protobuf,
+Pydantic, Kubernetes metadata, storage, or generated code.
+
+Field classifications:
+
+- `R` — **REQUIRED_V0_2**: needed to preserve the accepted semantic boundary.
+- `O` — **OPTIONAL_V0_2**: useful in v0.2, but absence has defined meaning.
+- `T` — **THIN_FOUNDATION**: establishes ownership/reference only.
+- `D` — **DEFERRED**: excluded pending evidence or a later architecture gate.
+- `P` — **PROVIDER_EXTENSION**: owned outside stable Core.
+- `C` — **COMPATIBILITY_ONLY**: retained or translated for existing API
+  compatibility; not target Core meaning.
+
+Cardinalities are logical. `?` means optional, `[]` means zero or more, and
+`[1..N]` means one or more. `Ref<T>` is a logical reference from Section 31;
+it does not imply a Kubernetes object reference.
+
+## 24. Agent Definition Logical Schema Candidate
+
+**Purpose:** authoritative, reusable logical definition of what an Agent is
+and which governed Binding intent it requests. It is not a running Agent.
+
+**Layers:** primarily `IDENTITY + DESIRED + REFERENCES`; observed definition
+validation may exist, but Runtime realization and execution observation do
+not.
+
+```text
+AgentDefinition {
+  identity: ResourceIdentity<AgentDefinition>                 R
+  schemaVersion: ContractSchemaVersion                       R
+  revision: ResourceRevision                                 R
+  generation: DesiredGeneration                              R
+
+  display: {
+    displayName?: Text                                       O
+    description?: Text                                       O
+    labels?: Map<Text, Text>                                 O
+  }
+
+  desired: {
+    roleOrPurpose: Text                                      R
+    instructions?: InstructionReferenceOrInline              O
+    runtimeBinding: DesiredRuntimeBinding                    R
+    capabilityBindings: CapabilityBinding[]                  O
+    modelBinding?: ThinModelBinding                          T
+    workspaceRef?: Ref<Workspace>                            T
+    stateRef?: Ref<StateOrMemory>                            T
+    knowledgeRefs?: Ref<Knowledge>[]                         T
+    policyRefs?: Ref<Policy>[]                               T
+    permissionRefs?: Ref<Permission>[]                       T
+  }
+
+  status?: {
+    observedGeneration?: DesiredGeneration                   O
+    validationConditions?: DefinitionCondition[]             O
+  }
+}
+```
+
+### 24.1 Agent Definition field semantics
+
+| Field | Class | Ownership and constraint |
+| --- | --- | --- |
+| `identity` | R | Platform-owned logical resource identity, stable across Instance and realization replacement |
+| `schemaVersion` | R | Logical Contract schema version; not Kubernetes `apiVersion` |
+| `revision` | R | Identifies this immutable/mutable resource representation revision; exact mechanics pending B14 |
+| `generation` | R | Monotonic desired-state generation used by effective/observed provenance |
+| `display.*` | O | Human/product presentation only; not identity or routing |
+| `roleOrPurpose` | R | Provider-independent semantic purpose; current `identity.role` maps here |
+| `instructions` | O | Desired logical instructions; inline form is compatibility-sensitive and size-bounded |
+| `runtimeBinding` | R | Desired template/constraints only; no realization or Provider-native configuration |
+| `capabilityBindings` | O | `1:N` governed intent; empty means no declared Capability use |
+| `modelBinding` | T | Thin model requirements/reference only; routing/fallback excluded |
+| thin references | T | Do not import lifecycle of Workspace, State, Knowledge, Policy, or Permission |
+| `status` | O | Definition validation/reconciliation only; no running state |
+
+### 24.2 Ownership and lifecycle
+
+- Core/Agent Definition owns identity, desired definition, desired Binding
+  intent, and desired generation.
+- Each Agent Instance references exactly one Definition and records the
+  Definition version/generation from which its effective state was derived.
+- Definition update does not silently mutate an executing Instance without an
+  explicit adoption/rollout rule. The exact adoption policy is deferred to a
+  lifecycle decision; provenance is required now.
+- Deletion is blocked while live Instances reference the Definition unless an
+  explicit, authorized cascading/orphaning policy exists.
+- Pod, container, Gateway, Runtime session, native configuration, realization
+  status, routing eligibility, and recovery are prohibited here.
+
+## 25. Agent Instance Logical Schema Candidate
+
+**Purpose:** stable platform-managed identity for one logical running Agent,
+surviving replacement of all native realizations.
+
+**Layers:** `IDENTITY + DESIRED + EFFECTIVE + OBSERVED + STATUS + REFERENCES +
+LIFECYCLE`.
+
+```text
+AgentInstance {
+  identity: ResourceIdentity<AgentInstance>                   R
+  schemaVersion: ContractSchemaVersion                       R
+  revision: ResourceRevision                                 R
+  generation: DesiredGeneration                              R
+
+  desired: {
+    definitionRef: Ref<AgentDefinition>                      R
+    lifecycleState: DesiredInstanceLifecycle                 R
+  }
+
+  effective: {
+    definitionRevision: ReferencedRevision                   R
+    definitionGeneration: DesiredGeneration                  R
+    runtimeBinding: EffectiveRuntimeBinding                  R
+    modelBinding?: EffectiveThinModelProjection              T
+    resolution: ResolutionProvenance                         R
+  }
+
+  status: {
+    observedGeneration?: DesiredGeneration                   O
+    routingEligibility: RoutingEligibility                   R
+    instanceConditions: AgentInstanceCondition[]             O
+    runtimeConditions: RuntimeCondition[]                    O
+    recoveryAssessment?: RecoveryAssessment                  O
+    realizationSummary: RealizationSummary                   R
+    nativeReferences: NativeReference[]                      O
+    executionCorrelations?: ExecutionCorrelationRef[]        O
+    observedAt: Instant                                      R
+  }
+}
+```
+
+### 25.1 Agent Instance field semantics
+
+| Field | Class | Ownership and constraint |
+| --- | --- | --- |
+| `identity` | R | Stable logical Instance identity; never copied from a native realization |
+| `definitionRef` | R | Exactly one Agent Definition; Definition-to-Instance is `1:N` |
+| `lifecycleState` | R | Desired logical existence/availability state; vocabulary remains a candidate |
+| effective Definition provenance | R | Exact Definition revision/generation resolved for this Instance |
+| `effective.runtimeBinding` | R | Derived from authorized Definition intent and resolution metadata; not desired authority |
+| effective Model projection | T | Only if needed to convey resolved thin requirements; no model-routing design |
+| `routingEligibility` | R | Control Plane-owned decision/projection with reason, evidence freshness, and observed time |
+| `instanceConditions` | O | Instance-domain assertions; vocabulary unfrozen |
+| `runtimeConditions` | O | Runtime-domain Provider-normalized assertions, kept structurally/domain distinct |
+| `recoveryAssessment` | O | Instance-owned semantic assessment; restart is evidence, not recovery |
+| `realizationSummary` | R | Counts and high-level observation only; no native topology authority |
+| native refs | O | `0:N` opaque evidence across temporal/active realizations |
+| execution correlations | O | Bounded links to active/recent logical executions where operationally required; not execution history storage |
+
+`RoutingEligibility` logically contains a decision (`ELIGIBLE`, `INELIGIBLE`,
+or `UNKNOWN`), stable reason, evidence freshness, and observation time. The
+vocabulary and timeout/escalation policy remain unfrozen. A Provider may supply
+evidence but cannot select among platform Agent Instances.
+
+`RealizationSummary` contains at most active count, temporal/observed count if
+bounded, desired/available summary where portable, and freshest observation.
+It cannot imply that one Instance equals one Pod or that zero observed native
+objects means the Instance never existed.
+
+### 25.2 Recovery Assessment candidate
+
+```text
+RecoveryAssessment {
+  status: TRUE | FALSE | UNKNOWN | NOT_APPLICABLE             R
+  reason: StableDomainReason                                  R
+  assessedAt: Instant                                         R
+  bindingVerified: TriState                                   R
+  identityContinuityVerified: TriState                        R
+  routingVerified: TriState                                   R
+  runtimeSemanticsVerified: TriState                          R
+  message?: SafeDiagnostic                                   O
+}
+```
+
+The predicates are structural candidates, not a frozen universal checklist.
+Applicable predicates may vary by declared Runtime ownership/profile.
+`UNKNOWN`, `FALSE`, and `NOT_APPLICABLE` are not interchangeable.
+
+## 26. Current Agent Compatibility Projection
+
+### 26.1 Field/semantic map
+
+| Current `Agent` field/behavior | Target owner | Difference | Classification | Draft interpretation |
+| --- | --- | --- | --- | --- |
+| `metadata.name/namespace` | Definition identity | Current object also anchors Service/Deployment | KEEP + MIGRATION_REQUIRED | Preserve as Definition-facing compatibility identity; Instance identity is new and separate |
+| `metadata.uid/resourceVersion/generation` | API representation | Kubernetes-specific | KEEP in current API | May map to representation revision/generation, not implementation-neutral identity |
+| `spec.identity.role` | Definition | Direct alignment | KEEP | Maps to `roleOrPurpose` |
+| `spec.identity.displayName` | Definition display | Direct alignment | KEEP | Maps to `display.displayName` |
+| `spec.instructions.systemPrompt` | Definition desired | Inline and Runtime-env realization today | KEEP / COMPATIBILITY_ALIAS | Maps to logical instructions; translation remains compatibility behavior |
+| `spec.capabilities[]` strings | Definition desired Capability intent | Lacks Definition/version/operation/policy | COMPATIBILITY_ALIAS + MIGRATION_REQUIRED | Translate only through explicit legacy capability mapping; unmapped strings remain visible/invalid, never silently upgraded |
+| `spec.runtime.type` | Definition desired Runtime Binding | Current enum mixes runtime family and selection | COMPATIBILITY_ALIAS | Maps to legacy runtime class constraint, not Provider identity |
+| `spec.runtime.image` | Provider/package configuration | Native packaging detail | PROVIDER_OWNED + COMPATIBILITY_ONLY | Legacy translator may create package/config reference; prohibited as target Core field |
+| `spec.model.provider/name` | Thin Model Binding / Provider-owned detail | Over-specifies current selection | COMPATIBILITY_ALIAS + MIGRATION_REQUIRED | Preserve legacy read; map only to thin reference/requirement supported by model evidence |
+| `spec.model.endpoint/baseUrl/secretRef` | Provider/configuration/credential owner | Provider-specific and security-sensitive | PROVIDER_OWNED + COMPATIBILITY_ONLY | Referenced legacy configuration; never copied into stable Core schema |
+| `spec.resources.cpu/memory` | Definition/runtime constraint intent | Current simplified Kubernetes values | KEEP concept / MIGRATION_REQUIRED representation | Map to portable constraints only if semantics proven; raw representation remains compatibility input |
+| `spec.replicas` | Current deployment realization intent | Not logical Instance count by accepted semantics | UNRESOLVED + COMPATIBILITY_ONLY | Preserve current behavior; do not create N Agent Instances from this field without a later decision |
+| `status.phase` | Current Agent infrastructure observation | Does not equal Instance condition or recovery | COMPATIBILITY_ALIAS | Preserve legacy projection; derive only from approved Instance/Runtime observations later |
+| `status.readyReplicas` | Native realization summary | Infrastructure-specific count | COMPATIBILITY_ALIAS | May project from bounded realization summary; not routing identity |
+| `status.observedGeneration` | Definition/legacy reconciliation | Schema-declared but weak implementation evidence | KEEP concept | Must have conformance before target claim |
+| `status.conditions` | Definition/legacy infrastructure status | Kubernetes-like structural precedent only | KEEP structure / MIGRATION_REQUIRED vocabulary | Do not merge with Runtime or Instance conditions |
+| same-name Deployment/Service | Provider/implementation realization | Current direct Operator behavior | MIGRATION_REQUIRED | Retain until later Provider implementation migration; never target logical identity |
+
+### 26.2 Recommended strategy
+
+**Recommend OPTION B: current Agent evolves toward Agent Definition and Agent
+Instance is introduced separately**, with a bounded compatibility translation
+rather than a rename.
+
+Rationale:
+
+1. current Agent already owns durable definition-like role, instructions,
+   Capability intent, resource intent, and desired Runtime/Model inputs;
+2. preserving its identity and manifests minimizes unnecessary replacement;
+3. Agent Instance requires independent identity and cannot be derived from a
+   Pod, Service, or replica index;
+4. Option A would perpetuate Definition/Instance ambiguity indefinitely;
+5. Option C remains the required representation mechanism if additive
+   evolution cannot preserve existing wire semantics, but logical versioning
+   should not pre-decide the Kubernetes version transition.
+
+The compatibility phase would conceptually keep current Agent behavior while a
+deterministic interpreter produces Definition intent and one legacy execution
+projection. It must not fabricate first-class Instance identity from
+`spec.replicas`. Exit criteria require explicit Instance creation/adoption,
+legacy field translation, observable warnings for unmapped values, rollback,
+and an approved API migration. No migration is implemented here.
+
+## 27. Task Logical Schema Candidate
+
+**Purpose:** durable request to perform bounded work, owning submission,
+execution observation, retry accounting, and Task-specific terminal outcome.
+It carries Platform Execution Identity but is not a universal Execution.
+
+```text
+Task {
+  identity: ResourceIdentity<Task>                            R
+  schemaVersion: ContractSchemaVersion                       R
+  revision: ResourceRevision                                 R
+
+  request: {
+    executionIdentity: PlatformExecutionIdentity             R
+    target: AgentTarget                                      R
+    input: InputValueOrReference                             R
+    routingIntent?: RoutingIntent                            O
+    authorizationRefs?: Ref<AuthorizationDecisionOrPolicy>[] T
+    timeout?: Duration                                       O
+    cancellationIntent?: CancellationIntent                  D
+    retryPolicy?: TaskRetryPolicy                            O
+  }
+
+  status: {
+    submission: SubmissionState                              R
+    execution: TaskExecutionState                            R
+    attempts: AttemptSummary                                 R
+    outcome?: TaskOutcome                                    O
+    selectedInstanceRef?: Ref<AgentInstance>                 O
+    nativeReferences?: NativeReference[]                     O
+    submittedAt?: Instant                                    O
+    startedAt?: Instant                                      O
+    completedAt?: Instant                                    O
+    observedAt: Instant                                      R
+  }
+}
+```
+
+### 27.1 State separation
+
+| Layer | Meaning | Compatibility |
+| --- | --- | --- |
+| Submission | accepted/rejected/pending Provider handoff or routing disposition | New logical distinction; current Pending/initial Running must remain projectable |
+| Execution | not started/running/terminal observation of this Task | Current phase values remain compatibility wire values; candidate vocabulary unfrozen |
+| Outcome | Task-owned success/failure/timeout/cancel result and safe diagnostic | Current result/reason/retryable map here; no universal Outcome |
+
+`TaskOutcome` logically includes terminal disposition, optional output value or
+reference, stable Task-domain reason, retryability assessment where meaningful,
+and safe message. Result payload/reference representation remains open; current
+string `status.result` must remain readable/projectable.
+
+`AttemptSummary` preserves current meaning: attempts belong to one Task
+execution unless an approved replay/idempotency rule creates another Platform
+Execution Identity. It contains total attempts and optionally bounded latest
+attempt metadata. It is not an attempt-history database.
+
+### 27.2 Target semantics
+
+```text
+AgentTarget =
+  DefinitionTarget { definitionRef, routingIntent? }
+  | InstanceTarget { instanceRef, targetingAuthorizationRef }
+  | LegacyAgentTarget { name, impliedScope }                  C
+```
+
+The union is logical, not a proposed wire union. Definition targeting asks the
+Control Plane to choose an eligible Instance. Explicit Instance targeting is
+privileged/authorized and still cannot name a native realization. Current
+`agentRef.name` keeps its exact legacy meaning until a representation decision
+maps it; it is not reinterpreted in place.
+
+Cancellation is `DEFERRED` as an operative Contract behavior because current
+source has no cancellation semantics and Providers have no universal evidence.
+The schema may reserve a future intent boundary only after Checkpoint C; it is
+not a v0.2 required field here.
+
+## 28. Workflow Logical Schema Candidate
+
+**Purpose:** durable DAG/orchestration resource that currently combines
+declarative graph definition/request with one execution observation/outcome.
+
+**Checkpoint B conclusion:** separation is semantically useful but a sixth
+first-class `WorkflowExecution` is neither necessary nor authorized. Use two
+embedded structures inside the existing first-class Workflow boundary.
+
+```text
+Workflow {
+  identity: ResourceIdentity<Workflow>                        R
+  schemaVersion: ContractSchemaVersion                       R
+  revision: ResourceRevision                                 R
+
+  definition: {
+    nodes: WorkflowNodeDefinition[1..N]                      R
+    graphConstraints?: WorkflowGraphConstraints              O
+  }
+
+  execution: {
+    executionIdentity: PlatformExecutionIdentity             R
+    requestRevision: ResourceRevision                        R
+    submission: SubmissionState                              R
+    nodeExecutions: Map<NodeIdentity, WorkflowNodeExecution> R
+    outcome?: WorkflowOutcome                                O
+    startedAt?: Instant                                      O
+    completedAt?: Instant                                    O
+    observedAt: Instant                                      R
+  }
+}
+```
+
+```text
+WorkflowNodeDefinition {
+  nodeIdentity: LocalLogicalName                              R
+  taskRequest: EmbeddedTaskRequest                           R
+  dependsOn: NodeIdentity[]                                  O
+  inputSources: NodeOutputReference[]                        O
+}
+
+WorkflowNodeExecution {
+  taskRef?: Ref<Task>                                        O
+  executionIdentity?: PlatformExecutionIdentity              O
+  state: TaskExecutionProjection                            R
+  outcomeSummary?: TaskOutcomeProjection                     O
+}
+```
+
+The embedded definition/execution distinction prevents semantic conflation in
+the logical Contract while preserving one current Workflow resource. Current
+Workflow-created Task resources remain the authoritative Task lifecycles; the
+node execution entry is an aggregate/projection, not a duplicate desired Task.
+
+### 28.1 Future promotion trigger
+
+`WorkflowExecution` becomes a **FUTURE_PROMOTION_CANDIDATE** only if accepted
+evidence requires multiple independently identified, retained, authorized,
+reconciled executions of one reusable Workflow definition, with independent
+lifecycle and references that cannot be represented without overloading the
+Workflow resource. Promotion requires a new architecture decision, API budget,
+compatibility/migration plan, and must not be inferred merely from the Console
+class name `WorkflowExecutionDetail`.
+
+## 29. Capability Definition Logical Schema Candidate
+
+**Purpose:** provider- and transport-independent enterprise identity and
+versioned semantic definition of a governed ability.
+
+**Layers:** `IDENTITY + DESIRED/DECLARATIVE + REFERENCES`; invocation outcomes
+belong to Capability invocation context, not Definition status.
+
+```text
+CapabilityDefinition {
+  identity: ResourceIdentity<CapabilityDefinition>            R
+  schemaVersion: ContractSchemaVersion                       R
+  revision: ResourceRevision                                 R
+  generation: DesiredGeneration                              R
+
+  display?: {
+    displayName?: Text                                       O
+    description?: Text                                       O
+    labels?: Map<Text, Text>                                 O
+  }
+
+  semantics: {
+    operationIdentity: LogicalOperationIdentity              R
+    inputSchemaRef: SchemaReference                          R
+    outputSchemaRef: SchemaReference                         R
+    riskClassification: RiskClassification                  R
+    authorizationRequirements: AuthorizationRequirements    R
+    executionCharacteristics: ExecutionCharacteristics      R
+    supportedDispositions: InteractionDisposition[1..N]      R
+  }
+
+  compatibility: {
+    capabilityVersion: SemanticVersion                       R
+    compatibilityPolicy: CompatibilityPolicyReference       R
+  }
+
+  policyRefs?: Ref<Policy>[]                                 T
+}
+```
+
+`ExecutionCharacteristics` describes only semantic properties required for
+safe use, such as side-effect profile, idempotency declaration, and whether an
+inline or deferred disposition is supported. Exact vocabulary and retry/cancel
+guarantees remain unfrozen and must not exceed spike evidence.
+
+Capability identity is not an MCP tool, REST endpoint, SDK function, CLI
+command, Provider descriptor, or native invocation. Those are Provider/native
+realizations mapped by a Capability Provider after authorization.
+
+## 30. Embedded Binding and Execution Value Candidates
+
+### 30.1 Desired Runtime Binding
+
+```text
+DesiredRuntimeBinding {
+  providerRef?: ProviderRef<RuntimeProvider>                  O
+  runtimePackageRef?: RuntimePackageRef                      O
+  runtimeClass: LogicalRuntimeClass                          R
+  configurationRef?: ProviderConfigurationRef                P
+  declaredRuntimeCapabilities?: RuntimeCapabilityRequirement[] O
+  constraints?: RuntimeConstraint[]                         O
+  compatibilityRequirement: ProviderCompatibilityRequirement R
+  extensionRef?: ProviderExtensionRef                        P
+}
+```
+
+At least one deterministic resolution input among Provider reference, package
+reference, and runtime class/constraints must be sufficient under the future
+resolution policy. The exact exclusivity rule is pending. `configurationRef`
+and `extensionRef` are opaque references whose targets are Provider-owned;
+Core does not inspect Hermes/OpenClaw/Native fields.
+
+### 30.2 Effective Runtime Binding
+
+```text
+EffectiveRuntimeBinding {
+  desiredSource: { definitionRef, generation }                R
+  providerRef: ProviderRef<RuntimeProvider>                   R
+  runtimePackageRef?: RuntimePackageRef                      O
+  runtimeClass: LogicalRuntimeClass                          R
+  resolvedConfigurationRef?: ProviderConfigurationRef        P
+  declaredCompatibility: CompatibilityDecision              R
+  resolvedConstraints?: RuntimeConstraint[]                 O
+  extensionRef?: ProviderExtensionRef                        P
+  resolvedAt: Instant                                        R
+}
+```
+
+This is a derived Instance-owned projection. It cannot be edited as a second
+desired source. Capability declarations here concern Runtime Contract support,
+not enterprise Capability Bindings.
+
+### 30.3 Capability Binding
+
+```text
+CapabilityBinding {
+  capabilityRef: Ref<CapabilityDefinition>                   R
+  capabilityVersionRequirement: VersionRequirement          R
+  operationConstraints?: LogicalOperationIdentity[]          O
+  providerRef?: ProviderRef<CapabilityProvider>              O
+  policyRefs?: Ref<Policy>[]                                 T
+  authorizationRequirements?: AuthorizationRequirements      O
+  configurationRef?: ProviderConfigurationRef                P
+  constraints?: CapabilityUseConstraint[]                   O
+  compatibilityRequirement: ProviderCompatibilityRequirement R
+}
+```
+
+The Binding is desired Agent Definition-owned governed intent. Discovery may
+identify a Capability or feasible Provider but never grants authority.
+Invocation-time effective resolution revalidates authorization and
+compatibility. `DENY` terminates before Provider invocation and produces a
+Capability-domain disposition/evidence, not a Runtime failure.
+
+### 30.4 Thin Model Binding
+
+```text
+ThinModelBinding {
+  modelRef?: Ref<Model>                                      T
+  providerClassRef?: Ref<ModelProviderClass>                 T
+  policyRef?: Ref<ModelPolicy>                               T
+  configurationRef?: ProviderConfigurationRef                P
+}
+```
+
+At least one reference would be required only after the Model Contract defines
+resolution rules. For now the entire value is optional and thin. Fallback,
+ranking, cost/quota/context routing, Provider selection algorithms, credential
+shape, and gateway behavior are `DEFERRED` pending S5-SPIKE-005 or equivalent
+accepted evidence.
+
+### 30.5 Platform Execution Identity
+
+```text
+PlatformExecutionIdentity {
+  logicalId: PlatformGeneratedId                              R
+  scope: ExecutionScope                                      R
+  rootId?: PlatformGeneratedId                               O
+  parentId?: PlatformGeneratedId                             O
+}
+```
+
+Minimum semantics:
+
+- `logicalId` is created by the Platform once for one logical execution and is
+  immutable throughout Provider routing, Runtime realization replacement, and
+  Capability calls attributable to that execution.
+- `scope` prevents accidental global/name ambiguity and is Platform-owned.
+- `rootId`/`parentId` are optional correlation relationships, not proof of a
+  universal execution tree or lifecycle.
+- attempt/retry/replay rules determine whether the same or a related identity
+  is used; those rules remain domain-specific and unfrozen.
+- no native identifier may populate any of these fields.
+
+## 31. Logical Reference Model
+
+Use a small bounded family rather than one structure that pretends all
+relationships resolve identically.
+
+```text
+ResourceRef<T> {
+  domain: LogicalDomain                                      R
+  kind: LogicalResourceKind                                 R
+  logicalId?: PlatformResourceId                             O
+  name?: LogicalName                                         O
+  scope: LogicalScope                                        R
+  revisionRequirement?: RevisionRequirement                 O
+  generationExpectation?: DesiredGeneration                  O
+}
+
+ProviderRef<P> {
+  domain: RUNTIME | CAPABILITY | MODEL                       R
+  providerId: ProviderId                                     R
+  compatibilityVersion: ProviderCompatibilityVersion         R
+}
+
+SchemaReference {
+  schemaId: LogicalSchemaId                                  R
+  schemaVersion: ContractSchemaVersion                       R
+}
+```
+
+Rules:
+
+- a `ResourceRef` must contain a resolvable logical ID or name under its scope;
+  whether both may coexist and mismatch handling are representation decisions;
+- `kind/domain` prevent a name from resolving across semantic domains;
+- revision requirements express exact/range/channel intent without confusing
+  desired generation;
+- current same-namespace `agentRef.name` is a `COMPATIBILITY_ONLY` shorthand
+  whose scope is fixed by the current API;
+- Provider refs are resolved through domain-specific internal metadata and do
+  not imply a public Provider resource;
+- schema refs identify semantic input/output schemas, not transport endpoints.
+
+## 32. Native Reference Model
+
+```text
+NativeReference {
+  domain: RUNTIME | CAPABILITY | INFRASTRUCTURE              R
+  providerRef?: ProviderRef                                  O
+  nativeKind: OpaqueKindLabel                                R
+  opaqueId: OpaqueText                                       R
+  observedAt: Instant                                        R
+  executionRef?: PlatformExecutionIdentity                  O
+  realizationRole?: OpaqueRoleLabel                         O
+  freshness?: EvidenceFreshness                             O
+}
+```
+
+`nativeKind` and `realizationRole` are diagnostic labels, not Core enums that
+encode Provider topology. `opaqueId` is never parsed, selected, generated, or
+treated as authoritative by Core. References are bounded, redactable evidence;
+raw payloads, credentials, endpoints, and Provider-native state machines stay
+outside Core. A single Platform execution may correlate with `0:N` native
+references, and one Instance may have `1:N` temporal and `0:N` active Runtime
+realizations.
+
+## 33. Desired / Effective / Observed Placement
+
+| Candidate | Desired | Effective | Observed/status | Reason |
+| --- | --- | --- | --- | --- |
+| Agent Definition | authoritative definition and Binding intent | no Runtime-effective authority; optional validation/default view | validation conditions only | Definition is what the Agent is, not where it runs |
+| Agent Instance | Definition association and desired lifecycle | Definition revision, Runtime Binding, thin Model projection, resolution provenance | routing eligibility, domain conditions, recovery, realization evidence | Instance bridges logical lifecycle to Provider realization |
+| Task | work request, target/routing intent, timeout/retry intent | selected Instance/routing decision may be recorded in status | submission, execution, attempts, Task Outcome, correlations | requested work and observed performance remain distinguishable |
+| Workflow | embedded graph definition/request | runnable graph/node resolution may be an internal projection | embedded execution identity, node Task projections, aggregate outcome | preserves current one-resource compatibility while separating semantics |
+| Capability Definition | authoritative semantic operation and compatibility declaration | none in Definition; effective Provider resolution is invocation-time | validation only | Definition does not own invocation lifecycle |
+| Runtime Binding | Definition-owned desired template | Instance-owned derived projection | Runtime conditions/native evidence outside Binding itself | prevents duplicate desired authority |
+| Capability Binding | Definition-owned governed intent | invocation-time Provider/authorization resolution | Capability outcome/native invocation evidence outside Binding | discovery and authorization remain separate |
+| Model Binding | thin desired references only | optional thin projection | no model-routing status in v0.2 draft | evidence does not justify more |
+
+No candidate is forced into identical `spec/status` containers. These are
+semantic planes; representation comes later.
+
+## 34. Versioning Strategy
+
+| Version concept | Meaning | Owner | Must not be confused with |
+| --- | --- | --- | --- |
+| Contract schema version | version of logical field/semantic contract | Contract owner/Human Gate | Kubernetes API version |
+| Kubernetes API version | served/stored representation and conversion boundary | API/CRD owner | logical resource revision |
+| Resource revision/version | particular resource content/release identity | resource owner | desired generation |
+| Desired generation | monotonic change to desired intent used for observation provenance | reconciled resource owner | semantic release version |
+| Capability semantic version | compatibility of Capability operation/input/output meaning | Capability owner | Capability Provider version |
+| Provider compatibility version | descriptor/interface compatibility understood by domain resolver | Provider/Contract ecosystem | native runtime version |
+| Runtime Package version | deployable package/distribution version | Runtime package publisher | Runtime Provider interface version |
+| Native runtime version | opaque native software/system version evidence | Provider/native owner | Core Contract version |
+
+Recommendations:
+
+1. every logical resource carries a Contract schema version independently of
+   its API representation;
+2. incompatible logical schema changes require a new schema version and
+   documented conversion/migration; additive optional fields still require
+   default/absence semantics;
+3. resource revision and desired generation remain distinct so an Instance can
+   prove which Definition it resolved;
+4. references may state revision/version requirements, but implicit "latest"
+   adoption is prohibited unless an explicit policy defines it;
+5. Provider compatibility is decided by domain-specific registry metadata;
+   Core never compares opaque native versions as Contract versions;
+6. existing `agentos.io/v1alpha1` remains a compatibility representation. This
+   draft does not select its successor or approve conversion webhooks/CRDs.
+
+## 35. Logical Invariants
+
+### 35.1 Cross-resource
+
+1. A logical resource identity belongs to exactly one resource kind/domain and
+   cannot be a native identifier.
+2. An Agent Definition may own desired Binding intent but never running
+   realization state.
+3. Each Agent Instance references exactly one resolvable Agent Definition.
+4. One Agent Definition may have zero or many Agent Instances.
+5. A live Agent Instance records the Definition revision/generation used by
+   its effective projection.
+6. Deleting a referenced Agent Definition is blocked while live Instances
+   exist unless an explicit approved lifecycle policy handles them.
+7. Effective Runtime Binding derives from authorized Definition intent and
+   records provenance; it is never independently edited as desired state.
+8. Control Plane routing selects a logical Agent Instance. Runtime Provider
+   translation cannot replace that selection.
+9. Native realization replacement cannot change Agent Instance identity.
+10. Platform Execution Identity is immutable for one logical execution and is
+    propagated without replacement across Providers.
+11. Native references are `0:N` evidence and cannot be authoritative resource,
+    routing, or execution identity.
+12. `UNKNOWN`, `FALSE`, and `NOT_APPLICABLE` remain semantically distinct.
+
+### 35.2 Task and Workflow
+
+13. A Task owns one requested-work lifecycle and Task-specific outcome; retries
+    follow current attempt semantics until a new rule is accepted.
+14. Task submission, execution state, and terminal outcome cannot contradict;
+    exact transition vocabulary remains a Checkpoint C concern.
+15. A Task target resolves only to a logical Definition/Instance under Control
+    Plane policy, never directly to a Pod/Gateway/session.
+16. Explicit Instance targeting requires authorization independent of target
+    existence or Runtime feasibility.
+17. A Workflow node has a unique local identity and may reference only declared
+    nodes under an acyclic graph.
+18. Workflow node execution projects an owned Task lifecycle and cannot become
+    a duplicate desired Task authority.
+19. Workflow aggregate outcome is derived from its node semantics and remains
+    distinct from Task outcomes.
+20. Current failure/timeout/skip, independent-sibling, fan-in, result-passing,
+    and idempotent reconciliation semantics remain compatibility constraints.
+
+### 35.3 Capability and Provider
+
+21. Capability identity/version/operation is independent of transport,
+    endpoint, tool, command, and Provider.
+22. Discovery, compatibility, authorization, and invocation are distinct
+    decisions/stages.
+23. Authorization is evaluated before Capability Provider invocation; `DENY`
+    may terminate with zero native invocation references.
+24. A Capability Provider may translate an authorized invocation but cannot
+    expand operation, permission, policy, or Platform identity.
+25. Provider-specific configuration is referenced opaquely and cannot become
+    stable Core semantics through widespread use.
+26. Runtime Provider and Capability Provider registries/interfaces remain
+    distinct; no universal Provider/Binding/Registry schema is implied.
+
+## 36. Field-Level Compatibility Map
+
+### 36.1 Current Task to draft Task
+
+| Current semantic | Draft semantic | Change | Classification |
+| --- | --- | --- | --- |
+| metadata identity/scope | Task resource identity | direct conceptual mapping | KEEP |
+| `spec.agentRef.name` | legacy Agent target | exact current meaning retained | KEEP + COMPATIBILITY_ALIAS |
+| `spec.input.prompt` | request input | string remains supported input representation | KEEP |
+| `spec.timeoutSeconds` | request timeout | preserve default 300 and minimum in current representation | KEEP |
+| create handler acceptance | submission/execution transition | logical separation makes implicit state explicit | ADDITIVE |
+| `status.phase` | execution/outcome projection | wire enum remains; target domains distinguish state/outcome | KEEP + COMPATIBILITY_ALIAS |
+| `status.result` string | Task Outcome output value/reference | string compatibility projection required | KEEP + ADDITIVE |
+| reason/message/retryable | Task Outcome diagnostic/retry assessment | domain ownership preserved | KEEP |
+| `status.attempts` | Attempt Summary total | direct semantic mapping | KEEP |
+| start/completion times | Task status timestamps | direct mapping | KEEP |
+| no execution ID | embedded Platform Execution Identity | new stable correlation | ADDITIVE |
+| no selected Instance | selected logical Instance reference | new routing evidence | ADDITIVE |
+| no cancellation | deferred cancellation intent/state | insufficient evidence | DEFERRED |
+
+No immediate breaking Task change is necessary. A richer target representation
+must coexist with or version the legacy Agent name; reinterpreting that field
+is a `BREAKING_CANDIDATE` and is not recommended.
+
+### 36.2 Current Workflow to draft Workflow
+
+| Current semantic | Draft semantic | Change | Classification |
+| --- | --- | --- | --- |
+| metadata identity/scope | Workflow resource identity | direct mapping | KEEP |
+| `spec.tasks[]` | embedded `definition.nodes[]` | semantic grouping only | KEEP + COMPATIBILITY_ALIAS |
+| task `name` | local node identity | direct mapping | KEEP |
+| node `agentRef/input/timeout` | embedded Task request | direct/compatibility mapping | KEEP |
+| `dependsOn` | graph dependency refs | direct mapping | KEEP |
+| `input.from[].task` | node output refs | direct mapping | KEEP |
+| generated Task CR | authoritative node Task lifecycle | preserved | KEEP |
+| Task naming/labels/owner ref | API/implementation correlation | current compatibility behavior | KEEP / future MIGRATION_REQUIRED only if changed |
+| `status.phase` | Workflow Outcome/execution projection | preserve wire values | KEEP + COMPATIBILITY_ALIAS |
+| status task map | embedded node execution projections | direct mapping | KEEP |
+| no execution ID | embedded Workflow Platform Execution Identity | additive | ADDITIVE |
+| combined definition/run | two embedded logical structures | no new resource | ADDITIVE semantic clarification |
+| reusable definition with many runs | future promoted resource boundary | not proven/authorized | DEFERRED |
+
+No immediate breaking Workflow change is necessary. The draft preserves
+Workflow-to-Task behavior and does not create a sixth resource.
+
+### 36.3 Current Runtime abstraction to target boundary
+
+| Current | Target interpretation | Classification |
+| --- | --- | --- |
+| Agent `runtime.type` | legacy desired Runtime class constraint | COMPATIBILITY_ALIAS |
+| Agent `runtime.image` | Provider/package configuration input | PROVIDER_EXTENSION + COMPATIBILITY_ONLY |
+| Operator direct Deployment/Service construction | current Native realization implementation | MIGRATION_REQUIRED later |
+| same-name Service routing | legacy Runtime interaction route | MIGRATION_REQUIRED later |
+| Native `/v1/invoke` | Runtime-specific Provider/native protocol | KEEP implementation; not Core Contract |
+| runtime-local model Provider ABC | Runtime implementation detail | KEEP; not Runtime Provider |
+| no Runtime Binding/Provider registry | accepted target boundaries | ADDITIVE logical/internal metadata |
+
+## 37. Golden Demo Traceability
+
+```text
+Digital Employee (business projection; not Core resource)
+  -> Agent Definition
+       identity + role/purpose + instructions
+       desired Runtime Binding
+       Capability Bindings
+       thin Model/Workspace/State/Knowledge/Policy refs
+  -> Agent Instances [1..N]
+       stable logical identity
+       effective Runtime Binding
+       routing eligibility + conditions + recovery
+       native realization evidence [0..N]
+       -> OpenClaw Runtime Provider
+       -> Hermes Runtime Provider (only if certified; ED-S5-001 remains)
+       -> Native Runtime Provider
+  -> Workflow
+       embedded DAG definition + execution identity
+       -> Tasks
+            Definition target or authorized Instance target
+            Platform Execution Identity
+            Task-specific outcome
+  -> Capability Binding
+       Capability Definition + governed use
+       discovery -> compatibility -> authorization
+       -> REST Provider | MCP Provider | future Provider
+       -> opaque native invocation evidence
+```
+
+Provider switching changes effective Binding/realization evidence, not Agent
+Definition, Instance, Task/Workflow, Capability, or Platform execution identity.
+The same projection supports multiple Instances, logical routing, realization
+replacement, semantic recovery, and different Capability protocols without a
+DigitalEmployee API or demo-specific Core fields.
+
+## 38. Human Decisions Required — Checkpoint B
+
+All decisions remain **PENDING** until the Human Checkpoint B Gate.
+
+### B01 — Agent Definition logical schema
+
+**Recommendation:** accept Section 24 as the authoritative desired logical
+definition with Binding intent and thin references, excluding running/native
+state.
+**Decision:** PENDING.
+
+### B02 — Agent Instance logical schema
+
+**Recommendation:** accept Section 25 as stable running logical identity with
+desired lifecycle, effective Binding provenance, routing eligibility,
+domain-owned conditions/recovery, and opaque realization evidence.
+**Decision:** PENDING.
+
+### B03 — Current Agent compatibility strategy
+
+**Recommendation:** OPTION B—evolve current Agent toward Agent Definition and
+introduce Agent Instance separately, using bounded compatibility translation;
+do not rename or reinterpret current fields in place.
+**Decision:** PENDING.
+
+### B04 — Task logical schema
+
+**Recommendation:** retain first-class Task, embed Platform Execution Identity,
+distinguish submission/execution/outcome, preserve current attempt and wire
+semantics, and add richer logical targeting only compatibly.
+**Decision:** PENDING.
+
+### B05 — Workflow logical schema
+
+**Recommendation:** retain one first-class Workflow for v0.2 with embedded
+definition and execution structures; preserve owned Task behavior and defer
+WorkflowExecution promotion to the trigger in Section 28.1.
+**Decision:** PENDING.
+
+### B06 — Capability Definition logical schema
+
+**Recommendation:** accept provider/transport-independent identity, operation,
+input/output schema refs, risk/authorization/execution characteristics, and
+semantic compatibility version.
+**Decision:** PENDING.
+
+### B07 — Runtime Binding shape
+
+**Recommendation:** accept separate desired Definition-owned template and
+effective Instance-owned projection with provenance; Provider configuration is
+opaque extension/reference only.
+**Decision:** PENDING.
+
+### B08 — Capability Binding shape
+
+**Recommendation:** accept Agent Definition-owned governed intent with
+Capability/version/operation constraints and invocation-time Provider and
+authorization resolution.
+**Decision:** PENDING.
+
+### B09 — Thin Model Binding
+
+**Recommendation:** accept only optional model, Provider-class, policy, and
+opaque configuration references; defer all routing/fallback algorithms.
+**Decision:** PENDING.
+
+### B10 — Platform Execution Identity
+
+**Recommendation:** accept Platform-generated logical ID plus scope and
+optional root/parent correlation; exact retry/replay hierarchy remains
+domain-specific and unfrozen.
+**Decision:** PENDING.
+
+### B11 — Logical reference family
+
+**Recommendation:** accept bounded Resource, Provider, and Schema reference
+families with explicit domain/kind/scope/version semantics instead of one
+universal reference.
+**Decision:** PENDING.
+
+### B12 — Native reference model
+
+**Recommendation:** accept separate opaque, bounded, timestamped,
+domain/Provider-attributed evidence that can correlate to Platform execution
+but never becomes logical identity or routing authority.
+**Decision:** PENDING.
+
+### B13 — Desired/effective/observed placement
+
+**Recommendation:** accept Section 33; semantic planes apply selectively and
+must not become identical Kubernetes-like serialization.
+**Decision:** PENDING.
+
+### B14 — Versioning strategy
+
+**Recommendation:** distinguish Contract schema, API, resource revision,
+desired generation, Capability semantic, Provider compatibility, Runtime
+Package, and native Runtime versions.
+**Decision:** PENDING.
+
+### B15 — Compatibility strategy
+
+**Recommendation:** classify existing fields explicitly; prefer keep/additive/
+alias, require migration for ownership changes, and treat in-place reference
+reinterpretation or wire-semantic changes as breaking candidates.
+**Decision:** PENDING.
+
+### B16 — Agent target model
+
+**Recommendation:** support Definition-targeted logical routing and authorized
+Instance targeting while retaining current `agentRef.name` as a legacy target;
+do not target native realizations.
+**Decision:** PENDING.
+
+### B17 — Workflow execution separation
+
+**Recommendation:** accept embedded definition/execution separation for v0.2;
+promotion requires independently identified multi-run lifecycle evidence and a
+new architecture decision.
+**Decision:** PENDING.
+
+## 39. Contradictions and Stop-Condition Review — Checkpoint B
+
+| Stop condition | Result |
+| --- | --- |
+| Sixth first-class resource necessary | Not found; Workflow separation is embedded and promotion deferred |
+| Definition/Instance requires breaking architecture | Not found; logical separation fits S5-ARCH-004 and compatibility strategy B |
+| Immediate Task/Workflow break required | Not found; current semantics can be preserved/projected |
+| Model Binding requires unperformed routing evidence | Not found; draft remains deliberately thin |
+| Provider-specific fields necessary in Core | Not found; opaque extension/config refs suffice |
+| Logical Contract cannot remain implementation-neutral | Not found; no Kubernetes/transport representation is selected |
+| Accepted S5-ARCH-004 semantics contradicted | Not found |
+
+No blocking contradiction was found. Current implementation/ADR drift and
+future migration cost remain recorded; this draft does not resolve either.
+
+## 40. Evidence Debt — Checkpoint B
+
+Carry forward all Checkpoint A debt, plus:
+
+- exact Agent Definition revision/adoption/rollout semantics are not proven;
+- desired Instance lifecycle vocabulary, deletion/finalization, and explicit
+  Instance targeting authorization are unfrozen;
+- Runtime Binding resolution exclusivity, compatibility algorithm, and
+  effective projection conformance are unproven;
+- routing eligibility inputs, staleness, and `UNKNOWN` escalation remain open;
+- retry/replay/idempotency relationships to Platform Execution Identity remain
+  unresolved, especially for side effects;
+- Task output inline/reference size and retention policy remain open;
+- Workflow embedded execution identity migration and reusable-definition
+  promotion evidence remain absent;
+- Capability risk, authorization, interaction disposition, side-effect, and
+  deferred-operation vocabularies remain unfrozen;
+- logical reference ID/name coexistence, revision requirement, dangling ref,
+  deletion, and rebinding mechanics require Checkpoint C/API work;
+- schema version conversion rules have no representation or conformance plan;
+- no combined production Runtime/Capability path proves unchanged Platform
+  Execution Identity propagation;
+- ED-S5-001 still blocks Hermes Provider certification/readiness only.
+
+These debts block relevant schema/Contract freeze, API approval, Provider
+certification, or production claims. They do not falsify this logical resource
+candidate set.
+
+## 41. Checkpoint B State
+
+LIFECYCLE: **REVIEW**
+AUTHORIZATION: **AUTHORIZED**
+STATUS: **PASS**
+CHECKPOINT: **B — RESOURCE_SCHEMA_DRAFT**
+RESULT: **RESOURCE_SCHEMA_DRAFT_RECOMMENDED**
+
+CONTRACT_FREEZE: **NO**
+SCHEMA_FREEZE: **NO**
+RUNTIME_CONTRACT: **NOT_FROZEN**
+CAPABILITY_CONTRACT: **NOT_FROZEN**
+CONDITION_VOCABULARY: **NOT_FROZEN**
+OUTCOME_VOCABULARY: **NOT_FROZEN**
+RECOVERY_VOCABULARY: **NOT_FROZEN**
+`G-S5-RUNTIME-FREEZE-01`: **FAIL / UNCHANGED**
+PRODUCTION_CORE_CHANGE: **0**
+ADR_CHANGE: **0**
+EXISTING_SCHEMA_CHANGE: **0**
+CRD_CHANGE: **0**
+NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
+NEXT_GATE: **Human Checkpoint B Gate**
+
+Checkpoint C has not begun and is not authorized by this result.
