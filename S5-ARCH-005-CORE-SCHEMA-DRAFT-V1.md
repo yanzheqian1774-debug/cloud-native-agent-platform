@@ -10,15 +10,14 @@ MODE: Architecture / Schema Draft
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: C — REFERENCES_STATUS_CONDITIONS_EXECUTION
-RESULT: **CONNECTED_SCHEMA_MODEL_RECOMMENDED**
+CHECKPOINT: D — COMPATIBILITY_AND_MIGRATION_MAP
+RESULT: **COMPATIBILITY_MIGRATION_RECOMMENDED**
 
-> Checkpoints A and B established the compatibility baseline and logical
-> resource candidates. Their Human Gates passed for Schema Draft use.
-> Checkpoint C connects those candidates through references, routing, status,
-> conditions, domain outcomes, execution correlation, and recovery. It does not
-> approve a CRD, freeze a Contract/schema/vocabulary, change an ADR, authorize
-> implementation, or begin Checkpoint D.
+> Checkpoints A-C established the compatibility baseline, logical resource
+> candidates, and connected semantic model. Their Human Gates passed for Schema
+> Draft use. Checkpoint D maps a bounded compatibility and migration path from
+> current APIs to that model. It does not approve a CRD, freeze a Contract or
+> schema, implement migration, change an ADR, or begin Checkpoint E.
 
 ## 1. Source-of-Truth Baseline
 
@@ -2701,3 +2700,811 @@ NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
 NEXT_GATE: **Human Checkpoint C Gate**
 
 Checkpoint D has not begun and is not authorized by this result.
+
+# Checkpoint D — Compatibility and Migration Map
+
+## 65. Human Checkpoint C Gate Record
+
+HUMAN DECISION: **PASS WITH COMPATIBILITY AND FREEZE CONSTRAINTS**
+
+| Accepted dimension | Checkpoint D authority |
+| --- | --- |
+| C01-C18 | `ACCEPTED_FOR_SCHEMA_DRAFT` |
+| Agent migration direction | Option B; preserve current semantics and identity |
+| Task targeting | Definition-facing request plus selected Instance projection |
+| Workflow | one resource; definition/execution split remains debt |
+| Condition/Capability Outcome | boundary accepted; vocabulary/taxonomy not frozen |
+| Execution identity/native refs | embedded Platform identity; opaque optional correlations |
+| Contract/schema/CRD | not frozen or approved |
+| Checkpoint purpose | compatibility, migration, and evolution; no new schema breadth |
+
+Sections 1-64 remain the distinct Checkpoint A-C records. Checkpoint D adds no
+resource and does not reconstruct or rewrite prior evidence.
+
+## 66. Migration Strategy Summary
+
+**Recommendation:** a staged Option B transition using a compatibility
+translation layer, additive logical/API projections where representable, and a
+versioned representation only for semantics that cannot coexist safely in the
+current API.
+
+```text
+Current v1alpha1 objects remain authoritative and valid
+  -> compatibility reader interprets current Agent as Definition-facing intent
+  -> Platform mints and durably records a distinct legacy-managed Instance ID
+  -> current Task Agent reference remains unchanged
+  -> Control Plane records selected Instance as additive derived evidence
+  -> Runtime compatibility translator preserves current Service/invoke path
+  -> users may explicitly adopt Definition/Instance-facing APIs when approved
+  -> mixed mode remains observable and reversible within declared boundary
+  -> legacy fields deprecate only after conformance, adoption, and Human Gate
+```
+
+This is a logical migration model, not authorization for a compatibility
+controller, new CRD, webhook, database, API version, or status field.
+
+### 66.1 Primary change classifications
+
+Every difference below uses one primary classification:
+
+| Classification | Meaning in this checkpoint |
+| --- | --- |
+| `KEEP` | preserve current representation and semantics |
+| `ADDITIVE` | new optional representation/semantic with defined absence behavior |
+| `COMPATIBILITY_ALIAS` | old representation continues to expose/project a target semantic |
+| `DERIVED_PROJECTION` | computed read/status/view from authoritative source, never second desired authority |
+| `TRANSLATION_LAYER` | bounded deterministic mapping across old/target boundaries |
+| `DEPRECATE_LATER` | retain now; removal requires exit criteria and later approval |
+| `MIGRATION_REQUIRED` | ownership/representation must move through explicit plan |
+| `BREAKING_CANDIDATE` | cannot be done in place without compatibility break; not recommended now |
+| `DEFERRED` | outside v0.2 migration evidence/scope |
+
+`REMOVE_CANDIDATE` from the Gate's Runtime-specific evaluation is represented
+here as `DEPRECATE_LATER` followed by a future removal decision; Checkpoint D
+does not authorize removal.
+
+## 67. Current Agent to Definition and Instance Migration
+
+### 67.1 Persistence and authority by transition stage
+
+| Stage | Persisted authority | Derived/effective state | User behavior | Primary classification |
+| --- | --- | --- | --- | --- |
+| D0 current-compatible | current Agent remains desired authority; existing Deployment/Service/status unchanged | Definition compatibility interpretation; distinct legacy-managed Instance mapping may be shadow/read-only until approved | all existing manifests and operations work unchanged | KEEP |
+| D1 observable compatibility | current Agent still desired authority; durable compatibility metadata records schema interpretation and minted Instance identity | Definition projection, default managed Instance projection, selected Instance, Binding translation, execution identity | users can inspect but need not author new semantics | ADDITIVE + DERIVED_PROJECTION |
+| D2 explicit adoption | approved Definition/Instance representations may be authored; current Agent remains accepted during window | compatibility adapter routes both forms through one semantic model | users opt in per Agent/workload | TRANSLATION_LAYER |
+| D3 migration | adopted Agent desired authority moves to Definition representation; Instance lifecycle becomes explicit where required | legacy Agent facade projects compatible status/view | controlled conversion with rollback checkpoint | MIGRATION_REQUIRED |
+| D4 future deprecation | legacy-only fields/paths emit actionable deprecation evidence | no silent translation for unsupported values | removal only after exit criteria/Human Gate | DEPRECATE_LATER |
+
+The exact persistence representation for new logical Definition/Instance is
+not selected. D1 requires any stable Instance mapping to be durable in an
+approved source of truth; an ephemeral process-local map is prohibited.
+Kubernetes remains the current Control Plane source of truth, but this does not
+pre-approve a particular CRD/status/annotation encoding.
+
+### 67.2 Compatibility interpretation
+
+```text
+Current Agent object A
+  -> preserve A metadata identity as Definition-facing compatibility identity
+  -> translate A.spec definition-owned values into Agent Definition intent
+  -> translate Provider-owned values into opaque legacy Provider config/package refs
+  -> preserve A.spec.replicas as legacy infrastructure replicas
+  -> mint Instance identity I, where I != A identity
+  -> record durable mapping I -> A Definition interpretation
+  -> derive I effective Runtime Binding from A generation + legacy translator
+  -> retain current Deployment/Service realization until migration stage permits change
+```
+
+The compatibility Instance is a logical projection only after it has a stable,
+durably recorded Platform identity. It is not a Pod, replica, ordinal, Service,
+or Agent UID alias. One legacy Agent initially maps to one legacy-managed
+logical Instance whose Runtime may still have `replicas` native realizations.
+Creating one Instance per replica is prohibited.
+
+### 67.3 Current Agent field migration
+
+| Current field/behavior | Target interpretation | Classification | Migration/exit rule |
+| --- | --- | --- | --- |
+| metadata name/namespace | Definition-facing compatibility address | KEEP | preserve throughout compatibility window |
+| metadata UID | current API object evidence | KEEP | never reuse as Instance ID |
+| role/displayName | Definition purpose/display | COMPATIBILITY_ALIAS | may become canonical on explicit Definition adoption |
+| instructions.systemPrompt | Definition instruction intent | COMPATIBILITY_ALIAS | preserve inline behavior; future ref conversion explicit |
+| capabilities strings | legacy Capability intent | TRANSLATION_LAYER | only named mapping may create Bindings; unknown remains visible |
+| runtime.type | legacy Runtime class constraint | TRANSLATION_LAYER | resolve through legacy Runtime Provider descriptor |
+| runtime.image | legacy Provider/package config | TRANSLATION_LAYER | opaque package/config ref; never stable Core field |
+| model provider/name | legacy thin Model intent plus Provider detail | TRANSLATION_LAYER | keep until dedicated Model migration exists |
+| model endpoint/baseUrl/secretRef | Provider config/credential reference | TRANSLATION_LAYER | no value copied into Core; later deprecate after equivalent refs work |
+| resources cpu/memory | portable constraint candidate plus legacy raw values | TRANSLATION_LAYER | preserve current behavior; normalize only with proven semantics |
+| replicas | legacy native realization count | KEEP | must not become Instance count |
+| phase/readyReplicas | legacy infrastructure projection | COMPATIBILITY_ALIAS | derive compatible view from Instance/Runtime only after conformance |
+| conditions | legacy Agent infrastructure conditions | TRANSLATION_LAYER | keep domain distinct; never merge vocabularies |
+| same-name Deployment/Service | current native realization/route | KEEP in bounded mode | migration to Provider path requires conformance and rollback checkpoint |
+
+### 67.4 Explicit Instance adoption
+
+Users adopt explicit Instances only through a future approved representation.
+For an Agent in compatibility mode:
+
+1. the system exposes the minted legacy-managed Instance identity and source
+   Agent generation;
+2. user chooses to retain that Instance identity or creates additional new
+   Instance identities under approved lifecycle rules;
+3. Definition adoption preserves the Definition-facing identity mapping;
+4. Tasks without explicit targeting continue Definition-based selection;
+5. explicitly targeted Tasks require authorization and cannot target the
+   compatibility Service directly;
+6. the legacy path may be disabled per migrated Definition only after no active
+   Task/Workflow depends on legacy interpretation and rollback criteria pass.
+
+## 68. Identity Migration Map
+
+| Identity/reference | Current | Target | Stability rule | Classification |
+| --- | --- | --- | --- | --- |
+| Agent metadata identity | namespaced Agent name/UID | Definition-facing compatibility identity | name/scope remain stable; UID remains representation evidence | KEEP |
+| Agent Definition identity | no separate logical Contract ID | stable Definition identity mapped to current Agent during compatibility | mapping must be durable and one-to-one | ADDITIVE |
+| Agent Instance identity | absent; Deployment/Service/replicas used operationally | new Platform-minted identity | never equal Definition ID, UID, Pod, Service, replica, Gateway, session | ADDITIVE |
+| Task identity | Task metadata | Task logical resource identity | unchanged | KEEP |
+| Task Agent reference | same-namespace Agent name | legacy Definition target alias | meaning remains unchanged; no Instance reinterpretation | COMPATIBILITY_ALIAS |
+| Task selected Instance | absent | derived status/effective reference | new, stable for recorded routing decision | DERIVED_PROJECTION |
+| Workflow identity | Workflow metadata | Workflow logical identity | unchanged | KEEP |
+| Workflow node identity | local node string | embedded Definition node ID | unchanged within Workflow | KEEP |
+| Workflow-owned Task identity | generated resource name/UID | Task identity correlated to node | current naming/labels remain compatibility contract | KEEP |
+| Execution identity | absent | Platform-generated embedded identity | additive; native IDs cannot seed it | ADDITIVE |
+| Console Agent name | node Agent reference/current Agent view | Definition-facing display with optional selected Instance detail | current visible name remains stable | COMPATIBILITY_ALIAS |
+| observability labels | Agent/Workflow/task labels | compatibility labels plus logical IDs when approved | old labels retained during window; new IDs additive | ADDITIVE |
+
+Identity drift is detected when one current Agent maps to multiple Definition
+identities, one Instance ID maps across Definitions, legacy Agent name resolves
+to an Instance directly, or rerouting changes selected Instance without an
+auditable decision. Any such condition blocks migration.
+
+Deletion/recreation of a same-named current Agent requires explicit identity
+semantics because Kubernetes UID changes. This draft does not promise that a
+recreated object retains the old logical Definition identity; the compatibility
+mapping must use durable generation/revision and tombstone/adoption rules before
+that guarantee can be made.
+
+## 69. Task Migration Map
+
+| Current field/behavior | v0.2 logical target | Classification | Compatibility mechanism |
+| --- | --- | --- | --- |
+| metadata identity | Task identity/revision | KEEP | current resource remains authoritative |
+| creation timestamp | submitted/created evidence | KEEP | derive logical submission time without rewriting metadata |
+| `spec.agentRef.name` | legacy Definition target | COMPATIBILITY_ALIAS | same namespace/name semantics preserved |
+| `spec.input.prompt` | request input inline value | KEEP | remains valid input representation |
+| timeout default/minimum | Task timeout intent | KEEP | preserve `300` default and existing validation |
+| `status.phase` | projection of submission/execution/Outcome | COMPATIBILITY_ALIAS | deterministic mapping; current enum unchanged |
+| `status.result` | Task Outcome inline output | COMPATIBILITY_ALIAS | preserve string; output ref is additive alternative later |
+| `status.reason` | Task-domain Outcome reason | KEEP | existing machine values preserved |
+| `status.message` | safe Task diagnostic | KEEP | retain behavior; future redaction limits additive policy |
+| `status.retryable` | Task-owned retry assessment | KEEP | do not reuse for Capability side-effect safety |
+| `status.attempts` | Task attempt summary total | KEEP | existing counting behavior unchanged |
+| started/completed timestamps | execution/outcome times | KEEP | no reinterpretation |
+| Platform Execution Identity | embedded execution identity | ADDITIVE | generated once and persisted before/with acceptance |
+| submission disposition | distinct logical state | DERIVED_PROJECTION initially | derive from current phase/reason; explicit field only after API approval |
+| execution state | distinct logical state | DERIVED_PROJECTION initially | derive deterministically from current phase |
+| Task Outcome | domain semantic conclusion | DERIVED_PROJECTION initially | derive from current terminal status/result/reason |
+| selected Instance | routing evidence | ADDITIVE | status-only/effective projection; not user-required |
+| native refs | optional correlation evidence | ADDITIVE | absence cannot break execution |
+| cancellation | unsupported future behavior | DEFERRED | no current field/enum expansion |
+
+### 69.1 Exact Task breaking candidates
+
+- changing `agentRef.name` to mean Agent Instance;
+- requiring a new target field for existing Tasks;
+- changing current phase/reason spellings or terminality;
+- changing `result` from string to object without dual representation/version;
+- resetting or redefining `attempts` around Provider attempts;
+- requiring native references for completion;
+- treating old Tasks without Platform Execution Identity as invalid;
+- rerouting an accepted Task without auditable identity/provenance rules.
+
+Old Tasks lacking Execution Identity receive a compatibility identity only by a
+deterministic, collision-safe, durably recorded migration rule. Generating a
+different identity on every read/restart is prohibited. Exact backfill mechanics
+remain an API/migration design decision.
+
+## 70. Workflow Migration Map
+
+| Current semantic | v0.2 embedded model | Classification | Migration behavior |
+| --- | --- | --- | --- |
+| Workflow metadata identity | Workflow identity | KEEP | unchanged |
+| `spec.tasks[]` | embedded definition nodes | COMPATIBILITY_ALIAS | logical grouping only; current wire stays |
+| node name | local node identity | KEEP | unchanged |
+| node Agent/input/timeout | embedded Task request | KEEP | current semantics retained |
+| `dependsOn` | graph dependency refs | KEEP | graph validation retained |
+| input result sources | node output refs | KEEP | order/result-passing retained |
+| owned Task creation | materialized Task lifecycle | KEEP | Task remains execution authority |
+| Task names/labels/owner refs | node/Task correlation | KEEP | changing requires later migration |
+| failure/timeout skip propagation | dependency impossible/terminal projection | COMPATIBILITY_ALIAS | current behavior preserved |
+| independent siblings/fan-in | runnable graph semantics | KEEP | no orchestration redesign |
+| Workflow phase | aggregate execution/Outcome projection | COMPATIBILITY_ALIAS | current machine values remain |
+| per-node status map | node execution projection | DERIVED_PROJECTION | cannot become desired Task authority |
+| Workflow execution identity | embedded root identity | ADDITIVE | old Workflow compatibility backfill required |
+| Task parent/root correlation | child correlation | ADDITIVE | does not create Execution resource |
+| Human Gate waiting | thin embedded execution state | DEFERRED until representation approved | must not overload current success/failure dishonestly |
+| reusable definition/multiple runs | future promotion | DEFERRED | requires independent lifecycle/identity evidence and Human Architecture Gate |
+
+The existing Console and controller continue to see one Workflow plus owned
+Tasks. No dual Workflow/WorkflowExecution writes occur. Future promotion trigger
+remains multiple independently retained, referenced, authorized, and reconciled
+runs of one reusable definition that cannot be represented compatibly inside
+the current resource.
+
+## 71. Capability Introduction Migration
+
+Capability Definition and Binding can be introduced without invalidating
+current workloads by making adoption explicit and operation-scoped.
+
+| Current behavior | Introduction path | Classification |
+| --- | --- | --- |
+| Agent `capabilities[]` strings | optional legacy-name resolver to a declared Capability Definition/Binding | TRANSLATION_LAYER |
+| unknown capability string | preserve as visible legacy value; no silent authority/provider mapping | KEEP |
+| direct Runtime-internal tool behavior | continues for legacy workload profile, explicitly uncertified as platform Capability | KEEP during window |
+| new Capability Definition | independently registered logical definition | ADDITIVE |
+| new Capability Binding | optional Agent Definition governed intent | ADDITIVE |
+| REST/MCP Provider descriptor | domain-specific internal registry metadata | ADDITIVE |
+| authorization decision before invocation | required for adopted Binding path | ADDITIVE |
+| native tool/endpoint identity | Provider extension/native evidence | TRANSLATION_LAYER |
+
+Adoption sequence:
+
+1. publish Capability Definition and Provider compatibility metadata;
+2. map a legacy capability string only through explicit configured identity and
+   version/operation rules;
+3. add Capability Binding to adopted Definition intent;
+4. validate authorization independently of discovery and Provider availability;
+5. route new invocation through Capability Provider and correlate Platform
+   Execution Identity;
+6. compare outcomes with legacy behavior before deprecating direct integration.
+
+Legacy direct behavior cannot be marketed as Contract-conforming Capability
+use unless it passes the same authorization, identity, outcome, and Provider
+isolation conformance. Deprecation begins only after all in-scope legacy strings
+have explicit mappings or declared unsupported disposition, adopted workloads
+pass conformance, and rollback exists. No marketplace or dynamic service is
+introduced.
+
+## 72. Runtime Migration Map
+
+```text
+current Agent runtime/model fields
+  -> legacy Runtime compatibility translator
+    -> DesiredRuntimeBinding interpretation
+      -> domain Runtime Provider resolution metadata
+        -> EffectiveRuntimeBinding on legacy-managed/new Instance
+          -> current Native Service path OR adopted Provider path
+            -> opaque native realization evidence
+```
+
+| Current Runtime input/behavior | Target treatment | Primary classification |
+| --- | --- | --- |
+| `runtime.type` | keep as compatibility input; translate to Runtime class/Provider constraints | TRANSLATION_LAYER |
+| `runtime.image` | translate to opaque Runtime Package/Provider configuration ref | TRANSLATION_LAYER |
+| model provider/name | keep legacy input; map only to thin Model Binding/reference where justified | TRANSLATION_LAYER |
+| endpoint/base URL/Secret ref | Provider-owned opaque config/credential target | TRANSLATION_LAYER |
+| simplified CPU/memory | legacy realization constraint with optional portable mapping | TRANSLATION_LAYER |
+| replicas | current native realization count | KEEP |
+| Operator constructs Deployment/Service | legacy Native Runtime Provider behavior | COMPATIBILITY_ALIAS initially; MIGRATION_REQUIRED later |
+| same-name Service routing | compatibility Runtime path after logical selection | TRANSLATION_LAYER |
+| `/v1/invoke` payload | current Runtime-native interaction | KEEP during compatibility; DEPRECATE_LATER only after conformance |
+| Runtime environment variables | Provider implementation/config detail | DEPRECATE_LATER from direct Core coupling |
+| Agent readiness phase/count | legacy infrastructure projection | DERIVED_PROJECTION |
+
+No current Runtime-specific field is promoted to stable Core. Fields that
+cannot be represented through opaque Provider configuration/package references
+remain legacy-only and block that workload's Provider-path adoption rather than
+expanding Core.
+
+### 72.1 Runtime fallback boundary
+
+Fallback to the current Runtime path is allowed only when all are true:
+
+- the workload originated from or retains a valid legacy Agent representation;
+- its current Runtime configuration is still understood by the legacy
+  translator;
+- the current Deployment/Service path remains present and compatible;
+- no explicit adopted Provider-only semantic would be lost;
+- routing/audit identifies fallback and preserves Platform execution identity;
+- policy permits fallback.
+
+There is no universal fallback from OpenClaw, Hermes, future third-party, or
+explicit multi-Instance semantics to the current Native path. Claiming one
+would hide behavior and ownership drift.
+
+## 73. Console Compatibility Projection
+
+The Console remains read-only and projects the current Kubernetes source of
+truth. Its user-facing Agent concept may progressively disclose Definition and
+Instance detail without changing business identity.
+
+```text
+Current Console Agent reference/name
+  -> Definition-facing compatibility identity + display
+  -> optional Instance summary (count/eligibility/selected Instance)
+  -> optional Runtime Binding/Condition/Recovery technical detail
+
+Current Workflow/Task execution view
+  -> existing fields unchanged
+  -> optional Platform Execution Identity and selected Instance
+  -> native evidence only behind bounded operator detail
+```
+
+| Console concern | Compatibility rule | Classification |
+| --- | --- | --- |
+| existing routes and response fields | preserve | KEEP |
+| machine phase values | preserve | KEEP |
+| Agent name shown on node | Definition-facing alias | COMPATIBILITY_ALIAS |
+| selected Instance detail | optional derived projection | ADDITIVE |
+| Definition/Instance summary | derived from authoritative Control Plane objects/mapping | DERIVED_PROJECTION |
+| Digital Employee/Agent business label | presentation projection only | KEEP |
+| Provider/native IDs | optional restricted technical detail | ADDITIVE |
+| Console database/source of truth | prohibited | BREAKING_CANDIDATE |
+
+Because Console response models forbid extras, any new field requires an
+explicit versioned or backward-compatible response model and tests in a later
+authorized implementation. Old clients must continue to parse existing
+responses unchanged. Console never owns Definition/Instance identity or
+migration state.
+
+## 74. Current Examples and Manifests
+
+| Current artifact pattern | v0.2 interpretation | Classification |
+| --- | --- | --- |
+| Agent manifests with runtime/model fields | legacy Definition-facing intent plus Provider compatibility input | TRANSLATION_LAYER |
+| Agent `replicas` | native realization count, not Instance count | KEEP |
+| Task `agentRef.name` | legacy Definition target | COMPATIBILITY_ALIAS |
+| Workflow embedded node Agent refs | embedded Task legacy targets | COMPATIBILITY_ALIAS |
+| current timeout/result-passing/DAG examples | unchanged Task/Workflow behavior | KEEP |
+| failure/skip Golden Demo | unchanged outcome/propagation compatibility fixture | KEEP |
+| capability strings | legacy unmapped/mapped intent depending explicit registry config | TRANSLATION_LAYER |
+
+All checked-in current manifests remain valid inputs during the compatibility
+window. They should become mandatory conformance fixtures. New v0.2 examples
+may demonstrate explicit Definitions/Instances/Bindings only after an API
+representation is approved and must not replace legacy fixtures prematurely.
+
+## 75. Versioned Transition Recommendation
+
+Do not decide between same-version extension and a new Kubernetes API version
+globally. Use a combined, evidence-triggered strategy:
+
+### 75.1 Same current representation
+
+Use only for behavior-preserving compatibility interpretation and additive
+optional projections whose absence/unknown semantics are safe for old clients.
+Do not add required fields, reinterpret current fields, or expand existing enums
+without proving client/server compatibility.
+
+### 75.2 New logical resources/representations
+
+Agent Instance and Capability Definition require separately approved API and
+persistence representations. Their logical novelty does not automatically
+require changing Agent/Task/Workflow Kubernetes API version, and it does not
+pre-approve them as CRDs.
+
+### 75.3 New API version trigger
+
+A new version/conversion layer is required if any approved representation must:
+
+- change requiredness/defaulting or field type;
+- reinterpret `agentRef`, Agent Runtime/Model fields, Task status, or Workflow
+  structure;
+- change enum terminality/meaning;
+- split desired authority across incompatible objects;
+- make round-trip conversion lossy;
+- require old clients to understand a new state for correctness.
+
+### 75.4 Dual-read and write policy
+
+- dual-read may accept legacy and adopted representations through one semantic
+  validator/resolver;
+- dual-write is prohibited by default because it creates competing desired
+  authorities and update loops;
+- if conversion requires two persisted representations, one is explicitly
+  authoritative and the other is a derived projection with generation and
+  ownership markers;
+- conflicts fail closed and become observable; last-writer-wins is prohibited;
+- compatibility facade is read/project/translate behavior, not a second source
+  of truth.
+
+**Recommendation:** begin with current API preservation plus a logical
+compatibility layer and additive observability, then select new API versions
+per resource only after representation analysis proves necessity. This avoids
+both assuming `v1alpha1` can absorb everything and creating versions without
+evidence.
+
+## 76. Mixed-Version Behavior
+
+### 76.1 Supported bounded modes
+
+| Mode | Desired authority | Routing/runtime | Status/view |
+| --- | --- | --- | --- |
+| legacy | current Agent/Task/Workflow | compatibility Instance + current Runtime path | current status authoritative; target semantics derived |
+| compatibility-observed | current desired objects | same path plus minted identity/execution/routing evidence | current fields plus optional derived projections |
+| adopted | approved Definition/Instance/Binding representation | Provider resolution path; legacy fallback only when eligible | target status plus current compatibility facade where lossless |
+| mixed Workflow | current Workflow nodes may target legacy or adopted Definitions | each Task resolved independently under same execution correlation rules | aggregate uses current compatible phase projection |
+
+### 76.2 Ambiguity prevention
+
+- every object/workload carries an observable compatibility mode and semantic
+  schema version once such representation is approved;
+- one desired authority is declared per resource relationship;
+- explicit Instance target cannot be interpreted by legacy Runtime routing;
+- adopted-only fields cannot be silently dropped when projected to legacy;
+- unsupported mixed dependency or Provider combinations fail validation before
+  execution rather than degrade silently;
+- selection, translation, fallback, and conversion decisions record generation,
+  version, reason, and time;
+- old consumers see only states that preserve current meaning; new distinctions
+  unavailable to them remain additive detail, not altered phase semantics.
+
+Fundamental ambiguity was not found at the logical layer. Representation-level
+ambiguity remains a conformance/implementation gate.
+
+## 77. Migration Safety and Risk Matrix
+
+| Risk | Severity | Failure mode | Detection/observability | Mitigation/rollback boundary |
+| --- | --- | --- | --- | --- |
+| data loss | High | current Provider config/status cannot round-trip | field-level conversion diff; unmapped-field report | retain authoritative legacy object; block adoption on lossy mapping |
+| Definition identity drift | Critical | current Agent maps to new Definition ID/name | durable mapping audit and uniqueness check | abort conversion; retain current Agent authority |
+| Instance identity collision/drift | Critical | regenerated/shared ID after restart or across Definitions | mapping conformance and restart tests | require durable minted ID; never derive from replica/native ID |
+| routing drift | Critical | Task selects Instance outside target/eligibility | decision provenance and invariant checks | fail closed; legacy path only under bounded criteria |
+| behavior drift | High | Provider translation changes Runtime/model/capability behavior | unchanged-workload differential E2E | retain legacy Runtime path; block Provider adoption |
+| status interpretation drift | High | current phase/result differs from richer model | bidirectional projection contract tests | current fields remain compatibility authority until proven |
+| rollback difficulty | High | adopted-only semantics cannot map to legacy | pre-adoption reversibility assessment | mark non-rollbackable boundary; require explicit acceptance |
+| mixed-version conflict | High | two desired authorities or incompatible refs | mode/source markers and generation conflict conditions | fail closed; prohibit implicit last-writer-wins/dual-write |
+| Provider incompatibility | High | descriptor/package/profile mismatch | deterministic compatibility decision | no handoff; retain eligible legacy path only |
+| Console break | Medium | old client rejects new fields or changed phase | API consumer/schema tests | version/add optional model; preserve existing response |
+| migration invisibility | High | fallback/translation occurs silently | conditions/events/audit metrics by mode/reason | migration cannot progress without observable state |
+| secret/config exposure | Critical | Provider config copied into Core/status/logs | redaction and schema-boundary tests | opaque refs only; block migration on exposure |
+| cleanup ownership error | Critical | external/shared realization deleted | ownership-mode conformance and audit | fail safe; no unconditional deletion |
+| execution identity split | High | old/new path produces conflicting IDs | end-to-end propagation/correlation test | persist once before handoff; block on mismatch |
+| recovery fiction | High | restart projected as recovered | predicate/evidence conformance | keep UNKNOWN/FALSE; no automatic success/rerun |
+
+Migration progression requires risk-specific evidence; a general passing test
+suite cannot waive identity, cleanup, security, or rollback failures.
+
+## 78. Rollback Model
+
+### 78.1 Supported logical rollback
+
+- existing Agent, Task, Workflow, manifests, current status, and current Console
+  fields remain valid throughout D0-D2;
+- additive Definition/Instance/execution/status projections may be ignored by
+  old consumers because they do not change current wire semantics;
+- compatibility observation can be disabled while current desired authority
+  and Runtime path remain intact;
+- Provider resolution may fall back to current Runtime only within Section
+  72.1 criteria and with observable reason/provenance;
+- migration may roll back before adopted-only desired semantics become
+  authoritative or legacy configuration is removed;
+- conversion writes require a recovery copy/authoritative source and verified
+  reverse projection before cutover.
+
+### 78.2 Not promised
+
+- explicit multi-Instance lifecycle cannot generally collapse back to one
+  current Agent/replica model without semantic/data loss;
+- OpenClaw, Hermes, external/shared, Capability Provider, or adopted-only
+  execution behavior cannot universally fall back to Native Runtime;
+- in-flight execution cannot be silently moved or replayed during rollback;
+- state/memory continuity across Providers is not assumed;
+- native resources with external/shared/unknown ownership cannot be deleted to
+  force rollback;
+- new Capability authorization/outcome evidence cannot be reduced to legacy
+  direct tool behavior without losing governance semantics;
+- once deprecated fields are removed in a future approved version, rollback to
+  clients requiring them needs an explicit conversion/support plan.
+
+Every migration unit must declare its last reversible checkpoint and any
+irreversible state before cutover. Where evidence is absent, rollback status is
+`UNKNOWN`, and migration cannot claim reversible.
+
+## 79. Schema Evolution Policy Candidate
+
+| Evolution type | Candidate rule |
+| --- | --- |
+| additive optional field | allowed only with defined absence/default/unknown semantics and old-reader tolerance evidence |
+| required field | new version or deterministic default/backfill with lossless conversion proof |
+| semantic reinterpretation | prohibited in place; new field/version and migration required |
+| enum expansion | allowed only if old consumers safely preserve/ignore unknown value; otherwise versioned change |
+| terminality change | breaking candidate requiring version and migration |
+| field deprecation | retain read/write or defined read alias during published compatibility window; emit actionable observability |
+| field removal | later Human Gate only after usage zero/threshold, conformance, migration, rollback/support plan |
+| reference evolution | add typed reference alongside legacy alias; conflicts fail; never change legacy target meaning |
+| generation semantics | desired changes increment generation; derived/status writes do not; old generation cannot satisfy current reconciliation |
+| Provider extension | versioned by Provider owner behind opaque ref; Core compatibility descriptor declares supported Contract profile |
+| native evidence | additive and bounded; absence always valid unless a specific profile explicitly requires evidence, never execution identity |
+| condition/outcome vocabulary | domain-owned versioning; shared structure does not imply synchronized enum releases |
+| compatibility window | explicit start, supported modes, telemetry, deprecation criteria, and end Human Gate; not time-only |
+
+The policy remains a Schema Draft recommendation, not frozen governance. Every
+future change records source/target version, classification, compatibility
+impact, conversion, mixed-mode behavior, deprecation window, and conformance.
+
+## 80. Conformance Handoff
+
+No tests are implemented here. Before the Schema Candidate can advance toward
+API approval/freeze, the following evidence is required.
+
+| Conformance area | Minimum evidence | Blocks |
+| --- | --- | --- |
+| existing Agent manifests | all checked-in manifests validate and retain current Deployment/Service/env/replica/status behavior in legacy mode | migration/adoption |
+| Agent compatibility projection | field-by-field deterministic mapping including unmapped/Provider-owned data and round-trip report | schema/API approval |
+| Definition/Instance derivation | stable distinct IDs across restart/update; generation provenance; no replica-to-Instance mapping | Agent migration |
+| Agent identity deletion/recreation | explicit expected mapping/tombstone/adoption behavior | identity guarantee/freeze |
+| existing Task behavior | current phases, results, retries, attempts, timestamps, timeout/error tests unchanged | Task migration |
+| Task target selection | legacy Agent ref -> Definition target -> eligible selected Instance with auth/freshness and fail-closed cases | routing Contract |
+| old Task identity backfill | deterministic persistent collision-free Platform Execution Identity or explicit legacy-unknown disposition | execution identity migration |
+| existing Workflow behavior | DAG validation, owned Tasks, parallel/fan-in, result passing, failure/skip, aggregation unchanged | Workflow migration |
+| Workflow identity propagation | root/parent Task execution correlation without new resource or behavior drift | execution Contract |
+| Runtime Binding translation | current runtime/model/resource inputs map to opaque refs/effective Binding without Core leakage | Runtime migration |
+| legacy Runtime fallback | bounded eligibility, behavior equivalence, audit, and explicit non-fallback cases | rollback claim |
+| Capability introduction | legacy direct mode preserved; explicit Binding discovery/auth/deny-before-handoff/Provider isolation/outcome | Capability adoption |
+| Provider extension isolation | unknown extensions round-trip opaquely; secrets/native config absent from Core/status/logs | security/API approval |
+| Condition projection | four-way truth, generation, freshness, transition, and domain separation; current phases deterministic | condition schema/freeze |
+| Recovery Assessment | negative restart-only case and positive applicable predicate case; unknown/stale/stateful/external cases | recovery vocabulary/freeze |
+| Console compatibility | current REST responses/routes/phase values unchanged; additive version/model works with old clients | Console migration |
+| mixed mode | legacy/adopted Tasks in one Workflow, one desired authority, conflict rejection, version/Provider mismatch | migration cutover |
+| rollback | last reversible checkpoint, data/config retention, no in-flight replay, ownership-safe cleanup | operational approval |
+| unchanged consumer | one generic consumer preserves Platform identity and domain semantics across Native/external Runtime and REST/MCP Capability Providers | Contract freeze/provider certification |
+
+Conformance results must identify exact Contract/API/Provider/package versions,
+mode, fixtures, and unsupported profiles. Passing legacy tests alone does not
+certify the new semantic path.
+
+## 81. Breaking Candidates and Deferred Changes
+
+### 81.1 Breaking candidates
+
+1. renaming current Agent to AgentDefinition in place;
+2. making current Agent mean both Definition and Instance;
+3. reusing Agent name/UID, Deployment, Service, Pod, replica ordinal, Gateway,
+   or session as Instance identity;
+4. changing `agentRef.name` to Instance or native target;
+5. requiring explicit Instance or Execution Identity on existing Task specs;
+6. changing Task phase/reason/result/attempt semantics or types in place;
+7. splitting Workflow into Workflow and WorkflowExecution;
+8. changing Workflow Task naming/labels/ownership or Console joins without
+   migration;
+9. treating capability strings as authorized Capability Bindings silently;
+10. moving Runtime/model endpoints, credentials, images, or native configuration
+    into stable Core;
+11. using dual-write/last-writer-wins desired authority;
+12. requiring native IDs for correctness or cleanup;
+13. collapsing domain Conditions/Outcomes into universal enums;
+14. projecting UNKNOWN as healthy/eligible/recovered/successful;
+15. promising universal Provider fallback or state portability.
+
+No breaking candidate is accepted or required by this migration recommendation.
+
+### 81.2 Deferred
+
+- Workflow Definition/Execution resource promotion;
+- Model routing/fallback/ranking/quota/cost/context algorithms;
+- cancellation and durable deferred execution;
+- State/Memory portability;
+- multi-tenant scope/identity/RBAC/policy lifecycle;
+- Human Feedback learning architecture;
+- dynamic Provider marketplace/registry service;
+- automatic in-flight rerouting/replay;
+- removal of any current Agent/Task/Workflow field or API version.
+
+## 82. Human Decisions Required — Checkpoint D
+
+All decisions remain **PENDING** until the Human Checkpoint D Gate.
+
+### D01 — Staged Agent migration strategy
+
+**Recommendation:** accept D0-D4 Option B stages with current Agent authoritative
+through compatibility observation, explicit opt-in adoption, and later gated
+deprecation.
+**Decision:** PENDING.
+
+### D02 — Definition identity preservation
+
+**Recommendation:** preserve current Agent name/scope as Definition-facing
+compatibility address through a durable one-to-one mapping; Kubernetes UID
+remains representation evidence.
+**Decision:** PENDING.
+
+### D03 — New Agent Instance identity
+
+**Recommendation:** Platform-mint and durably record a distinct legacy-managed
+Instance identity; never derive it from Definition ID, replica, or native ID.
+**Decision:** PENDING.
+
+### D04 — Legacy Instance cardinality
+
+**Recommendation:** one current Agent initially maps to one legacy-managed
+logical Instance whose Runtime may own multiple native replicas; do not map
+replicas to Instances.
+**Decision:** PENDING.
+
+### D05 — Task migration
+
+**Recommendation:** preserve every current Task field/behavior; add Execution
+Identity, selection, and richer states as additive/derived semantics; retain
+legacy target alias.
+**Decision:** PENDING.
+
+### D06 — Workflow migration
+
+**Recommendation:** preserve current DAG, Task ownership, behavior, status, and
+Console joins; add embedded execution identity/projections only compatibly and
+defer resource split.
+**Decision:** PENDING.
+
+### D07 — Capability introduction
+
+**Recommendation:** optional explicit Definition/Binding adoption with named
+legacy mapping, independent authorization, Provider isolation, and no silent
+upgrade of capability strings.
+**Decision:** PENDING.
+
+### D08 — Runtime compatibility translation
+
+**Recommendation:** translate current runtime/model/resource fields to desired
+Binding and opaque Provider/package config while retaining the current Runtime
+path for bounded legacy mode.
+**Decision:** PENDING.
+
+### D09 — Runtime fallback boundary
+
+**Recommendation:** allow observable fallback only for legacy-compatible
+workloads meeting Section 72.1; no universal external/adopted-to-Native
+fallback.
+**Decision:** PENDING.
+
+### D10 — Console compatibility projection
+
+**Recommendation:** preserve current routes/fields/phases and Agent name while
+adding Definition/Instance/execution detail only through compatible derived
+projections or API versions.
+**Decision:** PENDING.
+
+### D11 — Versioned transition strategy
+
+**Recommendation:** preserve current APIs first, use additive safe projections,
+and choose a new API version per resource only when requiredness/type/semantic/
+round-trip evidence triggers it.
+**Decision:** PENDING.
+
+### D12 — Conversion and desired authority
+
+**Recommendation:** permit dual-read through one semantic model; prohibit
+dual-write by default; declare one authoritative desired representation and
+fail closed on conflicts.
+**Decision:** PENDING.
+
+### D13 — Deprecated fields
+
+**Recommendation:** deprecate current Provider-specific and legacy integration
+fields only after equivalent opaque refs, adoption, conformance, observability,
+rollback/support, and a later Human Gate; remove nothing in v0.2 draft.
+**Decision:** PENDING.
+
+### D14 — Breaking candidates
+
+**Recommendation:** accept Section 81.1 as prohibited/unaccepted candidates;
+none is required by the recommended migration.
+**Decision:** PENDING.
+
+### D15 — Rollback boundary
+
+**Recommendation:** guarantee bounded rollback only while legacy authority/path
+is retained and no adopted-only semantics would be lost; record explicit
+non-rollbackable boundaries and treat absent evidence as UNKNOWN.
+**Decision:** PENDING.
+
+### D16 — Mixed-version behavior
+
+**Recommendation:** support declared legacy, compatibility-observed, adopted,
+and mixed Workflow modes with one desired authority, explicit versions/mode,
+fail-closed conflicts, and observable selection/translation/fallback.
+**Decision:** PENDING.
+
+### D17 — Schema evolution policy
+
+**Recommendation:** accept Section 79 candidate rules for optional/required
+fields, reinterpretation, enums, deprecation/removal, references, generation,
+extensions, evidence, and compatibility windows; policy remains unfrozen.
+**Decision:** PENDING.
+
+### D18 — Conformance handoff
+
+**Recommendation:** require the Section 80 matrix before API approval,
+migration, freeze, certification, or production claims as indicated.
+**Decision:** PENDING.
+
+### D19 — Current examples as fixtures
+
+**Recommendation:** all checked-in current Agent/Task/Workflow examples remain
+valid compatibility fixtures; new explicit v0.2 examples supplement rather
+than replace them.
+**Decision:** PENDING.
+
+### D20 — Migration observability
+
+**Recommendation:** require mode, source/target version, identity mapping,
+generation, translation/selection/fallback reason, time, and failure conditions
+before migration progresses.
+**Decision:** PENDING.
+
+## 83. Contradictions and Stop-Condition Review — Checkpoint D
+
+| Stop condition | Result |
+| --- | --- |
+| Current Agent semantics must be silently reinterpreted | Not required; translation is explicit and old semantics remain |
+| Existing identity cannot be preserved safely | Not found logically; durable mapping and deletion/recreation evidence remain pre-cutover requirements |
+| Immediate breaking Task change unavoidable | Not found |
+| Workflow must become two resources | Not found |
+| Capability introduction breaks existing workloads | Not required; optional adopted path retains legacy mode |
+| Runtime migration requires Provider-specific Core fields | Not found; opaque refs and legacy translator suffice |
+| Rollback cannot be bounded | Bounded through D0-D2; adopted-only/non-legacy paths explicitly not promised universal rollback |
+| Mixed-version semantics fundamentally ambiguous | Not found logically; one authority/mode/conflict rules bound them |
+| S5-ARCH-004 boundary must change | Not found |
+
+No blocking contradiction was found. Checkpoint E has not begun.
+
+## 84. Evidence Debt — Checkpoint D
+
+Carry forward Checkpoint A-C debt, plus:
+
+- exact API/persistence representation for Definition, Instance, Capability,
+  compatibility metadata, and additive status remains undecided;
+- no durable Agent-to-Definition/Instance mapping implementation or restart,
+  update, deletion/recreation, collision, adoption, or rollback evidence exists;
+- compatibility Instance creation, ownership, lifecycle, and deletion semantics
+  remain schema/API and conformance debt;
+- field-level lossless translation for current Runtime/Model/resource values
+  and secrets has not been proven;
+- old Task/Workflow Platform Execution Identity backfill mechanics remain open;
+- deterministic richer-state/current-phase projection needs contract tests and
+  vocabulary review;
+- explicit Definition/Instance reference coexistence and conflict validation
+  lack API representation;
+- Capability legacy-name mapping, authorization, Provider registration,
+  outcome, and deprecation telemetry remain unimplemented/unproven;
+- Runtime fallback equivalence is supported only conceptually for the legacy
+  Native path and requires differential E2E evidence;
+- mixed legacy/adopted Workflow behavior and rollback across in-flight work are
+  unproven;
+- Console API additive/version compatibility and old-client tolerance need
+  explicit tests;
+- compatibility/deprecation duration and adoption thresholds remain Human
+  product/support decisions;
+- schema evolution policy is a candidate, not frozen;
+- combined unchanged-consumer Runtime/Capability conformance, Provider
+  certification, recovery profiles, state continuity, and ED-S5-001 remain
+  open under their existing classifications.
+
+These debts block API/CRD approval, migration implementation, Contract/schema
+freeze, Provider certification, production cutover, and applicable rollback
+claims. They do not falsify the bounded logical migration path.
+
+## 85. Checkpoint D State
+
+LIFECYCLE: **REVIEW**
+AUTHORIZATION: **AUTHORIZED**
+STATUS: **PASS**
+CHECKPOINT: **D — COMPATIBILITY_AND_MIGRATION_MAP**
+RESULT: **COMPATIBILITY_MIGRATION_RECOMMENDED**
+
+CONTRACT_FREEZE: **NO**
+SCHEMA_FREEZE: **NO**
+RUNTIME_CONTRACT: **NOT_FROZEN**
+CAPABILITY_CONTRACT: **NOT_FROZEN**
+CONDITION_VOCABULARY: **NOT_FROZEN**
+OUTCOME_VOCABULARY: **NOT_FROZEN**
+RECOVERY_VOCABULARY: **NOT_FROZEN**
+`G-S5-RUNTIME-FREEZE-01`: **FAIL / UNCHANGED**
+PRODUCTION_CORE_CHANGE: **0**
+ADR_CHANGE: **0**
+EXISTING_SCHEMA_CHANGE: **0**
+CRD_CHANGE: **0**
+NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
+NEXT_GATE: **Human Checkpoint D Gate**
+
+Checkpoint E has not begun and is not authorized by this result.
