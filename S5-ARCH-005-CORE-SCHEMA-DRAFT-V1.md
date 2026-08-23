@@ -10,14 +10,14 @@ MODE: Architecture / Schema Draft
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: D — COMPATIBILITY_AND_MIGRATION_MAP
-RESULT: **COMPATIBILITY_MIGRATION_RECOMMENDED**
+CHECKPOINT: E — FINAL_SCHEMA_CANDIDATE_CONVERGENCE
+RESULT: **CORE_SCHEMA_CANDIDATE_V0_RECOMMENDED**
 
-> Checkpoints A-C established the compatibility baseline, logical resource
-> candidates, and connected semantic model. Their Human Gates passed for Schema
-> Draft use. Checkpoint D maps a bounded compatibility and migration path from
-> current APIs to that model. It does not approve a CRD, freeze a Contract or
-> schema, implement migration, change an ADR, or begin Checkpoint E.
+> Checkpoints A-D established the compatibility baseline, logical resource
+> candidates, connected semantic model, and bounded migration path. Their Human
+> Gates passed for Schema Candidate use. Checkpoint E converges those records
+> into Core Schema Candidate v0. It does not approve a CRD, freeze a Contract or
+> schema, authorize implementation, edit an ADR, or close S5-ARCH-005.
 
 ## 1. Source-of-Truth Baseline
 
@@ -3508,3 +3508,760 @@ NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
 NEXT_GATE: **Human Checkpoint D Gate**
 
 Checkpoint E has not begun and is not authorized by this result.
+
+# Checkpoint E — Final Schema Candidate Convergence
+
+## 86. Human Checkpoint D Gate Record
+
+HUMAN DECISION: **PASS WITH CANDIDATE-CONVERGENCE CONSTRAINTS**
+
+| Accepted dimension | Checkpoint E authority |
+| --- | --- |
+| D01-D20 | `ACCEPTED_FOR_SCHEMA_CANDIDATE` |
+| Migration | staged Option B; no accepted breaking change |
+| Identity | current Definition-facing address preserved; new distinct Instance ID |
+| Task/Workflow | additive compatibility; current wire behavior remains binding input |
+| Capability/Runtime | explicit translation/adoption; Provider specifics outside Core |
+| Versioning/mixed mode | per-resource evidence; exactly one desired authority |
+| Rollback | bounded only; no universal claim |
+| Schema evolution | candidate policy, not frozen |
+| Checkpoint purpose | final convergence; no exploratory expansion or implementation |
+
+Sections 1-85 remain the distinct Checkpoint A-D record. No earlier Human
+Decision, debt, or freeze constraint is rewritten by this convergence.
+
+## 87. Executive Candidate Summary
+
+**Candidate:** `v0.2 Core Schema Candidate v0`
+
+The Candidate has five first-class logical resources: Agent Definition, Agent
+Instance, Task, Workflow, and Capability Definition. Runtime Binding and
+Capability Binding are domain-specific embedded Bindings; Model Binding is a
+thin embedded foundation. Platform Execution Identity is a Platform-owned
+embedded value, not a resource. Runtime and Capability Providers are distinct
+interfaces whose registries and Runtime Package records remain internal
+metadata. Domain Conditions, Outcomes, and Recovery Assessment remain embedded
+under their semantic owners. Native identities remain opaque `0:N` evidence.
+
+The Candidate preserves current Agent/Task/Workflow semantics through staged
+Option B compatibility. It requires no accepted breaking change and no sixth
+resource. It is implementation-neutral and representation-neutral: first-class
+logical resource does not mean CRD. The Candidate is ready for schema
+prototyping and bounded conformance work where classified below; it is not a
+frozen Contract, approved API/CRD, implementation authorization, Provider
+certification, or production-readiness claim.
+
+## 88. Final Logical Schema Inventory
+
+| Category | Candidate members | Final v0 disposition |
+| --- | --- | --- |
+| First-class logical resources | Agent Definition, Agent Instance, Task, Workflow, Capability Definition | candidate set fixed for final Human Gate |
+| Embedded Bindings | Runtime Binding, Capability Binding | domain-specific desired/effective boundaries; no CRDs |
+| Thin embedded Binding | Model Binding | references/ownership only; routing deferred |
+| Core value object | Platform Execution Identity | embedded, Platform-created, stable, propagated |
+| Relationship primitive | execution correlation | bounded parent/root/native relationships; no lifecycle resource |
+| Domain Conditions | Runtime Conditions, Agent Instance Conditions | shared structure/four-way truth; domain vocabulary unfrozen |
+| Domain Outcomes | Task Outcome, Workflow Outcome, Capability Outcome | separate ownership/taxonomy; Provider results are evidence |
+| Embedded status | Agent Instance Status, Recovery Assessment | Instance-owned effective/observed state and semantic recovery |
+| Provider interfaces | Runtime Provider, Capability Provider | replaceable translation boundaries, never Core resources |
+| Internal metadata | Runtime Provider Registry, Capability Provider Registry, Runtime Package | deterministic version/compatibility facts; no public Registry service |
+| Thin foundations | Model, Workspace, State/Memory, Knowledge, Policy, Permission, Human Gate | references/interaction boundary only |
+| Rejected abstractions | universal Execution/Status/Result/Provider/Binding/Registry/RuntimeInstance; WorkflowExecution now | not part of Candidate |
+
+## 89. Resource Candidate Cards
+
+### 89.1 Agent Definition
+
+| Dimension | Candidate card |
+| --- | --- |
+| Purpose | authoritative reusable logical definition of what an Agent is and what governed Bindings/references it requests |
+| Authority/owner | Agent Definition/Core owns desired logical definition and generation |
+| Identity | Platform resource identity; current Agent name/scope is the compatibility address; distinct from every Instance/native ID |
+| Desired | role/purpose, display/instructions, desired Runtime Binding template, Capability Bindings, thin Model and other foundation refs |
+| Effective | validation/default projection only; no running effective Runtime authority |
+| Observed/status | observed generation and definition validation conditions only |
+| References | Capability Definitions, thin Model/Workspace/State/Knowledge/Policy/Permission |
+| Lifecycle | definition create/update/version/adoption/delete protection; live Instances prevent ungoverned deletion |
+| Compatibility | current Agent evolves toward Definition through explicit translator; no rename or field reinterpretation |
+| Provider boundary | Provider config/package/native mechanics only through opaque refs/legacy translator |
+| Native evidence boundary | no Pod/container/Gateway/session/realization state |
+| Evidence debt | revision/adoption/rollout, deletion/recreation identity, API representation, compatibility mapping conformance |
+| Freeze status | `CANDIDATE_WITH_EVIDENCE_DEBT`; not frozen |
+
+### 89.2 Agent Instance
+
+| Dimension | Candidate card |
+| --- | --- |
+| Purpose | stable logical running identity that survives native realization replacement |
+| Authority/owner | Agent Instance Control Plane owns desired lifecycle, effective resolution, routing eligibility, conditions, recovery |
+| Identity | distinct Platform-minted identity; exactly one Definition ref; never replica/native identity |
+| Desired | Definition ref and desired lifecycle intent |
+| Effective | observed Definition revision/generation, effective Runtime Binding, optional thin Model projection, resolution provenance |
+| Observed/status | routing eligibility, Runtime/Instance Conditions, Recovery Assessment, realization summary, native refs, freshness |
+| References | exactly one Definition; effective Provider/package metadata; optional execution correlations |
+| Lifecycle | Definition `1:N` Instances; identity stable across `1:N` temporal and `0:N` active realizations |
+| Compatibility | one legacy Agent initially projects one legacy-managed Instance with durably recorded distinct identity; replicas remain native count |
+| Provider boundary | Control Plane selects Instance; Runtime Provider translates its effective Binding and selects only within it |
+| Native evidence boundary | opaque bounded refs; never routing/identity authority |
+| Evidence debt | lifecycle vocabulary, targeting authorization, eligibility freshness, stable backfill/mapping, deletion/finalization, in-flight behavior |
+| Freeze status | `CANDIDATE_WITH_EVIDENCE_DEBT`; not frozen |
+
+### 89.3 Task
+
+| Dimension | Candidate card |
+| --- | --- |
+| Purpose | durable requested-work lifecycle owning submission, execution observation, attempts, and Task terminal Outcome |
+| Authority/owner | Task domain owns request and Task Outcome; Control Plane owns Instance routing |
+| Identity | current Task identity plus embedded Platform Execution Identity for one logical execution |
+| Desired/requested | Definition-facing target or authorized Instance target, input, timeout, routing/auth intent, retry policy where supported |
+| Effective | target interpretation and selected Instance routing decision/provenance |
+| Observed/status | submission disposition, execution state, attempts, Outcome, timestamps, optional native refs |
+| References | Definition/Instance target family, authorization/policy refs, output ref, native evidence |
+| Lifecycle | current Pending/Running/Succeeded/Failed/TimedOut behavior remains compatibility constraint; cancellation deferred |
+| Compatibility | existing `agentRef`, input, timeout, phase, result, reasons, retryable, attempts, timestamps remain; richer model is additive/derived |
+| Provider boundary | Provider/native result is evidence; Task owner determines Outcome |
+| Native evidence boundary | optional `0:N`; absence cannot invalidate execution correctness |
+| Evidence debt | identity backfill, exact state/outcome vocabulary, retry/replay/idempotency, target auth, output ref/retention, cancellation |
+| Freeze status | `CANDIDATE_WITH_EVIDENCE_DEBT`; not frozen |
+
+### 89.4 Workflow
+
+| Dimension | Candidate card |
+| --- | --- |
+| Purpose | first-class DAG/orchestration lifecycle with embedded definition/request and aggregate execution/outcome |
+| Authority/owner | Workflow owns graph, node orchestration, aggregate state/Outcome; Tasks own node execution |
+| Identity | current Workflow identity; embedded root Platform Execution Identity; local node identities |
+| Desired/requested | nodes, dependencies, Task requests, input-source references |
+| Effective | runnable/blocked node interpretation; no separate desired Task authority |
+| Observed/status | node Task projections, dependency/skip state, partial completion, Human Gate wait, aggregate Outcome |
+| References | owned/referenced Tasks, node dependencies/output refs, thin Human Gate refs |
+| Lifecycle | one v0.2 resource; current execution conflation retained as explicit debt |
+| Compatibility | DAG, Task ownership/names/labels, result passing, parallel/fan-in, failure/skip, aggregation, status, Console joins preserved |
+| Provider boundary | no direct Runtime/Capability Provider ownership; node Tasks follow their domain paths |
+| Native evidence boundary | Workflow aggregates logical Task evidence; no native topology authority |
+| Evidence debt | root/Task identity backfill, Human Gate representation, reusable multi-run promotion, mixed-mode/in-flight behavior |
+| Freeze status | `CANDIDATE_WITH_EVIDENCE_DEBT`; not frozen |
+
+### 89.5 Capability Definition
+
+| Dimension | Candidate card |
+| --- | --- |
+| Purpose | provider/transport-independent enterprise identity and semantic operation Contract |
+| Authority/owner | Capability domain owns identity/version/operation/input-output/risk/auth/execution characteristics |
+| Identity | logical Capability/version/operation; never MCP tool, REST endpoint, SDK function, CLI command, or Provider ID |
+| Desired/declarative | schemas, risk, authorization requirements, interaction characteristics/dispositions, compatibility policy |
+| Effective | invocation-time Binding/Provider/version/auth resolution outside Definition |
+| Observed/status | definition validation only; invocation produces separate Capability Outcome |
+| References | input/output schemas, policy refs, Capability Bindings from Definitions |
+| Lifecycle | definition/version publication and compatibility; no Provider-native deletion implied |
+| Compatibility | optional adoption; legacy strings/direct tools require explicit mapping and remain ungoverned until conformance |
+| Provider boundary | Capability Provider translates only after independent authorization; REST/MCP are realizations |
+| Native evidence boundary | optional invocation refs under Capability Outcome; zero on pre-handoff denial is valid |
+| Evidence debt | taxonomy, side effects/idempotency, deferred/cancel durability, third-party MCP, mapping/deprecation telemetry |
+| Freeze status | `CANDIDATE_WITH_EVIDENCE_DEBT`; not frozen |
+
+## 90. Authoritative Relationship Map
+
+```text
+Agent Definition
+  1:N  -> Agent Instance
+  1:1  -> desired Runtime Binding template (embedded)
+  1:N  -> Capability Binding (embedded)
+  0:1  -> thin Model Binding (embedded)
+  0:N  -> thin Workspace/State/Knowledge/Policy/Permission refs
+
+Agent Instance
+  1:1  -> Agent Definition ref
+  1:1  -> effective Runtime Binding (derived/embedded)
+  1:N temporal / 0:N active -> opaque native Runtime realizations
+  0:N  -> execution correlation refs (bounded observation)
+
+Task
+  1:1  -> logical target (Definition by default; authorized Instance optional)
+  0:1  -> selected Agent Instance (effective routing evidence)
+  1:1  -> Platform Execution Identity
+  0:N  -> native Runtime/Capability/infrastructure refs
+
+Workflow
+  1:N  -> embedded node definitions
+  0:N  -> owned/referenced Task resources over execution lifecycle
+  1:1  -> root Platform Execution Identity per logical execution
+  Task execution IDs -> optional parent/root correlation to Workflow
+
+Capability Binding
+  1:1  -> Capability Definition
+  0:1  -> preferred/required Capability Provider metadata
+  0:N  -> policy/authorization/config refs
+
+Platform Execution Identity
+  unchanged -> routing -> selected Instance -> Runtime Provider
+            -> native Runtime -> Capability authorization/Provider
+  0:N -> opaque native correlation references
+```
+
+Cardinality is semantic, not a persistence or CRD design. Bindings and
+Execution Identity have no independently reconciled desired lifecycle.
+
+## 91. Authority Map
+
+| Question | Authoritative owner | Supporting actor/evidence | Explicit non-owner |
+| --- | --- | --- | --- |
+| Who owns Agent desired definition? | Agent Definition/Core | compatibility interpreter may translate legacy Agent | Agent Instance, Provider, native Runtime |
+| Who owns Instance desired lifecycle? | Agent Instance Control Plane | API/user declares under policy | Runtime Provider/native realization |
+| Who resolves effective Runtime Binding? | Agent Instance reconciler/domain Runtime resolver | Runtime registry/package compatibility metadata | Agent Definition status, native Runtime |
+| Who observes native Runtime state? | Runtime Provider normalizes evidence | native Runtime/infrastructure supplies raw evidence | Task/Workflow owner |
+| Who decides logical routing? | Control Plane | Instance eligibility and policy evidence | Runtime Provider/native Gateway |
+| Who decides Capability authorization? | Governance/Capability authorization owner | Binding/policy/permission and request context | discovery, Provider, transport |
+| Who determines terminal Task semantics? | Task domain | Runtime/Capability/Provider results are evidence | Provider/native system |
+| Who determines Workflow Outcome? | Workflow domain | owned Task states/Outcomes | Task Provider/native system |
+| Who determines Capability Outcome? | Capability domain | Provider/transport/remote evidence | Task/Runtime domain |
+| Who determines recovery? | Agent Instance reconciler | Provider/native evidence and applicable predicates | Kubernetes restart/Provider alone |
+| Who owns native realization mechanics? | Runtime Provider/native system under declared ownership mode | Kubernetes/infrastructure where applicable | Agent Definition/Task/Workflow |
+| Who owns native cleanup authority? | declared Binding/Provider lifecycle owner under policy | NativeReference ownership hint/evidence | opaque ID holder by itself |
+| Who creates Platform Execution Identity? | Task/Workflow execution owner in Platform | Providers propagate unchanged | native Provider/runtime/tool |
+| Who owns Provider compatibility metadata? | domain registry/package publisher/governance | conformance/certification evidence | Core resource instance |
+
+Core owns logical semantics and control; Provider owns translation/adaptation;
+native Runtime/system owns native mechanics. None may silently assume another's
+authority.
+
+## 92. Canonical End-to-End Execution Trace
+
+```text
+1. Business/API request
+   -> creates or invokes Task / embedded Workflow execution context
+
+2. Task/Workflow owner
+   -> creates Platform Execution Identity
+   -> records Definition-facing logical target
+
+3. Control Plane routing
+   -> resolves Agent Definition/version/scope
+   -> builds authorized eligible Agent Instance set
+   -> evaluates eligibility freshness and policy
+   -> selects Agent Instance and records selectedInstanceRef
+
+4. Agent Instance effective state
+   -> exposes effective Runtime Binding derived from Definition generation
+   -> identifies Runtime Provider/package compatibility
+
+5. Runtime Provider
+   -> receives unchanged Platform Execution Identity
+   -> translates effective Binding to native Runtime behavior
+   -> may select a realization only inside selected Instance Binding
+
+6. Native Runtime execution
+   -> executes using OpenClaw, Hermes, Native, or future native mechanics
+   -> emits optional native run/session/Pod/Gateway IDs as opaque evidence
+
+7. Capability use, when requested
+   -> resolves Capability Binding and Capability Definition/operation
+   -> evaluates authorization independently of discovery/availability
+   -> DENY may terminate before Provider handoff
+   -> Capability Provider receives unchanged execution context
+   -> invokes REST, MCP, or future transport/native operation
+   -> emits optional native invocation IDs as opaque evidence
+
+8. Normalization and semantic conclusion
+   -> Runtime Provider produces Runtime-domain Conditions/evidence
+   -> Capability domain produces Capability Outcome
+   -> Agent Instance reconciler updates Instance Conditions/Recovery
+   -> Task owner determines Task Outcome
+   -> Workflow owner aggregates node state and Workflow Outcome
+```
+
+No native identifier is required for correctness, authorization, routing, or
+Platform identity. Provider/native results remain evidence until the owning
+domain derives its semantic conclusion.
+
+## 93. Canonical Compatibility Trace
+
+```text
+Current Agent object/name/scope                         KEEP
+  -> Definition-facing compatibility address           ALIAS
+  -> current role/instructions/intent translation       TRANSLATED
+  -> Provider-specific runtime/model config refs        TRANSLATED
+  -> distinct durable legacy-managed Instance identity  ADDITIVE
+  -> Instance effective Binding/status                  DERIVED
+
+Current Task agentRef.name                              KEEP + ALIAS
+  -> Definition logical target                          TRANSLATED
+  -> eligible Instance resolution                       DERIVED
+  -> selectedInstanceRef                                ADDITIVE + DERIVED
+
+Current same-name Service / invoke path                 KEEP
+  -> compatibility Runtime Provider behavior            TRANSLATED
+
+Current Task/Workflow phases/results/status             KEEP
+  -> richer submission/execution/outcome model          DERIVED
+
+Current Console routes/fields/Agent name                KEEP
+  -> Definition + Instance technical projections        ADDITIVE + DERIVED
+
+Provider-specific legacy fields/path                    DEPRECATED_LATER
+  only after equivalent refs, adoption, conformance,
+  observable migration, bounded rollback, Human Gate
+```
+
+`ALIAS`, `DERIVED`, and `TRANSLATED` are presentation shorthand for the exact
+Checkpoint D classifications `COMPATIBILITY_ALIAS`, `DERIVED_PROJECTION`, and
+`TRANSLATION_LAYER`. No trace step changes current field meaning in place.
+
+## 94. Candidate Stability Classification
+
+Every major area has one primary classification.
+
+| Semantic area | Classification | Basis / remaining boundary |
+| --- | --- | --- |
+| Agent Definition vs Agent Instance distinction | `CANDIDATE_STABLE` | accepted architecture/spike evidence and compatibility path |
+| Definition `1:N` Instance | `CANDIDATE_STABLE` | required for multiple stable logical running identities |
+| five-resource logical candidate set | `CANDIDATE_STABLE` | no sixth resource required across A-D |
+| Task and Workflow separate first-class resources | `CANDIDATE_STABLE` | current source/tests plus accepted boundary |
+| Workflow definition/execution embedded distinction | `CANDIDATE_WITH_EVIDENCE_DEBT` | one resource retained; future multi-run promotion unresolved |
+| Capability Definition provider independence | `CANDIDATE_STABLE` | REST/MCP evidence and governance separation |
+| Runtime vs Capability domain separation | `CANDIDATE_STABLE` | D32 Option C; distinct lifecycle/auth/outcome semantics |
+| embedded Runtime/Capability Binding direction | `CANDIDATE_STABLE` | no independent lifecycle/resource need proven |
+| thin Model Binding | `THIN_FOUNDATION` | routing/fallback evidence absent |
+| Platform Execution Identity concept | `CANDIDATE_STABLE` | stable Platform-owned propagation boundary accepted |
+| execution retry/replay/child identity rules | `CANDIDATE_WITH_EVIDENCE_DEBT` | side effects/in-flight/deferred behavior unresolved |
+| bounded logical reference families | `CANDIDATE_STABLE` | typed domain/scope/provenance; representation deferred |
+| current Agent compatibility Option B | `CANDIDATE_STABLE` | bounded staged path; no accepted break required |
+| identity mapping/backfill mechanics | `CANDIDATE_WITH_EVIDENCE_DEBT` | persistence/restart/delete/recreate evidence absent |
+| Core logical routing ownership | `CANDIDATE_STABLE` | Control Plane selects Instance; Provider translates Binding |
+| routing eligibility vocabulary/thresholds | `CANDIDATE_WITH_EVIDENCE_DEBT` | freshness inputs/timeout/selection rules unfrozen |
+| Provider isolation/extension boundary | `CANDIDATE_STABLE` | opaque refs/internal metadata; no Provider-specific Core |
+| native identity opacity and `0:N` correlation | `CANDIDATE_STABLE` | repeated Runtime/Capability/Instance evidence |
+| shared Condition structure/four-way truth | `CANDIDATE_STABLE` | boundary accepted; domain vocabularies separate |
+| exact Condition names/serialization/reasons | `CANDIDATE_WITH_EVIDENCE_DEBT` | explicitly unfrozen |
+| Task submission/execution/Outcome separation | `CANDIDATE_STABLE` | compatible deterministic projection exists logically |
+| Task exact state/outcome taxonomy/backfill | `CANDIDATE_WITH_EVIDENCE_DEBT` | API/conformance evidence absent |
+| Workflow Outcome ownership/current projection | `CANDIDATE_STABLE` | current behavior preserved; taxonomy unfrozen |
+| Capability Outcome ownership boundary | `CANDIDATE_STABLE` | domain distinctions proven; taxonomy not frozen |
+| Capability side-effect/deferred/cancel semantics | `CANDIDATE_WITH_EVIDENCE_DEBT` | evidence incomplete |
+| restart/replacement is not recovery | `CANDIDATE_STABLE` | positive/negative spike evidence |
+| Recovery Assessment placement/semantic predicate model | `CANDIDATE_STABLE` | Agent Instance-owned and four-way; threshold vocabulary debt remains |
+| Recovery predicate applicability/thresholds | `CANDIDATE_WITH_EVIDENCE_DEBT` | ownership profiles, freshness, state/in-flight evidence incomplete |
+| Provider registries and Runtime Package as internal metadata | `CANDIDATE_STABLE` | public resource/service not justified |
+| Runtime/Capability Provider interfaces | `CANDIDATE_STABLE` | distinct replaceable translation boundaries |
+| Runtime/Capability Contract conformance/freeze | `BLOCKED` | freeze gate and combined unchanged-consumer evidence incomplete |
+| Workspace, State/Memory, Knowledge, Policy, Permission, Human Gate | `THIN_FOUNDATION` | references/interaction only |
+| State portability | `DEFERRED` | unsupported and not assumed |
+| multi-tenancy/governance lifecycle | `DEFERRED` | v0.4 direction/evidence absent |
+| Model routing/fallback | `DEFERRED` | requires dedicated evidence |
+| WorkflowExecution/universal Execution resources | `DEFERRED` | rejected for v0.2; promotion trigger not met |
+
+## 95. Claim-Scoped Evidence Debt
+
+| Debt | Classification | Scope blocked | Does not block |
+| --- | --- | --- | --- |
+| Runtime Contract unchanged-consumer conformance | `BLOCKED` for freeze | Runtime Contract freeze, broad Provider certification, stable implementation claim | Core Candidate convergence |
+| `G-S5-RUNTIME-FREEZE-01` | `BLOCKED` / FAIL unchanged | Runtime Contract freeze | logical schema/prototype |
+| ED-S5-001 Hermes | `BLOCKED` for Hermes certification | Hermes Provider/package certification and readiness | Core Candidate, Native/OpenClaw schema path |
+| OpenClaw/Native Provider conformance | `CANDIDATE_WITH_EVIDENCE_DEBT` | certification/production claims for each combination | provider-neutral schema |
+| Capability deferred execution | `CANDIDATE_WITH_EVIDENCE_DEBT` | deferred durability/observation profile | inline Capability boundary |
+| side-effecting Capability | `CANDIDATE_WITH_EVIDENCE_DEBT` | retry/idempotency/safe replay claims | read-only/idempotent profile candidate |
+| in-flight cancellation/retry/recovery | `CANDIDATE_WITH_EVIDENCE_DEBT` | cancellation/rebind/replay production behavior | identity/routing ownership |
+| Recovery thresholds/applicability | `CANDIDATE_WITH_EVIDENCE_DEBT` | vocabulary freeze and production recovery claims | recovery placement/invariant |
+| mixed-version implementation | `CANDIDATE_WITH_EVIDENCE_DEBT` | migration/cutover readiness | bounded logical compatibility path |
+| identity mapping/backfill | `CANDIDATE_WITH_EVIDENCE_DEBT` | migration/API approval | Definition/Instance distinction |
+| translation losslessness | `CANDIDATE_WITH_EVIDENCE_DEBT` | legacy workload adoption/fallback | target ownership boundary |
+| Console old-client tolerance | `CANDIDATE_WITH_EVIDENCE_DEBT` | additive Console implementation | read-only projection strategy |
+| third-party MCP | `CANDIDATE_WITH_EVIDENCE_DEBT` | that Provider certification/broad MCP claim | Capability Provider boundary |
+| out-of-process Providers | `DEFERRED` unless claimed | mandatory isolation/deployment claim | serializable interface direction |
+| State portability | `DEFERRED` | portability/continuity claims | thin State reference |
+| multi-tenancy | `DEFERRED` | tenant isolation/enterprise production | tenant-ready separation principles |
+| Model routing/fallback | `DEFERRED` | Model Contract/routing schema | thin Model Binding |
+| S5-ARCH-001/002/003 main-tree gap | `CANDIDATE_WITH_EVIDENCE_DEBT` | durable provenance completeness | Candidate based on durable ARCH-004/spikes/current source |
+
+No debt is silently converted into evidence. Debt classifications apply only
+to the named Contract profile, Provider combination, migration, or product
+claim.
+
+## 96. Multi-Runtime Mapping
+
+| Core semantic | OpenClaw Provider | Hermes Provider | Native Runtime Provider |
+| --- | --- | --- | --- |
+| Agent Definition | unchanged | unchanged | unchanged/current Agent compatibility input |
+| Agent Instance | Platform identity independent of OpenClaw runs/Gateway | Platform identity independent of Hermes session/request | Platform identity independent of Deployment/Pod/Service |
+| Runtime Binding | Provider/package/config refs in extension boundary | Provider/package/config refs in extension boundary | translated current type/image/env/package refs |
+| logical routing | Control Plane selects Instance | Control Plane selects Instance | Control Plane selects Instance/legacy projection |
+| native selection | Provider selects within Binding | Provider selects within Binding | Provider uses current/native realizations within Binding |
+| Runtime Conditions | Provider-normalized domain semantics | Provider-normalized domain semantics | Provider-normalized readiness/invoke evidence |
+| execution identity | propagated unchanged | propagated unchanged | propagated unchanged once conformance exists |
+| native refs | OpenClaw run/Gateway/session IDs opaque | Hermes request/session/process IDs opaque | Pod/Service/process/request IDs opaque |
+| recovery | Instance semantic predicates | Instance semantic predicates; ED-S5-001 applies to certification | Instance semantic predicates; restart alone insufficient |
+| certification | combination-scoped evidence required | `EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE` | conformance/certification evidence required |
+
+Core resources and fields do not change by Runtime family. Provider/package
+certification can advance independently without altering logical identity,
+routing, Outcome, or recovery ownership.
+
+### 96.1 Hermes disposition
+
+HERMES: **EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE**
+ED-S5-001: **OPEN**
+
+ED-S5-001 does not block Core Schema Candidate v0 convergence. It blocks only
+applicable Hermes Provider/package certification, production readiness, and
+Golden Demo claims that present Hermes as certified. No Hermes-specific Core
+field, taxonomy, workaround, or relaxed invariant is introduced.
+
+## 97. Golden Demo Traceability
+
+```text
+Digital Employee / business role (product projection)
+  -> Agent Definition (role/purpose + governed desired intent)
+    -> multiple Agent Instances (stable logical identities)
+      -> Runtime Binding / Provider selection
+         |- OpenClaw Provider [certification status displayed]
+         |- Hermes Provider [EXPERIMENTAL / NOT CERTIFIABLE]
+         `- Native Runtime Provider [certification status displayed]
+      -> Task / Workflow with Platform Execution Identity
+        -> logical selected Instance and Runtime evidence
+        -> Capability Binding + authorization
+           |- REST Capability Provider
+           `- MCP Capability Provider
+        -> Capability Outcome -> Task Outcome -> Workflow Outcome
+  -> business result projection
+```
+
+The Demo can show one Definition with multiple Instances and different Runtime
+Providers without changing Core semantics. Operator details progressively
+disclose Binding, eligibility, Conditions, recovery, and native correlations.
+Business users may continue seeing an Agent/Digital Employee projection.
+
+Demo acceptance requirements include honest Provider/certification badges,
+stable execution correlation, a denied Capability path before Provider
+handoff, success/failure Outcomes, realization replacement with semantic
+recovery assessment, and current compatibility behavior. Hermes may appear only
+as experimental with ED-S5-001 disclosed; the Demo must not fake certification,
+state portability, or universal rollback.
+
+## 98. Implementation Readiness Map
+
+This is a handoff classification, not authorization.
+
+| Candidate area | Readiness | Rationale / next evidence |
+| --- | --- | --- |
+| five-resource logical model documentation | `READY_FOR_SCHEMA_PROTOTYPE` | Candidate cards/relationships/authority converged |
+| embedded Runtime/Capability Bindings | `READY_FOR_SCHEMA_PROTOTYPE` | representation and compatibility algorithms remain prototype work |
+| thin Model/Foundation refs | `DEFERRED` beyond thin prototype | do not elaborate without evidence |
+| Platform Execution Identity value/propagation interface | `READY_FOR_SCHEMA_PROTOTYPE` | retry/backfill and combined path need conformance |
+| typed logical/native reference structures | `READY_FOR_SCHEMA_PROTOTYPE` | API representation unresolved |
+| current Agent compatibility interpreter | `READY_FOR_CONFORMANCE_TEST` after prototype plan | field mapping and identity safety matrix defined |
+| Agent Definition/Instance identity mapping | `READY_FOR_CONFORMANCE_TEST` after durable prototype | restart/delete/recreate/adoption evidence required |
+| Task/Workflow compatibility projections | `READY_FOR_CONFORMANCE_TEST` | current fixtures/tests provide baseline |
+| Runtime Provider interface/Binding translation | `READY_FOR_CONFORMANCE_TEST` | Contract freeze still blocked |
+| Capability Provider interface/Binding authorization | `READY_FOR_CONFORMANCE_TEST` | inline profiles first; side effects/deferred debt |
+| shared Condition structure/four-way truth | `READY_FOR_SCHEMA_PROTOTYPE` | exact vocabulary/serialization unfrozen |
+| domain Outcome structures | `READY_FOR_SCHEMA_PROTOTYPE` | taxonomies and projections require conformance |
+| Recovery Assessment | `READY_FOR_CONFORMANCE_TEST` | negative/positive spike base exists; thresholds/profiles needed |
+| mixed-version/rollback mechanics | `READY_FOR_CONFORMANCE_TEST` after representation prototype | no production claim until evidence |
+| Console derived projection | `READY_FOR_CONFORMANCE_TEST` after API schema plan | old-client tolerance and no second source of truth |
+| Native/OpenClaw Provider production use | `BLOCKED_FOR_PRODUCTION` | certification/readiness gates incomplete |
+| Hermes Provider production use | `BLOCKED_FOR_PRODUCTION` | ED-S5-001 and Runtime freeze/conformance |
+| Runtime/Capability stable Contract implementation | `BLOCKED_FOR_PRODUCTION` | freeze gates not passed |
+| State portability, Model routing, multi-tenancy | `DEFERRED` | separate architecture/evidence required |
+
+## 99. Bounded Conformance Matrix
+
+Evidence types are independent:
+
+- **CONTRACT CONFORMANCE** verifies unchanged semantic consumers and logical
+  rules for a versioned Candidate/Contract.
+- **PROVIDER CERTIFICATION** verifies one Contract + Provider + package + mode +
+  platform combination, including declared optional profiles.
+- **PRODUCT DEMO ACCEPTANCE** verifies honest end-to-end user/operator behavior
+  and presentation; it cannot substitute for either technical gate.
+
+| Area | Contract conformance evidence | Provider certification evidence | Product Demo acceptance |
+| --- | --- | --- | --- |
+| current Agent manifests | unchanged parse/validation/behavior; exact translation report | legacy Native translator/package combination | existing Agents run and display unchanged |
+| Agent compatibility projection | deterministic field map, no secret/Core leakage, one authority | Provider config refs resolve equivalently | Definition/Instance detail projects under same business Agent |
+| Definition/Instance identity | distinct durable IDs across restart/update/delete/recreate cases | realization changes preserve Instance | multiple Instances visible with stable identity |
+| multiple Instances | `1:N`, target set, eligibility/selection invariants | Provider supports declared realization/profile behavior | route work to separate Instances without native IDs |
+| Task targeting/selected Instance | legacy alias + Definition/explicit auth target + fail-closed mismatch | Runtime handoff uses already-selected Instance | selected Instance and reason visible |
+| Workflow compatibility | current DAG/Task/result/skip/aggregate tests unchanged | each node Provider combination declared | current workflow and mixed Provider path render correctly |
+| Execution Identity | stable creation/backfill/propagation and conflict/missing failures | unchanged round trip through Provider/native transport | one correlation shown across Task/Runtime/Capability |
+| Runtime Binding translation | current inputs -> desired/effective/provenance, opaque extensions | package/config/mode compatibility and failure cases | switch eligible Providers without Core field changes |
+| OpenClaw Provider | generic Runtime consumer unchanged | OpenClaw package/mode live certification suite | honest badge and success/failure/recovery path |
+| Native Runtime Provider | generic Runtime consumer unchanged | current/native package and compatibility differential tests | legacy and adopted Native paths behave coherently |
+| Hermes Provider | generic schema unchanged; no Hermes fields | blocked until ED-S5-001 and freeze prerequisites pass | experimental only; no certified claim |
+| Capability Binding | identity/version/operation/auth decision invariants | Provider maps authorized Binding only | governed Capability shown separately from discovery |
+| REST Capability | unchanged Capability consumer/output semantics | REST Provider live/profile tests | successful/failed REST operation correlated |
+| MCP Capability | unchanged Capability consumer/output semantics | third-party MCP and declared profile tests | MCP operation honestly marked certification scope |
+| authorization denial | deny before handoff, zero native ref valid, audit evidence | Provider must not be called | denied path visibly not transport failure |
+| Conditions | four-way truth, generation/time/freshness/domain separation | native-to-domain normalization per Provider | stale/unknown not shown as healthy |
+| Outcomes | domain ownership, evidence-to-semantic projection, current status map | native result interpretation per Provider | Task/Workflow/Capability results remain distinguishable |
+| Recovery Assessment | applicable predicate/unknown/false/NA algorithm | ownership-mode realization/state evidence | restart-only negative and semantic recovery positive paths |
+| mixed compatibility mode | one desired authority, conflict rejection, version/fallback audit | each mixed Provider combination certified independently | legacy/adopted nodes coexist without hidden behavior drift |
+| rollback | reversible checkpoint, lossless reverse projection, in-flight exclusion | Provider cleanup/ownership/fallback safety | rollback scope and non-guarantees displayed |
+| Console compatibility | current routes/fields/phases and old-client tests | not a Provider gate | current UX preserved; added detail is derived/read-only |
+
+## 100. Freeze and Acceptance Readiness Gates
+
+No gate passes merely because another gate passes.
+
+| Gate | Required evidence/decision | Current state |
+| --- | --- | --- |
+| Core Schema Candidate Gate | Human acceptance of five resources, embedded/value boundaries, relationships, authority, compatibility, stability/readiness classifications | **PENDING — this Checkpoint E recommendation** |
+| Core Schema Freeze Gate | normative field/serialization/version/compatibility policy, representation decision, conversion and conformance evidence, accepted governing decision | **NOT_READY / NOT_FROZEN** |
+| Runtime Contract Freeze Gate | versioned Runtime Contract, unchanged-consumer conformance, Binding/Provider/package compatibility, Conditions/outcomes/recovery profiles, `G-S5-RUNTIME-FREEZE-01` pass | **BLOCKED / gate FAIL unchanged** |
+| Capability Contract Freeze Gate | versioned Capability semantics, auth/outcome/input-output compatibility, required inline/deferred/side-effect profiles and conformance | **BLOCKED for broad freeze; evidence debt open** |
+| Provider Certification Gate | frozen/applicable Contract profile plus combination-specific Provider/package/mode/platform live evidence | **NOT_READY; Hermes BLOCKED by ED-S5-001** |
+| Production Readiness Gate | approved implementation/migration, security/operations/upgrade/rollback, certified combinations, compatibility and SLO evidence | **BLOCKED_FOR_PRODUCTION** |
+| Golden Demo Acceptance Gate | honest end-to-end scenario, current compatibility, multiple Instances/Providers, execution/capability correlation, failure/recovery, accurate certification labels | **NOT_RUN / independent** |
+
+The Human Final Schema Candidate Gate may accept Candidate v0 without freezing
+schema or Contracts. Freeze requires separate normative artifacts, evidence,
+and Human decisions.
+
+## 101. ADR Impact Map
+
+No ADR is edited here.
+
+| ADR | Future impact | Candidate semantics to address | Timing |
+| --- | --- | --- | --- |
+| ADR-0003 Operator/reconciliation responsibilities | `CLARIFY_LATER` | separate Agent infrastructure, Agent Instance/effective Binding, Runtime Provider, and Task/Workflow reconciliation ownership; acknowledge existing controller drift | after Candidate acceptance, before implementation changes that depend on boundary |
+| ADR-0004 pluggable Runtime architecture | `AMEND_LATER` | evolve `runtimeClass -> resolver -> adapter` prose toward Definition intent -> Instance effective Runtime Binding -> domain registry -> Runtime Provider -> opaque realization; preserve pluggability/ownership | before Runtime Provider production implementation/freeze |
+| ADR-0005 Model abstractions | `CLARIFY_LATER` | distinguish thin Model Binding from current embedded Provider fields and runtime-local ModelProvider; keep routing/gateway/fallback deferred | after Model evidence, before Model schema implementation |
+
+ADR-0001 Kubernetes source of truth, ADR-0002 declarative Agent principles, and
+ADR-0006 read-only Console remain compatible. Any changed accepted decision
+requires separately authorized ADR work and Human ownership.
+
+## 102. Recommended Engineering Sequence
+
+After—and only after—the Human Final Schema Candidate Gate:
+
+1. **Candidate integration:** publish/locate the accepted Candidate and decision
+   record; retain explicit non-freeze status and Contract index placeholders.
+2. **Representation/prototype plan (G1/G2 as applicable):** choose bounded
+   non-production representations for identity, references, Bindings,
+   Conditions, Outcomes, compatibility mode, and provenance; decide which
+   public API/CRD questions require architecture approval.
+3. **Conformance harness:** implement implementation-neutral fixtures and
+   unchanged-consumer tests before multiple Providers depend on implicit APIs.
+4. **Compatibility interpreter/projection prototype:** prove lossless current
+   Agent mapping, distinct durable Instance identity, current Task/Workflow
+   projections, secret isolation, and restart/delete/recreate behavior.
+5. **Agent Definition/Instance prototype:** exercise `1:N`, eligibility,
+   selected Instance, generation provenance, and bounded native evidence behind
+   non-production/approved interfaces.
+6. **Runtime Provider conformance:** Native first as current differential
+   baseline, OpenClaw as external validation, Hermes only within experimental
+   scope until ED-S5-001 closes; keep certification combination-specific.
+7. **Capability Provider conformance:** explicit Capability Definition/Binding,
+   REST then MCP, deny-before-handoff, Outcome ownership, inline safe profiles
+   before deferred/side-effect profiles.
+8. **Recovery and mixed-mode evidence:** negative restart-only, positive
+   semantic recovery, stale/unknown, ownership-safe cleanup, legacy/adopted
+   Workflow, bounded rollback, and no in-flight replay claim.
+9. **Console projection prototype:** preserve current API/UX and add read-only
+   Definition/Instance/execution/certification details with old-client tests.
+10. **Golden Demo integration:** execute honest multi-Instance/multi-Runtime/
+    REST-MCP scenario with certification/debt labels and current compatibility.
+11. **ADR work:** clarify/amend ADR-0003/0004 and later ADR-0005 only under
+    separate authorization before affected production boundaries.
+12. **Freeze/readiness review:** independently evaluate Core schema, Runtime,
+    Capability, Provider certification, production, and Demo gates; do not merge
+    them into one pass/fail decision.
+
+No step in this sequence is authorized by Checkpoint E itself.
+
+## 103. Human Decisions Required — Checkpoint E
+
+All decisions remain **PENDING** until the Human Final Schema Candidate Gate.
+
+### E01 — Final five-resource logical Candidate
+
+**Recommendation:** accept Agent Definition, Agent Instance, Task, Workflow,
+and Capability Definition as the complete v0.2 first-class logical Candidate;
+no CRD count is implied.
+**Decision:** PENDING.
+
+### E02 — Embedded Binding disposition
+
+**Recommendation:** accept Runtime and Capability Bindings as domain-specific
+embedded structures and Model Binding as thin embedded foundation; no Binding
+resource/CRD.
+**Decision:** PENDING.
+
+### E03 — Platform Execution Identity
+
+**Recommendation:** accept embedded Platform-created stable identity propagated
+unchanged end to end, with optional `0:N` native correlations and no universal
+Execution resource.
+**Decision:** PENDING.
+
+### E04 — Relationship map
+
+**Recommendation:** accept Section 90 cardinalities and typed relationships as
+the authoritative Candidate map, independent of persistence representation.
+**Decision:** PENDING.
+
+### E05 — Authority map
+
+**Recommendation:** accept Section 91 separation of Core semantic/control,
+Provider translation, and native mechanics/ownership.
+**Decision:** PENDING.
+
+### E06 — Reference model
+
+**Recommendation:** accept bounded typed logical families and structurally
+separate opaque NativeReference evidence; serialization remains unfrozen.
+**Decision:** PENDING.
+
+### E07 — Condition boundary
+
+**Recommendation:** accept shared structure and four-way truth with Runtime and
+Instance domain ownership; names/reasons/serialization remain evidence debt.
+**Decision:** PENDING.
+
+### E08 — Outcome boundary
+
+**Recommendation:** accept separate Task, Workflow, and Capability Outcomes;
+Runtime interaction remains Runtime-specific and Provider results are evidence.
+**Decision:** PENDING.
+
+### E09 — Recovery Assessment
+
+**Recommendation:** accept Instance-owned embedded semantic predicate model;
+restart/replacement/state portability never imply recovery.
+**Decision:** PENDING.
+
+### E10 — Compatibility and migration strategy
+
+**Recommendation:** accept staged Option B, current semantic preservation,
+distinct durable Instance identity, additive/derived projections, and explicit
+mapping/adoption/deprecation gates.
+**Decision:** PENDING.
+
+### E11 — Mixed-version authority and rollback
+
+**Recommendation:** accept exactly one desired authority, fail-closed conflicts,
+observable mode/translation/fallback, and bounded—not universal—rollback.
+**Decision:** PENDING.
+
+### E12 — Provider extension boundary
+
+**Recommendation:** accept opaque configuration/extension refs, internal domain
+metadata, bounded evidence, and safe diagnostics; no Provider-family Core
+fields.
+**Decision:** PENDING.
+
+### E13 — Hermes debt scope
+
+**Recommendation:** retain Hermes `EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE` and
+ED-S5-001 OPEN; debt blocks Hermes combination claims only, not Candidate v0.
+**Decision:** PENDING.
+
+### E14 — Candidate stability classification
+
+**Recommendation:** accept Section 94 exact `CANDIDATE_STABLE`,
+`CANDIDATE_WITH_EVIDENCE_DEBT`, `THIN_FOUNDATION`, `DEFERRED`, and `BLOCKED`
+classifications.
+**Decision:** PENDING.
+
+### E15 — Implementation readiness map
+
+**Recommendation:** accept Section 98 prototype/conformance/production/deferred
+handoff classifications as non-authorization.
+**Decision:** PENDING.
+
+### E16 — Conformance matrix
+
+**Recommendation:** accept Section 99 and keep Contract conformance, Provider
+certification, and Product Demo acceptance independent.
+**Decision:** PENDING.
+
+### E17 — Freeze readiness gates
+
+**Recommendation:** accept Section 100 independent gates; none is frozen or
+production-ready by Candidate acceptance.
+**Decision:** PENDING.
+
+### E18 — Golden Demo traceability
+
+**Recommendation:** accept Section 97 as the product trace; require honest
+Provider/certification status and no fake Hermes/state/rollback claims.
+**Decision:** PENDING.
+
+### E19 — ADR impact
+
+**Recommendation:** record ADR-0003 `CLARIFY_LATER`, ADR-0004 `AMEND_LATER`, and
+ADR-0005 `CLARIFY_LATER`; perform no edits until separately authorized.
+**Decision:** PENDING.
+
+### E20 — Next engineering sequence
+
+**Recommendation:** accept Section 102 sequencing after Final Gate, with
+representation decisions and conformance before production Provider/API work.
+**Decision:** PENDING.
+
+## 104. Final Contradiction Review
+
+| Authority/evidence | Review result |
+| --- | --- |
+| S5-ARCH-004 accepted boundary | aligned: five resources, embedded Bindings, embedded Execution Identity, domain ownership, internal metadata |
+| S5-SPIKE-003 Capability evidence | aligned: provider-independent identity, REST/MCP separation, authorization before Provider, domain Outcome |
+| S5-SPIKE-004 Agent Instance evidence | aligned: stable logical identity, platform routing, realization replacement, semantic recovery |
+| Runtime Provider Architecture | aligned: Binding -> registry metadata -> Provider -> opaque native realization; Contract not frozen |
+| current Agent API/controller | compatible through staged Option B; direct Runtime/Model/replica behavior preserved as legacy input/path |
+| current Task behavior | preserved; richer identity/selection/state/outcome is additive/derived |
+| current Workflow behavior | preserved; no split or engine redesign |
+| current Console | preserved read-only projection and machine values; additive detail gated |
+| D32 Option C | aligned: only identity/correlation/condition shape primitives shared; interactions/outcomes remain domain-specific |
+| accepted compatibility constraints | aligned: no rename/reinterpretation, one authority, explicit mapping, bounded rollback, evidence-based versioning |
+
+Final challenges:
+
+- Candidate convergence does not require a sixth resource or universal
+  Execution/Status/Outcome.
+- Workflow can remain one resource with explicit evolution debt.
+- Provider-specific behavior fits opaque extensions and certification profiles;
+  no Core discriminator is required.
+- Hermes debt stays combination-scoped and changes no Core field.
+- current Task/Workflow compatibility is bounded without immediate breaking
+  changes.
+- unresolved evidence remains classified as debt, blocked, thin, or deferred;
+  no unsupported claim is promoted to Candidate-stable.
+
+**CONTRADICTION: NONE.** No accepted boundary change is proposed.
+
+## 105. Optional Machine-Readable Companion
+
+`S5-ARCH-005-SCHEMA-CANDIDATE-V0.yaml` was deliberately **NOT CREATED**.
+
+At this stage a YAML structure would imply field names, nesting, serialization,
+requiredness, and type precision beyond the accepted implementation-neutral
+Candidate. The pseudo-schemas and cards in this artifact are sufficient for
+prototype planning while clearly retaining non-normative status.
+
+## 106. Checkpoint E State
+
+LIFECYCLE: **REVIEW**
+AUTHORIZATION: **AUTHORIZED**
+STATUS: **PASS**
+CHECKPOINT: **E — FINAL_SCHEMA_CANDIDATE_CONVERGENCE**
+RESULT: **CORE_SCHEMA_CANDIDATE_V0_RECOMMENDED**
+
+CANDIDATE: **v0.2 CORE SCHEMA CANDIDATE v0**
+CONTRACT_FREEZE: **NO**
+SCHEMA_FREEZE: **NO**
+RUNTIME_CONTRACT: **NOT_FROZEN**
+CAPABILITY_CONTRACT: **NOT_FROZEN**
+CONDITION_VOCABULARY: **NOT_FROZEN**
+OUTCOME_VOCABULARY: **NOT_FROZEN**
+RECOVERY_VOCABULARY: **NOT_FROZEN**
+`G-S5-RUNTIME-FREEZE-01`: **FAIL / UNCHANGED**
+PRODUCTION_CORE_CHANGE: **0**
+ADR_CHANGE: **0**
+EXISTING_SCHEMA_CHANGE: **0**
+CRD_CHANGE: **0**
+OPTIONAL_COMPANION: **NOT_CREATED / FALSE_PRECISION_AVOIDED**
+NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
+NEXT_GATE: **Human Final Schema Candidate Gate**
+
+S5-ARCH-005 remains open. This Checkpoint does not close the session or begin
+implementation.
