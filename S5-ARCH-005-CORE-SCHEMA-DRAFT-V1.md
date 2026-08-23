@@ -10,14 +10,15 @@ MODE: Architecture / Schema Draft
 LIFECYCLE: REVIEW
 AUTHORIZATION: AUTHORIZED
 STATUS: PASS
-CHECKPOINT: B — RESOURCE_SCHEMA_DRAFT
-RESULT: **RESOURCE_SCHEMA_DRAFT_RECOMMENDED**
+CHECKPOINT: C — REFERENCES_STATUS_CONDITIONS_EXECUTION
+RESULT: **CONNECTED_SCHEMA_MODEL_RECOMMENDED**
 
-> Checkpoint A established the compatibility and design baseline. The Human
-> Checkpoint A Gate passed and accepted A01-A14 for Schema Draft use. Checkpoint
-> B adds implementation-neutral logical schema candidates. It does not approve
-> a Kubernetes CRD, freeze a Contract/schema/vocabulary, change an ADR,
-> authorize implementation, or begin Checkpoint C.
+> Checkpoints A and B established the compatibility baseline and logical
+> resource candidates. Their Human Gates passed for Schema Draft use.
+> Checkpoint C connects those candidates through references, routing, status,
+> conditions, domain outcomes, execution correlation, and recovery. It does not
+> approve a CRD, freeze a Contract/schema/vocabulary, change an ADR, authorize
+> implementation, or begin Checkpoint D.
 
 ## 1. Source-of-Truth Baseline
 
@@ -1766,3 +1767,937 @@ NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
 NEXT_GATE: **Human Checkpoint B Gate**
 
 Checkpoint C has not begun and is not authorized by this result.
+
+# Checkpoint C — References, Status, Conditions, and Execution
+
+## 42. Human Checkpoint B Gate Record
+
+HUMAN DECISION: **PASS WITH COMPATIBILITY CONSTRAINTS**
+
+| Accepted dimension | Checkpoint C authority |
+| --- | --- |
+| B01-B17 | `ACCEPTED_FOR_SCHEMA_DRAFT` |
+| Current Agent strategy | OPTION B: evolve toward Definition; introduce Instance separately |
+| Workflow | one v0.2 resource; definition/execution conflation remains evolution debt |
+| Bindings | embedded only; no Binding CRDs |
+| Execution Identity | embedded Core value; no generic Execution resource |
+| References | bounded logical families; native references structurally separate |
+| Contract/schema | not frozen |
+| CRD/API/production | not approved or authorized |
+
+Checkpoint A and B Sections 1-41 remain unchanged historical records. The
+Gate authorizes only a connected implementation-neutral logical model.
+
+## 43. Connected Logical Contract Overview
+
+```text
+Agent Definition (desired authority)
+  | 1:N definitionRef
+  v
+Agent Instance (desired lifecycle + effective resolution + observed status)
+  ^
+  | selectedInstanceRef after Control Plane routing
+Task (logical Definition target + execution identity + Task outcome)
+  ^
+  | owned/referenced Task lifecycle
+Workflow (embedded graph request + aggregate execution/outcome)
+
+Agent Definition
+  |- desired Runtime Binding ----------> effective Runtime Binding on Instance
+  |- Capability Bindings --------------> invocation-time authorization/resolution
+  |- thin Model Binding ----------------> optional effective thin projection
+  `- thin Workspace/State/Knowledge/Policy/Permission refs
+
+Platform Execution Identity
+  Task/Workflow context
+    -> logical routing decision
+      -> selected Agent Instance
+        -> Runtime Provider
+          -> native Runtime correlation [0:N]
+            -> Capability Provider
+              -> native Capability correlation [0:N]
+```
+
+The arrows describe semantic relationships, not storage ownership or
+Kubernetes `ObjectReference`. Only Agent Definition, Agent Instance, Task,
+Workflow, and Capability Definition are first-class resource candidates.
+
+## 44. Cross-Resource Reference Relationships
+
+| Source | Relationship | Target | Cardinality | Owner/resolver | Lifecycle consequence |
+| --- | --- | --- | --- | --- | --- |
+| Agent Instance | `definitionRef` | Agent Definition | exactly `1` | Agent Control Plane | live Instance blocks ungoverned Definition deletion |
+| Agent Instance effective state | Definition revision/generation provenance | Agent Definition revision | exactly `1` effective snapshot | Instance reconciler | update/adoption is explicit; no implicit latest |
+| Task request | logical target | Agent Definition | `1` when Definition-targeted | Control Plane router | selects from eligible Instances |
+| Task request | explicit target | Agent Instance | `0..1` alternative | Control Plane + authorization | target must belong to allowed Definition/set and be eligible |
+| Task status | `selectedInstanceRef` | Agent Instance | `0..1` per routing attempt/current selection | Control Plane | observed/effective decision, not request authority |
+| Workflow node | Task request/Task ref | Task | `1` logical request; `0..1` created resource until scheduled | Workflow domain | Task owns execution; Workflow owns aggregate projection |
+| Agent Definition | embedded Capability Binding | Capability Definition | `0:N` | Capability domain resolver | reference does not grant invocation permission |
+| Agent Definition | desired Runtime Binding | Runtime Provider/package metadata | embedded intent | Runtime resolver | no Provider/public Registry resource implied |
+| Agent Instance | effective Runtime Binding | resolved Provider/package metadata | exactly `1` while runnable | Instance/Runtime resolution | derived from Definition generation and compatibility decision |
+| Agent Definition | thin Model Binding | external Model/Policy/Class reference | `0..1` | future Model domain | no routing/fallback semantics imported |
+| Task/Workflow context | Execution Identity | embedded Core value | exactly `1` per logical execution | Task/Workflow owner | stable through routing and Providers |
+| Execution Identity | native references | Runtime/Capability/infrastructure evidence | `0:N` | observing domain | correlation only; correctness cannot require a native ID |
+
+### 44.1 Reference resolution principles
+
+1. resolution is domain-owned and produces either a typed logical target or a
+   domain-specific failure/unknown disposition;
+2. name lookup always occurs within an explicit scope; ID lookup cannot silently
+   fall back to a same-named resource;
+3. kind/domain mismatch is invalid even if an ID/name happens to exist;
+4. version/revision requirements are checked before effective resolution;
+5. a dangling desired reference prevents the dependent effective state from
+   becoming usable but does not erase the desired reference;
+6. references do not transfer lifecycle ownership except where a separately
+   declared relationship rule, such as live Instance protection, says so;
+7. current same-namespace `agentRef.name` remains a compatibility shorthand,
+   not the canonical form of every future reference.
+
+## 45. Task Targeting and Instance Selection
+
+### 45.1 Logical placement
+
+```text
+Task.request.target =
+  DefinitionTarget {
+    definitionRef                                  REQUIRED_V0_2
+    routingIntent?                                 OPTIONAL_V0_2
+  }
+  | InstanceTarget {
+      instanceRef                                  OPTIONAL_V0_2
+      targetingAuthorizationRef                    REQUIRED when explicit
+    }
+  | LegacyAgentTarget {
+      name
+      implied same-namespace scope
+    }                                              COMPATIBILITY_ONLY
+
+Task.status.routing = {
+  targetInterpretation                             REQUIRED_V0_2
+  candidateDefinitionRef                           REQUIRED_V0_2
+  selectedInstanceRef?                             OPTIONAL_V0_2
+  selectionDisposition                             REQUIRED_V0_2
+  reason                                           REQUIRED_V0_2
+  selectedAt?                                      OPTIONAL_V0_2
+  evidenceFreshness?                               OPTIONAL_V0_2
+}
+```
+
+### 45.2 Selection transition
+
+```text
+requested logical target
+  -> resolve Definition scope/version
+  -> determine authorized candidate Instance set
+  -> evaluate Instance routing eligibility and freshness
+  -> select one logical Agent Instance
+  -> record selectedInstanceRef and decision provenance
+  -> pass selected Instance's effective Runtime Binding to Runtime Provider
+```
+
+Control Plane owns every transition through Instance selection. The Runtime
+Provider receives an already-selected Instance/Binding and may choose only
+among native realizations within that effective Binding.
+
+### 45.3 Consistency rules
+
+- for a Definition target, the selected Instance must reference that Definition
+  and satisfy the request's revision/policy constraints;
+- for explicit Instance targeting, the Instance's Definition becomes the
+  candidate Definition and authorization is mandatory;
+- `selectedInstanceRef` is status/effective evidence and cannot overwrite the
+  request target;
+- selection may be absent while pending, denied, invalid, or unknown; absence
+  does not mean a Runtime Provider may choose an Instance;
+- a stale or `UNKNOWN` eligibility assessment cannot be interpreted as
+  eligible without an explicitly approved risk policy;
+- Task never contains Pod, Service, Gateway, session, endpoint, or native run
+  identity as a routing target.
+
+### 45.4 Current Task compatibility
+
+Current `spec.agentRef.name` continues to mean the same-named current Agent in
+the Task namespace. Under the compatibility interpreter it identifies the
+Definition-facing legacy Agent and requests Control Plane selection of its
+legacy-compatible execution projection. It is not silently converted into an
+explicit Instance reference. A future additive target field or versioned API
+may express Definition/Instance targeting; conflict with legacy `agentRef`
+must be rejected rather than resolved by precedence hidden from users.
+
+## 46. Desired, Effective, and Observed Transitions
+
+| Domain | Desired/requested authority | Effective derived state | Observed/status evidence | Transition owner |
+| --- | --- | --- | --- | --- |
+| Agent Definition | definition, desired Bindings, thin refs | validated/defaulted projection only if needed | validation conditions + observed generation | Definition reconciler/validator |
+| Agent Instance | Definition ref + desired lifecycle | Definition revision, Runtime Binding, thin Model projection, resolution provenance | eligibility, Instance/Runtime conditions, recovery, native refs | Agent Instance reconciler |
+| Runtime Binding | Definition-owned intent/template | Instance-owned resolved Provider/package/config refs | Runtime Conditions and realization evidence outside Binding | Instance reconciler + Runtime Provider evidence |
+| Capability Binding | Definition-owned governed intent | per-invocation Capability/Provider/version/authorization decision | Capability Outcome + native refs | Capability authorization/resolution owner |
+| Task | input, target, routing/auth intent, timeout/retry intent | routing interpretation + selected Instance | submission, execution, attempts, Outcome, correlations | Task owner/Control Plane |
+| Workflow | graph/node requests | runnable/blocked node interpretation | node Task projections + aggregate execution/outcome | Workflow owner |
+| Capability Definition | operation/schema/risk/auth/compatibility declaration | validated definition only | validation status only | Capability Definition owner |
+
+Transitions must preserve provenance:
+
+- effective Definition/Binding values identify desired source generation;
+- observed state identifies relevant generation plus observation/freshness time;
+- a desired change invalidates, but does not falsify, observations of an older
+  generation;
+- Providers emit evidence and normalized domain observations; they do not edit
+  desired Core values;
+- `UNKNOWN` is the correct projection when required evidence is absent, stale,
+  contradictory, or unsupported.
+
+## 47. Agent Instance Status Boundary
+
+```text
+AgentInstanceStatus {
+  observedDefinition: {
+    definitionRef: ResourceRef<AgentDefinition>               R
+    revision: ResourceRevision                                R
+    generation: DesiredGeneration                             R
+  }
+
+  effectiveRuntime: {
+    bindingSummary: EffectiveRuntimeBindingSummary            R
+    sourceGeneration: DesiredGeneration                       R
+    resolvedAt: Instant                                       R
+  }
+
+  routingEligibility: {
+    truth: FourWayTruth                                       R
+    reason: StableInstanceReason                              R
+    message?: SafeMessage                                     O
+    evaluatedAt: Instant                                      R
+    freshness: EvidenceFreshness                              R
+  }
+
+  runtimeConditionSummary?: DomainConditionSummary            O
+  instanceConditions: Condition<AgentInstanceDomain>[]        O
+  runtimeConditions: Condition<RuntimeDomain>[]                O
+  recoveryAssessment?: RecoveryAssessment                     O
+  realizationSummary: {
+    activeCount: NonNegativeInteger                           R
+    availableCount?: NonNegativeInteger                       O
+    observedAt: Instant                                       R
+    freshness: EvidenceFreshness                              R
+  }
+  nativeReferences: NativeReference[]                         O
+  executionCorrelations?: ExecutionCorrelationRef[]           O
+  observedAt: Instant                                         R
+}
+```
+
+`EffectiveRuntimeBindingSummary` exposes only Provider/package/class identity,
+compatibility disposition, desired provenance, and safe extension references.
+It does not duplicate Provider configuration or native topology.
+
+`DomainConditionSummary` is a convenience projection such as worst/most
+relevant truth and freshest observation. It cannot replace the underlying
+domain Conditions or create one universal health verdict.
+
+The status must not mirror Pod phase, restart count, container readiness,
+Gateway health, or native sessions. Those may appear only as bounded native
+evidence normalized into Runtime/Instance semantics.
+
+## 48. Condition Model
+
+### 48.1 Shared structural candidate
+
+```text
+Condition<Domain> {
+  concept: DomainConditionConcept                              R
+  truth: TRUE | FALSE | UNKNOWN | NOT_APPLICABLE              R
+  reason: StableDomainReason                                   R
+  message?: SafeMessage                                        O
+  observedGeneration?: DesiredGeneration                       O
+  observedAt: Instant                                           R
+  lastTransitionAt?: Instant                                    O
+  freshness: EvidenceFreshness                                  R
+  evidenceRefs?: EvidenceReference[]                            O
+}
+```
+
+This shares shape, not vocabulary or lifecycle. Exact names, serialization,
+enums, transition rules, reason taxonomies, and freshness thresholds remain
+unfrozen.
+
+### 48.2 Four-way truth
+
+| Truth | Meaning | Forbidden interpretation |
+| --- | --- | --- |
+| `TRUE` | sufficient fresh evidence supports the domain assertion | generic success in another domain |
+| `FALSE` | sufficient fresh evidence contradicts the assertion | unknown or unavailable evidence |
+| `UNKNOWN` | truth cannot be established from applicable evidence | healthy, false, or not applicable |
+| `NOT_APPLICABLE` | concept does not apply to this declared profile/mode | unsupported because evidence is missing |
+
+`lastTransitionAt` changes only when `truth` changes for the same concept and
+semantic subject. `observedAt` changes when evidence is evaluated. Freshness
+describes whether the observation may still support decisions. Safe messages
+must be bounded and redacted; controllers cannot depend on message text.
+
+## 49. Runtime Conditions
+
+Runtime Condition remains Runtime-domain owned. A Runtime Provider normalizes
+native evidence into portable Runtime assertions without importing native
+health names into Core.
+
+| Concept | v0.2 disposition | Meaning |
+| --- | --- | --- |
+| `RuntimeAvailable` | minimum meaningful candidate | effective Runtime can accept/continue the declared Runtime interaction profile |
+| `InfrastructureAvailable` | conditional | applies only where the Runtime profile owns/observes infrastructure availability |
+| `DependencyReady` | conditional | applies only for a declared dependency whose readiness is portable and relevant |
+| `ProtocolAvailable` | Provider detail by default | expose only if later evidence proves it is a required platform Runtime semantic |
+| `TaskReady` | prohibited | Task readiness is not a Runtime Condition |
+
+Runtime availability is not Instance routing eligibility, Task success,
+Capability authorization, or recovery. A Provider-native `healthy`, Pod
+`Ready`, Hermes state, OpenClaw run status, or HTTP success is evidence from
+which the Provider may derive a Runtime Condition; it is never copied as a Core
+condition concept by default.
+
+## 50. Agent Instance Conditions
+
+Instance-domain conditions answer questions owned by Agent Instance
+reconciliation. Candidate concepts are structural and unfrozen:
+
+| Conceptual question | Candidate condition concept | Relation to other domains |
+| --- | --- | --- |
+| Is the Instance eligible for logical routing? | `RoutingEligible` | derived using policy, Binding, Runtime evidence, and freshness; not equal to RuntimeAvailable |
+| Is effective Runtime Binding resolved and usable? | `RuntimeBindingUsable` | Instance owns conclusion; Runtime Provider supplies compatibility/evidence |
+| Is a required realization available? | `RequiredRealizationAvailable` | conditional by ownership/profile; native evidence alone is insufficient |
+| Is reconciliation converged to desired generation? | `ReconciliationCurrent` | compares desired/effective/observed provenance |
+| Is the Instance degraded while still potentially routable? | `Degraded` | domain-specific policy conclusion, not inverse of availability |
+| Is recovery semantically established? | `RecoveryResolved` | projects Recovery Assessment; restart is not enough |
+
+These are logical concepts for review, not frozen names/enums. An Instance may
+be RuntimeAvailable but ineligible due to policy, stale evidence, Definition
+mismatch, unresolved recovery, or explicit lifecycle intent. It may also be
+temporarily eligible under a profile where a conditional realization concept
+is not applicable. No one Condition is a universal health status.
+
+## 51. Task Execution Semantics
+
+### 51.1 Domain structures
+
+```text
+TaskSubmissionDisposition {
+  state: PENDING | ACCEPTED | REJECTED | UNKNOWN              candidate
+  reason: TaskSubmissionReason
+  decidedAt?: Instant
+}
+
+TaskExecutionState {
+  state: NOT_STARTED | RUNNING | TERMINAL | UNKNOWN           candidate
+  observedAt: Instant
+  selectedInstanceRef?: ResourceRef<AgentInstance>
+}
+
+TaskOutcome {
+  terminalDisposition: SUCCEEDED | FAILED | TIMED_OUT |
+                       CANCELLED | UNKNOWN                    candidate
+  output?: InlineValueOrOutputReference
+  reason: StableTaskReason
+  retryable?: Boolean
+  message?: SafeMessage
+  completedAt?: Instant
+  evidenceRefs?: EvidenceReference[]
+}
+```
+
+The candidate labels are explanatory, not frozen. Logical constraints:
+
+- submission rejection can become a terminal Task-owned failure without
+  Runtime invocation;
+- accepted submission does not mean execution started or succeeded;
+- execution `TERMINAL` requires a Task Outcome, but Outcome vocabulary remains
+  Task-owned;
+- Provider result is evidence. Task owner determines the Task Outcome after
+  applying timeout, retry, validation, and Task semantics;
+- Runtime or Capability failure evidence cannot directly overwrite Task state;
+- current phase values remain the compatibility projection described below.
+
+### 51.2 Current phase projection
+
+| Current Task phase | Submission projection | Execution projection | Outcome projection |
+| --- | --- | --- | --- |
+| `Pending` | pending or not yet accepted | not started/unknown | absent |
+| `Running` | accepted | running | absent |
+| `Succeeded` | accepted | terminal | succeeded with current result |
+| `Failed` | accepted or rejected, depending on reason | terminal or not started | failed with current reason/message/retryable |
+| `TimedOut` | accepted | terminal | timed out |
+
+This mapping is deliberately many-to-one/conditional. It preserves current
+wire behavior while allowing a later additive representation to expose the
+distinctions. Current `attempts` remains a Task-owned summary. Cancellation is
+not added to the current phase enum and remains unsupported until separately
+approved.
+
+## 52. Workflow Execution Semantics
+
+Workflow keeps one first-class resource with embedded execution semantics.
+
+```text
+WorkflowExecutionState {
+  executionIdentity: PlatformExecutionIdentity                R
+  submission: WorkflowSubmissionDisposition                   R
+  aggregateState: WorkflowAggregateState                      R
+  nodes: Map<NodeIdentity, WorkflowNodeExecution>              R
+  outcome?: WorkflowOutcome                                    O
+  humanGateWaits?: HumanGateWaitState[]                         T
+  observedAt: Instant                                          R
+}
+
+WorkflowNodeExecution {
+  taskRef?: ResourceRef<Task>
+  state: PENDING | BLOCKED | RUNNING | TERMINAL | UNKNOWN      candidate
+  dependencyDisposition: SATISFIED | WAITING | IMPOSSIBLE |
+                         HUMAN_GATE_WAIT | UNKNOWN             candidate
+  taskProjection?: TaskExecutionProjection
+}
+
+WorkflowOutcome {
+  terminalDisposition: SUCCEEDED | FAILED | CANCELLED |
+                       UNKNOWN                                candidate
+  nodeSummary: AggregateNodeSummary
+  reason: StableWorkflowReason
+  message?: SafeMessage
+  completedAt?: Instant
+}
+```
+
+Bounded semantic rules:
+
+- dependency blocking is not failure while required upstream outcomes remain
+  non-terminal or unknown;
+- a node becomes skipped/terminally non-executed when a required dependency
+  can no longer satisfy execution, preserving current failure/timeout/skip
+  propagation;
+- independent siblings continue independently;
+- partial completion is an aggregate observation, not necessarily a terminal
+  Workflow Outcome;
+- a Human Gate wait blocks only the governed continuation path and is distinct
+  from dependency failure or execution success;
+- retry belongs to the underlying Task unless Workflow-level orchestration
+  explicitly creates/replaces a Task under later approved semantics;
+- recovery of an Agent Instance does not automatically retry or succeed an
+  affected Task/Workflow node;
+- no new engine, queue, history store, or WorkflowExecution resource is
+  implied.
+
+Current Workflow phases and per-node states remain compatibility projections.
+The current `Skipped` node state is retained, even though the logical model
+explains why it was not executed.
+
+## 53. Capability Outcome
+
+Capability Outcome is owned by the Capability invocation domain and remains
+separate from Task Outcome, Runtime interaction result, and transport error.
+
+```text
+CapabilityOutcome {
+  disposition: AUTHORIZATION_DENIED | VALIDATION_FAILED |
+               PROVIDER_UNAVAILABLE | PROTOCOL_FAILED |
+               REMOTE_EXECUTION_FAILED | TIMED_OUT |
+               SUCCEEDED | UNKNOWN                            candidate
+  capabilityRef: ResourceRef<CapabilityDefinition>            R
+  operation: LogicalOperationIdentity                          R
+  output?: InlineValueOrOutputReference                        O
+  reason: StableCapabilityReason                               R
+  retrySafety?: CapabilityRetrySafety                          O
+  message?: SafeMessage                                        O
+  nativeReferences?: NativeReference[]                         O
+  observedAt: Instant                                           R
+}
+```
+
+The dispositions are semantic distinctions for draft review, not a frozen
+universal error enum. Domain rules:
+
+- `AUTHORIZATION_DENIED` may be final before Provider invocation and therefore
+  legitimately have zero native references;
+- validation precedes Provider handoff where Core/Capability owner can
+  validate the semantic request;
+- Provider unavailable and protocol failure describe different ownership and
+  retry evidence;
+- remote execution failure does not imply transport failure;
+- HTTP/MCP/native success is Provider evidence; the Capability owner confirms
+  semantic success/output conformance;
+- `UNKNOWN` is used when completion or semantic validity cannot be established;
+- retry safety depends on Capability side-effect/idempotency declarations and
+  is not inferred from a generic retryable boolean.
+
+## 54. Execution Identity Propagation
+
+### 54.1 Propagation path
+
+```text
+Task or embedded Workflow execution owner creates PlatformExecutionIdentity
+  -> Task/Workflow request and status carry the same logical identity
+  -> routing decision records identity + selected Agent Instance
+  -> Runtime Provider receives identity with effective Runtime Binding
+  -> Runtime Provider propagates identity without replacement
+  -> native Runtime may return 0:N opaque correlation IDs
+  -> Capability authorization/resolution receives same root execution context
+  -> Capability Provider propagates identity without replacement
+  -> native Capability may return 0:N opaque invocation IDs
+  -> outcomes/evidence correlate back to Platform identity
+```
+
+### 54.2 Rules
+
+1. Platform execution correctness, authorization, outcome ownership, and
+   recovery cannot require any native ID.
+2. Provider transport may encode the Platform identity differently, but the
+   semantic value must remain round-trippable and unchanged.
+3. A Workflow execution has its own identity; each materialized Task has its
+   own identity with optional root/parent correlation to the Workflow. This
+   does not create a universal execution hierarchy resource.
+4. Capability invocations attributable to a Task may correlate using that Task
+   execution identity plus domain-specific subordinate context; whether a new
+   child logical identity is required remains operation/retry-specific.
+5. retries within current Task attempt semantics retain the Task execution
+   identity unless an approved replay rule states otherwise.
+6. duplicate, conflicting, or missing propagated identity is a Contract
+   conformance failure, not permission to substitute a native run ID.
+7. redaction and exposure policies apply to native evidence independently of
+   Platform identity.
+
+## 55. Native Reference and Ownership Semantics
+
+```text
+NativeReference {
+  domain: RUNTIME | CAPABILITY | INFRASTRUCTURE               R
+  providerRef?: ProviderRef                                   O
+  nativeKind: OpaqueKindLabel                                 R
+  opaqueId: OpaqueText                                        R
+  observedAt: Instant                                         R
+  freshness?: EvidenceFreshness                               O
+  lifecycleOwnership: PLATFORM_OWNED | PROVIDER_OWNED |
+                      EXTERNALLY_OWNED | SHARED | UNKNOWN     R
+  executionRef?: PlatformExecutionIdentity                    O
+  realizationRole?: OpaqueRoleLabel                           O
+}
+```
+
+`lifecycleOwnership` is a cleanup safety hint backed by Binding/Provider policy,
+not a transfer of authority. Rules:
+
+- Platform cleanup may act only when the effective Binding and Provider
+  Contract authorize cleanup for the declared ownership mode;
+- `EXTERNALLY_OWNED`, `SHARED`, or `UNKNOWN` prohibits unconditional deletion;
+- a native reference disappearing is evidence, not proof that the logical
+  Instance/Task/Workflow has been deleted or recovered;
+- native kind/role labels remain opaque diagnostics and cannot introduce
+  Hermes/OpenClaw/Pod-specific Core branches;
+- references are bounded in count/retention; large histories and raw native
+  payloads belong in observability systems.
+
+## 56. Recovery Assessment
+
+Recovery Assessment remains an Agent Instance-owned embedded status value.
+
+```text
+RecoveryAssessment {
+  truth: TRUE | FALSE | UNKNOWN | NOT_APPLICABLE               R
+  reason: StableRecoveryReason                                 R
+  desiredInstanceExists: FourWayTruth                          R
+  stableIdentityRetained: FourWayTruth                         R
+  effectiveBindingUsable: FourWayTruth                         R
+  runtimeConditionAcceptable: FourWayTruth                     R
+  routingEligibilityRestored: FourWayTruth                     R
+  requiredRealizationAvailable: FourWayTruth                   R
+  executionContinuity?: FourWayTruth                           O
+  stateContinuity?: FourWayTruth                               O
+  assessedDefinitionGeneration: DesiredGeneration              R
+  assessedAt: Instant                                           R
+  evidenceFreshness: EvidenceFreshness                          R
+  evidenceRefs?: EvidenceReference[]                            O
+  message?: SafeMessage                                         O
+}
+```
+
+Assessment algorithm principles:
+
+- applicable predicates are determined by declared Runtime ownership/profile,
+  not by Provider family names;
+- overall `TRUE` requires every required predicate to be true with sufficient
+  fresh evidence;
+- any required false predicate makes overall false;
+- any unresolved required predicate makes overall unknown unless another
+  required predicate is already false;
+- not-applicable predicates are excluded from conjunction but remain visible;
+- execution/state continuity is evaluated only when the relevant Contract and
+  Provider profile explicitly support it;
+- a restart, Pod replacement, new Gateway route, successful health endpoint,
+  or new native session is evidence for some predicates at most; none alone is
+  recovery;
+- state portability is never assumed.
+
+## 57. Human Gate Thin Interaction
+
+Governance and execution owners communicate through references and state, not
+through a new Human Gate Core resource.
+
+```text
+HumanGateRequestRef {
+  decisionRequestRef: ResourceRef<GovernanceDecisionRequest>  T
+  requiredAuthorityRef: ResourceRef<DecisionAuthority>        T
+  requestedAt: Instant                                        T
+}
+
+HumanGateDecisionEvidenceRef {
+  decisionRef: ResourceRef<GovernanceDecision>                 T
+  disposition: APPROVED | REJECTED | EXPIRED | REVOKED |
+               UNKNOWN                                        candidate
+  decidedAt?: Instant
+  evidenceRef?: EvidenceReference
+}
+
+HumanGateWaitState {
+  gateRequestRef: HumanGateRequestRef                          T
+  state: WAITING | RESUMABLE | REJECTED | EXPIRED | UNKNOWN   candidate
+  decisionEvidenceRef?: HumanGateDecisionEvidenceRef           T
+  continuationRef: WorkflowNodeOrTaskContinuationRef           T
+}
+```
+
+- Governance owns request identity, authority evaluation, approval/rejection,
+  expiry/revocation, and evidence.
+- Task/Workflow owns waiting, resume eligibility, and continuation transition.
+- approval makes a continuation eligible; it does not mean the continuation
+  ran or succeeded.
+- rejection/expiry is an execution-domain blocking disposition, not a Provider
+  failure.
+- stale, revoked, mismatched, or unknown evidence cannot be treated as approval.
+- no Human Feedback, learning, preference, or approval workflow architecture
+  is introduced.
+
+## 58. Provider Extension Points
+
+| Extension category | Logical location | Core visibility | Constraint |
+| --- | --- | --- | --- |
+| Provider configuration reference | desired/effective domain Binding | opaque ref only | target/version/credentials owned outside Core |
+| Provider extension reference | Binding or Provider descriptor | opaque ref + declared compatibility | no stable Core parsing/branching |
+| Runtime Package reference | Runtime Binding/internal registry metadata | package ID/version/compatibility facts | no public RuntimePackage resource |
+| Provider descriptor | domain-specific internal registry | ID, compatibility version, supported profiles | Runtime and Capability registries remain distinct |
+| native metadata | bounded NativeReference/evidence | safe kind/opaque ID/time/ownership hint | raw payload/topology excluded |
+| safe diagnostic | domain Condition/Outcome | bounded redacted reason/message | no credentials, endpoints, or control via message text |
+
+Provider-specific fields may be versioned behind the referenced extension
+owner. Widespread Provider adoption does not promote a field into Core; only
+cross-Provider semantic proof plus a Human architecture decision may do so.
+Neither `hermes`, `openclaw`, `native`, MCP, REST, Pod, Gateway, nor a model
+vendor becomes a stable Core field discriminator.
+
+## 59. Expanded Connected-Schema Invariants
+
+In addition to Section 35:
+
+1. Agent Instance references exactly one Agent Definition at all times it is
+   logically live.
+2. Effective Definition revision/generation recorded by an Instance must resolve
+   under its `definitionRef`.
+3. A Task's selected Instance must reference the Task target Definition, or be
+   the explicitly targeted authorized Instance.
+4. A selected Instance must come from the Control Plane's eligible candidate
+   set evaluated with sufficient freshness.
+5. Task target intent is immutable for one accepted logical execution unless a
+   separately defined rerouting rule preserves audit/provenance.
+6. Runtime effective Binding must derive from authorized Definition desired
+   intent and record source generation and compatibility decision.
+7. Effective Binding cannot contain an independently editable desired field.
+8. Capability invocation requires a resolvable Capability Binding and a current
+   authorization decision independent of discovery/Provider feasibility.
+9. Authorization denial must prevent Provider invocation and may have zero
+   native references.
+10. Platform Execution Identity remains stable from execution owner through
+    routing and both Provider domains.
+11. Native ID cannot replace or backfill missing Platform identity.
+12. Provider result/transport status remains evidence; Task, Workflow, and
+    Capability owners determine their own Outcomes.
+13. Runtime Conditions and Agent Instance Conditions cannot share a condition
+    concept merely because their structural fields match.
+14. `UNKNOWN` cannot be treated as healthy, eligible, recovered, authorized, or
+    successful.
+15. `NOT_APPLICABLE` requires a declared profile rule, not missing evidence.
+16. Recovery `TRUE` requires all applicable semantic predicates with fresh
+    evidence; restart or replacement is insufficient.
+17. A native realization with external/shared/unknown ownership cannot be
+    unconditionally deleted by Platform cleanup.
+18. Workflow node projection cannot become a second desired Task authority.
+19. Human Gate approval affects resume eligibility only and cannot set Task or
+    Workflow Outcome to succeeded.
+20. No Core value may require Provider-family-specific interpretation for
+    correctness.
+21. Logical reference resolution failure preserves desired intent and produces
+    domain-owned condition/outcome evidence rather than silently retargeting.
+22. Old-generation observation cannot satisfy current-generation reconciliation
+    without an explicit compatibility rule.
+23. Native reference absence cannot prove logical deletion, failure, or
+    recovery.
+24. Current Task/Workflow phase projections remain coherent with richer states;
+    conflicting representations are rejected, not silently prioritized.
+
+## 60. Current API Compatibility Mapping — Checkpoint C
+
+### 60.1 Current Task Agent reference
+
+| Mechanism | Recommendation | Classification |
+| --- | --- | --- |
+| Preserve `spec.agentRef.name` read/write meaning | required throughout v0.2 compatibility window | KEEP |
+| Interpret as Definition-facing legacy target under same namespace | deterministic compatibility layer | TRANSLATION |
+| Add selected logical Instance to status/projection | new evidence, never request rewrite | ADDITIVE_FIELD |
+| Add richer Definition/Instance target | only additive with mutual-exclusion validation or versioned API | ADDITIVE_FIELD / VERSIONED_MIGRATION |
+| Reinterpret `agentRef.name` as Instance | prohibited | BREAKING_CANDIDATE |
+| Put native Service/Pod/Gateway target in Task | prohibited | BREAKING_ARCHITECTURE |
+
+### 60.2 Current Task status
+
+| Current field | Compatibility mechanism | Connected-model mapping |
+| --- | --- | --- |
+| `phase` | stable compatibility projection | derives from submission/execution/Outcome without changing wire values |
+| `result` | alias/derived field | Task Outcome inline output; output references require additive/versioned representation |
+| `reason/message` | compatibility alias | Task-domain stable reason and safe message |
+| `retryable` | derived compatibility field | Task assessment only; Capability side-effect retry safety remains distinct |
+| `attempts` | keep | bounded Task AttemptSummary total |
+| `startedAt/completedAt` | keep | Task execution/outcome timestamps |
+| Execution Identity | additive | new embedded Core value; no native substitution |
+| selected Instance | additive derived status | records Control Plane selection |
+
+### 60.3 Current Workflow Task ownership/status
+
+| Current behavior | Mechanism | Constraint |
+| --- | --- | --- |
+| Workflow embeds node requests | compatibility alias to embedded definition | no reusable Definition resource implied |
+| controller creates owned Task CRs | keep | Task remains execution authority |
+| `<workflow>-<node>` name and labels | keep current implementation | later change requires migration of Console/controller joins |
+| node status map | derived field/projection | cannot become duplicate Task desired state |
+| `Skipped` propagation | keep | maps to terminally non-executed dependency disposition |
+| Workflow phase | stable compatibility projection | richer aggregate state must project deterministically |
+| Human Gate waiting | additive future thin state | must not reuse Failed/Succeeded dishonestly |
+| Workflow execution identity | additive | each Task may correlate by parent/root identity |
+
+### 60.4 Current Runtime invocation path
+
+| Current behavior | Compatibility mechanism | Target boundary |
+| --- | --- | --- |
+| same-name Agent Service | legacy routing translation | Control Plane selection precedes Provider/native route |
+| `POST /v1/invoke` string input/output | keep Runtime-specific implementation | Provider evidence, not universal Execution schema |
+| HTTP status classification | keep current Task compatibility | Runtime/Task/Capability domain ownership remains distinct |
+| no Platform identity propagation | additive Contract candidate | required conformance before freeze |
+| direct Operator Deployment/Service | migration required later | Runtime Binding/Provider boundary; no implementation here |
+
+### 60.5 Current Console Agent/Workflow view
+
+The current Console exposes Workflow and node Agent references, Task execution
+state, results, attempts, reasons, and timestamps. Compatibility mechanisms:
+
+- preserve current response fields and machine phase values;
+- derive existing `agent.name` from the legacy Task target while optionally
+  adding selected Instance information only through a compatible response
+  extension/version;
+- keep the Console read-only and Kubernetes-backed;
+- do not make Console projection identity authoritative;
+- do not treat `WorkflowExecutionDetail` naming as a Core resource;
+- because Pydantic models forbid extras, any additive response field requires
+  explicit schema/test work in a later authorized implementation.
+
+## 61. Human Decisions Required — Checkpoint C
+
+All decisions remain **PENDING** until the Human Checkpoint C Gate.
+
+### C01 — Connected logical reference relationships
+
+**Recommendation:** accept Section 44 cardinalities, resolver ownership, and
+lifecycle consequences without selecting Kubernetes ObjectReference.
+**Decision:** PENDING.
+
+### C02 — Task Definition target and selected Instance
+
+**Recommendation:** request carries Definition target or authorized explicit
+Instance target; status records Control Plane-selected Instance; legacy Agent
+name remains a compatibility target.
+**Decision:** PENDING.
+
+### C03 — Desired/effective/observed transitions
+
+**Recommendation:** accept Section 46 selective placement and mandatory
+generation/provenance/freshness rules.
+**Decision:** PENDING.
+
+### C04 — Agent Instance Status boundary
+
+**Recommendation:** accept Definition provenance, effective Runtime summary,
+routing eligibility, separate Runtime/Instance Conditions, recovery,
+realization summary, and bounded native evidence; reject Pod-status mirroring.
+**Decision:** PENDING.
+
+### C05 — Condition structure and four-way truth
+
+**Recommendation:** accept shared structure only, with domain concepts/reasons
+and distinct TRUE/FALSE/UNKNOWN/NOT_APPLICABLE semantics; vocabulary remains
+unfrozen.
+**Decision:** PENDING.
+
+### C06 — Runtime Condition placement
+
+**Recommendation:** Runtime-domain Provider-normalized Conditions with
+`RuntimeAvailable` as minimum candidate; conditional infrastructure/dependency
+concepts and no TaskReady/native health names.
+**Decision:** PENDING.
+
+### C07 — Agent Instance Condition placement
+
+**Recommendation:** Instance-domain conditions answer routing, Binding,
+realization, reconciliation, degradation, and recovery questions without
+equating them to Runtime/Pod health.
+**Decision:** PENDING.
+
+### C08 — Task execution separation
+
+**Recommendation:** distinguish submission disposition, execution state, and
+Task Outcome while preserving deterministic current phase/status projection.
+**Decision:** PENDING.
+
+### C09 — Workflow embedded execution
+
+**Recommendation:** accept bounded node/dependency/partial/skip/Human Gate/
+aggregate semantics inside Workflow; no WorkflowExecution resource or engine
+redesign.
+**Decision:** PENDING.
+
+### C10 — Capability Outcome
+
+**Recommendation:** accept Capability-owned distinctions for denial,
+validation, Provider availability, protocol, remote execution, timeout,
+success, and unknown; do not create a universal error schema.
+**Decision:** PENDING.
+
+### C11 — Execution Identity propagation
+
+**Recommendation:** accept end-to-end unchanged Platform identity through
+routing, Runtime, and Capability Providers with `0:N` optional native
+correlations.
+**Decision:** PENDING.
+
+### C12 — NativeReference ownership shape
+
+**Recommendation:** add lifecycle ownership hint to opaque bounded evidence;
+external/shared/unknown ownership prohibits unconditional cleanup.
+**Decision:** PENDING.
+
+### C13 — Recovery Assessment
+
+**Recommendation:** accept Instance-owned four-way predicate assessment with
+generation/freshness provenance; restart/replacement and state portability are
+insufficient.
+**Decision:** PENDING.
+
+### C14 — Human Gate thin interaction
+
+**Recommendation:** Governance owns requests/authority/decisions/evidence;
+Task/Workflow owns waiting/resume/continuation; approval is not success.
+**Decision:** PENDING.
+
+### C15 — Provider extension points
+
+**Recommendation:** opaque config/extension refs, domain registry metadata,
+bounded native evidence, and safe diagnostics only; no Provider-family fields
+in stable Core.
+**Decision:** PENDING.
+
+### C16 — Compatibility aliases and translations
+
+**Recommendation:** preserve current Agent ref, Task phases/status, Workflow
+Task ownership, Runtime invocation, and Console fields through explicit alias,
+translation, additive field, or versioned migration; prohibit in-place
+reinterpretation.
+**Decision:** PENDING.
+
+### C17 — Eligibility and freshness safety
+
+**Recommendation:** only sufficiently fresh eligible Instance evidence may
+support routing; UNKNOWN/stale evidence cannot silently become eligible.
+**Decision:** PENDING.
+
+### C18 — Outcome ownership boundary
+
+**Recommendation:** Provider/native results remain evidence; Task, Workflow,
+and Capability owners derive distinct Outcomes, and Runtime interaction remains
+Runtime-specific.
+**Decision:** PENDING.
+
+## 62. Contradictions and Stop-Condition Review — Checkpoint C
+
+| Stop condition | Result |
+| --- | --- |
+| Another first-class resource required | Not found |
+| WorkflowExecution required | Not found; bounded embedded structure remains sufficient |
+| Universal Execution schema required | Not found; only identity/correlation and shared condition shape are common |
+| Current Task compatibility requires immediate break | Not found; aliases/translations/additive status preserve current behavior |
+| Condition sharing contradicts D32/D36 | Not found; structure is shared while concepts/reasons/ownership remain domain-specific |
+| Provider-specific fields required in Core | Not found |
+| Model routing detail required | Not found |
+| S5-ARCH-004 boundary must change | Not found |
+
+No blocking contradiction was found. Checkpoint D has not begun.
+
+## 63. Evidence Debt — Checkpoint C
+
+Carry forward Checkpoint A/B debt, plus:
+
+- exact logical ID/name/scope mismatch and dangling-reference error taxonomy is
+  unfrozen;
+- Definition update adoption and target revision-selection rules remain open;
+- explicit Instance targeting authorization and audit policy is unproven;
+- routing eligibility input set, freshness thresholds, deterministic selection,
+  rebinding, and in-flight rerouting remain Contract-freeze debt;
+- current Agent compatibility interpreter/facade has no API representation or
+  conformance evidence;
+- submission/execution/outcome vocabulary and deterministic projection to/from
+  current Task phases remain unfrozen;
+- cancellation remains unsupported and Human Gate wait-state projection into
+  the current Workflow API is unresolved;
+- Capability denial/validation/Provider/protocol/remote/timeout taxonomies,
+  retry safety, and deferred durability remain unfrozen;
+- combined unchanged-consumer propagation of Platform Execution Identity
+  through Runtime and Capability Providers remains unproven;
+- native lifecycle ownership assertion source, authorization, revocation, and
+  cleanup conformance remain open;
+- Recovery predicate applicability, evidence thresholds, timeout/escalation,
+  stateful/external profiles, and in-flight execution disposition remain open;
+- Provider extension schema versioning, signing, redaction, and safe diagnostic
+  limits remain unproven;
+- existing Console compatibility requires future explicit API schema/tests for
+  any additive selected-Instance/execution fields;
+- ED-S5-001 continues to block Hermes certification/readiness only.
+
+These debts block relevant Contract/schema freeze, API approval, migration,
+Provider certification, or production claims. They do not require another
+resource or a universal semantic object.
+
+## 64. Checkpoint C State
+
+LIFECYCLE: **REVIEW**
+AUTHORIZATION: **AUTHORIZED**
+STATUS: **PASS**
+CHECKPOINT: **C — REFERENCES_STATUS_CONDITIONS_EXECUTION**
+RESULT: **CONNECTED_SCHEMA_MODEL_RECOMMENDED**
+
+CONTRACT_FREEZE: **NO**
+SCHEMA_FREEZE: **NO**
+RUNTIME_CONTRACT: **NOT_FROZEN**
+CAPABILITY_CONTRACT: **NOT_FROZEN**
+CONDITION_VOCABULARY: **NOT_FROZEN**
+OUTCOME_VOCABULARY: **NOT_FROZEN**
+RECOVERY_VOCABULARY: **NOT_FROZEN**
+`G-S5-RUNTIME-FREEZE-01`: **FAIL / UNCHANGED**
+PRODUCTION_CORE_CHANGE: **0**
+ADR_CHANGE: **0**
+EXISTING_SCHEMA_CHANGE: **0**
+CRD_CHANGE: **0**
+NEXT_ACTION: **WAIT_FOR_HUMAN_DECISION**
+NEXT_GATE: **Human Checkpoint C Gate**
+
+Checkpoint D has not begun and is not authorized by this result.
