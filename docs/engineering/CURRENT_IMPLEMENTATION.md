@@ -13,24 +13,45 @@ details.
 
 ## Current Release Planning Context
 
-The current planning baseline targets:
+The latest published and implemented release baseline is:
 
 v0.1.0-alpha
 
-Planning phase:
+The current development objective is:
 
-S4.5 — Alpha Release Hardening.
+v0.2 CONNECT — Digital Employee Technical Preview
 
-This is planning metadata, not an implementation capability claim.
+The v0.2 objective is a `WORKING_RELEASE_OBJECTIVE`, not an implementation
+capability claim. Release acceptance and production readiness are
+`NOT_GRANTED`.
 
-The current goal is to make the existing Agent Control Plane core:
+The published v0.1 baseline was hardened to make the existing Agent Control
+Plane core:
 
 - installable;
 - runnable;
 - observable;
 - documented;
 - reproducible;
-- safe to publish as an Alpha.
+- suitable for the bounded Alpha claims in its release notes.
+
+## Accepted v0.2 Candidate versus implementation
+
+The accepted v0.2 Core Schema Candidate defines five logical resource
+candidates: Agent Definition, Agent Instance, Task, Workflow, and Capability
+Definition. This acceptance does not authorize five CRDs or establish their
+persistence representation.
+
+Runtime and Capability Bindings remain embedded Candidate boundaries; Model
+Binding is a thin embedded foundation. Core Schema, Runtime Contract, and
+Capability Contract freezes are `NO`. Provider certification and production
+readiness are `NOT_GRANTED`; Hermes remains `EXPERIMENTAL / NOT CURRENTLY
+CERTIFIABLE`, and ED-S5-001 remains `OPEN`.
+
+These Candidate semantics are approved architecture direction, not proof of
+implementation. See the [Candidate artifact](../../S5-ARCH-005-CORE-SCHEMA-DRAFT-V1.md),
+[Project State](../../PROJECT_STATE.md), and
+[Governance Registry](../governance/REGISTRY.md).
 
 ## Implemented Core
 
