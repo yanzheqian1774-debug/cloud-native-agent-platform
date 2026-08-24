@@ -714,9 +714,12 @@ candidate table. It still grants no implementation authorization.
 | G05 | Native primary; OpenClaw supported external-path Candidate; Hermes Experimental/not certifiable | `ACCEPTED_WITH_EVIDENCE_DEBT` | OpenClaw claim needs bounded live evidence; Hermes is optional, visibly Experimental, ED-S5-001 open |
 | G06 | minimum vertical slice and Tracks A–E are the planning basis | `ACCEPTED_FOR_IMPLEMENTATION_PLANNING` | no implementation Session is active or authorized before close, integration, and separate authorization |
 
-All six Human decisions are recorded exactly. QD-01 through QD-06 from
-Section 16 are resolved by G01 through G06; no new product or architecture
-decision is introduced.
+| G07 | Runtime integrations use independently versioned Provider Adapters between stable Core and exact upstream Runtime versions/profiles | `ACCEPTED_AS_V0_2_PROVIDER_POLICY` | v0.2 implementation evidence must select, pin and test exact Native, OpenClaw and Experimental Hermes targets; this Session selects no unsupported version |
+
+All seven Human decisions are recorded exactly. QD-01 through QD-06 from
+Section 16 are resolved by G01 through G06. G07 adds the versioned Runtime
+Provider support policy within the accepted Core/Provider boundary; it creates
+no new Core resource, implementation authorization, freeze, or certification.
 
 ## 20. Final capability classification and handoff
 
@@ -763,13 +766,15 @@ changing their evidence or blocker scope.
 
 ## 21. Final acceptance matrix
 
-The 31 non-duplicated criteria in Section 10 are the final criterion registry:
+The 31 non-duplicated criteria in Section 10 are the Product, Technical, and
+Engineering/Conformance base criterion registry:
 PDA-01–12 (`PRODUCT`), TDA-01–11 (`TECHNICAL`), and ECA-01–08
 (`CONFORMANCE`). For Checkpoint B, `FULL`, `PARTIAL`, and `MANUAL_GATE` in the
 Automation column normalize to `YES`, `PARTIAL`, and `NO`. Their existing
 blocking-scope column remains binding. The prerequisite register below
-completes every criterion without duplicating its action, result, evidence,
-owner, or scope.
+completes every base criterion without duplicating its action, result,
+evidence, owner, or scope. Section 33 adds the G07 Provider Conformance
+criteria to the consolidated Checkpoint B acceptance registry.
 
 | Criterion IDs | Layer | Prerequisite |
 | --- | --- | --- |
@@ -802,7 +807,7 @@ owner, or scope.
 | Acceptance scope | Criteria/evidence required | Disposition |
 | --- | --- | --- |
 | Minimum vertical slice | PDA-01–09 except full Workflow/MCP; TDA-01–04, REST ALLOW portion of TDA-07, TDA-09 Task/Capability portion; ECA-02/07 | implementation entry evidence, not release acceptance |
-| Full v0.2 Golden Demo | all PDA, TDA except optional Hermes live execution, and ECA criteria; all R01–R19 | required for future Golden Demo Gate |
+| Full v0.2 Golden Demo | all PDA, TDA except optional Hermes live execution, ECA, and applicable PCA criteria; all R01–R19 | required for future Golden Demo Gate |
 | Optional extended Demo | TDA-06 Hermes display/path and recovery extension presentation | optional; cannot fail mandatory Golden Path |
 | External dependency fallback | ECA-04/05 plus visible non-live label and Native deterministic path | public reliability only; does not satisfy OpenClaw live acceptance |
 | Release Gate evidence | successful Golden Demo Gate, compatibility, reproducibility, CI, bounded Runtime claims and separate release governance | evidence input only; Release Acceptance remains `NOT_GRANTED` |
@@ -864,14 +869,20 @@ are assigned.
 - Parallel start: first; other track design may proceed read-only, integration
   waits for stabilized interfaces.
 
-### 23.2 Track B — Runtime Provider: Native and OpenClaw
+### 23.2 Track B — Runtime Provider: Native, OpenClaw and bounded Hermes Experimental Adapter evidence
 
-- Objective: prove Native differential behavior and bounded live OpenClaw path
-  behind one generic Runtime boundary.
+- Objective: select exact upstream targets through evidence; produce
+  independently versioned Native, OpenClaw, and bounded Experimental Hermes
+  Adapter/package Candidates; validate versions; prove Native differential and
+  bounded live OpenClaw paths; and collect feasible Hermes Experimental
+  evidence behind one generic Runtime boundary.
 - Input Contract: Track A Execution Identity, selected Instance and Binding;
   accepted Runtime Provider architecture.
-- Output: Native mapping, OpenClaw external prototype, normalized evidence and
-  deterministic unavailability fallback.
+- Output: Provider package Candidates, pinned-version evidence, Compatibility
+  Manifest Candidate, version-mismatch tests, Runtime-specific evidence
+  bundles, Native mapping, OpenClaw external prototype, bounded Hermes
+  Experimental evidence where feasible, normalized evidence, deterministic
+  fallback, and supported/experimental claim recommendation.
 - Write scope: separately approved Runtime Provider prototype/adapters,
   fixtures and tests.
 - Probable locations: new bounded Provider module/prototype, `runtime/`,
@@ -882,8 +893,11 @@ are assigned.
 - Shared files: execution envelope, Binding projection, Operator handoff,
   integrated harness.
 - Conflict risk: Medium/High.
-- Required tests: unchanged consumer, Native differential, OpenClaw live
-  terminal result, unavailable/error normalization, opaque refs, fallback.
+- Required tests: unchanged consumer; exact match, untested and unsupported
+  version behavior; Native differential; OpenClaw live terminal result; Hermes
+  Experimental behavior where feasible; Binding/configuration translation;
+  Execution Identity propagation; native correlation; Condition/Outcome
+  normalization; unavailable/error/recovery evidence; cleanup; fallback.
 - Completion result: `NATIVE_AND_OPENCLAW_DEMO_PATHS_EVIDENCED`.
 - Human Gate: Runtime prototype and supported-claim evidence Gate.
 - Parallel start: with C/D after A interface stabilization.
@@ -939,13 +953,17 @@ are assigned.
 - Parallel start: UX/draft prototype after Gate; authoritative integration
   waits for A and relevant C interface.
 
-### 23.5 Track E — Technical View, Observability and Golden Demo Harness
+### 23.5 Track E — Technical View, Observability, Provider Conformance and Golden Demo Harness
 
-- Objective: correlate the Technical View and package deterministic end-to-end
+- Objective: correlate the Technical View, own the Provider Conformance Harness
+  and Compatibility Manifest validation, and package deterministic end-to-end
   evidence for the accepted public story.
 - Input Contract: integrated A–D interfaces and all final acceptance criteria.
-- Output: Technical View, synthetic dataset/services, bootstrap, traces,
-  correction/recovery scripts, fallback and evidence report.
+- Output: Technical View, Provider Contract conformance results, exact-version
+  evidence report, manifest validation, mismatch/rejection results, identity
+  propagation/native-correlation/normalization/recovery/cleanup evidence,
+  synthetic dataset/services, bootstrap, correction/recovery scripts, fallback
+  and Golden Demo evidence report.
 - Write scope: separately approved Console technical projection, examples,
   e2e/conformance harness and documentation.
 - Probable locations: `console/`, `examples/`, `docs/`, dedicated e2e fixtures
@@ -956,8 +974,12 @@ are assigned.
 - Shared files: Console projection schemas, Demo manifests/docs, CI entry
   points, execution/Outcome fixtures.
 - Conflict risk: Medium/High at integration.
-- Required tests: full 31-criterion matrix, clean bootstrap, cross-view
-  equality, failure/fallback, claim/secret checks, timed rehearsal.
+- Required tests: the full Product/Technical/Engineering and Provider
+  Conformance matrices; Compatibility Manifest validation; exact-version,
+  mismatch/rejection/degradation, identity propagation, native correlation,
+  Condition/Outcome normalization, failure/recovery evidence and cleanup;
+  clean bootstrap, cross-view equality, fallback, claim/secret checks, timed
+  rehearsal.
 - Completion result: `GOLDEN_DEMO_CANDIDATE_READY_FOR_EXECUTION_GATE`.
 - Human Gate: Golden Demo execution/acceptance Gate; separate Release Gate.
 - Parallel start: harness/data skeleton may begin after contracts are fixed;
@@ -991,6 +1013,10 @@ Any public API/CRD or lifecycle change still requires its applicable Gate.
 | Likely shared path | Primary owner | Consumers | Allowed change | Sequencing | Risk | Integration strategy |
 | --- | --- | --- | --- | --- | --- | --- |
 | bounded Core representation/identity interface | A | B/C/D/E | approved prototype contracts and tests | A first | High | versioned handoff; no consumer edits |
+| logical Runtime Provider Contract Candidate | A | B/E | A owns stable Core-facing logical capabilities; no frozen method/API names | A first; B/E consume | Critical | A single writer; B supplies Adapter evidence; E supplies conformance feedback through reviewed handoff |
+| Compatibility Manifest Candidate/metadata | B | A/E | representation-neutral Provider/package/upstream compatibility evidence | A Contract boundary first | High | B single writer; E validates; A consumes compatibility result only |
+| Runtime Provider package directories | B | A/E | Runtime-specific translation, validation and version evidence | A interface first | High | B-only writes; package-specific PRs may follow after shared boundary is integrated |
+| Provider Conformance Harness | E | A/B | tests and evidence only; cannot redefine Contract | A/B Candidates available | High | E single writer; failures return to owning track through explicit interface change review |
 | `manifests/crd/` | A, only after G2 | C/E | separately approved additive API work only | single writer | Critical | dedicated PR and compatibility Gate |
 | `operator/src/agent_operator/task_controller.py` | A initially; C after handoff | B/C/E | identity/routing first, capability handoff second | serial | Critical | A merge/integration before C write |
 | `operator/src/agent_operator/workflow_controller.py` | C | A/E | compatible Workflow/Outcome/Human Gate integration | A Task interface first | High | C owns; E consumes fixtures |
@@ -1022,12 +1048,14 @@ Core contradiction, compatibility cannot be preserved, identity/authority is
 ambiguous, a Human decision is required, or sufficient evidence exists for a
 Freeze Gate. Do not create another general architecture-convergence Session.
 
-Non-blocking uncertainty remains the claim-scoped Evidence Debt in Section 15:
-representation/backfill, combined identity conformance, OpenClaw live and
-combination evidence, MCP/side-effect breadth, bounded authorization, domain
-vocabulary/recovery, mixed-version/Console tolerance, Hermes ED-S5-001, and
-timed usability. None is silently closed or converted into implementation
-evidence.
+Non-blocking uncertainty remains the claim-scoped Evidence Debt in Sections 15
+and 32: representation/backfill, combined identity conformance, exact Provider
+targets and packaging mechanics, Compatibility Manifest representation,
+version-range/mismatch/deprecation behavior, OpenClaw live and combination
+evidence, Provider Contract conformance/certification thresholds,
+MCP/side-effect breadth, bounded authorization, domain vocabulary/recovery,
+mixed-version/Console tolerance, Hermes ED-S5-001, and timed usability. None is
+silently closed or converted into implementation evidence.
 
 ## 27. Next Session portfolio
 
@@ -1047,6 +1075,7 @@ No implementation Session is activated by this Checkpoint.
 - Checkpoint: `B — FINAL_SCOPE_CONVERGENCE_AND_IMPLEMENTATION_HANDOFF`
 - Result: `READY_TO_CLOSE`
 - Human Close Confirmation: `PENDING`
+- G07 Provider support policy: `ACCEPTED_AS_V0_2_PROVIDER_POLICY`
 - Broad architecture convergence: `COMPLETE_FOR_BOUNDED_V0_2_IMPLEMENTATION`
 - Implementation entry: `READY_AFTER_SESSION_CLOSE_AND_INTEGRATION`
 - Production/Core change: `0`
@@ -1061,3 +1090,154 @@ No implementation Session is activated by this Checkpoint.
 - Next gate: `Human S5-ARCH-006 Close Confirmation`
 
 S5-ARCH-006 is not closed. PR #44 must remain open and unmerged.
+
+## 29. G07 — Versioned Runtime Provider Support Policy
+
+**Disposition: `ACCEPTED_AS_V0_2_PROVIDER_POLICY`**
+
+```text
+Stable Core
+  -> Runtime Binding
+  -> Versioned Runtime Provider Contract
+  -> independently versioned Provider Adapter Package
+  -> exact supported upstream Runtime version/profile
+```
+
+Stable Core remains independent of Hermes, OpenClaw, and Native Runtime
+implementation versions, Provider configuration and identity, and native
+lifecycle mechanics. Core owns Platform identity; Definition, Instance, Task
+and Workflow semantics; Platform Execution Identity; logical Runtime intent;
+Capability governance; normalized domain Conditions and Outcomes; and control
+and authority boundaries.
+
+The Runtime Provider Adapter owns Provider-specific validation, Runtime
+Binding and native configuration translation, realization creation/connection,
+start/stop/observe/cleanup and Task execution translation, unchanged Platform
+Execution Identity propagation, native identity correlation, native-to-domain
+Condition/Outcome normalization, recovery evidence, version compatibility and
+unsupported-version behavior, and explicit Provider limitations/evidence.
+Native Runtime, OpenClaw, and Hermes each own their native mechanics and native
+evidence. An Adapter cannot replace Platform identity or authority with native
+identity or mechanics.
+
+Logical Provider capability Candidates are:
+
+- validate Binding and compatibility;
+- resolve or create a realization;
+- start, stop, execute, observe, and clean up;
+- correlate native evidence;
+- normalize Conditions and Outcomes; and
+- provide recovery evidence.
+
+Names such as `validateBinding`, `validateCompatibility`,
+`resolveOrCreateRealization`, `start`, `stop`, `execute`, `observe`,
+`correlateNativeEvidence`, `normalizeCondition`, `normalizeOutcome`,
+`provideRecoveryEvidence`, and `cleanup` describe logical capabilities only.
+They are not frozen interface, method, serialization, transport, or API names.
+
+## 30. v0.2 Provider classification and version support matrix
+
+| Runtime | Final classification | v0.2 requirements and constraints |
+| --- | --- | --- |
+| Native Runtime | `PRIMARY_GOLDEN_PATH` | exact platform Runtime version/profile selected and tested by bounded implementation evidence; full minimum slice; deterministic path; identity propagation and normalized Condition/Outcome evidence; certification `NOT_GRANTED` |
+| OpenClaw | `SUPPORTED_EXTERNAL_RUNTIME_PATH_CANDIDATE / EXACT_VERSION_EVIDENCE_REQUIRED` | independently versioned Adapter; exact pinned/tested upstream; bounded live path; Binding translation; identity/native correlation; normalized evidence; limitations; reject unsupported or explicitly degrade safely; no future/all-version or certification claim |
+| Hermes | `EXPERIMENTAL_ADAPTER / EXACT_VERSION_EVIDENCE_REQUIRED / NOT_CURRENTLY_CERTIFIABLE` | independently versioned Adapter; exact pinned target selected by bounded evidence; feasible Experimental path; identity/profile/session correlation and normalization where supported; explicit unavailable/unsupported behavior; visible label; ED-S5-001 open; non-blocking |
+| Future Runtime | `EXTENSION_POINT` | same logical Provider Contract, exact compatibility profile, applicable Conformance Harness, and separate support/certification decision |
+
+### 30.1 Provider Version Support Matrix Candidate
+
+| Runtime Provider | Provider package/version | compatible Core Contract version | exact supported upstream Runtime version/profile | support classification | required feature profile | live evidence | Conformance | known limitations | certification | deprecation | fallback/rejection |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Native | `TO_BE_SELECTED_BY_BOUNDED_IMPLEMENTATION_EVIDENCE` | `CANDIDATE / NOT_FROZEN; exact version TBD` | `TO_BE_SELECTED_BY_BOUNDED_IMPLEMENTATION_EVIDENCE` | `PRIMARY_GOLDEN_PATH` | minimum vertical slice, deterministic execute/observe, identity, Conditions/Outcomes | current v0.1 Native exists; versioned Provider path not yet proven | `NOT_YET_RUN` | current implementation predates accepted Provider boundary | `NOT_GRANTED` | `UNDECIDED` | deterministic failure; no silent version substitution |
+| OpenClaw | `TO_BE_SELECTED_BY_BOUNDED_IMPLEMENTATION_EVIDENCE` | `CANDIDATE / NOT_FROZEN; exact version TBD` | `TO_BE_SELECTED_BY_BOUNDED_IMPLEMENTATION_EVIDENCE` | `SUPPORTED_EXTERNAL_RUNTIME_PATH_CANDIDATE` | external connection/execution/observe, identity, native refs, Conditions/Outcomes, cleanup as applicable | bounded successful terminal live evidence required | `NOT_YET_RUN` | successful real-model completion/dependency recovery and exact-version support unproven | `NOT_GRANTED` | `UNDECIDED` | reject unsafe mismatch; optional explicit safe degradation; labelled fixture plus Native public fallback does not prove live support |
+| Hermes | `TO_BE_SELECTED_BY_BOUNDED_IMPLEMENTATION_EVIDENCE` | `CANDIDATE / NOT_FROZEN; exact version TBD` | `TO_BE_SELECTED_BY_BOUNDED_IMPLEMENTATION_EVIDENCE` | `EXPERIMENTAL_ADAPTER` | feasible Experimental execute/observe, identity, profile/session refs, normalized evidence | Hermes v0.20.4 evidence exists but did not close ED-S5-001 and is not selected here as the supported target | `NOT_YET_RUN / ED-S5-001_OPEN` | successful external-model completion absent; unavailable path must be non-blocking | `NOT_CURRENTLY_CERTIFIABLE` | `UNDECIDED` | explicit unavailable/unsupported result; never blocks Native or Core v0.2 claim |
+| Future Provider | `UNASSIGNED` | declared exact Candidate/Contract compatibility required | exact version/profile required | `EXTENSION_POINT` | declared required/optional/unsupported features | none | `REQUIRED_BEFORE_SUPPORT_CLAIM` | unknown until evidence | `NOT_GRANTED` | declared by future decision | fail closed or explicitly declared safe degradation |
+
+No row means “latest,” “current,” “all supported versions,” or general future
+compatibility. Exact Provider packages, Core Contract versions, and upstream
+targets are selected by separately authorized bounded implementation or Spike
+evidence.
+
+## 31. Compatibility Manifest Candidate
+
+Classification: `CANDIDATE_WITH_EVIDENCE_DEBT`
+
+Each immutable evidence snapshot must be capable of declaring:
+
+- Provider name and Provider package version;
+- compatible Core Contract version/profile;
+- supported upstream Runtime version/range and tested exact version;
+- required, optional, and unsupported features;
+- required configuration extensions;
+- known limitations and evidence links;
+- Conformance and certification states as independent values;
+- deprecation state; and
+- explicit fallback, degradation, or rejection behavior.
+
+The declaration is representation-neutral. Field names, nesting,
+serialization, file format, Kubernetes/public API exposure, version-range
+syntax, and Provider Registry representation are not frozen. Runtime Package
+and Provider Registry remain internal metadata. A change to that boundary
+requires a separate Human architecture decision.
+
+## 32. Version mismatch behavior and Evidence Debt
+
+Compatibility validation occurs before unsafe Provider invocation:
+
+1. detect the upstream Runtime version/profile;
+2. compare it with the evidenced Compatibility Manifest;
+3. accept an exact supported match;
+4. identify an untested version without promoting it to supported;
+5. reject an unsupported/unsafe mismatch before Provider invocation; or
+6. enter an explicitly declared degraded mode only when the manifest and
+   evidence prove that mode safe.
+
+Every mismatch preserves Platform identity and emits actionable
+operator-facing Condition/diagnostic evidence. An unsafe failure produces no
+Provider invocation. No Adapter may silently report `SUPPORTED` outside its
+declared and evidenced compatibility profile.
+
+Claim-scoped `UNASSIGNED_EVIDENCE_DEBT` is retained for exact Native profile,
+OpenClaw version, Hermes target, Provider package versioning mechanics,
+Compatibility Manifest representation, version-range policy, mismatch and
+safe-degradation behavior, Provider Contract conformance, certification
+thresholds, and upgrade/deprecation policy. OpenClaw live execution evidence
+also remains debt. Hermes debt remains the assigned `ED-S5-001 / OPEN`.
+Only the corresponding exact-version support, conformance, certification,
+upgrade, deprecation, or production claim is blocked; these debts do not all
+block the bounded v0.2 prototype or Native Golden Path.
+
+## 33. Provider Conformance acceptance
+
+Conformance is independent of certification. Passing these bounded tests does
+not grant Provider certification, Production Readiness, all-version
+compatibility, or Runtime Contract Freeze.
+
+| ID | Provider applicability | Expected behavior | Required evidence | Track | Automation | Blocking claim/gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| PCA-01 | all | Provider package has immutable Candidate identity/version | package metadata and repeatability test | B/E | `YES` | package support claim |
+| PCA-02 | all | exact upstream version/profile is declared; no ambiguous latest/all label | manifest validation | B/E | `YES` | exact-version support claim |
+| PCA-03 | all | Stable Core schema/identity contains no upstream-version dependency | architecture/source boundary test | A/E | `YES/PARTIAL` | Core independence claim |
+| PCA-04 | all | Runtime Binding is translated only by selected Adapter | unchanged-consumer/translation test | B/E | `YES` | Provider path acceptance |
+| PCA-05 | all | detected version is validated before unsafe execution | ordered interaction test | B/E | `YES` | supported path |
+| PCA-06 | Native/OpenClaw; Hermes where feasible | exact supported match executes under declared profile | bounded live/deterministic run | B/E | `PARTIAL` | corresponding support classification |
+| PCA-07 | all | unsupported unsafe version is rejected before invocation | zero-invocation mismatch test | B/E | `YES` | safety/support claim |
+| PCA-08 | declared profiles only | degraded mode occurs only when explicitly declared and evidenced | positive/negative degradation fixtures | B/E | `YES` | degraded support claim |
+| PCA-09 | all | untested version never appears as supported | manifest/status negative test | B/E | `YES` | any version-support claim |
+| PCA-10 | all executable paths | Platform Execution Identity propagates unchanged | end-to-end equality assertion | A/B/E | `YES` | Runtime path acceptance |
+| PCA-11 | all executable paths | native IDs remain opaque correlation evidence | trace/reference assertions | B/E | `YES` | technical Demo acceptance |
+| PCA-12 | all | native observations normalize to Runtime-domain Conditions | normalization fixtures/live evidence | B/E | `YES/PARTIAL` | Condition support claim |
+| PCA-13 | all executable paths | native results normalize as evidence for domain Outcomes | normalization fixtures/live evidence | B/E | `YES/PARTIAL` | Outcome support claim |
+| PCA-14 | all | failures are normalized without replacing Platform semantics | failure matrix | B/E | `YES` | supported failure claim |
+| PCA-15 | all applicable modes | Adapter provides bounded recovery evidence without declaring State continuity | replacement/unavailable evidence | B/E | `YES/PARTIAL` | recovery claim |
+| PCA-16 | owned modes | cleanup respects declared ownership and is idempotent/safe | cleanup and foreign-resource tests | B/E | `YES` | lifecycle/cleanup claim |
+| PCA-17 | all | known limitations and unsupported features are visible | manifest/Technical View assertions | B/E | `YES` | public support claim |
+| PCA-18 | OpenClaw | pinned exact version succeeds through bounded live path | live evidence bundle and trace | B/E | `PARTIAL` | OpenClaw supported-candidate acceptance |
+| PCA-19 | Hermes | Experimental/non-certifiable/ED-S5-001 labels remain visible | UI/manifest/claim tests | B/E | `YES` | Hermes optional path only |
+| PCA-20 | future Provider fixture | generic Contract/manifest can describe another Adapter without Core Provider fields | representation-neutral fixture/conformance compile or load test | A/E | `YES/PARTIAL` | extension-point feasibility only |
+
+The final acceptance registry now contains the original 31 Product, Technical,
+and Engineering/Conformance criteria plus 20 Provider Conformance criteria.
+Full v0.2 Golden Demo acceptance requires applicable PCA criteria for Native
+and OpenClaw. Hermes PCA criteria remain optional/Experimental. External
+fallback cannot substitute for PCA-18 live evidence.
