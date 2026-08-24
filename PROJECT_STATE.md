@@ -36,6 +36,9 @@ records lifecycle and provenance.
 | S5-ARCH-005 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Accepted Candidate artifact and source head |
 | S5-REL-004 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS / SESSION_CLOSED` | PR #42 merge plus imported Human confirmation |
 | S5-GOV-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints and CI satisfied; Human Close Confirmation passed; reopen prohibited |
+| S5-ARCH-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Golden Demo Scope Gate passed with constraints; Human Close Confirmation passed; PR #44 merged at the authorized baseline; reopen prohibited |
+| S5-REL-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed closure forward-imported by S5-PLAN-001; PR #44 and merge `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` Git-verified; reopen prohibited |
+| S5-PLAN-001 | `CLOSING / AUTHORIZED / PASS / READY_FOR_HUMAN_IMPLEMENTATION_ENTRY_GATE` | Checkpoint A Human Gate passed with constraints; P01–P12 dispositioned; Tracks A–E planned only; implementation entry and Human Close Confirmation not granted |
 
 ## Accepted architecture state
 
@@ -67,22 +70,21 @@ The bounded working objective is to demonstrate Digital Employee construction
 and governed execution across the stable Core and external Runtime Providers.
 A Digital Employee is a business-facing projection, not a Core CRD.
 
-The final Demo scenario is an open Human decision. Current directions are:
-
-- durable carried-forward direction: Engineering Release Risk Manager;
-- proposed business-facing direction: After-Sales Service Expert / Quality
-  Issue Identification and Closure.
-
-Neither direction is recorded here as final Demo approval.
+The accepted primary public Demo candidate is Quality Issue Identification and
+Closure Digital Employee. Engineering Release Risk Manager is the accepted
+secondary technical/conformance example. This scope acceptance does not grant
+implementation entry, Provider certification, production readiness or release
+acceptance.
 
 ## Immediate next work
 
-1. After separate authorization, consider S5-REL-005 — Project Governance
-   Baseline Integration, with source Session S5-GOV-001 and source PR #43.
-2. Authorize a separate Product/Architecture Session for v0.2 Demo scope.
-3. Authorize bounded Contract, prototype, and conformance Sessions afterward.
+1. Review the converged S5-PLAN-001 implementation handoff.
+2. Decide the Human S5-PLAN-001 Implementation Entry Gate.
+3. Authorize only the accepted bounded future Sessions afterward; S5-PLAN-001
+   Human Close Confirmation remains pending.
 
-S5-REL-005 is a recommendation only. It is not active or authorized.
+Tracks A–E and all recommended future Session IDs are `NOT_ACTIVE /
+NOT_AUTHORIZED` until that Gate and separate Session authorization.
 
 ## Source-of-truth links
 

@@ -5,6 +5,13 @@ These records coordinate work; they do not replace Tasks, architecture
 decisions, the [Governance Registry](../governance/REGISTRY.md), or Git/PR
 evidence.
 
+## Active portfolio plans
+
+- [S5-PLAN-001 — v0.2 Implementation Portfolio and Release Execution Plan](active/S5-PLAN-001-V0.2-IMPLEMENTATION-PORTFOLIO.md)
+  is an authorized planning handoff in `CLOSING`, ready for its Human
+  Implementation Entry Gate. Its Tracks and future Sessions remain
+  planned/recommended only and do not authorize implementation.
+
 Do not create speculative daily records. Create a record only for an actual
 working day or authorized coordination window.
 

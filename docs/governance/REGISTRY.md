@@ -52,6 +52,8 @@ of failure unless the governing claim requires it.
 | S5-GOV-001 | Project Source of Truth & Release Governance Foundation / GOV | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; Checkpoint C — Session Finalization; reopen prohibited | Source: S5-REL-004; branch `codex/s5-gov-001-release-governance`; isolated worktree; Draft PR #43; commit recorded in Git/PR | Checkpoint A: `PASS_WITH_CONSTRAINTS`; Checkpoint B: `PASS_WITH_CONSTRAINTS` with CI satisfied; Human Close Confirmation: `PASS` | `HUMAN_CONFIRMED / REPOSITORY_NATIVE / PR_NATIVE` | None; reopen prohibited |
 | S5-REL-005 | Project Governance Baseline Integration / REL | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; Checkpoint C — Session Closeout; reopen prohibited | Source: S5-GOV-001; PR #43; source head `71739cdcf035fd404176519d2df9975a9a781229`; merge and durable main `acbad19a8af7e0b3762007ba708a90ed0be53d07` | Merge Gate, Closeout Authorization, Close Confirmation: `PASS` | `HUMAN_CONFIRMED_GIT_VERIFIED`; import method: `FORWARD_IMPORTED_BY_S5_ARCH_006` | None; reopen prohibited |
 | S5-ARCH-006 | v0.2 Digital Employee Golden Demo Scope & Acceptance Contract / ARCH | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; Checkpoint B — Final Scope Convergence and Implementation Handoff; reopen prohibited | Source: S5-ARCH-005, S5-REL-004, S5-GOV-001, S5-REL-005; branch `codex/s5-arch-006-digital-employee-demo`; Draft PR #44 | Golden Demo Scope Gate: `PASS_WITH_CONSTRAINTS`; G07 Provider support: `ACCEPTED_AS_V0_2_PROVIDER_POLICY`; G08 deployment/assets: `ACCEPTED_AS_V0_2_DEPLOYMENT_AND_ASSET_POLICY`; Human Close Confirmation: `PASS` | `HUMAN_CONFIRMED / PR_NATIVE` | Recommended only: S5-REL-006 Golden Demo Scope Integration; not active or authorized |
+| S5-REL-006 | Golden Demo Scope Integration / REL | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; reopen prohibited | Source: S5-ARCH-006; source PR #44; merge and durable main `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` | Merge Gate, Closeout Authorization, Close Confirmation: `PASS` | `HUMAN_CONFIRMED_GIT_VERIFIED`; import method: `FORWARD_IMPORTED_BY_S5_PLAN_001` | None; reopen prohibited |
+| S5-PLAN-001 | v0.2 Implementation Portfolio & Release Execution Plan / PLAN | `CLOSING / AUTHORIZED` | `PASS / READY_FOR_HUMAN_IMPLEMENTATION_ENTRY_GATE`; Checkpoint B — Final Portfolio Convergence and Implementation Handoff | Source: S5-ARCH-005, S5-GOV-001, S5-ARCH-006, S5-REL-006; baseline `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9`; branch `codex/s5-plan-001-v0-2-implementation-portfolio` | Checkpoint A Implementation Portfolio Gate: `PASS_WITH_CONSTRAINTS`; Human Close Confirmation: `PENDING` | `HUMAN_CONFIRMED / REPOSITORY_NATIVE / HUMAN_CONFIRMED_GIT_VERIFIED` | Human S5-PLAN-001 Implementation Entry Gate; implementation not granted |
 
 S5-REL-004 closure was not previously repository-native. Its Registry entry is
 an explicit import of Human-confirmed closure; PR #42 and its merge commit are
@@ -61,6 +63,11 @@ S5-REL-005 final closure occurred after it merged the governance baseline and
 therefore could not be recorded recursively in its own source PR. S5-ARCH-006
 forward-imported the exact Human-confirmed and Git-verified historical state;
 S5-REL-005 remains closed and is not reopened.
+
+S5-REL-006 final closure likewise occurred after its source PR merged. This
+Registry forward-import records the Human-confirmed closure against the
+Git-verified PR #44 merge without reopening S5-REL-006 or creating a recursive
+closeout PR.
 
 ## Human and Open Decision Index
 
