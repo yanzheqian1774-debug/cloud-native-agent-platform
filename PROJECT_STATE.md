@@ -38,7 +38,7 @@ records lifecycle and provenance.
 | S5-GOV-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints and CI satisfied; Human Close Confirmation passed; reopen prohibited |
 | S5-ARCH-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Golden Demo Scope Gate passed with constraints; Human Close Confirmation passed; PR #44 merged at the authorized baseline; reopen prohibited |
 | S5-REL-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed closure forward-imported by S5-PLAN-001; PR #44 and merge `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` Git-verified; reopen prohibited |
-| S5-PLAN-001 | `CLOSING / AUTHORIZED / PASS / READY_FOR_HUMAN_IMPLEMENTATION_ENTRY_GATE` | Checkpoint A Human Gate passed with constraints; P01–P12 dispositioned; Tracks A–E planned only; implementation entry and Human Close Confirmation not granted |
+| S5-PLAN-001 | `CLOSING / AUTHORIZED / PASS / READY_TO_CLOSE` | Checkpoint A and Implementation Entry Gates passed with constraints; Portfolio and P01–P12 accepted; implementation route conditionally granted but no Session active; Human Close Confirmation pending |
 
 ## Accepted architecture state
 
@@ -72,19 +72,21 @@ A Digital Employee is a business-facing projection, not a Core CRD.
 
 The accepted primary public Demo candidate is Quality Issue Identification and
 Closure Digital Employee. Engineering Release Risk Manager is the accepted
-secondary technical/conformance example. This scope acceptance does not grant
-implementation entry, Provider certification, production readiness or release
-acceptance.
+secondary technical/conformance example. Implementation entry is conditionally
+granted as a route only; no future Session is active or authorized. Provider
+certification, production readiness and release acceptance remain not granted.
 
 ## Immediate next work
 
-1. Review the converged S5-PLAN-001 implementation handoff.
-2. Decide the Human S5-PLAN-001 Implementation Entry Gate.
-3. Authorize only the accepted bounded future Sessions afterward; S5-PLAN-001
-   Human Close Confirmation remains pending.
+1. Decide the Human S5-PLAN-001 Close Confirmation.
+2. After closure, separately authorize S5-REL-007 — Implementation Portfolio
+   Integration for Draft PR #45.
+3. After durable integration, separately authorize the narrow S5-ARCH-007
+   Representation/API Gate or bounded preparatory Sessions.
 
-Tracks A–E and all recommended future Session IDs are `NOT_ACTIVE /
-NOT_AUTHORIZED` until that Gate and separate Session authorization.
+Tracks A–E and all recommended future Session IDs remain `NOT_ACTIVE /
+NOT_AUTHORIZED`. Conditional Implementation Entry accepts the route; it does
+not start work.
 
 ## Source-of-truth links
 

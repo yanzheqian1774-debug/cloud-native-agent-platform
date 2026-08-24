@@ -8,9 +8,10 @@ evidence.
 ## Active portfolio plans
 
 - [S5-PLAN-001 — v0.2 Implementation Portfolio and Release Execution Plan](active/S5-PLAN-001-V0.2-IMPLEMENTATION-PORTFOLIO.md)
-  is an authorized planning handoff in `CLOSING`, ready for its Human
-  Implementation Entry Gate. Its Tracks and future Sessions remain
-  planned/recommended only and do not authorize implementation.
+  is an accepted planning handoff in `CLOSING / READY_TO_CLOSE`. Its
+  Implementation Entry Gate passed with constraints, but Tracks and future
+  Sessions remain inactive and separately unauthorized. Human Close
+  Confirmation is pending.
 
 Do not create speculative daily records. Create a record only for an actual
 working day or authorized coordination window.

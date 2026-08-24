@@ -10,14 +10,17 @@
 | Lifecycle | `CLOSING` |
 | Authorization | `AUTHORIZED` |
 | Status | `PASS` |
-| Checkpoint | `B — FINAL_PORTFOLIO_CONVERGENCE_AND_IMPLEMENTATION_HANDOFF` |
-| Result | `READY_FOR_HUMAN_IMPLEMENTATION_ENTRY_GATE` |
+| Checkpoint | `C — SESSION_FINALIZATION` |
+| Result | `READY_TO_CLOSE` |
 | Human Checkpoint A Gate | `PASS_WITH_CONSTRAINTS` |
+| Human Implementation Entry Gate | `PASS_WITH_CONSTRAINTS` |
+| Human Close Confirmation | `PENDING` |
 | Authorized baseline | `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` |
-| Implementation entry | `NOT_YET_GRANTED` |
-| Next gate | `Human S5-PLAN-001 Implementation Portfolio Gate` |
+| Implementation entry | `CONDITIONALLY_GRANTED` |
+| Next gate | `Human S5-PLAN-001 Close Confirmation` |
 
-This is an implementation plan, not implementation authorization. Tracks A–E
+This plan has conditional implementation entry, but it does not authorize or
+start any implementation Session. Tracks A–E
 and every Session ID below are `PLANNED / NOT_ACTIVE / NOT_AUTHORIZED` or
 `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`. No schema or Contract is
 frozen; no Provider is certified; production readiness and release acceptance
@@ -268,7 +271,7 @@ never reused.
 | S5-TEST-005 | TEST | Provider and Capability conformance | B/C PRs | parallel validation | test/evidence PR |
 | S5-IMPL-011 | IMPL | E Technical View | A–D schemas | integration | Technical View PR |
 | S5-IMPL-012 | IMPL | E Golden Demo harness | A–D,TEST-005 | integration | harness/fixtures PR |
-| S5-REL-007+ | REL | one REL per merged implementation PR, or Human-approved integration bundle | corresponding PR | serialized governance | Registry/evidence only |
+| Later REL IDs allocated once | REL | one REL per merged implementation PR, or Human-approved integration bundle after Portfolio integration | corresponding PR | serialized governance | Registry/evidence only |
 
 ## 7. Document/File and enterprise connector plan
 
@@ -747,14 +750,18 @@ focused Codex work plus local validation, excluding Human waiting and CI queue.
 | S5-TEST-005 — Conformance harness | TEST/E1; criterion manifest and component/provider suite | Plan Gate; harness/fixtures/evidence; excludes component semantics | Test Entry→Harness Gate; runner/report schema; test PR | 2–4 sessions/high/Prep-1/E2–E4 |
 | S5-IMPL-011 — Technical View | IMPL/E; correlated technical projection | A2,B/C/D handoffs; Technical UI/API consumer; excludes DTO ownership | E Entry→View Gate; UI/equality evidence; PR | 2–4 sessions/medium/Integration/E2 |
 | S5-IMPL-012 — Golden Demo integration | IMPL/E; E2/E4 harness and deterministic package | required A–D,TEST-005; Demo fixtures/evidence; excludes new semantics | P04→Demo Gate; clean bundle/report; integration PR | 3–6 sessions/low-medium/Integration/REL |
-| S5-REL-007 — Implementation integration baseline | REL; integrate Human-approved MVS bundle | merged component PRs; Registry/evidence only; excludes implementation | Merge Gates→Durable-main Gate; integration record; REL PR | 1–2 sessions/medium/serialized/RC |
-| S5-TEST-006 — Release Candidate validation | TEST/E; exact final-head 70-criterion disposition | REL-007 + external/document scope; tests/evidence only | RC Entry→RC Human Gate; versioned report; evidence PR | 2–4 sessions/low/RC/REL-008 |
-| S5-REL-008 — v0.2 Release Acceptance handoff | REL; assemble immutable RC provenance | TEST-006; Registry/release evidence only; excludes granting acceptance | RC Gate→Human Release Gate; acceptance candidate; REL PR | 1–2 sessions/medium/serialized/Human |
+| S5-REL-007 — Implementation Portfolio Integration | REL; integrate this accepted planning artifact | S5-PLAN-001 and PR #45; Registry/planning evidence only; excludes implementation | Human Close Confirmation→Durable-main Gate; portfolio integration record; REL PR | 1–2 sessions/high/serialized/S5-ARCH-007 |
+| S5-REL-008 — Implementation integration baseline | REL; integrate Human-approved MVS bundle | merged component PRs; Registry/evidence only; excludes implementation | Merge Gates→Durable-main Gate; integration record; REL PR | 1–2 sessions/medium/serialized/RC |
+| S5-TEST-006 — Release Candidate validation | TEST/E; exact final-head 70-criterion disposition | REL-008 + external/document scope; tests/evidence only | RC Entry→RC Human Gate; versioned report; evidence PR | 2–4 sessions/low/RC/REL-009 |
+| S5-REL-009 — v0.2 Release Acceptance handoff | REL; assemble immutable RC provenance | TEST-006; Registry/release evidence only; excludes granting acceptance | RC Gate→Human Release Gate; acceptance candidate; REL PR | 1–2 sessions/medium/serialized/Human |
 
-First recommended authorization is `S5-ARCH-007`; preparatory
+The chronologically next recommended Session is S5-REL-007 for Portfolio
+integration. The first recommended architecture/implementation-entry Session
+is `S5-ARCH-007`, downstream of that integration. Preparatory
 `S5-SPIKE-005`, `S5-SPIKE-007`, `S5-SPIKE-008` and E1 `S5-TEST-005` are safe
-parallel recommendations after separate authorization. `S5-SPIKE-006` is
-optional. All IMPL integration Sessions wait for the stated A handoff.
+parallel recommendations only after Portfolio integration and separate
+authorization. `S5-SPIKE-006` is optional. All IMPL integration Sessions wait
+for the stated A handoff.
 
 ## 23. Final shared-file single-writer map
 
@@ -774,7 +781,7 @@ optional. All IMPL integration Sessions wait for the stated A handoff.
 | Conformance Harness | S5-TEST-005, then TEST-006 final-head evidence | component Sessions contribute adapters only | Harness schema Gate; E resolves conflicts |
 | Governance Registry | current authorized PLAN/REL Session only | all read; coding Sessions prohibited | merge-order handoff to corresponding REL Session |
 | Project State | current authorized PLAN/REL Session only | all read; coding Sessions prohibited | same durable-main Gate as Registry |
-| release documentation | S5-REL-008 | all contribute evidence; no pre-acceptance completion claims | Human Release Gate; release owner resolves |
+| release documentation | S5-REL-009 | all contribute evidence; no pre-acceptance completion claims | Human Release Gate; release owner resolves |
 
 No two simultaneously recommended parallel Sessions own the same write scope.
 
@@ -836,10 +843,10 @@ first-slice blockers are only the subsets explicitly marked MVS above.
 Current longest dependency chain:
 
 ```text
-S5-PLAN-001 merge -> S5-ARCH-007 -> IMPL-001 (A1) -> IMPL-002 (A2)
+S5-PLAN-001 -> REL-007 -> S5-ARCH-007 -> IMPL-001 (A1) -> IMPL-002 (A2)
 -> IMPL-003 (A3) -> IMPL-004 + IMPL-007 + IMPL-009
 -> IMPL-008 + IMPL-010 -> IMPL-011 -> IMPL-012
--> REL-007 -> TEST-006 -> REL-008 -> Human Release Acceptance
+-> REL-008 -> TEST-006 -> REL-009 -> Human Release Acceptance
 ```
 
 The single-Codex mostly sequential scenario executes roughly 25–50 focused
@@ -858,16 +865,23 @@ is concentrated in A representation, OpenClaw, Console DTOs and integration.
 ## 26. Progress dashboard
 
 ```text
-Overall product: RUN [completed] -> CONNECT [current] -> BUILD [pending]
-                 -> GOVERN [pending] -> SCALE [pending] -> TRUST [pending]
+Overall product: RUN [COMPLETED_BASELINE] -> CONNECT [ACTIVE/current]
+                 -> BUILD [FUTURE] -> GOVERN [FUTURE]
+                 -> SCALE [FUTURE] -> TRUST [FUTURE]
 
-v0.2: planning [current: Checkpoint B] -> vertical slice [pending]
-      -> parallel implementation [pending] -> integration [pending]
-      -> conformance [pending] -> Release Acceptance [blocked: Human Gate]
+v0.2: architecture/product contract [COMPLETE]
+      -> implementation portfolio [ACCEPTED / FINALIZING/current]
+      -> Portfolio integration [PENDING]
+      -> Representation/API Gate [PENDING]
+      -> vertical slice [NOT_STARTED]
+      -> parallel implementation [NOT_STARTED]
+      -> Golden Demo integration [NOT_STARTED]
+      -> Release Acceptance [NOT_GRANTED]
 
-S5-PLAN-001: Checkpoint A [completed] -> Checkpoint B [current]
-             -> Human Implementation Entry Gate [pending]
-             -> Closeout [pending]
+S5-PLAN-001: Checkpoint A [COMPLETE] -> Checkpoint B [COMPLETE]
+             -> Implementation Entry Gate [PASS_WITH_CONSTRAINTS]
+             -> Checkpoint C [CURRENT]
+             -> Human Close Confirmation [PENDING]
 
 Future dependency: Track A [pending] -> B/C/D [pending]
                    -> E [pending] -> Release Gate [blocked until evidence]
@@ -877,7 +891,77 @@ State portability; production multi-tenancy; all-version support; final
 commercial packaging and final product brand.
 ```
 
-Checkpoint B handoff state: `CLOSING / AUTHORIZED / PASS /
-READY_FOR_HUMAN_IMPLEMENTATION_ENTRY_GATE`. Human Close Confirmation and
-Implementation Entry remain pending/not granted. Next action is
-`WAIT_FOR_HUMAN_IMPLEMENTATION_ENTRY_GATE`.
+## 27. Checkpoint C — Session finalization
+
+Human dispositions:
+
+- Checkpoint A Gate: `PASS_WITH_CONSTRAINTS`.
+- Implementation Entry Gate: `PASS_WITH_CONSTRAINTS`.
+- Portfolio: `ACCEPTED`; P01–P12: `ACCEPTED_AS_RECORDED`.
+- Minimum Vertical Slice: `ACCEPTED_FOR_IMPLEMENTATION_HANDOFF`.
+- Implementation Entry: `CONDITIONALLY_GRANTED`.
+- Tracks A–E: `ACCEPTED_FOR_PORTFOLIO_PLANNING / NOT_ACTIVE /
+  NOT_AUTHORIZED`.
+- Future Sessions: `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`.
+- Human Close Confirmation: `PENDING`; Session closed: `NO`.
+
+`CONDITIONALLY_GRANTED` accepts the route only. Implementation has not begun.
+The conditions are: close S5-PLAN-001 through Human confirmation; integrate PR
+#45 through separately authorized S5-REL-007; separately authorize every
+writable future Session; take any public API/CRD/existing-schema change through
+the G2 Representation/API Gate; and enforce the accepted single-writer scopes.
+
+Accepted order:
+
+1. close S5-PLAN-001;
+2. integrate PR #45 through recommended S5-REL-007;
+3. separately authorize the narrow S5-ARCH-007 Representation/API Gate;
+4. execute A1 representation selection after its authorization;
+5. authorize and execute A2 identity/interface spine;
+6. execute A3 compatibility evidence;
+7. converge the Native MVS;
+8. execute bounded B/C/D work against stabilized interfaces;
+9. use E for integration, Conformance and Demo evidence; and
+10. run separate RC and Human Release Acceptance Gates.
+
+S5-ARCH-007 is `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED` and downstream
+of S5-REL-007. Its narrow scope is minimal Definition and Instance
+representation, Platform Execution Identity representation/propagation,
+Definition/Instance compatibility, Runtime Binding reference, existing
+API/CRD impact, migration/backfill need, prototype alternatives and a G2 Human
+decision. It must not reopen product positioning, Digital Employee, G01–G08,
+the five-resource Candidate, Provider/managed-Runtime policy, Golden Demo or
+Tracks A–E. It contains no implementation unless separately authorized.
+
+Parallel-safe recommendations remain S5-SPIKE-005, S5-SPIKE-007,
+S5-SPIKE-008 and S5-TEST-005, all inactive and unauthorized. Their isolated
+evidence/mocks/fixtures may later be authorized only after Portfolio
+integration and cannot redefine or write shared Core interfaces.
+
+Final progress:
+
+```text
+Overall: RUN [COMPLETED_BASELINE] -> CONNECT [ACTIVE/current]
+         -> BUILD [FUTURE] -> GOVERN [FUTURE] -> SCALE [FUTURE]
+         -> TRUST [FUTURE]
+
+v0.2: architecture/product contract [COMPLETE]
+      -> implementation portfolio [ACCEPTED / FINALIZING/current]
+      -> Portfolio integration [PENDING]
+      -> Representation/API Gate [PENDING]
+      -> Minimum Vertical Slice [NOT_STARTED]
+      -> parallel implementation [NOT_STARTED]
+      -> Golden Demo integration [NOT_STARTED]
+      -> Release Acceptance [NOT_GRANTED]
+
+S5-PLAN-001: Checkpoint A [COMPLETE] -> Checkpoint B [COMPLETE]
+             -> Implementation Entry Gate [PASS_WITH_CONSTRAINTS]
+             -> Checkpoint C [CURRENT]
+             -> Human Close Confirmation [PENDING]
+```
+
+Finalization state: `CLOSING / AUTHORIZED / PASS / C — SESSION_FINALIZATION /
+READY_TO_CLOSE`. Next recommended Session is `S5-REL-007 — Implementation
+Portfolio Integration`, source S5-PLAN-001 and PR #45, state
+`RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`. Next action is
+`WAIT_FOR_HUMAN_CLOSE_CONFIRMATION`.
