@@ -49,11 +49,16 @@ of failure unless the governing claim requires it.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | S5-ARCH-005 | v0.2 Core Schema Draft & Compatibility Map / ARCH | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED` | Source: S5-ARCH-004; branch `codex/s5-arch-005-core-schema-draft`; PR #42; source head `771929705093ff14e444faa508229a84c929d2e7` | Final Schema Candidate Gate and Close Confirmation: `PASS_WITH_CONSTRAINTS / PASS` | `REPOSITORY_NATIVE / PR_NATIVE` | None; reopen prohibited |
 | S5-REL-004 | Core Schema Candidate Integration / REL | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED` | Source: S5-ARCH-005; PR #42; merge `71e0f682c015b49f7afed6e21988c94a080f2450` | Merge Gate, Closeout Authorization, Close Confirmation: `PASS` | Closure: `HUMAN_CONFIRMED`; merge: `PR_NATIVE / REPOSITORY_NATIVE` | None; reopen prohibited |
-| S5-GOV-001 | Project Source of Truth & Release Governance Foundation / GOV | `REVIEW / AUTHORIZED` | `PASS / PROJECT_GOVERNANCE_BASELINE_CANDIDATE` | Source: S5-REL-004; branch `codex/s5-gov-001-release-governance`; isolated worktree; Draft PR #43; commit recorded in Git/PR | Checkpoint A: `PASS_WITH_CONSTRAINTS`; Checkpoint B candidate awaits review | `HUMAN_CONFIRMED / REPOSITORY_NATIVE / PR_NATIVE` | Human S5-GOV-001 Minimum Governance Baseline Gate |
+| S5-GOV-001 | Project Source of Truth & Release Governance Foundation / GOV | `CLOSING / AUTHORIZED` | `PASS / READY_TO_CLOSE`; Checkpoint C — Session Finalization | Source: S5-REL-004; branch `codex/s5-gov-001-release-governance`; isolated worktree; Draft PR #43; commit recorded in Git/PR | Checkpoint A: `PASS_WITH_CONSTRAINTS`; Checkpoint B: `PASS_WITH_CONSTRAINTS`; Human Close Confirmation: `PENDING` | `HUMAN_CONFIRMED / REPOSITORY_NATIVE / PR_NATIVE` | Human S5-GOV-001 Close Confirmation |
 
 S5-REL-004 closure was not previously repository-native. Its Registry entry is
 an explicit import of Human-confirmed closure; PR #42 and its merge commit are
 independently Git/PR-native.
+
+After S5-GOV-001 is Human-confirmed `CLOSED`, the recommended integration
+Session is **S5-REL-005 — Project Governance Baseline Integration**, with
+source Session S5-GOV-001 and source PR #43. This is a recommendation only;
+S5-REL-005 is not `ACTIVE` or `AUTHORIZED`.
 
 ## Human and Open Decision Index
 
