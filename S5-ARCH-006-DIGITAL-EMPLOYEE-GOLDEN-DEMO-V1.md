@@ -6,12 +6,12 @@ SESSION
 - Title: v0.2 Digital Employee Golden Demo Scope & Acceptance Contract
 - Type: `ARCH`
 - Version: `v0.2 CONNECT — Digital Employee Technical Preview`
-- Lifecycle: `REVIEW`
+- Lifecycle: `CLOSING`
 - Authorization: `AUTHORIZED`
-- Checkpoint: `A — GOLDEN_DEMO_SCOPE_AND_ACCEPTANCE_BASELINE`
-- Result: `GOLDEN_DEMO_SCOPE_CANDIDATE`
+- Checkpoint: `B — FINAL_SCOPE_CONVERGENCE_AND_IMPLEMENTATION_HANDOFF`
+- Result: `READY_TO_CLOSE`
 - Baseline: `acbad19a8af7e0b3762007ba708a90ed0be53d07`
-- Candidate status: `HUMAN_DECISION_REQUIRED`
+- Candidate status: `SCOPE_ACCEPTED_WITH_CONSTRAINTS / READY_TO_CLOSE`
 
 This artifact defines an implementation-ready Product Demo candidate. It does
 not authorize implementation, select a persistence representation, add a CRD,
@@ -676,7 +676,10 @@ remain outside this Gate.
 | Conflicts with accepted Core | None found |
 | Resolves known ADR drift silently | No; drift retained and future Gates required |
 
-## 18. Checkpoint recommendation
+## 18. Historical Checkpoint A recommendation
+
+This was the state presented to the Human Golden Demo Scope Gate. Section 19
+records its resolution and Section 28 is the current Session state.
 
 - Status: `PASS`
 - Result: `GOLDEN_DEMO_SCOPE_CANDIDATE`
@@ -688,5 +691,373 @@ remain outside this Gate.
 - Capability Provider change: `0`
 - Console change: `0`
 - Test source change: `0`
-- Next action: `WAIT_FOR_HUMAN_GOLDEN_DEMO_SCOPE_GATE`
-- Next gate: `Human S5-ARCH-006 Golden Demo Scope Gate`
+- Next action at Checkpoint A: `WAIT_FOR_HUMAN_GOLDEN_DEMO_SCOPE_GATE`
+- Next gate at Checkpoint A: `Human S5-ARCH-006 Golden Demo Scope Gate`
+
+# Checkpoint B — Final Scope Convergence and Implementation Handoff
+
+Sections 1–18 remain the evidence and Checkpoint A candidate record. The Human
+Gate below resolves its open scope decisions. This section is the authoritative
+implementation-planning handoff where a Checkpoint B table refines an earlier
+candidate table. It still grants no implementation authorization.
+
+## 19. Human Golden Demo Scope Gate
+
+**HUMAN DECISION: `PASS_WITH_CONSTRAINTS`**
+
+| ID | Decision | Disposition | Binding constraint |
+| --- | --- | --- | --- |
+| G01 | Primary public v0.2 Demo: Quality Issue Identification and Closure Digital Employee | `ACCEPTED_AS_V0_2_CANDIDATE` | safe synthetic and reproducible data only |
+| G02 | Secondary technical example: Engineering Release Risk Manager | `ACCEPTED_AS_SECONDARY` | deterministic engineering, testing, and Conformance evidence; must not compete with the primary public story |
+| G03 | business description → AI draft → editable preview → Diff/validation → Human Review → publish → test | `ACCEPTED_WITH_HUMAN_AUTHORITY_CONSTRAINT` | draft is non-authoritative; material content editable; Human approval required; no silent permission escalation; Provider translation remains Provider-owned |
+| G04 | Product and Technical Views are both required | `ACCEPTED_AS_REQUIRED` | same Core references and Platform Execution Identity; no competing source of truth |
+| G05 | Native primary; OpenClaw supported external-path Candidate; Hermes Experimental/not certifiable | `ACCEPTED_WITH_EVIDENCE_DEBT` | OpenClaw claim needs bounded live evidence; Hermes is optional, visibly Experimental, ED-S5-001 open |
+| G06 | minimum vertical slice and Tracks A–E are the planning basis | `ACCEPTED_FOR_IMPLEMENTATION_PLANNING` | no implementation Session is active or authorized before close, integration, and separate authorization |
+
+All six Human decisions are recorded exactly. QD-01 through QD-06 from
+Section 16 are resolved by G01 through G06; no new product or architecture
+decision is introduced.
+
+## 20. Final capability classification and handoff
+
+`BLOCKED_CLAIM_OR_GATE` means only that a named freeze, certification,
+production, API, or supported claim cannot be granted without its evidence. It
+does not automatically block bounded prototype implementation. Deferred work
+is not a v0.2 blocker.
+
+### 20.1 Required capability matrix
+
+| ID | Product behavior | Technical mapping | Acceptance | Required evidence | Automatable | Track | Dependency | v0.2 blocker |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R01 | manage one Digital Employee in business language | projection over Definition, Instances, Bindings and work | PDA-01/02/07/11; ECA-07 | cross-view projection fixtures and source-of-truth tests | `YES/PARTIAL` | D/E | A projection contract | Yes: Product Demo |
+| R02 | begin from natural language and receive editable draft | draft generation outside authoritative desired state | PDA-01/02 | deterministic prompt/draft fixture and edit tests | `YES/PARTIAL` | D | G03 authority boundary | Yes: Product Demo |
+| R03 | review Diff/validation and approve | version/change evidence plus Human Gate boundary | PDA-03/04/05 | Diff, negative validation, approval/audit tests | `YES/PARTIAL` | D/A | R02; approval representation | Yes: Product Demo |
+| R04 | publish and run deterministic test | approved Definition projection then Task | PDA-05/06; ECA-04 | publish authority test and clean test execution | `YES/PARTIAL` | D/E | R03; A execution interface | Yes: Product Demo |
+| R05 | see stable Definition/Instance relationship | Definition `1:N` Instance, distinct Instance identity | TDA-02 | identity, restart, update and mapping tests | `YES` | A | approved bounded representation | Yes: vertical slice |
+| R06 | assign and follow Task/Workflow | current-compatible Task/Workflow plus richer projections | PDA-06/07; ECA-02 | DAG and v0.1 differential tests | `YES` | A/C | R05 and execution interface | Yes: full Demo; Task only in first slice |
+| R07 | correlate work end to end | embedded Platform Execution Identity propagated unchanged | TDA-01/03–08 | creation, persistence, propagation and mismatch tests | `YES` | A | representation and retry rules | Yes: vertical slice |
+| R08 | understand selected Instance and Runtime | selected Instance plus effective Runtime Binding evidence | TDA-03/04 | eligibility, selection and Binding projection tests | `YES` | A/B | R05/R07 | Yes: vertical slice |
+| R09 | execute deterministic Native Golden Path | current Native Runtime behind bounded Provider mapping | TDA-04; ECA-01/02 | Native end-to-end and v0.1 differential suite | `YES` | B | A interface spine | Yes: release Golden Path |
+| R10 | run same semantics on OpenClaw | external Runtime Provider path; opaque native refs | TDA-05; ECA-01/05 | bounded live success plus conformance/fallback fixtures | `PARTIAL` | B/E | A interface; OpenClaw environment | Yes: full v0.2 Demo, not first slice |
+| R11 | understand governed Capability assignment | Capability Definition and embedded Binding projection | PDA-02; TDA-07/08 | identity/version/operation and Binding tests | `YES` | C | A identity envelope | Yes: full Demo |
+| R12 | use REST and MCP | two Provider realizations behind one Capability boundary | TDA-07; ECA-01/03 | local REST/MCP success/failure fixtures | `YES` | C/E | R11/R13 | Yes: REST in first slice; MCP in full Demo |
+| R13 | see ALLOW and pre-invocation DENY | authorization separate from discovery/Provider | PDA-09; TDA-08 | zero-call DENY, ALLOW, audit and error tests | `YES` | C/E | bounded auth representation | Yes: full Demo; REST ALLOW in first slice |
+| R14 | switch between synchronized views | shared Core refs and Execution Identity | TDA-01/11; ECA-07 | cross-view equality and no-second-store tests | `YES` | D/E | A/C projections | Yes: vertical slice |
+| R15 | understand business result | separate Capability, Task and Workflow Outcomes | PDA-08; TDA-09 | domain ownership and projection tests | `YES` | A/C/D/E | R07/R11; Outcome representation | Yes: Task/Capability Outcome in first slice |
+| R16 | correct, approve and compare a rerun | new Definition version and comparable fresh execution | PDA-10; TDA-11 | two-version Diff, approval and Outcome comparison | `YES/PARTIAL` | D/E | R03/R07/R15 | Yes: full Demo, not first slice |
+| R17 | see bounded recovery assessment | stable Instance, reassessed Binding/eligibility, Instance-owned Recovery | TDA-10; ECA-03 | replacement, stale/unknown and no-continuity tests | `YES` | A/B/E | R05/R08; recovery predicates | Yes: full Demo only |
+| R18 | preserve current v0.1 behavior | additive translator/projection over Agent/Task/Workflow | ECA-02 | current suite plus old/new differential fixtures | `YES` | A–E | every changed interface | Yes: all implementation |
+| R19 | reproduce Demo and fallback safely | synthetic services/data, versioned harness and honest fallback | ECA-01/04–06/08 | clean bootstrap, fixture integrity, claim and secret scans | `YES/PARTIAL` | E | integrated A–D outputs | Yes: public Demo |
+
+### 20.2 Other final classifications
+
+| Classification | IDs | Final disposition |
+| --- | --- | --- |
+| `EXPERIMENTAL` | X01 Hermes path | optional and visibly Experimental; ED-S5-001 open; not part of mandatory Release Golden Path |
+| `DEFERRED` | D01–D11 | unchanged from Section 8.3; none is a v0.2 blocker |
+| `BLOCKED_CLAIM_OR_GATE` | B01–B05 | Section 8.4 claims retained: freezes, Provider certification, Hermes success/certification, production recovery/State continuity, and public API/CRD representation |
+
+Every proposed capability is classified exactly once. The labels `BLOCKED` in
+Checkpoint A Section 8.4 are normalized to `BLOCKED_CLAIM_OR_GATE` here without
+changing their evidence or blocker scope.
+
+## 21. Final acceptance matrix
+
+The 31 non-duplicated criteria in Section 10 are the final criterion registry:
+PDA-01–12 (`PRODUCT`), TDA-01–11 (`TECHNICAL`), and ECA-01–08
+(`CONFORMANCE`). For Checkpoint B, `FULL`, `PARTIAL`, and `MANUAL_GATE` in the
+Automation column normalize to `YES`, `PARTIAL`, and `NO`. Their existing
+blocking-scope column remains binding. The prerequisite register below
+completes every criterion without duplicating its action, result, evidence,
+owner, or scope.
+
+| Criterion IDs | Layer | Prerequisite |
+| --- | --- | --- |
+| PDA-01–02 | `PRODUCT` | G01/G03; synthetic input and draft generator available |
+| PDA-03–05 | `PRODUCT` | editable draft, version base, validator, Human approval boundary |
+| PDA-06–08 | `PRODUCT` | approved publish, minimum identity/execution spine, Native and required Capabilities |
+| PDA-09 | `PRODUCT` | authorization decision point and instrumented Provider |
+| PDA-10 | `PRODUCT` | completed first execution, version/Diff/approval and comparable Outcome model |
+| PDA-11 | `PRODUCT` | work/version projections and Runtime maturity metadata |
+| PDA-12 | `PRODUCT` | integrated prototype and timed clean rehearsal |
+| TDA-01 | `TECHNICAL` | same Core projection exposed to both views |
+| TDA-02–04 | `TECHNICAL` | Track A bounded representation and Native Provider mapping |
+| TDA-05 | `TECHNICAL` | stabilized A interface and bounded live OpenClaw environment |
+| TDA-06 | `TECHNICAL` | maturity/debt metadata; no Hermes live success required |
+| TDA-07–08 | `TECHNICAL` | Capability definition/binding, authorization and REST/MCP providers |
+| TDA-09 | `TECHNICAL` | domain Condition/Outcome projections |
+| TDA-10 | `TECHNICAL` | stable Instance identity and bounded recovery predicates |
+| TDA-11 | `TECHNICAL` | version/configuration evidence and supportable event/log references |
+| ECA-01 | `CONFORMANCE` | all Required integrated paths available in test profile |
+| ECA-02 | `CONFORMANCE` | current v0.1 fixtures and unchanged compatibility baseline |
+| ECA-03 | `CONFORMANCE` | normalized failures, stale/unknown evidence and controllable providers |
+| ECA-04 | `CONFORMANCE` | clean bootstrap and synthetic dependency package |
+| ECA-05 | `CONFORMANCE` | external Runtime disable switch and labelled fixture fallback |
+| ECA-06 | `CONFORMANCE` | complete artifact/claim inventory |
+| ECA-07 | `CONFORMANCE` | shared projection repository and no Console desired-state database |
+| ECA-08 | `CONFORMANCE` | final capability, criterion and Core traceability registries |
+
+### 21.1 Acceptance scopes
+
+| Acceptance scope | Criteria/evidence required | Disposition |
+| --- | --- | --- |
+| Minimum vertical slice | PDA-01–09 except full Workflow/MCP; TDA-01–04, REST ALLOW portion of TDA-07, TDA-09 Task/Capability portion; ECA-02/07 | implementation entry evidence, not release acceptance |
+| Full v0.2 Golden Demo | all PDA, TDA except optional Hermes live execution, and ECA criteria; all R01–R19 | required for future Golden Demo Gate |
+| Optional extended Demo | TDA-06 Hermes display/path and recovery extension presentation | optional; cannot fail mandatory Golden Path |
+| External dependency fallback | ECA-04/05 plus visible non-live label and Native deterministic path | public reliability only; does not satisfy OpenClaw live acceptance |
+| Release Gate evidence | successful Golden Demo Gate, compatibility, reproducibility, CI, bounded Runtime claims and separate release governance | evidence input only; Release Acceptance remains `NOT_GRANTED` |
+
+## 22. Final implementation gap convergence
+
+| ID | State | Concrete gap / affected component | Minimum implementation | Test evidence | Dependency | Track | Shared-file risk |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| R01 | `NEW_IMPLEMENTATION_REQUIRED` | no Digital Employee projection; Console | derived projection and minimum surfaces | PDA-01/02/07/11, ECA-07 | A projection | D/E | High |
+| R02 | `NEW_IMPLEMENTATION_REQUIRED` | no authoring service/UI; Console/product boundary | deterministic editable AI draft prototype | PDA-01/02 | G03 | D | Medium |
+| R03 | `NEW_IMPLEMENTATION_REQUIRED` | no Diff/validation/approval; Console plus authority boundary | validator, version Diff, explicit approval record | PDA-03–05 | R02/A representation | D/A | High |
+| R04 | `NEW_IMPLEMENTATION_REQUIRED` | no approved publish/test flow | publish adapter to authoritative intent and test Task | PDA-05/06 | R03/A | D/E | High |
+| R05 | `PROTOTYPE_REQUIRED` | current Agent has no distinct Instance; prototype/Core representation | bounded Definition/Instance identity and projection | TDA-02 identity matrix | Human representation Gate as needed | A | High/single-writer |
+| R06 | `EXISTS_WITH_GAP` | current Task/Workflow lacks richer targeting/identity/Human Gate | additive compatible Task/Workflow integration | current plus TDA/PDA flow | R05/R07 | A/C | High/single-writer |
+| R07 | `PROTOTYPE_REQUIRED` | no Platform Execution Identity in current path | mint, persist/project and propagate unchanged | identity/conformance suite | bounded representation | A | High/single-writer |
+| R08 | `PROTOTYPE_REQUIRED` | no logical selection/effective Binding in current path | eligibility, selection record and Binding projection | TDA-03/04 | R05/R07 | A/B | High |
+| R09 | `EXISTS_WITH_GAP` | Native exists without accepted Provider/identity path | Native differential adapter/mapping | Native E2E and v0.1 differential | A stabilized interface | B | Medium |
+| R10 | `PROTOTYPE_REQUIRED` | OpenClaw absent from Production/Core; live success debt | bounded external Provider path and fixture fallback | live TDA-05 plus ECA-05 | A interface/environment | B/E | Medium |
+| R11 | `PROTOTYPE_REQUIRED` | string capabilities only | bounded Definition/Binding projection | identity/binding tests | A execution context | C | Medium/High |
+| R12 | `PROTOTYPE_REQUIRED` | REST/MCP only in spike evidence | local deterministic Provider implementations | TDA-07 success/failure | R11/R13 | C/E | Medium |
+| R13 | `NEW_IMPLEMENTATION_REQUIRED` | no enterprise authorization path | bounded decision interface and pre-handoff enforcement | zero-call DENY/ALLOW/audit | Human authority boundary | C | High |
+| R14 | `NEW_IMPLEMENTATION_REQUIRED` | current Console only Workflow view | synchronized Product/Technical projections | TDA-01, ECA-07 | A/C contracts | D/E | High/single-writer Console schemas |
+| R15 | `PROTOTYPE_REQUIRED` | current result/phase not separated domain Outcomes | bounded Capability/Task/Workflow Outcome projections | TDA-09/domain ownership | R07/R11 | A/C/D/E | High |
+| R16 | `NEW_IMPLEMENTATION_REQUIRED` | no version correction loop | revise/Diff/approve/republish and compare | PDA-10 | R03/R15 | D/E | Medium |
+| R17 | `PROTOTYPE_REQUIRED` | recovery exists only as spike evidence | stable identity replacement and Instance assessment | TDA-10/stale-unknown tests | R05/R08 | A/B/E | Medium/High |
+| R18 | `EVIDENCE_REQUIRED` | additive mapping/mixed-mode unproven | differential compatibility harness and explicit translator | ECA-02 | every track | A–E | High |
+| R19 | `NEW_IMPLEMENTATION_REQUIRED` | quality Demo package absent | synthetic data/services, bootstrap, fixtures, fallback and claims checks | ECA-01/04–06/08 | A–D integrated | E | Medium |
+
+No Required capability is `EXISTS` without qualification. This reflects
+current source, not architecture readiness.
+
+## 23. Implementation portfolio handoff
+
+All tracks are `PROPOSED / NOT_ACTIVE / NOT_AUTHORIZED`. No final Session IDs
+are assigned.
+
+### 23.1 Track A — Core Representation and Execution Identity
+
+- Objective: establish the bounded identity/interface spine and v0.1-compatible
+  projection for Definition, Instance, Task targeting, selection, Binding,
+  Execution Identity, minimal Outcomes and recovery ownership.
+- Input Contract: accepted Core Candidate, G04/G06, current v0.1 behavior.
+- Output: approved prototype representation/interface, compatibility mapping,
+  deterministic identity/routing/conformance evidence.
+- Write scope: separately approved prototype/Core projection and relevant
+  Operator/API tests; public CRD/schema only after G2 approval.
+- Probable locations: `operator/`, `manifests/crd/`, `tests/`, a dedicated
+  prototype area, and Console-facing projection schemas.
+- Prohibited: silent CRD reinterpretation, API group change, freeze, Provider
+  implementation, Console UX.
+- Dependencies: Session close/integration and representation Gate.
+- Shared files: Task/Workflow schemas/controllers, projection schemas,
+  execution envelope.
+- Conflict risk: High; single writer for identity and public representation.
+- Required tests: identity lifecycle, routing, propagation, conflict/missing,
+  v0.1 differential, recovery-negative fixtures.
+- Completion result: `IDENTITY_INTERFACE_SPINE_READY_FOR_DEPENDENT_TRACKS`.
+- Human Gate: bounded representation/implementation authorization.
+- Parallel start: first; other track design may proceed read-only, integration
+  waits for stabilized interfaces.
+
+### 23.2 Track B — Runtime Provider: Native and OpenClaw
+
+- Objective: prove Native differential behavior and bounded live OpenClaw path
+  behind one generic Runtime boundary.
+- Input Contract: Track A Execution Identity, selected Instance and Binding;
+  accepted Runtime Provider architecture.
+- Output: Native mapping, OpenClaw external prototype, normalized evidence and
+  deterministic unavailability fallback.
+- Write scope: separately approved Runtime Provider prototype/adapters,
+  fixtures and tests.
+- Probable locations: new bounded Provider module/prototype, `runtime/`,
+  Operator handoff integration, Demo fixtures.
+- Prohibited: Runtime Contract freeze, certification, Hermes remediation,
+  Core Provider-family fields, production claim.
+- Dependencies: stabilized A interface; bounded OpenClaw environment.
+- Shared files: execution envelope, Binding projection, Operator handoff,
+  integrated harness.
+- Conflict risk: Medium/High.
+- Required tests: unchanged consumer, Native differential, OpenClaw live
+  terminal result, unavailable/error normalization, opaque refs, fallback.
+- Completion result: `NATIVE_AND_OPENCLAW_DEMO_PATHS_EVIDENCED`.
+- Human Gate: Runtime prototype and supported-claim evidence Gate.
+- Parallel start: with C/D after A interface stabilization.
+
+### 23.3 Track C — Capability / Workflow / Authorization
+
+- Objective: implement bounded Capability Definition/Binding projection,
+  REST/MCP realizations, pre-handoff authorization and domain Outcomes inside
+  the required Workflow.
+- Input Contract: A identity envelope, Capability Candidate, current Workflow
+  compatibility, G03 authority constraint.
+- Output: governed REST/MCP paths, ALLOW/DENY audit evidence, Workflow and
+  Capability Outcomes.
+- Write scope: separately approved Capability prototype, authorization fixture,
+  Workflow integration and tests.
+- Probable locations: new Capability prototype/module, `operator/` Workflow and
+  Task integration, `tests/`, Demo providers.
+- Prohibited: full RBAC/ABAC, policy language, Capability Contract freeze,
+  marketplace, broad side-effect/replay guarantee.
+- Dependencies: A interface; bounded authorization representation.
+- Shared files: Task/Workflow controllers and schemas, execution envelope,
+  Outcome projection, Demo harness.
+- Conflict risk: High; Task/Workflow integration must be sequenced with A.
+- Required tests: REST/MCP success/failure, discovery vs authorization,
+  zero-call DENY, identity propagation, Outcome ownership, DAG compatibility.
+- Completion result: `GOVERNED_CAPABILITY_WORKFLOW_PATH_EVIDENCED`.
+- Human Gate: Capability prototype/authorization Gate.
+- Parallel start: Provider-local work after A interface; shared Workflow writes
+  only after A handoff.
+
+### 23.4 Track D — AI-assisted Authoring and Product View
+
+- Objective: deliver the accepted three-step authoring flow and business
+  projection without creating another source of truth.
+- Input Contract: G01/G03/G04, Track A projection contract, Track C permission
+  and Outcome projections.
+- Output: editable draft, Diff, validation, Human approval/publish/test and
+  minimum Product View surfaces.
+- Write scope: separately approved Console frontend/backend and bounded draft
+  service/projection; authoritative writes only through approved platform path.
+- Probable locations: `console/backend/`, `console/frontend/`, projection/API
+  tests, optional bounded prototype module.
+- Prohibited: Console database as desired-state authority, silent permission
+  change, full enterprise Console, production auth, brand decisions.
+- Dependencies: A projection; C permission shape for integration.
+- Shared files: Console schemas/API/client/types, Digital Employee projection,
+  version/Diff evidence.
+- Conflict risk: High; Console schema files are single-writer during slice.
+- Required tests: draft/edit/Diff/validation/approval, fail-closed publish,
+  source-of-truth, cross-view refs, usability rehearsal.
+- Completion result: `AUTHORING_AND_PRODUCT_VIEW_VERTICAL_SLICE_READY`.
+- Human Gate: Product UX/authority Gate.
+- Parallel start: UX/draft prototype after Gate; authoritative integration
+  waits for A and relevant C interface.
+
+### 23.5 Track E — Technical View, Observability and Golden Demo Harness
+
+- Objective: correlate the Technical View and package deterministic end-to-end
+  evidence for the accepted public story.
+- Input Contract: integrated A–D interfaces and all final acceptance criteria.
+- Output: Technical View, synthetic dataset/services, bootstrap, traces,
+  correction/recovery scripts, fallback and evidence report.
+- Write scope: separately approved Console technical projection, examples,
+  e2e/conformance harness and documentation.
+- Probable locations: `console/`, `examples/`, `docs/`, dedicated e2e fixtures
+  and CI scripts where approved.
+- Prohibited: redefine A–D interfaces, fake live Provider success, persist a
+  second source of truth, broaden release/certification claims.
+- Dependencies: stable integrated outputs from A–D.
+- Shared files: Console projection schemas, Demo manifests/docs, CI entry
+  points, execution/Outcome fixtures.
+- Conflict risk: Medium/High at integration.
+- Required tests: full 31-criterion matrix, clean bootstrap, cross-view
+  equality, failure/fallback, claim/secret checks, timed rehearsal.
+- Completion result: `GOLDEN_DEMO_CANDIDATE_READY_FOR_EXECUTION_GATE`.
+- Human Gate: Golden Demo execution/acceptance Gate; separate Release Gate.
+- Parallel start: harness/data skeleton may begin after contracts are fixed;
+  integration waits for A–D.
+
+## 24. Execution order and parallel map
+
+1. **Phase 1 — Track A:** establish the bounded identity/interface spine and
+   compatibility constraints. The first implementation authorization should
+   target the Section 12 minimum vertical slice, not the full portfolio.
+2. **Phase 2 — Tracks B, C, D:** start Provider-local, Capability-local, and
+   authoring UX work in parallel against stabilized A interfaces. B/C shared
+   handoff and D authoritative publication integration wait for A. C Workflow
+   writes sequence with A. D permission/Outcome integration waits for C.
+3. **Phase 3 — Track E:** integrate A–D, execute the full acceptance matrix,
+   package synthetic dependencies, and rehearse live/fallback paths.
+
+```text
+close + REL integration + separate authorization
+  -> A [single-writer identity/interface spine]
+       |-> B Runtime Providers ---------|
+       |-> C Capability/Workflow/Auth ---|-> E integration and evidence
+       `-> D Authoring/Product View -----|
+```
+
+Complete Schema or Contract Freeze is not required for bounded prototype work.
+Any public API/CRD or lifecycle change still requires its applicable Gate.
+
+## 25. Shared-file ownership and conflict map
+
+| Likely shared path | Primary owner | Consumers | Allowed change | Sequencing | Risk | Integration strategy |
+| --- | --- | --- | --- | --- | --- | --- |
+| bounded Core representation/identity interface | A | B/C/D/E | approved prototype contracts and tests | A first | High | versioned handoff; no consumer edits |
+| `manifests/crd/` | A, only after G2 | C/E | separately approved additive API work only | single writer | Critical | dedicated PR and compatibility Gate |
+| `operator/src/agent_operator/task_controller.py` | A initially; C after handoff | B/C/E | identity/routing first, capability handoff second | serial | Critical | A merge/integration before C write |
+| `operator/src/agent_operator/workflow_controller.py` | C | A/E | compatible Workflow/Outcome/Human Gate integration | A Task interface first | High | C owns; E consumes fixtures |
+| `runtime/` generic interface | B | A/C/E | Native/OpenClaw Provider mapping | A contract first | High | B-owned PR; unchanged-consumer tests |
+| Capability prototype/provider directory | C | B/D/E | Capability/auth/REST/MCP only | A contract first | Medium | C-owned interface and fixtures |
+| `console/backend/src/agent_console/schemas.py` and projection/API | D during slice | A/C/E | Product projection and shared DTOs | A/C shapes first | Critical | single-writer D; E follows versioned DTO |
+| `console/frontend/src/` shared API/types/routes | D | E | Product View first, Technical View extension by agreed handoff | serial for shared types | High | D owns base; E rebases after integration |
+| Demo fixtures/examples/docs | E | B/C/D | integration-only scenario data/runbook | interfaces stable | Medium | E owns canonical fixture versions |
+| CI/e2e entry points | E | A–D | additive bounded gates only | final phase | Medium | E integrates track test commands |
+| `docs/governance/REGISTRY.md` | active governance/REL Session | all read-only | lifecycle/provenance only | governance-serialized | High | never edited concurrently by implementation tracks |
+
+Single-writer files in the first vertical slice are the chosen Core identity
+representation, public CRD files if separately approved, Task controller/schema,
+and Console backend schemas/projection. Every writable Session follows:
+
+```text
+one Session -> one Codex conversation -> one branch
+            -> one isolated worktree -> one primary PR
+```
+
+## 26. Architecture exit and remaining debt
+
+`BROAD_ARCHITECTURE_CONVERGENCE: COMPLETE_FOR_BOUNDED_V0_2_IMPLEMENTATION`
+
+`IMPLEMENTATION_ENTRY: READY_AFTER_SESSION_CLOSE_AND_INTEGRATION`
+
+Further architecture work is allowed only when implementation finds a material
+Core contradiction, compatibility cannot be preserved, identity/authority is
+ambiguous, a Human decision is required, or sufficient evidence exists for a
+Freeze Gate. Do not create another general architecture-convergence Session.
+
+Non-blocking uncertainty remains the claim-scoped Evidence Debt in Section 15:
+representation/backfill, combined identity conformance, OpenClaw live and
+combination evidence, MCP/side-effect breadth, bounded authorization, domain
+vocabulary/recovery, mixed-version/Console tolerance, Hermes ED-S5-001, and
+timed usability. None is silently closed or converted into implementation
+evidence.
+
+## 27. Next Session portfolio
+
+| Order | Work | State |
+| --- | --- | --- |
+| 1 | REL Session to integrate the accepted S5-ARCH-006 artifact after close confirmation and merge authorization | `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED` |
+| 2 | minimum vertical-slice implementation planning/authorization | `PROPOSED / NOT_ACTIVE / NOT_AUTHORIZED` |
+| 3 | Tracks A–E according to Section 24 dependency readiness | `PROPOSED / NOT_ACTIVE / NOT_AUTHORIZED` |
+
+No implementation Session is activated by this Checkpoint.
+
+## 28. Checkpoint B finalization state
+
+- Lifecycle: `CLOSING`
+- Authorization: `AUTHORIZED`
+- Status: `PASS`
+- Checkpoint: `B — FINAL_SCOPE_CONVERGENCE_AND_IMPLEMENTATION_HANDOFF`
+- Result: `READY_TO_CLOSE`
+- Human Close Confirmation: `PENDING`
+- Broad architecture convergence: `COMPLETE_FOR_BOUNDED_V0_2_IMPLEMENTATION`
+- Implementation entry: `READY_AFTER_SESSION_CLOSE_AND_INTEGRATION`
+- Production/Core change: `0`
+- Schema change: `0`
+- CRD change: `0`
+- ADR change: `0`
+- Runtime Provider change: `0`
+- Capability Provider change: `0`
+- Console change: `0`
+- Test source change: `0`
+- Next action: `WAIT_FOR_HUMAN_CLOSE_CONFIRMATION`
+- Next gate: `Human S5-ARCH-006 Close Confirmation`
+
+S5-ARCH-006 is not closed. PR #44 must remain open and unmerged.
