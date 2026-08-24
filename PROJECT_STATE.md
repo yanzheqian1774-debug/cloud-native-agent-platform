@@ -38,7 +38,9 @@ records lifecycle and provenance.
 | S5-GOV-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints and CI satisfied; Human Close Confirmation passed; reopen prohibited |
 | S5-ARCH-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Golden Demo Scope Gate passed with constraints; Human Close Confirmation passed; PR #44 merged at the authorized baseline; reopen prohibited |
 | S5-REL-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed closure forward-imported by S5-PLAN-001; PR #44 and merge `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` Git-verified; reopen prohibited |
-| S5-PLAN-001 | `CLOSING / AUTHORIZED / PASS / READY_TO_CLOSE` | Checkpoint A and Implementation Entry Gates passed with constraints; Portfolio and P01–P12 accepted; implementation route conditionally granted but no Session active; Human Close Confirmation pending |
+| S5-PLAN-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed closure; PR #45 merged at `040f324359c6db16ee52c55b8f367d1cc4157de9`; reopen prohibited |
+| S5-REL-007 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed/Git-verified durable Portfolio integration forward-imported by S5-ARCH-007; reopen prohibited |
+| S5-ARCH-007 | `CLOSING / AUTHORIZED / PASS / READY_TO_CLOSE` | Human G2 Representation/API Gate passed with constraints; R3 accepted for bounded A1; G2-01–G2-12 dispositioned; Human Close Confirmation pending; no implementation or public schema/API/CRD change |
 
 ## Accepted architecture state
 
@@ -78,15 +80,15 @@ certification, production readiness and release acceptance remain not granted.
 
 ## Immediate next work
 
-1. Decide the Human S5-PLAN-001 Close Confirmation.
-2. After closure, separately authorize S5-REL-007 — Implementation Portfolio
-   Integration for Draft PR #45.
-3. After durable integration, separately authorize the narrow S5-ARCH-007
-   Representation/API Gate or bounded preparatory Sessions.
+1. Decide the Human S5-ARCH-007 Close Confirmation.
+2. After closure, integrate S5-ARCH-007 through a separately authorized REL
+   Session, then separately authorize S5-IMPL-001.
+3. Keep all public API, CRD, existing-schema, production integration, freeze,
+   certification, readiness, and release decisions under their separate Gates.
 
-Tracks A–E and all recommended future Session IDs remain `NOT_ACTIVE /
-NOT_AUTHORIZED`. Conditional Implementation Entry accepts the route; it does
-not start work.
+Tracks A–E and all recommended implementation Session IDs remain `NOT_ACTIVE /
+NOT_AUTHORIZED`. S5-ARCH-007 is closing architecture work only; its accepted
+R3 decision and A1 recommendation do not start implementation.
 
 ## Source-of-truth links
 

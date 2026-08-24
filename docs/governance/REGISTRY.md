@@ -53,7 +53,9 @@ of failure unless the governing claim requires it.
 | S5-REL-005 | Project Governance Baseline Integration / REL | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; Checkpoint C — Session Closeout; reopen prohibited | Source: S5-GOV-001; PR #43; source head `71739cdcf035fd404176519d2df9975a9a781229`; merge and durable main `acbad19a8af7e0b3762007ba708a90ed0be53d07` | Merge Gate, Closeout Authorization, Close Confirmation: `PASS` | `HUMAN_CONFIRMED_GIT_VERIFIED`; import method: `FORWARD_IMPORTED_BY_S5_ARCH_006` | None; reopen prohibited |
 | S5-ARCH-006 | v0.2 Digital Employee Golden Demo Scope & Acceptance Contract / ARCH | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; Checkpoint B — Final Scope Convergence and Implementation Handoff; reopen prohibited | Source: S5-ARCH-005, S5-REL-004, S5-GOV-001, S5-REL-005; branch `codex/s5-arch-006-digital-employee-demo`; Draft PR #44 | Golden Demo Scope Gate: `PASS_WITH_CONSTRAINTS`; G07 Provider support: `ACCEPTED_AS_V0_2_PROVIDER_POLICY`; G08 deployment/assets: `ACCEPTED_AS_V0_2_DEPLOYMENT_AND_ASSET_POLICY`; Human Close Confirmation: `PASS` | `HUMAN_CONFIRMED / PR_NATIVE` | Recommended only: S5-REL-006 Golden Demo Scope Integration; not active or authorized |
 | S5-REL-006 | Golden Demo Scope Integration / REL | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; reopen prohibited | Source: S5-ARCH-006; source PR #44; merge and durable main `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` | Merge Gate, Closeout Authorization, Close Confirmation: `PASS` | `HUMAN_CONFIRMED_GIT_VERIFIED`; import method: `FORWARD_IMPORTED_BY_S5_PLAN_001` | None; reopen prohibited |
-| S5-PLAN-001 | v0.2 Implementation Portfolio & Release Execution Plan / PLAN | `CLOSING / AUTHORIZED` | `PASS / READY_TO_CLOSE`; Checkpoint C — Session Finalization; implementation route conditionally granted, no future Session active | Source: S5-ARCH-005, S5-GOV-001, S5-ARCH-006, S5-REL-006; baseline `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9`; Checkpoint B head `e40a3bc3118a6238c56bf8932c4964f87c10cd57`; branch `codex/s5-plan-001-v0-2-implementation-portfolio`; Draft PR #45 | Checkpoint A Gate: `PASS_WITH_CONSTRAINTS`; Implementation Entry Gate: `PASS_WITH_CONSTRAINTS`; Human Close Confirmation: `PENDING` | `HUMAN_CONFIRMED / REPOSITORY_NATIVE / HUMAN_CONFIRMED_GIT_VERIFIED` | Human S5-PLAN-001 Close Confirmation; then recommended S5-REL-007, inactive/unauthorized |
+| S5-PLAN-001 | v0.2 Implementation Portfolio & Release Execution Plan / PLAN | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; implementation route conditionally granted, no implementation Session active; reopen prohibited | Source: S5-ARCH-005, S5-GOV-001, S5-ARCH-006, S5-REL-006; branch `codex/s5-plan-001-v0-2-implementation-portfolio`; PR #45; merge `040f324359c6db16ee52c55b8f367d1cc4157de9` | Checkpoint A and Implementation Entry Gates: `PASS_WITH_CONSTRAINTS`; Human Close Confirmation: `PASS` | `HUMAN_CONFIRMED_GIT_VERIFIED / PR_NATIVE / REPOSITORY_NATIVE` | None; reopen prohibited |
+| S5-REL-007 | Implementation Portfolio Integration / REL | `CLOSED / COMPLETED` | `PASS / SESSION_CLOSED`; reopen prohibited | Source: S5-PLAN-001; PR #45; merge and durable main `040f324359c6db16ee52c55b8f367d1cc4157de9` | Merge Gate, Closeout Authorization, Close Confirmation: `PASS` | `HUMAN_CONFIRMED_GIT_VERIFIED`; import method: `FORWARD_IMPORTED_BY_S5_ARCH_007` | None; reopen prohibited |
+| S5-ARCH-007 | v0.2 Core Representation & API Gate / ARCH | `CLOSING / AUTHORIZED` | `PASS / READY_TO_CLOSE`; Checkpoint B — Final G2 Convergence and A1 Handoff | Source: S5-ARCH-005, S5-ARCH-006, S5-PLAN-001, S5-REL-007; baseline `040f324359c6db16ee52c55b8f367d1cc4157de9`; branch `codex/s5-arch-007-core-representation-api-gate`; Draft PR #46 | Human G2 Representation/API Gate: `PASS_WITH_CONSTRAINTS`; R3 accepted for bounded A1; G2-01–G2-12 dispositioned; Human Close Confirmation: `PENDING`; A1 inactive/unauthorized | `HUMAN_CONFIRMED / REPOSITORY_NATIVE / PR_NATIVE` | Human S5-ARCH-007 Close Confirmation |
 
 S5-REL-004 closure was not previously repository-native. Its Registry entry is
 an explicit import of Human-confirmed closure; PR #42 and its merge commit are
@@ -69,6 +71,10 @@ Registry forward-import records the Human-confirmed closure against the
 Git-verified PR #44 merge without reopening S5-REL-006 or creating a recursive
 closeout PR.
 
+S5-REL-007 final closure occurred after PR #45 durably integrated the accepted
+Portfolio. S5-ARCH-007 forward-imports the Human-confirmed and Git-verified
+closure without reopening S5-REL-007 or creating a recursive closeout PR.
+
 ## Human and Open Decision Index
 
 | Subject | State | Durable scope / source |
@@ -77,6 +83,7 @@ closeout PR.
 | Five logical resources | `ACCEPTED_WITH_EVIDENCE_DEBT` | Logical Candidate only; five CRDs are not authorized or approved |
 | Option B compatibility direction | `ACCEPTED_WITH_EVIDENCE_DEBT` | Additive compatibility direction; representation, migration, and conformance remain debt |
 | Platform Execution Identity | `ACCEPTED_WITH_EVIDENCE_DEBT` | Embedded Core value; serialization and propagation conformance remain debt |
+| S5-ARCH-007 prototype representation | `ACCEPTED_WITH_EVIDENCE_DEBT` | R3 internal-first representation accepted for bounded A1; no public API/CRD/schema authorization; future public form deferred |
 | Runtime and Capability Bindings | `ACCEPTED_WITH_EVIDENCE_DEBT` | Embedded boundaries |
 | Model Binding | `ACCEPTED_WITH_EVIDENCE_DEBT` | Thin embedded foundation; routing remains deferred |
 | Final v0.2 Demo scenario | `PENDING` | Engineering Release Risk Manager is durable direction; After-Sales Service Expert is proposed; neither is final |
