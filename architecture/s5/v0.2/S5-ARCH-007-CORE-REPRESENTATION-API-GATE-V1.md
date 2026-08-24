@@ -964,7 +964,7 @@ Session must stop if it would silently resolve ADR-0003/0004/0005 drift.
 | `git diff --check` | pass |
 | `make check` | pass: Ruff check, Ruff format check, and 166 pytest tests passed |
 | existing warnings | one Starlette/httpx TestClient deprecation warning; unrelated to this documentation Gate |
-| required GitHub CI | pending PR publication; no CI result claimed |
+| required GitHub CI | pass on draft PR #46: Quality Gates and Frontend Quality Gates |
 
 Current artifact state before Human Gate:
 
