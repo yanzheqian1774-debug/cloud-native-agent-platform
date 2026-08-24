@@ -35,7 +35,7 @@ records lifecycle and provenance.
 | --- | --- | --- |
 | S5-ARCH-005 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Accepted Candidate artifact and source head |
 | S5-REL-004 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS / SESSION_CLOSED` | PR #42 merge plus imported Human confirmation |
-| S5-GOV-001 | `CLOSING / AUTHORIZED / PASS / READY_TO_CLOSE` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints; Human Close Confirmation pending |
+| S5-GOV-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints and CI satisfied; Human Close Confirmation passed; reopen prohibited |
 
 ## Accepted architecture state
 
@@ -77,11 +77,10 @@ Neither direction is recorded here as final Demo approval.
 
 ## Immediate next work
 
-1. Obtain Human Close Confirmation for S5-GOV-001.
-2. After closure, consider S5-REL-005 — Project Governance Baseline
-   Integration, with source Session S5-GOV-001 and source PR #43.
-3. Authorize a separate Product/Architecture Session for v0.2 Demo scope.
-4. Authorize bounded Contract, prototype, and conformance Sessions afterward.
+1. After separate authorization, consider S5-REL-005 — Project Governance
+   Baseline Integration, with source Session S5-GOV-001 and source PR #43.
+2. Authorize a separate Product/Architecture Session for v0.2 Demo scope.
+3. Authorize bounded Contract, prototype, and conformance Sessions afterward.
 
 S5-REL-005 is a recommendation only. It is not active or authorized.
 
