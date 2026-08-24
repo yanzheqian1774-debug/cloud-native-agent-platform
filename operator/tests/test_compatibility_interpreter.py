@@ -81,6 +81,7 @@ def test_definition_name_is_not_reused_as_instance_identity() -> None:
     context = interpret()
     assert isinstance(context.selected_instance_id, AgentInstanceId)
     assert context.selected_instance_id.value != context.definition_ref.name
+    assert context.selected_instance_id.value != AGENT["metadata"]["uid"]
 
 
 def test_same_task_replay_recovers_immutable_execution_context() -> None:
@@ -96,6 +97,29 @@ def test_recreated_task_is_a_new_logical_execution() -> None:
     second = interpret(task_meta={**TASK_META, "uid": "task-uid-2"})
     assert first.execution_identity != second.execution_identity
     assert first.selected_instance_id == second.selected_instance_id
+
+
+def test_execution_identity_is_not_the_raw_task_uid() -> None:
+    context = interpret()
+    assert context.execution_identity.value != TASK_META["uid"]
+
+
+def test_identity_derivation_has_an_explicit_namespace_boundary() -> None:
+    other_agent = deepcopy(AGENT)
+    other_agent["metadata"]["namespace"] = "other-workloads"
+    other_task_meta = {
+        **TASK_META,
+        "namespace": "other-workloads",
+    }
+    other = interpret_legacy_task(
+        task_spec=deepcopy(TASK_SPEC),
+        task_metadata=other_task_meta,
+        namespace="other-workloads",
+        agent_candidates=[other_agent],
+    )
+    current = interpret()
+    assert other.selected_instance_id != current.selected_instance_id
+    assert other.execution_identity != current.execution_identity
 
 
 def test_replaced_agent_selects_a_new_internal_instance() -> None:
@@ -146,6 +170,13 @@ def test_conflicting_namespaced_agent_evidence_is_not_remapped(
     "mutator",
     [
         lambda agent: agent["metadata"].pop("uid"),
+        lambda agent: agent["metadata"].update({"uid": " malformed-uid "}),
+        lambda agent: agent["metadata"].update(
+            {"uid": NativeCorrelationId("runtime-instance-1")}
+        ),
+        lambda agent: agent["metadata"].update(
+            {"uid": AgentInstanceId("untrusted-instance-1")}
+        ),
         lambda agent: agent["metadata"].update(
             {"deletionTimestamp": "2026-08-24T01:00:00Z"}
         ),
@@ -192,7 +223,10 @@ def test_richer_agent_reference_evidence_fails_without_silent_remap() -> None:
     "task_meta",
     [
         {**TASK_META, "uid": ""},
+        {**TASK_META, "uid": " malformed-uid "},
         {**TASK_META, "uid": NativeCorrelationId("runtime-request-1")},
+        {**TASK_META, "uid": AgentInstanceId("instance-1")},
+        {**TASK_META, "uid": AgentDefinitionRef("workloads", "researcher")},
     ],
 )
 def test_native_or_missing_id_cannot_substitute_for_platform_execution_identity(

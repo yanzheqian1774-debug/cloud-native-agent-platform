@@ -79,6 +79,21 @@ def invoke_agent(
 
         response.raise_for_status()
 
+    except (
+        httpx.ReadError,
+        httpx.ReadTimeout,
+        httpx.RemoteProtocolError,
+        httpx.WriteError,
+        httpx.WriteTimeout,
+    ) as exc:
+        raise TaskExecutionError(
+            reason="ExecutionOutcomeUnknown",
+            message=(
+                "Runtime transport failed after invocation may have started; "
+                "automatic retry was suppressed"
+            ),
+            retryable=False,
+        ) from exc
     except httpx.HTTPError as exc:
         raise classify_http_error(exc) from exc
 

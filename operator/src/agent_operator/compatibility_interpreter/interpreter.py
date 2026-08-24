@@ -51,6 +51,10 @@ class InvalidLegacyEvidenceError(CompatibilityInterpreterError):
 def _required_string(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise InvalidLegacyEvidenceError(f"{field_name} must be a non-empty string")
+    if value != value.strip():
+        raise InvalidLegacyEvidenceError(
+            f"{field_name} must not contain surrounding whitespace"
+        )
     return value
 
 
@@ -70,8 +74,10 @@ def _timestamp(value: object, field_name: str) -> datetime:
         ) from exc
 
 
-def _opaque_id(kind: str, uid: str) -> str:
-    return str(uuid5(NAMESPACE_URL, f"agentos.io/v0.2/{kind}/{uid}"))
+def _opaque_id(kind: str, *identity_parts: str) -> str:
+    """Derive a typed internal ID from domain-separated Kubernetes evidence."""
+    seed = "/".join(("agentos.io", "v0.2", kind, *identity_parts))
+    return str(uuid5(NAMESPACE_URL, seed))
 
 
 def _runtime_binding(
@@ -116,7 +122,9 @@ def _legacy_instance(
         spec=_mapping(body.get("spec"), "Agent.spec"),
     )
     return AgentInstance(
-        instance_id=AgentInstanceId(_opaque_id("legacy-agent-instance", agent_uid)),
+        instance_id=AgentInstanceId(
+            _opaque_id("legacy-agent-instance", namespace, agent_name, agent_uid)
+        ),
         definition_ref=AgentDefinitionRef(namespace, agent_name),
         lifecycle=AgentInstanceLifecycle.ACTIVE,
         desired_runtime_binding=DesiredRuntimeBinding(binding),
@@ -202,7 +210,7 @@ def interpret_legacy_task(
     builder = ExecutionEnvelopeBuilder(
         selector=RejectAmbiguousInstanceSelector(repository),
         identity_minter=lambda: PlatformExecutionIdentity(
-            _opaque_id("task-execution", task_uid)
+            _opaque_id("task-execution", namespace, task_name, task_uid)
         ),
     )
     return builder.build(request)

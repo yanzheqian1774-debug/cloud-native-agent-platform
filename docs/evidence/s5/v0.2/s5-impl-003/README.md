@@ -6,9 +6,9 @@
 | --- | --- |
 | Session | `S5-IMPL-003` |
 | Track | `A3 — COMPATIBILITY_INTERPRETER` |
-| Lifecycle | `REVIEW` |
-| Checkpoint | `A — COMPATIBILITY_INTERPRETER_AND_SAFE_TASK_INTEGRATION_CANDIDATE` |
-| Result | `A3_IMPLEMENTATION_CANDIDATE` |
+| Lifecycle | `CLOSING` |
+| Checkpoint | `B — A3_SAFETY_CONVERGENCE_AND_EXIT_CANDIDATE` |
+| Result | `READY_TO_CLOSE` |
 | Authorized baseline | `a630db68daf29778cedcb8e3826f73d1802c49f0` |
 | Source Session | `S5-IMPL-002` |
 | Source integration | `S5-REL-010` |
@@ -37,9 +37,9 @@ The A3 flow is:
 current Task UID + namespaced agentRef.name
   -> read exactly one current Agent object
   -> validate Agent namespace/name/UID/runtime evidence
-  -> derive one typed compatibility Instance from Agent UID
+  -> derive one typed compatibility Instance from namespace/name/Agent UID
   -> project agentRef.name as Definition identity
-  -> derive/recover Platform Execution Identity from Task UID
+  -> derive/recover Platform Execution Identity from namespace/name/Task UID
   -> build immutable A2 InternalExecutionEnvelope
   -> persist existing Running status as replay barrier
   -> invoke unchanged same-named v0.1 Agent Service
@@ -66,12 +66,34 @@ Deleting and recreating a Task produces a different Kubernetes UID and a new
 Platform identity even if namespace/name are reused. No public status, spec,
 annotation, CRD, or schema field is needed for retention.
 
+The Task UID is only a seed. The root identity is a typed
+`PlatformExecutionIdentity` containing UUIDv5 over the domain-separated input
+`agentos.io/v0.2/task-execution/<namespace>/<task-name>/<task-uid>`. It is not
+the raw Task UID. Namespace and resource name make the current Kubernetes
+scope explicit. Cluster/tenant identity is not modeled, so the derivation is
+scoped to one current Kubernetes control plane and is not a future global
+identity Contract.
+
 The current Agent remains Definition-like and realization-oriented. A3 does
-not call its name an Instance ID. It derives a distinct typed compatibility
-Instance ID from the immutable Agent UID and validates that the observed Agent
-matches the Task's namespace/name. Replacement produces a new internal
-Instance ID. Terminating, missing, mismatched, malformed, or ambiguous evidence
-fails closed before Runtime invocation.
+not call its name an Instance ID. It derives a distinct typed
+`AgentInstanceId` containing UUIDv5 over the domain-separated input
+`agentos.io/v0.2/legacy-agent-instance/<namespace>/<agent-name>/<agent-uid>`.
+The result is neither the raw Agent UID nor Definition identity. Replacement
+produces a new internal Instance ID. Terminating, missing, mismatched,
+malformed, or ambiguous evidence fails closed before Runtime invocation.
+
+```text
+COMPATIBILITY_INSTANCE_MAPPING: ONE_TRANSITIONAL_COMPATIBILITY_INSTANCE_PER_CURRENT_AGENT_UID
+COMPATIBILITY_INSTANCE_SCOPE: INTERNAL / TRANSITIONAL / REPLACEABLE / NOT_FROZEN
+FINAL_DEFINITION_TO_INSTANCE_CARDINALITY: 1:N / UNCHANGED
+```
+
+The root Execution Identity is distinct from `status.attempts`. A3 implements
+no typed attempt identity: `ATTEMPT_IDENTITY: DEFERRED`; the existing positive
+attempt number remains Task status evidence only. The current Runtime returns
+no native invocation identity. Any future native ID remains correlation-only
+and cannot substitute for root Execution, attempt, Instance, or Definition
+identity.
 
 Desired and effective Runtime Binding values are distinct A1 owner types. Both
 are derived only from the current Agent runtime intent for this compatibility
@@ -85,7 +107,7 @@ returns no native correlation ID to A3.
 | Behavior | Classification | Evidence and limitation |
 | --- | --- | --- |
 | Replay versus new execution | `PROVEN` | Same Task UID rebuilds an equal envelope; a new UID produces a unique Platform Execution Identity; terminal replay is a no-op. |
-| Retry | `PROVEN` | All HTTP attempts in one handler receive the same immutable envelope and Platform identity; existing attempt/status semantics remain unchanged. |
+| Retry | `BOUNDED_WITH_LIMITATION` | All allowed HTTP attempts receive the same immutable root identity. Connect/pre-send and explicit retryable HTTP failures retain current retry behavior. Read/write/protocol failures are outcome-indeterminate and now fail closed without automatic retry. No attempt identity or Runtime idempotency key exists. |
 | Duplicate Runtime invocation | `BOUNDED_WITH_LIMITATION` | `Running` is durably written before invocation. A replay observing `Running` fails with `ExecutionStateUnknown` and performs zero invocation. This is not a distributed compare-and-set or Runtime idempotency protocol. |
 | Restart | `BOUNDED_WITH_LIMITATION` | Restart before `Running` may safely reconstruct and execute. Restart after `Running` prevents re-invocation but cannot determine whether the previous Runtime request completed. |
 
@@ -93,6 +115,69 @@ Failure before invocation produces typed missing/invalid/conflicting evidence
 or a retryable Agent lookup error and performs no Runtime call. Failure after
 the invocation begins is conservatively treated as outcome-unknown on replay.
 There is no silent remapping, new selection, or automatic fallback invocation.
+
+## Persisted replay barrier and crash-window matrix
+
+The replay barrier is the existing public `Task.status.phase: Running` value;
+there is no new field or schema. `patch_task_status` writes the complete
+Running status synchronously before `invoke_compatible_agent`. If that write
+fails, the exception aborts the handler and the Runtime is not invoked. An
+existing terminal phase is a no-op. Existing Running is ambiguous and becomes
+terminal `Failed / ExecutionStateUnknown` without another Runtime call. The
+terminal patch is persisted by Kopf after the handler returns.
+
+| Window | Persisted evidence | Replay and side-effect behavior | Classification |
+| --- | --- | --- | --- |
+| C0 — before Running write | No A3 execution evidence | Runtime has not been called; reconstruction with the same Task UID may invoke | `PROVEN` |
+| C1 — after Running, before invocation | `Running`, attempts `0` | Runtime has no side effect; replay refuses invocation and reports unknown because it cannot prove the exact crash point | `BOUNDED_WITH_LIMITATION` |
+| C2 — during invocation | `Running` | Runtime may have produced side effects; replay never invokes; outcome cannot be recovered | `OUTCOME_INDETERMINATE / REQUIRES_RUNTIME_IDEMPOTENCY` |
+| C3 — after Runtime success, before terminal write | `Running` | Runtime result/side effects may exist; replay never invokes; success cannot be reconstructed | `OUTCOME_INDETERMINATE` |
+| C4 — after Runtime failure, before terminal write | `Running` | Runtime may have produced partial side effects; replay never invokes; failure detail may be lost | `OUTCOME_INDETERMINATE` |
+| C5 — after terminal write | Terminal phase and outcome | Replay is a no-op and performs zero invocation | `PROVEN` |
+
+This is not exactly-once execution. It prefers possible false-negative/unknown
+outcome over automatic duplicate invocation after a persisted Running state.
+
+## Concurrent reconciliation and retry analysis
+
+Kopf normally serializes handlers for one object in one process, but A3 adds no
+global lock. A test with two handlers holding the same stale non-Running status
+proves both can write Running and invoke. Kubernetes resource-version CAS,
+multi-process synchronization, distributed locking, and a Runtime idempotency
+key are not provided. Duplicate prevention is therefore bounded to observed
+persisted status and normal framework serialization.
+
+Within one handler, every retry uses the same immutable envelope and root
+Execution Identity; `status.attempts` counts calls. Connect failures and
+explicit retryable HTTP responses use the existing retry loop. Read, write,
+and remote-protocol failures may occur after delivery, so A3 maps them to
+non-retryable `ExecutionOutcomeUnknown`. They are not automatically treated as
+proof of non-execution. No native invocation correlation is available.
+
+```text
+DUPLICATE_EXECUTION_PREVENTION: BOUNDED_WITH_LIMITATION
+DISTRIBUTED_CAS: NOT_PROVIDED
+RUNTIME_IDEMPOTENCY_KEY: NOT_PROVIDED
+```
+
+## Fallback and active-path classification
+
+There is no conditional identity-bypass fallback. The compatibility path is
+always interpreted first, then calls the unchanged v0.1 same-named Service
+target from the validated Definition in the envelope. Invalid evidence cannot
+activate the Service path, substitute Definition for Instance, or discard the
+root Platform identity. The compatibility invocation is deterministic and
+test-observable; it is not a competing source of truth. Source rollback
+restores the prior direct call without data migration.
+
+```text
+FALLBACK_AUTHORITY: COMPATIBILITY_ONLY / NOT_A_COMPETING_SOURCE_OF_TRUTH
+ACTIVE_TASK_PATH_CHANGE: YES — INTERNAL_PRE_INVOCATION_IDENTITY_AND_REPLAY_PATH
+ACTIVE_RUNTIME_TARGET_CHANGE: NO
+PRODUCTION_CORE_CHANGE: YES — INTERNAL_COMPATIBILITY_INTERPRETER
+OPERATOR_PRODUCTION_PATH_CHANGE: YES — BOUNDED_TASK_CONTROLLER_INTEGRATION
+EXTERNAL_SIDE_EFFECT_ORDER_CHANGE: YES — Agent read/interpretation now precedes Running; Runtime remains after Running
+```
 
 ## Test matrix
 
@@ -103,13 +188,14 @@ There is no silent remapping, new selection, or automatic fallback invocation.
 | Missing/ambiguous/mixed evidence | Missing Agent, multiple candidates, namespace/name conflict, missing UID/runtime, terminating Agent |
 | Instance safety | Typed ID distinct from Definition, replacement changes Instance ID, invalid evidence rejected |
 | Execution identity | Typed Platform ID, deterministic replay recovery, new-Task uniqueness, native-ID substitution rejection |
-| Retry/replay/restart | Same envelope across retry, terminal no-op, persisted-Running replay zero-invocation, unknown-outcome failure |
+| Retry/replay/restart | Same root envelope across retry, terminal no-op, persisted-Running replay zero-invocation, status-write fault injection, unknown-outcome suppression |
+| Concurrency | Two stale handlers demonstrate the absence of distributed CAS and the retained duplicate limitation |
 | Runtime Binding | Desired/effective typed separation, current runtime type/image projection, secret-shaped extra fields not imported |
 | Workflow | Workflow-generated Task enters A3 without public-wire or controller changes |
 | Rollback | Active-consumer path inventory is exact; no persisted A3 fields, migration, backfill, dependency, or lockfile change |
 
-Baseline: `236` tests. A3 adds `31` tests. Full changed-head result:
-`267 passed`, with one existing Starlette/httpx deprecation warning.
+Baseline: `236` tests. A3 adds `47` tests. Full changed-head result:
+`283 passed`, with one existing Starlette/httpx deprecation warning.
 
 ## Compatibility and changed paths
 
@@ -155,8 +241,12 @@ the interpreter. A source rollback restores the prior direct path.
 - Exact Runtime outcome recovery after a controller crash is not available.
 - The `Running` barrier bounds duplicates but is not a cross-controller CAS or
   downstream Runtime idempotency key.
+- Two concurrent handlers with stale status can both invoke; normal Kopf
+  per-object serialization is a framework bound, not distributed proof.
 - The compatibility Instance is deterministic internal evidence, not a
   first-class Agent Instance resource or production routing policy.
+- Cluster/tenant identity is not part of the deterministic seed; identities
+  are scoped to the current Kubernetes control plane.
 - Effective Binding is compatibility evidence, not Provider certification.
 - Platform identity is not propagated through the unchanged v0.1 Runtime wire;
   downstream propagation belongs to later authorized Runtime integration.
@@ -178,8 +268,9 @@ CERTIFICATION_STATE: NOT_GRANTED
 PRODUCTION_READINESS: NOT_GRANTED
 RELEASE_ACCEPTANCE: NOT_GRANTED
 IMPLEMENTATION_STARTED: YES
-A3_EXIT: A3_IMPLEMENTATION_CANDIDATE
+A3_IMPLEMENTATION: COMPLETE_FOR_BOUNDED_COMPATIBILITY_INTERPRETER
+A3_EXIT: READY_TO_CLOSE
 SESSION_CLOSED: NO
-NEXT_ACTION: WAIT_FOR_HUMAN_A3_IMPLEMENTATION_REVIEW_GATE
-NEXT_GATE: Human S5-IMPL-003 A3 Implementation Review Gate
+NEXT_ACTION: WAIT_FOR_HUMAN_CLOSE_CONFIRMATION
+NEXT_GATE: Human S5-IMPL-003 Close Confirmation
 ```

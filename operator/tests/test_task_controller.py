@@ -206,6 +206,60 @@ def test_invoke_agent_rejects_invalid_response(mock_post) -> None:
         raise AssertionError("TaskExecutionError was not raised")
 
 
+@pytest.mark.parametrize(
+    "transport_error",
+    [
+        httpx.ReadTimeout("read timed out"),
+        httpx.WriteTimeout("write timed out"),
+        httpx.ReadError("read failed"),
+        httpx.WriteError("write failed"),
+        httpx.RemoteProtocolError("protocol failed"),
+    ],
+)
+@patch("agent_operator.task_controller.httpx.post")
+def test_invoke_agent_suppresses_retry_for_indeterminate_transport_failure(
+    mock_post,
+    transport_error,
+) -> None:
+    mock_post.side_effect = transport_error
+    with pytest.raises(TaskExecutionError) as exc_info:
+        invoke_agent(
+            agent_name="researcher-agent",
+            namespace="agent-workloads",
+            prompt="hello",
+            timeout_seconds=30,
+        )
+    assert exc_info.value.reason == "ExecutionOutcomeUnknown"
+    assert exc_info.value.retryable is False
+
+
+@patch("agent_operator.task_controller.invoke_agent")
+def test_indeterminate_transport_failure_is_not_retried(
+    mock_invoke_agent,
+) -> None:
+    mock_invoke_agent.side_effect = TaskExecutionError(
+        reason="ExecutionOutcomeUnknown",
+        message="Runtime outcome unknown",
+        retryable=False,
+    )
+    status_patch = kopf.Patch()
+    create_task(
+        spec={
+            "agentRef": {"name": "researcher-agent"},
+            "input": {"prompt": "hello"},
+        },
+        name="test-task",
+        namespace="agent-workloads",
+        patch=status_patch,
+        meta=TASK_META,
+    )
+    mock_invoke_agent.assert_called_once()
+    assert status_patch.status["phase"] == "Failed"
+    assert status_patch.status["reason"] == "ExecutionOutcomeUnknown"
+    assert status_patch.status["retryable"] is False
+    assert status_patch.status["attempts"] == 1
+
+
 @patch("agent_operator.retry.time.sleep")
 @patch("agent_operator.task_controller.invoke_agent")
 def test_create_task_retries_retryable_error_then_succeeds(
@@ -522,3 +576,46 @@ def test_missing_definition_fails_before_running_or_invocation(
     assert status_patch.status["phase"] == "Failed"
     assert status_patch.status["reason"] == "AgentDefinitionNotFound"
     assert status_patch.status["attempts"] == 0
+
+
+@patch("agent_operator.task_controller.invoke_compatible_agent")
+def test_running_barrier_write_failure_prevents_runtime_invocation(
+    mock_invoke_compatible,
+    mock_task_status_writer,
+) -> None:
+    mock_task_status_writer.side_effect = RuntimeError("status write failed")
+    with pytest.raises(RuntimeError, match="status write failed"):
+        create_task(
+            spec={
+                "agentRef": {"name": "researcher-agent"},
+                "input": {"prompt": "hello"},
+            },
+            name="test-task",
+            namespace="agent-workloads",
+            patch=kopf.Patch(),
+            meta=TASK_META,
+        )
+    mock_invoke_compatible.assert_not_called()
+
+
+@patch("agent_operator.task_controller.invoke_compatible_agent")
+def test_two_handlers_with_stale_status_can_both_invoke_without_distributed_cas(
+    mock_invoke_compatible,
+) -> None:
+    mock_invoke_compatible.side_effect = ["first", "second"]
+    for _ in range(2):
+        create_task(
+            spec={
+                "agentRef": {"name": "researcher-agent"},
+                "input": {"prompt": "hello"},
+            },
+            name="test-task",
+            namespace="agent-workloads",
+            patch=kopf.Patch(),
+            meta=TASK_META,
+            status={},
+        )
+    assert mock_invoke_compatible.call_count == 2
+    first = mock_invoke_compatible.call_args_list[0].kwargs["context"]
+    second = mock_invoke_compatible.call_args_list[1].kwargs["context"]
+    assert first.execution_identity == second.execution_identity
