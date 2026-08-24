@@ -1,0 +1,63 @@
+"""Intentional exports for the internal, unfrozen v0.2 prototype."""
+
+from .domain import (
+    AgentDefinitionProjection,
+    AgentDefinitionRef,
+    AgentInstance,
+    AgentInstanceId,
+    AgentInstanceLifecycle,
+    DesiredRuntimeBinding,
+    EffectiveRuntimeBinding,
+    ExecutionIdentityRecord,
+    NativeCorrelationId,
+    NativeRealizationEvidence,
+    PlatformExecutionIdentity,
+    RuntimeBinding,
+    SelectedInstanceEvidence,
+    mint_agent_instance_id,
+    mint_platform_execution_identity,
+)
+from .errors import (
+    CoreRepresentationError,
+    DefinitionOwnershipConflictError,
+    DuplicateInstanceError,
+    InstanceNotFoundError,
+    InvalidBindingError,
+    InvalidDomainValueError,
+    InvalidNativeEvidenceError,
+)
+from .serialization import (
+    agent_instance_from_dict,
+    agent_instance_to_dict,
+    execution_identity_from_dict,
+    execution_identity_to_dict,
+)
+
+__all__ = [
+    "AgentDefinitionProjection",
+    "AgentDefinitionRef",
+    "AgentInstance",
+    "AgentInstanceId",
+    "AgentInstanceLifecycle",
+    "CoreRepresentationError",
+    "DefinitionOwnershipConflictError",
+    "DesiredRuntimeBinding",
+    "DuplicateInstanceError",
+    "EffectiveRuntimeBinding",
+    "ExecutionIdentityRecord",
+    "InstanceNotFoundError",
+    "InvalidBindingError",
+    "InvalidDomainValueError",
+    "InvalidNativeEvidenceError",
+    "NativeCorrelationId",
+    "NativeRealizationEvidence",
+    "PlatformExecutionIdentity",
+    "RuntimeBinding",
+    "SelectedInstanceEvidence",
+    "agent_instance_from_dict",
+    "agent_instance_to_dict",
+    "execution_identity_from_dict",
+    "execution_identity_to_dict",
+    "mint_agent_instance_id",
+    "mint_platform_execution_identity",
+]
