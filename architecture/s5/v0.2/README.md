@@ -6,6 +6,14 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Accepted architecture
 
+- [Digital Employee Golden Demo Scope and Acceptance Candidate v1](../../../S5-ARCH-006-DIGITAL-EMPLOYEE-GOLDEN-DEMO-V1.md)
+  defines the S5-ARCH-006 Product Demo scope, layered acceptance contract,
+  implementation gap map, and portfolio handoff. Its Human Golden Demo Scope
+  Gate passed with constraints, including G07's independently versioned
+  Runtime Provider support policy and G08's platform-managed-primary/hybrid
+  placement and enterprise asset boundary. The Session is
+  `CLOSED / COMPLETED / PASS / SESSION_CLOSED`; it authorizes no implementation
+  or freeze. Integration remains separately governed.
 - [Runtime Provider Architecture v1](baselines/s5-arch-002-runtime-provider-architecture-v1.md)
   defines the accepted Runtime Provider model. Its acceptance does not freeze the
   Runtime Contract or certify a Provider.
