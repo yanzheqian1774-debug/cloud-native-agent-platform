@@ -10,8 +10,10 @@ Source code and tests remain authoritative for implemented behavior.
   defines the S5-ARCH-006 Product Demo scope, layered acceptance contract,
   implementation gap map, and portfolio handoff. Its Human Golden Demo Scope
   Gate passed with constraints, including G07's independently versioned
-  Runtime Provider support policy. The Session is `CLOSING / READY_TO_CLOSE`,
-  pending Human Close Confirmation, and authorizes no implementation or freeze.
+  Runtime Provider support policy and G08's platform-managed-primary/hybrid
+  placement and enterprise asset boundary. The Session is
+  `CLOSING / READY_TO_CLOSE`, pending Human Close Confirmation, and authorizes
+  no implementation or freeze.
 - [Runtime Provider Architecture v1](baselines/s5-arch-002-runtime-provider-architecture-v1.md)
   defines the accepted Runtime Provider model. Its acceptance does not freeze the
   Runtime Contract or certify a Provider.

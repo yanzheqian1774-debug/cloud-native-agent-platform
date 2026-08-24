@@ -715,8 +715,9 @@ candidate table. It still grants no implementation authorization.
 | G06 | minimum vertical slice and Tracks A–E are the planning basis | `ACCEPTED_FOR_IMPLEMENTATION_PLANNING` | no implementation Session is active or authorized before close, integration, and separate authorization |
 
 | G07 | Runtime integrations use independently versioned Provider Adapters between stable Core and exact upstream Runtime versions/profiles | `ACCEPTED_AS_V0_2_PROVIDER_POLICY` | v0.2 implementation evidence must select, pin and test exact Native, OpenClaw and Experimental Hermes targets; this Session selects no unsupported version |
+| G08 | SaaS Control Plane with separately placed Runtime execution; Platform-managed is the v0.2 primary path, Customer-managed is architecture-ready/deferred, and Edge/Desktop is optional/deferred | `ACCEPTED_AS_V0_2_DEPLOYMENT_AND_ASSET_POLICY` | placement never replaces Platform identity; managed Native/OpenClaw and Experimental Hermes server paths; governed Skill/Memory assets; no Edge fleet implementation or desktop dependency |
 
-All seven Human decisions are recorded exactly. QD-01 through QD-06 from
+All eight Human decisions are recorded exactly. QD-01 through QD-06 from
 Section 16 are resolved by G01 through G06. G07 adds the versioned Runtime
 Provider support policy within the accepted Core/Provider boundary; it creates
 no new Core resource, implementation authorization, freeze, or certification.
@@ -1076,6 +1077,7 @@ No implementation Session is activated by this Checkpoint.
 - Result: `READY_TO_CLOSE`
 - Human Close Confirmation: `PENDING`
 - G07 Provider support policy: `ACCEPTED_AS_V0_2_PROVIDER_POLICY`
+- G08 deployment/asset policy: `ACCEPTED_AS_V0_2_DEPLOYMENT_AND_ASSET_POLICY`
 - Broad architecture convergence: `COMPLETE_FOR_BOUNDED_V0_2_IMPLEMENTATION`
 - Implementation entry: `READY_AFTER_SESSION_CLOSE_AND_INTEGRATION`
 - Production/Core change: `0`
@@ -1241,3 +1243,308 @@ and Engineering/Conformance criteria plus 20 Provider Conformance criteria.
 Full v0.2 Golden Demo acceptance requires applicable PCA criteria for Native
 and OpenClaw. Hermes PCA criteria remain optional/Experimental. External
 fallback cannot substitute for PCA-18 live evidence.
+
+## 34. G08 — Managed Runtime Primary and Hybrid Placement Policy
+
+**Disposition: `ACCEPTED_AS_V0_2_DEPLOYMENT_AND_ASSET_POLICY`**
+
+**v0.2 primary placement: `PLATFORM_MANAGED / PRIMARY_REQUIRED_PATH`.** The
+Golden Path runs without employee desktop installation.
+
+| Placement | Final v0.2 disposition | Intended use and boundary |
+| --- | --- | --- |
+| `PLATFORM_MANAGED` | `PRIMARY_REQUIRED_PATH` | platform-managed isolated Container, VM, Runtime Pool, or equivalent for continuous Digital Employees, background Tasks/Workflows, controlled versions, monitoring and recovery |
+| `CUSTOMER_MANAGED` | `ARCHITECTURE_READY / IMPLEMENTATION_DEFERRED` unless bounded Capability connectivity evidence makes a narrower prototype necessary | future customer VPC, on-premises, private cloud/cluster or managed workstation pool for private data/models, residency and restricted systems; prefer outbound authenticated connectivity |
+| `EDGE_DESKTOP` | `OPTIONAL_EXTENSION / NOT_V0_2_PRIMARY_PATH / IMPLEMENTATION_DEFERRED` | only explicit local file/application/device/browser/model needs; offline, user-session, drift, state and credential constraints; no v0.2 fleet implementation |
+
+### 34.1 Control Plane and Runtime Plane authority
+
+```text
+SaaS Control Plane
+  -> Digital Employee desired state
+  -> Agent Definition / Agent Instance identity
+  -> Task / Workflow
+  -> Runtime Binding including placement intent/evidence
+  -> Capability policy
+  -> Platform Execution Identity
+  -> normalized Conditions / Outcomes
+  -> governance / audit
+
+separately placed Runtime Plane
+  -> Provider Adapter
+  -> Provider-specific configuration
+  -> Runtime process / Gateway
+  -> Profile/Home / Workspace
+  -> native Session / local execution state
+  -> native evidence
+```
+
+The SaaS Control Plane owns logical semantics and authority. The Runtime Plane
+owns native execution mechanics. Process, device, Gateway, Profile, Container,
+VM and native Session identities remain opaque evidence and cannot replace
+Agent Instance or Platform Execution Identity.
+
+### 34.2 v0.2 managed topology
+
+```text
+SaaS Control Plane
+  -> Managed Runtime Plane
+       |- Native Managed Runtime [REQUIRED]
+       |- OpenClaw Managed/Server Runtime [REQUIRED external evidence]
+       `- Hermes Managed/Server Runtime [EXPERIMENTAL]
+  -> Capability Gateway / Provider
+       |- REST
+       `- MCP
+  -> safe synthetic enterprise systems
+```
+
+Native uses a managed deterministic path with one isolated realization per
+applicable Instance scope. OpenClaw runs its evidence-selected exact upstream
+version in a managed/server environment without employee desktop installation
+and preserves Gateway capability only where evidenced. Hermes runs its
+evidence-selected exact upstream version in a managed/server environment with
+an isolated Profile/Home per Agent Instance or equivalent approved scope; it
+does not require Hermes Desktop and remains Experimental/not certifiable.
+
+## 35. Runtime Connectivity, lifecycle and isolation Candidates
+
+### 35.1 Runtime Connectivity Candidate
+
+Classification: `THIN_FOUNDATION / REPRESENTATION_NOT_FROZEN`.
+
+Platform-managed Runtime may use internal trusted Control Plane connectivity.
+Future Customer-managed and Edge placements should use a customer/device-side
+Enterprise Runtime Connector that initiates an outbound authenticated
+connection. Its logical responsibilities may include registration, Runtime or
+device identity, Provider/Runtime version and compatibility reporting,
+heartbeat, desired-operation retrieval, start/stop handling, Task delivery,
+Execution Identity propagation, status/Outcome and policy-bounded evidence
+reporting, disconnection, local buffering, reconnect and resynchronization.
+
+Protocol, endpoint, WebSocket/gRPC choice, serialization, public API and
+deployment technology remain unfrozen. Connector/Edge implementation is not a
+v0.2 blocker.
+
+### 35.2 Lifecycle and status
+
+Logical lifecycle capabilities are register, validate compatibility, provision
+or connect, configure, synchronize approved assets, start, observe, execute,
+stop, drain, replace, recover and clean up. Conceptual statuses are registered,
+connected, ready, busy, degraded, offline, incompatible, draining and recovery
+required. These are not frozen method names, state vocabulary, serialization,
+or public APIs. Provider Adapters translate native state into domain-owned
+Conditions and retain native evidence.
+
+### 35.3 Managed Runtime isolation Candidate
+
+Each Agent Instance—or an explicitly approved sharing boundary—must isolate:
+Runtime process/execution boundary, Profile/Home, Workspace, Memory namespace,
+Secret scope, network policy, resource quota, Skill assignment and execution
+evidence. Hermes Profiles cannot be concurrently shared by independent Agent
+processes until a safe external Memory design is evidenced. OpenClaw Gateway
+sharing cannot silently cross tenant, Digital Employee, identity, credential,
+or policy boundaries. Exact tenancy/sharing rules remain evidence debt.
+
+## 36. Enterprise Skill, Memory and execution boundaries
+
+### 36.1 Skill asset boundary
+
+| Concept | Authority/classification | Boundary |
+| --- | --- | --- |
+| Runtime-native Skill | Provider-native execution material | Hermes Skill, OpenClaw plugin, instructions/scripts; never automatically authoritative enterprise state |
+| Enterprise Skill Package | `PRODUCT_ASSET / INTERNAL_PACKAGE_METADATA_CANDIDATE` | governed identity/version, purpose, owner, source/license, Runtime compatibility, instructions/assets, required Capabilities/Secret refs, risk, review, integrity/signature evidence, limitations and deprecation; not a Core resource or CRD |
+| Capability Definition | Provider-independent governed semantic operation | Skill assignment cannot bypass Capability Binding or authorization |
+
+Promotion is:
+
+```text
+Runtime-native or learned Skill -> Asset Candidate -> secret scan
+  -> malware/dependency scan -> license review
+  -> Capability/data-boundary analysis -> Human Review
+  -> version/integrity evidence -> Enterprise Skill Catalog
+  -> approved Digital Employee assignment -> Provider translation
+```
+
+v0.2 requires one bounded pre-approved Skill/configuration example. Arbitrary
+unreviewed installation and automatic learned-Skill promotion are prohibited.
+Complete Catalog/Marketplace productization is deferred to BUILD/GOVERN.
+
+### 36.2 Memory, Session and State authority
+
+| Content | Default authority |
+| --- | --- |
+| personal preference, private conversation, local file/application context | `PERSONAL_MEMORY / USER_OWNED / NOT_AUTOMATICALLY_ENTERPRISE_ASSET` |
+| Task context, Runtime session, intermediate result, tool cache | `EXECUTION_STATE / EXECUTION_SCOPED / RETENTION_CONTROLLED` |
+| approved business knowledge, procedures, governed examples/policies/terms | `ENTERPRISE_KNOWLEDGE / ENTERPRISE_OWNED / VERSIONED / GOVERNED` |
+| learned Skill/Workflow/rule or summarized business knowledge | `LEARNED_ASSET_CANDIDATE / NON_AUTHORITATIVE_UNTIL_REVIEWED_AND_APPROVED` |
+
+Runtime-local Memory may be used in the bounded managed path. Cross-Runtime
+State portability remains `DEFERRED`; no seamless Hermes/OpenClaw Memory
+portability is claimed.
+
+### 36.3 Understanding-to-execution trace
+
+```text
+business request -> Digital Employee context -> approved knowledge / Skill
+  -> plan / Workflow -> Capability selection -> authorization
+  -> REST/MCP or sandboxed execution -> execution feedback
+  -> Business Outcome -> governed asset candidate where applicable
+```
+
+The managed path must preserve core reasoning/execution, require no employee
+desktop, exclude/defer local-device-only capabilities, enforce Capability
+authorization, propagate Execution Identity, expose Skill/Memory authority and
+prevent learned content from automatically becoming enterprise state.
+
+### 36.4 High-risk execution boundary
+
+Classification: `ARCHITECTURE_CANDIDATE_WITH_IMPLEMENTATION_EVIDENCE_DEBT`.
+
+The preferred enterprise pattern is a longer-lived managed Agent Runtime using
+a governed Capability Gateway and an ephemeral/isolated execution sandbox for
+high-risk shell, arbitrary code, browser automation, file transformation,
+untrusted-content processing, or network access beyond approved Capabilities.
+A complete sandbox platform is not required in the minimum slice unless later
+evidence requires it. v0.2 cannot claim unrestricted high-risk execution as a
+supported enterprise capability.
+
+## 37. G08 capability classification update
+
+Existing required IDs are refined as follows: R05/R08 require identity and
+Runtime placement to remain independent; R09 is the platform-managed Native
+path; R10 is the managed/server OpenClaw path; R12/R13 retain governed REST/MCP;
+R14 adds placement/asset visibility; and R19 includes desktop-independent clean
+reproduction. Four additional Required capabilities complete the G08 scope:
+
+| ID | Required behavior | Technical mapping | Acceptance | Evidence | Automation | Track | Dependency | v0.2 blocker |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R20 | show and operate managed Runtime lifecycle/status | placement-aware Binding, Adapter lifecycle and domain Conditions | MRA-01–08/16 | managed startup/observe/replace/offline fixtures | `YES/PARTIAL` | A/B/E | G07 packages and A placement semantics | Yes: managed Golden Path |
+| R21 | assign only approved Skill/configuration | internal Skill Package metadata, approved synchronization, Capability boundary | MRA-09–11 | approval/integrity assignment and rejection tests | `YES/PARTIAL` | B/C/D/E | Skill metadata and authority policy | Yes: bounded Skill example |
+| R22 | trace understanding through governed execution | Workflow, Capability authorization, managed Provider evidence and Outcomes | MRA-12–15 | end-to-end trace with authority assertions | `YES/PARTIAL` | C/E | R12/R13/R15/R21 | Yes: full Demo |
+| R23 | expose placement and Skill/Memory authority in both views | shared Instance/Binding/asset/evidence projections | MRA-17/18 | cross-view equality and business-label tests | `YES/PARTIAL` | D/E | A/B/C projections | Yes: full Demo |
+
+`EXPERIMENTAL` X01 now explicitly includes managed/server Hermes Adapter plus
+bounded Profile/Skill/Memory evidence. Existing Deferred IDs cover
+multi-tenancy/sharing (D01), Runtime pools/scheduling (D05), State portability
+(D07), and marketplace breadth (D09). Additional Deferred capabilities are:
+
+| ID | Deferred capability |
+| --- | --- |
+| D12 | full Customer-managed Runtime deployment and Connector implementation |
+| D13 | Edge/Desktop as primary path and Edge fleet management |
+| D14 | complete Enterprise Skill Catalog and automatic learned-Skill promotion |
+| D15 | complete high-risk execution sandbox platform beyond slice requirements |
+
+All Blocked claim/gate classifications remain unchanged. Deferred placement or
+asset work is not automatically a v0.2 blocker.
+
+## 38. G08 implementation gap map
+
+| Area | State | Concrete gap / minimum follow-up | Track | Blocking scope |
+| --- | --- | --- | --- | --- |
+| managed Native provisioning | `EXISTS_WITH_GAP` | current Kubernetes Native realization exists; prove exact managed profile, Instance scope and G07 identity/status path | A/B/E | Native managed Golden Path |
+| managed OpenClaw server path | `PROTOTYPE_REQUIRED` | no Production/Core path; add bounded exact-version managed/server Adapter evidence | B/E | required external path |
+| managed Hermes server path | `EVIDENCE_REQUIRED` | spike evidence exists but ED-S5-001 open; bounded isolated managed evidence only | B/E | Hermes Experimental claim only |
+| Runtime placement | `NEW_IMPLEMENTATION_REQUIRED` | representation-neutral placement intent/evidence absent; prototype under A Gate | A/D/E | managed Demo visibility |
+| Runtime registration | `PROTOTYPE_REQUIRED` | no generic Provider registration lifecycle | A/B/E | managed Provider path |
+| heartbeat | `PROTOTYPE_REQUIRED` | no generic connection/freshness evidence | B/E | applicable managed/external status claim |
+| start/stop | `EXISTS_WITH_GAP` | Native lifecycle exists; generic Adapter semantics/version evidence absent | B/E | Provider lifecycle claim |
+| status normalization | `PROTOTYPE_REQUIRED` | accepted Conditions not represented across Providers | A/B/E | Technical Demo |
+| Profile/Home isolation | `PROTOTYPE_REQUIRED` | Hermes/provider isolation not integrated or tested | B/E | Hermes/managed isolation claim |
+| Workspace/Memory namespace | `PROTOTYPE_REQUIRED` | thin boundary only; retention/persistence rules unresolved | A/B/E | bounded managed state claim |
+| Secret references | `EXISTS_WITH_GAP` | current Kubernetes Secret refs exist; Provider/Instance scope and consumption evidence incomplete | A/B/C/E | secure managed path |
+| approved Skill synchronization | `NEW_IMPLEMENTATION_REQUIRED` | no governed assignment/sync path | B/C/D/E | bounded Skill example |
+| Skill asset metadata | `PROTOTYPE_REQUIRED` | representation-neutral internal package Candidate only | B/C/D | Skill governance claim |
+| Capability Gateway | `PROTOTYPE_REQUIRED` | REST/MCP spike boundary not integrated as managed gateway | C/E | governed execution path |
+| customer Connector concept | `DEFERRED` | thin foundation only; protocol/identity unfrozen | A/B/C | no v0.2 blocker |
+| high-risk sandbox boundary | `DEFERRED` | architecture Candidate; full platform outside slice | C/E | blocks unrestricted high-risk claim only |
+| learned asset promotion | `DEFERRED` | policy documented; Catalog/scans/workflow absent | C/D/E | no v0.2 blocker |
+| State portability | `DEFERRED` | unsupported across Native/OpenClaw/Hermes | A/B/E | blocks portability claim only |
+| fleet/placement scale | `DEFERRED` | Customer/Edge fleet and Runtime Pool scheduling absent | A/B/E | no v0.2 blocker |
+
+## 39. Managed Runtime acceptance matrix
+
+| ID | Classification | Expected result | Required evidence | Track | Automation | Prerequisite | Blocking scope |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| MRA-01 | `REQUIRED` | Golden Path runs without employee desktop | clean managed rehearsal and dependency inventory | B/E | `PARTIAL` | managed package/profile | v0.2 Golden Path |
+| MRA-02 | `REQUIRED` | Native runs as isolated managed primary Runtime | Native managed E2E trace | B/E | `YES/PARTIAL` | A/G07 interface | v0.2 Golden Path |
+| MRA-03 | `REQUIRED` | OpenClaw exact target runs in managed/server environment | bounded live evidence | B/E | `PARTIAL` | G07 exact-version selection | external path |
+| MRA-04 | `EXPERIMENTAL` | Hermes exact target is managed/server, isolated and visibly Experimental | bounded evidence/labels where feasible | B/E | `PARTIAL` | selected target; ED-S5-001 remains | Hermes only |
+| MRA-05 | `REQUIRED` | selected Instance records exact placement evidence | projection/equality tests | A/D/E | `YES` | placement Candidate | managed Demo |
+| MRA-06 | `REQUIRED` | Instance identity survives realization replacement/device change | identity/replacement tests | A/B/E | `YES` | stable Instance | recovery/identity claim |
+| MRA-07 | `REQUIRED` | managed Runtime registers, starts and is observed through normalized evidence | lifecycle/Condition tests | A/B/E | `YES` | Provider Adapter | managed path |
+| MRA-08 | `REQUIRED` | Runtime/package/upstream compatibility evidence is visible | manifest and Technical View tests | B/E | `YES` | G07 manifest | support claim |
+| MRA-09 | `REQUIRED` | Profile/Home/Workspace are isolated per approved Instance/sharing scope | isolation and cross-scope negative tests | B/E | `YES/PARTIAL` | managed topology | managed isolation claim |
+| MRA-10 | `REQUIRED` | pre-approved Skill/configuration is assigned and synchronized | version/integrity/assignment evidence | B/C/D/E | `YES/PARTIAL` | Skill Package Candidate | bounded Skill example |
+| MRA-11 | `REQUIRED` | arbitrary or unauthorized Skill installation is rejected | negative authorization/zero-install test | B/C/E | `YES` | approval policy | enterprise Skill boundary |
+| MRA-12 | `REQUIRED` | Personal Memory is not promoted to enterprise asset automatically | authority/retention negative test | A/D/E | `YES` | Memory classification | asset governance claim |
+| MRA-13 | `REQUIRED` | learned Skill/knowledge remains non-authoritative until approval | promotion negative/audit test | C/D/E | `YES` | Human review boundary | learned asset claim |
+| MRA-14 | `REQUIRED` | Runtime/Skill cannot bypass Capability authorization | end-to-end DENY and zero-call evidence | B/C/E | `YES` | Capability Gateway | governed execution |
+| MRA-15 | `REQUIRED` | REST/MCP execute through managed Capability governance with one identity | end-to-end traces | B/C/E | `YES/PARTIAL` | R12/R13 | full Demo |
+| MRA-16 | `REQUIRED_WHERE_APPLICABLE` | disconnected/offline/incompatible state is explicit and fails honestly | status/failure/reconnect fixtures | B/E | `YES` | lifecycle/status Candidate | external/connector claims |
+| MRA-17 | `REQUIRED` | high-risk work is denied or routed only through approved bounded execution | negative policy/sandbox-boundary evidence | C/E | `YES/PARTIAL` | risk classification | blocks unrestricted high-risk claim |
+| MRA-18 | `REQUIRED` | Product/Technical Views share placement, identity, status and asset authority | cross-view equality tests | D/E | `YES` | A–C projections | full Demo |
+| MRA-19 | `REQUIRED` | external Runtime fallback is deterministic, labelled and desktop-independent | unavailable/fallback rehearsal | B/E | `YES/PARTIAL` | Native path and fixture | public reliability; not live support evidence |
+
+The consolidated acceptance registry now contains 70 criteria: 12 Product, 11
+Technical, 8 Engineering/Conformance, 20 Provider Conformance and 19 Managed
+Runtime criteria. MRA-04 remains Experimental; MRA-16 applies only to a claimed
+connection mode. Neither makes Hermes or Edge a mandatory Golden Path.
+
+## 40. G08 Track updates and ownership
+
+These deltas are authoritative additions to Section 23:
+
+- **Track A:** owns placement-reference semantics, identity independence from
+  realization/device, and conceptual lifecycle/Condition boundaries.
+- **Track B:** owns managed/server profiles, Adapter lifecycle, isolated
+  Profile/Home/Workspace, exact-version managed images/packages, registration
+  and heartbeat evidence, Native/OpenClaw managed paths, and bounded Hermes
+  Experimental managed evidence.
+- **Track C:** owns the Capability Gateway boundary, prevents Runtime bypass of
+  authorization, retains the thin enterprise Connector concept for private
+  systems, and provides synthetic enterprise systems for v0.2.
+- **Track D:** owns business-friendly placement/Runtime selection, approved
+  Skill assignment, Skill/Memory authority visibility, and hides raw native
+  configuration by default.
+- **Track E:** owns managed-runtime E2E tests, placement/status views,
+  replacement/offline/incompatible evidence, Skill/configuration evidence,
+  Product/Technical synchronization and desktop independence.
+
+Single-writer boundaries remain: A owns placement and Platform identity
+semantics; B owns Runtime packages/native translation and managed topology
+evidence; C owns Capability Gateway/authorization integration; D owns Product
+projection schemas; E owns conformance/Demo evidence. A–E consume versioned
+handoffs and cannot concurrently redefine placement, Provider Contract,
+Capability authority or shared Console DTOs.
+
+## 41. G08 Evidence Debt and final disposition
+
+Claim-scoped `UNASSIGNED_EVIDENCE_DEBT` is recorded for managed Runtime
+packaging, placement representation, Connector protocol/identity, heartbeat
+and disconnection thresholds, Runtime sharing/tenancy, Profile/Home isolation,
+Workspace persistence, Secret management, Skill Package representation,
+Skill scanning/signing, learned-asset promotion, Personal/Enterprise Memory
+policy, State retention, cross-Runtime State portability, high-risk sandboxing,
+Customer-managed/Edge deployment and Runtime fleet management. Existing
+ED-S5-001 remains open. These debts block only their named support, isolation,
+portability, high-risk, deployment, fleet, production or certification claims;
+deferred Customer/Edge work is not a v0.2 blocker.
+
+Final G08 output:
+
+- G08: `ACCEPTED_AS_V0_2_DEPLOYMENT_AND_ASSET_POLICY`
+- v0.2 primary placement: `PLATFORM_MANAGED`
+- Native: `MANAGED / REQUIRED / PRIMARY_GOLDEN_PATH`
+- OpenClaw: `MANAGED_SERVER_PATH / SUPPORTED_EXTERNAL_RUNTIME_PATH_CANDIDATE / EXACT_VERSION_EVIDENCE_REQUIRED`
+- Hermes: `MANAGED_SERVER_PATH / EXPERIMENTAL_ADAPTER / EXACT_VERSION_EVIDENCE_REQUIRED / NOT_CURRENTLY_CERTIFIABLE`
+- Customer-managed: `ARCHITECTURE_READY / IMPLEMENTATION_DEFERRED`
+- Edge/Desktop: `NOT_V0_2_PRIMARY_PATH / DEFERRED`
+- Enterprise Skill Package: `PRODUCT_ASSET / INTERNAL_PACKAGE_METADATA_CANDIDATE`
+- Personal Memory: `NOT_AUTOMATICALLY_ENTERPRISE_ASSET`
+- State portability: `DEFERRED`
+
+G08 authorizes no Connector, Provider, Skill Registry, Memory, sandbox, Core,
+Schema, CRD, Console or test implementation. S5-ARCH-006 remains
+`CLOSING / READY_TO_CLOSE`, subject to validation on the amended head and the
+still-pending Human Close Confirmation.
