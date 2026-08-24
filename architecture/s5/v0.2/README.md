@@ -7,10 +7,12 @@ Source code and tests remain authoritative for implemented behavior.
 ## Accepted architecture
 
 - [Core Representation & API Gate v1](S5-ARCH-007-CORE-REPRESENTATION-API-GATE-V1.md)
-  inventories the current physical APIs and recommends an internal-first,
-  compatibility-preserving representation for the A1 prototype. Its G2-01–G2-12
-  decisions remain pending Human disposition; it changes no public API, CRD,
-  schema, production source, or freeze state.
+  inventories the current physical APIs and records the Human-accepted R3
+  internal-first, compatibility-preserving representation for the bounded A1
+  prototype. G2-01–G2-12 are dispositioned with constraints; S5-ARCH-007 is
+  `CLOSING / READY_TO_CLOSE` with Human Close Confirmation pending. It changes
+  no public API, CRD, schema, production source, or freeze state and does not
+  authorize S5-IMPL-001.
 - [Digital Employee Golden Demo Scope and Acceptance Candidate v1](../../../S5-ARCH-006-DIGITAL-EMPLOYEE-GOLDEN-DEMO-V1.md)
   defines the S5-ARCH-006 Product Demo scope, layered acceptance contract,
   implementation gap map, and portfolio handoff. Its Human Golden Demo Scope

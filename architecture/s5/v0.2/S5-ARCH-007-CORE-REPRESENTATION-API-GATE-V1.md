@@ -8,26 +8,29 @@
 | Title | v0.2 Core Representation & API Gate |
 | Session type | `ARCH` |
 | Version | `v0.2 CONNECT — Digital Employee Technical Preview` |
-| Lifecycle | `REVIEW` |
+| Lifecycle | `CLOSING` |
 | Authorization | `AUTHORIZED` |
-| Status | `PASS_WITH_CONSTRAINTS` |
-| Checkpoint | `A — CURRENT_REPRESENTATION_DIFF_AND_G2_CANDIDATE` |
-| Result | `CORE_REPRESENTATION_G2_CANDIDATE` |
+| Status | `PASS` |
+| Checkpoint | `B — FINAL_G2_CONVERGENCE_AND_A1_HANDOFF` |
+| Result | `READY_TO_CLOSE` |
 | Authorized baseline | `040f324359c6db16ee52c55b8f367d1cc4157de9` |
 | Branch | `codex/s5-arch-007-core-representation-api-gate` |
-| G2-01–G2-12 | `PENDING_HUMAN_G2_GATE` |
-| Prototype representation | `RECOMMENDED` |
+| Human G2 Representation/API Gate | `PASS_WITH_CONSTRAINTS` |
+| Selected option | `R3 — INTERNAL_PROTOTYPE_REPRESENTATION_FIRST` |
+| G2-01–G2-12 | `DISPOSITIONED` |
+| Prototype representation | `ACCEPTED_FOR_BOUNDED_A1_PROTOTYPE` |
 | Schema freeze | `NO` |
 | Contract freeze | `NO` |
 | Production API commitment | `NO` |
 | A1 state | `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED` |
 | Implementation started | `NO` |
-| Next action | `WAIT_FOR_HUMAN_G2_REPRESENTATION_API_GATE` |
-| Next gate | Human S5-ARCH-007 G2 Representation/API Gate |
+| Human Close Confirmation | `PENDING` |
+| Next action | `WAIT_FOR_HUMAN_CLOSE_CONFIRMATION` |
+| Next gate | Human S5-ARCH-007 Close Confirmation |
 
-This artifact makes one concrete prototype recommendation. It is an
-architecture decision candidate, not implementation, a public schema, a
-Contract, migration authorization, certification, or release acceptance.
+This artifact records the Human-accepted bounded prototype representation. It
+is not implementation authorization, a public schema, a Contract, migration
+authorization, certification, or release acceptance.
 Prototype field names below are intentionally precise enough to test but are
 not permanently frozen.
 
@@ -752,7 +755,9 @@ vocabulary freeze, recovery thresholds, mixed live controller versions.
 
 ## 12. G2 Human decision candidates
 
-Every decision below remains `PENDING_HUMAN_G2_GATE`.
+The recommendation, alternatives, evidence, compatibility, rollback, and debt
+below preserve the Checkpoint A candidate record. Human dispositions are now
+authoritative in Section 16.
 
 ### G2-01 — Definition representation
 
@@ -919,9 +924,10 @@ Every decision below remains `PENDING_HUMAN_G2_GATE`.
 - OpenClaw exact targets; Hermes ED-S5-001; Provider certification;
 - State portability, Model routing, multi-tenancy, broader governance.
 
-Open decisions are exactly G2-01–G2-12 plus later independently gated public
-representation, Contract freeze, certification, production, and release
-decisions. Nothing in this Gate closes ED-S5-001.
+G2-01–G2-12 are dispositioned in Section 16. Later independently gated public
+representation, migration/backfill, Contract freeze, certification,
+production, and release decisions remain open. Nothing in this Gate closes
+ED-S5-001.
 
 ## 14. Constraints, contradiction review, and final state
 
@@ -966,20 +972,307 @@ Session must stop if it would silently resolve ADR-0003/0004/0005 drift.
 | existing warnings | one Starlette/httpx TestClient deprecation warning; unrelated to this documentation Gate |
 | required GitHub CI | pass on draft PR #46: Quality Gates and Frontend Quality Gates |
 
-Current artifact state before Human Gate:
+Checkpoint B finalization state:
 
 ```text
 SESSION: S5-ARCH-007
-LIFECYCLE: REVIEW
+LIFECYCLE: CLOSING
 AUTHORIZATION: AUTHORIZED
-STATUS: PASS_WITH_CONSTRAINTS
-RESULT: CORE_REPRESENTATION_G2_CANDIDATE
-G2_01_G2_12: PENDING_HUMAN_G2_GATE
-PROTOTYPE_REPRESENTATION: RECOMMENDED
+STATUS: PASS
+CHECKPOINT: B — FINAL_G2_CONVERGENCE_AND_A1_HANDOFF
+RESULT: READY_TO_CLOSE
+HUMAN_G2_REPRESENTATION_API_GATE: PASS_WITH_CONSTRAINTS
+SELECTED_OPTION: R3 — INTERNAL_PROTOTYPE_REPRESENTATION_FIRST
+G2_01_G2_12: DISPOSITIONED
+PROTOTYPE_REPRESENTATION: ACCEPTED_FOR_BOUNDED_A1
 SCHEMA_FREEZE: NO
 CONTRACT_FREEZE: NO
 PRODUCTION_API_COMMITMENT: NO
 A1_STATE: RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED
 IMPLEMENTATION_STARTED: NO
-NEXT_ACTION: WAIT_FOR_HUMAN_G2_REPRESENTATION_API_GATE
+HUMAN_CLOSE_CONFIRMATION: PENDING
+NEXT_ACTION: WAIT_FOR_HUMAN_CLOSE_CONFIRMATION
+```
+
+## 16. Checkpoint B — Human G2 disposition ledger
+
+The Human G2 Representation/API Gate is
+`PASS_WITH_CONSTRAINTS`. Checkpoint A evidence remains preserved; the ledger
+below finalizes, rather than replaces, its limitations.
+
+| Decision | Human disposition | Binding constraint |
+| --- | --- | --- |
+| G2-01 — Definition representation | `ACCEPTED_WITH_CONSTRAINTS` | current namespaced Agent remains Definition-facing; no field reinterpretation |
+| G2-02 — Instance representation | `ACCEPTED_WITH_EVIDENCE_DEBT` | distinct Platform-minted internal identity; expose a storage-independent repository interface |
+| G2-03 — Execution Identity | `ACCEPTED_WITH_EVIDENCE_DEBT` | Platform-minted internal value propagated unchanged; native IDs remain optional evidence |
+| G2-04 — Task targeting | `ACCEPTED_FOR_A1_HANDOFF` | `Task.spec.agentRef.name` remains Definition-facing |
+| G2-05 — selected Instance | `ACCEPTED_WITH_EVIDENCE_DEBT` | internal execution evidence only; no Task schema field in A1 |
+| G2-06 — Runtime Binding | `ACCEPTED_WITH_EVIDENCE_DEBT` | internal domain-specific embedded Binding; no Binding CRD |
+| G2-07 — Capability Binding | `ACCEPTED_FOR_A1_HANDOFF` | embedded governed intent and current behavior preserved; no Binding CRD |
+| G2-08 — Conditions/Outcomes/Recovery | `ACCEPTED_WITH_EVIDENCE_DEBT` | minimum internal structural seams; domain ownership; no universal type |
+| G2-09 — migration/backfill | `DEFERRED_FOR_A1 / REQUIRED_BEFORE_PUBLIC_PROMOTION` | fixtures and future seam only; no resource migration |
+| G2-10 — mixed version | `ACCEPTED_WITH_EVIDENCE_DEBT` | old objects work through compatibility defaults in tests; no dual write |
+| G2-11 — public API/CRD/schema | `NO_CHANGE_AUTHORIZED_FOR_A1` | any discovered public or existing-schema need is a mandatory Human stop |
+| G2-12 — A1 scope | `ACCEPTED_WITH_CONSTRAINTS` | internal types, interfaces, repositories/adapters, fixtures, and tests only; A1 waits for closure and integration |
+
+## 17. Final internal representation authority map
+
+| A1 value | Authority classification | Explicit non-authority |
+| --- | --- | --- |
+| Agent Definition projection | `AUTHORITATIVE_COMPATIBILITY_INPUT` | Instance, Provider, native Runtime, Console |
+| Agent Instance identity | `PLATFORM_AUTHORITATIVE_INTERNAL_IDENTITY` | Python object, Definition, Pod/container/Gateway/session/process/native ID |
+| Definition reference | `PLATFORM_AUTHORITATIVE_RELATIONSHIP` | Provider/native realization |
+| desired Runtime Binding | `DEFINITION_OWNED_INTENT` | Instance status and Provider observation |
+| effective Runtime Binding | `INSTANCE_OWNED_DERIVED_EFFECTIVE_STATE` | Definition status, Task, native Runtime |
+| selected Instance | `ROUTER_DERIVED_EXECUTION_EVIDENCE` | Task desired target, Provider/native selector |
+| Platform Execution Identity | `PLATFORM_AUTHORITATIVE_EXECUTION_VALUE` | native correlation or tracing backend |
+| native realization IDs | `OPAQUE_CORRELATION_EVIDENCE` | every logical identity and routing authority |
+| Runtime Conditions | `RUNTIME_DOMAIN_OBSERVATION` | Instance semantic conclusion |
+| Instance Conditions | `INSTANCE_DOMAIN_NORMALIZATION` | raw Provider/native observation |
+| Task Outcome | `TASK_DOMAIN_OUTCOME` | Runtime/Capability Provider result |
+| Workflow Outcome | `WORKFLOW_DOMAIN_OUTCOME` | individual Task or Provider result |
+| Capability Outcome | `CAPABILITY_DOMAIN_OUTCOME` | discovery, transport, or Provider result alone |
+| Recovery Assessment | `INSTANCE_OWNED_ASSESSMENT` | restart, replacement, health, or running process alone |
+| Console projection | `DERIVED_NON_AUTHORITATIVE_VIEW` | desired or effective Control Plane state |
+| Provider-local configuration | `PROVIDER_OWNED_TRANSLATION_INPUT` | Stable Core value |
+
+No derived, Provider-local, Console, or native field may become a competing
+source of truth.
+
+## 18. Instance stability and persistence seam
+
+`INTERNAL` does not mean ephemeral process identity. A1 must define an
+`AgentInstance` domain value/aggregate with a Platform-minted ID, immutable or
+explicitly governed Definition reference, lifecycle state, effective Runtime
+Binding seam, and realization evidence collection. It must not rely on Python
+object identity or any Pod, container, Gateway, Hermes, OpenClaw, Runtime
+process, or other native identifier.
+
+The storage-independent repository port must provide at least:
+
+```text
+save(instance) -> instance
+get(instance_id) -> instance | not-found
+list_by_definition(definition_ref) -> ordered instances
+delete(instance_id, expected_version?) -> deleted | conflict | not-found
+```
+
+Required semantics:
+
+- `instanceId` uniqueness is enforced independently of Definition identity;
+- two or more Instances may reference one Definition;
+- the Definition reference cannot silently change;
+- realization replacement changes evidence, never Instance identity;
+- deletion is explicit, idempotent where practical, and cannot imply native
+  cleanup without Binding ownership evidence;
+- repository results cross the canonical serialization boundary rather than
+  exposing stored mutable object identity;
+- an in-memory implementation is deterministic, injectable, has no implicit
+  global singleton, and exists only for tests/prototype evidence;
+- a future persistent implementation can replace it through the same port
+  without rewriting domain semantics.
+
+If A1 selects only the deterministic in-memory implementation, it must report:
+
+```text
+PERSISTENCE: PROTOTYPE_ONLY
+RESTART_STABILITY: NOT_YET_PROVEN
+```
+
+Persistent Instance storage, process-restart stability, identity backfill,
+delete/recreate tombstones, concurrency/version control, and production
+cleanup remain explicit Evidence Debt.
+
+## 19. Future public-promotion seam
+
+Future public representation is
+`DEFERRED_PENDING_A1_A2_MVS_EVIDENCE`. A1 must keep:
+
+- domain types independent from Kubernetes and HTTP serialization;
+- repository ports independent from storage technology;
+- API DTOs absent or structurally separated from domain values;
+- Provider-native evidence structurally separate from Core identities;
+- reference direction stable: Instance -> Definition, Task selection ->
+  Instance, execution -> opaque correlations;
+- parsing/conversion explicit and versioned;
+- fixtures under `core.agentos.io/prototype-v0.2`;
+- Console independent from internal Provider structures;
+- state injected through repository ports, never implicit global singletons.
+
+Possible future forms remain open: public CRD, versioned API object, internal
+persisted resource, or derived public projection. No form is selected or
+frozen by this Gate.
+
+## 20. Final A1 implementation package
+
+### 20.1 Identity and objective
+
+- Session ID: **`S5-IMPL-001`**.
+- Title: **A1 Core Representation Prototype**.
+- Objective: implement and test the accepted internal prototype
+  representation without changing public wire contracts.
+- State: `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`.
+- Entry: only after S5-ARCH-007 is Human-confirmed closed, durably integrated,
+  and S5-IMPL-001 is separately authorized.
+
+### 20.2 Single-writer scope
+
+The repository has no existing internal Core package. The bounded location is:
+
+- `core/src/agent_core/representation/v0_2/` — domain values, identity types,
+  repository ports, canonical serialization, compatibility translators;
+- `core/src/agent_core/repositories/` — deterministic prototype repository
+  implementation, if separation from ports is useful;
+- `core/tests/` — A1-local unit, invariant, serialization, and compatibility
+  tests/fixtures;
+- `docs/evidence/s5/v0.2/s5-impl-001/` — A1 Exit report and generated evidence
+  index only;
+- root `pyproject.toml` only if required to add `core/src` and `core/tests` to
+  existing test discovery, with **no dependency addition**.
+
+This location is bounded because it creates an unconsumed Core domain seam
+without placing prototype semantics in the existing Operator, Runtime,
+Gateway, or Console packages.
+
+Prohibited writes include `manifests/crd/`, public API schemas, existing
+Agent/Task/Workflow schemas, existing controllers, Runtime/Capability Provider
+packages, `gateway/`, `console/`, ADRs, dependencies, release documentation,
+and governance files except separately authorized S5-IMPL-001 metadata.
+
+### 20.3 Minimum deliverables
+
+1. Definition-facing compatibility projection over current Agent.
+2. Distinct internal Agent Instance domain representation and Platform-minted
+   ID.
+3. Definition-to-Instance relationship and lifecycle value.
+4. desired/effective Runtime Binding seams.
+5. Runtime-native realization evidence collection.
+6. Platform Execution Identity value type.
+7. internal selected Instance evidence type.
+8. storage-independent repository ports.
+9. deterministic prototype repositories or fixtures.
+10. versioned serialization fixtures.
+11. current Agent/Task/Workflow compatibility fixtures.
+12. negative identity/authority tests and public-wire non-change evidence.
+13. documented rollback/removal boundary.
+
+Excluded: CRD/API/schema changes, controller-wide routing, full Runtime
+Provider, OpenClaw/Hermes execution, Console DTOs, database selection,
+production migration/backfill, and every freeze.
+
+### 20.4 A1 automated test contract
+
+`UNIT_EVIDENCE`:
+
+- Platform seams mint valid Instance and Execution IDs;
+- repository save/get/list/delete and uniqueness behavior is deterministic;
+- desired/effective Binding and domain-owned condition/outcome types remain
+  structurally distinct;
+- versioned serialization round-trips and rejects unknown/unsafe fields.
+
+`COMPATIBILITY_EVIDENCE`:
+
+- current Agent wire fixture is byte/semantically unchanged;
+- current Task target remains Definition-facing;
+- old Task without Execution Identity remains readable through a compatibility
+  default;
+- current Workflow DAG/execution semantics and public Runtime/Console DTO
+  fixtures remain unchanged;
+- rollback removes the unconsumed prototype without resource migration.
+
+`PROPERTY_OR_INVARIANT_EVIDENCE`:
+
+- Definition ID and Instance ID differ;
+- two Instances can reference one Definition;
+- Instance ID remains stable as realization evidence changes;
+- native IDs cannot replace Instance ID or Execution ID;
+- Definition reference is immutable or changes only through an explicit
+  governed operation;
+- native correlations are `0:N`;
+- selected Instance evidence is internal;
+- Provider-specific values cannot enter Stable Core fields;
+- embedded Runtime/Capability Binding boundaries remain preserved;
+- recovery cannot become `TRUE` from restart/replacement/health alone.
+
+`INTEGRATION_EVIDENCE_DEFERRED_TO_A2`: live controller routing, Runtime
+propagation, Kubernetes persistence, Provider execution, Console projections,
+and mixed deployed versions.
+
+### 20.5 A1 stop conditions
+
+A1 stops and returns to Human review if it requires a new CRD, Kubernetes API
+version, public/existing schema field, reinterpretation of a current field,
+Task wire or Workflow DAG change, Runtime public API or Console DTO change,
+dual write, migration/backfill, native-ID authority, Provider-specific Stable
+Core field, universal Status/Outcome, or Definition identity reuse.
+
+### 20.6 A1 exit criteria
+
+A1 exits only when domain types compile; all unit/compatibility/invariant tests
+pass; current public schemas remain byte/semantically unchanged; the current
+166-test baseline does not regress; new A1 tests pass; rollback and
+`PERSISTENCE: PROTOTYPE_ONLY` / `RESTART_STABILITY: NOT_YET_PROVEN` debt are
+documented where applicable; no unsupported public claim is made; and its PR
+receives separate Human review and REL integration.
+
+A1 completion grants neither A2 authorization nor public representation,
+freeze, certification, production readiness, or release acceptance.
+
+## 21. Final compatibility and no-change position
+
+```text
+CURRENT_AGENT: DEFINITION_FACING_COMPATIBILITY_ADDRESS
+CURRENT_TASK_TARGET: DEFINITION_FACING
+CURRENT_WORKFLOW: DAG_AND_EXECUTION_SEMANTICS_PRESERVED
+AGENT_INSTANCE: INTERNAL_DISTINCT_PLATFORM_IDENTITY_FOR_A1
+SELECTED_INSTANCE: INTERNAL_ROUTING_EVIDENCE_FOR_A1
+EXECUTION_IDENTITY: INTERNAL_PLATFORM_VALUE_FOR_A1
+NATIVE_IDS: OPTIONAL_OPAQUE_CORRELATION_EVIDENCE
+RUNTIME_BINDING: EMBEDDED_DOMAIN_BINDING
+CAPABILITY_BINDING: EMBEDDED_GOVERNED_INTENT
+MODEL_BINDING: THIN_EMBEDDED_FOUNDATION
+PUBLIC_API_CHANGE: NO
+SCHEMA_CHANGE: NO
+CRD_CHANGE: NO
+EXISTING_SCHEMA_CHANGE: NO
+BREAKING_WIRE_CHANGE: NO
+DUAL_WRITE: PROHIBITED_BY_DEFAULT
+MIGRATION: NOT_AUTHORIZED_IN_A1
+ROLLBACK: REMOVE_OR_DISABLE_UNCONSUMED_INTERNAL_PROTOTYPE
+```
+
+R3 does not decide that Agent Instance remains permanently internal.
+
+## 22. Final Evidence Debt classification
+
+All debt remains claim-scoped. Persistent Instance storage, restart stability,
+identity backfill, public API representation, selected Instance and Execution
+Identity public exposure, serialization stability, mixed-version behavior
+beyond fixtures, migration losslessness, Runtime Provider integration,
+OpenClaw live evidence, Console projection tolerance, recovery and
+Condition/Outcome vocabularies, State portability, and multi-tenancy remain
+open. Hermes `ED-S5-001` remains `OPEN` and blocks only applicable Hermes
+certification/readiness claims.
+
+## 23. Checkpoint B finalization record
+
+```text
+SESSION: S5-ARCH-007
+LIFECYCLE: CLOSING
+AUTHORIZATION: AUTHORIZED
+STATUS: PASS
+CHECKPOINT: B — FINAL_G2_CONVERGENCE_AND_A1_HANDOFF
+RESULT: READY_TO_CLOSE
+HUMAN_G2_REPRESENTATION_API_GATE: PASS_WITH_CONSTRAINTS
+SELECTED_OPTION: R3 — INTERNAL_PROTOTYPE_REPRESENTATION_FIRST
+G2_01_G2_12: DISPOSITIONED
+PROTOTYPE_REPRESENTATION: ACCEPTED_FOR_BOUNDED_A1
+A1_STATE: RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED
+IMPLEMENTATION_STARTED: NO
+HUMAN_CLOSE_CONFIRMATION: PENDING
+SESSION_CLOSED: NO
+PR_STATE: OPEN / DRAFT / UNMERGED
+NEXT_RECOMMENDED_SESSION: S5-IMPL-001 (after closure, integration, and separate authorization)
+NEXT_ACTION: WAIT_FOR_HUMAN_CLOSE_CONFIRMATION
+NEXT_GATE: Human S5-ARCH-007 Close Confirmation
 ```
