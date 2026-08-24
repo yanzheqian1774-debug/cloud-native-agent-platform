@@ -17,6 +17,8 @@ path to First Value.
 
 ## Product and architecture
 
+- [Current Project State](../PROJECT_STATE.md)
+- [Governance Registry](governance/REGISTRY.md)
 - [Current implementation boundary](engineering/CURRENT_IMPLEMENTATION.md)
 - [Target architecture](../ARCHITECTURE.md)
 - [Architecture decisions and known drift](../adr/README.md)
@@ -28,6 +30,7 @@ tests define current behavior; accepted ADRs define approved architecture.
 
 ## Contributors
 
+- [Execution-plan and parallel-work conventions](exec-plans/README.md)
 - [Contributing guide](../CONTRIBUTING.md)
 - [Repository map](engineering/REPOSITORY_MAP.md)
 - [Definition of Done](engineering/DEFINITION_OF_DONE.md)

@@ -10,6 +10,13 @@ Its technical kernel is a Kubernetes-native Agent Control Plane.
 The architecture intentionally separates agent definitions, instances,
 runtime implementations, state, models, and capabilities.
 
+The accepted v0.2 logical Candidate and its evidence/debt boundaries are
+recorded in [S5-ARCH-005](S5-ARCH-005-CORE-SCHEMA-DRAFT-V1.md). Candidate
+acceptance does not imply implementation, CRD approval, Schema or Contract
+freeze, Provider certification, production readiness, or release acceptance.
+Current lifecycle and Human Gate metadata is indexed in the
+[Governance Registry](docs/governance/REGISTRY.md).
+
 ## Architecture Model
 
 The product is organized into eight product planes plus two

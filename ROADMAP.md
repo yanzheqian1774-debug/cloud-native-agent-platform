@@ -102,6 +102,21 @@ Potential candidates include:
 - OpenClaw;
 - LangGraph.
 
+### Current v0.2 working objective
+
+CONNECT is the current active development stage. Its working release objective
+is **v0.2 CONNECT — Digital Employee Technical Preview**. This objective does
+not grant release acceptance, production readiness, Provider certification, or
+Contract/Schema freeze.
+
+The final Digital Employee Demo scenario and its acceptance criteria require a
+separate Human Product/Architecture Gate. The alternative simplified sequence
+`v0.1 -> v0.2 -> v0.5 -> v0.9 -> v1.0` is `NOT_APPROVED / OPEN`; it does not
+replace the approved RUN / CONNECT / BUILD / GOVERN / SCALE / TRUST roadmap.
+
+Current operational status is summarized in [PROJECT_STATE.md](PROJECT_STATE.md)
+and governed through the [Governance Registry](docs/governance/REGISTRY.md).
+
 ## v0.3 — BUILD
 
 Question:

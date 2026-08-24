@@ -157,7 +157,8 @@ ultimate purpose.
 
 ## Current Release Boundary
 
-v0.1.0-alpha proves the Agent Control Plane core.
+The latest published release is **v0.1.0-alpha**. It proves the Agent Control
+Plane core.
 
 It MUST focus on:
 
@@ -170,6 +171,19 @@ It MUST focus on:
 - reproducibility.
 
 It MUST NOT expand into the complete Enterprise Agent Platform.
+
+The current development objective is **v0.2 CONNECT — Digital Employee
+Technical Preview**, classified as a `WORKING_RELEASE_OBJECTIVE`. v0.2 release
+acceptance and production readiness are `NOT_GRANTED`.
+
+For this objective, the platform governs Digital Employees as business-facing
+projections over Agent Definitions, Agent Instances, Tasks, Workflows,
+Capabilities, Runtime Providers, and enterprise control mechanisms. Digital
+Employee is not a Core CRD. The final Demo scenario and final product brand
+remain open Human decisions.
+
+See the derived [current Project State](PROJECT_STATE.md) and authoritative
+[Governance Registry](docs/governance/REGISTRY.md) for operational status.
 
 ## North Star Test
 
