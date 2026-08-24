@@ -73,6 +73,12 @@ def test_native_id_cannot_replace_platform_id(make_instance):
     assert PlatformExecutionIdentity("execution-1") != NativeCorrelationId(
         "execution-1"
     )
+    with pytest.raises(InvalidDomainValueError):
+        AgentInstanceId(NativeCorrelationId("native-1"))  # type: ignore[arg-type]
+    with pytest.raises(InvalidDomainValueError):
+        PlatformExecutionIdentity(  # type: ignore[arg-type]
+            NativeCorrelationId("native-2")
+        )
 
 
 def test_platform_minting_is_opaque_and_injectable():
@@ -102,6 +108,9 @@ def test_platform_identity_string_is_redaction_safe():
 
     assert str(value) == "PlatformExecutionIdentity(sensitiv...)"
     assert "full-identifier" not in str(value)
+    assert str(AgentInstanceId("sensitive-instance-identifier")) == (
+        "AgentInstanceId(sensitiv...)"
+    )
 
 
 def test_desired_and_effective_bindings_are_distinct(desired_binding, timestamp):
@@ -155,6 +164,27 @@ def test_native_evidence_supports_multiple_temporal_values(make_instance, timest
         "native-1",
         "native-2",
     ]
+
+
+def test_native_evidence_collection_is_defensively_copied(make_instance, timestamp):
+    evidence = NativeRealizationEvidence(
+        "runtime-family", "process", NativeCorrelationId("native-1"), timestamp
+    )
+    mutable_realizations = [evidence]
+    template = make_instance()
+    instance = AgentInstance(
+        instance_id=template.instance_id,
+        definition_ref=template.definition_ref,
+        lifecycle=template.lifecycle,
+        desired_runtime_binding=template.desired_runtime_binding,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+        realizations=mutable_realizations,  # type: ignore[arg-type]
+    )
+
+    mutable_realizations.clear()
+
+    assert instance.realizations == (evidence,)
 
 
 def test_selected_instance_evidence_is_definition_facing_and_internal(

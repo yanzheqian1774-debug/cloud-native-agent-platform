@@ -2,7 +2,6 @@ from datetime import timedelta
 
 import pytest
 from agent_core.representation.v0_2 import (
-    SCHEMA_VERSION,
     EffectiveRuntimeBinding,
     ExecutionIdentityRecord,
     InvalidDomainValueError,
@@ -14,6 +13,7 @@ from agent_core.representation.v0_2 import (
     execution_identity_from_dict,
     execution_identity_to_dict,
 )
+from agent_core.representation.v0_2.serialization import SCHEMA_VERSION
 
 
 def test_internal_fixture_round_trip_preserves_typed_distinctions(
@@ -86,3 +86,54 @@ def test_execution_identity_round_trip_preserves_platform_and_native_types(times
         "native-1",
         "native-2",
     ]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda payload: payload["instance"]["realizations"][0].update(extra=True),
+        lambda payload: payload["instance"]["realizations"][0].pop("kind"),
+    ],
+)
+def test_native_realization_fixture_rejects_shape_confusion(
+    make_instance, timestamp, mutation
+):
+    instance = make_instance().with_realization(
+        NativeRealizationEvidence(
+            "runtime-family", "process", NativeCorrelationId("native-1"), timestamp
+        ),
+        updated_at=timestamp,
+    )
+    payload = agent_instance_to_dict(instance)
+    mutation(payload)
+
+    with pytest.raises(InvalidDomainValueError, match="realization fixture"):
+        agent_instance_from_dict(payload)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"attempt": 0},
+        {"attempt": "1"},
+        {"parent_execution_id": PlatformExecutionIdentity("execution-parent")},
+        {
+            "execution_id": PlatformExecutionIdentity("execution-child"),
+            "root_execution_id": PlatformExecutionIdentity("execution-root"),
+            "parent_execution_id": None,
+        },
+    ],
+)
+def test_execution_identity_rejects_invalid_internal_tree_metadata(timestamp, kwargs):
+    values = {
+        "execution_id": PlatformExecutionIdentity("execution-root"),
+        "root_execution_id": PlatformExecutionIdentity("execution-root"),
+        "parent_execution_id": None,
+        "attempt": 1,
+        "native_correlations": (),
+        "created_at": timestamp,
+    }
+    values.update(kwargs)
+
+    with pytest.raises(InvalidDomainValueError):
+        ExecutionIdentityRecord(**values)

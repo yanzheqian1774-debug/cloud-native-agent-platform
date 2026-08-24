@@ -8,10 +8,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import NewType
 from uuid import uuid4
 
 from .errors import (
@@ -29,13 +28,11 @@ def _required(value: object, field_name: str) -> None:
         raise InvalidDomainValueError(f"{field_name} must be a non-empty string")
 
 
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
 def _redacted_configuration(
     value: Mapping[str, ConfigurationScalar],
 ) -> Mapping[str, ConfigurationScalar]:
+    if not isinstance(value, Mapping):
+        raise InvalidBindingError("configuration must be a mapping")
     blocked_fragments = ("secret", "token", "password", "credential", "api_key")
     result: dict[str, ConfigurationScalar] = {}
     for key, item in value.items():
@@ -145,6 +142,8 @@ class NativeRealizationEvidence:
             )
         if not isinstance(self.observed_at, datetime):
             raise InvalidNativeEvidenceError("observed_at must be a datetime")
+        if not isinstance(self.active, bool):
+            raise InvalidNativeEvidenceError("active must be a boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,6 +210,8 @@ class ExecutionIdentityRecord:
             raise InvalidDomainValueError(
                 "parent execution ID must be a Platform execution ID"
             )
+        if not isinstance(self.attempt, int) or isinstance(self.attempt, bool):
+            raise InvalidDomainValueError("execution attempt must be an integer")
         if self.attempt < 1:
             raise InvalidDomainValueError("execution attempt must be positive")
         if not all(
@@ -219,8 +220,16 @@ class ExecutionIdentityRecord:
             raise InvalidNativeEvidenceError(
                 "execution correlations must contain native correlation IDs"
             )
+        object.__setattr__(self, "native_correlations", tuple(self.native_correlations))
         if not isinstance(self.created_at, datetime):
             raise InvalidDomainValueError("execution created_at must be a datetime")
+        is_root = self.execution_id == self.root_execution_id
+        if is_root and self.parent_execution_id is not None:
+            raise InvalidDomainValueError("root execution cannot have a parent")
+        if not is_root and self.parent_execution_id is None:
+            raise InvalidDomainValueError("child execution requires a parent")
+        if self.parent_execution_id == self.execution_id:
+            raise InvalidDomainValueError("execution cannot be its own parent")
 
 
 class AgentInstanceLifecycle(StrEnum):
@@ -234,10 +243,10 @@ class AgentInstance:
     definition_ref: AgentDefinitionRef
     lifecycle: AgentInstanceLifecycle
     desired_runtime_binding: DesiredRuntimeBinding
+    created_at: datetime
+    updated_at: datetime
     effective_runtime_binding: EffectiveRuntimeBinding | None = None
     realizations: tuple[NativeRealizationEvidence, ...] = ()
-    created_at: datetime = field(default_factory=_utc_now)
-    updated_at: datetime = field(default_factory=_utc_now)
 
     def __post_init__(self) -> None:
         if not isinstance(self.instance_id, AgentInstanceId):
@@ -264,6 +273,11 @@ class AgentInstance:
             raise InvalidNativeEvidenceError(
                 "realizations must contain native evidence"
             )
+        object.__setattr__(self, "realizations", tuple(self.realizations))
+        if not isinstance(self.created_at, datetime):
+            raise InvalidDomainValueError("created_at must be a datetime")
+        if not isinstance(self.updated_at, datetime):
+            raise InvalidDomainValueError("updated_at must be a datetime")
 
     def with_realization(
         self, evidence: NativeRealizationEvidence, *, updated_at: datetime
@@ -290,8 +304,3 @@ def mint_platform_execution_identity(
 ) -> PlatformExecutionIdentity:
     """Mint an opaque Platform-owned execution identity."""
     return PlatformExecutionIdentity((generator or (lambda: str(uuid4())))())
-
-
-# Documents that external Task targets remain Definition-facing without making
-# this internal projection a public Task DTO.
-DefinitionFacingTaskTarget = NewType("DefinitionFacingTaskTarget", AgentDefinitionRef)

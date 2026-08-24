@@ -27,6 +27,10 @@ class InMemoryAgentInstanceRepository:
                 raise DefinitionOwnershipConflictError(
                     "Agent Instance Definition ownership cannot change"
                 )
+            if stored.created_at != instance.created_at:
+                raise DuplicateInstanceError(
+                    "Agent Instance ID conflicts with an existing aggregate"
+                )
             if stored == instance:
                 raise DuplicateInstanceError("duplicate Agent Instance")
         self._records[key] = agent_instance_to_dict(instance)

@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 from agent_core.repositories import InMemoryAgentInstanceRepository
@@ -34,6 +35,16 @@ def test_duplicate_identical_instance_is_explicit(make_instance):
 
     with pytest.raises(DuplicateInstanceError):
         repository.save(instance)
+
+
+def test_conflicting_aggregate_with_duplicate_id_is_rejected(make_instance, timestamp):
+    repository = InMemoryAgentInstanceRepository()
+    instance = make_instance()
+    repository.save(instance)
+    conflicting = replace(instance, created_at=timestamp + timedelta(seconds=1))
+
+    with pytest.raises(DuplicateInstanceError, match="conflicts"):
+        repository.save(conflicting)
 
 
 def test_one_definition_owns_multiple_ordered_instances(make_instance, definition_ref):
@@ -85,3 +96,33 @@ def test_repository_instances_have_no_global_state(make_instance):
 
     with pytest.raises(InstanceNotFoundError):
         second.get(AgentInstanceId("instance-001"))
+
+
+def test_repository_does_not_alias_mutable_binding_input(definition_ref, timestamp):
+    from agent_core.representation.v0_2 import (
+        AgentInstance,
+        AgentInstanceLifecycle,
+        DesiredRuntimeBinding,
+        RuntimeBinding,
+    )
+
+    configuration = {"profile": "original"}
+    instance = AgentInstance(
+        instance_id=AgentInstanceId("instance-001"),
+        definition_ref=definition_ref,
+        lifecycle=AgentInstanceLifecycle.ACTIVE,
+        desired_runtime_binding=DesiredRuntimeBinding(
+            RuntimeBinding(
+                "binding/1", "provider/1", "MANAGED", configuration=configuration
+            )
+        ),
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+    repository = InMemoryAgentInstanceRepository()
+    repository.save(instance)
+
+    configuration["profile"] = "mutated"
+
+    stored = repository.get(instance.instance_id)
+    assert stored.desired_runtime_binding.value.configuration["profile"] == "original"

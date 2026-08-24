@@ -1,4 +1,4 @@
-"""Public surface of the internal, unfrozen v0.2 representation package."""
+"""Intentional exports for the internal, unfrozen v0.2 prototype."""
 
 from .domain import (
     AgentDefinitionProjection,
@@ -6,7 +6,6 @@ from .domain import (
     AgentInstance,
     AgentInstanceId,
     AgentInstanceLifecycle,
-    DefinitionFacingTaskTarget,
     DesiredRuntimeBinding,
     EffectiveRuntimeBinding,
     ExecutionIdentityRecord,
@@ -28,7 +27,6 @@ from .errors import (
     InvalidNativeEvidenceError,
 )
 from .serialization import (
-    SCHEMA_VERSION,
     agent_instance_from_dict,
     agent_instance_to_dict,
     execution_identity_from_dict,
@@ -36,14 +34,12 @@ from .serialization import (
 )
 
 __all__ = [
-    "SCHEMA_VERSION",
     "AgentDefinitionProjection",
     "AgentDefinitionRef",
     "AgentInstance",
     "AgentInstanceId",
     "AgentInstanceLifecycle",
     "CoreRepresentationError",
-    "DefinitionFacingTaskTarget",
     "DefinitionOwnershipConflictError",
     "DesiredRuntimeBinding",
     "DuplicateInstanceError",

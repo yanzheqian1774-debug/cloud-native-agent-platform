@@ -128,6 +128,12 @@ def agent_instance_from_dict(payload: object) -> AgentInstance:
     realizations = value["realizations"]
     if not isinstance(realizations, list):
         raise InvalidDomainValueError("realizations must be a list")
+    realization_fields = {"system", "kind", "id", "observedAt", "active"}
+    if any(
+        not isinstance(item, dict) or set(item) != realization_fields
+        for item in realizations
+    ):
+        raise InvalidDomainValueError("invalid native realization fixture shape")
     return AgentInstance(
         instance_id=AgentInstanceId(value["instanceId"]),
         definition_ref=AgentDefinitionRef(ref["namespace"], ref["name"]),
