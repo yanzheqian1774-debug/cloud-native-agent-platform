@@ -12,8 +12,8 @@ Source code and tests remain authoritative for implemented behavior.
   Gate passed with constraints, including G07's independently versioned
   Runtime Provider support policy and G08's platform-managed-primary/hybrid
   placement and enterprise asset boundary. The Session is
-  `CLOSING / READY_TO_CLOSE`, pending Human Close Confirmation, and authorizes
-  no implementation or freeze.
+  `CLOSED / COMPLETED / PASS / SESSION_CLOSED`; it authorizes no implementation
+  or freeze. Integration remains separately governed.
 - [Runtime Provider Architecture v1](baselines/s5-arch-002-runtime-provider-architecture-v1.md)
   defines the accepted Runtime Provider model. Its acceptance does not freeze the
   Runtime Contract or certify a Provider.

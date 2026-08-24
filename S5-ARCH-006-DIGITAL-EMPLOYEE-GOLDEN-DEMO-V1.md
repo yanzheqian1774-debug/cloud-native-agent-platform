@@ -6,12 +6,12 @@ SESSION
 - Title: v0.2 Digital Employee Golden Demo Scope & Acceptance Contract
 - Type: `ARCH`
 - Version: `v0.2 CONNECT — Digital Employee Technical Preview`
-- Lifecycle: `CLOSING`
-- Authorization: `AUTHORIZED`
+- Lifecycle: `CLOSED`
+- Authorization: `COMPLETED`
 - Checkpoint: `B — FINAL_SCOPE_CONVERGENCE_AND_IMPLEMENTATION_HANDOFF`
-- Result: `READY_TO_CLOSE`
+- Result: `SESSION_CLOSED`
 - Baseline: `acbad19a8af7e0b3762007ba708a90ed0be53d07`
-- Candidate status: `SCOPE_ACCEPTED_WITH_CONSTRAINTS / READY_TO_CLOSE`
+- Candidate status: `SCOPE_ACCEPTED_WITH_CONSTRAINTS / SESSION_CLOSED`
 
 This artifact defines an implementation-ready Product Demo candidate. It does
 not authorize implementation, select a persistence representation, add a CRD,
@@ -1068,7 +1068,10 @@ silently closed or converted into implementation evidence.
 
 No implementation Session is activated by this Checkpoint.
 
-## 28. Checkpoint B finalization state
+## 28. Checkpoint B pre-close finalization state
+
+This section records the pre-close state accepted by the later Human Close
+Confirmation. Section 42 is the authoritative final Session state.
 
 - Lifecycle: `CLOSING`
 - Authorization: `AUTHORIZED`
@@ -1545,6 +1548,64 @@ Final G08 output:
 - State portability: `DEFERRED`
 
 G08 authorizes no Connector, Provider, Skill Registry, Memory, sandbox, Core,
-Schema, CRD, Console or test implementation. S5-ARCH-006 remains
-`CLOSING / READY_TO_CLOSE`, subject to validation on the amended head and the
-still-pending Human Close Confirmation.
+Schema, CRD, Console or test implementation. At the end of the G08 amendment,
+S5-ARCH-006 remained `CLOSING / READY_TO_CLOSE`, subject to the Human Close
+Confirmation recorded in Section 42.
+
+## 42. Human Close Confirmation and Session finalization
+
+HUMAN CLOSE CONFIRMATION: **PASS**
+
+| Field | Final state |
+| --- | --- |
+| Session | `S5-ARCH-006` |
+| Title | v0.2 Digital Employee Golden Demo Scope & Acceptance Contract |
+| Type | `ARCH` |
+| Version | `v0.2 CONNECT — Digital Employee Technical Preview` |
+| Lifecycle | `CLOSED` |
+| Authorization | `COMPLETED` |
+| Status | `PASS` |
+| Checkpoint | `B — FINAL_SCOPE_CONVERGENCE_AND_IMPLEMENTATION_HANDOFF` |
+| Result | `SESSION_CLOSED` |
+| Reopen | `PROHIBITED` |
+| Human Golden Demo Scope Gate | `PASS_WITH_CONSTRAINTS` |
+| Human Close Confirmation | `PASS` |
+
+### 42.1 Preserved decisions and handoff
+
+G01–G08 are preserved exactly as recorded in Section 19. Closure preserves 23
+Required, one Experimental, 15 Deferred, and five blocked claim/gate
+classifications; 70 acceptance criteria; the complete implementation gap map;
+minimum vertical slice; Tracks A–E; execution/parallel/ownership rules;
+Provider version policy; managed Runtime/asset policy; architecture exit; and
+all claim-scoped Evidence Debt. ED-S5-001 remains `OPEN`.
+
+`BROAD_ARCHITECTURE_CONVERGENCE: COMPLETE_FOR_BOUNDED_V0_2_IMPLEMENTATION`
+
+`IMPLEMENTATION_ENTRY: READY_AFTER_SESSION_CLOSE_AND_INTEGRATION`
+
+Core Schema, Runtime Contract, Capability Contract, Condition/Outcome/Recovery
+vocabulary and compatibility representations remain not frozen. Provider
+certification, Production Readiness, v0.2 Release Acceptance and all-version
+support remain not granted.
+
+### 42.2 Implementation-planning notes
+
+The proposed Generic REST/OpenAPI, MCP, Document/File and real enterprise
+document Connector prioritization would add implementation-selection detail
+beyond the accepted scope. It is therefore
+`DEFERRED_TO_IMPLEMENTATION_PLANNING`; no G09, Core resource, Provider choice,
+Connector selection or implementation authorization is created here.
+
+### 42.3 Next recommendation
+
+- Recommended Session: `S5-REL-006 — Golden Demo Scope Integration`
+- Type: `REL`
+- Source Session: `S5-ARCH-006`
+- Source PR: `#44`
+- State: `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`
+- Next action: `START_S5_REL_006_AFTER_SEPARATE_AUTHORIZATION`
+- Next gate: `S5-REL-006 Checkpoint A Authorization`
+
+S5-ARCH-006 is closed and cannot be reopened. PR #44 remains Draft and must not
+be merged except through separately authorized integration governance.
