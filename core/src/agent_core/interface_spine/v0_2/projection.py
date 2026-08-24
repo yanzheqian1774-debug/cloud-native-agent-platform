@@ -21,6 +21,27 @@ class DefinitionFacingRequest:
     desired_runtime_binding: DesiredRuntimeBinding
     source_task_name: str | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.namespace, str) or not self.namespace.strip():
+            raise InvalidDefinitionProjectionError(
+                "Definition namespace must be a non-empty string"
+            )
+        if not isinstance(self.agent_name, str) or not self.agent_name.strip():
+            raise InvalidDefinitionProjectionError(
+                "Definition name must be a non-empty string"
+            )
+        if not isinstance(self.desired_runtime_binding, DesiredRuntimeBinding):
+            raise InvalidDefinitionProjectionError(
+                "Definition request requires desired Runtime Binding intent"
+            )
+        if self.source_task_name is not None and (
+            not isinstance(self.source_task_name, str)
+            or not self.source_task_name.strip()
+        ):
+            raise InvalidDefinitionProjectionError(
+                "source Task name must be a non-empty string"
+            )
+
 
 def project_definition(request: DefinitionFacingRequest) -> AgentDefinitionProjection:
     """Project the current namespaced Agent address without mutating its source."""
@@ -33,12 +54,6 @@ def project_definition(request: DefinitionFacingRequest) -> AgentDefinitionProje
         )
     except CoreRepresentationError as exc:
         raise InvalidDefinitionProjectionError(str(exc)) from exc
-    if not isinstance(request.desired_runtime_binding, DesiredRuntimeBinding):
-        raise InvalidDefinitionProjectionError(
-            "Definition projection requires desired Runtime Binding intent"
-        )
-    if request.source_task_name is not None and not request.source_task_name.strip():
-        raise InvalidDefinitionProjectionError("source Task name cannot be empty")
     return AgentDefinitionProjection(
         definition_ref=definition_ref,
         desired_runtime_binding=request.desired_runtime_binding,

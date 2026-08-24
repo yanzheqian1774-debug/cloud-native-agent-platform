@@ -246,6 +246,30 @@ def test_native_identity_cannot_be_minted_as_platform_identity() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "wrong_identity",
+    [AgentInstanceId("instance"), AgentDefinitionRef("workloads", "agent")],
+)
+def test_definition_or_instance_identity_cannot_replace_execution_identity(
+    wrong_identity: object,
+) -> None:
+    definition = AgentDefinitionRef("workloads", "researcher")
+    repository = InMemoryAgentInstanceRepository()
+    repository.save(instance("instance-a", definition))
+    builder = ExecutionEnvelopeBuilder(
+        selector=DeterministicPrototypeInstanceSelector(repository),
+        identity_minter=lambda: wrong_identity,  # type: ignore[arg-type,return-value]
+    )
+    with pytest.raises(NativeIdentitySubstitutionError):
+        builder.build(
+            DefinitionFacingRequest(
+                namespace="workloads",
+                agent_name="researcher",
+                desired_runtime_binding=DesiredRuntimeBinding(binding("requested")),
+            )
+        )
+
+
 def test_envelope_rejects_definition_instance_mismatch() -> None:
     definition = AgentDefinitionRef("workloads", "researcher")
     selected = select_deterministically(
@@ -288,6 +312,25 @@ def test_envelope_is_immutable_and_provider_neutral() -> None:
         envelope.execution_identity = PlatformExecutionIdentity("changed")  # type: ignore[misc]
     assert "kubernetes" not in repr(envelope).casefold()
     assert "credentials" not in repr(envelope).casefold()
+
+
+def test_envelope_defensively_copies_native_evidence_collection() -> None:
+    definition = AgentDefinitionRef("workloads", "researcher")
+    selected = select_deterministically(
+        request(definition), (instance("a", definition),)
+    )
+    correlations = [NativeCorrelationId("native-1")]
+    envelope = InternalExecutionEnvelope(
+        definition_ref=definition,
+        selected_instance_id=selected.instance_id,
+        execution_identity=PlatformExecutionIdentity("execution"),
+        desired_runtime_binding=selected.desired_runtime_binding,
+        effective_runtime_binding=selected.effective_runtime_binding,
+        selection_evidence=selected.evidence,
+        native_correlations=correlations,  # type: ignore[arg-type]
+    )
+    correlations.append(NativeCorrelationId("native-2"))
+    assert envelope.native_correlations == (NativeCorrelationId("native-1"),)
 
 
 def test_realization_replacement_preserves_instance_identity() -> None:
