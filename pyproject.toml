@@ -72,6 +72,7 @@ pythonpath = [
     "operator/src",
     "runtime/src",
     "console/backend/src",
+    "experiments/s5-spike-005-runtime-target-manifest",
 ]
 minversion = "8.0"
 testpaths = [
@@ -82,6 +83,7 @@ testpaths = [
     "runtime/tests",
     "workflow/tests",
     "console/backend/tests",
+    "experiments/s5-spike-005-runtime-target-manifest/tests",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

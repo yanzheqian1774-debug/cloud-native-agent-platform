@@ -1,0 +1,7 @@
+{
+  "openclaw_unsupported_version": {"base": "openclaw-exact-target.json", "request_runtime_exact_version": "2026.7.2", "expected": "RUNTIME_VERSION_UNSUPPORTED"},
+  "missing_version": {"base": "native-supported.json", "request_runtime_exact_version": null, "expected": "RUNTIME_EXACT_VERSION_MISSING"},
+  "mismatched_provider_package": {"base": "native-supported.json", "request_provider_package_version": "0.1.1", "expected": "PROVIDER_PACKAGE_VERSION_MISMATCH"},
+  "incompatible_core": {"base": "native-supported.json", "request_core_version": "0.2.0", "expected": "CORE_VERSION_INCOMPATIBLE"},
+  "explicit_degraded_mode": {"base": "native-supported.json", "allow_degraded": true, "expected": "EXPLICIT_DEGRADED_MODE_ACCEPTED"}
+}
