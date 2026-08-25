@@ -1,9 +1,12 @@
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import httpx
 import kopf
 import pytest
+from agent_gateway.capability import ProviderResponse
 from agent_operator.errors import TaskExecutionError
+from agent_operator.execution_coordinator import ExecutionClassification
 from agent_operator.retry import RetryExhaustedError
 from agent_operator.task_controller import (
     build_agent_service_url,
@@ -37,6 +40,25 @@ def mock_task_status_writer():
         ),
     ):
         yield mock_status_writer
+
+
+def succeeded_outcome(result: str):
+    return SimpleNamespace(
+        classification=ExecutionClassification.SUCCEEDED,
+        result=result,
+        diagnostic="TASK_RUNTIME_SUCCEEDED",
+    )
+
+
+@pytest.fixture
+def mock_execution_coordinator():
+    coordinator = Mock()
+    coordinator.execute.return_value = succeeded_outcome("research result")
+    with patch(
+        "agent_operator.task_controller.build_default_coordinator",
+        return_value=coordinator,
+    ):
+        yield coordinator
 
 
 def test_build_agent_service_url() -> None:
@@ -79,12 +101,9 @@ def test_invoke_agent(mock_post) -> None:
     )
 
 
-@patch("agent_operator.task_controller.invoke_agent")
 def test_create_task_sets_succeeded_status(
-    mock_invoke_agent,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_agent.return_value = "research result"
-
     status_patch = kopf.Patch()
 
     create_task(
@@ -112,22 +131,55 @@ def test_create_task_sets_succeeded_status(
     assert status_patch.status["message"] is None
     assert status_patch.status["retryable"] is None
 
-    mock_invoke_agent.assert_called_once()
-
-    call_kwargs = mock_invoke_agent.call_args.kwargs
-
-    assert call_kwargs["agent_name"] == "researcher-agent"
-    assert call_kwargs["namespace"] == "agent-workloads"
-    assert call_kwargs["prompt"] == "research this topic"
-
-    assert 0 < call_kwargs["timeout_seconds"] <= 60
+    mock_execution_coordinator.execute.assert_called_once()
+    call_kwargs = mock_execution_coordinator.execute.call_args.kwargs
+    assert call_kwargs["input_text"] == "research this topic"
+    assert call_kwargs["context"].envelope.definition_ref.name == "researcher-agent"
 
 
-@patch("agent_operator.task_controller.invoke_agent")
+def test_default_task_path_consumes_native_and_requested_capability() -> None:
+    agent = {
+        **AGENT_BODY,
+        "spec": {
+            "runtime": {"type": "native"},
+            "model": {"provider": "mock", "name": "mock-model"},
+            "capabilities": ["customer-lookup"],
+        },
+    }
+    status_patch = kopf.Patch()
+    with (
+        patch(
+            "agent_operator.task_controller.load_agent_definition",
+            return_value=[agent],
+        ),
+        patch(
+            "agent_operator.execution_coordinator.DeterministicSyntheticTransport.send",
+            return_value=ProviderResponse(200, {"accepted": True}),
+        ) as capability_send,
+    ):
+        create_task(
+            name="test-task",
+            spec={
+                "agentRef": {"name": "researcher-agent"},
+                "input": {"prompt": "research this topic"},
+            },
+            namespace="agent-workloads",
+            patch=status_patch,
+            meta=TASK_META,
+        )
+
+    assert status_patch.status["phase"] == "Succeeded"
+    assert status_patch.status["result"] == "mock response: research this topic"
+    assert status_patch.status["attempts"] == 1
+    capability_send.assert_called_once()
+    provider_request = capability_send.call_args.args[0]
+    assert provider_request.execution_identity.value
+
+
 def test_create_task_sets_failed_status(
-    mock_invoke_agent,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_agent.side_effect = TaskExecutionError(
+    mock_execution_coordinator.execute.side_effect = TaskExecutionError(
         reason="AuthenticationError",
         message="unauthorized",
         retryable=False,
@@ -233,11 +285,10 @@ def test_invoke_agent_suppresses_retry_for_indeterminate_transport_failure(
     assert exc_info.value.retryable is False
 
 
-@patch("agent_operator.task_controller.invoke_agent")
 def test_indeterminate_transport_failure_is_not_retried(
-    mock_invoke_agent,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_agent.side_effect = TaskExecutionError(
+    mock_execution_coordinator.execute.side_effect = TaskExecutionError(
         reason="ExecutionOutcomeUnknown",
         message="Runtime outcome unknown",
         retryable=False,
@@ -253,7 +304,7 @@ def test_indeterminate_transport_failure_is_not_retried(
         patch=status_patch,
         meta=TASK_META,
     )
-    mock_invoke_agent.assert_called_once()
+    mock_execution_coordinator.execute.assert_called_once()
     assert status_patch.status["phase"] == "Failed"
     assert status_patch.status["reason"] == "ExecutionOutcomeUnknown"
     assert status_patch.status["retryable"] is False
@@ -261,18 +312,17 @@ def test_indeterminate_transport_failure_is_not_retried(
 
 
 @patch("agent_operator.retry.time.sleep")
-@patch("agent_operator.task_controller.invoke_agent")
 def test_create_task_retries_retryable_error_then_succeeds(
-    mock_invoke_agent,
     mock_sleep,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_agent.side_effect = [
+    mock_execution_coordinator.execute.side_effect = [
         TaskExecutionError(
             reason="UpstreamUnavailable",
             message="temporarily unavailable",
             retryable=True,
         ),
-        "TASK_OK",
+        succeeded_outcome("TASK_OK"),
     ]
 
     status_patch = kopf.Patch()
@@ -298,17 +348,16 @@ def test_create_task_retries_retryable_error_then_succeeds(
     assert status_patch.status["reason"] is None
     assert status_patch.status["message"] is None
     assert status_patch.status["retryable"] is None
-    assert mock_invoke_agent.call_count == 2
+    assert mock_execution_coordinator.execute.call_count == 2
     mock_sleep.assert_called_once_with(1.0)
 
 
 @patch("agent_operator.retry.time.sleep")
-@patch("agent_operator.task_controller.invoke_agent")
 def test_create_task_fails_after_retry_exhaustion(
-    mock_invoke_agent,
     mock_sleep,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_agent.side_effect = TaskExecutionError(
+    mock_execution_coordinator.execute.side_effect = TaskExecutionError(
         reason="UpstreamUnavailable",
         message="temporarily unavailable",
         retryable=True,
@@ -336,7 +385,7 @@ def test_create_task_fails_after_retry_exhaustion(
     assert status_patch.status["retryable"] is True
     assert status_patch.status["result"] is None
     assert status_patch.status["attempts"] == 3
-    assert mock_invoke_agent.call_count == 3
+    assert mock_execution_coordinator.execute.call_count == 3
     assert mock_sleep.call_count == 2
 
 
@@ -409,6 +458,7 @@ def test_create_task_passes_execution_timeout_to_retry(
 
 def test_create_task_persists_running_status_before_execution(
     mock_task_status_writer,
+    mock_execution_coordinator,
 ) -> None:
     status_patch = kopf.Patch()
     call_order = []
@@ -417,27 +467,24 @@ def test_create_task_persists_running_status_before_execution(
 
     def invoke_side_effect(**_):
         call_order.append("invoke")
-        return "task result"
+        return succeeded_outcome("task result")
 
-    with patch(
-        "agent_operator.task_controller.invoke_agent",
-        side_effect=invoke_side_effect,
-    ):
-        create_task(
-            spec={
-                "agentRef": {
-                    "name": "researcher-agent",
-                },
-                "input": {
-                    "prompt": "research this topic",
-                },
-                "timeoutSeconds": 60,
+    mock_execution_coordinator.execute.side_effect = invoke_side_effect
+    create_task(
+        spec={
+            "agentRef": {
+                "name": "researcher-agent",
             },
-            name="running-task",
-            namespace="agent-workloads",
-            patch=status_patch,
-            meta={**TASK_META, "name": "running-task"},
-        )
+            "input": {
+                "prompt": "research this topic",
+            },
+            "timeoutSeconds": 60,
+        },
+        name="running-task",
+        namespace="agent-workloads",
+        patch=status_patch,
+        meta={**TASK_META, "name": "running-task"},
+    )
 
     assert call_order == [
         "running",
@@ -483,13 +530,12 @@ def test_invoke_agent_classifies_rate_limit_response(mock_post) -> None:
     assert exc_info.value.retryable is True
 
 
-@patch("agent_operator.task_controller.invoke_compatible_agent")
 def test_retry_attempts_reuse_one_immutable_execution_context(
-    mock_invoke_compatible,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_compatible.side_effect = [
+    mock_execution_coordinator.execute.side_effect = [
         TaskExecutionError("NetworkError", "temporary", True),
-        "TASK_OK",
+        succeeded_outcome("TASK_OK"),
     ]
     with patch("agent_operator.retry.time.sleep"):
         create_task(
@@ -502,10 +548,10 @@ def test_retry_attempts_reuse_one_immutable_execution_context(
             patch=kopf.Patch(),
             meta=TASK_META,
         )
-    first = mock_invoke_compatible.call_args_list[0].kwargs["context"]
-    second = mock_invoke_compatible.call_args_list[1].kwargs["context"]
+    first = mock_execution_coordinator.execute.call_args_list[0].kwargs["context"]
+    second = mock_execution_coordinator.execute.call_args_list[1].kwargs["context"]
     assert first is second
-    assert first.execution_identity == second.execution_identity
+    assert first.envelope.execution_identity == second.envelope.execution_identity
 
 
 @patch("agent_operator.task_controller.invoke_compatible_agent")
@@ -598,11 +644,13 @@ def test_running_barrier_write_failure_prevents_runtime_invocation(
     mock_invoke_compatible.assert_not_called()
 
 
-@patch("agent_operator.task_controller.invoke_compatible_agent")
 def test_two_handlers_with_stale_status_can_both_invoke_without_distributed_cas(
-    mock_invoke_compatible,
+    mock_execution_coordinator,
 ) -> None:
-    mock_invoke_compatible.side_effect = ["first", "second"]
+    mock_execution_coordinator.execute.side_effect = [
+        succeeded_outcome("first"),
+        succeeded_outcome("second"),
+    ]
     for _ in range(2):
         create_task(
             spec={
@@ -615,7 +663,7 @@ def test_two_handlers_with_stale_status_can_both_invoke_without_distributed_cas(
             meta=TASK_META,
             status={},
         )
-    assert mock_invoke_compatible.call_count == 2
-    first = mock_invoke_compatible.call_args_list[0].kwargs["context"]
-    second = mock_invoke_compatible.call_args_list[1].kwargs["context"]
-    assert first.execution_identity == second.execution_identity
+    assert mock_execution_coordinator.execute.call_count == 2
+    first = mock_execution_coordinator.execute.call_args_list[0].kwargs["context"]
+    second = mock_execution_coordinator.execute.call_args_list[1].kwargs["context"]
+    assert first.envelope.execution_identity == second.envelope.execution_identity
