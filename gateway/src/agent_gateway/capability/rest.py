@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from ipaddress import ip_address
+from types import MappingProxyType
 from typing import Protocol
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from .models import (
+    MAX_EVIDENCE_BYTES,
     MAX_HEADER_LENGTH,
     MAX_HEADERS,
     Ambiguity,
@@ -18,9 +22,11 @@ from .models import (
     CapabilityStatus,
     InvocationEvidence,
     ProviderIdentity,
+    ProviderNativeRequestId,
     ProviderRequest,
     ProviderResponse,
     _contains_secret,
+    _frozen_json_mapping,
 )
 
 SUPPORTED_CONTENT_TYPES = frozenset({"application/json"})
@@ -36,6 +42,8 @@ class TransportAmbiguityError(ConnectionError):
 
 
 class RestTransport(Protocol):
+    """One-attempt seam; implementations must not redirect, retry, or retarget."""
+
     def send(self, request: ProviderRequest) -> ProviderResponse: ...
 
 
@@ -43,6 +51,8 @@ class RestTransport(Protocol):
 class RestProviderConfiguration:
     provider: ProviderIdentity
     target: str
+    allowed_hosts: tuple[str, ...]
+    allowed_operations: tuple[str, ...]
     method: str = "POST"
     headers: Mapping[str, str] = field(default_factory=dict)
 
@@ -50,9 +60,11 @@ class RestProviderConfiguration:
         if not isinstance(self.provider, ProviderIdentity):
             raise CapabilityModelError("configured provider identity is invalid")
         parsed = urlparse(self.target)
+        host = parsed.hostname
         if (
             parsed.scheme != "https"
             or not parsed.netloc
+            or host is None
             or parsed.username
             or parsed.password
             or parsed.query
@@ -60,6 +72,57 @@ class RestProviderConfiguration:
             or _contains_secret(self.target)
         ):
             raise CapabilityModelError("REST target must be an authorized HTTPS URL")
+        try:
+            port = parsed.port
+        except ValueError:
+            raise CapabilityModelError("REST target port is invalid") from None
+        canonical_host = host.casefold().rstrip(".")
+        if not canonical_host or host != canonical_host or port not in {None, 443}:
+            raise CapabilityModelError("REST target is not canonical")
+        try:
+            ip_address(canonical_host)
+        except ValueError:
+            pass
+        else:
+            raise CapabilityModelError("literal-IP REST targets are unsupported")
+        if (
+            canonical_host == "localhost"
+            or canonical_host.endswith((".localhost", ".local", ".internal"))
+            or "." not in canonical_host
+            or re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", canonical_host)
+            is None
+        ):
+            raise CapabilityModelError("local or invalid REST target is unsupported")
+        if not isinstance(self.allowed_hosts, tuple):
+            raise CapabilityModelError("REST allowed hosts must be an immutable tuple")
+        allowed_hosts = tuple(self.allowed_hosts)
+        if (
+            not allowed_hosts
+            or any(
+                not isinstance(item, str)
+                or item != item.casefold().rstrip(".")
+                or re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", item) is None
+                for item in allowed_hosts
+            )
+            or canonical_host not in allowed_hosts
+        ):
+            raise CapabilityModelError("REST target host is not authorized")
+        if not isinstance(self.allowed_operations, tuple):
+            raise CapabilityModelError("REST operations must be an immutable tuple")
+        operations = tuple(self.allowed_operations)
+        if not operations or any(
+            not isinstance(item, str)
+            or re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", item) is None
+            for item in operations
+        ):
+            raise CapabilityModelError("REST operation configuration is invalid")
+        object.__setattr__(self, "allowed_hosts", allowed_hosts)
+        object.__setattr__(self, "allowed_operations", operations)
+        object.__setattr__(
+            self,
+            "target",
+            urlunparse(("https", canonical_host, parsed.path or "/", "", "", "")),
+        )
         if self.method not in SUPPORTED_METHODS:
             raise CapabilityModelError("REST method is unsupported")
         if (
@@ -76,6 +139,7 @@ class RestProviderConfiguration:
             or _contains_secret(self.headers)
         ):
             raise CapabilityModelError("REST headers are invalid or secret-like")
+        object.__setattr__(self, "headers", MappingProxyType(dict(self.headers)))
 
 
 class RestProvider:
@@ -90,6 +154,13 @@ class RestProvider:
         return self._configuration.provider
 
     def invoke(self, request: CapabilityRequest) -> CapabilityOutcome:
+        if request.operation not in self._configuration.allowed_operations:
+            return self._outcome(
+                request,
+                CapabilityStatus.FAILED,
+                "REST_OPERATION_UNAUTHORIZED",
+                attempts=0,
+            )
         provider_request = ProviderRequest(
             provider=self.identity,
             execution_identity=request.execution_identity,
@@ -97,6 +168,7 @@ class RestProvider:
             target=self._configuration.target,
             headers=self._configuration.headers,
             body={"operation": request.operation, "arguments": dict(request.arguments)},
+            follow_redirects=False,
         )
         try:
             response = self._transport.send(provider_request)
@@ -122,13 +194,32 @@ class RestProvider:
             return self._outcome(
                 request, CapabilityStatus.FAILED, "PROVIDER_RESPONSE_MALFORMED"
             )
+        try:
+            response_body = _frozen_json_mapping(
+                response.body,
+                name="REST response",
+                max_bytes=MAX_EVIDENCE_BYTES,
+            )
+        except CapabilityModelError:
+            return self._outcome(
+                request, CapabilityStatus.FAILED, "PROVIDER_RESPONSE_MALFORMED"
+            )
+        if response.native_request_id is not None and not isinstance(
+            response.native_request_id, ProviderNativeRequestId
+        ):
+            return self._outcome(
+                request, CapabilityStatus.FAILED, "PROVIDER_RESPONSE_MALFORMED"
+            )
         if response.native_request_id is not None and (
             response.native_request_id.value == request.execution_identity.value
         ):
             return self._outcome(
                 request, CapabilityStatus.FAILED, "PROVIDER_NATIVE_ID_INVALID"
             )
-        if response.content_type not in SUPPORTED_CONTENT_TYPES:
+        if (
+            not isinstance(response.content_type, str)
+            or response.content_type not in SUPPORTED_CONTENT_TYPES
+        ):
             return self._outcome(
                 request, CapabilityStatus.FAILED, "PROVIDER_CONTENT_UNSUPPORTED"
             )
@@ -136,7 +227,7 @@ class RestProvider:
             evidence = InvocationEvidence(
                 attempts=1,
                 http_status=response.status_code,
-                result=response.body if 200 <= response.status_code < 300 else None,
+                result=response_body if 200 <= response.status_code < 300 else None,
             )
         except Exception:
             return self._outcome(
@@ -177,6 +268,7 @@ class RestProvider:
         diagnostic: str,
         *,
         ambiguity: Ambiguity = Ambiguity.NONE,
+        attempts: int = 1,
     ) -> CapabilityOutcome:
         return CapabilityOutcome(
             execution_identity=request.execution_identity,
@@ -185,7 +277,7 @@ class RestProvider:
             authorization=AuthorizationDecision.ALLOW,
             status=status,
             diagnostic=diagnostic,
-            invocation=InvocationEvidence(attempts=1),
+            invocation=InvocationEvidence(attempts=attempts),
             ambiguity=ambiguity,
             retry_safe=False,
         )

@@ -98,6 +98,39 @@ HTTPS URLs without embedded credentials, query strings, or fragments. Headers,
 request bodies, content type, response evidence, and serialized sizes are
 bounded. No automatic retry or silent fallback exists.
 
+### Checkpoint B safety convergence
+
+Human review authorized correction of defects within the existing Gateway,
+REST, test, and evidence paths. Relative to Checkpoint A head
+`c53272413eb80520bc0df475b2f798f96a88276d`, Checkpoint B changes only:
+
+- `gateway/src/agent_gateway/capability/gateway.py`;
+- `gateway/src/agent_gateway/capability/models.py`;
+- `gateway/src/agent_gateway/capability/rest.py`;
+- `gateway/tests/test_capability_gateway.py`;
+- this evidence file.
+
+The convergence adds exact authorized-host and authorized-operation
+configuration, URL canonicalization, rejection of literal IPs, local suffixes,
+userinfo, queries, fragments, non-default ports and non-HTTPS schemes, and an
+explicit no-redirect Provider request. Configuration headers are defensively
+copied. Unsupported operations return before the transport seam. Authorization
+and Provider ports returning malformed objects fail closed.
+
+Provider-native IDs, diagnostics, response bodies, content types and internal
+Outcome fields now have explicit type, secret/redaction and size boundaries.
+Response bodies are bounded even when the Provider returns an error status.
+Tests cover loopback, RFC1918/link-local literals, IPv6 loopback, local/internal
+names, exact-host mismatch, canonical default ports, redirect prohibition,
+operation denial, configuration immutability, malformed Provider output,
+diagnostic/native-ID redaction and deterministic invocation isolation.
+
+Because this Candidate has no real HTTP transport, it does not perform DNS
+resolution. Any future separately authorized transport must preserve the exact
+target, prohibit redirects/retries/retargeting, and reject non-global resolved
+addresses at connection time. DNS pinning/rebinding defense remains explicit
+transport Evidence Debt and blocks production readiness.
+
 ## Secret and redaction boundary
 
 Serializable headers, request arguments, authorization attributes, Provider
@@ -145,13 +178,13 @@ No dependency or lockfile is changed.
 
 Validation results recorded on 2026-08-25:
 
-- targeted S5-IMPL-007 component tests: **36 passed**;
-- Gateway/Core/A1/A2/A3/Native/fixture adjacent validation: **222 passed**;
-- full pytest: **425 passed**, with one existing Starlette/httpx deprecation
+- targeted S5-IMPL-007 component tests: **57 passed**;
+- Gateway/Core/A1/A2/A3/Native/fixture adjacent validation: **243 passed**;
+- full pytest: **446 passed**, with one existing Starlette/httpx deprecation
   warning;
 - Ruff lint: **passed**;
 - Ruff format: **83 files already formatted**;
-- `make check`: **passed** with the same 425-test result and warning.
+- `make check`: **passed** with the same 446-test result and warning.
 
 Exact-head CI results are recorded after the Draft PR is created.
 
@@ -162,6 +195,8 @@ Exact-head CI results are recorded after the Draft PR is created.
 - It does not prove live endpoint behavior, authentication, rate limiting,
   cancellation, durable audit, distributed delivery, idempotency, sandboxing,
   long-running operations, or exactly-once execution.
+- A future real transport must add connection-time DNS/IP enforcement; exact
+  configured-host validation alone does not prove DNS-rebinding resistance.
 - Timeout and ambiguous transport explicitly retain unknown-effect evidence;
   side effects cannot be excluded and retry safety is not inferred.
 - Capability discovery, a production Policy Engine, MCP, Document/File, secret

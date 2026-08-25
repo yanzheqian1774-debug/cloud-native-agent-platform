@@ -4,6 +4,7 @@ from .models import (
     Ambiguity,
     AuthorizationContext,
     AuthorizationDecision,
+    AuthorizationResult,
     CapabilityOutcome,
     CapabilityRequest,
     CapabilityStatus,
@@ -35,6 +36,8 @@ class CapabilityGateway:
             return self._denied(request, "AUTHORIZATION_DECISION_UNAVAILABLE")
         if result is None:
             return self._denied(request, "AUTHORIZATION_DECISION_MISSING")
+        if not isinstance(result, AuthorizationResult):
+            return self._denied(request, "AUTHORIZATION_DECISION_MALFORMED")
         decisions = result.decisions
         if len(decisions) != 1:
             return self._denied(request, "AUTHORIZATION_DECISION_AMBIGUOUS")
@@ -57,7 +60,7 @@ class CapabilityGateway:
                 diagnostic="PROVIDER_INVOCATION_FAILED_REDACTED",
                 invocation=InvocationEvidence(attempts=1),
             )
-        if (
+        if not isinstance(outcome, CapabilityOutcome) or (
             outcome.execution_identity != request.execution_identity
             or outcome.capability != request.capability
             or outcome.provider != self._provider.identity

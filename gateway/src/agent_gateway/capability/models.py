@@ -38,6 +38,8 @@ class CapabilityModelError(ValueError):
 def _required(value: object, name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise CapabilityModelError(f"{name} is required")
+    if len(value) > 256:
+        raise CapabilityModelError(f"{name} exceeds the size boundary")
 
 
 def _secret_key(value: str) -> bool:
@@ -106,10 +108,12 @@ class ProviderIdentity:
 
 @dataclass(frozen=True, slots=True)
 class ProviderNativeRequestId:
-    value: str
+    value: str = field(repr=False)
 
     def __post_init__(self) -> None:
         _required(self.value, "provider-native request ID")
+        if _contains_secret(self.value):
+            raise CapabilityModelError("provider-native request ID is secret-like")
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +195,7 @@ class ProviderRequest:
     target: str
     headers: Mapping[str, str]
     body: Mapping[str, Any]
+    follow_redirects: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.provider, ProviderIdentity):
@@ -200,6 +205,8 @@ class ProviderRequest:
         if self.method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
             raise CapabilityModelError("REST method is unsupported")
         _required(self.target, "REST target")
+        if self.follow_redirects is not False:
+            raise CapabilityModelError("REST redirects are prohibited")
         if (
             not isinstance(self.headers, Mapping)
             or len(self.headers) > MAX_HEADERS
@@ -227,7 +234,7 @@ class ProviderRequest:
 @dataclass(frozen=True, slots=True)
 class ProviderResponse:
     status_code: int
-    body: Mapping[str, Any]
+    body: Mapping[str, Any] = field(repr=False)
     native_request_id: ProviderNativeRequestId | None = None
     content_type: str = "application/json"
 
@@ -282,7 +289,27 @@ class CapabilityOutcome:
     def __post_init__(self) -> None:
         if not isinstance(self.execution_identity, PlatformExecutionIdentity):
             raise CapabilityModelError("Outcome requires Platform identity")
+        if not isinstance(self.capability, CapabilityIdentity):
+            raise CapabilityModelError("Outcome capability identity is invalid")
+        if not isinstance(self.provider, ProviderIdentity):
+            raise CapabilityModelError("Outcome provider identity is invalid")
+        if not isinstance(self.authorization, AuthorizationDecision):
+            raise CapabilityModelError("Outcome authorization is invalid")
+        if not isinstance(self.status, CapabilityStatus):
+            raise CapabilityModelError("Outcome status is invalid")
+        if not isinstance(self.invocation, InvocationEvidence):
+            raise CapabilityModelError("Outcome invocation evidence is invalid")
+        if not isinstance(self.ambiguity, Ambiguity):
+            raise CapabilityModelError("Outcome ambiguity is invalid")
+        if not isinstance(self.retry_safe, bool):
+            raise CapabilityModelError("Outcome retry safety is invalid")
+        if self.native_request_id is not None and not isinstance(
+            self.native_request_id, ProviderNativeRequestId
+        ):
+            raise CapabilityModelError("Outcome native request ID is invalid")
         _required(self.diagnostic, "stable diagnostic")
+        if re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", self.diagnostic) is None:
+            raise CapabilityModelError("diagnostic must be a stable bounded code")
         if self.native_request_id is not None and (
             self.native_request_id.value == self.execution_identity.value
         ):

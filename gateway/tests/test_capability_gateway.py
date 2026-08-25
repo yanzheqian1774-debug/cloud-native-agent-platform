@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import replace
+from urllib.parse import urlparse
 
 import pytest
 from agent_core.representation.v0_2 import PlatformExecutionIdentity
@@ -74,6 +75,8 @@ def make_provider(result):
         RestProviderConfiguration(
             ProviderIdentity("provider.synthetic.rest"),
             "https://synthetic.invalid/capabilities/customer-lookup",
+            ("synthetic.invalid",),
+            ("lookup",),
         ),
         transport,
     )
@@ -107,6 +110,7 @@ def test_allow_invokes_provider_exactly_once_and_preserves_identities(
     assert (
         transport.calls[0].execution_identity is capability_request.execution_identity
     )
+    assert transport.calls[0].follow_redirects is False
 
 
 def test_deny_returns_normalized_denial_before_provider_invocation(
@@ -131,6 +135,7 @@ def test_deny_returns_normalized_denial_before_provider_invocation(
     ("authorization", "diagnostic"),
     [
         (None, "AUTHORIZATION_DECISION_MISSING"),
+        (object(), "AUTHORIZATION_DECISION_MALFORMED"),
         (decision("MAYBE"), "AUTHORIZATION_DECISION_UNKNOWN"),
         (decision("ALLOW"), "AUTHORIZATION_DECISION_UNKNOWN"),
         (
@@ -221,6 +226,14 @@ def test_rest_status_normalization(
             ProviderResponse(200, {}, content_type="text/plain"),
             "PROVIDER_CONTENT_UNSUPPORTED",
         ),
+        (
+            ProviderResponse(200, {}, native_request_id=object()),
+            "PROVIDER_RESPONSE_MALFORMED",
+        ),
+        (
+            ProviderResponse(200, {}, content_type=[]),
+            "PROVIDER_CONTENT_UNSUPPORTED",
+        ),
     ],
 )
 def test_malformed_or_unsupported_response_is_normalized(
@@ -286,12 +299,33 @@ def test_provider_native_id_cannot_substitute_for_platform_identity(
     assert outcome.diagnostic == "PROVIDER_NATIVE_ID_INVALID"
 
 
+def test_secret_like_native_id_and_diagnostic_are_rejected(capability_request, context):
+    with pytest.raises(CapabilityModelError, match="secret-like"):
+        ProviderNativeRequestId("Bearer do-not-leak-123")
+
+    legitimate, _ = execute(ProviderResponse(200, {}), capability_request, context)
+    with pytest.raises(CapabilityModelError, match="stable bounded code"):
+        replace(legitimate, diagnostic="token=do-not-leak")
+
+
+def test_native_identity_type_cannot_replace_platform_identity():
+    with pytest.raises(CapabilityModelError, match="Platform Execution Identity"):
+        CapabilityRequest(
+            CapabilityIdentity("crm.customer.lookup"),
+            "lookup",
+            ProviderNativeRequestId("native-request-9"),
+            {},
+        )
+
+
 @pytest.mark.parametrize("method", ["CONNECT", "TRACE", "get", ""])
 def test_invalid_method_fails_closed_before_transport_construction(method):
     with pytest.raises(CapabilityModelError, match="method"):
         RestProviderConfiguration(
             ProviderIdentity("provider.synthetic.rest"),
             "https://synthetic.invalid/lookup",
+            ("synthetic.invalid",),
+            ("lookup",),
             method=method,
         )
 
@@ -307,7 +341,79 @@ def test_invalid_method_fails_closed_before_transport_construction(method):
 )
 def test_unsupported_target_fails_closed(target):
     with pytest.raises(CapabilityModelError, match="authorized HTTPS"):
-        RestProviderConfiguration(ProviderIdentity("provider.synthetic.rest"), target)
+        RestProviderConfiguration(
+            ProviderIdentity("provider.synthetic.rest"),
+            target,
+            ("synthetic.invalid",),
+            ("lookup",),
+        )
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://localhost/lookup",
+        "https://intranet/lookup",
+        "https://service.localhost/lookup",
+        "https://metadata.google.internal/lookup",
+        "https://127.0.0.1/lookup",
+        "https://10.0.0.1/lookup",
+        "https://169.254.169.254/latest/meta-data",
+        "https://[::1]/lookup",
+        "https://synthetic.invalid:8443/lookup",
+        "https://synthetic.invalid./lookup",
+    ],
+)
+def test_ssrf_and_noncanonical_targets_fail_closed(target):
+    with pytest.raises(CapabilityModelError):
+        RestProviderConfiguration(
+            ProviderIdentity("provider.synthetic.rest"),
+            target,
+            (urlparse(target).hostname or "synthetic.invalid",),
+            ("lookup",),
+        )
+
+
+def test_target_requires_exact_authorized_host():
+    with pytest.raises(CapabilityModelError, match="host is not authorized"):
+        RestProviderConfiguration(
+            ProviderIdentity("provider.synthetic.rest"),
+            "https://other.invalid/lookup",
+            ("synthetic.invalid",),
+            ("lookup",),
+        )
+
+
+def test_target_is_canonicalized_and_default_port_removed():
+    configuration = RestProviderConfiguration(
+        ProviderIdentity("provider.synthetic.rest"),
+        "https://SYNTHETIC.INVALID:443/lookup",
+        ("synthetic.invalid",),
+        ("lookup",),
+    )
+    assert configuration.target == "https://synthetic.invalid/lookup"
+
+
+def test_unauthorized_operation_fails_before_transport(capability_request, context):
+    unauthorized = replace(capability_request, operation="delete")
+    outcome, transport = execute(ProviderResponse(200, {}), unauthorized, context)
+    assert transport.calls == []
+    assert outcome.status is CapabilityStatus.FAILED
+    assert outcome.diagnostic == "REST_OPERATION_UNAUTHORIZED"
+    assert outcome.invocation.attempts == 0
+
+
+def test_configuration_headers_are_defensively_copied():
+    headers = {"Content-Type": "application/json"}
+    configuration = RestProviderConfiguration(
+        ProviderIdentity("provider.synthetic.rest"),
+        "https://synthetic.invalid/lookup",
+        ("synthetic.invalid",),
+        ("lookup",),
+        headers=headers,
+    )
+    headers["X-Mutated"] = "true"
+    assert dict(configuration.headers) == {"Content-Type": "application/json"}
 
 
 @pytest.mark.parametrize(
@@ -323,6 +429,8 @@ def test_secret_like_serializable_configuration_is_rejected(kwargs):
         RestProviderConfiguration(
             ProviderIdentity("provider.synthetic.rest"),
             "https://synthetic.invalid/lookup",
+            ("synthetic.invalid",),
+            ("lookup",),
             **kwargs,
         )
 
@@ -372,6 +480,18 @@ def test_caller_input_is_not_mutated(capability_request, context):
     assert transport.calls[0].body["arguments"] == original
 
 
+def test_provider_state_is_isolated_between_invocations(capability_request, context):
+    first, first_transport = execute(
+        ProviderResponse(200, {"sequence": 1}), capability_request, context
+    )
+    second, second_transport = execute(
+        ProviderResponse(200, {"sequence": 2}), capability_request, context
+    )
+    assert first.invocation.result == {"sequence": 1}
+    assert second.invocation.result == {"sequence": 2}
+    assert len(first_transport.calls) == len(second_transport.calls) == 1
+
+
 def test_provider_cannot_override_allow_decision(capability_request, context):
     outcome, _ = execute(
         ProviderResponse(200, {"provider_decision": "DENY", "ok": True}),
@@ -399,5 +519,19 @@ def test_provider_outcome_cannot_override_allow_decision(capability_request, con
         StaticAuthorization(decision()), OverridingProvider()
     ).execute(capability_request, context)
     assert outcome.authorization is AuthorizationDecision.ALLOW
+    assert outcome.status is CapabilityStatus.FAILED
+    assert outcome.diagnostic == "PROVIDER_EVIDENCE_INVALID"
+
+
+def test_malformed_provider_outcome_fails_closed(capability_request, context):
+    class MalformedProvider:
+        identity = ProviderIdentity("provider.synthetic.rest")
+
+        def invoke(self, capability_request):
+            return object()
+
+    outcome = CapabilityGateway(
+        StaticAuthorization(decision()), MalformedProvider()
+    ).execute(capability_request, context)
     assert outcome.status is CapabilityStatus.FAILED
     assert outcome.diagnostic == "PROVIDER_EVIDENCE_INVALID"
