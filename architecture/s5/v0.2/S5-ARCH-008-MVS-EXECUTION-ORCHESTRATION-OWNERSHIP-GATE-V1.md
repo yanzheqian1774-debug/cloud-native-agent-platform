@@ -6,21 +6,20 @@
 | --- | --- |
 | ID | `S5-ARCH-008` |
 | Type / version | `ARCH` / `v0.2 CONNECT — Digital Employee Technical Preview` |
-| Lifecycle / authorization | `REVIEW` / `AUTHORIZED` |
+| Lifecycle / authorization | `CLOSING` / `AUTHORIZED` |
 | Status | `PASS_WITH_CONSTRAINTS` |
-| Checkpoint | `A — OPERATOR_EXECUTION_ORCHESTRATION_BOUNDARY_AND_G2_CANDIDATE` |
-| Result | `MVS_EXECUTION_ORCHESTRATION_G2_CANDIDATE` |
+| Checkpoint | `B — FINAL_G2_CONVERGENCE_AND_S5_IMPL_008_HANDOFF` |
+| Result | `READY_TO_CLOSE` |
 | Authorized baseline | `f6309c163194ebc7f64a21661770a5a43252e3fc` |
-| Recommended option | `O1 — BOUNDED_OPERATOR_HOSTED_MVS_INTEGRATION` |
-| Human G2 decision | `PENDING` |
-| S5-IMPL-008 | `ACTIVE / BLOCKED_PENDING_G2` |
+| Selected option | `O1 — BOUNDED_OPERATOR_HOSTED_MVS_INTEGRATION` |
+| Human G2 decision | `PASS_WITH_CONSTRAINTS` |
+| S5-IMPL-008 | `ACTIVE / BLOCKED_UNTIL_ARCH_INTEGRATION` |
 | Implementation started | `NO` |
-| Next action | `WAIT_FOR_HUMAN_MVS_EXECUTION_ORCHESTRATION_G2_GATE` |
+| Next action | `WAIT_FOR_HUMAN_CLOSE_CONFIRMATION` |
 
-This artifact is an architecture decision candidate. It does not approve its
-own recommendation, authorize implementation, amend ADR-0003, freeze a
-Contract, or grant release, Provider-certification, or production-readiness
-claims.
+Human G2 selected O1 with every constraint recorded here. This artifact does
+not by itself authorize implementation, amend ADR-0003, freeze a Contract, or
+grant release, Provider-certification, or production-readiness claims.
 
 ## 2. Provenance and scope
 
@@ -79,21 +78,21 @@ G2 and cannot be inferred from the Portfolio or current code.
 
 | Option | Delivery and compatibility | Architecture consequence | Disposition |
 | --- | --- | --- | --- |
-| O1 — bounded Operator-hosted MVS integration | Reuses tested controllers; no public API, CRD, schema, dependency, migration, or dual write | Explicit, temporary v0.2 exception; extraction seams and production blocker required | `RECOMMENDED_PENDING_HUMAN_G2` |
+| O1 — bounded Operator-hosted MVS integration | Reuses tested controllers; no public API, CRD, schema, dependency, migration, or dual write | Explicit, temporary v0.2 exception; extraction seams and production blocker required | `SELECTED_PASS_WITH_CONSTRAINTS` |
 | O2 — separate component now | Aligns physical ownership with ADR-0003 before integration | Broad process/package, lifecycle, deployment, reliability, and test design; premature for the bounded MVS | `NOT_RECOMMENDED_FOR_THIS_MVS` |
 | O3 — amend/supersede ADR-0003 for permanent Operator ownership | Could legitimize current placement | Collapses reconciliation and business execution boundaries without production evidence | `REJECT_RECOMMENDATION` |
 | O4 — defer S5-IMPL-008 | Avoids further drift | Blocks the vertical slice until permanent ownership is resolved | `FALLBACK_IF_O1_CONSTRAINTS_ARE_NOT_ACCEPTED` |
 
-## 6. Recommended decision: O1 bounded exception
+## 6. Selected decision: O1 bounded exception
 
-Human G2 should authorize O1 only for the v0.2 Minimum Vertical Slice. This is
+Human G2 authorizes O1 only for the v0.2 Minimum Vertical Slice. This is
 a temporary physical co-location exception, not permanent Operator ownership.
 It preserves the logical boundaries already introduced by the internal Core,
 Native Provider, and Capability Gateway packages while deferring a premature
 production-grade process split.
 
 O1 does **not** amend or supersede ADR-0003. ADR-0003 already records the
-intended separation and the index records current drift. This candidate adds a
+intended separation and the index records current drift. This decision adds a
 time-bounded, Human-approved exception with an explicit extraction obligation;
 it neither rewrites nor weakens the accepted long-term decision. If Human G2
 instead chooses O3 or grants permanent Operator ownership, a separately owned
@@ -146,7 +145,7 @@ O1 is valid only if S5-IMPL-008 supplies all of these internal seams:
   Identity end to end;
 - deterministic, controller-independent component tests for the coordinator;
 - collaborators supplied explicitly (Provider, Gateway, repositories,
-  selectors, and clocks), with no new globals; and
+  selectors, identity minters, and clocks), with no new globals; and
 - no new public resource representation.
 
 Physical co-location inside the Operator repository or process is permitted
@@ -155,7 +154,7 @@ its tests to move without importing Kubernetes controller behavior.
 
 ## 10. Public compatibility boundary
 
-The candidate authorizes no public API, CRD, status schema, Kubernetes API
+The decision authorizes no public API, CRD, status schema, Kubernetes API
 group, Runtime HTTP wire, Console DTO, Contract freeze, dependency, database,
 migration, or dual write. Existing Task and Workflow lifecycle meanings,
 replay barriers, retry rules, names, owner references, DAG behavior, and
@@ -169,7 +168,7 @@ outside the initial MVS integration.
 
 If implementation discovers that any public or frozen boundary must change,
 or that lifecycle semantics cannot be preserved, S5-IMPL-008 must stop at a
-new G2 rather than treating this candidate as authority.
+new G2 rather than treating this decision as broader authority.
 
 ## 11. Rollback
 
@@ -192,18 +191,19 @@ unfrozen; certification and production readiness are not granted.
 
 This debt is not a Technical Preview release blocker. It is a production
 blocker until resolved. A new Human architecture decision and extraction are
-required before any production-readiness or Provider-certification claim, and
-before broad Workflow intervention, durable retries, horizontal execution
-scaling, or multi-tenant production use—whichever occurs first.
+required before any production-readiness or Provider-certification claim,
+release acceptance beyond Technical Preview, broad Workflow intervention,
+durable retry/recovery, horizontal execution scaling, production multi-tenancy,
+or multi-process/distributed execution—whichever occurs first.
 
 ## 13. S5-IMPL-008 handoff and resume conditions
 
-S5-IMPL-008 remains blocked. It may resume only after Human G2 dispositions
-G2-EO-01 through G2-EO-10, explicitly selects an option, and—if O1 is
-selected—accepts every constraint and seam in this artifact. The implementing
-Session must start from the authorized durable baseline containing the Human
-decision, retain its existing isolated ownership, and revalidate predecessor
-handoffs and overlap.
+S5-IMPL-008 remains blocked. It may resume only after Human Close Confirmation,
+S5-ARCH-008 Session closure, durable REL integration of Draft PR #54 and this
+exact architecture artifact, and a separate S5-IMPL-008 Resume Authorization.
+The implementing Session must start from that authorized durable baseline,
+retain its existing isolated ownership, and revalidate predecessor handoffs
+and overlap.
 
 Initial resumed scope is limited to Task/Workflow consumption of the Native
 Provider and Capability Gateway plus internal Outcome evidence. Document/File
@@ -211,29 +211,49 @@ requires a later, separately authorized boundary. No REL Session starts
 automatically, and this architecture Session does not resume or mutate the
 blocked implementation worktree.
 
-## 14. G2 decision ledger
+## 14. Future Product Architecture Handoff
 
-| Decision | Candidate disposition | Human disposition |
+The following direction is preserved for future planning only. It is
+`RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`, is not part of S5-IMPL-008,
+and requires a future Human architecture gate:
+
+- synchronized Digital Employee Product and Technical Operations views;
+- AI-assisted Job and Agent Definition drafts with Human approval of duties,
+  permitted capabilities, and explicit prohibitions;
+- problem-driven Work Requests and Work Plans, approved Agent Definition
+  matching, and multi-role Dynamic Digital Workforce planning;
+- elastic Agent Instance allocation and Runtime Realization scale-up and
+  scale-to-zero governed by workload, capacity, cost, and budget policy;
+- Skill and MCP Control Plane plus Platform-owned Job, Memory, and State Plane;
+  and
+- OpenClaw and Hermes only as Runtime/Workspace Adapters, with any proposed
+  v0.3 through v1.0 roadmap separately owned and approved.
+
+## 15. G2 decision ledger
+
+| Decision | Human disposition | Binding constraint |
 | --- | --- | --- |
-| G2-EO-01 — select O1/O2/O3/O4 | Select O1 | `PENDING` |
-| G2-EO-02 — ADR-0003 treatment | No amendment for bounded O1; amendment/superseding ADR required for O3 | `PENDING` |
-| G2-EO-03 — temporary Task ownership | Thin controller plus internal Operator-hosted coordinator | `PENDING` |
-| G2-EO-04 — temporary Workflow ownership | Existing thin DAG/Task-resource coordinator only | `PENDING` |
-| G2-EO-05 — extraction seams | All Section 9 seams mandatory | `PENDING` |
-| G2-EO-06 — public compatibility | Confirm no public API/CRD/schema change | `PENDING` |
-| G2-EO-07 — Outcome | Internal, domain-specific, version-unfrozen | `PENDING` |
-| G2-EO-08 — extraction/production blocker | Section 12 trigger; not TP blocker, is production blocker | `PENDING` |
-| G2-EO-09 — Document/File | Excluded from initial MVS integration | `PENDING` |
-| G2-EO-10 — resume conditions | Human dispositions plus all Section 13 conditions | `PENDING` |
+| G2-EO-01 — select O1/O2/O3/O4 | `PASS` — O1 selected | Bounded Operator-hosted MVS integration only |
+| G2-EO-02 — ADR-0003 treatment | `PASS_WITH_CONSTRAINTS` | No amendment or supersession; explicit time-limited exception; permanent ownership not granted |
+| G2-EO-03 — temporary Task ownership | `PASS_WITH_CONSTRAINTS` | Current Operator Task path is a thin adapter, replay-barrier coordinator, and coordinator consumer |
+| G2-EO-04 — temporary Workflow ownership | `PASS_WITH_CONSTRAINTS` | Current Operator Workflow path is a thin DAG/Task lifecycle coordinator, not a general process engine |
+| G2-EO-05 — extraction seams | `PASS` | Every Section 9 seam is mandatory; no global repository, selector, minter, or clock |
+| G2-EO-06 — public compatibility | `PASS` | No public API, CRD, schema, or existing-wire change |
+| G2-EO-07 — Outcome | `PASS_WITH_CONSTRAINTS` | Internal, domain-specific, version-unfrozen, non-public, non-normative; no universal Status/Outcome |
+| G2-EO-08 — extraction/production blocker | `PASS` | Section 12 trigger; not a Technical Preview blocker; production blocked until resolved |
+| G2-EO-09 — Document/File | `PASS` | Prohibited from initial MVS; post-MVS, recommended only, inactive, unauthorized |
+| G2-EO-10 — resume conditions | `PASS` | Closure, durable PR #54 REL integration, and separate Resume Authorization required |
 
 ```text
 SESSION: S5-ARCH-008
-LIFECYCLE: REVIEW
+LIFECYCLE: CLOSING
 STATUS: PASS_WITH_CONSTRAINTS
-CHECKPOINT: A — OPERATOR_EXECUTION_ORCHESTRATION_BOUNDARY_AND_G2_CANDIDATE
-RESULT: MVS_EXECUTION_ORCHESTRATION_G2_CANDIDATE
-S5_IMPL_008: ACTIVE / BLOCKED_PENDING_G2
+CHECKPOINT: B — FINAL_G2_CONVERGENCE_AND_S5_IMPL_008_HANDOFF
+RESULT: READY_TO_CLOSE
+HUMAN_MVS_EXECUTION_ORCHESTRATION_G2_GATE: PASS_WITH_CONSTRAINTS
+S5_IMPL_008: ACTIVE / BLOCKED_UNTIL_ARCH_INTEGRATION
 IMPLEMENTATION_STARTED: NO
-NEXT_ACTION: WAIT_FOR_HUMAN_MVS_EXECUTION_ORCHESTRATION_G2_GATE
-NEXT_GATE: Human S5-ARCH-008 MVS Execution & Orchestration G2 Gate
+SESSION_CLOSED: NO
+NEXT_ACTION: WAIT_FOR_HUMAN_CLOSE_CONFIRMATION
+NEXT_GATE: Human S5-ARCH-008 Close Confirmation
 ```
