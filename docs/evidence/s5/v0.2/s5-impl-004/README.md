@@ -195,6 +195,35 @@ This is a fail-closed redaction correction only. It does not implement a
 Secrets Manager, CredentialRef projection, credential injection, resolution,
 rotation, lifecycle management, or Provider certification.
 
+### S5-IMPL-004-C1 Checkpoint B safety convergence
+
+The Human Secret Boundary Correction Review Gate passed with constraints at
+Checkpoint A head `e0efa43030388e4031087861167c6c4191c74f85`. Checkpoint B
+replaced recursive traversal with an iterative scanner so cyclic and deeply
+nested caller input cannot escape as `RecursionError` or recurse indefinitely.
+
+The scanner has explicit bounds of 32 container levels, 4,096 visited nodes,
+65,536 characters per string, and 262,144 aggregate key/value characters.
+Inputs outside those bounds fail with the stable redacted
+`binding_configuration_unsupported` reason. Regex evaluation only receives
+strings within those limits, and the high-confidence expressions use bounded
+or linear character-class matching without nested ambiguous repetition.
+
+Mapping and Sequence cycles are detected by identity and rejected. Exceptions
+raised while traversing a caller-supplied container are normalized without
+including the exception or object in diagnostics. Unsupported values are not
+passed to `str`, `repr`, evidence construction, or serialization. Tests use an
+object whose secret-bearing repr records any access and prove that neither repr
+nor string conversion occurs.
+
+Additional false-positive evidence covers ordinary token/key/bearer prose,
+short prefixes, and prefix lookalikes. Large ordinary values within the bound
+remain accepted; large secret-shaped values within the bound are rejected and
+redacted; oversized values fail with the stable resource-bound reason. Cyclic,
+deep, hostile-object, Secret, and oversized rejection paths construct no
+desired/effective Binding and make no Native invocation. Caller-owned cyclic
+containers retain their original identities and links.
+
 ## Execution identity and normalized evidence
 
 Platform Execution Identity is mandatory and must be identical in the outer
@@ -312,6 +341,22 @@ S5-IMPL-004-C1 correction validation produced:
   Binding-serialization, invocation non-call, public wire/API/CRD/schema,
   dependency/lockfile, changed-path, and rollback audits: passed.
 
+S5-IMPL-004-C1 Checkpoint B safety convergence validation produced:
+
+- complete Secret Boundary and Native Provider tests: `59 passed`;
+- complete Runtime tests: `75 passed`, with the existing Starlette/httpx
+  deprecation warning;
+- integrated Manifest compatibility tests: `17 passed`;
+- relevant A1 Core tests: `64 passed`;
+- relevant A2 identity-adapter tests: `6 passed`;
+- relevant A3 compatibility-interpreter tests: `33 passed`;
+- full pytest: `363 passed`, with the same warning;
+- `make check`: passed, including Ruff lint, Ruff format for 74 files, and
+  `363 passed`;
+- recursion/resource-bound, regex safety, false-positive, evidence-redaction,
+  serialization/non-call, public wire/API/CRD/schema, dependency/lockfile,
+  changed-path, and rollback audits: passed.
+
 ## Limitations and Evidence Debt
 
 - The candidate has component evidence only; it is not wired into an Operator
@@ -323,6 +368,9 @@ S5-IMPL-004-C1 correction validation produced:
   cleanup are not proven.
 - Provider certification, Runtime Contract freeze, production readiness, and
   release acceptance remain not granted.
+- Secret-value detection is deliberately high-confidence and bounded; it is
+  not a general content-classification system, and oversized or structurally
+  unsupported configuration is rejected rather than inspected without limit.
 - OpenClaw and Hermes implementation remain not started and unauthorized.
 - S5-REL-012 repository terminal metadata remains deferred governance work.
 

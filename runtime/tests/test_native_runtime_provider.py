@@ -4,6 +4,8 @@ from dataclasses import asdict
 
 import pytest
 from agent_runtime.providers.native.binding import (
+    MAX_CONFIGURATION_DEPTH,
+    MAX_CONFIGURATION_STRING_LENGTH,
     BindingTranslationError,
     _is_secret_value,
     translate_binding,
@@ -327,6 +329,124 @@ def test_unsupported_configuration_value_types_fail_explicitly(value) -> None:
     with pytest.raises(BindingTranslationError) as exc:
         translate_binding(desired(AGENT_ROLE=value))
     assert exc.value.reason == DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+
+
+def assert_provider_rejects_without_binding_or_invocation(
+    configuration, reason
+) -> None:
+    calls = []
+    provider = NativeRuntimeProvider(lambda *args: calls.append(args))
+    rejected = provider.invoke(
+        execution(desired_binding=DesiredRuntimeBinding(RUNTIME_TARGET, configuration))
+    )
+    assert rejected.reason == reason
+    assert rejected.diagnostic == reason.value
+    assert rejected.binding is None
+    assert calls == []
+
+
+def test_cyclic_mapping_fails_safely_without_mutation() -> None:
+    cycle = {}
+    cycle["self"] = cycle
+    configuration = {"AGENT_ROLE": cycle}
+
+    assert_provider_rejects_without_binding_or_invocation(
+        configuration, DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+    )
+
+    assert configuration["AGENT_ROLE"] is cycle
+    assert cycle["self"] is cycle
+
+
+def test_cyclic_sequence_fails_safely_without_mutation() -> None:
+    cycle = []
+    cycle.append(cycle)
+    configuration = {"AGENT_ROLE": cycle}
+
+    assert_provider_rejects_without_binding_or_invocation(
+        configuration, DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+    )
+
+    assert configuration["AGENT_ROLE"] is cycle
+    assert cycle[0] is cycle
+
+
+def test_excessive_nesting_has_stable_redacted_failure() -> None:
+    nested = "ordinary role"
+    for _ in range(MAX_CONFIGURATION_DEPTH + 1):
+        nested = [nested]
+    configuration = {"AGENT_ROLE": nested}
+
+    assert_provider_rejects_without_binding_or_invocation(
+        configuration, DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+    )
+
+
+def test_unsupported_object_is_never_stringified_or_represented() -> None:
+    secret = synthetic_secret("token")
+
+    class Unsupported:
+        repr_calls = 0
+
+        def __repr__(self):
+            self.repr_calls += 1
+            return secret
+
+        __str__ = __repr__
+
+    unsupported = Unsupported()
+    configuration = {"AGENT_ROLE": unsupported}
+
+    assert_provider_rejects_without_binding_or_invocation(
+        configuration, DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+    )
+
+    assert unsupported.repr_calls == 0
+
+
+def test_large_non_secret_value_within_bound_is_accepted() -> None:
+    value = "ordinary role description " + "x" * 32_768
+    assert len(value) < MAX_CONFIGURATION_STRING_LENGTH
+    binding = translate_binding(desired(AGENT_ROLE=value))
+    assert ("AGENT_ROLE", value) in binding.effective.configuration
+
+
+def test_large_secret_value_within_bound_is_rejected_and_redacted() -> None:
+    secret = synthetic_secret("bearer") + " " + "x" * 32_768
+    assert len(secret) < MAX_CONFIGURATION_STRING_LENGTH
+
+    with pytest.raises(BindingTranslationError) as exc:
+        translate_binding(desired(AGENT_ROLE=secret))
+
+    assert exc.value.reason == DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED
+    assert secret not in str(exc.value)
+    assert secret not in repr(exc.value)
+
+
+def test_oversized_value_fails_with_stable_resource_bound_reason() -> None:
+    value = "x" * (MAX_CONFIGURATION_STRING_LENGTH + 1)
+    with pytest.raises(BindingTranslationError) as exc:
+        translate_binding(desired(AGENT_ROLE=value))
+    assert exc.value.reason == DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+    assert str(exc.value) == DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED.value
+    assert value not in str(exc.value)
+    assert value not in repr(exc.value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "tokenization key bearer concepts",
+        "sketch-abcdefghijklmnop",
+        "task-test-abcdefghijklmnop",
+        "pk-shortprefix",
+        "api-keyboard=abcdefghijklmnop",
+    ],
+)
+def test_additional_word_and_prefix_boundaries_are_accepted(value) -> None:
+    assert not _is_secret_value(value)
+    binding = translate_binding(desired(AGENT_ROLE=value))
+    assert ("AGENT_ROLE", value) in binding.effective.configuration
 
 
 def test_health_readiness_and_runtime_information_are_normalized() -> None:

@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Mapping, Sequence
+from enum import Enum
 
 from agent_runtime.providers.native.compatibility import RUNTIME_TARGET
 from agent_runtime.providers.native.models import (
@@ -24,13 +25,26 @@ SUPPORTED_CONFIGURATION = frozenset(
 SECRET_MARKERS = frozenset({"apikey", "credential", "password", "secret", "token"})
 SECRET_VALUE_PATTERNS = (
     re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----"),
-    re.compile(r"(?i)(?:^|\s)bearer\s+[a-z0-9._~+/=-]{8,}(?:$|\s)"),
+    re.compile(
+        r"(?i)(?:^|\s)bearer\s+"
+        r"(?=[a-z0-9._~+/=-]*[0-9._~+/=-])[a-z0-9._~+/=-]{8,}(?:$|\s)"
+    ),
     re.compile(
         r"(?i)(?:api[-_ ]?key|credential|password|secret|token)"
         r"\s*[:=]\s*['\"]?[a-z0-9._~+/=-]{8,}"
     ),
     re.compile(r"(?i)(?:^|[^a-z0-9])(?:sk|rk|pk)[-_](?:test[-_])?[a-z0-9]{16,}"),
 )
+MAX_CONFIGURATION_DEPTH = 32
+MAX_CONFIGURATION_NODES = 4096
+MAX_CONFIGURATION_STRING_LENGTH = 65_536
+MAX_CONFIGURATION_TOTAL_CHARACTERS = 262_144
+
+
+class _SecretScanResult(Enum):
+    CLEAN = "clean"
+    SECRET = "secret"
+    UNSUPPORTED = "unsupported"
 
 
 class BindingTranslationError(ValueError):
@@ -50,30 +64,73 @@ def _is_secret_value(value: str) -> bool:
     return any(pattern.search(value) for pattern in SECRET_VALUE_PATTERNS)
 
 
-def _contains_secret(value: object, seen: set[int] | None = None) -> bool:
-    """Inspect supported containers without converting values to diagnostic text."""
+def _scan_secret_boundary(value: object) -> _SecretScanResult:
+    """Inspect bounded containers without repr or recursive Python calls."""
 
-    if isinstance(value, str):
-        return _is_secret_value(value)
-    if isinstance(value, Mapping):
-        seen = set() if seen is None else seen
-        identity = id(value)
-        if identity in seen:
-            return False
-        seen.add(identity)
-        return any(
-            (isinstance(key, str) and _is_secret_key(key))
-            or _contains_secret(item, seen)
-            for key, item in value.items()
-        )
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        seen = set() if seen is None else seen
-        identity = id(value)
-        if identity in seen:
-            return False
-        seen.add(identity)
-        return any(_contains_secret(item, seen) for item in value)
-    return False
+    stack = [(value, 0)]
+    seen: set[int] = set()
+    nodes = 0
+    total_characters = 0
+    unsupported = False
+
+    try:
+        while stack:
+            item, depth = stack.pop()
+            nodes += 1
+            if nodes > MAX_CONFIGURATION_NODES:
+                return _SecretScanResult.UNSUPPORTED
+            if isinstance(item, str):
+                total_characters += len(item)
+                if (
+                    len(item) > MAX_CONFIGURATION_STRING_LENGTH
+                    or total_characters > MAX_CONFIGURATION_TOTAL_CHARACTERS
+                ):
+                    return _SecretScanResult.UNSUPPORTED
+                if _is_secret_value(item):
+                    return _SecretScanResult.SECRET
+                continue
+            if isinstance(item, Mapping):
+                identity = id(item)
+                if identity in seen or depth >= MAX_CONFIGURATION_DEPTH:
+                    unsupported = True
+                    continue
+                seen.add(identity)
+                for key, nested in item.items():
+                    if not isinstance(key, str):
+                        unsupported = True
+                    else:
+                        total_characters += len(key)
+                        if (
+                            len(key) > MAX_CONFIGURATION_STRING_LENGTH
+                            or total_characters > MAX_CONFIGURATION_TOTAL_CHARACTERS
+                        ):
+                            return _SecretScanResult.UNSUPPORTED
+                        if _is_secret_key(key):
+                            return _SecretScanResult.SECRET
+                    stack.append((nested, depth + 1))
+                    if len(stack) + nodes > MAX_CONFIGURATION_NODES:
+                        return _SecretScanResult.UNSUPPORTED
+                continue
+            if isinstance(item, Sequence) and not isinstance(
+                item, (str, bytes, bytearray)
+            ):
+                identity = id(item)
+                if identity in seen or depth >= MAX_CONFIGURATION_DEPTH:
+                    unsupported = True
+                    continue
+                seen.add(identity)
+                for nested in item:
+                    stack.append((nested, depth + 1))
+                    if len(stack) + nodes > MAX_CONFIGURATION_NODES:
+                        return _SecretScanResult.UNSUPPORTED
+                continue
+            unsupported = True
+    except Exception:
+        return _SecretScanResult.UNSUPPORTED
+
+    if unsupported:
+        return _SecretScanResult.UNSUPPORTED
+    return _SecretScanResult.CLEAN
 
 
 def translate_binding(desired: DesiredRuntimeBinding) -> BindingEvidence:
@@ -83,9 +140,19 @@ def translate_binding(desired: DesiredRuntimeBinding) -> BindingEvidence:
         raise BindingTranslationError(
             DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
         )
-    if _contains_secret(desired.configuration):
+    scan = _scan_secret_boundary(desired.configuration)
+    if scan is _SecretScanResult.SECRET:
         raise BindingTranslationError(DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED)
-    copied = dict(desired.configuration)
+    if scan is _SecretScanResult.UNSUPPORTED:
+        raise BindingTranslationError(
+            DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+        )
+    try:
+        copied = dict(desired.configuration)
+    except Exception:
+        raise BindingTranslationError(
+            DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
+        ) from None
     if not all(isinstance(key, str) for key in copied) or not all(
         isinstance(value, str) for value in copied.values()
     ):
