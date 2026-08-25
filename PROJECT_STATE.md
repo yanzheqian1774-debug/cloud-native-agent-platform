@@ -22,6 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
+- S5-PLAN-002 authorized durable-main baseline:
+  `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
   `71e0f682c015b49f7afed6e21988c94a080f2450`
 
@@ -33,6 +35,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| S5-PLAN-002 | `REVIEW / AUTHORIZED / PASS_WITH_CONSTRAINTS / PLAN_CANDIDATE` | Human Session identity and Portfolio authorization passed; exact baseline `7c1bc0266b39c913497fd67dcd4b7783f288dc57`; pilot and downstream Sessions remain not authorized; Human Harness & Parallel Readiness Review Gate pending |
 | S5-ARCH-005 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Accepted Candidate artifact and source head |
 | S5-REL-004 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS / SESSION_CLOSED` | PR #42 merge plus imported Human confirmation |
 | S5-GOV-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints and CI satisfied; Human Close Confirmation passed; reopen prohibited |
