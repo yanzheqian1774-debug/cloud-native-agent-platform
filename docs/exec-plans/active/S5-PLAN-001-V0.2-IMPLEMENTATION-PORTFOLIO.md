@@ -274,9 +274,11 @@ never reused.
 | S5-IMPL-012 | IMPL | E Golden Demo harness | A–D,TEST-005 | integration | harness/fixtures PR |
 | Later REL IDs allocated once | REL | one REL per merged implementation PR, or Human-approved integration bundle after Portfolio integration | corresponding PR | serialized governance | Registry/evidence only |
 
-S5-PLAN-002 is the active planning owner for Harness and parallel-delivery
-readiness. Its Human-reviewed plan and a separately authorized measured pilot
-are prerequisites for using parallel Codex delivery on downstream work.
+S5-PLAN-002 is the closing planning owner for Harness and parallel-delivery
+readiness. Its Human-closed plan and a separately allocated and authorized
+`TEST` pilot are prerequisites for using parallel Codex delivery on downstream
+work; the exact Pilot Session ID remains subject to a Human Pilot Selection
+Gate.
 `S5-TEST-005` remains the first conformance-Harness Session and
 `S5-IMPL-012` remains downstream Golden Demo integration; neither is activated
 by S5-PLAN-002.

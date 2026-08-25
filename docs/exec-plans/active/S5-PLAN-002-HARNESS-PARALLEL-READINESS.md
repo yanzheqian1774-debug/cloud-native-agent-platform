@@ -8,12 +8,12 @@
 | Title | Harness & Parallel Delivery Readiness Plan |
 | Type | `PLAN` |
 | Version | v0.2 CONNECT — Digital Employee Technical Preview |
-| Checkpoint | A — Harness Parallel Readiness Plan Candidate |
-| Lifecycle / authorization | `REVIEW / AUTHORIZED` |
+| Checkpoint | B — Parallel Readiness Convergence and Pilot Candidate |
+| Lifecycle / authorization | `CLOSING / AUTHORIZED` |
 | Source | `S5-REL-017` — closed; reopening prohibited |
 | Baseline | `7c1bc0266b39c913497fd67dcd4b7783f288dc57` |
 | Branch | `codex/s5-plan-002-harness-parallel-readiness` |
-| Human gate | S5-PLAN-002 Harness & Parallel Readiness Review Gate |
+| Human gate | S5-PLAN-002 Close Confirmation |
 
 This Session owns planning and repository-native planning metadata only. It
 does not authorize a pilot, Harness implementation, production or test changes,
@@ -104,7 +104,10 @@ durable machine-checkable record:
 | Git | Branch or detached policy, baseline SHA, authorized head SHA |
 | Scope | Exact writable and prohibited paths |
 | Ownership | Owner and time-bounded lease |
-| Outcome | Expected result, current Human gate, expiry/close state |
+| Outcome | Expected result |
+| Stop Conditions | Exact mandatory stop list and escalation target |
+| Gates | Current gate and next Human gate |
+| Lifecycle | Current state, lease expiry, and close/reopen state |
 
 One logical writable Session maps to one authoritative conversation, one
 branch, one isolated worktree, and one primary PR. Read-only children use clean
@@ -114,13 +117,25 @@ preflight validator, duplicate-Session detector, branch/worktree validator,
 shared-path collision detector, parent-child result manifest, and closeout
 validator. None is implemented by this plan.
 
+Before dispatch, the parent must query the authoritative Session/task
+inventory, branch/worktree ownership, open PR ownership, and active path
+leases. A matching active Session or duplicate parent/child routing identity is
+a hard stop, not a reusable task. A writable child must prove a clean isolated
+worktree, its exact authorized branch and baseline/head ancestry, and exclusive
+path ownership before its first write. Read-only reviewers must prove a clean
+detached worktree or immutable snapshot. Repeat the preflight before accepting
+results; expiry, branch drift, unexpected commits, or a second task with the
+same logical Session invalidates the route.
+
 ## 8. Authoritative writer model
 
 `AUTHORITATIVE_WRITER_COUNT: EXACTLY_1`. The parent grants one lease over exact
 paths to the Builder. Reviewers do not edit, commit, push, resolve conflicts,
 or mutate PRs. The writer may not expand scope, delegate its lease, or accept a
 review result that targets a different head. Shared-path changes remain
-serialized even when prepared in separate worktrees.
+serialized even when prepared in separate worktrees. No child creates a
+logical Session, merges, mutates a PR, or performs final acceptance; those
+actions remain with the authoritative parent and applicable Human gate.
 
 ## 9. Read-only reviewer model
 
@@ -135,17 +150,28 @@ and rerun or explicitly dispositioned.
 
 `ROLE_POOL_SIZE: 7`
 
-`ACTIVE_ROLE_COUNT: DYNAMIC / INITIAL_3_TO_4`
+`CURRENT_EXECUTABLE_REPOSITORY_ROLES: ARCHITECT / BUILDER / TESTER / REVIEWER`
+
+`HISTORICAL_ONLY_OR_MISSING_ROLES: ORCHESTRATOR / RESEARCHER / WRITER`
+
+`INITIAL_ACTIVE_ROLE_COUNT: 3`
+
+`MAXIMUM_INITIAL_PILOT_ROLE_COUNT: 4`
 
 `AUTHORITATIVE_WRITER_COUNT: EXACTLY_1`
 
-The first pilot should use the parent Orchestrator, one writable Builder, and
-one read-only Architecture/Ownership Reviewer. Add the read-only
-Identity/Security/Replay Reviewer as capacity permits; the Test/Evidence review
-may be a distinct fourth active worker or a serialized follow-up. Seven
-simultaneous workers are not recommended. Roles activate only for independent,
-bounded work with explicit evidence consumers and expire at their result or
-parent cancellation.
+`READ_ONLY_REVIEWER_COUNT: 1_TO_3`
+
+`SEVEN_SIMULTANEOUS_ROLES: NOT_RECOMMENDED_FOR_FIRST_PILOT`
+
+The first pilot starts with exactly three active roles: the parent
+Orchestrator, one writable Builder, and one read-only Architecture/Ownership
+Reviewer. Only after resource preflight may a fourth, read-only combined
+Identity/Security/Replay and Test/Evidence Reviewer activate. The general
+reviewer allowance is one to three, but the initial pilot maximum is four total
+roles and therefore two reviewers. Seven simultaneous workers are not
+recommended. Roles activate only for independent, bounded work with explicit
+evidence consumers and expire at their result or parent cancellation.
 
 ## 11. Shared-file/path ownership matrix
 
@@ -194,6 +220,7 @@ Allowed orchestration states are `PENDING`, `ACTIVE`, `BLOCKED`, `STOPPED`,
 | Gateway unavailable | Runtime-dependent work is `BLOCKED` or `FAILED` by deadline; never infer task success |
 | Container healthy, Agent/Gateway not ready | Runtime is not ready; invocation is prohibited or fails explicitly |
 | Missing/incomplete evidence | Result is `BLOCKED` or `FAILED`, never PASS |
+| Unknown outcome | Preserve `UNKNOWN` in evidence and block dependent acceptance; never coerce it to success |
 | Late result after parent closure | Quarantine as late evidence; do not mutate or reopen the closed parent |
 
 No failed, timed-out, cancelled, skipped, unrun, unknown, or stale-head result
@@ -226,8 +253,9 @@ when the checkpoint changes materially, or when a fresh owner is authorized.
 Before rotation, commit or otherwise durably record the canonical current-state
 summary, accepted decisions, open risks and Evidence Debt, exact Git provenance,
 active ownership/leases, current checkpoint, results, and next Human gate. The
-new conversation must verify that record before acting. Conversational memory
-alone is never authority. Human-confirmed post-merge state may be forward-
+handoff also records repository/PR state, exact tests and CI state, and all
+explicit reopen prohibitions. The new conversation must verify that record
+before acting. Conversational memory alone is never authority. Human-confirmed post-merge state may be forward-
 imported by a later authorized Session with exact provenance; the closed Session
 is never reopened.
 
@@ -259,7 +287,10 @@ must be measured rather than assumed.
 | Field | Candidate |
 | --- | --- |
 | Objective | Produce one synthetic routing and evidence closeout artifact while independent reviewers assess ownership, security/replay, and evidence completeness; compare with a serial rehearsal using the same packet |
-| Parent Session | `S5-PLAN-002`, only at a separately Human-authorized pilot checkpoint |
+| Pilot Session type | `TEST`, because the primary deliverable is orchestration/evidence validation rather than product behavior |
+| Parent Session | A new Human-allocated `TEST` Session, with S5-PLAN-002 as predecessor and governance handoff; exact ID is intentionally unassigned |
+| Predecessors | Closed S5-PLAN-002 after Human Close Confirmation; closed S5-REL-017 is inherited provenance only and is never reopened |
+| Selection state | `HUMAN_PILOT_SELECTION_GATE_REQUIRED`; no Pilot Session is created or activated by this plan |
 | Roles | Initial 3: parent Orchestrator, sole writable Builder, read-only Architecture/Ownership Reviewer; optionally add one combined Identity/Security/Test reviewer or split within maximum 4 |
 | Writer | Exactly one Builder |
 | Read-only packages | Architecture/ownership; identity/security/replay; test/evidence, serialized if capacity requires |
@@ -269,7 +300,7 @@ must be measured rather than assumed.
 | Success | No collision/duplicate/routing/context-loss incident; all required child states known; final tests pass; quality does not regress; wall-clock improves against a comparable baseline |
 | Failure | Any stop condition, unknown child, escaped defect, unresolved rejection, failed required gate, or rework/latency that removes benefit |
 | Rollback | Stop children, preserve evidence, abandon unmerged pilot branch or revert only through a separately reviewed change |
-| Human gates | Pilot authorization; any scope/ownership change; merge; result/acceleration claim |
+| Human gates | Pilot ID and baseline allocation; Pilot authorization; any scope/ownership change; merge; result/acceleration claim |
 
 The pilot should avoid public schemas, CRDs, governance files, shared Harness
 configuration, and cross-Track interface ownership.
@@ -303,8 +334,9 @@ and Human authorization when the stopping condition requires it.
 
 No item below is activated by this plan.
 
-1. Human accepts this readiness plan and separately authorizes the pilot.
-2. Run and assess the bounded pilot; accept a concurrency policy only from
+1. Human closes this readiness plan, then allocates the exact `TEST` Pilot
+   Session ID and baseline at the Human Pilot Selection Gate.
+2. Separately authorize, run, and assess the bounded pilot; accept a concurrency policy only from
    measured evidence.
 3. Authorize `S5-TEST-005` for the conformance Harness schema, runner, fixtures,
    and evidence contract. It must not redefine component semantics.
@@ -341,12 +373,17 @@ No item below is activated by this plan.
 
 ## 24. Exit criteria
 
-Checkpoint A exits to Human review only when this plan and its evidence index
-are internally consistent; the Portfolio, Registry, and Project State uniquely
-register S5-PLAN-002; only authorized paths changed; links and Session IDs are
-valid; secrets are absent; repository checks and exact-head PR quality gates
-pass; and the Draft PR remains unmerged. Plan acceptance does not authorize the
-pilot or any downstream Session. Final Session closure requires a separate
-Human confirmation and durable integration path.
+Checkpoint B exits to Human Close Confirmation only when this plan and its
+evidence index are internally consistent; the Portfolio, Registry, and Project
+State uniquely register S5-PLAN-002; only authorized paths changed; links and
+Session IDs are valid; secrets are absent; repository checks and exact-head PR
+quality gates pass; and the Draft PR remains unmerged. Plan acceptance does not
+authorize the pilot or any downstream Session. The pilot ID remains Human-
+owned at a separate selection gate. Final Session closure requires Human Close
+Confirmation and a separately authorized durable integration path.
 
-`RESULT: HARNESS_PARALLEL_READINESS_PLAN_CANDIDATE`
+`PLAN_STATE: COMPLETE_FOR_HUMAN_CLOSE_CONFIRMATION`
+
+`PILOT_STATE: RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED`
+
+`RESULT: READY_TO_CLOSE`
