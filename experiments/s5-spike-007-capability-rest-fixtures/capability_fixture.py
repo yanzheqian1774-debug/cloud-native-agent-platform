@@ -11,6 +11,9 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
+_SYNTHETIC_PROVIDER_ID = "provider.synthetic.rest"
+_SUPPORTED_OPERATION = "lookup"
+
 
 class Decision(StrEnum):
     ALLOW = "ALLOW"
@@ -102,6 +105,10 @@ def execute(
 ) -> CapabilityOutcome:
     """Apply authorization before one bounded Provider invocation."""
 
+    rejection = _request_rejection(request, provider)
+    if rejection:
+        return _outcome(request, provider, "REJECTED", rejection, invoked=False)
+
     rejection = _authorization_rejection(request, authorization)
     if rejection:
         return _outcome(request, provider, "DENIED", rejection, invoked=False)
@@ -157,12 +164,37 @@ def execute(
     )
 
 
+def _request_rejection(
+    request: CapabilityRequest, provider: ScriptedRestProvider
+) -> str | None:
+    if not request.capability_id or not request.capability_id.strip():
+        return "CAPABILITY_IDENTITY_MISSING"
+    if (
+        not request.platform_execution_identity
+        or not request.platform_execution_identity.strip()
+    ):
+        return "PLATFORM_EXECUTION_IDENTITY_MISSING"
+    if provider.provider_id != _SYNTHETIC_PROVIDER_ID:
+        return "PROVIDER_TARGET_INVALID"
+    if not isinstance(request.arguments, Mapping) or not all(
+        isinstance(key, str) for key in request.arguments
+    ):
+        return "CAPABILITY_REQUEST_MALFORMED"
+    if request.operation != _SUPPORTED_OPERATION:
+        return "CAPABILITY_OPERATION_UNSUPPORTED"
+    return None
+
+
 def _authorization_rejection(
     request: CapabilityRequest, authorization: AuthorizationContext | None
 ) -> str | None:
     if authorization is None or authorization.decision is None:
         return "AUTHORIZATION_DECISION_MISSING"
-    if not authorization.subject_id or not authorization.tenant_id:
+    if (
+        not authorization.subject_id
+        or not authorization.tenant_id
+        or not authorization.platform_execution_identity
+    ):
         return "AUTHORIZATION_CONTEXT_MALFORMED"
     if authorization.platform_execution_identity != request.platform_execution_identity:
         return "AUTHORIZATION_CONTEXT_IDENTITY_MISMATCH"

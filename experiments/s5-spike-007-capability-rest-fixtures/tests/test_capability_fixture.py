@@ -44,6 +44,14 @@ def test_allow_invokes_provider_exactly_once_and_normalizes_success() -> None:
     assert outcome.status == "SUCCEEDED"
     assert outcome.reason == "CAPABILITY_INVOCATION_SUCCEEDED"
     assert outcome.result == {"customer_state": "active", "source": "synthetic"}
+    assert provider.requests == [
+        {
+            "capability_id": "capability.synthetic.customer-lookup",
+            "operation": "lookup",
+            "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+            "arguments": {"customer_reference": "customer-synthetic-1042"},
+        }
+    ]
 
 
 def test_deny_occurs_before_provider_invocation() -> None:
@@ -60,7 +68,15 @@ def test_deny_occurs_before_provider_invocation() -> None:
         (None, "AUTHORIZATION_DECISION_MISSING"),
         (authorization(decision=None), "AUTHORIZATION_DECISION_MISSING"),
         (authorization(decision="ALLOW_OR_DENY"), "AUTHORIZATION_DECISION_AMBIGUOUS"),
+        (
+            authorization(decision=["ALLOW", "DENY"]),
+            "AUTHORIZATION_DECISION_AMBIGUOUS",
+        ),
         (authorization(subject_id=""), "AUTHORIZATION_CONTEXT_MALFORMED"),
+        (
+            authorization(platform_execution_identity=""),
+            "AUTHORIZATION_CONTEXT_MALFORMED",
+        ),
         (
             authorization(platform_execution_identity="provider-native-identity"),
             "AUTHORIZATION_CONTEXT_IDENTITY_MISMATCH",
@@ -72,6 +88,54 @@ def test_invalid_authorization_fails_closed_before_invocation(context, reason) -
     outcome = execute(request(), context, provider)
     assert provider.call_count == 0
     assert outcome.status == "DENIED" and outcome.reason == reason
+
+
+@pytest.mark.parametrize(
+    ("request_overrides", "provider_id", "reason"),
+    [
+        (
+            {"capability_id": ""},
+            "provider.synthetic.rest",
+            "CAPABILITY_IDENTITY_MISSING",
+        ),
+        (
+            {"platform_execution_identity": ""},
+            "provider.synthetic.rest",
+            "PLATFORM_EXECUTION_IDENTITY_MISSING",
+        ),
+        ({}, "provider.untrusted.target", "PROVIDER_TARGET_INVALID"),
+        (
+            {"arguments": ["not", "a", "mapping"]},
+            "provider.synthetic.rest",
+            "CAPABILITY_REQUEST_MALFORMED",
+        ),
+        (
+            {"arguments": {1: "non-string-key"}},
+            "provider.synthetic.rest",
+            "CAPABILITY_REQUEST_MALFORMED",
+        ),
+        (
+            {"operation": "delete_everything"},
+            "provider.synthetic.rest",
+            "CAPABILITY_OPERATION_UNSUPPORTED",
+        ),
+    ],
+)
+def test_invalid_request_or_provider_fails_closed_before_invocation(
+    request_overrides, provider_id, reason
+) -> None:
+    values = {
+        "capability_id": "capability.synthetic.customer-lookup",
+        "operation": "lookup",
+        "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+        "arguments": frozen_arguments({"customer_reference": "synthetic-1042"}),
+    }
+    values.update(request_overrides)
+    provider = ScriptedRestProvider(provider_id, [response("success")])
+    outcome = execute(CapabilityRequest(**values), authorization(), provider)
+    assert provider.call_count == 0
+    assert not outcome.provider_invoked
+    assert (outcome.status, outcome.reason) == ("REJECTED", reason)
 
 
 @pytest.mark.parametrize(
@@ -159,10 +223,42 @@ def test_caller_owned_fixtures_are_not_mutated() -> None:
         "provider.synthetic.rest",
         [ProviderResponse(200, provider_body, "provider-request-synthetic-001")],
     )
-    outcome = execute(req, authorization(), provider)
+    authorization_context = authorization()
+    original_authorization = deepcopy(authorization_context)
+    outcome = execute(req, authorization_context, provider)
     outcome.result["customer_state"] = "locally-modified"
     assert request_data == original_request
+    assert authorization_context == original_authorization
     assert provider_body == original_body
+
+
+def test_fixture_state_is_isolated_and_has_no_global_counter() -> None:
+    first = ScriptedRestProvider("provider.synthetic.rest", [response("success")])
+    second = ScriptedRestProvider("provider.synthetic.rest", [response("success")])
+    execute(request(), authorization(), first)
+    assert first.call_count == 1
+    assert second.call_count == 0 and second.requests == []
+    execute(request(), authorization(), second)
+    assert first.call_count == second.call_count == 1
+
+
+def test_production_python_does_not_import_spike_module() -> None:
+    repository = Path(__file__).parents[3]
+    production_roots = (
+        repository / "core" / "src",
+        repository / "operator" / "src",
+        repository / "runtime" / "src",
+        repository / "gateway",
+        repository / "console" / "backend" / "src",
+    )
+    offenders = [
+        str(path.relative_to(repository))
+        for root in production_roots
+        if root.exists()
+        for path in root.rglob("*.py")
+        if "capability_fixture" in path.read_text()
+    ]
+    assert offenders == []
 
 
 def test_diagnostic_reasons_are_stable_redacted_codes() -> None:
