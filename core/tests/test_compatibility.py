@@ -44,6 +44,7 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
     assert discovered_imports == {
         *authorized_gateway_imports,
         "operator/src/agent_operator/compatibility_interpreter/interpreter.py",
+        "operator/src/agent_operator/execution_coordinator.py",
         "operator/src/agent_operator/identity_adapter.py",
         "operator/src/agent_operator/task_controller.py",
         "operator/tests/test_compatibility_interpreter.py",

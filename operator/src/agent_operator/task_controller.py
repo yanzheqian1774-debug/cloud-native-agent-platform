@@ -14,6 +14,13 @@ from agent_operator.compatibility_interpreter import (
     interpret_legacy_task,
 )
 from agent_operator.errors import TaskExecutionError, classify_http_error
+from agent_operator.execution_coordinator import (
+    ExecutionClassification,
+    TaskExecutionContext,
+    build_capability_plan,
+    build_default_coordinator,
+    build_runtime_configuration,
+)
 from agent_operator.retry import RetryExhaustedError, execute_with_retry
 
 
@@ -190,19 +197,38 @@ def create_task(
 
     agent_name = spec.get("agentRef", {}).get("name")
     try:
+        agent_candidates = load_agent_definition(
+            name=agent_name,
+            namespace=namespace,
+        )
         context = interpret_legacy_task(
             task_spec=spec,
             task_metadata=meta,
             namespace=namespace,
-            agent_candidates=load_agent_definition(
-                name=agent_name,
-                namespace=namespace,
-            ),
+            agent_candidates=agent_candidates,
         )
-    except CompatibilityInterpreterError as exc:
+        definition_evidence = agent_candidates[0]
+        capability_plan = build_capability_plan(
+            definition_evidence=definition_evidence,
+            envelope=context,
+            input_text=prompt,
+        )
+        coordinator = build_default_coordinator(
+            capability_plan.capability if capability_plan is not None else None
+        )
+        execution_context = TaskExecutionContext(
+            envelope=context,
+            runtime_configuration=build_runtime_configuration(
+                definition_evidence=definition_evidence,
+                namespace=namespace,
+                agent_name=agent_name,
+            ),
+            capability_plan=capability_plan,
+        )
+    except (CompatibilityInterpreterError, ValueError) as exc:
         patch.status["phase"] = "Failed"
         patch.status["result"] = None
-        patch.status["reason"] = exc.reason
+        patch.status["reason"] = getattr(exc, "reason", "InvalidLegacyIdentityEvidence")
         patch.status["message"] = str(exc)
         patch.status["retryable"] = False
         patch.status["attempts"] = 0
@@ -230,10 +256,29 @@ def create_task(
     patch.status["startedAt"] = started_at
 
     def operation(remaining_seconds: float) -> str:
-        return invoke_compatible_agent(
-            context=context,
-            prompt=prompt,
-            timeout_seconds=remaining_seconds,
+        del remaining_seconds
+        outcome = coordinator.execute(
+            context=execution_context,
+            input_text=prompt,
+        )
+        if outcome.classification is ExecutionClassification.SUCCEEDED:
+            if outcome.result is None:
+                raise TaskExecutionError(
+                    reason="InvalidResponse",
+                    message="execution completed without a result",
+                    retryable=False,
+                )
+            return outcome.result
+        if outcome.classification is ExecutionClassification.DENIED:
+            reason = "AuthorizationError"
+        elif outcome.classification is ExecutionClassification.UNKNOWN:
+            reason = "ExecutionOutcomeUnknown"
+        else:
+            reason = "InvalidRequest"
+        raise TaskExecutionError(
+            reason=reason,
+            message=f"bounded execution failed: {outcome.diagnostic}",
+            retryable=False,
         )
 
     try:
