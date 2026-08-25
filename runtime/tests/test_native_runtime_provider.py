@@ -1,8 +1,11 @@
+import json
 from copy import deepcopy
+from dataclasses import asdict
 
 import pytest
 from agent_runtime.providers.native.binding import (
     BindingTranslationError,
+    _is_secret_value,
     translate_binding,
 )
 from agent_runtime.providers.native.compatibility import (
@@ -225,6 +228,105 @@ def test_binding_rejects_unsupported_or_secret_configuration(
         translate_binding(DesiredRuntimeBinding(RUNTIME_TARGET, configuration))
     assert exc.value.reason == reason
     assert "do-not-record" not in str(exc.value)
+
+
+def synthetic_secret(kind: str) -> str:
+    material = "".join(("synthetic", "noncredential", "0123456789"))
+    return {
+        "api-key": f"api_key={material}",
+        "bearer": f"Bearer {material}",
+        "private-key": f"-----BEGIN PRIVATE KEY-----\n{material}",
+        "token": f"token: {material}",
+    }[kind]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        synthetic_secret("api-key"),
+        synthetic_secret("bearer"),
+        synthetic_secret("private-key"),
+        synthetic_secret("token"),
+        f"{'Sk'}-{'Test'}-{''.join(('Synthetic', 'NonCredential', '0123456789'))}",
+    ],
+)
+def test_high_confidence_secret_value_policy_rejects_case_variations(value) -> None:
+    assert _is_secret_value(value)
+    with pytest.raises(BindingTranslationError) as exc:
+        translate_binding(desired(AGENT_ROLE=value))
+    assert exc.value.reason == DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED
+    assert str(exc.value) == DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED.value
+    assert value not in str(exc.value)
+    assert value not in repr(exc.value)
+
+
+@pytest.mark.parametrize(
+    "configuration",
+    [
+        {"AGENT_ROLE": {"description": synthetic_secret("token")}},
+        {"AGENT_ROLE": ["research", synthetic_secret("bearer")]},
+        {"AGENT_ROLE": {"steps": ["research", {"Api-Key": "synthetic-material"}]}},
+    ],
+)
+def test_nested_secret_values_and_keys_are_rejected_recursively(configuration) -> None:
+    original = deepcopy(configuration)
+    with pytest.raises(BindingTranslationError) as exc:
+        translate_binding(DesiredRuntimeBinding(RUNTIME_TARGET, configuration))
+    assert exc.value.reason == DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED
+    assert configuration == original
+
+
+def test_one_secret_among_multiple_values_rejects_without_invocation_or_binding() -> (
+    None
+):
+    secret = synthetic_secret("api-key")
+    source = {
+        "AGENT_NAME": "researcher",
+        "AGENT_ROLE": secret,
+        "MODEL_PROVIDER": "mock",
+    }
+    original = deepcopy(source)
+    calls = []
+    provider = NativeRuntimeProvider(lambda *args: calls.append(args))
+
+    rejected = provider.invoke(
+        execution(desired_binding=DesiredRuntimeBinding(RUNTIME_TARGET, source))
+    )
+
+    assert rejected.reason == DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED
+    assert rejected.diagnostic == DiagnosticReason.BINDING_SECRET_VALUE_PROHIBITED.value
+    assert rejected.binding is None
+    assert calls == []
+    assert source == original
+    serialized = json.dumps(asdict(rejected), default=str)
+    assert secret not in serialized
+    assert secret not in repr(rejected)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "token budget planning",
+        "bearer of good news",
+        "sk-short",
+        "api key rotation policy",
+        "private key concepts without a PEM header",
+    ],
+)
+def test_secret_value_false_positive_boundaries_remain_accepted(value) -> None:
+    assert not _is_secret_value(value)
+    binding = translate_binding(desired(AGENT_ROLE=value))
+    assert ("AGENT_ROLE", value) in binding.effective.configuration
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, True, 7, b"bytes", {"description": "research"}, ["research"]],
+)
+def test_unsupported_configuration_value_types_fail_explicitly(value) -> None:
+    with pytest.raises(BindingTranslationError) as exc:
+        translate_binding(desired(AGENT_ROLE=value))
+    assert exc.value.reason == DiagnosticReason.BINDING_CONFIGURATION_UNSUPPORTED
 
 
 def test_health_readiness_and_runtime_information_are_normalized() -> None:

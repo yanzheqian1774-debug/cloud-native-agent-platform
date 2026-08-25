@@ -161,6 +161,40 @@ password, credential, and API-key values are never accepted into normalized
 evidence or diagnostic text. The implementation adds no credentials, Secret
 material, or new configuration transport.
 
+### S5-IMPL-004-C1 boundary correction
+
+S5-REL-013 discovered that the original Checkpoint B implementation inspected
+configuration keys but did not inspect values. Consequently a secret-shaped
+value beneath an otherwise allowed key could be copied into desired Binding
+evidence and the effective Runtime Binding. The previous value-redaction claim
+above is corrected by `S5-IMPL-004-C1`; S5-REL-013 remains stopped and owns no
+mutation in this correction.
+
+Before desired normalization, effective Binding construction, serialization,
+diagnostic creation, or Native invocation, the corrected translator now:
+
+- recursively scans strings in configuration mappings and sequences, including
+  nested keys, without converting unknown objects to text;
+- rejects high-confidence labeled token, API-key, credential, password, and
+  Secret assignments, bearer credentials, private-key headers, and bounded
+  API-key prefix forms;
+- handles marker and value matching case-insensitively where the form is
+  case-insensitive;
+- rejects every non-string effective configuration value explicitly; and
+- returns only the stable `binding_secret_value_prohibited` reason when a
+  Secret is detected.
+
+Rejected input produces no desired or effective Binding evidence and makes no
+Native invocation. The caller-owned input is not mutated. Synthetic test
+material is absent from exception text, exception repr, normalized evidence,
+and serialized rejection evidence. Boundary tests also preserve legitimate
+role text such as token-planning prose and reject unsupported safe nested
+containers with the stable unsupported-configuration reason.
+
+This is a fail-closed redaction correction only. It does not implement a
+Secrets Manager, CredentialRef projection, credential injection, resolution,
+rotation, lifecycle management, or Provider certification.
+
 ## Execution identity and normalized evidence
 
 Platform Execution Identity is mandatory and must be identical in the outer
@@ -260,6 +294,23 @@ produced:
   schema, dependency/lockfile, identity and Binding authority, timeout/retry/
   fallback, Secret/redaction, relative link, and rollback-without-migration
   audits: passed.
+
+S5-IMPL-004-C1 correction validation produced:
+
+- focused Secret Boundary and Native Provider tests: `47 passed`;
+- complete Runtime tests: `63 passed`, with the existing Starlette/httpx
+  deprecation warning;
+- integrated Manifest compatibility tests: `17 passed`;
+- relevant A1 Core tests: `64 passed`;
+- relevant A2 identity-adapter tests: `6 passed`;
+- relevant A3 compatibility-interpreter tests: `33 passed`;
+- repository manifest/project compatibility tests: `20 passed`;
+- full pytest: `351 passed`, with the same warning;
+- `make check`: passed, including Ruff lint, Ruff format for 74 files, and
+  `351 passed`;
+- `git diff --check`, Secret-pattern/redaction,
+  Binding-serialization, invocation non-call, public wire/API/CRD/schema,
+  dependency/lockfile, changed-path, and rollback audits: passed.
 
 ## Limitations and Evidence Debt
 
