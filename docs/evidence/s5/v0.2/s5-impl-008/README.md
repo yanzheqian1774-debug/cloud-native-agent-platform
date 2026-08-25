@@ -15,6 +15,31 @@ grant release acceptance, Provider certification, production readiness,
 exactly-once execution, permanent Operator ownership, or Contract/schema
 freeze.
 
+## Checkpoint B safety convergence
+
+Human MVS Integration Review returned `PASS_WITH_CONSTRAINTS`. Checkpoint B
+reviewed the complete baseline-to-candidate diff from
+`73de37f328f9303c43a7de0a92da334639bad660` through Checkpoint A head
+`679b4e4c643ffb5b0b0d711b3f8fbca56fe22f07` and confirmed exactly the six
+owned paths listed below, with no hidden, generated, dependency, lockfile,
+Workflow controller, Provider, Gateway, Core production, public API, HTTP wire,
+CRD, or schema change.
+
+The bounded review corrections:
+
+- reject multiple Capability declarations as ambiguous before the `Running`
+  barrier or any invocation;
+- retain fail-closed handling for malformed Capability declarations;
+- defensively copy Runtime configuration and Capability arguments at the
+  internal context boundary; and
+- add coordinator-level proof that Capability transport ambiguity makes one
+  Provider attempt, performs no retry/fallback, and normalizes to `UNKNOWN`.
+
+These corrections touch only the already authorized coordinator, coordinator
+tests, Task controller tests, and this evidence path. The Task controller,
+Provider/Gateway/Core contracts, Workflow source, public wire, and dependency
+boundaries remain unchanged.
+
 ## Architecture provenance and O1 constraints
 
 The implementation follows S5-ARCH-008's Human-selected `O1 —
@@ -203,12 +228,12 @@ include caller data or secrets.
 Candidate-worktree results before commit:
 
 - targeted A1/A2/A3, Task/Workflow, Native, Capability, and coordinator suite:
-  `224 passed`;
+  `231 passed`;
 - Core, Operator, Runtime, and Gateway regression suite: `368 passed`;
-- full pytest: `456 passed`, one existing Starlette/httpx warning;
+- full pytest: `463 passed`, one existing Starlette/httpx warning;
 - Ruff lint: pass;
 - Ruff format check: `85 files already formatted`;
-- `make check`: pass, `456 passed`;
+- `make check`: pass, `463 passed`;
 - frontend lint: pass;
 - frontend build: pass;
 - `git diff --check`: pass;

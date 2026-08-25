@@ -12,6 +12,7 @@ from agent_gateway.capability import (
     ProviderResponse,
     RestProvider,
     RestProviderConfiguration,
+    TransportAmbiguityError,
 )
 from agent_operator.compatibility_interpreter import interpret_legacy_task
 from agent_operator.execution_coordinator import (
@@ -132,6 +133,21 @@ def test_native_execution_preserves_platform_identity_and_invokes_once() -> None
     assert outcome.platform_execution_identity == calls[0][0]
     assert outcome.runtime.correlation.native_invocation_id == "native-correlation"
     assert outcome.runtime.correlation.native_invocation_id != calls[0][0]
+
+
+def test_capability_absent_does_not_invoke_gateway() -> None:
+    class FailIfInvokedGateway:
+        def execute(self, request, context):
+            raise AssertionError("Capability Gateway must not be invoked")
+
+    context = execution_context(capability=False)
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(),
+        capability_gateway=FailIfInvokedGateway(),
+    ).execute(context=context, input_text="research this topic")
+
+    assert outcome.classification is ExecutionClassification.SUCCEEDED
+    assert outcome.capability is None
 
 
 @pytest.mark.parametrize(
@@ -280,3 +296,90 @@ def test_capability_plan_does_not_mutate_agent_or_input() -> None:
     assert isinstance(plan, CapabilityPlan)
     assert AGENT["spec"]["capabilities"] == capabilities_before
     assert prompt == "research this topic"
+
+
+def test_execution_context_defensively_copies_caller_mappings() -> None:
+    envelope = execution_context().envelope
+    runtime_configuration = {"MODEL_PROVIDER": "mock"}
+    arguments = {"nested": {"value": "original"}}
+    plan = CapabilityPlan(
+        capability=build_capability_plan(
+            definition_evidence=AGENT,
+            envelope=envelope,
+            input_text="research this topic",
+        ).capability,
+        operation="invoke",
+        arguments=arguments,
+        authorization=AuthorizationContext(
+            subject="researcher-agent",
+            tenant="agent-workloads",
+            execution_identity=envelope.execution_identity,
+        ),
+    )
+    context = TaskExecutionContext(
+        envelope=envelope,
+        runtime_configuration=runtime_configuration,
+        capability_plan=plan,
+    )
+
+    runtime_configuration["MODEL_PROVIDER"] = "changed"
+    arguments["nested"]["value"] = "changed"
+
+    assert context.runtime_configuration["MODEL_PROVIDER"] == "mock"
+    assert context.capability_plan is not None
+    assert context.capability_plan.arguments["nested"]["value"] == "original"
+
+
+@pytest.mark.parametrize(
+    "capabilities",
+    [
+        ["customer-lookup", "document-read"],
+        [""],
+        "customer-lookup",
+    ],
+)
+def test_malformed_or_ambiguous_capability_declaration_fails_closed(
+    capabilities,
+) -> None:
+    context = execution_context()
+    invalid_agent = {**AGENT, "spec": {**AGENT["spec"], "capabilities": capabilities}}
+
+    with pytest.raises(ValueError, match="capability evidence"):
+        build_capability_plan(
+            definition_evidence=invalid_agent,
+            envelope=context.envelope,
+            input_text="research this topic",
+        )
+
+
+def test_capability_transport_ambiguity_is_unknown_without_retry() -> None:
+    class AmbiguousTransport:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def send(self, request):
+            self.calls += 1
+            raise TransportAmbiguityError
+
+    authorization = FixedAuthorization(AuthorizationDecision.ALLOW)
+    transport = AmbiguousTransport()
+    provider = RestProvider(
+        RestProviderConfiguration(
+            provider=ProviderIdentity("test.synthetic-rest"),
+            target="https://synthetic.invalid/capabilities/customer-lookup",
+            allowed_hosts=("synthetic.invalid",),
+            allowed_operations=("invoke",),
+        ),
+        transport,
+    )
+    context = execution_context(capability=True)
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(),
+        capability_gateway=CapabilityGateway(authorization, provider),
+    ).execute(context=context, input_text="research this topic")
+
+    assert outcome.classification is ExecutionClassification.UNKNOWN
+    assert outcome.retry_safe is False
+    assert outcome.result is None
+    assert authorization.calls == 1
+    assert transport.calls == 1

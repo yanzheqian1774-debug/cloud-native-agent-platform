@@ -176,6 +176,45 @@ def test_default_task_path_consumes_native_and_requested_capability() -> None:
     assert provider_request.execution_identity.value
 
 
+def test_ambiguous_capability_declaration_fails_before_running_or_invocation(
+    mock_task_status_writer,
+) -> None:
+    agent = {
+        **AGENT_BODY,
+        "spec": {
+            "runtime": {"type": "native"},
+            "model": {"provider": "mock", "name": "mock-model"},
+            "capabilities": ["customer-lookup", "document-read"],
+        },
+    }
+    status_patch = kopf.Patch()
+    with (
+        patch(
+            "agent_operator.task_controller.load_agent_definition",
+            return_value=[agent],
+        ),
+        patch(
+            "agent_operator.task_controller.build_default_coordinator"
+        ) as coordinator_factory,
+    ):
+        create_task(
+            name="test-task",
+            spec={
+                "agentRef": {"name": "researcher-agent"},
+                "input": {"prompt": "research this topic"},
+            },
+            namespace="agent-workloads",
+            patch=status_patch,
+            meta=TASK_META,
+        )
+
+    mock_task_status_writer.assert_not_called()
+    coordinator_factory.assert_not_called()
+    assert status_patch.status["phase"] == "Failed"
+    assert status_patch.status["reason"] == "InvalidLegacyIdentityEvidence"
+    assert status_patch.status["attempts"] == 0
+
+
 def test_create_task_sets_failed_status(
     mock_execution_coordinator,
 ) -> None:

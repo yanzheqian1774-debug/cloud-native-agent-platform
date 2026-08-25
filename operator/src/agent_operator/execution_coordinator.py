@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
+from types import MappingProxyType
 from typing import Any, Protocol
 
 from agent_core.interface_spine.v0_2 import InternalExecutionEnvelope
@@ -71,6 +73,15 @@ class CapabilityPlan:
     arguments: Mapping[str, Any]
     authorization: AuthorizationContext
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.arguments, Mapping):
+            raise ValueError("Capability arguments must be a mapping")
+        object.__setattr__(
+            self,
+            "arguments",
+            MappingProxyType(deepcopy(dict(self.arguments))),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class TaskExecutionContext:
@@ -79,6 +90,21 @@ class TaskExecutionContext:
     envelope: InternalExecutionEnvelope
     runtime_configuration: Mapping[str, str]
     capability_plan: CapabilityPlan | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.runtime_configuration, Mapping):
+            raise ValueError("Runtime configuration must be a mapping")
+        copied = deepcopy(dict(self.runtime_configuration))
+        if not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in copied.items()
+        ):
+            raise ValueError("Runtime configuration must contain string pairs")
+        object.__setattr__(
+            self,
+            "runtime_configuration",
+            MappingProxyType(copied),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +322,8 @@ def build_capability_plan(
         raise ValueError("Agent capability evidence must be a sequence")
     if not capabilities:
         return None
+    if len(capabilities) != 1:
+        raise ValueError("Agent capability evidence is ambiguous")
     selected = capabilities[0]
     if not isinstance(selected, str) or not selected.strip():
         raise ValueError("Agent capability evidence must contain non-empty names")
