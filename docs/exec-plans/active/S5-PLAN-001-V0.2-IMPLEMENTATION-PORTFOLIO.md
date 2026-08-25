@@ -255,6 +255,7 @@ never reused.
 
 | ID | Type | Track / purpose | Depends on | Parallel class | Primary PR boundary |
 | --- | --- | --- | --- | --- | --- |
+| S5-PLAN-002 | PLAN | Harness and parallel delivery readiness; routing, ownership, failure propagation and bounded pilot design | S5-REL-017 | sequential planning; no parallel execution authorized | planning/evidence metadata only |
 | S5-ARCH-007 | ARCH | representation/interface Human decision | S5-PLAN-001 | sequential | decision artifact only |
 | S5-SPIKE-005 | SPIKE | exact Native/OpenClaw targets + Manifest representation evidence | S5-PLAN-001 | early parallel | experiments/evidence |
 | S5-SPIKE-006 | SPIKE | bounded Hermes target evidence | S5-PLAN-001 | optional parallel | experiments/evidence |
@@ -272,6 +273,15 @@ never reused.
 | S5-IMPL-011 | IMPL | E Technical View | A–D schemas | integration | Technical View PR |
 | S5-IMPL-012 | IMPL | E Golden Demo harness | A–D,TEST-005 | integration | harness/fixtures PR |
 | Later REL IDs allocated once | REL | one REL per merged implementation PR, or Human-approved integration bundle after Portfolio integration | corresponding PR | serialized governance | Registry/evidence only |
+
+S5-PLAN-002 is the closing planning owner for Harness and parallel-delivery
+readiness. Its Human-closed plan and a separately allocated and authorized
+`TEST` pilot are prerequisites for using parallel Codex delivery on downstream
+work; the exact Pilot Session ID remains subject to a Human Pilot Selection
+Gate.
+`S5-TEST-005` remains the first conformance-Harness Session and
+`S5-IMPL-012` remains downstream Golden Demo integration; neither is activated
+by S5-PLAN-002.
 
 ## 7. Document/File and enterprise connector plan
 
