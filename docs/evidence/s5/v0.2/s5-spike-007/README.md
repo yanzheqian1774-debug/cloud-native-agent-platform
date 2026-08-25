@@ -160,7 +160,9 @@ as a production dependency.
 
 Checkpoint A CI on commit `120de72b525f7a0fb510ea96cf08aaf18e70a927`
 passed both **Quality Gates** and **Frontend Quality Gates**. Checkpoint B
-results recorded on `2026-08-25` from the converged candidate:
+convergence commit `79eb235fd76a8be7213a5770b8212eed46ff23c8` also
+passed both exact-head gates. Results recorded on `2026-08-25` from the
+converged candidate:
 
 - targeted S5-SPIKE-007 tests: **26 passed**;
 - existing production Capability tests: **none present at this baseline**;
