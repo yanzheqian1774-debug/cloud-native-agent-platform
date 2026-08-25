@@ -56,6 +56,8 @@ unrun, unknown, or stale-head checks are not PASS.
   `463 passed, 1 warning`
 - Known warning: existing Starlette/httpx deprecation warning from
   `fastapi.testclient`; unrelated to documentation changes
-- Exact-head GitHub and Frontend Quality Gates: pending after final push
+- GitHub Quality Gates and Frontend Quality Gates: `PASS` at candidate head
+  `40a6391b0452815298a72a37b77d2c0c1c2a34c0`; final delivery also requires
+  both gates to pass on the final metadata head
 
 Next gate: Human S5-PLAN-002 Harness & Parallel Readiness Review Gate.
