@@ -2,9 +2,12 @@
 
 ## Result boundary
 
-This artifact records the Checkpoint A implementation candidate for logical
-Session `S5-IMPL-004`. The result is a bounded internal Native Runtime Provider
-candidate: `COMPONENT_TESTED_CANDIDATE / PRIMARY_GOLDEN_PATH / NOT_CERTIFIED`.
+This artifact records the Checkpoint A implementation candidate and Checkpoint
+B convergence review for logical Session `S5-IMPL-004`. The result is a
+bounded internal Native Runtime Provider candidate:
+`COMPONENT_TESTED_CANDIDATE / PRIMARY_GOLDEN_PATH_CANDIDATE / NOT_CERTIFIED`.
+"Golden Path candidate" describes only the deterministic component seam; it
+is not an end-to-end or active integration claim.
 It does not grant Provider certification, production readiness, Contract or
 Schema freeze, or release acceptance.
 
@@ -21,6 +24,56 @@ S5-REL-012 is Human-confirmed as
 non-blocking for this bounded implementation and its forward import is
 deferred to a separately authorized PLAN, REL, or GOV Session. This evidence
 artifact is not a competing governance authority; S5-REL-012 was not reopened.
+
+## Checkpoint B convergence review
+
+The Human Native Provider Implementation Review Gate passed with constraints.
+Checkpoint B reviewed these eight changed files completely:
+
+1. `docs/evidence/s5/v0.2/s5-impl-004/README.md`;
+2. `runtime/src/agent_runtime/providers/native/__init__.py`;
+3. `runtime/src/agent_runtime/providers/native/binding.py`;
+4. `runtime/src/agent_runtime/providers/native/compatibility.py`;
+5. `runtime/src/agent_runtime/providers/native/models.py`;
+6. `runtime/src/agent_runtime/providers/native/provider.py`;
+7. `runtime/tests/test_native_provider_compatibility.py`;
+8. `runtime/tests/test_native_runtime_provider.py`.
+
+The review concludes:
+
+- the Native Provider is internal, replaceable, and Provider-local;
+- import direction is acyclic within the package and has no Core, operator,
+  HTTP DTO, OpenClaw, or Hermes edge;
+- production Runtime code does not import from
+  `experiments/s5-spike-005-runtime-target-manifest/`;
+- the experimental fixture is test evidence only, not a production dependency
+  or frozen contract;
+- Provider package identity, exact Runtime target/profile, Core compatibility,
+  degraded policy, and Platform Execution Identity are validated before
+  binding translation or invocation;
+- desired and effective Runtime Bindings remain distinct and deterministic;
+- Platform Execution Identity is required and propagated unchanged, while
+  native IDs remain optional opaque correlation evidence only;
+- binding translation copies caller input, rejects secret-like keys, and never
+  serializes their values into evidence or diagnostics;
+- missing identity/version, mismatch, implicit degraded mode, OpenClaw, and
+  Hermes all fail closed without fallback or Runtime substitution;
+- timeout/transport ambiguity performs one invocation attempt, does not retry,
+  and returns `UNKNOWN` without an exactly-once claim;
+- start and stop return `NOT_YET_PROVEN`; bounded in-memory cleanup does not
+  imply durable recovery, certified cleanup, or Provider certification;
+- existing Native Runtime HTTP behavior is unchanged; no public API, CRD,
+  schema, controller, dependency, lockfile, or migration change exists.
+
+Active integration classification is exact:
+
+- `DEFAULT_TASK_PATH_CONSUMES_NATIVE_PROVIDER: NO`;
+- `ACTIVE_CONSUMER_COUNT: 0`;
+- `OPERATOR_CONTROLLER_INTEGRATION: NO`;
+- `ACTIVE_RUNTIME_BEHAVIOR_CHANGE: NO`.
+
+Therefore the Native Provider remains `COMPONENT_TESTED_CANDIDATE`. It is not
+described as an end-to-end Golden Path.
 
 ## Current Native inventory
 
@@ -71,7 +124,9 @@ The package identity is:
 
 The only accepted Runtime target is
 `native:0.1.0+e6a162f:managed-kubernetes-deterministic-mock`. The provider
-state is `SUPPORTED_CANDIDATE / PRIMARY_GOLDEN_PATH / NOT_CERTIFIED`.
+state is
+`SUPPORTED_CANDIDATE / PRIMARY_GOLDEN_PATH_CANDIDATE / NOT_CERTIFIED`, at the
+component boundary only.
 
 The implementation consumes the integrated S5-SPIKE-005 Native manifest
 candidate by pinning and testing its exact provider version, Runtime identity,
@@ -130,7 +185,7 @@ stable provider-local reason values.
 | Health | Supported | Normalized provider-local healthy state |
 | Readiness | Supported | Exact selected target ready |
 | Runtime information | Supported | Package, target, features, limitations, certification state |
-| Invoke | Supported | Deterministic mock Golden Path |
+| Invoke | Supported | Deterministic mock component Golden Path candidate |
 | Observe result | Supported | In-process Platform-identity lookup for completed success |
 | Start | Not yet proven | No durable provisioning claim; explicit unsupported result |
 | Stop | Not yet proven | No distributed lifecycle claim; explicit unsupported result |
@@ -184,6 +239,27 @@ Imports compile and load from `runtime/src` without Core, operator, HTTP,
 OpenClaw, or Hermes consumers. No relative Markdown links were added. Secret
 pattern scanning found no credential-shaped values; named fake negative-test
 values are asserted absent from diagnostics.
+
+Checkpoint B convergence validation on the strengthened final candidate
+produced:
+
+- targeted Native Provider tests: `31 passed`;
+- complete Runtime tests: `43 passed`, with one existing Starlette/httpx
+  deprecation warning;
+- integrated Manifest compatibility tests: `17 passed`;
+- relevant A1 Core tests: `64 passed`;
+- relevant A2 identity-adapter tests: `6 passed`;
+- relevant A3 compatibility-interpreter tests: `33 passed`;
+- full pytest: `331 passed`, with the same one warning;
+- Ruff lint: passed;
+- Ruff format check: passed for 74 files;
+- `make check`: passed, including `331 passed`;
+- `git diff --check`: passed;
+- authorized path ownership, acyclic import direction, zero active production
+  consumers, experiments dependency, prohibited scope, public wire/API/CRD/
+  schema, dependency/lockfile, identity and Binding authority, timeout/retry/
+  fallback, Secret/redaction, relative link, and rollback-without-migration
+  audits: passed.
 
 ## Limitations and Evidence Debt
 

@@ -252,7 +252,16 @@ def test_deterministic_invocation_preserves_platform_identity() -> None:
     assert provider.observe("platform-exec-001") == first
 
 
-def test_compatibility_rejection_happens_before_invocation() -> None:
+@pytest.mark.parametrize(
+    "runtime_target",
+    [
+        RuntimeTargetIdentity("openclaw", "2026.7.1-2", "external"),
+        RuntimeTargetIdentity("hermes", "0.20.4", "experimental"),
+    ],
+)
+def test_unsupported_target_has_no_invocation_or_silent_fallback(
+    runtime_target,
+) -> None:
     calls = []
 
     def invoker(*args):
@@ -261,15 +270,10 @@ def test_compatibility_rejection_happens_before_invocation() -> None:
 
     provider = NativeRuntimeProvider(invoker)
     rejected = provider.invoke(
-        execution(
-            compatibility=compatibility(
-                runtime_target=RuntimeTargetIdentity(
-                    "openclaw", "2026.7.1-2", "external"
-                )
-            )
-        )
+        execution(compatibility=compatibility(runtime_target=runtime_target))
     )
     assert rejected.reason == DiagnosticReason.RUNTIME_TARGET_UNSUPPORTED
+    assert rejected.compatibility.effective_runtime is None
     assert calls == []
 
 
@@ -328,13 +332,18 @@ def test_duplicate_native_invocation_id_is_rejected() -> None:
 def test_invocation_failure_and_transport_ambiguity_are_normalized(
     error, state, reason
 ) -> None:
+    calls = 0
+
     def invoker(*_):
+        nonlocal calls
+        calls += 1
         raise error
 
     evidence = NativeRuntimeProvider(invoker).invoke(execution())
     assert evidence.state == state
     assert evidence.reason == reason
     assert evidence.correlation.platform_execution_identity == "platform-exec-001"
+    assert calls == 1
 
 
 def test_lifecycle_fails_closed_and_cleanup_is_bounded() -> None:

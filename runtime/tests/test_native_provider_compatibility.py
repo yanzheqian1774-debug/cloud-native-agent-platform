@@ -45,3 +45,21 @@ def test_native_provider_has_no_active_openclaw_or_hermes_import() -> None:
     source = "\n".join(path.read_text() for path in native_root.glob("*.py"))
     assert "agent_runtime.providers.openclaw" not in source
     assert "agent_runtime.providers.hermes" not in source
+
+
+def test_component_only_has_no_experiments_dependency() -> None:
+    runtime_root = ROOT / "runtime/src/agent_runtime"
+    native_root = runtime_root / "providers/native"
+    native_source = "\n".join(path.read_text() for path in native_root.glob("*.py"))
+    consumers = [
+        path
+        for path in runtime_root.rglob("*.py")
+        if native_root not in path.parents
+        and (
+            "agent_runtime.providers.native" in path.read_text()
+            or "NativeRuntimeProvider" in path.read_text()
+        )
+    ]
+    assert "experiments" not in native_source
+    assert "manifest_candidate" not in native_source
+    assert consumers == []
