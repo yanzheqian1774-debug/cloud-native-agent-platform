@@ -1,0 +1,14 @@
+{
+  "allow": {
+    "subject_id": "agent-instance-synthetic-1",
+    "tenant_id": "tenant-synthetic-1",
+    "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+    "decision": "ALLOW"
+  },
+  "deny": {
+    "subject_id": "agent-instance-synthetic-1",
+    "tenant_id": "tenant-synthetic-1",
+    "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+    "decision": "DENY"
+  }
+}

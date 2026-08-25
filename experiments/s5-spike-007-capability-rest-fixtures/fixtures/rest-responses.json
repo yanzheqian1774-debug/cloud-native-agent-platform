@@ -1,0 +1,22 @@
+{
+  "success": {
+    "status_code": 200,
+    "provider_request_id": "provider-request-synthetic-001",
+    "body": {"customer_state": "active", "source": "synthetic"}
+  },
+  "client_error": {
+    "status_code": 404,
+    "provider_request_id": "provider-request-synthetic-002",
+    "body": {"error": "synthetic_not_found"}
+  },
+  "server_error": {
+    "status_code": 503,
+    "provider_request_id": "provider-request-synthetic-003",
+    "body": {"error": "synthetic_unavailable"}
+  },
+  "malformed": {
+    "status_code": 200,
+    "provider_request_id": "provider-request-synthetic-004",
+    "body": ["unexpected", "shape"]
+  }
+}
