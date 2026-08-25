@@ -1,0 +1,6 @@
+{
+  "capability_id": "capability.synthetic.customer-lookup",
+  "operation": "lookup",
+  "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+  "arguments": {"customer_reference": "customer-synthetic-1042"}
+}
