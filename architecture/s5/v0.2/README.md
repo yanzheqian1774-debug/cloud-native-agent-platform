@@ -4,6 +4,15 @@ This directory is the durable architecture record integrated by S5-REL-001.
 It preserves accepted architecture separately from current implementation.
 Source code and tests remain authoritative for implemented behavior.
 
+## Active architecture reviews
+
+- [MVS Execution & Orchestration Ownership Gate v1](S5-ARCH-008-MVS-EXECUTION-ORCHESTRATION-OWNERSHIP-GATE-V1.md)
+  records the Human-selected O1 bounded exception, temporary authority map,
+  mandatory extraction seams, final G2 dispositions, production blocker, and
+  constrained S5-IMPL-008 handoff. It is `CLOSING / READY_TO_CLOSE` with Human
+  Close Confirmation pending; it does not itself authorize implementation or
+  amend ADR-0003.
+
 ## Accepted architecture
 
 - [Core Representation & API Gate v1](S5-ARCH-007-CORE-REPRESENTATION-API-GATE-V1.md)
