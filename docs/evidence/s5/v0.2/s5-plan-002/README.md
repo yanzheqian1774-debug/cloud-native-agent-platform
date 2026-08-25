@@ -43,4 +43,19 @@ unrun, unknown, or stale-head checks are not PASS.
 
 `PLAN_CANDIDATE / REVIEW / PILOT_NOT_STARTED / DOWNSTREAM_NOT_STARTED`
 
+## Checkpoint A validation record
+
+- Initial candidate commit: `ce123a7831e4001b99af4ccb3a72622320cf0673`
+- Draft PR: `#56`
+- Changed paths: exactly the five Checkpoint A authorized paths
+- Relative links: `PASS`
+- Session/downstream ID uniqueness: `PASS`
+- Targeted secret-pattern scan: `PASS`
+- `git diff --check`: `PASS`
+- `make check`: `PASS` — Ruff lint and format passed; pytest reported
+  `463 passed, 1 warning`
+- Known warning: existing Starlette/httpx deprecation warning from
+  `fastapi.testclient`; unrelated to documentation changes
+- Exact-head GitHub and Frontend Quality Gates: pending after final push
+
 Next gate: Human S5-PLAN-002 Harness & Parallel Readiness Review Gate.
