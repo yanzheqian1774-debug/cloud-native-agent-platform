@@ -1,12 +1,11 @@
 # S5-TEST-006 Parallel Delivery Readiness Pilot Evidence
 
-> Convergence state: parallel evidence structure assembled by the sole writable
-> Builder and converged with the Parent-validated parallel Reviewer result.
-> Failure injection, exact-state artifact review and timestamped immutable
-> snapshot validation and first-commit validation are complete. Recording the
-> committed results requires one single-commit amend; amended-head artifact and
-> scope audits, Draft PR, remote exact-head gates and Parent acceptance remain
-> pending.
+> Checkpoint B convergence state: Pilot evidence is in lifecycle `CLOSING`.
+> Checkpoint A produced one evidence commit and Draft PR #57 with exact-head
+> Quality and Frontend Quality Gates PASS. Human Recovery authorized one final
+> single-writer correction pass with no Reviewer recall. Recovery validation,
+> one correction commit/push and repeat exact-head gates remain required before
+> Human close confirmation.
 
 ## 1. Session and routing identity
 
@@ -16,27 +15,38 @@
 - Title: Parallel Delivery Readiness Pilot
 - Type: `TEST`
 - Track: `PARALLEL_DELIVERY_READINESS_PILOT`
-- Checkpoint: A — BOUNDED_SERIAL_AND_PARALLEL_REHEARSAL_CANDIDATE
+- Checkpoint: B — PILOT_EVIDENCE_CONVERGENCE_AND_EXIT_CANDIDATE
 - Parent task: `/root`
 - Builder task: `/root/s5_test_006_builder` (`S5-TEST-006-BUILDER-01`)
 - Reviewer task: `/root/s5_test_006_reviewer` (`S5-TEST-006-REVIEWER-01`)
 - Parent task count: exactly one
 - Logical Session count: exactly one
 - Child task count: exactly two; both are subtasks, not logical Sessions
-- Current child lifecycle: timestamped snapshot validation evidence recorded;
-  awaiting exact-state Reviewer acceptance and commit authorization. Final
-  Session lifecycle and result require Parent acceptance.
+- Lifecycle: `CLOSING`
+- Authorization: `AUTHORIZED_RECOVERY`
+- `RECOVERY_MODE: SINGLE_WRITER_NO_PARALLEL_EVIDENCE_CLOSEOUT`
+- `HUMAN_RECOVERY_GATE: PASS_WITH_CONSTRAINTS`
+- `RECOVERY_AUTHORIZATION_ACTIONS: 1` (separate from the accepted four Human
+  actions)
+- Expected result after successful correction delivery: `READY_TO_CLOSE`
+- Session closed: no
 
 ## 2. Baseline and provenance
 
 - Human-authorized baseline: `eb4e727b3f71fdd8def5e4cb32c503445101fd6e`
 - Preparation HEAD: `eb4e727b3f71fdd8def5e4cb32c503445101fd6e`
 - Baseline match at parallel Builder start: `PASS`
+- Authorized Checkpoint A head:
+  `cf5e727523425bcee180970ea5ec5a2305e23f50`
+- Draft PR: #57, open, Draft and unmerged at the authorized Checkpoint A head
+- Checkpoint A remote gates: Quality Gates PASS and Frontend Quality Gates PASS
+  at `cf5e727523425bcee180970ea5ec5a2305e23f50`
 - Source plan: [S5-PLAN-002 evidence index](../README.md)
 - Source integration: `S5-REL-018` — closed; reopening prohibited
 - Supersession: the Human-authorized Pilot baseline above explicitly supersedes
   the earlier plan candidate baseline for this Pilot only.
-- `origin/main` and final candidate HEAD: pending Parent delivery record.
+- Checkpoint B correction head and final exact-head gate results: pending
+  correction commit and push.
 
 ## 3. Role allocation
 
@@ -47,7 +57,7 @@
 - Sole writable Builder: this README only
 - Read-only Architecture/Ownership Reviewer: detached immutable review worktree
 - Authoritative writer count: exactly 1
-- Optional fourth role: not authorized at Checkpoint A
+- Optional fourth role: not authorized
 
 ## 4. Worktree and branch ownership
 
@@ -78,7 +88,7 @@ schema. The Reviewer completed before the Builder began.
 
 - Reviewer-to-Builder wait/handoff: 194s
 - Rework: 0
-- Human interventions: 0
+- Worker-content Human interventions: 0
 - Routing errors: 0
 - Path collisions: 0
 - Commit or PR created: no
@@ -134,9 +144,11 @@ Durable synthetic handoff candidate:
 - Session: `S5-TEST-006` — Parallel Delivery Readiness Pilot (`TEST`)
 - Parent: `/root`; Builder: `/root/s5_test_006_builder`; Reviewer:
   `/root/s5_test_006_reviewer`
-- Baseline/current pre-delivery HEAD:
-  `eb4e727b3f71fdd8def5e4cb32c503445101fd6e`
-- Checkpoint: A — BOUNDED_SERIAL_AND_PARALLEL_REHEARSAL_CANDIDATE
+- Original baseline: `eb4e727b3f71fdd8def5e4cb32c503445101fd6e`
+- Current authorized Checkpoint A/pre-correction HEAD:
+  `cf5e727523425bcee180970ea5ec5a2305e23f50`
+- Checkpoint B correction head: pending commit
+- Checkpoint: B — PILOT_EVIDENCE_CONVERGENCE_AND_EXIT_CANDIDATE
 - Completed: serial rehearsal; parallel review; parallel Builder evidence
   preparation and convergence; failure-propagation dry run; exact-state
   artifact review and context reconstruction
@@ -144,17 +156,17 @@ Durable synthetic handoff candidate:
   only the authorized README; do not generalize from one sample
 - Open risks: convention-based authority enforcement; no repository-native
   task/lease registry; one synthetic sample does not establish readiness
-- Evidence Debt: exact-state final review, commit, Draft PR, remote exact-head
-  quality evidence, and Human acceptance
+- Evidence Debt: recovery validation, correction commit/push, repeat exact-head
+  gates and Human close confirmation; Reviewer recall is prohibited
 - Ownership: Builder owns only this README through Parent convergence;
   Reviewer is detached/read-only; Parent owns routing and acceptance
-- PR/test/CI state: timestamped immutable-snapshot local validation PASS; no
-  commit, push or PR yet; exact-commit local reruns and remote exact-head gates
-  have not run
-- Next action: obtain exact-state final Reviewer acceptance, deliver one
-  exact-scope commit and Draft PR only if every condition passes, verify remote
-  exact-head gates, then stop at the Human review gate
-- Human gate: Human S5-TEST-006 Pilot Evidence Review Gate
+- PR/test/CI state: Draft PR #57 is open, Draft and unmerged; Checkpoint A
+  Quality and Frontend Quality Gates passed at the exact authorized head;
+  Checkpoint B correction validation and delivery are pending
+- Next action: validate this sole-writer recovery correction, create and push one
+  correction commit to existing Draft PR #57, verify repeat exact-head gates,
+  then stop at the Human close gate
+- Human gate: Human S5-TEST-006 Close Confirmation
 - Reopen prohibitions: S5-PLAN-002, S5-REL-018 and S5-TEST-005 remain closed
   and untouched
 
@@ -177,15 +189,14 @@ findings. Parent Pilot acceptance remains pending.
 | Active worker duration | 34s | 175s (14s Reviewer + 161s Builder) |
 | Blocked/wait duration | 194s | 64s |
 | Reviewer latency | 22s | 14s |
-| Builder latency | 12s | 161s (117s preparation + 44s convergence) |
 | Handoff latency | 194s | 64s |
-| Rework count | 0 | 4 |
+| Checkpoint A rework count | 0 | 4 |
 | Merge conflicts | 0 | 0 observed |
 | Path collisions | 0 | 0 |
 | Duplicate task count | 0 | 0 |
 | Routing-error count | 0 | 0 accidental; 1 synthetic invalid route detected |
 | Context-loss incidents | 0 observed | 0; context reconstruction PASS |
-| Human interventions | 0 | 0 |
+| Worker-content Human interventions | 0 | 0 |
 | Failed/unknown child states | 0 | 0 required children; 1 synthetic `STOPPED` attempt excluded from PASS |
 
 Resource observation: 10 logical CPUs; 17,179,869,184 bytes physical memory
@@ -200,7 +211,28 @@ provisioning, routing, child dispatch and monitoring, serial/parallel handoffs,
 evidence convergence, reviews, rework, failure injection and validation setup.
 It is not hidden as active worker time and is outside the controlled 228s serial
 and 236s parallel wall-clock samples. It materially limits end-to-end efficiency
-interpretation. Final post-commit, PR and quality-gate overhead remains pending.
+interpretation. Approximate end-to-end elapsed time reached 57 minutes, far
+above both controlled rehearsal windows. Final Checkpoint B correction,
+post-commit and repeated quality-gate overhead remains pending.
+
+Checkpoint B overhead record:
+
+- Builder correction: `2026-08-25T15:59:08Z`–`2026-08-25T20:19:17Z`
+  (4h20m9s)
+- Builder-end-to-Reviewer-start gap: `2026-08-25T20:19:17Z`–
+  `2026-08-25T21:24:54Z` (1h05m37s), classified as orchestration/queueing and
+  not active work; no cause is inferred
+- Reviewer rereview: `2026-08-25T21:24:54Z`–`2026-08-25T22:29:19Z`
+  (1h04m25s)
+- Classification: Checkpoint B orchestration/correction/review elapsed, not
+  controlled rehearsal active time or wall time
+
+This overhead does not alter the accepted approximately 57-minute Checkpoint A
+result or the controlled 228s/236s samples. It materially raises lifecycle cost
+and reinforces `LOW_CONFIDENCE` and the prohibition on generalization.
+The Checkpoint B correction/review/queue total is approximately 6h30m11s. This
+approximately seven-hour operational event is lifecycle evidence, not a change
+to either controlled sample.
 
 ## 10. Acceleration calculation
 
@@ -219,14 +251,17 @@ SERIAL_WALL_CLOCK`
 
 - Serial routing and ownership stability: no errors or collisions observed.
 - Serial baseline/branch stability: no drift observed.
-- Parallel routing and ownership review converged without observed violations;
-  artifact context corrections passed exact-state rereview, resource
-  observations are recorded, and isolated precommit validation passed; exact
-  committed-head local and remote quality gates remain pending. The overall
-  immutable-snapshot validation passed with complete timing and command
-  provenance; exact committed-head local and remote quality gates remain
-  pending.
+- Checkpoint A exact-head local and remote Quality and Frontend Quality Gates passed at cf5e727523425bcee180970ea5ec5a2305e23f50. Checkpoint B correction-head validation and repeated remote gates remain pending.
 - No production code or test source is in writable scope.
+
+- `SAFETY_RESULT: PASS_WITH_CONSTRAINTS` — routing identity was preserved;
+  exactly one writer and one read-only Reviewer operated; the expired lease
+  stopped before work; no collision, duplicate or missing required result was
+  observed; context was reconstructable; and the controlled stop preserved Git
+  and PR state.
+- `PERFORMANCE_RESULT: NO_ACCELERATION_OBSERVED` — parallel wait decreased but
+  wall clock regressed; equivalence was weak; orchestration/evidence overhead
+  was material; and small evidence-only tasks are unsuitable for this model.
 
 ## 12. Reviewer findings
 
@@ -303,32 +338,90 @@ Final rereview after timestamped snapshot evidence:
   overall PASS claim is permitted.
 - Disposition: rework round 4 required; another exact-state rereview pending.
 
+Checkpoint B correction rereview:
+
+- State: `COMPLETED/FAIL`
+- Time: `2026-08-25T21:24:54Z`–`2026-08-25T22:29:19Z` (1h04m25s)
+- Reviewer mutations: zero
+- Disposition: bounded Checkpoint B corrections required; no commit, push or PR
+  mutation is authorized by this review result
+
 ## 13. Rework and Human interventions
 
 - Serial rework count: 0
-- Serial Human intervention count: 0
-- Parallel rework count: 4
+- Serial worker-content intervention count: 0
+- Checkpoint A rework count: 4
+- Checkpoint B rework count: 1
+- Cumulative rework count: 5
 - Parallel routing corrections: 0
 - Parallel ownership corrections: 0
-- Parallel Human interventions: 0
+- Parallel worker-content intervention count: 0
+- `CONTENT_DECISION_INTERVENTIONS: 1`
+- `ORCHESTRATION_STATUS_INTERVENTIONS: 1` — Human status request at
+  approximately 32 minutes
+- `AUTHORITATIVE_TASK_RESUME_INTERVENTIONS: 1` — authoritative task resume after
+  the informational status response
+- `CONTROLLED_STOP_INTERVENTIONS: 1`
+- `TOTAL_HUMAN_ORCHESTRATION_INTERVENTIONS: 3`
+- `TOTAL_HUMAN_ACTIONS_INCLUDING_CONTENT_GATE: 4`
+- `RECOVERY_AUTHORIZATION_ACTIONS: 1` — separately recorded and not folded into
+  the accepted total of four
+- The resume was necessary to continue. Neither the status request nor resume
+  changed content decisions or controlled timing results; they are separately
+  accounted orchestration actions. Therefore, unqualified Human interventions
+  cannot be reported as zero.
+
+Controlled-stop recovery record:
+
+- Controlled stop occurred: YES
+- Stop condition: `PILOT_ORCHESTRATION_RUNTIME_AND_RECONNECT_INSTABILITY`
+- Preserved HEAD: `cf5e727523425bcee180970ea5ec5a2305e23f50`
+- Index: empty
+- Preserved working diff: exactly one authorized README, 143 insertions and
+  59 deletions
+- Preserved README SHA-256:
+  `6dc25d6ac89fb404ba5de9f5fcf9ece7145b19b166486d20736969f458c99576`
+- Draft PR #57: unchanged, Draft and unmerged
+- Post-head commit, push or PR mutation before recovery: none
+- Children: completed; cancellation was not needed
+- Temporary validation directories: preserved
 - Counting rule: record each discrete correction cycle or Human decision needed
   to continue; do not hide corrections inside aggregation.
 
 ## 14. Limitations and invalid comparisons
 
+- `COMPARISON_VALIDITY: LOW_CONFIDENCE`
+- Interpretation: `DIRECTIONAL_ONLY`
+- The common checklist and 18-section schema support a directional observation,
+  but workload equivalence is not proven: active work was 34s serial versus
+  175s parallel; evidence convergence and rework were unequal; the UI step was
+  stale; status/resume overhead occurred; and approximately 57 minutes of
+  end-to-end elapsed time far exceeded both rehearsal windows.
+- This was not a controlled benchmark.
+- Checkpoint B added 4h20m9s of Builder correction elapsed, 1h05m37s of
+  orchestration/queueing gap and 1h04m25s of Reviewer rereview elapsed. These
+  are outside the controlled samples, materially increase lifecycle cost and
+  reinforce `LOW_CONFIDENCE`; they do not alter the preserved sample metrics.
 - One synthetic sample cannot establish general delivery acceleration.
 - Convention-based role and write enforcement remains a risk.
 - Second-level timestamps limit measurement precision.
 - Parent aggregation and Reviewer convergence add orchestration work that must
   be included or disclosed.
 - Materially non-equivalent serial/parallel work makes acceleration an invalid
-  comparison.
+  basis for generalized performance claims. The observed 3.51% regression is
+  preserved as the directional sample result.
+- Generalized parallel performance claim: `NOT_GRANTED`
+- Planned 30%–40% acceleration hypothesis: `UNPROVEN`
+- Checkpoint B correction/review/queue elapsed approximately 6h30m11s. The
+  approximately seven-hour event is operational evidence of lifecycle cost,
+  not controlled performance evidence.
 - Preparation evidence is not final acceptance.
 
 ## 15. Evidence Debt
 
-- Parallel Reviewer evidence and exact-state artifact review are converged and
-  accepted as `COMPLETED/PASS`; overall Parent acceptance remains pending.
+- Checkpoint A evidence and remote gates converged at authorized head
+  `cf5e727523425bcee180970ea5ec5a2305e23f50`; overall close confirmation
+  remains pending.
 - Failure-propagation rehearsal completed with the synthetic attempt stopped and
   isolated before work.
 - Context reconstruction and corrected exact-state rereview completed PASS.
@@ -336,16 +429,46 @@ Final rereview after timestamped snapshot evidence:
 - Exact-state artifact rereview: `2026-08-25T15:10:48Z`–`2026-08-25T15:11:06Z`
   (18s), `COMPLETED/FAIL — additional consistency corrections required`.
   Corrections were applied and the second exact-state rereview passed.
-- Timestamped immutable-snapshot precommit validation passed; exact-commit
-  rerun, commit, Draft PR and remote exact-head quality results remain pending.
+- Human Recovery replaced further Reviewer convergence with a single final
+  sole-writer correction pass. Recovery validation, one correction commit/push
+  updating existing Draft PR #57, and repeat exact-head Quality and Frontend
+  Quality Gates remain required.
+- The first Checkpoint B correction rereview returned `COMPLETED/FAIL` at
+  `2026-08-25T21:24:54Z`–`2026-08-25T22:29:19Z`; its bounded corrections are
+  addressed by this Human-authorized single-writer pass, and no Reviewer recall
+  is permitted.
 - Convention-based authority enforcement needs future evidence or automation.
 
 ## 16. Recommended next concurrency level
 
-Recommended next concurrency remains exactly 3 because the measured parallel
-sample regressed by approximately 3.51% and observed load was nontrivial. This
-single synthetic sample is not generalized. A fourth role requires a future
-Human gate and is not authorized by this Pilot.
+- Initial three-role model:
+  `SAFE_ENOUGH_FOR_FURTHER_BOUNDED_TESTING_WITH_CONSTRAINTS`
+- Three-role general rollout: `NOT_AUTHORIZED`
+- Fourth role: `NOT_RECOMMENDED / NOT_AUTHORIZED`
+- Seven roles: `NOT_RECOMMENDED`
+- General parallel delivery: `NOT_AUTHORIZED`
+- General concurrency expansion: `NOT_AUTHORIZED`
+- Any next Pilot requires a separate Human decision.
+- Do not use parallel execution for small evidence or documentation tasks.
+- Prefer larger independently executable packages, exactly one writer and fewer
+  convergence cycles.
+- Set explicit retry/rework limits and runtime/no-progress limits.
+- Measure compute time separately from queueing and reconnect overhead.
+
+Future candidate entry criteria, without authorization:
+
+- independently executable work packages;
+- expected serial duration plausibly exceeding orchestration overhead, as a
+  hypothesis rather than a universal threshold;
+- minimal handoff requirements;
+- stable contracts;
+- no shared writable paths;
+- deterministic validation;
+- no more than one repository writer;
+- bounded Reviewer roles;
+- explicit timeout and cancellation behavior;
+- a measured serial baseline; and
+- no repeated Human resume requirement.
 
 ## 17. Rollback
 
@@ -357,11 +480,13 @@ are outside scope.
 
 ## 18. Next gate
 
-- Next gate: Human S5-TEST-006 Pilot Evidence Review Gate
-- Next action before that gate: exact-state final Reviewer acceptance, one
-  exact-scope commit, one Draft PR and remote exact-head quality gates; proceed
-  only if every condition passes, then await Human review.
-- Required delivery state: one Draft PR, open and unmerged
+- Expected result after successful correction delivery: `READY_TO_CLOSE`
+- Next gate: Human S5-TEST-006 Close Confirmation
+- Next action before that gate: recovery validation, one correction commit/push
+  updating existing Draft PR #57, and repeat exact-head Quality and Frontend
+  Quality Gates; no Reviewer recall
+- Current delivery state: Draft PR #57 is open, Draft and unmerged at the
+  authorized Checkpoint A head; Checkpoint B correction is not yet delivered
 - Session closed: no
 - S5-PLAN-002, S5-REL-018 and S5-TEST-005 reopening: prohibited
 - Pilot generalization: not granted
@@ -492,8 +617,9 @@ Timestamped command record:
 - Frontend `npm run build`: `2026-08-25T15:37:57Z`–
   `2026-08-25T15:38:00Z`; exit 0; Vite 8.2.1 built 38 modules.
 
-Recording these results changes the commit and requires final artifact and
-scope audits against the amended head. Draft PR and remote exact-head Quality
-and Frontend Quality Gates remain pending and are not claimed PASS. Failed,
-skipped, timed-out, unrun, unknown, missing or stale-head checks cannot count as
-PASS.
+These results were incorporated into the authorized Checkpoint A head
+`cf5e727523425bcee180970ea5ec5a2305e23f50`. Draft PR #57 is open, Draft and
+unmerged, and both Quality and Frontend Quality Gates passed at that exact head.
+Checkpoint B correction validation, commit/push and repeated exact-head gates
+remain pending and are not claimed PASS. Failed, skipped, timed-out, unrun,
+unknown, missing or stale-head checks cannot count as PASS.
