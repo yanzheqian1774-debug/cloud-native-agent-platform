@@ -131,6 +131,9 @@ NOT_AUTHORIZED
 PARALLEL_AGENT_EXPANSION:
 NOT_AUTHORIZED
 
+ORCHESTRATION_RUNTIME_AND_RECONNECT_INSTABILITY:
+RECORDED
+
 30_TO_40_PERCENT_ACCELERATION:
 UNPROVEN_HYPOTHESIS
 ```
@@ -184,6 +187,9 @@ UNPROVEN_HYPOTHESIS
 
 ## 3. Role allocation
 
+This section is `HISTORICAL_CHECKPOINT_STATE` and records the roles active
+during the completed Pilot.
+
 - Role pool size: 7
 - Active role count: exactly 3
 - Parent Orchestrator: routing, lifecycle, aggregation and acceptance; no
@@ -211,6 +217,9 @@ UNPROVEN_HYPOTHESIS
 
 ## 5. Serial rehearsal
 
+This section is `HISTORICAL_CHECKPOINT_STATE` and preserves the completed
+serial rehearsal chronology.
+
 The serial rehearsal used the fixed review checklist and this same evidence
 schema. The Reviewer completed before the Builder began.
 
@@ -229,6 +238,9 @@ schema. The Reviewer completed before the Builder began.
 - Parent serial acceptance: recorded by Parent before parallel start.
 
 ## 6. Parallel rehearsal
+
+This section is `HISTORICAL_CHECKPOINT_STATE` and preserves the completed
+parallel rehearsal chronology, including its then-pending handoff.
 
 - Builder start: `2026-08-25T15:02:55Z`
 - Reviewer: `2026-08-25T15:02:44Z`–`2026-08-25T15:02:58Z` (14s),
