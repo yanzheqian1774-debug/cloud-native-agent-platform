@@ -1,0 +1,9 @@
+{
+  "id": "synthetic-customer-lookup-request",
+  "capability": "customer-lookup",
+  "operation": "invoke",
+  "arguments": {
+    "query": "bounded synthetic request"
+  },
+  "classification": "EXPERIMENTAL"
+}
