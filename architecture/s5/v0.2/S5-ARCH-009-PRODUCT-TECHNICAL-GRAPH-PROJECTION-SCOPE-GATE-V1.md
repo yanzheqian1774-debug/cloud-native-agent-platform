@@ -25,6 +25,25 @@ no production execution, public API, CRD, schema, frozen Contract, dependency,
 Task/Workflow semantics, Runtime support, or source-of-truth ownership. Human
 Close Confirmation is required before Session closure or implementation.
 
+### 1.1 Correction provenance
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-ARCH-009-C1` |
+| Title | `Human Approval Fixture Direction Correction` |
+| Source Session | `S5-ARCH-009 — CLOSED / NOT_REOPENED` |
+| Discovered by | `S5-REL-023 CHECKPOINT A` |
+| Source head before correction | `a1c77cc7ff23424f09c0438c4dd720be9182f5b5` |
+| Correction scope | `HUMAN APPROVAL FIXTURE BLOCKS DIRECTION AND RELATED INTERNAL CONSISTENCY` |
+| S5-REL-023 state | `STOPPED / UNMODIFIED / UNMERGED` |
+| Final delivery head | `RESOLVED_BY_EXACT_GIT_PR_AND_CI_PROVENANCE` |
+| Self-referential head | `NOT_REQUIRED` |
+| Recursive correction | `NO` |
+
+This correction uses the accepted non-self-referential head rule. It does not
+reopen S5-ARCH-009, resume S5-REL-023, or create a successor to record its own
+commit SHA.
+
 ## 2. Preflight, scope, and source review
 
 Preflight established a clean isolated worktree, the exact expected branch,
@@ -161,7 +180,7 @@ Candidate relation meanings:
 | `PRODUCES` | Outcome or Evidence production |
 | `REFERENCES` | non-owning immutable/correlation reference |
 | `APPROVED_BY` | Human approval decision linkage |
-| `BLOCKS` | blocking gate/failure semantics |
+| `BLOCKS` | directed blocking gate/failure semantics: `source_node_id` is the blocking prerequisite or blocker, `target_node_id` is the blocked node, and the target cannot proceed while the source remains unsatisfied |
 | `COMPENSATES` | explicit compensation path; never normal-path merge |
 
 Cardinality is semantic metadata, not a count inferred from a snapshot:
@@ -214,6 +233,15 @@ reference; blocking and informational semantics; or contradictory
 authorization state. Missing classification fails closed to separate edges.
 Relations with materially different evidence authority also MUST NOT merge,
 even when their Evidence IDs happen to be equal.
+
+For `BLOCKS`, direction is always source to target:
+`blocking prerequisite -- BLOCKS --> blocked node`. The relation is not
+automatically equivalent to `DATA_FLOW` or `TRIGGERS`. Product aggregation may
+simplify its label, but it must preserve the raw source and target direction;
+Technical projection must expose the raw `BLOCKS` relation. `BLOCKS` may share
+a node pair with another relation only when direction and safety semantics are
+compatible, and it must never merge with an opposite-direction relation or be
+hidden by `DATA_FLOW` or `TRIGGERS`.
 
 ## 8. GP08 — grouping and expansion
 
@@ -401,7 +429,7 @@ projection security filter and before detail expansion.
 | 5 | T1/T2, Cap C1/C2, Evidence K1/K2; `N6/R8` | no pair has mergeable duplicate here; `E8`; `P4/4`, `T6/8` | Task↔Capability/Evidence `MANY_TO_MANY`; citation Evidence IDs sorted |
 | 6 | Nodes A/B with dependency, data, trigger relations; `N2/R3` | one visual edge: primary `DEPENDS_ON`, badges `TRIGGERS`,`DATA_FLOW`; `E1`; `P2/1`, `T2/1` | three semantic cardinalities preserved in expanded raw detail and evidence union |
 | 7 | Task, Capability, Approval/decision, Outcome denied; `N4/R4` | `REQUESTS`, `AUTHORIZED_BY`, `BLOCKS`, `PRODUCES`; `E4`; `P3/3`, `T4/4` | `DENY`, Provider calls `0`, citations `0`; decision evidence linked |
-| 8 | Plan, approval, task, Human actor/role evidence; `N3/R3` | approval gate blocks until approved, then state changes without edge identity change; `E3`; `P3/3`, `T3/3` | `REQUESTS` + `APPROVED_BY`; immutable actor/time/revision evidence |
+| 8 | Plan, approval, task, Human actor/role evidence; `N3/R3` | approval prerequisite blocks the task until approved (`approval-BLOCKS->task`), then state changes without edge identity change; Product and Technical preserve that direction; `E3`; `P3/3`, `T3/3` | `REQUESTS` + `APPROVED_BY`; immutable actor/time/revision evidence remains linked to the approval relation |
 | 9 | A failed, B skipped downstream, Outcome; `N4/R4` | failure and skip are distinct; blocking edge cannot merge with informational dependency; `E4`; `P4/4`, `T4/4` | A→B dependency plus blocking semantics in separate groups; failure evidence only on A |
 | 10 | Task, runtime realization, UNKNOWN Outcome; `N3/R2` | `E2`; `P2/1`, `T3/2`; UNKNOWN styling/count remains separate | execution→Outcome `ONE_TO_ONE`; ambiguity/reason evidence retained; never success/failure |
 | 11 | Definition with 12 Instances and assignments; `N13/R24` | one default Instance group; `E2` summary edges; `P2/1`, `T2/2`; expansion restores `N13/R24/E24` | Definition `ONE_TO_MANY`; group exposes count 12 and union of all 12 evidence IDs |
@@ -424,7 +452,7 @@ tuples produced by that rule, not input order.
 | 5 | `T1,T2,C1,C2,K1,K2` | `{T1,T2}-REQUESTS->{C1,C2}` and `{T1,T2}-REFERENCES->{K1,K2}` = 8 | `ev-cap-t1-c1..t2-c2`, `ev-knowledge-t1-k1..t2-k2`; `MANY_TO_MANY`; missing citation Evidence ID rejects malformed evidence |
 | 6 | `A,B` | `A-DEPENDS_ON->B`; `A-DATA_FLOW->B`; `A-TRIGGERS->B` = 3 | `ev-dependency`, `ev-data`, `ev-trigger`; accept as one edge only when the complete GP06 key matches; differing direction/security/history/evidence authority must yield separate edges |
 | 7 | `task,capability,approval,outcome` | `task-REQUESTS->capability`; `capability-AUTHORIZED_BY->approval`; `approval-BLOCKS->task`; `task-PRODUCES->outcome` = 4 | `ev-deny`; `DENY`, calls `0`, citations `0`; any call or citation rejects `DENY_REQUIRES_ZERO_PROVIDER_EFFECTS` |
-| 8 | `plan,approval,task` | `plan-REQUESTS->approval`; `task-BLOCKS->approval`; `plan-APPROVED_BY->approval` = 3 | `ev-actor`, `ev-decided-at`, `ev-plan-revision`; accept exact immutable approval replay; contradictory authorization state does not merge and conflicting replay rejects |
+| 8 | `plan,approval,task` | `plan-REQUESTS->approval`; `approval-BLOCKS->task`; `plan-APPROVED_BY->approval` = 3 | `ev-actor`, `ev-decided-at`, `ev-plan-revision` remain attached to `plan-APPROVED_BY->approval`; the corrected source/target tuple produces the canonical `gpr` relation ID and its deterministic sorted position; Product and Technical preserve `approval-BLOCKS->task`; accept exact immutable approval replay; contradictory authorization state does not merge and conflicting replay rejects |
 | 9 | `A,B,workflow,outcome` | `workflow-CONTAINS->{A,B}`; `B-DEPENDS_ON->A`; `A-BLOCKS->B`; `A-PRODUCES->outcome` = 4 | `ev-failure-a`, `ev-skip-b`; accept `A=FAILED`, `B=SKIPPED`; reject any projection that maps B to FAILED or merges blocking with informational semantics |
 | 10 | `task,runtime,outcome` | `task-EXECUTED_BY->runtime`; `task-PRODUCES->outcome` = 2 | `ev-ambiguous-effect`; accept `UNKNOWN`; reject success/failure coercion or retry-safe inference |
 | 11 | `definition,I01..I12` | `definition-CONTAINS->{I01..I12}` and `{I01..I12}-REFERENCES->definition` = 24 | `ev-instance-01..12`; accept one default group and exact evidence union; expansion order `I01..I12`; missing member evidence is preserved as a limitation, never silently dropped |
@@ -454,7 +482,7 @@ this documentation-only Session.
 | Instance / `EXECUTED_BY` Runtime Realization | execution-environment availability only | Runtime details omitted | requested/effective Runtime and realization visible | Runtime pool group is presentation-only | Platform Execution Identity, binding evidence, correlation IDs | Runtime Binding, Kubernetes UID, Provider-native ID |
 | Task / `REQUESTS`, `AUTHORIZED_BY` Capability | permitted/denied business state | Capability group when dense | decision, reason, request, and Provider-call evidence visible | eligible Capability group | decision and call Evidence IDs | raw request arguments and diagnostics |
 | Task / `REFERENCES` Knowledge | Citation visible when authorized | Evidence group | synthetic Collection/Asset/Revision/Evidence visible | Evidence group with raw expansion | exact citation and Evidence IDs | raw retrieval diagnostics; no production RAG claim |
-| Plan/Task / `APPROVED_BY`, `BLOCKS` Approval | Human gate/state visible | repeated approvals only when threshold met | actor/reference/revision/reason evidence visible as authorized | blocking edges never merge with informational edges | immutable approval evidence | security-sensitive actor detail where policy hides it |
+| Approval / `BLOCKS` Task; Plan / `APPROVED_BY` Approval | Human gate/state visible with the approval prerequisite pointing to the blocked Task | repeated approvals only when threshold met; raw blocked direction preserved | actor/reference/revision/reason evidence and raw `approval-BLOCKS->task` visible as authorized | blocking edges never merge with informational or opposite-direction edges | immutable approval evidence attached to the correct raw relation | security-sensitive actor detail where policy hides it |
 | Task/Workflow / `PRODUCES` Outcome | Outcome summary and explicit state | Outcome summary group only when homogeneous | domain Outcome, reason, UNKNOWN, and limitations visible | raw terminal/ambiguous relations | Outcome Evidence IDs and limitation codes | raw diagnostic evidence |
 | Any `COMPENSATES` or historical `REFERENCES` | visible only as business-relevant exception/history | never normal-path merged | visible with temporal/path classification | separate edge group | raw relation, temporal context, evidence authority | historical/native detail |
 
@@ -480,12 +508,14 @@ Filtering may omit a node or edge but cannot allocate a replacement identity.
 | UNKNOWN preservation | GP13 and fixture 10 |
 | Runtime claims unchanged | GP14 |
 | Knowledge/Capability invariants | GP15 and fixtures 5/7 |
+| canonical `BLOCKS` direction | source is blocker/prerequisite and target is blocked; fixtures 7/8 use Approval→Task and fixture 9 uses failed A→skipped B |
 | no production/public change | architecture artifact and index only |
 
-No contradiction was found with accepted S5-ARCH-008, the accepted logical
-Core candidate, the internal shared DTO, current Workflow DAG behavior, or
-Platform Execution Identity. This candidate adds no competing authority: it
-derives relationships from those sources and fails closed on conflict.
+After the S5-ARCH-009-C1 correction, no contradiction remains with accepted
+S5-ARCH-008, the accepted logical Core candidate, the internal shared DTO,
+current Workflow DAG behavior, or Platform Execution Identity. This candidate
+adds no competing authority: it derives relationships from those sources and
+fails closed on conflict.
 
 ## 15. Limitations and claim boundaries
 
