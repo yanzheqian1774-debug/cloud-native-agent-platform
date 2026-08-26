@@ -1,0 +1,59 @@
+{
+  "schema_version": "s5-test-005/v1",
+  "criteria": [
+    {
+      "id": "A2-IDENTITY-001",
+      "type": "component",
+      "target": "A2 Identity Spine",
+      "profile": "internal-v0.2-candidate",
+      "version": "v0.2",
+      "adapter": "identity_spine",
+      "applicable_profiles": ["mvs-native"]
+    },
+    {
+      "id": "A3-COMPAT-001",
+      "type": "component",
+      "target": "A3 Compatibility Interpreter",
+      "profile": "legacy-task-v0.2-candidate",
+      "version": "v0.2",
+      "adapter": "compatibility_interpreter",
+      "applicable_profiles": ["mvs-native"]
+    },
+    {
+      "id": "B-NATIVE-001",
+      "type": "component",
+      "target": "Native Runtime Provider",
+      "profile": "native/mock/deterministic",
+      "version": "native-provider-v0.2-candidate",
+      "adapter": "native_provider",
+      "applicable_profiles": ["mvs-native"]
+    },
+    {
+      "id": "C-GATEWAY-001",
+      "type": "component",
+      "target": "Capability Gateway synthetic REST",
+      "profile": "synthetic-rest/deterministic",
+      "version": "capability-gateway-v0.2-candidate",
+      "adapter": "capability_gateway",
+      "applicable_profiles": ["mvs-native"]
+    },
+    {
+      "id": "E-MVS-001",
+      "type": "integration",
+      "target": "Bounded MVS Task execution integration",
+      "profile": "native+synthetic-rest",
+      "version": "v0.2-candidate",
+      "adapter": "mvs_execution",
+      "applicable_profiles": ["mvs-native"]
+    },
+    {
+      "id": "E-WORKFLOW-OPTIONAL-001",
+      "type": "integration",
+      "target": "Workflow terminal propagation",
+      "profile": "optional/not-initial-target",
+      "version": "not-yet-proven",
+      "adapter": "workflow_terminal",
+      "applicable_profiles": ["workflow-terminal"]
+    }
+  ]
+}
