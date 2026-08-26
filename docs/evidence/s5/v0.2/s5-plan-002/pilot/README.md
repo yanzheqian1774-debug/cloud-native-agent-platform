@@ -1,11 +1,139 @@
 # S5-TEST-006 Parallel Delivery Readiness Pilot Evidence
 
-> Checkpoint B convergence state: Pilot evidence is in lifecycle `CLOSING`.
+> `HISTORICAL_CHECKPOINT_STATE` — Checkpoint B convergence state: Pilot
+> evidence was in lifecycle `CLOSING`.
 > Checkpoint A produced one evidence commit and Draft PR #57 with exact-head
 > Quality and Frontend Quality Gates PASS. Human Recovery authorized one final
 > single-writer correction pass with no Reviewer recall. Recovery validation,
 > one correction commit/push and repeat exact-head gates remain required before
 > Human close confirmation.
+
+## Authoritative durable terminal state
+
+```text
+SESSION:
+S5-TEST-006
+
+TITLE:
+Parallel Delivery Readiness Pilot
+
+SESSION_TYPE:
+TEST
+
+PILOT_TYPE:
+BOUNDED_SERIAL_AND_PARALLEL_REHEARSAL
+
+LIFECYCLE:
+CLOSED
+
+AUTHORIZATION:
+COMPLETED
+
+STATUS:
+PASS_WITH_CONSTRAINTS
+
+RESULT:
+SESSION_CLOSED
+
+REOPEN:
+PROHIBITED
+
+SESSION_CLOSED:
+YES
+
+SOURCE_RECOVERY_HEAD:
+b09e3d20619d3a3f04e1dd6a13d9846cf731f6c5
+
+RECOVERY_CI:
+QUALITY_GATES_PASS / FRONTEND_QUALITY_GATES_PASS
+```
+
+This section is authoritative for the current durable state. Statements below
+labelled `HISTORICAL_CHECKPOINT_STATE` preserve chronology and do not override
+this terminal state.
+
+## Explicit claim boundary
+
+```text
+PILOT_EVIDENCE:
+CANDIDATE_FOR_DURABLE_INTEGRATION
+
+EXECUTABLE_HARNESS:
+NOT_IMPLEMENTED_BY_THIS_PR
+
+MEASURED_ACCELERATION:
+NOT_ACHIEVED
+
+PRODUCTION_PARALLEL_READINESS:
+NOT_GRANTED
+
+PRODUCT_MVS:
+NOT_COMPLETE
+
+PROVIDER_CERTIFICATION:
+NOT_GRANTED
+
+PRODUCTION_READINESS:
+NOT_GRANTED
+
+RELEASE_ACCEPTANCE:
+NOT_GRANTED
+
+CONTRACT_FREEZE:
+NO
+
+SCHEMA_FREEZE:
+NO
+```
+
+## Preserved Pilot results
+
+```text
+SERIAL_WALL_CLOCK:
+228_SECONDS
+
+PARALLEL_WALL_CLOCK:
+236_SECONDS
+
+OBSERVED_RESULT:
+3.51_PERCENT_REGRESSION
+
+COMPARISON_VALIDITY:
+LOW_CONFIDENCE / DIRECTIONAL_ONLY
+
+TOTAL_REWORK_ROUNDS:
+5
+
+TOTAL_HUMAN_ORCHESTRATION_INTERVENTIONS:
+3
+
+LABEL_EQUIVALENCE_WAIVER:
+PASS_WITH_HUMAN_WAIVER
+
+SAFETY_RESULT:
+PASS_WITH_CONSTRAINTS
+
+PERFORMANCE_RESULT:
+NO_ACCELERATION_OBSERVED
+
+GENERALIZED_ACCELERATION_CLAIM:
+NOT_GRANTED
+
+THREE_ROLE_GENERAL_ROLLOUT:
+NOT_AUTHORIZED
+
+FOURTH_ROLE_AUTHORIZATION:
+NOT_GRANTED
+
+SEVEN_ROLE_ACTIVATION:
+NOT_AUTHORIZED
+
+PARALLEL_AGENT_EXPANSION:
+NOT_AUTHORIZED
+
+30_TO_40_PERCENT_ACCELERATION:
+UNPROVEN_HYPOTHESIS
+```
 
 ## 1. Session and routing identity
 
@@ -14,6 +142,7 @@
 - Session: `S5-TEST-006`
 - Title: Parallel Delivery Readiness Pilot
 - Type: `TEST`
+- Pilot type: `BOUNDED_SERIAL_AND_PARALLEL_REHEARSAL`
 - Track: `PARALLEL_DELIVERY_READINESS_PILOT`
 - Checkpoint: B — PILOT_EVIDENCE_CONVERGENCE_AND_EXIT_CANDIDATE
 - Parent task: `/root`
@@ -22,14 +151,18 @@
 - Parent task count: exactly one
 - Logical Session count: exactly one
 - Child task count: exactly two; both are subtasks, not logical Sessions
-- Lifecycle: `CLOSING`
-- Authorization: `AUTHORIZED_RECOVERY`
+- Lifecycle: `CLOSED`
+- Authorization: `COMPLETED`
+- Status: `PASS_WITH_CONSTRAINTS`
+- Result: `SESSION_CLOSED`
+- Reopen: `PROHIBITED`
 - `RECOVERY_MODE: SINGLE_WRITER_NO_PARALLEL_EVIDENCE_CLOSEOUT`
 - `HUMAN_RECOVERY_GATE: PASS_WITH_CONSTRAINTS`
 - `RECOVERY_AUTHORIZATION_ACTIONS: 1` (separate from the accepted four Human
   actions)
-- Expected result after successful correction delivery: `READY_TO_CLOSE`
-- Session closed: no
+- Source recovery HEAD: `b09e3d20619d3a3f04e1dd6a13d9846cf731f6c5`
+- Recovery CI: `QUALITY_GATES_PASS / FRONTEND_QUALITY_GATES_PASS`
+- Session closed: yes
 
 ## 2. Baseline and provenance
 
@@ -45,8 +178,9 @@
 - Source integration: `S5-REL-018` — closed; reopening prohibited
 - Supersession: the Human-authorized Pilot baseline above explicitly supersedes
   the earlier plan candidate baseline for this Pilot only.
-- Checkpoint B correction head and final exact-head gate results: pending
-  correction commit and push.
+- Source recovery head: `b09e3d20619d3a3f04e1dd6a13d9846cf731f6c5`
+- Source recovery exact-head gates: Quality Gates PASS and Frontend Quality
+  Gates PASS.
 
 ## 3. Role allocation
 
@@ -118,7 +252,8 @@ schema. The Reviewer completed before the Builder began.
 - Injection type: expired ownership-lease token dry run
 - Attempt identity: `S5-TEST-006-REVIEWER-01-FAILURE-DRYRUN-01`
 - Invalid token: `REVIEW-LEASE-EXPIRED-2026-08-25T15:00:00Z`
-- Lifecycle: `PENDING -> STOPPED` before work; effectively 0s
+- `HISTORICAL_CHECKPOINT_STATE` lifecycle: `PENDING -> STOPPED` before work;
+  effectively 0s
 - Repository/evidence inspection or writes: none
 - Git, PR, task or Session mutation: none
 - Reset: none
@@ -139,7 +274,8 @@ history and contain:
 - Ownership and PR/test/CI state
 - Next action, Human gate and reopen prohibitions
 
-Durable synthetic handoff candidate:
+`HISTORICAL_CHECKPOINT_STATE` — Durable synthetic handoff candidate recorded
+before terminal close:
 
 - Session: `S5-TEST-006` — Parallel Delivery Readiness Pilot (`TEST`)
 - Parent: `/root`; Builder: `/root/s5_test_006_builder`; Reviewer:
@@ -147,7 +283,7 @@ Durable synthetic handoff candidate:
 - Original baseline: `eb4e727b3f71fdd8def5e4cb32c503445101fd6e`
 - Current authorized Checkpoint A/pre-correction HEAD:
   `cf5e727523425bcee180970ea5ec5a2305e23f50`
-- Checkpoint B correction head: pending commit
+- Checkpoint B correction head: pending commit at this historical checkpoint
 - Checkpoint: B — PILOT_EVIDENCE_CONVERGENCE_AND_EXIT_CANDIDATE
 - Completed: serial rehearsal; parallel review; parallel Builder evidence
   preparation and convergence; failure-propagation dry run; exact-state
@@ -156,7 +292,8 @@ Durable synthetic handoff candidate:
   only the authorized README; do not generalize from one sample
 - Open risks: convention-based authority enforcement; no repository-native
   task/lease registry; one synthetic sample does not establish readiness
-- Evidence Debt: recovery validation, correction commit/push, repeat exact-head
+- Historical Evidence Debt: recovery validation, correction commit/push,
+  repeat exact-head
   gates and Human close confirmation; Reviewer recall is prohibited
 - Ownership: Builder owns only this README through Parent convergence;
   Reviewer is detached/read-only; Parent owns routing and acceptance
@@ -179,7 +316,8 @@ the end of that review round.
 Second exact-state artifact rereview: `COMPLETED/PASS` at
 `2026-08-25T15:13:01Z`–`2026-08-25T15:13:29Z` (28s), with zero Reviewer
 mutations. All reconstruction and artifact checks passed with no blocking
-findings. Parent Pilot acceptance remains pending.
+findings. Parent Pilot acceptance remained pending at this historical
+checkpoint.
 
 ## 9. Timing and metrics
 
@@ -213,7 +351,8 @@ It is not hidden as active worker time and is outside the controlled 228s serial
 and 236s parallel wall-clock samples. It materially limits end-to-end efficiency
 interpretation. Approximate end-to-end elapsed time reached 57 minutes, far
 above both controlled rehearsal windows. Final Checkpoint B correction,
-post-commit and repeated quality-gate overhead remains pending.
+`HISTORICAL_CHECKPOINT_STATE` — post-commit and repeated quality-gate overhead
+remained pending at this checkpoint.
 
 Checkpoint B overhead record:
 
@@ -251,7 +390,10 @@ SERIAL_WALL_CLOCK`
 
 - Serial routing and ownership stability: no errors or collisions observed.
 - Serial baseline/branch stability: no drift observed.
-- Checkpoint A exact-head local and remote Quality and Frontend Quality Gates passed at cf5e727523425bcee180970ea5ec5a2305e23f50. Checkpoint B correction-head validation and repeated remote gates remain pending.
+- Checkpoint A exact-head local and remote Quality and Frontend Quality Gates
+  passed at `cf5e727523425bcee180970ea5ec5a2305e23f50`. Source recovery Quality and
+  Frontend Quality Gates passed at
+  `b09e3d20619d3a3f04e1dd6a13d9846cf731f6c5`.
 - No production code or test source is in writable scope.
 
 - `SAFETY_RESULT: PASS_WITH_CONSTRAINTS` — routing identity was preserved;
@@ -263,7 +405,10 @@ SERIAL_WALL_CLOCK`
   wall clock regressed; equivalence was weak; orchestration/evidence overhead
   was material; and small evidence-only tasks are unsuitable for this model.
 
-## 12. Reviewer findings
+## 12. Historical reviewer findings
+
+This section preserves `HISTORICAL_CHECKPOINT_STATE` review outcomes and their
+then-pending dispositions.
 
 Serial Reviewer result:
 
@@ -417,7 +562,12 @@ Controlled-stop recovery record:
   not controlled performance evidence.
 - Preparation evidence is not final acceptance.
 
-## 15. Evidence Debt
+## 15. Historical checkpoint Evidence Debt
+
+The pending items in this section are `HISTORICAL_CHECKPOINT_STATE` records
+preserved for chronology. They were resolved by the authoritative durable
+terminal state above unless the item explicitly describes future evidence or
+automation.
 
 - Checkpoint A evidence and remote gates converged at authorized head
   `cf5e727523425bcee180970ea5ec5a2305e23f50`; overall close confirmation
@@ -478,7 +628,10 @@ reversion of the documentation-only candidate must follow Human-authorized Git
 workflow. No production rollback is required because production and test code
 are outside scope.
 
-## 18. Next gate
+## 18. Historical checkpoint next gate
+
+The following is `HISTORICAL_CHECKPOINT_STATE`, preserved to show the gate that
+preceded terminal close:
 
 - Expected result after successful correction delivery: `READY_TO_CLOSE`
 - Next gate: Human S5-TEST-006 Close Confirmation
@@ -487,11 +640,15 @@ are outside scope.
   Quality Gates; no Reviewer recall
 - Current delivery state: Draft PR #57 is open, Draft and unmerged at the
   authorized Checkpoint A head; Checkpoint B correction is not yet delivered
-- Session closed: no
+- Session closed: no at this historical checkpoint
 - S5-PLAN-002, S5-REL-018 and S5-TEST-005 reopening: prohibited
 - Pilot generalization: not granted
 
-## Validation record
+## Historical validation record
+
+This validation record is `HISTORICAL_CHECKPOINT_STATE`; its pending statements
+describe the pre-recovery snapshots and do not override the authoritative
+durable terminal state or source recovery CI above.
 
 Overall isolated snapshot state: `PASS` for immutable digest
 `9e2000e90f7a7c055f9d6dabab277ac1d3ede134ff829415eab7af45fcd159b7`.
