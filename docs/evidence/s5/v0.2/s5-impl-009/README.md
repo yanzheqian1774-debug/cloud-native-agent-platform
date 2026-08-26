@@ -11,7 +11,7 @@
 | Branch | `codex/s5-impl-009-authoring-backend-shared-view-dto` |
 | C1 correction branch | `codex/s5-impl-009-c1-approval-replay-exactness` |
 | Final exact head | Recorded by the Draft PR exact-head gate; this in-commit artifact cannot self-reference its own Git object ID |
-| C1 correction commit | Recorded after correction validation and before delivery |
+| C1 correction commit | `9f8e6549a4cb18a5029f11e515bd33dccdf7410c` |
 | Classification | `INTERNAL / VERSION_UNFROZEN / NOT_A_PUBLIC_CONTRACT` |
 
 PR #59 was verified merged at the authorized baseline. Fresh `origin/main`, the
