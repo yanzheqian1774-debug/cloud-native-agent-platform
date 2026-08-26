@@ -1,0 +1,204 @@
+"""Immutable shared execution truth for internal Product/Technical views."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from enum import StrEnum
+from typing import Any
+
+from agent_core.representation.v0_2 import PlatformExecutionIdentity
+
+
+class ViewProjectionError(ValueError):
+    """Stable failure for malformed or unsupported projection evidence."""
+
+
+class AuthorizationDecision(StrEnum):
+    ALLOW = "ALLOW"
+    DENY = "DENY"
+
+
+class OutcomeStatus(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeSupport:
+    runtime: str
+    classification: str
+    availability: str
+    support: str
+
+
+NATIVE_SUPPORT = RuntimeSupport(
+    "NATIVE",
+    "COMPONENT_TESTED_CANDIDATE / PRIMARY_GOLDEN_PATH_CANDIDATE",
+    "AVAILABLE_FOR_BOUNDED_DEMO",
+    "NOT_CERTIFIED",
+)
+OPENCLAW_SUPPORT = RuntimeSupport(
+    "OPENCLAW",
+    "EXACT_VERSION_CANDIDATE",
+    "CURRENTLY_UNAVAILABLE_WITHOUT_LIVE_MANAGED_PROFILE_EVIDENCE",
+    "SUPPORT_NOT_GRANTED",
+)
+HERMES_SUPPORT = RuntimeSupport(
+    "HERMES",
+    "EXPERIMENTAL / NOT_CURRENTLY_CERTIFIABLE",
+    "UNAVAILABLE",
+    "SUPPORT_NOT_GRANTED",
+)
+RUNTIME_SUPPORT = {
+    item.runtime: item for item in (NATIVE_SUPPORT, OPENCLAW_SUPPORT, HERMES_SUPPORT)
+}
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeCitation:
+    collection_id: str
+    asset_id: str
+    revision_id: str
+    evidence_id: str
+    message_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class SharedExecutionView:
+    """Single source from which both views are projected; never reconstructed."""
+
+    platform_execution_identity: PlatformExecutionIdentity
+    definition_id: str
+    definition_revision: str
+    instance_id: str
+    task_id: str
+    workflow_id: str
+    digital_employee_name_key: str
+    role_title_key: str
+    role_description_key: str
+    responsibility_keys: tuple[str, ...]
+    allowed_activity_keys: tuple[str, ...]
+    prohibited_activity_keys: tuple[str, ...]
+    suggested_team_ids: tuple[str, ...]
+    instance_count: int
+    work_plan_keys: tuple[str, ...]
+    business_progress_code: str
+    approval_state: str
+    requested_runtime: str
+    effective_runtime: str | None
+    provider_native_correlation_id: str | None
+    capability_decision: AuthorizationDecision
+    capability_reason_code: str
+    provider_call_count: int
+    outcome_status: OutcomeStatus
+    outcome_summary_key: str
+    citations: tuple[KnowledgeCitation, ...]
+    limitation_codes: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        required = (
+            self.definition_id,
+            self.definition_revision,
+            self.instance_id,
+            self.task_id,
+            self.workflow_id,
+            self.digital_employee_name_key,
+            self.role_title_key,
+            self.role_description_key,
+            self.business_progress_code,
+            self.approval_state,
+            self.requested_runtime,
+            self.capability_reason_code,
+            self.outcome_summary_key,
+        )
+        if not isinstance(self.platform_execution_identity, PlatformExecutionIdentity):
+            raise ViewProjectionError("PLATFORM_EXECUTION_IDENTITY_REQUIRED")
+        if not all(isinstance(value, str) and value.strip() for value in required):
+            raise ViewProjectionError("MALFORMED_PROJECTION_EVIDENCE")
+        if self.instance_count < 0 or self.provider_call_count < 0:
+            raise ViewProjectionError("INVALID_COUNT")
+        if self.requested_runtime not in RUNTIME_SUPPORT:
+            raise ViewProjectionError("UNSUPPORTED_REQUESTED_RUNTIME")
+        if (
+            self.effective_runtime is not None
+            and self.effective_runtime not in RUNTIME_SUPPORT
+        ):
+            raise ViewProjectionError("UNSUPPORTED_EFFECTIVE_RUNTIME")
+        if self.effective_runtime is not None and (
+            RUNTIME_SUPPORT[self.effective_runtime].support == "SUPPORT_NOT_GRANTED"
+        ):
+            raise ViewProjectionError("UNSUPPORTED_RUNTIME_EVIDENCE")
+        if self.capability_decision == AuthorizationDecision.DENY and (
+            self.provider_call_count != 0 or self.citations
+        ):
+            raise ViewProjectionError("DENY_REQUIRES_ZERO_PROVIDER_EFFECTS")
+        if (
+            self.capability_decision == AuthorizationDecision.ALLOW
+            and not self.citations
+        ):
+            raise ViewProjectionError("ALLOW_REQUIRES_SYNTHETIC_CITATIONS")
+        if len(self.citations) > 32 or len(self.work_plan_keys) > 32:
+            raise ViewProjectionError("PROJECTION_LIMIT_EXCEEDED")
+        if len({item.evidence_id for item in self.citations}) != len(self.citations):
+            raise ViewProjectionError("AMBIGUOUS_CITATION_EVIDENCE")
+
+
+def product_view(source: SharedExecutionView) -> dict[str, Any]:
+    """Project locale-neutral business semantics from the shared source."""
+    return {
+        "platformExecutionIdentity": source.platform_execution_identity.value,
+        "definitionId": source.definition_id,
+        "definitionRevision": source.definition_revision,
+        "digitalEmployeeNameKey": source.digital_employee_name_key,
+        "roleTitleKey": source.role_title_key,
+        "roleDescriptionKey": source.role_description_key,
+        "responsibilityKeys": list(source.responsibility_keys),
+        "allowedActivityKeys": list(source.allowed_activity_keys),
+        "prohibitedActivityKeys": list(source.prohibited_activity_keys),
+        "suggestedTeamIds": list(source.suggested_team_ids),
+        "instanceCount": source.instance_count,
+        "workPlanKeys": list(source.work_plan_keys),
+        "businessProgressCode": source.business_progress_code,
+        "approvalState": source.approval_state,
+        "outcomeStatus": source.outcome_status.value,
+        "outcomeSummaryKey": source.outcome_summary_key,
+        "citations": [asdict(item) for item in source.citations],
+    }
+
+
+def technical_view(source: SharedExecutionView) -> dict[str, Any]:
+    """Project technical evidence without promoting native IDs to authority."""
+    requested = RUNTIME_SUPPORT[source.requested_runtime]
+    effective = (
+        RUNTIME_SUPPORT[source.effective_runtime]
+        if source.effective_runtime is not None
+        else None
+    )
+    return {
+        "platformExecutionIdentity": source.platform_execution_identity.value,
+        "definition": {
+            "id": source.definition_id,
+            "revision": source.definition_revision,
+        },
+        "instanceId": source.instance_id,
+        "taskId": source.task_id,
+        "workflowId": source.workflow_id,
+        "requestedRuntime": asdict(requested),
+        "effectiveRuntime": asdict(effective) if effective else None,
+        "providerNativeCorrelation": {
+            "id": source.provider_native_correlation_id,
+            "authority": "CORRELATION_ONLY",
+        },
+        "capability": {
+            "decision": source.capability_decision.value,
+            "reasonCode": source.capability_reason_code,
+            "providerCallCount": source.provider_call_count,
+        },
+        "outcome": {
+            "status": source.outcome_status.value,
+            "summaryMessageKey": source.outcome_summary_key,
+        },
+        "knowledgeEvidence": [asdict(item) for item in source.citations],
+        "limitationCodes": list(source.limitation_codes),
+    }

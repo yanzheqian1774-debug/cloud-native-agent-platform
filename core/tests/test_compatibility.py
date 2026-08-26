@@ -40,9 +40,14 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "gateway/src/agent_gateway/capability/models.py",
         "gateway/tests/test_capability_gateway.py",
     }
+    authorized_console_imports = {
+        "console/backend/src/agent_console/shared_views.py",
+        "console/backend/tests/test_shared_views.py",
+    }
 
     assert discovered_imports == {
         *authorized_gateway_imports,
+        *authorized_console_imports,
         "operator/src/agent_operator/compatibility_interpreter/interpreter.py",
         "operator/src/agent_operator/execution_coordinator.py",
         "operator/src/agent_operator/identity_adapter.py",
@@ -53,3 +58,6 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
     assert {
         path for path in discovered_imports if path.startswith("gateway/")
     } == authorized_gateway_imports
+    assert {
+        path for path in discovered_imports if path.startswith("console/")
+    } == authorized_console_imports
