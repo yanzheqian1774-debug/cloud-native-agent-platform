@@ -7,20 +7,23 @@
 | Session | `S5-ARCH-009` |
 | Type / track | `ARCH` / `D — PRODUCT_AND_TECHNICAL_VIEWS` |
 | Version | `v0.2 CONNECT — Digital Employee Technical Preview` |
-| Lifecycle | `REVIEW` |
+| Lifecycle | `CLOSING` |
 | Status | `PASS_WITH_CONSTRAINTS` |
-| Checkpoint | `A — PRODUCT_TECHNICAL_GRAPH_PROJECTION_SCOPE_CANDIDATE` |
-| Result | `GRAPH_PROJECTION_SCOPE_CANDIDATE` |
+| Checkpoint | `B — GRAPH_PROJECTION_DECISION_CONVERGENCE_AND_EXIT` |
+| Result | `READY_TO_CLOSE` |
 | Authorized baseline | `9d057598bdaf233efc682430d0d6ea7579591ea8` |
-| Graph Projection | `ARCHITECTURE_CANDIDATE / INTERNAL / UNFROZEN / NOT_IMPLEMENTED` |
+| Checkpoint A head | `1a020927aa7c357b04a7127c864a31e27b4ba8b1` |
+| Source PR | `#61 / OPEN / DRAFT / UNMERGED` |
+| Human review | `PASS_WITH_CONSTRAINTS` |
+| Graph Projection | `ARCHITECTURE_COMPLETE / INTERNAL / UNFROZEN / NOT_IMPLEMENTED` |
 | Product View / Technical View | `NOT_STARTED / NOT_STARTED` |
 | Session closed | `NO` |
-| Next action | `WAIT_FOR_HUMAN_S5_ARCH_009_GRAPH_PROJECTION_SCOPE_REVIEW_GATE` |
+| Next action | `WAIT_FOR_HUMAN_S5_ARCH_009_CLOSE_CONFIRMATION` |
 
 This candidate defines a replaceable internal projection boundary. It changes
 no production execution, public API, CRD, schema, frozen Contract, dependency,
 Task/Workflow semantics, Runtime support, or source-of-truth ownership. Human
-acceptance is required before implementation.
+Close Confirmation is required before Session closure or implementation.
 
 ## 2. Preflight, scope, and source review
 
@@ -29,6 +32,14 @@ and local `HEAD` plus refreshed `origin/main` at the authorized baseline. The
 branch was not attached elsewhere, no remote branch or open PR owned this
 Session, no open PR competed for the two authorized architecture paths, and
 the writable scope resolved to this artifact plus `architecture/s5/v0.2/README.md`.
+
+Checkpoint B reused that exact task, branch, worktree, and Draft PR #61.
+Before correction, local, remote, and PR heads all equalled Checkpoint A head
+`1a020927aa7c357b04a7127c864a31e27b4ba8b1`; refreshed `origin/main` still
+equalled the authorized baseline; the PR was `OPEN / DRAFT / CLEAN / MERGEABLE
+/ UNMERGED`; worktree and index were clean; the baseline diff contained
+exactly the same two authorized paths; and no competing open PR, branch, or
+worktree owned the Session or paths.
 
 Read-only review covered the integrated Authoring Backend, immutable
 `SharedExecutionView`, its Product/Technical projection functions and tests;
@@ -166,13 +177,19 @@ Declared cardinality travels with the relation semantic or its source
 contract. Observing one node at runtime never narrows `ONE_TO_MANY` to
 `ONE_TO_ONE`.
 
+The model explicitly does **not** assume one Task has one Agent, one Instance
+handles one Task, one Task has one upstream dependency, one Evidence item
+belongs to one Task, or one Runtime Realization corresponds to one Platform
+Instance. Those cases are covered by assignment multiplicity, `MANY_TO_ONE`,
+fan-in, `MANY_TO_MANY`, and future Instance/Realization `N:M` respectively.
+
 ## 7. GP06–GP07 — deterministic edge aggregation
 
 Relations may share one visual edge only when this tuple is equal:
 
 `(source_node_id, target_node_id, direction, projection_context,
-tenant_or_security_domain, path_class, temporal_class, blocking_class,
-authorization_class)`.
+tenant_or_security_domain, execution_or_historical_context, path_class,
+blocking_class, authorization_class, evidence_authority_class)`.
 
 Within an eligible group:
 
@@ -195,6 +212,8 @@ Relations MUST NOT merge across direction; tenant/security domain; success and
 failure paths; normal and compensation paths; current execution and historical
 reference; blocking and informational semantics; or contradictory
 authorization state. Missing classification fails closed to separate edges.
+Relations with materially different evidence authority also MUST NOT merge,
+even when their Evidence IDs happen to be equal.
 
 ## 8. GP08 — grouping and expansion
 
@@ -219,6 +238,13 @@ then group-kind rank, then group ID. The projection MUST expose member count,
 hidden edge count, phase summary including UNKNOWN, all limitation codes, and
 an evidence union. Expansion restores raw members and recomputes only affected
 visual edges without changing canonical node/relation IDs.
+
+The numeric thresholds are `IMPLEMENTATION_CONFIGURATION_CANDIDATES`, not
+frozen Contract values. Product defaults to the strongest permitted collapse
+needed to remain within both budgets. Technical defaults to one less-dense
+level (expand the highest-priority Product group) when that remains within the
+same budgets; otherwise it retains grouping and exposes raw membership through
+detail expansion. Neither policy changes the canonical graph.
 
 ## 9. GP09–GP10 — projection policies
 
@@ -288,6 +314,20 @@ bounded component-tested candidate and not certified; OpenClaw support is not
 granted without live exact-profile evidence; Hermes remains experimental and
 not currently certifiable.
 
+Runtime scope is exact:
+
+| Capability | v0.2 state |
+| --- | --- |
+| Native multi-instance support | `NOT_GRANTED` |
+| OpenClaw multi-instance support | `NOT_GRANTED` |
+| Hermes multi-instance support | `NOT_GRANTED` |
+| Runtime Pool | `NOT_IMPLEMENTED` |
+| autoscaling | `NOT_IMPLEMENTED` |
+| Runtime Realization cardinality | `FUTURE_MODEL_EXTENSIBILITY_ONLY` |
+
+No `N:M` relation or Runtime grouping fixture may be presented as current
+product availability, lifecycle behavior, scheduling, or support.
+
 Capability and Knowledge relations preserve authorization-before-invocation or
 retrieval. `DENY` requires zero Provider calls and no produced citations.
 Citations reference exact Evidence IDs. Knowledge nodes are deterministic
@@ -303,6 +343,45 @@ projection policy, not a public compatibility promise. No public Graph API,
 CRD, schema, Contract, persistence representation, library choice, or freeze
 is granted. Any public exposure, production persistence, execution behavior
 change, or competing relationship authority requires a new Human G2 decision.
+
+### 12.1 GP01–GP16 Human convergence ledger
+
+Each row is binding for the internal v0.2 candidate. “Deferred” content is not
+authorized by this decision.
+
+| GP | Decision and rationale | Accepted constraints | v0.2 requirement | Deferred scope | Implementation consequence | Test/fixture consequence | Human disposition |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GP01 | One canonical read-only graph is the sole relationship authority so views cannot diverge. | Upstream facts retain authority; no persistence or execution writes. | One builder result feeds both projections. | Public/persistent graph. | Provide one pure construction boundary; prohibit view-local discovery. | Cross-view raw relationship-ID equality. | `ACCEPTED` |
+| GP02 | Separate plan, execution dependency, assignment, data/evidence, approval/decision, and visual layers because only execution ordering requires acyclicity. | Execution dependencies form a DAG; cycles elsewhere do not invalidate it. | Validate the dependency subgraph independently. | General process engine or workflow semantic change. | Layer-tag every relation and run scoped DAG validation. | Accept evidence/reference cycles; reject execution dependency cycles. | `ACCEPTED_WITH_CONSTRAINTS` |
+| GP03 | Use the minimum typed Node value in Section 5 to preserve identity, state, evidence, and limitations. | Internal, bounded, secret-safe, domain-separated; dispositions remain as classified. | Required node types appear only when supported by source evidence. | Public node schema and new lifecycle resources. | Immutable internal Node model. | Required/optional presence, malformed values, ordering, UNKNOWN. | `ACCEPTED_FOR_INTERNAL_V0_2_CANDIDATE` |
+| GP04 | Use the minimum typed Relation value in Section 6 so raw semantics survive presentation. | Direction, cardinality, state, evidence, priority, aggregation, and visibility are explicit. | Preserve every raw relation. | Public relation contract/storage representation. | Immutable internal Relation model with stable enum handling. | Direction, visibility, evidence, and unsupported-type failure tests. | `ACCEPTED_FOR_INTERNAL_V0_2_CANDIDATE` |
+| GP05 | Support all four semantic cardinalities because observed counts do not define domain multiplicity. | Never infer narrower cardinality from one snapshot. | `ONE_TO_ONE`, `ONE_TO_MANY`, `MANY_TO_ONE`, `MANY_TO_MANY`. | Runtime lifecycle realization of future multiplicities. | Cardinality is construction input/declared metadata. | Fixtures 2–5 and anti-assumption assertions. | `ACCEPTED` |
+| GP06 | Aggregate eligible same-pair relations deterministically to reduce visual noise without losing meaning. | GP06 key includes projection/security/temporal/path/authority context; raw relations and evidence remain expandable. | Primary label, ordered badges, `+N`, stable group ID. | UI interaction design and frozen label counts. | Pure aggregation after security filtering. | Reversed-input byte equality and fixture 6 exact membership. | `ACCEPTED_WITH_CONSTRAINTS` |
+| GP07 | Keep safety-significant relations separate because visual merging could misstate control or history. | All Section 7 discriminators, including materially different evidence authority, fail closed to separate edges. | No unsafe cross-boundary merge. | Policy-driven semantic equivalence beyond the accepted key. | Validate discriminator completeness before aggregation. | Fixtures 6/7/9 plus one case per non-mergeable discriminator. | `ACCEPTED` |
+| GP08 | Deterministically group bounded complexity while preserving complete drill-down evidence. | Thresholds are implementation configuration candidates; Product is denser than Technical where budgets allow. | Seven group kinds, 50-node/32-edge candidate budgets, stable expansion. | Production scale tuning and Runtime Pool implementation. | Pure view grouping over canonical members. | Fixture 11 collapsed/expanded counts and evidence union. | `ACCEPTED_FOR_BOUNDED_V0_2_VIEW` |
+| GP09 | Product projection emphasizes business intent, work, responsibility, progress, Outcome, citations, and approvals. | Technical/native/diagnostic detail hidden by default, never contradicted or deleted. | Product filter/group policy over the canonical graph. | Final Product UI/UX and authoring. | No Product-local graph builder. | Product counts and shared-value equality in all fixtures. | `ACCEPTED` |
+| GP10 | Technical projection exposes identities, runtime, authorization, calls, Outcome, evidence, and limitations. | One visual edge per eligible group with raw expansion. | Technical filter/group policy over the same graph. | Final Technical UI and observability product. | No Technical-local graph builder. | Technical counts, aggregation membership, and drill-down equality. | `ACCEPTED` |
+| GP11 | Deterministic domain-separated projection IDs preserve reproducibility without competing with Platform identity. | Platform Execution Identity authoritative; native IDs correlation-only; canonical normalized ordering. | Byte-equivalent output for identical normalized input/policy. | Public ID compatibility guarantee. | Versioned SHA-256 ID construction as candidate algorithm. | Input permutation, domain collision, native-ID substitution rejection. | `ACCEPTED` |
+| GP12 | Separate authored topology, approved revision, execution snapshot, current state, and history to prevent retroactive rewrite. | Running/historical execution retains exact immutable approved revision. | Explicit revision reference on execution context. | Plan persistence/version API. | Builder consumes revision identity; never derives “latest.” | Later approval cannot change prior execution linkage. | `ACCEPTED` |
+| GP13 | Preserve eight explicit states because ambiguity and control outcomes are not binary. | UNKNOWN never maps to success/failure; skipped differs from failed/blocked/denied. | Versioned upstream-state mapping. | Universal public Outcome/Status contract. | Fail closed on unmapped state or emit UNKNOWN with limitation where authorized. | Fixtures 7, 9, and 10 exact state assertions. | `ACCEPTED` |
+| GP14 | Model future Definition `1:N` Instance, Instance `N:M` Realization, and Realization `1:N` Execution without claiming support. | Native/OpenClaw/Hermes multi-instance not granted; Runtime Pool/autoscaling not implemented. | Cardinality metadata only. | Multi-instance lifecycle, Runtime Pool, autoscaling, scheduling. | No Runtime behavior or resource changes. | Future-shape fixture only; support-claim audit must remain negative. | `ACCEPTED_AS_FUTURE_EXTENSIBILITY_ONLY` |
+| GP15 | Preserve authorization-first Capability/Knowledge evidence so a view cannot invent effects or citations. | DENY means zero calls/citations; Knowledge synthetic only; Evidence IDs exact. | Synthetic nodes and citation linkage when evidence exists. | Production Knowledge, RAG, governance, Provider certification. | Consume existing evidence; perform no retrieval/invocation. | Fixture 5 N:N evidence and fixture 7 DENY-zero-call rejection cases. | `ACCEPTED_WITH_SYNTHETIC_V0_2_BOUNDARY` |
+| GP16 | Keep Graph Projection versioned, internal, unfrozen, and replaceable because implementation/public compatibility is unproven. | No API, CRD, schema, Contract freeze, persistence, or library grant. | Candidate policy version is explicit. | Any public or frozen surface. | Implementation stays behind an internal boundary and separate gate. | Compatibility tests are internal only; public-surface audit remains empty. | `ACCEPTED` |
+
+### 12.2 Mandatory architecture and cardinality invariants
+
+The Human review confirms as non-negotiable: one canonical relationship
+authority; Product and Technical views as projections rather than builders;
+execution dependency DAG validation independent of the general directed
+relation graph; cycle tolerance outside that DAG; read-only projection;
+distinct plan topology, approved revision, execution snapshot, current state,
+and history; immutable approved-plan linkage for running executions; unchanged
+Platform Execution Identity authority; graph/node/relation/group IDs that
+cannot act as execution identities; correlation-only native/Provider IDs; and
+explicit UNKNOWN without success/failure coercion.
+
+All four cardinalities are required. The five forbidden one-to-one assumptions
+listed in Section 6 are test obligations, not merely documentation guidance.
 
 ## 13. Deterministic visual fixtures
 
@@ -328,11 +407,62 @@ projection security filter and before detail expansion.
 | 11 | Definition with 12 Instances and assignments; `N13/R24` | one default Instance group; `E2` summary edges; `P2/1`, `T2/2`; expansion restores `N13/R24/E24` | Definition `ONE_TO_MANY`; group exposes count 12 and union of all 12 evidence IDs |
 | 12 | Same canonical serial graph as #1 | same snapshot ID; Product `P7/6`, Technical `T8/10`; every shared identity/state/evidence value equal | omissions only; no view-local relation creation; stable byte-equivalent output |
 
+### 13.1 Fixture completeness review
+
+Relation notation is `source-TYPE->target`; indexed expressions expand in
+ascending numeric order and therefore define every raw member. `ev-*` values
+are exact fixture Evidence IDs. After ID construction, every fixture applies
+the common stable ordering stated above; expected sequences are the ascending
+tuples produced by that rule, not input order.
+
+| # | Exact raw nodes | Exact raw relations | Evidence linkage and rejection expectation |
+| --- | --- | --- | --- |
+| 1 | `problem,plan,workflow,A,B,C,definition,instance,runtime,outcome` | `problem-DECOMPOSES_TO->plan`; `workflow-CONTAINS->{A,B,C}`; `B-DEPENDS_ON->A`; `C-DEPENDS_ON->B`; `{A,B,C}-ASSIGNED_TO->definition`; `definition-CONTAINS->instance`; `instance-EXECUTED_BY->runtime`; `C-PRODUCES->outcome` = 12 | `ev-plan`, `ev-dep-ab`, `ev-dep-bc`, `ev-outcome`; accept; Product/Technical counts and order as row 1 |
+| 2 | `workflow,A,B,C,D,definition,instance,outcome` | `workflow-CONTAINS->{A,B,C,D}`; `{B,C}-DEPENDS_ON->A`; `D-DEPENDS_ON->{B,C}`; `{A,D}-ASSIGNED_TO->instance`; `D-PRODUCES->outcome` = 10 | one `ev-dep-*` per DAG edge; accept topological tie-break `B,C`; adding `A-DEPENDS_ON->D` rejects `EXECUTION_DEPENDENCY_CYCLE` without rejecting unrelated relation cycles |
+| 3 | `definition,I1,I2,I3,runtime` | `definition-CONTAINS->{I1,I2,I3}`; `{I1,I2,I3}-REFERENCES->definition`; `I1-EXECUTED_BY->runtime` = 7 | `ev-select-i1..i3`; declared `ONE_TO_MANY`; accept and retain all Instance identities |
+| 4 | `T1,T2,T3,I1` | `{T1,T2,T3}-ASSIGNED_TO->I1` = 3 | `ev-assignment-t1..t3`; `MANY_TO_ONE`; accept; duplicate relation ID rejects |
+| 5 | `T1,T2,C1,C2,K1,K2` | `{T1,T2}-REQUESTS->{C1,C2}` and `{T1,T2}-REFERENCES->{K1,K2}` = 8 | `ev-cap-t1-c1..t2-c2`, `ev-knowledge-t1-k1..t2-k2`; `MANY_TO_MANY`; missing citation Evidence ID rejects malformed evidence |
+| 6 | `A,B` | `A-DEPENDS_ON->B`; `A-DATA_FLOW->B`; `A-TRIGGERS->B` = 3 | `ev-dependency`, `ev-data`, `ev-trigger`; accept as one edge only when the complete GP06 key matches; differing direction/security/history/evidence authority must yield separate edges |
+| 7 | `task,capability,approval,outcome` | `task-REQUESTS->capability`; `capability-AUTHORIZED_BY->approval`; `approval-BLOCKS->task`; `task-PRODUCES->outcome` = 4 | `ev-deny`; `DENY`, calls `0`, citations `0`; any call or citation rejects `DENY_REQUIRES_ZERO_PROVIDER_EFFECTS` |
+| 8 | `plan,approval,task` | `plan-REQUESTS->approval`; `task-BLOCKS->approval`; `plan-APPROVED_BY->approval` = 3 | `ev-actor`, `ev-decided-at`, `ev-plan-revision`; accept exact immutable approval replay; contradictory authorization state does not merge and conflicting replay rejects |
+| 9 | `A,B,workflow,outcome` | `workflow-CONTAINS->{A,B}`; `B-DEPENDS_ON->A`; `A-BLOCKS->B`; `A-PRODUCES->outcome` = 4 | `ev-failure-a`, `ev-skip-b`; accept `A=FAILED`, `B=SKIPPED`; reject any projection that maps B to FAILED or merges blocking with informational semantics |
+| 10 | `task,runtime,outcome` | `task-EXECUTED_BY->runtime`; `task-PRODUCES->outcome` = 2 | `ev-ambiguous-effect`; accept `UNKNOWN`; reject success/failure coercion or retry-safe inference |
+| 11 | `definition,I01..I12` | `definition-CONTAINS->{I01..I12}` and `{I01..I12}-REFERENCES->definition` = 24 | `ev-instance-01..12`; accept one default group and exact evidence union; expansion order `I01..I12`; missing member evidence is preserved as a limitation, never silently dropped |
+| 12 | exactly fixture 1 canonical nodes | exactly fixture 1 canonical relations and IDs | same `ev-*`, snapshot ID, Platform Execution Identity, and raw relationship IDs; reject either view creating, reversing, or changing a shared relation |
+
+For every row, the raw and aggregated counts, Product/Technical visible
+node/edge counts, cardinality, and aggregation outcome are those in the main
+fixture table. The two tables form one fixture contract. Component tests MUST
+assert both tables, the expanded indexed members, exact Evidence-ID unions,
+permutation-stable ordering, and each stated rejection.
+
 Fixture implementations MUST name every node and raw relation explicitly,
 assert the counts above, assert the exact sorted ID sequences, test reversed
 input order, and test at least one non-mergeable discriminator for fixtures 6,
 7, and 9. Counts are architecture acceptance data, not production fixtures in
 this documentation-only Session.
+
+### 13.2 Final Product/Technical mapping
+
+| Canonical node/relation | Product visibility | Product aggregation | Technical visibility | Technical aggregation | Drill-down evidence | Hidden by default in Product |
+| --- | --- | --- | --- | --- | --- | --- |
+| Business Problem / `DECOMPOSES_TO` Plan | visible | business plan summary | visible when trace requested | raw or same eligible edge group | approved plan revision and relation IDs | authoring internals |
+| Plan / `CONTAINS` Workflow/Task | Plan and business steps visible | repeated step/parallel groups | Plan revision, Workflow, and Tasks visible | branch and repeated-Task groups as needed | topology source, revision, raw relation IDs | Kubernetes UID and raw spec |
+| Task / `DEPENDS_ON`, `TRIGGERS`, `DATA_FLOW` Task | business sequence/progress visible | eligible same-pair semantics aggregate | all semantics visible | one eligible edge plus raw expansion | dependency/data/trigger relation IDs and Evidence IDs | retry/replay and raw diagnostics |
+| Task / `ASSIGNED_TO` Definition or Instance | responsible role and Instance count | role/Instance group | Definition and Instance identities visible | repeated assignment group only at thresholds | selection/assignment evidence and cardinality | Instance ID unless explicitly authorized detail |
+| Definition / `CONTAINS` Instance | role plus count | Instance group | Definition and every Instance/group visible | bounded Instance group with expansion | exact Definition/Instance IDs and relation IDs | raw logical Instance identity |
+| Instance / `EXECUTED_BY` Runtime Realization | execution-environment availability only | Runtime details omitted | requested/effective Runtime and realization visible | Runtime pool group is presentation-only | Platform Execution Identity, binding evidence, correlation IDs | Runtime Binding, Kubernetes UID, Provider-native ID |
+| Task / `REQUESTS`, `AUTHORIZED_BY` Capability | permitted/denied business state | Capability group when dense | decision, reason, request, and Provider-call evidence visible | eligible Capability group | decision and call Evidence IDs | raw request arguments and diagnostics |
+| Task / `REFERENCES` Knowledge | Citation visible when authorized | Evidence group | synthetic Collection/Asset/Revision/Evidence visible | Evidence group with raw expansion | exact citation and Evidence IDs | raw retrieval diagnostics; no production RAG claim |
+| Plan/Task / `APPROVED_BY`, `BLOCKS` Approval | Human gate/state visible | repeated approvals only when threshold met | actor/reference/revision/reason evidence visible as authorized | blocking edges never merge with informational edges | immutable approval evidence | security-sensitive actor detail where policy hides it |
+| Task/Workflow / `PRODUCES` Outcome | Outcome summary and explicit state | Outcome summary group only when homogeneous | domain Outcome, reason, UNKNOWN, and limitations visible | raw terminal/ambiguous relations | Outcome Evidence IDs and limitation codes | raw diagnostic evidence |
+| Any `COMPENSATES` or historical `REFERENCES` | visible only as business-relevant exception/history | never normal-path merged | visible with temporal/path classification | separate edge group | raw relation, temporal context, evidence authority | historical/native detail |
+
+Both projections carry the same `graph_snapshot_id` and unchanged Platform
+Execution Identity when execution-scoped. Every displayed or grouped edge
+retains its canonical `aggregation_id` and ordered raw `relation_id` members,
+so a Product edge can be traced to the identical Technical raw relationships.
+Filtering may omit a node or edge but cannot allocate a replacement identity.
 
 ## 14. Acceptance proof and contradiction audit
 
@@ -374,13 +504,25 @@ derives relationships from those sources and fails closed on conflict.
 
 ## 16. Implementation handoff, rollback, and gate
 
-A separately authorized implementation may introduce a pure internal graph
-model/builder and deterministic fixtures, then adapt the existing shared DTO as
-one input. It must preserve upstream authority, import direction, Controller
-behavior, public wire shapes, Runtime/Capability/Knowledge constraints, and
-the exact projection equality rules here. Public transport/UI exposure,
-persistence, schema, dependencies, and production integration require their
-own scopes and gates.
+A separately authorized bounded downstream internal implementation slice owns:
+
+- the internal Graph Projection model;
+- deterministic node and raw-relation construction;
+- isolated execution-dependency DAG validation;
+- general directed relation graph handling;
+- deterministic edge aggregation and grouping;
+- Product and Technical projection policies;
+- all twelve deterministic fixtures; and
+- pure component tests, including rejection and permutation cases.
+
+It may adapt the existing shared DTO as one input. It must preserve upstream
+authority, import direction, Controller behavior, public wire shapes,
+Runtime/Capability/Knowledge constraints, and the exact projection equality
+rules here. It does **not** own final Product View UI, final Technical View UI,
+drag/drop authoring, Runtime multi-instance lifecycle, execution scheduling,
+public schema, production Knowledge, persistence, or dependency selection.
+Those require separately authorized scopes and gates. This Session allocates
+no downstream Session ID and activates no implementation.
 
 Rollback for this architecture Session is removal of this artifact and its one
 index entry. There is no data migration, execution rollback, dependency
@@ -389,15 +531,16 @@ cleanup, or public compatibility action.
 ```text
 SESSION: S5-ARCH-009
 CODEX_TASK_NAME: [S5-ARCH-009] Product and Technical Graph Projection Scope Gate
-LIFECYCLE: REVIEW
+LIFECYCLE: CLOSING
 STATUS: PASS_WITH_CONSTRAINTS
-CHECKPOINT: A — PRODUCT_TECHNICAL_GRAPH_PROJECTION_SCOPE_CANDIDATE
-RESULT: GRAPH_PROJECTION_SCOPE_CANDIDATE
-CURRENT_STEP: 1_OF_4
-GRAPH_PROJECTION: ARCHITECTURE_CANDIDATE / INTERNAL / UNFROZEN / NOT_IMPLEMENTED
+CHECKPOINT: B — GRAPH_PROJECTION_DECISION_CONVERGENCE_AND_EXIT
+RESULT: READY_TO_CLOSE
+CURRENT_STEP: 2_OF_4
+GRAPH_PROJECTION: ARCHITECTURE_COMPLETE / INTERNAL / UNFROZEN / NOT_IMPLEMENTED
 PRODUCT_VIEW: NOT_STARTED
 TECHNICAL_VIEW: NOT_STARTED
+PR_STATE: OPEN / DRAFT / CLEAN / UNMERGED
 SESSION_CLOSED: NO
-NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_GRAPH_PROJECTION_SCOPE_REVIEW_GATE
-NEXT_GATE: Human S5-ARCH-009 Graph Projection Scope Review Gate
+NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_CLOSE_CONFIRMATION
+NEXT_GATE: Human S5-ARCH-009 Close Confirmation
 ```
