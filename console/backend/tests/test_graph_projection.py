@@ -12,6 +12,7 @@ from agent_console.graph_projection import (
     NodeType,
     PathClass,
     Phase,
+    ProjectionEffects,
     ProjectionVisibility,
     RelationSpec,
     RelationType,
@@ -20,7 +21,7 @@ from agent_console.graph_projection import (
     product_graph_view,
     technical_graph_view,
 )
-from agent_console.shared_views import PlatformExecutionIdentity
+from agent_console.shared_views import AuthorizationDecision, PlatformExecutionIdentity
 
 CONTEXT = SnapshotContext(
     authoritative_input_id="fixture-authority",
@@ -86,6 +87,7 @@ def relation(
         path_class=path_class,
         observed_source_count=observed[0],
         observed_target_count=observed[1],
+        tenant_or_security_domain=CONTEXT.security_domain,
     )
 
 
@@ -293,10 +295,9 @@ def parallel_fixture():
 
 def definition_instances_fixture(count: int = 3):
     names = [f"I{index:02d}" for index in range(1, count + 1)]
-    nodes = [
-        node("definition", NodeType.DEFINITION),
-        node("runtime", NodeType.RUNTIME_REALIZATION),
-    ]
+    nodes = [node("definition", NodeType.DEFINITION)]
+    if count == 3:
+        nodes.append(node("runtime", NodeType.RUNTIME_REALIZATION))
     nodes += [
         node(
             name,
@@ -476,7 +477,12 @@ def denied_fixture():
             state=Phase.DENIED,
         ),
     ]
-    return build_graph(CONTEXT, nodes, relations)
+    return build_graph(
+        CONTEXT,
+        nodes,
+        relations,
+        effects=ProjectionEffects(AuthorizationDecision.DENY, 0),
+    )
 
 
 def approval_fixture():
@@ -622,6 +628,20 @@ def all_fixtures():
 
 def test_all_twelve_fixtures_have_the_complete_cardinality_contract() -> None:
     fixtures = all_fixtures()
+    assert [len(item.nodes) for item in fixtures] == [
+        10,
+        8,
+        5,
+        4,
+        6,
+        2,
+        4,
+        3,
+        4,
+        3,
+        13,
+        10,
+    ]
     assert [len(item.relations) for item in fixtures] == [
         12,
         11,
@@ -643,6 +663,7 @@ def test_all_twelve_fixtures_have_the_complete_cardinality_contract() -> None:
         for relation in graph.relations
     } == set(Cardinality)
     assert fixtures[0].graph_snapshot_id == fixtures[11].graph_snapshot_id
+    assert len({item.graph_snapshot_id for item in fixtures[:11]}) == 11
     assert tuple(item.relation_id for item in fixtures[0].relations) == tuple(
         item.relation_id for item in fixtures[11].relations
     )
@@ -689,6 +710,59 @@ def test_fixture_input_permutation_is_byte_stable() -> None:
     assert [item.relation_id for item in graph.relations] == [
         item.relation_id for item in rebuilt.relations
     ]
+
+
+def test_snapshot_identity_changes_with_authoritative_graph_or_effect_facts() -> None:
+    original = denied_fixture()
+    changed_relation = relation(
+        "task",
+        "capability",
+        RelationType.REQUESTS,
+        Cardinality.MANY_TO_MANY,
+        evidence=("ev-request-changed",),
+    )
+    changed_graph = build_graph(
+        CONTEXT,
+        [node("task"), node("capability", NodeType.CAPABILITY)],
+        [changed_relation],
+    )
+    original_subset = build_graph(
+        CONTEXT,
+        [node("task"), node("capability", NodeType.CAPABILITY)],
+        [
+            relation(
+                "task",
+                "capability",
+                RelationType.REQUESTS,
+                Cardinality.MANY_TO_MANY,
+                evidence=("ev-request",),
+            )
+        ],
+    )
+    assert changed_graph.graph_snapshot_id != original_subset.graph_snapshot_id
+    allowed = build_graph(
+        CONTEXT,
+        [
+            node("task"),
+            node(
+                "capability",
+                NodeType.CAPABILITY,
+                evidence=("ev-citation",),
+            ),
+        ],
+        [
+            relation(
+                "task",
+                "capability",
+                RelationType.REQUESTS,
+                Cardinality.MANY_TO_MANY,
+                evidence=("ev-request",),
+            )
+        ],
+        effects=ProjectionEffects(AuthorizationDecision.ALLOW, 1, ("ev-citation",)),
+    )
+    assert allowed.graph_snapshot_id != original_subset.graph_snapshot_id
+    assert original.graph_snapshot_id != allowed.graph_snapshot_id
 
 
 def test_only_execution_dependency_cycles_fail_closed() -> None:
@@ -752,6 +826,7 @@ def test_safety_discriminators_prevent_unsafe_merges() -> None:
                 semantic_discriminator=item.semantic_discriminator,
                 aggregation_key=item.aggregation_key,
                 evidence_authority_class="OTHER" if index == 0 else "UPSTREAM",
+                tenant_or_security_domain=CONTEXT.security_domain,
             )
         )
     split = build_graph(CONTEXT, [node("A"), node("B")], specs)
@@ -788,7 +863,7 @@ def test_grouping_is_presentation_only_and_expansion_restores_members() -> None:
     assert len(collapsed.raw_relations) == 24
     expanded = technical_graph_view(graph, expanded_group_ids=(group.group_id,))
     assert expanded.groups == ()
-    assert len(expanded.nodes) == 14
+    assert len(expanded.nodes) == 13
     assert len(expanded.edges) == 24
     assert [item.relation_id for item in collapsed.raw_relations] == [
         item.relation_id for item in expanded.raw_relations
@@ -806,6 +881,61 @@ def test_unknown_and_distinct_failure_skip_states_are_preserved() -> None:
     assert phases["A"] == Phase.FAILED
     assert phases["B"] == Phase.SKIPPED
     assert len(technical_graph_view(failure).edges) == 5
+
+
+def test_security_and_denial_effect_evidence_fail_closed() -> None:
+    mismatched = replace(
+        relation(
+            "A",
+            "B",
+            RelationType.REFERENCES,
+            Cardinality.ONE_TO_ONE,
+            evidence=("ev",),
+        ),
+        tenant_or_security_domain="tenant-b",
+    )
+    with pytest.raises(GraphProjectionError, match="SECURITY_DOMAIN_MISMATCH"):
+        build_graph(CONTEXT, [node("A"), node("B")], [mismatched])
+    with pytest.raises(
+        GraphProjectionError, match="DENY_REQUIRES_ZERO_PROVIDER_EFFECTS"
+    ):
+        ProjectionEffects(AuthorizationDecision.DENY, 1)
+    with pytest.raises(
+        GraphProjectionError, match="DENY_REQUIRES_ZERO_PROVIDER_EFFECTS"
+    ):
+        ProjectionEffects(AuthorizationDecision.DENY, 0, ("ev-citation",))
+    with pytest.raises(
+        GraphProjectionError, match="ALLOW_REQUIRES_PROVIDER_CALL_EVIDENCE"
+    ):
+        ProjectionEffects(AuthorizationDecision.ALLOW, 0)
+
+    authorization = relation(
+        "capability",
+        "approval",
+        RelationType.AUTHORIZED_BY,
+        Cardinality.MANY_TO_ONE,
+        evidence=("ev-decision",),
+        layer=GraphLayer.APPROVAL_DECISION,
+    )
+    authorization_nodes = [
+        node("capability", NodeType.CAPABILITY),
+        node("approval", NodeType.APPROVAL),
+    ]
+    with pytest.raises(
+        GraphProjectionError, match="CAPABILITY_EFFECT_EVIDENCE_REQUIRED"
+    ):
+        build_graph(CONTEXT, authorization_nodes, [authorization])
+    with pytest.raises(GraphProjectionError, match="CITATION_EVIDENCE_NOT_IN_GRAPH"):
+        build_graph(
+            CONTEXT,
+            authorization_nodes,
+            [authorization],
+            effects=ProjectionEffects(
+                AuthorizationDecision.ALLOW,
+                1,
+                ("ev-missing-citation",),
+            ),
+        )
 
 
 @pytest.mark.parametrize(

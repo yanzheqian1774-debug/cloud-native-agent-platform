@@ -17,7 +17,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
-from agent_console.shared_views import PlatformExecutionIdentity
+from agent_console.shared_views import AuthorizationDecision, PlatformExecutionIdentity
 
 
 class GraphProjectionError(ValueError):
@@ -220,9 +220,38 @@ class SnapshotContext:
                 self, name, _required(getattr(self, name), "INVALID_CONTEXT")
             )
 
-    @property
-    def snapshot_id(self) -> str:
-        return _identity("gps:v0.2-candidate", asdict(self))
+
+@dataclass(frozen=True, slots=True)
+class ProjectionEffects:
+    """Bounded Provider/citation evidence used by GP15 fail-closed checks."""
+
+    capability_decision: AuthorizationDecision
+    provider_call_count: int
+    citation_evidence_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.capability_decision, AuthorizationDecision):
+            raise GraphProjectionError("INVALID_CAPABILITY_DECISION")
+        if (
+            not isinstance(self.provider_call_count, int)
+            or isinstance(self.provider_call_count, bool)
+            or self.provider_call_count < 0
+        ):
+            raise GraphProjectionError("INVALID_PROVIDER_CALL_COUNT")
+        object.__setattr__(
+            self,
+            "citation_evidence_ids",
+            _stable_strings(self.citation_evidence_ids, "INVALID_CITATION_EVIDENCE"),
+        )
+        if self.capability_decision == AuthorizationDecision.DENY and (
+            self.provider_call_count != 0 or self.citation_evidence_ids
+        ):
+            raise GraphProjectionError("DENY_REQUIRES_ZERO_PROVIDER_EFFECTS")
+        if (
+            self.capability_decision == AuthorizationDecision.ALLOW
+            and self.provider_call_count == 0
+        ):
+            raise GraphProjectionError("ALLOW_REQUIRES_PROVIDER_CALL_EVIDENCE")
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,15 +440,60 @@ def _relation_sort(relation: RawRelation) -> tuple[object, ...]:
     )
 
 
+def _snapshot_identity(
+    context: SnapshotContext,
+    node_specs: Sequence[NodeSpec],
+    relation_specs: Sequence[RelationSpec],
+    effects: ProjectionEffects | None,
+) -> str:
+    """Bind the snapshot ID to all normalized authoritative graph facts."""
+    normalized_nodes = sorted(
+        (_normalize(asdict(spec)) for spec in node_specs),
+        key=canonical_json,
+    )
+    normalized_relations = sorted(
+        (_normalize(asdict(spec)) for spec in relation_specs),
+        key=canonical_json,
+    )
+    return _identity(
+        "gps:v0.2-candidate",
+        {
+            "context": asdict(context),
+            "nodes": normalized_nodes,
+            "relations": normalized_relations,
+            "effects": asdict(effects) if effects is not None else None,
+        },
+    )
+
+
 def build_graph(
     context: SnapshotContext,
     node_specs: Sequence[NodeSpec],
     relation_specs: Sequence[RelationSpec],
+    *,
+    effects: ProjectionEffects | None = None,
 ) -> CanonicalGraph:
     """Build and validate one canonical graph from normalized upstream facts."""
+    if not isinstance(context, SnapshotContext):
+        raise GraphProjectionError("INVALID_CONTEXT")
+    if effects is not None and not isinstance(effects, ProjectionEffects):
+        raise GraphProjectionError("INVALID_PROJECTION_EFFECTS")
     if not node_specs:
         raise GraphProjectionError("GRAPH_REQUIRES_NODES")
-    snapshot_id = context.snapshot_id
+    has_authorization = any(
+        RelationType.AUTHORIZED_BY in spec.relation_types for spec in relation_specs
+    )
+    if has_authorization and effects is None:
+        raise GraphProjectionError("CAPABILITY_EFFECT_EVIDENCE_REQUIRED")
+    if effects is not None and effects.citation_evidence_ids:
+        graph_evidence = {
+            evidence
+            for spec in (*node_specs, *relation_specs)
+            for evidence in spec.evidence_ids
+        }
+        if not set(effects.citation_evidence_ids) <= graph_evidence:
+            raise GraphProjectionError("CITATION_EVIDENCE_NOT_IN_GRAPH")
+    snapshot_id = _snapshot_identity(context, node_specs, relation_specs, effects)
     nodes_by_entity: dict[str, GraphNode] = {}
     for spec in node_specs:
         if spec.entity_id in nodes_by_entity:
@@ -447,6 +521,8 @@ def build_graph(
     relations: list[RawRelation] = []
     relation_ids: set[str] = set()
     for spec in relation_specs:
+        if spec.tenant_or_security_domain != context.security_domain:
+            raise GraphProjectionError("SECURITY_DOMAIN_MISMATCH")
         try:
             source = nodes_by_entity[spec.source_entity_id]
             target = nodes_by_entity[spec.target_entity_id]
