@@ -52,6 +52,94 @@ This section is authoritative for the current durable state. Statements below
 labelled `HISTORICAL_CHECKPOINT_STATE` preserve chronology and do not override
 this terminal state.
 
+## CORRECTION PROVENANCE REGISTRATION
+
+```text
+ORIGINAL_SESSION:
+S5-TEST-006
+
+ORIGINAL_SESSION_TITLE:
+Parallel Delivery Readiness Pilot
+
+ORIGINAL_SESSION_STATE:
+CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED
+
+ORIGINAL_SESSION_REOPEN:
+PROHIBITED
+
+CORRECTION_SESSION:
+S5-TEST-006-C1
+
+CORRECTION_SESSION_TITLE:
+Pilot Evidence Terminal-State Correction
+
+CORRECTION_SESSION_TYPE:
+TEST
+
+CORRECTION_SESSION_STATE:
+CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED
+
+CORRECTION_SESSION_REOPEN:
+PROHIBITED
+
+CORRECTION_CHECKPOINT_A_COMMIT:
+755987d73d2d630276ab146a28dc7c5a518558ff
+
+CORRECTION_FINAL_COMMIT:
+3864a79be6cc53b8c8a19248fbe245bf26c9dc57
+
+CORRECTION_CHANGED_PATH:
+docs/evidence/s5/v0.2/s5-plan-002/pilot/README.md
+
+CORRECTION_CHANGED_PATH_COUNT:
+1
+
+CORRECTION_SCOPE:
+
+- durable terminal state;
+- canonical Pilot type;
+- historical checkpoint-state labeling;
+- instability record;
+- explicit claim boundaries.
+
+SOURCE_SESSION_REOPENED:
+NO
+
+PILOT_RERUN:
+NO
+
+PARALLEL_AGENT_STARTED:
+NO
+
+S5_REL_019_MODIFIED:
+NO
+
+CORRECTION_PROVENANCE:
+HUMAN_CONFIRMED / GIT_VERIFIED / DURABLY_REGISTERED
+
+PROVENANCE_REGISTRATION_SESSION:
+S5-TEST-006-C2
+
+PROVENANCE_REGISTRATION_SESSION_TITLE:
+Pilot Correction Provenance Registration
+
+PROVENANCE_REGISTRATION_PURPOSE:
+REGISTER_S5_TEST_006_C1_DURABLE_PROVENANCE_ONLY
+
+NO_RECURSIVE_CORRECTION_SESSION:
+HUMAN_ACCEPTED
+```
+
+S5-TEST-006-C2 registers provenance only. Its future commit SHA and terminal
+state are intentionally not asserted before Human Close Confirmation. The C2
+registration is independently identifiable through this durable record, the
+exact Session ID and title, the required commit subject, Git ancestry and the
+external Human-confirmed terminal state after delivery.
+
+After S5-TEST-006-C2 closes, the absence of its post-commit terminal state in
+the same commit is `HUMAN_CONFIRMED_GIT_VERIFIED_METADATA_LAG_ONLY`. This is
+non-blocking for S5-REL-019 and must not trigger S5-TEST-006-C3.
+
 ## Explicit claim boundary
 
 ```text
