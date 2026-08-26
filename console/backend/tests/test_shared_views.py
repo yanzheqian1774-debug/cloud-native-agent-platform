@@ -4,6 +4,9 @@ from dataclasses import replace
 
 import pytest
 from agent_console.shared_views import (
+    HERMES_SUPPORT,
+    NATIVE_SUPPORT,
+    OPENCLAW_SUPPORT,
     AuthorizationDecision,
     KnowledgeCitation,
     OutcomeStatus,
@@ -82,6 +85,22 @@ def test_requested_and_effective_runtime_remain_separate_and_honest() -> None:
         source(requested_runtime="OPENCLAW", effective_runtime="OPENCLAW")
     with pytest.raises(ViewProjectionError, match="UNSUPPORTED_RUNTIME_EVIDENCE"):
         source(requested_runtime="HERMES", effective_runtime="HERMES")
+    with pytest.raises(ViewProjectionError, match="RUNTIME_SUBSTITUTION_NOT_ALLOWED"):
+        source(requested_runtime="OPENCLAW", effective_runtime="NATIVE")
+
+
+def test_runtime_classifications_are_exact_and_support_is_not_claimed() -> None:
+    assert NATIVE_SUPPORT.classification == (
+        "COMPONENT_TESTED_CANDIDATE / PRIMARY_GOLDEN_PATH_CANDIDATE"
+    )
+    assert NATIVE_SUPPORT.support == "NOT_CERTIFIED"
+    assert OPENCLAW_SUPPORT.classification == "EXACT_VERSION_CANDIDATE"
+    assert OPENCLAW_SUPPORT.availability == (
+        "CURRENTLY_UNAVAILABLE_WITHOUT_LIVE_MANAGED_PROFILE_EVIDENCE"
+    )
+    assert OPENCLAW_SUPPORT.support == "SUPPORT_NOT_GRANTED"
+    assert HERMES_SUPPORT.classification == ("EXPERIMENTAL / NOT_CURRENTLY_CERTIFIABLE")
+    assert HERMES_SUPPORT.support == "SUPPORT_NOT_GRANTED"
 
 
 def test_allow_has_deterministic_synthetic_citations_and_serialization() -> None:
@@ -109,6 +128,13 @@ def test_deny_requires_zero_provider_calls_and_no_citations() -> None:
         replace(denied, provider_call_count=1)
 
 
+def test_allow_requires_provider_call_evidence() -> None:
+    with pytest.raises(
+        ViewProjectionError, match="ALLOW_REQUIRES_PROVIDER_CALL_EVIDENCE"
+    ):
+        source(provider_call_count=0)
+
+
 def test_unknown_outcome_and_locale_neutral_semantics_are_preserved() -> None:
     ambiguous = source(outcome_status=OutcomeStatus.UNKNOWN)
     product = product_view(ambiguous)
@@ -127,3 +153,65 @@ def test_projection_does_not_mutate_caller_source() -> None:
     technical["limitationCodes"].append("mutated")
     assert repr(shared) == before
     assert shared.suggested_team_ids == ("definition.customer-insight",)
+
+
+def test_mutable_collections_are_defensively_copied() -> None:
+    plan = ["plan.group_themes"]
+    citations = [source().citations[0]]
+    shared = source(work_plan_keys=plan, citations=citations)
+    plan.append("plan.mutated")
+    citations.clear()
+    assert shared.work_plan_keys == ("plan.group_themes",)
+    assert len(shared.citations) == 1
+
+
+@pytest.mark.parametrize(
+    ("overrides", "code"),
+    [
+        (
+            {"work_plan_keys": tuple(f"plan.{index}" for index in range(33))},
+            "MALFORMED_PROJECTION_COLLECTION",
+        ),
+        ({"outcome_summary_key": "x" * 2_001}, "PROJECTION_LIMIT_EXCEEDED"),
+        ({"capability_decision": "ALLOW"}, "INVALID_CAPABILITY_DECISION"),
+        ({"outcome_status": "PASS"}, "INVALID_OUTCOME_STATUS"),
+        ({"task_id": "instance-001"}, "IDENTITY_DOMAIN_COLLISION"),
+        (
+            {"provider_native_correlation_id": "pei-demo-001"},
+            "NATIVE_ID_CANNOT_BE_PLATFORM_AUTHORITY",
+        ),
+        ({"citations": (object(),)}, "MALFORMED_CITATION"),
+        (
+            {"outcome_summary_key": "outcome.api_key.must-not-leak"},
+            "SECRET_SHAPED_VALUE_REJECTED",
+        ),
+    ],
+)
+def test_hostile_or_contradictory_projection_evidence_fails_closed(
+    overrides, code
+) -> None:
+    with pytest.raises(ViewProjectionError) as exc_info:
+        source(**overrides)
+    assert str(exc_info.value) == code
+    assert "/private/" not in str(exc_info.value)
+
+
+def test_non_synthetic_knowledge_evidence_is_rejected() -> None:
+    with pytest.raises(ViewProjectionError, match="NON_SYNTHETIC_KNOWLEDGE_EVIDENCE"):
+        KnowledgeCitation(
+            "knowledge-collection.production.quality",
+            "knowledge-asset.synthetic.standard",
+            "revision.synthetic.standard.r3",
+            "evidence.synthetic.standard.12",
+            "citation.synthetic.standard.section_2",
+        )
+
+
+def test_aggregate_projection_output_is_bounded() -> None:
+    large = tuple(f"message.{index}.{'x' * 990}" for index in range(32))
+    with pytest.raises(ViewProjectionError, match="PROJECTION_LIMIT_EXCEEDED"):
+        source(
+            responsibility_keys=large,
+            allowed_activity_keys=large,
+            prohibited_activity_keys=large,
+        )

@@ -43,6 +43,12 @@ class ApprovalDecision(StrEnum):
     REJECT = "REJECT"
 
 
+class ChangeType(StrEnum):
+    ADD = "ADD"
+    REMOVE = "REMOVE"
+    REPLACE = "REPLACE"
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimePreference:
     requested: str
@@ -67,6 +73,7 @@ class DigitalEmployeeValues:
 @dataclass(frozen=True, slots=True)
 class FieldChange:
     field: str
+    change_type: ChangeType
     before: Any
     after: Any
 
@@ -130,7 +137,7 @@ def normalize_values(raw: Mapping[str, object]) -> DigitalEmployeeValues:
     if not isinstance(raw, Mapping):
         raise AuthoringError("MALFORMED_INPUT")
     try:
-        encoded = json.dumps(raw, sort_keys=True, default=lambda _: None)
+        encoded = json.dumps(raw, sort_keys=True)
     except (TypeError, ValueError) as exc:
         raise AuthoringError("MALFORMED_INPUT") from exc
     if len(encoded) > MAX_SERIALIZED_INPUT:
@@ -191,11 +198,20 @@ def deterministic_diff(
     before: DigitalEmployeeValues, after: DigitalEmployeeValues
 ) -> tuple[FieldChange, ...]:
     """Return a bounded field-ordered immutable Diff."""
-    return tuple(
-        FieldChange(field, getattr(before, field), getattr(after, field))
-        for field in _DIFF_FIELDS
-        if getattr(before, field) != getattr(after, field)
-    )
+    changes = []
+    for field in _DIFF_FIELDS:
+        old = getattr(before, field)
+        new = getattr(after, field)
+        if old == new:
+            continue
+        if old is None:
+            change_type = ChangeType.ADD
+        elif new is None:
+            change_type = ChangeType.REMOVE
+        else:
+            change_type = ChangeType.REPLACE
+        changes.append(FieldChange(field, change_type, old, new))
+    return tuple(changes)
 
 
 def _revision(values: DigitalEmployeeValues, source_revision: str | None) -> str:
@@ -274,11 +290,16 @@ class AuthoringBackend:
             raise AuthoringError("INVALID_APPROVAL_DECISION")
         if decided_at.tzinfo is None or decided_at.utcoffset() is None:
             raise AuthoringError("INVALID_APPROVAL_TIMESTAMP")
+        if not isinstance(source_revision, str) or not source_revision.strip():
+            raise AuthoringError("SOURCE_REVISION_REQUIRED")
         if source_revision != current.source_revision:
             raise AuthoringError("STALE_SOURCE_REVISION")
         if current.approval is not None:
-            requested = ApprovalRecord(actor, decision, decided_at, source_revision)
-            if current.approval == requested:
+            if (
+                current.approval.actor == actor
+                and current.approval.decision == decision
+                and current.approval.source_revision == source_revision
+            ):
                 return current
             raise AuthoringError("REVISION_ALREADY_DECIDED")
         if current.state == AuthoringState.SUPERSEDED:

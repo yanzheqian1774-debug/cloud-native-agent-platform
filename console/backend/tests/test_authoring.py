@@ -9,6 +9,7 @@ from agent_console.authoring import (
     AuthoringBackend,
     AuthoringError,
     AuthoringState,
+    ChangeType,
     deterministic_diff,
 )
 
@@ -60,7 +61,35 @@ def test_draft_and_diff_are_deterministic_and_ai_never_effective() -> None:
     assert first.ai_assisted is True
     assert backend.effective == original
     assert [change.field for change in first.diff] == ["role_title"]
+    assert first.diff[0].change_type == ChangeType.REPLACE
     assert deterministic_diff(original.values, first.values) == first.diff
+
+
+def test_diff_classifies_add_remove_replace_and_omits_unchanged_values() -> None:
+    backend = AuthoringBackend(values(knowledge_binding_ref=None))
+    added = backend.create_draft(
+        values(
+            knowledge_binding_ref="knowledge.synthetic.quality.v1",
+            role_title="Senior Specialist",
+        )
+    )
+    assert [(item.field, item.change_type) for item in added.diff] == [
+        ("role_title", ChangeType.REPLACE),
+        ("knowledge_binding_ref", ChangeType.ADD),
+    ]
+    approved = backend.decide(
+        backend.request_review(added.revision).revision,
+        actor="human:reviewer",
+        decision=ApprovalDecision.APPROVE,
+        decided_at=NOW,
+        source_revision=added.source_revision,
+    )
+    removed = backend.create_draft(
+        values(knowledge_binding_ref=None, role_title=approved.values.role_title)
+    )
+    assert [(item.field, item.change_type) for item in removed.diff] == [
+        ("knowledge_binding_ref", ChangeType.REMOVE)
+    ]
 
 
 def test_human_approval_is_required_and_records_complete_decision() -> None:
@@ -147,6 +176,13 @@ def test_rejection_preserves_effective_and_same_decision_is_idempotent() -> None
     assert rejected.state == AuthoringState.REJECTED
     assert backend.effective == effective
     assert backend.decide(candidate.revision, **args) == rejected
+    assert (
+        backend.decide(
+            candidate.revision,
+            **{**args, "decided_at": datetime(2026, 8, 27, tzinfo=UTC)},
+        )
+        == rejected
+    )
     with pytest.raises(AuthoringError, match="REVISION_ALREADY_DECIDED"):
         backend.decide(
             candidate.revision,
@@ -188,6 +224,10 @@ def test_input_is_defensively_copied() -> None:
             lambda item: item.update({"role_description": "x" * 2_001}),
             "INPUT_LIMIT_EXCEEDED",
         ),
+        (
+            lambda item: item.update({"role_description": object()}),
+            "MALFORMED_INPUT",
+        ),
     ],
 )
 def test_malformed_ambiguous_oversized_and_secret_input_is_redacted(
@@ -199,3 +239,21 @@ def test_malformed_ambiguous_oversized_and_secret_input_is_redacted(
         AuthoringBackend(source)
     assert str(exc_info.value) == code
     assert "must-not-leak" not in str(exc_info.value)
+
+
+def test_cyclic_input_and_missing_source_revision_fail_closed() -> None:
+    cyclic = values()
+    cyclic["runtime_preference"]["requested"] = cyclic
+    with pytest.raises(AuthoringError, match="MALFORMED_INPUT"):
+        AuthoringBackend(cyclic)
+
+    backend = AuthoringBackend(values())
+    candidate = review(backend)
+    with pytest.raises(AuthoringError, match="SOURCE_REVISION_REQUIRED"):
+        backend.decide(
+            candidate.revision,
+            actor="human:reviewer",
+            decision=ApprovalDecision.APPROVE,
+            decided_at=NOW,
+            source_revision="",
+        )

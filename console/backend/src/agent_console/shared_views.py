@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -22,6 +23,34 @@ class OutcomeStatus(StrEnum):
     PASS = "PASS"
     FAIL = "FAIL"
     UNKNOWN = "UNKNOWN"
+
+
+MAX_STRING = 2_000
+MAX_COLLECTION = 32
+MAX_AGGREGATE_TEXT = 64_000
+_SECRET = re.compile(
+    r"(?:api[_-]?key|authorization|bearer|credential|password|secret|token)",
+    re.IGNORECASE,
+)
+
+
+def _text(value: object, code: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ViewProjectionError(code)
+    if len(value) > MAX_STRING:
+        raise ViewProjectionError("PROJECTION_LIMIT_EXCEEDED")
+    if _SECRET.search(value):
+        raise ViewProjectionError("SECRET_SHAPED_VALUE_REJECTED")
+    return value
+
+
+def _strings(value: object, code: str) -> tuple[str, ...]:
+    if not isinstance(value, (tuple, list)) or len(value) > MAX_COLLECTION:
+        raise ViewProjectionError(code)
+    result = tuple(_text(item, code) for item in value)
+    if len(set(result)) != len(result):
+        raise ViewProjectionError("AMBIGUOUS_PROJECTION_EVIDENCE")
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +92,18 @@ class KnowledgeCitation:
     evidence_id: str
     message_key: str
 
+    def __post_init__(self) -> None:
+        prefixes = {
+            "collection_id": "knowledge-collection.synthetic.",
+            "asset_id": "knowledge-asset.synthetic.",
+            "revision_id": "revision.synthetic.",
+            "evidence_id": "evidence.synthetic.",
+            "message_key": "citation.synthetic.",
+        }
+        for field, prefix in prefixes.items():
+            if not _text(getattr(self, field), "MALFORMED_CITATION").startswith(prefix):
+                raise ViewProjectionError("NON_SYNTHETIC_KNOWLEDGE_EVIDENCE")
+
 
 @dataclass(frozen=True, slots=True)
 class SharedExecutionView:
@@ -97,6 +138,29 @@ class SharedExecutionView:
     limitation_codes: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        tuple_fields = (
+            "responsibility_keys",
+            "allowed_activity_keys",
+            "prohibited_activity_keys",
+            "suggested_team_ids",
+            "work_plan_keys",
+            "limitation_codes",
+        )
+        for field in tuple_fields:
+            object.__setattr__(
+                self,
+                field,
+                _strings(getattr(self, field), "MALFORMED_PROJECTION_COLLECTION"),
+            )
+        if (
+            not isinstance(self.citations, (tuple, list))
+            or len(self.citations) > MAX_COLLECTION
+        ):
+            raise ViewProjectionError("MALFORMED_CITATION_COLLECTION")
+        citations = tuple(self.citations)
+        if not all(isinstance(item, KnowledgeCitation) for item in citations):
+            raise ViewProjectionError("MALFORMED_CITATION")
+        object.__setattr__(self, "citations", citations)
         required = (
             self.definition_id,
             self.definition_revision,
@@ -114,10 +178,34 @@ class SharedExecutionView:
         )
         if not isinstance(self.platform_execution_identity, PlatformExecutionIdentity):
             raise ViewProjectionError("PLATFORM_EXECUTION_IDENTITY_REQUIRED")
-        if not all(isinstance(value, str) and value.strip() for value in required):
-            raise ViewProjectionError("MALFORMED_PROJECTION_EVIDENCE")
+        for value in required:
+            _text(value, "MALFORMED_PROJECTION_EVIDENCE")
+        if not isinstance(self.instance_count, int) or isinstance(
+            self.instance_count, bool
+        ):
+            raise ViewProjectionError("INVALID_COUNT")
+        if not isinstance(self.provider_call_count, int) or isinstance(
+            self.provider_call_count, bool
+        ):
+            raise ViewProjectionError("INVALID_COUNT")
         if self.instance_count < 0 or self.provider_call_count < 0:
             raise ViewProjectionError("INVALID_COUNT")
+        if not isinstance(self.capability_decision, AuthorizationDecision):
+            raise ViewProjectionError("INVALID_CAPABILITY_DECISION")
+        if not isinstance(self.outcome_status, OutcomeStatus):
+            raise ViewProjectionError("INVALID_OUTCOME_STATUS")
+        if (
+            len({self.definition_id, self.instance_id, self.task_id, self.workflow_id})
+            != 4
+        ):
+            raise ViewProjectionError("IDENTITY_DOMAIN_COLLISION")
+        if self.provider_native_correlation_id is not None:
+            _text(self.provider_native_correlation_id, "INVALID_NATIVE_CORRELATION")
+            if (
+                self.provider_native_correlation_id
+                == self.platform_execution_identity.value
+            ):
+                raise ViewProjectionError("NATIVE_ID_CANNOT_BE_PLATFORM_AUTHORITY")
         if self.requested_runtime not in RUNTIME_SUPPORT:
             raise ViewProjectionError("UNSUPPORTED_REQUESTED_RUNTIME")
         if (
@@ -129,6 +217,11 @@ class SharedExecutionView:
             RUNTIME_SUPPORT[self.effective_runtime].support == "SUPPORT_NOT_GRANTED"
         ):
             raise ViewProjectionError("UNSUPPORTED_RUNTIME_EVIDENCE")
+        if (
+            self.effective_runtime is not None
+            and self.effective_runtime != self.requested_runtime
+        ):
+            raise ViewProjectionError("RUNTIME_SUBSTITUTION_NOT_ALLOWED")
         if self.capability_decision == AuthorizationDecision.DENY and (
             self.provider_call_count != 0 or self.citations
         ):
@@ -138,10 +231,22 @@ class SharedExecutionView:
             and not self.citations
         ):
             raise ViewProjectionError("ALLOW_REQUIRES_SYNTHETIC_CITATIONS")
-        if len(self.citations) > 32 or len(self.work_plan_keys) > 32:
-            raise ViewProjectionError("PROJECTION_LIMIT_EXCEEDED")
+        if (
+            self.capability_decision == AuthorizationDecision.ALLOW
+            and self.provider_call_count == 0
+        ):
+            raise ViewProjectionError("ALLOW_REQUIRES_PROVIDER_CALL_EVIDENCE")
         if len({item.evidence_id for item in self.citations}) != len(self.citations):
             raise ViewProjectionError("AMBIGUOUS_CITATION_EVIDENCE")
+        aggregate = sum(len(value) for value in required)
+        aggregate += sum(
+            len(value) for field in tuple_fields for value in getattr(self, field)
+        )
+        aggregate += sum(
+            len(value) for item in self.citations for value in asdict(item).values()
+        )
+        if aggregate > MAX_AGGREGATE_TEXT:
+            raise ViewProjectionError("PROJECTION_LIMIT_EXCEEDED")
 
 
 def product_view(source: SharedExecutionView) -> dict[str, Any]:

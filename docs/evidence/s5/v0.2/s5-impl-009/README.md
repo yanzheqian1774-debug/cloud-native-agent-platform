@@ -50,6 +50,27 @@ Diff order is fixed by the owned field inventory. Revision identity is derived
 deterministically from normalized content plus its source revision; it is an
 internal revision, not a public version contract.
 
+### Checkpoint B transition matrix
+
+| From / request | Result | Effective Definition |
+| --- | --- | --- |
+| effective Definition + changed valid input | immutable `DRAFT` | unchanged |
+| `DRAFT` + review request | `REVIEW_REQUIRED` | unchanged |
+| `REVIEW_REQUIRED` + exact Human approval | `APPROVED` | changes to that exact revision |
+| `REVIEW_REQUIRED` + Human rejection | `REJECTED` | unchanged |
+| other open revision after approval | `SUPERSEDED` | unchanged |
+| stale source revision | `STALE_SOURCE_REVISION` | unchanged |
+| superseded approval | `SUPERSEDED_REVISION` | unchanged |
+| missing actor/source or malformed decision/time | stable rejection code | unchanged |
+| repeated same actor/decision/source | original immutable decision | unchanged from first decision |
+| conflicting repeated actor/decision/source | `REVISION_ALREADY_DECIDED` | unchanged |
+| Draft without review, empty Diff, or unknown revision | stable rejection code | unchanged |
+
+There is no publish method, fallback revision, implicit transition, or silent
+overwrite. Diff order is fixed. Each difference is explicitly `ADD`, `REMOVE`,
+or `REPLACE`; unchanged values are omitted. Nested collections are copied to
+tuples before storage, so later caller mutation cannot change a Draft or Diff.
+
 ## Shared source and field mapping
 
 `SharedExecutionView` is the one immutable source consumed by both projection
@@ -68,6 +89,26 @@ reconstructs state from the other view.
 | capability decision/reason/call count | citations only when allowed | authorization evidence and call count |
 | synthetic Knowledge evidence | deterministic citations | Collection/Asset/Revision/Evidence IDs |
 | limitation codes | presentation can map separately | stable codes |
+
+### Exact shared-source projection map
+
+| Shared source field | Product output | Technical output |
+| --- | --- | --- |
+| `digital_employee_name_key` | `digitalEmployeeNameKey` | presentation-neutral omission |
+| `role_title_key` / `role_description_key` | `roleTitleKey` / `roleDescriptionKey` | presentation-neutral omission |
+| responsibility/allowed/prohibited keys | corresponding Product key arrays | presentation-neutral omission |
+| suggested team IDs / Instance count | `suggestedTeamIds` / `instanceCount` | distinct `instanceId` |
+| work-plan keys / progress code | `workPlanKeys` / `businessProgressCode` | shared evidence remains source |
+| Outcome status/summary key | `outcomeStatus` / `outcomeSummaryKey` | `outcome.status` / `summaryMessageKey` |
+| citations | deterministic citation records | `knowledgeEvidence` with Collection/Asset/Revision/Evidence IDs |
+| approval state | `approvalState` | shared source remains authority |
+| Definition ID/revision | `definitionId` / `definitionRevision` | `definition.id` / `definition.revision` |
+| Instance/Task/Workflow IDs | Instance count/team context | `instanceId` / `taskId` / `workflowId` |
+| Platform Execution Identity | `platformExecutionIdentity` | identical `platformExecutionIdentity` |
+| requested/effective Runtime | no independent reconstruction | separate `requestedRuntime` / `effectiveRuntime` |
+| Capability decision/reason/calls | citation visibility constrained by decision | `capability.decision/reasonCode/providerCallCount` |
+| native correlation | omitted | `providerNativeCorrelation` with `CORRELATION_ONLY` authority |
+| limitation codes | presentation mapping outside DTO | `limitationCodes` |
 
 All presentation content is represented by stable Message Keys. Locale is not
 part of the source or either projection, so switching between `zh-CN` and
@@ -109,6 +150,15 @@ outside this session.
 Outcome is internal, domain-specific, and unfrozen. `PASS`, `FAIL`, and
 `UNKNOWN` preserve ambiguity without an exactly-once, retry, or fallback claim.
 
+Checkpoint B additionally validates that all Knowledge IDs carry deterministic
+`synthetic` namespaces, malformed citation objects fail with stable diagnostics,
+and a native correlation cannot equal or replace Platform Execution Identity.
+Projection construction normalizes caller-owned lists to tuples and enforces
+per-string, per-collection, and aggregate text bounds. Projection functions
+return new lists/dictionaries, so output mutation cannot alter the shared
+source. No I/O, host-path access, retrieval, invocation, or publication code is
+present in either module.
+
 ## Tests and audits
 
 Focused tests cover deterministic Draft/Diff, Human approval, stale and
@@ -125,6 +175,26 @@ targeted, repository, frontend, Diff, import-direction, changed-path,
 public-wire, schema, dependency, redaction, bounds, rollback, and relative-link
 audits complete.
 
+Checkpoint B validation results:
+
+- focused authoring and shared DTO: `34 passed`;
+- explicit A1/A2/A3, Native Provider, Capability Gateway, bounded execution,
+  Conformance Harness, and S5-SPIKE-008 regression matrix: `334 passed`;
+- full `make check`: Ruff lint passed, Ruff format passed, `586 passed` with
+  one pre-existing Starlette/httpx deprecation warning;
+- frontend lint and production build: passed;
+- `git diff --check`: passed;
+- exact changed-path, import direction, experiment isolation, no-I/O,
+  public-wire, CRD/schema, dependency/lockfile, identity authority, synthetic
+  Knowledge, relative-link, and rollback audits: passed.
+
+Checkpoint B focused coverage also includes transition completeness, Diff
+add/remove/replace classification, timezone and source-revision validation,
+cyclic and unsupported authoring input, mutable shared DTO inputs, malformed
+enums/counts/citations, identity-domain collision, native/Platform ID collision,
+non-synthetic Knowledge IDs, collection/string/aggregate bounds, deterministic
+reprojection, and host-path-free diagnostics.
+
 ## Limitations and claim boundaries
 
 - in-memory lifecycle only; no durability, distribution, concurrency, or
@@ -138,9 +208,9 @@ audits complete.
 
 ## Rollback
 
-Revert the single S5-IMPL-009 implementation commit. The five paths are new and
-have no existing production consumer, public migration, dual-write, or stored
-state to unwind.
+Revert the S5-IMPL-009 commits from PR #60. Five paths are new and the only
+existing-path change is the exact Core consumer allowlist. There is no public
+migration, dual-write, external effect, or stored state to unwind.
 
 ## Next Human gate
 
