@@ -229,6 +229,35 @@ claim boundary above: only exact immutable Approval evidence is idempotent, and
 a changed `decided_at` returns `REVISION_ALREADY_DECIDED` without modifying the
 stored Approval, effective Definition, or caller input.
 
+### Non-recursive provenance registration
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-IMPL-009-C1` |
+| Title | `Approval Replay Exactness Correction` |
+| `ORIGINAL_S5_IMPL_009_SOURCE_HEAD` | `6f97ec6457f181f59e0ec444596b18a1b1a2f870` |
+| `C1_CORRECTION_IMPLEMENTATION_COMMIT` | `9f8e6549a4cb18a5029f11e515bd33dccdf7410c` |
+| `C1_PRE_PROVENANCE_REGISTRATION_HEAD` | `a8d6cc3fa675c0c60530691721d2edb29379cf0f` |
+| `PROVENANCE_REGISTRATION_COMMIT` | `THIS_DOCUMENTATION_SUCCESSOR_COMMIT / RESOLVED_BY_GIT_HISTORY` |
+| `FINAL_DELIVERY_HEAD` | `RESOLVED_FROM_EXACT_PR_SOURCE_HEAD_AND_GIT_HISTORY` |
+| `FINAL_HEAD_SELF_REFERENCE` | `NOT_REQUIRED / CRYPTOGRAPHICALLY_RECURSIVE` |
+| `FINAL_HEAD_VERIFICATION_OWNER` | `S5-REL-022 CHECKPOINT_A_RESUME` |
+
+The parent chain from the original source head through the correction
+implementation commit and pre-registration head reconstructs the complete C1
+lineage. The one documentation successor that contains this registration is
+identified by Git history and by the exact local source, remote source, and PR
+head; embedding its own SHA here is neither required nor cryptographically
+possible.
+
+S5-REL-022 discovered the Approval replay contradiction and remained stopped,
+unmodified, and unmerged throughout C1. S5-IMPL-009 remained closed. Only an
+exact replay of the same immutable Approval evidence is idempotent. A different
+`decided_at`, actor, decision, or source revision fails closed with
+`REVISION_ALREADY_DECIDED`; stored Approval evidence, effective Definition, and
+caller input remain unchanged. This documentation successor changes no
+implementation semantics, and no recursive correction is required.
+
 C1 correction validation results:
 
 - focused Authoring replay tests: `16 passed`;
