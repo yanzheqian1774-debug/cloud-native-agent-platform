@@ -334,7 +334,7 @@ class RelationSpec:
     semantic_discriminator: str = "default"
     path_class: PathClass = PathClass.NORMAL
     blocking_class: str = "INFORMATIONAL"
-    authorization_class: str = "UNCLASSIFIED"
+    authorization_class: str | None = None
     evidence_authority_class: str = "UPSTREAM"
     execution_or_historical_context: str = "CURRENT"
     tenant_or_security_domain: str = "default"
@@ -348,13 +348,18 @@ class RelationSpec:
             "target_entity_id",
             "semantic_discriminator",
             "blocking_class",
-            "authorization_class",
             "evidence_authority_class",
             "execution_or_historical_context",
             "tenant_or_security_domain",
         ):
             object.__setattr__(
                 self, name, _required(getattr(self, name), "INVALID_RELATION")
+            )
+        if self.authorization_class is not None:
+            object.__setattr__(
+                self,
+                "authorization_class",
+                _required(self.authorization_class, "INVALID_RELATION"),
             )
         if not self.relation_types or not all(
             isinstance(item, RelationType) for item in self.relation_types
@@ -410,7 +415,7 @@ class RawRelation:
     semantic_discriminator: str
     path_class: PathClass
     blocking_class: str
-    authorization_class: str
+    authorization_class: str | None
     evidence_authority_class: str
     execution_or_historical_context: str
     tenant_or_security_domain: str
@@ -660,6 +665,12 @@ def _aggregate_relations(
     for relation in relations:
         source = endpoint_aliases.get(relation.source_node_id, relation.source_node_id)
         target = endpoint_aliases.get(relation.target_node_id, relation.target_node_id)
+        authorization_boundary: object = relation.authorization_class
+        if authorization_boundary is None:
+            # GP07 requires a genuinely missing safety classification to fail
+            # closed to a deterministic singleton.  An explicit UNCLASSIFIED
+            # value remains an ordinary, shareable classification.
+            authorization_boundary = ("MISSING", relation.relation_id)
         key = (
             source,
             target,
@@ -669,28 +680,36 @@ def _aggregate_relations(
             relation.execution_or_historical_context,
             relation.path_class,
             relation.blocking_class,
-            relation.authorization_class,
+            authorization_boundary,
             relation.evidence_authority_class,
         )
         buckets[key].append(relation)
     result: list[VisualEdge] = []
     for key, members in buckets.items():
-        ordered = sorted(
-            members,
+        # Presentation occurrences use the binding GP06 order.  This is
+        # deliberately distinct from canonical relation and identity order.
+        occurrences = sorted(
+            (
+                (relation, relation_type)
+                for relation in members
+                for relation_type in relation.relation_types
+            ),
             key=lambda item: (
-                item.display_priority,
-                min(_TYPE_RANK[kind] for kind in item.relation_types),
-                item.relation_id,
+                item[0].display_priority,
+                _TYPE_RANK[item[1]],
+                item[0].relation_id,
             ),
         )
         types: list[RelationType] = []
-        for relation in ordered:
-            for relation_type in relation.relation_types:
-                if relation_type not in types:
-                    types.append(relation_type)
-        relation_ids = tuple(sorted(item.relation_id for item in members))
+        presentation_relation_ids: list[str] = []
+        for relation, relation_type in occurrences:
+            if relation_type not in types:
+                types.append(relation_type)
+            if relation.relation_id not in presentation_relation_ids:
+                presentation_relation_ids.append(relation.relation_id)
+        identity_relation_ids = tuple(sorted(item.relation_id for item in members))
         aggregation_id = _identity(
-            "gpa:v0.2-candidate", (graph.graph_snapshot_id, key, relation_ids)
+            "gpa:v0.2-candidate", (graph.graph_snapshot_id, key, identity_relation_ids)
         )
         cardinalities = tuple(
             sorted(
@@ -707,7 +726,7 @@ def _aggregate_relations(
                 secondary_types=tuple(types[1:3]),
                 remaining_type_count=max(0, len(types) - 3),
                 cardinalities=cardinalities,
-                raw_relation_ids=relation_ids,
+                raw_relation_ids=tuple(presentation_relation_ids),
                 evidence_ids=tuple(
                     sorted(
                         {evidence for item in members for evidence in item.evidence_ids}

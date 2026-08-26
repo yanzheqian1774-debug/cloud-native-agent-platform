@@ -68,7 +68,8 @@ def relation(
     state: Phase = Phase.PENDING,
     semantic_discriminator: str | None = None,
     blocking_class: str = "INFORMATIONAL",
-    authorization_class: str = "UNCLASSIFIED",
+    authorization_class: str | None = "UNCLASSIFIED",
+    display_priority: int = 100,
     path_class: PathClass = PathClass.NORMAL,
     observed: tuple[int, int] = (1, 1),
 ) -> RelationSpec:
@@ -86,6 +87,7 @@ def relation(
         or f"{source}-{relation_type.value}-{target}",
         blocking_class=blocking_class,
         authorization_class=authorization_class,
+        display_priority=display_priority,
         path_class=path_class,
         observed_source_count=observed[0],
         observed_target_count=observed[1],
@@ -1038,6 +1040,130 @@ def test_same_pair_aggregation_preserves_raw_semantics_and_cardinalities() -> No
     assert set(edge.cardinalities) == set(Cardinality) - {Cardinality.MANY_TO_ONE}
     assert len(edge.raw_relation_ids) == 3
     assert edge.evidence_ids == ("ev-data", "ev-dependency", "ev-trigger")
+    relation_by_id = {item.relation_id: item for item in graph.relations}
+    assert tuple(
+        relation_by_id[item].relation_types[0] for item in edge.raw_relation_ids
+    ) == (
+        RelationType.DEPENDS_ON,
+        RelationType.TRIGGERS,
+        RelationType.DATA_FLOW,
+    )
+    assert edge.raw_relation_ids != tuple(sorted(edge.raw_relation_ids))
+
+
+def test_gp06_flattens_type_occurrences_before_presentation_ordering() -> None:
+    graph = build_graph(
+        CONTEXT,
+        [node("A"), node("B")],
+        [
+            RelationSpec(
+                source_entity_id="A",
+                target_entity_id="B",
+                relation_types=(RelationType.DATA_FLOW, RelationType.DEPENDS_ON),
+                layer=GraphLayer.ASSIGNMENT,
+                declared_cardinality=Cardinality.ONE_TO_ONE,
+                evidence_ids=("ev-combined",),
+                semantic_discriminator="combined",
+                authorization_class="UNCLASSIFIED",
+                tenant_or_security_domain=CONTEXT.security_domain,
+            ),
+            relation(
+                "A",
+                "B",
+                RelationType.TRIGGERS,
+                Cardinality.ONE_TO_ONE,
+                evidence=("ev-trigger",),
+            ),
+        ],
+    )
+    edge = technical_graph_view(graph).edges[0]
+    assert (edge.primary_type, *edge.secondary_types) == (
+        RelationType.DEPENDS_ON,
+        RelationType.TRIGGERS,
+        RelationType.DATA_FLOW,
+    )
+
+
+def test_gp06_equal_type_uses_relation_id_as_final_tie_breaker() -> None:
+    relations = [
+        relation(
+            "A",
+            "B",
+            RelationType.REFERENCES,
+            Cardinality.ONE_TO_ONE,
+            evidence=(f"ev-{index}",),
+            semantic_discriminator=f"reference-{index}",
+        )
+        for index in (2, 1)
+    ]
+    graph = build_graph(CONTEXT, [node("A"), node("B")], relations)
+    edge = technical_graph_view(graph).edges[0]
+    assert edge.raw_relation_ids == tuple(sorted(edge.raw_relation_ids))
+
+
+def test_gp06_permutation_preserves_presentation_and_aggregate_identity() -> None:
+    relations = [
+        relation(
+            "A",
+            "B",
+            relation_type,
+            cardinality,
+            evidence=(evidence,),
+            aggregation_key="f06-g01",
+        )
+        for relation_type, cardinality, evidence in (
+            (RelationType.DEPENDS_ON, Cardinality.ONE_TO_ONE, "ev-dependency"),
+            (RelationType.DATA_FLOW, Cardinality.ONE_TO_MANY, "ev-data"),
+            (RelationType.TRIGGERS, Cardinality.MANY_TO_MANY, "ev-trigger"),
+        )
+    ]
+    original = technical_graph_view(
+        build_graph(CONTEXT, [node("A"), node("B")], relations)
+    ).edges[0]
+    replay = technical_graph_view(
+        build_graph(CONTEXT, [node("B"), node("A")], list(reversed(relations)))
+    ).edges[0]
+    assert replay == original
+
+
+def test_missing_authorization_class_is_distinct_and_never_aggregates() -> None:
+    nodes = [
+        node("capability", NodeType.CAPABILITY),
+        node("approval", NodeType.APPROVAL),
+    ]
+    missing = [
+        relation(
+            "capability",
+            "approval",
+            RelationType.AUTHORIZED_BY,
+            Cardinality.MANY_TO_ONE,
+            evidence=(f"ev-{state.value.lower()}",),
+            layer=GraphLayer.APPROVAL_DECISION,
+            state=state,
+            semantic_discriminator=f"authorization-{state.value.lower()}",
+            authorization_class=None,
+            aggregation_key="shared-fixture-handle",
+        )
+        for state in (Phase.DENIED, Phase.SUCCEEDED)
+    ]
+    effects = ProjectionEffects(AuthorizationDecision.ALLOW, 1)
+    graph = build_graph(CONTEXT, nodes, missing, effects=effects)
+    replay = build_graph(
+        CONTEXT,
+        list(reversed(nodes)),
+        list(reversed(missing)),
+        effects=effects,
+    )
+    edges = technical_graph_view(graph).edges
+    assert len(edges) == 2
+    assert all(len(edge.raw_relation_ids) == 1 for edge in edges)
+    assert len({item.relation_id for item in graph.relations}) == 2
+    assert graph.graph_snapshot_id == replay.graph_snapshot_id
+    assert edges == technical_graph_view(replay).edges
+
+    explicit = [replace(item, authorization_class="UNCLASSIFIED") for item in missing]
+    explicit_graph = build_graph(CONTEXT, nodes, explicit, effects=effects)
+    assert len(technical_graph_view(explicit_graph).edges) == 1
 
 
 def test_aggregation_key_is_metadata_not_a_gp06_safety_discriminator() -> None:
@@ -1090,6 +1216,7 @@ def test_safety_discriminators_prevent_unsafe_merges() -> None:
                 evidence_ids=item.evidence_ids,
                 semantic_discriminator=item.semantic_discriminator,
                 aggregation_key=item.aggregation_key,
+                authorization_class=item.authorization_class,
                 evidence_authority_class="OTHER" if index == 0 else "UPSTREAM",
                 tenant_or_security_domain=CONTEXT.security_domain,
             )

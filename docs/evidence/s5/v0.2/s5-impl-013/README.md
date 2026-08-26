@@ -46,6 +46,53 @@ This artifact records durable repository evidence. It changes no implementation
 behavior and does not grant merge, release acceptance, production readiness,
 public compatibility, Contract/schema freeze, or Provider certification.
 
+### S5-IMPL-013-C2 local correction state
+
+S5-REL-024 reported two P1 findings against the C1 head. First, an aggregate's
+`raw_relation_ids` were globally sorted by opaque projection ID after semantic
+label ordering, so expansion order did not preserve the binding GP06
+presentation order. Second, `RelationSpec.authorization_class` normalized an
+omitted aggregation-safety classification to the shared explicit value
+`UNCLASSIFIED`, allowing genuinely missing classifications to enter the same
+GP07 bucket.
+
+The initial C2 proposal to extend the presentation key with source, target,
+cardinality, and evidence order was withdrawn by the Human scope decision. No
+such extended ordering is implemented. C2 retains the accepted GP06 order
+exactly as `(display_priority, relation-type rank, relation_id)`: it first
+flattens relation-type occurrences, derives labels and raw-member presentation
+order from that sequence, and keeps a separately sorted member-ID tuple solely
+for deterministic aggregate identity. Fixture 6 therefore expands as
+`DEPENDS_ON`, `TRIGGERS`, `DATA_FLOW`; reversed inputs produce the same edge and
+aggregate identity; and equal-priority occurrences of the same type use
+`relation_id` only as the final tie-breaker.
+
+C2 also represents a missing authorization classification as `None`, distinct
+from explicit `UNCLASSIFIED` and from a classified string value. During GP07
+aggregation, a missing authorization classification receives a deterministic
+relation-specific safety boundary and therefore remains a singleton. The exact
+same-source/same-target `AUTHORIZED_BY` reproduction with one `DENIED` and one
+`SUCCEEDED` relation produces two singleton edges, zero aggregation, two
+distinct raw relation identities, and byte-stable replay. Explicitly
+`UNCLASSIFIED` members remain eligible to aggregate when every other accepted
+safety discriminator is equal. `aggregation_key` remains metadata outside the
+GP06/GP07 safety tuple.
+
+C2 local validation at the uncommitted correction candidate:
+
+- focused Graph Projection suite: **19 passed**;
+- Graph Projection, Core compatibility, and shared-view regression slice:
+  **40 passed**;
+- focused Ruff lint: passed;
+- focused Ruff format check: **2 files already formatted**;
+- full `make check`: Ruff lint passed, Ruff format checked **106 files**, and
+  **606 passed** with one pre-existing Starlette/httpx deprecation warning;
+- `git diff --check`: passed;
+- frontend lint/build: not required because no frontend path changed;
+- GitHub PR #62 ownership and exact-head CI: **pending remote verification**;
+  no C2 commit, push, PR mutation, Quality Gate claim, or Frontend Quality Gate
+  claim is made by this local record.
+
 ## Exact changed-path inventory
 
 The final authorized path count is three:
