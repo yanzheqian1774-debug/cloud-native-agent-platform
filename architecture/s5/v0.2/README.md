@@ -6,6 +6,15 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [Product and Technical Graph Projection Scope Gate v1](S5-ARCH-009-PRODUCT-TECHNICAL-GRAPH-PROJECTION-SCOPE-GATE-V1.md)
+  defines one internal canonical relationship graph, graph layers, node and
+  relation semantics, cardinality, deterministic aggregation and grouping,
+  Product/Technical projection policies, identity and plan-revision
+  invariants, and architecture-only fixture expectations. It is
+  `CLOSING / PASS_WITH_CONSTRAINTS / READY_TO_CLOSE`; Graph Projection is
+  architecture-complete but remains `NOT_IMPLEMENTED`, internal, and unfrozen.
+  Both views remain `NOT_STARTED`, and Human S5-ARCH-009 Close Confirmation is
+  pending.
 - [MVS Execution & Orchestration Ownership Gate v1](S5-ARCH-008-MVS-EXECUTION-ORCHESTRATION-OWNERSHIP-GATE-V1.md)
   records the Human-selected O1 bounded exception, temporary authority map,
   mandatory extraction seams, final G2 dispositions, production blocker, and
