@@ -27,7 +27,7 @@ CONTEXT = SnapshotContext(
     authoritative_input_id="fixture-authority",
     approved_plan_revision="plan-revision-001",
     execution_snapshot_id="execution-snapshot-001",
-    security_domain="tenant-a",
+    security_domain="fixture-authorized-domain",
 )
 PEI = PlatformExecutionIdentity("pei-fixture-001")
 
@@ -68,6 +68,7 @@ def relation(
     state: Phase = Phase.PENDING,
     semantic_discriminator: str | None = None,
     blocking_class: str = "INFORMATIONAL",
+    authorization_class: str = "UNCLASSIFIED",
     path_class: PathClass = PathClass.NORMAL,
     observed: tuple[int, int] = (1, 1),
 ) -> RelationSpec:
@@ -84,6 +85,7 @@ def relation(
         semantic_discriminator=semantic_discriminator
         or f"{source}-{relation_type.value}-{target}",
         blocking_class=blocking_class,
+        authorization_class=authorization_class,
         path_class=path_class,
         observed_source_count=observed[0],
         observed_target_count=observed[1],
@@ -93,15 +95,31 @@ def relation(
 
 def serial_fixture():
     nodes = [
-        node("problem", NodeType.BUSINESS_PROBLEM),
+        node(
+            "problem",
+            NodeType.BUSINESS_PROBLEM,
+            visibility=ProjectionVisibility.PRODUCT,
+        ),
         node("plan", NodeType.PLAN),
         node("workflow", NodeType.WORKFLOW),
         node("A"),
         node("B"),
         node("C"),
-        node("definition", NodeType.DEFINITION),
-        node("instance", NodeType.INSTANCE),
-        node("runtime", NodeType.RUNTIME_REALIZATION),
+        node(
+            "definition",
+            NodeType.DEFINITION,
+            visibility=ProjectionVisibility.TECHNICAL,
+        ),
+        node(
+            "instance",
+            NodeType.INSTANCE,
+            visibility=ProjectionVisibility.TECHNICAL,
+        ),
+        node(
+            "runtime",
+            NodeType.RUNTIME_REALIZATION,
+            visibility=ProjectionVisibility.TECHNICAL,
+        ),
         node("outcome", NodeType.OUTCOME),
     ]
     relations = [
@@ -112,6 +130,7 @@ def serial_fixture():
             Cardinality.ONE_TO_ONE,
             evidence=("ev-plan",),
             layer=GraphLayer.PLAN,
+            visibility=ProjectionVisibility.PRODUCT,
         ),
         relation(
             "workflow",
@@ -163,6 +182,7 @@ def serial_fixture():
             Cardinality.MANY_TO_ONE,
             evidence=("ev-assign-a",),
             observed=(3, 1),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "B",
@@ -171,6 +191,7 @@ def serial_fixture():
             Cardinality.MANY_TO_ONE,
             evidence=("ev-assign-b",),
             observed=(3, 1),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "C",
@@ -179,6 +200,7 @@ def serial_fixture():
             Cardinality.MANY_TO_ONE,
             evidence=("ev-assign-c",),
             observed=(3, 1),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "definition",
@@ -186,6 +208,7 @@ def serial_fixture():
             RelationType.CONTAINS,
             Cardinality.ONE_TO_MANY,
             evidence=("ev-instance",),
+            visibility=ProjectionVisibility.DETAIL_ONLY,
         ),
         relation(
             "instance",
@@ -193,6 +216,7 @@ def serial_fixture():
             RelationType.EXECUTED_BY,
             Cardinality.MANY_TO_ONE,
             evidence=("ev-runtime-binding",),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "C",
@@ -201,6 +225,15 @@ def serial_fixture():
             Cardinality.ONE_TO_ONE,
             evidence=("ev-outcome",),
             layer=GraphLayer.DATA_EVIDENCE,
+            visibility=ProjectionVisibility.TECHNICAL,
+        ),
+        relation(
+            "plan",
+            "workflow",
+            RelationType.TRIGGERS,
+            Cardinality.ONE_TO_ONE,
+            evidence=("ev-plan-revision",),
+            layer=GraphLayer.PLAN,
         ),
     ]
     return build_graph(CONTEXT, nodes, relations)
@@ -212,8 +245,16 @@ def parallel_fixture():
         for name in ("workflow", "A", "B", "C", "D")
     ]
     nodes += [
-        node("definition", NodeType.DEFINITION),
-        node("instance", NodeType.INSTANCE),
+        node(
+            "definition",
+            NodeType.DEFINITION,
+            visibility=ProjectionVisibility.TECHNICAL,
+        ),
+        node(
+            "instance",
+            NodeType.INSTANCE,
+            visibility=ProjectionVisibility.TECHNICAL,
+        ),
         node("outcome", NodeType.OUTCOME),
     ]
     relations = [
@@ -255,6 +296,7 @@ def parallel_fixture():
             evidence=("ev-dep-db",),
             layer=GraphLayer.EXECUTION_DEPENDENCY,
             observed=(1, 2),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "D",
@@ -264,6 +306,7 @@ def parallel_fixture():
             evidence=("ev-dep-dc",),
             layer=GraphLayer.EXECUTION_DEPENDENCY,
             observed=(1, 2),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "A",
@@ -272,6 +315,7 @@ def parallel_fixture():
             Cardinality.MANY_TO_ONE,
             evidence=("ev-assignment-a",),
             observed=(2, 1),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "D",
@@ -280,6 +324,7 @@ def parallel_fixture():
             Cardinality.MANY_TO_ONE,
             evidence=("ev-assignment-d",),
             observed=(2, 1),
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "D",
@@ -288,21 +333,32 @@ def parallel_fixture():
             Cardinality.ONE_TO_ONE,
             evidence=("ev-outcome",),
             layer=GraphLayer.DATA_EVIDENCE,
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
     ]
     return build_graph(CONTEXT, nodes, relations)
 
 
 def definition_instances_fixture(count: int = 3):
-    names = [f"I{index:02d}" for index in range(1, count + 1)]
+    names = [
+        f"I{index}" if count == 3 else f"I{index:02d}" for index in range(1, count + 1)
+    ]
     nodes = [node("definition", NodeType.DEFINITION)]
     if count == 3:
-        nodes.append(node("runtime", NodeType.RUNTIME_REALIZATION))
+        nodes.append(
+            node(
+                "runtime",
+                NodeType.RUNTIME_REALIZATION,
+                visibility=ProjectionVisibility.TECHNICAL,
+            )
+        )
     nodes += [
         node(
             name,
             NodeType.INSTANCE,
-            evidence=(f"ev-instance-{index:02d}",),
+            evidence=(
+                f"ev-select-i{index}" if count == 3 else f"ev-instance-{index:02d}",
+            ),
             group_kind=GroupKind.DEFINITION_INSTANCES,
             group_parent_id="definition",
         )
@@ -316,7 +372,9 @@ def definition_instances_fixture(count: int = 3):
                 name,
                 RelationType.CONTAINS,
                 Cardinality.ONE_TO_MANY,
-                evidence=(f"ev-instance-{index:02d}",),
+                evidence=(
+                    f"ev-select-i{index}" if count == 3 else f"ev-instance-{index:02d}",
+                ),
                 observed=(1, count),
             )
         )
@@ -326,18 +384,22 @@ def definition_instances_fixture(count: int = 3):
                 "definition",
                 RelationType.REFERENCES,
                 Cardinality.MANY_TO_ONE,
-                evidence=(f"ev-instance-{index:02d}",),
+                evidence=(
+                    f"ev-select-i{index}" if count == 3 else f"ev-instance-{index:02d}",
+                ),
                 observed=(count, 1),
+                visibility=ProjectionVisibility.TECHNICAL,
             )
         )
     if count == 3:
         relations.append(
             relation(
-                "I01",
+                names[0],
                 "runtime",
                 RelationType.EXECUTED_BY,
                 Cardinality.MANY_TO_ONE,
                 evidence=("ev-runtime-binding",),
+                visibility=ProjectionVisibility.TECHNICAL,
             )
         )
     return build_graph(CONTEXT, nodes, relations)
@@ -370,6 +432,9 @@ def shared_evidence_fixture():
             else NodeType.CAPABILITY
             if name.startswith("C")
             else NodeType.KNOWLEDGE,
+            visibility=ProjectionVisibility.TECHNICAL
+            if name.startswith("K")
+            else ProjectionVisibility.BOTH,
         )
         for name in ("T1", "T2", "C1", "C2", "K1", "K2")
     ]
@@ -396,6 +461,7 @@ def shared_evidence_fixture():
                     evidence=(f"ev-knowledge-{task.lower()}-{knowledge.lower()}",),
                     layer=GraphLayer.DATA_EVIDENCE,
                     observed=(2, 2),
+                    visibility=ProjectionVisibility.TECHNICAL,
                 )
             )
     return build_graph(CONTEXT, nodes, relations)
@@ -456,6 +522,7 @@ def denied_fixture():
             evidence=("ev-deny",),
             layer=GraphLayer.APPROVAL_DECISION,
             state=Phase.DENIED,
+            visibility=ProjectionVisibility.TECHNICAL,
         ),
         relation(
             "approval",
@@ -499,6 +566,7 @@ def approval_fixture():
             Cardinality.ONE_TO_MANY,
             evidence=("ev-plan-revision",),
             layer=GraphLayer.APPROVAL_DECISION,
+            authorization_class="HUMAN_APPROVAL_REQUEST",
         ),
         relation(
             "approval",
@@ -516,6 +584,7 @@ def approval_fixture():
             Cardinality.ONE_TO_ONE,
             evidence=("ev-actor", "ev-decided-at", "ev-plan-revision"),
             layer=GraphLayer.APPROVAL_DECISION,
+            authorization_class="HUMAN_APPROVAL_DECISION",
         ),
     ]
     return build_graph(CONTEXT, nodes, relations)
@@ -584,7 +653,11 @@ def unknown_fixture():
         CONTEXT,
         [
             node("task"),
-            node("runtime", NodeType.RUNTIME_REALIZATION),
+            node(
+                "runtime",
+                NodeType.RUNTIME_REALIZATION,
+                visibility=ProjectionVisibility.TECHNICAL,
+            ),
             node("outcome", NodeType.OUTCOME, phase=Phase.UNKNOWN),
         ],
         [
@@ -594,6 +667,7 @@ def unknown_fixture():
                 RelationType.EXECUTED_BY,
                 Cardinality.MANY_TO_ONE,
                 evidence=("ev-runtime-binding",),
+                visibility=ProjectionVisibility.TECHNICAL,
             ),
             relation(
                 "task",
@@ -643,7 +717,7 @@ def test_all_twelve_fixtures_have_the_complete_cardinality_contract() -> None:
         10,
     ]
     assert [len(item.relations) for item in fixtures] == [
-        12,
+        13,
         11,
         7,
         3,
@@ -654,9 +728,9 @@ def test_all_twelve_fixtures_have_the_complete_cardinality_contract() -> None:
         5,
         2,
         24,
-        12,
+        13,
     ]
-    assert sum(len(item.relations) for item in fixtures) == 94
+    assert sum(len(item.relations) for item in fixtures) == 96
     assert {
         relation.declared_cardinality
         for graph in fixtures
@@ -669,11 +743,167 @@ def test_all_twelve_fixtures_have_the_complete_cardinality_contract() -> None:
     )
 
 
+def _initial_entities(view) -> frozenset[str]:
+    return frozenset(item.entity_id for item in view.nodes)
+
+
+def test_all_twelve_fixtures_match_the_complete_view_visibility_contract() -> None:
+    fixtures = all_fixtures()
+    product = [product_graph_view(item) for item in fixtures]
+    technical = [technical_graph_view(item) for item in fixtures]
+
+    expected_product_entities = [
+        {"problem", "plan", "workflow", "A", "B", "C", "outcome"},
+        {"workflow", "A", "B", "C", "D", "outcome"},
+        {"definition", "I1", "I2", "I3"},
+        {"T1", "T2", "T3", "I1"},
+        {"T1", "T2", "C1", "C2"},
+        {"A", "B"},
+        {"task", "capability", "approval", "outcome"},
+        {"plan", "approval", "task"},
+        {"workflow", "A", "B", "outcome"},
+        {"task", "outcome"},
+        {"definition"},
+        {"problem", "plan", "workflow", "A", "B", "C", "outcome"},
+    ]
+    expected_technical_entities = [
+        {
+            "plan",
+            "workflow",
+            "A",
+            "B",
+            "C",
+            "definition",
+            "instance",
+            "runtime",
+            "outcome",
+        },
+        {"workflow", "A", "B", "C", "D", "definition", "instance", "outcome"},
+        {"definition", "I1", "I2", "I3", "runtime"},
+        {"T1", "T2", "T3", "I1"},
+        {"T1", "T2", "C1", "C2", "K1", "K2"},
+        {"A", "B"},
+        {"task", "capability", "approval", "outcome"},
+        {"plan", "approval", "task"},
+        {"workflow", "A", "B", "outcome"},
+        {"task", "runtime", "outcome"},
+        {"definition"},
+        {
+            "plan",
+            "workflow",
+            "A",
+            "B",
+            "C",
+            "definition",
+            "instance",
+            "runtime",
+            "outcome",
+        },
+    ]
+    assert [_initial_entities(item) for item in product] == [
+        frozenset(item) for item in expected_product_entities
+    ]
+    assert [_initial_entities(item) for item in technical] == [
+        frozenset(item) for item in expected_technical_entities
+    ]
+    assert [len(item.nodes) + len(item.groups) for item in product] == [
+        7,
+        6,
+        4,
+        4,
+        4,
+        2,
+        4,
+        3,
+        4,
+        2,
+        2,
+        7,
+    ]
+    assert [len(item.nodes) + len(item.groups) for item in technical] == [
+        9,
+        8,
+        5,
+        4,
+        6,
+        2,
+        4,
+        3,
+        4,
+        3,
+        2,
+        9,
+    ]
+    assert [len(item.raw_relations) for item in product] == [
+        7,
+        6,
+        3,
+        3,
+        4,
+        3,
+        3,
+        3,
+        5,
+        1,
+        12,
+        7,
+    ]
+    assert [len(item.raw_relations) for item in technical] == [
+        11,
+        11,
+        7,
+        3,
+        8,
+        3,
+        4,
+        3,
+        5,
+        2,
+        24,
+        11,
+    ]
+    assert [len(item.edges) for item in product] == [7, 6, 3, 3, 4, 1, 3, 3, 5, 1, 1, 7]
+    assert [len(item.edges) for item in technical] == [
+        11,
+        11,
+        7,
+        3,
+        8,
+        1,
+        4,
+        3,
+        5,
+        2,
+        2,
+        11,
+    ]
+    assert [len(item.groups) for item in product] == [0] * 10 + [1, 0]
+    assert [len(item.groups) for item in technical] == [0] * 10 + [1, 0]
+    for views in (product, technical):
+        group = views[10].groups[0]
+        graph = fixtures[10]
+        entity_by_id = {item.node_id: item.entity_id for item in graph.nodes}
+        assert tuple(entity_by_id[item] for item in group.member_node_ids) == tuple(
+            f"I{index:02d}" for index in range(1, 13)
+        )
+
+
 def test_fixture_input_permutation_is_byte_stable() -> None:
     graph = parallel_fixture()
     node_specs = [
-        node(
-            item.entity_id, item.node_type, phase=item.phase, evidence=item.evidence_ids
+        NodeSpec(
+            node_type=item.node_type,
+            entity_id=item.entity_id,
+            label_key=item.label_key,
+            phase=item.phase,
+            progress=item.progress,
+            execution_identity=item.execution_identity,
+            summary=item.summary,
+            evidence_ids=item.evidence_ids,
+            limitation_codes=item.limitation_codes,
+            visibility=item.visibility,
+            group_kind=item.group_kind,
+            group_parent_id=item.group_parent_id,
         )
         for item in reversed(graph.nodes)
     ]
@@ -810,6 +1040,41 @@ def test_same_pair_aggregation_preserves_raw_semantics_and_cardinalities() -> No
     assert edge.evidence_ids == ("ev-data", "ev-dependency", "ev-trigger")
 
 
+def test_aggregation_key_is_metadata_not_a_gp06_safety_discriminator() -> None:
+    graph = build_graph(
+        CONTEXT,
+        [node("A"), node("B")],
+        [
+            relation(
+                "A",
+                "B",
+                RelationType.DEPENDS_ON,
+                Cardinality.ONE_TO_ONE,
+                evidence=("ev-dependency",),
+                aggregation_key="fixture-handle-a",
+            ),
+            relation(
+                "A",
+                "B",
+                RelationType.DATA_FLOW,
+                Cardinality.ONE_TO_MANY,
+                evidence=("ev-data",),
+                aggregation_key="fixture-handle-b",
+            ),
+            relation(
+                "A",
+                "B",
+                RelationType.TRIGGERS,
+                Cardinality.MANY_TO_MANY,
+                evidence=("ev-trigger",),
+            ),
+        ],
+    )
+    edge = technical_graph_view(graph).edges[0]
+    assert len(technical_graph_view(graph).edges) == 1
+    assert len(edge.raw_relation_ids) == 3
+
+
 def test_safety_discriminators_prevent_unsafe_merges() -> None:
     graph = same_pair_fixture()
     by_id = {item.node_id: item.entity_id for item in graph.nodes}
@@ -894,7 +1159,7 @@ def test_security_and_denial_effect_evidence_fail_closed() -> None:
         ),
         tenant_or_security_domain="tenant-b",
     )
-    with pytest.raises(GraphProjectionError, match="SECURITY_DOMAIN_MISMATCH"):
+    with pytest.raises(GraphProjectionError, match="SECURITY_DOMAIN_INPUT_MISMATCH"):
         build_graph(CONTEXT, [node("A"), node("B")], [mismatched])
     with pytest.raises(
         GraphProjectionError, match="DENY_REQUIRES_ZERO_PROVIDER_EFFECTS"

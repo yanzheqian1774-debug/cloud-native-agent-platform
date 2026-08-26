@@ -522,7 +522,7 @@ def build_graph(
     relation_ids: set[str] = set()
     for spec in relation_specs:
         if spec.tenant_or_security_domain != context.security_domain:
-            raise GraphProjectionError("SECURITY_DOMAIN_MISMATCH")
+            raise GraphProjectionError("SECURITY_DOMAIN_INPUT_MISMATCH")
         try:
             source = nodes_by_entity[spec.source_entity_id]
             target = nodes_by_entity[spec.target_entity_id]
@@ -671,7 +671,6 @@ def _aggregate_relations(
             relation.blocking_class,
             relation.authorization_class,
             relation.evidence_authority_class,
-            relation.aggregation_key,
         )
         buckets[key].append(relation)
     result: list[VisualEdge] = []
@@ -748,7 +747,9 @@ def _build_groups(
     ):
         if len(members) < threshold:
             continue
-        member_ids = tuple(sorted(item.node_id for item in members))
+        ordered_members = tuple(sorted(members, key=_node_sort))
+        member_ids = tuple(item.node_id for item in ordered_members)
+        identity_member_ids = tuple(sorted(member_ids))
         group_id = _identity(
             "gpg:v0.2-candidate",
             (
@@ -757,13 +758,13 @@ def _build_groups(
                 graph.context.security_domain,
                 kind,
                 parent,
-                member_ids,
+                identity_member_ids,
             ),
         )
         if group_id in expanded_group_ids:
             continue
         phases: dict[Phase, int] = defaultdict(int)
-        for member in members:
+        for member in ordered_members:
             phases[member.phase] += 1
             aliases[member.node_id] = group_id
             hidden.add(member.node_id)
@@ -778,11 +779,21 @@ def _build_groups(
                     sorted(phases.items(), key=lambda item: item[0].value)
                 ),
                 evidence_ids=tuple(
-                    sorted({value for item in members for value in item.evidence_ids})
+                    sorted(
+                        {
+                            value
+                            for item in ordered_members
+                            for value in item.evidence_ids
+                        }
+                    )
                 ),
                 limitation_codes=tuple(
                     sorted(
-                        {value for item in members for value in item.limitation_codes}
+                        {
+                            value
+                            for item in ordered_members
+                            for value in item.limitation_codes
+                        }
                     )
                 ),
             )

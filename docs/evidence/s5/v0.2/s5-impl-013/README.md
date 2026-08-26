@@ -16,6 +16,26 @@
 | Draft PR | `#62 / OPEN / DRAFT / CLEAN / MERGEABLE / UNMERGED` at evidence authorization |
 | Classification | `INTERNAL / UNFROZEN / REPLACEABLE / NOT_A_PUBLIC_CONTRACT` |
 
+### S5-IMPL-013-C1 correction state
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-IMPL-013-C1` |
+| Title | `Graph Projection Fixture Contract and Aggregation Safety Correction` |
+| Implementation source head | `a78c22bc25e2aa23b378a6ea2cb69fed367b9e8f` |
+| Architecture-contract authority | `origin/main` at `a76d5cc17e555a34aee63ab1cc18065c8203fb68` |
+| Branch | `codex/s5-impl-013-c1-fixture-contract-aggregation-safety` |
+| Target PR | `#62 / NEW_PR_PROHIBITED` |
+| Rebase / merge-main | `PROHIBITED / NOT_PERFORMED` |
+
+This C1 correction consumes the integrated S5-ARCH-009-C3/C4 fixture contract
+as read-only architecture authority without rebasing or merging it. It
+completes all twelve fixture visibility mappings, adds the approved
+`plan-TRIGGERS->workflow` revision linkage to Fixtures 1/12, aligns the
+security-input discriminator, and removes `aggregation_key` from the exact
+GP06 safety tuple. It changes no public API, frozen Contract, CRD, execution
+behavior, source-of-truth boundary, dependency, or persistence model.
+
 The Human G1 gate authorized the bounded internal implementation slice from
 S5-ARCH-009 after confirming S5-ARCH-009, C1, C2, and S5-REL-023 closed and
 durably integrated. Architecture terminal-metadata lag was explicitly accepted
@@ -99,6 +119,12 @@ and evidence-authority class. Missing or different safety classifications do
 not merge. `BLOCKS` retains blocker/prerequisite to blocked-node direction and
 cannot merge with an opposite-direction or informational relation.
 
+`aggregation_key` remains preserved raw fixture/presentation metadata but is
+not a GP06 safety discriminator and cannot split relations whose complete
+approved safety tuple is equal. Fixture 8 assigns distinct Human approval
+request and decision authorization classifications, so its same-pair
+relations remain separate for a safety reason rather than a fixture handle.
+
 Aggregated edges retain the ordered raw relation IDs, complete Evidence-ID
 union, and the sorted set of original declared cardinalities. Aggregation does
 not invent a replacement cardinality. Expansion restores the same canonical
@@ -110,7 +136,7 @@ The component suite implements all twelve S5-ARCH-009 deterministic fixtures:
 
 | Fixture | Raw shape / proof |
 | --- | --- |
-| 1 | serial graph, `N10/R12` |
+| 1 | serial graph with exact approved-revision trigger, `N10/R13` |
 | 2 | parallel fan-out/fan-in, `N8/R11` |
 | 3 | Definition and three Instances, `N5/R7` |
 | 4 | three Tasks assigned to one Instance, `N4/R3` |
@@ -121,14 +147,20 @@ The component suite implements all twelve S5-ARCH-009 deterministic fixtures:
 | 9 | failed blocker and skipped dependent remain distinct, `N4/R5` |
 | 10 | ambiguous `UNKNOWN` Outcome, `N3/R2` |
 | 11 | twelve-Instance grouping and exact expansion, `N13/R24` |
-| 12 | Fixture 1 dual-view identity reuse, `N10/R12` |
+| 12 | Fixture 1 dual-view identity reuse, `N10/R13` |
 
-The suite proves 94 raw relation occurrences, zero missing declared
+The suite proves 96 raw relation occurrences, zero missing declared
 cardinalities, exactly the four canonical cardinality values, exact Fixture 12
 snapshot/relation identity reuse, distinct snapshot identities for different
 fixtures, stable reversed-input ordering, execution-cycle rejection, tolerance
 of non-execution cycles, unsafe-merge separation, security-domain rejection,
 effect-evidence rejection, UNKNOWN preservation, and exact group expansion.
+
+The C1 suite additionally proves every corrected initial Product/Technical
+node/group set and edge count for all twelve fixtures; Fixture 3 `P4/3`;
+Fixture 7 `P4/3`; Fixtures 1/12 `P7/7` and `T9/11`; exact `I01..I12` expansion
+order; the common `fixture-authorized-domain` input; and
+`SECURITY_DOMAIN_INPUT_MISMATCH` for cross-domain relation input.
 
 ## Compatibility and non-change audit
 
@@ -149,6 +181,23 @@ The final diff contains the two new internal implementation/test files plus
 this evidence artifact only.
 
 ## Validation and exact-head provenance
+
+S5-IMPL-013-C1 local validation on the authorized implementation branch:
+
+- focused Graph Projection suite: **15 passed**;
+- targeted Graph Projection, Core compatibility, and shared-view suite:
+  **36 passed**;
+- full `make check`: Ruff lint passed, Ruff format passed, **602 passed**;
+- one existing Starlette/httpx deprecation warning remained unchanged;
+- `uv` reported non-fatal environment-lock warnings because validation reused
+  the existing repository environment without writing outside this worktree.
+
+The C1 correction has not been rebased onto or merged with the architecture
+authority. No new PR was created; PR #62 remains the sole target. Exact C1
+commit and CI provenance remain pending the authorized commit/push workflow.
+
+The original S5-IMPL-013 validation record follows unchanged for historical
+provenance.
 
 Local validation against Checkpoint B implementation head
 `cb033f6a8c2ca1b0bd795cd38b4d1db0ea4f2bdc`:
