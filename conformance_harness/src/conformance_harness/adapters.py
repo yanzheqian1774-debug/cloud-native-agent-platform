@@ -75,9 +75,11 @@ def identity_spine(criterion: Criterion) -> Evidence:
     assert len(handed_off.native_correlations) == 1
     assert handed_off.native_correlations[0].value != first.execution_identity.value
     return Evidence(
-        EvidenceClassification.TESTED,
-        True,
-        {
+        criterion_id=criterion.criterion_id,
+        classification=EvidenceClassification.TESTED,
+        completed=True,
+        execution_provenance="identity_spine:in-process:current-head",
+        observations={
             "boundary": criterion.target,
             "platform_execution_identity_authoritative": True,
             "native_identity_correlation_only": True,
@@ -94,9 +96,11 @@ def compatibility_interpreter(criterion: Criterion) -> Evidence:
     assert task == TASK_SPEC
     assert agent == AGENT
     return Evidence(
-        EvidenceClassification.TESTED,
-        True,
-        {
+        criterion_id=criterion.criterion_id,
+        classification=EvidenceClassification.TESTED,
+        completed=True,
+        execution_provenance="compatibility_interpreter:in-process:current-head",
+        observations={
             "boundary": criterion.target,
             "deterministic": True,
             "caller_inputs_mutated": False,
@@ -124,9 +128,11 @@ def native_provider(criterion: Criterion) -> Evidence:
         != outcome.platform_execution_identity
     )
     return Evidence(
-        EvidenceClassification.SUPPORTED_CANDIDATE,
-        True,
-        {
+        criterion_id=criterion.criterion_id,
+        classification=EvidenceClassification.SUPPORTED_CANDIDATE,
+        completed=True,
+        execution_provenance="native_provider:deterministic-mock:current-head",
+        observations={
             "boundary": criterion.target,
             "requested_runtime": outcome.requested_runtime,
             "effective_runtime": outcome.effective_runtime,
@@ -166,9 +172,15 @@ def capability_gateway(criterion: Criterion) -> Evidence:
     assert first == second
     assert first.execution_identity == envelope.execution_identity
     return Evidence(
-        EvidenceClassification.TESTED,
-        True,
-        {"boundary": criterion.target, "synthetic_rest": True, "deterministic": True},
+        criterion_id=criterion.criterion_id,
+        classification=EvidenceClassification.TESTED,
+        completed=True,
+        execution_provenance="capability_gateway:synthetic-rest:current-head",
+        observations={
+            "boundary": criterion.target,
+            "synthetic_rest": True,
+            "deterministic": True,
+        },
     )
 
 
@@ -212,9 +224,14 @@ def mvs_execution(criterion: Criterion) -> Evidence:
     assert outcome.capability.status is CapabilityStatus.SUCCEEDED
     assert outcome.capability.execution_identity == envelope.execution_identity
     return Evidence(
-        EvidenceClassification.SUPPORTED_CANDIDATE,
-        True,
-        {"boundary": criterion.target, "runtime_and_capability_observed": True},
+        criterion_id=criterion.criterion_id,
+        classification=EvidenceClassification.SUPPORTED_CANDIDATE,
+        completed=True,
+        execution_provenance="mvs_execution:native+synthetic-rest:current-head",
+        observations={
+            "boundary": criterion.target,
+            "runtime_and_capability_observed": True,
+        },
     )
 
 

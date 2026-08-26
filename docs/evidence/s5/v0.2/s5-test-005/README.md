@@ -33,12 +33,12 @@ defensively copied.
 
 ## Changed-path inventory
 
-- `conformance_harness/__init__.py`
-- `conformance_harness/adapters.py`
-- `conformance_harness/fixtures.py`
-- `conformance_harness/manifest.py`
-- `conformance_harness/models.py`
-- `conformance_harness/runner.py`
+- `conformance_harness/src/conformance_harness/__init__.py`
+- `conformance_harness/src/conformance_harness/adapters.py`
+- `conformance_harness/src/conformance_harness/fixtures.py`
+- `conformance_harness/src/conformance_harness/manifest.py`
+- `conformance_harness/src/conformance_harness/models.py`
+- `conformance_harness/src/conformance_harness/runner.py`
 - `conformance_harness/fixtures/criteria.json`
 - `conformance_harness/fixtures/capability_request.json`
 - `tests/conformance_harness/test_adapters.py`
@@ -47,7 +47,7 @@ defensively copied.
 - `tests/conformance_harness/test_runner.py`
 - `tests/conformance_harness/test_targets.py`
 - `docs/evidence/s5/v0.2/s5-test-005/README.md`
-- `pyproject.toml` (adds only `.` to pytest test discovery)
+- `pyproject.toml` (adds only `conformance_harness/src` to pytest discovery)
 
 No dependency, packaging, version, or build-backend configuration changed.
 
@@ -160,3 +160,134 @@ Candidate result: `PASS_WITH_CONSTRAINTS`, contingent on exact-head local gates,
 Draft PR CI, and Human review. This does not close the Session. The next action
 is delivery of the isolated Draft PR followed by the Human S5-TEST-005
 Conformance Harness Review Gate.
+
+## Checkpoint B — safety and evidence convergence
+
+### Provenance
+
+- Checkpoint: `B — CONFORMANCE_HARNESS_SAFETY_CONVERGENCE_AND_EXIT_CANDIDATE`
+- Checkpoint A head: `7686ee43498d9da82c5e20557665029f6b2ea261`
+- Checkpoint B final head: the correction commit containing this section,
+  resolved by `git rev-parse HEAD` and recorded exactly by Draft PR #58; a Git
+  commit cannot embed its own content-addressed SHA.
+- Baseline remains `df76e0b36dcb42c12e25852a04fd0086dac987a8`.
+- Worktree, branch and PR remain the Checkpoint A worktree,
+  `codex/s5-test-005-conformance-harness`, and Draft PR #58.
+- No child Agent, parallel writer, competing PR or downstream Product View,
+  Technical View, Golden Demo or release PR was active at preflight.
+
+### Problems identified and bounded corrections
+
+Checkpoint A kept classification inside `Evidence`, allowed inconsistent result
+objects to be constructed directly, had no explicit manifest/fixture resource
+bounds, accepted arbitrary fixture suffixes and credential-shaped content, and
+used the repository root (`.`) on pytest's import path. Checkpoint B:
+
+- separates typed `Disposition` and `EvidenceClassification` on every result;
+- cross-validates result, manifest and supporting-evidence classifications;
+- requires each PASS evidence record to identify criterion ID and deterministic
+  execution provenance;
+- limits PASS authority to completed `TESTED` or `SUPPORTED_CANDIDATE` evidence;
+- rejects contradictory results, duplicate report criteria and unreconciled
+  summaries;
+- adds manifest limits of 256 KiB, 256 criteria and 32 nesting levels;
+- adds fixture limits of 64 KiB and 32 nesting levels, JSON-only suffixes,
+  duplicate-key and duplicate-identity rejection, finite-number enforcement,
+  symlink confinement and credential-shape rejection;
+- avoids stringifying unsupported hostile exception objects, redacts sensitive
+  diagnostics and unrelated host paths, and caps diagnostics at 240 characters;
+- deep-freezes evidence observations and emits deterministic compact, sorted
+  JSON bytes for replay comparison; and
+- moves the internal package under `conformance_harness/src/conformance_harness`
+  so pytest imports only `conformance_harness/src`, not the repository root.
+
+### Result versus evidence model
+
+Disposition answers whether a criterion ran and satisfied its assertion.
+Evidence classification answers the authority and maturity of evidence. They
+are separate enum fields. Construction fails when evidence identifies another
+criterion or classification, PASS lacks completed evidence, a non-PASS carries
+completed pass evidence, results duplicate a criterion, or summary arithmetic
+differs from individual results.
+
+`NOT_APPLICABLE` does not automatically mean `NOT_YET_PROVEN`. The Workflow row
+has both only because the manifest explicitly records
+`evidence_classification=NOT_YET_PROVEN` while profile evaluation independently
+produces `disposition=NOT_APPLICABLE`. Neither it nor UNRUN contributes to PASS.
+
+### Exact six-criterion proof matrix
+
+| Criterion | Disposition | Evidence classification | Completed proof and exact boundary |
+| --- | --- | --- | --- |
+| `A2-IDENTITY-001` | `PASS` | `TESTED` | Current-head in-process execution proves deterministic identity recovery and native-correlation separation for A2 / `internal-v0.2-candidate` / `v0.2`. |
+| `A3-COMPAT-001` | `PASS` | `TESTED` | Current-head in-process execution runs the interpreter twice and proves equal envelopes plus unchanged caller data for `legacy-task-v0.2-candidate` / `v0.2`. |
+| `B-NATIVE-001` | `PASS` | `SUPPORTED_CANDIDATE` | Current-head deterministic mock execution proves the exact Native requested/effective target and correlation-only native invocation ID for `native-provider-v0.2-candidate`. |
+| `C-GATEWAY-001` | `PASS` | `TESTED` | Current-head synthetic REST execution proves equal repeated outcomes and preserved Platform Execution Identity for `capability-gateway-v0.2-candidate`. |
+| `E-MVS-001` | `PASS` | `SUPPORTED_CANDIDATE` | Current-head Native plus synthetic REST execution completes Runtime and Capability outcomes under the same Platform identity for `v0.2-candidate`. |
+| `E-WORKFLOW-OPTIONAL-001` | `NOT_APPLICABLE` | `NOT_YET_PROVEN` | No adapter runs under `mvs-native`; no evidence is fabricated and no PASS is counted. |
+
+Arithmetic remains total `6` = PASS `5` + FAIL `0` + UNRUN `0` +
+NOT_APPLICABLE `1`.
+
+### Determinism and isolation evidence
+
+- Selection and result ordering are sorted by criterion ID; duplicate manifest
+  and selection IDs fail before execution.
+- Repeated runs produce equal immutable reports and byte-identical normalized
+  JSON records.
+- Adapter registries are copied per runner. One caller or runner cannot mutate
+  another runner's registry, counters or summary.
+- A failed criterion records bounded FAIL while the next independent criterion
+  still runs and records its own result.
+- Manifest input, fixture content, adapter caller data and nested evidence are
+  defensively copied; evidence mappings and nested sequences are immutable.
+- No clock, repository, global counter, mutable singleton or nondeterministic ID
+  source is used by the Harness.
+
+### Pytest discovery boundary
+
+`pyproject.toml` adds only `conformance_harness/src` to pytest `pythonpath`.
+Existing explicit `testpaths` remain unchanged. Virtual environments, temporary
+directories, build outputs, fixtures and evidence directories therefore are not
+added to test collection. No project dependency, version, package metadata,
+build backend or lockfile changes.
+
+### Checkpoint B validation
+
+- `uv run pytest tests/conformance_harness -q`: `57 passed`.
+- Targeted A2/A3/Native/Capability/MVS component regressions: `189 passed`.
+- `make check`, using the provisioned environment offline: Ruff passed; full
+  pytest `520 passed`, with one existing Starlette/httpx warning.
+- `npm run lint`: passed.
+- `npm run build`: passed; Vite transformed 38 modules.
+- Manifest/fixture bound tests, hostile diagnostic tests, import ownership,
+  arithmetic, deterministic serialization and state isolation tests: passed.
+- Exact changed-path, import/cycle, production-import, public API/CRD/schema,
+  dependency/lockfile, secret/redaction, relative-link, rollback and Git diff
+  audits are rerun before the Checkpoint B commit.
+- Exact-final-head GitHub Quality and Frontend Quality Gates remain required
+  after push.
+
+### Explicit non-promotion boundary
+
+- Executable Harness: `INTERNAL_TEST_CANDIDATE`
+- Component certification: `NOT_GRANTED`
+- Provider certification: `NOT_GRANTED`
+- Production readiness: `NOT_GRANTED`
+- Release acceptance: `NOT_GRANTED`
+- Contract freeze / schema freeze: `NO / NO`
+- Product MVS: `NOT_COMPLETE`
+- Golden Demo: `NOT_IMPLEMENTED_BY_THIS_SESSION`
+- OpenClaw / Hermes support: `NOT_GRANTED_BY_THIS_SESSION`
+
+### Remaining Evidence Debt and rollback
+
+The Harness does not prove live external Capability services, Workflow terminal
+propagation, external runtimes, all versions/environments, production security,
+certification, readiness or release acceptance. Human review and separately
+authorized durable integration remain required.
+
+Rollback remains deletion/revert-only. Reverting the Checkpoint B correction
+returns exactly to Checkpoint A; reverting the complete PR removes only the
+Harness, tests/evidence and test-discovery entry. No production rollback or
+migration exists because production semantics and state are unchanged.

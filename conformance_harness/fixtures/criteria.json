@@ -8,6 +8,7 @@
       "profile": "internal-v0.2-candidate",
       "version": "v0.2",
       "adapter": "identity_spine",
+      "evidence_classification": "TESTED",
       "applicable_profiles": ["mvs-native"]
     },
     {
@@ -17,6 +18,7 @@
       "profile": "legacy-task-v0.2-candidate",
       "version": "v0.2",
       "adapter": "compatibility_interpreter",
+      "evidence_classification": "TESTED",
       "applicable_profiles": ["mvs-native"]
     },
     {
@@ -26,6 +28,7 @@
       "profile": "native/mock/deterministic",
       "version": "native-provider-v0.2-candidate",
       "adapter": "native_provider",
+      "evidence_classification": "SUPPORTED_CANDIDATE",
       "applicable_profiles": ["mvs-native"]
     },
     {
@@ -35,6 +38,7 @@
       "profile": "synthetic-rest/deterministic",
       "version": "capability-gateway-v0.2-candidate",
       "adapter": "capability_gateway",
+      "evidence_classification": "TESTED",
       "applicable_profiles": ["mvs-native"]
     },
     {
@@ -44,6 +48,7 @@
       "profile": "native+synthetic-rest",
       "version": "v0.2-candidate",
       "adapter": "mvs_execution",
+      "evidence_classification": "SUPPORTED_CANDIDATE",
       "applicable_profiles": ["mvs-native"]
     },
     {
@@ -53,6 +58,7 @@
       "profile": "optional/not-initial-target",
       "version": "not-yet-proven",
       "adapter": "workflow_terminal",
+      "evidence_classification": "NOT_YET_PROVEN",
       "applicable_profiles": ["workflow-terminal"]
     }
   ]
