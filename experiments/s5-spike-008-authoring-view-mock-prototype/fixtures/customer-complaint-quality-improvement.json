@@ -80,6 +80,8 @@
   },
   "execution": {
     "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+    "source_event_timestamp": "2026-08-26T04:00:00Z",
+    "duration_seconds": 184,
     "business_status": "COMPLETED",
     "current_step": "Recommendations ready",
     "outcome": {
@@ -147,6 +149,62 @@
       "runtime_provider_identity": "provider.runtime.native.synthetic.v1",
       "provider_native_correlation_id": "native-correlation-synthetic-0001",
       "capability_request_identity": "capreq.synthetic.complaint-analysis.001"
+    }
+  },
+  "localized_content": {
+    "en-US": {
+      "employees": [
+        {
+          "role_title": "Customer Insight Specialist",
+          "role_description": "Turns synthetic complaint patterns into clear business insights.",
+          "business_responsibilities": ["Classify complaint themes", "Explain customer impact"],
+          "can_do": ["Analyze authorized synthetic complaint records", "Cite approved knowledge assets"],
+          "cannot_do": ["Contact customers", "Change production records", "Select infrastructure"],
+          "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+        },
+        {
+          "role_title": "Quality Analysis Specialist",
+          "role_description": "Prioritizes quality improvements from authorized evidence.",
+          "business_responsibilities": ["Rank quality issues", "Recommend bounded improvements"],
+          "can_do": ["Compare approved historical cases", "Propose prioritized actions"],
+          "cannot_do": ["Approve product changes", "Trigger real remediation", "Silently change Runtime"],
+          "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+        }
+      ],
+      "work_plan": ["Group complaint themes", "Assess frequency and business impact", "Prioritize improvement recommendations"],
+      "knowledge_collection": "Customer Complaint and Quality Improvement Knowledge",
+      "knowledge_assets": [
+        {"title": "Customer Complaint Classification Standard", "citation": "Classification Standard, mock revision 3, section 2"},
+        {"title": "Product Quality Issue Handling Standard", "citation": "Issue Handling Standard, mock revision 2, section 4"},
+        {"title": "Historical Quality Improvement Cases", "citation": "Historical Cases, mock revision 5, case group B"}
+      ]
+    },
+    "zh-CN": {
+      "employees": [
+        {
+          "role_title": "客户洞察专员",
+          "role_description": "把合成客户投诉模式转化为清晰的业务洞察。",
+          "business_responsibilities": ["归类投诉主题", "说明客户影响"],
+          "can_do": ["分析已授权的合成投诉记录", "引用已批准的知识资产"],
+          "cannot_do": ["联系客户", "更改生产记录", "选择基础设施"],
+          "knowledge_scope": "客户投诉与质量改进知识"
+        },
+        {
+          "role_title": "质量分析专员",
+          "role_description": "依据已授权证据确定质量改进优先级。",
+          "business_responsibilities": ["排序质量问题", "提出有边界的改进建议"],
+          "can_do": ["比较已批准的历史案例", "提出优先行动建议"],
+          "cannot_do": ["批准产品变更", "触发真实整改", "静默更换运行环境"],
+          "knowledge_scope": "客户投诉与质量改进知识"
+        }
+      ],
+      "work_plan": ["归纳投诉主题", "评估频率和业务影响", "确定改进建议优先级"],
+      "knowledge_collection": "客户投诉与质量改进知识",
+      "knowledge_assets": [
+        {"title": "客户投诉分类标准", "citation": "《客户投诉分类标准》模拟修订版 3，第 2 节"},
+        {"title": "产品质量问题处理标准", "citation": "《产品质量问题处理标准》模拟修订版 2，第 4 节"},
+        {"title": "历史质量改进案例", "citation": "《历史质量改进案例》模拟修订版 5，案例组 B"}
+      ]
     }
   },
   "states": ["empty", "Draft", "Diff pending approval", "approved mock definition", "business question entered", "employee recommendation", "plan awaiting confirmation", "execution running", "execution succeeded", "capability denied", "outcome unknown", "OpenClaw unavailable", "Hermes experimental", "Knowledge authorization allowed", "Knowledge authorization denied", "citation available", "citation unavailable or stale"]

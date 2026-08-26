@@ -12,6 +12,12 @@ ROOT = Path(__file__).parents[1]
 REPOSITORY = ROOT.parents[1]
 sys.path.insert(0, str(ROOT))
 
+from i18n import (
+    DEFAULT_LOCALE,
+    load_catalog,
+    localized_business_content,
+    translate,
+)
 from prototype import (
     accept_suggestion,
     apply_ai_suggestion,
@@ -246,9 +252,9 @@ def test_web_mock_has_accessible_dual_view_and_required_state_controls() -> None
     script = (ROOT / "web" / "app.js").read_text()
     assert 'aria-label="Primary journey"' in html
     assert 'aria-label="Technical View"' in html
-    assert "Open Technical View" in html
-    assert "Reject Draft" in html
-    assert "Approve and mock publish" in html
+    assert 'data-i18n="technical.open"' in html
+    assert 'data-i18n="action.reject"' in html
+    assert 'data-state-key="action.approve"' in html
     assert "@media (max-width:760px)" in (ROOT / "web" / "styles.css").read_text()
     assert "setTechnical" in script
 
@@ -282,3 +288,136 @@ def test_production_code_does_not_import_spike_prototype() -> None:
         and "s5-spike-008" in path.read_text()
     ]
     assert offenders == []
+
+
+def test_en_us_and_zh_cn_catalogs_have_complete_matching_keys() -> None:
+    english = load_catalog("en-US")
+    chinese = load_catalog("zh-CN")
+    assert english
+    assert english.keys() == chinese.keys()
+    assert all(value.strip() for value in english.values())
+    assert all(value.strip() for value in chinese.values())
+
+
+def test_translation_fallback_order_is_selected_default_then_key() -> None:
+    catalogs = {
+        "en-US": {"complete": "English", "default-only": "Default"},
+        "zh-CN": {"complete": "中文"},
+    }
+    assert translate("zh-CN", "complete", catalogs) == "中文"
+    assert translate("zh-CN", "default-only", catalogs) == "Default"
+    assert translate("en-US", "missing", catalogs) == "missing"
+    assert translate("fr-FR", "complete", catalogs) == "English"
+    assert DEFAULT_LOCALE == "en-US"
+
+
+def test_critical_actions_never_fall_back_to_blank() -> None:
+    for locale in ("zh-CN", "en-US", "unknown"):
+        for key in (
+            "problem.recommend",
+            "action.confirm",
+            "suggestion.accept",
+            "action.reject",
+            "action.approve",
+            "technical.open",
+        ):
+            assert translate(locale, key).strip()
+
+
+def test_required_terminology_glossary_is_exact() -> None:
+    terms = {
+        "term.digitalEmployee": ("数字员工", "Digital Employee"),
+        "term.definition": ("定义", "Definition"),
+        "term.instance": ("实例", "Instance"),
+        "term.task": ("任务", "Task"),
+        "term.workflow": ("工作流", "Workflow"),
+        "term.executionIdentity": ("执行身份", "Execution Identity"),
+        "term.runtime": ("运行环境", "Runtime"),
+        "term.capability": ("能力", "Capability"),
+        "term.enterpriseKnowledge": ("企业知识", "Enterprise Knowledge"),
+        "term.outcome": ("执行结果", "Outcome"),
+        "term.evidence": ("执行证据", "Evidence"),
+        "term.citation": ("知识引用", "Citation"),
+        "term.draft": ("草稿", "Draft"),
+        "term.diff": ("变更对比", "Diff"),
+        "term.approval": ("审批", "Approval"),
+    }
+    for key, (chinese, english) in terms.items():
+        assert translate("zh-CN", key) == chinese
+        assert translate("en-US", key) == english
+
+
+def test_reason_code_is_stable_while_explanation_is_localized() -> None:
+    code = "LIVE_MANAGED_PROFILE_EVIDENCE_REQUIRED"
+    key = f"reason.{code}"
+    assert translate("zh-CN", key) == "缺少实时托管运行证据"
+    assert translate("en-US", key) == "Live managed-profile evidence is required"
+    assert code == "LIVE_MANAGED_PROFILE_EVIDENCE_REQUIRED"
+
+
+def test_localized_projection_preserves_authoritative_evidence() -> None:
+    source = load_fixture()
+    english = localized_business_content(source, "en-US")
+    chinese = localized_business_content(source, "zh-CN")
+    for key in ("identities", "execution", "runtime_support"):
+        assert english[key] == chinese[key] == source[key]
+    assert (
+        english["knowledge"]["authorization"] == chinese["knowledge"]["authorization"]
+    )
+    assert (
+        english["knowledge"]["deny_evidence"] == chinese["knowledge"]["deny_evidence"]
+    )
+    for english_asset, chinese_asset in zip(
+        english["knowledge"]["assets"], chinese["knowledge"]["assets"], strict=True
+    ):
+        for key in ("asset_id", "revision", "evidence_id"):
+            assert english_asset[key] == chinese_asset[key]
+
+
+def test_localized_business_content_changes_display_fields_only() -> None:
+    fixture = load_fixture()
+    english = localized_business_content(fixture, "en-US")
+    chinese = localized_business_content(fixture, "zh-CN")
+    assert english["directory"][0]["role_title"] == "Customer Insight Specialist"
+    assert chinese["directory"][0]["role_title"] == "客户洞察专员"
+    assert (
+        english["knowledge"]["collection"]["name"]
+        != chinese["knowledge"]["collection"]["name"]
+    )
+    assert (
+        english["knowledge"]["assets"][0]["citation"]
+        != chinese["knowledge"]["assets"][0]["citation"]
+    )
+
+
+def test_unknown_business_locale_uses_en_us_display_without_data_change() -> None:
+    fixture = load_fixture()
+    unknown = localized_business_content(fixture, "fr-FR")
+    english = localized_business_content(fixture, "en-US")
+    assert unknown["directory"] == english["directory"]
+    assert unknown["knowledge"] == english["knowledge"]
+    assert unknown["display_locale"] == "en-US"
+
+
+def test_runtime_support_translation_never_promotes_state() -> None:
+    support = {item["runtime"]: item for item in load_fixture()["runtime_support"]}
+    assert translate("zh-CN", "runtime.native.label") == "可用"
+    assert translate("zh-CN", "runtime.openclaw.label") == "实验性 / 当前不可用"
+    assert translate("zh-CN", "runtime.hermes.label") == "实验性"
+    assert (
+        support["Native"]["technical_state"] == "INTEGRATED_COMPONENT_TESTED_CANDIDATE"
+    )
+    assert support["OpenClaw"]["support"] == "NOT_GRANTED"
+    assert support["Hermes"]["support"] == "NOT_GRANTED"
+
+
+def test_web_uses_locale_formatters_and_preserves_journey_state() -> None:
+    script = (ROOT / "web" / "app.js").read_text()
+    styles = (ROOT / "web" / "styles.css").read_text()
+    assert "Intl.DateTimeFormat" in script
+    assert "Intl.NumberFormat" in script
+    assert 'timeZone:"UTC"' in script
+    assert "source_event_timestamp" in script
+    assert "currentLocale" in script and "showStep" in script
+    assert ":focus-visible" in styles
+    assert "overflow-wrap:anywhere" in styles
