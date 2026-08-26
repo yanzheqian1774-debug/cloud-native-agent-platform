@@ -63,6 +63,30 @@ This C2 correction preserves the complete C1 provenance and corrected
 `BLOCKS` direction. It changes no graph architecture, relation meaning,
 execution behavior, public model, schema, or implementation scope.
 
+### 1.3 View-visibility completeness correction provenance
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-ARCH-009-C3` |
+| Title | `Graph Fixture View Visibility Contract Correction` |
+| Discovered by | `S5-IMPL-013 CHECKPOINT A` |
+| Source head before correction | `f5b5f24249e12a0e8d82962fa7d165e4bbc98c37` |
+| Source sessions | `S5-ARCH-009 CLOSED`; `S5-ARCH-009-C1 CLOSED`; `S5-ARCH-009-C2 CLOSED` |
+| Correction scope | `COMPLETE PRODUCT/TECHNICAL VIEW VISIBILITY CONTRACT FOR ALL 12 DETERMINISTIC FIXTURES` |
+| S5-IMPL-013 state | `CLOSED / REOPEN_PROHIBITED / UNMODIFIED` |
+| S5-IMPL-013-C1 state | `STOPPED / UNMODIFIED` |
+| S5-REL-024 state | `STOPPED / UNMODIFIED` |
+| Final delivery head | `RESOLVED_BY_EXACT_GIT_PR_AND_CI` |
+| Self-referential head | `NOT_REQUIRED` |
+| Recursive correction | `NO` |
+
+This C3 correction preserves the complete C1/C2 provenance, corrected
+`BLOCKS` direction, and complete cardinality contract. It resolves the
+previously implicit relation-visibility encoding and names every initially
+rendered Product/Technical node or deterministic presentation group. It
+changes no graph architecture, relation meaning, security policy, execution
+behavior, public model, schema, or implementation authorization.
+
 ## 2. Preflight, scope, and source review
 
 Preflight established a clean isolated worktree, the exact expected branch,
@@ -465,11 +489,11 @@ input as well as part of the canonical `gpr` identity input in GP11.
 | --- | --- | --- | --- |
 | 1 | Serial: problem, plan, workflow, tasks A/B/C, definition, instance, runtime, outcome; `N10/R12` | no multi-relation collapse; `E12`; `P7/6`, `T8/10` | A→B→C `ONE_TO_ONE` occurrence dependencies; Outcome evidence on `PRODUCES` |
 | 2 | Parallel: workflow, A, B/C, D plus definition/instance/outcome; `N8/R11` | fan-out/fan-in remain explicit; `E11`; `P6/6`, `T8/11` | exact Section 13.2 mapping preserves fan-out and fan-in declarations independently; DAG topological order A,B,C,D |
-| 3 | Definition with Instances I1/I2/I3 and runtime; `N5/R7` | three Instances remain visible (<4 threshold); `E7`; `P2/1` (Definition role + count), `T5/7` | declared Definition→Instance `ONE_TO_MANY`; selection evidence per assignment |
+| 3 | Definition with Instances I1/I2/I3 and runtime; `N5/R7` | three Instances remain visible (<4 threshold); `E7`; `P4/3`, `T5/7` | declared Definition→Instance `ONE_TO_MANY`; selection evidence per assignment |
 | 4 | Tasks T1/T2/T3 to Instance I1; `N4/R3` | repeated Tasks remain distinct; `E3`; `P4/3`, `T4/3` | Task→Instance `MANY_TO_ONE`; each assignment evidence retained |
 | 5 | T1/T2, Cap C1/C2, Evidence K1/K2; `N6/R8` | no pair has mergeable duplicate here; `E8`; `P4/4`, `T6/8` | Task↔Capability/Evidence `MANY_TO_MANY`; citation Evidence IDs sorted |
 | 6 | Nodes A/B with dependency, data, trigger relations; `N2/R3` | one visual edge: primary `DEPENDS_ON`, badges `TRIGGERS`,`DATA_FLOW`; `E1`; `P2/1`, `T2/1` | exact mapping in Section 13.2: `ONE_TO_ONE`, `ONE_TO_MANY`, and `MANY_TO_MANY` remain distinct in expanded raw detail and evidence union |
-| 7 | Task, Capability, Approval/decision, Outcome denied; `N4/R4` | `REQUESTS`, `AUTHORIZED_BY`, `BLOCKS`, `PRODUCES`; `E4`; `P3/3`, `T4/4` | `DENY`, Provider calls `0`, citations `0`; decision evidence linked |
+| 7 | Task, Capability, Approval/decision, Outcome denied; `N4/R4` | `REQUESTS`, `AUTHORIZED_BY`, `BLOCKS`, `PRODUCES`; `E4`; `P4/3`, `T4/4` | `DENY`, Provider calls `0`, citations `0`; decision evidence linked |
 | 8 | Plan, approval, task, Human actor/role evidence; `N3/R3` | approval prerequisite blocks the task until approved (`approval-BLOCKS->task`), then state changes without edge identity change; Product and Technical preserve that direction; `E3`; `P3/3`, `T3/3` | `REQUESTS` + `APPROVED_BY`; immutable actor/time/revision evidence remains linked to the approval relation |
 | 9 | A failed, B skipped downstream, Outcome; `N4/R5` | failure and skip are distinct; blocking edge cannot merge with informational dependency; `E5`; `P4/5`, `T4/5` | `B-DEPENDS_ON->A` and `A-BLOCKS->B` preserve their distinct direction and cardinality in separate groups; failure evidence only on A |
 | 10 | Task, runtime realization, UNKNOWN Outcome; `N3/R2` | `E2`; `P2/1`, `T3/2`; UNKNOWN styling/count remains separate | execution→Outcome `ONE_TO_ONE`; ambiguity/reason evidence retained; never success/failure |
@@ -664,6 +688,64 @@ retains its canonical `aggregation_id` and ordered raw `relation_id` members,
 so a Product edge can be traced to the identical Technical raw relationships.
 Filtering may omit a node or edge but cannot allocate a replacement identity.
 
+### 13.4 Complete fixture view-visibility contract
+
+The relation tables' `P` and `T` columns are a compact, lossless encoding of
+the single canonical `projection_visibility` policy value. The only valid
+mapping is:
+
+| Product (`P`) | Technical (`T`) | Canonical `projection_visibility` |
+| --- | --- | --- |
+| `V` | `V` | `BOTH` |
+| `V` | `D` | `PRODUCT` |
+| `D` | `V` | `TECHNICAL` |
+| `D` | `D` | `DETAIL_ONLY` |
+
+`V` means initially rendered after the fixture's stated security filter and
+default grouping policy. `D` means absent from that initial projection but
+retained for an authorized detail/drill-down path. This mapping is applied to
+the canonical raw relation before grouping or edge aggregation; a view MUST
+NOT allocate, reverse, or reclassify a relation. Security filtering precedes
+this policy and may remove data that `V` would otherwise render.
+
+The following table completely names the initially rendered node set for each
+view. Braces denote exact deterministic presentation-group membership, not a
+new canonical node or relationship endpoint. Nodes not named for a view are
+detail-only for that initial fixture projection. A visible raw edge requires
+both endpoints to be rendered directly or represented by the named
+deterministic group; disconnected Product summary nodes are permitted only
+where the raw linking relation is Technical/detail-only and remains traceable
+by its canonical ID.
+
+| Fixture | Product initial nodes/groups | Technical initial nodes/groups | Product/Technical initial counts |
+| --- | --- | --- | --- |
+| 1 | `problem`, `plan`, `workflow`, `A`, `B`, `C`, `outcome` | `workflow`, `A`, `B`, `C`, `definition`, `instance`, `runtime`, `outcome` | `P7/6`, `T8/10` |
+| 2 | `workflow`, `A`, `B`, `C`, `D`, `outcome` | `workflow`, `A`, `B`, `C`, `D`, `definition`, `instance`, `outcome` | `P6/6`, `T8/11` |
+| 3 | `definition`, `I1`, `I2`, `I3` | `definition`, `I1`, `I2`, `I3`, `runtime` | `P4/3`, `T5/7` |
+| 4 | `T1`, `T2`, `T3`, `I1` | `T1`, `T2`, `T3`, `I1` | `P4/3`, `T4/3` |
+| 5 | `T1`, `T2`, `C1`, `C2` | `T1`, `T2`, `C1`, `C2`, `K1`, `K2` | `P4/4`, `T6/8` |
+| 6 | `A`, `B` | `A`, `B` | `P2/1`, `T2/1` |
+| 7 | `task`, `capability`, `approval`, `outcome` | `task`, `capability`, `approval`, `outcome` | `P4/3`, `T4/4` |
+| 8 | `plan`, `approval`, `task` | `plan`, `approval`, `task` | `P3/3`, `T3/3` |
+| 9 | `A`, `B`, `workflow`, `outcome` | `A`, `B`, `workflow`, `outcome` | `P4/5`, `T4/5` |
+| 10 | `task`, `outcome` | `task`, `runtime`, `outcome` | `P2/1`, `T3/2` |
+| 11 | `definition`, group `{I01..I12}` | `definition`, group `{I01..I12}` | `P2/1`, `T2/2` |
+| 12 | exactly Fixture 1 Product nodes | exactly Fixture 1 Technical nodes | `P7/6`, `T8/10` |
+
+Fixture 3 stays expanded in both views because three siblings are below the
+ordinary four-sibling collapse threshold. Its earlier `P2/1` shorthand is
+therefore corrected to endpoint-closed `P4/3`; the Product view omits only the
+Runtime detail. Fixture 11 applies the ordinary threshold in both views. Its
+presentation groups preserve the raw members and relations specified in
+Sections 13.1–13.2.
+
+The earlier Fixture 7 `P3/3` shorthand was not endpoint-closed: its three
+Product-visible raw relations require all four canonical endpoints (`task`,
+`capability`, `approval`, and `outcome`). It is therefore corrected to
+`P4/3`. This is a visibility-count correction only; `N4/R4`, `E4`, relation
+IDs, direction, cardinality, evidence, DENY semantics, and Technical `T4/4`
+remain unchanged.
+
 ## 14. Acceptance proof and contradiction audit
 
 | Required proof | Candidate disposition |
@@ -683,7 +765,7 @@ Filtering may omit a node or edge but cannot allocate a replacement identity.
 | canonical `BLOCKS` direction | source is blocker/prerequisite and target is blocked; fixtures 7/8 use Approval→Task and fixture 9 uses failed A→skipped B |
 | no production/public change | architecture artifact and index only |
 
-After the S5-ARCH-009-C1 correction, no contradiction remains with accepted
+After the S5-ARCH-009-C1/C2/C3 corrections, no contradiction remains with accepted
 S5-ARCH-008, the accepted logical Core candidate, the internal shared DTO,
 current Workflow DAG behavior, or Platform Execution Identity. This candidate
 adds no competing authority: it derives relationships from those sources and
@@ -766,6 +848,43 @@ PR_MERGED: NO
 SESSION_CLOSED: NO
 NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_C2_CLOSE_CONFIRMATION
 NEXT_GATE: Human S5-ARCH-009-C2 Close Confirmation
+```
+
+Checkpoint A for S5-ARCH-009-C3 completed the missing visibility contract at
+the authorized durable-main baseline. All twelve fixture projections now have
+an exact initial node/group set, all relation `P`/`T` pairs resolve to exactly
+one canonical `projection_visibility` value, and the endpoint-closure audit
+has two explicit corrections: Fixture 3 Product visibility is `P4/3`, not
+`P2/1`, and Fixture 7 Product visibility is `P4/3`, not `P3/3`. C1 direction,
+C2 cardinalities, the 94 raw relation occurrences,
+canonical identities, evidence, security-before-projection ordering, and all
+claim boundaries remain unchanged.
+
+This candidate does not reopen or modify S5-IMPL-013, resume or modify
+S5-IMPL-013-C1 or S5-REL-024, modify PR #62, or authorize implementation.
+
+```text
+SESSION: S5-ARCH-009-C3
+CODEX_TASK_NAME: [S5-ARCH-009-C3] Graph Fixture View Visibility Contract Correction
+LIFECYCLE: REVIEW
+STATUS: CANDIDATE_COMPLETE
+CHECKPOINT: A — VIEW_VISIBILITY_CONTRACT_CORRECTION_CANDIDATE
+RESULT: READY_FOR_HUMAN_REVIEW
+CURRENT_STEP: 1_OF_3
+ALL_12_FIXTURES: NODE_VISIBILITY_COMPLETE
+RELATION_VISIBILITY_ENUM_MAPPING: COMPLETE
+FIXTURE_3_PRODUCT_VISIBILITY: CORRECTED_TO_P4_3
+FIXTURE_7_PRODUCT_VISIBILITY: CORRECTED_TO_P4_3
+C1_BLOCKS_DIRECTION: PRESERVED
+C2_CARDINALITY_CONTRACT: PRESERVED
+RAW_RELATION_OCCURRENCES: 94 / UNCHANGED
+S5_IMPL_013_MODIFIED: NO
+S5_IMPL_013_C1_MODIFIED: NO
+S5_REL_024_MODIFIED: NO
+PR_62_MODIFIED: NO
+SESSION_CLOSED: NO
+NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_C3_CHECKPOINT_A_REVIEW
+NEXT_GATE: Human S5-ARCH-009-C3 Checkpoint A Review
 ```
 
 Rollback for this architecture Session is removal of this artifact and its one
