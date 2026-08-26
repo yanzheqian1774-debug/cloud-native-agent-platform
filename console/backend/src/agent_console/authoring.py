@@ -298,6 +298,7 @@ class AuthoringBackend:
             if (
                 current.approval.actor == actor
                 and current.approval.decision == decision
+                and current.approval.decided_at == decided_at
                 and current.approval.source_revision == source_revision
             ):
                 return current

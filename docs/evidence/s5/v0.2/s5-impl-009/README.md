@@ -5,10 +5,13 @@
 | Field | Value |
 | --- | --- |
 | Session | `S5-IMPL-009` |
+| Correction session | `S5-IMPL-009-C1 — APPROVAL_REPLAY_EXACTNESS_CORRECTION` |
 | Checkpoint | `A — AUTHORING_BACKEND_AND_SHARED_VIEW_DTO_CANDIDATE` |
 | Authorized baseline | `cf8373d342a7b2c463468cd041527f5b6044ce38` |
 | Branch | `codex/s5-impl-009-authoring-backend-shared-view-dto` |
+| C1 correction branch | `codex/s5-impl-009-c1-approval-replay-exactness` |
 | Final exact head | Recorded by the Draft PR exact-head gate; this in-commit artifact cannot self-reference its own Git object ID |
+| C1 correction commit | Recorded after correction validation and before delivery |
 | Classification | `INTERNAL / VERSION_UNFROZEN / NOT_A_PUBLIC_CONTRACT` |
 
 PR #59 was verified merged at the authorized baseline. Fresh `origin/main`, the
@@ -38,10 +41,16 @@ labelled Draft. The effective Definition changes only after an explicit Human
 `APPROVE` decision on the current immutable source revision.
 
 The decision record retains actor, `APPROVE`/`REJECT`, timezone-aware timestamp,
-and source revision. A byte-equivalent repeated decision is idempotent; a
-different repeated decision fails closed. Rejection leaves the effective
-Definition unchanged. Approval supersedes other open revisions. Stale source
-revision, superseded revision, empty Diff, malformed/extra/missing fields,
+and source revision. Only a repeat with exactly equal immutable Approval
+evidence (actor, decision, `decided_at`, and source revision) is idempotent. A
+repeat with any different decision evidence is a conflicting repeat decision
+and fails closed with `REVISION_ALREADY_DECIDED`; in particular, a changed
+`decided_at` is never normalized away, tolerated, or overwritten. Datetimes
+retain their existing internal timezone-aware Python value semantics and are
+compared directly; no public timestamp representation is introduced. Rejection
+leaves the effective Definition unchanged. Approval supersedes other open
+revisions. Stale source revision, superseded revision, empty Diff,
+malformed/extra/missing fields,
 duplicate ambiguous values, bounded-size violations, and secret-shaped values
 return stable redacted codes.
 
@@ -62,8 +71,8 @@ internal revision, not a public version contract.
 | stale source revision | `STALE_SOURCE_REVISION` | unchanged |
 | superseded approval | `SUPERSEDED_REVISION` | unchanged |
 | missing actor/source or malformed decision/time | stable rejection code | unchanged |
-| repeated same actor/decision/source | original immutable decision | unchanged from first decision |
-| conflicting repeated actor/decision/source | `REVISION_ALREADY_DECIDED` | unchanged |
+| exact replay of actor/decision/decided_at/source | original immutable decision | unchanged from first decision |
+| different actor, decision, decided_at, or source | `REVISION_ALREADY_DECIDED` | unchanged |
 | Draft without review, empty Diff, or unknown revision | stable rejection code | unchanged |
 
 There is no publish method, fallback revision, implicit transition, or silent
@@ -163,6 +172,9 @@ present in either module.
 
 Focused tests cover deterministic Draft/Diff, Human approval, stale and
 superseded revisions, rejection preservation, immutable repeated decisions,
+exact approval and rejection replay, changed timestamp/actor/decision
+rejection, deterministic repeated rejection, stored Approval and effective
+Definition non-mutation, caller-input preservation, redacted replay diagnostics,
 malformed/ambiguous/oversized input, defensive copying, diagnostic redaction,
 secret-shaped rejection, cross-view equality, identity separation, Runtime
 separation, provider correlation authority, Capability ALLOW/DENY,
@@ -205,6 +217,29 @@ reprojection, and host-path-free diagnostics.
 - no Product View UI, Technical View UI, or Golden Demo integration;
 - no Runtime, Knowledge, Capability, or Outcome certification;
 - no globalization, production-readiness, release, or schema-freeze claim.
+
+## S5-IMPL-009-C1 correction record
+
+S5-REL-022 discovered a material contradiction: the implementation and focused
+test treated a repeated decision with a changed `decided_at` as idempotent even
+though the durable evidence described exact replay. S5-IMPL-009-C1 corrects
+that contradiction only. S5-IMPL-009 remains closed and is not reopened;
+S5-REL-022 remains stopped, unmodified, and unmerged. The correction changes no
+claim boundary above: only exact immutable Approval evidence is idempotent, and
+a changed `decided_at` returns `REVISION_ALREADY_DECIDED` without modifying the
+stored Approval, effective Definition, or caller input.
+
+C1 correction validation results:
+
+- focused Authoring replay tests: `16 passed`;
+- complete focused S5-IMPL-009 and rollback compatibility set: `37 passed`;
+- full `make check`: Ruff lint passed, Ruff format passed, `587 passed` with
+  the one pre-existing Starlette/httpx deprecation warning;
+- frontend lint and production build: passed;
+- `git diff --check` and exact three-path scope audit: passed;
+- public API/HTTP wire/CRD/schema and dependency/lockfile non-change audits:
+  passed;
+- S5-REL-022 worktree non-mutation audit: passed.
 
 ## Rollback
 

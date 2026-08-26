@@ -162,7 +162,7 @@ def test_stale_source_revision_and_superseded_revision_fail_closed() -> None:
         )
 
 
-def test_rejection_preserves_effective_and_same_decision_is_idempotent() -> None:
+def test_rejection_exact_replay_is_idempotent_and_conflicts_fail_closed() -> None:
     backend = AuthoringBackend(values())
     effective = backend.effective
     candidate = review(backend)
@@ -173,21 +173,50 @@ def test_rejection_preserves_effective_and_same_decision_is_idempotent() -> None
         "source_revision": candidate.source_revision,
     }
     rejected = backend.decide(candidate.revision, **args)
+    stored_approval = rejected.approval
     assert rejected.state == AuthoringState.REJECTED
     assert backend.effective == effective
     assert backend.decide(candidate.revision, **args) == rejected
-    assert (
-        backend.decide(
-            candidate.revision,
-            **{**args, "decided_at": datetime(2026, 8, 27, tzinfo=UTC)},
-        )
-        == rejected
+
+    conflicts = (
+        {**args, "decided_at": datetime(2026, 8, 27, tzinfo=UTC)},
+        {**args, "actor": "human:other-reviewer"},
+        {**args, "decision": ApprovalDecision.APPROVE},
     )
-    with pytest.raises(AuthoringError, match="REVISION_ALREADY_DECIDED"):
+    for conflicting_args in conflicts:
+        original_args = conflicting_args.copy()
+        for _ in range(2):
+            with pytest.raises(AuthoringError) as exc_info:
+                backend.decide(candidate.revision, **conflicting_args)
+            assert str(exc_info.value) == "REVISION_ALREADY_DECIDED"
+            assert "human:" not in str(exc_info.value)
+            assert "2026" not in str(exc_info.value)
+            assert backend.effective == effective
+            assert backend._get(candidate.revision) == rejected
+            assert backend._get(candidate.revision).approval == stored_approval
+            assert conflicting_args == original_args
+
+
+def test_approval_exact_replay_is_idempotent_and_rejection_fails_closed() -> None:
+    backend = AuthoringBackend(values())
+    candidate = review(backend)
+    args = {
+        "actor": "human:reviewer",
+        "decision": ApprovalDecision.APPROVE,
+        "decided_at": NOW,
+        "source_revision": candidate.source_revision,
+    }
+    approved = backend.decide(candidate.revision, **args)
+    assert backend.decide(candidate.revision, **args) == approved
+
+    with pytest.raises(AuthoringError) as exc_info:
         backend.decide(
             candidate.revision,
-            **{**args, "decision": ApprovalDecision.APPROVE},
+            **{**args, "decision": ApprovalDecision.REJECT},
         )
+    assert str(exc_info.value) == "REVISION_ALREADY_DECIDED"
+    assert backend.effective == approved
+    assert backend._get(candidate.revision) == approved
 
 
 def test_input_is_defensively_copied() -> None:
