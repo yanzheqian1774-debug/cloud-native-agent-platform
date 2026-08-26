@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Employee — non-production mock</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#">Northstar <span>Digital Employees</span></a>
+      <span class="mock-label">NON-PRODUCTION MOCK · SYNTHETIC DATA</span>
+      <button id="view-toggle" class="secondary" type="button" aria-pressed="false">Open Technical View</button>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Customer experience workspace</p>
+          <h1>Turn a business problem into supervised work.</h1>
+          <p class="lede">Describe the outcome. Review who will help and how. Keep the technical detail available—but out of the way.</p>
+        </div>
+        <div class="identity-pill"><span>Execution</span><strong data-execution-id>Not started</strong></div>
+      </section>
+
+      <nav class="steps" aria-label="Primary journey">
+        <button class="step active" data-step="1"><b>1</b><span>Describe the problem</span></button>
+        <button class="step" data-step="2"><b>2</b><span>Review the plan</span></button>
+        <button class="step" data-step="3"><b>3</b><span>View the outcome</span></button>
+      </nav>
+
+      <section id="step-1" class="panel journey-panel">
+        <div class="section-heading"><div><p class="eyebrow">Step 1</p><h2>What would you like your team to solve?</h2></div><span class="status neutral">Draft</span></div>
+        <label for="problem">Business problem</label>
+        <textarea id="problem" rows="4"></textarea>
+        <div class="actions"><button id="recommend" class="primary" type="button">Recommend a team and plan</button></div>
+      </section>
+
+      <section id="step-2" class="panel journey-panel hidden">
+        <div class="section-heading"><div><p class="eyebrow">Step 2</p><h2>Review the recommended approach</h2></div><span class="status warning">Human confirmation required</span></div>
+        <div id="employee-cards" class="card-grid"></div>
+        <div class="plan-block"><h3>Proposed work plan</h3><ol id="plan"></ol><div class="plan-meta"><span><small>Proposed team capacity</small><strong>2 mock Instances</strong></span><span><small>Expected sources</small><strong>3 approved mock assets</strong></span></div></div>
+        <div class="notice">No Runtime choice is required. If the preferred environment is unavailable, work pauses for your confirmation—there is no silent fallback.</div>
+        <div class="actions"><button class="secondary back" type="button">Back</button><button id="confirm" class="primary" type="button">Confirm and start mock work</button></div>
+      </section>
+
+      <section id="step-3" class="journey-panel hidden">
+        <div class="outcome-grid">
+          <article class="panel outcome"><div class="section-heading"><div><p class="eyebrow">Step 3</p><h2>Improvement brief</h2></div><span class="status success">Completed</span></div><p id="outcome-summary" class="outcome-summary"></p><h3>Prioritized recommendations</h3><ol id="recommendations"></ol></article>
+          <aside class="panel progress"><p class="eyebrow">Work-plan progress</p><h3>3 of 3 complete</h3><div id="progress-list"></div><div class="runtime-friendly"><span class="pulse"></span><div><small>Execution environment</small><strong>Available</strong></div></div></aside>
+        </div>
+        <article class="panel citations"><div class="section-heading"><div><p class="eyebrow">View-only Knowledge evidence</p><h2>Why you can trust this brief</h2></div><span class="status neutral">Synthetic / view only</span></div><div id="citations"></div><p class="limitation">Knowledge Binding: INTERNAL_MOCK / VERSION_UNFROZEN · Live enterprise provider: NOT_IMPLEMENTED · Governance: NOT_GRANTED</p></article>
+        <div class="actions"><button class="secondary back" type="button">Back</button><button id="open-authoring" class="secondary" type="button">Open authoring mock</button></div>
+      </section>
+
+      <section id="authoring" class="panel hidden">
+        <div class="section-heading"><div><p class="eyebrow">Authoring prototype</p><h2>Draft, compare, approve</h2></div><span id="draft-status" class="status warning">Diff pending approval</span></div>
+        <p class="limitation">Published definition is immutable. AI output is a candidate until a Human accepts it. Publish is an in-memory mock action only.</p>
+        <div class="authoring-grid"><div><h3>Current published definition</h3><div id="published-card" class="definition-card"></div></div><div><h3>Editable Draft</h3><label for="draft-role">Role description</label><textarea id="draft-role" rows="4"></textarea><div class="suggestion"><span>AI suggestion · candidate only</span><p>Add “Compare issue frequency and severity” to responsibilities.</p><button id="accept-suggestion" class="secondary" type="button">Accept into Draft</button></div></div></div>
+        <div id="diff" class="diff"><h3>Field-level Diff</h3><p>No accepted changes yet.</p></div>
+        <div class="actions"><button id="reject-draft" class="secondary" type="button">Reject Draft</button><button id="approve-draft" class="primary" type="button" disabled>Approve and mock publish</button></div>
+      </section>
+
+      <aside id="technical" class="technical-drawer" aria-hidden="true" aria-label="Technical View">
+        <div class="drawer-heading"><div><p class="eyebrow">Same execution · deeper projection</p><h2>Technical View</h2></div><button id="close-technical" class="icon-button" aria-label="Close Technical View">×</button></div>
+        <div class="tech-alert">Internal mock candidate. No public DTO, Runtime invocation, support, certification, or exactly-once claim.</div>
+        <div id="technical-content"></div>
+      </aside>
+      <div id="scrim" class="scrim hidden"></div>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
