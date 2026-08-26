@@ -1,0 +1,211 @@
+{
+  "classification": "INTERNAL_MOCK / NON_AUTHORITATIVE / VERSION_UNFROZEN",
+  "scenario": {
+    "id": "scenario.synthetic.customer-complaint-quality-improvement.v1",
+    "title": "Customer complaint and quality improvement",
+    "business_prompt": "Analyze recent customer complaints, identify the top issue categories, and produce prioritized improvement recommendations.",
+    "primary_steps": [
+      "Enter a business problem",
+      "Review recommended employees and plan",
+      "Start mock work and view results"
+    ]
+  },
+  "identities": {
+    "digital_employee_id": "de.synthetic.customer-insight.v1",
+    "definition_id": "definition.synthetic.customer-insight.v1",
+    "draft_id": "draft.synthetic.customer-insight.v2",
+    "agent_definition_reference": "agent-definition.synthetic.customer-insight.v1",
+    "instance_id": "instance.synthetic.customer-insight.001",
+    "task_id": "task.synthetic.qi-1042",
+    "workflow_id": "workflow.synthetic.complaint-analysis.v1",
+    "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+    "capability_request_id": "capreq.synthetic.complaint-analysis.001",
+    "runtime_provider_id": "provider.runtime.native.synthetic.v1",
+    "provider_correlation_id": "native-correlation-synthetic-0001",
+    "knowledge_collection_id": "knowledge-collection.synthetic.quality.v1"
+  },
+  "directory": [
+    {
+      "digital_employee_id": "de.synthetic.customer-insight.v1",
+      "name": "Mira",
+      "role_title": "Customer Insight Specialist",
+      "role_description": "Turns synthetic complaint patterns into clear business insights.",
+      "business_responsibilities": ["Classify complaint themes", "Explain customer impact"],
+      "can_do": ["Analyze authorized synthetic complaint records", "Cite approved knowledge assets"],
+      "cannot_do": ["Contact customers", "Change production records", "Select infrastructure"],
+      "status": "AVAILABLE_FOR_MOCK_WORK",
+      "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+    },
+    {
+      "digital_employee_id": "de.synthetic.quality-analysis.v1",
+      "name": "Quinn",
+      "role_title": "Quality Analysis Specialist",
+      "role_description": "Prioritizes quality improvements from authorized evidence.",
+      "business_responsibilities": ["Rank quality issues", "Recommend bounded improvements"],
+      "can_do": ["Compare approved historical cases", "Propose prioritized actions"],
+      "cannot_do": ["Approve product changes", "Trigger real remediation", "Silently change Runtime"],
+      "status": "AVAILABLE_FOR_MOCK_WORK",
+      "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+    }
+  ],
+  "authoring": {
+    "published": {
+      "definition_id": "definition.synthetic.customer-insight.v1",
+      "version": "mock-v1",
+      "status": "PUBLISHED_MOCK_IMMUTABLE",
+      "name": "Mira",
+      "role_title": "Customer Insight Specialist",
+      "role_description": "Turns synthetic complaint patterns into clear business insights.",
+      "business_responsibilities": ["Classify complaint themes", "Explain customer impact"],
+      "can_do": ["Analyze authorized synthetic complaint records", "Cite approved knowledge assets"],
+      "cannot_do": ["Contact customers", "Change production records", "Select infrastructure"],
+      "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+    },
+    "ai_suggestion": {
+      "field": "business_responsibilities",
+      "candidate": ["Classify complaint themes", "Explain customer impact", "Compare issue frequency and severity"],
+      "status": "CANDIDATE_ONLY_HUMAN_REVIEW_REQUIRED"
+    }
+  },
+  "business_entry": {
+    "suggested_digital_employee_ids": ["de.synthetic.customer-insight.v1", "de.synthetic.quality-analysis.v1"],
+    "work_plan": [
+      {"step": 1, "label": "Group complaint themes", "status": "SUCCEEDED"},
+      {"step": 2, "label": "Assess frequency and business impact", "status": "SUCCEEDED"},
+      {"step": 3, "label": "Prioritize improvement recommendations", "status": "SUCCEEDED"}
+    ],
+    "proposed_instance_count": 2,
+    "expected_knowledge_sources": ["Customer Complaint Classification Standard", "Product Quality Issue Handling Standard", "Historical Quality Improvement Cases"],
+    "confirmation": "HUMAN_CONFIRMED_MOCK_PLAN"
+  },
+  "execution": {
+    "platform_execution_identity": "pei-synthetic-qi-1042-attempt-1",
+    "source_event_timestamp": "2026-08-26T04:00:00Z",
+    "duration_seconds": 184,
+    "business_status": "COMPLETED",
+    "current_step": "Recommendations ready",
+    "outcome": {
+      "summary": "Delivery delay, packaging damage, and setup confusion are the leading synthetic complaint themes.",
+      "recommendations": ["Prioritize carrier handoff controls", "Add packaging stress checks", "Clarify first-use setup guidance"],
+      "internal_status": "SUCCEEDED",
+      "evidence_classification": "DETERMINISTIC_SYNTHETIC_MOCK"
+    },
+    "intervention": "NONE",
+    "requested_runtime": "Native",
+    "effective_runtime": "Native",
+    "runtime_target": "native deterministic mock profile",
+    "runtime_version": "fixture-v1",
+    "runtime_binding": "binding.synthetic.native.qi-1042",
+    "capability_decision": "ALLOW",
+    "provider_call_count": 1,
+    "replay_barrier": "NO_AUTOMATIC_RETRY_AFTER_POSSIBLE_EFFECTS",
+    "desired_instance_count": 2,
+    "effective_instance_count": 2,
+    "selected_instance": "instance.synthetic.customer-insight.001",
+    "mock_utilization": "62%",
+    "scale_recommendation": "NO_CHANGE_RECOMMENDED / MOCK_ONLY"
+  },
+  "runtime_support": [
+    {"runtime": "Native", "product_label": "AVAILABLE", "technical_state": "INTEGRATED_COMPONENT_TESTED_CANDIDATE", "demo_role": "PRIMARY_EXECUTION_PATH", "support": "NOT_CERTIFIED", "detail": "Deterministic mock profile; production readiness not granted."},
+    {"runtime": "OpenClaw", "product_label": "EXPERIMENTAL / NOT CURRENTLY AVAILABLE", "technical_state": "SELECTED_EXACT_VERSION_CANDIDATE", "target": "2026.7.1-2", "invocation_state": "LIVE_MANAGED_PROFILE_EVIDENCE_REQUIRED", "support": "NOT_GRANTED", "demo_role": "SAFE_REJECTION_PRESENTATION"},
+    {"runtime": "Hermes", "product_label": "EXPERIMENTAL", "technical_state": "NOT_CURRENTLY_CERTIFIABLE", "support": "NOT_GRANTED", "demo_role": "EVIDENCE_DEBT_PRESENTATION"}
+  ],
+  "runtime_plugin_architecture": {
+    "model": ["Stable Core", "Minimal Logical Provider Boundary", "Pluggable Runtime Providers", "Runtime Packages", "Compatibility Manifest", "Conformance Evidence"],
+    "message": "Platform unifies identity, governance intent, compatibility evidence, Outcome boundaries and security constraints. Providers may use different protocols, lifecycle models, Workspace, Memory and recovery behavior.",
+    "managed_native_direction": "FUTURE_V0_3_PLANNING_ONLY / IMPLEMENTATION_PROHIBITED"
+  },
+  "knowledge": {
+    "binding_label": "INTERNAL_MOCK / VERSION_UNFROZEN",
+    "provider_label": "SYNTHETIC / VIEW_ONLY",
+    "live_enterprise_provider": "NOT_IMPLEMENTED",
+    "governance": "NOT_GRANTED",
+    "collection": {"id": "knowledge-collection.synthetic.quality.v1", "name": "Customer Complaint and Quality Improvement Knowledge"},
+    "assets": [
+      {"asset_id": "knowledge-asset.synthetic.classification-standard", "revision": "revision.synthetic.classification-standard.r3", "title": "Customer Complaint Classification Standard", "evidence_id": "evidence.synthetic.classification.12", "citation": "Classification Standard, mock revision 3, section 2"},
+      {"asset_id": "knowledge-asset.synthetic.handling-standard", "revision": "revision.synthetic.handling-standard.r2", "title": "Product Quality Issue Handling Standard", "evidence_id": "evidence.synthetic.handling.07", "citation": "Issue Handling Standard, mock revision 2, section 4"},
+      {"asset_id": "knowledge-asset.synthetic.historical-cases", "revision": "revision.synthetic.historical-cases.r5", "title": "Historical Quality Improvement Cases", "evidence_id": "evidence.synthetic.cases.31", "citation": "Historical Cases, mock revision 5, case group B"}
+    ],
+    "authorization": {"decision": "ALLOW", "reason": "SYNTHETIC_SCOPE_MATCH", "provider_calls": 1},
+    "deny_evidence": {"decision": "DENY", "reason": "KNOWLEDGE_SCOPE_NOT_AUTHORIZED", "provider_calls": 0},
+    "fixture_version": "knowledge-fixture-v1",
+    "provider_correlation_id": "knowledge-provider-synthetic-0001"
+  },
+  "views": {
+    "product": {
+      "digital_employee_id": "de.synthetic.customer-insight.v1",
+      "assigned_digital_employee_ids": ["de.synthetic.customer-insight.v1", "de.synthetic.quality-analysis.v1"],
+      "business_status": "COMPLETED",
+      "current_step": "Recommendations ready",
+      "runtime_message": "Execution environment available",
+      "citations": ["Classification Standard, mock revision 3, section 2", "Issue Handling Standard, mock revision 2, section 4", "Historical Cases, mock revision 5, case group B"]
+    },
+    "technical": {
+      "digital_employee_definition": "definition.synthetic.customer-insight.v1",
+      "agent_definition_reference": "agent-definition.synthetic.customer-insight.v1",
+      "instance_identity": "instance.synthetic.customer-insight.001",
+      "task_identity": "task.synthetic.qi-1042",
+      "workflow_reference": "workflow.synthetic.complaint-analysis.v1",
+      "runtime_provider_identity": "provider.runtime.native.synthetic.v1",
+      "provider_native_correlation_id": "native-correlation-synthetic-0001",
+      "capability_request_identity": "capreq.synthetic.complaint-analysis.001"
+    }
+  },
+  "localized_content": {
+    "en-US": {
+      "employees": [
+        {
+          "role_title": "Customer Insight Specialist",
+          "role_description": "Turns synthetic complaint patterns into clear business insights.",
+          "business_responsibilities": ["Classify complaint themes", "Explain customer impact"],
+          "can_do": ["Analyze authorized synthetic complaint records", "Cite approved knowledge assets"],
+          "cannot_do": ["Contact customers", "Change production records", "Select infrastructure"],
+          "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+        },
+        {
+          "role_title": "Quality Analysis Specialist",
+          "role_description": "Prioritizes quality improvements from authorized evidence.",
+          "business_responsibilities": ["Rank quality issues", "Recommend bounded improvements"],
+          "can_do": ["Compare approved historical cases", "Propose prioritized actions"],
+          "cannot_do": ["Approve product changes", "Trigger real remediation", "Silently change Runtime"],
+          "knowledge_scope": "Customer Complaint and Quality Improvement Knowledge"
+        }
+      ],
+      "work_plan": ["Group complaint themes", "Assess frequency and business impact", "Prioritize improvement recommendations"],
+      "knowledge_collection": "Customer Complaint and Quality Improvement Knowledge",
+      "knowledge_assets": [
+        {"title": "Customer Complaint Classification Standard", "citation": "Classification Standard, mock revision 3, section 2"},
+        {"title": "Product Quality Issue Handling Standard", "citation": "Issue Handling Standard, mock revision 2, section 4"},
+        {"title": "Historical Quality Improvement Cases", "citation": "Historical Cases, mock revision 5, case group B"}
+      ]
+    },
+    "zh-CN": {
+      "employees": [
+        {
+          "role_title": "客户洞察专员",
+          "role_description": "把合成客户投诉模式转化为清晰的业务洞察。",
+          "business_responsibilities": ["归类投诉主题", "说明客户影响"],
+          "can_do": ["分析已授权的合成投诉记录", "引用已批准的知识资产"],
+          "cannot_do": ["联系客户", "更改生产记录", "选择基础设施"],
+          "knowledge_scope": "客户投诉与质量改进知识"
+        },
+        {
+          "role_title": "质量分析专员",
+          "role_description": "依据已授权证据确定质量改进优先级。",
+          "business_responsibilities": ["排序质量问题", "提出有边界的改进建议"],
+          "can_do": ["比较已批准的历史案例", "提出优先行动建议"],
+          "cannot_do": ["批准产品变更", "触发真实整改", "静默更换运行环境"],
+          "knowledge_scope": "客户投诉与质量改进知识"
+        }
+      ],
+      "work_plan": ["归纳投诉主题", "评估频率和业务影响", "确定改进建议优先级"],
+      "knowledge_collection": "客户投诉与质量改进知识",
+      "knowledge_assets": [
+        {"title": "客户投诉分类标准", "citation": "《客户投诉分类标准》模拟修订版 3，第 2 节"},
+        {"title": "产品质量问题处理标准", "citation": "《产品质量问题处理标准》模拟修订版 2，第 4 节"},
+        {"title": "历史质量改进案例", "citation": "《历史质量改进案例》模拟修订版 5，案例组 B"}
+      ]
+    }
+  },
+  "states": ["empty", "Draft", "Diff pending approval", "approved mock definition", "business question entered", "employee recommendation", "plan awaiting confirmation", "execution running", "execution succeeded", "capability denied", "outcome unknown", "OpenClaw unavailable", "Hermes experimental", "Knowledge authorization allowed", "Knowledge authorization denied", "citation available", "citation unavailable or stale"]
+}

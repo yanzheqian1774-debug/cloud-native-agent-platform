@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Employee — non-production mock</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#">Northstar <span data-i18n="app.title">数字员工</span></a>
+      <span class="mock-label" data-i18n="app.mockLabel">非生产原型 · 合成数据</span>
+      <label class="locale-control"><span data-i18n="language.label">语言</span><select id="locale"><option value="zh-CN">中文</option><option value="en-US">English</option></select></label>
+      <button id="view-toggle" class="secondary" type="button" aria-pressed="false" data-i18n="technical.open">打开技术视图</button>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow" data-i18n="hero.eyebrow">客户体验工作台</p>
+          <h1 data-i18n="hero.title">把业务问题转化为可监督的工作。</h1>
+          <p class="lede" data-i18n="hero.lede">描述期望结果，审核参与者和工作计划。</p>
+        </div>
+        <div class="identity-pill"><span data-i18n="execution.label">执行</span><strong data-execution-id data-i18n="execution.notStarted">尚未开始</strong></div>
+      </section>
+
+      <nav class="steps" aria-label="Primary journey">
+        <button class="step active" data-step="1"><b>1</b><span data-i18n="step.1.nav">描述问题</span></button>
+        <button class="step" data-step="2"><b>2</b><span data-i18n="step.2.nav">审核计划</span></button>
+        <button class="step" data-step="3"><b>3</b><span data-i18n="step.3.nav">查看结果</span></button>
+      </nav>
+
+      <section id="step-1" class="panel journey-panel">
+        <div class="section-heading"><div><p class="eyebrow"><span data-i18n="step.label">步骤</span> 1</p><h2 data-i18n="step.1.title">您希望团队解决什么问题？</h2></div><span class="status neutral" data-i18n="draft.label">草稿</span></div>
+        <label for="problem" data-i18n="problem.label">业务问题</label>
+        <textarea id="problem" rows="4"></textarea>
+        <div class="actions"><button id="recommend" class="primary" type="button" data-i18n="problem.recommend">推荐数字员工和计划</button></div>
+      </section>
+
+      <section id="step-2" class="panel journey-panel hidden">
+        <div class="section-heading"><div><p class="eyebrow"><span data-i18n="step.label">步骤</span> 2</p><h2 data-i18n="step.2.title">审核建议方案</h2></div><span class="status warning" data-i18n="approval.required">需要人工确认</span></div>
+        <div id="employee-cards" class="card-grid"></div>
+        <div class="plan-block"><h3 data-i18n="plan.title">建议工作计划</h3><ol id="plan"></ol><div class="plan-meta"><span><small data-i18n="instance.proposal">建议团队容量</small><strong data-i18n="instance.value">2 个模拟实例</strong></span><span><small data-i18n="sources.expected">预期知识来源</small><strong data-i18n="sources.value">3 个已批准的模拟资产</strong></span></div></div>
+        <div class="notice" data-i18n="runtime.noSilentFallback">无需选择运行环境；不会静默替换。</div>
+        <div class="actions"><button class="secondary back" type="button" data-i18n="action.back">返回</button><button id="confirm" class="primary" type="button" data-i18n="action.confirm">确认并开始模拟工作</button></div>
+      </section>
+
+      <section id="step-3" class="journey-panel hidden">
+        <div class="outcome-grid">
+          <article class="panel outcome"><div class="section-heading"><div><p class="eyebrow"><span data-i18n="step.label">步骤</span> 3</p><h2 data-i18n="step.3.title">改进简报</h2></div><span class="status success" data-i18n="status.completed">已完成</span></div><p id="outcome-summary" class="outcome-summary"></p><h3 data-i18n="outcome.recommendations">优先改进建议</h3><ol id="recommendations"></ol></article>
+          <aside class="panel progress"><p class="eyebrow" data-i18n="progress.title">工作计划进度</p><h3 data-i18n="progress.complete">已完成 3/3</h3><div id="progress-list"></div><div class="runtime-friendly"><span class="pulse"></span><div><small data-i18n="runtime.environment">执行环境</small><strong data-i18n="runtime.available">可用</strong></div></div></aside>
+        </div>
+        <article class="panel citations"><div class="section-heading"><div><p class="eyebrow" data-i18n="knowledge.eyebrow">只读知识证据</p><h2 data-i18n="knowledge.title">本简报的依据</h2></div><span class="status neutral" data-i18n="knowledge.viewOnly">合成数据 / 只读</span></div><div id="citations"></div><p class="limitation">Knowledge Binding: INTERNAL_MOCK / VERSION_UNFROZEN · Live enterprise provider: NOT_IMPLEMENTED · Governance: NOT_GRANTED</p></article>
+        <div class="actions"><button class="secondary back" type="button" data-i18n="action.back">返回</button><button id="open-authoring" class="secondary" type="button" data-i18n="authoring.open">打开创作原型</button></div>
+      </section>
+
+      <section id="authoring" class="panel hidden">
+        <div class="section-heading"><div><p class="eyebrow" data-i18n="authoring.eyebrow">创作原型</p><h2 data-i18n="authoring.title">编辑草稿、查看差异并审批</h2></div><span id="draft-status" class="status warning" data-state-key="diff.pending">变更对比待审批</span></div>
+        <p class="limitation" data-i18n="authoring.limit">已发布定义保持不可变。AI 输出仅为候选。</p>
+        <div class="authoring-grid"><div><h3 data-i18n="published.title">当前已发布定义</h3><div id="published-card" class="definition-card"></div></div><div><h3 data-i18n="draft.editable">可编辑草稿</h3><label for="draft-role" data-i18n="role.description">角色描述</label><textarea id="draft-role" rows="4"></textarea><div class="suggestion"><span data-i18n="suggestion.label">AI 建议 · 仅候选</span><p data-i18n="suggestion.text">在职责中添加候选。</p><button id="accept-suggestion" class="secondary" type="button" data-state-key="suggestion.accept">接受到草稿</button></div></div></div>
+        <div id="diff" class="diff"><h3 data-i18n="diff.title">字段级变更对比</h3><p data-i18n="diff.empty">尚无已接受的变更。</p></div>
+        <div class="actions"><button id="reject-draft" class="secondary" type="button" data-i18n="action.reject">拒绝草稿</button><button id="approve-draft" class="primary" type="button" disabled data-state-key="action.approve">审批并模拟发布</button></div>
+      </section>
+
+      <aside id="technical" class="technical-drawer" aria-hidden="true" aria-label="Technical View">
+        <div class="drawer-heading"><div><p class="eyebrow" data-i18n="technical.eyebrow">同一次执行 · 更深层投影</p><h2 data-i18n="technical.title">技术视图</h2></div><button id="close-technical" class="icon-button" aria-label="Close Technical View" data-i18n-aria="technical.close">×</button></div>
+        <div class="tech-alert" data-i18n="technical.alert">内部模拟候选。</div>
+        <div id="technical-content"></div>
+      </aside>
+      <div id="scrim" class="scrim hidden"></div>
+    </main>
+    <script src="app.js?v=checkpoint-b"></script>
+  </body>
+</html>
