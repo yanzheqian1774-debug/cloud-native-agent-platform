@@ -44,6 +44,25 @@ This correction uses the accepted non-self-referential head rule. It does not
 reopen S5-ARCH-009, resume S5-REL-023, or create a successor to record its own
 commit SHA.
 
+### 1.2 Cardinality completeness correction provenance
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-ARCH-009-C2` |
+| Title | `Graph Fixture Cardinality Completeness Correction` |
+| Discovered by | `S5-REL-023 CHECKPOINT A RESUMED REVIEW` |
+| Source head before correction | `66ca642778a2800883cbf77c7cf67eb2a9ade5bd` |
+| Source sessions | `S5-ARCH-009 CLOSED`; `S5-ARCH-009-C1 CLOSED` |
+| Correction scope | `COMPLETE CARDINALITY CONTRACT FOR ALL 12 DETERMINISTIC FIXTURES` |
+| S5-REL-023 state | `STOPPED / UNMODIFIED / UNMERGED` |
+| Final delivery head | `RESOLVED_BY_EXACT_GIT_PR_AND_CI` |
+| Self-referential head | `NOT_REQUIRED` |
+| Recursive correction | `NO` |
+
+This C2 correction preserves the complete C1 provenance and corrected
+`BLOCKS` direction. It changes no graph architecture, relation meaning,
+execution behavior, public model, schema, or implementation scope.
+
 ## 2. Preflight, scope, and source review
 
 Preflight established a clean isolated worktree, the exact expected branch,
@@ -183,7 +202,13 @@ Candidate relation meanings:
 | `BLOCKS` | directed blocking gate/failure semantics: `source_node_id` is the blocking prerequisite or blocker, `target_node_id` is the blocked node, and the target cannot proceed while the source remains unsatisfied |
 | `COMPENSATES` | explicit compensation path; never normal-path merge |
 
-Cardinality is semantic metadata, not a count inferred from a snapshot:
+`declared_cardinality` is semantic metadata for a relation in its defined
+context. `observed_source_count` and `observed_target_count` are the distinct
+participating endpoint counts in one deterministic fixture. Observed fixture
+multiplicity is evidence, not a rule for narrowing the declaration. Every raw
+relation MUST carry exactly one of the four canonical values below; prose,
+endpoint counts, grouping, aggregation, or a view-local inference is not a
+cardinality value.
 
 | Cardinality | Required example | Rule |
 | --- | --- | --- |
@@ -234,6 +259,13 @@ authorization state. Missing classification fails closed to separate edges.
 Relations with materially different evidence authority also MUST NOT merge,
 even when their Evidence IDs happen to be equal.
 
+Aggregation never declares a replacement semantic cardinality. An aggregated
+edge exposes the deterministically sorted set of its members'
+`declared_cardinality` values and the ordered raw `relation_id` members. A
+single-value set is a visual summary only; a multi-value set MUST remain a set
+and MUST NOT be collapsed to a false label. Expansion restores every raw
+relation with its original direction, cardinality, evidence, and visibility.
+
 For `BLOCKS`, direction is always source to target:
 `blocking prerequisite -- BLOCKS --> blocked node`. The relation is not
 automatically equivalent to `DATA_FLOW` or `TRIGGERS`. Product aggregation may
@@ -249,6 +281,13 @@ Grouping is presentation-only and never discards raw graph members or evidence.
 Deterministic group kinds cover Instances of one Definition, repeated Task
 types, parallel branches, Evidence collections, Capability groups, Runtime
 pools, and large fan-in/fan-out.
+
+A Group is not an execution entity and cannot become a relation endpoint in
+the canonical raw graph. Collapsing Definition/Instance families preserves
+`ONE_TO_MANY`; fan-in preserves `MANY_TO_ONE`; shared Capability/Evidence
+families preserve `MANY_TO_MANY`. Group summaries expose the sorted underlying
+cardinality set, while expansion restores the exact raw relations. No group,
+threshold, or view policy changes or reverses a raw cardinality.
 
 Defaults and limits:
 
@@ -416,21 +455,23 @@ listed in Section 6 are test obligations, not merely documentation guidance.
 Fixture notation uses `N/R/E` for raw node, raw relation, and aggregated visual
 edge counts. `P` and `T` list Product/Technical visible node and edge counts.
 All fixtures sort nodes by `(node-type rank, entity_id, node_id)`, relations by
-`(source_node_id, target_node_id, direction, display_priority, relation_id)`,
-and evidence lexicographically. Counts describe the fixture after its stated
-projection security filter and before detail expansion.
+`(source_node_id, target_node_id, direction, display_priority,
+declared_cardinality, relation_id)`, and evidence lexicographically. Counts
+describe the fixture after its stated projection security filter and before
+detail expansion. Cardinality is therefore an explicit deterministic sort
+input as well as part of the canonical `gpr` identity input in GP11.
 
 | # | Fixture and raw graph | Aggregation / view expectation | Cardinality and evidence |
 | --- | --- | --- | --- |
 | 1 | Serial: problem, plan, workflow, tasks A/B/C, definition, instance, runtime, outcome; `N10/R12` | no multi-relation collapse; `E12`; `P7/6`, `T8/10` | A→B→C `ONE_TO_ONE` occurrence dependencies; Outcome evidence on `PRODUCES` |
-| 2 | Parallel: workflow, A, B/C, D plus definition/instance/outcome; `N8/R10` | fan-out/fan-in remain explicit; `E10`; `P6/6`, `T8/10` | A `ONE_TO_MANY` B/C; B/C `MANY_TO_ONE` D; DAG topological order A,B,C,D |
+| 2 | Parallel: workflow, A, B/C, D plus definition/instance/outcome; `N8/R11` | fan-out/fan-in remain explicit; `E11`; `P6/6`, `T8/11` | exact Section 13.2 mapping preserves fan-out and fan-in declarations independently; DAG topological order A,B,C,D |
 | 3 | Definition with Instances I1/I2/I3 and runtime; `N5/R7` | three Instances remain visible (<4 threshold); `E7`; `P2/1` (Definition role + count), `T5/7` | declared Definition→Instance `ONE_TO_MANY`; selection evidence per assignment |
 | 4 | Tasks T1/T2/T3 to Instance I1; `N4/R3` | repeated Tasks remain distinct; `E3`; `P4/3`, `T4/3` | Task→Instance `MANY_TO_ONE`; each assignment evidence retained |
 | 5 | T1/T2, Cap C1/C2, Evidence K1/K2; `N6/R8` | no pair has mergeable duplicate here; `E8`; `P4/4`, `T6/8` | Task↔Capability/Evidence `MANY_TO_MANY`; citation Evidence IDs sorted |
-| 6 | Nodes A/B with dependency, data, trigger relations; `N2/R3` | one visual edge: primary `DEPENDS_ON`, badges `TRIGGERS`,`DATA_FLOW`; `E1`; `P2/1`, `T2/1` | three semantic cardinalities preserved in expanded raw detail and evidence union |
+| 6 | Nodes A/B with dependency, data, trigger relations; `N2/R3` | one visual edge: primary `DEPENDS_ON`, badges `TRIGGERS`,`DATA_FLOW`; `E1`; `P2/1`, `T2/1` | exact mapping in Section 13.2: `ONE_TO_ONE`, `ONE_TO_MANY`, and `MANY_TO_MANY` remain distinct in expanded raw detail and evidence union |
 | 7 | Task, Capability, Approval/decision, Outcome denied; `N4/R4` | `REQUESTS`, `AUTHORIZED_BY`, `BLOCKS`, `PRODUCES`; `E4`; `P3/3`, `T4/4` | `DENY`, Provider calls `0`, citations `0`; decision evidence linked |
 | 8 | Plan, approval, task, Human actor/role evidence; `N3/R3` | approval prerequisite blocks the task until approved (`approval-BLOCKS->task`), then state changes without edge identity change; Product and Technical preserve that direction; `E3`; `P3/3`, `T3/3` | `REQUESTS` + `APPROVED_BY`; immutable actor/time/revision evidence remains linked to the approval relation |
-| 9 | A failed, B skipped downstream, Outcome; `N4/R4` | failure and skip are distinct; blocking edge cannot merge with informational dependency; `E4`; `P4/4`, `T4/4` | A→B dependency plus blocking semantics in separate groups; failure evidence only on A |
+| 9 | A failed, B skipped downstream, Outcome; `N4/R5` | failure and skip are distinct; blocking edge cannot merge with informational dependency; `E5`; `P4/5`, `T4/5` | `B-DEPENDS_ON->A` and `A-BLOCKS->B` preserve their distinct direction and cardinality in separate groups; failure evidence only on A |
 | 10 | Task, runtime realization, UNKNOWN Outcome; `N3/R2` | `E2`; `P2/1`, `T3/2`; UNKNOWN styling/count remains separate | execution→Outcome `ONE_TO_ONE`; ambiguity/reason evidence retained; never success/failure |
 | 11 | Definition with 12 Instances and assignments; `N13/R24` | one default Instance group; `E2` summary edges; `P2/1`, `T2/2`; expansion restores `N13/R24/E24` | Definition `ONE_TO_MANY`; group exposes count 12 and union of all 12 evidence IDs |
 | 12 | Same canonical serial graph as #1 | same snapshot ID; Product `P7/6`, Technical `T8/10`; every shared identity/state/evidence value equal | omissions only; no view-local relation creation; stable byte-equivalent output |
@@ -446,14 +487,14 @@ tuples produced by that rule, not input order.
 | # | Exact raw nodes | Exact raw relations | Evidence linkage and rejection expectation |
 | --- | --- | --- | --- |
 | 1 | `problem,plan,workflow,A,B,C,definition,instance,runtime,outcome` | `problem-DECOMPOSES_TO->plan`; `workflow-CONTAINS->{A,B,C}`; `B-DEPENDS_ON->A`; `C-DEPENDS_ON->B`; `{A,B,C}-ASSIGNED_TO->definition`; `definition-CONTAINS->instance`; `instance-EXECUTED_BY->runtime`; `C-PRODUCES->outcome` = 12 | `ev-plan`, `ev-dep-ab`, `ev-dep-bc`, `ev-outcome`; accept; Product/Technical counts and order as row 1 |
-| 2 | `workflow,A,B,C,D,definition,instance,outcome` | `workflow-CONTAINS->{A,B,C,D}`; `{B,C}-DEPENDS_ON->A`; `D-DEPENDS_ON->{B,C}`; `{A,D}-ASSIGNED_TO->instance`; `D-PRODUCES->outcome` = 10 | one `ev-dep-*` per DAG edge; accept topological tie-break `B,C`; adding `A-DEPENDS_ON->D` rejects `EXECUTION_DEPENDENCY_CYCLE` without rejecting unrelated relation cycles |
+| 2 | `workflow,A,B,C,D,definition,instance,outcome` | `workflow-CONTAINS->{A,B,C,D}`; `{B,C}-DEPENDS_ON->A`; `D-DEPENDS_ON->{B,C}`; `{A,D}-ASSIGNED_TO->instance`; `D-PRODUCES->outcome` = 11 | one `ev-dep-*` per DAG edge; accept topological tie-break `B,C`; adding `A-DEPENDS_ON->D` rejects `EXECUTION_DEPENDENCY_CYCLE` without rejecting unrelated relation cycles |
 | 3 | `definition,I1,I2,I3,runtime` | `definition-CONTAINS->{I1,I2,I3}`; `{I1,I2,I3}-REFERENCES->definition`; `I1-EXECUTED_BY->runtime` = 7 | `ev-select-i1..i3`; declared `ONE_TO_MANY`; accept and retain all Instance identities |
 | 4 | `T1,T2,T3,I1` | `{T1,T2,T3}-ASSIGNED_TO->I1` = 3 | `ev-assignment-t1..t3`; `MANY_TO_ONE`; accept; duplicate relation ID rejects |
 | 5 | `T1,T2,C1,C2,K1,K2` | `{T1,T2}-REQUESTS->{C1,C2}` and `{T1,T2}-REFERENCES->{K1,K2}` = 8 | `ev-cap-t1-c1..t2-c2`, `ev-knowledge-t1-k1..t2-k2`; `MANY_TO_MANY`; missing citation Evidence ID rejects malformed evidence |
 | 6 | `A,B` | `A-DEPENDS_ON->B`; `A-DATA_FLOW->B`; `A-TRIGGERS->B` = 3 | `ev-dependency`, `ev-data`, `ev-trigger`; accept as one edge only when the complete GP06 key matches; differing direction/security/history/evidence authority must yield separate edges |
 | 7 | `task,capability,approval,outcome` | `task-REQUESTS->capability`; `capability-AUTHORIZED_BY->approval`; `approval-BLOCKS->task`; `task-PRODUCES->outcome` = 4 | `ev-deny`; `DENY`, calls `0`, citations `0`; any call or citation rejects `DENY_REQUIRES_ZERO_PROVIDER_EFFECTS` |
 | 8 | `plan,approval,task` | `plan-REQUESTS->approval`; `approval-BLOCKS->task`; `plan-APPROVED_BY->approval` = 3 | `ev-actor`, `ev-decided-at`, `ev-plan-revision` remain attached to `plan-APPROVED_BY->approval`; the corrected source/target tuple produces the canonical `gpr` relation ID and its deterministic sorted position; Product and Technical preserve `approval-BLOCKS->task`; accept exact immutable approval replay; contradictory authorization state does not merge and conflicting replay rejects |
-| 9 | `A,B,workflow,outcome` | `workflow-CONTAINS->{A,B}`; `B-DEPENDS_ON->A`; `A-BLOCKS->B`; `A-PRODUCES->outcome` = 4 | `ev-failure-a`, `ev-skip-b`; accept `A=FAILED`, `B=SKIPPED`; reject any projection that maps B to FAILED or merges blocking with informational semantics |
+| 9 | `A,B,workflow,outcome` | `workflow-CONTAINS->{A,B}`; `B-DEPENDS_ON->A`; `A-BLOCKS->B`; `A-PRODUCES->outcome` = 5 | `ev-failure-a`, `ev-skip-b`; accept `A=FAILED`, `B=SKIPPED`; reject any projection that maps B to FAILED or merges blocking with informational semantics |
 | 10 | `task,runtime,outcome` | `task-EXECUTED_BY->runtime`; `task-PRODUCES->outcome` = 2 | `ev-ambiguous-effect`; accept `UNKNOWN`; reject success/failure coercion or retry-safe inference |
 | 11 | `definition,I01..I12` | `definition-CONTAINS->{I01..I12}` and `{I01..I12}-REFERENCES->definition` = 24 | `ev-instance-01..12`; accept one default group and exact evidence union; expansion order `I01..I12`; missing member evidence is preserved as a limitation, never silently dropped |
 | 12 | exactly fixture 1 canonical nodes | exactly fixture 1 canonical relations and IDs | same `ev-*`, snapshot ID, Platform Execution Identity, and raw relationship IDs; reject either view creating, reversing, or changing a shared relation |
@@ -470,7 +511,138 @@ input order, and test at least one non-mergeable discriminator for fixtures 6,
 7, and 9. Counts are architecture acceptance data, not production fixtures in
 this documentation-only Session.
 
-### 13.2 Final Product/Technical mapping
+### 13.2 Complete raw-relation cardinality contract
+
+The tables below are the complete relation-ID mapping for all fixtures. Each
+`fNN-rNN` handle identifies exactly one canonical `gpr` relation ID produced by
+GP11 from the row values; the handle is fixture notation, not a second graph
+identity. Comma-separated handles, endpoint pairs, and Evidence IDs are
+positionally aligned, so every expanded member resolves independently. `1:3`,
+for example, means one distinct source and three distinct targets participate
+in that declared relation family in this fixture; it does not replace or
+narrow `declared_cardinality`.
+
+`Dir` is always `S→T`. `Agg` is `—` when the raw relation is not visually
+aggregated, or a deterministic fixture aggregation handle whose member list is
+defined below. `P` and `T` are Product and Technical projection visibility:
+`V` means initially visible under the fixture policy and `D` means retained in
+authorized detail/drill-down. Either value consumes the same raw relation ID
+and cardinality; a view never infers its own value.
+
+Column names are compact aliases for the required implementation fields:
+relation handle → `relation_id`; Source/target → `source_node_id` and
+`target_node_id`; Type → `relation_type`; Declared cardinality →
+`declared_cardinality`; Observed S:T → `observed_source_count` and
+`observed_target_count`; Dir → `direction`; Evidence IDs → `evidence_ids`;
+Agg → `aggregation_group`; and P/T → Product/Technical projection visibility.
+Thus every expanded raw row resolves every required field without prose-only
+inheritance.
+
+#### Fixtures 1 and 12 — fully expanded serial and dual-view contracts
+
+| Relation handle | Source → target | Type | Declared cardinality | Observed S:T | Dir | Evidence IDs | Agg | P | T |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `f01-r01` | `problem→plan` | `DECOMPOSES_TO` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-plan` | — | V | D |
+| `f01-r02`,`f01-r03`,`f01-r04` | `workflow→A`,`workflow→B`,`workflow→C` | `CONTAINS` | `ONE_TO_MANY` | `1:3` | `S→T` | `ev-topology-a`,`ev-topology-b`,`ev-topology-c` | — | V | V |
+| `f01-r05`,`f01-r06` | `B→A`,`C→B` | `DEPENDS_ON` | `ONE_TO_ONE` | `1:1` per serial dependency | `S→T` | `ev-dep-ab`,`ev-dep-bc` | — | V | V |
+| `f01-r07`,`f01-r08`,`f01-r09` | `A→definition`,`B→definition`,`C→definition` | `ASSIGNED_TO` | `MANY_TO_ONE` | `3:1` | `S→T` | `ev-assign-a`,`ev-assign-b`,`ev-assign-c` | — | D | V |
+| `f01-r10` | `definition→instance` | `CONTAINS` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-instance` | — | D | D |
+| `f01-r11` | `instance→runtime` | `EXECUTED_BY` | `MANY_TO_ONE` | `1:1` | `S→T` | `ev-runtime-binding` | — | D | V |
+| `f01-r12` | `C→outcome` | `PRODUCES` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-outcome` | — | D | V |
+
+Fixture 12 contains the exact twelve raw relation IDs `f01-r01` through
+`f01-r12`, not aliases newly allocated by either view. Its fully expanded
+source, target, type, declared cardinality, observed count, direction,
+evidence, aggregation, and visibility values are exactly the twelve rows
+above. Product and Technical consume those same canonical IDs and values;
+their `V`/`D` differences are omission policy only. Both retain the identical
+Graph Snapshot ID and Platform Execution Identity. Neither aggregation nor a
+view may create `f12-*` replacement relations.
+
+#### Fixtures 2–5 — fan-out, fan-in, assignment, and shared evidence
+
+| Fixture / relation handles | Source → target | Type | Declared cardinality | Observed S:T | Dir | Evidence IDs | Agg | P | T |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 / `f02-r01`..`f02-r04` | `workflow→A`,`workflow→B`,`workflow→C`,`workflow→D` | `CONTAINS` | `ONE_TO_MANY` | `1:4` | `S→T` | `ev-topology-a`..`ev-topology-d` | — | V | V |
+| 2 / `f02-r05`,`f02-r06` | `B→A`,`C→A` | `DEPENDS_ON` | `MANY_TO_ONE` | `2:1` | `S→T` | `ev-dep-ba`,`ev-dep-ca` | — | V | V |
+| 2 / `f02-r07`,`f02-r08` | `D→B`,`D→C` | `DEPENDS_ON` | `ONE_TO_MANY` | `1:2` | `S→T` | `ev-dep-db`,`ev-dep-dc` | — | D | V |
+| 2 / `f02-r09` | `A→instance` | `ASSIGNED_TO` | `MANY_TO_ONE` | `2:1` with `f02-r10` | `S→T` | `ev-assignment-a` | — | D | V |
+| 2 / `f02-r10` | `D→instance` | `ASSIGNED_TO` | `MANY_TO_ONE` | `2:1` with `f02-r09` | `S→T` | `ev-assignment-d` | — | D | V |
+| 2 / `f02-r11` | `D→outcome` | `PRODUCES` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-outcome` | — | D | V |
+| 3 / `f03-r01`..`f03-r03` | `definition→I1`,`definition→I2`,`definition→I3` | `CONTAINS` | `ONE_TO_MANY` | `1:3` | `S→T` | `ev-select-i1`,`ev-select-i2`,`ev-select-i3` | — | V | V |
+| 3 / `f03-r04`..`f03-r06` | `I1→definition`,`I2→definition`,`I3→definition` | `REFERENCES` | `MANY_TO_ONE` | `3:1` | `S→T` | `ev-select-i1`,`ev-select-i2`,`ev-select-i3` | — | D | V |
+| 3 / `f03-r07` | `I1→runtime` | `EXECUTED_BY` | `MANY_TO_ONE` | `1:1` | `S→T` | `ev-runtime-binding` | — | D | V |
+| 4 / `f04-r01`..`f04-r03` | `T1→I1`,`T2→I1`,`T3→I1` | `ASSIGNED_TO` | `MANY_TO_ONE` | `3:1` | `S→T` | `ev-assignment-t1`,`ev-assignment-t2`,`ev-assignment-t3` | — | V | V |
+| 5 / `f05-r01`..`f05-r04` | `T1→C1`,`T1→C2`,`T2→C1`,`T2→C2` | `REQUESTS` | `MANY_TO_MANY` | `2:2` | `S→T` | `ev-cap-t1-c1`,`ev-cap-t1-c2`,`ev-cap-t2-c1`,`ev-cap-t2-c2` | — | V | V |
+| 5 / `f05-r05`..`f05-r08` | `T1→K1`,`T1→K2`,`T2→K1`,`T2→K2` | `REFERENCES` | `MANY_TO_MANY` | `2:2` | `S→T` | `ev-knowledge-t1-k1`,`ev-knowledge-t1-k2`,`ev-knowledge-t2-k1`,`ev-knowledge-t2-k2` | — | D | V |
+
+Fixture 2 therefore contains eleven relations, not ten: four `CONTAINS`, four
+`DEPENDS_ON`, two `ASSIGNED_TO`, and one `PRODUCES`. The `N8/R10` shorthand
+and derived `E10`/Technical edge count in the earlier summary are corrected to
+`N8/R11`, `E11`, and `T8/11`; Product remains `P6/6`. This arithmetic
+correction does not add a semantic relation—the completeness audit exposed the
+pre-existing enumerated eleventh member.
+
+#### Fixture 6 — same-pair multi-relation semantics
+
+| Relation handle | Source → target | Type | Declared cardinality | Observed S:T | Dir | Evidence IDs | Agg | P | T | Rationale |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `f06-r01` | `A→B` | `DEPENDS_ON` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-dependency` | `f06-g01` | V | V | this fixture's dependency occurrence has one exact prerequisite |
+| `f06-r02` | `A→B` | `DATA_FLOW` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-data` | `f06-g01` | V | one producer may emit evidence to multiple consumers even though one is observed |
+| `f06-r03` | `A→B` | `TRIGGERS` | `MANY_TO_MANY` | `1:1` | `S→T` | `ev-trigger` | `f06-g01` | V | event/activity triggering permits multiple sources and targets |
+
+`f06-g01` exposes the sorted cardinality set
+`[MANY_TO_MANY, ONE_TO_MANY, ONE_TO_ONE]` and ordered members
+`[f06-r01, f06-r03, f06-r02]` under the GP06 type ordering. It never labels the
+aggregate with one invented cardinality. This proves that same-node-pair raw
+relations may have different declared semantics and that expansion preserves
+them.
+
+#### Fixtures 7–10 — authorization, approval, failure, and ambiguity
+
+| Fixture / relation handle | Source → target | Type | Declared cardinality | Observed S:T | Dir | Evidence IDs | Agg | P | T |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 7 / `f07-r01` | `task→capability` | `REQUESTS` | `MANY_TO_MANY` | `1:1` | `S→T` | `ev-request` | — | V | V |
+| 7 / `f07-r02` | `capability→approval` | `AUTHORIZED_BY` | `MANY_TO_ONE` | `1:1` | `S→T` | `ev-deny` | — | D | V |
+| 7 / `f07-r03` | `approval→task` | `BLOCKS` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-deny` | — | V | V |
+| 7 / `f07-r04` | `task→outcome` | `PRODUCES` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-deny` | — | V | V |
+| 8 / `f08-r01` | `plan→approval` | `REQUESTS` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-plan-revision` | — | V | V |
+| 8 / `f08-r02` | `approval→task` | `BLOCKS` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-decided-at` | — | V | V |
+| 8 / `f08-r03` | `plan→approval` | `APPROVED_BY` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-actor`,`ev-decided-at`,`ev-plan-revision` | — | V | V |
+| 9 / `f09-r01`,`f09-r02` | `workflow→A`,`workflow→B` | `CONTAINS` | `ONE_TO_MANY` | `1:2` | `S→T` | `ev-topology-a`,`ev-topology-b` | — | V | V |
+| 9 / `f09-r03` | `B→A` | `DEPENDS_ON` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-skip-b` | — | V | V |
+| 9 / `f09-r04` | `A→B` | `BLOCKS` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-failure-a`,`ev-skip-b` | — | V | V |
+| 9 / `f09-r05` | `A→outcome` | `PRODUCES` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-failure-a` | — | V | V |
+| 10 / `f10-r01` | `task→runtime` | `EXECUTED_BY` | `MANY_TO_ONE` | `1:1` | `S→T` | `ev-runtime-binding` | — | D | V |
+| 10 / `f10-r02` | `task→outcome` | `PRODUCES` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-ambiguous-effect` | — | V | V |
+
+Fixture 9 therefore contains five relations, not four: two `CONTAINS`, one
+`DEPENDS_ON`, one `BLOCKS`, and one `PRODUCES`. Its earlier `N4/R4`, `E4`,
+`P4/4`, and `T4/4` shorthand is corrected to `N4/R5`, `E5`, `P4/5`, and
+`T4/5`. `f09-r03` remains dependent-to-prerequisite (`B→A`) while `f09-r04`
+remains blocker-to-blocked (`A→B`); cardinality never reverses either relation,
+and opposite direction plus distinct blocking class prevents their safety
+semantics from being collapsed.
+
+#### Fixture 11 — complete collapsed-group membership
+
+| Relation handles | Source → target expansion | Type | Declared cardinality | Observed S:T | Dir | Evidence IDs | Agg | P | T |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `f11-r01`..`f11-r12` | `definition→I01` through `definition→I12` | `CONTAINS` | `ONE_TO_MANY` | `1:12` | `S→T` | positionally `ev-instance-01`..`ev-instance-12` | `f11-g01` | V | V |
+| `f11-r13`..`f11-r24` | `I01→definition` through `I12→definition` | `REFERENCES` | `MANY_TO_ONE` | `12:1` | `S→T` | positionally `ev-instance-01`..`ev-instance-12` | `f11-g02` | D | V |
+
+The default group is presentation-only. `f11-g01` summarizes
+`ONE_TO_MANY`; `f11-g02` summarizes `MANY_TO_ONE`; neither group is a raw node
+or execution entity. Expansion restores all 24 exact members, endpoint
+directions, declared cardinalities, and evidence links in cardinality-aware
+stable order.
+
+The complete audit totals 94 raw relation occurrences across fixtures 1–12,
+counting Fixture 12's deliberate reuse of Fixture 1's twelve canonical IDs.
+All 94 resolve to one of the four canonical enum values; zero depend on prose,
+observed counts, aggregation, grouping, inheritance, or view-local inference.
+
+### 13.3 Final Product/Technical mapping
 
 | Canonical node/relation | Product visibility | Product aggregation | Technical visibility | Technical aggregation | Drill-down evidence | Hidden by default in Product |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -553,6 +725,31 @@ drag/drop authoring, Runtime multi-instance lifecycle, execution scheduling,
 public schema, production Knowledge, persistence, or dependency selection.
 Those require separately authorized scopes and gates. This Session allocates
 no downstream Session ID and activates no implementation.
+
+The S5-ARCH-009-C2 correction candidate stops at its Human review gate. It
+does not reopen either closed architecture source Session, resume or modify
+S5-REL-023, merge PR #61, or authorize implementation.
+
+```text
+SESSION: S5-ARCH-009-C2
+CODEX_TASK_NAME: [S5-ARCH-009-C2] Graph Fixture Cardinality Completeness Correction
+LIFECYCLE: REVIEW
+STATUS: PASS_WITH_CONSTRAINTS
+CHECKPOINT: A — GRAPH_FIXTURE_CARDINALITY_COMPLETENESS_CORRECTION
+RESULT: GRAPH_FIXTURE_CARDINALITY_CORRECTION_CANDIDATE
+CURRENT_STEP: 1_OF_3
+ALL_12_FIXTURES: CARDINALITY_COMPLETE
+RAW_RELATIONS_WITHOUT_CARDINALITY: 0
+CANONICAL_CARDINALITY_ENUM: PASS
+FIXTURE_INHERITANCE: FULLY_RESOLVABLE
+PRODUCT_TECHNICAL_CARDINALITY: CONSISTENT
+C1_BLOCKS_DIRECTION: PRESERVED
+S5_REL_023_MODIFIED: NO
+PR_MERGED: NO
+SESSION_CLOSED: NO
+NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_C2_CORRECTION_REVIEW_GATE
+NEXT_GATE: Human S5-ARCH-009-C2 Correction Review Gate
+```
 
 Rollback for this architecture Session is removal of this artifact and its one
 index entry. There is no data migration, execution rollback, dependency
