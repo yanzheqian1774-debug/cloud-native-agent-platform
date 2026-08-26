@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useI18n } from "../i18n/useI18n";
+import { NavLink } from "react-router-dom";
 
 interface ConsoleShellProps {
   children: ReactNode;
@@ -27,6 +28,11 @@ export function ConsoleShell({
           <LanguageSwitcher />
         </div>
       </header>
+
+      <nav className="global-nav" aria-label={t("nav.primary")}>
+        <NavLink to="/product">{t("nav.productView")}</NavLink>
+        <NavLink to="/workflows">{t("nav.workflowRuns")}</NavLink>
+      </nav>
 
       <div className="console-content">
         {children}
