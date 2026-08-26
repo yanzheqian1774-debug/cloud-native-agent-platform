@@ -1225,6 +1225,65 @@ def test_safety_discriminators_prevent_unsafe_merges() -> None:
     assert len(technical_graph_view(split).edges) == 2
 
 
+@pytest.mark.parametrize(
+    ("field", "first", "second"),
+    [
+        ("path_class", PathClass.NORMAL, PathClass.FAILURE),
+        ("blocking_class", "INFORMATIONAL", "CONTROL_EFFECT"),
+        ("authorization_class", "UNCLASSIFIED", "AUTHORIZED"),
+        ("execution_or_historical_context", "CURRENT", "HISTORICAL"),
+        ("evidence_authority_class", "UPSTREAM", "AUDITED"),
+    ],
+)
+def test_each_gp07_classification_separates_same_key_relations(
+    field: str, first: object, second: object
+) -> None:
+    base = relation(
+        "A",
+        "B",
+        RelationType.REFERENCES,
+        Cardinality.ONE_TO_ONE,
+        evidence=("ev-first",),
+        aggregation_key="shared-fixture-handle",
+        semantic_discriminator="first",
+    )
+    other = replace(
+        base,
+        evidence_ids=("ev-second",),
+        semantic_discriminator="second",
+    )
+    graph = build_graph(
+        CONTEXT,
+        [node("A"), node("B")],
+        [replace(base, **{field: first}), replace(other, **{field: second})],
+    )
+    assert len(technical_graph_view(graph).edges) == 2
+
+
+@pytest.mark.parametrize(
+    ("field", "code"),
+    [
+        ("path_class", "INVALID_RELATION_ENUM"),
+        ("blocking_class", "INVALID_RELATION"),
+        ("execution_or_historical_context", "INVALID_RELATION"),
+        ("evidence_authority_class", "INVALID_RELATION"),
+        ("tenant_or_security_domain", "INVALID_RELATION"),
+    ],
+)
+def test_missing_required_gp07_classifications_fail_closed(
+    field: str, code: str
+) -> None:
+    base = relation(
+        "A",
+        "B",
+        RelationType.REFERENCES,
+        Cardinality.ONE_TO_ONE,
+        evidence=("ev",),
+    )
+    with pytest.raises(GraphProjectionError, match=code):
+        replace(base, **{field: None})
+
+
 def test_product_and_technical_views_consume_identical_raw_ids() -> None:
     graph = approval_fixture()
     product = product_graph_view(graph)

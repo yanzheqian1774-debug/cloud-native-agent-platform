@@ -99,6 +99,38 @@ C2 local validation at the uncommitted correction candidate:
   recursive mutation; final local/remote/PR head equality and exact-head CI are
   resolved from Git history and the terminal delivery report.
 
+Checkpoint B independently reconfirmed the corrected acceptance boundary.
+Relation types and declared cardinalities are preserved aggregate-member
+metadata, not GP07 safety classifications: Fixture 6 retains all three raw
+relations, the complete `ONE_TO_ONE` / `ONE_TO_MANY` / `MANY_TO_MANY` set, and
+the `DEPENDS_ON` / `TRIGGERS` / `DATA_FLOW` presentation order in one stable
+aggregate. Product/Technical visibility remains a pre-aggregation view filter.
+The accepted endpoint, direction, projection-context, security-domain,
+temporal-context, path, blocking, authorization, and evidence-authority
+classifications remain the complete merge boundary; no new tuple member was
+invented.
+
+The one bounded Checkpoint B convergence correction adds durable tests, not a
+runtime behavior change. Same-key relations are proven separate for different
+path, blocking/effect, authorization, temporal, and evidence-authority values.
+Missing path, blocking, temporal, evidence-authority, or security-domain inputs
+fail closed, while the separately tested missing authorization value remains a
+deterministic singleton distinct from explicit `UNCLASSIFIED`.
+
+Checkpoint B local validation:
+
+- focused Graph Projection suite: **29 passed**;
+- Graph Projection, Core compatibility, and shared-view regression slice:
+  **50 passed**;
+- full `make check`: Ruff lint passed, Ruff format checked **106 files**, and
+  **616 passed** with the same pre-existing Starlette/httpx warning;
+- focused Ruff lint and format plus `git diff --check`: passed;
+- frontend `npm run lint`: passed;
+- frontend `npm run build`: passed with Vite **8.2.1** and **38 transformed
+  modules**;
+- exact successor-head Quality and Frontend Quality Gates are resolved by the
+  terminal delivery record to avoid recursive evidence mutation.
+
 ## Exact changed-path inventory
 
 The final authorized path count is three:
