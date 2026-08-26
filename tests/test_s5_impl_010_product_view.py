@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,27 @@ def source(name: str) -> str:
     path = PRODUCT / name
     assert path.is_file(), f"required Product source absent: {name}"
     return path.read_text(encoding="utf-8")
+
+
+def run_journey(script: str) -> dict[str, object]:
+    module = (PRODUCT / "journey.ts").as_uri()
+    completed = subprocess.run(
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "--eval",
+            (
+                "import { initialJourney, journeyReducer, applyApprovalDecision } "
+                f'from "{module}"; {script}'
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return json.loads(completed.stdout)
 
 
 def test_authorized_product_source_structure_exists() -> None:
@@ -108,20 +131,110 @@ def test_graph_expansion_is_progressively_disclosed() -> None:
     assert "rawRelations.map" in text
 
 
+def test_graph_does_not_infer_edges_and_marks_disconnected_nodes() -> None:
+    component = source("ProductGraph.tsx")
+    css = (ROOT / "console/frontend/src/styles/app.css").read_text(encoding="utf-8")
+    assert "connected.has(node.id)" in component
+    assert "product.graph.disconnected" in component
+    assert 'content: "→"' not in css and 'content: "↓"' not in css
+
+
+def test_adapter_validates_product_context_edges_and_freezes_fixture() -> None:
+    adapter = source("adapter.ts")
+    for contract in (
+        "PRODUCT_PROJECTION_CONTEXT_REQUIRED",
+        "INVALID_CANONICAL_PRODUCT_EDGE",
+        "INVALID_RAW_RELATION_EVIDENCE",
+        "FIXTURE_6_PRESENTATION_ORDER_REQUIRED",
+        "deepFreeze(productFixture)",
+    ):
+        assert contract in adapter
+
+
 def test_exact_approval_replay_fails_closed() -> None:
-    text = source("journey.ts")
-    assert 'state.approval === "APPROVED"' in text
-    assert 'state.approvedFingerprint === "sha256:synthetic-plan-r1"' in text
-    assert 'approval: "PENDING_HUMAN_REVIEW"' in text
+    result = run_journey(
+        "const approved=journeyReducer(initialJourney,{type:'APPROVE'});"
+        "const replay=applyApprovalDecision(approved,'APPROVED',"
+        "approved.decidedAt,approved.approvedFingerprint);"
+        "console.log(JSON.stringify({same:replay===approved,error:replay.approvalError}));"
+    )
+    assert result == {"same": True, "error": None}
+
+
+def test_changed_approval_decision_fails_closed() -> None:
+    result = run_journey(
+        "const approved=journeyReducer(initialJourney,{type:'APPROVE'});"
+        "const replay=applyApprovalDecision(approved,'REJECTED',"
+        "approved.decidedAt,approved.approvedFingerprint);"
+        "console.log(JSON.stringify({error:replay.approvalError,execution:replay.execution}));"
+    )
+    assert result == {
+        "error": "APPROVAL_REPLAY_MISMATCH",
+        "execution": "NOT_STARTED",
+    }
+
+
+def test_changed_decided_at_fails_closed() -> None:
+    result = run_journey(
+        "const approved=journeyReducer(initialJourney,{type:'APPROVE'});"
+        "const replay=applyApprovalDecision(approved,'APPROVED',"
+        "'2026-08-27T08:00:01Z',approved.approvedFingerprint);"
+        "console.log(JSON.stringify({error:replay.approvalError,execution:replay.execution}));"
+    )
+    assert result == {
+        "error": "APPROVAL_REPLAY_MISMATCH",
+        "execution": "NOT_STARTED",
+    }
+
+
+def test_malformed_approval_fails_closed() -> None:
+    result = run_journey(
+        "const replay=applyApprovalDecision(initialJourney,null,null,null);"
+        "console.log(JSON.stringify({error:replay.approvalError,execution:replay.execution}));"
+    )
+    assert result == {
+        "error": "MALFORMED_APPROVAL_DECISION",
+        "execution": "NOT_STARTED",
+    }
+
+
+def test_duplicate_execution_interaction_is_idempotent() -> None:
+    result = run_journey(
+        "const approved=journeyReducer(initialJourney,{type:'APPROVE'});"
+        "const running=journeyReducer(approved,{type:'RUN'});"
+        "const duplicate=journeyReducer(running,{type:'RUN'});"
+        "console.log(JSON.stringify({same:duplicate===running,count:duplicate.executionPresentationCount,execution:duplicate.execution}));"
+    )
+    assert result == {"same": True, "count": 1, "execution": "RUNNING"}
+
+
+def test_corrected_revision_uses_successor_fingerprint() -> None:
+    result = run_journey(
+        "const corrected=journeyReducer(initialJourney,"
+        "{type:'CORRECT',text:'bounded correction'});"
+        "const approved=journeyReducer(corrected,{type:'APPROVE'});"
+        "const running=journeyReducer(approved,{type:'RUN'});"
+        "console.log(JSON.stringify({revision:running.revision,fingerprint:running.approvedFingerprint,execution:running.execution}));"
+    )
+    assert result == {
+        "revision": "plan-revision.synthetic.qi-1042.r2",
+        "fingerprint": "sha256:synthetic-plan-r2",
+        "execution": "RUNNING",
+    }
 
 
 def test_rejected_revision_cannot_run() -> None:
-    text = source("journey.ts")
-    rejected = text[text.index('case "REJECT"') : text.index('case "RUN"')]
-    assert (
-        'execution: "NOT_STARTED"' in rejected
-        and "approvedFingerprint: null" in rejected
+    result = run_journey(
+        "const rejected=journeyReducer(initialJourney,{type:'REJECT'});"
+        "const attempted=journeyReducer(rejected,{type:'RUN'});"
+        "console.log(JSON.stringify({same:attempted===rejected,approval:attempted.approval,execution:attempted.execution,fingerprint:attempted.approvedFingerprint}));"
     )
+    assert result == {
+        "same": True,
+        "approval": "REJECTED",
+        "execution": "NOT_STARTED",
+        "fingerprint": "sha256:synthetic-plan-r1",
+    }
 
 
 def test_correction_creates_successor_revision() -> None:
@@ -176,6 +289,17 @@ def test_locale_switch_lives_outside_journey_state() -> None:
     )
     assert "useReducer(journeyReducer" in page and "useState<Locale>" in provider
     assert "locale" not in source("journey.ts")
+
+
+def test_product_dates_counts_ordinals_and_percentages_are_locale_aware() -> None:
+    product = (
+        source("DraftDiffApproval.tsx")
+        + source("DigitalEmployeeDirectory.tsx")
+        + source("BusinessJourney.tsx")
+    )
+    assert "Intl.DateTimeFormat(locale" in product
+    assert 'timeZone: "UTC"' in product
+    assert product.count("Intl.NumberFormat(locale") >= 3
 
 
 def test_accessibility_and_responsive_contracts() -> None:

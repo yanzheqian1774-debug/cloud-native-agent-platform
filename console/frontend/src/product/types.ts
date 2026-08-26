@@ -42,6 +42,8 @@ export interface ProductFixture {
   classification: readonly ["DETERMINISTIC", "SYNTHETIC", "NON_AUTHORITATIVE", "TECHNICAL_PREVIEW"];
   platformExecutionIdentity: string;
   graphSnapshotId: string;
+  projectionContext: "PRODUCT";
+  securityFiltered: true;
   questionKey: string;
   questions: string[];
   planRevision: string;
@@ -51,6 +53,7 @@ export interface ProductFixture {
   employees: DigitalEmployee[];
   nodes: ProductNode[];
   edges: ProductEdge[];
+  groups: { id: string; kind: string; memberNodeIds: string[] }[];
   approval: { state: ApprovalState; decidedAt: string | null; decisionFingerprint: string };
   outcome: { status: "PASS" | "FAIL" | "UNKNOWN"; summaryKey: string; evidenceIds: string[] };
   citations: { evidenceId: string; assetId: string; revisionId: string; labelKey: string }[];
@@ -67,6 +70,8 @@ export interface JourneyState {
   approval: ApprovalState;
   decidedAt: string | null;
   approvedFingerprint: string | null;
+  approvalError: "APPROVAL_REPLAY_MISMATCH" | "MALFORMED_APPROVAL_DECISION" | null;
   execution: ExecutionState;
+  executionPresentationCount: number;
   scenario: "ALLOW" | "DENY" | "UNKNOWN" | "FAILURE" | "EMPTY" | "LOADING" | "ERROR";
 }

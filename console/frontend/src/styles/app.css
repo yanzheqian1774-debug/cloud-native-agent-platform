@@ -69,8 +69,8 @@ progress { width: 100%; height: 14px; margin-top: 10px; accent-color: #175cd3; }
 .identity-strip { display: grid; gap: 8px; padding: 12px; background: #f8fafc; border-radius: 8px; }
 .business-graph { display: flex; gap: 10px; align-items: stretch; padding: 18px 0; overflow-x: auto; list-style: none; }
 .business-graph li { position: relative; flex: 0 0 170px; padding: 14px; background: #fff; border: 1px solid #98a2b3; border-radius: 8px; }
-.business-graph li:not(:last-child)::after { position: absolute; top: 50%; right: -10px; content: "→"; }
 .business-graph span, .business-graph strong { display: block; margin-bottom: 7px; }
+.disconnected-state { color: #475467; font-size: 12px; font-weight: 700; }
 .node-type { color: #667085; font-size: 11px; font-weight: 700; }
 .status-with-icon { display: inline-flex !important; gap: 6px; align-items: center; }
 .edge-list { border-top: 1px solid #e5e7eb; }.edge-item { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
@@ -89,7 +89,7 @@ progress { width: 100%; height: 14px; margin-top: 10px; accent-color: #175cd3; }
   .stepper { grid-template-columns: 1fr; }.stepper li { padding: 5px; border-bottom: 0; border-left: 3px solid #e5e7eb; }
   .question-box { grid-template-columns: 1fr; }.question-box label { grid-column: auto; }
   .plan-preview ol, .employee-grid, .runtime-grid, .revision-row { grid-template-columns: 1fr; }
-  .business-graph { flex-direction: column; overflow-x: visible; }.business-graph li { flex-basis: auto; }.business-graph li:not(:last-child)::after { top: auto; right: 50%; bottom: -16px; content: "↓"; }
+  .business-graph { flex-direction: column; overflow-x: visible; }.business-graph li { flex-basis: auto; }
   .edge-details dl, .evidence-list { grid-template-columns: 1fr; }
 }
 
