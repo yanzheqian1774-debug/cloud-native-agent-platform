@@ -63,6 +63,54 @@ This C2 correction preserves the complete C1 provenance and corrected
 `BLOCKS` direction. It changes no graph architecture, relation meaning,
 execution behavior, public model, schema, or implementation scope.
 
+### 1.3 View-visibility completeness correction provenance
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-ARCH-009-C3` |
+| Title | `Graph Fixture View Visibility Contract Correction` |
+| Discovered by | `S5-IMPL-013 CHECKPOINT A` |
+| Source head before correction | `f5b5f24249e12a0e8d82962fa7d165e4bbc98c37` |
+| Source sessions | `S5-ARCH-009 CLOSED`; `S5-ARCH-009-C1 CLOSED`; `S5-ARCH-009-C2 CLOSED` |
+| Correction scope | `COMPLETE PRODUCT/TECHNICAL VIEW VISIBILITY CONTRACT FOR ALL 12 DETERMINISTIC FIXTURES` |
+| S5-IMPL-013 state | `CLOSED / REOPEN_PROHIBITED / UNMODIFIED` |
+| S5-IMPL-013-C1 state | `STOPPED / UNMODIFIED` |
+| S5-REL-024 state | `STOPPED / UNMODIFIED` |
+| Final delivery head | `RESOLVED_BY_EXACT_GIT_PR_AND_CI` |
+| Self-referential head | `NOT_REQUIRED` |
+| Recursive correction | `NO` |
+
+This C3 correction preserves the complete C1/C2 provenance, corrected
+`BLOCKS` direction, and complete cardinality contract. It resolves the
+previously implicit relation-visibility encoding and names every initially
+rendered Product/Technical node or deterministic presentation group. It
+changes no graph architecture, relation meaning, security policy, execution
+behavior, public model, schema, or implementation authorization.
+
+### 1.4 Security-input and plan-execution connectivity correction provenance
+
+| Field | Value |
+| --- | --- |
+| Session | `S5-ARCH-009-C4` |
+| Title | `Graph Fixture Security Input and Plan-Execution Connectivity Correction` |
+| Source head before correction | `0f82fa7f6633943f48195b8321fbc977f9f67e65` |
+| Authorized main baseline | `f5b5f24249e12a0e8d82962fa7d165e4bbc98c37` |
+| Source sessions | `S5-ARCH-009-C3 CLOSED / REOPEN_PROHIBITED` |
+| Human G2 Gate | `PASS_WITH_CONSTRAINTS` |
+| Correction scope | `COMPLETE FIXTURE SECURITY-FILTER INPUT AND PLAN-EXECUTION REVISION CONNECTIVITY` |
+| S5-REL-025 state | `STOPPED / UNMODIFIED` |
+| S5-IMPL-013-C1 state | `STOPPED / UNMODIFIED` |
+| PR #62 state | `UNMODIFIED` |
+| Target PR | `#63`; immutable C3-named PR head acknowledged; C4 content ownership exclusive |
+| Final delivery head | `RESOLVED_BY_EXACT_GIT_PR_AND_CI` |
+| Recursive correction | `NO` |
+
+This C4 correction does not reopen C3. It makes the already-required upstream
+security-filter input deterministic for every fixture and adds the missing
+directed trigger from the exact approved Plan revision to the serial Workflow
+execution aggregate. It changes no authorization policy, security authority,
+execution behavior, public model, schema, or implementation authorization.
+
 ## 2. Preflight, scope, and source review
 
 Preflight established a clean isolated worktree, the exact expected branch,
@@ -322,8 +370,9 @@ Kubernetes UID, Provider-native IDs, raw Runtime Binding, retry/replay detail,
 and raw diagnostics. Hidden evidence remains available only through an
 authorized Technical/detail projection; it is never deleted or reinterpreted.
 
-Technical View exposes Workflow, Task, Definition, Instance, Runtime
-Realization, unchanged Platform Execution Identity, requested/effective
+Technical View exposes the exact approved Plan revision, Workflow, Task,
+Definition, Instance, Runtime Realization, unchanged Platform Execution
+Identity, requested/effective
 Runtime, Capability authorization, Provider calls, Outcome including UNKNOWN,
 synthetic Knowledge evidence, and limitation/reason codes. It uses one edge
 per eligible aggregation group and expands to the preserved raw relations.
@@ -332,6 +381,13 @@ Both views receive the same canonical snapshot ID and security-filtered graph.
 Cross-view values for shared identity, phase, Outcome, authorization,
 cardinality, and evidence MUST be equal; Product simplification may omit but
 must not contradict Technical evidence.
+
+Security filtering is an upstream input boundary, not a projection policy or
+Graph Projection authorization mechanism. The builder consumes only the
+authorized nodes, relations, evidence, and secret-safe fields emitted for one
+security domain. It MUST NOT recover a filtered endpoint or evidence item from
+another input, infer access from `projection_visibility`, or turn the
+security-domain discriminator into an authorization decision.
 
 ## 10. GP11 — identity and determinism
 
@@ -429,7 +485,7 @@ authorized by this decision.
 | GP09 | Product projection emphasizes business intent, work, responsibility, progress, Outcome, citations, and approvals. | Technical/native/diagnostic detail hidden by default, never contradicted or deleted. | Product filter/group policy over the canonical graph. | Final Product UI/UX and authoring. | No Product-local graph builder. | Product counts and shared-value equality in all fixtures. | `ACCEPTED` |
 | GP10 | Technical projection exposes identities, runtime, authorization, calls, Outcome, evidence, and limitations. | One visual edge per eligible group with raw expansion. | Technical filter/group policy over the same graph. | Final Technical UI and observability product. | No Technical-local graph builder. | Technical counts, aggregation membership, and drill-down equality. | `ACCEPTED` |
 | GP11 | Deterministic domain-separated projection IDs preserve reproducibility without competing with Platform identity. | Platform Execution Identity authoritative; native IDs correlation-only; canonical normalized ordering. | Byte-equivalent output for identical normalized input/policy. | Public ID compatibility guarantee. | Versioned SHA-256 ID construction as candidate algorithm. | Input permutation, domain collision, native-ID substitution rejection. | `ACCEPTED` |
-| GP12 | Separate authored topology, approved revision, execution snapshot, current state, and history to prevent retroactive rewrite. | Running/historical execution retains exact immutable approved revision. | Explicit revision reference on execution context. | Plan persistence/version API. | Builder consumes revision identity; never derives “latest.” | Later approval cannot change prior execution linkage. | `ACCEPTED` |
+| GP12 | Separate authored topology, approved revision, execution snapshot, current state, and history to prevent retroactive rewrite. | Running/historical execution retains exact immutable approved revision. | Explicit revision linkage on execution context. | Plan persistence/version API. | Builder consumes revision identity; never derives “latest.” | Fixtures 1/12 require `plan-TRIGGERS->workflow`; later approval cannot change prior execution linkage. | `ACCEPTED` |
 | GP13 | Preserve eight explicit states because ambiguity and control outcomes are not binary. | UNKNOWN never maps to success/failure; skipped differs from failed/blocked/denied. | Versioned upstream-state mapping. | Universal public Outcome/Status contract. | Fail closed on unmapped state or emit UNKNOWN with limitation where authorized. | Fixtures 7, 9, and 10 exact state assertions. | `ACCEPTED` |
 | GP14 | Model future Definition `1:N` Instance, Instance `N:M` Realization, and Realization `1:N` Execution without claiming support. | Native/OpenClaw/Hermes multi-instance not granted; Runtime Pool/autoscaling not implemented. | Cardinality metadata only. | Multi-instance lifecycle, Runtime Pool, autoscaling, scheduling. | No Runtime behavior or resource changes. | Future-shape fixture only; support-claim audit must remain negative. | `ACCEPTED_AS_FUTURE_EXTENSIBILITY_ONLY` |
 | GP15 | Preserve authorization-first Capability/Knowledge evidence so a view cannot invent effects or citations. | DENY means zero calls/citations; Knowledge synthetic only; Evidence IDs exact. | Synthetic nodes and citation linkage when evidence exists. | Production Knowledge, RAG, governance, Provider certification. | Consume existing evidence; perform no retrieval/invocation. | Fixture 5 N:N evidence and fixture 7 DENY-zero-call rejection cases. | `ACCEPTED_WITH_SYNTHETIC_V0_2_BOUNDARY` |
@@ -457,24 +513,55 @@ edge counts. `P` and `T` list Product/Technical visible node and edge counts.
 All fixtures sort nodes by `(node-type rank, entity_id, node_id)`, relations by
 `(source_node_id, target_node_id, direction, display_priority,
 declared_cardinality, relation_id)`, and evidence lexicographically. Counts
-describe the fixture after its stated projection security filter and before
-detail expansion. Cardinality is therefore an explicit deterministic sort
+describe the fixture after the exact common projection security-filter input
+defined below and before detail expansion. Cardinality is therefore an explicit
+deterministic sort
 input as well as part of the canonical `gpr` identity input in GP11.
+
+### 13.0 Exact fixture security-filter input
+
+All twelve positive fixtures use one explicit upstream security-filter result:
+
+| Input field | Exact fixture value |
+| --- | --- |
+| `security_domain` | `fixture-authorized-domain` |
+| authorized node IDs | the complete exact raw-node set named by that fixture |
+| authorized relation IDs | the complete exact raw-relation set named by that fixture |
+| authorized Evidence IDs | every non-secret `ev-*` ID named by that fixture |
+| authorized fields | the secret-safe canonical fields required by GP03–GP04 |
+| redacted or cross-domain input | none |
+
+This input means the upstream filter emits the fixture's complete declared raw
+graph; it is not an allow-all production policy. Product-hidden Runtime,
+identity, actor, request, and diagnostic detail is present in this authorized
+fixture input and is omitted only by the explicit Product visibility policy.
+Fixture 12 reuses Fixture 1's identical security-filter result as well as its
+canonical graph input, so their snapshot IDs remain equal.
+
+Security-filter rejection coverage is also exact. Removing an authorized node
+from the input removes every incident relation before canonical construction;
+removing a relation removes only that relation; removing evidence preserves an
+otherwise authorized node or relation only with the applicable limitation when
+GP03–GP04 permit it, and otherwise rejects malformed input. No projection or
+detail expansion may restore filtered data. Mixing a node, relation, evidence
+item, or discriminator from a second security domain rejects
+`SECURITY_DOMAIN_INPUT_MISMATCH`. These are input-boundary fixture assertions,
+not new authentication, tenancy, RBAC, or policy-engine semantics.
 
 | # | Fixture and raw graph | Aggregation / view expectation | Cardinality and evidence |
 | --- | --- | --- | --- |
-| 1 | Serial: problem, plan, workflow, tasks A/B/C, definition, instance, runtime, outcome; `N10/R12` | no multi-relation collapse; `E12`; `P7/6`, `T8/10` | A→B→C `ONE_TO_ONE` occurrence dependencies; Outcome evidence on `PRODUCES` |
+| 1 | Serial: problem, approved plan revision, workflow execution aggregate, tasks A/B/C, definition, instance, runtime, outcome; `N10/R13` | no multi-relation collapse; `E13`; `P7/7`, `T9/11` | A→B→C `ONE_TO_ONE` occurrence dependencies; the exact approved Plan revision triggers the Workflow execution; Outcome evidence on `PRODUCES` |
 | 2 | Parallel: workflow, A, B/C, D plus definition/instance/outcome; `N8/R11` | fan-out/fan-in remain explicit; `E11`; `P6/6`, `T8/11` | exact Section 13.2 mapping preserves fan-out and fan-in declarations independently; DAG topological order A,B,C,D |
-| 3 | Definition with Instances I1/I2/I3 and runtime; `N5/R7` | three Instances remain visible (<4 threshold); `E7`; `P2/1` (Definition role + count), `T5/7` | declared Definition→Instance `ONE_TO_MANY`; selection evidence per assignment |
+| 3 | Definition with Instances I1/I2/I3 and runtime; `N5/R7` | three Instances remain visible (<4 threshold); `E7`; `P4/3`, `T5/7` | declared Definition→Instance `ONE_TO_MANY`; selection evidence per assignment |
 | 4 | Tasks T1/T2/T3 to Instance I1; `N4/R3` | repeated Tasks remain distinct; `E3`; `P4/3`, `T4/3` | Task→Instance `MANY_TO_ONE`; each assignment evidence retained |
 | 5 | T1/T2, Cap C1/C2, Evidence K1/K2; `N6/R8` | no pair has mergeable duplicate here; `E8`; `P4/4`, `T6/8` | Task↔Capability/Evidence `MANY_TO_MANY`; citation Evidence IDs sorted |
 | 6 | Nodes A/B with dependency, data, trigger relations; `N2/R3` | one visual edge: primary `DEPENDS_ON`, badges `TRIGGERS`,`DATA_FLOW`; `E1`; `P2/1`, `T2/1` | exact mapping in Section 13.2: `ONE_TO_ONE`, `ONE_TO_MANY`, and `MANY_TO_MANY` remain distinct in expanded raw detail and evidence union |
-| 7 | Task, Capability, Approval/decision, Outcome denied; `N4/R4` | `REQUESTS`, `AUTHORIZED_BY`, `BLOCKS`, `PRODUCES`; `E4`; `P3/3`, `T4/4` | `DENY`, Provider calls `0`, citations `0`; decision evidence linked |
+| 7 | Task, Capability, Approval/decision, Outcome denied; `N4/R4` | `REQUESTS`, `AUTHORIZED_BY`, `BLOCKS`, `PRODUCES`; `E4`; `P4/3`, `T4/4` | `DENY`, Provider calls `0`, citations `0`; decision evidence linked |
 | 8 | Plan, approval, task, Human actor/role evidence; `N3/R3` | approval prerequisite blocks the task until approved (`approval-BLOCKS->task`), then state changes without edge identity change; Product and Technical preserve that direction; `E3`; `P3/3`, `T3/3` | `REQUESTS` + `APPROVED_BY`; immutable actor/time/revision evidence remains linked to the approval relation |
 | 9 | A failed, B skipped downstream, Outcome; `N4/R5` | failure and skip are distinct; blocking edge cannot merge with informational dependency; `E5`; `P4/5`, `T4/5` | `B-DEPENDS_ON->A` and `A-BLOCKS->B` preserve their distinct direction and cardinality in separate groups; failure evidence only on A |
 | 10 | Task, runtime realization, UNKNOWN Outcome; `N3/R2` | `E2`; `P2/1`, `T3/2`; UNKNOWN styling/count remains separate | execution→Outcome `ONE_TO_ONE`; ambiguity/reason evidence retained; never success/failure |
 | 11 | Definition with 12 Instances and assignments; `N13/R24` | one default Instance group; `E2` summary edges; `P2/1`, `T2/2`; expansion restores `N13/R24/E24` | Definition `ONE_TO_MANY`; group exposes count 12 and union of all 12 evidence IDs |
-| 12 | Same canonical serial graph as #1 | same snapshot ID; Product `P7/6`, Technical `T8/10`; every shared identity/state/evidence value equal | omissions only; no view-local relation creation; stable byte-equivalent output |
+| 12 | Same canonical serial graph and security-filter input as #1 | same snapshot ID; Product `P7/7`, Technical `T9/11`; every shared identity/state/evidence value equal | omissions only; no view-local relation creation; stable byte-equivalent output |
 
 ### 13.1 Fixture completeness review
 
@@ -486,7 +573,7 @@ tuples produced by that rule, not input order.
 
 | # | Exact raw nodes | Exact raw relations | Evidence linkage and rejection expectation |
 | --- | --- | --- | --- |
-| 1 | `problem,plan,workflow,A,B,C,definition,instance,runtime,outcome` | `problem-DECOMPOSES_TO->plan`; `workflow-CONTAINS->{A,B,C}`; `B-DEPENDS_ON->A`; `C-DEPENDS_ON->B`; `{A,B,C}-ASSIGNED_TO->definition`; `definition-CONTAINS->instance`; `instance-EXECUTED_BY->runtime`; `C-PRODUCES->outcome` = 12 | `ev-plan`, `ev-dep-ab`, `ev-dep-bc`, `ev-outcome`; accept; Product/Technical counts and order as row 1 |
+| 1 | `problem,plan,workflow,A,B,C,definition,instance,runtime,outcome` | `problem-DECOMPOSES_TO->plan`; `workflow-CONTAINS->{A,B,C}`; `B-DEPENDS_ON->A`; `C-DEPENDS_ON->B`; `{A,B,C}-ASSIGNED_TO->definition`; `definition-CONTAINS->instance`; `instance-EXECUTED_BY->runtime`; `C-PRODUCES->outcome`; `plan-TRIGGERS->workflow` = 13 | `ev-plan`, `ev-dep-ab`, `ev-dep-bc`, `ev-outcome`, `ev-plan-revision`; accept only when the exact immutable approved Plan revision triggers the Workflow execution aggregate; Product/Technical counts and order as row 1 |
 | 2 | `workflow,A,B,C,D,definition,instance,outcome` | `workflow-CONTAINS->{A,B,C,D}`; `{B,C}-DEPENDS_ON->A`; `D-DEPENDS_ON->{B,C}`; `{A,D}-ASSIGNED_TO->instance`; `D-PRODUCES->outcome` = 11 | one `ev-dep-*` per DAG edge; accept topological tie-break `B,C`; adding `A-DEPENDS_ON->D` rejects `EXECUTION_DEPENDENCY_CYCLE` without rejecting unrelated relation cycles |
 | 3 | `definition,I1,I2,I3,runtime` | `definition-CONTAINS->{I1,I2,I3}`; `{I1,I2,I3}-REFERENCES->definition`; `I1-EXECUTED_BY->runtime` = 7 | `ev-select-i1..i3`; declared `ONE_TO_MANY`; accept and retain all Instance identities |
 | 4 | `T1,T2,T3,I1` | `{T1,T2,T3}-ASSIGNED_TO->I1` = 3 | `ev-assignment-t1..t3`; `MANY_TO_ONE`; accept; duplicate relation ID rejects |
@@ -497,7 +584,7 @@ tuples produced by that rule, not input order.
 | 9 | `A,B,workflow,outcome` | `workflow-CONTAINS->{A,B}`; `B-DEPENDS_ON->A`; `A-BLOCKS->B`; `A-PRODUCES->outcome` = 5 | `ev-failure-a`, `ev-skip-b`; accept `A=FAILED`, `B=SKIPPED`; reject any projection that maps B to FAILED or merges blocking with informational semantics |
 | 10 | `task,runtime,outcome` | `task-EXECUTED_BY->runtime`; `task-PRODUCES->outcome` = 2 | `ev-ambiguous-effect`; accept `UNKNOWN`; reject success/failure coercion or retry-safe inference |
 | 11 | `definition,I01..I12` | `definition-CONTAINS->{I01..I12}` and `{I01..I12}-REFERENCES->definition` = 24 | `ev-instance-01..12`; accept one default group and exact evidence union; expansion order `I01..I12`; missing member evidence is preserved as a limitation, never silently dropped |
-| 12 | exactly fixture 1 canonical nodes | exactly fixture 1 canonical relations and IDs | same `ev-*`, snapshot ID, Platform Execution Identity, and raw relationship IDs; reject either view creating, reversing, or changing a shared relation |
+| 12 | exactly fixture 1 canonical nodes | exactly fixture 1 canonical relations and IDs, including `plan-TRIGGERS->workflow` | same security-filter input, `ev-*`, snapshot ID, Platform Execution Identity, approved Plan revision, and raw relationship IDs; reject either view creating, reversing, or changing a shared relation |
 
 For every row, the raw and aggregated counts, Product/Technical visible
 node/edge counts, cardinality, and aggregation outcome are those in the main
@@ -549,11 +636,19 @@ inheritance.
 | `f01-r10` | `definition→instance` | `CONTAINS` | `ONE_TO_MANY` | `1:1` | `S→T` | `ev-instance` | — | D | D |
 | `f01-r11` | `instance→runtime` | `EXECUTED_BY` | `MANY_TO_ONE` | `1:1` | `S→T` | `ev-runtime-binding` | — | D | V |
 | `f01-r12` | `C→outcome` | `PRODUCES` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-outcome` | — | D | V |
+| `f01-r13` | `plan→workflow` | `TRIGGERS` | `ONE_TO_ONE` | `1:1` | `S→T` | `ev-plan-revision` | — | V | V |
 
-Fixture 12 contains the exact twelve raw relation IDs `f01-r01` through
-`f01-r12`, not aliases newly allocated by either view. Its fully expanded
+`f01-r13` is the approved-revision-to-execution linkage required by GP12.
+`plan` is the exact immutable approved revision and `workflow` is the fixture's
+execution aggregate; the Plan triggers the Workflow in exactly that direction.
+This relation changes neither Workflow nor Plan authority. A later Plan
+approval changes the input revision and snapshot, never this prior relation's
+source or evidence.
+
+Fixture 12 contains the exact thirteen raw relation IDs `f01-r01` through
+`f01-r13`, not aliases newly allocated by either view. Its fully expanded
 source, target, type, declared cardinality, observed count, direction,
-evidence, aggregation, and visibility values are exactly the twelve rows
+evidence, aggregation, and visibility values are exactly the thirteen rows
 above. Product and Technical consume those same canonical IDs and values;
 their `V`/`D` differences are omission policy only. Both retain the identical
 Graph Snapshot ID and Platform Execution Identity. Neither aggregation nor a
@@ -637,9 +732,9 @@ or execution entity. Expansion restores all 24 exact members, endpoint
 directions, declared cardinalities, and evidence links in cardinality-aware
 stable order.
 
-The complete audit totals 94 raw relation occurrences across fixtures 1–12,
-counting Fixture 12's deliberate reuse of Fixture 1's twelve canonical IDs.
-All 94 resolve to one of the four canonical enum values; zero depend on prose,
+The complete audit totals 96 raw relation occurrences across fixtures 1–12,
+counting Fixture 12's deliberate reuse of Fixture 1's thirteen canonical IDs.
+All 96 resolve to one of the four canonical enum values; zero depend on prose,
 observed counts, aggregation, grouping, inheritance, or view-local inference.
 
 ### 13.3 Final Product/Technical mapping
@@ -664,6 +759,64 @@ retains its canonical `aggregation_id` and ordered raw `relation_id` members,
 so a Product edge can be traced to the identical Technical raw relationships.
 Filtering may omit a node or edge but cannot allocate a replacement identity.
 
+### 13.4 Complete fixture view-visibility contract
+
+The relation tables' `P` and `T` columns are a compact, lossless encoding of
+the single canonical `projection_visibility` policy value. The only valid
+mapping is:
+
+| Product (`P`) | Technical (`T`) | Canonical `projection_visibility` |
+| --- | --- | --- |
+| `V` | `V` | `BOTH` |
+| `V` | `D` | `PRODUCT` |
+| `D` | `V` | `TECHNICAL` |
+| `D` | `D` | `DETAIL_ONLY` |
+
+`V` means initially rendered after the fixture's stated security filter and
+default grouping policy. `D` means absent from that initial projection but
+retained for an authorized detail/drill-down path. This mapping is applied to
+the canonical raw relation before grouping or edge aggregation; a view MUST
+NOT allocate, reverse, or reclassify a relation. Security filtering precedes
+this policy and may remove data that `V` would otherwise render.
+
+The following table completely names the initially rendered node set for each
+view. Braces denote exact deterministic presentation-group membership, not a
+new canonical node or relationship endpoint. Nodes not named for a view are
+detail-only for that initial fixture projection. A visible raw edge requires
+both endpoints to be rendered directly or represented by the named
+deterministic group; disconnected Product summary nodes are permitted only
+where the raw linking relation is Technical/detail-only and remains traceable
+by its canonical ID.
+
+| Fixture | Product initial nodes/groups | Technical initial nodes/groups | Product/Technical initial counts |
+| --- | --- | --- | --- |
+| 1 | `problem`, `plan`, `workflow`, `A`, `B`, `C`, `outcome` | `plan`, `workflow`, `A`, `B`, `C`, `definition`, `instance`, `runtime`, `outcome` | `P7/7`, `T9/11` |
+| 2 | `workflow`, `A`, `B`, `C`, `D`, `outcome` | `workflow`, `A`, `B`, `C`, `D`, `definition`, `instance`, `outcome` | `P6/6`, `T8/11` |
+| 3 | `definition`, `I1`, `I2`, `I3` | `definition`, `I1`, `I2`, `I3`, `runtime` | `P4/3`, `T5/7` |
+| 4 | `T1`, `T2`, `T3`, `I1` | `T1`, `T2`, `T3`, `I1` | `P4/3`, `T4/3` |
+| 5 | `T1`, `T2`, `C1`, `C2` | `T1`, `T2`, `C1`, `C2`, `K1`, `K2` | `P4/4`, `T6/8` |
+| 6 | `A`, `B` | `A`, `B` | `P2/1`, `T2/1` |
+| 7 | `task`, `capability`, `approval`, `outcome` | `task`, `capability`, `approval`, `outcome` | `P4/3`, `T4/4` |
+| 8 | `plan`, `approval`, `task` | `plan`, `approval`, `task` | `P3/3`, `T3/3` |
+| 9 | `A`, `B`, `workflow`, `outcome` | `A`, `B`, `workflow`, `outcome` | `P4/5`, `T4/5` |
+| 10 | `task`, `outcome` | `task`, `runtime`, `outcome` | `P2/1`, `T3/2` |
+| 11 | `definition`, group `{I01..I12}` | `definition`, group `{I01..I12}` | `P2/1`, `T2/2` |
+| 12 | exactly Fixture 1 Product nodes | exactly Fixture 1 Technical nodes | `P7/7`, `T9/11` |
+
+Fixture 3 stays expanded in both views because three siblings are below the
+ordinary four-sibling collapse threshold. Its earlier `P2/1` shorthand is
+therefore corrected to endpoint-closed `P4/3`; the Product view omits only the
+Runtime detail. Fixture 11 applies the ordinary threshold in both views. Its
+presentation groups preserve the raw members and relations specified in
+Sections 13.1–13.2.
+
+The earlier Fixture 7 `P3/3` shorthand was not endpoint-closed: its three
+Product-visible raw relations require all four canonical endpoints (`task`,
+`capability`, `approval`, and `outcome`). It is therefore corrected to
+`P4/3`. This is a visibility-count correction only; `N4/R4`, `E4`, relation
+IDs, direction, cardinality, evidence, DENY semantics, and Technical `T4/4`
+remain unchanged.
+
 ## 14. Acceptance proof and contradiction audit
 
 | Required proof | Candidate disposition |
@@ -676,14 +829,15 @@ Filtering may omit a node or edge but cannot allocate a replacement identity.
 | Product/Technical consistency | GP09–GP10 and fixture 12 |
 | execution DAG plus general graph | GP02 and fixtures 2/8 |
 | identity authority | GP11; no new execution identity |
-| plan/execution revision linkage | GP12 |
+| plan/execution revision linkage | GP12 and Fixtures 1/12 `plan-TRIGGERS->workflow` with `ev-plan-revision` |
+| exact security-filter input | Section 13.0; all positive fixtures consume one complete single-domain upstream filter result and fail closed on cross-domain input |
 | UNKNOWN preservation | GP13 and fixture 10 |
 | Runtime claims unchanged | GP14 |
 | Knowledge/Capability invariants | GP15 and fixtures 5/7 |
 | canonical `BLOCKS` direction | source is blocker/prerequisite and target is blocked; fixtures 7/8 use Approval→Task and fixture 9 uses failed A→skipped B |
 | no production/public change | architecture artifact and index only |
 
-After the S5-ARCH-009-C1 correction, no contradiction remains with accepted
+After the S5-ARCH-009-C1/C2/C3/C4 corrections, no contradiction remains with accepted
 S5-ARCH-008, the accepted logical Core candidate, the internal shared DTO,
 current Workflow DAG behavior, or Platform Execution Identity. This candidate
 adds no competing authority: it derives relationships from those sources and
@@ -766,6 +920,85 @@ PR_MERGED: NO
 SESSION_CLOSED: NO
 NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_C2_CLOSE_CONFIRMATION
 NEXT_GATE: Human S5-ARCH-009-C2 Close Confirmation
+```
+
+Checkpoint A for S5-ARCH-009-C3 completed the missing visibility contract at
+the authorized durable-main baseline. All twelve fixture projections now have
+an exact initial node/group set, all relation `P`/`T` pairs resolve to exactly
+one canonical `projection_visibility` value, and the endpoint-closure audit
+has two explicit corrections: Fixture 3 Product visibility is `P4/3`, not
+`P2/1`, and Fixture 7 Product visibility is `P4/3`, not `P3/3`. C1 direction,
+C2 cardinalities, the 94 raw relation occurrences,
+canonical identities, evidence, security-before-projection ordering, and all
+claim boundaries remain unchanged.
+
+This candidate does not reopen or modify S5-IMPL-013, resume or modify
+S5-IMPL-013-C1 or S5-REL-024, modify PR #62, or authorize implementation.
+
+```text
+SESSION: S5-ARCH-009-C3
+CODEX_TASK_NAME: [S5-ARCH-009-C3] Graph Fixture View Visibility Contract Correction
+LIFECYCLE: REVIEW
+STATUS: CANDIDATE_COMPLETE
+CHECKPOINT: A — VIEW_VISIBILITY_CONTRACT_CORRECTION_CANDIDATE
+RESULT: READY_FOR_HUMAN_REVIEW
+CURRENT_STEP: 1_OF_3
+ALL_12_FIXTURES: NODE_VISIBILITY_COMPLETE
+RELATION_VISIBILITY_ENUM_MAPPING: COMPLETE
+FIXTURE_3_PRODUCT_VISIBILITY: CORRECTED_TO_P4_3
+FIXTURE_7_PRODUCT_VISIBILITY: CORRECTED_TO_P4_3
+C1_BLOCKS_DIRECTION: PRESERVED
+C2_CARDINALITY_CONTRACT: PRESERVED
+RAW_RELATION_OCCURRENCES: 94 / UNCHANGED
+S5_IMPL_013_MODIFIED: NO
+S5_IMPL_013_C1_MODIFIED: NO
+S5_REL_024_MODIFIED: NO
+PR_62_MODIFIED: NO
+SESSION_CLOSED: NO
+NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_C3_CHECKPOINT_A_REVIEW
+NEXT_GATE: Human S5-ARCH-009-C3 Checkpoint A Review
+```
+
+Checkpoint A for S5-ARCH-009-C4 completes the two bounded fixture inputs that
+remained implicit after C3. Section 13.0 now supplies one exact, single-domain
+upstream security-filter result for every positive fixture plus fail-closed
+negative assertions. Fixtures 1 and 12 now include the exact directed
+`plan-TRIGGERS->workflow` relation and `ev-plan-revision`, proving the GP12
+approved-revision-to-execution connection without changing execution or Plan
+authority. The two deliberate serial occurrences raise the complete audit from
+94 to 96 raw relation occurrences; raw node counts, C1
+`BLOCKS` direction, and all C2/C3 contracts otherwise remain unchanged.
+
+This C4 candidate exclusively owns the new correction content despite PR #63's
+immutable C3-named head branch. It does not reopen C3, modify PR #62, resume or
+modify S5-REL-025 or S5-IMPL-013-C1, or authorize implementation.
+
+```text
+SESSION: S5-ARCH-009-C4
+CODEX_TASK_NAME: [S5-ARCH-009-C4] Graph Fixture Security Input and Plan-Execution Connectivity Correction
+LIFECYCLE: REVIEW
+STATUS: CANDIDATE_COMPLETE
+CHECKPOINT: A — SECURITY_INPUT_AND_PLAN_EXECUTION_CONNECTIVITY_CORRECTION
+RESULT: READY_FOR_HUMAN_REVIEW
+CURRENT_STEP: 1_OF_3
+HUMAN_G2_GATE: PASS_WITH_CONSTRAINTS
+ALL_12_FIXTURES_SECURITY_INPUT: COMPLETE
+SECURITY_FILTER_AUTHORITY: UPSTREAM / UNCHANGED
+FIXTURE_1_PLAN_EXECUTION_CONNECTIVITY: COMPLETE
+FIXTURE_12_PLAN_EXECUTION_CONNECTIVITY: INHERITS_EXACT_FIXTURE_1_GRAPH
+PLAN_EXECUTION_RELATION: plan-TRIGGERS->workflow
+PLAN_EXECUTION_RELATION_VISIBILITY: PRODUCT / TECHNICAL
+RAW_RELATION_OCCURRENCES: 96
+C1_BLOCKS_DIRECTION: PRESERVED
+C2_CARDINALITY_CONTRACT: PRESERVED
+C3_VISIBILITY_CONTRACT: PRESERVED_WITH_DERIVED_FIXTURE_1_AND_12_EDGE_COUNT_UPDATE
+S5_ARCH_009_C3_REOPENED: NO
+S5_REL_025_MODIFIED: NO
+S5_IMPL_013_C1_MODIFIED: NO
+PR_62_MODIFIED: NO
+SESSION_CLOSED: NO
+NEXT_ACTION: WAIT_FOR_HUMAN_S5_ARCH_009_C4_CHECKPOINT_A_REVIEW
+NEXT_GATE: Human S5-ARCH-009-C4 Checkpoint A Review
 ```
 
 Rollback for this architecture Session is removal of this artifact and its one
