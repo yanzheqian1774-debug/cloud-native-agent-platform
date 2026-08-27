@@ -76,3 +76,16 @@ Checkpoint A owns exactly five paths:
 The candidate remains subject to Human review and merge gates. It grants no
 implementation, Contract freeze, production readiness, certification, Golden Demo, or
 release acceptance.
+
+## Checkpoint B independent safety review
+
+Checkpoint B compared the candidate against the accepted Core representation,
+Workflow/Task lifecycle, Definition/Instance, Runtime/Provider, Capability authorization,
+Canonical Graph, Product/Technical projection, S5-ARCH-010 Evidence/shared-read-model,
+Golden Demo, and current public API/CRD boundaries. One bounded five-path correction
+made existing-contract mapping, additional threat cases, future package gate ordering,
+the separate Preference/Intervention/Optimization architecture review, rollback syntax,
+and forward-recorded S5-REL-028 closure explicit.
+
+Result: `PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_S5_ARCH_011_MERGE_GATE`. No unresolved
+architecture contradiction, implementation authorization, or downstream Session exists.

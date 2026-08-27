@@ -60,6 +60,28 @@ S5-ARCH-010/S5-IMPL-014 Evidence and shared-read-model boundary.
   Evidence, citations, correction, and Outcome.
 - **Unsupported claims**: any capability listed as v0.3, rejected, or a non-goal.
 
+### 2.2 Checkpoint B durable-architecture consistency review
+
+The independent review found no unresolved contradiction. Apparent overlaps resolve as
+follows:
+
+| Governing architecture or implementation | Apparent contradiction | Resolution |
+| --- | --- | --- |
+| Current Workflow/Task CRDs and controllers | New planning contracts could become a second current Workflow authority | candidates are internal proposal/approval records; only the approved canonical revision maps to and invokes the existing bounded execution path; current source remains authority for implemented lifecycle behavior |
+| S5-ARCH-005/007 Definition and Instance separation | Role matching or preview could create or replace Instance identity | matching uses exact existing `PUBLISHED/MATCHABLE` Definition versions; preview creates no Definition or Instance; Platform-minted Instance identity remains separate |
+| S5-ARCH-009 Canonical Graph and sibling views | new Intent, planning, or Knowledge identities could define new Graph semantics or view-local relationships | existing Graph node/relation vocabulary, directions, cardinality, and relationship authority remain unchanged; unsupported mappings fail or become authorized limitations; views consume one upstream graph |
+| S5-ARCH-009 synthetic Knowledge boundary | live bounded retrieval could retroactively convert synthetic fixtures into production Knowledge | synthetic fixtures remain labelled; S5-ARCH-011 authorizes only a future bounded live read-only Pack and explicitly makes no production RAG, persistence, governance, or Enterprise Knowledge claim |
+| S5-ARCH-010/S5-IMPL-014 Evidence and shared snapshot | retrieval Evidence or citation assembly could replace execution Evidence or shared-view authority | retrieval Evidence is a future append-only Evidence kind; Kubernetes remains current state authority, Graph remains relationship authority, and the one backend assembler remains sibling snapshot authority |
+| Accepted Runtime/Provider decisions and known drift | placement contracts could introduce RuntimeClass, a Runtime Manager, or external routing | placement is limited to one already declared Native target and existing Native path; no RuntimeClass refactor, provisioning, lifecycle management, OpenClaw/Hermes selection, or certification |
+| Capability authorization | descriptor selection could grant invocation authority | authorization precedes scoring and invocation; a descriptor or model cannot grant permission; live invocation retains separate authorization Evidence |
+| Human approval and Product correction | Product correction could mutate an approved plan or become policy | Product emits a semantic correction request only; deterministic validation and a new exact-digest Human approval create an immutable successor; tenant policy is unchanged |
+| Golden Demo architecture | supplier-quality example could claim Demo completion or replace the approved scenario gate | it is a bounded architecture example and future package only; no Demo asset, acceptance, readiness, or Release state changes |
+| Public API and `agentos.io/v1alpha1` Agent/Task/Workflow CRDs | internal contracts could become new public schemas | all S5-ARCH-011 contracts are internal, versioned candidates; public API/CRD/schema changes require a separate Human G2 gate |
+
+Known ADR-0003 Operator/Workflow and ADR-0004 Runtime abstraction drift is neither
+resolved nor expanded by this decision. Current source defines implemented behavior;
+accepted ADRs retain architecture authority until a separately approved decision.
+
 ## 3. Product experience principle
 
 Business users primarily submit a question and receive an answer. The work process is
@@ -172,6 +194,24 @@ fail-closed outcome; it never authorizes fallback.
 | `RuntimePlacementDecision` | decision ID; request, exact target/version, availability, limitations, reasons | append-only bounded placement authority | unavailable blocks execution; both views preserve decision and target identity |
 | `ProductSemanticCorrection` | correction ID/revision; source Workflow revision, normalized business patch, actor/decision | draft/validated/accepted/rejected; correction authority | cannot mutate source; accepted correction produces a new candidate and approval cycle |
 | `SuccessorRevision` | successor ID; predecessor ID/digest, accepted correction ID, new candidate/approval/digest | immutable canonical revision | predecessor remains queryable; executions stay bound to their exact revision |
+
+### 6.1 Existing-contract reuse and mapping
+
+These names do not authorize duplicate competing domain objects. Future implementation
+MUST reuse the existing `agent_core.representation.v0_2` identity, Definition, Instance,
+Task, Workflow, Capability, Runtime Binding, Platform Execution Identity, Outcome, and
+Evidence values where their accepted semantics match. The new contracts are either:
+
+- proposal/approval records that reference the existing Workflow/Task identities;
+- typed requirement or binding records that reference existing Definition, Capability,
+  Runtime, and execution identities; or
+- Knowledge-specific internal values mapped into the existing append-only Evidence and
+  shared projection seams.
+
+If implementation discovers that an existing similarly named type has incompatible
+semantics, it MUST stop at its implementation Architecture Gate. It MUST NOT alias,
+shadow, fork, or silently replace the existing contract. Public Agent/Task/Workflow CRDs
+remain unchanged and are not serialization targets for these candidate envelopes.
 
 ## 7. Intent and planning state machine
 
@@ -412,6 +452,15 @@ citations. This decision does not create the Demo Scenario Pack or Knowledge Pac
 | Generated text writes Knowledge | Knowledge authority | read-only interface; no publication capability | attempt create/update/delete operations | ingestion/publication deferred to v0.3 |
 | Correction becomes tenant policy | correction/policy authority | correction scopes only a successor candidate | policy-shaped correction test | repeated feedback is not learning in v0.2 |
 | Optimization candidate affects production | execution authority | preview/candidate has zero production influence | inject optimization candidate into matcher/runtime | optimization lifecycle remains v0.3 |
+| Approval replay uses a changed normalized digest | approval/canonical Workflow authority | approval lookup requires exact digest, canonicalizer version, tenant/security domain, and candidate identity; mismatch rejects | replay old approval across semantic, normalization-version, tenant, and candidate changes | canonicalization implementation defects remain a review focus |
+| Malicious or invalid model output exploits parser limits | planning validator | bounded parser/schema/resource limits reject before canonicalization or approval | adversarial structure, oversized output, unknown fields, injection text, and parser differential tests | model output remains untrusted even after syntactic parsing |
+| Descriptor enumeration through rejection reasons | catalog authorization/matcher | unauthorized descriptors are absent before scoring and use nondisclosing reasons/counts | compare absent and denied descriptors across result body, ordering, and counts | timing and aggregate side channels require operational measurement |
+| Knowledge existence inferred from result count or timing | Knowledge authorization/retrieval | denied sources contribute zero candidates/counts and responses use bounded nondisclosing behavior | absent-versus-denied count, rank, cache, error, and timing comparisons | strict timing equivalence is not claimed in v0.2 |
+| Citation remains stale after document version changes | Knowledge/citation authority | citation stays bound to historical exact version/digest and current answers rerun matching/retrieval | update document while replaying old Evidence and creating a new answer | historical citations may intentionally reference superseded content with visible status |
+| UI state makes a candidate or preview matchable | candidate/Definition authority | backend accepts only authoritative published lifecycle state, never UI flags | tamper with Product/Technical UI state, payload labels, and cached status | compromised backend authority is outside frontend controls |
+| Product View hides a Runtime limitation | placement/shared projection authority | shared snapshot retains limitation identity; Product may simplify wording but cannot omit a decision-blocking limitation | compare Product/Technical limitation IDs and blocked-execution state | progressive disclosure may reduce Product detail, never the blocking fact |
+| Synthetic history contaminates live optimization or policy | provenance/execution/policy authority | v0.2 has no production optimization/learning path; provenance filter excludes synthetic history from live authority | inject synthetic outcomes into matching, policy, correction, and proposed optimization inputs | evaluation may use labelled synthetic history but cannot influence live execution |
+| Future MCP wrapper becomes Knowledge authority | Knowledge/MCP boundary | wrapper must preserve authoritative reference/version/digest/auth/citation and cannot publish, authorize, rank, or mint identity | malicious wrapper identity, authorization, content, rank, and citation substitution tests | future MCP Resource support requires its own architecture and implementation gates |
 
 ## 16. Validation and acceptance requirements
 
@@ -454,6 +503,16 @@ No task ID is allocated and no package is authorized by this decision.
 Expected path families are indicative and require separate Human scope authorization.
 Portfolio, Golden Demo, and Release artifacts are unchanged here.
 
+The prerequisite order is: internal contract/identity mapping and planning engine;
+authorization-capable matcher; Native placement bridge and bounded Knowledge retrieval
+in parallel only after their shared identities are fixed; shared Product correction
+journey after planning/retrieval DTOs; Scenario Pack after all live seams; enhanced
+Golden acceptance last. A package MUST NOT write another package's authority and a
+single writer owns each shared contract change. Any public API, CRD, Graph semantic,
+dependency/lockfile, persistent-infrastructure, or workflow-lifecycle impact discovered
+by a package requires its own Human Architecture Gate before implementation. No package
+or task ID is allocated here.
+
 ## 18. v0.2/v0.3 boundary
 
 | Classification | Knowledge capability |
@@ -467,6 +526,12 @@ Portfolio, Golden Demo, and Release artifacts are unchanged here.
 Generated-role publication/matching, Agent Factory, managed Agent Instance lifecycle,
 Runtime Manager, distributed placement, Recovery, optimization, OpenClaw/Hermes managed
 support, and production Certification are also v0.3 or later.
+
+Preference, Intervention, feedback-to-policy, and Optimization/PublishedOptimization
+authority require a **second Human Architecture Review**. `ProductSemanticCorrection`
+does not implement preference learning, an Intervention ledger, tenant policy, an
+optimization candidate lifecycle, or production influence. No authoritative four-stage
+v0.3 Portfolio is created or implied here.
 
 ## 19. Consequences and limitations
 
@@ -493,7 +558,8 @@ authority; the deterministic backend assembler retains shared Product/Technical 
 authority. Knowledge retrieval Evidence is an additional future Evidence type, not a new
 execution-state, Workflow, Graph, or Knowledge-publication authority.
 
-Architecture rollback is a revert of the future architecture merge. No data migration,
+Architecture rollback is `git revert -m 1 <future-pr-72-main-merge-commit>` for the
+required future GitHub merge commit. No data migration,
 infrastructure cleanup, credential rotation, Runtime action, or Demo reset is required
 because this decision implements none. Future internal contracts MUST be explicitly
 versioned; storage/API migration decisions remain deferred to their implementation gates.

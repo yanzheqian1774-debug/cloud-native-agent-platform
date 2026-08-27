@@ -14,8 +14,11 @@ Source code and tests remain authoritative for implemented behavior.
   projections, and immutable correction successors. It is architecture-only:
   implementation, public API/CRD/Graph changes, generated-role publication, general
   RAG/Knowledge operations, Runtime Manager, MCP Knowledge access, Golden Demo, and
-  production claims remain unauthorized. Checkpoint A is `REVIEW / AUTHORIZED /
-  PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE`.
+  production claims remain unauthorized. Independent Checkpoint B added one bounded
+  safety clarification for durable-architecture mapping, threat completeness, package
+  gates, the separate Preference/Intervention/Optimization review, and rollback. It is
+  `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS /
+  READY_FOR_HUMAN_S5_ARCH_011_MERGE_GATE`.
 - [Production Execution Evidence and Shared Read Model Boundary v1](S5-ARCH-010-PRODUCTION-EXECUTION-EVIDENCE-SHARED-READ-MODEL-BOUNDARY-V1.md)
   records the Human-approved Hybrid F authority model and bounded single-node
   SQLite persistence direction for a future v0.2 implementation slice.

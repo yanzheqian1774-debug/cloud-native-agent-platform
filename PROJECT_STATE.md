@@ -37,8 +37,8 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-ARCH-011 | `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Architecture-only candidate from exact durable baseline `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exactly five authorized architecture/evidence/governance paths define bounded Intent, canonical planning, deterministic matching, published-role, Native placement, and read-only Knowledge consumption boundaries; no implementation, public API/CRD/Graph, dependency/workflow, Portfolio, Golden Demo, Runtime, MCP, Recovery, Certification, or Release change is authorized |
-| S5-REL-028 | `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Unmerged durable integration candidate from baseline `13bc16f746a58912bc093ff249ff390250ce20cf`; exact source head `443214c0a0277473648f68800ad008f981d758c9`, Draft PR #70, 29 source paths and provenance merge `af3dab64deec8a95138a28f7f7dd5c3ce44c6e7f`; bounded REL governance/evidence successor only; no downstream task started |
+| S5-ARCH-011 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Architecture-only candidate from exact durable baseline `a0d82be4387f5706129ee6676ad5965b42a3efdb`; Checkpoint A head `761ba46345f01e30c0d8f72b84722621ece80d40`; Draft PR #72; exactly five authorized architecture/evidence/governance paths plus one bounded linear safety correction; no implementation, public API/CRD/Graph, dependency/workflow, Portfolio, Golden Demo, Runtime, MCP, Recovery, Certification, or Release change is authorized |
+| S5-REL-028 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #70 and PR #71 merged at durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exact-main CI run `33072486290` succeeded; terminal pre-close row was expected governance lag; reopen prohibited |
 | S5-IMPL-014 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | Native-only source head `443214c0a0277473648f68800ad008f981d758c9` on Draft PR #70; exact 29-path scope and CI run `33065548477` succeeded with 726 tests recorded; corrected P1 boundaries are Workflow/Task UID binding, independently authorized references, verbatim Canonical Graph relations/no frontend canonical IDs, and terminal semantic completeness; bounded single-node SQLite and internal Technical Preview only |
 | S5-ARCH-010 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Active architecture candidate, not completed, merged, or durable main; Human Review Gate passed with constraints; Draft PR #69 contains Hybrid F and the bounded single-node SQLite direction plus one linear safety clarification; implementation task ID is unresolved and no implementation or downstream Session is authorized |
 | S5-REL-027 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #68 merged into durable main `4d5da13e519627ba40cfdc632e3662f5cf965626`; exact-main CI `33046211942` succeeded; the prior pre-close row was expected terminal snapshot lag; reopen prohibited |
@@ -99,9 +99,10 @@ PRs #66 and #67 merged through Technical durable merge. S5-REL-027 then merged
 the governance reconciliation through current main
 `4d5da13e519627ba40cfdc632e3662f5cf965626`; exact-main CI run `33046211942`
 succeeded, and its Human-confirmed closure is forward-imported here without
-reopening it. S5-REL-028 is the only active integration Session for the closed
-S5-IMPL-014 source. Its candidate is not durable main and neither Draft PR is
-authorized to merge. No downstream task has started.
+reopening it. S5-REL-028 is Human-confirmed closed and its PR #70/PR #71 result
+is durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; its earlier pre-close row was
+expected terminal governance lag and is forward-recorded without reopening it.
+No downstream implementation task has started.
 Golden Demo implementation and Release have not started. No Product MVS, Runtime or
 Provider certification, production Knowledge or recovery support, Golden Demo
 readiness, production readiness, or release acceptance is granted.
