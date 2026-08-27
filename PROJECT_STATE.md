@@ -35,7 +35,9 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-REL-025 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human Implementation and Review Gates passed with constraints. The Product View candidate on `codex/s5-rel-025-product-view-integration` preserves merge `93bd1db550a0ca4c96c9c30962d40d97927fac31` and evidence successor `b81e0d7150081a327f3d586d2d1d3ada837b3105`, based on durable main `25f755432381b40efae2f3e251863db0ca32acee` and source head `18fa8f9a0eb5caef18772063c28c8fd414d6959f`. Direct Product tests (33), full tests (649), Ruff, frontend lint/build, independent Product UX review, and exact-candidate CI run `33035843711` passed. Draft PR #65 is open, unmerged, clean, and mergeable. The evidence-only review successor is resolved by exact Git/PR/CI head. It is not yet durable main; the Human Merge Gate remains pending. |
+| S5-REL-026 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human naming, Implementation, and Review Gates passed with constraints. The Technical View candidate preserves source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9` from Draft PR #66 over durable baseline `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9` through two-parent integration merge `7ce4ad11a65a43e7859f59aa5a921de849895eda` and evidence commit `367e2eba6cb81fbf48fdb9505ac9bfbc83731cae`. Source-head CI run `33040609882` and exact-candidate CI run `33041706623` passed both required jobs. Draft integration PR #67 remains open, unmerged, clean, and mergeable. The candidate is not durable main and S5-REL-026 is not closed; the Human Merge Gate remains pending. |
+| S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical View source is fixed at `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; Draft PR #66 remains open and unmerged at evidence-writing time. Closure does not imply durable integration, Product MVS completion, Golden Demo readiness, or release readiness. |
+| S5-REL-025 | `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS / MERGED_TO_DURABLE_MAIN` | Human Implementation, Review, and Merge Gates passed with constraints. The Product View candidate preserves merge `93bd1db550a0ca4c96c9c30962d40d97927fac31` and evidence successor `b81e0d7150081a327f3d586d2d1d3ada837b3105`; direct Product tests (33), full tests (649), Ruff, frontend lint/build, independent Product UX review, and exact-candidate CI run `33035843711` passed. PR #65 merged to durable main as `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`. Close Confirmation remains pending; no Product MVS completion claim is made. |
 | S5-IMPL-010 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product View source is fixed at `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; Draft PR #64 remains unmerged. Closure does not imply durable integration or Product MVS completion. |
 | S5-PLAN-002 | `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS / READY_TO_CLOSE` | Checkpoint B plan convergence complete at exact baseline `7c1bc0266b39c913497fd67dcd4b7783f288dc57`; Pilot is recommended only and requires a separately allocated `TEST` Session and Human authorization; downstream Sessions remain inactive; Human Close Confirmation pending |
 | S5-ARCH-005 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Accepted Candidate artifact and source head |
@@ -84,12 +86,14 @@ secondary technical/conformance example. Implementation entry is conditionally
 granted as a route only; no future Session is active or authorized. Provider
 certification, production readiness and release acceptance remain not granted.
 
-S5-REL-025 is the only Product View integration owner. Its reviewed candidate
-is not durable main. PR #64 and PR #65 remain Draft and unmerged. Technical
-View, Golden Demo implementation, and Release have not started. The next
-decision is the Human S5-REL-025 Merge Gate; no Product MVS, Runtime
-certification, Golden Demo readiness, production readiness, or release
-acceptance is granted.
+Product View is durable on main through merged PR #65 at
+`4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`. S5-REL-026 is the only active
+Technical View integration owner. Its bounded candidate is not durable main;
+source PR #66 remains Draft and unmerged at evidence-writing time. Golden Demo
+implementation and Release have not started. The next decision is the Human
+S5-REL-026 Merge Gate; no Product MVS, Runtime or
+Provider certification, production Knowledge or recovery support, Golden Demo
+readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 

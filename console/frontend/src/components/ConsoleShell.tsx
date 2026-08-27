@@ -31,6 +31,7 @@ export function ConsoleShell({
 
       <nav className="global-nav" aria-label={t("nav.primary")}>
         <NavLink to="/product">{t("nav.productView")}</NavLink>
+        <NavLink to="/technical">{t("nav.technicalView")}</NavLink>
         <NavLink to="/workflows">{t("nav.workflowRuns")}</NavLink>
       </nav>
 
