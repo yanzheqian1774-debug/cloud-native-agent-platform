@@ -204,5 +204,11 @@ terminal: PRs #64 and #65 are merged through durable Product merge
 `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`, S5-IMPL-010 and S5-REL-025 are
 Human-confirmed closed, and exact-main CI run `33036620588` succeeded. Thus PRs
 #64–#67 are merged and S5-IMPL-010, S5-REL-025, S5-IMPL-011, and S5-REL-026
-are closed. S5-REL-027 is active for governance reconciliation only; no
+are closed. S5-REL-027 is active in `REVIEW / PASS_WITH_CONSTRAINTS /
+READY_FOR_HUMAN_MERGE_GATE` at Draft PR #68; it is not merged or closed, and no
 downstream task is authorized.
+
+The original rollback section describes the pre-merge checkpoint. After the
+terminal Technical durable integration, the applicable repository rollback is
+`git revert -m 1 b244fa5da3e670fa754278a0559da1a3049fb05a`; branch deletion or PR
+closure is no longer a rollback for already-merged Technical content.

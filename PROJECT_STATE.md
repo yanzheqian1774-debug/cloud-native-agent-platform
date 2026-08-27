@@ -37,7 +37,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-REL-027 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / IN_PROGRESS` | Human-allocated governance reconciliation at durable baseline `b244fa5da3e670fa754278a0559da1a3049fb05a`; exactly five authorized documentation paths; no downstream task allocated |
+| S5-REL-027 | `REVIEW / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Active, not merged, and not closed; Draft PR #68 at Checkpoint A head `d8d1ca66f573800944ea9db655f65cc6695e00d3`; exact-candidate CI `33045129213` succeeded; exactly five authorized documentation paths; no downstream task allocated |
 | S5-REL-026 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PRs #66 and #67 merged; durable-main merge `b244fa5da3e670fa754278a0559da1a3049fb05a`; exact-main CI `33042871796` succeeded |
 | S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PR #66 merged automatically through Technical View durable integration |
 | S5-REL-025 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product source head `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; PRs #64 and #65 merged; durable-main merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`; exact-main CI `33036620588` succeeded |
@@ -93,15 +93,16 @@ Product and Technical Views are both durably integrated. PRs #64 and #65 merged
 through Product durable merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`;
 PRs #66 and #67 merged through Technical durable merge and current main
 `b244fa5da3e670fa754278a0559da1a3049fb05a`. Exact-main CI run `33042871796`
-succeeded. S5-REL-027 is the sole active governance reconciliation Session.
+succeeded. S5-REL-027 is the sole active governance reconciliation Session and
+is in Review at the Human Merge Gate; it is not merged or closed.
 Golden Demo implementation and Release have not started. No Product MVS, Runtime or
 Provider certification, production Knowledge or recovery support, Golden Demo
 readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Complete S5-REL-027 and return it to the Human S5-REL-027 Review Gate.
-2. After that review, return to the Human Portfolio Sequence Gate; the next
+1. Return S5-REL-027 to the Human Merge Gate; Draft PR #68 remains unmerged.
+2. After reconciliation closes, return to the Human Portfolio Sequence Gate; the next
    portfolio implementation remains unresolved and no candidate ID is active
    or authorized.
 3. Keep all public API, CRD, existing-schema, production integration, freeze,

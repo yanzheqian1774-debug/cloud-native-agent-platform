@@ -44,11 +44,14 @@ their original checkpoints; they do not override this reconciliation.
 - Product and Technical Views are durably integrated. This does not establish
   Product MVS completion, Golden Demo readiness, release readiness, or
   production Runtime/Provider/Knowledge completion.
-- S5-REL-027 is `ACTIVE / AUTHORIZED` for governance reconciliation only.
+- S5-REL-027 is active in `REVIEW / AUTHORIZED / PASS_WITH_CONSTRAINTS /
+  READY_FOR_HUMAN_MERGE_GATE` for governance reconciliation only. Draft PR #68
+  is open, Draft, unmerged, and the Session is not closed.
 - Every future candidate ID remains `RECOMMENDED_ONLY / NOT_ACTIVE /
   NOT_AUTHORIZED`; no downstream Session is allocated or activated.
-- The next action after S5-REL-027 is the Human Portfolio Sequence Gate. The
-  next portfolio implementation is unresolved.
+- The current action is the Human S5-REL-027 Merge Gate. After reconciliation
+  closes, the next action is the Human Portfolio Sequence Gate; the next
+  portfolio implementation is unresolved.
 
 ## 1. Baseline and provenance
 
@@ -1013,10 +1016,10 @@ Portfolio Integration`, source S5-PLAN-001 and PR #45, state
 | --- | --- | --- |
 | Product View implementation and integration | S5-IMPL-010 and S5-REL-025 `CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS`; PRs #64–#65 merged; durable merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`; exact-main CI `33036620588` successful | closure `HUMAN_CONFIRMED`; PR/merge/CI `PR_NATIVE / REPOSITORY_NATIVE`; reconciliation `DERIVED` |
 | Technical View implementation and integration | S5-IMPL-011 and S5-REL-026 `CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS`; PRs #66–#67 merged; durable merge/main `b244fa5da3e670fa754278a0559da1a3049fb05a`; exact-main CI `33042871796` successful | closure `HUMAN_CONFIRMED`; PR/merge/CI `PR_NATIVE / REPOSITORY_NATIVE`; reconciliation `DERIVED` |
-| S5-REL-027 | `ACTIVE / AUTHORIZED`; bounded governance reconciliation only | ID/authorization `HUMAN_CONFIRMED`; baseline `REPOSITORY_NATIVE` |
+| S5-REL-027 | Active in `REVIEW / AUTHORIZED / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE`; Draft PR #68 open/unmerged; Session not closed; bounded governance reconciliation only | ID/authorization/review `HUMAN_CONFIRMED`; baseline/content `REPOSITORY_NATIVE`; PR/CI `PR_NATIVE`; reconciliation `DERIVED` |
 | Future candidate IDs | `RECOMMENDED_ONLY / NOT_ACTIVE / NOT_AUTHORIZED` | accepted historical portfolio plus current Human authorization boundary |
 | OpenClaw, Hermes, Golden Demo, REL-008, Release readiness | `UNRESOLVED / NOT_ACTIVE / NOT_AUTHORIZED`; release and production readiness remain `NOT_GRANTED` | `REPOSITORY_NATIVE / HUMAN_CONFIRMED / DERIVED` |
 
-Current next action: complete S5-REL-027, return to the Human S5-REL-027 Review
-Gate, then return to the Human Portfolio Sequence Gate. No downstream task ID
-is allocated or activated by this reconciliation.
+Current next action: return S5-REL-027 to the Human Merge Gate. After the
+reconciliation closes, return to the Human Portfolio Sequence Gate. No
+downstream task ID is allocated or activated by this reconciliation.
