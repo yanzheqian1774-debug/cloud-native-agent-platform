@@ -12,12 +12,26 @@ from agent_operator.task_controller import (
     build_agent_service_url,
     create_task,
     invoke_agent,
+    task_evidence_subject,
 )
 
 TASK_META = {
     "name": "test-task",
     "namespace": "agent-workloads",
     "uid": "task-uid-001",
+    "labels": {
+        "agentos.io/workflow": "workflow-001",
+        "agentos.io/workflow-task": "test-task",
+    },
+    "ownerReferences": [
+        {
+            "apiVersion": "agentos.io/v1alpha1",
+            "kind": "Workflow",
+            "name": "workflow-001",
+            "uid": "workflow-uid-001",
+            "controller": True,
+        }
+    ],
 }
 AGENT_BODY = {
     "metadata": {
@@ -135,6 +149,26 @@ def test_create_task_sets_succeeded_status(
     call_kwargs = mock_execution_coordinator.execute.call_args.kwargs
     assert call_kwargs["input_text"] == "research this topic"
     assert call_kwargs["context"].envelope.definition_ref.name == "researcher-agent"
+    assert (
+        call_kwargs["context"].evidence_subject.workflow_identity == "workflow-uid-001"
+    )
+    assert call_kwargs["context"].evidence_subject.task_identity == "task-uid-001"
+
+
+def test_standalone_task_has_no_evidence_subject() -> None:
+    metadata = {key: TASK_META[key] for key in ("name", "namespace", "uid")}
+    assert task_evidence_subject(metadata=metadata, namespace="agent-workloads") is None
+
+
+def test_contradictory_workflow_identity_fails_closed() -> None:
+    metadata = {
+        **TASK_META,
+        "ownerReferences": [
+            {**TASK_META["ownerReferences"][0], "name": "different-workflow"}
+        ],
+    }
+    with pytest.raises(ValueError, match="EVIDENCE_SUBJECT_IDENTITY_CONFLICT"):
+        task_evidence_subject(metadata=metadata, namespace="agent-workloads")
 
 
 def test_default_task_path_consumes_native_and_requested_capability() -> None:

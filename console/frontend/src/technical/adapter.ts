@@ -1,6 +1,7 @@
 import { sharedExecutionSnapshot } from "../shared/executionSnapshotFixture.ts";
 import { projectTechnicalSnapshot } from "../shared/projections.ts";
 import type { SelectedExecutionContextValue, SharedExecutionSnapshot, TechnicalProjection } from "../shared/executionSnapshotTypes.ts";
+import type { AuthorizedReferenceProjection, CanonicalRelation } from "../shared/executionSnapshotTypes.ts";
 
 let mode: "live" | "synthetic-preview" = "synthetic-preview";
 let liveSnapshot: SharedExecutionSnapshot | null = null;
@@ -8,6 +9,23 @@ let liveSnapshot: SharedExecutionSnapshot | null = null;
 export function configureTechnicalPreview(nextMode: typeof mode, snapshot?: SharedExecutionSnapshot): void {
   mode = nextMode;
   liveSnapshot = snapshot ?? null;
+}
+
+export function loadLiveTechnicalPreview(): {
+  selectedContext: SelectedExecutionContextValue;
+  sharedSnapshotId: string;
+  canonicalRelations: readonly CanonicalRelation[];
+  evidenceReferences: readonly AuthorizedReferenceProjection[];
+  citations: readonly AuthorizedReferenceProjection[];
+} {
+  if (mode !== "live" || liveSnapshot === null) throw new Error("LIVE_PREVIEW_NOT_LOADED");
+  return deepFreeze({
+    selectedContext: liveSnapshot.selectedContext,
+    sharedSnapshotId: liveSnapshot.sharedSnapshotId ?? "",
+    canonicalRelations: liveSnapshot.canonicalRelations ?? [],
+    evidenceReferences: liveSnapshot.authorizedEvidenceReferences ?? [],
+    citations: liveSnapshot.authorizedCitations ?? [],
+  });
 }
 
 function deepFreeze<T>(value: T): Readonly<T> {

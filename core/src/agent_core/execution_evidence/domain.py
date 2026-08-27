@@ -37,6 +37,18 @@ class OutcomeClassification(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class ReferenceType(StrEnum):
+    EVIDENCE = "EVIDENCE"
+    CITATION = "CITATION"
+
+
+class ReferenceVisibility(StrEnum):
+    PRODUCT = "PRODUCT"
+    TECHNICAL = "TECHNICAL"
+    BOTH = "BOTH"
+    DETAIL_ONLY = "DETAIL_ONLY"
+
+
 MAX_TEXT = 512
 MAX_REFS = 32
 _CODE = re.compile(r"[A-Z][A-Z0-9_]{0,127}")
@@ -80,18 +92,95 @@ def _timestamp(value: object, code: str) -> str:
     return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _refs(value: object, code: str) -> tuple[str, ...]:
-    if not isinstance(value, (tuple, list)) or len(value) > MAX_REFS:
-        raise EvidenceValidationError(code)
-    result = tuple(_text(item, code) for item in value)
-    if len(set(result)) != len(result):
-        raise EvidenceValidationError(code)
-    return tuple(sorted(result))
-
-
 def canonical_json(value: object) -> str:
     """Serialize normalized evidence for stable hashing and snapshot identity."""
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedReference:
+    """One independently authorized reference decision recorded as evidence."""
+
+    reference_identity: str
+    reference_type: ReferenceType
+    namespace: str
+    security_domain: str
+    authorization_decision: AuthorizationDecision
+    reason_code: str
+    visibility: ReferenceVisibility
+    source_identity: str
+    provenance: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "reference_identity",
+            "namespace",
+            "security_domain",
+            "source_identity",
+            "provenance",
+        ):
+            object.__setattr__(
+                self, name, _text(getattr(self, name), "INVALID_REFERENCE")
+            )
+        object.__setattr__(
+            self,
+            "reason_code",
+            _text(self.reason_code, "INVALID_REFERENCE_REASON", stable_code=True),
+        )
+        if not isinstance(self.reference_type, ReferenceType):
+            raise EvidenceValidationError("INVALID_REFERENCE_TYPE")
+        if self.authorization_decision not in {
+            AuthorizationDecision.ALLOW,
+            AuthorizationDecision.DENY,
+        }:
+            raise EvidenceValidationError("INVALID_REFERENCE_AUTHORIZATION")
+        if not isinstance(self.visibility, ReferenceVisibility):
+            raise EvidenceValidationError("INVALID_REFERENCE_VISIBILITY")
+
+    @property
+    def canonical_payload(self) -> dict[str, str]:
+        return {
+            "reference_identity": self.reference_identity,
+            "reference_type": self.reference_type.value,
+            "namespace": self.namespace,
+            "security_domain": self.security_domain,
+            "authorization_decision": self.authorization_decision.value,
+            "reason_code": self.reason_code,
+            "visibility": self.visibility.value,
+            "source_identity": self.source_identity,
+            "provenance": self.provenance,
+        }
+
+    @classmethod
+    def from_allowlisted(cls, source: Mapping[str, object]) -> AuthorizedReference:
+        if not isinstance(source, Mapping) or set(source) != {
+            "reference_identity",
+            "reference_type",
+            "namespace",
+            "security_domain",
+            "authorization_decision",
+            "reason_code",
+            "visibility",
+            "source_identity",
+            "provenance",
+        }:
+            raise EvidenceValidationError("INVALID_REFERENCE_AUTHORIZATION")
+        try:
+            return cls(
+                reference_identity=source["reference_identity"],  # type: ignore[arg-type]
+                reference_type=ReferenceType(source["reference_type"]),
+                namespace=source["namespace"],  # type: ignore[arg-type]
+                security_domain=source["security_domain"],  # type: ignore[arg-type]
+                authorization_decision=AuthorizationDecision(
+                    source["authorization_decision"]
+                ),
+                reason_code=source["reason_code"],  # type: ignore[arg-type]
+                visibility=ReferenceVisibility(source["visibility"]),
+                source_identity=source["source_identity"],  # type: ignore[arg-type]
+                provenance=source["provenance"],  # type: ignore[arg-type]
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise EvidenceValidationError("INVALID_REFERENCE_AUTHORIZATION") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,8 +206,7 @@ class ExecutionEvidenceRecord:
     provider_call_count: int
     outcome_classification: OutcomeClassification
     outcome_reference: str | None = None
-    evidence_references: tuple[str, ...] = ()
-    citation_references: tuple[str, ...] = ()
+    references: tuple[AuthorizedReference, ...] = ()
     limitation_code: str | None = None
     supersedes_record_id: str | None = None
     schema_version: int = 1
@@ -174,18 +262,37 @@ class ExecutionEvidenceRecord:
                 self.limitation_code, "INVALID_LIMITATION_CODE", stable_code=True
             ),
         )
+        if (
+            not isinstance(self.references, (tuple, list))
+            or len(self.references) > MAX_REFS
+        ):
+            raise EvidenceValidationError("INVALID_REFERENCE_AUTHORIZATION")
+        references = tuple(self.references)
+        if not all(isinstance(item, AuthorizedReference) for item in references):
+            raise EvidenceValidationError("INVALID_REFERENCE_AUTHORIZATION")
+        if len(
+            {(item.reference_type, item.reference_identity) for item in references}
+        ) != len(references):
+            raise EvidenceValidationError("DUPLICATE_REFERENCE_AUTHORIZATION")
         object.__setattr__(
             self,
-            "evidence_references",
-            _refs(self.evidence_references, "INVALID_EVIDENCE_REFERENCE"),
-        )
-        object.__setattr__(
-            self,
-            "citation_references",
-            _refs(self.citation_references, "INVALID_CITATION_REFERENCE"),
+            "references",
+            tuple(
+                sorted(
+                    references,
+                    key=lambda item: (
+                        item.reference_type.value,
+                        item.reference_identity,
+                    ),
+                )
+            ),
         )
         if self.authorization_decision is AuthorizationDecision.DENY and (
-            self.provider_call_count != 0 or self.citation_references
+            self.provider_call_count != 0
+            or any(
+                item.authorization_decision is AuthorizationDecision.ALLOW
+                for item in references
+            )
         ):
             raise EvidenceValidationError("DENY_REQUIRES_ZERO_PROVIDER_EFFECTS")
         if self.storage_sequence is not None and (
@@ -224,8 +331,7 @@ class ExecutionEvidenceRecord:
                 "provider_call_count": self.provider_call_count,
                 "outcome_classification": self.outcome_classification.value,
                 "outcome_reference": self.outcome_reference,
-                "evidence_references": list(self.evidence_references),
-                "citation_references": list(self.citation_references),
+                "references": [item.canonical_payload for item in self.references],
                 "limitation_code": self.limitation_code,
                 "supersedes_record_id": self.supersedes_record_id,
             }
@@ -246,7 +352,27 @@ class ExecutionEvidenceRecord:
     def from_allowlisted(cls, source: Mapping[str, object]) -> ExecutionEvidenceRecord:
         if not isinstance(source, Mapping) or set(source) != _PRODUCER_FIELDS:
             raise EvidenceValidationError("UNKNOWN_OR_MISSING_EVIDENCE_FIELD")
-        return cls(**dict(source))  # type: ignore[arg-type]
+        values = dict(source)
+        references = values.get("references")
+        if not isinstance(references, (tuple, list)):
+            raise EvidenceValidationError("INVALID_REFERENCE_AUTHORIZATION")
+        values["references"] = tuple(
+            item
+            if isinstance(item, AuthorizedReference)
+            else AuthorizedReference.from_allowlisted(item)  # type: ignore[arg-type]
+            for item in references
+        )
+        try:
+            values["event_type"] = EvidenceEventType(values["event_type"])
+            values["authorization_decision"] = AuthorizationDecision(
+                values["authorization_decision"]
+            )
+            values["outcome_classification"] = OutcomeClassification(
+                values["outcome_classification"]
+            )
+        except (TypeError, ValueError) as exc:
+            raise EvidenceValidationError("INVALID_EVIDENCE") from exc
+        return cls(**values)  # type: ignore[arg-type]
 
 
 _PRODUCER_FIELDS = {

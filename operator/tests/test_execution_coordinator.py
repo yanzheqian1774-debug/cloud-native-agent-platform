@@ -25,6 +25,7 @@ from agent_operator.execution_coordinator import (
     CapabilityPlan,
     EvidenceAvailability,
     ExecutionClassification,
+    TaskEvidenceSubject,
     TaskExecutionContext,
     TaskExecutionCoordinator,
     build_capability_plan,
@@ -79,6 +80,9 @@ def execution_context(*, capability: bool = False) -> TaskExecutionContext:
             )
             if capability
             else None
+        ),
+        evidence_subject=TaskEvidenceSubject(
+            "agent-workloads", "workflow-uid-001", "task-uid-001"
         ),
     )
 
@@ -419,6 +423,8 @@ def test_successful_native_outcome_captures_normalized_evidence() -> None:
     evidence = repository.records[0]
     assert evidence.security_domain == "business-unit-a"
     assert evidence.platform_execution_identity == outcome.platform_execution_identity
+    assert evidence.workflow_identity == "workflow-uid-001"
+    assert evidence.task_identity == "task-uid-001"
     assert "research this topic" not in repr(evidence.canonical_payload)
 
 
@@ -468,4 +474,17 @@ def test_deny_evidence_has_zero_provider_calls_and_citations() -> None:
     assert outcome.classification is ExecutionClassification.DENIED
     assert transport.calls == []
     assert repository.records[0].provider_call_count == 0
-    assert repository.records[0].citation_references == ()
+    assert repository.records[0].references == ()
+
+
+def test_missing_evidence_subject_fails_evidence_closed_after_execution() -> None:
+    repository = RecordingEvidenceRepository()
+    context = replace(execution_context(), evidence_subject=None)
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(),
+        evidence_repository=repository,
+    ).execute(context=context, input_text="research this topic")
+    assert outcome.classification is ExecutionClassification.SUCCEEDED
+    assert outcome.evidence_availability is EvidenceAvailability.UNAVAILABLE
+    assert outcome.evidence_reason_code == "EVIDENCE_SUBJECT_UNAVAILABLE"
+    assert repository.records == []

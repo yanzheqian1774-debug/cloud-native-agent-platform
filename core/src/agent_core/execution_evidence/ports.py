@@ -57,9 +57,10 @@ class ExecutionEvidenceRepository(Protocol):
         through_high_water_mark: int,
     ) -> tuple[ExecutionEvidenceRecord, ...]: ...
 
-    def read_task(
+    def read_subject(
         self,
         scope: AuthorizedEvidenceScope,
+        workflow_identity: str,
         task_identity: str,
         *,
         through_high_water_mark: int,

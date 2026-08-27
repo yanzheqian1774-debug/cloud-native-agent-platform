@@ -1,6 +1,7 @@
 import { productFixture } from "./fixture";
 import type { ProductFixture } from "./types";
 import type { SharedExecutionSnapshot } from "../shared/executionSnapshotTypes";
+import type { AuthorizedReferenceProjection, CanonicalRelation } from "../shared/executionSnapshotTypes";
 import { sharedExecutionSnapshot } from "../shared/executionSnapshotFixture";
 import { projectProductSnapshot } from "../shared/projections";
 
@@ -8,61 +9,50 @@ const REQUIRED_CLASSIFICATIONS = ["DETERMINISTIC", "SYNTHETIC", "NON_AUTHORITATI
 const CARDINALITIES = new Set(["ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE", "MANY_TO_MANY"]);
 let mode: "live" | "synthetic-preview" = import.meta.env.VITE_EXECUTION_PREVIEW_MODE === "live" ? "live" : "synthetic-preview";
 let liveSnapshot: SharedExecutionSnapshot | null = null;
-const liveProductPlaceholder: ProductFixture = {
+const liveModulePlaceholder: ProductFixture = deepFreeze({
   classification: ["LIVE", "TECHNICAL_PREVIEW"],
-  platformExecutionIdentity: "pei-live-loading",
-  graphSnapshotId: "gps:v0.2-candidate:live-loading",
+  platformExecutionIdentity: "pei-live-module-placeholder",
+  graphSnapshotId: "gps:v0.2-candidate:live-module-placeholder",
   projectionContext: "PRODUCT",
   securityFiltered: true,
-  questionKey: "live.loading",
+  questionKey: "live.module.placeholder",
   questions: [],
-  planRevision: "live-loading",
-  correctionRevision: "live-loading",
-  workflowId: "live-loading",
+  planRevision: "live-module-placeholder",
+  correctionRevision: "live-module-placeholder",
+  workflowId: "live-module-placeholder",
   taskKeys: [],
   employees: [],
   nodes: [],
   edges: [],
   groups: [],
-  approval: { state: "PENDING_HUMAN_REVIEW", decidedAt: null, decisionFingerprint: "live-loading" },
-  outcome: { status: "UNKNOWN", summaryKey: "live.loading", evidenceIds: [] },
+  approval: { state: "PENDING_HUMAN_REVIEW", decidedAt: null, decisionFingerprint: "live-module-placeholder" },
+  outcome: { status: "UNKNOWN", summaryKey: "live.module.placeholder", evidenceIds: [] },
   citations: [],
   capability: { decision: "DENY", reasonCode: "LIVE_PREVIEW_NOT_LOADED", providerCallCount: 0 },
-};
-
-function projectLiveProduct(source: SharedExecutionSnapshot): ProductFixture {
-  return {
-    classification: source.classification,
-    readModelState: source.readModelState,
-    sharedSnapshotId: source.sharedSnapshotId,
-    platformExecutionIdentity: source.selectedContext.executionId,
-    graphSnapshotId: source.selectedContext.graphSnapshotId,
-    projectionContext: "PRODUCT",
-    securityFiltered: true,
-    questionKey: source.questionKey,
-    questions: source.questions,
-    planRevision: source.selectedContext.revisionId,
-    correctionRevision: source.correctionRevision,
-    workflowId: source.selectedContext.workflowId,
-    taskKeys: source.taskKeys,
-    employees: source.employees,
-    nodes: source.nodes.map(({ id, type, labelKey, phase }) => ({ id, type, labelKey, phase })),
-    edges: source.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, rawRelations: edge.rawRelations.map(({ id, type, direction, cardinality, evidenceIds }) => ({ id, type, direction, cardinality, evidenceIds })) })),
-    groups: source.groups,
-    approval: source.approval,
-    outcome: { status: source.outcome.status, summaryKey: source.outcome.summaryKey, evidenceIds: source.outcome.evidenceIds },
-    citations: source.citations.map(({ evidenceId, assetId, revisionId, labelKey }) => ({ evidenceId, assetId, revisionId, labelKey })),
-    capability: { decision: source.authorization.decision, reasonCode: source.authorization.reasonCode, providerCallCount: source.authorization.providerCallCount },
-  };
-}
+}) as ProductFixture;
 
 export function configureProductPreview(nextMode: typeof mode, snapshot?: SharedExecutionSnapshot): void {
   mode = nextMode;
   liveSnapshot = snapshot ?? null;
-  if (nextMode === "live" && snapshot) {
-    Object.assign(liveProductPlaceholder, projectLiveProduct(snapshot));
-    deepFreeze(liveProductPlaceholder);
-  }
+}
+
+export function loadLiveProductPreview(): {
+  platformExecutionIdentity: string;
+  graphSnapshotId: string;
+  sharedSnapshotId: string;
+  canonicalRelations: readonly CanonicalRelation[];
+  evidenceReferences: readonly AuthorizedReferenceProjection[];
+  citations: readonly AuthorizedReferenceProjection[];
+} {
+  if (mode !== "live" || liveSnapshot === null) throw new Error("LIVE_PREVIEW_NOT_LOADED");
+  return deepFreeze({
+    platformExecutionIdentity: liveSnapshot.selectedContext.executionId,
+    graphSnapshotId: liveSnapshot.selectedContext.graphSnapshotId,
+    sharedSnapshotId: liveSnapshot.sharedSnapshotId ?? "",
+    canonicalRelations: liveSnapshot.canonicalRelations ?? [],
+    evidenceReferences: liveSnapshot.authorizedEvidenceReferences ?? [],
+    citations: liveSnapshot.authorizedCitations ?? [],
+  });
 }
 
 function deepFreeze<T>(value: T): Readonly<T> {
@@ -74,16 +64,15 @@ function deepFreeze<T>(value: T): Readonly<T> {
 }
 
 export function loadProductPreview(): ProductFixture {
-  if (mode === "live" && liveSnapshot === null) return liveProductPlaceholder;
-  const source = mode === "live" ? liveSnapshot! : sharedExecutionSnapshot;
-  const siblingProjection = mode === "live" ? projectLiveProduct(source) : projectProductSnapshot(source);
-  if (mode === "synthetic-preview" && (productFixture.platformExecutionIdentity !== siblingProjection.platformExecutionIdentity || productFixture.graphSnapshotId !== siblingProjection.graphSnapshotId)) {
+  if (mode === "live") return liveModulePlaceholder;
+  const siblingProjection = projectProductSnapshot(sharedExecutionSnapshot);
+  if (productFixture.platformExecutionIdentity !== siblingProjection.platformExecutionIdentity || productFixture.graphSnapshotId !== siblingProjection.graphSnapshotId) {
     throw new Error("PRODUCT_SHARED_PROJECTION_MISMATCH");
   }
   if (mode === "synthetic-preview" && productFixture.classification.some((value, index) => value !== REQUIRED_CLASSIFICATIONS[index])) {
     throw new Error("PRODUCT_PREVIEW_CLASSIFICATION_INVALID");
   }
-  const projected = mode === "live" ? siblingProjection : productFixture;
+  const projected = productFixture;
   if (!projected.platformExecutionIdentity.startsWith("pei-")) {
     throw new Error("PLATFORM_EXECUTION_IDENTITY_REQUIRED");
   }

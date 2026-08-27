@@ -67,3 +67,40 @@ def test_missing_repository_is_authority_missing_not_success() -> None:
     )
     assert response.status_code == 503
     assert response.json()["detail"]["state"] == "AUTHORITY_MISSING"
+
+
+def test_denied_reference_identity_is_not_serialized() -> None:
+    from dataclasses import replace
+
+    from agent_core.execution_evidence import (
+        AuthorizationDecision,
+        AuthorizedReference,
+        ReferenceType,
+        ReferenceVisibility,
+    )
+    from test_preview_api import evidence
+
+    denied = AuthorizedReference(
+        "citation-private",
+        ReferenceType.CITATION,
+        "agent-workloads",
+        "domain-a",
+        AuthorizationDecision.DENY,
+        "REFERENCE_DENIED",
+        ReferenceVisibility.BOTH,
+        "execution-evidence",
+        "native-runtime",
+    )
+    repository = EvidenceRepository((replace(evidence(), references=(denied,)),))
+    browser = TestClient(app)
+    app.dependency_overrides[get_preview_principal] = lambda: TrustedPreviewPrincipal(
+        "server-principal", "agent-workloads", "domain-a", True
+    )
+    app.dependency_overrides[get_preview_service] = lambda: PreviewService(
+        WorkflowRepository(), repository
+    )
+    response = browser.get(
+        "/api/internal/preview/v1/executions/agent-workloads/workflow/task"
+    )
+    assert response.status_code == 200
+    assert "citation-private" not in response.text

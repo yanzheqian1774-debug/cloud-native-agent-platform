@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from agent_console.app import (
     app,
     get_preview_principal,
@@ -8,9 +10,12 @@ from agent_core.execution_evidence import (
     AppendDisposition,
     AppendResult,
     AuthorizationDecision,
+    AuthorizedReference,
     EvidenceEventType,
     ExecutionEvidenceRecord,
     OutcomeClassification,
+    ReferenceType,
+    ReferenceVisibility,
 )
 from fastapi.testclient import TestClient
 
@@ -50,7 +55,7 @@ def evidence():
         security_domain="domain-a",
         platform_execution_identity="pei-001",
         workflow_identity="workflow-uid",
-        task_identity="task",
+        task_identity="task-uid",
         attempt_ordinal=1,
         event_ordinal=1,
         event_type=EvidenceEventType.EXECUTION_OUTCOME,
@@ -63,16 +68,39 @@ def evidence():
         provider_correlation_id="provider-001",
         provider_call_count=1,
         outcome_classification=OutcomeClassification.SUCCEEDED,
-        evidence_references=("evidence-ref",),
-        citation_references=("citation-ref",),
+        references=(
+            AuthorizedReference(
+                "evidence-ref",
+                ReferenceType.EVIDENCE,
+                "agent-workloads",
+                "domain-a",
+                AuthorizationDecision.ALLOW,
+                "REFERENCE_ALLOWED",
+                ReferenceVisibility.BOTH,
+                "execution-evidence",
+                "native-runtime",
+            ),
+            AuthorizedReference(
+                "citation-ref",
+                ReferenceType.CITATION,
+                "agent-workloads",
+                "domain-a",
+                AuthorizationDecision.ALLOW,
+                "REFERENCE_ALLOWED",
+                ReferenceVisibility.BOTH,
+                "execution-evidence",
+                "native-runtime",
+            ),
+        ),
         storage_sequence=1,
         recorded_at="2026-08-27T08:00:01Z",
     )
 
 
 class EvidenceRepository:
-    def __init__(self):
+    def __init__(self, records=None):
         self.reads = 0
+        self.records = tuple(records or (evidence(),))
 
     def append(self, value):
         return AppendResult(AppendDisposition.APPENDED, value)
@@ -81,9 +109,13 @@ class EvidenceRepository:
         self.reads += 1
         return 1
 
-    def read_task(self, scope, task_identity, *, through_high_water_mark):
+    def read_subject(
+        self, scope, workflow_identity, task_identity, *, through_high_water_mark
+    ):
         self.reads += 1
-        return (evidence(),)
+        assert workflow_identity == "workflow-uid"
+        assert task_identity == "task-uid"
+        return self.records
 
     def read_execution(self, *args, **kwargs):
         raise AssertionError
@@ -142,3 +174,13 @@ def test_authorized_not_found_is_bounded() -> None:
     assert response.status_code == 404
     assert response.json()["detail"]["state"] == "NOT_FOUND"
     assert "trace" not in response.text.lower()
+
+
+def test_cross_workflow_evidence_fails_closed() -> None:
+    foreign = replace(evidence(), workflow_identity="workflow-uid-foreign")
+    browser, _ = client(EvidenceRepository((foreign,)))
+    response = browser.get(
+        "/api/internal/preview/v1/executions/agent-workloads/workflow/task"
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"]["state"] == "AUTHORITY_MISSING"

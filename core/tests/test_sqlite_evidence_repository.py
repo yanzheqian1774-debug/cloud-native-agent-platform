@@ -6,14 +6,31 @@ from agent_core.execution_evidence import (
     AppendDisposition,
     AuthorizationDecision,
     AuthorizedEvidenceScope,
+    AuthorizedReference,
     EvidenceDigestConflict,
     EvidenceEventType,
     EvidenceRepositoryUnavailable,
     EvidenceSchemaIncompatible,
     ExecutionEvidenceRecord,
     OutcomeClassification,
+    ReferenceType,
+    ReferenceVisibility,
     SQLiteExecutionEvidenceRepository,
 )
+
+
+def reference(identity: str, reference_type: ReferenceType) -> AuthorizedReference:
+    return AuthorizedReference(
+        identity,
+        reference_type,
+        "agent-workloads",
+        "business-unit-a",
+        AuthorizationDecision.ALLOW,
+        "REFERENCE_ALLOWED",
+        ReferenceVisibility.BOTH,
+        "execution-evidence",
+        "native-runtime",
+    )
 
 
 def record(**overrides) -> ExecutionEvidenceRecord:
@@ -37,8 +54,10 @@ def record(**overrides) -> ExecutionEvidenceRecord:
         "provider_call_count": 1,
         "outcome_classification": OutcomeClassification.SUCCEEDED,
         "outcome_reference": "outcome-001",
-        "evidence_references": ("evidence-ref-001",),
-        "citation_references": ("citation-ref-001",),
+        "references": (
+            reference("evidence-ref-001", ReferenceType.EVIDENCE),
+            reference("citation-ref-001", ReferenceType.CITATION),
+        ),
         "schema_version": 1,
     }
     values.update(overrides)
@@ -115,6 +134,20 @@ def test_fixed_high_water_mark_excludes_concurrent_later_append(tmp_path) -> Non
     )
     rows = repository.read_execution(scope(), "pei-001", through_high_water_mark=mark)
     assert tuple(item.event_ordinal for item in rows) == (1,)
+
+
+def test_subject_read_is_bound_to_workflow_and_task_uid(tmp_path) -> None:
+    repository = SQLiteExecutionEvidenceRepository(tmp_path / "evidence.sqlite")
+    appended = repository.append(record()).record
+    assert repository.read_subject(
+        scope(), "workflow-uid-001", "task-uid-001", through_high_water_mark=1
+    ) == (appended,)
+    assert (
+        repository.read_subject(
+            scope(), "workflow-uid-002", "task-uid-001", through_high_water_mark=1
+        )
+        == ()
+    )
 
 
 def test_newer_partial_and_unknown_schema_fail_closed(tmp_path) -> None:

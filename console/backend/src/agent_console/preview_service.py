@@ -118,8 +118,20 @@ class PreviewService:
         scope = AuthorizedEvidenceScope(namespace, principal.security_domain)
         try:
             high_water_mark = self._evidence.high_water_mark(scope)
-            evidence = self._evidence.read_task(
-                scope, task_name, through_high_water_mark=high_water_mark
+            workflow_metadata = workflow.get("metadata", {})
+            selected_metadata = selected.get("metadata", {})
+            workflow_uid = workflow_metadata.get("uid")
+            task_uid = selected_metadata.get("uid")
+            if not all(
+                isinstance(value, str) and value.strip()
+                for value in (workflow_uid, task_uid)
+            ):
+                raise PreviewAuthorityMissing
+            evidence = self._evidence.read_subject(
+                scope,
+                workflow_uid,
+                task_uid,
+                through_high_water_mark=high_water_mark,
             )
         except EvidenceRepositoryError as exc:
             raise PreviewAuthorityMissing from exc
@@ -141,6 +153,7 @@ class PreviewService:
                 evidence=evidence,
                 evidence_high_water_mark=high_water_mark,
                 graph=graph,
+                selected_task_identity=task_uid,
             )
         except SnapshotAssemblyError as exc:
             raise PreviewAuthorityMissing from exc

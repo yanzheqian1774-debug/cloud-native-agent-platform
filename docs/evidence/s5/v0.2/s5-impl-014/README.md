@@ -9,7 +9,7 @@
 | Durable baseline | `13bc16f746a58912bc093ff249ff390250ce20cf` |
 | Implementation branch | `codex/s5-impl-014-native-evidence-shared-read-model` |
 | Implementation head | The immutable commit containing this evidence; exact SHA is recorded in the Draft PR and Checkpoint A return |
-| Authorized paths | 26 after Human-approved expansion for `core/tests/test_compatibility.py` |
+| Authorized paths | 29 after Human-approved Checkpoint A and Checkpoint B expansions |
 | Classification | Native-only Technical Preview; bounded local single-node persistence; not production certified |
 
 ## Authority boundaries
@@ -44,6 +44,16 @@ metadata, database location and process identity. Same record ID and digest is a
 deterministic replay. Same record ID and a different digest fails closed without
 adding a row.
 
+Checkpoint B correction binds every production record to Kubernetes-owned
+Workflow UID and Task UID supplied by the Task handler. Missing or contradictory
+subject identity prevents evidence append without changing the execution result.
+Task display names and `workflow.unbound` are never production associations.
+
+Evidence and Citation references carry their own type, scope, decision, reason,
+visibility, source and provenance. Only independently allowed references in the
+authorized namespace/security domain reach the snapshot; denied references are
+omitted without identity, metadata, digest or count disclosure.
+
 ## SQLite boundary
 
 The standard-library `sqlite3` adapter requires an explicit database location.
@@ -56,6 +66,11 @@ Database, WAL and SHM files are runtime artifacts outside Git. Open, corruption,
 locking, bootstrap and transaction failures map to stable bounded codes without
 exposing paths, SQL or raw diagnostics. WAL grants no multi-node, shared-filesystem,
 HA or production durability claim.
+
+Because this implementation is unmerged, the corrected initial SQLite v1 schema
+uses a final adapter marker and composite Workflow UID/Task UID subject index.
+Databases created from the rejected pre-correction candidate fail closed; no
+artificial production migration or upgrade support is claimed.
 
 ## Trusted authorization and shared snapshot
 
@@ -75,6 +90,9 @@ UID/resourceVersion inputs, Platform Execution Identity, fixed high-water mark,
 ordered evidence record IDs/digests and unchanged Graph snapshot identity.
 Product and Technical responses preserve the same execution, shared snapshot,
 Graph, authorization, Runtime, outcome, evidence, citations and raw relations.
+The versioned `execution-snapshot-v2` completeness policy requires a unique final
+execution-outcome event, contiguous unique ordinals and consistent authorization/
+Provider-call evidence. A contiguous non-terminal prefix remains partial.
 
 ## Frontend modes
 
@@ -85,11 +103,15 @@ Graph, authorization, Runtime, outcome, evidence, citations and raw relations.
   never silently falls back to the fixture, and UNKNOWN/incomplete/unavailable
   evidence is never promoted to success.
 
+Live frontend code consumes Canonical Graph relations verbatim. It does not expand
+relation-type tuples, mint relation identities, infer direction/cardinality or
+reconstruct filtered relations.
+
 ## Validation evidence
 
 - Domain/SQLite/coordinator/snapshot/API/security and existing sibling view tests
   pass.
-- Full pytest: 708 passed with one existing Starlette/httpx deprecation warning.
+- Full pytest: 726 passed with one existing Starlette/httpx deprecation warning.
 - Ruff lint and format checks pass.
 - Frontend clean-install lint, TypeScript compilation and production build pass
   from temporary storage without repository dependency or lockfile mutation.

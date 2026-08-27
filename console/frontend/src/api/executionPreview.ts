@@ -1,7 +1,8 @@
 import type {
   ExecutionState,
+  AuthorizedReferenceProjection,
+  CanonicalRelation,
   SharedExecutionSnapshot,
-  SnapshotEdge,
   SnapshotNode,
 } from "../shared/executionSnapshotTypes";
 
@@ -36,17 +37,6 @@ interface BackendNode {
   visibility: "PRODUCT" | "TECHNICAL" | "BOTH" | "DETAIL_ONLY";
   evidence_ids: string[];
   limitation_codes: string[];
-}
-
-interface BackendRelation {
-  relation_id: string;
-  source_node_id: string;
-  target_node_id: string;
-  relation_types: string[];
-  direction: "SOURCE_TO_TARGET";
-  declared_cardinality: "ONE_TO_ONE" | "ONE_TO_MANY" | "MANY_TO_ONE" | "MANY_TO_MANY";
-  evidence_ids: string[];
-  projection_visibility: "PRODUCT" | "TECHNICAL" | "BOTH" | "DETAIL_ONLY";
 }
 
 function object(value: unknown, code: string): Record<string, unknown> {
@@ -88,9 +78,10 @@ export async function fetchExecutionPreview(
   const result = payload as BackendResponse;
   if (result.schemaVersion !== 1 || !["COMPLETE", "PARTIAL", "STALE"].includes(result.state)) throw new ExecutionPreviewError("ERROR", "PREVIEW_VERSION_OR_STATE_INVALID");
   const source = object(result.snapshot, "PREVIEW_SNAPSHOT_INVALID");
+  const snapshotSecurityDomain = string(source.securityDomain, "PREVIEW_SCOPE_INVALID");
   const graph = object(source.graph, "PREVIEW_GRAPH_INVALID");
   const graphNodes = graph.nodes as BackendNode[];
-  const graphRelations = graph.relations as BackendRelation[];
+  const graphRelations = graph.relations as CanonicalRelation[];
   if (!Array.isArray(graphNodes) || !Array.isArray(graphRelations)) throw new ExecutionPreviewError("ERROR", "PREVIEW_GRAPH_INVALID");
   const nodes: SnapshotNode[] = graphNodes.map((node) => ({
     id: node.node_id,
@@ -101,21 +92,16 @@ export async function fetchExecutionPreview(
     evidenceIds: node.evidence_ids,
     limitationCodes: node.limitation_codes,
   }));
-  const edges: SnapshotEdge[] = graphRelations.map((relation) => ({
-    id: relation.relation_id,
-    source: relation.source_node_id,
-    target: relation.target_node_id,
-    rawRelations: relation.relation_types.map((type) => ({
-      id: `${relation.relation_id}:${type}`,
-      source: relation.source_node_id,
-      target: relation.target_node_id,
-      type,
-      direction: relation.direction,
-      cardinality: relation.declared_cardinality,
-      evidenceIds: relation.evidence_ids,
-      visibility: relation.projection_visibility,
-    })),
-  }));
+  for (const relation of graphRelations) {
+    if (
+      !relation
+      || typeof relation !== "object"
+      || !relation.relation_id
+      || !Array.isArray(relation.relation_types)
+      || relation.direction !== "SOURCE_TO_TARGET"
+      || !Array.isArray(relation.evidence_ids)
+    ) throw new ExecutionPreviewError("ERROR", "PREVIEW_GRAPH_RELATION_INVALID");
+  }
   const authorization = object(source.authorization, "PREVIEW_AUTHORIZATION_INVALID");
   const outcome = object(source.outcome, "PREVIEW_OUTCOME_INVALID");
   const runtime = object(source.runtime, "PREVIEW_RUNTIME_INVALID");
@@ -126,8 +112,24 @@ export async function fetchExecutionPreview(
   if (!selectedTask) throw new ExecutionPreviewError("ERROR", "PREVIEW_TASK_VERSION_INVALID");
   const decision = string(authorization.decision, "PREVIEW_AUTHORIZATION_INVALID") as "ALLOW" | "DENY";
   const calls = authorization.providerCallCount;
-  const citations = source.citations as string[];
-  if (!Number.isInteger(calls) || !Array.isArray(citations) || (decision === "DENY" && (calls !== 0 || citations.length))) throw new ExecutionPreviewError("ERROR", "DENY_REQUIRES_ZERO_PROVIDER_EFFECTS");
+  const evidenceReferences = source.evidenceReferences as AuthorizedReferenceProjection[];
+  const citations = source.citations as AuthorizedReferenceProjection[];
+  if (!Number.isInteger(calls) || !Array.isArray(evidenceReferences) || !Array.isArray(citations) || (decision === "DENY" && (calls !== 0 || evidenceReferences.length || citations.length))) throw new ExecutionPreviewError("ERROR", "DENY_REQUIRES_ZERO_PROVIDER_EFFECTS");
+  for (const [reference, expectedType] of [
+    ...evidenceReferences.map((item) => [item, "EVIDENCE"] as const),
+    ...citations.map((item) => [item, "CITATION"] as const),
+  ]) {
+    if (
+      reference.authorizationDecision !== "ALLOW"
+      || reference.referenceType !== expectedType
+      || reference.namespace !== namespace
+      || reference.securityDomain !== snapshotSecurityDomain
+      || !reference.referenceIdentity
+      || !reference.reasonCode
+      || !reference.sourceIdentity
+      || !reference.provenance
+    ) throw new ExecutionPreviewError("ERROR", "PREVIEW_REFERENCE_AUTHORIZATION_INVALID");
+  }
   const executionId = result.platformExecutionIdentity;
   const workflowId = string(workflow.name, "PREVIEW_WORKFLOW_VERSION_INVALID");
   const taskId = string(selectedTask.name, "PREVIEW_TASK_VERSION_INVALID");
@@ -146,12 +148,15 @@ export async function fetchExecutionPreview(
     taskKeys: [taskId],
     employees: [{ id: "definition.live.native", nameKey: "live.employee.name", roleKey: "live.employee.role", descriptionKey: "live.employee.description", responsibilityKeys: [], allowedKeys: [], prohibitedKeys: [], capabilities: [], runtimeId: "NATIVE", previewInstanceCount: 1, previewState: result.state }],
     nodes,
-    edges,
+    edges: [],
+    canonicalRelations: graphRelations,
+    authorizedEvidenceReferences: evidenceReferences,
+    authorizedCitations: citations,
     groups: [],
     approval: { state: "APPROVED", decidedAt: null, decisionFingerprint: result.sharedSnapshotId },
     authorization: { decision, reasonCode: string(authorization.reasonCode, "PREVIEW_AUTHORIZATION_INVALID"), providerCallCount: calls as number, requestId: result.sharedSnapshotId },
-    outcome: { id: string(outcome.reference ?? `outcome.${executionId}`, "PREVIEW_OUTCOME_INVALID"), status: outcomeStatus, summaryKey: `live.outcome.${outcomeStatus.toLowerCase()}`, evidenceIds: (source.evidence as Array<Record<string, unknown>>).map((item) => string(item.recordId, "PREVIEW_EVIDENCE_INVALID")) },
-    citations: citations.map((id) => ({ citationId: id, evidenceId: id, assetId: id, revisionId, labelKey: "live.citation" })),
+    outcome: { id: string(outcome.reference ?? `outcome.${executionId}`, "PREVIEW_OUTCOME_INVALID"), status: outcomeStatus, summaryKey: `live.outcome.${outcomeStatus.toLowerCase()}`, evidenceIds: evidenceReferences.map((item) => item.referenceIdentity) },
+    citations: [],
     runtimeSupport: [{ id: "NATIVE", classification: string(runtime.classification, "PREVIEW_RUNTIME_INVALID"), availability: "LIVE_EVIDENCE", support: "NOT_CERTIFIED", providerCorrelationId: runtime.providerCorrelationId as string | null }],
     requestedRuntimeId: "NATIVE",
     effectiveRuntimeId: "NATIVE",

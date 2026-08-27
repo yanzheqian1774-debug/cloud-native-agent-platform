@@ -15,8 +15,8 @@ import { SelectedExecutionContext } from "./shared/SelectedExecutionContext";
 import { TechPage } from "./pages/Technical\u0056iewPage";
 import "./styles/app.css";
 import { ExecutionPreviewError, fetchExecutionPreview, type PreviewMode } from "./api/executionPreview";
-import { configureProductPreview, loadProductPreview } from "./product/adapter";
-import { configureTechnicalPreview, loadTechnicalPreview } from "./technical/adapter";
+import { configureProductPreview, loadLiveProductPreview } from "./product/adapter";
+import { configureTechnicalPreview, loadLiveTechnicalPreview } from "./technical/adapter";
 import type { SharedExecutionSnapshot } from "./shared/executionSnapshotTypes";
 
 type AppPreviewState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "ERROR";
@@ -26,8 +26,8 @@ function configuredMode(): PreviewMode {
 }
 
 function LiveExecutionView({ snapshot, context }: { snapshot: SharedExecutionSnapshot; context: "PRODUCT" | "TECHNICAL" }) {
-  const product = loadProductPreview();
-  const technical = loadTechnicalPreview(snapshot.selectedContext);
+  const product = loadLiveProductPreview();
+  const technical = loadLiveTechnicalPreview();
   if (product.platformExecutionIdentity !== technical.selectedContext.executionId || product.graphSnapshotId !== technical.selectedContext.graphSnapshotId) {
     throw new Error("CROSS_VIEW_IDENTITY_MISMATCH");
   }
@@ -37,8 +37,8 @@ function LiveExecutionView({ snapshot, context }: { snapshot: SharedExecutionSna
     <section className="preview-warning" role="status"><strong>LIVE · {snapshot.readModelState}</strong><span>Never backed by synthetic fixture data.</span></section>
     <section className="product-section panel-pad" aria-labelledby="live-identity"><h2 id="live-identity">Shared execution identity</h2><dl className="evidence-list"><dt>Platform Execution Identity</dt><dd className="stable-id">{snapshot.selectedContext.executionId}</dd><dt>Shared snapshot identity</dt><dd className="stable-id">{snapshot.sharedSnapshotId}</dd><dt>Canonical Graph identity</dt><dd className="stable-id">{snapshot.selectedContext.graphSnapshotId}</dd><dt>Read-model state</dt><dd className="stable-id">{snapshot.readModelState}</dd></dl></section>
     <section className="product-section panel-pad" aria-labelledby="live-outcome"><h2 id="live-outcome">Authorization and outcome</h2><dl className="evidence-list"><dt>Decision</dt><dd className="stable-id">{snapshot.authorization.decision}</dd><dt>Reason code</dt><dd className="stable-id">{snapshot.authorization.reasonCode}</dd><dt>Provider calls</dt><dd>{snapshot.authorization.providerCallCount}</dd><dt>Execution outcome</dt><dd className="stable-id">{snapshot.outcome.status}</dd></dl>{snapshot.outcome.status !== "PASS" && <p role="alert">This execution is not presented as a verified success.</p>}{snapshot.readModelState !== "COMPLETE" && <p role="alert">The execution outcome is preserved, but this evidence snapshot is not complete and must not be treated as verified complete.</p>}</section>
-    <section className="product-section panel-pad" aria-labelledby="live-graph"><h2 id="live-graph">Canonical Graph evidence</h2><p>{snapshot.nodes.length} nodes · {snapshot.edges.length} edges. Relations are rendered exactly as supplied by the authorized snapshot.</p>{snapshot.edges.map((edge) => <details key={edge.id}><summary className="stable-id">{edge.source} → {edge.target}</summary>{edge.rawRelations.map((relation) => <p className="stable-id" key={relation.id}>{relation.type} · {relation.cardinality} · {relation.evidenceIds.join(", ")}</p>)}</details>)}</section>
-    <section className="product-section panel-pad" aria-labelledby="live-evidence"><h2 id="live-evidence">Evidence and citations</h2><p className="stable-id">{snapshot.outcome.evidenceIds.join(", ") || "NO_EVIDENCE_REFERENCES"}</p><p className="stable-id">{snapshot.citations.map((item) => item.evidenceId).join(", ") || "NO_AUTHORIZED_CITATIONS"}</p>{snapshot.limitations.map((code) => <p className="stable-id" key={code}>{code}</p>)}</section>
+    <section className="product-section panel-pad" aria-labelledby="live-graph"><h2 id="live-graph">Canonical Graph evidence</h2><p>{snapshot.nodes.length} nodes · {(snapshot.canonicalRelations ?? []).length} relations. Relations are rendered exactly as supplied by the authorized snapshot.</p>{(snapshot.canonicalRelations ?? []).map((relation) => <details key={relation.relation_id}><summary className="stable-id">{relation.source_node_id} → {relation.target_node_id}</summary><p className="stable-id">{relation.relation_types.join(" · ")} · {relation.declared_cardinality} · {relation.evidence_ids.join(", ")}</p></details>)}</section>
+    <section className="product-section panel-pad" aria-labelledby="live-evidence"><h2 id="live-evidence">Evidence and citations</h2><p className="stable-id">{(snapshot.authorizedEvidenceReferences ?? []).map((item) => item.referenceIdentity).join(", ") || "NO_EVIDENCE_REFERENCES"}</p><p className="stable-id">{(snapshot.authorizedCitations ?? []).map((item) => item.referenceIdentity).join(", ") || "NO_AUTHORIZED_CITATIONS"}</p>{snapshot.limitations.map((code) => <p className="stable-id" key={code}>{code}</p>)}</section>
   </main>;
 }
 

@@ -3,11 +3,34 @@ from dataclasses import replace
 import pytest
 from agent_core.execution_evidence import (
     AuthorizationDecision,
+    AuthorizedReference,
     EvidenceEventType,
     EvidenceValidationError,
     ExecutionEvidenceRecord,
     OutcomeClassification,
+    ReferenceType,
+    ReferenceVisibility,
 )
+
+
+def reference(
+    identity: str,
+    reference_type: ReferenceType,
+    decision: AuthorizationDecision = AuthorizationDecision.ALLOW,
+) -> AuthorizedReference:
+    return AuthorizedReference(
+        reference_identity=identity,
+        reference_type=reference_type,
+        namespace="agent-workloads",
+        security_domain="business-unit-a",
+        authorization_decision=decision,
+        reason_code="REFERENCE_ALLOWED"
+        if decision is AuthorizationDecision.ALLOW
+        else "REFERENCE_DENIED",
+        visibility=ReferenceVisibility.BOTH,
+        source_identity="execution-evidence",
+        provenance="native-runtime",
+    )
 
 
 def record(**overrides) -> ExecutionEvidenceRecord:
@@ -31,8 +54,10 @@ def record(**overrides) -> ExecutionEvidenceRecord:
         "provider_call_count": 1,
         "outcome_classification": OutcomeClassification.SUCCEEDED,
         "outcome_reference": "outcome-001",
-        "evidence_references": ("evidence-ref-001",),
-        "citation_references": ("citation-ref-001",),
+        "references": (
+            reference("evidence-ref-001", ReferenceType.EVIDENCE),
+            reference("citation-ref-001", ReferenceType.CITATION),
+        ),
         "limitation_code": None,
         "supersedes_record_id": None,
         "schema_version": 1,
@@ -46,6 +71,13 @@ def test_record_is_immutable_and_digest_is_stable() -> None:
     assert value.payload_digest == record().payload_digest
     with pytest.raises(AttributeError):
         value.reason_code = "CHANGED"  # type: ignore[misc]
+
+
+def test_allowlisted_canonical_payload_round_trips_structured_references() -> None:
+    value = record()
+    rebuilt = ExecutionEvidenceRecord.from_allowlisted(value.canonical_payload)
+    assert rebuilt == value
+    assert rebuilt.payload_digest == value.payload_digest
 
 
 def test_repository_metadata_is_excluded_from_digest() -> None:
@@ -69,12 +101,27 @@ def test_deny_requires_zero_provider_effects() -> None:
     denied = record(
         authorization_decision=AuthorizationDecision.DENY,
         provider_call_count=0,
-        citation_references=(),
+        references=(
+            reference("denied-ref", ReferenceType.CITATION, AuthorizationDecision.DENY),
+        ),
         outcome_classification=OutcomeClassification.DENIED,
     )
     assert denied.provider_call_count == 0
     with pytest.raises(EvidenceValidationError, match="DENY_REQUIRES_ZERO"):
         replace(denied, provider_call_count=1)
+
+
+def test_reference_authorization_is_independent_and_scope_bound() -> None:
+    value = record()
+    assert {item.reference_type for item in value.references} == {
+        ReferenceType.EVIDENCE,
+        ReferenceType.CITATION,
+    }
+    with pytest.raises(EvidenceValidationError, match="DENY_REQUIRES_ZERO"):
+        record(
+            authorization_decision=AuthorizationDecision.DENY,
+            provider_call_count=0,
+        )
 
 
 @pytest.mark.parametrize(

@@ -86,6 +86,26 @@ class EvidenceAvailability(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class TaskEvidenceSubject:
+    """Kubernetes-owned identities used only to bind execution evidence."""
+
+    namespace: str
+    workflow_identity: str
+    task_identity: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(value, str) and value.strip()
+            for value in (
+                self.namespace,
+                self.workflow_identity,
+                self.task_identity,
+            )
+        ):
+            raise ValueError("EVIDENCE_SUBJECT_IDENTITY_REQUIRED")
+
+
+@dataclass(frozen=True, slots=True)
 class CapabilityPlan:
     capability: CapabilityIdentity
     operation: str
@@ -109,6 +129,7 @@ class TaskExecutionContext:
     envelope: InternalExecutionEnvelope
     runtime_configuration: Mapping[str, str]
     capability_plan: CapabilityPlan | None = None
+    evidence_subject: TaskEvidenceSubject | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.runtime_configuration, Mapping):
@@ -124,6 +145,14 @@ class TaskExecutionContext:
             "runtime_configuration",
             MappingProxyType(copied),
         )
+        if self.evidence_subject is not None:
+            if not isinstance(self.evidence_subject, TaskEvidenceSubject):
+                raise ValueError("EVIDENCE_SUBJECT_INVALID")
+            if (
+                self.evidence_subject.namespace
+                != self.envelope.definition_ref.namespace
+            ):
+                raise ValueError("EVIDENCE_SUBJECT_NAMESPACE_CONFLICT")
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +302,26 @@ class TaskExecutionCoordinator:
         """Append normalized evidence without falsifying completed execution."""
         if self._evidence_repository is None:
             return outcome
+        subject = context.evidence_subject
+        if subject is None:
+            return InternalExecutionOutcome(
+                **{
+                    field: getattr(outcome, field)
+                    for field in (
+                        "classification",
+                        "platform_execution_identity",
+                        "requested_runtime",
+                        "effective_runtime",
+                        "runtime",
+                        "capability",
+                        "result",
+                        "diagnostic",
+                        "retry_safe",
+                    )
+                },
+                evidence_availability=EvidenceAvailability.UNAVAILABLE,
+                evidence_reason_code="EVIDENCE_SUBJECT_UNAVAILABLE",
+            )
         capability = outcome.capability
         if capability is None:
             authorization = EvidenceAuthorizationDecision.NOT_APPLICABLE
@@ -290,17 +339,15 @@ class TaskExecutionCoordinator:
                 if capability.native_request_id is not None
                 else outcome.runtime.correlation.native_invocation_id
             )
-        source_task = context.envelope.source_task_ref
-        task_identity = source_task.name if source_task is not None else "task.unbound"
         record = ExecutionEvidenceRecord(
             evidence_record_id=(
                 f"evidence.native.{outcome.platform_execution_identity}.1.1"
             ),
-            namespace=context.envelope.definition_ref.namespace,
+            namespace=subject.namespace,
             security_domain=self._security_domain,
             platform_execution_identity=outcome.platform_execution_identity,
-            workflow_identity="workflow.unbound",
-            task_identity=task_identity,
+            workflow_identity=subject.workflow_identity,
+            task_identity=subject.task_identity,
             attempt_ordinal=1,
             event_ordinal=1,
             event_type=EvidenceEventType.EXECUTION_OUTCOME,
@@ -313,11 +360,6 @@ class TaskExecutionCoordinator:
             provider_correlation_id=provider_correlation,
             provider_call_count=provider_calls,
             outcome_classification=OutcomeClassification(outcome.classification.value),
-            limitation_code=(
-                "WORKFLOW_IDENTITY_UNBOUND"
-                if source_task is not None
-                else "TASK_AND_WORKFLOW_IDENTITY_UNBOUND"
-            ),
         )
         try:
             self._evidence_repository.append(record)

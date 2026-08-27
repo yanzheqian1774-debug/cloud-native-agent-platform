@@ -10,9 +10,13 @@ from pathlib import Path
 
 from .domain import (
     AuthorizationDecision,
+    AuthorizedReference,
     EvidenceEventType,
+    EvidenceValidationError,
     ExecutionEvidenceRecord,
     OutcomeClassification,
+    ReferenceType,
+    ReferenceVisibility,
 )
 from .ports import (
     AppendDisposition,
@@ -48,8 +52,7 @@ _EXPECTED_COLUMNS = (
     "provider_call_count",
     "outcome_classification",
     "outcome_reference",
-    "evidence_references",
-    "citation_references",
+    "reference_authorizations",
     "limitation_code",
     "supersedes_record_id",
 )
@@ -115,7 +118,8 @@ class SQLiteExecutionEvidenceRepository:
                     "schema_version INTEGER NOT NULL, adapter TEXT NOT NULL)"
                 )
                 connection.execute(
-                    "INSERT INTO evidence_schema VALUES (1, 1, 'sqlite-single-node-v1')"
+                    "INSERT INTO evidence_schema VALUES "
+                    "(1, 1, 'sqlite-single-node-v1-final')"
                 )
                 connection.execute(
                     """CREATE TABLE execution_evidence (
@@ -134,8 +138,7 @@ class SQLiteExecutionEvidenceRepository:
                     reason_code TEXT NOT NULL, provider_correlation_id TEXT,
                     provider_call_count INTEGER NOT NULL,
                     outcome_classification TEXT NOT NULL, outcome_reference TEXT,
-                    evidence_references TEXT NOT NULL,
-                    citation_references TEXT NOT NULL,
+                    reference_authorizations TEXT NOT NULL,
                     limitation_code TEXT, supersedes_record_id TEXT)"""
                 )
                 connection.execute(
@@ -145,7 +148,8 @@ class SQLiteExecutionEvidenceRepository:
                 )
                 connection.execute(
                     "CREATE INDEX evidence_task_idx ON execution_evidence("
-                    "namespace, security_domain, task_identity, storage_sequence)"
+                    "namespace, security_domain, workflow_identity, task_identity, "
+                    "platform_execution_identity, storage_sequence)"
                 )
                 connection.execute(
                     "CREATE INDEX evidence_workflow_idx ON execution_evidence("
@@ -187,7 +191,7 @@ class SQLiteExecutionEvidenceRepository:
             raise EvidenceSchemaIncompatible("EVIDENCE_SCHEMA_INCOMPATIBLE") from exc
         if (
             row is None
-            or tuple(row) != (SCHEMA_VERSION, "sqlite-single-node-v1")
+            or tuple(row) != (SCHEMA_VERSION, "sqlite-single-node-v1-final")
             or columns != _EXPECTED_COLUMNS
         ):
             raise EvidenceSchemaIncompatible("EVIDENCE_SCHEMA_INCOMPATIBLE")
@@ -247,7 +251,12 @@ class SQLiteExecutionEvidenceRepository:
                 (scope.namespace, scope.security_domain),
             ).fetchone()
             return int(row[0])
-        except sqlite3.DatabaseError as exc:
+        except (
+            sqlite3.DatabaseError,
+            EvidenceValidationError,
+            ValueError,
+            TypeError,
+        ) as exc:
             raise EvidenceRepositoryUnavailable("EVIDENCE_READ_UNAVAILABLE") from exc
         finally:
             connection.close()
@@ -274,14 +283,20 @@ class SQLiteExecutionEvidenceRepository:
                 ),
             ).fetchall()
             return tuple(self._from_row(row) for row in rows)
-        except sqlite3.DatabaseError as exc:
+        except (
+            sqlite3.DatabaseError,
+            EvidenceValidationError,
+            ValueError,
+            TypeError,
+        ) as exc:
             raise EvidenceRepositoryUnavailable("EVIDENCE_READ_UNAVAILABLE") from exc
         finally:
             connection.close()
 
-    def read_task(
+    def read_subject(
         self,
         scope: AuthorizedEvidenceScope,
+        workflow_identity: str,
         task_identity: str,
         *,
         through_high_water_mark: int,
@@ -290,12 +305,14 @@ class SQLiteExecutionEvidenceRepository:
         try:
             rows = connection.execute(
                 "SELECT * FROM execution_evidence WHERE namespace=? "
-                "AND security_domain=? AND task_identity=? AND storage_sequence<=? "
+                "AND security_domain=? AND workflow_identity=? AND task_identity=? "
+                "AND storage_sequence<=? "
                 "ORDER BY platform_execution_identity,attempt_ordinal,event_ordinal,"
                 "occurred_at,recorded_at,evidence_record_id",
                 (
                     scope.namespace,
                     scope.security_domain,
+                    workflow_identity,
                     task_identity,
                     through_high_water_mark,
                 ),
@@ -333,8 +350,10 @@ class SQLiteExecutionEvidenceRepository:
             record.provider_call_count,
             record.outcome_classification.value,
             record.outcome_reference,
-            json.dumps(record.evidence_references, separators=(",", ":")),
-            json.dumps(record.citation_references, separators=(",", ":")),
+            json.dumps(
+                [item.canonical_payload for item in record.references],
+                separators=(",", ":"),
+            ),
             record.limitation_code,
             record.supersedes_record_id,
         )
@@ -361,8 +380,22 @@ class SQLiteExecutionEvidenceRepository:
             provider_call_count=row["provider_call_count"],
             outcome_classification=OutcomeClassification(row["outcome_classification"]),
             outcome_reference=row["outcome_reference"],
-            evidence_references=tuple(json.loads(row["evidence_references"])),
-            citation_references=tuple(json.loads(row["citation_references"])),
+            references=tuple(
+                AuthorizedReference(
+                    reference_identity=item["reference_identity"],
+                    reference_type=ReferenceType(item["reference_type"]),
+                    namespace=item["namespace"],
+                    security_domain=item["security_domain"],
+                    authorization_decision=AuthorizationDecision(
+                        item["authorization_decision"]
+                    ),
+                    reason_code=item["reason_code"],
+                    visibility=ReferenceVisibility(item["visibility"]),
+                    source_identity=item["source_identity"],
+                    provenance=item["provenance"],
+                )
+                for item in json.loads(row["reference_authorizations"])
+            ),
             limitation_code=row["limitation_code"],
             supersedes_record_id=row["supersedes_record_id"],
             schema_version=row["schema_version"],

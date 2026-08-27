@@ -2,10 +2,13 @@
 
 from .domain import (
     AuthorizationDecision,
+    AuthorizedReference,
     EvidenceEventType,
     EvidenceValidationError,
     ExecutionEvidenceRecord,
     OutcomeClassification,
+    ReferenceType,
+    ReferenceVisibility,
     canonical_json,
 )
 from .ports import (
@@ -25,6 +28,7 @@ __all__ = [
     "AppendResult",
     "AuthorizationDecision",
     "AuthorizedEvidenceScope",
+    "AuthorizedReference",
     "EvidenceDigestConflict",
     "EvidenceEventType",
     "EvidenceRepositoryError",
@@ -34,6 +38,8 @@ __all__ = [
     "ExecutionEvidenceRecord",
     "ExecutionEvidenceRepository",
     "OutcomeClassification",
+    "ReferenceType",
+    "ReferenceVisibility",
     "SQLiteExecutionEvidenceRepository",
     "canonical_json",
 ]
