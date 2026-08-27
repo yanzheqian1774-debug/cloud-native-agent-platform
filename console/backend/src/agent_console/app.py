@@ -1,10 +1,19 @@
 """FastAPI application for the AgentOS Workflow Execution Console."""
 
+import os
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from agent_core.execution_evidence import SQLiteExecutionEvidenceRepository
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from kubernetes.client.exceptions import ApiException
 
+from agent_console.preview_schemas import PreviewError, PreviewResponse
+from agent_console.preview_service import (
+    PreviewService,
+    PreviewServiceError,
+    TrustedPreviewPrincipal,
+)
 from agent_console.repository import (
     KubernetesWorkflowRepository,
     WorkflowRepository,
@@ -43,6 +52,31 @@ WorkflowServiceDependency = Annotated[
     WorkflowService,
     Depends(get_workflow_service),
 ]
+
+
+def get_preview_principal() -> TrustedPreviewPrincipal:
+    """Resolve preview authority from trusted server configuration only."""
+    principal = os.environ.get("AGENT_CONSOLE_PREVIEW_PRINCIPAL", "")
+    namespace = os.environ.get("AGENT_CONSOLE_PREVIEW_NAMESPACE", "")
+    security_domain = os.environ.get("AGENT_CONSOLE_PREVIEW_SECURITY_DOMAIN", "")
+    return TrustedPreviewPrincipal(
+        principal_id=principal,
+        namespace=namespace,
+        security_domain=security_domain,
+        authorized=bool(principal and namespace and security_domain),
+    )
+
+
+def get_preview_service(repository: RepositoryDependency) -> PreviewService:
+    location = os.environ.get("AGENT_EXECUTION_EVIDENCE_DB")
+    evidence = SQLiteExecutionEvidenceRepository(Path(location)) if location else None
+    return PreviewService(repository, evidence)
+
+
+PreviewPrincipalDependency = Annotated[
+    TrustedPreviewPrincipal, Depends(get_preview_principal)
+]
+PreviewServiceDependency = Annotated[PreviewService, Depends(get_preview_service)]
 
 
 @app.get("/healthz")
@@ -85,3 +119,47 @@ def get_workflow(
             ) from exc
 
         raise
+
+
+@app.get(
+    "/api/internal/preview/v1/executions/{namespace}/{workflow_name}/{task_name}",
+    response_model=PreviewResponse,
+    responses={
+        403: {"model": PreviewError},
+        404: {"model": PreviewError},
+        500: {"model": PreviewError},
+        503: {"model": PreviewError},
+    },
+)
+def get_execution_preview(
+    namespace: str,
+    workflow_name: str,
+    task_name: str,
+    principal: PreviewPrincipalDependency,
+    service: PreviewServiceDependency,
+    response: Response,
+    if_none_match: Annotated[str | None, Header()] = None,
+) -> PreviewResponse | Response:
+    """Return one authorization-first internal Technical Preview snapshot."""
+    try:
+        preview = service.get_preview(
+            principal=principal,
+            namespace=namespace,
+            workflow_name=workflow_name,
+            task_name=task_name,
+        )
+    except PreviewServiceError as exc:
+        payload = PreviewError(
+            state=exc.state,
+            reasonCode=exc.reason_code,
+            message="Execution preview is unavailable",
+        )
+        raise HTTPException(
+            status_code=exc.status_code, detail=payload.model_dump()
+        ) from exc
+    etag = f'"{preview.sharedSnapshotId}"'
+    if if_none_match == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "private, no-cache"
+    return preview

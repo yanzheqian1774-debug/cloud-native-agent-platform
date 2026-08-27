@@ -870,3 +870,10 @@ def product_graph_view(graph: CanonicalGraph, **kwargs: Any) -> GraphView:
 
 def technical_graph_view(graph: CanonicalGraph, **kwargs: Any) -> GraphView:
     return project_graph(graph, ProjectionContext.TECHNICAL, **kwargs)
+
+
+def graph_to_dict(graph: CanonicalGraph) -> dict[str, Any]:
+    """Serialize the existing canonical graph without reconstructing relations."""
+    if not isinstance(graph, CanonicalGraph):
+        raise GraphProjectionError("CANONICAL_GRAPH_REQUIRED")
+    return _normalize(asdict(graph))  # type: ignore[return-value]

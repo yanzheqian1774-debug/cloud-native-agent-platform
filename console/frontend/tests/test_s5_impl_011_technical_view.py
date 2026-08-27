@@ -372,3 +372,31 @@ def test_root_shim_is_the_only_standard_discovery_entry() -> None:
     assert FRONTEND not in [
         root / value for value in ("core/tests", "tests", "gateway/tests")
     ]
+
+
+def test_live_frontend_preserves_canonical_relations_without_minting_ids() -> None:
+    source = text("src/api/executionPreview.ts")
+    assert "relation_types.map" not in source
+    assert "${relation.relation_id}" not in source
+    assert "canonicalRelations: graphRelations" in source
+    app = text("src/App.tsx")
+    assert "key={relation.relation_id}" in app
+    assert "relation.relation_types.join" in app
+
+
+def test_live_product_and_technical_consume_same_relation_collection() -> None:
+    product = text("src/product/adapter.ts")
+    technical = text("src/technical/adapter.ts")
+    expected = "canonicalRelations: liveSnapshot.canonicalRelations ?? []"
+    assert expected in product
+    assert expected in technical
+    assert "loadLiveProductPreview" in product
+    assert "loadLiveTechnicalPreview" in technical
+
+
+def test_live_reference_projection_is_already_authorized() -> None:
+    api = text("src/api/executionPreview.ts")
+    assert 'reference.authorizationDecision !== "ALLOW"' in api
+    assert "PREVIEW_REFERENCE_AUTHORIZATION_INVALID" in api
+    assert "assetId: id" not in api
+    assert "citationId: id" not in api

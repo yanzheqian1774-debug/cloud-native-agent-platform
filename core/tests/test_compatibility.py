@@ -41,7 +41,13 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "gateway/tests/test_capability_gateway.py",
     }
     authorized_console_imports = {
+        "console/backend/src/agent_console/app.py",
+        "console/backend/src/agent_console/execution_snapshot.py",
+        "console/backend/src/agent_console/preview_service.py",
         "console/backend/src/agent_console/shared_views.py",
+        "console/backend/tests/test_execution_evidence_security.py",
+        "console/backend/tests/test_execution_snapshot.py",
+        "console/backend/tests/test_preview_api.py",
         "console/backend/tests/test_shared_views.py",
     }
 
@@ -53,6 +59,7 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "operator/src/agent_operator/identity_adapter.py",
         "operator/src/agent_operator/task_controller.py",
         "operator/tests/test_compatibility_interpreter.py",
+        "operator/tests/test_execution_coordinator.py",
         "operator/tests/test_identity_adapter.py",
     }
     assert {
@@ -61,3 +68,4 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
     assert {
         path for path in discovered_imports if path.startswith("console/")
     } == authorized_console_imports
+    assert "console/backend/src/agent_console/repository.py" not in discovered_imports
