@@ -139,3 +139,39 @@ required.
 Stop after exact evidence-correction-head CI and return to the Human S5-REL-025
 Merge Gate. Do not merge to main, start Technical View, start Golden Demo, or
 start Release.
+
+## Terminal durable-integration and closure addendum — 2026-08-27
+
+The open/unmerged and future-CI statements above are preserved as historical
+checkpoint observations that were accurate when the candidate and review
+evidence were written. They are superseded for current lifecycle navigation by
+the following terminal facts:
+
+- PR #65 merged with durable-main merge commit
+  `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`.
+- Source PR #64 merged automatically through that durable integration; its
+  source head remains `18fa8f9a0eb5caef18772063c28c8fd414d6959f`.
+- Exact-main CI run `33036620588` completed with `SUCCESS` at
+  `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`.
+- The Human-confirmed terminal state is `S5-REL-025 CLOSED /
+  PASS_WITH_CONSTRAINTS`.
+- The source and REL branches are retained; closure does not authorize branch
+  cleanup or history rewriting.
+
+Closure records durable Product View integration only. It does not claim that
+the Product MVS is complete, that Golden Demo or Release work has started, or
+that release or production readiness is granted.
+
+For portfolio consistency at this reconciliation point, the later Technical
+View integration is also terminal: PRs #66 and #67 are merged, S5-IMPL-011 and
+S5-REL-026 are Human-confirmed closed, durable main is
+`b244fa5da3e670fa754278a0559da1a3049fb05a`, and exact-main CI run
+`33042871796` succeeded. Thus PRs #64–#67 are merged and S5-IMPL-010,
+S5-REL-025, S5-IMPL-011, and S5-REL-026 are closed. S5-REL-027 is active in
+`REVIEW / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` at Draft PR #68;
+it is not merged or closed, and no downstream task is authorized.
+
+The original rollback section describes the pre-merge checkpoint. After the
+terminal Product durable integration, the applicable repository rollback is
+`git revert -m 1 4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`; branch deletion or PR
+closure is no longer a rollback for already-merged Product content.
