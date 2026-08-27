@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -307,3 +309,38 @@ def technical_view(source: SharedExecutionView) -> dict[str, Any]:
         "knowledgeEvidence": [asdict(item) for item in source.citations],
         "limitationCodes": list(source.limitation_codes),
     }
+
+
+def sibling_snapshot_views(
+    snapshot: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return sibling projections while preserving every shared authority field."""
+    required = (
+        "platformExecutionIdentity",
+        "sharedSnapshotId",
+        "graphSnapshotId",
+        "authorization",
+        "runtime",
+        "outcome",
+        "evidence",
+        "citations",
+        "graph",
+    )
+    if not isinstance(snapshot, Mapping) or any(
+        key not in snapshot for key in required
+    ):
+        raise ViewProjectionError("SHARED_EXECUTION_SNAPSHOT_REQUIRED")
+    shared = {key: deepcopy(snapshot[key]) for key in required}
+    product = {
+        **shared,
+        "projectionContext": "PRODUCT",
+        "state": snapshot.get("state"),
+        "sourceVersions": deepcopy(snapshot.get("sourceVersions", {})),
+    }
+    technical = {
+        **deepcopy(shared),
+        "projectionContext": "TECHNICAL",
+        "state": snapshot.get("state"),
+        "sourceVersions": deepcopy(snapshot.get("sourceVersions", {})),
+    }
+    return product, technical

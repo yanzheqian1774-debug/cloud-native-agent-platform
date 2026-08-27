@@ -16,6 +16,7 @@ from agent_operator.compatibility_interpreter import (
 from agent_operator.errors import TaskExecutionError, classify_http_error
 from agent_operator.execution_coordinator import (
     ExecutionClassification,
+    TaskEvidenceSubject,
     TaskExecutionContext,
     build_capability_plan,
     build_default_coordinator,
@@ -148,6 +149,50 @@ def load_agent_definition(*, name: str, namespace: str) -> list[dict[str, Any]]:
     return [body]
 
 
+def task_evidence_subject(
+    *, metadata: dict[str, Any], namespace: str
+) -> TaskEvidenceSubject | None:
+    """Resolve evidence identity from Kubernetes Task and Workflow ownership."""
+    task_uid = metadata.get("uid")
+    metadata_namespace = metadata.get("namespace")
+    labels = metadata.get("labels", {})
+    owners = metadata.get("ownerReferences", ())
+    workflow_name = (
+        labels.get("agentos.io/workflow") if isinstance(labels, dict) else None
+    )
+    workflow_owners = (
+        [
+            item
+            for item in owners
+            if isinstance(item, dict)
+            and item.get("apiVersion") == "agentos.io/v1alpha1"
+            and item.get("kind") == "Workflow"
+            and item.get("controller") is True
+        ]
+        if isinstance(owners, list)
+        else []
+    )
+    if workflow_name is None and not workflow_owners:
+        return None
+    if (
+        not isinstance(task_uid, str)
+        or not task_uid.strip()
+        or metadata_namespace != namespace
+        or not isinstance(workflow_name, str)
+        or not workflow_name.strip()
+        or len(workflow_owners) != 1
+        or workflow_owners[0].get("name") != workflow_name
+        or not isinstance(workflow_owners[0].get("uid"), str)
+        or not workflow_owners[0]["uid"].strip()
+    ):
+        raise ValueError("EVIDENCE_SUBJECT_IDENTITY_CONFLICT")
+    return TaskEvidenceSubject(
+        namespace=namespace,
+        workflow_identity=workflow_owners[0]["uid"],
+        task_identity=task_uid,
+    )
+
+
 def invoke_compatible_agent(
     *,
     context: InternalExecutionEnvelope,
@@ -224,6 +269,10 @@ def create_task(
                 agent_name=agent_name,
             ),
             capability_plan=capability_plan,
+            evidence_subject=task_evidence_subject(
+                metadata=meta,
+                namespace=namespace,
+            ),
         )
     except (CompatibilityInterpreterError, ValueError) as exc:
         patch.status["phase"] = "Failed"

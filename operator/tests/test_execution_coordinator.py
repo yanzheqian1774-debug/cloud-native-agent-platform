@@ -1,6 +1,12 @@
 from dataclasses import replace
 
 import pytest
+from agent_core.execution_evidence import (
+    AppendDisposition,
+    AppendResult,
+    EvidenceDigestConflict,
+    EvidenceRepositoryUnavailable,
+)
 from agent_gateway.capability import (
     AuthorizationContext,
     AuthorizationDecision,
@@ -17,7 +23,9 @@ from agent_gateway.capability import (
 from agent_operator.compatibility_interpreter import interpret_legacy_task
 from agent_operator.execution_coordinator import (
     CapabilityPlan,
+    EvidenceAvailability,
     ExecutionClassification,
+    TaskEvidenceSubject,
     TaskExecutionContext,
     TaskExecutionCoordinator,
     build_capability_plan,
@@ -72,6 +80,9 @@ def execution_context(*, capability: bool = False) -> TaskExecutionContext:
             )
             if capability
             else None
+        ),
+        evidence_subject=TaskEvidenceSubject(
+            "agent-workloads", "workflow-uid-001", "task-uid-001"
         ),
     )
 
@@ -383,3 +394,97 @@ def test_capability_transport_ambiguity_is_unknown_without_retry() -> None:
     assert outcome.result is None
     assert authorization.calls == 1
     assert transport.calls == 1
+
+
+class RecordingEvidenceRepository:
+    def __init__(self, failure=None):
+        self.records = []
+        self.failure = failure
+
+    def append(self, record):
+        self.records.append(record)
+        if self.failure is not None:
+            raise self.failure
+        return AppendResult(AppendDisposition.APPENDED, record)
+
+
+def test_successful_native_outcome_captures_normalized_evidence() -> None:
+    repository = RecordingEvidenceRepository()
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(),
+        evidence_repository=repository,
+        security_domain="business-unit-a",
+        clock=lambda: "2026-08-27T08:00:00Z",
+    ).execute(context=execution_context(), input_text="research this topic")
+
+    assert outcome.classification is ExecutionClassification.SUCCEEDED
+    assert outcome.evidence_availability is EvidenceAvailability.AVAILABLE
+    assert len(repository.records) == 1
+    evidence = repository.records[0]
+    assert evidence.security_domain == "business-unit-a"
+    assert evidence.platform_execution_identity == outcome.platform_execution_identity
+    assert evidence.workflow_identity == "workflow-uid-001"
+    assert evidence.task_identity == "task-uid-001"
+    assert "research this topic" not in repr(evidence.canonical_payload)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        EvidenceRepositoryUnavailable("EVIDENCE_APPEND_UNAVAILABLE"),
+        EvidenceDigestConflict("EVIDENCE_DIGEST_CONFLICT"),
+    ],
+)
+def test_evidence_failure_preserves_truthful_execution_without_provider_replay(
+    failure,
+) -> None:
+    calls = []
+
+    def invoke(identity, input_text, configuration):
+        calls.append(identity)
+        from agent_runtime.providers.native.models import NativeInvocation
+
+        return NativeInvocation("native result", "native-correlation")
+
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(invoke),
+        evidence_repository=RecordingEvidenceRepository(failure),
+        clock=lambda: "2026-08-27T08:00:00Z",
+    ).execute(context=execution_context(), input_text="research this topic")
+
+    assert outcome.classification is ExecutionClassification.SUCCEEDED
+    assert outcome.result == "native result"
+    assert outcome.evidence_availability is EvidenceAvailability.UNAVAILABLE
+    assert outcome.evidence_reason_code == failure.reason_code
+    assert len(calls) == 1
+
+
+def test_deny_evidence_has_zero_provider_calls_and_citations() -> None:
+    gateway, _, transport = capability_gateway(AuthorizationDecision.DENY)
+    repository = RecordingEvidenceRepository()
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(),
+        capability_gateway=gateway,
+        evidence_repository=repository,
+        clock=lambda: "2026-08-27T08:00:00Z",
+    ).execute(
+        context=execution_context(capability=True), input_text="research this topic"
+    )
+
+    assert outcome.classification is ExecutionClassification.DENIED
+    assert transport.calls == []
+    assert repository.records[0].provider_call_count == 0
+    assert repository.records[0].references == ()
+
+
+def test_missing_evidence_subject_fails_evidence_closed_after_execution() -> None:
+    repository = RecordingEvidenceRepository()
+    context = replace(execution_context(), evidence_subject=None)
+    outcome = TaskExecutionCoordinator(
+        native_provider=NativeRuntimeProvider(),
+        evidence_repository=repository,
+    ).execute(context=context, input_text="research this topic")
+    assert outcome.classification is ExecutionClassification.SUCCEEDED
+    assert outcome.evidence_availability is EvidenceAvailability.UNAVAILABLE
+    assert outcome.evidence_reason_code == "EVIDENCE_SUBJECT_UNAVAILABLE"
+    assert repository.records == []
