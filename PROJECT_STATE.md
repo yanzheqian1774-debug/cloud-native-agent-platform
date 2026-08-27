@@ -22,8 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `a0d82be4387f5706129ee6676ad5965b42a3efdb`
-- Exact-main CI: run `33072486290`, `SUCCESS`
+- Current durable-main head: `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`
+- Exact-main CI: run `33083580433`, `SUCCESS`
 - S5-PLAN-002 authorized durable-main baseline:
   `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
@@ -37,6 +37,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| S5-ARCH-012 | `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Human-approved-with-constraints Governed Successor and Cold Optimization Boundary from exact durable baseline `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; exactly five architecture/evidence/governance paths; typed correction/intervention/feedback/preference/candidate/evaluation/publication/application/rollback authorities; v0.2 preferences and candidates are preview-only and `NOT_APPLIED`; no implementation, Portfolio, public API/CRD/Graph, dependency/Workflow, Knowledge, Demo, Runtime, Recovery, Certification, or Release change |
 | S5-ARCH-011 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Architecture-only candidate from exact durable baseline `a0d82be4387f5706129ee6676ad5965b42a3efdb`; Checkpoint A head `761ba46345f01e30c0d8f72b84722621ece80d40`; Draft PR #72; exactly five authorized architecture/evidence/governance paths plus one bounded linear safety correction; no implementation, public API/CRD/Graph, dependency/workflow, Portfolio, Golden Demo, Runtime, MCP, Recovery, Certification, or Release change is authorized |
 | S5-REL-028 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #70 and PR #71 merged at durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exact-main CI run `33072486290` succeeded; terminal pre-close row was expected governance lag; reopen prohibited |
 | S5-IMPL-014 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | Native-only source head `443214c0a0277473648f68800ad008f981d758c9` on Draft PR #70; exact 29-path scope and CI run `33065548477` succeeded with 726 tests recorded; corrected P1 boundaries are Workflow/Task UID binding, independently authorized references, verbatim Canonical Graph relations/no frontend canonical IDs, and terminal semantic completeness; bounded single-node SQLite and internal Technical Preview only |
@@ -109,10 +110,10 @@ readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Return the S5-ARCH-011 architecture candidate to its Human Review Gate; do
-   not start any implementation or downstream Session.
-2. Preserve its bounded Native-only, read-only Knowledge consumption and
-   non-executable Role Candidate constraints; it is not implementation evidence.
+1. Return S5-ARCH-012 to its Human Review Gate; do not start implementation or
+   any downstream Session.
+2. Preserve its typed authorities, cold-path isolation, consent/deletion boundary,
+   Knowledge non-writeback, and v0.2 `DRAFT / NOT_APPLIED` candidate constraint.
 3. Keep all public API, CRD, existing-schema, production integration, freeze,
    certification, readiness, and release decisions under their separate Gates.
 

@@ -6,6 +6,16 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [User Intervention, Preference, Feedback, and Governed Optimization Boundary v1](S5-ARCH-012-USER-INTERVENTION-PREFERENCE-FEEDBACK-GOVERNED-OPTIMIZATION-BOUNDARY-V1.md)
+  defines the Human-approved-with-constraints Governed Successor and Cold
+  Optimization Boundary. It preserves distinct typed authorities for correction,
+  intervention, feedback, preferences/consent/deletion, candidates, evaluation,
+  future publication/application, and rollback. v0.2 preference and candidate
+  behavior is preview-only and `NOT_APPLIED`; governed publication is reserved for
+  v0.3. This is architecture-only and changes no implementation, public API, CRD,
+  Canonical Graph, dependency, Workflow, Knowledge, Runtime, Demo, or Release state.
+  It is `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS /
+  READY_FOR_HUMAN_S5_ARCH_012_REVIEW_GATE`.
 - [Product Intent, Dynamic Work, Role, and Knowledge Consumption Boundary v1](S5-ARCH-011-PRODUCT-INTENT-DYNAMIC-WORK-ROLE-KNOWLEDGE-CONSUMPTION-BOUNDARY-V1.md)
   defines the Human-approved-with-constraints bounded v0.2 authority and contract
   model from a business question to an immutable approved Workflow, deterministic
