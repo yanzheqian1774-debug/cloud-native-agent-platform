@@ -22,8 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `b244fa5da3e670fa754278a0559da1a3049fb05a`
-- Exact-main CI: run `33042871796`, `SUCCESS`
+- Current durable-main head: `4d5da13e519627ba40cfdc632e3662f5cf965626`
+- Exact-main CI: run `33046211942`, `SUCCESS`
 - S5-PLAN-002 authorized durable-main baseline:
   `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
@@ -37,7 +37,8 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-REL-027 | `REVIEW / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Active, not merged, and not closed; Draft PR #68 at Checkpoint A head `d8d1ca66f573800944ea9db655f65cc6695e00d3`; exact-candidate CI `33045129213` succeeded; exactly five authorized documentation paths; no downstream task allocated |
+| S5-ARCH-010 | `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS` | Active architecture candidate, not completed or durable main; Human G2 approved Hybrid F and a future bounded single-node SQLite-backed append-only internal evidence repository for architecture direction only; implementation task ID is unresolved and no implementation or downstream Session is authorized |
+| S5-REL-027 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #68 merged into durable main `4d5da13e519627ba40cfdc632e3662f5cf965626`; exact-main CI `33046211942` succeeded; the prior pre-close row was expected terminal snapshot lag; reopen prohibited |
 | S5-REL-026 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PRs #66 and #67 merged; durable-main merge `b244fa5da3e670fa754278a0559da1a3049fb05a`; exact-main CI `33042871796` succeeded |
 | S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PR #66 merged automatically through Technical View durable integration |
 | S5-REL-025 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product source head `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; PRs #64 and #65 merged; durable-main merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`; exact-main CI `33036620588` succeeded |
@@ -91,20 +92,22 @@ certification, production readiness and release acceptance remain not granted.
 
 Product and Technical Views are both durably integrated. PRs #64 and #65 merged
 through Product durable merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`;
-PRs #66 and #67 merged through Technical durable merge and current main
-`b244fa5da3e670fa754278a0559da1a3049fb05a`. Exact-main CI run `33042871796`
-succeeded. S5-REL-027 is the sole active governance reconciliation Session and
-is in Review at the Human Merge Gate; it is not merged or closed.
+PRs #66 and #67 merged through Technical durable merge. S5-REL-027 then merged
+the governance reconciliation through current main
+`4d5da13e519627ba40cfdc632e3662f5cf965626`; exact-main CI run `33046211942`
+succeeded, and its Human-confirmed closure is forward-imported here without
+reopening it. S5-ARCH-010 is the active architecture-only Session.
 Golden Demo implementation and Release have not started. No Product MVS, Runtime or
 Provider certification, production Knowledge or recovery support, Golden Demo
 readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Return S5-REL-027 to the Human Merge Gate; Draft PR #68 remains unmerged.
-2. After reconciliation closes, return to the Human Portfolio Sequence Gate; the next
-   portfolio implementation remains unresolved and no candidate ID is active
-   or authorized.
+1. Return S5-ARCH-010 Checkpoint A to Human Review. No implementation or
+   downstream Session is active or authorized.
+2. If the architecture checkpoint closes and integrates, separately gate the
+   exact Native implementation paths, SQLite persistence/security, internal
+   DTO/API compatibility, evidence capture, and Product/Technical live adapters.
 3. Keep all public API, CRD, existing-schema, production integration, freeze,
    certification, readiness, and release decisions under their separate Gates.
 

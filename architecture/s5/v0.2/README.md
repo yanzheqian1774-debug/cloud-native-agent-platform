@@ -6,6 +6,15 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [Production Execution Evidence and Shared Read Model Boundary v1](S5-ARCH-010-PRODUCTION-EXECUTION-EVIDENCE-SHARED-READ-MODEL-BOUNDARY-V1.md)
+  records the Human-approved Hybrid F authority model and bounded single-node
+  SQLite persistence direction for a future v0.2 implementation slice.
+  Kubernetes remains public control/current-state authority, the append-only
+  internal repository owns detailed evidence, the Canonical Graph owns
+  relationships, and one deterministic backend assembler owns the shared
+  Product/Technical snapshot. It is architecture-only: implementation,
+  production certification, multi-node persistence, public API/CRD changes,
+  recovery, and exactly-once claims are not authorized.
 - [Product and Technical Graph Projection Scope Gate v1](S5-ARCH-009-PRODUCT-TECHNICAL-GRAPH-PROJECTION-SCOPE-GATE-V1.md)
   defines one internal canonical relationship graph, graph layers, node and
   relation semantics, cardinality, deterministic aggregation and grouping,
