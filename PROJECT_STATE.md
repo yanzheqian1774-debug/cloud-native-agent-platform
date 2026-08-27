@@ -35,6 +35,8 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| S5-REL-025 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / LOCAL_VALIDATION_PASSED` | Human Implementation Gate passed with constraints. The Product View is a bounded integration candidate on `codex/s5-rel-025-product-view-integration` at merge `93bd1db550a0ca4c96c9c30962d40d97927fac31`, based on durable main `25f755432381b40efae2f3e251863db0ca32acee` and source head `18fa8f9a0eb5caef18772063c28c8fd414d6959f`. Direct Product tests (33), full tests (649), Ruff, frontend lint and build passed. It is not yet durable main; a Draft integration PR, exact integrated-head CI, and the Human Review Gate remain pending. |
+| S5-IMPL-010 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product View source is fixed at `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; Draft PR #64 remains unmerged. Closure does not imply durable integration or Product MVS completion. |
 | S5-PLAN-002 | `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS / READY_TO_CLOSE` | Checkpoint B plan convergence complete at exact baseline `7c1bc0266b39c913497fd67dcd4b7783f288dc57`; Pilot is recommended only and requires a separately allocated `TEST` Session and Human authorization; downstream Sessions remain inactive; Human Close Confirmation pending |
 | S5-ARCH-005 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Accepted Candidate artifact and source head |
 | S5-REL-004 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS / SESSION_CLOSED` | PR #42 merge plus imported Human confirmation |
@@ -81,6 +83,12 @@ Closure Digital Employee. Engineering Release Risk Manager is the accepted
 secondary technical/conformance example. Implementation entry is conditionally
 granted as a route only; no future Session is active or authorized. Provider
 certification, production readiness and release acceptance remain not granted.
+
+S5-REL-025 is the only active Product View integration owner. Its candidate is
+not durable main. PR #64 remains Draft and unmerged. Technical View, Golden
+Demo implementation, and Release have not started. The next decision is the
+Human S5-REL-025 Review Gate; no Product MVS, Runtime certification, Golden Demo
+readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
