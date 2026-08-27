@@ -6,7 +6,7 @@
 | --- | --- |
 | Session | `S5-ARCH-010` |
 | Type / version | `ARCH` / `v0.2 CONNECT — Digital Employee Technical Preview` |
-| Lifecycle / checkpoint | `REVIEW` / `A — ARCHITECTURE_DECISION_AND_G2_BOUNDARY` |
+| Lifecycle / checkpoint | `CLOSING` / `B — INDEPENDENT_ARCHITECTURE_SAFETY_AND_MERGE_READINESS` |
 | Authorized baseline | `4d5da13e519627ba40cfdc632e3662f5cf965626` |
 | Human architecture decision | `PASS_WITH_CONSTRAINTS` |
 | Human G2 decision | `APPROVED_FOR_BOUNDED_V0_2_ARCHITECTURE_ONLY` |
@@ -14,7 +14,7 @@
 | v0.2 persistence direction | `SQLITE_BACKED_APPEND_ONLY_INTERNAL_EVIDENCE_REPOSITORY` |
 | Persistence classification | `BOUNDED_SINGLE_NODE_V0_2_PERSISTENCE / NOT_PRODUCTION_CERTIFIED / NOT_MULTI_NODE` |
 | Implementation authorization | `NOT_GRANTED` |
-| Publication state | `CANDIDATE / NOT_DURABLE_MAIN / HUMAN_REVIEW_PENDING` |
+| Publication state | `CANDIDATE / NOT_DURABLE_MAIN / READY_FOR_HUMAN_MERGE_GATE` |
 
 This decision defines an internal architecture boundary. It does not implement
 or freeze a database schema, migration, API, DTO, Runtime Contract, Capability
@@ -39,6 +39,9 @@ No component may dual-write, reinterpret, or compete with another authority.
 Evidence cannot become a second Task/Workflow state machine. Kubernetes status
 cannot silently become the detailed evidence journal. Product, Technical, and
 frontend code cannot reconstruct or mint execution or Graph authority.
+Runtime- and Provider-native identifiers remain correlation-only and can never
+substitute for Platform Execution Identity, Task identity, Workflow identity,
+or shared snapshot identity.
 
 ## 3. Internal Execution Evidence Record
 
@@ -73,6 +76,12 @@ redaction fail closed: an unknown field, unsafe value, or value that cannot be
 normalized is rejected rather than persisted. Diagnostics must be mapped to
 bounded reason or limitation codes before append. References must not embed
 the referenced sensitive content.
+
+The payload digest is computed only from the canonical normalized allowlisted
+record. Prohibited or redacted source values are never direct digest inputs,
+and a digest is not a substitute for retaining sensitive content. The digest
+design must prevent use as a recovery oracle for prompts, credentials, raw
+arguments, or Provider bodies.
 
 ## 4. Identity, attempts, ordering, and idempotency
 
@@ -115,6 +124,7 @@ Human G2 approves a future first-slice SQLite adapter only as bounded
 single-node v0.2 persistence:
 
 - local/single-node use only;
+- restart-durable for the bounded single-node v0.2 demonstration only;
 - database file location supplied by bounded configuration;
 - database files and sidecar files excluded from Git;
 - transactional append and unique record identity;
@@ -125,6 +135,10 @@ single-node v0.2 persistence:
 - no production certification;
 - persistence accessed only through a replaceable Evidence Repository port;
 - PostgreSQL or an event journal/materialized read model remains downstream.
+
+SQLite is not the enterprise target store and grants no shared-filesystem
+safety, high availability, horizontal scale, full tenant isolation, release
+certification, or production-readiness claim.
 
 This architecture task creates no table, SQL schema, database file, migration,
 dependency, adapter, or configuration.
@@ -138,9 +152,13 @@ aggregates, cache keys, and snapshot assembly are prohibited. Missing,
 unknown, contradictory, or unauthorized domain context defaults to deny.
 
 Raw diagnostics are never exposed. Provider, Runtime, Capability, Evidence,
-and Citation fields are independently allowlisted. The v0.2 discriminator is
-tenant-ready safety metadata, not a claim that the downstream tenant model or
-enterprise authorization architecture is implemented.
+and Citation fields are independently allowlisted. Evidence and Citation
+references require their own authorization decision after the execution query
+is authorized and before Graph construction or serialization. Correction,
+tombstone, and erasure records contain no removed or prohibited content. The
+v0.2 discriminator is tenant-ready safety metadata, not a claim that the
+downstream tenant model or enterprise authorization architecture is
+implemented.
 
 ## 8. Canonical Graph input
 
@@ -166,9 +184,11 @@ Assembler inputs are:
 3. one canonical Graph snapshot; and
 4. requested locale for formatting only, never business or authority state.
 
-For identical ordered inputs and assembler version, output is deterministic.
-The snapshot carries one shared identity and exact source-version provenance.
-Its state is one of:
+The assembler is read-only and derived: it cannot persist, correct, or become
+an independent authority for any input fact. For identical ordered inputs and
+assembler version, output is deterministic and reproducible. Every snapshot
+carries namespace, security domain, one shared identity, and exact
+source-version provenance. Its state is one of:
 
 - `COMPLETE` — all required authorities and expected evidence are present;
 - `PARTIAL` — safe output exists with explicit gaps/limitations;
@@ -270,7 +290,11 @@ Implementation requires all applicable independent gates:
 4. Native evidence capture gate;
 5. Product/Technical live-adapter gate;
 6. exact-head CI; and
-7. durable integration.
+7. durable integration;
+8. Golden Demo readiness re-evaluation after implementation evidence exists;
+   and
+9. a new production-persistence G2 before PostgreSQL, an event journal,
+   multi-node storage, or any production durability claim.
 
 Any need for a public API/CRD change, distributed persistence, permanent
 execution ownership, tenant architecture, production certification, recovery
@@ -280,9 +304,9 @@ semantics, or Contract freeze returns to a new Human G2 decision.
 
 ```text
 SESSION: S5-ARCH-010
-LIFECYCLE: REVIEW
-CHECKPOINT: A — ARCHITECTURE_DECISION_AND_G2_BOUNDARY
-CURRENT_STEP: 1_OF_3
+LIFECYCLE: CLOSING
+CHECKPOINT: B — INDEPENDENT_ARCHITECTURE_SAFETY_AND_MERGE_READINESS
+CURRENT_STEP: 2_OF_3
 HUMAN_ARCHITECTURE_DECISION: PASS_WITH_CONSTRAINTS
 HUMAN_G2_DECISION: APPROVED_FOR_BOUNDED_V0_2_ARCHITECTURE_ONLY
 SELECTED_ARCHITECTURE: HYBRID_F
@@ -290,5 +314,6 @@ V0_2_PERSISTENCE_DIRECTION: SQLITE_BACKED_APPEND_ONLY_INTERNAL_EVIDENCE_REPOSITO
 PERSISTENCE_CLASSIFICATION: BOUNDED_SINGLE_NODE_V0_2_PERSISTENCE / NOT_PRODUCTION_CERTIFIED / NOT_MULTI_NODE
 IMPLEMENTATION_AUTHORIZED: NO
 IMPLEMENTATION_TASK_ID: UNRESOLVED
-NEXT_GATE: Human S5-ARCH-010 Checkpoint A Review
+RESULT: READY_FOR_HUMAN_S5_ARCH_010_MERGE_GATE
+NEXT_GATE: Human S5-ARCH-010 Merge Gate
 ```
