@@ -7,6 +7,7 @@
 - REL ID authority: `HUMAN_ALLOCATED`
 - Human REL naming decision: `PASS`
 - Human Implementation Gate: `PASS_WITH_CONSTRAINTS`
+- Human Review Gate: `PASS_WITH_CONSTRAINTS`
 - Durable baseline: `25f755432381b40efae2f3e251863db0ca32acee`
 - Source session: `S5-IMPL-010`
 - Source head: `18fa8f9a0eb5caef18772063c28c8fd414d6959f`
@@ -15,7 +16,10 @@
 - Integration merge: `93bd1db550a0ca4c96c9c30962d40d97927fac31`
 - First parent: `25f755432381b40efae2f3e251863db0ca32acee`
 - Second parent: `18fa8f9a0eb5caef18772063c28c8fd414d6959f`
-- Integration PR: one new Draft PR, identifier recorded PR-natively after push
+- Reviewed candidate head: `b81e0d7150081a327f3d586d2d1d3ada837b3105`
+- Integration PR: `#65`, `OPEN / DRAFT / UNMERGED / CLEAN / MERGEABLE` at
+  independent review
+- Evidence-only review successor: `RESOLVED_BY_EXACT_GIT_PR_AND_CI`
 - Main merge authorization: `NOT_GRANTED`
 
 The explicit merge preserves all three S5-IMPL-010 source commits. It is not a
@@ -76,8 +80,11 @@ These evidence classes are independent and must not substitute for one another:
   Quality Gates passed.
 - Local integrated-candidate validation: `PASS` on the merge plus the three REL
   paths before the linear evidence successor commit.
-- Exact integrated-head CI: `PENDING_PR_NATIVE_OBSERVATION`; it must execute at
-  the final evidence successor head after the Draft integration PR exists.
+- Exact reviewed-candidate CI: run `33035843711` at
+  `b81e0d7150081a327f3d586d2d1d3ada837b3105`; Quality Gates and Frontend
+  Quality Gates passed and all expected steps executed.
+- Exact evidence-correction-head CI: resolved by the matching local, tracking,
+  remote, PR #65, and CI heads after this non-self-referential successor.
 - Future exact-main merge CI: `NOT_RUN / NOT_AUTHORIZED`; no main merge is
   authorized by this evidence.
 
@@ -100,16 +107,35 @@ Local reconciliation on 2026-08-27:
 - baseline-to-candidate inventory: exactly **21 paths**, comprising the 18
   source paths and 3 authorized REL paths.
 
+Independent Checkpoint B review additionally verified that every one of the 18
+source blobs equals the authorized source tree, the three source commits remain
+unmodified beneath a true two-parent integration merge, and the evidence commit
+changes only the three REL paths. Browser reconfirmation passed complete
+`en-US` and `zh-CN` journeys, mid-journey locale switching with stable selected
+question and Platform Execution Identity, semantic statuses, existing
+`/workflows` navigation, intentional `/` to `/product` routing, visible keyboard
+focus, and zero warning/error logs. At **390×844**, viewport, body, and document
+widths were exactly **390 px**, with no horizontal overflow.
+
+The prospective merge into unchanged `origin/main` is conflict-free. It has
+exactly 21 modified/added paths, no deletion, rename, mode change, submodule,
+API/CRD/schema, Shared DTO, canonical Graph semantic, dependency/lockfile, or
+workflow change. The required GitHub method is **Create a merge commit**, with
+current `origin/main` as first parent and the exact final PR #65 head as second
+parent; squash and rebase methods are prohibited because they would not
+preserve the integration merge and evidence-successor history.
+
 ## Rollback boundary
 
-Before any main merge, rollback is deletion of the unmerged REL branch or
-closure of its Draft PR. If later authorized and merged, revert the bounded
-integration merge plus its linear evidence/governance successor. No database
-migration, dependency cleanup, external-effect reversal, public API rollback,
-or Kubernetes action is required.
+Before any main merge, rollback is closure of unmerged Draft PR #65 or deletion
+of its REL branch. If later authorized and merged with a main merge commit,
+rollback is `git revert -m 1 <PR-65-main-merge-commit>`; the expected rollback
+scope is exactly the 21 Product and REL paths. No database migration, dependency
+cleanup, external-effect reversal, public API rollback, or Kubernetes action is
+required.
 
 ## Gate
 
-Stop after exact integrated-head CI and return to the Human S5-REL-025 Review
-Gate. Do not merge to main, start Technical View, start Golden Demo, or start
-Release.
+Stop after exact evidence-correction-head CI and return to the Human S5-REL-025
+Merge Gate. Do not merge to main, start Technical View, start Golden Demo, or
+start Release.
