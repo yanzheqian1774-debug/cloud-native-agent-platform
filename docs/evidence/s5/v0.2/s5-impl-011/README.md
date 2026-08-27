@@ -78,10 +78,12 @@ snapshot identity, authorization decision/reason, Outcome, Evidence, Citation,
 Runtime IDs/support classifications, and Provider correlation IDs. Provider
 IDs remain correlation-only.
 
-The URL contains only validated stable identifiers. Unknown, extra,
-contradictory, or malformed context falls back to the deterministic safe
-selection and never creates an identity or relation. Product → Technical →
-Product retains the selected context. Locale state remains separate.
+The URL contains only validated stable identifiers. Partial, duplicate,
+unknown, extra, contradictory, or malformed context falls back to the
+deterministic safe selection and never creates an identity or relation.
+Technical renders the validated shared selection rather than a fixture-default
+substitute. Product → Technical → Product and browser back/forward retain or
+restore the URL-selected context. Locale state remains separate.
 
 ## Honesty and limitations
 
@@ -99,12 +101,12 @@ Product retains the selected context. Locale state remains separate.
 
 Local candidate validation on 2026-08-27:
 
-- direct frontend-local Technical tests: **24 passed**;
+- direct frontend-local Technical tests: **27 passed**;
 - existing Product View tests: **33 passed**, unchanged;
-- combined Product/Technical root tests: **57 passed**;
-- root shim: exactly **24** S5-IMPL-011 nodes;
+- combined Product/Technical root tests: **60 passed**;
+- root shim: exactly **27** S5-IMPL-011 nodes;
 - duplicate S5-IMPL-011 nodes: **0**;
-- full repository `make check`: **673 passed**, with one existing
+- full repository `make check`: **676 passed**, with one existing
   Starlette/httpx deprecation warning;
 - Ruff lint: passed;
 - Ruff format check: **109 files already formatted**;
@@ -123,12 +125,13 @@ after that SHA is pushed.
 
 ## Browser QA
 
-Interactive QA passed for English and Simplified Chinese Technical Views,
-mid-journey locale switching, Product → Technical → Product round-trip,
-validated URL reload, malformed URL fallback, identity drill-down, raw relation
-expansion, all Runtime/Provider classifications, ALLOW plus synthetic Citation,
-DENY with zero calls, UNKNOWN/failure/unavailable/downstream honesty, recovery
-limitations, desktop presentation, keyboard traversal, visible focus,
+Interactive QA passed for English and Simplified Chinese Product and Technical
+Views, mid-journey locale switching, Product → Technical → Product round-trip,
+validated URL reload, partial/duplicate/malformed URL fallback, browser-history
+identity restoration, identity drill-down, raw relation expansion, all
+Runtime/Provider classifications, ALLOW plus synthetic Citation, DENY with zero
+calls, UNKNOWN/failure/empty/loading/error/unavailable/downstream honesty,
+recovery limitations, desktop presentation, keyboard traversal, visible focus,
 accessible names and expanded/current states, and zero browser warnings/errors.
 
 At `390×844`, `window.innerWidth`, `document.body.scrollWidth`, and

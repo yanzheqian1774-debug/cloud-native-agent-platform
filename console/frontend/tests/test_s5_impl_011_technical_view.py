@@ -41,6 +41,23 @@ def run_shared(script: str) -> dict[str, object]:
     return json.loads(completed.stdout)
 
 
+def run_module(module: Path, imports: str, script: str) -> dict[str, object]:
+    completed = subprocess.run(
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "--eval",
+            f'import {{ {imports} }} from "{module.as_uri()}";{script}',
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return json.loads(completed.stdout)
+
+
 def test_shared_snapshot_has_all_six_exact_classifications() -> None:
     source = text("src/shared/executionSnapshotFixture.ts") + text(
         "src/shared/executionSnapshotTypes.ts"
@@ -191,6 +208,57 @@ def test_url_context_allows_only_known_stable_identifiers() -> None:
         assert key in source
     assert "defaultSelectedExecutionContext" in source
     assert "URLSearchParams" in source
+
+
+def test_url_context_rejects_partial_duplicate_unknown_and_contradictory_input() -> (
+    None
+):
+    result = run_module(
+        SHARED / "urlContext.ts",
+        "parseSelectedContext",
+        "const snapshot=(await import('"
+        + (SHARED / "executionSnapshotFixture.ts").as_uri()
+        + "')).sharedExecutionSnapshot;"
+        "const base=snapshot.selectedContext;"
+        "const full=new URLSearchParams(base);"
+        "const duplicate=new URLSearchParams(full);duplicate.append('employeeId',snapshot.employees[1].id);"
+        "const contradictory=new URLSearchParams(full);contradictory.set('executionId','pei-unknown');"
+        "console.log(JSON.stringify({"
+        "partial:parseSelectedContext('?employeeId='+snapshot.employees[1].id,snapshot),"
+        "duplicate:parseSelectedContext('?'+duplicate,snapshot),"
+        "unknown:parseSelectedContext('?'+full+'&extra=value',snapshot),"
+        "contradictory:parseSelectedContext('?'+contradictory,snapshot),"
+        "base}));",
+    )
+    assert result["partial"] == result["base"]
+    assert result["duplicate"] == result["base"]
+    assert result["unknown"] == result["base"]
+    assert result["contradictory"] == result["base"]
+
+
+def test_history_navigation_cannot_be_overridden_by_stale_local_selection() -> None:
+    source = text("src/shared/SelectedExecutionContext.tsx")
+    assert "localSelection?.search === location.search" in source
+    assert "search: location.search" in source
+
+
+def test_technical_view_consumes_and_validates_selected_context() -> None:
+    page = text("src/pages/TechnicalViewPage.tsx")
+    assert "loadTechnicalPreview(selection)" in page
+    assert "useSelectedExecution()" in page
+    result = run_module(
+        TECHNICAL / "adapter.ts",
+        "loadTechnicalPreview",
+        "const base=loadTechnicalPreview();"
+        "const selected={...base.selectedContext,employeeId:'de.synthetic.quality-analysis.v1'};"
+        "const accepted=loadTechnicalPreview(selected);"
+        "let rejected=null;try{loadTechnicalPreview({...selected,executionId:'pei-unknown'})}catch(error){rejected=error.message}"
+        "console.log(JSON.stringify({employeeId:accepted.selectedContext.employeeId,rejected}));",
+    )
+    assert result == {
+        "employeeId": "de.synthetic.quality-analysis.v1",
+        "rejected": "CROSS_VIEW_IDENTITY_MISMATCH",
+    }
 
 
 def test_product_technical_navigation_and_route_exist() -> None:
