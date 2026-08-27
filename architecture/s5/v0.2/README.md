@@ -6,6 +6,16 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [Product Intent, Dynamic Work, Role, and Knowledge Consumption Boundary v1](S5-ARCH-011-PRODUCT-INTENT-DYNAMIC-WORK-ROLE-KNOWLEDGE-CONSUMPTION-BOUNDARY-V1.md)
+  defines the Human-approved-with-constraints bounded v0.2 authority and contract
+  model from a business question to an immutable approved Workflow, deterministic
+  authorization-first matching, declared Native placement, authorized read-only
+  Knowledge retrieval and citations, execution Evidence, sibling Product/Technical
+  projections, and immutable correction successors. It is architecture-only:
+  implementation, public API/CRD/Graph changes, generated-role publication, general
+  RAG/Knowledge operations, Runtime Manager, MCP Knowledge access, Golden Demo, and
+  production claims remain unauthorized. Checkpoint A is `REVIEW / AUTHORIZED /
+  PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE`.
 - [Production Execution Evidence and Shared Read Model Boundary v1](S5-ARCH-010-PRODUCTION-EXECUTION-EVIDENCE-SHARED-READ-MODEL-BOUNDARY-V1.md)
   records the Human-approved Hybrid F authority model and bounded single-node
   SQLite persistence direction for a future v0.2 implementation slice.

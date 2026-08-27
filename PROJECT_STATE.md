@@ -22,8 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `13bc16f746a58912bc093ff249ff390250ce20cf`
-- Exact-main CI: run `33049808981`, `SUCCESS`
+- Current durable-main head: `a0d82be4387f5706129ee6676ad5965b42a3efdb`
+- Exact-main CI: run `33072486290`, `SUCCESS`
 - S5-PLAN-002 authorized durable-main baseline:
   `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
@@ -37,6 +37,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| S5-ARCH-011 | `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Architecture-only candidate from exact durable baseline `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exactly five authorized architecture/evidence/governance paths define bounded Intent, canonical planning, deterministic matching, published-role, Native placement, and read-only Knowledge consumption boundaries; no implementation, public API/CRD/Graph, dependency/workflow, Portfolio, Golden Demo, Runtime, MCP, Recovery, Certification, or Release change is authorized |
 | S5-REL-028 | `REVIEW / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Unmerged durable integration candidate from baseline `13bc16f746a58912bc093ff249ff390250ce20cf`; exact source head `443214c0a0277473648f68800ad008f981d758c9`, Draft PR #70, 29 source paths and provenance merge `af3dab64deec8a95138a28f7f7dd5c3ce44c6e7f`; bounded REL governance/evidence successor only; no downstream task started |
 | S5-IMPL-014 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | Native-only source head `443214c0a0277473648f68800ad008f981d758c9` on Draft PR #70; exact 29-path scope and CI run `33065548477` succeeded with 726 tests recorded; corrected P1 boundaries are Workflow/Task UID binding, independently authorized references, verbatim Canonical Graph relations/no frontend canonical IDs, and terminal semantic completeness; bounded single-node SQLite and internal Technical Preview only |
 | S5-ARCH-010 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Active architecture candidate, not completed, merged, or durable main; Human Review Gate passed with constraints; Draft PR #69 contains Hybrid F and the bounded single-node SQLite direction plus one linear safety clarification; implementation task ID is unresolved and no implementation or downstream Session is authorized |
@@ -107,10 +108,10 @@ readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Return the S5-REL-028 candidate to its Human Review Gate. Keep both the
-   source and integration PRs Draft and unmerged.
-2. Treat its SQLite persistence as bounded local single-node evidence only and
-   its API as an internal Technical Preview boundary, not a public Contract.
+1. Return the S5-ARCH-011 architecture candidate to its Human Review Gate; do
+   not start any implementation or downstream Session.
+2. Preserve its bounded Native-only, read-only Knowledge consumption and
+   non-executable Role Candidate constraints; it is not implementation evidence.
 3. Keep all public API, CRD, existing-schema, production integration, freeze,
    certification, readiness, and release decisions under their separate Gates.
 
