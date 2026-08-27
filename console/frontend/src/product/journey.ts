@@ -1,4 +1,7 @@
 import type { JourneyState } from "./types";
+import type { SharedExecutionSnapshot } from "../shared/executionSnapshotTypes.ts";
+
+type SharedRevisionId = SharedExecutionSnapshot["selectedContext"]["revisionId"];
 
 export const initialJourney: JourneyState = {
   step: "QUESTION", question: "", selectedEmployeeId: "de.synthetic.customer-insight.v1",
@@ -10,7 +13,7 @@ export const initialJourney: JourneyState = {
 
 const DECIDED_AT = "2026-08-27T08:00:00Z";
 
-function fingerprintFor(revision: string): string | null {
+function fingerprintFor(revision: SharedRevisionId): string | null {
   if (revision === "plan-revision.synthetic.qi-1042.r1") return "sha256:synthetic-plan-r1";
   if (revision === "plan-revision.synthetic.qi-1042.r2") return "sha256:synthetic-plan-r2";
   return null;

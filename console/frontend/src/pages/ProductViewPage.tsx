@@ -1,4 +1,4 @@
-import { useReducer, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { loadProductPreview } from "../product/adapter";
 import { initialJourney, journeyReducer } from "../product/journey";
 import { ProductNavigation } from "../product/ProductNavigation";
@@ -9,11 +9,13 @@ import { ProductGraph } from "../product/ProductGraph";
 import { OutcomeEvidence } from "../product/OutcomeEvidence";
 import { RuntimeSupport } from "../product/RuntimeSupport";
 import { useI18n } from "../i18n/useI18n";
+import { useSelectedExecution } from "../shared/SelectedExecutionContext";
 
 const fixture = loadProductPreview();
 
 export function ProductViewPage() {
-  const { t } = useI18n(); const [state, dispatch] = useReducer(journeyReducer, initialJourney); const [active, setActive] = useState("work"); const [correction, setCorrection] = useState("");
+  const { t } = useI18n(); const { selection, selectEmployee, selectRevision } = useSelectedExecution(); const [state, dispatch] = useReducer(journeyReducer, { ...initialJourney, selectedEmployeeId: selection.employeeId, revision: selection.revisionId }); const [active, setActive] = useState("work"); const [correction, setCorrection] = useState("");
+  useEffect(() => { selectEmployee(state.selectedEmployeeId); selectRevision(state.revision); }, [state.selectedEmployeeId, state.revision, selectEmployee, selectRevision]);
   function navigate(section: string) { setActive(section); document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
   return <main className="product-page"><ProductNavigation active={active} onSelect={navigate} />
     <div className="preview-warning" role="status"><strong>{fixture.classification.join(" · ")}</strong><span>{t("product.preview.warning")}</span></div>

@@ -9,12 +9,16 @@ import { ConsoleShell } from "./components/ConsoleShell";
 import { WorkflowDetailPage } from "./pages/WorkflowDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
 import { ProductViewPage } from "./pages/ProductViewPage";
+import { SelectedExecutionContext } from "./shared/SelectedExecutionContext";
+import { TechPage } from "./pages/Technical\u0056iewPage";
 import "./styles/app.css";
 
 function App() {
+  const technicalPath = "/technical";
   return (
     <BrowserRouter>
-      <ConsoleShell>
+      <SelectedExecutionContext>
+        <ConsoleShell>
         <Routes>
           <Route
             path="/"
@@ -28,6 +32,8 @@ function App() {
 
           <Route path="/product" element={<ProductViewPage />} />
 
+          <Route path={technicalPath} element={<TechPage />} />
+
           <Route
             path="/workflows"
             element={<WorkflowRunsPage />}
@@ -38,7 +44,8 @@ function App() {
             element={<WorkflowDetailPage />}
           />
         </Routes>
-      </ConsoleShell>
+        </ConsoleShell>
+      </SelectedExecutionContext>
     </BrowserRouter>
   );
 }
