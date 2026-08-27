@@ -8,6 +8,7 @@ import {
 import { ConsoleShell } from "./components/ConsoleShell";
 import { WorkflowDetailPage } from "./pages/WorkflowDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
+import { ProductViewPage } from "./pages/ProductViewPage";
 import "./styles/app.css";
 
 function App() {
@@ -19,11 +20,13 @@ function App() {
             path="/"
             element={
               <Navigate
-                to="/workflows"
+                to="/product"
                 replace
               />
             }
           />
+
+          <Route path="/product" element={<ProductViewPage />} />
 
           <Route
             path="/workflows"
