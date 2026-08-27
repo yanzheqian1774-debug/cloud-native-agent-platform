@@ -170,3 +170,39 @@ does not grant Product MVS completion, Contract or Schema freeze, Provider
 certification, production Runtime, Knowledge or recovery support, Golden Demo
 readiness, production readiness, Release readiness, or Release acceptance. The
 next decision is the Human S5-REL-026 Merge Gate.
+
+## Terminal durable-integration and closure addendum — 2026-08-27
+
+The open/unmerged, future exact-main CI, and pending Merge Gate statements
+above are preserved as historical checkpoint observations that were accurate
+when the candidate and independent review evidence were written. They are
+superseded for current lifecycle navigation by these terminal facts:
+
+- PR #67 merged with durable-main merge commit
+  `b244fa5da3e670fa754278a0559da1a3049fb05a`.
+- That durable merge has first parent
+  `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`, second parent
+  `f89f1520b46087dd08f506f7a7b541744c451ba2`, and merged tree
+  `18b17ad135d36d308e90dce33480857571dab2a0`.
+- Source PR #66 merged automatically through that durable integration; its
+  source head remains `c9cd70108bb3b1bd77458d5340a63a41443b84c9`.
+- Exact-main CI run `33042871796` completed with `SUCCESS` at
+  `b244fa5da3e670fa754278a0559da1a3049fb05a`.
+- The Human-confirmed terminal state is `S5-REL-026 CLOSED /
+  PASS_WITH_CONSTRAINTS`.
+- The source and REL branches are retained; closure does not authorize branch
+  cleanup or history rewriting.
+
+The source head, reviewed candidate head, final PR head, and exact-main merge
+remain distinct provenance points. Closure records durable Technical View
+integration only. It does not claim Product MVS completion, Golden Demo or
+Release start/readiness, production Runtime/Provider/Knowledge completion,
+Provider certification, or release acceptance.
+
+For portfolio consistency at this reconciliation point, Product View is also
+terminal: PRs #64 and #65 are merged through durable Product merge
+`4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`, S5-IMPL-010 and S5-REL-025 are
+Human-confirmed closed, and exact-main CI run `33036620588` succeeded. Thus PRs
+#64–#67 are merged and S5-IMPL-010, S5-REL-025, S5-IMPL-011, and S5-REL-026
+are closed. S5-REL-027 is active for governance reconciliation only; no
+downstream task is authorized.

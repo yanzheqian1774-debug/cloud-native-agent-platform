@@ -22,6 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
+- Current durable-main head: `b244fa5da3e670fa754278a0559da1a3049fb05a`
+- Exact-main CI: run `33042871796`, `SUCCESS`
 - S5-PLAN-002 authorized durable-main baseline:
   `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
@@ -35,10 +37,11 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-REL-026 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human naming, Implementation, and Review Gates passed with constraints. The Technical View candidate preserves source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9` from Draft PR #66 over durable baseline `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9` through two-parent integration merge `7ce4ad11a65a43e7859f59aa5a921de849895eda` and evidence commit `367e2eba6cb81fbf48fdb9505ac9bfbc83731cae`. Source-head CI run `33040609882` and exact-candidate CI run `33041706623` passed both required jobs. Draft integration PR #67 remains open, unmerged, clean, and mergeable. The candidate is not durable main and S5-REL-026 is not closed; the Human Merge Gate remains pending. |
-| S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical View source is fixed at `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; Draft PR #66 remains open and unmerged at evidence-writing time. Closure does not imply durable integration, Product MVS completion, Golden Demo readiness, or release readiness. |
-| S5-REL-025 | `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS / MERGED_TO_DURABLE_MAIN` | Human Implementation, Review, and Merge Gates passed with constraints. The Product View candidate preserves merge `93bd1db550a0ca4c96c9c30962d40d97927fac31` and evidence successor `b81e0d7150081a327f3d586d2d1d3ada837b3105`; direct Product tests (33), full tests (649), Ruff, frontend lint/build, independent Product UX review, and exact-candidate CI run `33035843711` passed. PR #65 merged to durable main as `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`. Close Confirmation remains pending; no Product MVS completion claim is made. |
-| S5-IMPL-010 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product View source is fixed at `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; Draft PR #64 remains unmerged. Closure does not imply durable integration or Product MVS completion. |
+| S5-REL-027 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / IN_PROGRESS` | Human-allocated governance reconciliation at durable baseline `b244fa5da3e670fa754278a0559da1a3049fb05a`; exactly five authorized documentation paths; no downstream task allocated |
+| S5-REL-026 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PRs #66 and #67 merged; durable-main merge `b244fa5da3e670fa754278a0559da1a3049fb05a`; exact-main CI `33042871796` succeeded |
+| S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PR #66 merged automatically through Technical View durable integration |
+| S5-REL-025 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product source head `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; PRs #64 and #65 merged; durable-main merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`; exact-main CI `33036620588` succeeded |
+| S5-IMPL-010 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product source head `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; PR #64 merged automatically through Product View durable integration |
 | S5-PLAN-002 | `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS / READY_TO_CLOSE` | Checkpoint B plan convergence complete at exact baseline `7c1bc0266b39c913497fd67dcd4b7783f288dc57`; Pilot is recommended only and requires a separately allocated `TEST` Session and Human authorization; downstream Sessions remain inactive; Human Close Confirmation pending |
 | S5-ARCH-005 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Accepted Candidate artifact and source head |
 | S5-REL-004 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS / SESSION_CLOSED` | PR #42 merge plus imported Human confirmation |
@@ -86,26 +89,27 @@ secondary technical/conformance example. Implementation entry is conditionally
 granted as a route only; no future Session is active or authorized. Provider
 certification, production readiness and release acceptance remain not granted.
 
-Product View is durable on main through merged PR #65 at
-`4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`. S5-REL-026 is the only active
-Technical View integration owner. Its bounded candidate is not durable main;
-source PR #66 remains Draft and unmerged at evidence-writing time. Golden Demo
-implementation and Release have not started. The next decision is the Human
-S5-REL-026 Merge Gate; no Product MVS, Runtime or
+Product and Technical Views are both durably integrated. PRs #64 and #65 merged
+through Product durable merge `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`;
+PRs #66 and #67 merged through Technical durable merge and current main
+`b244fa5da3e670fa754278a0559da1a3049fb05a`. Exact-main CI run `33042871796`
+succeeded. S5-REL-027 is the sole active governance reconciliation Session.
+Golden Demo implementation and Release have not started. No Product MVS, Runtime or
 Provider certification, production Knowledge or recovery support, Golden Demo
 readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Decide the Human S5-ARCH-007 Close Confirmation.
-2. After closure, integrate S5-ARCH-007 through a separately authorized REL
-   Session, then separately authorize S5-IMPL-001.
+1. Complete S5-REL-027 and return it to the Human S5-REL-027 Review Gate.
+2. After that review, return to the Human Portfolio Sequence Gate; the next
+   portfolio implementation remains unresolved and no candidate ID is active
+   or authorized.
 3. Keep all public API, CRD, existing-schema, production integration, freeze,
    certification, readiness, and release decisions under their separate Gates.
 
-Tracks A–E and all recommended implementation Session IDs remain `NOT_ACTIVE /
-NOT_AUTHORIZED`. S5-ARCH-007 is closing architecture work only; its accepted
-R3 decision and A1 recommendation do not start implementation.
+Tracks A–E and all candidate future Session IDs remain `RECOMMENDED_ONLY /
+NOT_ACTIVE / NOT_AUTHORIZED`. Historical S5-ARCH-007 and S5-IMPL-001 navigation
+does not authorize immediate work.
 
 ## Source-of-truth links
 
