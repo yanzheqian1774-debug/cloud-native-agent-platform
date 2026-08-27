@@ -1,5 +1,7 @@
 import { productFixture } from "./fixture";
 import type { ProductFixture } from "./types";
+import { sharedExecutionSnapshot } from "../shared/executionSnapshotFixture";
+import { projectProductSnapshot } from "../shared/projections";
 
 const REQUIRED_CLASSIFICATIONS = ["DETERMINISTIC", "SYNTHETIC", "NON_AUTHORITATIVE", "TECHNICAL_PREVIEW"];
 const CARDINALITIES = new Set(["ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE", "MANY_TO_MANY"]);
@@ -13,6 +15,10 @@ function deepFreeze<T>(value: T): Readonly<T> {
 }
 
 export function loadProductPreview(): ProductFixture {
+  const siblingProjection = projectProductSnapshot(sharedExecutionSnapshot);
+  if (productFixture.platformExecutionIdentity !== siblingProjection.platformExecutionIdentity || productFixture.graphSnapshotId !== siblingProjection.graphSnapshotId) {
+    throw new Error("PRODUCT_SHARED_PROJECTION_MISMATCH");
+  }
   if (productFixture.classification.some((value, index) => value !== REQUIRED_CLASSIFICATIONS[index])) {
     throw new Error("PRODUCT_PREVIEW_CLASSIFICATION_INVALID");
   }
