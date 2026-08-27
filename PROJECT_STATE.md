@@ -35,7 +35,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-REL-026 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / INTEGRATED_CANDIDATE_VALIDATION` | Human naming and Implementation Gates passed. The Technical View candidate preserves source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9` from Draft PR #66 over durable baseline `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9` through two-parent integration merge `7ce4ad11a65a43e7859f59aa5a921de849895eda`. Source-head CI run `33040609882` passed. The candidate is not durable main; its Draft integration PR, exact-candidate CI, and Human Review Gate remain pending. |
+| S5-REL-026 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human naming, Implementation, and Review Gates passed with constraints. The Technical View candidate preserves source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9` from Draft PR #66 over durable baseline `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9` through two-parent integration merge `7ce4ad11a65a43e7859f59aa5a921de849895eda` and evidence commit `367e2eba6cb81fbf48fdb9505ac9bfbc83731cae`. Source-head CI run `33040609882` and exact-candidate CI run `33041706623` passed both required jobs. Draft integration PR #67 remains open, unmerged, clean, and mergeable. The candidate is not durable main and S5-REL-026 is not closed; the Human Merge Gate remains pending. |
 | S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical View source is fixed at `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; Draft PR #66 remains open and unmerged at evidence-writing time. Closure does not imply durable integration, Product MVS completion, Golden Demo readiness, or release readiness. |
 | S5-REL-025 | `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS / MERGED_TO_DURABLE_MAIN` | Human Implementation, Review, and Merge Gates passed with constraints. The Product View candidate preserves merge `93bd1db550a0ca4c96c9c30962d40d97927fac31` and evidence successor `b81e0d7150081a327f3d586d2d1d3ada837b3105`; direct Product tests (33), full tests (649), Ruff, frontend lint/build, independent Product UX review, and exact-candidate CI run `33035843711` passed. PR #65 merged to durable main as `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`. Close Confirmation remains pending; no Product MVS completion claim is made. |
 | S5-IMPL-010 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Product View source is fixed at `18fa8f9a0eb5caef18772063c28c8fd414d6959f`; Draft PR #64 remains unmerged. Closure does not imply durable integration or Product MVS completion. |
@@ -91,7 +91,7 @@ Product View is durable on main through merged PR #65 at
 Technical View integration owner. Its bounded candidate is not durable main;
 source PR #66 remains Draft and unmerged at evidence-writing time. Golden Demo
 implementation and Release have not started. The next decision is the Human
-S5-REL-026 Review Gate after exact-candidate CI; no Product MVS, Runtime or
+S5-REL-026 Merge Gate; no Product MVS, Runtime or
 Provider certification, production Knowledge or recovery support, Golden Demo
 readiness, production readiness, or release acceptance is granted.
 

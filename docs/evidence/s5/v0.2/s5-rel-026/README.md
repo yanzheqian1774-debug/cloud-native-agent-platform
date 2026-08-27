@@ -7,7 +7,8 @@
 - REL ID authority: `HUMAN_ALLOCATED`
 - Human naming decision: `PASS`
 - Human Implementation Gate: `PASS_WITH_CONSTRAINTS`
-- Checkpoint: `A — BOUNDED_DURABLE_INTEGRATION_CANDIDATE`
+- Checkpoint: `B — INDEPENDENT_INTEGRATION_REVIEW_AND_MERGE_READINESS`
+- Human Review Gate: `PASS_WITH_CONSTRAINTS`
 - Durable baseline: `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`
 - Source session: Human-confirmed closed `S5-IMPL-011`
 - Source branch: `codex/s5-impl-011-technical-view`
@@ -17,7 +18,8 @@
 - Integration merge: `7ce4ad11a65a43e7859f59aa5a921de849895eda`
 - First parent: `4d23f76e6f8a1afa1ada45ac8ac3fb379aa811f9`
 - Second parent: `c9cd70108bb3b1bd77458d5340a63a41443b84c9`
-- Draft integration PR: pending creation after local candidate validation
+- Evidence commit and reviewed candidate: `367e2eba6cb81fbf48fdb9505ac9bfbc83731cae`
+- Draft integration PR: #67, `OPEN / DRAFT / UNMERGED / CLEAN / MERGEABLE`
 
 The merge is explicit and provenance-preserving. It does not squash, rebase,
 cherry-pick, fast-forward, amend, or rewrite the two source commits:
@@ -111,7 +113,8 @@ Local integrated-candidate validation on 2026-08-27 passed:
 - 60 combined Product/Technical tests passed;
 - exactly 27 root-shim Technical nodes and zero duplicates;
 - 676 tests passed in standard collection/full `make check`;
-- Ruff lint passed and 109 files were already formatted;
+- Ruff lint passed; Ruff inspected 109 files and reported them already
+  formatted, rewriting zero files;
 - frontend clean install and ESLint passed;
 - TypeScript compilation and production build passed with 62 modules transformed;
 - exact 30-path, source-blob, API/CRD/schema, backend DTO, Canonical Graph,
@@ -125,9 +128,18 @@ validated URL context and history, accessibility, responsive presentation,
 honest empty/error/unavailable/downstream states, and zero browser console
 warnings or errors.
 
-The exact final candidate head and its required Quality Gates and Frontend
-Quality Gates are pending the evidence commit, Draft integration PR, and
-GitHub Actions run. Source-head CI is not substituted for candidate-head CI.
+GitHub Actions run `33041706623` targeted the exact reviewed candidate head
+`367e2eba6cb81fbf48fdb9505ac9bfbc83731cae` and completed successfully:
+
+- Quality Gates: `SUCCESS`
+- Frontend Quality Gates: `SUCCESS`
+- all expected checkout, toolchain, dependency, lint, test, TypeScript, and
+  production-build steps executed.
+
+This evidence update is a bounded, linear post-review successor because a
+commit cannot contain its own SHA or the CI run created only after it is
+pushed. Its exact head and CI remain GitHub/PR-native evidence. Source-head CI
+is not substituted for candidate-head or post-review evidence-head CI.
 
 ### 3. Future exact-main-merge CI
 
@@ -136,6 +148,16 @@ merge must be validated independently at its exact merge SHA; neither source
 CI nor integration-candidate CI constitutes future exact-main-merge CI.
 
 ## Rollback and authority limits
+
+Independent prospective merge review against unchanged `origin/main` found
+zero conflicts and the same exact 30-path candidate content. GitHub must use
+**Create a merge commit**; squash or rebase merge would discard the preserved
+internal integration merge and its evidence successors. The future durable
+rollback command is:
+
+```text
+git revert -m 1 <future-pr-67-main-merge-commit>
+```
 
 Rollback is one bounded revert of integration merge
 `7ce4ad11a65a43e7859f59aa5a921de849895eda` to first parent
@@ -147,4 +169,4 @@ This candidate is not merged to durable main and S5-REL-026 is not closed. It
 does not grant Product MVS completion, Contract or Schema freeze, Provider
 certification, production Runtime, Knowledge or recovery support, Golden Demo
 readiness, production readiness, Release readiness, or Release acceptance. The
-next decision is the Human S5-REL-026 Review Gate after exact-candidate CI.
+next decision is the Human S5-REL-026 Merge Gate.
