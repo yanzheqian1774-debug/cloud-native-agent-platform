@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import os
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from hashlib import sha256
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from agent_core.execution_evidence import (
+    AuthorizationDecision as EvidenceAuthorizationDecision,
+)
+from agent_core.execution_evidence import (
+    EvidenceEventType,
+    EvidenceRepositoryError,
+    ExecutionEvidenceRecord,
+    ExecutionEvidenceRepository,
+    OutcomeClassification,
+    SQLiteExecutionEvidenceRepository,
+)
 from agent_core.interface_spine.v0_2 import InternalExecutionEnvelope
 from agent_gateway.capability import (
     AuthorizationContext,
@@ -66,6 +80,11 @@ class ExecutionClassification(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class EvidenceAvailability(StrEnum):
+    AVAILABLE = "AVAILABLE"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
 @dataclass(frozen=True, slots=True)
 class CapabilityPlan:
     capability: CapabilityIdentity
@@ -120,6 +139,8 @@ class InternalExecutionOutcome:
     result: str | None
     diagnostic: str
     retry_safe: bool
+    evidence_availability: EvidenceAvailability = EvidenceAvailability.UNAVAILABLE
+    evidence_reason_code: str = "EVIDENCE_REPOSITORY_NOT_CONFIGURED"
 
 
 class TaskExecutionCoordinator:
@@ -130,9 +151,17 @@ class TaskExecutionCoordinator:
         *,
         native_provider: NativeExecutionPort,
         capability_gateway: CapabilityExecutionPort | None = None,
+        evidence_repository: ExecutionEvidenceRepository | None = None,
+        security_domain: str = "default",
+        clock: Callable[[], str] = lambda: (
+            datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        ),
     ) -> None:
         self._native_provider = native_provider
         self._capability_gateway = capability_gateway
+        self._evidence_repository = evidence_repository
+        self._security_domain = security_domain
+        self._clock = clock
 
     def execute(
         self,
@@ -177,30 +206,36 @@ class TaskExecutionCoordinator:
                 if runtime.state is ExecutionState.UNKNOWN
                 else ExecutionClassification.FAILED
             )
-            return InternalExecutionOutcome(
-                classification=classification,
-                platform_execution_identity=identity,
-                requested_runtime=requested_runtime,
-                effective_runtime=effective_runtime,
-                runtime=runtime,
-                capability=None,
-                result=None,
-                diagnostic=runtime.reason.value,
-                retry_safe=False,
+            return self._with_evidence(
+                context,
+                InternalExecutionOutcome(
+                    classification=classification,
+                    platform_execution_identity=identity,
+                    requested_runtime=requested_runtime,
+                    effective_runtime=effective_runtime,
+                    runtime=runtime,
+                    capability=None,
+                    result=None,
+                    diagnostic=runtime.reason.value,
+                    retry_safe=False,
+                ),
             )
 
         capability = self._execute_capability(context)
         if capability is None:
-            return InternalExecutionOutcome(
-                classification=ExecutionClassification.SUCCEEDED,
-                platform_execution_identity=identity,
-                requested_runtime=requested_runtime,
-                effective_runtime=effective_runtime,
-                runtime=runtime,
-                capability=None,
-                result=runtime.output,
-                diagnostic="TASK_RUNTIME_SUCCEEDED",
-                retry_safe=False,
+            return self._with_evidence(
+                context,
+                InternalExecutionOutcome(
+                    classification=ExecutionClassification.SUCCEEDED,
+                    platform_execution_identity=identity,
+                    requested_runtime=requested_runtime,
+                    effective_runtime=effective_runtime,
+                    runtime=runtime,
+                    capability=None,
+                    result=runtime.output,
+                    diagnostic="TASK_RUNTIME_SUCCEEDED",
+                    retry_safe=False,
+                ),
             )
 
         if capability.status is CapabilityStatus.SUCCEEDED:
@@ -215,16 +250,113 @@ class TaskExecutionCoordinator:
         else:
             classification = ExecutionClassification.FAILED
             result = None
+        return self._with_evidence(
+            context,
+            InternalExecutionOutcome(
+                classification=classification,
+                platform_execution_identity=identity,
+                requested_runtime=requested_runtime,
+                effective_runtime=effective_runtime,
+                runtime=runtime,
+                capability=capability,
+                result=result,
+                diagnostic=capability.diagnostic,
+                retry_safe=capability.retry_safe,
+            ),
+        )
+
+    def _with_evidence(
+        self,
+        context: TaskExecutionContext,
+        outcome: InternalExecutionOutcome,
+    ) -> InternalExecutionOutcome:
+        """Append normalized evidence without falsifying completed execution."""
+        if self._evidence_repository is None:
+            return outcome
+        capability = outcome.capability
+        if capability is None:
+            authorization = EvidenceAuthorizationDecision.NOT_APPLICABLE
+            capability_identity = None
+            provider_calls = 0
+            provider_correlation = outcome.runtime.correlation.native_invocation_id
+        else:
+            authorization = EvidenceAuthorizationDecision(
+                capability.authorization.value
+            )
+            capability_identity = capability.capability.value
+            provider_calls = capability.invocation.attempts
+            provider_correlation = (
+                capability.native_request_id.value
+                if capability.native_request_id is not None
+                else outcome.runtime.correlation.native_invocation_id
+            )
+        source_task = context.envelope.source_task_ref
+        task_identity = source_task.name if source_task is not None else "task.unbound"
+        record = ExecutionEvidenceRecord(
+            evidence_record_id=(
+                f"evidence.native.{outcome.platform_execution_identity}.1.1"
+            ),
+            namespace=context.envelope.definition_ref.namespace,
+            security_domain=self._security_domain,
+            platform_execution_identity=outcome.platform_execution_identity,
+            workflow_identity="workflow.unbound",
+            task_identity=task_identity,
+            attempt_ordinal=1,
+            event_ordinal=1,
+            event_type=EvidenceEventType.EXECUTION_OUTCOME,
+            occurred_at=self._clock(),
+            runtime_classification="NATIVE",
+            selected_instance_identity=context.envelope.selected_instance_id.value,
+            capability_identity=capability_identity,
+            authorization_decision=authorization,
+            reason_code=outcome.diagnostic,
+            provider_correlation_id=provider_correlation,
+            provider_call_count=provider_calls,
+            outcome_classification=OutcomeClassification(outcome.classification.value),
+            limitation_code=(
+                "WORKFLOW_IDENTITY_UNBOUND"
+                if source_task is not None
+                else "TASK_AND_WORKFLOW_IDENTITY_UNBOUND"
+            ),
+        )
+        try:
+            self._evidence_repository.append(record)
+        except EvidenceRepositoryError as exc:
+            return InternalExecutionOutcome(
+                **{
+                    field: getattr(outcome, field)
+                    for field in (
+                        "classification",
+                        "platform_execution_identity",
+                        "requested_runtime",
+                        "effective_runtime",
+                        "runtime",
+                        "capability",
+                        "result",
+                        "diagnostic",
+                        "retry_safe",
+                    )
+                },
+                evidence_availability=EvidenceAvailability.UNAVAILABLE,
+                evidence_reason_code=exc.reason_code,
+            )
         return InternalExecutionOutcome(
-            classification=classification,
-            platform_execution_identity=identity,
-            requested_runtime=requested_runtime,
-            effective_runtime=effective_runtime,
-            runtime=runtime,
-            capability=capability,
-            result=result,
-            diagnostic=capability.diagnostic,
-            retry_safe=capability.retry_safe,
+            **{
+                field: getattr(outcome, field)
+                for field in (
+                    "classification",
+                    "platform_execution_identity",
+                    "requested_runtime",
+                    "effective_runtime",
+                    "runtime",
+                    "capability",
+                    "result",
+                    "diagnostic",
+                    "retry_safe",
+                )
+            },
+            evidence_availability=EvidenceAvailability.AVAILABLE,
+            evidence_reason_code="EVIDENCE_RECORDED",
         )
 
     def _execute_capability(
@@ -358,6 +490,16 @@ def build_default_coordinator(
         gateway = CapabilityGateway(
             DeclaredCapabilityAuthorization(capability), provider
         )
+    database_location = os.environ.get("AGENT_EXECUTION_EVIDENCE_DB")
+    evidence_repository = (
+        SQLiteExecutionEvidenceRepository(Path(database_location))
+        if database_location
+        else None
+    )
+    security_domain = os.environ.get("AGENT_EXECUTION_SECURITY_DOMAIN", "default")
     return TaskExecutionCoordinator(
-        native_provider=NativeRuntimeProvider(), capability_gateway=gateway
+        native_provider=NativeRuntimeProvider(),
+        capability_gateway=gateway,
+        evidence_repository=evidence_repository,
+        security_domain=security_domain,
     )

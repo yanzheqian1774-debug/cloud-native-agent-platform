@@ -3,6 +3,7 @@ export type PreviewClassification =
   | "SYNTHETIC"
   | "NON_AUTHORITATIVE"
   | "TECHNICAL_PREVIEW"
+  | "LIVE"
   | "NO_NETWORK"
   | "NO_RUNTIME_OR_PROVIDER_INVOCATION";
 
@@ -84,7 +85,9 @@ export interface SelectedExecutionContextValue {
 }
 
 export interface SharedExecutionSnapshot {
-  snapshotKind: "BOUNDED_SYNTHETIC_FRONTEND_SNAPSHOT";
+  snapshotKind: "BOUNDED_SYNTHETIC_FRONTEND_SNAPSHOT" | "AUTHORIZED_LIVE_EXECUTION_SNAPSHOT";
+  readModelState?: "COMPLETE" | "PARTIAL" | "STALE";
+  sharedSnapshotId?: string;
   classification: readonly PreviewClassification[];
   selectedContext: SelectedExecutionContextValue;
   questionKey: string;
@@ -121,7 +124,9 @@ export interface ProductEdge { id: string; source: string; target: string; rawRe
 export interface ProductNode { id: string; type: string; labelKey: string; phase: ExecutionState }
 
 export interface ProductFixture {
-  classification: readonly ["DETERMINISTIC", "SYNTHETIC", "NON_AUTHORITATIVE", "TECHNICAL_PREVIEW"];
+  classification: readonly PreviewClassification[];
+  readModelState?: "COMPLETE" | "PARTIAL" | "STALE";
+  sharedSnapshotId?: string;
   platformExecutionIdentity: string;
   graphSnapshotId: string;
   projectionContext: "PRODUCT";

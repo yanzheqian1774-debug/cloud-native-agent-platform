@@ -37,6 +37,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| S5-IMPL-014 | `IMPLEMENTATION / AUTHORIZED / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Native-only implementation on branch `codex/s5-impl-014-native-evidence-shared-read-model` from exact durable baseline `13bc16f746a58912bc093ff249ff390250ce20cf`; exact 26-path scope; bounded single-node SQLite evidence and internal Technical Preview read model only; unmerged and not durable main |
 | S5-ARCH-010 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Active architecture candidate, not completed, merged, or durable main; Human Review Gate passed with constraints; Draft PR #69 contains Hybrid F and the bounded single-node SQLite direction plus one linear safety clarification; implementation task ID is unresolved and no implementation or downstream Session is authorized |
 | S5-REL-027 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #68 merged into durable main `4d5da13e519627ba40cfdc632e3662f5cf965626`; exact-main CI `33046211942` succeeded; the prior pre-close row was expected terminal snapshot lag; reopen prohibited |
 | S5-REL-026 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PRs #66 and #67 merged; durable-main merge `b244fa5da3e670fa754278a0559da1a3049fb05a`; exact-main CI `33042871796` succeeded |
@@ -103,11 +104,10 @@ readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Return Draft PR #69 to the Human S5-ARCH-010 Merge Gate. Keep it Draft and
-   unmerged; no implementation or downstream Session is active or authorized.
-2. If the architecture checkpoint closes and integrates, separately gate the
-   exact Native implementation paths, SQLite persistence/security, internal
-   DTO/API compatibility, evidence capture, and Product/Technical live adapters.
+1. Return the S5-IMPL-014 Draft PR to the Human Review Gate. Keep it Draft and
+   unmerged; do not start Checkpoint B automatically.
+2. Treat its SQLite persistence as bounded local single-node evidence only and
+   its API as an internal Technical Preview boundary, not a public Contract.
 3. Keep all public API, CRD, existing-schema, production integration, freeze,
    certification, readiness, and release decisions under their separate Gates.
 
