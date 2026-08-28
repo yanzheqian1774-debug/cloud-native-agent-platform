@@ -6,6 +6,18 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [User Intervention, Preference, Feedback, and Governed Optimization Boundary v1](S5-ARCH-012-USER-INTERVENTION-PREFERENCE-FEEDBACK-GOVERNED-OPTIMIZATION-BOUNDARY-V1.md)
+  defines the Human-approved-with-constraints Governed Successor and Cold
+  Optimization Boundary. It preserves distinct typed authorities for correction,
+  intervention, feedback, preferences/consent/deletion, candidates, evaluation,
+  future publication/application, and rollback. v0.2 preference and candidate
+  behavior is preview-only and `NOT_APPLIED`; governed publication is reserved for
+  v0.3. This is architecture-only and changes no implementation, public API, CRD,
+  Canonical Graph, dependency, Workflow, Knowledge, Runtime, Demo, or Release state.
+  Checkpoint B independently tightened deduplication, stale/revoked-input handling,
+  deletion inference safety, projection parity, metrics, rollback, and threat coverage.
+  It is `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS /
+  READY_FOR_HUMAN_S5_ARCH_012_MERGE_GATE`.
 - [Product Intent, Dynamic Work, Role, and Knowledge Consumption Boundary v1](S5-ARCH-011-PRODUCT-INTENT-DYNAMIC-WORK-ROLE-KNOWLEDGE-CONSUMPTION-BOUNDARY-V1.md)
   defines the Human-approved-with-constraints bounded v0.2 authority and contract
   model from a business question to an immutable approved Workflow, deterministic
@@ -17,8 +29,10 @@ Source code and tests remain authoritative for implemented behavior.
   production claims remain unauthorized. Independent Checkpoint B added one bounded
   safety clarification for durable-architecture mapping, threat completeness, package
   gates, the separate Preference/Intervention/Optimization review, and rollback. It is
-  `CLOSING / AUTHORIZED / PASS_WITH_CONSTRAINTS /
-  READY_FOR_HUMAN_S5_ARCH_011_MERGE_GATE`.
+  Human-confirmed closure is durably forward-recorded after PR #72 merged at
+  `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; the Session is
+  `CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` and reopening is
+  prohibited.
 - [Production Execution Evidence and Shared Read Model Boundary v1](S5-ARCH-010-PRODUCTION-EXECUTION-EVIDENCE-SHARED-READ-MODEL-BOUNDARY-V1.md)
   records the Human-approved Hybrid F authority model and bounded single-node
   SQLite persistence direction for a future v0.2 implementation slice.
