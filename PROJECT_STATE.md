@@ -22,10 +22,10 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `329da75d802886300a6f721c0205d1e5b23c2074`
-- Exact-main CI: run `33139763263`, `SUCCESS`
+- Current durable-main head: `4713b797c53121f24cb70171926318d575b7fcc8`
+- Exact-main CI: run `33156199625`, `SUCCESS`
 - S5-PLAN-003 authorized durable-main baseline:
-  `329da75d802886300a6f721c0205d1e5b23c2074`
+  `05bac769b61f42aa5643a8496861e8e962c6bf5b`
 - S5-PLAN-002 authorized durable-main baseline:
   `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
@@ -39,7 +39,8 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-IMPL-015 | `ACTIVE / IMPLEMENTATION_COMPLETE / REVIEW_READY / CHECKPOINT_C / AWAITING_EXACT_HEAD_CI` | Package 1 bounded Intent and Canonical Planning implementation commit `388c37b4ecdf22502f1578fb470d0b40ac048891` was pushed on branch `codex/s5-impl-015-bounded-intent-canonical-planning`; Draft PR #75 targets `main`; final terminal Evidence commit and exact-head CI remain pending; the PR is unmerged and the Session is not closed or durably integrated; no downstream Package, Demo, REL, or Release authority is granted |
+| S5-REL-029 | `ACTIVE / DURABLE_INTEGRATION_COMPLETE / RECONCILIATION_PREPARED / AWAITING_RECONCILIATION_INTEGRATION_AND_HUMAN_CLOSE_CONFIRMATION` | S5-IMPL-015 PR #75 merged as `4713b797c53121f24cb70171926318d575b7fcc8` with ordered parents `05bac769b61f42aa5643a8496861e8e962c6bf5b` and `fbfd3889b587af08b991525a5abda2b4f994562c`; exact-main CI run `33156199625` succeeded; this governance reconciliation remains unmerged and Human Close Confirmation is `NO` |
+| S5-IMPL-015 | `ACTIVE / IMPLEMENTATION_COMPLETE / CHECKPOINT_C_PASS_WITH_CONSTRAINTS / DURABLY_INTEGRATED / AWAITING_HUMAN_CLOSE_CONFIRMATION` | Package 1 source commits `388c37b4ecdf22502f1578fb470d0b40ac048891` and `fbfd3889b587af08b991525a5abda2b4f994562c`; exact-head CI run `33153148233` succeeded; PR #75 merged through S5-REL-029 at durable main `4713b797c53121f24cb70171926318d575b7fcc8`; exact-main CI run `33156199625` succeeded; Session closure is not granted and no downstream Package, Demo, or Release authority exists |
 | S5-PLAN-003 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #74 merged at durable main `05bac769b61f42aa5643a8496861e8e962c6bf5b`; exact-main CI run `33145152123` succeeded; terminal closure is forward-recorded without reopening; ten logical packages retain mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B still requires a separate G2; closure did not itself start or allocate downstream implementation |
 | S5-ARCH-012 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #73 merged at durable main `329da75d802886300a6f721c0205d1e5b23c2074`; exact-main CI run `33139763263` succeeded; closure is forward-recorded without reopening; preference/candidate scope remains preview-only and `DRAFT / NOT_APPLIED`; no implementation was authorized by the Session |
 | S5-ARCH-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #72 merged at durable main `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; exact-main CI run `33083580433` succeeded; exactly five architecture/evidence/governance paths plus one bounded linear safety correction; closure is forward-recorded without reopening; no implementation was authorized by the Session |
@@ -122,10 +123,17 @@ Product MVS, Runtime or Provider certification, production Knowledge or recovery
 support, Golden Demo readiness, production readiness, or release acceptance is
 granted.
 
+S5-IMPL-015 Package 1 is now durably integrated through PR #75 and S5-REL-029 at
+main `4713b797c53121f24cb70171926318d575b7fcc8`; exact-main CI run
+`33156199625` succeeded. Both S5-IMPL-015 and S5-REL-029 remain active and await
+Human Close Confirmation. The S5-REL-029 reconciliation PR must be integrated by
+a separate Human Gate. Package 2–4, Golden Demo, Enhanced Golden Demo, and
+Release remain unauthorized and have not started.
+
 ## Immediate next work
 
-1. Preserve S5-PLAN-003 as terminally closed; allocate and authorize every
-   downstream Session through its own Human Gate.
+1. Complete the separately gated S5-REL-029 governance reconciliation and Human
+   Close Confirmations; do not start downstream work from integration alone.
 2. Preserve the model-assisted/untrusted candidate boundary, deterministic
    canonicalization and exact-digest approval, authorization-first matching and
    Knowledge retrieval, Native-only placement, and immutable Evidence/successor
