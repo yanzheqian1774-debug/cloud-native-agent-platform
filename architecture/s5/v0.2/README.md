@@ -6,6 +6,19 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [Definition Publication and Matchability Authority v1](S5-ARCH-013-DEFINITION-PUBLICATION-MATCHABILITY-AUTHORITY-V1.md)
+  defines the minimum internal v0.2 authority between authoring approval and
+  Package 2 matching. It separates immutable Definition Versions, explicit
+  publication, scoped match authorization, fail-closed effective-candidate
+  projection, and read-only advisory matching. Checkpoint B completes the trusted
+  catalog supply, deterministic snapshot, conflict/disclosure, exact handoff-path,
+  reuse-classification, and future validation-matrix audit. Checkpoint C records
+  terminal architecture Evidence and handoff preparation. It is `ACTIVE /
+  ARCHITECTURE_COMPLETE / REVIEW_READY / AWAITING_DURABLE_INTEGRATION`;
+  S5-IMPL-030 and all downstream work remain frozen. No public API, CRD, shared
+  DTO, Canonical Graph, persistence,
+  dependency, Workflow CI, frontend, implementation, Demo, or Release change is
+  authorized.
 - [User Intervention, Preference, Feedback, and Governed Optimization Boundary v1](S5-ARCH-012-USER-INTERVENTION-PREFERENCE-FEEDBACK-GOVERNED-OPTIMIZATION-BOUNDARY-V1.md)
   defines the Human-approved-with-constraints Governed Successor and Cold
   Optimization Boundary. It preserves distinct typed authorities for correction,
