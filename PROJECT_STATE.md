@@ -39,7 +39,8 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-PLAN-003 | `CLOSING / AUTHORIZED_WITH_CONSTRAINTS / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human-authorized Product Intent and Golden Demo Portfolio rebaseline at exact baseline `329da75d802886300a6f721c0205d1e5b23c2074`; Checkpoint A head `686928e146f1471ffdb18f96192127552327852b`; Draft PR #74; independent consistency/sequence review authorized with constraints; ten logical packages with mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B requires a separate G2; one bounded linear correction; no downstream task ID is allocated or active |
+| S5-IMPL-015 | `ACTIVE / IMPLEMENTATION_COMPLETE / REVIEW_READY / CHECKPOINT_C / AWAITING_EXACT_HEAD_CI` | Package 1 bounded Intent and Canonical Planning implementation commit `388c37b4ecdf22502f1578fb470d0b40ac048891` was pushed on branch `codex/s5-impl-015-bounded-intent-canonical-planning`; Draft PR #75 targets `main`; final terminal Evidence commit and exact-head CI remain pending; the PR is unmerged and the Session is not closed or durably integrated; no downstream Package, Demo, REL, or Release authority is granted |
+| S5-PLAN-003 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #74 merged at durable main `05bac769b61f42aa5643a8496861e8e962c6bf5b`; exact-main CI run `33145152123` succeeded; terminal closure is forward-recorded without reopening; ten logical packages retain mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B still requires a separate G2; closure did not itself start or allocate downstream implementation |
 | S5-ARCH-012 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #73 merged at durable main `329da75d802886300a6f721c0205d1e5b23c2074`; exact-main CI run `33139763263` succeeded; closure is forward-recorded without reopening; preference/candidate scope remains preview-only and `DRAFT / NOT_APPLIED`; no implementation was authorized by the Session |
 | S5-ARCH-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #72 merged at durable main `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; exact-main CI run `33083580433` succeeded; exactly five architecture/evidence/governance paths plus one bounded linear safety correction; closure is forward-recorded without reopening; no implementation was authorized by the Session |
 | S5-REL-028 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #70 and PR #71 merged at durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exact-main CI run `33072486290` succeeded; terminal pre-close row was expected governance lag; reopen prohibited |
@@ -108,21 +109,23 @@ is durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; its earlier pre-clos
 expected terminal governance lag and is forward-recorded without reopening it.
 S5-ARCH-010, S5-ARCH-011, and S5-ARCH-012 are Human-confirmed closed. Their
 accepted architecture is not implementation evidence. S5-PLAN-003 now owns the
-bounded supplier-quality Product Intent and Golden Demo Portfolio rebaseline.
-Its ten logical packages and all implementation, integration, test, Demo,
-Solution, and release identifiers remain `UNALLOCATED / NOT_ACTIVE /
-NOT_AUTHORIZED`. S5-PLAN-002 remains the unrelated Harness & Parallel Delivery
-Readiness Plan and is unchanged.
+bounded supplier-quality Product Intent and Golden Demo Portfolio rebaseline and
+is Human-confirmed closed after PR #74 and exact-main CI. Its ten logical packages
+retain the accepted sequence. Closure did not itself allocate or authorize any
+downstream implementation, integration, test, Demo, Solution, or release Session.
+S5-PLAN-002 remains the unrelated Harness & Parallel Delivery Readiness Plan and
+is unchanged.
 
-No downstream implementation task has started. Golden Demo implementation and
-Release have not started. No Product MVS, Runtime or
-Provider certification, production Knowledge or recovery support, Golden Demo
-readiness, production readiness, or release acceptance is granted.
+S5-PLAN-003 terminal closure does not establish downstream implementation state.
+Golden Demo implementation and Release were not started by that Plan Session. No
+Product MVS, Runtime or Provider certification, production Knowledge or recovery
+support, Golden Demo readiness, production readiness, or release acceptance is
+granted.
 
 ## Immediate next work
 
-1. Return S5-PLAN-003 to its Human Merge Gate; do not start implementation or
-   any downstream Session.
+1. Preserve S5-PLAN-003 as terminally closed; allocate and authorize every
+   downstream Session through its own Human Gate.
 2. Preserve the model-assisted/untrusted candidate boundary, deterministic
    canonicalization and exact-digest approval, authorization-first matching and
    Knowledge retrieval, Native-only placement, and immutable Evidence/successor
@@ -133,9 +136,8 @@ readiness, production readiness, or release acceptance is granted.
    integration, certification, readiness, and release decisions under their
    separate Gates.
 
-Tracks A–E and all candidate future Session IDs remain `RECOMMENDED_ONLY /
-NOT_ACTIVE / NOT_AUTHORIZED`. Historical S5-ARCH-007 and S5-IMPL-001 navigation
-does not authorize immediate work.
+S5-PLAN-003 recommendations do not allocate or activate future Session IDs.
+Historical S5-ARCH-007 and S5-IMPL-001 navigation does not authorize work.
 
 ## Source-of-truth links
 
