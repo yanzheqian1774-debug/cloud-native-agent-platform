@@ -116,6 +116,22 @@ and exact-head CI facts are recorded only after they exist. PR merge, Durable
 Integration, exact-main CI, Human closure, REL and downstream work remain outside
 S5-IMPL-015 authority.
 
+## Checkpoint C Git and PR handoff
+
+- Authorized baseline: `05bac769b61f42aa5643a8496861e8e962c6bf5b`.
+- Implementation commit: `388c37b4ecdf22502f1578fb470d0b40ac048891`.
+- Commit parent: `05bac769b61f42aa5643a8496861e8e962c6bf5b`.
+- Branch: `codex/s5-impl-015-bounded-intent-canonical-planning`.
+- Push: normal, non-force push to the authorized branch only.
+- Pull request: Draft PR #75, head is the authorized branch and base is `main`.
+- PR state at recording: open and unmerged.
+- Final Evidence commit and exact-head CI: pending at this recording point.
+
+The PR description records Package 1 scope, Portfolio and Architecture authority,
+validation, known limitations, boundary exclusions, and the requirement for a
+separately Human-authorized REL Session before Durable Integration. S5-IMPL-015 does
+not authorize PR merge.
+
 ## Governance reconciliation
 
 S5-PLAN-003 was Human-confirmed closed after PR #74 merged at durable main
