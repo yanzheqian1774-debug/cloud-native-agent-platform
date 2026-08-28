@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "knowledge-pack.v1",
+  "knowledgePackId": "supplier-quality-pack",
+  "knowledgePackVersion": "v1",
+  "tenantId": "tenant-a",
+  "securityDomain": "supplier-quality",
+  "owner": "quality-office",
+  "classification": "internal-demo",
+  "provenance": "DEMO_CONFIGURATION",
+  "authority": "NON_PRODUCTION_DEMO_CONFIGURATION_ONLY",
+  "canonicalDigest": "8d05909929e2bf0f60113b40eef05d66956aab6213ae0709d43561ab16f528dc",
+  "documents": [
+    {
+      "documentId": "document-8d-procedure",
+      "documentVersion": "v1",
+      "documentType": "procedure",
+      "path": "8d-procedure-v1.md",
+      "sha256": "b0920d209d3fe0c5cb7b6c5ada2b1698d6b52a3474b117895d8f6b3a2940e5b1",
+      "effectiveAt": "2026-08-29T00:00:00Z",
+      "expiresAt": "2027-08-29T00:00:00Z",
+      "status": "AVAILABLE"
+    }
+  ]
+}
