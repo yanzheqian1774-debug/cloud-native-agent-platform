@@ -6,9 +6,9 @@
 | --- | --- |
 | Session | `S5-PLAN-003` |
 | Type | `PLAN` |
-| Lifecycle | `IMPLEMENTATION` |
-| Checkpoint | `A — V0_2_PORTFOLIO_REBASELINE_AND_EXECUTION_SEQUENCE` |
-| Human decision | `AUTHORIZED_WITH_CONSTRAINTS` |
+| Lifecycle | `CLOSING` |
+| Checkpoint | `B — INDEPENDENT_PORTFOLIO_CONSISTENCY_SEQUENCE_AND_MERGE_READINESS` |
+| Human decision | Checkpoint A `AUTHORIZED_WITH_CONSTRAINTS`; Checkpoint B review `AUTHORIZED_WITH_CONSTRAINTS` |
 | Baseline | `329da75d802886300a6f721c0205d1e5b23c2074` |
 | Exact-main CI | `33139763263 / SUCCESS` |
 | Branch | `codex/s5-plan-003-v0-2-product-intent-golden-demo-rebaseline` |
@@ -48,7 +48,7 @@ The ordinary experience stays business-first. Technical identities, matching det
 
 Model-assisted or replaceable candidate generation may interpret a free-form question and propose Intent, Tasks, Workflow structure, matching suggestions, and explanatory text. Its output is untrusted. Schema validation, canonicalization, stable identity, digest calculation, dependency ordering, cycle rejection, supported-requirement checks, authorization, and approval binding are deterministic.
 
-Malformed, ambiguous, unsupported, contradictory, or `UNKNOWN` requirements fail closed or return for Human correction. A model cannot approve itself, directly create an executable canonical revision, override compatibility or authorization, grant credentials, publish a role, select an unsupported Runtime fallback, manufacture citations, mutate Evidence, or apply preferences or optimization. Only the approved exact canonical digest may reach matching, placement, retrieval, or execution.
+Malformed, ambiguous, unsupported, contradictory, or `UNKNOWN` requirements fail closed or return for Human correction. A model cannot approve itself, directly create an executable canonical revision, override compatibility or authorization, grant credentials, publish a role, select an unsupported Runtime fallback, manufacture citations, mutate Evidence, or apply preferences or optimization. Only the approved exact canonical digest may reach matching, placement, retrieval, Capability invocation, Provider invocation, or Runtime execution; every preapproval path produces zero such calls.
 
 ## 3. Current capability inventory
 
@@ -101,6 +101,8 @@ Optional preview path:
 ```
 
 Package 7 may begin after Packages 1–5 are durably integrated, but final Golden Demo acceptance requires 6A. Package 6B is outside the Product MVS and mandatory critical path and may not block the Golden Demo, bounded core release, or ordinary execution.
+
+Packages 3 and 4 may start in parallel only after Packages 1 and 2 durably fix the shared requirement IDs, descriptor/binding IDs, canonical digest/version rules, tenant/security-domain context, authorization decision references, and projection-safe reason-code vocabulary. That synchronization gate freezes only the internal package inputs needed by both branches; it does not freeze a public Contract. Any unresolved ownership or semantic change returns to the owning package or a Human G2 gate rather than allowing divergent local contracts.
 
 ### Package 1 — Bounded Intent and Canonical Planning Engine
 
@@ -272,18 +274,25 @@ Required demonstration metrics are first-plan acceptance, corrections per task, 
 
 ## 12. Risks and mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Model proposal treated as authority | Untrusted candidate boundary, deterministic checks, exact Human approval |
-| Approval replay or semantic mutation | Versioned canonicalizer and exact digest/tenant/candidate binding |
-| Unauthorized descriptor or Knowledge leakage | Authorization before scoring/retrieval; disclosure-safe zero-call denial tests |
-| Frontend mints canonical state or citations | One backend assembler and exact sibling identity tests |
-| External Runtime or synthetic fallback hides failure | Native allowlist and explicit failure/provenance states |
-| Feedback rewrites facts or blocks execution | Separate append-only authority and non-critical failure isolation |
-| Preference deletion retains recoverable content | Separate G2, value/audit separation, cache/backup/tombstone tests |
-| Preview influences production | `DRAFT / NOT_APPLIED` and zero-influence boundary tests |
-| Demo claims exceed evidence | Claim-to-Evidence and unsupported-claim audits |
-| Package ownership collision | Separate implementation and durable-integration sessions with single writers |
+| Threat or risk | Prevention / fail-closed behavior | Validation owner or future gate |
+| --- | --- | --- |
+| Prompt injection influences canonical approval | Treat all generated content as untrusted; allowlisted schema/canonicalizer; exact Human approval cannot be supplied by content | Package 1 adversarial parser, digest, approval-replay, and zero-preapproval-call tests |
+| Approval replay or semantic mutation | Bind canonicalizer version, candidate identity, tenant/security domain, and exact semantic digest; mismatch rejects | Package 1 contract and mutation tests |
+| Malicious, poisoned, or unauthorized descriptor | Authorize and validate compatibility before candidate creation/scoring; denied descriptors contribute no rank, reason detail, or count | Package 2 poisoning, permutation, nondisclosure, and tie tests |
+| Unauthorized Knowledge discovery | Authorize before retrieval; `DENY` makes zero calls and returns no existence, identity, title, count, or chunk metadata | Package 4 security and timing/count review |
+| Citation forgery or stale substitution | Only the backend may bind independently authorized citation IDs to exact document/version/section/chunk digests and retrieval Evidence | Packages 4 and 5 citation mutation and sibling-equality tests |
+| Role fallback escalates authority | Match only existing `PUBLISHED/MATCHABLE` Definitions; `ROLE_GAP` grants nothing; previews are rejected at every execution boundary | Package 2 lifecycle and negative-boundary tests |
+| Runtime fallback or provider escalation | Select only a declared available compatible Native target; unavailable/unsupported requirements fail with zero Provider call | Package 3 placement and zero-call tests |
+| Unapproved execution | No matching, retrieval, placement, Capability, Provider, or Runtime call before exact canonical approval | Packages 1–4 integration tests and Package 8 E2E |
+| Cross-tenant matching, retrieval, cache, or projection | Trusted tenant/security-domain context, pre-query isolation, domain-bound cache/snapshot, fail closed on mismatch | Packages 2, 4, 5, and 6A isolation tests; enterprise tenant architecture remains future |
+| Sensitive intervention or feedback payload | Typed allowlisted fields only; reject raw prompts, Provider bodies, secrets, credentials, arbitrary metadata, and unrestricted payloads | Package 6A prohibited-field and redaction tests |
+| Preference inferred or used without consent | Inference may only create a visible suggestion; explicit versioned consent/scope required; Package 6B has zero planning influence | Separate Package 6B Human G2 and consent/withdrawal tests |
+| Deleted preference remains recoverable | Separate value/audit storage; erase active/cache copies; tombstone retains no value, digest, embedding, ciphertext, or sensitive metadata | Package 6B privacy/deletion G2 and backup-restore tests |
+| Metric manipulation becomes authority | Versioned numerator/denominator/dataset/provenance; metrics remain evidence only and cannot approve or publish | Packages 6A/6B and 9 metric/claim audits |
+| Optimization candidate published by implication | v0.2 candidate is always `DRAFT / NOT_APPLIED`; no publication or application port exists | Package 6B zero-influence tests and separate future v0.3 architecture gate |
+| Synthetic history presented as live | Immutable provenance classes, separated counts, visible labels, and rejection of mixed/hidden provenance | Packages 4, 6A/6B, 7, and 8 provenance tests |
+| Hidden live-to-fixture fallback | Live and synthetic modes are explicit; live failure remains failure and cannot load fixture results or citations | Packages 4, 5, 7, and 8 failure/fallback tests |
+| Package ownership collision | Single writer per authority and separate implementation/durable-integration sessions | Human task allocation and every package entry gate |
 
 ## 13. Rollback and compatibility
 
@@ -310,6 +319,8 @@ These are forward terminal addenda. Historical checkpoint evidence is unchanged 
 | S5-ARCH-011 — Intent, dynamic work, roles, Runtime and Knowledge | 1, 2, 3, 4, 5, 7, 8 |
 | S5-ARCH-012 — correction, intervention, feedback and governed preview | 5, 6A, 6B, 7, 8 |
 
-## 16. Checkpoint A result
+## 16. Checkpoint B independent review result
 
-Checkpoint A is a planning artifact only. The next gate is the Human S5-PLAN-003 Review Gate, followed by an independently authorized merge/close sequence. Until those gates pass, every downstream package and identifier remains `UNALLOCATED / NOT_ACTIVE / NOT_AUTHORIZED`.
+The independent review found no contradictory v0.2 classification, missing package, circular dependency, public API/CRD/Graph/Workflow assumption, unsupported capability claim, or broken authority boundary. It required one bounded linear clarification: the exact Package 3/4 synchronization gate, explicit zero-call preapproval coverage, complete misuse dispositions, and exact Ruff inspection wording in the evidence index.
+
+This remains a planning artifact only. The next gate is the Human S5-PLAN-003 Merge Gate, followed by an independently authorized merge/close sequence. Until those gates pass, every downstream package and identifier remains `UNALLOCATED / NOT_ACTIVE / NOT_AUTHORIZED`.

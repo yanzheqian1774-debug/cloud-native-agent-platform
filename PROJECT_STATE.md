@@ -39,7 +39,7 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-PLAN-003 | `IMPLEMENTATION / AUTHORIZED_WITH_CONSTRAINTS / CHECKPOINT_A / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_REVIEW_GATE` | Human-authorized Product Intent and Golden Demo Portfolio rebaseline at exact baseline `329da75d802886300a6f721c0205d1e5b23c2074`; exact-main CI run `33139763263` succeeded; ten logical packages with mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B requires a separate G2; no downstream task ID is allocated or active |
+| S5-PLAN-003 | `CLOSING / AUTHORIZED_WITH_CONSTRAINTS / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human-authorized Product Intent and Golden Demo Portfolio rebaseline at exact baseline `329da75d802886300a6f721c0205d1e5b23c2074`; Checkpoint A head `686928e146f1471ffdb18f96192127552327852b`; Draft PR #74; independent consistency/sequence review authorized with constraints; ten logical packages with mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B requires a separate G2; one bounded linear correction; no downstream task ID is allocated or active |
 | S5-ARCH-012 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #73 merged at durable main `329da75d802886300a6f721c0205d1e5b23c2074`; exact-main CI run `33139763263` succeeded; closure is forward-recorded without reopening; preference/candidate scope remains preview-only and `DRAFT / NOT_APPLIED`; no implementation was authorized by the Session |
 | S5-ARCH-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #72 merged at durable main `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; exact-main CI run `33083580433` succeeded; exactly five architecture/evidence/governance paths plus one bounded linear safety correction; closure is forward-recorded without reopening; no implementation was authorized by the Session |
 | S5-REL-028 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #70 and PR #71 merged at durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exact-main CI run `33072486290` succeeded; terminal pre-close row was expected governance lag; reopen prohibited |
@@ -121,7 +121,7 @@ readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Return S5-PLAN-003 to its Human Review Gate; do not start implementation or
+1. Return S5-PLAN-003 to its Human Merge Gate; do not start implementation or
    any downstream Session.
 2. Preserve the model-assisted/untrusted candidate boundary, deterministic
    canonicalization and exact-digest approval, authorization-first matching and

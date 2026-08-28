@@ -7,8 +7,8 @@
 | Session | `S5-PLAN-003` |
 | Task | `[S5-PLAN-003] v0.2 Product Intent and Golden Demo Portfolio Rebaseline` |
 | Type | `PLAN` |
-| Checkpoint | `A — V0_2_PORTFOLIO_REBASELINE_AND_EXECUTION_SEQUENCE` |
-| Human decision | `AUTHORIZED_WITH_CONSTRAINTS` |
+| Checkpoint | `B — INDEPENDENT_PORTFOLIO_CONSISTENCY_SEQUENCE_AND_MERGE_READINESS` |
+| Human decision | Checkpoint A and Checkpoint B review `AUTHORIZED_WITH_CONSTRAINTS` |
 | Baseline | `329da75d802886300a6f721c0205d1e5b23c2074` |
 | Exact-main CI | `33139763263 / SUCCESS` |
 | Branch | `codex/s5-plan-003-v0-2-product-intent-golden-demo-rebaseline` |
@@ -78,7 +78,8 @@ Checkpoint A validation covers:
 - architecture-to-package traceability and dependency/critical-path review;
 - v0.2/v0.3, Knowledge, privacy/consent/deletion, and unsupported-claim audits;
 - Product MVS, Golden Demo, and Release Readiness gate coverage;
-- repository `make check`, Ruff lint, and Ruff format checks;
+- repository `make check`, Ruff lint, and Ruff format checks; the Ruff format
+  check inspected exactly 121 files and rewrote zero files;
 - exact-final-head Quality Gates and Frontend Quality Gates after Draft PR
   publication.
 
@@ -94,6 +95,21 @@ Product MVS completion, Golden Demo readiness or acceptance, v0.2 release
 readiness or acceptance, production readiness, certification, or v0.3
 implementation.
 
-After exact-head validation, the next gate is the Human S5-PLAN-003 Review
-Gate. Merge, closeout, downstream allocation, implementation, Golden Demo, and
-release decisions remain separate Human gates.
+## Checkpoint B independent review
+
+The five-path candidate was independently reconciled with S5-ARCH-010/011/012,
+the accepted Golden Demo architecture, and current Native execution, Evidence,
+Graph, Product View, Technical View, approval, Knowledge, and Runtime evidence.
+The review found zero contradictory classifications, unsupported claims, broken
+relative links, authority overlaps, circular dependencies, or allocated future
+task IDs.
+
+One bounded convergence correction clarifies the exact Package 3/4 shared-input
+synchronization gate, zero-call preapproval boundary, complete security/privacy
+misuse dispositions, and Ruff inspected-versus-rewritten counts. It changes no
+application, test, architecture, API, CRD, Graph, Workflow, dependency, Demo,
+or release artifact.
+
+After new exact-head validation, the next gate is the Human S5-PLAN-003 Merge
+Gate. Closeout, downstream allocation, implementation, Golden Demo, and release
+decisions remain separate Human gates.
