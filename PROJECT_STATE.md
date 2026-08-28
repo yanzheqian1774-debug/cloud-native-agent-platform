@@ -22,8 +22,10 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`
-- Exact-main CI: run `33083580433`, `SUCCESS`
+- Current durable-main head: `329da75d802886300a6f721c0205d1e5b23c2074`
+- Exact-main CI: run `33139763263`, `SUCCESS`
+- S5-PLAN-003 authorized durable-main baseline:
+  `329da75d802886300a6f721c0205d1e5b23c2074`
 - S5-PLAN-002 authorized durable-main baseline:
   `7c1bc0266b39c913497fd67dcd4b7783f288dc57`
 - S5-GOV-001 starting durable-main SHA:
@@ -37,11 +39,12 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-ARCH-012 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human-approved-with-constraints Governed Successor and Cold Optimization Boundary from exact durable baseline `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; Checkpoint A head `83d5178d9544239cac0d3fc63e48f20188c9fa8c`; Draft PR #73; exactly five architecture/evidence/governance paths plus one bounded privacy/safety correction; typed correction/intervention/feedback/preference/candidate/evaluation/publication/application/rollback authorities; v0.2 preferences and candidates are preview-only and `NOT_APPLIED`; no implementation, Portfolio, public API/CRD/Graph, dependency/Workflow, Knowledge, Demo, Runtime, Recovery, Certification, or Release change |
+| S5-PLAN-003 | `CLOSING / AUTHORIZED_WITH_CONSTRAINTS / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Human-authorized Product Intent and Golden Demo Portfolio rebaseline at exact baseline `329da75d802886300a6f721c0205d1e5b23c2074`; Checkpoint A head `686928e146f1471ffdb18f96192127552327852b`; Draft PR #74; independent consistency/sequence review authorized with constraints; ten logical packages with mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B requires a separate G2; one bounded linear correction; no downstream task ID is allocated or active |
+| S5-ARCH-012 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #73 merged at durable main `329da75d802886300a6f721c0205d1e5b23c2074`; exact-main CI run `33139763263` succeeded; closure is forward-recorded without reopening; preference/candidate scope remains preview-only and `DRAFT / NOT_APPLIED`; no implementation was authorized by the Session |
 | S5-ARCH-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #72 merged at durable main `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79`; exact-main CI run `33083580433` succeeded; exactly five architecture/evidence/governance paths plus one bounded linear safety correction; closure is forward-recorded without reopening; no implementation was authorized by the Session |
 | S5-REL-028 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #70 and PR #71 merged at durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; exact-main CI run `33072486290` succeeded; terminal pre-close row was expected governance lag; reopen prohibited |
 | S5-IMPL-014 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | Native-only source head `443214c0a0277473648f68800ad008f981d758c9` on Draft PR #70; exact 29-path scope and CI run `33065548477` succeeded with 726 tests recorded; corrected P1 boundaries are Workflow/Task UID binding, independently authorized references, verbatim Canonical Graph relations/no frontend canonical IDs, and terminal semantic completeness; bounded single-node SQLite and internal Technical Preview only |
-| S5-ARCH-010 | `CLOSING / AUTHORIZED / CHECKPOINT_B / PASS_WITH_CONSTRAINTS / READY_FOR_HUMAN_MERGE_GATE` | Active architecture candidate, not completed, merged, or durable main; Human Review Gate passed with constraints; Draft PR #69 contains Hybrid F and the bounded single-node SQLite direction plus one linear safety clarification; implementation task ID is unresolved and no implementation or downstream Session is authorized |
+| S5-ARCH-010 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #69 merged at durable main `13bc16f746a58912bc093ff249ff390250ce20cf`; exact-main CI run `33049808981` succeeded; closure is forward-recorded without reopening; bounded Hybrid F architecture does not grant production persistence, multi-node, Recovery, exactly-once, Golden Demo, or release claims |
 | S5-REL-027 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #68 merged into durable main `4d5da13e519627ba40cfdc632e3662f5cf965626`; exact-main CI `33046211942` succeeded; the prior pre-close row was expected terminal snapshot lag; reopen prohibited |
 | S5-REL-026 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PRs #66 and #67 merged; durable-main merge `b244fa5da3e670fa754278a0559da1a3049fb05a`; exact-main CI `33042871796` succeeded |
 | S5-IMPL-011 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS` | Technical source head `c9cd70108bb3b1bd77458d5340a63a41443b84c9`; PR #66 merged automatically through Technical View durable integration |
@@ -53,7 +56,7 @@ records lifecycle and provenance.
 | S5-GOV-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Checkpoint C finalization; Checkpoint B Human Gate passed with constraints and CI satisfied; Human Close Confirmation passed; reopen prohibited |
 | S5-ARCH-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Golden Demo Scope Gate passed with constraints; Human Close Confirmation passed; PR #44 merged at the authorized baseline; reopen prohibited |
 | S5-REL-006 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed closure forward-imported by S5-PLAN-001; PR #44 and merge `df2a56d48c21e4e74b6fb1d94f39cb2f07894aa9` Git-verified; reopen prohibited |
-| S5-PLAN-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed closure; PR #45 merged at `040f324359c6db16ee52c55b8f367d1cc4157de9`; reopen prohibited |
+| S5-PLAN-001 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED / PARTIALLY_SUPERSEDED_FORWARD` | Human-confirmed closure; PR #45 merged at `040f324359c6db16ee52c55b8f367d1cc4157de9`; retained as historical authority for completed work; S5-PLAN-003 supersedes only its unstarted remaining v0.2 sequence, Golden Demo route, and release-readiness route; reopen prohibited |
 | S5-REL-007 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed/Git-verified durable Portfolio integration forward-imported by S5-ARCH-007; reopen prohibited |
 | S5-ARCH-007 | `CLOSING / AUTHORIZED / PASS / READY_TO_CLOSE` | Human G2 Representation/API Gate passed with constraints; R3 accepted for bounded A1; G2-01–G2-12 dispositioned; Human Close Confirmation pending; no implementation or public schema/API/CRD change |
 | S5-REL-010 | `CLOSED / COMPLETED / PASS / SESSION_CLOSED` | Human-confirmed and Git-verified A2 integration at PR #48 merge `a630db68daf29778cedcb8e3826f73d1802c49f0`; forward-imported by S5-IMPL-003; reopen prohibited |
@@ -103,19 +106,32 @@ succeeded, and its Human-confirmed closure is forward-imported here without
 reopening it. S5-REL-028 is Human-confirmed closed and its PR #70/PR #71 result
 is durable main `a0d82be4387f5706129ee6676ad5965b42a3efdb`; its earlier pre-close row was
 expected terminal governance lag and is forward-recorded without reopening it.
-No downstream implementation task has started.
-Golden Demo implementation and Release have not started. No Product MVS, Runtime or
+S5-ARCH-010, S5-ARCH-011, and S5-ARCH-012 are Human-confirmed closed. Their
+accepted architecture is not implementation evidence. S5-PLAN-003 now owns the
+bounded supplier-quality Product Intent and Golden Demo Portfolio rebaseline.
+Its ten logical packages and all implementation, integration, test, Demo,
+Solution, and release identifiers remain `UNALLOCATED / NOT_ACTIVE /
+NOT_AUTHORIZED`. S5-PLAN-002 remains the unrelated Harness & Parallel Delivery
+Readiness Plan and is unchanged.
+
+No downstream implementation task has started. Golden Demo implementation and
+Release have not started. No Product MVS, Runtime or
 Provider certification, production Knowledge or recovery support, Golden Demo
 readiness, production readiness, or release acceptance is granted.
 
 ## Immediate next work
 
-1. Return S5-ARCH-012 to its Human Merge Gate; do not start implementation or
+1. Return S5-PLAN-003 to its Human Merge Gate; do not start implementation or
    any downstream Session.
-2. Preserve its typed authorities, cold-path isolation, consent/deletion boundary,
-   Knowledge non-writeback, and v0.2 `DRAFT / NOT_APPLIED` candidate constraint.
-3. Keep all public API, CRD, existing-schema, production integration, freeze,
-   certification, readiness, and release decisions under their separate Gates.
+2. Preserve the model-assisted/untrusted candidate boundary, deterministic
+   canonicalization and exact-digest approval, authorization-first matching and
+   Knowledge retrieval, Native-only placement, and immutable Evidence/successor
+   authorities.
+3. Keep Package 6B outside the critical path and behind a separate Human G2
+   persistence/privacy/State decision; it remains `PREVIEW / NOT_APPLIED`.
+4. Keep all public API, CRD, Graph, Workflow, dependency, production
+   integration, certification, readiness, and release decisions under their
+   separate Gates.
 
 Tracks A–E and all candidate future Session IDs remain `RECOMMENDED_ONLY /
 NOT_ACTIVE / NOT_AUTHORIZED`. Historical S5-ARCH-007 and S5-IMPL-001 navigation

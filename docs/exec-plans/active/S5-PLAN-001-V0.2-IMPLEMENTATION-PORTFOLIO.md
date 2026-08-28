@@ -1023,3 +1023,21 @@ Portfolio Integration`, source S5-PLAN-001 and PR #45, state
 Current next action: return S5-REL-027 to the Human Merge Gate. After the
 reconciliation closes, return to the Human Portfolio Sequence Gate. No
 downstream task ID is allocated or activated by this reconciliation.
+
+## 29. Forward navigation — S5-PLAN-003 partial supersession
+
+S5-PLAN-001 remains the closed historical authority for its completed work,
+decisions, evidence, and links. It is not reopened or rewritten by this
+addendum.
+
+The Human-authorized [S5-PLAN-003 v0.2 Product Intent and Golden Demo Portfolio
+Rebaseline](S5-PLAN-003-V0.2-PRODUCT-INTENT-GOLDEN-DEMO-REBASELINE.md) partially
+supersedes only S5-PLAN-001's unstarted remaining v0.2 sequence, Golden Demo
+route, and release-readiness route. Historical package and candidate IDs in
+Sections 1–28 remain records of their original planning context; they do not
+allocate, activate, or compete with the future packages in S5-PLAN-003.
+
+S5-PLAN-002 remains the unrelated Harness & Parallel Delivery Readiness Plan
+and is neither reused nor modified. S5-PLAN-003 allocates no implementation,
+integration, test, Demo, Solution, release, or v0.3 task and grants no Product
+MVS, Golden Demo, production-readiness, certification, or release acceptance.
