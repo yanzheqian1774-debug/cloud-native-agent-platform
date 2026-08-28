@@ -22,8 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `4713b797c53121f24cb70171926318d575b7fcc8`
-- Exact-main CI: run `33156199625`, `SUCCESS`
+- Current durable-main head: `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6`
+- Exact-main CI: run `33179314079`, `SUCCESS`
 - S5-PLAN-003 authorized durable-main baseline:
   `05bac769b61f42aa5643a8496861e8e962c6bf5b`
 - S5-PLAN-002 authorized durable-main baseline:
@@ -39,7 +39,9 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-ARCH-013 | `ACTIVE / ARCHITECTURE_COMPLETE / REVIEW_READY / AWAITING_DURABLE_INTEGRATION / CHECKPOINT_C_PASS_WITH_CONSTRAINTS` | Terminal architecture Evidence prepared at baseline `a485c5f3fb016629bf17c0fcd47c0ecd3d4c6fa3`; exactly five architecture/Evidence/governance paths define the internal Definition Version, trusted catalog supply, publication, scoped match authorization, deterministic effective-candidate snapshot, read-only Package 2 consumption, exact future handoff paths/reuse rules, and validation matrix; commit/push/Draft PR/exact-head CI remain pending at repository-recording time; no merge, durable integration, closure, implementation, or downstream authority; S5-IMPL-030 remains `FROZEN_PENDING_ARCHITECTURE_G2` |
+| S5-REL-030 | `ACTIVE / INTEGRATION_COMPLETE / RECONCILIATION_PREPARED / AWAITING_RECONCILIATION_INTEGRATION_AND_HUMAN_CLOSE_CONFIRMATION` | S5-ARCH-013 PR #77 merged as `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6` with ordered parents `a485c5f3fb016629bf17c0fcd47c0ecd3d4c6fa3` and `a8ae79574a4c16e646cb33adb7026d1a97d4af8f`; exact-main CI run `33179314079` succeeded; this governance reconciliation remains unmerged and Human Close Confirmation is `NO` |
+| S5-ARCH-013 | `ACTIVE / ARCHITECTURE_COMPLETE / DURABLY_INTEGRATED / AWAITING_HUMAN_CLOSE_CONFIRMATION / CHECKPOINT_C_PASS_WITH_CONSTRAINTS` | Source head `a8ae79574a4c16e646cb33adb7026d1a97d4af8f`; exact-head CI run `33164654998` succeeded; PR #77 merged through S5-REL-030 as `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6` with exact-main CI run `33179314079` successful; exactly five architecture/Evidence/governance paths were integrated; no implementation or downstream authority; Human Close Confirmation is `NO` |
+| S5-IMPL-030 | `ACTIVE / IDLE / FROZEN_PENDING_ARCHITECTURE_G2` | Package 2 implementation and resumption remain unauthorized until S5-ARCH-013 and S5-REL-030 receive Human Close Confirmation; durable architecture integration alone grants no downstream authority |
 | S5-REL-029 | `ACTIVE / DURABLE_INTEGRATION_COMPLETE / RECONCILIATION_PREPARED / AWAITING_RECONCILIATION_INTEGRATION_AND_HUMAN_CLOSE_CONFIRMATION` | S5-IMPL-015 PR #75 merged as `4713b797c53121f24cb70171926318d575b7fcc8` with ordered parents `05bac769b61f42aa5643a8496861e8e962c6bf5b` and `fbfd3889b587af08b991525a5abda2b4f994562c`; exact-main CI run `33156199625` succeeded; this governance reconciliation remains unmerged and Human Close Confirmation is `NO` |
 | S5-IMPL-015 | `ACTIVE / IMPLEMENTATION_COMPLETE / CHECKPOINT_C_PASS_WITH_CONSTRAINTS / DURABLY_INTEGRATED / AWAITING_HUMAN_CLOSE_CONFIRMATION` | Package 1 source commits `388c37b4ecdf22502f1578fb470d0b40ac048891` and `fbfd3889b587af08b991525a5abda2b4f994562c`; exact-head CI run `33153148233` succeeded; PR #75 merged through S5-REL-029 at durable main `4713b797c53121f24cb70171926318d575b7fcc8`; exact-main CI run `33156199625` succeeded; Session closure is not granted and no downstream Package, Demo, or Release authority exists |
 | S5-PLAN-003 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #74 merged at durable main `05bac769b61f42aa5643a8496861e8e962c6bf5b`; exact-main CI run `33145152123` succeeded; terminal closure is forward-recorded without reopening; ten logical packages retain mandatory critical path `1 → 2 → (3 || 4) → 5 → 6A → 7 → 8 → 9`; optional Package 6B still requires a separate G2; closure did not itself start or allocate downstream implementation |
