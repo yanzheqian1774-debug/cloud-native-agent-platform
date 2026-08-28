@@ -107,9 +107,10 @@ COLD: authorized interventions/feedback/preferences → scoped Evidence set
 
 Cold-path outage, rejection, retention, or corruption MUST NOT block ordinary task
 execution. The cold path cannot mutate an active Workflow, approved revision, running
-execution, Outcome, or Evidence. Candidate generation never writes into the Planner.
-There is no online self-modification, automatic production publication, automatic
-training/fine-tuning claim, or automatic Knowledge writeback.
+execution, Outcome, or Evidence. Candidate generation never writes into the Planner
+and cannot trigger Runtime or Capability calls. There is no online self-modification,
+automatic production publication, automatic training/fine-tuning claim, or automatic
+Knowledge writeback.
 
 ## 6. Typed contract model
 
@@ -131,9 +132,11 @@ training/fine-tuning claim, or automatic Knowledge writeback.
 | `OptimizationApplicationDecision` | exact published version, context/domain, eligibility, authorization, precedence/conflicts and generated-candidate provenance | append-only `APPLIED/NOT_APPLICABLE/DENIED/CONFLICT`; never mutates approved revision |
 | `OptimizationRollbackRecord` | actor, reason, time, scope, target and replacement/prior version | append-only; immediately makes target ineligible for future application |
 
-Every contract defines projection-safe summaries separately from protected payloads.
-Retention is policy-bound by tenant/security domain. References never embed protected
-content. Unknown schema, authority, lifecycle, or digest versions fail closed.
+Every contract defines its own projection behavior and projection-safe summary
+separately from protected payloads; the common envelope does not define projection
+semantics. Retention is policy-bound by tenant/security domain. References never embed
+protected content. Unknown schema, authority, lifecycle, or digest versions fail
+closed.
 
 ## 7. Correction and immutable successor
 
@@ -238,6 +241,17 @@ consented for the purpose, tenant-local, and scope-compatible. One intervention 
 insufficient for publication. A candidate grants no access, permission, approval, or
 application and cannot modify active or approved work.
 
+The assembler deduplicates on stable typed record identity plus canonical digest.
+Same identity/same digest is one signal; same identity/different digest is a conflict
+and excludes the record. Superseded or stale Outcome/Evidence references, withdrawn
+consent, revoked Knowledge authorization, unauthorized scope promotion, and events
+outside the named dataset version are excluded fail closed. Inclusion/exclusion counts
+and reasons are committed to the set digest. Counterexamples cannot be selectively
+omitted without changing that digest. Principal diversity and bounded per-principal
+weighting limit repeated-user amplification; synthetic counts never increase live
+sample counts. Collusion and sybil identity remain residual governance risks requiring
+Human review, not reasons to weaken tenant or minimum-evidence gates.
+
 ## 12. Evaluation, publication, application, and rollback
 
 Evaluation binds exact candidate and dataset/Evidence-set digests, policy version,
@@ -269,8 +283,12 @@ authorization authority.
 Rollback appends an authorized record, stops future application of the target,
 identifies replacement/prior version, and preserves historical generated revisions
 and Evidence. It does not rewrite past execution, replay tasks, delete Execution
-Evidence, or reverse external effects. Reverting this architecture document only
-reverts the decision text; future implementations require separate migration,
+Evidence, or reverse external effects. An ambiguous target, version, tenant, scope, or
+replacement fails closed and stops new application of the affected target pending
+resolution. If a published optimization produced a subsequently superseded template,
+rollback revokes only future eligibility of the optimization and cannot silently
+reactivate or rewrite either template version. Reverting this architecture document
+only reverts the decision text; future implementations require separate migration,
 deletion, operational rollback, and side-effect gates.
 
 ## 13. Knowledge non-writeback
@@ -298,8 +316,12 @@ Demo readiness, or Release acceptance. This decision implements no Demo asset.
 ## 15. Metrics model
 
 Each metric records numerator, denominator, tenant/domain/scope, time window, dataset
-version, and synthetic/live provenance. Empty denominators are `NOT_MEASURABLE`, not
-zero. Metrics are observational Evidence only.
+and metric-definition versions, synthetic/live provenance, authorized audience, and a
+metric-specific limitation. Empty denominators are `NOT_MEASURABLE`, not zero.
+Unauthorized audiences receive no count, timing, denominator, or cohort metadata;
+small-cell and timing suppression prevents cross-tenant or protected-group inference.
+Metrics are observational Evidence only and synthetic Demo data is excluded from live
+production metrics.
 
 | Metric | Numerator / denominator |
 | --- | --- |
@@ -325,17 +347,32 @@ zero. Metrics are observational Evidence only.
 | --- | --- | --- | --- |
 | Hidden inference; Preference | model suggestion applied silently | suggestion-only state and explicit consent; no consent means no use | unconfirmed suggestion never affects plan; social inference remains imperfect |
 | Consent spoofing; Consent | UI/model asserts another principal | trusted identity, exact version/purpose binding; mismatch denies | forged/expired/withdrawn consent; upstream identity assurance required |
+| Consent replay after withdrawal; Consent | cached or copied grant is reused | decision freshness and withdrawal high-water mark checked at every use; stale grant denies | replay before/after withdrawal across cache/restart; propagation latency remains bounded residual risk |
 | Cross-user/tenant use; scope/Evidence set | cache, query, or aggregate crosses domain | pre-query isolation and domain-bound cache/set; deny contradiction | cross-domain query/aggregation/cache negatives; full tenant IAM is future |
+| Timing/count inference; projections/metrics | response timing or small cohorts disclose protected activity | authorize before aggregate, constant-shaped denial, small-cell/timing suppression; suppress result | cross-tenant timing/count probes; infrastructure side channels remain residual |
 | Feedback poisoning/repeated manipulation; Candidate | malicious signals dominate | principal/rate provenance, diversity/minimum-evidence, counterexamples, Human review | sybil/repetition/outlier fixtures; organizational collusion remains residual |
+| Duplicate/stale/selective inputs; Evidence set | duplicate events inflate samples or stale references and omitted counterexamples bias result | stable ID/digest deduplication, freshness/supersession validation, committed inclusion/exclusion policy; conflict invalidates set | duplicates, digest conflict, stale Outcome/Evidence and omitted-counterexample fixtures; source quality remains residual |
 | Synthetic shown as live; Evidence set | labels removed in aggregation/UI | immutable provenance class and separate metrics; hidden mix invalidates | projection and digest separation tests; synthetic realism can still bias review |
+| Synthetic Demo contaminates production metrics; metrics | Demo records enter live cohort | environment/provenance admission and separate datasets; contaminated metric is invalid | Demo-to-production cohort injection test; operator misclassification remains residual |
 | Sensitive Diff leakage; correction/event | patch embeds protected payload | allowlisted operations, classification and field filtering; reject unsafe patch | secret/business-payload/hash-oracle negatives; classifiers are fallible |
 | Deleted value retained; Preference | tombstone/hash/embedding/cache/backups preserve value | value/audit separation, cache invalidation, prohibited tombstone fields | deletion/recovery/backup-restore tests; physical backup expiry is delayed |
 | Denied Knowledge leakage; Evidence set/evaluation | denied content becomes feature or proposal | independently authorized references only; exclusion before load | DENY corpus zero-read and no-derived-output tests; side-channel research continues |
+| Revoked Knowledge reused; Evidence set/application | candidate retains a formerly allowed Knowledge reference | revalidate authorization/version at set creation, evaluation, publication and application; stale reference denies | revoke between candidate/evaluation/application tests; historical candidate remains auditable but unusable |
 | Permission expansion; Candidate/application | proposal broadens Capability/Data/Knowledge | independent authorization/compatibility and no-expansion invariant | privilege-diff and descriptor mismatch tests; policy configuration risk remains |
 | Approval bypass/insufficient evidence; publication | model/evaluator/metric self-approves | exact digest binding, minimum policy, separate Human/policy decision | single-event, self-approval, digest-mismatch negatives; Human error remains |
+| Evaluator/publisher concentration; decision/publication | one actor evaluates and publishes or a model approves itself | separation-of-duties policy and Human principal for material changes; conflicted or model-only decision denies | same-actor and model-self-approval negatives; small organizations need a governed exception policy |
 | Policy conflict; application | multiple versions/preferences conflict | deterministic precedence and explicit `CONFLICT`; no application | equal-rank and mandatory-policy conflict tests; policy design remains Human-owned |
 | Rollback ineffective; lifecycle | caches keep applying revoked version | authoritative eligibility check, invalidation and observation; deny stale version | concurrent rollback/cache/restart tests; in-flight external effects remain |
+| Rollback after template supersession; rollback/template authority | rollback attempts to restore or rewrite an independently superseded template | rollback only revokes future optimization eligibility; ambiguous replacement denies and template lifecycle remains independent | supersession-before-rollback and replacement-conflict tests; manual template recovery may be required |
 | Metrics become authority; publication | threshold triggers automatic publish | metrics are Evidence only; explicit decision required | threshold-without-decision never publishes; reviewer automation bias remains |
+
+All Product and Technical projections consume the same stable record IDs, versions,
+digests, and lifecycle states from the shared backend assembler. Synthetic history and
+v0.2 candidates are visibly labelled `SYNTHETIC` and `DRAFT / NOT_APPLIED` in both
+views. Preference values are filtered before snapshot assembly, so deletion removes
+them from both views and Technical detail cannot reconstruct them from tombstones,
+digests, counts, timing, or hidden fields. Product presentation remains business-first;
+Technical detail is authorized and progressively disclosed.
 
 ## 17. Future implementation decomposition — not allocated
 

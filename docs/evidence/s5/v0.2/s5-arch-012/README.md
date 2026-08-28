@@ -6,7 +6,7 @@
 | --- | --- |
 | Session | `S5-ARCH-012` |
 | Type | `ARCH` |
-| Checkpoint | `A — ARCHITECTURE_DECISION_AND_G2_BOUNDARY` |
+| Checkpoint | `B — INDEPENDENT_ARCHITECTURE_PRIVACY_SAFETY_AND_MERGE_READINESS` |
 | Baseline | `0ea21ab628561f2e1e5e1a08651e9ef5a9b8fc79` |
 | Architecture | [Governed Successor and Cold Optimization Boundary](../../../../../architecture/s5/v0.2/S5-ARCH-012-USER-INTERVENTION-PREFERENCE-FEEDBACK-GOVERNED-OPTIMIZATION-BOUNDARY-V1.md) |
 | Implementation | `NOT_STARTED / NOT_AUTHORIZED_BY_THIS_ARTIFACT` |
@@ -25,6 +25,16 @@ v0.2 requires correction, successor, intervention, feedback, consent, isolation,
 Knowledge non-writeback contracts. Preference and candidate behavior is preview-only.
 Evaluation/publication/application and governed cross-task optimization are future
 v0.3 boundaries.
+
+Checkpoint B independently reviewed architecture consistency, typed authority
+separation, hot/cold isolation, consent and deletion, candidate poisoning resistance,
+evaluation/publication/application, rollback, projections, metrics, and privacy and
+security threats. One bounded linear correction makes stable deduplication,
+stale/revoked-input exclusion, consent replay prevention, count/timing suppression,
+projection deletion safety, evaluator/publisher separation, template-supersession
+rollback, and synthetic-production metric isolation explicit. It also forward-records
+the supplied Human-confirmed S5-ARCH-011 closure. These are architecture-only safety
+clarifications and create no implementation authority.
 
 This evidence does not establish implemented preference/intervention storage,
 optimization, learning, evaluation, publication, Demo behavior, Knowledge writeback,
