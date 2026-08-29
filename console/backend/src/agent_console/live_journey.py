@@ -23,6 +23,19 @@ from agent_console.live_journey_schemas import (
     JourneyRevision,
     LiveJourneyResponse,
 )
+from agent_console.live_journey_stream import (
+    InMemoryJourneyEventBroker,
+    JourneyEventPublisher,
+    JourneyEventSource,
+    JourneyStreamScope,
+)
+from agent_console.live_journey_stream_schemas import (
+    JourneyEventEnvelope,
+    JourneyEventPayload,
+    JourneyEventType,
+    JourneyStage,
+    JourneyStatus,
+)
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/+-]{0,255}")
 _DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -40,10 +53,8 @@ class JourneyDenied(LiveJourneyError):
     status_code = 403
 
 
-class JourneyNotFound(LiveJourneyError):
-    state = "NOT_FOUND"
-    reason_code = "LIVE_JOURNEY_NOT_FOUND"
-    status_code = 404
+class JourneyNotFound(JourneyDenied):
+    pass
 
 
 class JourneyAuthorityMissing(LiveJourneyError):
@@ -138,11 +149,76 @@ class UnavailableExecutionAuthority:
 class LiveJourneyCoordinator:
     """Coordinates presentation and commands without replacing upstream owners."""
 
-    def __init__(self, execution_authority: ExistingExecutionAuthority | None = None):
+    def __init__(
+        self,
+        execution_authority: ExistingExecutionAuthority | None = None,
+        event_publisher: JourneyEventPublisher | None = None,
+        event_source: JourneyEventSource | None = None,
+    ):
         self._execution = execution_authority or UnavailableExecutionAuthority()
+        broker = InMemoryJourneyEventBroker()
+        self._event_publisher = event_publisher or broker
+        candidate_source = event_source or self._event_publisher
+        self._event_source = (
+            candidate_source
+            if hasattr(candidate_source, "replay_and_subscribe")
+            else None
+        )
         self._journeys: dict[str, tuple[JourneyRevision | None, JourneyRevision]] = {}
         self._provenance: dict[str, str] = {}
         self._replays: dict[str, tuple[str, str]] = {}
+        self._event_sequences: dict[tuple[str, str, str], int] = {}
+
+    @property
+    def event_source(self) -> JourneyEventSource:
+        if self._event_source is None:
+            raise JourneyAuthorityMissing("JOURNEY_EVENT_SOURCE_UNAVAILABLE")
+        return self._event_source  # type: ignore[return-value]
+
+    def _publish(
+        self,
+        journey_id: str,
+        revision: JourneyRevision,
+        *,
+        event_type: JourneyEventType,
+        stage: JourneyStage,
+        status: JourneyStatus,
+        terminal: bool,
+        reason_code: str,
+        localization_key: str,
+    ) -> None:
+        identity = revision.identity
+        scope = JourneyStreamScope(
+            identity.tenantId, identity.securityDomain, journey_id
+        )
+        sequence = self._event_sequences.get(scope.key, 0) + 1
+        event_digest = hashlib.sha256(f"{scope.key}:{sequence}".encode()).hexdigest()
+        event_id = f"journey-event:{event_digest}"
+        envelope = JourneyEventEnvelope(
+            journeyId=journey_id,
+            eventId=event_id,
+            sequence=sequence,
+            occurredAt=datetime.now(UTC),
+            eventType=event_type,
+            stage=stage,
+            status=status,
+            terminal=terminal,
+            reasonCode=reason_code,
+            localizationKey=localization_key,
+            identity=identity,
+            payload=JourneyEventPayload(
+                revision=revision.revision,
+                approvalId=identity.approvalId,
+                platformExecutionIdentity=identity.platformExecutionIdentity,
+                sharedSnapshotId=identity.sharedSnapshotId,
+                graphSnapshotId=identity.graphSnapshotId,
+                evidenceIds=identity.evidenceIds,
+                citationIds=identity.citationIds,
+                limitationCodes=revision.limitationCodes,
+            ),
+        )
+        self._event_publisher.publish(envelope)
+        self._event_sequences[scope.key] = sequence
 
     def register_live(self, seed: LiveJourneySeed) -> LiveJourneyResponse:
         if seed.provenance != "LIVE_EXECUTION":
@@ -203,6 +279,16 @@ class LiveJourneyCoordinator:
         )
         self._journeys[seed.journey_id] = (None, revision)
         self._provenance[seed.journey_id] = seed.provenance
+        self._publish(
+            seed.journey_id,
+            revision,
+            event_type="JOURNEY_REGISTERED",
+            stage="JOURNEY",
+            status="REGISTERED",
+            terminal=False,
+            reason_code="JOURNEY_REGISTERED",
+            localization_key="liveJourney.event.journeyRegistered",
+        )
         return self.get(seed.journey_id, self._system_principal(seed))
 
     @staticmethod
@@ -214,6 +300,8 @@ class LiveJourneyCoordinator:
     def _authorized(
         self, journey_id: str, principal: TrustedJourneyPrincipal
     ) -> tuple[JourneyRevision | None, JourneyRevision]:
+        if not principal.authorized or not principal.principal_id:
+            raise JourneyDenied
         pair = self._journeys.get(journey_id)
         if pair is None:
             raise JourneyNotFound
@@ -312,6 +400,16 @@ class LiveJourneyCoordinator:
         )
         immutable_predecessor = current.model_copy(update={"lifecycle": "SUPERSEDED"})
         self._journeys[journey_id] = (immutable_predecessor, successor)
+        self._publish(
+            journey_id,
+            successor,
+            event_type="CORRECTION_ACCEPTED",
+            stage="CORRECTION",
+            status="ACCEPTED",
+            terminal=False,
+            reason_code=reason_code.upper(),
+            localization_key="liveJourney.event.correctionAccepted",
+        )
         return self.get(journey_id, principal)
 
     def approve(
@@ -361,6 +459,16 @@ class LiveJourneyCoordinator:
             self._journeys[journey_id] = (predecessor, approved)
         else:
             raise LiveJourneyError("INVALID_APPROVAL_DECISION")
+        self._publish(
+            journey_id,
+            self._journeys[journey_id][1],
+            event_type="APPROVAL_RECORDED",
+            stage="APPROVAL",
+            status="APPROVED" if decision == "APPROVE" else "REJECTED",
+            terminal=decision == "REJECT",
+            reason_code=reason_code.upper(),
+            localization_key="liveJourney.event.approvalRecorded",
+        )
         return self.get(journey_id, principal)
 
     def rerun(
@@ -379,12 +487,61 @@ class LiveJourneyCoordinator:
             or digest != successor.identity.canonicalDigest
         ):
             raise JourneyConflict("RERUN_REVISION_DIGEST_MISMATCH")
-        result = self._execution.rerun(
-            revision_id=revision_id,
-            digest=digest,
-            tenant_id=successor.identity.tenantId,
-            security_domain=successor.identity.securityDomain,
+        authorized = successor.model_copy(
+            update={"executionState": "AUTHORIZED_HANDOFF"}
         )
+        self._publish(
+            journey_id,
+            authorized,
+            event_type="EXECUTION_AUTHORIZED",
+            stage="EXECUTION",
+            status="AUTHORIZED",
+            terminal=False,
+            reason_code="EXACT_DIGEST_EXECUTION_AUTHORIZED",
+            localization_key="liveJourney.event.executionAuthorized",
+        )
+        running = successor.model_copy(update={"executionState": "RUNNING"})
+        self._publish(
+            journey_id,
+            running,
+            event_type="EXECUTION_STARTED",
+            stage="EXECUTION",
+            status="STARTED",
+            terminal=False,
+            reason_code="EXISTING_EXECUTION_AUTHORITY_STARTED",
+            localization_key="liveJourney.event.executionStarted",
+        )
+        try:
+            result = self._execution.rerun(
+                revision_id=revision_id,
+                digest=digest,
+                tenant_id=successor.identity.tenantId,
+                security_domain=successor.identity.securityDomain,
+            )
+        except JourneyAuthorityMissing:
+            self._publish(
+                journey_id,
+                successor,
+                event_type="JOURNEY_UNAVAILABLE",
+                stage="EXECUTION",
+                status="UNAVAILABLE",
+                terminal=True,
+                reason_code="EXECUTION_AUTHORITY_UNAVAILABLE",
+                localization_key="liveJourney.event.journeyUnavailable",
+            )
+            raise
+        except Exception as exc:
+            self._publish(
+                journey_id,
+                successor,
+                event_type="JOURNEY_ERROR",
+                stage="EXECUTION",
+                status="ERROR",
+                terminal=True,
+                reason_code="EXECUTION_AUTHORITY_ERROR",
+                localization_key="liveJourney.event.journeyError",
+            )
+            raise JourneyAuthorityMissing("EXECUTION_AUTHORITY_ERROR") from exc
         if not isinstance(result, AuthorizedRerunResult):
             raise JourneyAuthorityMissing("EXECUTION_AUTHORITY_RESULT_INVALID")
         for value in (
@@ -422,4 +579,19 @@ class LiveJourneyCoordinator:
             }
         )
         self._journeys[journey_id] = (predecessor, rerunning)
+        succeeded = rerunning.executionState == "SUCCEEDED"
+        self._publish(
+            journey_id,
+            rerunning,
+            event_type="EXECUTION_SUCCEEDED" if succeeded else "EXECUTION_FAILED",
+            stage="EXECUTION",
+            status="SUCCEEDED" if succeeded else "FAILED",
+            terminal=True,
+            reason_code="EXISTING_EXECUTION_AUTHORITY_RESULT",
+            localization_key=(
+                "liveJourney.event.executionSucceeded"
+                if succeeded
+                else "liveJourney.event.executionFailed"
+            ),
+        )
         return self.get(journey_id, principal)

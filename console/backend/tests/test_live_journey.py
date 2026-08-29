@@ -12,6 +12,10 @@ from agent_console.live_journey import (
     TrustedJourneyPrincipal,
 )
 from agent_console.live_journey_schemas import JourneyCitation, JourneyOutcome
+from agent_console.live_journey_stream import (
+    InMemoryJourneyEventBroker,
+    JourneyStreamScope,
+)
 
 
 class ExecutionAuthority:
@@ -181,6 +185,50 @@ def test_scope_is_fail_closed_and_nondisclosing(coordinator):
     foreign = TrustedJourneyPrincipal("human:foreign", "tenant-b", "quality", True)
     with pytest.raises(JourneyDenied, match=r"^$"):
         coordinator.get("journey:supplier-quality-1", foreign)
+
+
+def test_absent_and_foreign_scope_are_nondisclosing_equivalents(coordinator):
+    principal = TrustedJourneyPrincipal("human:reviewer", "tenant-a", "quality", True)
+    foreign = TrustedJourneyPrincipal("human:foreign", "tenant-b", "quality", True)
+    failures = []
+    for journey_id, actor in (
+        ("journey:absent", principal),
+        ("journey:supplier-quality-1", foreign),
+    ):
+        with pytest.raises(JourneyDenied) as captured:
+            coordinator.get(journey_id, actor)
+        failures.append(
+            (
+                captured.value.state,
+                captured.value.reason_code,
+                captured.value.status_code,
+                str(captured.value),
+            )
+        )
+    assert (
+        failures[0]
+        == failures[1]
+        == (
+            "DENIED",
+            "LIVE_JOURNEY_ACCESS_DENIED",
+            403,
+            "",
+        )
+    )
+
+
+def test_registration_emits_backend_identity_without_mutating_journey() -> None:
+    broker = InMemoryJourneyEventBroker()
+    service = LiveJourneyCoordinator(event_publisher=broker)
+    registered = service.register_live(seed())
+    scope = JourneyStreamScope("tenant-a", "quality", registered.journeyId)
+    subscription = broker.replay_and_subscribe(scope, None)
+    assert len(subscription._replay) == 1
+    event = subscription._replay[0]
+    assert event.eventType == "JOURNEY_REGISTERED"
+    assert event.identity == registered.successor.identity
+    assert registered.successor.executionState == "SUCCEEDED"
+    subscription.close()
 
 
 @pytest.mark.parametrize(

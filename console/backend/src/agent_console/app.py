@@ -1,11 +1,14 @@
 """FastAPI application for the AgentOS Workflow Execution Console."""
 
+import hashlib
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 from agent_core.execution_evidence import SQLiteExecutionEvidenceRepository
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, ValidationError
 
@@ -40,6 +43,16 @@ from agent_console.live_journey_schemas import (
     LiveJourneyError,
     LiveJourneyResponse,
     RerunRequest,
+)
+from agent_console.live_journey_stream import (
+    JourneyResumeUnavailable,
+    JourneyStreamFailure,
+    JourneyStreamScope,
+    format_sse,
+)
+from agent_console.live_journey_stream_schemas import (
+    JourneyEventEnvelope,
+    JourneyEventPayload,
 )
 from agent_console.preview_schemas import PreviewError, PreviewResponse
 from agent_console.preview_service import (
@@ -330,6 +343,91 @@ def get_live_planning_journey(
         return service.get(journey_id, principal)
     except JourneyServiceError as exc:
         raise _journey_http_error(exc) from exc
+
+
+@app.get(
+    "/api/internal/preview/v1/live-planning-journeys/{journey_id}/events",
+    response_class=StreamingResponse,
+)
+def stream_live_planning_journey(
+    journey_id: str,
+    request: Request,
+    principal: JourneyPrincipalDependency,
+    service: JourneyServiceDependency,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+) -> StreamingResponse:
+    """Authorize first, then frame one shared backend-issued event stream."""
+    try:
+        journey = service.get(journey_id, principal)
+        identity = journey.successor.identity
+        scope = JourneyStreamScope(
+            identity.tenantId, identity.securityDomain, journey.journeyId
+        )
+        # Authorization is deliberately rechecked immediately before cursor access.
+        service.get(journey_id, principal)
+        subscription = service.event_source.replay_and_subscribe(scope, last_event_id)
+    except JourneyServiceError as exc:
+        raise _journey_http_error(exc) from exc
+    except JourneyResumeUnavailable:
+        sequence = service.event_source.next_sequence(scope)
+        event = JourneyEventEnvelope(
+            journeyId=journey_id,
+            eventId=(
+                "journey-event:resume:"
+                + hashlib.sha256(
+                    f"{scope.key}:{last_event_id}:{sequence}".encode()
+                ).hexdigest()
+            ),
+            sequence=sequence,
+            occurredAt=datetime.now(UTC),
+            eventType="RESUME_UNAVAILABLE",
+            stage="RESUME",
+            status="UNAVAILABLE",
+            terminal=True,
+            reasonCode="RESUME_UNAVAILABLE",
+            localizationKey="liveJourney.event.resumeUnavailable",
+            identity=identity,
+            payload=JourneyEventPayload(
+                revision=journey.successor.revision,
+                limitationCodes=["SAME_PROCESS_REPLAY_UNAVAILABLE"],
+            ),
+        )
+
+        async def unavailable():
+            yield format_sse(event)
+
+        return StreamingResponse(
+            unavailable(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    except JourneyStreamFailure as exc:
+        raise HTTPException(status_code=503, detail=exc.reason_code) from exc
+
+    async def frames():
+        try:
+            async for event in subscription.events():
+                if await request.is_disconnected():
+                    break
+                # Reauthorize before every replayed or live delivery.
+                authorized = service.get(journey_id, principal).successor.identity
+                if (
+                    authorized.tenantId,
+                    authorized.securityDomain,
+                    journey_id,
+                ) != scope.key:
+                    break
+                yield format_sse(event)
+                if event.terminal:
+                    break
+        finally:
+            subscription.close()
+
+    return StreamingResponse(
+        frames(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post(

@@ -43,6 +43,29 @@ def run_journey(script: str) -> dict[str, object]:
     return json.loads(completed.stdout)
 
 
+def run_live_event_reducer(script: str) -> dict[str, object]:
+    module = (
+        ROOT / "console/frontend/src/shared/livePlanningJourneyEventTypes.ts"
+    ).as_uri()
+    completed = subprocess.run(
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "--eval",
+            (
+                "import { initialJourneyEventState, applyJourneyEvent } "
+                f'from "{module}"; {script}'
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    return json.loads(completed.stdout)
+
+
 def test_authorized_product_source_structure_exists() -> None:
     expected = {
         "types.ts",
@@ -60,6 +83,16 @@ def test_authorized_product_source_structure_exists() -> None:
         "InterventionFeedback.tsx",
     }
     assert {path.name for path in PRODUCT.iterdir()} == expected
+
+
+def test_live_stream_authorized_source_files_exist_exactly() -> None:
+    expected = {
+        ROOT / "console/frontend/src/api/livePlanningJourneyStream.ts",
+        ROOT / "console/frontend/src/shared/livePlanningJourneyEventTypes.ts",
+        ROOT / "console/frontend/src/product/LivePlanningJourney.tsx",
+        ROOT / "console/frontend/src/technical/LivePlanningJourneyPanel.tsx",
+    }
+    assert all(path.is_file() for path in expected)
 
 
 def test_fixture_is_bounded_and_non_authoritative() -> None:
@@ -343,3 +376,72 @@ def test_no_network_credentials_or_host_paths_in_product_sources() -> None:
         text,
         re.IGNORECASE,
     )
+
+
+def test_live_event_reducer_is_idempotent_and_fails_on_gap() -> None:
+    event = {
+        "schemaVersion": "journey-event.v1",
+        "journeyId": "journey:one",
+        "eventId": "event:one",
+        "sequence": 1,
+        "occurredAt": "2026-08-29T01:00:00Z",
+        "eventType": "JOURNEY_REGISTERED",
+        "stage": "JOURNEY",
+        "status": "REGISTERED",
+        "terminal": False,
+        "reasonCode": "JOURNEY_REGISTERED",
+        "localizationKey": "liveJourney.event.journeyRegistered",
+        "provenance": "LIVE_EXECUTION",
+        "identity": {
+            "tenantId": "tenant-a",
+            "securityDomain": "quality",
+            "canonicalWorkflowRevisionId": "revision:one",
+            "canonicalDigest": "a" * 64,
+            "sharedSnapshotId": "snapshot:one",
+            "graphSnapshotId": "graph:one",
+            "platformExecutionIdentity": None,
+            "approvalId": "approval:one",
+            "placementDecisionId": "placement:one",
+            "evidenceIds": [],
+            "citationIds": [],
+        },
+        "payload": {
+            "revision": 1,
+            "approvalId": "approval:one",
+            "platformExecutionIdentity": None,
+            "sharedSnapshotId": "snapshot:one",
+            "graphSnapshotId": "graph:one",
+            "evidenceIds": [],
+            "citationIds": [],
+            "limitationCodes": [],
+        },
+    }
+    serialized = json.dumps(event, separators=(",", ":"))
+    gap = json.dumps({**event, "eventId": "event:three", "sequence": 3})
+    result = run_live_event_reducer(
+        f"const raw={json.dumps(serialized)};"
+        "const once=applyJourneyEvent(initialJourneyEventState,raw);"
+        "const duplicate=applyJourneyEvent(once,raw);"
+        f"const gap=applyJourneyEvent(duplicate,{json.dumps(gap)});"
+        "console.log(JSON.stringify({same:duplicate===once,count:duplicate.events.length,failure:gap.failure}));"
+    )
+    assert result == {
+        "same": True,
+        "count": 1,
+        "failure": "JOURNEY_EVENT_SEQUENCE_GAP",
+    }
+
+
+def test_live_event_i18n_catalogs_match_and_preserve_technical_values() -> None:
+    messages = (ROOT / "console/frontend/src/i18n/messages.ts").read_text(
+        encoding="utf-8"
+    )
+    en, zh = messages.split('"zh-CN":', 1)
+    pattern = re.compile(r'"(liveJourney\.event\.[^"]+)"\s*:')
+    assert set(pattern.findall(en)) == set(pattern.findall(zh))
+    product = source("LivePlanningJourney.tsx")
+    technical = (
+        ROOT / "console/frontend/src/technical/LivePlanningJourneyPanel.tsx"
+    ).read_text(encoding="utf-8")
+    for value in ("event.eventType", "event.reasonCode", "event.provenance"):
+        assert value in product + technical
