@@ -104,3 +104,8 @@ export function formatTimestamp(
 
   return new Date(value).toLocaleString(locale);
 }
+
+/** Machine identifiers, enums, digests, and reason codes are never translated. */
+export function preserveTechnicalCode(value: string): string {
+  return value;
+}

@@ -8,6 +8,22 @@ from agent_core.execution_evidence import SQLiteExecutionEvidenceRepository
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from kubernetes.client.exceptions import ApiException
 
+from agent_console.live_journey import (
+    LiveJourneyCoordinator,
+    TrustedJourneyPrincipal,
+)
+from agent_console.live_journey import (
+    LiveJourneyError as JourneyServiceError,
+)
+from agent_console.live_journey_schemas import (
+    ApprovalRequest as JourneyApprovalRequest,
+)
+from agent_console.live_journey_schemas import (
+    CorrectionRequest,
+    LiveJourneyError,
+    LiveJourneyResponse,
+    RerunRequest,
+)
 from agent_console.preview_schemas import PreviewError, PreviewResponse
 from agent_console.preview_service import (
     PreviewService,
@@ -77,6 +93,44 @@ PreviewPrincipalDependency = Annotated[
     TrustedPreviewPrincipal, Depends(get_preview_principal)
 ]
 PreviewServiceDependency = Annotated[PreviewService, Depends(get_preview_service)]
+
+
+_live_journey_service = LiveJourneyCoordinator()
+
+
+def get_live_journey_principal() -> TrustedJourneyPrincipal:
+    """Resolve journey scope from trusted server configuration only."""
+    principal = os.environ.get("AGENT_CONSOLE_JOURNEY_PRINCIPAL", "")
+    tenant = os.environ.get("AGENT_CONSOLE_JOURNEY_TENANT", "")
+    domain = os.environ.get("AGENT_CONSOLE_JOURNEY_SECURITY_DOMAIN", "")
+    return TrustedJourneyPrincipal(
+        principal_id=principal,
+        tenant_id=tenant,
+        security_domain=domain,
+        authorized=bool(principal and tenant and domain),
+    )
+
+
+def get_live_journey_service() -> LiveJourneyCoordinator:
+    """Return the explicitly configured in-memory Technical Preview coordinator."""
+    return _live_journey_service
+
+
+JourneyPrincipalDependency = Annotated[
+    TrustedJourneyPrincipal, Depends(get_live_journey_principal)
+]
+JourneyServiceDependency = Annotated[
+    LiveJourneyCoordinator, Depends(get_live_journey_service)
+]
+
+
+def _journey_http_error(exc: JourneyServiceError) -> HTTPException:
+    payload = LiveJourneyError(
+        state=exc.state,
+        reasonCode=exc.reason_code,
+        message="Live planning journey is unavailable",
+    )
+    return HTTPException(status_code=exc.status_code, detail=payload.model_dump())
 
 
 @app.get("/healthz")
@@ -163,3 +217,91 @@ def get_execution_preview(
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "private, no-cache"
     return preview
+
+
+@app.get(
+    "/api/internal/preview/v1/live-planning-journeys/{journey_id}",
+    response_model=LiveJourneyResponse,
+    responses={
+        403: {"model": LiveJourneyError},
+        404: {"model": LiveJourneyError},
+        503: {"model": LiveJourneyError},
+    },
+)
+def get_live_planning_journey(
+    journey_id: str,
+    principal: JourneyPrincipalDependency,
+    service: JourneyServiceDependency,
+) -> LiveJourneyResponse:
+    """Return equal Product and Technical projections of one live journey."""
+    try:
+        return service.get(journey_id, principal)
+    except JourneyServiceError as exc:
+        raise _journey_http_error(exc) from exc
+
+
+@app.post(
+    "/api/internal/preview/v1/live-planning-journeys/{journey_id}/corrections",
+    response_model=LiveJourneyResponse,
+)
+def correct_live_planning_journey(
+    journey_id: str,
+    request: CorrectionRequest,
+    principal: JourneyPrincipalDependency,
+    service: JourneyServiceDependency,
+) -> LiveJourneyResponse:
+    try:
+        return service.correct(
+            journey_id,
+            principal,
+            predecessor_revision_id=request.predecessorRevisionId,
+            predecessor_digest=request.predecessorDigest,
+            objective=request.objective,
+            reason_code=request.reasonCode,
+        )
+    except JourneyServiceError as exc:
+        raise _journey_http_error(exc) from exc
+
+
+@app.post(
+    "/api/internal/preview/v1/live-planning-journeys/{journey_id}/approvals",
+    response_model=LiveJourneyResponse,
+)
+def approve_live_planning_journey(
+    journey_id: str,
+    request: JourneyApprovalRequest,
+    principal: JourneyPrincipalDependency,
+    service: JourneyServiceDependency,
+) -> LiveJourneyResponse:
+    try:
+        return service.approve(
+            journey_id,
+            principal,
+            candidate_digest=request.candidateDigest,
+            decision=request.decision,
+            reason_code=request.reasonCode,
+            replay_identity=request.replayIdentity,
+        )
+    except JourneyServiceError as exc:
+        raise _journey_http_error(exc) from exc
+
+
+@app.post(
+    "/api/internal/preview/v1/live-planning-journeys/{journey_id}/reruns",
+    response_model=LiveJourneyResponse,
+)
+def rerun_live_planning_journey(
+    journey_id: str,
+    request: RerunRequest,
+    principal: JourneyPrincipalDependency,
+    service: JourneyServiceDependency,
+) -> LiveJourneyResponse:
+    try:
+        return service.rerun(
+            journey_id,
+            principal,
+            revision_id=request.canonicalWorkflowRevisionId,
+            digest=request.canonicalDigest,
+        )
+    except JourneyServiceError as exc:
+        raise _journey_http_error(exc) from exc
