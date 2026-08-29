@@ -7,6 +7,10 @@ import type {
   NodePhase,
   WorkflowPhase,
 } from "../types/workflow";
+import type {
+  FeedbackReasonCode,
+  OutcomeAssessment,
+} from "../shared/interventionFeedbackTypes";
 
 export type Translate = (
   key: MessageKey,
@@ -28,6 +32,27 @@ const edgeKeys = {
   control: "edge.control",
   data: "edge.data",
 } as const satisfies Record<EdgeType, MessageKey>;
+
+const feedbackAssessmentKeys = {
+  SATISFIED: "feedback.assessment.SATISFIED",
+  PARTIALLY_SATISFIED: "feedback.assessment.PARTIALLY_SATISFIED",
+  UNSATISFIED: "feedback.assessment.UNSATISFIED",
+} as const satisfies Record<OutcomeAssessment, MessageKey>;
+
+const feedbackReasonKeys = {
+  MISSING_TASK: "feedback.reason.MISSING_TASK",
+  EXTRA_TASK: "feedback.reason.EXTRA_TASK",
+  WRONG_DATA: "feedback.reason.WRONG_DATA",
+  INSUFFICIENT_DATA: "feedback.reason.INSUFFICIENT_DATA",
+  WRONG_KNOWLEDGE: "feedback.reason.WRONG_KNOWLEDGE",
+  WRONG_ROLE: "feedback.reason.WRONG_ROLE",
+  WRONG_SKILL: "feedback.reason.WRONG_SKILL",
+  WRONG_CAPABILITY: "feedback.reason.WRONG_CAPABILITY",
+  WRONG_ORDER: "feedback.reason.WRONG_ORDER",
+  MISSING_CONSTRAINT: "feedback.reason.MISSING_CONSTRAINT",
+  WRONG_OUTPUT_FORMAT: "feedback.reason.WRONG_OUTPUT_FORMAT",
+  CITATION_NOT_USEFUL: "feedback.reason.CITATION_NOT_USEFUL",
+} as const satisfies Record<FeedbackReasonCode, MessageKey>;
 
 export function formatPhase(
   phase: WorkflowPhase | NodePhase,
@@ -91,6 +116,20 @@ export function formatEdgeType(
   t: Translate,
 ): string {
   return t(edgeKeys[type]);
+}
+
+export function formatFeedbackAssessment(
+  value: OutcomeAssessment,
+  t: Translate,
+): string {
+  return t(feedbackAssessmentKeys[value]);
+}
+
+export function formatFeedbackReasonExplanation(
+  value: FeedbackReasonCode,
+  t: Translate,
+): string {
+  return t(feedbackReasonKeys[value]);
 }
 
 export function formatTimestamp(

@@ -11,6 +11,7 @@ import { RuntimeSupport } from "../product/RuntimeSupport";
 import { useI18n } from "../i18n/useI18n";
 import { useSelectedExecution } from "../shared/SelectedExecutionContext";
 import { LivePlanningJourney } from "../product/LivePlanningJourney";
+import { InterventionFeedback } from "../product/InterventionFeedback";
 
 const fixture = loadProductPreview();
 
@@ -21,6 +22,7 @@ export function ProductViewPage() {
   const liveJourneyId = import.meta.env.VITE_LIVE_PLANNING_JOURNEY_ID as string | undefined;
   return <main className="product-page"><ProductNavigation active={active} onSelect={navigate} />
     {liveJourneyId && <LivePlanningJourney journeyId={liveJourneyId} />}
+    {liveJourneyId && <InterventionFeedback journeyId={liveJourneyId} />}
     <div className="preview-warning" role="status"><strong>{fixture.classification.join(" · ")}</strong><span>{t("product.preview.warning")}</span></div>
     <BusinessJourney fixture={fixture} state={state} dispatch={dispatch} />
     <DigitalEmployeeDirectory employees={fixture.employees} selectedId={state.selectedEmployeeId} onSelect={(id) => dispatch({ type: "SELECT_EMPLOYEE", id })} />
