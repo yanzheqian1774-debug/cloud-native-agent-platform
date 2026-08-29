@@ -10,6 +10,7 @@ import { OutcomeEvidence } from "../product/OutcomeEvidence";
 import { RuntimeSupport } from "../product/RuntimeSupport";
 import { useI18n } from "../i18n/useI18n";
 import { useSelectedExecution } from "../shared/SelectedExecutionContext";
+import { LivePlanningJourney } from "../product/LivePlanningJourney";
 
 const fixture = loadProductPreview();
 
@@ -17,7 +18,9 @@ export function ProductViewPage() {
   const { t } = useI18n(); const { selection, selectEmployee, selectRevision } = useSelectedExecution(); const [state, dispatch] = useReducer(journeyReducer, { ...initialJourney, selectedEmployeeId: selection.employeeId, revision: selection.revisionId }); const [active, setActive] = useState("work"); const [correction, setCorrection] = useState("");
   useEffect(() => { selectEmployee(state.selectedEmployeeId); selectRevision(state.revision); }, [state.selectedEmployeeId, state.revision, selectEmployee, selectRevision]);
   function navigate(section: string) { setActive(section); document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  const liveJourneyId = import.meta.env.VITE_LIVE_PLANNING_JOURNEY_ID as string | undefined;
   return <main className="product-page"><ProductNavigation active={active} onSelect={navigate} />
+    {liveJourneyId && <LivePlanningJourney journeyId={liveJourneyId} />}
     <div className="preview-warning" role="status"><strong>{fixture.classification.join(" · ")}</strong><span>{t("product.preview.warning")}</span></div>
     <BusinessJourney fixture={fixture} state={state} dispatch={dispatch} />
     <DigitalEmployeeDirectory employees={fixture.employees} selectedId={state.selectedEmployeeId} onSelect={(id) => dispatch({ type: "SELECT_EMPLOYEE", id })} />
