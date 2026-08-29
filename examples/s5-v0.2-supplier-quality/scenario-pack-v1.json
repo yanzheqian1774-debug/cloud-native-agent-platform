@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "supplier-quality-scenario-pack.v1",
+  "scenarioId": "s5-v0.2-supplier-quality-v1",
+  "scenarioVersion": "v1",
+  "namespace": "s5-v02-supplier-quality-demo",
+  "tenantId": "tenant-a",
+  "securityDomain": "supplier-quality",
+  "provenance": "DEMO_CONFIGURATION",
+  "authority": "NON_PRODUCTION_DEMO_CONFIGURATION_ONLY",
+  "canonicalDigestAlgorithm": "sha256-canonical-json-v1",
+  "canonicalDigest": "2c2c45ea7f9445cd0003aed1b9e63d2d18c61d981174a01098c32a8442ced410",
+  "inputs": {
+    "cases": "data/supplier-quality-cases-v1.json",
+    "descriptors": "catalog/descriptors-v1.json",
+    "publishedRoles": "catalog/published-roles-v1.json",
+    "syntheticHistory": "history/synthetic-history-v1.json",
+    "knowledgePack": "knowledge/knowledge-pack-v1.json",
+    "knowledgeDocument": "knowledge/8d-procedure-v1.md",
+    "namespaceManifest": "namespace.yaml",
+    "checksums": "checksums.sha256"
+  },
+  "provenanceClasses": {
+    "configuration": "DEMO_CONFIGURATION",
+    "history": "SYNTHETIC_HISTORY",
+    "runtimeOutputs": "LIVE_EXECUTION"
+  },
+  "liveExecution": {
+    "owner": "EXISTING_PLATFORM_RUNTIME_ONLY",
+    "recordsIncluded": 0,
+    "fixtureFallback": "PROHIBITED",
+    "evidenceFabrication": "PROHIBITED"
+  },
+  "sideEffects": {
+    "credentialCreation": false,
+    "permissionGrant": false,
+    "rolePublication": false,
+    "runtimeProvisioning": false,
+    "knowledgeIngestion": false
+  }
+}

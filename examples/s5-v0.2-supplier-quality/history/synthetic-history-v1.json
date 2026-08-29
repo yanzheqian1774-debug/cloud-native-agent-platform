@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "supplier-quality-synthetic-history.v1",
+  "historyId": "supplier-quality-synthetic-history-v1",
+  "historyVersion": "v1",
+  "scenarioId": "s5-v0.2-supplier-quality-v1",
+  "namespace": "s5-v02-supplier-quality-demo",
+  "tenantId": "tenant-a",
+  "securityDomain": "supplier-quality",
+  "provenance": "SYNTHETIC_HISTORY",
+  "authority": "NON_LIVE_DEMO_CONTEXT_ONLY",
+  "liveExecutionEvidence": false,
+  "records": [
+    {
+      "historyRecordId": "synthetic-history-001",
+      "caseId": "sq-case-001",
+      "observedAt": "2026-08-26T12:00:00Z",
+      "event": "Synthetic containment review remained open after its demo due time.",
+      "provenance": "SYNTHETIC_HISTORY",
+      "isLiveExecution": false
+    },
+    {
+      "historyRecordId": "synthetic-history-002",
+      "caseId": "sq-case-002",
+      "observedAt": "2026-08-28T10:00:00Z",
+      "event": "Synthetic root-cause review requested an additional demo measurement.",
+      "provenance": "SYNTHETIC_HISTORY",
+      "isLiveExecution": false
+    }
+  ]
+}

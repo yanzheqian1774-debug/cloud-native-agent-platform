@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: s5-v02-supplier-quality-demo
+  labels:
+    app.kubernetes.io/part-of: enterprise-agent-platform-demo
+    demo.platform.example/scenario-id: s5-v0.2-supplier-quality-v1
+    demo.platform.example/provenance: DEMO_CONFIGURATION
+  annotations:
+    demo.platform.example/authority: NON_PRODUCTION_DEMO_CONFIGURATION_ONLY
+    demo.platform.example/tenant-id: tenant-a
+    demo.platform.example/security-domain: supplier-quality

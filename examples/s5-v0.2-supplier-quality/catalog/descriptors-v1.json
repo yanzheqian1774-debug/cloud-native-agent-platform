@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "supplier-quality-descriptor-catalog.v1",
+  "catalogId": "supplier-quality-descriptors-v1",
+  "catalogVersion": "v1",
+  "scenarioId": "s5-v0.2-supplier-quality-v1",
+  "tenantId": "tenant-a",
+  "securityDomain": "supplier-quality",
+  "provenance": "DEMO_CONFIGURATION",
+  "authority": "CURATED_REFERENCE_ONLY",
+  "descriptors": [
+    {
+      "descriptorId": "descriptor.supplier-quality-analyst.v1",
+      "title": "Supplier Quality Analyst",
+      "duties": ["analyze supplier-quality exceptions", "recommend bounded containment"],
+      "data": ["supplier-quality-cases-v1"],
+      "knowledge": ["supplier-quality-pack:v1"],
+      "skills": ["root-cause-analysis", "risk-prioritization"],
+      "capabilities": ["quality.read"],
+      "runtimes": ["native"]
+    },
+    {
+      "descriptorId": "descriptor.quality-reviewer.v1",
+      "title": "Quality Review Coordinator",
+      "duties": ["review proposed containment", "identify escalation needs"],
+      "data": ["supplier-quality-cases-v1"],
+      "knowledge": ["supplier-quality-pack:v1"],
+      "skills": ["quality-review", "human-escalation"],
+      "capabilities": ["quality.read"],
+      "runtimes": ["native"]
+    }
+  ]
+}

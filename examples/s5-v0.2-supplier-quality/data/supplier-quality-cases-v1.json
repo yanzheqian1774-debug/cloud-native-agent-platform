@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "supplier-quality-cases.v1",
+  "datasetId": "supplier-quality-cases-v1",
+  "datasetVersion": "v1",
+  "scenarioId": "s5-v0.2-supplier-quality-v1",
+  "namespace": "s5-v02-supplier-quality-demo",
+  "tenantId": "tenant-a",
+  "securityDomain": "supplier-quality",
+  "provenance": "DEMO_CONFIGURATION",
+  "authority": "SANITIZED_SYNTHETIC_DEMO_DATA_ONLY",
+  "sanitation": {
+    "containsPersonalData": false,
+    "containsProductionData": false,
+    "containsCredentials": false,
+    "supplierNamesAreFictional": true
+  },
+  "cases": [
+    {
+      "caseId": "sq-case-001",
+      "supplierAlias": "Demo Supplier Alpha",
+      "partFamily": "demo-valve-body",
+      "severity": "HIGH",
+      "issue": "Dimensional result exceeds the synthetic tolerance band.",
+      "lotId": "DEMO-LOT-A17",
+      "openedAt": "2026-08-25T09:00:00Z",
+      "containmentDueAt": "2026-08-26T09:00:00Z",
+      "state": "CONTAINMENT_REQUIRED"
+    },
+    {
+      "caseId": "sq-case-002",
+      "supplierAlias": "Demo Supplier Beta",
+      "partFamily": "demo-sensor-housing",
+      "severity": "MEDIUM",
+      "issue": "Synthetic coating inspection shows intermittent voids.",
+      "lotId": "DEMO-LOT-B04",
+      "openedAt": "2026-08-26T11:30:00Z",
+      "containmentDueAt": "2026-08-29T11:30:00Z",
+      "state": "ROOT_CAUSE_REVIEW"
+    },
+    {
+      "caseId": "sq-case-003",
+      "supplierAlias": "Demo Supplier Gamma",
+      "partFamily": "demo-connector-shell",
+      "severity": "LOW",
+      "issue": "Synthetic packaging label is misaligned.",
+      "lotId": "DEMO-LOT-C22",
+      "openedAt": "2026-08-27T14:00:00Z",
+      "containmentDueAt": "2026-09-03T14:00:00Z",
+      "state": "MONITORING"
+    }
+  ]
+}
