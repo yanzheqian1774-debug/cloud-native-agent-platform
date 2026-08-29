@@ -57,6 +57,7 @@ def test_authorized_product_source_structure_exists() -> None:
         "OutcomeEvidence.tsx",
         "RuntimeSupport.tsx",
         "LivePlanningJourney.tsx",
+        "InterventionFeedback.tsx",
     }
     assert {path.name for path in PRODUCT.iterdir()} == expected
 

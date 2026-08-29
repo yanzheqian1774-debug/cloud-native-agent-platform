@@ -807,3 +807,102 @@ h1 {
     width: calc(100% - 32px);
   }
 }
+
+/* Package 6A intervention and outcome feedback */
+
+.intervention-feedback {
+  margin: 24px 0;
+  padding: clamp(18px, 3vw, 30px);
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgb(16 24 40 / 7%);
+}
+
+.intervention-feedback header {
+  max-width: 76ch;
+}
+
+.feedback-grid,
+.feedback-record-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.feedback-grid article,
+.feedback-record-list article,
+.feedback-summary {
+  min-width: 0;
+  padding: 18px;
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+}
+
+.feedback-grid label {
+  display: block;
+  margin: 12px 0 6px;
+  color: #344054;
+  font-weight: 650;
+}
+
+.feedback-grid button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 16px;
+}
+
+.feedback-count {
+  margin-bottom: 0;
+  color: #475467;
+}
+
+.feedback-summary,
+.feedback-state,
+.feedback-error {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.feedback-summary {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.feedback-state,
+.feedback-error {
+  align-items: flex-start;
+  padding: 16px;
+  background: #fffaeb;
+  border-left: 4px solid #f79009;
+}
+
+.feedback-record-list {
+  margin: 18px 0;
+}
+
+.technical-feedback .evidence-list,
+.technical-feedback .stable-id {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .feedback-grid,
+  .feedback-record-list {
+    grid-template-columns: 1fr;
+  }
+
+  .intervention-feedback {
+    margin-inline: 0;
+    padding: 18px;
+    border-radius: 10px;
+  }
+
+  .feedback-state,
+  .feedback-error {
+    flex-direction: column;
+  }
+}
