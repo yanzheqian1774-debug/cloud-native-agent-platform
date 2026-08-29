@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "supplier-quality-published-role-declarations.v1",
+  "catalogVersion": "v1",
+  "scenarioId": "s5-v0.2-supplier-quality-v1",
+  "tenantId": "tenant-a",
+  "securityDomain": "supplier-quality",
+  "provenance": "DEMO_CONFIGURATION",
+  "authority": "READ_ONLY_DECLARATION_OF_EXISTING_PUBLICATION",
+  "publicationAuthorityIncluded": false,
+  "permissionGrantIncluded": false,
+  "roles": [
+    {
+      "definitionId": "definition.supplier-quality-analyst",
+      "versionId": "v1",
+      "descriptorId": "descriptor.supplier-quality-analyst.v1",
+      "lifecycle": "PUBLISHED",
+      "matchability": "MATCHABLE",
+      "publicationDecisionId": "publication.supplier-quality-analyst.v1",
+      "publicationPolicyRef": "definition-publication-v1",
+      "requiredPurpose": "published-role-matching"
+    },
+    {
+      "definitionId": "definition.quality-reviewer",
+      "versionId": "v1",
+      "descriptorId": "descriptor.quality-reviewer.v1",
+      "lifecycle": "PUBLISHED",
+      "matchability": "MATCHABLE",
+      "publicationDecisionId": "publication.quality-reviewer.v1",
+      "publicationPolicyRef": "definition-publication-v1",
+      "requiredPurpose": "published-role-matching"
+    }
+  ]
+}
