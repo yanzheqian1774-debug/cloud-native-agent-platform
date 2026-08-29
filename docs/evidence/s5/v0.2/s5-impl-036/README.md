@@ -69,3 +69,39 @@ exact-head Quality Gates and Frontend Quality Gates are intentionally
 `PENDING`. GitHub-native terminal results are returned to v0.2-CONTROL-002
 without amending this Evidence file. The PR must remain Draft, open, and
 unmerged; no REL or downstream session is started here.
+
+## Bounded CI portability correction
+
+Exact-head CI run `33265516363` on commit
+`62ce9109abbeab58308fc4e94bdbcc5194f1a1ca` completed with Frontend Quality
+Gates successful and Quality Gates failed. The only failure was the focused
+Knowledge immutability test invoking `git show` against the authorized baseline
+commit. That historical object/path lookup was available locally but was not a
+portable assumption for the CI checkout.
+
+The bounded correction removes only that Git-history dependency. It retains
+strict integrity by checking both current read-only Knowledge paths against
+their exact accepted SHA-256 values, checking those same values are bound in
+`checksums.sha256`, checking the scenario manifest binds both exact paths, and
+checking bootstrap only copies those sources into the explicit target while
+reset never addresses a Knowledge source path. No Knowledge content or Package
+behavior changed.
+
+Correction revalidation completed as follows:
+
+- the directly failed test passed with `1 passed`;
+- all focused Package 7 tests passed with `11 passed`;
+- focused Ruff lint and format verification passed;
+- both pre-hook and post-hook `make check` passed with `926 passed` and the one
+  existing Starlette/httpx deprecation warning;
+- all-files pre-commit passed with unchanged correction-path hashes and Git
+  status;
+- all ten checksum entries passed, including the two exact Knowledge digests;
+- repeated clean-target bootstrap produced identical relative-tree digest
+  `49fc1446f4887ee8b9a38c2df65c1c99b26b0e6576517ffecc7691c39fee9414`;
+- repeated exact-target reset, Knowledge immutability, `git diff --check`,
+  two-correction-path scope, and aggregate twelve-path PR inventory passed.
+
+The correction commit, normal push, and replacement exact-head CI are
+intentionally `PENDING` at this file revision and are reported from Git and
+GitHub without amending this Evidence file.

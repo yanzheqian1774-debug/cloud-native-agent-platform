@@ -29,6 +29,14 @@ INPUTS = (
     "bootstrap.sh",
     "reset.sh",
 )
+KNOWLEDGE_CHECKSUMS = {
+    "knowledge/knowledge-pack-v1.json": (
+        "774528d7b501a77a19f2683bfaf9fa84790d3d82d83a8ab9d1e0e2f1c51c4154"
+    ),
+    "knowledge/8d-procedure-v1.md": (
+        "b0920d209d3fe0c5cb7b6c5ada2b1698d6b52a3474b117895d8f6b3a2940e5b1"
+    ),
+}
 
 
 def load_json(relative: str) -> dict:
@@ -278,21 +286,30 @@ def test_reset_rejects_wildcard_broad_default_cross_namespace_and_foreign_marker
 
 
 def test_read_only_knowledge_files_match_baseline_and_are_not_writable_assets() -> None:
-    for relative in (
-        "knowledge/knowledge-pack-v1.json",
-        "knowledge/8d-procedure-v1.md",
-    ):
-        baseline = subprocess.run(
-            [
-                "git",
-                "show",
-                f"c033cb31c9cf1287419a81d2c809bc90dffb225d:examples/s5-v0.2-supplier-quality/{relative}",
-            ],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-        ).stdout
-        assert (PACK / relative).read_bytes() == baseline
+    declared = {
+        relative: checksum
+        for checksum, relative in (
+            line.split("  ", 1)
+            for line in (PACK / "checksums.sha256").read_text().splitlines()
+        )
+    }
+    assert {
+        relative: declared[relative] for relative in KNOWLEDGE_CHECKSUMS
+    } == KNOWLEDGE_CHECKSUMS
+    for relative, expected in KNOWLEDGE_CHECKSUMS.items():
+        assert hashlib.sha256((PACK / relative).read_bytes()).hexdigest() == expected
+
+    manifest_inputs = load_json("scenario-pack-v1.json")["inputs"]
+    assert manifest_inputs["knowledgePack"] == "knowledge/knowledge-pack-v1.json"
+    assert manifest_inputs["knowledgeDocument"] == "knowledge/8d-procedure-v1.md"
+
+    bootstrap = (PACK / "bootstrap.sh").read_text().splitlines()
+    knowledge_operations = [line.strip() for line in bootstrap if "/knowledge/" in line]
+    assert knowledge_operations == [
+        'cp "$script_dir/knowledge/knowledge-pack-v1.json" "$target_dir/knowledge/"',
+        'cp "$script_dir/knowledge/8d-procedure-v1.md" "$target_dir/knowledge/"',
+    ]
+    assert "/knowledge/" not in (PACK / "reset.sh").read_text()
 
 
 def test_scripts_are_executable_and_use_no_kubernetes_context() -> None:
