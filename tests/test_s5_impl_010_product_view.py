@@ -1,4 +1,5 @@
 """Bounded static and compatibility validation for S5-IMPL-010 Product View."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
@@ -54,7 +55,7 @@ def run_live_event_reducer(script: str) -> dict[str, object]:
             "--input-type=module",
             "--eval",
             (
-                "import { initialJourneyEventState, applyJourneyEvent } "
+                "import { initialJourneyEventState, applyJourneyEvent, initialJourneyStreamState, applyJourneyStreamEvent, applyJourneyStreamDisconnect } "
                 f'from "{module}"; {script}'
             ),
         ],
@@ -430,6 +431,121 @@ def test_live_event_reducer_is_idempotent_and_fails_on_gap() -> None:
         "count": 1,
         "failure": "JOURNEY_EVENT_SEQUENCE_GAP",
     }
+
+
+def test_live_stream_terminal_disconnect_and_fail_closed_matrix() -> None:
+    identity = {
+        "tenantId": "tenant-a",
+        "securityDomain": "quality",
+        "canonicalWorkflowRevisionId": "revision:one",
+        "canonicalDigest": "a" * 64,
+        "sharedSnapshotId": "snapshot:one",
+        "graphSnapshotId": "graph:one",
+        "platformExecutionIdentity": "execution:one",
+        "approvalId": "approval:one",
+        "placementDecisionId": "placement:one",
+        "evidenceIds": ["evidence:one"],
+        "citationIds": ["citation:one"],
+    }
+    event = {
+        "schemaVersion": "journey-event.v1",
+        "journeyId": "journey:one",
+        "eventId": "event:one",
+        "sequence": 1,
+        "occurredAt": "2026-08-30T01:00:00Z",
+        "eventType": "EXECUTION_SUCCEEDED",
+        "stage": "EXECUTION",
+        "status": "SUCCEEDED",
+        "terminal": True,
+        "reasonCode": "EXECUTION_SUCCEEDED",
+        "localizationKey": "liveJourney.event.executionSucceeded",
+        "provenance": "LIVE_EXECUTION",
+        "identity": identity,
+        "payload": {
+            "revision": 1,
+            "approvalId": "approval:one",
+            "platformExecutionIdentity": "execution:one",
+            "sharedSnapshotId": "snapshot:one",
+            "graphSnapshotId": "graph:one",
+            "evidenceIds": ["evidence:one"],
+            "citationIds": ["citation:one"],
+            "limitationCodes": [],
+        },
+    }
+    result = run_live_event_reducer(
+        f"const base={json.dumps(event, separators=(',', ':'))};"
+        f"const identity={json.dumps(identity, separators=(',', ':'))};"
+        "const binding={journeyId:'journey:one',identity};"
+        "const raw=(value)=>JSON.stringify(value);"
+        "const terminal=(value=base)=>applyJourneyStreamEvent(initialJourneyStreamState,raw(value),binding);"
+        "const success=terminal();"
+        "const failure=terminal({...base,eventType:'EXECUTION_FAILED',status:'FAILED',reasonCode:'EXECUTION_FAILED',localizationKey:'liveJourney.event.executionFailed'});"
+        "const resume=terminal({...base,eventType:'RESUME_UNAVAILABLE',stage:'RESUME',status:'UNAVAILABLE',reasonCode:'RESUME_UNAVAILABLE',localizationKey:'liveJourney.event.resumeUnavailable'});"
+        "const activeEvent={...base,eventType:'EXECUTION_STARTED',status:'STARTED',terminal:false,reasonCode:'EXECUTION_STARTED',localizationKey:'liveJourney.event.executionStarted'};"
+        "const active=terminal(activeEvent);"
+        "const duplicate=applyJourneyStreamEvent(success,raw(base),binding);"
+        "const afterTerminal=applyJourneyStreamEvent(success,raw({...base,eventId:'event:two',sequence:2}),binding);"
+        "const gap=applyJourneyStreamEvent(active,raw({...activeEvent,eventId:'event:three',sequence:3}),binding);"
+        "const reorder=applyJourneyStreamEvent(active,raw({...activeEvent,eventId:'event:zero',sequence:1}),binding);"
+        "const conflict=applyJourneyStreamEvent(active,raw({...activeEvent,status:'FAILED'}),binding);"
+        "const malformed=applyJourneyStreamEvent(initialJourneyStreamState,'{',binding);"
+        "const wrongJourney=terminal({...base,journeyId:'journey:other'});"
+        "const wrongTenant=terminal({...base,identity:{...identity,tenantId:'tenant-b'}});"
+        "const wrongDomain=terminal({...base,identity:{...identity,securityDomain:'other'}});"
+        "const wrongRevision=applyJourneyStreamEvent(active,raw({...base,eventId:'event:two',sequence:2,identity:{...identity,canonicalWorkflowRevisionId:'revision:other'}}),binding);"
+        "const wrongDigest=applyJourneyStreamEvent(active,raw({...base,eventId:'event:two',sequence:2,identity:{...identity,canonicalDigest:'b'.repeat(64)}}),binding);"
+        "const invalidDigest=terminal({...base,identity:{...identity,canonicalDigest:'invalid'}});"
+        "const wrongSnapshot=terminal({...base,identity:{...identity,sharedSnapshotId:'snapshot:other'}});"
+        "console.log(JSON.stringify({"
+        "success:[success.phase,applyJourneyStreamDisconnect(success).phase],"
+        "failure:[failure.phase,applyJourneyStreamDisconnect(failure).phase],"
+        "resume:[resume.phase,applyJourneyStreamDisconnect(resume).phase],"
+        "disconnect:applyJourneyStreamDisconnect(active).failure,"
+        "duplicate:[duplicate.events===success.events,duplicate.events.events.length],"
+        "afterTerminal:afterTerminal.failure,gap:gap.failure,reorder:reorder.failure,conflict:conflict.failure,malformed:malformed.failure,"
+        "identity:[wrongJourney.failure,wrongTenant.failure,wrongDomain.failure,wrongRevision.failure,wrongDigest.failure,invalidDigest.failure,wrongSnapshot.failure]}));"
+    )
+    assert result == {
+        "success": ["TERMINAL", "TERMINAL"],
+        "failure": ["TERMINAL", "TERMINAL"],
+        "resume": ["TERMINAL", "TERMINAL"],
+        "disconnect": "JOURNEY_STREAM_UNAVAILABLE",
+        "duplicate": [True, 1],
+        "afterTerminal": "JOURNEY_EVENT_AFTER_TERMINAL",
+        "gap": "JOURNEY_EVENT_SEQUENCE_GAP",
+        "reorder": "JOURNEY_EVENT_SEQUENCE_GAP",
+        "conflict": "JOURNEY_EVENT_CONFLICTING_DUPLICATE",
+        "malformed": "JOURNEY_EVENT_MALFORMED",
+        "identity": [
+            "JOURNEY_EVENT_SCOPE_MISMATCH",
+            "JOURNEY_EVENT_SCOPE_MISMATCH",
+            "JOURNEY_EVENT_SCOPE_MISMATCH",
+            "JOURNEY_EVENT_CANONICAL_IDENTITY_MISMATCH",
+            "JOURNEY_EVENT_CANONICAL_IDENTITY_MISMATCH",
+            "JOURNEY_EVENT_CANONICAL_IDENTITY_INVALID",
+            "JOURNEY_EVENT_CANONICAL_IDENTITY_INVALID",
+        ],
+    }
+
+
+def test_live_stream_client_closes_terminal_and_cleanup_without_reconnect() -> None:
+    client = (ROOT / "console/frontend/src/api/livePlanningJourneyStream.ts").read_text(
+        encoding="utf-8"
+    )
+    product = source("LivePlanningJourney.tsx")
+    technical = (
+        ROOT / "console/frontend/src/technical/LivePlanningJourneyPanel.tsx"
+    ).read_text(encoding="utf-8")
+    assert 'if (state.phase === "TERMINAL") source.close()' in client
+    assert "applyJourneyStreamDisconnect(state)" in client
+    assert "if (next === state) return" in client
+    assert "disposed = true; source.close()" in client
+    assert "setTimeout" not in client and "new EventSource" in client
+    assert "subscribeLivePlanningJourney({ journeyId" in product
+    assert (
+        "subscribeLivePlanningJourney({ journeyId: journey.journeyId, identity }"
+        in technical
+    )
 
 
 def test_live_event_i18n_catalogs_match_and_preserve_technical_values() -> None:

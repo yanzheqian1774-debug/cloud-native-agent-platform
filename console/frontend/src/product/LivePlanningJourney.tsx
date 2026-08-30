@@ -18,7 +18,10 @@ export function LivePlanningJourney({ journeyId }: { journeyId: string }) {
     });
     return () => controller.abort();
   }, [journeyId]);
-  useEffect(() => subscribeLivePlanningJourney(journeyId, { onEvent: (serialized) => deliver(serialized), onFailure: setFailure }), [journeyId]);
+  useEffect(() => {
+    if (!journey) return;
+    return subscribeLivePlanningJourney({ journeyId, identity: journey.product.identity }, { onEvent: (serialized) => deliver(serialized), onFailure: setFailure });
+  }, [journeyId, journey]);
   if (failure) return <section className="live-journey-state" role="alert"><strong>{t("liveJourney.unavailable")}</strong><span className="stable-id">{failure}</span></section>;
   if (!journey) return <section className="live-journey-state" role="status">{t("liveJourney.loading")}</section>;
   const revision = journey.product.revision;
