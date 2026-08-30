@@ -64,6 +64,8 @@ function validate(payload: unknown): SupplierQualityDemoStart {
 
 export async function startSupplierQualityDemo(
   replayIdentity: string,
+  question: string,
+  locale: "en" | "zh-CN" = "zh-CN",
   signal?: AbortSignal,
 ): Promise<SupplierQualityDemoStart> {
   let response: Response;
@@ -77,7 +79,8 @@ export async function startSupplierQualityDemo(
       body: JSON.stringify({
         scenarioId: "s5-v0.2-supplier-quality-v1",
         replayIdentity,
-        locale: "en",
+        locale,
+        question,
       }),
       signal,
     });

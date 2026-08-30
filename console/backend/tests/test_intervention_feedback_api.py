@@ -401,10 +401,15 @@ def test_frontend_localizes_labels_with_english_fallback_and_preserves_codes() -
 
 def test_frontend_product_technical_and_responsive_seams_are_present() -> None:
     product_page = frontend_source("pages/ProductViewPage.tsx")
+    product_journey = frontend_source("product/QuestionToOutcomeJourney.tsx")
     technical_page = frontend_source("pages/TechnicalViewPage.tsx")
     css = frontend_source("styles/app.css")
-    assert "<InterventionFeedback journeyId={liveJourneyId}" in product_page
-    assert "<InterventionFeedbackPanel journeyId={liveJourneyId}" in technical_page
+    assert "QuestionToOutcomeJourney" in product_page
+    assert "<InterventionFeedback journeyId={journey.journeyId}" in product_journey
+    assert "liveJourney?.successor.outcome" in technical_page
+    assert "<InterventionFeedbackPanel journeyId={supplierQualityJourneyId}" in (
+        technical_page
+    )
     assert ".feedback-grid" in css
     assert "@media (max-width: 600px)" in css
     assert "grid-template-columns: 1fr" in css

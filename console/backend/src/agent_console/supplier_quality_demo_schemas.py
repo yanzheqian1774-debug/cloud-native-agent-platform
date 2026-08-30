@@ -15,6 +15,11 @@ class SupplierQualityDemoStartRequest(StrictDemoModel):
     scenarioId: Literal["s5-v0.2-supplier-quality-v1"]
     replayIdentity: str = Field(min_length=1, max_length=200)
     locale: Literal["en", "zh-CN"] = "en"
+    question: str = Field(
+        default="某供应商近期交付质量持续下降, 请分析原因并制定整改计划。",
+        min_length=8,
+        max_length=500,
+    )
 
 
 class SupplierQualityDemoCallCounts(StrictDemoModel):

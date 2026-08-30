@@ -627,9 +627,12 @@ def get_live_planning_journey(
     journey_id: str,
     principal: JourneyPrincipalDependency,
     service: JourneyServiceDependency,
+    demo_service: SupplierQualityDemoDependency,
 ) -> LiveJourneyResponse:
     """Return equal Product and Technical projections of one live journey."""
     try:
+        if demo_service.owns(journey_id):
+            return demo_service.get(journey_id, principal)
         return service.get(journey_id, principal)
     except JourneyServiceError as exc:
         raise _journey_http_error(exc) from exc

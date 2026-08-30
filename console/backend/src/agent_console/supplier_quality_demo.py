@@ -89,8 +89,12 @@ from agent_console.live_journey import (
 )
 from agent_console.live_journey_schemas import (
     JourneyCitation,
+    JourneyIdentity,
     JourneyOutcome,
+    JourneyProjection,
     JourneyRevision,
+    JourneyTaskProjection,
+    JourneyUnderstanding,
     LiveJourneyResponse,
 )
 from agent_console.matching import (
@@ -246,7 +250,7 @@ class _JourneyRecord:
     reset_token: str
     root: Path
     package: MaterializedPackage
-    canonical: CanonicalWorkflowRevision
+    canonical: CanonicalWorkflowRevision | None
     question: object
     display: LiveJourneyResponse
     counts_at_start: SupplierQualityDemoCallCounts
@@ -327,6 +331,7 @@ class SupplierQualityDemoService:
         fingerprint = _sha(
             {
                 "scenarioId": request.scenarioId,
+                "question": request.question,
                 "locale": request.locale,
                 "tenantId": principal.tenant_id,
                 "securityDomain": principal.security_domain,
@@ -340,11 +345,24 @@ class SupplierQualityDemoService:
             record = self._records[journey_id]
             if not record.active:
                 raise SupplierQualityDemoConflict("DEMO_START_REPLAY_RESET")
-            live = self._live.get(journey_id, principal)
-            return self._start_response(record, live, replayed=True)
+            return self._start_response(record, record.display, replayed=True)
 
         package = self._load_package(principal)
         journey_id = f"supplier-quality-journey:{self._opaque_id()}"
+        normalized_question = " ".join(request.question.split())
+        supplier_terms = (
+            "供应商",
+            "质量",
+            "交付",
+            "缺陷",
+            "整改",
+            "supplier",
+            "quality",
+            "defect",
+            "corrective",
+        )
+        if not any(term in normalized_question.lower() for term in supplier_terms):
+            raise SupplierQualityDemoFailure("UNSUPPORTED_SUPPLIER_QUALITY_QUESTION")
         question = create_business_question(
             request_id=f"supplier-quality-request:{self._opaque_id()}",
             tenant_id=TENANT_ID,
@@ -352,49 +370,72 @@ class SupplierQualityDemoService:
             principal=principal.principal_id,
             locale=request.locale,
             scenario_id=SCENARIO_ID,
-            question=(
-                "Assess Package 7 supplier quality exceptions with governed evidence"
-            ),
+            question=normalized_question,
             created_at=self._clock(),
             provenance="package7-live-initiation",
         )
         generator = _CountingGenerator(self._counts)
         result = self._planning.generate(question, generator)
-        approval = self._planning.request_approval(result)
-        canonical = self._planning.decide(
-            result,
-            approval,
-            tenant_id=TENANT_ID,
-            security_domain=SECURITY_DOMAIN,
-            actor=principal.principal_id,
-            decision=PlanningDecision.APPROVE,
-            decided_at=self._clock(),
-            replay_identity=f"initial-approval:{journey_id}",
-            reason_code="DEMO_INITIATION_EXACT_APPROVAL",
-        )
-        if canonical is None:
-            raise SupplierQualityDemoUnavailable("PLANNING_APPROVAL_UNAVAILABLE")
-        pipeline = self._execute_revision(package, canonical, principal)
-        seed = LiveJourneySeed(
-            journey_id=journey_id,
-            tenant_id=TENANT_ID,
-            security_domain=SECURITY_DOMAIN,
-            canonical_workflow_revision_id=canonical.canonical_workflow_revision_id,
-            canonical_digest=canonical.approved_candidate_digest,
-            approval_id=canonical.approval_id,
-            objective=canonical.intent_revision.objective,
-            task_ids=canonical.ordered_task_ids,
-            shared_snapshot_id=pipeline.shared_snapshot_id,
-            graph_snapshot_id=pipeline.graph_snapshot_id,
-            platform_execution_identity=pipeline.platform_execution_identity,
-            placement_decision_id=pipeline.placement_decision_id,
-            evidence_ids=pipeline.evidence_ids,
-            citations=pipeline.citations,
-            outcome=pipeline.outcome,
-            answer=pipeline.answer,
-            knowledge_state=pipeline.knowledge_state,
-        )
-        live = self._live.register_live(seed)
+        candidate = result.workflow_candidate
+        if candidate is None:
+            raise SupplierQualityDemoFailure("QUESTION_PLANNING_INVALID")
+        if "question" not in request.model_fields_set:
+            approval = self._planning.request_approval(result)
+            canonical = self._planning.decide(
+                result,
+                approval,
+                tenant_id=TENANT_ID,
+                security_domain=SECURITY_DOMAIN,
+                actor=principal.principal_id,
+                decision=PlanningDecision.APPROVE,
+                decided_at=self._clock(),
+                replay_identity=f"initial-approval:{journey_id}",
+                reason_code="DEMO_INITIATION_EXACT_APPROVAL",
+            )
+            if canonical is None:
+                raise SupplierQualityDemoUnavailable("PLANNING_APPROVAL_UNAVAILABLE")
+            pipeline = self._execute_revision(package, canonical, principal)
+            live = self._live.register_live(
+                LiveJourneySeed(
+                    journey_id=journey_id,
+                    tenant_id=TENANT_ID,
+                    security_domain=SECURITY_DOMAIN,
+                    canonical_workflow_revision_id=canonical.canonical_workflow_revision_id,
+                    canonical_digest=canonical.approved_candidate_digest,
+                    approval_id=canonical.approval_id,
+                    objective=canonical.intent_revision.objective,
+                    task_ids=canonical.ordered_task_ids,
+                    shared_snapshot_id=pipeline.shared_snapshot_id,
+                    graph_snapshot_id=pipeline.graph_snapshot_id,
+                    platform_execution_identity=pipeline.platform_execution_identity,
+                    placement_decision_id=pipeline.placement_decision_id,
+                    evidence_ids=pipeline.evidence_ids,
+                    citations=pipeline.citations,
+                    outcome=pipeline.outcome,
+                    answer=pipeline.answer,
+                    knowledge_state=pipeline.knowledge_state,
+                )
+            )
+            reset_token = self._reset_token(journey_id)
+            counts = self._counts.snapshot()
+            record = _JourneyRecord(
+                journey_id=journey_id,
+                replay_identity=request.replayIdentity,
+                request_fingerprint=fingerprint,
+                reset_token=reset_token,
+                root=package.root,
+                package=package,
+                canonical=canonical,
+                question=question,
+                display=live,
+                counts_at_start=counts,
+                outcomes=[pipeline.outcome],
+                execution_evidence_ids=[pipeline.evidence_ids],
+            )
+            self._records[journey_id] = record
+            self._start_replays[request.replayIdentity] = (fingerprint, journey_id)
+            return self._start_response(record, live, replayed=False)
+        live = self._draft_projection(journey_id, question, result, package, revision=1)
         reset_token = self._reset_token(journey_id)
         counts = self._counts.snapshot()
         record = _JourneyRecord(
@@ -404,16 +445,20 @@ class SupplierQualityDemoService:
             reset_token=reset_token,
             root=package.root,
             package=package,
-            canonical=canonical,
+            canonical=None,
             question=question,
             display=live,
             counts_at_start=counts,
-            outcomes=[pipeline.outcome],
-            execution_evidence_ids=[pipeline.evidence_ids],
+            pending=result,
         )
         self._records[journey_id] = record
         self._start_replays[request.replayIdentity] = (fingerprint, journey_id)
         return self._start_response(record, live, replayed=False)
+
+    def get(
+        self, journey_id: str, principal: TrustedJourneyPrincipal
+    ) -> LiveJourneyResponse:
+        return self._authorized_record(journey_id, principal).display
 
     def correct(
         self,
@@ -429,7 +474,44 @@ class SupplierQualityDemoService:
         current = record.display.successor
         predecessor = record.canonical
         if record.pending is not None:
-            raise JourneyConflict("SUCCESSOR_ALREADY_PENDING")
+            current_candidate = record.pending.workflow_candidate
+            if (
+                current_candidate is None
+                or predecessor_digest != current_candidate.candidate_digest
+            ):
+                raise JourneyConflict("CORRECTION_BINDING_MISMATCH")
+            if predecessor_revision_id != current.identity.canonicalWorkflowRevisionId:
+                raise JourneyConflict("CORRECTION_BINDING_MISMATCH")
+            normalized = " ".join(objective.split())
+            if not normalized or len(normalized) > 500:
+                raise SupplierQualityDemoFailure("INVALID_CORRECTION_PATCH")
+            question = create_business_question(
+                request_id=f"supplier-quality-correction:{self._opaque_id()}",
+                tenant_id=TENANT_ID,
+                security_domain=SECURITY_DOMAIN,
+                principal=principal.principal_id,
+                locale="zh-CN",
+                scenario_id=SCENARIO_ID,
+                question=normalized,
+                created_at=self._clock(),
+                provenance="deterministic-supplier-quality-correction",
+            )
+            generator = _CountingGenerator(self._counts)
+            pending = self._planning.generate(question, generator)
+            next_view = self._draft_projection(
+                journey_id,
+                question,
+                pending,
+                record.package,
+                revision=current.revision + 1,
+                predecessor=current,
+            )
+            record.pending = pending
+            record.question = question
+            record.display = next_view
+            return next_view
+        if predecessor is None:
+            raise JourneyConflict("CORRECTION_AUTHORITY_MISSING")
         if (
             predecessor_revision_id != predecessor.canonical_workflow_revision_id
             or predecessor_digest != predecessor.approved_candidate_digest
@@ -559,18 +641,7 @@ class SupplierQualityDemoService:
         pending_view = record.display.successor
         if canonical is None:
             rejected = pending_view.model_copy(update={"approvalState": "REJECTED"})
-            record.display = self._live.register_authoritative_transition(
-                journey_id,
-                principal,
-                predecessor=previous,
-                successor=rejected,
-                event_type="APPROVAL_RECORDED",
-                stage="APPROVAL",
-                status="REJECTED",
-                terminal=True,
-                reason_code=reason_code.upper(),
-                localization_key="liveJourney.event.approvalRecorded",
-            )
+            record.display = record.display.model_copy(update={"successor": rejected})
             return record.display
         record.canonical = canonical
         record.pending = None
@@ -578,6 +649,7 @@ class SupplierQualityDemoService:
             update={
                 "lifecycle": "EXECUTABLE",
                 "approvalState": "APPROVED",
+                "executionState": "NOT_REQUESTED",
                 "identity": pending_view.identity.model_copy(
                     update={
                         "canonicalWorkflowRevisionId": (
@@ -587,22 +659,44 @@ class SupplierQualityDemoService:
                         "approvalId": canonical.approval_id,
                     }
                 ),
-                "limitationCodes": ["RERUN_REQUIRED_FOR_CURRENT_AUTHORITIES"],
+                "limitationCodes": ["EXECUTION_REQUIRES_EXPLICIT_START"],
             }
         )
-        superseded = previous.model_copy(update={"lifecycle": "SUPERSEDED"})
-        record.display = self._live.register_authoritative_transition(
-            journey_id,
-            principal,
-            predecessor=superseded,
-            successor=approved,
-            event_type="APPROVAL_RECORDED",
-            stage="APPROVAL",
-            status="APPROVED",
-            terminal=False,
-            reason_code=reason_code.upper(),
-            localization_key="liveJourney.event.approvalRecorded",
+        superseded = (
+            None
+            if pending_view.predecessorRevisionId is None
+            else previous.model_copy(update={"lifecycle": "SUPERSEDED"})
         )
+        if self._live.owns(journey_id):
+            record.display = self._live.register_authoritative_transition(
+                journey_id,
+                principal,
+                predecessor=superseded,
+                successor=approved,
+                event_type="APPROVAL_RECORDED",
+                stage="APPROVAL",
+                status="APPROVED",
+                terminal=False,
+                reason_code=reason_code.upper(),
+                localization_key="liveJourney.event.approvalRecorded",
+            )
+        else:
+            record.display = record.display.model_copy(
+                update={
+                    "product": JourneyProjection(
+                        projection="PRODUCT",
+                        identity=approved.identity,
+                        revision=approved,
+                    ),
+                    "technical": JourneyProjection(
+                        projection="TECHNICAL",
+                        identity=approved.identity,
+                        revision=approved,
+                    ),
+                    "predecessor": superseded,
+                    "successor": approved,
+                }
+            )
         return record.display
 
     def rerun(
@@ -618,6 +712,7 @@ class SupplierQualityDemoService:
         if (
             current.lifecycle != "EXECUTABLE"
             or current.approvalState != "APPROVED"
+            or record.canonical is None
             or revision_id != record.canonical.canonical_workflow_revision_id
             or digest != record.canonical.approved_candidate_digest
         ):
@@ -655,11 +750,12 @@ class SupplierQualityDemoService:
                 localization_key="liveJourney.event.executionStarted",
             )
 
+        first_execution = not self._live.owns(journey_id)
         pipeline = self._execute_revision(
             package,
             record.canonical,
             principal,
-            before_execution=publish_execution_start,
+            before_execution=None if first_execution else publish_execution_start,
         )
         succeeded = pipeline.outcome.classification == "SUCCEEDED"
         completed = current.model_copy(
@@ -684,10 +780,36 @@ class SupplierQualityDemoService:
                 "citations": list(pipeline.citations),
                 "outcome": pipeline.outcome,
                 "limitationCodes": [],
+                "projectedTasks": [
+                    task.model_copy(update={"state": "SUCCEEDED"})
+                    for task in current.projectedTasks
+                ],
             }
         )
         record.outcomes.append(pipeline.outcome)
         record.execution_evidence_ids.append(pipeline.evidence_ids)
+        if first_execution:
+            seed = LiveJourneySeed(
+                journey_id=journey_id,
+                tenant_id=TENANT_ID,
+                security_domain=SECURITY_DOMAIN,
+                canonical_workflow_revision_id=record.canonical.canonical_workflow_revision_id,
+                canonical_digest=record.canonical.approved_candidate_digest,
+                approval_id=record.canonical.approval_id,
+                objective=record.canonical.intent_revision.objective,
+                task_ids=record.canonical.ordered_task_ids,
+                shared_snapshot_id=pipeline.shared_snapshot_id,
+                graph_snapshot_id=pipeline.graph_snapshot_id,
+                platform_execution_identity=pipeline.platform_execution_identity,
+                placement_decision_id=pipeline.placement_decision_id,
+                evidence_ids=pipeline.evidence_ids,
+                citations=pipeline.citations,
+                outcome=pipeline.outcome,
+                answer=pipeline.answer,
+                knowledge_state=pipeline.knowledge_state,
+            )
+            self._live.register_live(seed)
+            publish_execution_start()
         record.display = self._live.register_authoritative_transition(
             journey_id,
             principal,
@@ -706,6 +828,153 @@ class SupplierQualityDemoService:
         )
         return record.display
 
+    def _draft_projection(
+        self,
+        journey_id: str,
+        question: Any,
+        result: PlanningResult,
+        package: MaterializedPackage,
+        *,
+        revision: int,
+        predecessor: JourneyRevision | None = None,
+    ) -> LiveJourneyResponse:
+        candidate = result.workflow_candidate
+        if candidate is None:
+            raise SupplierQualityDemoFailure("QUESTION_PLANNING_INVALID")
+        descriptors = {
+            item["descriptorId"]: item for item in package.descriptors["descriptors"]
+        }
+        declarations = package.roles["roles"]
+        analyst = next(
+            item for item in declarations if "analyst" in item["definitionId"]
+        )
+        reviewer = next(
+            item for item in declarations if "reviewer" in item["definitionId"]
+        )
+        tasks = []
+        for index, task in enumerate(candidate.tasks):
+            declaration = (
+                reviewer if task.future_task_id == "review-quality-plan" else analyst
+            )
+            descriptor = descriptors[declaration["descriptorId"]]
+            tasks.append(
+                JourneyTaskProjection(
+                    taskId=task.future_task_id,
+                    title={
+                        "collect-quality-inputs": "汇总质量证据",
+                        "analyze-quality-exception": "分析质量异常与潜在根因",
+                        "review-quality-plan": "审查整改计划并确认执行边界",
+                    }[task.future_task_id],
+                    purpose=(
+                        f"针对业务问题 {question.question}: {task.business_purpose}"
+                        if index == 0
+                        else task.business_purpose
+                    ),
+                    inputs=list(task.inputs),
+                    actions=[task.task_type],
+                    dependencies=list(task.dependencies),
+                    expectedOutputs=list(task.outputs),
+                    completionConditions=list(task.acceptance_conditions),
+                    approvalRequired=task.approval_classification == "HUMAN",
+                    requiredRole="质量审核协调员"
+                    if declaration is reviewer
+                    else "供应商质量分析员",
+                    matchedRole=descriptor["title"],
+                    matchState="MATCHED",
+                    definitionId=declaration["definitionId"],
+                    definitionVersion=declaration["versionId"],
+                    definitionDigest=None,
+                    descriptorId=declaration["descriptorId"],
+                    publicationState=declaration["lifecycle"],
+                    matchAuthorization=declaration["matchability"],
+                    publicationDecisionId=declaration["publicationDecisionId"],
+                    skills=list(descriptor["skills"]),
+                    mcpCapabilities=list(descriptor["capabilities"]),
+                    knowledgeRefs=list(descriptor["knowledge"]),
+                    runtimeRefs=list(descriptor["runtimes"]),
+                    readiness="READY",
+                    reasonCodes=["PUBLISHED_ROLE_DECLARATION_MATCHED"],
+                    state="READY" if index == 0 else "WAITING_DEPENDENCY",
+                )
+            )
+        digest = candidate.candidate_digest
+        identity = JourneyIdentity(
+            tenantId=TENANT_ID,
+            securityDomain=SECURITY_DOMAIN,
+            canonicalWorkflowRevisionId=f"workflow-candidate:{digest}",
+            canonicalDigest=digest,
+            sharedSnapshotId=f"draft-snapshot:{digest}",
+            graphSnapshotId=f"draft-graph:{digest}",
+            platformExecutionIdentity=None,
+            approvalId=f"pending-approval:{digest}",
+            placementDecisionId="NOT_BOUND",
+            evidenceIds=[],
+            citationIds=[],
+        )
+        understanding = JourneyUnderstanding(
+            question=question.question,
+            scope=[
+                f"当前业务问题: {question.question}",
+                "脱敏供应商质量案例",
+                "交付质量、缺陷、根因、整改与改善验证",
+            ],
+            facts=["当前演示使用三个经过校验的脱敏质量案例"],
+            assumptions=list(result.intent_candidate.assumptions),
+            uncertainties=list(result.intent_candidate.uncertainties),
+            expectedOutcome=list(candidate.intent_revision.success_criteria),
+            provenance="DETERMINISTIC_DEMO_INTERPRETATION",
+        )
+        successor = JourneyRevision(
+            revision=revision,
+            predecessorRevisionId=(
+                None
+                if predecessor is None
+                else predecessor.identity.canonicalWorkflowRevisionId
+            ),
+            objective=candidate.intent_revision.objective,
+            lifecycle="PENDING_APPROVAL",
+            approvalState="PENDING",
+            identity=identity,
+            planTaskIds=list(candidate.ordered_task_ids),
+            matchState="MATCHED",
+            placementState="UNAVAILABLE",
+            knowledgeState="UNAVAILABLE",
+            executionState="NOT_REQUESTED",
+            answer=None,
+            citations=[],
+            outcome=None,
+            limitationCodes=[
+                "PROJECTED_TASKS_NOT_PERSISTED",
+                "EXACT_APPROVAL_REQUIRED",
+            ],
+            understanding=understanding,
+            decomposition=[f"围绕业务问题确认分析范围: {question.question}"]
+            + [task.title for task in tasks]
+            + ["执行获批计划并验证改善效果"],
+            projectedTasks=tasks,
+        )
+        superseded = (
+            None
+            if predecessor is None
+            else predecessor.model_copy(update={"lifecycle": "SUPERSEDED"})
+        )
+        product = JourneyProjection(
+            projection="PRODUCT", identity=identity, revision=successor
+        )
+        technical = JourneyProjection(
+            projection="TECHNICAL", identity=identity, revision=successor
+        )
+        return LiveJourneyResponse(
+            journeyId=journey_id,
+            state="LIVE",
+            provenance="LIVE_EXECUTION",
+            reasonCode="REVIEWABLE_DRAFT_READY",
+            product=product,
+            technical=technical,
+            predecessor=superseded,
+            successor=successor,
+        )
+
     def reset(
         self,
         journey_id: str,
@@ -723,7 +992,8 @@ class SupplierQualityDemoService:
             or not hmac.compare_digest(record.reset_token, expected)
         ):
             raise SupplierQualityDemoDenied("DEMO_RESET_CONFIRMATION_MISMATCH")
-        self._live.unregister_live(journey_id, principal)
+        if self._live.owns(journey_id):
+            self._live.unregister_live(journey_id, principal)
         record.active = False
         self._start_replays.pop(record.replay_identity, None)
         return SupplierQualityDemoResetResponse(
@@ -752,7 +1022,8 @@ class SupplierQualityDemoService:
         record = self._records.get(journey_id)
         if record is None or not record.active:
             raise JourneyNotFound()
-        self._live.get(journey_id, principal)
+        if self._live.owns(journey_id):
+            self._live.get(journey_id, principal)
         return record
 
     @staticmethod

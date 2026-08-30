@@ -195,8 +195,10 @@ def test_live_frontend_mode_is_explicit_and_fixture_free_at_render_boundary() ->
     technical = (ROOT / "console/frontend/src/pages/TechnicalViewPage.tsx").read_text()
     api = (ROOT / "console/frontend/src/api/supplierQualityDemo.ts").read_text()
     assert "VITE_SUPPLIER_QUALITY_DEMO_MODE" in app
-    assert "LIVE_EXECUTION" in app
+    assert "if (supplierQualityLive)" in app
+    assert "QuestionToOutcomeJourney" in product
     assert "supplierQualityJourneyId" in product
     assert "supplierQualityJourneyId" in technical
     assert "SYNTHETIC_PREVIEW" not in api
+    assert "executionSnapshotFixture" not in product
     assert "/api/internal/demo/v1/supplier-quality-journeys" in api
