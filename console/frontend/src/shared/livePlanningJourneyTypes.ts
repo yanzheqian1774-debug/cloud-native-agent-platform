@@ -20,6 +20,9 @@ export interface JourneyOutcome {
   summary: string; comparableMetric: string; comparableValue: number | null;
 }
 
+export interface JourneyUnderstanding { question: string; scope: string[]; facts: string[]; assumptions: string[]; uncertainties: string[]; expectedOutcome: string[]; provenance: "DETERMINISTIC_DEMO_INTERPRETATION"; }
+export interface JourneyTaskProjection { taskId: string; title: string; purpose: string; inputs: string[]; actions: string[]; dependencies: string[]; expectedOutputs: string[]; completionConditions: string[]; approvalRequired: boolean; requiredRole: string; matchedRole: string | null; matchState: "MATCHED" | "ROLE_GAP" | "NOT_EVALUATED"; definitionId: string | null; definitionVersion: string | null; definitionDigest: string | null; descriptorId: string | null; publicationState: string; matchAuthorization: string; publicationDecisionId: string | null; skills: string[]; mcpCapabilities: string[]; knowledgeRefs: string[]; runtimeRefs: string[]; readiness: "READY" | "ROLE_GAP" | "DENIED" | "UNAVAILABLE" | "NOT_BOUND"; reasonCodes: string[]; state: "NOT_STARTED" | "WAITING_DEPENDENCY" | "READY" | "RUNNING" | "SUCCEEDED" | "FAILED"; }
+
 export interface JourneyRevision {
   revision: number; predecessorRevisionId: string | null; objective: string;
   lifecycle: "PENDING_APPROVAL" | "APPROVED" | "EXECUTABLE" | "SUPERSEDED";
@@ -29,6 +32,7 @@ export interface JourneyRevision {
   knowledgeState: KnowledgeState;
   executionState: "NOT_REQUESTED" | "AUTHORIZED_HANDOFF" | "RUNNING" | "SUCCEEDED" | "FAILED" | "UNAVAILABLE";
   answer: string | null; citations: JourneyCitation[]; outcome: JourneyOutcome | null; limitationCodes: string[];
+  understanding: JourneyUnderstanding | null; decomposition: string[]; projectedTasks: JourneyTaskProjection[];
 }
 
 export interface JourneyProjection { projection: "PRODUCT" | "TECHNICAL"; identity: JourneyIdentity; revision: JourneyRevision; }

@@ -1,0 +1,31 @@
+# Limitations
+
+- The experience is intentionally limited to sanitized Supplier Quality questions. Unsupported domains fail before planning, matching, or execution.
+- Understanding and plan generation are deterministic bounded Demo interpretation, not free-form model reasoning.
+- Projected tasks are read-only plan projections and are not persistent Task authority.
+- The DAG is a focused dependency visualization, not a graph editor or new graph source of truth. It renders only declared task dependencies.
+- The execution request is synchronous. The authoritative event stream records causal authorization/start/terminal events, but this Checkpoint does not introduce asynchronous orchestration or persistence.
+- The comparable `supplierQualityCaseCount` value is a Demo comparison metric, not a verified production improvement target.
+- Result prose from the existing execution authority remains English in some evidence-backed fields; Chinese headings and explanations provide the primary Product hierarchy without translating or altering authoritative values.
+- The repository reports one existing Starlette/httpx deprecation warning; it is unrelated to S5-IMPL-040.
+- No deployment or multi-process durability claim is made. Journey and stream ownership remain process-local as before.
+- The effective directory is deliberately limited to resources referenced by the current Supplier Quality journey snapshot; it is not an enterprise-wide inventory.
+- The current snapshot does not separately expose MCP Server or MCP Operation identities, so those fields are shown honestly as `NOT_EXPOSED` and no invocation relationship is invented.
+- Cross-view selection is bounded URL presentation state. It is not persisted and never replaces canonical journey, revision, or snapshot authority.
+- The local relationship view covers relationships proved by the current projection; it does not claim to be a complete system graph.
+- Business Capability identities are the canonical bounded task action codes exposed by the plan projection, with Chinese presentation labels; this is not a new capability registry.
+- No authoritative Model participation is present, so the directory intentionally omits a Model category.
+- The runtime scene has no Provider identity, infrastructure topology, CPU/GPU/memory telemetry, token usage, or real-time logs. Missing fields are labelled unavailable.
+- Execution uses a bounded Platform Execution Identity. No independent persistent Agent Instance is created or implied.
+- The eight-family status legend documents the visual vocabulary; it is not evidence that every family occurred in the captured execution. Only states supplied by the authoritative snapshot are rendered as current state.
+- Typography is optimized for the captured Chinese-first Product and Technical workflows and the repository breakpoints; it does not claim a platform-wide design-system migration.
+- Local Human preview requires the existing server-owned Demo principal, exact tenant/security domain, and a separately materialized Package 7 root. These values configure only the bounded local process; localhost is not trusted automatically.
+- The top-level Demo access gate has no separate purpose field or principal allowlist beyond a non-empty trusted principal and exact tenant/security-domain scope. Purpose-specific authorization remains enforced by downstream Package 7 authorities after this precondition passes.
+- Workspace, Task Center, and directories project the single process-local current Demo journey; they are not persistent enterprise work-management or catalog authorities.
+- The semantic relationship view is a read-only projection of relationships present in the current snapshot. It does not infer missing one-to-many records or create graph authority.
+- A browser reload on a deep Product/Technical URL does not restore the process-local frontend journey identifier; the direct acceptance path intentionally preserves context through in-app navigation.
+- The two authorized screenshot files bound the persisted image inventory. Other information-architecture views are documented as reproducible Browser steps rather than additional files.
+- The current backend exposes exact approval and immutable correction authority, but no rejection endpoint. The pending UI therefore explains and disables rejection rather than recording a fabricated decision.
+- Approval principal and approval timestamp are not exposed by the current response contract and are labelled unavailable; the approval ID and digest remain available only in technical disclosure.
+- Current task dependencies are sequential. No parallel or convergence edge is displayed because the authoritative snapshot declares none.
+- Product execution timestamps are not separate response fields; exact start/end timestamps remain available through authoritative Technical events.

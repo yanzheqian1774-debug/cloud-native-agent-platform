@@ -46,6 +46,47 @@ class JourneyOutcome(StrictModel):
     comparableValue: float | None
 
 
+class JourneyUnderstanding(StrictModel):
+    question: str
+    scope: list[str]
+    facts: list[str]
+    assumptions: list[str]
+    uncertainties: list[str]
+    expectedOutcome: list[str]
+    provenance: Literal["DETERMINISTIC_DEMO_INTERPRETATION"]
+
+
+class JourneyTaskProjection(StrictModel):
+    taskId: str
+    title: str
+    purpose: str
+    inputs: list[str]
+    actions: list[str]
+    dependencies: list[str]
+    expectedOutputs: list[str]
+    completionConditions: list[str]
+    approvalRequired: bool
+    requiredRole: str
+    matchedRole: str | None
+    matchState: Literal["MATCHED", "ROLE_GAP", "NOT_EVALUATED"]
+    definitionId: str | None
+    definitionVersion: str | None
+    definitionDigest: str | None
+    descriptorId: str | None = None
+    publicationState: str = "NOT_EXPOSED"
+    matchAuthorization: str = "NOT_EXPOSED"
+    publicationDecisionId: str | None = None
+    skills: list[str]
+    mcpCapabilities: list[str]
+    knowledgeRefs: list[str]
+    runtimeRefs: list[str]
+    readiness: Literal["READY", "ROLE_GAP", "DENIED", "UNAVAILABLE", "NOT_BOUND"]
+    reasonCodes: list[str]
+    state: Literal[
+        "NOT_STARTED", "WAITING_DEPENDENCY", "READY", "RUNNING", "SUCCEEDED", "FAILED"
+    ]
+
+
 class JourneyRevision(StrictModel):
     revision: int = Field(ge=1)
     predecessorRevisionId: str | None
@@ -71,6 +112,9 @@ class JourneyRevision(StrictModel):
     citations: list[JourneyCitation]
     outcome: JourneyOutcome | None
     limitationCodes: list[str]
+    understanding: JourneyUnderstanding | None = None
+    decomposition: list[str] = []
+    projectedTasks: list[JourneyTaskProjection] = []
 
 
 class JourneyProjection(StrictModel):

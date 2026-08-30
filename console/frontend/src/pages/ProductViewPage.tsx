@@ -1,37 +1,9 @@
-import { useEffect, useReducer, useState } from "react";
-import { loadProductPreview } from "../product/adapter";
-import { initialJourney, journeyReducer } from "../product/journey";
-import { ProductNavigation } from "../product/ProductNavigation";
-import { BusinessJourney } from "../product/BusinessJourney";
-import { DigitalEmployeeDirectory } from "../product/DigitalEmployeeDirectory";
-import { DraftDiffApproval } from "../product/DraftDiffApproval";
-import { ProductGraph } from "../product/ProductGraph";
-import { OutcomeEvidence } from "../product/OutcomeEvidence";
-import { RuntimeSupport } from "../product/RuntimeSupport";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useI18n } from "../i18n/useI18n";
-import { useSelectedExecution } from "../shared/SelectedExecutionContext";
-import { LivePlanningJourney } from "../product/LivePlanningJourney";
-import { InterventionFeedback } from "../product/InterventionFeedback";
-import { NavLink } from "react-router-dom";
+import { QuestionToOutcomeJourney } from "../product/QuestionToOutcomeJourney";
 
-const fixture = loadProductPreview();
-
-export function ProductViewPage({ supplierQualityJourneyId }: { supplierQualityJourneyId?: string }) {
-  const { t } = useI18n(); const { selection, selectEmployee, selectRevision } = useSelectedExecution(); const [state, dispatch] = useReducer(journeyReducer, { ...initialJourney, selectedEmployeeId: selection.employeeId, revision: selection.revisionId }); const [active, setActive] = useState("work"); const [correction, setCorrection] = useState("");
-  useEffect(() => { selectEmployee(state.selectedEmployeeId); selectRevision(state.revision); }, [state.selectedEmployeeId, state.revision, selectEmployee, selectRevision]);
-  function navigate(section: string) { setActive(section); document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-  const liveJourneyId = supplierQualityJourneyId ?? import.meta.env.VITE_LIVE_PLANNING_JOURNEY_ID as string | undefined;
-  if (supplierQualityJourneyId) return <main className="product-page"><nav className="view-switcher" aria-label={t("nav.views")}><NavLink to="/product">{t("nav.productView")}</NavLink><NavLink to="/technical">{t("nav.technicalView")}</NavLink></nav><header className="product-hero"><p className="eyebrow">LIVE_EXECUTION</p><h1>{t("supplierQuality.product.title")}</h1><p>{t("supplierQuality.product.description")}</p></header><div className="preview-warning" role="status"><strong>LIVE_EXECUTION</strong><span>{t("supplierQuality.liveOnly")}</span></div><LivePlanningJourney journeyId={supplierQualityJourneyId} /><InterventionFeedback journeyId={supplierQualityJourneyId} /></main>;
-  return <main className="product-page"><ProductNavigation active={active} onSelect={navigate} />
-    {liveJourneyId && <LivePlanningJourney journeyId={liveJourneyId} />}
-    {liveJourneyId && <InterventionFeedback journeyId={liveJourneyId} />}
-    <div className="preview-warning" role="status"><strong>{fixture.classification.join(" · ")}</strong><span>{t("product.preview.warning")}</span></div>
-    <BusinessJourney fixture={fixture} state={state} dispatch={dispatch} />
-    <DigitalEmployeeDirectory employees={fixture.employees} selectedId={state.selectedEmployeeId} onSelect={(id) => dispatch({ type: "SELECT_EMPLOYEE", id })} />
-    {state.step !== "QUESTION" && <DraftDiffApproval state={state} onApprove={() => dispatch({ type: "APPROVE" })} onReject={() => dispatch({ type: "REJECT" })} />}
-    <ProductGraph nodes={fixture.nodes} edges={fixture.edges} snapshotId={fixture.graphSnapshotId} executionId={fixture.platformExecutionIdentity} />
-    <RuntimeSupport />
-    {(state.step === "OUTCOME" || state.scenario !== "ALLOW") && <OutcomeEvidence fixture={fixture} state={state} />}
-    <section className="product-section panel-pad" aria-labelledby="correction-title"><div className="section-heading"><h2 id="correction-title">{t("product.correction.title")}</h2><p>{t("product.correction.description")}</p></div><label htmlFor="correction">{t("product.correction.label")}</label><textarea id="correction" value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={t("product.correction.placeholder")} /><button disabled={!correction.trim()} onClick={() => { dispatch({ type: "CORRECT", text: correction }); document.getElementById("approvals")?.scrollIntoView({ behavior: "smooth" }); }}>{t("product.correction.create")}</button></section>
-  </main>;
+export function ProductViewPage({ supplierQualityJourneyId, onJourneyStarted }: { supplierQualityJourneyId?: string; onJourneyStarted?: (id: string) => void }) {
+  const { t } = useI18n();
+  const { search } = useLocation();
+  return <main className="product-page question-to-outcome-page"><nav className="demo-breadcrumb" aria-label="面包屑"><Link to="/workspace">工作台</Link><span>/</span><Link to="/tasks">任务</Link><span>/</span><strong>{supplierQualityJourneyId?"供应商质量整改":"提出问题"}</strong></nav><nav className="view-switcher" aria-label={t("nav.views")}><NavLink to={{ pathname: "/product", search }}>业务视图</NavLink><NavLink to={{ pathname: "/technical", search }}>技术视图</NavLink></nav><QuestionToOutcomeJourney journeyId={supplierQualityJourneyId} onJourneyStarted={onJourneyStarted} /></main>;
 }

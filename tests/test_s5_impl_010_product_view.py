@@ -82,6 +82,7 @@ def test_authorized_product_source_structure_exists() -> None:
         "RuntimeSupport.tsx",
         "LivePlanningJourney.tsx",
         "InterventionFeedback.tsx",
+        "QuestionToOutcomeJourney.tsx",
     }
     assert {path.name for path in PRODUCT.iterdir()} == expected
 
@@ -323,7 +324,10 @@ def test_locale_switch_lives_outside_journey_state() -> None:
     provider = (ROOT / "console/frontend/src/i18n/I18nProvider.tsx").read_text(
         encoding="utf-8"
     )
-    assert "useReducer(journeyReducer" in page and "useState<Locale>" in provider
+    journey = source("QuestionToOutcomeJourney.tsx")
+    assert "useI18n" in page and "useI18n" in journey
+    assert "useState<Locale>" in provider
+    assert 'locale==="zh-CN"' in journey
     assert "locale" not in source("journey.ts")
 
 

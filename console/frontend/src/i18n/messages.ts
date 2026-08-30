@@ -615,4 +615,4 @@ export type Locale = keyof typeof messages;
 export type MessageKey =
   keyof (typeof messages)["en-US"];
 
-export const DEFAULT_LOCALE: Locale = "en-US";
+export const DEFAULT_LOCALE: Locale = "zh-CN";

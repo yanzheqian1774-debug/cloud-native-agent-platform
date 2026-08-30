@@ -196,7 +196,11 @@ def test_frontend_live_route_is_explicit_bilingual_and_fixture_free() -> None:
     api_source = (ROOT / "console/frontend/src/api/supplierQualityDemo.ts").read_text()
     messages = (ROOT / "console/frontend/src/i18n/messages.ts").read_text()
     assert "VITE_SUPPLIER_QUALITY_DEMO_MODE" in app_source
-    assert "LIVE_EXECUTION" in app_source
+    assert "if (supplierQualityLive)" in app_source
+    assert (
+        "QuestionToOutcomeJourney"
+        in (ROOT / "console/frontend/src/pages/ProductViewPage.tsx").read_text()
+    )
     assert "SYNTHETIC_PREVIEW" not in api_source
     assert '"supplierQuality.product.title"' in messages
     assert "供应商质量实时旅程" in messages
