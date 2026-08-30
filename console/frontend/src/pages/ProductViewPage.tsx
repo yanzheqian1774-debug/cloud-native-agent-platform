@@ -12,14 +12,16 @@ import { useI18n } from "../i18n/useI18n";
 import { useSelectedExecution } from "../shared/SelectedExecutionContext";
 import { LivePlanningJourney } from "../product/LivePlanningJourney";
 import { InterventionFeedback } from "../product/InterventionFeedback";
+import { NavLink } from "react-router-dom";
 
 const fixture = loadProductPreview();
 
-export function ProductViewPage() {
+export function ProductViewPage({ supplierQualityJourneyId }: { supplierQualityJourneyId?: string }) {
   const { t } = useI18n(); const { selection, selectEmployee, selectRevision } = useSelectedExecution(); const [state, dispatch] = useReducer(journeyReducer, { ...initialJourney, selectedEmployeeId: selection.employeeId, revision: selection.revisionId }); const [active, setActive] = useState("work"); const [correction, setCorrection] = useState("");
   useEffect(() => { selectEmployee(state.selectedEmployeeId); selectRevision(state.revision); }, [state.selectedEmployeeId, state.revision, selectEmployee, selectRevision]);
   function navigate(section: string) { setActive(section); document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-  const liveJourneyId = import.meta.env.VITE_LIVE_PLANNING_JOURNEY_ID as string | undefined;
+  const liveJourneyId = supplierQualityJourneyId ?? import.meta.env.VITE_LIVE_PLANNING_JOURNEY_ID as string | undefined;
+  if (supplierQualityJourneyId) return <main className="product-page"><nav className="view-switcher" aria-label={t("nav.views")}><NavLink to="/product">{t("nav.productView")}</NavLink><NavLink to="/technical">{t("nav.technicalView")}</NavLink></nav><header className="product-hero"><p className="eyebrow">LIVE_EXECUTION</p><h1>{t("supplierQuality.product.title")}</h1><p>{t("supplierQuality.product.description")}</p></header><div className="preview-warning" role="status"><strong>LIVE_EXECUTION</strong><span>{t("supplierQuality.liveOnly")}</span></div><LivePlanningJourney journeyId={supplierQualityJourneyId} /><InterventionFeedback journeyId={supplierQualityJourneyId} /></main>;
   return <main className="product-page"><ProductNavigation active={active} onSelect={navigate} />
     {liveJourneyId && <LivePlanningJourney journeyId={liveJourneyId} />}
     {liveJourneyId && <InterventionFeedback journeyId={liveJourneyId} />}

@@ -18,8 +18,14 @@ import { ExecutionPreviewError, fetchExecutionPreview, type PreviewMode } from "
 import { configureProductPreview, loadLiveProductPreview } from "./product/adapter";
 import { configureTechnicalPreview, loadLiveTechnicalPreview } from "./technical/adapter";
 import type { SharedExecutionSnapshot } from "./shared/executionSnapshotTypes";
+import {
+  startSupplierQualityDemo,
+  SupplierQualityDemoError,
+} from "./api/supplierQualityDemo";
+import { useI18n } from "./i18n/useI18n";
 
 type AppPreviewState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "ERROR";
+type DemoState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "STALE" | "CONFLICT" | "ERROR";
 
 function configuredMode(): PreviewMode {
   return import.meta.env.VITE_EXECUTION_PREVIEW_MODE === "live" ? "live" : "synthetic-preview";
@@ -43,12 +49,37 @@ function LiveExecutionView({ snapshot, context }: { snapshot: SharedExecutionSna
 }
 
 function App() {
+  const { t } = useI18n();
   const technicalPath = "/technical";
   const mode = configuredMode();
+  const supplierQualityLive = import.meta.env.VITE_SUPPLIER_QUALITY_DEMO_MODE === "live";
   const [previewState, setPreviewState] = useState<AppPreviewState>(mode === "live" ? "LOADING" : "READY");
   const [reasonCode, setReasonCode] = useState(mode === "live" ? "PREVIEW_LOADING" : "SYNTHETIC_PREVIEW_EXPLICIT");
   const [liveSnapshot, setLiveSnapshot] = useState<SharedExecutionSnapshot | null>(null);
+  const [demoState, setDemoState] = useState<DemoState>(supplierQualityLive ? "LOADING" : "READY");
+  const [demoReasonCode, setDemoReasonCode] = useState(supplierQualityLive ? "SUPPLIER_QUALITY_DEMO_LOADING" : "SUPPLIER_QUALITY_DEMO_DISABLED");
+  const [supplierQualityJourneyId, setSupplierQualityJourneyId] = useState<string | null>(null);
   useEffect(() => {
+    if (!supplierQualityLive) return;
+    const controller = new AbortController();
+    startSupplierQualityDemo("supplier-quality-console-live-v1", controller.signal)
+      .then((started) => {
+        setSupplierQualityJourneyId(started.journeyId);
+        setDemoReasonCode(started.live.reasonCode);
+        setDemoState("READY");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const failure = error instanceof SupplierQualityDemoError
+          ? error
+          : new SupplierQualityDemoError("ERROR", "SUPPLIER_QUALITY_DEMO_ERROR");
+        setDemoReasonCode(failure.reasonCode);
+        setDemoState(failure.state);
+      });
+    return () => controller.abort();
+  }, [supplierQualityLive]);
+  useEffect(() => {
+    if (supplierQualityLive) return;
     if (mode === "synthetic-preview") {
       configureProductPreview(mode);
       configureTechnicalPreview(mode);
@@ -71,7 +102,10 @@ function App() {
       setPreviewState(failure.state);
     });
     return () => controller.abort();
-  }, [mode]);
+  }, [mode, supplierQualityLive]);
+  if (supplierQualityLive) {
+    return <BrowserRouter><SelectedExecutionContext><ConsoleShell>{demoState !== "READY" || !supplierQualityJourneyId ? <main className="product-page"><section className="preview-warning" role={demoState === "LOADING" ? "status" : "alert"} aria-live="polite"><strong>LIVE_EXECUTION · {demoState}</strong><span>{demoState === "LOADING" ? t("supplierQuality.loading") : t("supplierQuality.unavailable")}</span><span className="stable-id">{demoReasonCode}</span></section></main> : <Routes><Route path="/" element={<Navigate to="/product" replace />} /><Route path="/product" element={<ProductViewPage supplierQualityJourneyId={supplierQualityJourneyId} />} /><Route path={technicalPath} element={<TechPage supplierQualityJourneyId={supplierQualityJourneyId} />} /><Route path="*" element={<Navigate to="/product" replace />} /></Routes>}</ConsoleShell></SelectedExecutionContext></BrowserRouter>;
+  }
   if (previewState !== "READY") {
     return <main className="product-page"><section className="preview-warning" role={previewState === "LOADING" ? "status" : "alert"} aria-live="polite"><strong>{mode.toUpperCase()} · {previewState}</strong><span className="stable-id">{reasonCode}</span></section></main>;
   }

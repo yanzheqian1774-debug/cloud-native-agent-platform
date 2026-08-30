@@ -336,6 +336,68 @@ class LiveJourneyCoordinator:
             successor=successor,
         )
 
+    def owns(self, journey_id: str) -> bool:
+        """Return whether this process owns an active presentation registration."""
+        return journey_id in self._journeys
+
+    def register_authoritative_transition(
+        self,
+        journey_id: str,
+        principal: TrustedJourneyPrincipal,
+        *,
+        predecessor: JourneyRevision | None,
+        successor: JourneyRevision,
+        event_type: JourneyEventType,
+        stage: JourneyStage,
+        status: JourneyStatus,
+        terminal: bool,
+        reason_code: str,
+        localization_key: str,
+    ) -> LiveJourneyResponse:
+        """Project one transition already issued by an upstream authority."""
+        _, current = self._authorized(journey_id, principal)
+        identity = successor.identity
+        if not principal.permits(identity.tenantId, identity.securityDomain):
+            raise JourneyDenied()
+        if successor.revision < current.revision:
+            raise JourneyConflict("AUTHORITATIVE_REVISION_REGRESSION")
+        if predecessor is not None and (
+            predecessor.identity.tenantId != identity.tenantId
+            or predecessor.identity.securityDomain != identity.securityDomain
+            or successor.predecessorRevisionId
+            != predecessor.identity.canonicalWorkflowRevisionId
+        ):
+            raise JourneyConflict("AUTHORITATIVE_SUCCESSOR_BINDING_MISMATCH")
+        self._journeys[journey_id] = (predecessor, successor)
+        self._publish(
+            journey_id,
+            successor,
+            event_type=event_type,
+            stage=stage,
+            status=status,
+            terminal=terminal,
+            reason_code=reason_code,
+            localization_key=localization_key,
+        )
+        return self.get(journey_id, principal)
+
+    def unregister_live(
+        self, journey_id: str, principal: TrustedJourneyPrincipal
+    ) -> None:
+        """Remove one exact bridge-owned presentation and its transient stream."""
+        _, current = self._authorized(journey_id, principal)
+        scope = JourneyStreamScope(
+            current.identity.tenantId,
+            current.identity.securityDomain,
+            journey_id,
+        )
+        del self._journeys[journey_id]
+        self._provenance.pop(journey_id, None)
+        self._event_sequences.pop(scope.key, None)
+        source = self._event_source
+        if source is not None and hasattr(source, "clear_scope"):
+            source.clear_scope(scope)
+
     def correct(
         self,
         journey_id: str,

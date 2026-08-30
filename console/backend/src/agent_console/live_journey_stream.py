@@ -38,6 +38,8 @@ class JourneyEventSource(Protocol):
 
     def next_sequence(self, scope: JourneyStreamScope) -> int: ...
 
+    def clear_scope(self, scope: JourneyStreamScope) -> bool: ...
+
 
 @dataclass(frozen=True, slots=True)
 class JourneyStreamScope:
@@ -183,6 +185,23 @@ class InMemoryJourneyEventBroker(JourneyEventPublisher, JourneyEventSource):
     def next_sequence(self, scope: JourneyStreamScope) -> int:
         buffer = self._buffers.get(scope.key)
         return 1 if buffer is None else buffer.next_sequence
+
+    def clear_scope(self, scope: JourneyStreamScope) -> bool:
+        """Forget one exact process-local replay/subscriber scope."""
+        buffer = self._buffers.pop(scope.key, None)
+        if buffer is None:
+            return False
+        buffer.subscribers.clear()
+        buffer.events.clear()
+        buffer.serialized.clear()
+        return True
+
+    def scope_counts(self, scope: JourneyStreamScope) -> tuple[int, int]:
+        """Expose bounded diagnostics without disclosing event content."""
+        buffer = self._buffers.get(scope.key)
+        if buffer is None:
+            return (0, 0)
+        return (len(buffer.events), len(buffer.subscribers))
 
 
 def format_sse(envelope: JourneyEventEnvelope) -> bytes:
