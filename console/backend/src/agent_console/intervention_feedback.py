@@ -604,3 +604,13 @@ class InterventionFeedbackService:
             outcomeFeedback=feedback_views,
         )
         return InterventionFeedbackResponse(product=product, technical=technical)
+
+    def preserved_counts(
+        self,
+        principal: TrustedCapturePrincipal,
+        target: TrustedInterventionTarget,
+    ) -> tuple[int, int]:
+        """Return scoped append-only counts for non-destructive reset evidence."""
+        self._authorize(principal, target)
+        self._validate_target(target)
+        return (len(self._interventions(target)), len(self._feedback(target)))

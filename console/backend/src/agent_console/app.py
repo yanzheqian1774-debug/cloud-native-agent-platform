@@ -2,11 +2,36 @@
 
 import hashlib
 import os
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
-from agent_core.execution_evidence import SQLiteExecutionEvidenceRepository
+from agent_core.execution_evidence import (
+    AppendDisposition,
+    AppendResult,
+    AuthorizedEvidenceScope,
+    AuthorizedReference,
+    EvidenceDigestConflict,
+    ExecutionEvidenceRecord,
+    ReferenceType,
+    ReferenceVisibility,
+    SQLiteExecutionEvidenceRepository,
+)
+from agent_core.execution_evidence import (
+    AuthorizationDecision as EvidenceAuthorizationDecision,
+)
+from agent_core.interface_spine.v0_2 import InternalExecutionEnvelope, SourceTaskRef
+from agent_core.representation.v0_2 import (
+    AgentDefinitionRef,
+    DesiredRuntimeBinding,
+    EffectiveRuntimeBinding,
+    RuntimeBinding,
+    SelectedInstanceEvidence,
+    mint_agent_instance_id,
+    mint_platform_execution_identity,
+)
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from kubernetes.client.exceptions import ApiException
@@ -69,11 +94,203 @@ from agent_console.schemas import (
     WorkflowRunList,
 )
 from agent_console.service import WorkflowService
+from agent_console.supplier_quality_demo import (
+    SupplierQualityDemoFailure,
+    SupplierQualityDemoService,
+)
+from agent_console.supplier_quality_demo_schemas import (
+    SupplierQualityDemoError,
+    SupplierQualityDemoResetRequest,
+    SupplierQualityDemoResetResponse,
+    SupplierQualityDemoStartRequest,
+    SupplierQualityDemoStartResponse,
+)
 
 app = FastAPI(
     title="AgentOS Workflow Execution Console",
     version="0.1.0",
 )
+
+
+class _SupplierQualityExecutionEvidence:
+    """Process-local adapter for the existing append-only Evidence port."""
+
+    def __init__(self, clock: Callable[[], datetime]) -> None:
+        self._clock = clock
+        self._records: dict[str, ExecutionEvidenceRecord] = {}
+        self._sequence = 0
+        self.references: tuple[AuthorizedReference, ...] = ()
+
+    def append(self, record: ExecutionEvidenceRecord) -> AppendResult:
+        decorated = replace(record, references=self.references)
+        existing = self._records.get(decorated.evidence_record_id)
+        if existing is not None:
+            if existing.payload_digest != decorated.payload_digest:
+                raise EvidenceDigestConflict("EVIDENCE_DIGEST_CONFLICT")
+            return AppendResult(AppendDisposition.REPLAYED, existing)
+        self._sequence += 1
+        stored = decorated.with_repository_metadata(
+            storage_sequence=self._sequence,
+            recorded_at=self._clock().isoformat().replace("+00:00", "Z"),
+        )
+        self._records[stored.evidence_record_id] = stored
+        return AppendResult(AppendDisposition.APPENDED, stored)
+
+    def high_water_mark(self, scope: AuthorizedEvidenceScope) -> int:
+        return max(
+            (
+                item.storage_sequence or 0
+                for item in self._records.values()
+                if item.namespace == scope.namespace
+                and item.security_domain == scope.security_domain
+            ),
+            default=0,
+        )
+
+    def read_execution(
+        self,
+        scope: AuthorizedEvidenceScope,
+        platform_execution_identity: str,
+        *,
+        through_high_water_mark: int,
+    ) -> tuple[ExecutionEvidenceRecord, ...]:
+        return tuple(
+            sorted(
+                (
+                    item
+                    for item in self._records.values()
+                    if item.namespace == scope.namespace
+                    and item.security_domain == scope.security_domain
+                    and item.platform_execution_identity == platform_execution_identity
+                    and (item.storage_sequence or 0) <= through_high_water_mark
+                ),
+                key=lambda item: item.storage_sequence or 0,
+            )
+        )
+
+    def read_subject(
+        self,
+        scope: AuthorizedEvidenceScope,
+        workflow_identity: str,
+        task_identity: str,
+        *,
+        through_high_water_mark: int,
+    ) -> tuple[ExecutionEvidenceRecord, ...]:
+        return tuple(
+            item
+            for item in self._records.values()
+            if item.namespace == scope.namespace
+            and item.security_domain == scope.security_domain
+            and item.workflow_identity == workflow_identity
+            and item.task_identity == task_identity
+            and (item.storage_sequence or 0) <= through_high_water_mark
+        )
+
+    @property
+    def records(self) -> tuple[ExecutionEvidenceRecord, ...]:
+        return tuple(
+            sorted(self._records.values(), key=lambda item: item.storage_sequence or 0)
+        )
+
+
+class _SupplierQualityExecutionAuthority:
+    """Composition-root access to frozen Core identity and Evidence contracts."""
+
+    def __init__(
+        self,
+        clock: Callable[[], datetime],
+        opaque_id: Callable[[], str],
+    ) -> None:
+        self._clock = clock
+        self._opaque_id = opaque_id
+        self.evidence_repository = _SupplierQualityExecutionEvidence(clock)
+
+    @staticmethod
+    def scope(namespace: str, security_domain: str) -> AuthorizedEvidenceScope:
+        return AuthorizedEvidenceScope(namespace, security_domain)
+
+    def attach_knowledge_references(
+        self,
+        *,
+        namespace: str,
+        security_domain: str,
+        evidence_id: str,
+        citation_ids: tuple[str, ...],
+    ) -> None:
+        reference_kwargs: dict[str, Any] = {
+            "namespace": namespace,
+            "security_domain": security_domain,
+            "authorization_decision": EvidenceAuthorizationDecision.ALLOW,
+            "reason_code": "KNOWLEDGE_REFERENCE_ALLOWED",
+            "visibility": ReferenceVisibility.BOTH,
+            "source_identity": "knowledge-retrieval",
+            "provenance": "live-execution",
+        }
+        self.evidence_repository.references = (
+            AuthorizedReference(
+                reference_identity=evidence_id,
+                reference_type=ReferenceType.EVIDENCE,
+                **reference_kwargs,
+            ),
+            *(
+                AuthorizedReference(
+                    reference_identity=citation_id,
+                    reference_type=ReferenceType.CITATION,
+                    **reference_kwargs,
+                )
+                for citation_id in citation_ids
+            ),
+        )
+
+    def create_envelope(
+        self,
+        *,
+        namespace: str,
+        definition_id: str,
+        task_id: str,
+        binding_id: str,
+        provider_ref: str,
+        runtime_mode: str,
+        package_ref: str,
+        selection_reason: str,
+        configuration: Mapping[str, str],
+    ) -> InternalExecutionEnvelope:
+        instance_id = mint_agent_instance_id(lambda: f"instance:{self._opaque_id()}")
+        execution_identity = mint_platform_execution_identity(
+            lambda: f"execution:{self._opaque_id()}"
+        )
+        definition_ref = AgentDefinitionRef(namespace, definition_id)
+        binding = RuntimeBinding(
+            binding_id=binding_id,
+            provider_ref=provider_ref,
+            mode=runtime_mode,
+            package_ref=package_ref,
+            configuration=configuration,
+        )
+        return InternalExecutionEnvelope(
+            definition_ref=definition_ref,
+            selected_instance_id=instance_id,
+            execution_identity=execution_identity,
+            desired_runtime_binding=DesiredRuntimeBinding(binding),
+            effective_runtime_binding=EffectiveRuntimeBinding(
+                binding, resolved_at=self._clock()
+            ),
+            selection_evidence=SelectedInstanceEvidence(
+                definition_ref=definition_ref,
+                instance_id=instance_id,
+                authority="published-role-matching",
+                reason=selection_reason,
+                selected_at=self._clock(),
+            ),
+            source_task_ref=SourceTaskRef(namespace, task_id),
+        )
+
+
+def _create_supplier_quality_execution_authority(
+    clock: Callable[[], datetime],
+    opaque_id: Callable[[], str],
+) -> _SupplierQualityExecutionAuthority:
+    return _SupplierQualityExecutionAuthority(clock, opaque_id)
 
 
 def get_repository() -> WorkflowRepository:
@@ -126,6 +343,14 @@ PreviewServiceDependency = Annotated[PreviewService, Depends(get_preview_service
 
 
 _live_journey_service = LiveJourneyCoordinator()
+_supplier_quality_root = os.environ.get("AGENT_CONSOLE_SUPPLIER_QUALITY_ROOT")
+_supplier_quality_demo_service = SupplierQualityDemoService(
+    materialized_root=(
+        None if not _supplier_quality_root else Path(_supplier_quality_root)
+    ),
+    live_journeys=_live_journey_service,
+    execution_authority_factory=_create_supplier_quality_execution_authority,
+)
 
 
 def get_live_journey_principal() -> TrustedJourneyPrincipal:
@@ -151,6 +376,16 @@ JourneyPrincipalDependency = Annotated[
 ]
 JourneyServiceDependency = Annotated[
     LiveJourneyCoordinator, Depends(get_live_journey_service)
+]
+
+
+def get_supplier_quality_demo_service() -> SupplierQualityDemoService:
+    """Return the bounded process-local Package 7 composition bridge."""
+    return _supplier_quality_demo_service
+
+
+SupplierQualityDemoDependency = Annotated[
+    SupplierQualityDemoService, Depends(get_supplier_quality_demo_service)
 ]
 
 _intervention_feedback_service = InterventionFeedbackService()
@@ -234,6 +469,15 @@ def _journey_http_error(exc: JourneyServiceError) -> HTTPException:
         state=exc.state,
         reasonCode=exc.reason_code,
         message="Live planning journey is unavailable",
+    )
+    return HTTPException(status_code=exc.status_code, detail=payload.model_dump())
+
+
+def _demo_http_error(exc: SupplierQualityDemoFailure) -> HTTPException:
+    payload = SupplierQualityDemoError(
+        state=exc.state,
+        reasonCode=exc.reason_code,
+        message="Supplier quality live journey is unavailable",
     )
     return HTTPException(status_code=exc.status_code, detail=payload.model_dump())
 
@@ -322,6 +566,52 @@ def get_execution_preview(
     response.headers["ETag"] = etag
     response.headers["Cache-Control"] = "private, no-cache"
     return preview
+
+
+@app.post(
+    "/api/internal/demo/v1/supplier-quality-journeys",
+    response_model=SupplierQualityDemoStartResponse,
+    responses={
+        403: {"model": SupplierQualityDemoError},
+        409: {"model": SupplierQualityDemoError},
+        422: {"model": SupplierQualityDemoError},
+        503: {"model": SupplierQualityDemoError},
+    },
+)
+def start_supplier_quality_demo(
+    request: SupplierQualityDemoStartRequest,
+    principal: JourneyPrincipalDependency,
+    service: SupplierQualityDemoDependency,
+) -> SupplierQualityDemoStartResponse:
+    """Start or exactly replay the one authorized Package 7 live journey."""
+    try:
+        return service.start(request, principal)
+    except SupplierQualityDemoFailure as exc:
+        raise _demo_http_error(exc) from exc
+
+
+@app.delete(
+    "/api/internal/demo/v1/supplier-quality-journeys/{journey_id}",
+    response_model=SupplierQualityDemoResetResponse,
+    responses={
+        403: {"model": SupplierQualityDemoError},
+        404: {"model": SupplierQualityDemoError},
+        503: {"model": SupplierQualityDemoError},
+    },
+)
+def reset_supplier_quality_demo(
+    journey_id: str,
+    request: SupplierQualityDemoResetRequest,
+    principal: JourneyPrincipalDependency,
+    service: SupplierQualityDemoDependency,
+) -> SupplierQualityDemoResetResponse:
+    """Clear only exact bridge-owned transient registration and replay state."""
+    try:
+        return service.reset(journey_id, request, principal)
+    except SupplierQualityDemoFailure as exc:
+        raise _demo_http_error(exc) from exc
+    except JourneyServiceError as exc:
+        raise _journey_http_error(exc) from exc
 
 
 @app.get(
@@ -439,8 +729,18 @@ def correct_live_planning_journey(
     request: CorrectionRequest,
     principal: JourneyPrincipalDependency,
     service: JourneyServiceDependency,
+    demo_service: SupplierQualityDemoDependency,
 ) -> LiveJourneyResponse:
     try:
+        if demo_service.owns(journey_id):
+            return demo_service.correct(
+                journey_id,
+                principal,
+                predecessor_revision_id=request.predecessorRevisionId,
+                predecessor_digest=request.predecessorDigest,
+                objective=request.objective,
+                reason_code=request.reasonCode,
+            )
         return service.correct(
             journey_id,
             principal,
@@ -462,8 +762,18 @@ def approve_live_planning_journey(
     request: JourneyApprovalRequest,
     principal: JourneyPrincipalDependency,
     service: JourneyServiceDependency,
+    demo_service: SupplierQualityDemoDependency,
 ) -> LiveJourneyResponse:
     try:
+        if demo_service.owns(journey_id):
+            return demo_service.approve(
+                journey_id,
+                principal,
+                candidate_digest=request.candidateDigest,
+                decision=request.decision,
+                reason_code=request.reasonCode,
+                replay_identity=request.replayIdentity,
+            )
         return service.approve(
             journey_id,
             principal,
@@ -485,8 +795,16 @@ def rerun_live_planning_journey(
     request: RerunRequest,
     principal: JourneyPrincipalDependency,
     service: JourneyServiceDependency,
+    demo_service: SupplierQualityDemoDependency,
 ) -> LiveJourneyResponse:
     try:
+        if demo_service.owns(journey_id):
+            return demo_service.rerun(
+                journey_id,
+                principal,
+                revision_id=request.canonicalWorkflowRevisionId,
+                digest=request.canonicalDigest,
+            )
         return service.rerun(
             journey_id,
             principal,

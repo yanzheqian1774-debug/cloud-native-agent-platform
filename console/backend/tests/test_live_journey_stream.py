@@ -171,6 +171,19 @@ def test_exact_subscriber_limit_preserves_existing_subscribers() -> None:
         subscription.close()
 
 
+def test_clear_scope_drops_only_exact_buffer_and_subscribers() -> None:
+    broker = InMemoryJourneyEventBroker()
+    broker.publish(envelope(1))
+    broker.publish(envelope(1, journey_id="journey:other"))
+    subscription = broker.replay_and_subscribe(scope(), None)
+    assert broker.scope_counts(scope()) == (1, 1)
+    assert broker.clear_scope(scope()) is True
+    assert broker.scope_counts(scope()) == (0, 0)
+    assert broker.scope_counts(scope("journey:other")) == (1, 0)
+    assert broker.clear_scope(scope()) is False
+    subscription.close()
+
+
 def _payload_with_exact_size(target: int) -> JourneyEventPayload:
     for full_count in range(128):
         for tail_length in range(1, 200):

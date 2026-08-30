@@ -245,3 +245,55 @@ def test_stale_remains_distinct_and_visible(principal):
     response = service.get("journey:supplier-quality-1", principal)
     assert response.state == "STALE"
     assert response.reasonCode == "LIVE_KNOWLEDGE_STALE"
+
+
+def test_authoritative_transition_preserves_equal_sibling_projection(principal):
+    service = LiveJourneyCoordinator()
+    initial = service.register_live(seed())
+    current = initial.successor
+    successor = current.model_copy(
+        update={
+            "revision": 2,
+            "predecessorRevisionId": current.identity.canonicalWorkflowRevisionId,
+            "objective": "Upstream-issued corrected objective",
+            "lifecycle": "PENDING_APPROVAL",
+            "approvalState": "PENDING",
+            "executionState": "NOT_REQUESTED",
+            "answer": None,
+            "citations": [],
+            "outcome": None,
+        }
+    )
+    response = service.register_authoritative_transition(
+        initial.journeyId,
+        principal,
+        predecessor=current,
+        successor=successor,
+        event_type="CORRECTION_ACCEPTED",
+        stage="CORRECTION",
+        status="ACCEPTED",
+        terminal=False,
+        reason_code="UPSTREAM_CORRECTION_ACCEPTED",
+        localization_key="liveJourney.event.correctionAccepted",
+    )
+    assert response.product.identity == response.technical.identity
+    assert response.product.revision == response.technical.revision
+    assert response.predecessor == current
+
+
+def test_unregister_removes_only_exact_live_registration_and_stream(principal):
+    broker = InMemoryJourneyEventBroker()
+    service = LiveJourneyCoordinator(event_publisher=broker)
+    first = service.register_live(seed())
+    other_seed = seed(journey_id="journey:supplier-quality-2")
+    service.register_live(other_seed)
+    first_scope = JourneyStreamScope("tenant-a", "quality", first.journeyId)
+    other_scope = JourneyStreamScope("tenant-a", "quality", other_seed.journey_id)
+    assert broker.scope_counts(first_scope) == (1, 0)
+    service.unregister_live(first.journeyId, principal)
+    assert broker.scope_counts(first_scope) == (0, 0)
+    assert broker.scope_counts(other_scope) == (1, 0)
+    assert service.owns(first.journeyId) is False
+    assert service.owns(other_seed.journey_id) is True
+    with pytest.raises(JourneyDenied):
+        service.get(first.journeyId, principal)
