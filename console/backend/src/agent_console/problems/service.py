@@ -191,6 +191,7 @@ class ProblemPlanningService:
         self._lock = threading.Lock()
         self._problems: dict[str, dict[str, Any]] = {}
         self._analysis_streams: dict[str, dict[str, Any]] = {}
+        self._completed_mutations: set[tuple[str, str, str]] = set()
         self._authority_epoch = f"process-local:{uuid.uuid4()}"
         self._chunks = self._seed_chunks()
 
@@ -1031,6 +1032,17 @@ class ProblemPlanningService:
     def intervene(
         self, problem_id: str, command: dict[str, Any], principal: TrustedPrincipal
     ) -> dict[str, Any]:
+        mutation_key = (problem_id, "INTERVENTION", _digest(command))
+        with self._lock:
+            if mutation_key in self._completed_mutations:
+                return self.get(problem_id, principal)
+            result = self._intervene_once(problem_id, command, principal)
+            self._completed_mutations.add(mutation_key)
+            return result
+
+    def _intervene_once(
+        self, problem_id: str, command: dict[str, Any], principal: TrustedPrincipal
+    ) -> dict[str, Any]:
         problem = self.get(problem_id, principal)
         current = problem["planRevisions"][-1]
         if command.get("predecessorDigest") != current["canonicalDigest"]:
@@ -1236,6 +1248,17 @@ class ProblemPlanningService:
         ]
 
     def correct(
+        self, problem_id: str, command: dict[str, Any], principal: TrustedPrincipal
+    ) -> dict[str, Any]:
+        mutation_key = (problem_id, "CORRECTION", _digest(command))
+        with self._lock:
+            if mutation_key in self._completed_mutations:
+                return self.get(problem_id, principal)
+            result = self._correct_once(problem_id, command, principal)
+            self._completed_mutations.add(mutation_key)
+            return result
+
+    def _correct_once(
         self, problem_id: str, command: dict[str, Any], principal: TrustedPrincipal
     ) -> dict[str, Any]:
         problem = self.get(problem_id, principal)

@@ -245,6 +245,47 @@ def test_governed_interventions_create_successors_events_and_exact_evidence():
     ]
 
 
+def test_identical_intervention_double_click_and_replay_are_idempotent():
+    service = ProblemPlanningService(Model(), Vector())
+    problem = create(service, True)
+    first = problem["planRevisions"][-1]
+    command = {
+        "predecessorDigest": first["canonicalDigest"],
+        "kind": "TASK",
+        "reason": "人工调整首个任务名称",
+        "payload": {
+            "taskId": first["tasks"][0]["taskId"],
+            "changes": {"name": "核验质量事实与批次范围"},
+        },
+    }
+
+    accepted = service.intervene(problem["problemId"], command, principal())
+    accepted_revision_id = accepted["planRevisions"][-1]["planRevisionId"]
+    accepted_event_count = len(accepted["events"])
+    replayed = service.intervene(problem["problemId"], command, principal())
+
+    assert len(replayed["planRevisions"]) == 2
+    assert replayed["planRevisions"][-1]["planRevisionId"] == accepted_revision_id
+    assert len(replayed["events"]) == accepted_event_count
+    assert len(replayed["humanDecisions"]) == 1
+
+
+def test_identical_summary_correction_is_idempotent():
+    service = ProblemPlanningService(Model(), Vector())
+    problem = create(service, True)
+    first = problem["planRevisions"][-1]
+    command = {
+        "predecessorDigest": first["canonicalDigest"],
+        "summary": "人工确认后的整改计划摘要",
+        "reason": "人工修订计划解释与验证门槛",
+    }
+
+    service.correct(problem["problemId"], command, principal())
+    replayed = service.correct(problem["problemId"], command, principal())
+
+    assert len(replayed["planRevisions"]) == 2
+
+
 def test_task_intervention_revalidates_dag_and_rejects_cycle():
     service = ProblemPlanningService(Model(), Vector())
     problem = create(service, True)
