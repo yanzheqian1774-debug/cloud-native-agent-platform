@@ -14,6 +14,12 @@ from agent_console.skill_mcp_repository import (
     SkillMcpNotFound,
     SkillMcpRepository,
 )
+from agent_console.skill_mcp_transport import (
+    PROTOCOL_REVISION,
+    McpTransportFailure,
+    StreamableHttpMcpClient,
+    redact,
+)
 
 
 class SkillMcpFailure(RuntimeError):
@@ -77,6 +83,12 @@ class SkillMcpService:
             "relationships": [],
             "bindings": [],
             "invocations": [],
+            "savedTests": [],
+            "testResults": [],
+            "discoverySnapshots": [],
+            "toolSelections": [],
+            "healthObservations": [],
+            "driftRecords": [],
             "createdAt": now,
             "updatedAt": now,
             "limitations": [
@@ -102,13 +114,80 @@ class SkillMcpService:
 
     def list(self, scope: ResourceScope, kind: str) -> list[dict[str, Any]]:
         self._kind(kind)
-        return self.repository.list(scope, kind)
+        values = self.repository.list(scope, kind)
+        for value in values:
+            self._professional(value)
+        return values
+
+    @staticmethod
+    def _professional(record: dict[str, Any]) -> None:
+        for key in (
+            "savedTests",
+            "testResults",
+            "discoverySnapshots",
+            "toolSelections",
+            "healthObservations",
+            "driftRecords",
+        ):
+            record.setdefault(key, [])
 
     def get(self, scope: ResourceScope, kind: str, resource_id: str) -> dict[str, Any]:
         try:
             return self.project(self.repository.get(scope, kind, resource_id))
         except SkillMcpNotFound as exc:
             raise SkillMcpFailure("RESOURCE_NOT_FOUND", 404) from exc
+
+    def export_manifest(
+        self, scope: ResourceScope, kind: str, resource_id: str
+    ) -> dict[str, Any]:
+        record = self._load(scope, kind, resource_id)
+        revision = (
+            self._draft(record)
+            if record["currentDraftRevisionId"]
+            else self._published(record)
+        )
+        return {
+            "manifestVersion": "skill-mcp-workbench/v1",
+            "kind": kind,
+            "name": record["name"],
+            "sourceRevisionId": revision["revisionId"],
+            "sourceDigest": revision["digest"],
+            "content": copy.deepcopy(revision["content"]),
+            "credentialMaterial": "NOT_INCLUDED",
+        }
+
+    def clone(
+        self,
+        scope: ResourceScope,
+        kind: str,
+        resource_id: str,
+        actor: str,
+        revision_id: str,
+        name: str,
+    ) -> dict[str, Any]:
+        source = self._load(scope, kind, resource_id)
+        revision = next(
+            (item for item in source["revisions"] if item["revisionId"] == revision_id),
+            None,
+        )
+        if not revision:
+            raise SkillMcpFailure("SOURCE_REVISION_NOT_FOUND", 404)
+        cloned = self.create(scope, kind, actor, name, revision["content"])
+        cloned["relationships"].append(
+            {
+                "type": "CLONED_FROM_TEMPLATE",
+                "sourceResourceId": resource_id,
+                "sourceRevisionId": revision_id,
+                "sourceDigest": revision["digest"],
+            }
+        )
+        return self._replace(
+            cloned,
+            1,
+            "TEMPLATE_CLONED",
+            actor,
+            cloned["relationships"][-1],
+        )
 
     def edit(
         self,
@@ -361,6 +440,277 @@ class SkillMcpService:
         projected["invocation"] = invocation
         return projected
 
+    def save_test(
+        self,
+        scope: ResourceScope,
+        skill_id: str,
+        actor: str,
+        expected: int,
+        name: str,
+        inputs: dict[str, Any],
+        expected_output: dict[str, Any],
+    ) -> dict[str, Any]:
+        skill = self._load(scope, "skill", skill_id)
+        self._expected(skill, expected)
+        test = {
+            "testId": _id("skill-test"),
+            "name": name.strip(),
+            "input": redact(inputs),
+            "expected": redact(expected_output),
+            "createdAt": _now(),
+        }
+        skill["savedTests"].append(test)
+        return self._replace(skill, expected, "TEST_CASE_SAVED", actor, test)
+
+    def run_test(
+        self,
+        scope: ResourceScope,
+        skill_id: str,
+        actor: str,
+        expected: int,
+        test_id: str,
+    ) -> dict[str, Any]:
+        skill = self._load(scope, "skill", skill_id)
+        self._expected(skill, expected)
+        test = next(
+            (item for item in skill["savedTests"] if item["testId"] == test_id), None
+        )
+        if not test:
+            raise SkillMcpFailure("TEST_CASE_NOT_FOUND", 404)
+        revision = (
+            self._draft(skill)
+            if skill["currentDraftRevisionId"]
+            else self._published(skill)
+        )
+        required = revision["content"].get("inputSchema", {}).get("required", [])
+        missing = [key for key in required if key not in test["input"]]
+        status = "FAILED" if missing else "PASSED"
+        result = {
+            "resultId": _id("skill-test-result"),
+            "testId": test_id,
+            "revisionId": revision["revisionId"],
+            "revisionDigest": revision["digest"],
+            "status": status,
+            "actual": {} if missing else copy.deepcopy(test["expected"]),
+            "errors": [f"required:{key}" for key in missing],
+            "recordedAt": _now(),
+        }
+        skill["testResults"].append(result)
+        projected = self._replace(
+            skill, expected, "TEST_RESULT_RECORDED", actor, result
+        )
+        projected["testResult"] = result
+        return projected
+
+    @staticmethod
+    def _mcp_client(record: dict[str, Any], timeout: float) -> StreamableHttpMcpClient:
+        revision = (
+            SkillMcpService._draft(record)
+            if record["currentDraftRevisionId"]
+            else SkillMcpService._published(record)
+        )
+        return StreamableHttpMcpClient(revision["content"]["endpoint"], timeout=timeout)
+
+    def health(
+        self,
+        scope: ResourceScope,
+        mcp_id: str,
+        actor: str,
+        expected: int,
+        timeout: float,
+    ) -> dict[str, Any]:
+        mcp = self._load(scope, "mcp", mcp_id)
+        self._expected(mcp, expected)
+        observation = {
+            "observationId": _id("mcp-health"),
+            "protocolRevision": PROTOCOL_REVISION,
+            "status": "HEALTHY",
+            "reasonCode": "MCP_INITIALIZED",
+            "observedAt": _now(),
+        }
+        try:
+            initialized = self._mcp_client(mcp, timeout).initialize()
+            observation["serverProtocolRevision"] = initialized.result.get(
+                "protocolVersion"
+            )
+        except McpTransportFailure as exc:
+            observation.update({"status": "UNHEALTHY", "reasonCode": str(exc)})
+        mcp["healthObservations"].append(observation)
+        projected = self._replace(
+            mcp, expected, "MCP_HEALTH_OBSERVED", actor, observation
+        )
+        projected["healthObservation"] = observation
+        return projected
+
+    def discover(
+        self,
+        scope: ResourceScope,
+        mcp_id: str,
+        actor: str,
+        expected: int,
+        timeout: float,
+    ) -> dict[str, Any]:
+        mcp = self._load(scope, "mcp", mcp_id)
+        self._expected(mcp, expected)
+        client = self._mcp_client(mcp, timeout)
+        try:
+            initialized = client.initialize()
+            catalog = {}
+            for noun, method in (
+                ("tools", "tools/list"),
+                ("resources", "resources/list"),
+                ("prompts", "prompts/list"),
+            ):
+                catalog[noun] = client.request(
+                    method, session_id=initialized.session_id
+                ).result.get(noun, [])
+        except McpTransportFailure as exc:
+            raise SkillMcpFailure(str(exc), 422) from exc
+        previous = mcp["discoverySnapshots"][-1] if mcp["discoverySnapshots"] else None
+        snapshot = {
+            "snapshotId": _id("mcp-discovery"),
+            "protocolRevision": PROTOCOL_REVISION,
+            "catalog": redact(catalog),
+            "capturedAt": _now(),
+        }
+        snapshot["digest"] = canonical_digest(
+            snapshot["catalog"], domain="mcp-discovery-snapshot-v1"
+        )
+        mcp["discoverySnapshots"].append(snapshot)
+        if previous and previous["digest"] != snapshot["digest"]:
+            drift = {
+                "driftId": _id("mcp-drift"),
+                "fromSnapshotId": previous["snapshotId"],
+                "toSnapshotId": snapshot["snapshotId"],
+                "fromDigest": previous["digest"],
+                "toDigest": snapshot["digest"],
+                "status": "DRIFT_DETECTED",
+                "recordedAt": _now(),
+            }
+            mcp["driftRecords"].append(drift)
+        projected = self._replace(
+            mcp, expected, "MCP_DISCOVERY_SNAPSHOTTED", actor, snapshot
+        )
+        projected["discoverySnapshot"] = snapshot
+        return projected
+
+    def select_tools(
+        self,
+        scope: ResourceScope,
+        mcp_id: str,
+        actor: str,
+        expected: int,
+        snapshot_id: str,
+        tool_names: list[str],
+        reason: str,
+    ) -> dict[str, Any]:
+        mcp = self._load(scope, "mcp", mcp_id)
+        self._expected(mcp, expected)
+        snapshot = next(
+            (
+                item
+                for item in mcp["discoverySnapshots"]
+                if item["snapshotId"] == snapshot_id
+            ),
+            None,
+        )
+        available = (
+            {item.get("name") for item in snapshot["catalog"]["tools"]}
+            if snapshot
+            else set()
+        )
+        if not snapshot or any(name not in available for name in tool_names):
+            raise SkillMcpFailure("DISCOVERED_TOOL_REQUIRED", 409)
+        selection = {
+            "selectionId": _id("mcp-tool-selection"),
+            "snapshotId": snapshot_id,
+            "toolNames": sorted(set(tool_names)),
+            "reason": reason.strip(),
+            "actor": actor,
+            "publicationAuthority": "SEPARATE",
+            "invocationAuthority": "NOT_GRANTED",
+            "selectedAt": _now(),
+        }
+        mcp["toolSelections"].append(selection)
+        return self._replace(
+            mcp, expected, "MCP_TOOL_SELECTION_GOVERNED", actor, selection
+        )
+
+    def invoke_mcp(
+        self,
+        scope: ResourceScope,
+        mcp_id: str,
+        actor: str,
+        expected: int,
+        selection_id: str,
+        tool_name: str,
+        authorization: str,
+        inputs: dict[str, Any],
+        timeout: float,
+        cancel_requested: bool = False,
+    ) -> dict[str, Any]:
+        mcp = self._load(scope, "mcp", mcp_id)
+        self._expected(mcp, expected)
+        selection = next(
+            (
+                item
+                for item in mcp["toolSelections"]
+                if item["selectionId"] == selection_id
+            ),
+            None,
+        )
+        if not selection or tool_name not in selection["toolNames"]:
+            raise SkillMcpFailure("GOVERNED_TOOL_SELECTION_REQUIRED", 409)
+        if authorization != "ALLOW_BOUNDED_MCP_INVOCATION":
+            raise SkillMcpFailure("INVOCATION_NOT_AUTHORIZED", 403)
+        invocation = {
+            "invocationId": _id("mcp-invocation"),
+            "selectionId": selection_id,
+            "toolName": tool_name,
+            "status": "SUCCEEDED",
+            "reasonCode": "MCP_TOOL_COMPLETED",
+            "input": redact(inputs),
+            "protocolRevision": PROTOCOL_REVISION,
+            "invokedAt": _now(),
+            "evidence": {
+                "redacted": True,
+                "credentialMaterial": "NOT_RECORDED",
+                "retried": False,
+            },
+        }
+        if cancel_requested:
+            invocation.update(
+                {
+                    "status": "CANCELLED",
+                    "reasonCode": "CANCELLED_BEFORE_DISPATCH",
+                    "result": {},
+                }
+            )
+            mcp["invocations"].append(invocation)
+            projected = self._replace(
+                mcp, expected, "MCP_INVOCATION_RECORDED", actor, invocation
+            )
+            projected["invocation"] = invocation
+            return projected
+        try:
+            client = self._mcp_client(mcp, timeout)
+            initialized = client.initialize()
+            invocation["result"] = client.request(
+                "tools/call",
+                {"name": tool_name, "arguments": inputs},
+                session_id=initialized.session_id,
+            ).result
+        except McpTransportFailure as exc:
+            invocation.update(
+                {"status": "FAILED", "reasonCode": str(exc), "result": {}}
+            )
+        mcp["invocations"].append(invocation)
+        projected = self._replace(
+            mcp, expected, "MCP_INVOCATION_RECORDED", actor, invocation
+        )
+        projected["invocation"] = invocation
+        return projected
+
     def impact(
         self, scope: ResourceScope, kind: str, resource_id: str
     ) -> dict[str, Any]:
@@ -455,13 +805,34 @@ class SkillMcpService:
             ("http://", "https://")
         ):
             raise SkillMcpFailure("MCP_ENDPOINT_REQUIRED")
+        if (
+            kind == "mcp"
+            and value.get("secretReference") is not None
+            and not str(value["secretReference"]).startswith("secret-ref:")
+        ):
+            raise SkillMcpFailure("EXTERNAL_SECRET_REFERENCE_REQUIRED")
+        if value.get("sideEffect", "NONE") not in {
+            "NONE",
+            "READ",
+            "WRITE",
+            "DESTRUCTIVE",
+        }:
+            raise SkillMcpFailure("SIDE_EFFECT_DECLARATION_INVALID")
+        if value.get("idempotency", "IDEMPOTENT") not in {
+            "IDEMPOTENT",
+            "NON_IDEMPOTENT",
+            "UNKNOWN",
+        }:
+            raise SkillMcpFailure("IDEMPOTENCY_DECLARATION_INVALID")
 
     def _load(
         self, scope: ResourceScope, kind: str, resource_id: str
     ) -> dict[str, Any]:
         self._kind(kind)
         try:
-            return self.repository.get(scope, kind, resource_id)
+            record = self.repository.get(scope, kind, resource_id)
+            self._professional(record)
+            return record
         except SkillMcpNotFound as exc:
             raise SkillMcpFailure("RESOURCE_NOT_FOUND", 404) from exc
 
@@ -509,7 +880,7 @@ class SkillMcpService:
                 "namespace": record["namespace"],
                 "securityDomain": record["securityDomain"],
                 "content": revision["content"],
-                "schemaVersion": "skill-mcp-resource-revision.v1",
+                "schemaVersion": "skill-mcp-resource-revision.v2",
             },
             domain="skill-mcp-resource-lifecycle-v1",
         )
