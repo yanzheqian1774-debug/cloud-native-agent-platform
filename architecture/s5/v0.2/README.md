@@ -8,9 +8,10 @@ Source code and tests remain authoritative for implemented behavior.
 
 - [Bounded Product Continuity Persistence Architecture v1](S5-ARCH-018-BOUNDED-PRODUCT-CONTINUITY-PERSISTENCE-V1.md)
   proposes the consolidated v0.2.2–v0.2.4 domain authority, typed repository
-  ports, bounded single-node SQLite, history, security, secret, Qdrant, Runtime
-  reconciliation, Accounting and migration boundaries, plus the first Durable
-  Agent Definition implementation entry. It is `PROPOSED /
+  ports, PostgreSQL primary deployment adapter, bounded existing-Evidence SQLite
+  transition/test role, history, security, secret, Qdrant, Runtime reconciliation,
+  Accounting and migration boundaries, plus the first Durable Agent Definition
+  implementation entry. It is `AMENDED_PROPOSAL /
   READY_FOR_HUMAN_ARCHITECTURE_REVIEW / NOT_STARTED`; no implementation,
   public API/CRD, State Plane, Tenant, multi-node or production claim is granted.
 - [Definition Publication and Matchability Authority v1](S5-ARCH-013-DEFINITION-PUBLICATION-MATCHABILITY-AUTHORITY-V1.md)

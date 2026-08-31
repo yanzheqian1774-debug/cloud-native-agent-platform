@@ -11,7 +11,7 @@
 | Worktree | clean dedicated worktree at entry; no competing S5-ARCH-018 branch/worktree |
 | PR / Issue collision | no S5-ARCH-018 PR or Issue found at entry |
 | Reserved IDs | S5-ARCH-014–017 remain `RESERVED / UNRECONCILED / NOT_REUSABLE` |
-| Decision classification | `PROPOSED / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
+| Decision classification | `AMENDED_PROPOSAL / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
 
 The Human control session explicitly allocated S5-ARCH-018 and granted
 `GO_WITH_CONDITIONS`. This supersedes only the prior candidate/unallocated
@@ -36,11 +36,38 @@ facts outside existing public Workflow/Task control state.
 
 ## Result
 
-The proposed decision is [S5-ARCH-018](../../../../../architecture/s5/v0.2/S5-ARCH-018-BOUNDED-PRODUCT-CONTINUITY-PERSISTENCE-V1.md).
-It covers four durable domains, typed repository ports, one configured single-node
-SQLite boundary, immutable history, authorization-first scoping, secret exclusion,
-Qdrant derivation, restart reconciliation, derived Accounting, migration/coexistence
-and the first Durable Agent Definition implementation entry.
+The amended proposal is [S5-ARCH-018](../../../../../architecture/s5/v0.2/S5-ARCH-018-BOUNDED-PRODUCT-CONTINUITY-PERSISTENCE-V1.md).
+It covers four durable domains, typed repository ports, PostgreSQL as the primary
+deployment adapter, bounded SQLite transition/test use, immutable history,
+authorization-first scoping, secret exclusion, Qdrant derivation, restart
+reconciliation, derived Accounting, migration/coexistence and the first Durable
+Agent Definition implementation entry.
+
+## PostgreSQL amendment
+
+The Human amendment supersedes the earlier proposal that made one bounded SQLite
+store the default for all new v0.2 domains. No implementation or Durable Integration
+occurred under that text.
+
+- v0.2.2 Product Journey and Enterprise Resource authority deploys on PostgreSQL.
+- Existing SQLite Execution Evidence remains unchanged during a visible two-store
+  transition; cross-store linkage uses exact identities, digests and scope and has
+  no cross-store atomicity claim.
+- Before v0.2.3 closed-loop execution completion, a PostgreSQL Evidence adapter must
+  pass the existing typed-port conformance suite and a verified import/cutover/
+  rollback gate without identity or digest rewriting.
+- Qdrant remains a derived Knowledge index; SQL retains Knowledge/document/chunk/
+  ingestion/index-snapshot identities, digests, scope and Qdrant references.
+- The first Durable Agent Definition deployment uses its domain-owned Repository
+  Port with a PostgreSQL adapter. In-memory/SQLite are focused local/test adapters.
+- Immutable/link-based history, scope nondisclosure, Secret-reference-only storage,
+  Runtime observed-state reconciliation, derived Accounting and Workbench continuity
+  remain unchanged.
+
+The first implementation will require an approved PostgreSQL driver/client dependency
+if absent, external Secret reference, bounded pool configuration, PostgreSQL service/
+database availability, ordered migrations and a backup/restore rehearsal. These are
+G1 implementation/deployment prerequisites, not changes made in this ARCH Session.
 
 ## Claim boundary
 
@@ -53,16 +80,15 @@ exactly-once, certification, production-readiness, deployment or release claim.
 
 | Validation | Result |
 | --- | --- |
-| Architecture/index links and exact-path audit | passed; exactly five governance/architecture paths plus this Evidence directory |
+| Architecture/index links and exact-path audit | passed; same exact six paths |
 | Authority, terminology, domain/lifecycle and persistence-boundary audit | passed |
 | Security/nondisclosure, secret/private-data and unsupported-claim audit | passed |
 | `git diff --check` | passed |
 | `make check` | passed: Ruff lint, Ruff format and `1046 passed`; one existing Starlette/httpx deprecation warning |
 | `uv run pre-commit run --all-files` | passed: Ruff lint, Ruff format and pytest |
-| Commit / Draft PR / exact-head CI | recorded after Git and GitHub operations |
+| Commit / Draft PR / exact-head CI | pending amendment commit and CI |
 
 ## Next gate
 
-Human Architecture Review and Durable Integration decision. A separately allocated
-G1 implementation Session may begin only after this Proposed decision is accepted
-and durably integrated.
+Human review of the PostgreSQL amendment. Durable Integration, REL allocation and G1
+implementation remain prohibited until the amended proposal is accepted.

@@ -7,10 +7,10 @@
 | Session | `S5-ARCH-018` |
 | Type / checkpoint | `ARCH / G2`; `A — ARCHITECTURE_DECISION_AND_VALIDATION` |
 | Authorized baseline | `a6ec463a365b5f12e8fb64b0b84772a3beb0ae15` |
-| Decision status | `PROPOSED / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
+| Decision status | `AMENDED_PROPOSAL / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
 | Implementation status | `NOT_STARTED` |
 | Contract status | internal v0.2 architecture; `NOT_FROZEN`; no public API or CRD change |
-| Selected direction | domain-owned typed repository ports with bounded single-node SQLite adapters |
+| Selected direction | domain-owned typed repository ports with PostgreSQL as the primary deployment adapter; bounded SQLite transition/test role |
 
 This G2 proposes the consolidated persistence architecture for v0.2.2 through
 v0.2.4. It authorizes no implementation until Human acceptance and a separately
@@ -24,11 +24,13 @@ recovery, or exactly-once guarantee.
 
 Bounded product continuity is stored as domain-owned canonical aggregates,
 immutable revisions, and append-only decisions/facts. Domain services depend on
-typed repository ports expressed only in domain values. A v0.2 adapter may store
-these records in one configured local SQLite database on one node. SQL, SQLite
-types, row identifiers, connection details, pragmas, database paths, and migration
-mechanics stay behind adapters. A later PostgreSQL adapter must preserve the same
-domain identities, digests, repository behavior, ordering, and conflict semantics.
+typed repository ports expressed only in domain values. PostgreSQL is the primary
+deployment adapter for every newly implemented v0.2.2–v0.2.4 product-continuity
+domain. Existing SQLite Execution Evidence remains supported during a bounded
+transition, and SQLite or in-memory adapters may support focused local development
+and repository conformance tests. SQL statements, PostgreSQL sequences/row IDs,
+driver objects, database URLs, PostgreSQL-specific JSON representations, SQLite
+paths/types, connection details and migration mechanics stay behind adapters.
 
 Product, Technical, Business, Resource, Runtime Operations, and Model Governance
 views are authorized projections over the same canonical identities. They never
@@ -101,42 +103,54 @@ Domain services own lifecycle rules and transaction intent. Adapters own atomic
 storage execution, not business decisions. Ports expose neither SQL transactions
 nor generic CRUD/session objects. Cross-domain workflows use an application
 coordinator and explicit typed references; no repository performs cross-domain
-hidden mutation. If an operation needs atomic writes across domains, it must either
-use one explicitly defined application transaction over the single configured
-store or use append-first resumable orchestration with a durable idempotency key;
-it may not use silent dual writes.
+hidden mutation. If an operation needs atomic writes across PostgreSQL-owned domains,
+it must use one explicitly defined application transaction. A transitional operation
+that links PostgreSQL to SQLite Execution Evidence uses append-first resumable
+orchestration with a durable idempotency key and explicit partial/uncertain state;
+it has no cross-store atomicity and may not use silent dual writes.
 
-## 5. Bounded SQLite v0.2 contract
+## 5. PostgreSQL v0.2 deployment contract
 
-### 5.1 Location and ownership
+### 5.1 Instance, database and ownership
 
-The v0.2 reference uses one explicitly configured database location for all new
-product-continuity domains and the existing Execution Evidence tables. Bounded
-separation is allowed only after a later G2 explains atomicity, backup, migration,
-availability, and identity consequences. No default current-working-directory,
-temporary, repository, or frontend-owned database is allowed.
+The bounded v0.2 deployment uses one PostgreSQL instance and one logical database
+for new Product Journey, Enterprise Resource, Execution and Model Governance
+domains. Each domain owns an explicit schema or equivalently explicit migration
+namespace and grants no schema ownership to frontend or projection code. Additional
+databases, cross-database transactions, replicas, sharding or distributed ownership
+require a later G2.
 
-The service account owns the database directory and database/WAL/SHM files with
-least privilege. Startup rejects symlinks, non-regular targets, unsafe ownership
-or permissions, unwritable parent directories, and locations inside Git. Secret
-values and credentials never determine or appear in a file name.
+Connection configuration is supplied by the deployment boundary. Credentials are
+resolved only through external typed Secret references; they are absent from domain
+objects, logs, Evidence, migrations and frontend configuration. TLS and private
+network transport are required where the deployment environment supports them;
+an implementation must document any local exception without claiming production
+security.
 
 ### 5.2 Transactions, locking and concurrency
 
-- Empty-store initialization and each migration are atomic.
+- Empty-database initialization and each migration are atomic where PostgreSQL DDL
+  semantics permit; any non-transactional operation requires a separately reviewed
+  resumable step and startup barrier.
 - Immutable insert plus its required append-only acceptance fact is one transaction.
 - Head advancement uses compare-and-set in the same transaction as the advancing fact.
 - Append uses a unique semantic identity and ordinal/version constraint.
-- The adapter uses bounded busy timeout, WAL, `synchronous=FULL`, foreign-key
-  enforcement, explicit transactions, and fail-closed error mapping.
-- A process may use multiple readers and bounded serialized writers on one host.
-  Persistent lock contention returns unavailable/busy; callers do not spin forever.
-- WAL does not grant shared-filesystem, NFS, multi-host, multi-node, HA, horizontal
-  scaling, or production-durability claims.
+- Unique and foreign-key constraints enforce scoped semantic identity and typed
+  relationships in addition to domain validation.
+- Updates use optimistic concurrency through expected revision/high-water values;
+  digest or version conflicts fail without partial writes.
+- The adapter uses explicit isolation levels, bounded statement/lock/transaction
+  timeouts and fail-closed error mapping. Deadlock or serialization failure may be
+  retried only through a bounded idempotent operation.
+- The application connection pool has explicit per-process minimum/maximum size,
+  acquisition timeout, idle/lifetime limits and a deployment-wide connection budget.
+  Exhaustion returns unavailable; callers do not spin forever.
+- No HA, replica-read consistency, multi-region, distributed transaction,
+  horizontal-scale or production-certification claim is made.
 
 ### 5.3 Schema and startup
 
-The consolidated store begins at logical schema version `1`. A metadata table
+The PostgreSQL product-continuity store begins at logical schema version `1`. A metadata table
 records schema version, adapter marker and migration history with checksums. Startup
 checks application-supported minimum/maximum version, required tables/indexes,
 constraints and adapter marker before serving reads or writes. Empty storage may be
@@ -159,14 +173,16 @@ partially restore a domain or delete newly unknown rows.
 
 Unavailable, corrupt, incompatible, permission-denied or persistently locked storage
 prevents authoritative lifecycle writes and any read that would otherwise be claimed
-complete. The system never falls back to memory, fixtures or a new empty file. Errors
+complete. The system never falls back to memory, SQLite, fixtures or a new empty
+database. Errors
 expose stable codes only, not paths, SQL, records, counts or foreign existence.
 
-A bounded backup is an operator action using SQLite's safe backup mechanism or a
-stopped-service copy of database plus required sidecars. Success requires integrity
-and schema checks. Restore is whole-store, stopped-writer and scope-preserving. Reset
-is destructive, explicit, separately authorized, never automatic, and makes no
-retention/legal-erasure guarantee.
+A bounded backup uses a PostgreSQL-consistent logical or physical backup appropriate
+to the deployment. Before first implementation acceptance, backup and restore must be
+rehearsed into an isolated database and verified by schema, constraint, row/digest,
+scope and repository-conformance checks. Restore is whole-database, coordinated with
+stopped writers and scope-preserving. Reset is destructive, explicit, separately
+authorized, never automatic, and makes no retention/legal-erasure guarantee.
 
 ## 6. Security, scope and nondisclosure
 
@@ -233,15 +249,33 @@ a separate gate if it creates new authority or infrastructure.
 ## 11. Compatibility and coexistence
 
 The existing `ExecutionEvidenceRepository` semantics, evidence identities and S5-ARCH-010
-Hybrid F authority are preserved. Its SQLite schema becomes a versioned domain-owned
-part of the one configured store through a forward migration or, if migration cannot
-be proven safe, a separately approved stopped-service import. No copy-and-switch,
-dual-write or silent re-identification is authorized.
+Hybrid F authority are preserved. During v0.2.2, existing Execution Evidence SQLite
+remains unchanged while new Product Journey and Enterprise Resource authority is in
+PostgreSQL. Cross-store links contain canonical identities, exact digests and scope;
+there is no cross-store transaction, atomic commit, referential constraint or
+exactly-once claim. Health and Technical Inspection must label the split authority
+and independently report either store as unavailable or stale.
 
-PostgreSQL adoption replaces adapters, not ports or domain objects. Conformance tests
-must run unchanged against in-memory test doubles, SQLite and future PostgreSQL for
-identity, scope, replay, conflict, ordering, transactions, history and failure mapping.
-Database-generated integer keys may exist internally for performance but never escape,
+Before v0.2.3 closed-loop execution is complete, add a PostgreSQL Execution Evidence
+adapter behind the existing typed port. Run the same repository conformance suite
+against SQLite and PostgreSQL, preserving Evidence identities, digests, append-only
+behavior, ordering, authorization-first reads and disclosure-safe errors. Define and
+validate an explicit migration/import and cutover procedure:
+
+1. freeze or high-water-bound SQLite Evidence writes;
+2. verify source integrity, schema and scoped record counts/digests;
+3. import idempotently into PostgreSQL without minting identities or rewriting time;
+4. compare all identities/digests/ordinals and authorization behavior;
+5. switch the injected adapter through configuration only;
+6. retain a rollback window with no dual authority; and
+7. archive or retire SQLite only through a separately authorized retention decision.
+
+Dual-write is prohibited unless a later G2 defines conflict authority and recovery.
+New closed-loop execution must not depend indefinitely on split authoritative stores.
+Failure to prove import, cutover, rollback and conformance blocks v0.2.3 completion.
+
+PostgreSQL and SQLite adapters replace storage mechanics, not ports or domain objects.
+Database-generated keys may exist internally for performance but never escape,
 participate in canonical digests, or replace Platform identities.
 
 ## 12. First implementation entry — v0.2.2 Durable Agent Definition Lifecycle
@@ -271,8 +305,10 @@ revisions; deprecation changes eligibility and appends history.
 
 ### Ports and writers
 
-Add typed Agent Definition/revision/lifecycle repositories and a SQLite adapter behind
-the domain boundary. The Agent Definition application service is the sole lifecycle
+Add typed Agent Definition/revision/lifecycle repositories and a PostgreSQL deployment
+adapter behind the domain boundary. In-memory or SQLite adapters may be used only for
+focused test/local-development conformance and are never deployed product authority.
+The Agent Definition application service is the sole lifecycle
 writer. Validation/test/review services return typed facts; only the application
 service appends them after scope/digest verification. Publication and match authority
 remain logically separate as required by S5-ARCH-013. Workbench endpoints and views
@@ -291,14 +327,18 @@ provenance. No public API/CRD change is implied; any new internal endpoint is a 
 
 Expected paths are bounded to a new or existing domain package under
 `console/backend/src/agent_console/`, matching tests under
-`console/backend/tests/`, explicit startup/configuration wiring, and narrowly required
-internal Workbench frontend paths. Reuse/move of `definition_authority.py` must preserve
-current semantics and compatibility tests. `operator/`, `runtime/`, CRDs, public API,
-gateway, Qdrant and model-provider paths are out of scope.
+`console/backend/tests/`, a PostgreSQL adapter/migration package, explicit
+startup/configuration wiring, deployment Secret/reference and PostgreSQL prerequisite
+manifests, and narrowly required internal Workbench frontend paths. Reuse/move of
+`definition_authority.py` must preserve current semantics and compatibility tests.
+`operator/`, `runtime/`, CRDs, public API, gateway, Qdrant and model-provider behavior
+remain out of scope. Any deployment-manifest path must be exact and may provision only
+the approved bounded PostgreSQL dependency; S5-DEPLOY-003 remains prohibited.
 
 ### Required tests
 
-- port conformance against in-memory and SQLite adapters;
+- port conformance against PostgreSQL and focused in-memory/SQLite adapters using
+  identical cases and domain results;
 - same ID/same digest replay and same ID/different digest/scope/provenance conflict;
 - exact digest canonicalization and secret-shaped input rejection;
 - full lifecycle happy path and every skipped, stale, duplicate or invalid transition;
@@ -306,30 +346,48 @@ gateway, Qdrant and model-provider paths are out of scope.
 - publication versus derived scoped `MATCHABLE` separation and deprecation retention;
 - authorization-before-lookup, foreign identity/count/existence nondisclosure, scoped
   pagination/aggregation and cache-key isolation;
-- atomic head/fact update, injected crash/lock/unavailable/corrupt/incompatible-schema
-  failures and no in-memory fallback;
-- empty-store v1 initialization, supported forward migration fixture, newer/partial/
+- atomic head/fact update; optimistic-concurrency, unique/FK, deadlock/serialization,
+  pool-exhaustion, timeout, unavailable and incompatible-schema failures; bounded
+  idempotent retry and no in-memory/SQLite deployment fallback;
+- empty-database v1 initialization, supported forward migration fixture, newer/partial/
   checksum-mismatch rejection and prior-binary compatibility declaration;
+- external Secret-reference-only connection configuration; database URL/credential,
+  driver, SQL, sequence ID and PostgreSQL JSON representation non-leakage;
+- TLS/private-network configuration where applicable and stable non-disclosing
+  database-unavailable errors;
+- PostgreSQL backup/restore rehearsal with exact identity, digest, scope, history and
+  constraint verification;
 - service restart recovers the identical definition ID, revision ID, digest, facts,
   derived eligibility and history from the configured database;
 - Workbench sibling projections retain identical canonical identity and provenance;
-- existing Execution Evidence coexistence and full repository regression validation.
+- explicit SQLite Execution Evidence coexistence with cross-store canonical identity/
+  digest linkage and no cross-store atomicity claim;
+- PostgreSQL Execution Evidence adapter conformance plus verified import/cutover/
+  rollback fixtures before v0.2.3 completion; and full repository regression validation.
 
 ### STOP conditions and gate
 
-The implementation is `G1` only after Human acceptance of this G2, because it adds
-an internal adapter/service/Workbench capability behind approved ports. STOP and
-return to `G2` for public API/CRD or Kubernetes authority changes, a second database,
-multi-node/shared-filesystem operation, enterprise Tenant/IAM/retention architecture,
+The implementation is `G1` only after Human acceptance and Durable Integration of
+this amended G2, because it adds an internal adapter/service/Workbench capability
+behind approved ports. The first implementation requires a PostgreSQL driver/client
+dependency if none is already present, an externally supplied Secret reference,
+bounded connection-pool configuration, an available PostgreSQL database, ordered
+migration execution and backup/restore rehearsal. Dependency/lockfile and deployment
+prerequisite changes require exact G1 planning and security review; they are not
+implemented by this decision. STOP and return to `G2` for public API/CRD or Kubernetes
+authority changes, more than the approved PostgreSQL database plus transitional
+Evidence SQLite arrangement, SQLite shared-filesystem/multi-node use, PostgreSQL HA,
+replication or multi-region operation, enterprise Tenant/IAM/retention architecture,
 general State Plane, destructive migration/down-migration, cross-domain atomicity not
-covered here, new persistent dependency, changed S5-ARCH-010/013 semantics, or a need
+covered here, another persistent dependency, changed S5-ARCH-010/013 semantics, or a need
 to persist secret values. Frontend scope or a new endpoint requires a written G1 plan.
 
 ## 13. Decision consequences and limitations
 
-This decision gives v0.2 a truthful restart-continuity seam and preserves future
-PostgreSQL replacement. It intentionally accepts bounded single-writer contention,
-offline migrations and whole-store backup/restore. It does not establish production
+This amended decision gives v0.2 a truthful PostgreSQL deployment seam and preserves
+SQLite only for bounded transition/local conformance. It intentionally accepts an
+explicit v0.2.2 dual-store transition without cross-store atomicity, ordered migrations
+and coordinated whole-database backup/restore. It does not establish production
 readiness, certification, availability/SLA, multi-node safety, complete Tenant or
 authorization architecture, retention/deletion compliance, distributed transactions,
 exactly-once effects, complete recovery, or release acceptance.
