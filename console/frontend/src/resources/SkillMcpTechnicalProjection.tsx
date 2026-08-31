@@ -44,6 +44,17 @@ export function SkillMcpTechnicalProjection({
           </li>
         ))}
       </ul>
+      <h4>Operational inspection</h4>
+      <dl>
+        <dt>Saved tests / results</dt>
+        <dd>{projection.resource.savedTests.length} / {projection.resource.testResults.length}</dd>
+        <dt>Discovery snapshots / drift</dt>
+        <dd>{projection.resource.discoverySnapshots.length} / {projection.resource.driftRecords.length}</dd>
+        <dt>Governed Tool selections</dt>
+        <dd>{projection.resource.toolSelections.length}</dd>
+        <dt>Invocation Evidence</dt>
+        <dd>{projection.resource.invocations.length} record(s), credential material not recorded</dd>
+      </dl>
       <p className="agent-limitations">{technical.limitations.join(" · ")}</p>
     </section>
   );

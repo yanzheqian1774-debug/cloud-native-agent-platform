@@ -21,6 +21,8 @@ from agent_console.skill_mcp_repository import (
 
 ADAPTER = "skill-mcp-resource-postgresql-v1"
 SCHEMA_VERSION = 1
+PROFESSIONAL_ADAPTER = "skill-mcp-professional-postgresql-v1"
+PROFESSIONAL_SCHEMA_VERSION = 2
 
 
 class PostgresSkillMcpRepository:
@@ -36,6 +38,9 @@ class PostgresSkillMcpRepository:
         if not database_url:
             raise SkillMcpRepositoryError("SKILL_MCP_STORAGE_UNAVAILABLE")
         self.migration_path = migration_path
+        self.professional_migration_path = migration_path.with_name(
+            "0004_skill_mcp_professional_experience.sql"
+        )
         try:
             self.pool = ConnectionPool(
                 database_url,
@@ -52,6 +57,10 @@ class PostgresSkillMcpRepository:
     @property
     def migration_checksum(self) -> str:
         return hashlib.sha256(self.migration_path.read_bytes()).hexdigest()
+
+    @property
+    def professional_migration_checksum(self) -> str:
+        return hashlib.sha256(self.professional_migration_path.read_bytes()).hexdigest()
 
     def migrate(self) -> None:
         try:
@@ -73,6 +82,25 @@ class PostgresSkillMcpRepository:
                     or row["adapter"] != ADAPTER
                 ):
                     raise SkillMcpRepositoryError("SKILL_MCP_SCHEMA_INCOMPATIBLE")
+                connection.execute(self.professional_migration_path.read_text())
+                professional = connection.execute(
+                    "SELECT checksum,adapter FROM skill_mcp_resource.schema_migrations WHERE version=%s",
+                    (PROFESSIONAL_SCHEMA_VERSION,),
+                ).fetchone()
+                if professional is None:
+                    connection.execute(
+                        "INSERT INTO skill_mcp_resource.schema_migrations(version,checksum,adapter) VALUES (%s,%s,%s)",
+                        (
+                            PROFESSIONAL_SCHEMA_VERSION,
+                            self.professional_migration_checksum,
+                            PROFESSIONAL_ADAPTER,
+                        ),
+                    )
+                elif (
+                    professional["checksum"] != self.professional_migration_checksum
+                    or professional["adapter"] != PROFESSIONAL_ADAPTER
+                ):
+                    raise SkillMcpRepositoryError("SKILL_MCP_SCHEMA_INCOMPATIBLE")
         except SkillMcpRepositoryError:
             raise
         except PsycopgError as exc:
@@ -89,6 +117,16 @@ class PostgresSkillMcpRepository:
                     row is None
                     or row["checksum"] != self.migration_checksum
                     or row["adapter"] != ADAPTER
+                ):
+                    raise SkillMcpRepositoryError("SKILL_MCP_SCHEMA_INCOMPATIBLE")
+                professional = connection.execute(
+                    "SELECT checksum,adapter FROM skill_mcp_resource.schema_migrations WHERE version=%s",
+                    (PROFESSIONAL_SCHEMA_VERSION,),
+                ).fetchone()
+                if (
+                    professional is None
+                    or professional["checksum"] != self.professional_migration_checksum
+                    or professional["adapter"] != PROFESSIONAL_ADAPTER
                 ):
                     raise SkillMcpRepositoryError("SKILL_MCP_SCHEMA_INCOMPATIBLE")
         except SkillMcpRepositoryError:
@@ -167,6 +205,31 @@ class PostgresSkillMcpRepository:
                 if row is None:
                     raise SkillMcpConflict("STALE_RESOURCE")
                 self._fact(connection, record, len(record["facts"]) + 1, fact)
+                if fact["event"] in {
+                    "TEST_CASE_SAVED",
+                    "TEST_RESULT_RECORDED",
+                    "MCP_HEALTH_OBSERVED",
+                    "MCP_DISCOVERY_SNAPSHOTTED",
+                    "MCP_TOOL_SELECTION_GOVERNED",
+                    "MCP_INVOCATION_RECORDED",
+                    "MCP_DRIFT_RECORDED",
+                }:
+                    connection.execute(
+                        "INSERT INTO skill_mcp_resource.professional_facts(namespace,security_domain,kind,resource_id,ordinal,fact_id,fact_type,safe_fact) VALUES (%s,%s,%s,%s,(SELECT coalesce(max(ordinal),0)+1 FROM skill_mcp_resource.professional_facts WHERE namespace=%s AND security_domain=%s AND kind=%s AND resource_id=%s),%s,%s,%s::jsonb)",
+                        (
+                            record["namespace"],
+                            record["securityDomain"],
+                            record["kind"],
+                            record["resourceId"],
+                            record["namespace"],
+                            record["securityDomain"],
+                            record["kind"],
+                            record["resourceId"],
+                            fact["factId"],
+                            fact["event"],
+                            json.dumps(fact),
+                        ),
+                    )
                 record["facts"] = [*record["facts"], fact]
                 connection.execute(
                     "UPDATE skill_mcp_resource.resources SET record=%s::jsonb WHERE namespace=%s AND security_domain=%s AND kind=%s AND resource_id=%s",
