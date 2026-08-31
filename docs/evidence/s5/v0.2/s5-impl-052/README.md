@@ -141,3 +141,10 @@ Controlled pause after a clean Draft PR. Await S5-IMPL-051 and migration `0006`
 Durable Integration, merge advanced `origin/main` normally without rebase, then
 perform final assembly and cross-module validation. Do not mark the PR Ready or
 route it for integration before that gate.
+
+## Commit and Draft PR
+
+- A1 implementation commit: `e6e47f6` (`Implement workflow and runtime profile workbenches`).
+- Draft PR: [#105](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/105).
+- PR state requirement: `DRAFT`; merge and Ready-for-review conversion are
+  prohibited until the Track A dependency and final assembly gate are satisfied.
