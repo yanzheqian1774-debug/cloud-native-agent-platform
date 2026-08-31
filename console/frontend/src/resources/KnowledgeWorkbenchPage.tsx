@@ -64,6 +64,8 @@ export function KnowledgeWorkbenchPage() {
     try {
       const resources = await listKnowledge();
       setItems(resources);
+      setDashboard(await getKnowledgeDashboard());
+      setMetadata(await getKnowledgeMetadata());
       if (id) setSelected(await getKnowledge(id));
       setError(null);
       setState("READY");
