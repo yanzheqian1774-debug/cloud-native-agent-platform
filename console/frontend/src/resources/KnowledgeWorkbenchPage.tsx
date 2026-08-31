@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   createKnowledge,
+  createKnowledgeSuccessor,
   getKnowledge,
   knowledgeAction,
   listKnowledge,
   purgeKnowledge,
+  retrieveKnowledge,
   KnowledgeRequestError,
   type KnowledgeProjection,
   type KnowledgeResource,
@@ -22,6 +24,9 @@ export function KnowledgeWorkbenchPage() {
   const [filter, setFilter] = useState("");
   const [authorizationId, setAuthorizationId] = useState("");
   const [reasonClassification, setReasonClassification] = useState("");
+  const [view, setView] = useState<"PRODUCT" | "TECHNICAL">("PRODUCT");
+  const [query, setQuery] = useState("supplier defect containment procedure");
+  const [successorContent, setSuccessorContent] = useState("");
   const purgeDialog = useRef<HTMLDialogElement>(null);
 
   function recordError(reason: unknown) {
@@ -83,6 +88,24 @@ export function KnowledgeWorkbenchPage() {
     } catch (reason) { purgeDialog.current?.close(); recordError(reason); }
   }
 
+  async function retrieve(authorization = "ALLOW") {
+    if (!selected) return;
+    setState("SAVING");
+    try {
+      const result = await retrieveKnowledge(selected.knowledge.knowledgeId, selected.knowledge.aggregateVersion, query, authorization);
+      setSelected(result); setError(null); setNotice("Authorized retrieval and exact Citations recorded."); setState("READY");
+    } catch (reason) { recordError(reason); }
+  }
+
+  async function successor() {
+    if (!selected || !successorContent) return;
+    setState("SAVING");
+    try {
+      const result = await createKnowledgeSuccessor(selected.knowledge.knowledgeId, selected.knowledge.aggregateVersion, successorContent);
+      setSelected(result); setError(null); setNotice("Successor draft created without changing published history."); setState("READY");
+    } catch (reason) { recordError(reason); }
+  }
+
   const value = selected?.knowledge;
   const currentRevision = value?.revisions.find((item) => item.revisionId === (value.currentDraftRevisionId ?? value.publishedRevisionId));
   const source = currentRevision?.content.source;
@@ -91,6 +114,7 @@ export function KnowledgeWorkbenchPage() {
   const latestJob = value?.ingestionJobs.at(-1);
   const recoveryRequired = value?.lifecycleState === "RECOVERY_REQUIRED" || value?.purge?.status === "RECOVERY_REQUIRED";
   const visibleItems = items.filter((item) => `${item.name} ${item.knowledgeId} ${item.lifecycleState}`.toLowerCase().includes(filter.toLowerCase()));
+  const latestRetrieval = value?.retrievals.at(-1);
 
   return <main className="agent-workbench">
     <header><p className="eyebrow">Enterprise Resource Workbench</p><h1>Knowledge Workbench</h1><p>Govern sources, immutable Knowledge Packs, ingestion, authorized retrieval provenance and derived index recovery. Browser state never becomes lifecycle authority.</p></header>
@@ -112,6 +136,10 @@ export function KnowledgeWorkbenchPage() {
       <header><p className="eyebrow">{value.lifecycleState} · {value.archived ? "Archived" : "Active record"}</p><h2>{value.name}</h2><span className="technical-value">{value.knowledgeId}</span></header>
       {recoveryRequired && <div role="alert" className="notice"><strong>RECOVERY_REQUIRED</strong><span>The system cannot prove the cross-store operation completed. Resume recovery before claiming availability or purge completion.</span></div>}
 
+      <div className="agent-view-tabs" role="tablist" aria-label="Knowledge projection"><button role="tab" aria-selected={view === "PRODUCT"} onClick={() => setView("PRODUCT")}>Product View</button><button role="tab" aria-selected={view === "TECHNICAL"} onClick={() => setView("TECHNICAL")}>Technical View</button></div>
+
+      {view === "PRODUCT" ? <>
+
       <section className="agent-review-card"><div className="section-heading"><div><p className="eyebrow">Source and Pack</p><h3>{currentRevision?.state ?? "NO_REVISION"} lifecycle</h3></div><span className={`status ${currentRevision?.state === "PUBLISHED" ? "success" : "warning"}`}>{currentRevision?.state ?? "UNKNOWN"}</span></div>
         <dl><dt>Source identity</dt><dd className="technical-value">{source?.sourceId ?? "NOT_RECORDED"}</dd><dt>Source kind</dt><dd>{source?.kind ?? "NOT_RECORDED"}</dd><dt>Provenance</dt><dd className="technical-value">{source?.provenance ?? "NOT_RECORDED"}</dd><dt>Knowledge Pack identity</dt><dd className="technical-value">{value.knowledgeId}</dd></dl>
         <div className="agent-dashboard"><article><strong>{documents.length}</strong><span>Authorized documents</span></article><article><strong>{chunkCount}</strong><span>Authorized chunks</span></article><article><strong>{value.revisions.length}</strong><span>Immutable revisions</span></article></div>
@@ -124,10 +152,12 @@ export function KnowledgeWorkbenchPage() {
         <div className="agent-actions">{value.publishedRevisionId && !recoveryRequired && <button className="primary" onClick={() => void act("ingestion")}>Ingest and index</button>}{value.activeIndexSnapshotId && !recoveryRequired && <button onClick={() => void act("rebuild")}>Rebuild derived index</button>}{recoveryRequired && <button className="primary" onClick={() => void act("recovery")}>Resume recovery</button>}</div>
       </section>
 
-      <section><p className="eyebrow">Citation and provenance</p><h3>Authorized retrieval boundary</h3><p>Provenance is bound to the exact source and revision above. Citation records appear only after an independently authorized retrieval; this Workbench does not infer citations from indexed content.</p><p className="qto-disclosure">Denied and absent Knowledge use the same bounded disclosure. Counts above are rendered only after an authorized scoped aggregate response.</p></section>
+      <section className="agent-section"><p className="eyebrow">Citation and provenance</p><h3>Authorized retrieval</h3><p>Provenance is bound to the exact source and revision. Citation records appear only after backend authorization and retrieval.</p><label>Retrieval query<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="agent-actions"><button className="primary" disabled={!value.activeIndexSnapshotId} onClick={() => void retrieve()}>Run authorized retrieval</button><button onClick={() => void retrieve("DENY")}>Verify denied disclosure</button></div>{latestRetrieval && <div className="knowledge-citations"><p className="technical-value">Authorization: {latestRetrieval.authorizationDecisionId}</p>{latestRetrieval.citations.map((citation) => <article key={citation.citationId}><span className="agent-status status-succeeded">CITATION</span><strong>{citation.documentId} · {citation.chunkId}</strong><p>{citation.content}</p><small>Source {citation.sourceId} · Provenance {citation.provenance}</small></article>)}</div>}<p className="qto-disclosure">Denied and absent Knowledge use the same bounded disclosure. Counts above are rendered only after an authorized scoped aggregate response.</p></section>
 
-      <section><p className="eyebrow">Lifecycle impact</p><h3>Archive and compliance purge</h3><p>Archive removes this Pack from ordinary active views while preserving revision, Citation, Evidence and audit history. Purge is exceptional: it removes prohibited payloads and derived vectors, may require resumable recovery, and preserves only a non-sensitive tombstone.</p><div className="agent-actions"><button onClick={() => void act("archive")}>Archive Pack</button><button onClick={() => purgeDialog.current?.showModal()}>Review purge impact</button></div></section>
-      <KnowledgeTechnicalProjection projection={selected} />
+      {value.publishedRevisionId && !value.currentDraftRevisionId && <section className="agent-section"><p className="eyebrow">Successor revision</p><h3>Update source content</h3><p>The published revision remains immutable. Updated sanitized content creates a successor draft and requires the full exact-digest lifecycle.</p><label>Successor source content<textarea rows={5} value={successorContent} onChange={(event) => setSuccessorContent(event.target.value)} /></label><div className="agent-actions"><button disabled={!successorContent} onClick={() => void successor()}>Create successor draft</button></div></section>}
+
+      <section className="agent-section"><p className="eyebrow">Lifecycle impact</p><h3>Archive and compliance purge</h3><p>Archive removes this Pack from ordinary active views while preserving revision, Citation, Evidence and audit history. Purge is exceptional: it removes prohibited payloads and derived vectors, may require resumable recovery, and preserves only a non-sensitive tombstone.</p><div className="agent-actions"><button onClick={() => void act("archive")}>Archive Pack</button><button className="danger" onClick={() => purgeDialog.current?.showModal()}>Review purge impact</button></div></section>
+      </> : <KnowledgeTechnicalProjection projection={selected} />}
     </>}</section></div>
 
     <dialog ref={purgeDialog} aria-labelledby="knowledge-purge-title"><form method="dialog" onSubmit={(event) => { event.preventDefault(); void purge(); }}><div className="section-heading"><div><p className="eyebrow">Exceptional operation</p><h2 id="knowledge-purge-title">Authorize Knowledge purge</h2></div><button type="button" aria-label="Close purge dialog" onClick={() => purgeDialog.current?.close()}>×</button></div><p>This can remove source, document and chunk payloads plus derived Qdrant vectors. Cross-store completion is resumable and may become RECOVERY_REQUIRED.</p><label>Authorization identity<input required value={authorizationId} onChange={(event) => setAuthorizationId(event.target.value)} /></label><label>Non-sensitive reason classification<input required value={reasonClassification} onChange={(event) => setReasonClassification(event.target.value)} /></label><div className="agent-actions"><button type="button" onClick={() => purgeDialog.current?.close()}>Cancel</button><button className="primary" disabled={state === "SAVING" || !authorizationId || !reasonClassification} type="submit">Confirm authorized purge</button></div></form></dialog>

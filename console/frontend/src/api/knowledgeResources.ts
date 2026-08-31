@@ -24,6 +24,19 @@ export type KnowledgeResource = {
   revisions: KnowledgeRevision[];
   ingestionJobs: Array<{ jobId: string; status: string; highWaterMark: number }>;
   indexSnapshots: Array<{ snapshotId: string; indexDigest: string; status: string }>;
+  retrievals: Array<{
+    retrievalId: string;
+    authorizationDecisionId: string;
+    snapshotId: string;
+    citations: Array<{
+      citationId: string;
+      sourceId: string;
+      provenance: string;
+      documentId: string;
+      chunkId: string;
+      content: string;
+    }>;
+  }>;
   purge: { status: string; remainingSnapshotIds: string[] } | null;
   limitations: string[];
 };
@@ -43,6 +56,10 @@ export const listKnowledge=()=>request<KnowledgeResource[]>(root);
 export const getKnowledge=(id:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}`);
 export const createKnowledge=()=>request<KnowledgeProjection>(root,{method:"POST",body:JSON.stringify({name:"Supplier Quality Procedures",source:{sourceId:"source:supplier-quality",documentId:"document:8d-procedure",kind:"TEXT",provenance:"human:quality-owner",content:"Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure."}})});
 export const knowledgeAction=(id:string,action:string,expectedVersion:number,digest?:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/${action}`,{method:"POST",body:JSON.stringify({expectedVersion,...(digest?{digest}:{})})});
+export const createKnowledgeSuccessor = (id: string, expectedVersion: number, content: string) =>
+  request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/successors`, { method: "POST", body: JSON.stringify({ expectedVersion, content }) });
+export const retrieveKnowledge = (id: string, expectedVersion: number, query: string, authorization = "ALLOW") =>
+  request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/retrievals`, { method: "POST", body: JSON.stringify({ expectedVersion, query, authorization, authorizationDecisionId: `authorization:${crypto.randomUUID()}` }) });
 export const purgeKnowledge = (id: string, expectedVersion: number, authorizationId: string, reasonClassification: string) =>
   request<KnowledgeProjection | { purge: Record<string, unknown> }>(`${root}/${encodeURIComponent(id)}/purge`, {
     method: "POST",

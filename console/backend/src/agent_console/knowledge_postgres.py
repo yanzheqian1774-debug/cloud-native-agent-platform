@@ -204,7 +204,7 @@ class PostgresKnowledgeRepository:
         try:
             with self.pool.connection() as connection, connection.transaction():
                 row = connection.execute(
-                    "DELETE FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s AND aggregate_version=%s RETURNING knowledge_id",
+                    "SELECT knowledge_id FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s AND aggregate_version=%s FOR UPDATE",
                     (
                         scope.namespace,
                         scope.security_domain,
@@ -214,6 +214,14 @@ class PostgresKnowledgeRepository:
                 ).fetchone()
                 if row is None:
                     raise KnowledgeConflict("STALE_KNOWLEDGE")
+                connection.execute(
+                    "DELETE FROM knowledge_operation.lifecycle_facts WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s",
+                    (scope.namespace, scope.security_domain, knowledge_id),
+                )
+                connection.execute(
+                    "DELETE FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s",
+                    (scope.namespace, scope.security_domain, knowledge_id),
+                )
                 connection.execute(
                     "INSERT INTO knowledge_operation.purge_tombstones(namespace,security_domain,knowledge_id,tombstone) VALUES (%s,%s,%s,%s::jsonb)",
                     (

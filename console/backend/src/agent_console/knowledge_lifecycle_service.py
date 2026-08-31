@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from agent_console.knowledge_ingestion import deterministic_vector, ingest_text
 from agent_console.knowledge_pack import canonical_digest, identifier, normalize_text
@@ -110,6 +110,7 @@ class KnowledgeLifecycleService:
             ],
             "ingestionJobs": [],
             "indexSnapshots": [],
+            "retrievals": [],
             "activeIndexSnapshotId": None,
             "purge": None,
             "facts": [fact],
@@ -224,6 +225,68 @@ class KnowledgeLifecycleService:
             scope, knowledge_id, actor, expected_version, "KNOWLEDGE_PUBLISHED", mutate
         )
 
+    def successor(
+        self,
+        scope: KnowledgeScope,
+        knowledge_id: str,
+        actor: str,
+        expected_version: int,
+        source_content: str,
+    ) -> dict[str, Any]:
+        def mutate(record: dict[str, Any], fact: dict[str, Any]) -> None:
+            published = next(
+                (
+                    item
+                    for item in record["revisions"]
+                    if item["revisionId"] == record["publishedRevisionId"]
+                ),
+                None,
+            )
+            if published is None or record["currentDraftRevisionId"] is not None:
+                raise KnowledgeLifecycleFailure("PUBLISHED_REVISION_REQUIRED")
+            content = copy.deepcopy(published["content"])
+            document = content["documents"][0]
+            chunks, content_digest = ingest_text(document["documentId"], source_content)
+            document.update(chunks=chunks, contentDigest=content_digest)
+            revision_id = identity("knowledge-revision")
+            digest = canonical_digest(
+                {
+                    "scope": {
+                        "namespace": scope.namespace,
+                        "securityDomain": scope.security_domain,
+                    },
+                    "content": content,
+                    "predecessorRevisionId": published["revisionId"],
+                },
+                domain="knowledge-revision.v1",
+            )
+            record["revisions"].append(
+                {
+                    "revisionId": revision_id,
+                    "predecessorRevisionId": published["revisionId"],
+                    "state": "DRAFT",
+                    "digest": digest,
+                    "content": content,
+                    "createdAt": now(),
+                }
+            )
+            record["currentDraftRevisionId"] = revision_id
+            record["lifecycleState"] = "DRAFT"
+            fact.update(
+                revisionId=revision_id,
+                predecessorRevisionId=published["revisionId"],
+                digest=digest,
+            )
+
+        return self._change(
+            scope,
+            knowledge_id,
+            actor,
+            expected_version,
+            "KNOWLEDGE_SUCCESSOR_CREATED",
+            mutate,
+        )
+
     def ingest(
         self,
         scope: KnowledgeScope,
@@ -257,7 +320,7 @@ class KnowledgeLifecycleService:
                 for chunk in document["chunks"]:
                     points.append(
                         {
-                            "id": chunk["contentDigest"],
+                            "id": str(uuid5(NAMESPACE_URL, chunk["contentDigest"])),
                             "vector": deterministic_vector(chunk["content"]),
                             "payload": {
                                 "namespace": scope.namespace,
@@ -317,6 +380,97 @@ class KnowledgeLifecycleService:
         expected_version: int,
     ) -> dict[str, Any]:
         return self.ingest(scope, knowledge_id, actor, expected_version)
+
+    def retrieve(
+        self,
+        scope: KnowledgeScope,
+        knowledge_id: str,
+        actor: str,
+        expected_version: int,
+        authorization: str,
+        authorization_decision_id: str,
+        query: str,
+    ) -> dict[str, Any]:
+        if authorization != "ALLOW":
+            raise KnowledgeLifecycleFailure("KNOWLEDGE_ACCESS_DENIED")
+        authorization_decision_id = identifier(
+            authorization_decision_id, "KNOWLEDGE_ACCESS_DENIED"
+        )
+        query = normalize_text(query, "INVALID_RETRIEVAL_QUERY", limit=2_000)
+
+        def mutate(record: dict[str, Any], fact: dict[str, Any]) -> None:
+            revision = next(
+                (
+                    item
+                    for item in record["revisions"]
+                    if item["revisionId"] == record["publishedRevisionId"]
+                ),
+                None,
+            )
+            snapshot_id = record["activeIndexSnapshotId"]
+            if revision is None or snapshot_id is None or self.qdrant is None:
+                raise KnowledgeLifecycleFailure("KNOWLEDGE_UNAVAILABLE")
+            try:
+                hits = self.qdrant.search(
+                    deterministic_vector(query),
+                    namespace=scope.namespace,
+                    security_domain=scope.security_domain,
+                    knowledge_id=knowledge_id,
+                    snapshot_id=snapshot_id,
+                    limit=5,
+                )
+            except QdrantKnowledgeError as exc:
+                raise KnowledgeLifecycleFailure("KNOWLEDGE_UNAVAILABLE") from exc
+            chunks = {
+                chunk["chunkId"]: (document, chunk)
+                for document in revision["content"]["documents"]
+                for chunk in document["chunks"]
+            }
+            citations = []
+            for hit in hits:
+                payload = hit.get("payload", {})
+                match = chunks.get(payload.get("chunkId"))
+                if match is None or payload.get("revisionDigest") != revision["digest"]:
+                    continue
+                document, chunk = match
+                citations.append(
+                    {
+                        "citationId": identity("citation"),
+                        "knowledgeId": knowledge_id,
+                        "revisionId": revision["revisionId"],
+                        "revisionDigest": revision["digest"],
+                        "sourceId": revision["content"]["source"]["sourceId"],
+                        "provenance": revision["content"]["source"]["provenance"],
+                        "documentId": document["documentId"],
+                        "documentDigest": document["contentDigest"],
+                        "chunkId": chunk["chunkId"],
+                        "chunkDigest": chunk["contentDigest"],
+                        "content": chunk["content"],
+                    }
+                )
+            retrieval = {
+                "retrievalId": identity("retrieval"),
+                "authorizationDecisionId": authorization_decision_id,
+                "queryDigest": canonical_digest(query, domain="knowledge-query.v1"),
+                "snapshotId": snapshot_id,
+                "citations": citations,
+                "recordedAt": now(),
+            }
+            record.setdefault("retrievals", []).append(retrieval)
+            fact.update(
+                retrievalId=retrieval["retrievalId"],
+                authorizationDecisionId=authorization_decision_id,
+                citationIds=[item["citationId"] for item in citations],
+            )
+
+        return self._change(
+            scope,
+            knowledge_id,
+            actor,
+            expected_version,
+            "KNOWLEDGE_RETRIEVAL_RECORDED",
+            mutate,
+        )
 
     def recover(
         self,

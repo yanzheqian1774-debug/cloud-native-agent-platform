@@ -31,6 +31,16 @@ class PurgeCommand(VersionCommand):
     reasonClassification: str
 
 
+class SuccessorCommand(VersionCommand):
+    content: str
+
+
+class RetrievalCommand(VersionCommand):
+    authorization: str
+    authorizationDecisionId: str
+    query: str
+
+
 class KnowledgeResponse(BaseModel):
     knowledge: dict[str, Any]
     productProjection: dict[str, Any]
