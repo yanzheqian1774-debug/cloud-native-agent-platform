@@ -12,12 +12,18 @@ from agent_console.skill_mcp_postgres import PostgresSkillMcpRepository
 from agent_console.skill_mcp_repository import SkillMcpRepositoryError
 from agent_console.skill_mcp_schemas import (
     BindCommand,
+    CloneCommand,
     CreateResource,
+    DiscoveryCommand,
     EditResource,
+    ImportManifest,
     InvokeCommand,
     LifecycleCommand,
+    McpInvocationCommand,
     PublishCommand,
     ReviewCommand,
+    TestCaseCommand,
+    ToolSelectionCommand,
     VersionCommand,
 )
 from agent_console.skill_mcp_service import SkillMcpFailure, SkillMcpService
@@ -103,9 +109,53 @@ def create_resource(kind: str, command: CreateResource, p: Principal, service: S
     )
 
 
+@router.post("/{kind}/manifest-import", status_code=201)
+def import_manifest(kind: str, command: ImportManifest, p: Principal, service: Service):
+    if command.manifestVersion != "skill-mcp-workbench/v1" or command.kind != kind:
+        raise HTTPException(422, detail={"reasonCode": "MANIFEST_BOUNDARY_INVALID"})
+    return call(
+        lambda: service.project(
+            service.create(
+                service.scope(p[0], p[1]),
+                kind,
+                p[2],
+                command.name,
+                command.content.model_dump(),
+            )
+        )
+    )
+
+
 @router.get("/{kind}/{resource_id}")
 def get_resource(kind: str, resource_id: str, p: Principal, service: Service):
     return call(lambda: service.get(service.scope(p[0], p[1]), kind, resource_id))
+
+
+@router.get("/{kind}/{resource_id}/manifest")
+def export_manifest(kind: str, resource_id: str, p: Principal, service: Service):
+    return call(
+        lambda: service.export_manifest(service.scope(p[0], p[1]), kind, resource_id)
+    )
+
+
+@router.post("/{kind}/{resource_id}/clones", status_code=201)
+def clone_resource(
+    kind: str,
+    resource_id: str,
+    command: CloneCommand,
+    p: Principal,
+    service: Service,
+):
+    return call(
+        lambda: service.clone(
+            service.scope(p[0], p[1]),
+            kind,
+            resource_id,
+            p[2],
+            command.revisionId,
+            command.name,
+        )
+    )
 
 
 @router.put("/{kind}/{resource_id}/draft")
@@ -218,6 +268,107 @@ def invoke_resource(
             command.bindingId,
             command.authorization,
             command.input,
+        )
+    )
+
+
+@router.post("/skill/{resource_id}/tests")
+def save_test(
+    resource_id: str, command: TestCaseCommand, p: Principal, service: Service
+):
+    return call(
+        lambda: service.save_test(
+            service.scope(p[0], p[1]),
+            resource_id,
+            p[2],
+            command.expectedVersion,
+            command.name,
+            command.input,
+            command.expected,
+        )
+    )
+
+
+@router.post("/skill/{resource_id}/tests/{test_id}/runs")
+def run_test(
+    resource_id: str,
+    test_id: str,
+    command: VersionCommand,
+    p: Principal,
+    service: Service,
+):
+    return call(
+        lambda: service.run_test(
+            service.scope(p[0], p[1]),
+            resource_id,
+            p[2],
+            command.expectedVersion,
+            test_id,
+        )
+    )
+
+
+@router.post("/mcp/{resource_id}/health")
+def health(resource_id: str, command: DiscoveryCommand, p: Principal, service: Service):
+    return call(
+        lambda: service.health(
+            service.scope(p[0], p[1]),
+            resource_id,
+            p[2],
+            command.expectedVersion,
+            command.timeoutSeconds,
+        )
+    )
+
+
+@router.post("/mcp/{resource_id}/discovery")
+def discover(
+    resource_id: str, command: DiscoveryCommand, p: Principal, service: Service
+):
+    return call(
+        lambda: service.discover(
+            service.scope(p[0], p[1]),
+            resource_id,
+            p[2],
+            command.expectedVersion,
+            command.timeoutSeconds,
+        )
+    )
+
+
+@router.post("/mcp/{resource_id}/tool-selections")
+def select_tools(
+    resource_id: str, command: ToolSelectionCommand, p: Principal, service: Service
+):
+    return call(
+        lambda: service.select_tools(
+            service.scope(p[0], p[1]),
+            resource_id,
+            p[2],
+            command.expectedVersion,
+            command.snapshotId,
+            command.toolNames,
+            command.reason,
+        )
+    )
+
+
+@router.post("/mcp/{resource_id}/tool-invocations")
+def invoke_mcp(
+    resource_id: str, command: McpInvocationCommand, p: Principal, service: Service
+):
+    return call(
+        lambda: service.invoke_mcp(
+            service.scope(p[0], p[1]),
+            resource_id,
+            p[2],
+            command.expectedVersion,
+            command.selectionId,
+            command.toolName,
+            command.authorization,
+            command.input,
+            command.timeoutSeconds,
+            command.cancelRequested,
         )
     )
 
