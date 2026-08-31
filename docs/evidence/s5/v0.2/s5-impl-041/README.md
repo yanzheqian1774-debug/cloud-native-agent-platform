@@ -1,6 +1,22 @@
-# S5-IMPL-041 Checkpoint A Evidence
+# S5-IMPL-041 Evidence Index
 
-Status: `ACTIVE / FINAL_CHECKPOINT_A_CORRECTIONS_COMPLETE / AWAITING_HUMAN_REVIEW`
+Final status: `CLOSED / COMPLETED / SESSION_CLOSED`
+
+Human Close Confirmation established the terminal state after the historical
+Checkpoint A records were written. PR #91 merged source commits
+`de681a97ee11d6dbec758c3cb3eea4067c00d422` and
+`8393b67568d2e0329ea5ad6f066b330e1568ca56` at durable main
+`2fdf54edb8658929fde6c1259fefda43a8406a62`; exact-main CI run
+`33344714261` succeeded.
+
+- `CHECKPOINT-A-REPORT.md` and `FINAL-CHECKPOINT-A-CORRECTION.md` are immutable
+  point-in-time records. Their `ACTIVE / AWAITING_HUMAN_REVIEW` statements were
+  accurate when recorded and are not current lifecycle claims.
+- `CLOSURE-RECONCILIATION.md` records the later Human-confirmed terminal closure
+  and durable Git/CI lineage without rewriting those historical reports.
+- Code is already durable. Reimplementation and reintegration are not required.
+- Reopen is prohibited. Closure grants no downstream implementation,
+  integration, deployment, execution, v0.2.2, or release authority.
 
 This directory records the local controlled-Model, Qdrant, automated, and
 Browser evidence for v0.2.1. It makes no production, persistence, execution,
