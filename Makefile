@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help setup sync lock format format-check lint test check clean tree status console-e2e frontend-check agent-workbench-e2e
+.PHONY: help setup sync lock format format-check lint test check clean tree status console-e2e frontend-check agent-workbench-e2e skill-mcp-workbench-e2e
 
 help:
 	@echo "Cloud Native Multi-Agent Platform"
@@ -49,6 +49,9 @@ frontend-check:
 
 agent-workbench-e2e:
 	cd console/frontend && npm run test:e2e
+
+skill-mcp-workbench-e2e:
+	cd console/frontend && npx playwright test tests/e2e/skill-mcp-workbench.spec.ts
 
 clean:
 	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
