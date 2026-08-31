@@ -48,3 +48,39 @@ def test_private_api_runs_exact_digest_publication() -> None:
         )
     finally:
         app.dependency_overrides.pop(get_agent_definition_service, None)
+
+
+def test_private_api_rejects_supplied_unresolved_workflow_reference() -> None:
+    service = AgentDefinitionService(InMemoryAgentDefinitionRepository())
+    app.dependency_overrides[get_agent_definition_service] = lambda: service
+    try:
+        client = TestClient(app)
+        created = client.post(
+            "/api/internal/v0.2.2/agent-definitions",
+            json={
+                "name": "Unresolved workflow Agent",
+                "content": {
+                    "title": "Analyst",
+                    "duties": ["analyze"],
+                    "capabilities": ["analysis"],
+                    "bindings": {
+                        "workflow": {
+                            "kind": "workflow-definition",
+                            "resourceId": "workflow:1",
+                            "revisionId": "workflow-revision:1",
+                            "digest": "a" * 64,
+                        }
+                    },
+                },
+            },
+        ).json()["definition"]
+        response = client.post(
+            f"/api/internal/v0.2.2/agent-definitions/{created['definitionId']}/validation",
+            json={"expectedVersion": 1},
+        )
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["reasonCode"] == "WORKFLOW_RESOLVER_UNAVAILABLE"
+        )
+    finally:
+        app.dependency_overrides.pop(get_agent_definition_service, None)

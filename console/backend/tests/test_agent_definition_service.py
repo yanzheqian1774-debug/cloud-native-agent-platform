@@ -1,4 +1,5 @@
 import pytest
+from agent_console.agent_binding_validation import BindingResolution
 from agent_console.agent_definition_repository import (
     DefinitionScope,
     InMemoryAgentDefinitionRepository,
@@ -88,3 +89,57 @@ def test_disabled_and_deprecated_revisions_are_not_eligible() -> None:
         "maintenance",
     )
     assert service.eligible(scope) == []
+
+
+class ExactResolver:
+    def resolve(self, scope, kind, resource_id):
+        return BindingResolution(resource_id, "skill-revision:1", "a" * 64, True, True)
+
+
+def test_exact_binding_is_digest_bound_and_rematches_only_after_publication() -> None:
+    service = AgentDefinitionService(
+        InMemoryAgentDefinitionRepository(), ExactResolver()
+    )
+    scope = DefinitionScope("tenant-a", "quality")
+    content = {
+        **CONTENT,
+        "bindings": {
+            "skills": [
+                {
+                    "resourceId": "skill:1",
+                    "revisionId": "skill-revision:1",
+                    "digest": "a" * 64,
+                }
+            ]
+        },
+    }
+    created = service.create(scope, "human", "Bound Agent", content)
+    assert (
+        service.rematch(scope, ["supplier-quality-analysis"])["outcome"]
+        == "CAPABILITY_GAP"
+    )
+    validated = service.validate(scope, created["definitionId"], "human", 1)[
+        "definition"
+    ]
+    revision = validated["revisions"][-1]
+    reviewed = service.review(
+        scope,
+        created["definitionId"],
+        "human",
+        2,
+        revision["digest"],
+        "APPROVE",
+        "exact",
+    )["definition"]
+    service.publish(
+        scope,
+        created["definitionId"],
+        "human",
+        3,
+        revision["digest"],
+        reviewed["reviews"][-1]["reviewId"],
+    )
+    result = service.rematch(scope, ["supplier-quality-analysis"])
+    assert result["outcome"] == "GOVERNED_MATCH"
+    assert result["digest"] == revision["digest"]
+    assert result["executionAuthorityGranted"] is False

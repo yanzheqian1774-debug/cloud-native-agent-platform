@@ -7,6 +7,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from agent_console.agent_binding_validation import (
+    BindingResolver,
+    BindingValidationFailure,
+    validate_bindings,
+)
 from agent_console.agent_definition_repository import (
     AgentDefinitionConflict,
     AgentDefinitionNotFound,
@@ -46,6 +51,10 @@ def _content(value: dict[str, Any]) -> dict[str, Any]:
         raise AgentDefinitionFailure(str(exc)) from exc
     if not role.capabilities:
         raise AgentDefinitionFailure("CAPABILITY_REQUIRED")
+    bindings = copy.deepcopy(value.get("bindings", {}))
+    bindings.setdefault("skills", [])
+    bindings.setdefault("mcpTools", [])
+    bindings.setdefault("knowledge", [])
     return {
         "title": role.title,
         "duties": list(role.duties),
@@ -54,6 +63,8 @@ def _content(value: dict[str, Any]) -> dict[str, Any]:
         "skills": list(role.skills),
         "capabilities": list(role.capabilities),
         "runtimes": list(role.runtimes),
+        "businessPurpose": str(value.get("businessPurpose", "")).strip(),
+        "bindings": bindings,
     }
 
 
@@ -73,8 +84,13 @@ def _revision_digest(record: dict[str, Any], revision: dict[str, Any]) -> str:
 
 
 class AgentDefinitionService:
-    def __init__(self, repository: AgentDefinitionRepository) -> None:
+    def __init__(
+        self,
+        repository: AgentDefinitionRepository,
+        binding_resolver: BindingResolver | None = None,
+    ) -> None:
         self.repository = repository
+        self.binding_resolver = binding_resolver
         self.repository.compatibility()
 
     @staticmethod
@@ -164,9 +180,21 @@ class AgentDefinitionService:
         record = self._load(scope, definition_id)
         self._expected(record, expected)
         draft = self._draft(record)
+        try:
+            verified = validate_bindings(
+                scope, draft["content"].get("bindings", {}), self.binding_resolver
+            )
+        except BindingValidationFailure as exc:
+            draft["validationErrors"] = [exc.reason]
+            raise AgentDefinitionFailure(exc.reason, 409) from exc
         draft["state"] = "VALIDATED"
         draft["validatedAt"] = _now()
         draft["validationErrors"] = []
+        draft["bindingValidation"] = {
+            "status": "VALID",
+            "verifiedReferences": verified,
+            "executionAuthorityGranted": False,
+        }
         record["lifecycleState"] = "VALIDATED"
         return self._replace(record, expected, "DRAFT_VALIDATED", actor, draft)
 
@@ -183,6 +211,12 @@ class AgentDefinitionService:
         record = self._load(scope, definition_id)
         self._expected(record, expected)
         draft = self._draft(record)
+        try:
+            validate_bindings(
+                scope, draft["content"].get("bindings", {}), self.binding_resolver
+            )
+        except BindingValidationFailure as exc:
+            raise AgentDefinitionFailure(exc.reason, 409) from exc
         if draft["state"] != "VALIDATED":
             raise AgentDefinitionFailure("VALIDATION_REQUIRED", 409)
         if digest != draft["digest"]:
@@ -325,6 +359,35 @@ class AgentDefinitionService:
                 )
         return eligible
 
+    def rematch(
+        self, scope: DefinitionScope, required_capabilities: list[str]
+    ) -> dict[str, Any]:
+        required = set(required_capabilities)
+        candidates = [
+            item
+            for item in self.eligible(scope)
+            if required.issubset(set(item["revision"]["content"]["capabilities"]))
+        ]
+        if not candidates:
+            return {
+                "outcome": "CAPABILITY_GAP",
+                "requiredCapabilities": sorted(required),
+            }
+        selected = sorted(
+            candidates,
+            key=lambda item: (
+                item["definition"]["definitionId"],
+                item["revision"]["revisionId"],
+            ),
+        )[0]
+        return {
+            "outcome": "GOVERNED_MATCH",
+            "definitionId": selected["definition"]["definitionId"],
+            "revisionId": selected["revision"]["revisionId"],
+            "digest": selected["revision"]["digest"],
+            "executionAuthorityGranted": False,
+        }
+
     def project(self, record: dict[str, Any]) -> dict[str, Any]:
         definition = copy.deepcopy(record)
         technical = {
@@ -342,6 +405,12 @@ class AgentDefinitionService:
                 for r in record["revisions"]
             ],
             "limitations": record["limitations"],
+            "governedBindings": copy.deepcopy(
+                self._published(record)["content"].get("bindings", {})
+                if record["publishedRevisionId"]
+                else self._draft(record)["content"].get("bindings", {})
+            ),
+            "executionAuthorityGranted": False,
         }
         product = {
             "definitionId": record["definitionId"],
