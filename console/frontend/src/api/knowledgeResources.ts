@@ -1,5 +1,32 @@
-export type KnowledgeRevision = { revisionId:string; state:string; digest:string; content:{name:string;documents:Array<{documentId:string;chunks:Array<{chunkId:string;content:string}>}>} };
-export type KnowledgeResource = { knowledgeId:string;name:string;aggregateVersion:number;lifecycleState:string;archived:boolean;currentDraftRevisionId:string|null;publishedRevisionId:string|null;activeIndexSnapshotId:string|null;revisions:KnowledgeRevision[];ingestionJobs:Array<{jobId:string;status:string}>;indexSnapshots:Array<{snapshotId:string;indexDigest:string;status:string}>;limitations:string[] };
+export type KnowledgeRevision = {
+  revisionId: string;
+  state: string;
+  digest: string;
+  content: {
+    name: string;
+    source: { sourceId: string; kind: string; provenance: string };
+    documents: Array<{
+      documentId: string;
+      contentDigest: string;
+      chunks: Array<{ chunkId: string; contentDigest: string; content: string }>;
+    }>;
+  };
+};
+export type KnowledgeResource = {
+  knowledgeId: string;
+  name: string;
+  aggregateVersion: number;
+  lifecycleState: string;
+  archived: boolean;
+  currentDraftRevisionId: string | null;
+  publishedRevisionId: string | null;
+  activeIndexSnapshotId: string | null;
+  revisions: KnowledgeRevision[];
+  ingestionJobs: Array<{ jobId: string; status: string; highWaterMark: number }>;
+  indexSnapshots: Array<{ snapshotId: string; indexDigest: string; status: string }>;
+  purge: { status: string; remainingSnapshotIds: string[] } | null;
+  limitations: string[];
+};
 export type KnowledgeProjection = { knowledge:KnowledgeResource;productProjection:Record<string,unknown>;technicalProjection:Record<string,unknown> };
 export class KnowledgeRequestError extends Error {
   reasonCode: string;
@@ -16,3 +43,8 @@ export const listKnowledge=()=>request<KnowledgeResource[]>(root);
 export const getKnowledge=(id:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}`);
 export const createKnowledge=()=>request<KnowledgeProjection>(root,{method:"POST",body:JSON.stringify({name:"Supplier Quality Procedures",source:{sourceId:"source:supplier-quality",documentId:"document:8d-procedure",kind:"TEXT",provenance:"human:quality-owner",content:"Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure."}})});
 export const knowledgeAction=(id:string,action:string,expectedVersion:number,digest?:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/${action}`,{method:"POST",body:JSON.stringify({expectedVersion,...(digest?{digest}:{})})});
+export const purgeKnowledge = (id: string, expectedVersion: number, authorizationId: string, reasonClassification: string) =>
+  request<KnowledgeProjection | { purge: Record<string, unknown> }>(`${root}/${encodeURIComponent(id)}/purge`, {
+    method: "POST",
+    body: JSON.stringify({ expectedVersion, authorizationId, reasonClassification }),
+  });

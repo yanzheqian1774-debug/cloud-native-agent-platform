@@ -68,3 +68,29 @@ shared styling, and run real-browser acceptance against real PostgreSQL and
 Qdrant services.
 
 Status: `AWAITING_SHARED_ASSEMBLY_CONTINUATION`.
+
+## Product design reference addendum
+
+The A1 Knowledge components consume the established Agent Workbench and durable
+prototype patterns rather than introducing another shell or design system. They
+reuse the existing Workbench layout, enterprise cards, lifecycle badges, forms,
+filters, action hierarchy, tables, disclosure notices and technical projection
+classes. The purge impact flow uses an accessible native dialog and requires
+operator-supplied authorization identity and non-sensitive reason classification;
+no simulated authority or success is introduced.
+
+The refined component review confirms explicit presentation of:
+
+- Source and Knowledge Pack identity, provenance and exact revision digest;
+- Draft, validation, Human review, publication and archive lifecycle hierarchy;
+- authorized document/chunk counts only after a scoped backend response;
+- ingestion job, high-water mark, index snapshot, rebuild and recovery state;
+- Citation availability as an authorization-governed retrieval boundary, without
+  inventing Citation records;
+- nondisclosing absent/denied messaging;
+- archive and exceptional purge impact, including `RECOVERY_REQUIRED`;
+- Product and Technical sibling projections over the same backend object.
+
+No shared shell, global navigation, `App.tsx`, `app.css`, frontend persistence,
+mock metric, model/cost value or simulated backend action was added. Final visual
+and real-browser acceptance remains assigned to the shared assembly continuation.
