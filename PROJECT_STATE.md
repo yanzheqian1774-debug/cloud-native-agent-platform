@@ -42,7 +42,7 @@ records lifecycle and provenance.
 | Session | Current state | Durable basis |
 | --- | --- | --- |
 | S5-GOV-003 | `ACTIVE / AUTHORIZED / CHECKPOINT_A` | Governance-only reconciliation at exact baseline `474b19e7bf32a342d93b4b891f6c7a799b9261b6`; records Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction, sequence and unreconciled architecture-number debt; grants no implementation, architecture implementation, deployment, release, certification or public Contract authority |
-| S5-ARCH-018 | `CANDIDATE_ONLY / UNALLOCATED / NOT_ACTIVE` | Reserved only as the candidate identifier for a subsequent consolidated persistence G2; S5-GOV-003 does not allocate or start it |
+| S5-ARCH-018 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / PROPOSED_DECISION_READY_FOR_HUMAN_REVIEW` | Human-allocated ARCH/G2 at exact baseline `a6ec463a365b5f12e8fb64b0b84772a3beb0ae15`; architecture/governance only; acceptance, merge, Durable Integration and implementation allocation remain pending |
 | S5-ARCH-014–S5-ARCH-017 | `RESERVED / UNRECONCILED_GOVERNANCE_DEBT / NOT_REUSABLE` | Visible historical session traces are not a substitute for durable repository authority; exact contents and acceptance status are not reconstructed or fabricated; identifiers remain reserved pending separate Human reconciliation |
 | S5-IMPL-041 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / SESSION_CLOSED` | `S5-IMPL-041: governed problem-to-plan streaming` source commits `de681a97ee11d6dbec758c3cb3eea4067c00d422` and `8393b67568d2e0329ea5ad6f066b330e1568ca56`; PR #91 merged at durable main `2fdf54edb8658929fde6c1259fefda43a8406a62`; exact-main CI run `33344714261` succeeded; code is already durable, reimplementation and reintegration are not required, binding limitations remain, and reopen is prohibited; closure grants no S5-IMPL-042, S5-REL-044, S5-GOV-002 integration, deployment, v0.2.2, release, or downstream implementation authority |
 | S5-REL-030 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #78 merged at durable main `8757adabc9a95e3b3934303fa9c6f8586ff854e9` with ordered parents `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6` and `0993a03817123d9565c8fd03d00dd8fa7e2e0d5f`; exact-main CI run `33180601090` succeeded; closure is forward-recorded without reopening; no downstream authority was granted by closure |
@@ -123,8 +123,8 @@ schema-version/migration validation, replaceable PostgreSQL, Qdrant retained for
 vectors, durable SQL references for Knowledge/index snapshots, external secret
 values, restart reacquisition of Runtime observed state, and Accounting derived
 from durable facts unless separately approved otherwise. Implementation remains
-blocked on a consolidated persistence G2. `S5-ARCH-018` is candidate-only and
-unallocated.
+blocked on Human acceptance and Durable Integration of the proposed S5-ARCH-018
+G2. The Session is allocated and active, but grants no implementation authority.
 
 The bounded working objective is to demonstrate Digital Employee construction
 and governed execution across the stable Core and external Runtime Providers.
@@ -170,8 +170,8 @@ Release remain unauthorized and have not started.
 ## Immediate next work
 
 1. Complete Human review and the Durable Integration decision for S5-GOV-003.
-2. Allocate and conduct a consolidated persistence G2 only through a separate
-   Human decision; do not infer allocation from the candidate S5-ARCH-018 ID.
+2. Complete Human Architecture Review and the Durable Integration decision for
+   proposed S5-ARCH-018; do not start implementation because the Session is active.
 3. Preserve the model-assisted/untrusted candidate boundary, deterministic
    canonicalization and exact-digest approval, authorization-first matching and
    Knowledge retrieval, Native-only placement, and immutable Evidence/successor

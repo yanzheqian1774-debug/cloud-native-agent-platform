@@ -6,6 +6,10 @@ API, schema, or frontend implementation.
 
 ## Evidence sets
 
+- [S5-ARCH-018 architecture evidence](v0.2/s5-arch-018/README.md) records
+  entry revalidation, the proposed bounded product-continuity persistence
+  decision, implementation handoff and validation. It contains no implementation
+  and awaits Human Architecture Review.
 - [S5-GOV-003 governance evidence](v0.2/s5-gov-003/README.md) records the
   Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction,
   exact sequence and reserved/unreconciled S5-ARCH-014–017 debt. It grants no
