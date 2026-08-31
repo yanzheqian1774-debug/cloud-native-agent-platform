@@ -21,6 +21,8 @@ from agent_console.knowledge_repository import (
 
 ADAPTER = "knowledge-postgresql-v1"
 SCHEMA_VERSION = 1
+QUALITY_ADAPTER = "knowledge-quality-postgresql-v1"
+QUALITY_SCHEMA_VERSION = 5
 
 
 class PostgresKnowledgeRepository:
@@ -29,6 +31,7 @@ class PostgresKnowledgeRepository:
         database_url: str,
         *,
         migration_path: Path,
+        quality_migration_path: Path | None = None,
         min_pool_size: int = 1,
         max_pool_size: int = 4,
         timeout: float = 5.0,
@@ -36,6 +39,7 @@ class PostgresKnowledgeRepository:
         if not database_url:
             raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE")
         self.migration_path = migration_path
+        self.quality_migration_path = quality_migration_path
         try:
             self.pool = ConnectionPool(
                 database_url,
@@ -75,6 +79,76 @@ class PostgresKnowledgeRepository:
                     raise KnowledgeRepositoryError("KNOWLEDGE_SCHEMA_INCOMPATIBLE")
         except KnowledgeRepositoryError:
             raise
+        except PsycopgError as exc:
+            raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
+
+    def migrate_quality(self) -> None:
+        """Apply the reserved 0005 artifact without pretending 0004 was validated."""
+        if self.quality_migration_path is None:
+            raise KnowledgeRepositoryError("KNOWLEDGE_QUALITY_SCHEMA_UNAVAILABLE")
+        checksum = hashlib.sha256(self.quality_migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET LOCAL statement_timeout = '5s'")
+                connection.execute("SET LOCAL lock_timeout = '3s'")
+                connection.execute(self.quality_migration_path.read_text())
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM knowledge_quality.schema_migrations WHERE version=%s",
+                    (QUALITY_SCHEMA_VERSION,),
+                ).fetchone()
+                if row is None:
+                    connection.execute(
+                        "INSERT INTO knowledge_quality.schema_migrations(version,checksum,adapter) VALUES (%s,%s,%s)",
+                        (QUALITY_SCHEMA_VERSION, checksum, QUALITY_ADAPTER),
+                    )
+                elif row["checksum"] != checksum or row["adapter"] != QUALITY_ADAPTER:
+                    raise KnowledgeRepositoryError(
+                        "KNOWLEDGE_QUALITY_SCHEMA_INCOMPATIBLE"
+                    )
+        except KnowledgeRepositoryError:
+            raise
+        except PsycopgError as exc:
+            raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
+
+    def put_quality_entity(self, record: dict[str, Any]) -> dict[str, Any]:
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute(
+                    """INSERT INTO knowledge_quality.entities
+                    (namespace,security_domain,entity_type,entity_id,entity_digest,record)
+                    VALUES (%s,%s,%s,%s,%s,%s::jsonb)
+                    ON CONFLICT (namespace,security_domain,entity_type,entity_id)
+                    DO UPDATE SET entity_digest=excluded.entity_digest,record=excluded.record,updated_at=now()""",
+                    (
+                        record["namespace"],
+                        record["securityDomain"],
+                        record["entityType"],
+                        record["entityId"],
+                        record["digest"],
+                        json.dumps(record),
+                    ),
+                )
+            return record
+        except PsycopgError as exc:
+            raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
+
+    def list_quality_entities(
+        self, scope: KnowledgeScope, entity_type: str | None = None
+    ) -> list[dict[str, Any]]:
+        params: tuple[Any, ...] = (scope.namespace, scope.security_domain)
+        predicate = ""
+        if entity_type is not None:
+            predicate = " AND entity_type=%s"
+            params = (*params, entity_type)
+        try:
+            with self.pool.connection() as connection:
+                rows = connection.execute(
+                    "SELECT record FROM knowledge_quality.entities WHERE namespace=%s AND security_domain=%s"
+                    + predicate
+                    + " ORDER BY created_at,entity_id LIMIT 1000",
+                    params,
+                ).fetchall()
+                return [row["record"] for row in rows]
         except PsycopgError as exc:
             raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
 

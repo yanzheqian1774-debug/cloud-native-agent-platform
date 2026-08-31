@@ -42,6 +42,10 @@ class KnowledgeRepository(Protocol):
         expected_version: int,
         tombstone: dict[str, Any],
     ) -> None: ...
+    def put_quality_entity(self, record: dict[str, Any]) -> dict[str, Any]: ...
+    def list_quality_entities(
+        self, scope: KnowledgeScope, entity_type: str | None = None
+    ) -> list[dict[str, Any]]: ...
 
 
 class InMemoryKnowledgeRepository:
@@ -50,6 +54,7 @@ class InMemoryKnowledgeRepository:
     def __init__(self) -> None:
         self._records: dict[tuple[str, str, str], dict[str, Any]] = {}
         self._tombstones: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self._quality: dict[tuple[str, str, str, str], dict[str, Any]] = {}
         self._lock = threading.RLock()
 
     def compatibility(self) -> None:
@@ -116,3 +121,25 @@ class InMemoryKnowledgeRepository:
                 raise KnowledgeConflict("STALE_KNOWLEDGE")
             self._tombstones[key] = copy.deepcopy(tombstone)
             del self._records[key]
+
+    def put_quality_entity(self, record: dict[str, Any]) -> dict[str, Any]:
+        key = (
+            record["namespace"],
+            record["securityDomain"],
+            record["entityType"],
+            record["entityId"],
+        )
+        with self._lock:
+            self._quality[key] = copy.deepcopy(record)
+            return copy.deepcopy(record)
+
+    def list_quality_entities(
+        self, scope: KnowledgeScope, entity_type: str | None = None
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return [
+                copy.deepcopy(value)
+                for key, value in sorted(self._quality.items())
+                if key[:2] == (scope.namespace, scope.security_domain)
+                and (entity_type is None or key[2] == entity_type)
+            ]

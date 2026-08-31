@@ -14,6 +14,10 @@ from agent_console.knowledge_lifecycle_service import (
 )
 from agent_console.knowledge_postgres import PostgresKnowledgeRepository
 from agent_console.knowledge_qdrant import QdrantKnowledgeError, QdrantKnowledgeIndex
+from agent_console.knowledge_quality import (
+    KnowledgeQualityFailure,
+    KnowledgeQualityService,
+)
 from agent_console.knowledge_repository import (
     KnowledgeNotFound,
     KnowledgeRepositoryError,
@@ -22,9 +26,13 @@ from agent_console.knowledge_repository import (
 from agent_console.knowledge_schemas import (
     CreateKnowledge,
     DigestCommand,
+    DuplicateDecisionCommand,
+    EvaluationCommand,
+    ImportPreviewCommand,
     KnowledgeResponse,
     PurgeCommand,
     RetrievalCommand,
+    SearchCommand,
     SuccessorCommand,
     VersionCommand,
 )
@@ -33,11 +41,12 @@ router = APIRouter(
     prefix="/api/internal/v0.2.2/knowledge", tags=["knowledge-workbench"]
 )
 _service: KnowledgeLifecycleService | None = None
+_quality_service: KnowledgeQualityService | None = None
 _startup_error = "KNOWLEDGE_STORAGE_UNAVAILABLE"
 
 
 def configure() -> None:
-    global _service, _startup_error
+    global _service, _quality_service, _startup_error
     database_url = os.environ.get("KNOWLEDGE_DATABASE_URL", "")
     qdrant_url = os.environ.get("KNOWLEDGE_QDRANT_URL", "")
     if not database_url or not qdrant_url:
@@ -49,17 +58,23 @@ def configure() -> None:
         repository = PostgresKnowledgeRepository(
             database_url,
             migration_path=migration,
+            quality_migration_path=Path(__file__).parents[2]
+            / "migrations"
+            / "0005_knowledge_quality_operations.sql",
             min_pool_size=int(os.environ.get("KNOWLEDGE_DB_POOL_MIN", "1")),
             max_pool_size=int(os.environ.get("KNOWLEDGE_DB_POOL_MAX", "4")),
             timeout=float(os.environ.get("KNOWLEDGE_DB_TIMEOUT_SECONDS", "5")),
         )
         repository.migrate()
+        repository.migrate_quality()
         qdrant = QdrantKnowledgeIndex(qdrant_url)
         qdrant.ensure_collection()
         _service = KnowledgeLifecycleService(repository, qdrant)
+        _quality_service = KnowledgeQualityService(repository, qdrant)
         _startup_error = ""
     except (KnowledgeRepositoryError, QdrantKnowledgeError, ValueError):
         _service = None
+        _quality_service = None
         _startup_error = "KNOWLEDGE_STORAGE_UNAVAILABLE"
 
 
@@ -70,6 +85,12 @@ def get_knowledge_service() -> KnowledgeLifecycleService:
     if _service is None:
         raise HTTPException(503, detail={"reasonCode": _startup_error})
     return _service
+
+
+def get_quality_service() -> KnowledgeQualityService:
+    if _quality_service is None:
+        raise HTTPException(503, detail={"reasonCode": _startup_error})
+    return _quality_service
 
 
 def trusted_scope(
@@ -94,7 +115,12 @@ def call(operation):
         raise HTTPException(
             status_code=404, detail={"reasonCode": "KNOWLEDGE_NOT_FOUND"}
         ) from exc
-    except (KnowledgeLifecycleFailure, KnowledgeRepositoryError, ValueError) as exc:
+    except (
+        KnowledgeLifecycleFailure,
+        KnowledgeQualityFailure,
+        KnowledgeRepositoryError,
+        ValueError,
+    ) as exc:
         code = (
             str(exc)
             if str(exc).isupper() or "_" in str(exc)
@@ -106,6 +132,136 @@ def call(operation):
         raise HTTPException(
             status_code=status_code, detail={"reasonCode": code}
         ) from exc
+
+
+@router.get("/operations/dashboard")
+def quality_dashboard(
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.dashboard(scope))
+
+
+@router.post("/operations/search")
+def quality_search(
+    command: SearchCommand,
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(
+        lambda: service.search(
+            scope,
+            query=command.query,
+            mode=command.mode,
+            top_k=command.topK,
+            knowledge_id=command.knowledgeId,
+            source_id=command.sourceId,
+            document_id=command.documentId,
+            content_type=command.contentType,
+            revision_id=command.revisionId,
+            snapshot_id=command.snapshotId,
+        )
+    )
+
+
+@router.get("/operations/metadata")
+def quality_metadata(
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.metadata(scope))
+
+
+@router.get("/operations/evaluations")
+def quality_evaluation_runs(
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(
+        lambda: service.repository.list_quality_entities(scope, "EVALUATION_RUN")
+    )
+
+
+@router.post("/operations/evaluations")
+def quality_evaluate(
+    command: EvaluationCommand,
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.evaluate(scope, command.model_dump()))
+
+
+@router.post("/operations/imports/preview")
+def quality_import_preview(
+    command: ImportPreviewCommand,
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(
+        lambda: service.import_preview(
+            scope, format=command.format, content=command.content
+        )
+    )
+
+
+@router.post("/operations/imports/{import_job_id}/execute")
+def quality_import_execute(
+    import_job_id: str,
+    scope: KnowledgeScope = Depends(trusted_scope),
+    current_actor: str = Depends(actor),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.execute_import(scope, import_job_id, current_actor))
+
+
+@router.get("/operations/export")
+def quality_export(
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.export(scope))
+
+
+@router.post("/operations/duplicates/scan")
+def quality_duplicates(
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.duplicates(scope))
+
+
+@router.get("/operations/duplicates")
+def quality_duplicate_queue(
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.duplicate_queue(scope))
+
+
+@router.post("/operations/duplicates/decisions")
+def quality_duplicate_decision(
+    command: DuplicateDecisionCommand,
+    scope: KnowledgeScope = Depends(trusted_scope),
+    current_actor: str = Depends(actor),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(
+        lambda: service.decide_duplicate(
+            scope,
+            candidate_id=command.candidateId,
+            classification=command.classification,
+            actor=current_actor,
+        )
+    )
+
+
+@router.post("/{knowledge_id}/operations/summaries")
+def quality_summary(
+    knowledge_id: str,
+    scope: KnowledgeScope = Depends(trusted_scope),
+    service: KnowledgeQualityService = Depends(get_quality_service),
+):
+    return call(lambda: service.summarize(scope, knowledge_id))
 
 
 @router.get("")

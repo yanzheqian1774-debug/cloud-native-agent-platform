@@ -65,3 +65,19 @@ export const purgeKnowledge = (id: string, expectedVersion: number, authorizatio
     method: "POST",
     body: JSON.stringify({ expectedVersion, authorizationId, reasonClassification }),
   });
+export type KnowledgeSearchResult = { classification:string;topK:number;tokenizerVersion:string;retrievalPolicyVersion:string;fusion:{algorithm:string;k:number};results:Array<{rank:number;score:number;classification:string;lexicalRank:number|null;semanticRank:number|null;citation:{knowledgeId:string;revisionId:string;documentId:string;chunkId:string;content:string;sourceId:string;provenance:string}}> };
+export type KnowledgeDashboard = { authorizedKnowledgeCount:number;authorizedChunkCount:number;activeSnapshotCount:number;evaluationRunCount:number;duplicateCandidateCount:number;summaryCount:number;authority:string;semanticIndex:string };
+export type QualityEntity = { namespace:string;securityDomain:string;entityType:string;entityId:string;digest:string;body:Record<string,unknown>;decision?:QualityEntity|null };
+export type KnowledgeMetadata = Record<"knowledgeId"|"sourceId"|"documentId"|"contentType"|"revisionId"|"snapshotId",string[]>;
+export type KnowledgeSearchFilters = Partial<Record<"knowledgeId"|"sourceId"|"documentId"|"contentType"|"revisionId"|"snapshotId",string>>;
+export const getKnowledgeDashboard=()=>request<KnowledgeDashboard>(`${root}/operations/dashboard`);
+export const getKnowledgeMetadata=()=>request<KnowledgeMetadata>(`${root}/operations/metadata`);
+export const searchKnowledge=(query:string,mode:"LEXICAL"|"SEMANTIC"|"HYBRID",topK=5,filters:KnowledgeSearchFilters={})=>request<KnowledgeSearchResult>(`${root}/operations/search`,{method:"POST",body:JSON.stringify({query,mode,topK,...filters})});
+export const evaluateKnowledge=(query:string,expectedChunkIds:string[],mode:"LEXICAL"|"SEMANTIC"|"HYBRID"="HYBRID",comparisonToRunId?:string)=>request<QualityEntity>(`${root}/operations/evaluations`,{method:"POST",body:JSON.stringify({datasetVersion:"1",mode,topK:5,cases:[{caseId:"workbench-case",query,expectedChunkIds}],...(comparisonToRunId?{comparisonToRunId}:{})})});
+export const summarizeKnowledge=(knowledgeId:string)=>request<Record<string,unknown>>(`${root}/${encodeURIComponent(knowledgeId)}/operations/summaries`,{method:"POST"});
+export const scanKnowledgeDuplicates=()=>request<QualityEntity[]>(`${root}/operations/duplicates/scan`,{method:"POST"});
+export const getKnowledgeDuplicateQueue=()=>request<QualityEntity[]>(`${root}/operations/duplicates`);
+export const decideKnowledgeDuplicate=(candidateId:string,classification:"DUPLICATE"|"DISTINCT"|"NEEDS_INVESTIGATION")=>request<QualityEntity>(`${root}/operations/duplicates/decisions`,{method:"POST",body:JSON.stringify({candidateId,classification})});
+export const previewKnowledgeImport=(format:"txt"|"md"|"jsonl",content:string)=>request<QualityEntity>(`${root}/operations/imports/preview`,{method:"POST",body:JSON.stringify({format,content})});
+export const executeKnowledgeImport=(jobId:string)=>request<QualityEntity>(`${root}/operations/imports/${encodeURIComponent(jobId)}/execute`,{method:"POST"});
+export const exportKnowledge=()=>request<Record<string,unknown>>(`${root}/operations/export`);
