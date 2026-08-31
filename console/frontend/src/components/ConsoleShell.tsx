@@ -33,6 +33,8 @@ export function ConsoleShell({
         <NavLink to="/product">{t("nav.productView")}</NavLink>
         <NavLink to="/technical">{t("nav.technicalView")}</NavLink>
         <NavLink to="/workflows">{t("nav.workflowRuns")}</NavLink>
+        <NavLink to="/workflow-definitions">Workflow Definitions</NavLink>
+        <NavLink to="/runtime-profiles">Runtime Profiles</NavLink>
       </nav>
 
       <div className="console-content">

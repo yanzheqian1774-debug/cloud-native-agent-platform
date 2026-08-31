@@ -1,0 +1,17 @@
+export type ExactReference={kind:"AGENT"|"SKILL"|"MCP"|"KNOWLEDGE"|"RUNTIME_PROFILE";resourceId:string;revisionId:string};
+export type WorkflowTask={taskId:string;name:string;dependsOn:string[];inputs:string[];outputs:string[];capabilityRequirements:string[];references:ExactReference[];retryLimit:number;timeoutSeconds:number;failurePolicy:"FAIL_WORKFLOW"|"SKIP_DEPENDENTS"};
+export type WorkflowContent={description:string;tasks:WorkflowTask[];inputs:string[];outputs:string[];runtimeProfile:ExactReference};
+export type WorkflowRevision={revisionId:string;predecessorRevisionId:string|null;state:string;digest:string;content:WorkflowContent;createdAt:string};
+export type WorkflowDefinition={workflowDefinitionId:string;name:string;aggregateVersion:number;lifecycleState:string;currentDraftRevisionId:string|null;publishedRevisionId:string|null;revisions:WorkflowRevision[];reviews:Array<{reviewId:string;digest:string}>;relationships:unknown[];consumers:unknown[]};
+export type WorkflowProjection={definition:WorkflowDefinition;productProjection:Record<string,unknown>;technicalProjection:Record<string,unknown>};
+export class WorkflowDefinitionRequestError extends Error{reasonCode:string;status:number;constructor(reasonCode:string,status:number){super(reasonCode);this.reasonCode=reasonCode;this.status=status}}
+async function request<T>(path:string,init?:RequestInit):Promise<T>{let response:Response;try{response=await fetch(path,{...init,headers:{Accept:"application/json","Content-Type":"application/json",...init?.headers}})}catch{throw new WorkflowDefinitionRequestError("WORKFLOW_DEFINITION_NETWORK_UNAVAILABLE",503)}const body=await response.json().catch(()=>null);if(!response.ok)throw new WorkflowDefinitionRequestError(body?.detail?.reasonCode??"WORKFLOW_DEFINITION_UNAVAILABLE",response.status);return body as T}
+const root="/api/internal/v0.2.2/workflow-definitions";
+export const listWorkflowDefinitions=()=>request<WorkflowProjection[]>(root);
+export const getWorkflowDefinition=(id:string)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}`);
+export const createWorkflowDefinition=(name:string,content:WorkflowContent)=>request<WorkflowProjection>(root,{method:"POST",body:JSON.stringify({name,content})});
+export const validateWorkflowDefinition=(id:string,expectedVersion:number)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/validation`,{method:"POST",body:JSON.stringify({expectedVersion})});
+export const reviewWorkflowDefinition=(id:string,expectedVersion:number,digest:string)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/reviews`,{method:"POST",body:JSON.stringify({expectedVersion,digest,decision:"APPROVE",reason:"Human reviewed exact Workflow digest"})});
+export const publishWorkflowDefinition=(id:string,expectedVersion:number,digest:string,reviewId:string)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/publications`,{method:"POST",body:JSON.stringify({expectedVersion,digest,reviewId})});
+export const successorWorkflowDefinition=(id:string,expectedVersion:number)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/successors`,{method:"POST",body:JSON.stringify({expectedVersion})});
+export const compareWorkflowRevisions=(id:string,left:string,right:string)=>request<Record<string,unknown>>(`${root}/${encodeURIComponent(id)}/comparison?${new URLSearchParams({leftRevisionId:left,rightRevisionId:right})}`);

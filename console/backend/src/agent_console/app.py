@@ -113,6 +113,7 @@ from agent_console.repository import (
     KubernetesWorkflowRepository,
     WorkflowRepository,
 )
+from agent_console.runtime_profile_api import router as runtime_profile_router
 from agent_console.schemas import (
     WorkflowExecutionDetail,
     WorkflowRunList,
@@ -130,6 +131,7 @@ from agent_console.supplier_quality_demo_schemas import (
     SupplierQualityDemoStartRequest,
     SupplierQualityDemoStartResponse,
 )
+from agent_console.workflow_definition_api import router as workflow_definition_router
 
 app = FastAPI(
     title="AgentOS Workflow Execution Console",
@@ -137,6 +139,8 @@ app = FastAPI(
 )
 app.include_router(skill_mcp_router)
 app.include_router(knowledge_router)
+app.include_router(runtime_profile_router)
+app.include_router(workflow_definition_router)
 
 
 class _SupplierQualityExecutionEvidence:
