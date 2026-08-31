@@ -11,7 +11,7 @@
 | Worktree | clean dedicated worktree at entry; no competing S5-ARCH-018 branch/worktree |
 | PR / Issue collision | no S5-ARCH-018 PR or Issue found at entry |
 | Reserved IDs | S5-ARCH-014–017 remain `RESERVED / UNRECONCILED / NOT_REUSABLE` |
-| Decision classification | `AMENDED_PROPOSAL / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
+| Decision classification | `FINAL_RECONCILED_PROPOSAL / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
 
 The Human control session explicitly allocated S5-ARCH-018 and granted
 `GO_WITH_CONDITIONS`. This supersedes only the prior candidate/unallocated
@@ -69,6 +69,30 @@ if absent, external Secret reference, bounded pool configuration, PostgreSQL ser
 database availability, ordered migrations and a backup/restore rehearsal. These are
 G1 implementation/deployment prerequisites, not changes made in this ARCH Session.
 
+## Resource management and deletion reconciliation
+
+The PostgreSQL-primary direction is accepted in principle. The final reconciliation
+adds the previously required backend-governed operations for Agent, Skill, MCP,
+Knowledge, Capability and applicable Digital Employee projections: Draft creation/
+editing, validation/test, exact-digest Human review, publication, successors, history,
+relationships/consumers, enable/disable where applicable, deprecation, archive,
+deletion request, impact analysis and permitted purge.
+
+Unpublished unreferenced Draft hard delete requires authorization and preserves a
+minimum non-sensitive identity tombstone. Published Revisions use deprecation,
+matchability removal and archive and cannot normally be hard-deleted. Any reference,
+consumer, binding, Run, Evidence, Outcome or approval blocks deletion. Knowledge
+compliance purge removes applicable content/chunks plus derived Qdrant vectors and
+caches through resumable operations while preserving only non-sensitive audit/
+tombstone facts. MCP removal affects Platform-managed records only and does not claim
+external-server deletion. Historical Evidence, Outcome and approval facts remain
+immutable.
+
+The accepted management-platform prototype is recorded only as a non-authoritative
+design reference. Its shell/navigation/search and Dashboard/List/Detail, Catalog,
+Factory/Runtime separation and enterprise visual direction may guide experience work;
+mock data, actions, metrics, models, cost and frontend state have no authority.
+
 ## Claim boundary
 
 No database, schema, migration, adapter, dependency, backend, frontend, operator,
@@ -81,12 +105,12 @@ exactly-once, certification, production-readiness, deployment or release claim.
 | Validation | Result |
 | --- | --- |
 | Architecture/index links and exact-path audit | passed; same exact six paths |
-| Authority, terminology, domain/lifecycle and persistence-boundary audit | passed |
+| Authority, terminology, domain/lifecycle and persistence-boundary audit | passed, including resource/deletion semantics |
 | Security/nondisclosure, secret/private-data and unsupported-claim audit | passed |
 | `git diff --check` | passed |
 | `make check` | passed: Ruff lint, Ruff format and `1046 passed`; one existing Starlette/httpx deprecation warning |
 | `uv run pre-commit run --all-files` | passed: Ruff lint, Ruff format and pytest |
-| Commit / Draft PR / exact-head CI | pending amendment commit and CI |
+| Commit / Draft PR / exact-head CI | pending final reconciliation commit and CI |
 
 ## Next gate
 

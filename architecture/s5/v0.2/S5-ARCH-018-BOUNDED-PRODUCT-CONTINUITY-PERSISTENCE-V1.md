@@ -7,7 +7,7 @@
 | Session | `S5-ARCH-018` |
 | Type / checkpoint | `ARCH / G2`; `A — ARCHITECTURE_DECISION_AND_VALIDATION` |
 | Authorized baseline | `a6ec463a365b5f12e8fb64b0b84772a3beb0ae15` |
-| Decision status | `AMENDED_PROPOSAL / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
+| Decision status | `FINAL_RECONCILED_PROPOSAL / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
 | Implementation status | `NOT_STARTED` |
 | Contract status | internal v0.2 architecture; `NOT_FROZEN`; no public API or CRD change |
 | Selected direction | domain-owned typed repository ports with PostgreSQL as the primary deployment adapter; bounded SQLite transition/test role |
@@ -65,6 +65,61 @@ content; observed availability is separate timestamped Evidence.
   logical run unless a separately authorized correction creates a successor run.
 - A current pointer is a convenience index updated transactionally with the fact
   that advances it; the history, not the pointer alone, is authority.
+
+### 3.2 Governed resource management and deletion
+
+Agent, Skill, MCP, Knowledge and Capability resources, plus applicable Digital
+Employee projections, expose one backend-governed management contract. PostgreSQL
+persists every authoritative lifecycle mutation and decision. A Workbench or other
+projection may request an action but cannot apply, infer or simulate authority.
+
+Applicable management operations are:
+
+```text
+create Draft -> edit Draft -> validate/test -> submit for Human review
+-> approve or reject exact Revision digest -> publish immutable Revision
+-> create successor Revision -> inspect history/relationships/consumers
+-> enable/disable where applicable -> deprecate -> archive
+-> request deletion -> analyze impact -> purge only when permitted
+```
+
+Every operation requires trusted scope, authorization, expected aggregate/revision
+version, exact digest where a revision is involved, stable decision identity and a
+non-sensitive reason/provenance record. Enable/disable affects only the resource's
+declared availability boundary; it cannot silently unpublish, delete history, revoke
+unrelated authorization or claim control over an external system.
+
+Deletion is a governed request and decision, not generic repository CRUD:
+
+- An unpublished, unreferenced Draft may be hard-deleted only after authorization,
+  an exact-scope reference/consumer check and an atomic decision. The minimum
+  non-sensitive deletion tombstone remains so the identity cannot be silently reused.
+- A published Revision cannot normally be hard-deleted. Normal removal uses
+  deprecation, removal from future matchability, disablement where applicable and
+  archival. A successor never overwrites or erases its predecessor.
+- Any authorized reference, consumer, binding, Run, Evidence, Outcome, approval,
+  relationship or unresolved ingestion dependency makes deletion fail closed. Impact
+  analysis runs before mutation, is scope-isolated, records the checked high-water
+  marks, and cannot disclose foreign identities or counts.
+- Archive removes an object from ordinary active views while preserving authorized
+  history, references and audit access. Archive is not purge or deletion.
+- Historical Evidence, Outcome, approval, review, publication, selection, binding and
+  rollback facts are never rewritten to make a deletion appear to have always existed.
+
+Knowledge compliance purge is a separately authorized exceptional path. It removes
+applicable prohibited source content, document/chunk payloads, derived Qdrant vectors
+and derived caches, and appends a scope-bound purge decision. It preserves only the
+minimum non-sensitive tombstone/audit facts necessary to prove identity, affected
+revision/digest, authority, time, reason classification and completion state; it must
+not preserve prohibited content in the tombstone, logs, Evidence or backups. SQL and
+Qdrant/cache cleanup is resumable and explicitly reports partial or
+`RECOVERY_REQUIRED`; no cross-store atomicity is claimed. Exact retention, legal hold,
+backup expiry and regulatory authority still require the applicable governance gate.
+
+MCP deprecation, archival or purge removes only the Platform-managed MCP Definition,
+Revision, credentials references, bindings and derived caches within authorized scope.
+It makes no claim that an external MCP server, its data or its operator-owned logs
+were deleted. External cleanup requires separately verified authority and Evidence.
 
 ## 4. Repository port contract
 
@@ -323,6 +378,24 @@ relationships/consumers, derived match eligibility and deprecation. Product and
 Technical views receive the same definition/revision/digest and lifecycle high-water
 provenance. No public API/CRD change is implied; any new internal endpoint is a G1 plan.
 
+The accepted AI management-platform prototype is a non-authoritative product-design
+reference. Implementations may preserve its unified platform shell, left navigation,
+global search, business-first Golden Demo entry, Dashboard/List/Detail patterns,
+Enterprise Resource Catalog, Factory/Runtime separation, monitoring/security/domain-
+application entries and restrained enterprise visual style. Prototype data, simulated
+actions, metrics, model names, cost values, frontend state and mock responses are never
+authority or acceptance Evidence. All lifecycle and mutation actions remain
+backend-governed and PostgreSQL-persisted.
+
+The versioned Workbench delivery mapping is:
+
+- v0.2.2: Business/Resource Workbench, Agent/Skill/MCP/Knowledge Factory and
+  PostgreSQL product-continuity persistence;
+- v0.2.3: Runtime Operations, Runs, Instances, Intervention, Evidence and Outcome,
+  including completion of the PostgreSQL Execution Evidence migration gate; and
+- v0.2.4: Model Catalog, Evaluation, Selection, exact Binding and evidence-backed
+  usage/cost, with missing facts still `NOT_MEASURABLE`.
+
 ### Expected implementation paths
 
 Expected paths are bounded to a new or existing domain package under
@@ -344,6 +417,18 @@ the approved bounded PostgreSQL dependency; S5-DEPLOY-003 remains prohibited.
 - full lifecycle happy path and every skipped, stale, duplicate or invalid transition;
 - immutable published revision and successor/predecessor/correction history;
 - publication versus derived scoped `MATCHABLE` separation and deprecation retention;
+- complete governed management-operation transition coverage, including enable/
+  disable and archive where applicable;
+- unpublished/unreferenced Draft authorized hard delete with retained non-sensitive
+  tombstone; published Revision hard-delete rejection and identity non-reuse;
+- reference/consumer/binding/Run/Evidence/Outcome/approval impact checks that fail
+  closed before mutation and disclose no foreign identity or count;
+- Knowledge purge success, partial failure/resume and retry across SQL, Qdrant and
+  caches; prohibited-content absence from tombstone/log/Evidence/backup fixtures;
+- MCP removal tests proving Platform records are affected without claiming or issuing
+  external MCP server deletion;
+- immutable historical Evidence/Outcome/approval facts across deprecation, archive,
+  deletion request and purge;
 - authorization-before-lookup, foreign identity/count/existence nondisclosure, scoped
   pagination/aggregation and cache-key isolation;
 - atomic head/fact update; optimistic-concurrency, unique/FK, deadlock/serialization,

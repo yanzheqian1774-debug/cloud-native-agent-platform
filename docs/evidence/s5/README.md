@@ -9,7 +9,9 @@ API, schema, or frontend implementation.
 - [S5-ARCH-018 architecture evidence](v0.2/s5-arch-018/README.md) records
   entry revalidation, the PostgreSQL-primary amended product-continuity persistence
   proposal, bounded existing-Evidence SQLite transition, implementation handoff and
-  validation. It contains no implementation and awaits Human review of the amendment.
+  validation. Final reconciliation records governed resource management/deletion,
+  Knowledge purge, tombstone and non-authoritative Workbench reference boundaries.
+  It contains no implementation and awaits final Human review.
 - [S5-GOV-003 governance evidence](v0.2/s5-gov-003/README.md) records the
   Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction,
   exact sequence and reserved/unreconciled S5-ARCH-014–017 debt. It grants no

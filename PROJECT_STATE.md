@@ -42,7 +42,7 @@ records lifecycle and provenance.
 | Session | Current state | Durable basis |
 | --- | --- | --- |
 | S5-GOV-003 | `ACTIVE / AUTHORIZED / CHECKPOINT_A` | Governance-only reconciliation at exact baseline `474b19e7bf32a342d93b4b891f6c7a799b9261b6`; records Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction, sequence and unreconciled architecture-number debt; grants no implementation, architecture implementation, deployment, release, certification or public Contract authority |
-| S5-ARCH-018 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / AMENDED_PROPOSAL_READY_FOR_HUMAN_REVIEW` | Human amendment supersedes the SQLite-default proposal: PostgreSQL is primary deployment persistence for new v0.2.2–v0.2.4 product domains; existing Evidence SQLite remains a bounded transition and local/test adapter; amended acceptance, merge, Durable Integration and implementation allocation remain pending |
+| S5-ARCH-018 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / FINAL_RECONCILED_PROPOSAL_READY_FOR_HUMAN_REVIEW` | PostgreSQL-primary amendment is accepted in principle; final reconciliation adds backend-governed resource management, protected published revisions, reference-aware deletion, Knowledge purge and non-sensitive tombstones; existing Evidence SQLite remains transitional/local-test only; final acceptance, merge, Durable Integration and implementation allocation remain pending |
 | S5-ARCH-014–S5-ARCH-017 | `RESERVED / UNRECONCILED_GOVERNANCE_DEBT / NOT_REUSABLE` | Visible historical session traces are not a substitute for durable repository authority; exact contents and acceptance status are not reconstructed or fabricated; identifiers remain reserved pending separate Human reconciliation |
 | S5-IMPL-041 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / SESSION_CLOSED` | `S5-IMPL-041: governed problem-to-plan streaming` source commits `de681a97ee11d6dbec758c3cb3eea4067c00d422` and `8393b67568d2e0329ea5ad6f066b330e1568ca56`; PR #91 merged at durable main `2fdf54edb8658929fde6c1259fefda43a8406a62`; exact-main CI run `33344714261` succeeded; code is already durable, reimplementation and reintegration are not required, binding limitations remain, and reopen is prohibited; closure grants no S5-IMPL-042, S5-REL-044, S5-GOV-002 integration, deployment, v0.2.2, release, or downstream implementation authority |
 | S5-REL-030 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #78 merged at durable main `8757adabc9a95e3b3934303fa9c6f8586ff854e9` with ordered parents `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6` and `0993a03817123d9565c8fd03d00dd8fa7e2e0d5f`; exact-main CI run `33180601090` succeeded; closure is forward-recorded without reopening; no downstream authority was granted by closure |
@@ -125,6 +125,16 @@ append-only/link-based history, transaction/replay/digest conflict, schema/migra
 Qdrant-derived index, external Secret reference, Runtime reconciliation and derived
 Accounting boundaries remain. Implementation is blocked on Human acceptance and
 Durable Integration of the amended S5-ARCH-018 G2.
+
+Final S5-ARCH-018 reconciliation requires Agent, Skill, MCP, Knowledge, Capability and
+applicable Digital Employee projections to expose backend-governed Draft, validation/
+test, exact-digest Human review, publication, successor, history/relationship,
+enable/disable, deprecation, archive, deletion-request, impact-analysis and permitted
+purge operations. Unpublished unreferenced Drafts may be hard-deleted only after
+authorization; published or referenced resources are protected. Knowledge compliance
+purge removes applicable SQL content, chunks, Qdrant vectors and caches while retaining
+minimum non-sensitive tombstone/audit facts. MCP removal never claims external-server
+deletion, and historical Evidence, Outcome and approval facts remain immutable.
 
 The bounded working objective is to demonstrate Digital Employee construction
 and governed execution across the stable Core and external Runtime Providers.

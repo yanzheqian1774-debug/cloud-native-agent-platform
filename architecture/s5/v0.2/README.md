@@ -11,7 +11,9 @@ Source code and tests remain authoritative for implemented behavior.
   ports, PostgreSQL primary deployment adapter, bounded existing-Evidence SQLite
   transition/test role, history, security, secret, Qdrant, Runtime reconciliation,
   Accounting and migration boundaries, plus the first Durable Agent Definition
-  implementation entry. It is `AMENDED_PROPOSAL /
+  implementation entry. Final reconciliation adds governed resource operations,
+  reference-aware deletion, Knowledge compliance purge, non-sensitive tombstones,
+  the non-authoritative Workbench design reference and exact version mapping. It is `AMENDED_PROPOSAL /
   READY_FOR_HUMAN_ARCHITECTURE_REVIEW / NOT_STARTED`; no implementation,
   public API/CRD, State Plane, Tenant, multi-node or production claim is granted.
 - [Definition Publication and Matchability Authority v1](S5-ARCH-013-DEFINITION-PUBLICATION-MATCHABILITY-AUTHORITY-V1.md)
