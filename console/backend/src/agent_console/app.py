@@ -39,6 +39,20 @@ from fastapi.responses import StreamingResponse
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, ValidationError
 
+from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepository
+from agent_console.agent_definition_repository import AgentDefinitionRepositoryError
+from agent_console.agent_definition_schemas import (
+    CreateAgentDefinition,
+    EditAgentDefinition,
+    LifecycleCommand,
+    PublishCommand,
+    ReviewCommand,
+    VersionCommand,
+)
+from agent_console.agent_definition_service import (
+    AgentDefinitionFailure,
+    AgentDefinitionService,
+)
 from agent_console.intervention_feedback import (
     CaptureDenied,
     CaptureNotFound,
@@ -360,7 +374,45 @@ _supplier_quality_demo_service = SupplierQualityDemoService(
     live_journeys=_live_journey_service,
     execution_authority_factory=_create_supplier_quality_execution_authority,
 )
-_problem_planning_service = ProblemPlanningService()
+_agent_definition_service: AgentDefinitionService | None = None
+_agent_definition_startup_error: str | None = None
+
+
+def _configure_agent_definitions() -> None:
+    global _agent_definition_service, _agent_definition_startup_error
+    database_url = os.environ.get("AGENT_DEFINITION_DATABASE_URL", "")
+    if not database_url:
+        _agent_definition_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+        return
+    try:
+        migration = (
+            Path(__file__).parents[2]
+            / "migrations"
+            / "0001_agent_definition_lifecycle.sql"
+        )
+        repository = PostgresAgentDefinitionRepository(
+            database_url,
+            migration_path=migration,
+            min_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MIN", "1")),
+            max_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MAX", "4")),
+            timeout=float(os.environ.get("AGENT_DEFINITION_DB_TIMEOUT_SECONDS", "5")),
+        )
+        repository.migrate()
+        _agent_definition_service = AgentDefinitionService(repository)
+        _agent_definition_startup_error = None
+    except (AgentDefinitionRepositoryError, ValueError):
+        _agent_definition_service = None
+        _agent_definition_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+
+
+_configure_agent_definitions()
+_problem_planning_service = ProblemPlanningService(
+    agent_definitions=lambda scope: (
+        []
+        if _agent_definition_service is None
+        else _agent_definition_service.eligible(scope)
+    )
+)
 
 
 def get_live_journey_principal() -> TrustedJourneyPrincipal:
@@ -421,6 +473,23 @@ def _problem_principal(
 
 
 ProblemPrincipalDependency = Annotated[ProblemPrincipal, Depends(_problem_principal)]
+
+
+def get_agent_definition_service() -> AgentDefinitionService:
+    if _agent_definition_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "reasonCode": _agent_definition_startup_error
+                or "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+            },
+        )
+    return _agent_definition_service
+
+
+AgentDefinitionServiceDependency = Annotated[
+    AgentDefinitionService, Depends(get_agent_definition_service)
+]
 
 _intervention_feedback_service = InterventionFeedbackService()
 
@@ -949,6 +1018,199 @@ def _problem_http_error(exc: ProblemPlanningError) -> HTTPException:
     return HTTPException(status_code=exc.status, detail={"reasonCode": exc.reason})
 
 
+def _agent_http_error(exc: AgentDefinitionFailure) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail={"reasonCode": exc.reason})
+
+
+def _agent_scope(principal: ProblemPrincipal, service: AgentDefinitionService):
+    return service.scope(principal.tenant_id, principal.security_domain)
+
+
+@app.get("/api/internal/v0.2.2/agent-definitions")
+def list_agent_definitions(
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    return service.list(_agent_scope(principal, service))
+
+
+@app.post("/api/internal/v0.2.2/agent-definitions", status_code=201)
+def create_agent_definition(
+    command: CreateAgentDefinition,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        record = service.create(
+            _agent_scope(principal, service),
+            principal.principal_id,
+            command.name,
+            command.content.model_dump(),
+        )
+        return service.project(record)
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.get("/api/internal/v0.2.2/agent-definitions/{definition_id}")
+def get_agent_definition(
+    definition_id: str,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.get(_agent_scope(principal, service), definition_id)
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.put("/api/internal/v0.2.2/agent-definitions/{definition_id}/draft")
+def edit_agent_definition(
+    definition_id: str,
+    command: EditAgentDefinition,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.edit(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            command.expectedVersion,
+            command.content.model_dump(),
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.2/agent-definitions/{definition_id}/validation")
+def validate_agent_definition(
+    definition_id: str,
+    command: VersionCommand,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.validate(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            command.expectedVersion,
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.2/agent-definitions/{definition_id}/reviews")
+def review_agent_definition(
+    definition_id: str,
+    command: ReviewCommand,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.review(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            command.expectedVersion,
+            command.digest,
+            command.decision,
+            command.reason,
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.2/agent-definitions/{definition_id}/publications")
+def publish_agent_definition(
+    definition_id: str,
+    command: PublishCommand,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.publish(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            command.expectedVersion,
+            command.digest,
+            command.reviewId,
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.2/agent-definitions/{definition_id}/successors")
+def successor_agent_definition(
+    definition_id: str,
+    command: VersionCommand,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.successor(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            command.expectedVersion,
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.get("/api/internal/v0.2.2/agent-definitions/{definition_id}/deletion-impact")
+def agent_definition_impact(
+    definition_id: str,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.impact(_agent_scope(principal, service), definition_id)
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.2/agent-definitions/{definition_id}/{action}")
+def agent_definition_lifecycle(
+    definition_id: str,
+    action: str,
+    command: LifecycleCommand,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        return service.lifecycle(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            command.expectedVersion,
+            action.upper(),
+            command.reason,
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
+@app.delete("/api/internal/v0.2.2/agent-definitions/{definition_id}", status_code=204)
+def delete_agent_definition(
+    definition_id: str,
+    expectedVersion: int,
+    principal: ProblemPrincipalDependency,
+    service: AgentDefinitionServiceDependency,
+):
+    try:
+        service.delete_draft(
+            _agent_scope(principal, service),
+            definition_id,
+            principal.principal_id,
+            expectedVersion,
+        )
+    except AgentDefinitionFailure as exc:
+        raise _agent_http_error(exc) from exc
+
+
 def _problem_analysis_sse(events: Any) -> Any:
     for event in events:
         yield (
@@ -1055,6 +1317,18 @@ def correct_problem_plan(
 ) -> dict[str, Any]:
     try:
         return service.correct(problem_id, command, principal)
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.1/problems/{problem_id}/rematches")
+def rematch_problem_plan(
+    problem_id: str,
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> dict[str, Any]:
+    try:
+        return service.rematch(problem_id, principal)
     except ProblemPlanningError as exc:
         raise _problem_http_error(exc) from exc
 

@@ -133,6 +133,31 @@ def test_two_actual_runs_have_exact_knowledge_influence():
     assert "连续三批效果数据" in changed["expectedEvidence"]
 
 
+def test_governed_rematch_changes_only_the_agent_capability_gap():
+    service = ProblemPlanningService(
+        Model(),
+        Vector(),
+        agent_definitions=lambda scope: [
+            {
+                "definition": {"definitionId": "agent-definition:quality"},
+                "revision": {
+                    "revisionId": "agent-revision:published",
+                    "digest": "a" * 64,
+                    "content": {"capabilities": ["supplier-quality-analysis"]},
+                },
+            }
+        ],
+    )
+    problem = create(service)
+    before = problem["planRevisions"][-1]["capabilityGaps"][0]
+    assert before["state"] == "GAP"
+    result = service.rematch(problem["problemId"], principal())
+    after = result["planRevisions"][-1]["capabilityGaps"][0]
+    assert after["state"] == "MATCHED"
+    assert after["matchedRevisionId"] == "agent-revision:published"
+    assert after["executionAuthority"] == "NOT_GRANTED"
+
+
 def test_correction_is_immutable_successor_and_stale_approval_is_rejected():
     service = ProblemPlanningService(Model(), Vector())
     problem = create(service)

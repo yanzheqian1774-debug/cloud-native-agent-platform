@@ -8,6 +8,8 @@ remain authoritative for architecture.
 
 ## Registry semantics
 
+| S5-IMPL-046 | v0.2.2 Agent Definition Product Vertical Slice / IMPL G1 | `ACTIVE / IMPLEMENTATION_COMPLETE / CHECKPOINT_A / REVIEW_READY` | Sole-writer Agent Definition lifecycle and Workbench slice at exact baseline `440cd31dff6959bcaf11a9c66becc973c70d77f6`; PostgreSQL-primary private product-continuity API; no public Contract/CRD, Runtime, execution, deployment, release, certification or closure authority | Branch `codex/s5-impl-046-agent-definition-product-slice`; [Evidence](../evidence/s5/v0.2/s5-impl-046/README.md) | Human Gate authorized Checkpoints 0 and A with exact path whitelist; REL integration and Human closure remain pending |
+
 ### State vocabularies
 
 - Session lifecycle: `NEW`, `ACTIVE`, `REVIEW`, `CLOSING`, `CLOSED`
