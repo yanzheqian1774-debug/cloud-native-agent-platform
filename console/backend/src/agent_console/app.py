@@ -117,6 +117,7 @@ from agent_console.schemas import (
     WorkflowRunList,
 )
 from agent_console.service import WorkflowService
+from agent_console.skill_mcp_api import router as skill_mcp_router
 from agent_console.supplier_quality_demo import (
     SupplierQualityDemoFailure,
     SupplierQualityDemoService,
@@ -133,6 +134,7 @@ app = FastAPI(
     title="AgentOS Workflow Execution Console",
     version="0.1.0",
 )
+app.include_router(skill_mcp_router)
 
 
 class _SupplierQualityExecutionEvidence:
