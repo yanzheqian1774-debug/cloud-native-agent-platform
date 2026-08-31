@@ -6,20 +6,31 @@
 - Exact baseline CI: `33395352329 / SUCCESS` (Human supplied).
 - Branch: `codex/s5-impl-050-knowledge-retrieval-quality-operations`.
 - Gate: `G1`, bounded by v0.2-CONTROL-003 and accepted S5-ARCH-018.
-- Status: `PRODUCT_COMPLETION_COMMITTED_CANDIDATE / EXTERNAL_MIGRATION_GATE`.
+- Durable-main assembly baseline: `f5294c7fe22f60074b1037036a99445d9a33db0f`.
+- Exact assembly-baseline CI: `33405497333 / SUCCESS`.
+- Accepted pre-assembly source head: `0e498291b8ff3b9fa36c9389e45bbbcad3f398af`.
+- Normal merge commit: `0fbff60bc945155d0ab1371af3e412277a37e991` with ordered parents
+  `0e498291b8ff3b9fa36c9389e45bbbcad3f398af` and
+  `f5294c7fe22f60074b1037036a99445d9a33db0f`.
+- Status: `FINAL_INTEGRATION_ROUTING_CANDIDATE`.
 
-## Checkpoint 0 migration determination
+## Final migration assembly
 
-The baseline has no repository-wide ordered migration runner. Each product-continuity
-adapter directly applies one named migration and checksum-binds its own schema table.
-Consequently `0005_knowledge_quality_operations.sql` can exist and be exercised in
-this isolated branch while `0004` is absent. This is a runner gap, not evidence that
-the mandatory `0001 -> 0002 -> 0003 -> 0004 -> 0005` chain has passed. No fake `0004`
-and no relaxed contiguous-order validation were introduced.
+Durable migration `0004_skill_mcp_professional_experience.sql` entered main through
+PR #102 and was incorporated by the normal two-parent merge recorded above. The final
+migration directory is contiguous and ordered exactly `0001 -> 0002 -> 0003 -> 0004
+-> 0005`; there is no placeholder, duplicate, reorder, skipped number or symlink.
 
-Final migration-chain, PR-readiness and exact-head CI validation remain blocked until
-S5-IMPL-049 has durably integrated migration `0004` and that main is merged normally
-into this branch.
+Migrations `0001` through `0004` are byte-for-byte identical to durable main. S5-IMPL-050
+owns only `0005_knowledge_quality_operations.sql`, whose SHA-256 is
+`f481454ca9e217663cb151baa4b702a9a03337e77198f8e922266e75b15bca36`. Migration
+`0004` retains its mandated SHA-256
+`437b128d3439cd961a0c8b4f210fc175cfe347c07cdc93035814376f4f35cc82`.
+
+The exact five-file chain was applied sequentially to a clean PostgreSQL 15 database.
+All four scoped schemas were present afterward. Adapter startup, persisted restart
+recovery and controlled checksum-tamper rehearsals passed: altered `0004` and `0005`
+checksums failed closed, exact checksums were restored, and compatibility revalidated.
 
 ## Implemented result
 
@@ -67,10 +78,11 @@ into this branch.
 
 ## Validation evidence
 
-- Targeted deterministic/security suite: `25 passed`.
-- Real PostgreSQL 15 + pinned Qdrant `v1.15.4`, import/comparison/duplicate and restart
-  suite: `16 passed`.
-- `make check`: `1083 passed, 0 skipped`; Ruff lint/format passed.
+- Focused Knowledge quality/security, PostgreSQL, pinned Qdrant `v1.15.4`, restart,
+  Agent Definition and Skill/MCP preservation suite: `19 passed`.
+- Clean PostgreSQL 15 migration chain: exact `0001 -> 0005` applied; startup,
+  restart recovery and fail-closed checksum behavior passed.
+- `make check`: `1084 passed, 0 skipped`; Ruff lint/format passed.
 - Frontend `npm run lint`: passed.
 - Frontend `npm run build`: passed.
 - Real Chromium Playwright Knowledge journey: `1 passed`.
@@ -98,13 +110,9 @@ the final `make check` contains zero skips. There is no unresolved validation ga
 
 ## Limitations and next Gate
 
-- Migration `0004` is absent by design; the complete ordered chain and final restart
-  migration rehearsal are not claimable.
-- No production-quality, release, certification, merge, deployment, REL allocation or
-  Session-closure claim is made.
+- No production-quality, release, certification, merge, deployment, REL allocation,
+  Session-closure or v0.2.2 completion claim is made.
 
-Next: wait for Human confirmation that S5-IMPL-049 and its Durable Integration Session
-have completed. Durable integration still requires normal advanced-main merge, exact
-changed-path and byte-identity revalidation, the real `0001 -> 0005` migration chain,
-complete service/browser regression and fresh exact-head CI before converting the
-Draft PR to Ready for Review.
+Next: push the validated source, require fresh exact-head CI and clean GitHub
+mergeability, then route PR #103 as Ready for Human Durable Integration allocation and
+merge decision. This Session does not merge the PR or allocate the REL identifier.
