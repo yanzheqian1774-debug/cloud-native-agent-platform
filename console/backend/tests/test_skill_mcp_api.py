@@ -1,0 +1,35 @@
+from agent_console.app import app
+from agent_console.skill_mcp_api import get_skill_mcp_service
+from agent_console.skill_mcp_repository import InMemorySkillMcpRepository
+from agent_console.skill_mcp_service import SkillMcpService
+from fastapi.testclient import TestClient
+
+
+def test_private_workbench_api_creates_and_validates() -> None:
+    service = SkillMcpService(InMemorySkillMcpRepository())
+    app.dependency_overrides[get_skill_mcp_service] = lambda: service
+    try:
+        client = TestClient(app)
+        created = client.post(
+            "/api/internal/v0.2.2/resources/skill",
+            json={
+                "name": "Quality",
+                "content": {
+                    "description": "Quality",
+                    "capabilities": ["quality.lookup"],
+                    "instructions": "Inspect quality",
+                },
+            },
+        )
+        assert created.status_code == 201
+        resource = created.json()["resource"]
+        validated = client.post(
+            f"/api/internal/v0.2.2/resources/skill/{resource['resourceId']}/validation",
+            json={"expectedVersion": 1},
+        )
+        assert (
+            validated.status_code == 200
+            and validated.json()["productProjection"]["state"] == "VALIDATED"
+        )
+    finally:
+        app.dependency_overrides.pop(get_skill_mcp_service, None)
