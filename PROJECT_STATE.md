@@ -22,8 +22,10 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `8757adabc9a95e3b3934303fa9c6f8586ff854e9`
-- Exact-main CI: run `33180601090`, `SUCCESS`
+- Current durable-main head: `474b19e7bf32a342d93b4b891f6c7a799b9261b6`
+- Exact-main CI: run `33353367214`, `SUCCESS`
+- S5-GOV-003 authorized durable-main baseline:
+  `474b19e7bf32a342d93b4b891f6c7a799b9261b6`
 - S5-PLAN-003 authorized durable-main baseline:
   `05bac769b61f42aa5643a8496861e8e962c6bf5b`
 - S5-PLAN-002 authorized durable-main baseline:
@@ -39,6 +41,9 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| S5-GOV-003 | `ACTIVE / AUTHORIZED / CHECKPOINT_A` | Governance-only reconciliation at exact baseline `474b19e7bf32a342d93b4b891f6c7a799b9261b6`; records Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction, sequence and unreconciled architecture-number debt; grants no implementation, architecture implementation, deployment, release, certification or public Contract authority |
+| S5-ARCH-018 | `CANDIDATE_ONLY / UNALLOCATED / NOT_ACTIVE` | Reserved only as the candidate identifier for a subsequent consolidated persistence G2; S5-GOV-003 does not allocate or start it |
+| S5-ARCH-014–S5-ARCH-017 | `RESERVED / UNRECONCILED_GOVERNANCE_DEBT / NOT_REUSABLE` | Visible historical session traces are not a substitute for durable repository authority; exact contents and acceptance status are not reconstructed or fabricated; identifiers remain reserved pending separate Human reconciliation |
 | S5-IMPL-041 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / SESSION_CLOSED` | `S5-IMPL-041: governed problem-to-plan streaming` source commits `de681a97ee11d6dbec758c3cb3eea4067c00d422` and `8393b67568d2e0329ea5ad6f066b330e1568ca56`; PR #91 merged at durable main `2fdf54edb8658929fde6c1259fefda43a8406a62`; exact-main CI run `33344714261` succeeded; code is already durable, reimplementation and reintegration are not required, binding limitations remain, and reopen is prohibited; closure grants no S5-IMPL-042, S5-REL-044, S5-GOV-002 integration, deployment, v0.2.2, release, or downstream implementation authority |
 | S5-REL-030 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #78 merged at durable main `8757adabc9a95e3b3934303fa9c6f8586ff854e9` with ordered parents `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6` and `0993a03817123d9565c8fd03d00dd8fa7e2e0d5f`; exact-main CI run `33180601090` succeeded; closure is forward-recorded without reopening; no downstream authority was granted by closure |
 | S5-ARCH-013 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | Source head `a8ae79574a4c16e646cb33adb7026d1a97d4af8f`; PR #77 merged through S5-REL-030 and reconciled at durable main `8757adabc9a95e3b3934303fa9c6f8586ff854e9`; exact-main CI run `33180601090` succeeded; closure is forward-recorded without reopening |
@@ -93,6 +98,34 @@ representation remain `NOT_AUTHORIZED / NOT_APPROVED / UNDECIDED`.
 
 ## Current release focus
 
+Human-confirmed product sequencing after v0.2.1 is now exactly
+`v0.2.2 → v0.2.3 → v0.2.4 → v0.3.0`; no v0.2.5 is present in the confirmed
+sequence. v0.2.2 is Factory, Resource Workbench and bounded product-continuity
+persistence; v0.2.3 is Native/OpenClaw Runtime Operations and closed-loop
+execution; v0.2.4 is Enterprise Model Catalog, Evaluation and Governed
+Selection. These definitions are durable governance authority only, not current
+implementation or release claims.
+
+The binding Workbench continuity requirement preserves Business, Enterprise
+Resource, Runtime Operations, Model Governance, and Technical Inspection
+experiences. Independently managed resources progressively receive their
+applicable governed lifecycle actions, immutable history, relationships, and
+invocation or retrieval history. Product and Technical Views remain sibling
+projections over common canonical identities and never become lifecycle,
+planning, execution, or Evidence authority. The first Agent Definition slice is
+only the first implementation of this pattern and does not supersede later
+resource workbenches.
+
+The selected persistence direction is domain-owned typed repository ports with
+bounded single-node SQLite adapters for v0.2, immutable revisions,
+append-only/link-based history, explicit transaction/replay/digest-conflict/
+schema-version/migration validation, replaceable PostgreSQL, Qdrant retained for
+vectors, durable SQL references for Knowledge/index snapshots, external secret
+values, restart reacquisition of Runtime observed state, and Accounting derived
+from durable facts unless separately approved otherwise. Implementation remains
+blocked on a consolidated persistence G2. `S5-ARCH-018` is candidate-only and
+unallocated.
+
 The bounded working objective is to demonstrate Digital Employee construction
 and governed execution across the stable Core and external Runtime Providers.
 A Digital Employee is a business-facing projection, not a Core CRD.
@@ -136,15 +169,16 @@ Release remain unauthorized and have not started.
 
 ## Immediate next work
 
-1. Complete the separately gated S5-REL-029 governance reconciliation and Human
-   Close Confirmations; do not start downstream work from integration alone.
-2. Preserve the model-assisted/untrusted candidate boundary, deterministic
+1. Complete Human review and the Durable Integration decision for S5-GOV-003.
+2. Allocate and conduct a consolidated persistence G2 only through a separate
+   Human decision; do not infer allocation from the candidate S5-ARCH-018 ID.
+3. Preserve the model-assisted/untrusted candidate boundary, deterministic
    canonicalization and exact-digest approval, authorization-first matching and
    Knowledge retrieval, Native-only placement, and immutable Evidence/successor
    authorities.
-3. Keep Package 6B outside the critical path and behind a separate Human G2
+4. Keep Package 6B outside the critical path and behind a separate Human G2
    persistence/privacy/State decision; it remains `PREVIEW / NOT_APPLIED`.
-4. Keep all public API, CRD, Graph, Workflow, dependency, production
+5. Keep all public API, CRD, Graph, Workflow, dependency, production
    integration, certification, readiness, and release decisions under their
    separate Gates.
 

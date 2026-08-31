@@ -117,6 +117,104 @@ replace the approved RUN / CONNECT / BUILD / GOVERN / SCALE / TRUST roadmap.
 Current operational status is summarized in [PROJECT_STATE.md](PROJECT_STATE.md)
 and governed through the [Governance Registry](docs/governance/REGISTRY.md).
 
+### Human-confirmed v0.2 increment sequence
+
+The current exact sequence is:
+
+```text
+v0.2.1 → v0.2.2 → v0.2.3 → v0.2.4 → v0.3.0
+```
+
+There is no v0.2.5 in this Human-confirmed sequence. Each increment depends on
+the durable identities and governed outcomes of the preceding increment; none
+inherits production, certification, public Contract, deployment, release, or
+implementation authority merely by appearing here.
+
+#### v0.2.2 — Factory, Workbench and product continuity
+
+Product outcome: Agent, Skill, MCP and Knowledge Factory plus Enterprise
+Resource Workbench, with the exact lifecycle and first durable Agent Definition
+vertical slice defined in [PRODUCT.md](PRODUCT.md#v022--agent-skill-mcp-and-knowledge-factory).
+
+Required future package order:
+
+```text
+persistence G2
+→ typed repository ports and migration/replay contract
+→ durable Agent Definition revision lifecycle
+→ exact-digest test and Human-review binding
+→ immutable publication and governed matchability
+→ restart recovery and Resource Workbench inspection
+→ history-preserving deprecation
+```
+
+This increment excludes Runtime Manager, HA, distributed lifecycle,
+Marketplace, production certification and release acceptance. S5-IMPL-044 is a
+supporting Accounting primitive and cannot substitute for the main outcome.
+
+#### v0.2.3 — Runtime operations and closed loop
+
+Product outcome: Native/OpenClaw Runtime Operations and Closed-Loop Execution
+over the hierarchy recorded in [PRODUCT.md](PRODUCT.md#v023--runtime-operations-and-closed-loop-execution).
+
+Required future package order:
+
+```text
+Run identity and Approved Plan binding
+→ Workflow Run and Task Run
+→ Attempt and Placement
+→ Runtime Instance and Agent Instance reconciliation
+→ governed Resource Invocations, Events and Evidence
+→ Outcome and Feedback closure
+```
+
+It depends on v0.2.2 durable definitions and histories. Session remains context,
+not a substitute identity. This increment excludes HA, multi-cluster or
+distributed Runtime lifecycle, generalized Recovery, certification and
+production-readiness claims.
+
+#### v0.2.4 — Model catalog, evaluation and selection
+
+Product outcome: the bounded Enterprise Model Catalog, Evaluation and Governed
+Selection scope defined in [PRODUCT.md](PRODUCT.md#v024--enterprise-model-governance).
+
+Required future package order:
+
+```text
+Model Definition and immutable Revision catalog
+→ Provider/Endpoint/Profile references and compatibility declarations
+→ evidence-backed health and bounded evaluation
+→ policy evaluation and governed selection
+→ optional Human override and exact model binding
+→ invocation Evidence and explicit evidence-backed fallback
+```
+
+It depends on v0.2.2 product continuity and v0.2.3 durable execution Evidence.
+It excludes model training, GPU orchestration, Billing, Provider certification,
+production readiness and release acceptance. S5-IMPL-043 is a foundation or
+thin slice only and does not establish complete Model Governance.
+
+The shared persistence direction for v0.2.2–v0.2.4 requires a consolidated G2
+before implementation. S5-ARCH-018 is only the candidate identifier for that
+future Human-allocated gate; it is not allocated or active.
+
+### Workbench continuity across increments
+
+The [binding Workbench pattern](PRODUCT.md#binding-workbench-continuity) spans
+the Business, Enterprise Resource, Runtime Operations, Model Governance, and
+Technical Inspection experiences. Delivery must preserve Product View and
+Technical View as sibling projections over the same canonical objects and
+identities, with backend lifecycle, planning, execution, authorization, and
+Evidence authority unchanged.
+
+The first v0.2.2 Agent Definition vertical slice proves the pattern first; it
+does not collapse Workbench into a generic list/dashboard or remove the later
+Skill, MCP, Knowledge, Digital Employee, Runtime Operations, or Model Governance
+workbenches from scope. Subsequent resource packages progressively add the
+applicable authoring, validation/test, Human review, publication, immutable
+revision history, relationship/consumer, invocation/retrieval history, and
+deprecation actions rather than creating frontend-owned authority.
+
 ## v0.3 — BUILD
 
 Question:

@@ -6,6 +6,10 @@ API, schema, or frontend implementation.
 
 ## Evidence sets
 
+- [S5-GOV-003 governance evidence](v0.2/s5-gov-003/README.md) records the
+  Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction,
+  exact sequence and reserved/unreconciled S5-ARCH-014–017 debt. It grants no
+  implementation or architecture implementation authority.
 - [Hermes runtime evidence](runtime/hermes/README.md) preserves Runtime Contract
   falsification, configuration and credential findings, failure evidence, and
   certification debt. Hermes remains `EXPERIMENTAL / NOT CURRENTLY CERTIFIABLE`;

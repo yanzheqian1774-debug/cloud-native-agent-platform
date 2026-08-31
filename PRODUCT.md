@@ -155,6 +155,124 @@ Kubernetes is the technical foundation of the control plane.
 Kubernetes-native is a technical differentiator, not the product's
 ultimate purpose.
 
+## Human-confirmed v0.2 product increments
+
+The following bounded increments define how the current v0.2 objective grows
+from a business question to a governed, evidence-backed outcome. They are
+product definitions and acceptance boundaries, not claims of current
+implementation, production readiness, certification, Contract freeze, or
+release acceptance.
+
+### v0.2.2 — Agent, Skill, MCP and Knowledge Factory
+
+v0.2.2 combines the Agent, Skill, MCP and Knowledge Factory with an Enterprise
+Resource Workbench and bounded Resource and Product Journey persistence. Its
+managed resource lifecycle is:
+
+```text
+DRAFT
+→ VALIDATED
+→ TESTED
+→ HUMAN_REVIEWED
+→ PUBLISHED
+→ MATCHABLE
+→ DEPRECATED
+```
+
+The first future durable vertical slice must create an Agent Definition draft,
+validate the exact revision, bind a test result and Human review to its exact
+digest, publish an immutable revision, recover the same identity, revision and
+digest after service restart, inspect it in the Resource Workbench, make that
+exact published revision eligible for governed discovery and matching, and
+deprecate it without deleting history. S5-IMPL-044 Accounting is a supporting
+primitive; Accounting Technical Inspection does not replace the Factory and
+Workbench product outcome.
+
+### v0.2.3 — Runtime operations and closed-loop execution
+
+v0.2.3 provides Native/OpenClaw Runtime Operations and Closed-Loop Execution.
+Its required hierarchy is:
+
+```text
+Approved Plan → Workflow Run → Task Run → Attempt → Placement
+→ Runtime Instance → Agent Instance → Resource Invocations
+→ Events → Evidence → Outcome → Feedback
+```
+
+Session is execution context only. It does not replace Runtime, Agent, Task, or
+persistent Knowledge identity.
+
+### v0.2.4 — Enterprise model governance
+
+v0.2.4 provides an Enterprise Model Catalog, Evaluation and Governed Selection:
+Model Definition and immutable Revision; Provider, Endpoint and Profile
+references; capability and compatibility declarations; evidence-backed health
+and compatibility; bounded evaluation; policy evaluation; governed selection;
+optional Human override; exact model binding; invocation Evidence; and explicit
+evidence-backed fallback. S5-IMPL-043 provider adapters and Model Usage
+Inventory are foundations or thin slices, not complete Model Governance.
+
+All three increments require bounded product-continuity persistence. The
+Human-selected direction is domain-owned typed repository ports with bounded
+single-node SQLite adapters for v0.2, immutable revisions and append-only or
+link-based histories, and replaceability of PostgreSQL behind those ports.
+Qdrant remains vector storage while durable SQL stores Knowledge and index
+snapshot identities and references. Secret values remain external. Runtime
+observed state is reacquired and reconciled after restart, and Accounting is
+derived from durable facts unless a separate high-water snapshot is approved.
+Implementation requires a subsequent consolidated persistence G2; this product
+definition grants no persistence implementation authority.
+
+### Binding Workbench continuity
+
+The v0.2.2–v0.2.4 product direction preserves five related experiences over
+canonical backend-owned objects and identities:
+
+1. **Business Workbench:** problem, plan, approval, progress, Evidence-backed
+   result, correction, Outcome, and feedback.
+2. **Enterprise Resource Workbench:** Digital Employee, Agent, Skill, MCP,
+   Knowledge, Capability, and their relationships.
+3. **Runtime Operations Workbench:** Workflow Run, Task Run, Attempt, Runtime
+   Instance, Agent Instance, interventions, Events, Evidence, and Outcome.
+4. **Model Governance Workbench:** Model Catalog, Provider/Endpoint/Profile,
+   Evaluation, Selection, optional Human override, exact Binding, Usage, and
+   Invocation Evidence.
+5. **Technical Inspection:** canonical identities, authorization, provenance,
+   Accounting, limitations, and `NOT_MEASURABLE` classifications.
+
+Each independently managed resource should progressively provide, where the
+resource's governance semantics apply:
+
+```text
+Dashboard
+→ Catalog/List
+→ Detail
+→ Draft/Authoring
+→ Validation/Test
+→ Human Review
+→ Publication
+→ immutable Revision History
+→ Relationships/Consumers
+→ Invocation/Retrieval History
+→ Deprecation
+```
+
+Workbench does not mean a single generic table or a view-only dashboard. It
+includes the governed lifecycle actions appropriate to each resource while
+preserving backend authority and immutable history.
+
+Product View and Technical View are sibling projections over the same canonical
+objects and identities. Product View presents business meaning, important
+decisions, progress, Evidence, limitations, correction, and Outcome. Technical
+View presents revisions, matching, placement, Runtime, Provider/model, policy,
+authorization, provenance, and Accounting. Neither frontend view becomes
+lifecycle, planning, execution, or Evidence authority.
+
+The first v0.2.2 Agent Definition vertical slice is the first implementation of
+this Workbench pattern. It does not reduce or supersede the planned Skill, MCP,
+Knowledge, Digital Employee, Runtime Operations, or Model Governance
+workbenches.
+
 ## Current Release Boundary
 
 The latest published release is **v0.1.0-alpha**. It proves the Agent Control
