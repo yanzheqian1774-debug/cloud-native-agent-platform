@@ -48,6 +48,26 @@ There is no v0.2.5 in the current Human-confirmed sequence.
 S5-IMPL-044 is a supporting v0.2.2 Accounting primitive. S5-IMPL-043 is a
 v0.2.4 foundation/thin slice. Neither proves its full minor-version outcome.
 
+## Binding Workbench continuity
+
+The reconciliation preserves the Business Workbench; Enterprise Resource
+Workbench; Runtime Operations Workbench; Model Governance Workbench; and
+Technical Inspection described in [PRODUCT.md](../../../PRODUCT.md#binding-workbench-continuity).
+Product View and Technical View remain sibling projections over common
+canonical objects and identities. Neither frontend becomes lifecycle, planning,
+execution, authorization, or Evidence authority.
+
+The common resource experience progresses from Dashboard and Catalog/List
+through Detail, applicable Draft/Authoring, Validation/Test, Human Review,
+Publication, immutable Revision History, Relationships/Consumers,
+Invocation/Retrieval History, and Deprecation. This is a resource-appropriate
+governed lifecycle pattern, not a requirement for a generic table or a
+view-only dashboard.
+
+The first v0.2.2 Agent Definition slice implements this pattern first without
+reducing or superseding the planned Skill, MCP, Knowledge, Digital Employee,
+Runtime Operations, or Model Governance workbenches.
+
 ## Persistence decision and next architecture gate
 
 The selected direction is domain-owned typed repository ports; bounded

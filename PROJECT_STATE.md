@@ -106,6 +106,16 @@ execution; v0.2.4 is Enterprise Model Catalog, Evaluation and Governed
 Selection. These definitions are durable governance authority only, not current
 implementation or release claims.
 
+The binding Workbench continuity requirement preserves Business, Enterprise
+Resource, Runtime Operations, Model Governance, and Technical Inspection
+experiences. Independently managed resources progressively receive their
+applicable governed lifecycle actions, immutable history, relationships, and
+invocation or retrieval history. Product and Technical Views remain sibling
+projections over common canonical identities and never become lifecycle,
+planning, execution, or Evidence authority. The first Agent Definition slice is
+only the first implementation of this pattern and does not supersede later
+resource workbenches.
+
 The selected persistence direction is domain-owned typed repository ports with
 bounded single-node SQLite adapters for v0.2, immutable revisions,
 append-only/link-based history, explicit transaction/replay/digest-conflict/

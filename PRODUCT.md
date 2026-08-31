@@ -223,6 +223,56 @@ derived from durable facts unless a separate high-water snapshot is approved.
 Implementation requires a subsequent consolidated persistence G2; this product
 definition grants no persistence implementation authority.
 
+### Binding Workbench continuity
+
+The v0.2.2–v0.2.4 product direction preserves five related experiences over
+canonical backend-owned objects and identities:
+
+1. **Business Workbench:** problem, plan, approval, progress, Evidence-backed
+   result, correction, Outcome, and feedback.
+2. **Enterprise Resource Workbench:** Digital Employee, Agent, Skill, MCP,
+   Knowledge, Capability, and their relationships.
+3. **Runtime Operations Workbench:** Workflow Run, Task Run, Attempt, Runtime
+   Instance, Agent Instance, interventions, Events, Evidence, and Outcome.
+4. **Model Governance Workbench:** Model Catalog, Provider/Endpoint/Profile,
+   Evaluation, Selection, optional Human override, exact Binding, Usage, and
+   Invocation Evidence.
+5. **Technical Inspection:** canonical identities, authorization, provenance,
+   Accounting, limitations, and `NOT_MEASURABLE` classifications.
+
+Each independently managed resource should progressively provide, where the
+resource's governance semantics apply:
+
+```text
+Dashboard
+→ Catalog/List
+→ Detail
+→ Draft/Authoring
+→ Validation/Test
+→ Human Review
+→ Publication
+→ immutable Revision History
+→ Relationships/Consumers
+→ Invocation/Retrieval History
+→ Deprecation
+```
+
+Workbench does not mean a single generic table or a view-only dashboard. It
+includes the governed lifecycle actions appropriate to each resource while
+preserving backend authority and immutable history.
+
+Product View and Technical View are sibling projections over the same canonical
+objects and identities. Product View presents business meaning, important
+decisions, progress, Evidence, limitations, correction, and Outcome. Technical
+View presents revisions, matching, placement, Runtime, Provider/model, policy,
+authorization, provenance, and Accounting. Neither frontend view becomes
+lifecycle, planning, execution, or Evidence authority.
+
+The first v0.2.2 Agent Definition vertical slice is the first implementation of
+this Workbench pattern. It does not reduce or supersede the planned Skill, MCP,
+Knowledge, Digital Employee, Runtime Operations, or Model Governance
+workbenches.
+
 ## Current Release Boundary
 
 The latest published release is **v0.1.0-alpha**. It proves the Agent Control

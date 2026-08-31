@@ -198,6 +198,23 @@ The shared persistence direction for v0.2.2–v0.2.4 requires a consolidated G2
 before implementation. S5-ARCH-018 is only the candidate identifier for that
 future Human-allocated gate; it is not allocated or active.
 
+### Workbench continuity across increments
+
+The [binding Workbench pattern](PRODUCT.md#binding-workbench-continuity) spans
+the Business, Enterprise Resource, Runtime Operations, Model Governance, and
+Technical Inspection experiences. Delivery must preserve Product View and
+Technical View as sibling projections over the same canonical objects and
+identities, with backend lifecycle, planning, execution, authorization, and
+Evidence authority unchanged.
+
+The first v0.2.2 Agent Definition vertical slice proves the pattern first; it
+does not collapse Workbench into a generic list/dashboard or remove the later
+Skill, MCP, Knowledge, Digital Employee, Runtime Operations, or Model Governance
+workbenches from scope. Subsequent resource packages progressively add the
+applicable authoring, validation/test, Human review, publication, immutable
+revision history, relationship/consumer, invocation/retrieval history, and
+deprecation actions rather than creating frontend-owned authority.
+
 ## v0.3 — BUILD
 
 Question:

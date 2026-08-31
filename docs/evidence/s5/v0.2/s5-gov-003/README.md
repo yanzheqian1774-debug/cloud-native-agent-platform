@@ -31,6 +31,13 @@ product or persistence implementation and grants no downstream authority.
 - The bounded execution record is the
   [S5-GOV-003 exec plan](../../../../exec-plans/active/S5-GOV-003-V022-V024-AUTHORITY-PERSISTENCE-RECONCILIATION.md).
 
+The binding Workbench continuity record preserves the Business, Enterprise
+Resource, Runtime Operations, Model Governance, and Technical Inspection
+experiences; the progressive governed resource lifecycle; and Product/Technical
+sibling projections over shared canonical objects. It explicitly rejects a
+single generic table or view-only interpretation and preserves all later
+resource workbenches beyond the first Agent Definition slice.
+
 S5-ARCH-014 through S5-ARCH-017 remain `RESERVED / UNRECONCILED /
 NOT_REUSABLE`. Historical task traces are not durable architecture authority,
 and this reconciliation does not fabricate their contents or acceptance state.
