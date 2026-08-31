@@ -6,6 +6,16 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [Bounded Product Continuity Persistence Architecture v1](S5-ARCH-018-BOUNDED-PRODUCT-CONTINUITY-PERSISTENCE-V1.md)
+  proposes the consolidated v0.2.2–v0.2.4 domain authority, typed repository
+  ports, PostgreSQL primary deployment adapter, bounded existing-Evidence SQLite
+  transition/test role, history, security, secret, Qdrant, Runtime reconciliation,
+  Accounting and migration boundaries, plus the first Durable Agent Definition
+  implementation entry. Final reconciliation adds governed resource operations,
+  reference-aware deletion, Knowledge compliance purge, non-sensitive tombstones,
+  the non-authoritative Workbench design reference and exact version mapping. It is `AMENDED_PROPOSAL /
+  READY_FOR_HUMAN_ARCHITECTURE_REVIEW / NOT_STARTED`; no implementation,
+  public API/CRD, State Plane, Tenant, multi-node or production claim is granted.
 - [Definition Publication and Matchability Authority v1](S5-ARCH-013-DEFINITION-PUBLICATION-MATCHABILITY-AUTHORITY-V1.md)
   defines the minimum internal v0.2 authority between authoring approval and
   Package 2 matching. It separates immutable Definition Versions, explicit
