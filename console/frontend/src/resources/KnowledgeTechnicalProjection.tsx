@@ -13,6 +13,13 @@ export function KnowledgeTechnicalProjection({ projection }: { projection: Knowl
       <dt>Published revision</dt><dd className="technical-value">{String(technical.publishedRevisionId ?? "NOT_PUBLISHED")}</dd>
       <dt>Active index snapshot</dt><dd className="technical-value">{String(technical.activeIndexSnapshotId ?? "NOT_INDEXED")}</dd>
     </dl>
+    <h4>Quality contract</h4>
+    <dl>
+      <dt>Lexical tokenizer</dt><dd className="technical-value">CJK_BIGRAM_V1</dd>
+      <dt>Hybrid fusion</dt><dd className="technical-value">RECIPROCAL_RANK_FUSION · k=60 · absent ranks=0</dd>
+      <dt>Summary provider</dt><dd className="technical-value">DETERMINISTIC_EXTRACTIVE_V1 · model NOT_APPLICABLE</dd>
+      <dt>Quality schema</dt><dd className="technical-value">0005 · final chain validation pending migration 0004</dd>
+    </dl>
     <h4>Immutable revision digests</h4>
     <table><thead><tr><th>State</th><th>Revision</th><th>Digest</th></tr></thead><tbody>{knowledge.revisions.map((revision) => <tr key={revision.revisionId}><td><span className={`status ${revision.state === "PUBLISHED" ? "success" : "neutral"}`}>{revision.state}</span></td><td className="technical-value">{revision.revisionId}</td><td className="technical-value">sha256:{revision.digest}</td></tr>)}</tbody></table>
     <h4>Index snapshot history</h4>

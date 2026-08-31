@@ -10,6 +10,9 @@ from agent_console.knowledge_repository import KnowledgeConflict, KnowledgeNotFo
 DATABASE_URL = os.environ.get("KNOWLEDGE_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="real PostgreSQL required")
 MIGRATION = Path(__file__).parents[1] / "migrations" / "0003_knowledge_operations.sql"
+QUALITY_MIGRATION = (
+    Path(__file__).parents[1] / "migrations" / "0005_knowledge_quality_operations.sql"
+)
 
 
 def test_real_postgresql_migration_scope_and_optimistic_concurrency():
@@ -81,3 +84,48 @@ def test_real_postgresql_authorized_purge_reduces_history_to_tombstone():
         ).fetchone()
     assert row is not None and "Prohibited payload" not in str(row["tombstone"])
     store.pool.close()
+
+
+def test_real_postgresql_quality_migration_is_checksum_bound_and_scoped():
+    store = PostgresKnowledgeRepository(
+        DATABASE_URL or "",
+        migration_path=MIGRATION,
+        quality_migration_path=QUALITY_MIGRATION,
+    )
+    store.migrate()
+    store.migrate_quality()
+    scope = KnowledgeLifecycleService.scope(
+        f"knowledge-quality-{uuid.uuid4()}", "quality"
+    )
+    record = {
+        "namespace": scope.namespace,
+        "securityDomain": scope.security_domain,
+        "entityType": "METRIC_FACT",
+        "entityId": "metric:test",
+        "digest": "a" * 64,
+        "body": {"status": "NOT_MEASURABLE"},
+    }
+    store.put_quality_entity(record)
+    assert store.list_quality_entities(scope) == [record]
+    assert (
+        store.list_quality_entities(
+            KnowledgeLifecycleService.scope("foreign", "quality")
+        )
+        == []
+    )
+    changed = {
+        **record,
+        "digest": "b" * 64,
+        "body": {"status": "MEASURABLE"},
+    }
+    store.put_quality_entity(changed)
+    store.pool.close()
+    recovered = PostgresKnowledgeRepository(
+        DATABASE_URL or "",
+        migration_path=MIGRATION,
+        quality_migration_path=QUALITY_MIGRATION,
+    )
+    recovered.migrate()
+    recovered.migrate_quality()
+    assert recovered.list_quality_entities(scope) == [changed]
+    recovered.pool.close()

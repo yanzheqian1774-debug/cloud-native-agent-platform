@@ -51,12 +51,23 @@ class KnowledgeLifecycleService:
         }
 
     def create(
-        self, scope: KnowledgeScope, actor: str, name: str, source: dict[str, Any]
+        self,
+        scope: KnowledgeScope,
+        actor: str,
+        name: str,
+        source: dict[str, Any],
+        *,
+        knowledge_id: str | None = None,
+        revision_id: str | None = None,
     ) -> dict[str, Any]:
         source_id = identifier(source.get("sourceId"), "INVALID_SOURCE_ID")
         document_id = identifier(source.get("documentId"), "INVALID_DOCUMENT_ID")
         chunks, content_digest = ingest_text(document_id, source.get("content"))
-        revision_id = identity("knowledge-revision")
+        revision_id = (
+            identifier(revision_id, "INVALID_REVISION_ID")
+            if revision_id is not None
+            else identity("knowledge-revision")
+        )
         content = {
             "name": normalize_text(name, "INVALID_NAME"),
             "source": {
@@ -84,7 +95,11 @@ class KnowledgeLifecycleService:
             },
             domain="knowledge-revision.v1",
         )
-        knowledge_id = identity("knowledge")
+        knowledge_id = (
+            identifier(knowledge_id, "INVALID_KNOWLEDGE_ID")
+            if knowledge_id is not None
+            else identity("knowledge")
+        )
         fact = self._fact(
             "KNOWLEDGE_DRAFT_CREATED", actor, revisionId=revision_id, digest=digest
         )

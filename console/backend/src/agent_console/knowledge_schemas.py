@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class KnowledgeSourceInput(BaseModel):
@@ -45,3 +49,35 @@ class KnowledgeResponse(BaseModel):
     knowledge: dict[str, Any]
     productProjection: dict[str, Any]
     technicalProjection: dict[str, Any]
+
+
+class SearchCommand(StrictModel):
+    query: str
+    mode: str = "HYBRID"
+    topK: int = Field(default=5, ge=1, le=20)
+    knowledgeId: str | None = None
+    sourceId: str | None = None
+    documentId: str | None = None
+    contentType: str | None = None
+    revisionId: str | None = None
+    snapshotId: str | None = None
+
+
+class EvaluationCommand(StrictModel):
+    datasetVersion: str = "1"
+    mode: str = "HYBRID"
+    topK: int = Field(default=5, ge=1, le=20)
+    cases: list[dict[str, Any]]
+    comparisonToRunId: str | None = None
+    knowledgeRevision: str = "CURRENT_AUTHORIZED"
+    qdrantSnapshotIdentity: str = "AUTHORIZED_ACTIVE_SNAPSHOTS"
+
+
+class ImportPreviewCommand(StrictModel):
+    format: str
+    content: str
+
+
+class DuplicateDecisionCommand(StrictModel):
+    candidateId: str
+    classification: str
