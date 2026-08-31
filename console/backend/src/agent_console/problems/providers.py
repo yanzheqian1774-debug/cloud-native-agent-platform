@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from typing import Any, Protocol
 
@@ -67,6 +68,22 @@ def _required(name: str) -> str:
     if not value:
         raise ProblemPlanningError("PROVIDER_CONFIGURATION_MISSING", 503)
     return value
+
+
+def _planning_timeout_seconds() -> float:
+    raw_value = os.getenv("S5_PLANNING_TIMEOUT_SECONDS")
+    if raw_value is None:
+        return 30.0
+    value = raw_value.strip()
+    if not value:
+        raise ProblemPlanningError("PROVIDER_CONFIGURATION_INVALID", 503)
+    try:
+        timeout = float(value)
+    except ValueError:
+        raise ProblemPlanningError("PROVIDER_CONFIGURATION_INVALID", 503) from None
+    if not math.isfinite(timeout) or timeout <= 0 or timeout > 60:
+        raise ProblemPlanningError("PROVIDER_CONFIGURATION_INVALID", 503)
+    return timeout
 
 
 def _provider_request(
@@ -203,7 +220,14 @@ class OllamaEmbeddingProvider(_ConfiguredProvider):
 
 class OpenAICompatiblePlanningProvider(_ConfiguredProvider):
     def __init__(self, client: httpx.Client | None = None) -> None:
-        super().__init__("openai-compatible", _required("S5_PLANNING_MODEL"), client)
+        model = _required("S5_PLANNING_MODEL")
+        timeout = _planning_timeout_seconds()
+        planning_client = (
+            client
+            if client is not None
+            else httpx.Client(timeout=httpx.Timeout(timeout))
+        )
+        super().__init__("openai-compatible", model, planning_client)
         self.base_url = _required("S5_PLANNING_BASE_URL").rstrip("/")
         self._headers = {"Authorization": f"Bearer {_required('S5_PLANNING_API_KEY')}"}
 
