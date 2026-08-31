@@ -2,7 +2,41 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ExactResourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    resourceId: str = Field(min_length=1, max_length=240)
+    revisionId: str = Field(min_length=1, max_length=240)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class McpToolReference(ExactResourceReference):
+    toolName: str = Field(min_length=1, max_length=160)
+    snapshotId: str | None = Field(default=None, max_length=240)
+
+
+class KnowledgeReference(ExactResourceReference):
+    snapshotId: str | None = Field(default=None, max_length=240)
+
+
+class TypedReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=80)
+    resourceId: str = Field(min_length=1, max_length=240)
+    revisionId: str | None = Field(default=None, max_length=240)
+    digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class GovernedBindings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    skills: list[ExactResourceReference] = []
+    mcpTools: list[McpToolReference] = []
+    knowledge: list[KnowledgeReference] = []
+    model: TypedReference | None = None
+    workflow: TypedReference | None = None
+    runtimeProfile: TypedReference | None = None
 
 
 class DefinitionContent(BaseModel):
@@ -13,6 +47,8 @@ class DefinitionContent(BaseModel):
     skills: list[str] = []
     capabilities: list[str] = Field(min_length=1)
     runtimes: list[str] = []
+    businessPurpose: str = ""
+    bindings: GovernedBindings = GovernedBindings()
 
 
 class CreateAgentDefinition(BaseModel):
