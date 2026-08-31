@@ -48,6 +48,14 @@ the exact `quality.lookup` revisions, explicitly authorized one bounded capabili
 test, observed `SUCCEEDED`, verified `Evidence redacted: true`, and inspected the
 Technical sibling projection. Result: `1 passed`.
 
+The product-experience review also verifies the restrained light application
+surface, dark enterprise sidebar, clear Workbench navigation, backend-derived
+metric cards, Catalog/List/Detail hierarchy, lifecycle status colors, loading and
+empty states, actionable validation progression, visually distinct immutable
+Publish action, reversible-impact disclosure for deprecation, invocation result
+panel, keyboard-visible controls, and the Product/Technical projection switch over
+one canonical resource identity.
+
 ## Security and limitations
 
 - Trusted namespace/security-domain scope is resolved before repository access.
