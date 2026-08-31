@@ -1,6 +1,7 @@
 """FastAPI application for the AgentOS Workflow Execution Console."""
 
 import hashlib
+import json
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -8,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
+import httpx
 from agent_core.execution_evidence import (
     AppendDisposition,
     AppendResult,
@@ -84,6 +86,13 @@ from agent_console.preview_service import (
     PreviewService,
     PreviewServiceError,
     TrustedPreviewPrincipal,
+)
+from agent_console.problems import (
+    ProblemPlanningError,
+    ProblemPlanningService,
+)
+from agent_console.problems import (
+    TrustedPrincipal as ProblemPrincipal,
 )
 from agent_console.repository import (
     KubernetesWorkflowRepository,
@@ -351,6 +360,7 @@ _supplier_quality_demo_service = SupplierQualityDemoService(
     live_journeys=_live_journey_service,
     execution_authority_factory=_create_supplier_quality_execution_authority,
 )
+_problem_planning_service = ProblemPlanningService()
 
 
 def get_live_journey_principal() -> TrustedJourneyPrincipal:
@@ -387,6 +397,30 @@ def get_supplier_quality_demo_service() -> SupplierQualityDemoService:
 SupplierQualityDemoDependency = Annotated[
     SupplierQualityDemoService, Depends(get_supplier_quality_demo_service)
 ]
+
+
+def get_problem_planning_service() -> ProblemPlanningService:
+    return _problem_planning_service
+
+
+ProblemPlanningDependency = Annotated[
+    ProblemPlanningService, Depends(get_problem_planning_service)
+]
+
+
+def _problem_principal(
+    tenant_id: Annotated[str, Header(alias="X-Tenant-ID")] = "tenant-a",
+    security_domain: Annotated[
+        str, Header(alias="X-Security-Domain")
+    ] = "supplier-quality",
+    principal_id: Annotated[
+        str, Header(alias="X-Principal-ID")
+    ] = "human:supplier-quality-manager",
+) -> ProblemPrincipal:
+    return ProblemPrincipal(tenant_id, security_domain, principal_id)
+
+
+ProblemPrincipalDependency = Annotated[ProblemPrincipal, Depends(_problem_principal)]
 
 _intervention_feedback_service = InterventionFeedbackService()
 
@@ -909,3 +943,144 @@ def capture_outcome_feedback(
         return capture_service.project(capture_principal, target)
     except InterventionFeedbackFailure as exc:
         raise _capture_http_error(exc) from exc
+
+
+def _problem_http_error(exc: ProblemPlanningError) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail={"reasonCode": exc.reason})
+
+
+def _problem_analysis_sse(events: Any) -> Any:
+    for event in events:
+        yield (
+            f"id: {event['eventId']}\n"
+            f"event: {event['eventType']}\n"
+            f"data: {json.dumps(event, ensure_ascii=False, separators=(',', ':'))}\n\n"
+        ).encode()
+
+
+@app.post("/api/internal/v0.2.1/problem-analysis-streams")
+def begin_problem_analysis_stream(
+    command: dict[str, Any],
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> StreamingResponse:
+    """Emit real incremental interpretation and pause for Human clarification."""
+    try:
+        events = service.begin_analysis(command, principal)
+        return StreamingResponse(
+            _problem_analysis_sse(events), media_type="text/event-stream"
+        )
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.1/problem-analysis-streams/{stream_id}/resume")
+def resume_problem_analysis_stream(
+    stream_id: str,
+    response: dict[str, Any],
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> StreamingResponse:
+    """Resume after Human clarification and stream real planning artifacts."""
+    try:
+        events = service.resume_analysis(stream_id, response, principal)
+        return StreamingResponse(
+            _problem_analysis_sse(events), media_type="text/event-stream"
+        )
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.get("/api/internal/v0.2.1/problem-analysis-streams/{stream_id}/events")
+def replay_problem_analysis_stream(
+    stream_id: str,
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+) -> StreamingResponse:
+    """Authorized replay after one exact event without duplicate delivery."""
+    try:
+        events = service.replay_analysis(stream_id, last_event_id, principal)
+        return StreamingResponse(
+            _problem_analysis_sse(events), media_type="text/event-stream"
+        )
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.1/problems")
+def create_problem_plan(
+    command: dict[str, Any],
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> dict[str, Any]:
+    """Submit a formal Problem and produce one reviewable inert plan."""
+    try:
+        return service.create(command, principal)
+    except (ProblemPlanningError, httpx.HTTPError) as exc:
+        failure = (
+            exc
+            if isinstance(exc, ProblemPlanningError)
+            else ProblemPlanningError("CONTROLLED_PROVIDER_UNAVAILABLE", 503)
+        )
+        raise _problem_http_error(failure) from exc
+
+
+@app.get("/api/internal/v0.2.1/problems")
+def list_problem_plans(
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> list[dict[str, Any]]:
+    return service.list(principal)
+
+
+@app.get("/api/internal/v0.2.1/problems/{problem_id}")
+def get_problem_plan(
+    problem_id: str,
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> dict[str, Any]:
+    try:
+        return service.get(problem_id, principal)
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.1/problems/{problem_id}/corrections")
+def correct_problem_plan(
+    problem_id: str,
+    command: dict[str, Any],
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> dict[str, Any]:
+    try:
+        return service.correct(problem_id, command, principal)
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.1/problems/{problem_id}/interventions")
+def intervene_problem_plan(
+    problem_id: str,
+    command: dict[str, Any],
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> dict[str, Any]:
+    """Record one governed Human decision and create an immutable successor."""
+    try:
+        return service.intervene(problem_id, command, principal)
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
+
+
+@app.post("/api/internal/v0.2.1/problems/{problem_id}/approvals")
+def approve_problem_plan(
+    problem_id: str,
+    command: dict[str, Any],
+    principal: ProblemPrincipalDependency,
+    service: ProblemPlanningDependency,
+) -> dict[str, Any]:
+    try:
+        return service.approve(problem_id, command, principal)
+    except ProblemPlanningError as exc:
+        raise _problem_http_error(exc) from exc
