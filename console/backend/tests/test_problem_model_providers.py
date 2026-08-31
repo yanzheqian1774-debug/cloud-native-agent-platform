@@ -43,6 +43,69 @@ def configure_public(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(name, value)
 
 
+def assert_timeout(client: httpx.Client, seconds: float) -> None:
+    assert client.timeout.connect == seconds
+    assert client.timeout.read == seconds
+    assert client.timeout.write == seconds
+    assert client.timeout.pool == seconds
+
+
+def test_public_planning_timeout_defaults_to_exactly_30_seconds(monkeypatch):
+    configure_public(monkeypatch)
+    monkeypatch.delenv("S5_PLANNING_TIMEOUT_SECONDS", raising=False)
+    provider = OpenAICompatiblePlanningProvider()
+    assert_timeout(provider._client, 30.0)
+
+
+@pytest.mark.parametrize("configured", ["45", "60", "45.5"])
+def test_public_planning_timeout_accepts_bounded_seconds(monkeypatch, configured):
+    configure_public(monkeypatch)
+    monkeypatch.setenv("S5_PLANNING_TIMEOUT_SECONDS", configured)
+    provider = OpenAICompatiblePlanningProvider()
+    assert_timeout(provider._client, float(configured))
+
+
+@pytest.mark.parametrize(
+    "configured",
+    ["", "   ", "not-a-number", "NaN", "inf", "+Infinity", "-inf", "0", "-1", "60.1"],
+)
+def test_public_planning_timeout_invalid_configuration_fails_closed(
+    monkeypatch, configured
+):
+    configure_public(monkeypatch)
+    monkeypatch.setenv("S5_PLANNING_TIMEOUT_SECONDS", configured)
+    with pytest.raises(ProblemPlanningError) as caught:
+        OpenAICompatiblePlanningProvider()
+    assert (caught.value.reason, caught.value.status) == (
+        "PROVIDER_CONFIGURATION_INVALID",
+        503,
+    )
+    assert "secret-marker" not in str(caught.value)
+
+
+def test_public_planning_timeout_invalid_configuration_stays_unavailable(
+    monkeypatch,
+):
+    configure_public(monkeypatch)
+    monkeypatch.setenv("S5_PLANNING_PROVIDER", "openai-compatible")
+    monkeypatch.setenv("S5_PLANNING_TIMEOUT_SECONDS", "61")
+    provider = planning_provider_from_environment()
+    with pytest.raises(ProblemPlanningError) as caught:
+        provider.propose("problem", [])
+    assert (caught.value.reason, caught.value.status) == (
+        "PROVIDER_CONFIGURATION_INVALID",
+        503,
+    )
+
+
+def test_public_planning_timeout_does_not_change_embedding_or_ollama(monkeypatch):
+    configure_public(monkeypatch)
+    monkeypatch.setenv("S5_PLANNING_TIMEOUT_SECONDS", "45")
+    assert_timeout(OpenAICompatibleEmbeddingProvider()._client, 30.0)
+    assert_timeout(OllamaPlanningProvider()._client, 30.0)
+    assert_timeout(OllamaEmbeddingProvider()._client, 30.0)
+
+
 def test_public_planning_contract_auth_endpoint_model_and_schema(monkeypatch):
     configure_public(monkeypatch)
 
@@ -161,8 +224,11 @@ def test_provider_http_failures_are_controlled_and_credentials_are_redacted(
 
 def test_timeout_malformed_json_and_malformed_content_fail_closed(monkeypatch):
     configure_public(monkeypatch)
+    calls = 0
 
     def timeout(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
         raise httpx.ReadTimeout("planning-secret-marker", request=request)
 
     providers = [
@@ -183,6 +249,7 @@ def test_timeout_malformed_json_and_malformed_content_fail_closed(monkeypatch):
             provider.propose("problem", [])
         assert caught.value.status == 503
         assert "secret-marker" not in str(caught.value)
+    assert calls == 1
 
 
 @pytest.mark.parametrize(
