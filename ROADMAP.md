@@ -152,10 +152,11 @@ This increment excludes Runtime Manager, HA, distributed lifecycle,
 Marketplace, production certification and release acceptance. S5-IMPL-044 is a
 supporting Accounting primitive and cannot substitute for the main outcome.
 
-#### v0.2.3 — Runtime operations and closed loop
+#### v0.2.3 — Digital Employee execution and Runtime closure
 
 Product outcome: Native/OpenClaw Runtime Operations and Closed-Loop Execution
-over the hierarchy recorded in [PRODUCT.md](PRODUCT.md#v023--runtime-operations-and-closed-loop-execution).
+over the hierarchy recorded in
+[PRODUCT.md](PRODUCT.md#v023--digital-employee-execution-and-runtime-closure).
 
 Required future package order:
 
@@ -194,9 +195,23 @@ It excludes model training, GPU orchestration, Billing, Provider certification,
 production readiness and release acceptance. S5-IMPL-043 is a foundation or
 thin slice only and does not establish complete Model Governance.
 
-The shared persistence direction for v0.2.2–v0.2.4 requires a consolidated G2
-before implementation. S5-ARCH-018 is only the candidate identifier for that
-future Human-allocated gate; it is not allocated or active.
+The shared persistence direction for v0.2.2–v0.2.4 is governed by merged
+S5-ARCH-018: PostgreSQL is primary deployment persistence for new
+product-continuity domains, existing Execution Evidence SQLite is transitional,
+SQLite/in-memory are focused local/test adapters, and Qdrant is a derived
+Knowledge vector index. Implementations remain bounded by that decision and
+their separately allocated tasks.
+
+The delivery order after the durably integrated Agent Definition slice is:
+Skill/MCP lifecycle and Workbench; Knowledge Operations and Workbench; shared
+Product Shell and Resource Workbench assembly; Digital Employee Definition and
+composition; complete v0.2.2 real-browser acceptance/release gate; v0.2.3
+Runtime execution closure; then v0.2.4 Model and capability composition.
+
+After the S5-GOV-004 charter is durable, Skill/MCP and Knowledge may proceed as
+two isolated implementation tracks. One owner must control shared frontend
+shell, route, dependency, migration and CI paths, with at most two concurrent
+heavy implementation writers. The charter does not allocate those tasks.
 
 ### Workbench continuity across increments
 

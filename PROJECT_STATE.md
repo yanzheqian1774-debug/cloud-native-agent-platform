@@ -22,8 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `474b19e7bf32a342d93b4b891f6c7a799b9261b6`
-- Exact-main CI: run `33353367214`, `SUCCESS`
+- Current durable-main head: `5b990fe561d2044de61dc3ce3899e024327aab33`
+- Exact-main CI: run `33369618464`, `SUCCESS`
 - S5-GOV-003 authorized durable-main baseline:
   `474b19e7bf32a342d93b4b891f6c7a799b9261b6`
 - S5-PLAN-003 authorized durable-main baseline:
@@ -41,9 +41,10 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
-| S5-IMPL-046 | `ACTIVE / IMPLEMENTATION_COMPLETE / CHECKPOINT_A / REVIEW_READY` | Human-authorized G1 Agent Definition product vertical slice from exact baseline `440cd31dff6959bcaf11a9c66becc973c70d77f6`; sole writer for the bounded Agent lifecycle, PostgreSQL continuity, Workbench and governed rematch paths; local validation passed with 1,054 tests, frontend lint/build and real-browser acceptance; no public Contract/CRD, Runtime, deployment, integration, release or closure authority |
+| S5-GOV-004 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / REVIEW_READY` | Human-confirmed v0.2.x Product Capability and Runtime Charter v1 at exact baseline `5b990fe561d2044de61dc3ce3899e024327aab33`; governance/product/Evidence only; preserves S5-ARCH-018 and S5-IMPL-046 limitations; no implementation, architecture change, downstream allocation, release or completion authority |
+| S5-IMPL-046 | `ACTIVE / IMPLEMENTATION_COMPLETE / DURABLY_INTEGRATED / AWAITING_HUMAN_CLOSE_CONFIRMATION` | Human-authorized G1 Agent Definition product vertical slice from exact baseline `440cd31dff6959bcaf11a9c66becc973c70d77f6`; PR #98 merged at durable main `5b990fe561d2044de61dc3ce3899e024327aab33`, exact-main CI run `33369618464` succeeded; all bounded Agent lifecycle, PostgreSQL continuity, Workbench and governed rematch limitations remain; no public Contract/CRD, Runtime, deployment, release or closure authority |
 | S5-GOV-003 | `ACTIVE / AUTHORIZED / CHECKPOINT_A` | Governance-only reconciliation at exact baseline `474b19e7bf32a342d93b4b891f6c7a799b9261b6`; records Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction, sequence and unreconciled architecture-number debt; grants no implementation, architecture implementation, deployment, release, certification or public Contract authority |
-| S5-ARCH-018 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / FINAL_RECONCILED_PROPOSAL_READY_FOR_HUMAN_REVIEW` | PostgreSQL-primary amendment is accepted in principle; final reconciliation adds backend-governed resource management, protected published revisions, reference-aware deletion, Knowledge purge and non-sensitive tombstones; existing Evidence SQLite remains transitional/local-test only; final acceptance, merge, Durable Integration and implementation allocation remain pending |
+| S5-ARCH-018 | `CLOSED / COMPLETED / DURABLY_INTEGRATED` | Human Architecture Gate recorded by S5-IMPL-046 Evidence; PR #97 merged at durable main `440cd31dff6959bcaf11a9c66becc973c70d77f6`; PostgreSQL-primary new product-continuity persistence, bounded Evidence SQLite transition/local-test role, backend-governed resource management, protected history and deletion boundaries remain authoritative; no public API/CRD, State Plane, Tenant, HA, multi-region, certification or production authority |
 | S5-ARCH-014–S5-ARCH-017 | `RESERVED / UNRECONCILED_GOVERNANCE_DEBT / NOT_REUSABLE` | Visible historical session traces are not a substitute for durable repository authority; exact contents and acceptance status are not reconstructed or fabricated; identifiers remain reserved pending separate Human reconciliation |
 | S5-IMPL-041 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / SESSION_CLOSED` | `S5-IMPL-041: governed problem-to-plan streaming` source commits `de681a97ee11d6dbec758c3cb3eea4067c00d422` and `8393b67568d2e0329ea5ad6f066b330e1568ca56`; PR #91 merged at durable main `2fdf54edb8658929fde6c1259fefda43a8406a62`; exact-main CI run `33344714261` succeeded; code is already durable, reimplementation and reintegration are not required, binding limitations remain, and reopen is prohibited; closure grants no S5-IMPL-042, S5-REL-044, S5-GOV-002 integration, deployment, v0.2.2, release, or downstream implementation authority |
 | S5-REL-030 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / PASS_WITH_CONSTRAINTS / SESSION_CLOSED` | PR #78 merged at durable main `8757adabc9a95e3b3934303fa9c6f8586ff854e9` with ordered parents `7bb4c43e03d86259373b9fc5ae79fbcb3c1234c6` and `0993a03817123d9565c8fd03d00dd8fa7e2e0d5f`; exact-main CI run `33180601090` succeeded; closure is forward-recorded without reopening; no downstream authority was granted by closure |
@@ -124,8 +125,9 @@ Evidence SQLite remains supported during an explicit bounded transition; SQLite 
 in-memory adapters may serve focused local/test conformance only. Immutable revisions,
 append-only/link-based history, transaction/replay/digest conflict, schema/migration,
 Qdrant-derived index, external Secret reference, Runtime reconciliation and derived
-Accounting boundaries remain. Implementation is blocked on Human acceptance and
-Durable Integration of the amended S5-ARCH-018 G2.
+Accounting boundaries remain. S5-ARCH-018 is durably integrated. Each further
+implementation slice still requires its own allocation, exact path ownership,
+G1 plan and validation.
 
 Final S5-ARCH-018 reconciliation requires Agent, Skill, MCP, Knowledge, Capability and
 applicable Digital Employee projections to expose backend-governed Draft, validation/
@@ -180,9 +182,9 @@ Release remain unauthorized and have not started.
 
 ## Immediate next work
 
-1. Complete Human review and the Durable Integration decision for S5-GOV-003.
-2. Complete Human Architecture Review and the Durable Integration decision for
-   proposed S5-ARCH-018; do not start implementation because the Session is active.
+1. Complete Human review and the Durable Integration decision for S5-GOV-004.
+2. Preserve the durably integrated S5-ARCH-018 boundaries; downstream work
+   requires separately allocated implementation Sessions.
 3. Preserve the model-assisted/untrusted candidate boundary, deterministic
    canonicalization and exact-digest approval, authorization-first matching and
    Knowledge retrieval, Native-only placement, and immutable Evidence/successor

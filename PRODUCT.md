@@ -163,11 +163,13 @@ product definitions and acceptance boundaries, not claims of current
 implementation, production readiness, certification, Contract freeze, or
 release acceptance.
 
-### v0.2.2 — Agent, Skill, MCP and Knowledge Factory
+### v0.2.2 — Core Resource Management and Composition
 
-v0.2.2 combines the Agent, Skill, MCP and Knowledge Factory with an Enterprise
-Resource Workbench and bounded Resource and Product Journey persistence. Its
-managed resource lifecycle is:
+v0.2.2 combines Agent, Skill, MCP and Knowledge foundation with Digital Employee
+Definition and composition, Runtime Provider/Profile binding, an Enterprise
+Resource Catalog and domain Workbenches, PostgreSQL product-continuity
+persistence and a real resource-composition browser journey. Its managed
+resource lifecycle is:
 
 ```text
 DRAFT
@@ -188,10 +190,12 @@ deprecate it without deleting history. S5-IMPL-044 Accounting is a supporting
 primitive; Accounting Technical Inspection does not replace the Factory and
 Workbench product outcome.
 
-### v0.2.3 — Runtime operations and closed-loop execution
+### v0.2.3 — Digital Employee Execution and Runtime Closure
 
-v0.2.3 provides Native/OpenClaw Runtime Operations and Closed-Loop Execution.
-Its required hierarchy is:
+v0.2.3 provides Assignment, Digital Employee Instance, Native/OpenClaw Runtime
+Operations and Closed-Loop Execution. It reuses and productizes the v0.1
+Kubernetes-native Runtime rather than reimplementing it. OpenClaw is one
+mandatory bounded real execution vertical slice. Its required hierarchy is:
 
 ```text
 Approved Plan → Workflow Run → Task Run → Attempt → Placement
@@ -202,26 +206,46 @@ Approved Plan → Workflow Run → Task Run → Attempt → Placement
 Session is execution context only. It does not replace Runtime, Agent, Task, or
 persistent Knowledge identity.
 
-### v0.2.4 — Enterprise model governance
+### v0.2.4 — Model and Capability Composition
 
 v0.2.4 provides an Enterprise Model Catalog, Evaluation and Governed Selection:
 Model Definition and immutable Revision; Provider, Endpoint and Profile
 references; capability and compatibility declarations; evidence-backed health
 and compatibility; bounded evaluation; policy evaluation; governed selection;
-optional Human override; exact model binding; invocation Evidence; and explicit
-evidence-backed fallback. S5-IMPL-043 provider adapters and Model Usage
-Inventory are foundations or thin slices, not complete Model Governance.
+optional Human override; exact Agent/Digital Employee/Knowledge model binding;
+invocation Evidence; usage and latency; token and cost when measurable;
+explicit `NOT_MEASURABLE`; and evidence-backed fallback. S5-IMPL-043 provider
+adapters and Model Usage Inventory are foundations or thin slices, not complete
+Model Governance.
 
 All three increments require bounded product-continuity persistence. The
-Human-selected direction is domain-owned typed repository ports with bounded
-single-node SQLite adapters for v0.2, immutable revisions and append-only or
-link-based histories, and replaceability of PostgreSQL behind those ports.
-Qdrant remains vector storage while durable SQL stores Knowledge and index
+Human-selected direction is domain-owned typed repository ports with PostgreSQL
+as the primary deployment adapter for new product-continuity domains. Existing
+Execution Evidence SQLite remains transitional, and SQLite/in-memory adapters
+are limited to focused local development and conformance tests. Revisions are
+immutable and histories append-only or link-based. Qdrant remains a derived
+vector index while durable SQL stores authoritative Knowledge and index
 snapshot identities and references. Secret values remain external. Runtime
 observed state is reacquired and reconciled after restart, and Accounting is
 derived from durable facts unless a separate high-water snapshot is approved.
-Implementation requires a subsequent consolidated persistence G2; this product
-definition grants no persistence implementation authority.
+S5-ARCH-018 is the governing persistence authority; this product definition
+does not expand its implementation authority.
+
+The complete Runtime Manager, Tenant and Organization, centralized Policy and
+Authorization, Marketplace, FinOps, HA/autoscaling/failover, certification,
+generalized Recovery, governed optimization and ecosystem operations remain
+v0.3.x boundaries.
+
+Minimum v0.2.x governance remains mandatory: Identity, Revision, digest, Human
+Review, publication, authorization, isolation, Secret Reference, Evidence,
+audit, impact analysis, deletion protection and fail-closed behavior.
+
+Backend-only, API-only, architecture-only, mock-only, generic-table-only,
+fixture-only or browserless delivery does not satisfy a v0.2.x capability.
+Acceptance requires a real user entry, real frontend operation, backend
+authority, required durable persistence, real composition or consumption,
+version-required execution, Evidence/Outcome, real-browser acceptance against
+real services and explicit limitations.
 
 ### Binding Workbench continuity
 
