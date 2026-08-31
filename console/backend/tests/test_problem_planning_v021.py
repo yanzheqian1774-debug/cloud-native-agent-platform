@@ -85,6 +85,23 @@ def test_problem_identity_plan_digest_stream_and_inert_boundary():
     assert problem["events"][-1]["eventType"] == "STREAM_COMPLETED"
 
 
+def test_planning_and_embedding_ports_are_independent_and_provenance_is_bounded():
+    class Embeddings:
+        provider_id = "embedding-provider"
+        model = "embedding-model-v1"
+
+        def embed(self, texts):
+            return [[float(index + 1), 1.0, 0.0] for index, _ in enumerate(texts)]
+
+    service = ProblemPlanningService(Model(), Vector(), Embeddings())
+    problem = create(service)
+    provenance = problem["planRevisions"][0]["provenance"]
+    assert provenance["provider"] == "controlled-test-provider"
+    assert provenance["model"] == "controlled-planner-v1"
+    assert "endpoint" not in provenance
+    assert "apiKey" not in provenance
+
+
 def test_two_actual_runs_have_exact_knowledge_influence():
     service = ProblemPlanningService(Model(), Vector())
     run_a = create(service, False)

@@ -21,17 +21,16 @@ from typing import Any
 
 import httpx
 
+from agent_console.problems.providers import (
+    ProblemPlanningError,
+    embedding_provider_from_environment,
+    planning_provider_from_environment,
+)
+
 SUPPLIER_QUALITY = (
     "某供应商近期交付质量持续下降，请分析原因，制定整改计划，"
     "并在审批后执行和验证改善效果。"
 )
-
-
-class ProblemPlanningError(ValueError):
-    def __init__(self, reason: str, status: int = 422) -> None:
-        super().__init__(reason)
-        self.reason = reason
-        self.status = status
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,90 +47,6 @@ def _digest(value: object) -> str:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-class OllamaModelProposalPort:
-    provider_id = "ollama-local"
-
-    def __init__(self) -> None:
-        self.base_url = os.getenv("S5_IMPL_041_OLLAMA_URL", "http://127.0.0.1:11434")
-        self.model = os.getenv("S5_IMPL_041_PLANNING_MODEL", "qwen3:8B")
-        self.embedding_model = os.getenv(
-            "S5_IMPL_041_EMBEDDING_MODEL", "shaw/dmeta-embedding-zh:latest"
-        )
-
-    def propose(self, problem: str, context: list[dict[str, Any]]) -> dict[str, Any]:
-        schema = {
-            "type": "object",
-            "properties": {
-                "classification": {"type": "string"},
-                "summary": {"type": "string"},
-                "needs_clarification": {"type": "boolean"},
-                "tasks": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "purpose": {"type": "string"},
-                        },
-                        "required": ["title", "purpose"],
-                    },
-                },
-            },
-            "required": ["classification", "summary", "needs_clarification", "tasks"],
-        }
-        prompt = {
-            "problem": problem,
-            "authorized_context": [item["excerpt"] for item in context],
-            "boundary": "只形成待审批计划；禁止执行、创建实例、调用工具或发布资源。",
-        }
-        response = httpx.post(
-            f"{self.base_url}/api/chat",
-            json={
-                "model": self.model,
-                "stream": False,
-                "think": False,
-                "format": schema,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "你是受控规划模型。只返回符合 schema 的 JSON；"
-                            "模型输出不授予权威。"
-                        ),
-                    },
-                    {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-                ],
-                "options": {
-                    "temperature": 0,
-                    "seed": 41,
-                    "num_ctx": 2048,
-                    "num_predict": 400,
-                },
-            },
-            timeout=180,
-        )
-        response.raise_for_status()
-        try:
-            value = json.loads(response.json()["message"]["content"])
-        except (KeyError, TypeError, json.JSONDecodeError) as exc:
-            raise ProblemPlanningError("MODEL_SCHEMA_VALIDATION_FAILED", 503) from exc
-        if not isinstance(value.get("tasks"), list) or not value.get("summary"):
-            raise ProblemPlanningError("MODEL_SCHEMA_VALIDATION_FAILED", 503)
-        return value
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        response = httpx.post(
-            f"{self.base_url}/api/embed",
-            json={"model": self.embedding_model, "input": texts},
-            timeout=180,
-        )
-        response.raise_for_status()
-        vectors = response.json().get("embeddings")
-        if not isinstance(vectors, list) or len(vectors) != len(texts):
-            raise ProblemPlanningError("EMBEDDING_PROVIDER_INVALID", 503)
-        return vectors
 
 
 class QdrantVectorIndexPort:
@@ -184,9 +99,19 @@ class ProblemPlanningService:
     """Single-process preview authority with truthful restart-loss semantics."""
 
     def __init__(
-        self, model: Any | None = None, vector_index: Any | None = None
+        self,
+        planning_provider: Any | None = None,
+        vector_index: Any | None = None,
+        embedding_provider: Any | None = None,
     ) -> None:
-        self.model = model or OllamaModelProposalPort()
+        self.planning_provider = (
+            planning_provider or planning_provider_from_environment()
+        )
+        self.embedding_provider = (
+            embedding_provider
+            or planning_provider
+            or embedding_provider_from_environment()
+        )
         self.vector_index = vector_index or QdrantVectorIndexPort()
         self._lock = threading.Lock()
         self._problems: dict[str, dict[str, Any]] = {}
@@ -704,9 +629,11 @@ class ProblemPlanningService:
         accepted = time.perf_counter()
         timings["problemAcceptanceMs"] = round((accepted - started) * 1000)
         retrieval_started = time.perf_counter()
-        vectors = self.model.embed([item["excerpt"] for item in authorized])
+        vectors = self.embedding_provider.embed(
+            [item["excerpt"] for item in authorized]
+        )
         manifest = self.vector_index.rebuild(authorized, vectors)
-        query_vector = self.model.embed([description])[0]
+        query_vector = self.embedding_provider.embed([description])[0]
         dense = self.vector_index.query(query_vector, 8)
         dense_by_chunk = {item["payload"]["chunk_id"]: item for item in dense}
         terms = set(description.replace("，", " ").replace("。", " ").split())
@@ -721,7 +648,7 @@ class ProblemPlanningService:
         context = [item[2] for item in ranked]
         timings["retrievalMs"] = round((time.perf_counter() - retrieval_started) * 1000)
         model_started = time.perf_counter()
-        proposal = self.model.propose(description, context)
+        proposal = self.planning_provider.propose(description, context)
         timings["controlledModelPlanningMs"] = round(
             (time.perf_counter() - model_started) * 1000
         )
@@ -878,8 +805,8 @@ class ProblemPlanningService:
                 "NO_AGENT_OR_RUNTIME_INSTANCE",
             ],
             "provenance": {
-                "provider": self.model.provider_id,
-                "model": self.model.model,
+                "provider": self.planning_provider.provider_id,
+                "model": self.planning_provider.model,
                 "promptTemplateRevision": "supplier-quality-planning.zh-CN.v1",
                 "inputDigest": _digest(description),
                 "outputDigest": _digest(proposal),

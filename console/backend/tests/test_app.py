@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from agent_console.app import app, get_repository
+from agent_console.app import app, get_problem_planning_service, get_repository
+from agent_console.problems import ProblemPlanningService
 from fastapi.testclient import TestClient
 
 
@@ -165,4 +166,28 @@ def test_get_workflow_not_found_returns_404() -> None:
     assert response.status_code == 404
     assert response.json() == {
         "detail": "workflow not found",
+    }
+
+
+def test_problem_provider_configuration_failure_is_controlled_503(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("S5_PLANNING_PROVIDER", raising=False)
+    monkeypatch.delenv("S5_EMBEDDING_PROVIDER", raising=False)
+    unavailable = ProblemPlanningService()
+    app.dependency_overrides[get_problem_planning_service] = lambda: unavailable
+    try:
+        response = client.post(
+            "/api/internal/v0.2.1/problems",
+            json={
+                "name": "供应商质量整改",
+                "description": "Supplier quality has declined; analyze the causes.",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_problem_planning_service)
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": {"reasonCode": "PROVIDER_CONFIGURATION_MISSING"}
     }
