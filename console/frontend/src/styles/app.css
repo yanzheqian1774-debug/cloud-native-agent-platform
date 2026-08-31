@@ -365,6 +365,28 @@ progress { width: 100%; height: 14px; margin-top: 10px; accent-color: #175cd3; }
   border-radius: 14px;
   box-shadow: 0 10px 30px rgb(16 24 40 / 5%);
 }
+
+.agent-workbench { max-width: 1440px; margin: 0 auto; padding: 32px; color: #172033; }
+.agent-workbench > header { max-width: 820px; margin-bottom: 24px; }
+.agent-dashboard { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin: 24px 0; }
+.agent-dashboard article { display: grid; gap: 5px; padding: 20px; border: 1px solid #d0d5dd; border-radius: 14px; background: linear-gradient(145deg,#fff,#f6f8fc); }
+.agent-dashboard strong { color: #3157a4; font-size: 30px; }
+.agent-layout { display: grid; grid-template-columns: minmax(260px,340px) minmax(0,1fr); gap: 22px; align-items: start; }
+.agent-layout > aside,.agent-detail { padding: 22px; border: 1px solid #d0d5dd; border-radius: 14px; background: #fff; }
+.agent-list-heading { display: grid; gap: 12px; }.agent-list-heading h2 { margin: 0; }
+.agent-list,.agent-history,.agent-technical ul { display: grid; gap: 10px; padding: 0; list-style: none; }
+.agent-list button { box-sizing: border-box; display: grid; gap: 4px; width: 100%; padding: 14px; text-align: left; color: #172033; background: #f8fafc; border: 1px solid #d0d5dd; }
+.agent-list button.selected { border-color: #3157a4; background: #eef4ff; box-shadow: inset 3px 0 #3157a4; }
+.agent-detail { display: grid; gap: 24px; }.agent-detail > header { border-bottom: 1px solid #e4e7ec; padding-bottom: 18px; }.agent-detail h2 { margin: 5px 0; }
+.agent-review-card { padding: 22px; border: 1px solid #84adff; border-radius: 12px; background: #f5f8ff; }
+.agent-review-card label { display: grid; gap: 6px; margin: 18px 0; font-weight: 700; }.agent-review-card input { padding: 10px; font-family: ui-monospace,SFMono-Regular,monospace; border: 1px solid #98a2b3; border-radius: 7px; }
+.agent-tags,.agent-actions { display: flex; flex-wrap: wrap; gap: 10px; }.agent-tags span { padding: 5px 9px; color: #1849a9; background: #d1e9ff; border-radius: 999px; font-size: 13px; }
+.agent-actions button.primary { background: #175cd3; color: #fff; }.agent-actions button:disabled { opacity: .55; }
+.agent-history li,.agent-technical li { display: grid; grid-template-columns: minmax(110px,auto) 1fr; gap: 6px 14px; padding: 12px; background: #f8fafc; border-radius: 8px; }
+.agent-history li span:last-child,.agent-technical li span:last-child { grid-column: 2; }
+.agent-technical { padding: 20px; color: #e4e7ec; background: #101828; border-radius: 12px; }.agent-technical .eyebrow,.agent-technical .technical-value { color: #b2ccff; }.agent-technical dl { display: grid; grid-template-columns: 180px 1fr; gap: 9px; }.agent-technical dd { margin: 0; }.agent-technical li { background: #1d2939; }
+.agent-empty,.agent-state { padding: 24px; color: #475467; text-align: center; background: #f8fafc; border: 1px dashed #98a2b3; border-radius: 10px; }
+@media (max-width: 800px) { .agent-dashboard,.agent-layout { grid-template-columns: 1fr; }.agent-workbench { padding: 16px; }.agent-technical dl { grid-template-columns: 1fr; } }
 .qto-team { color: #fff; background: linear-gradient(135deg, #193568, #3157a4); border: 0; }
 .qto-team .eyebrow,.qto-team h2,.qto-team h3 { color: #fff; }
 .qto-team-summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; }

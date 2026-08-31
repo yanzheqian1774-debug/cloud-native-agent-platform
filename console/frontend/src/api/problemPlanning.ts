@@ -13,6 +13,7 @@ async function request<T>(path:string,init?:RequestInit,timeoutMs=180000):Promis
 }
 export const listProblems=()=>request<ProblemPlan[]>("/api/internal/v0.2.1/problems",undefined,15000);
 export const getProblem=(id:string)=>request<ProblemPlan>(`/api/internal/v0.2.1/problems/${encodeURIComponent(id)}`,undefined,15000);
+export const rematchProblem=(id:string)=>request<ProblemPlan>(`/api/internal/v0.2.1/problems/${encodeURIComponent(id)}/rematches`,{method:"POST"},30000);
 export function createProblem(includeNewKnowledge:boolean,description:string){return request<ProblemPlan>("/api/internal/v0.2.1/problems",{method:"POST",body:JSON.stringify({name:"供应商质量下降分析与整改",description,includeNewKnowledge})})}
 export function correctProblem(problem:ProblemPlan,summary:string){const current=problem.planRevisions.at(-1)!;return request<ProblemPlan>(`/api/internal/v0.2.1/problems/${encodeURIComponent(problem.problemId)}/corrections`,{method:"POST",body:JSON.stringify({predecessorDigest:current.canonicalDigest,summary,reason:"人工修订计划解释与验证门槛"})},30000)}
 export function interveneProblem(problem:ProblemPlan,kind:string,reason:string,payload:Record<string,unknown>){const current=problem.planRevisions.at(-1)!;return request<ProblemPlan>(`/api/internal/v0.2.1/problems/${encodeURIComponent(problem.problemId)}/interventions`,{method:"POST",body:JSON.stringify({predecessorDigest:current.canonicalDigest,kind,reason,payload})},30000)}

@@ -1,4 +1,4 @@
-# ruff: noqa: RUF001
+# ruff: noqa: E501, RUF001
 """Process-local v0.2.1 Problem and immutable plan authority.
 
 Model and vector-index adapters propose or derive data only. This module owns
@@ -13,7 +13,7 @@ import os
 import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 
+from agent_console.agent_definition_repository import DefinitionScope
 from agent_console.problems.providers import (
     ProblemPlanningError,
     embedding_provider_from_environment,
@@ -103,6 +104,8 @@ class ProblemPlanningService:
         planning_provider: Any | None = None,
         vector_index: Any | None = None,
         embedding_provider: Any | None = None,
+        agent_definitions: Callable[[DefinitionScope], list[dict[str, Any]]]
+        | None = None,
     ) -> None:
         self.planning_provider = (
             planning_provider or planning_provider_from_environment()
@@ -113,6 +116,7 @@ class ProblemPlanningService:
             or embedding_provider_from_environment()
         )
         self.vector_index = vector_index or QdrantVectorIndexPort()
+        self.agent_definitions = agent_definitions or (lambda scope: [])
         self._lock = threading.Lock()
         self._problems: dict[str, dict[str, Any]] = {}
         self._analysis_streams: dict[str, dict[str, Any]] = {}
@@ -784,6 +788,14 @@ class ProblemPlanningService:
             "tasks": tasks,
             "capabilityGaps": [
                 {
+                    "state": "GAP",
+                    "description": "尚无已发布并获准匹配的供应商质量分析 Agent Definition。",
+                    "missingCapability": "supplier-quality-analysis",
+                    "impact": "计划缺少可复用的 Agent Definition。",
+                    "recommendedAction": "在 Agent Workbench 创建、审核并发布适用定义。",
+                    "targetVersion": "v0.2.2",
+                },
+                {
                     "state": "PARTIALLY_SUPPORTED",
                     "description": (
                         "已规划围堵、升级与效果阈值，但实际执行和效果采集属于后续版本。"
@@ -797,7 +809,7 @@ class ProblemPlanningService:
                         "并在 v0.2.3 配置运行环境。"
                     ),
                     "targetVersion": "v0.2.2 / v0.2.3",
-                }
+                },
             ],
             "limitations": [
                 "PROCESS_LOCAL_TECHNICAL_PREVIEW",
@@ -954,6 +966,45 @@ class ProblemPlanningService:
         if problem is None:
             raise ProblemPlanningError("PREVIEW_STATE_UNAVAILABLE_AFTER_RESTART", 404)
         self._scope(problem, principal)
+        return problem
+
+    def rematch(self, problem_id: str, principal: TrustedPrincipal) -> dict[str, Any]:
+        problem = self.get(problem_id, principal)
+        current = problem["planRevisions"][-1]
+        eligible = self.agent_definitions(
+            DefinitionScope(principal.tenant_id, principal.security_domain)
+        )
+        candidates = []
+        for item in eligible:
+            revision = item["revision"]
+            if "supplier-quality-analysis" in revision["content"]["capabilities"]:
+                candidates.append((item["definition"]["definitionId"], revision))
+        gap = next(
+            (
+                item
+                for item in current["capabilityGaps"]
+                if item["missingCapability"] == "supplier-quality-analysis"
+            ),
+            None,
+        )
+        if gap is not None and candidates:
+            definition_id, revision = sorted(
+                candidates, key=lambda value: (value[0], value[1]["revisionId"])
+            )[0]
+            gap.update(
+                {
+                    "state": "MATCHED",
+                    "description": "已由受治理的已发布 Agent Definition 满足。",
+                    "matchedDefinitionId": definition_id,
+                    "matchedRevisionId": revision["revisionId"],
+                    "matchedDigest": revision["digest"],
+                    "executionAuthority": "NOT_GRANTED",
+                }
+            )
+        current["capabilityGapCount"] = sum(
+            1 for item in current["capabilityGaps"] if item["state"] != "MATCHED"
+        )
+        problem["updatedAt"] = _now()
         return problem
 
     def intervene(
