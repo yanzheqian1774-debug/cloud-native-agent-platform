@@ -1,0 +1,126 @@
+import { execFileSync, spawn } from "node:child_process";
+import path from "node:path";
+import { expect, test } from "@playwright/test";
+
+const backend = "http://127.0.0.1:8000";
+const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL ?? "http://127.0.0.1:6333";
+const authorizedHeaders = {
+  "X-Tenant-ID": "tenant-a",
+  "X-Security-Domain": "supplier-quality",
+  "X-Principal-ID": "human:knowledge-owner",
+};
+
+async function publish(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Validate draft" }).click();
+  await page.getByRole("button", { name: "Human review exact digest" }).click();
+  await page.getByRole("button", { name: "Publish immutable revision" }).click();
+  await expect(page.getByText("PUBLISHED", { exact: true }).first()).toBeVisible();
+}
+
+async function restartBackend(request: import("@playwright/test").APIRequestContext) {
+  execFileSync("pkill", ["-f", "uvicorn agent_console.app:app"]);
+  await expect.poll(async () => {
+    try { return (await request.get(`${backend}/healthz`, { timeout: 500 })).status(); }
+    catch { return 0; }
+  }, { timeout: 10_000 }).toBe(0);
+  const root = path.resolve(process.cwd(), "../..");
+  const pythonPath = ["conformance_harness/src", "core/src", "gateway/src", "operator/src", "runtime/src", "console/backend/src", "experiments/s5-spike-005-runtime-target-manifest", "experiments/s5-spike-007-capability-rest-fixtures"].map((entry) => path.join(root, entry)).join(path.delimiter);
+  const child = spawn("uv", ["run", "uvicorn", "agent_console.app:app", "--host", "127.0.0.1", "--port", "8000"], {
+    cwd: root,
+    env: { ...process.env, PYTHONPATH: pythonPath },
+    detached: true,
+    stdio: "inherit",
+  });
+  child.unref();
+  await expect.poll(async () => {
+    try { return (await request.get(`${backend}/healthz`, { timeout: 500 })).status(); }
+    catch { return 0; }
+  }, { timeout: 20_000 }).toBe(200);
+}
+
+test("completes the real Knowledge lifecycle, retrieval, recovery and purge journey", async ({ page, request }) => {
+  await page.goto("/knowledge");
+  await expect(page.locator(".demo-primary-nav")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Knowledge Workbench" })).toBeVisible();
+  await page.getByRole("button", { name: "Create governed source" }).click();
+  const identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
+  await expect(page.getByText("source:supplier-quality", { exact: true })).toBeVisible();
+  await publish(page);
+  await page.getByRole("button", { name: "Ingest and index" }).click();
+  await expect(page.getByText("COMPLETED", { exact: true })).toBeVisible();
+
+  const first = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
+  const firstRevision = first.knowledge.publishedRevisionId;
+  const firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
+  const firstSnapshot = first.knowledge.activeIndexSnapshotId;
+  expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
+
+  await page.getByRole("button", { name: "Run authorized retrieval" }).click();
+  await expect(page.getByText("CITATION", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Source source:supplier-quality · Provenance human:quality-owner/).first()).toBeVisible();
+
+  const denied = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
+  const absent = await request.get(`${backend}/api/internal/v0.2.2/knowledge/knowledge:absent`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
+  expect(denied.status()).toBe(404);
+  expect(await denied.text()).toBe(await absent.text());
+  const foreignList = await request.get(`${backend}/api/internal/v0.2.2/knowledge`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
+  expect(await foreignList.json()).toEqual([]);
+
+  await page.getByRole("button", { name: "Verify denied disclosure" }).click();
+  await expect(page.getByRole("alert")).toContainText("unavailable or you are not authorized");
+  await page.getByLabel("Successor source content").fill("Updated supplier containment procedure.\n\nCorrective action evidence must cite the approved successor.");
+  await page.getByRole("button", { name: "Create successor draft" }).click();
+  await publish(page);
+  await page.getByRole("button", { name: "Ingest and index" }).click();
+  await expect.poll(async () => {
+    const response = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders });
+    return (await response.json()).knowledge.activeIndexSnapshotId;
+  }).not.toBe(firstSnapshot);
+  const rebuilt = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
+  expect(rebuilt.knowledge.publishedRevisionId).not.toBe(firstRevision);
+  expect(rebuilt.technicalProjection.revisionDigests.at(-1).digest).not.toBe(firstDigest);
+  expect(rebuilt.knowledge.activeIndexSnapshotId).not.toBe(firstSnapshot);
+
+  await restartBackend(request);
+  await page.reload();
+  await page.getByLabel("Filter authorized Packs").fill(identity);
+  await page.getByRole("button", { name: /Supplier Quality Procedures/ }).click();
+  const recovered = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
+  expect(recovered.knowledge.knowledgeId).toBe(identity);
+  expect(recovered.knowledge.publishedRevisionId).toBe(rebuilt.knowledge.publishedRevisionId);
+  expect(recovered.knowledge.activeIndexSnapshotId).toBe(rebuilt.knowledge.activeIndexSnapshotId);
+  await page.getByRole("tab", { name: "Technical View" }).click();
+  await expect(page.getByLabel("Knowledge Technical View").getByText(identity, { exact: true })).toBeVisible();
+  await expect(page.getByText("Qdrant contains derived vectors only")).toBeVisible();
+  await page.getByRole("tab", { name: "Product View" }).click();
+  await page.getByRole("button", { name: "Archive Pack" }).click();
+  await expect(page.getByText(/ARCHIVED · Archived/)).toBeVisible();
+  await page.getByRole("button", { name: "Review purge impact" }).click();
+  await page.getByLabel("Authorization identity").fill("authorization:compliance-one");
+  await page.getByLabel("Non-sensitive reason classification").fill("PROHIBITED_CONTENT");
+  await page.getByRole("button", { name: "Confirm authorized purge" }).click();
+  await expect(page.getByRole("status")).toContainText("Authorized purge completed");
+
+  await page.getByRole("button", { name: "Create governed source" }).click();
+  const partialIdentity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
+  await publish(page);
+  await page.getByRole("button", { name: "Ingest and index" }).click();
+  await expect.poll(async () => {
+    const response = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(partialIdentity)}`, { headers: authorizedHeaders });
+    return (await response.json()).knowledge.lifecycleState;
+  }).toBe("AVAILABLE");
+  const deletedCollection = await request.delete(`${qdrant}/collections/knowledge_v1`);
+  expect(deletedCollection.ok()).toBe(true);
+  await expect.poll(async () => (await request.get(`${qdrant}/collections/knowledge_v1`)).status()).toBe(404);
+  await page.getByRole("button", { name: "Review purge impact" }).click();
+  await page.getByLabel("Authorization identity").fill("authorization:compliance-two");
+  await page.getByLabel("Non-sensitive reason classification").fill("PROHIBITED_CONTENT");
+  await page.getByRole("button", { name: "Confirm authorized purge" }).click();
+  await expect(page.getByText("RECOVERY_REQUIRED", { exact: true }).first()).toBeVisible();
+
+  const design = await page.locator(".agent-workbench").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, color: style.color };
+  });
+  expect(design).toEqual({ background: "rgb(246, 247, 249)", color: "rgb(23, 32, 42)" });
+});

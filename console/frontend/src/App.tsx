@@ -29,6 +29,7 @@ import { useI18n } from "./i18n/useI18n";
 import { AgentWorkbenchPage } from "./resources/AgentWorkbenchPage";
 import { SkillWorkbenchPage } from "./resources/SkillWorkbenchPage";
 import { McpWorkbenchPage } from "./resources/McpWorkbenchPage";
+import { KnowledgeWorkbenchPage } from "./resources/KnowledgeWorkbenchPage";
 
 type AppPreviewState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "ERROR";
 
@@ -46,7 +47,7 @@ function useDemoJourney(journeyId: string | null) {
 function DemoPrimaryNavigation() {
   const {locale}=useI18n(); const zh=locale==="zh-CN";
   const { pathname } = useLocation();
-  const items = zh?[["/problems","业务问题"],["/agents","Agent 工作台"],["/skills","Skill 工作台"],["/mcp","MCP 工作台"],["/tasks","计划与任务"],["/employees","数字员工与 Agent"],["/resources","Skills（技能）· MCP · 知识"],["/runtime","运行环境要求"],["/relationships","对象关系"],["/technical","技术视图"]]:[["/problems","Problems"],["/agents","Agent Workbench"],["/skills","Skill Workbench"],["/mcp","MCP Workbench"],["/tasks","Plans and Tasks"],["/employees","Digital Employees and Agents"],["/resources","Skills · MCP · Knowledge"],["/runtime","Runtime Requirements"],["/relationships","Relationships"],["/technical","Technical View"]];
+  const items = zh?[["/problems","业务问题"],["/agents","Agent 工作台"],["/skills","Skill 工作台"],["/mcp","MCP 工作台"],["/knowledge","知识工作台"],["/tasks","计划与任务"],["/employees","数字员工与 Agent"],["/resources","Skills（技能）· MCP · 知识"],["/runtime","运行环境要求"],["/relationships","对象关系"],["/technical","技术视图"]]:[["/problems","Problems"],["/agents","Agent Workbench"],["/skills","Skill Workbench"],["/mcp","MCP Workbench"],["/knowledge","Knowledge Workbench"],["/tasks","Plans and Tasks"],["/employees","Digital Employees and Agents"],["/resources","Skills · MCP · Knowledge"],["/runtime","Runtime Requirements"],["/relationships","Relationships"],["/technical","Technical View"]];
   return <><div className="demo-environment"><span>{zh?"受控供应商质量演示":"Controlled Supplier Quality Demo"}</span><small>{zh?"进程内技术预览 · 受控模型 + 混合检索":"Process-local technical preview · Controlled model + hybrid retrieval"}</small></div><nav className="demo-primary-nav" aria-label={zh?"演示主导航":"Demo navigation"}>{items.map(([to,label])=><NavLink key={to} to={to} aria-current={pathname===to?"page":undefined}>{label}</NavLink>)}</nav></>;
 }
 
@@ -192,7 +193,7 @@ function App() {
     return () => controller.abort();
   }, [mode, supplierQualityLive]);
   if (supplierQualityLive) {
-    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><DemoPrimaryNavigation/><Routes><Route path="/" element={<Navigate to="/problems" replace />} /><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<PlanningDirectoryPage kind="agents"/>} /><Route path="/resources" element={<PlanningDirectoryPage kind="resources"/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path="/relationships" element={<PlanningDirectoryPage kind="relationships"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/problems" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
+    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><DemoPrimaryNavigation/><Routes><Route path="/" element={<Navigate to="/problems" replace />} /><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<PlanningDirectoryPage kind="agents"/>} /><Route path="/resources" element={<PlanningDirectoryPage kind="resources"/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path="/relationships" element={<PlanningDirectoryPage kind="relationships"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/problems" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
   }
   if (previewState !== "READY") {
     return <main className="product-page"><section className="preview-warning" role={previewState === "LOADING" ? "status" : "alert"} aria-live="polite"><strong>{mode.toUpperCase()} · {previewState}</strong><span className="stable-id">{reasonCode}</span></section></main>;

@@ -69,6 +69,7 @@ from agent_console.intervention_feedback_schemas import (
     InterventionLifecycleCommand,
     OutcomeFeedbackCommand,
 )
+from agent_console.knowledge_api import router as knowledge_router
 from agent_console.live_journey import (
     LiveJourneyCoordinator,
     TrustedJourneyPrincipal,
@@ -135,6 +136,7 @@ app = FastAPI(
     version="0.1.0",
 )
 app.include_router(skill_mcp_router)
+app.include_router(knowledge_router)
 
 
 class _SupplierQualityExecutionEvidence:

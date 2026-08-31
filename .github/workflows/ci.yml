@@ -28,11 +28,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.15.4
+        ports:
+          - 6333:6333
     env:
       AGENT_DEFINITION_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       AGENT_DEFINITION_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       SKILL_MCP_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       SKILL_MCP_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
+      KNOWLEDGE_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
+      KNOWLEDGE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
+      KNOWLEDGE_QDRANT_URL: http://127.0.0.1:6333
+      KNOWLEDGE_TEST_QDRANT_URL: http://127.0.0.1:6333
 
     steps:
       - name: Checkout repository
@@ -95,9 +103,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.15.4
+        ports:
+          - 6333:6333
     env:
       AGENT_DEFINITION_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       SKILL_MCP_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
+      KNOWLEDGE_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
+      KNOWLEDGE_QDRANT_URL: http://127.0.0.1:6333
       PYTHONPATH: conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures
 
     steps:
