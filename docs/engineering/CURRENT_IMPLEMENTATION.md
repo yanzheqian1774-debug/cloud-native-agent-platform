@@ -11,6 +11,24 @@ mistaken for current product capabilities.
 The source code and tests remain the final authority for implementation
 details.
 
+## v0.2.2 unified product assembly
+
+The Console currently provides an authorization-scoped unified Dashboard,
+Resource Catalog, exact-reference relationship inspection, read-only Attention
+entry, and Digital Employee template projection across durable Agent, Skill,
+MCP, Knowledge, Workflow, and Runtime Profile facts. Product and Technical
+navigation preserve the same canonical identities, revision identifiers,
+digests, Evidence references, and limitations. These views are reconstructed
+from the domain repositories backed by migrations 0001–0007; they do not store
+dashboard counts, a graph, an approval queue, or a Digital Employee aggregate.
+
+Digital Employee templates are reusable composition inputs only. They grant no
+Agent Instance, Runtime Instance, Assignment, Run, Task Run, Attempt,
+Placement, Pod, or execution authority. The assembled experience remains
+Preview, not certified, and not production-ready. MCP acceptance remains
+bounded to the documented localhost fixture where applicable, OpenClaw Runtime
+Profiles remain declaration-only, and Model references remain unverified.
+
 ## Current Release Planning Context
 
 The latest published and implemented release baseline is:

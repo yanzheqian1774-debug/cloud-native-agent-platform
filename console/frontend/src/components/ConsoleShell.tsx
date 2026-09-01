@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import { LanguageSwitcher } from "./LanguageSwitcher";
-import { useI18n } from "../i18n/useI18n";
 import { NavLink } from "react-router-dom";
 
 interface ConsoleShellProps {
@@ -11,30 +9,28 @@ interface ConsoleShellProps {
 export function ConsoleShell({
   children,
 }: ConsoleShellProps) {
-  const { t } = useI18n();
-
   return (
     <div className="console-shell">
       <header className="console-header">
         <div className="console-header-inner">
-          <div className="console-brand">
+          <NavLink className="console-brand" to="/dashboard">
             <span className="console-brand-mark">
               A
             </span>
 
-            <span>{t("app.name")}</span>
-          </div>
-
-          <LanguageSwitcher />
+            <span>Cloud-Native Agent Platform<small>Enterprise Resource Console</small></span>
+          </NavLink>
         </div>
       </header>
 
-      <nav className="global-nav" aria-label={t("nav.primary")}>
-        <NavLink to="/product">{t("nav.productView")}</NavLink>
-        <NavLink to="/technical">{t("nav.technicalView")}</NavLink>
-        <NavLink to="/workflows">{t("nav.workflowRuns")}</NavLink>
-        <NavLink to="/workflow-definitions">Workflow Definitions</NavLink>
-        <NavLink to="/runtime-profiles">Runtime Profiles</NavLink>
+      <nav className="global-nav demo-primary-nav" aria-label="Primary product navigation">
+        <NavLink to="/dashboard">Dashboard</NavLink>
+        <NavLink to="/catalog">Resource Catalog</NavLink>
+        <NavLink to="/digital-employees">Digital Employees</NavLink>
+        <NavLink to="/attention">Attention</NavLink>
+        <NavLink to="/relationships">Relationships</NavLink>
+        <NavLink to="/problems">Business Questions</NavLink>
+        <NavLink to="/technical">Technical View</NavLink>
       </nav>
 
       <div className="console-content">
