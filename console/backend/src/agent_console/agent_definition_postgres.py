@@ -22,6 +22,7 @@ from agent_console.agent_definition_repository import (
 
 ADAPTER = "agent-definition-postgresql-v1"
 SCHEMA_VERSION = 1
+GOVERNED_BINDINGS_VERSION = 6
 
 
 class PostgresAgentDefinitionRepository:
@@ -30,6 +31,7 @@ class PostgresAgentDefinitionRepository:
         database_url: str,
         *,
         migration_path: Path,
+        governed_bindings_migration_path: Path | None = None,
         min_pool_size: int = 1,
         max_pool_size: int = 4,
         timeout: float = 5.0,
@@ -37,6 +39,7 @@ class PostgresAgentDefinitionRepository:
         if not database_url:
             raise AgentDefinitionRepositoryError("AGENT_DEFINITION_STORAGE_UNAVAILABLE")
         self.migration_path = migration_path
+        self.governed_bindings_migration_path = governed_bindings_migration_path
         try:
             self.pool = ConnectionPool(
                 database_url,
@@ -55,6 +58,14 @@ class PostgresAgentDefinitionRepository:
     @property
     def migration_checksum(self) -> str:
         return hashlib.sha256(self.migration_path.read_bytes()).hexdigest()
+
+    @property
+    def governed_bindings_checksum(self) -> str | None:
+        if self.governed_bindings_migration_path is None:
+            return None
+        return hashlib.sha256(
+            self.governed_bindings_migration_path.read_bytes()
+        ).hexdigest()
 
     def migrate(self) -> None:
         sql = self.migration_path.read_text()
@@ -79,6 +90,30 @@ class PostgresAgentDefinitionRepository:
                     raise AgentDefinitionRepositoryError(
                         "AGENT_DEFINITION_SCHEMA_INCOMPATIBLE"
                     )
+                if self.governed_bindings_migration_path is not None:
+                    connection.execute(
+                        self.governed_bindings_migration_path.read_text()
+                    )
+                    governed = connection.execute(
+                        "SELECT checksum, adapter FROM agent_definition.schema_migrations WHERE version = %s",
+                        (GOVERNED_BINDINGS_VERSION,),
+                    ).fetchone()
+                    if governed is None:
+                        connection.execute(
+                            "INSERT INTO agent_definition.schema_migrations(version,checksum,adapter) VALUES (%s,%s,%s)",
+                            (
+                                GOVERNED_BINDINGS_VERSION,
+                                self.governed_bindings_checksum,
+                                ADAPTER,
+                            ),
+                        )
+                    elif (
+                        governed["checksum"] != self.governed_bindings_checksum
+                        or governed["adapter"] != ADAPTER
+                    ):
+                        raise AgentDefinitionRepositoryError(
+                            "AGENT_DEFINITION_SCHEMA_INCOMPATIBLE"
+                        )
         except AgentDefinitionRepositoryError:
             raise
         except PsycopgError as exc:
@@ -101,6 +136,27 @@ class PostgresAgentDefinitionRepository:
                     raise AgentDefinitionRepositoryError(
                         "AGENT_DEFINITION_SCHEMA_INCOMPATIBLE"
                     )
+                if self.governed_bindings_migration_path is not None:
+                    governed = connection.execute(
+                        "SELECT checksum, adapter FROM agent_definition.schema_migrations WHERE version = %s",
+                        (GOVERNED_BINDINGS_VERSION,),
+                    ).fetchone()
+                    if (
+                        governed is None
+                        or governed["checksum"] != self.governed_bindings_checksum
+                        or governed["adapter"] != ADAPTER
+                    ):
+                        raise AgentDefinitionRepositoryError(
+                            "AGENT_DEFINITION_SCHEMA_INCOMPATIBLE"
+                        )
+                    newer = connection.execute(
+                        "SELECT 1 FROM agent_definition.schema_migrations WHERE version > %s LIMIT 1",
+                        (GOVERNED_BINDINGS_VERSION,),
+                    ).fetchone()
+                    if newer:
+                        raise AgentDefinitionRepositoryError(
+                            "AGENT_DEFINITION_SCHEMA_INCOMPATIBLE"
+                        )
         except AgentDefinitionRepositoryError:
             raise
         except PsycopgError as exc:
@@ -153,6 +209,7 @@ class PostgresAgentDefinitionRepository:
                     (*params, record["aggregateVersion"], json.dumps(record)),
                 )
                 self._insert_fact(connection, record, 1, record["facts"][0])
+                self._sync_bindings(connection, record)
             return record
         except AgentDefinitionConflict:
             raise
@@ -178,6 +235,28 @@ class PostgresAgentDefinitionRepository:
                 if row is None:
                     raise AgentDefinitionConflict("STALE_AGENT_DEFINITION")
                 self._insert_fact(connection, record, len(record["facts"]) + 1, fact)
+                if self.governed_bindings_migration_path is not None and fact.get(
+                    "event"
+                ) in {"DRAFT_VALIDATED", "HUMAN_REVIEWED", "REVISION_PUBLISHED"}:
+                    subject = fact.get("subject", {})
+                    revision_id = subject.get("revisionId")
+                    digest = subject.get("digest")
+                    if revision_id and digest:
+                        connection.execute(
+                            """INSERT INTO agent_definition.binding_facts(namespace,security_domain,definition_id,ordinal,fact_id,fact_type,revision_id,revision_digest,fact)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)""",
+                            (
+                                record["namespace"],
+                                record["securityDomain"],
+                                record["definitionId"],
+                                len(record["facts"]) + 1,
+                                fact["factId"],
+                                fact["event"],
+                                revision_id,
+                                digest,
+                                json.dumps(fact),
+                            ),
+                        )
                 record["facts"] = [*record["facts"], fact]
                 connection.execute(
                     "UPDATE agent_definition.definitions SET record=%s::jsonb WHERE namespace=%s AND security_domain=%s AND definition_id=%s",
@@ -188,6 +267,7 @@ class PostgresAgentDefinitionRepository:
                         record["definitionId"],
                     ),
                 )
+                self._sync_bindings(connection, record)
             return record
         except AgentDefinitionConflict:
             raise
@@ -214,6 +294,61 @@ class PostgresAgentDefinitionRepository:
                 json.dumps(fact),
             ),
         )
+
+    def _sync_bindings(
+        self, connection: Connection[Any], record: dict[str, Any]
+    ) -> None:
+        if self.governed_bindings_migration_path is None:
+            return
+        for revision in record.get("revisions", []):
+            bindings = revision.get("content", {}).get("bindings", {})
+            groups = (
+                ("skill", "skills"),
+                ("mcp", "mcpTools"),
+                ("knowledge", "knowledge"),
+            )
+            for kind, field in groups:
+                for ordinal, binding in enumerate(bindings.get(field, [])):
+                    connection.execute(
+                        """INSERT INTO agent_definition.revision_bindings(namespace,security_domain,definition_id,revision_id,binding_kind,binding_ordinal,resource_id,resource_revision_id,resource_digest,tool_name,snapshot_id,binding)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING""",
+                        (
+                            record["namespace"],
+                            record["securityDomain"],
+                            record["definitionId"],
+                            revision["revisionId"],
+                            kind,
+                            ordinal,
+                            binding["resourceId"],
+                            binding["revisionId"],
+                            binding["digest"],
+                            binding.get("toolName"),
+                            binding.get("snapshotId"),
+                            json.dumps(binding),
+                        ),
+                    )
+            for field, kind in (
+                ("model", "model"),
+                ("workflow", "workflow"),
+                ("runtimeProfile", "runtime-profile"),
+            ):
+                binding = bindings.get(field)
+                if binding:
+                    connection.execute(
+                        """INSERT INTO agent_definition.revision_bindings(namespace,security_domain,definition_id,revision_id,binding_kind,binding_ordinal,resource_id,resource_revision_id,resource_digest,binding)
+                        VALUES (%s,%s,%s,%s,%s,0,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING""",
+                        (
+                            record["namespace"],
+                            record["securityDomain"],
+                            record["definitionId"],
+                            revision["revisionId"],
+                            kind,
+                            binding["resourceId"],
+                            binding.get("revisionId"),
+                            binding.get("digest"),
+                            json.dumps(binding),
+                        ),
+                    )
 
     def delete_draft(
         self,

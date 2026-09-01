@@ -6,6 +6,18 @@ export type AgentContent = {
   skills: string[];
   capabilities: string[];
   runtimes: string[];
+  businessPurpose: string;
+  bindings: GovernedBindings;
+};
+
+export type ExactResourceReference = { resourceId: string; revisionId: string; digest: string };
+export type GovernedBindings = {
+  skills: ExactResourceReference[];
+  mcpTools: Array<ExactResourceReference & { toolName: string; snapshotId?: string }>;
+  knowledge: Array<ExactResourceReference & { snapshotId?: string }>;
+  model?: { kind: string; resourceId: string; revisionId?: string; digest?: string };
+  workflow?: { kind: string; resourceId: string; revisionId?: string; digest?: string };
+  runtimeProfile?: { kind: string; resourceId: string; revisionId?: string; digest?: string };
 };
 
 export type AgentRevision = {
@@ -68,6 +80,7 @@ const root = "/api/internal/v0.2.2/agent-definitions";
 export const listAgentDefinitions = () => request<AgentDefinition[]>(root);
 export const getAgentDefinition = (id: string) => request<AgentProjection>(`${root}/${encodeURIComponent(id)}`);
 export const createAgentDefinition = (name: string, content: AgentContent) => request<AgentProjection>(root, { method: "POST", body: JSON.stringify({ name, content }) });
+export const editAgentDefinition = (id: string, expectedVersion: number, content: AgentContent) => request<AgentProjection>(`${root}/${encodeURIComponent(id)}/draft`, { method: "PUT", body: JSON.stringify({ expectedVersion, content }) });
 export const validateAgentDefinition = (id: string, expectedVersion: number) => request<AgentProjection>(`${root}/${encodeURIComponent(id)}/validation`, { method: "POST", body: JSON.stringify({ expectedVersion }) });
 export const reviewAgentDefinition = (id: string, expectedVersion: number, digest: string) => request<AgentProjection>(`${root}/${encodeURIComponent(id)}/reviews`, { method: "POST", body: JSON.stringify({ expectedVersion, digest, decision: "APPROVE", reason: "Human verified the exact digest for publication" }) });
 export const publishAgentDefinition = (id: string, expectedVersion: number, digest: string, reviewId: string) => request<AgentProjection>(`${root}/${encodeURIComponent(id)}/publications`, { method: "POST", body: JSON.stringify({ expectedVersion, digest, reviewId }) });
