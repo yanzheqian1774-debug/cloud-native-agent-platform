@@ -1,5 +1,10 @@
-export type ProductRelationship={relation:string;sourceKind?:string;sourceIdentity?:string;sourceRevisionId?:string|null;targetKind:string;targetIdentity:string;targetRevisionId?:string;targetDigest?:string};
+export type ProductRelationship={relationshipId?:string;relation:string;sourceKind?:string;sourceIdentity?:string;sourceRevisionId?:string|null;sourceDigest?:string|null;targetKind:string;targetIdentity:string;targetRevisionId?:string;targetDigest?:string};
 export type ProductResource={kind:string;identity:string;name:string;revisionId:string|null;digest:string|null;lifecycleStatus:string;capabilityStatus:string;owner:string|null;compatibility:string;limitations:string[];capabilities:string[];relationships:ProductRelationship[];consumers:unknown[];reviewStatus:string;deepLink:string};
+export type TraceabilitySubject={kind:string;resourceId:string;revisionId:string;digest:string};
+export type ProductClaim={claimKey:string;productLabel:string;status:string;limitationCodes:string[];evidenceRefs:string[];technicalFactKeys:string[];affectedBusinessStepIds:string[]};
+export type TraceabilityEvidence={evidenceId:string;evidenceType:string;subject:TraceabilitySubject;provenance:Record<string,unknown>;observedAt:string|null;limitationCodes:string[]};
+export type TechnicalFact={factKey:string;valueClassification:string;provenance:Record<string,unknown>;affectedClaimKeys:string[];affectedBusinessStepIds:string[]};
+export type TraceabilityDTO={subject:TraceabilitySubject;claims:ProductClaim[];evidence:TraceabilityEvidence[];technicalFacts:TechnicalFact[]};
 export type ProductDashboard={resourceCount:number;countsByKind:Record<string,number>;countsByLifecycle:Record<string,number>;attentionCount:number;capabilityGapCount:number;authority:string;limitations:string[]};
 export type AttentionItem=Pick<ProductResource,"kind"|"identity"|"revisionId"|"digest"|"deepLink">&{status:string;reason:string};
 export type DigitalEmployeeTemplate={templateId:string;name:string;purpose:string;agentDefinition:{identity:string;revisionId:string|null;digest:string|null};composition:ProductRelationship[];readiness:string;limitations:string[];executionAuthority:"NONE";deepLink:string};
@@ -11,3 +16,4 @@ export const listProductResources=(query="",kind="",status="")=>request<ProductR
 export const listProductRelationships=()=>request<ProductRelationship[]>(`${root}/relationships`);
 export const listAttention=()=>request<AttentionItem[]>(`${root}/attention`);
 export const listDigitalEmployeeTemplates=()=>request<DigitalEmployeeTemplate[]>(`${root}/digital-employee-templates`);
+export const getProductTraceability=(kind:string,resourceId:string,revisionId:string,digest:string)=>request<TraceabilityDTO>(`${root}/traceability/${encodeURIComponent(kind)}/${encodeURIComponent(resourceId)}?${new URLSearchParams({revisionId,digest})}`);

@@ -7,6 +7,7 @@ import {
   Routes,
   useLocation,
   useSearchParams,
+  useNavigate,
 } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -36,6 +37,20 @@ import { ResourceCatalogPage } from "./catalog/ResourceCatalogPage";
 import { RelationshipsPage as UnifiedRelationshipsPage } from "./relationships/RelationshipsPage";
 import { AttentionPage } from "./attention/AttentionPage";
 import { DigitalEmployeesPage } from "./digital-employees/DigitalEmployeesPage";
+import { EvidenceInspector } from "./shared/EvidenceInspector";
+import { parseUrlContext } from "./shared/urlContext";
+import { ControlledState } from "./shared/ControlledState";
+import { getProductTraceability, type ProductAssemblyError, type TraceabilityDTO } from "./api/productAssembly";
+
+function EvidencePage() {
+  const location=useLocation(),navigate=useNavigate(),parsed=parseUrlContext(location.search);
+  const context=parsed.state==="VALID"?parsed.context:{};
+  const [traceability,setTraceability]=useState<TraceabilityDTO|null>(null),[traceabilityError,setTraceabilityError]=useState<ProductAssemblyError|null>(null),[retry,setRetry]=useState(0);
+  useEffect(()=>{if(!context.kind||!context.resourceId||!context.revisionId||!context.digest)return;let active=true;getProductTraceability(context.kind,context.resourceId,context.revisionId,context.digest).then(value=>{if(active){setTraceability(value);setTraceabilityError(null)}}).catch(value=>active&&setTraceabilityError(value));return()=>{active=false}},[context.kind,context.resourceId,context.revisionId,context.digest,retry]);
+  if(parsed.state==="INVALID"||!parsed.context.resourceId)return <main className="assembly-page"><ControlledState kind="not-found" title="Evidence context unavailable" detail="The URL context is invalid or unsupported."/></main>;
+  const close=()=>{const focusId=parsed.context.claimKey?`claim-${parsed.context.claimKey}`:parsed.context.factKey?`fact-${parsed.context.factKey}`:"";navigate(parsed.context.claimKey?`/product-view?${location.search.slice(1)}`:parsed.context.factKey?`/technical-view?${location.search.slice(1)}`:parsed.context.returnTo&&parsed.context.returnTo.startsWith("/")?parsed.context.returnTo:"/catalog");let attempts=0;const restoreFocus=()=>{const target=focusId&&document.getElementById(focusId);if(target){target.focus();return}if(attempts++<10)requestAnimationFrame(restoreFocus)};requestAnimationFrame(restoreFocus)};
+  return <EvidenceInspector context={parsed.context} onClose={close} data={traceability} error={traceabilityError} retry={()=>setRetry(value=>value+1)}/>;
+}
 
 type AppPreviewState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "ERROR";
 
@@ -192,7 +207,7 @@ function App() {
     return () => controller.abort();
   }, [mode, supplierQualityLive]);
   if (supplierQualityLive) {
-    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<ProductDashboardPage/>}/><Route path="/catalog" element={<ResourceCatalogPage/>}/><Route path="/digital-employees" element={<DigitalEmployeesPage/>}/><Route path="/attention" element={<AttentionPage/>}/><Route path="/relationships" element={<UnifiedRelationshipsPage/>}/><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workflow-definitions" element={<WorkflowWorkbenchPage/>} /><Route path="/runtime-profiles" element={<RuntimeProfileWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<DigitalEmployeesPage/>} /><Route path="/resources" element={<ResourceCatalogPage/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
+    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<ProductDashboardPage/>}/><Route path="/catalog" element={<ResourceCatalogPage/>}/><Route path="/digital-employees" element={<DigitalEmployeesPage/>}/><Route path="/attention" element={<AttentionPage/>}/><Route path="/relationships" element={<UnifiedRelationshipsPage/>}/><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workflow-definitions" element={<WorkflowWorkbenchPage/>} /><Route path="/runtime-profiles" element={<RuntimeProfileWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product-view" element={<ProductViewPage/>}/><Route path="/technical-view" element={<TechPage/>}/><Route path="/evidence" element={<EvidencePage/>}/><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<DigitalEmployeesPage/>} /><Route path="/resources" element={<ResourceCatalogPage/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
   }
   if (previewState !== "READY") {
     return <main className="product-page"><section className="preview-warning" role={previewState === "LOADING" ? "status" : "alert"} aria-live="polite"><strong>{mode.toUpperCase()} · {previewState}</strong><span className="stable-id">{reasonCode}</span></section></main>;

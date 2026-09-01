@@ -14,8 +14,23 @@ import type { LivePlanningJourney } from "../shared/livePlanningJourneyTypes";
 import { LivePlanningJourneyPanel } from "../technical/LivePlanningJourneyPanel";
 import { InterventionFeedbackPanel } from "../technical/InterventionFeedbackPanel";
 import { Link, NavLink, useLocation } from "react-router-dom";
+import { TraceabilityProjection } from "../shared/EvidenceInspector";
+import { parseUrlContext } from "../shared/urlContext";
+import { ControlledState } from "../shared/ControlledState";
+import { getProductTraceability, type ProductAssemblyError, type TraceabilityDTO } from "../api/productAssembly";
 
-export function TechPage({ supplierQualityJourneyId, questionFirst = false }: { supplierQualityJourneyId?: string; questionFirst?: boolean }) {
+export function TechPage(props: { supplierQualityJourneyId?: string; questionFirst?: boolean }) {
+  const { search } = useLocation();
+  const parsed = parseUrlContext(search);
+  const context=parsed.state==="VALID"?parsed.context:{};
+  const [traceability,setTraceability]=useState<TraceabilityDTO|null>(null),[traceabilityError,setTraceabilityError]=useState<ProductAssemblyError|null>(null),[retry,setRetry]=useState(0);
+  useEffect(()=>{if(!context.kind||!context.resourceId||!context.revisionId||!context.digest)return;let active=true;getProductTraceability(context.kind,context.resourceId,context.revisionId,context.digest).then(value=>{if(active){setTraceability(value);setTraceabilityError(null)}}).catch(value=>active&&setTraceabilityError(value));return()=>{active=false}},[context.kind,context.resourceId,context.revisionId,context.digest,retry]);
+  if (parsed.state === "INVALID") return <main className="technical-page"><ControlledState kind="not-found" title="Resource context unavailable" detail="The URL context is invalid or unsupported."/></main>;
+  if (parsed.context.resourceId) return <main className="technical-page"><TraceabilityProjection context={parsed.context} perspective="technical" data={traceability} error={traceabilityError} retry={()=>setRetry(value=>value+1)}/></main>;
+  return <LegacyTechPage {...props}/>;
+}
+
+function LegacyTechPage({ supplierQualityJourneyId, questionFirst = false }: { supplierQualityJourneyId?: string; questionFirst?: boolean }) {
   const { t } = useI18n();
   const { search } = useLocation();
   const { selection } = useSelectedExecution();

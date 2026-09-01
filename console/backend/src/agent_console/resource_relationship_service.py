@@ -19,7 +19,24 @@ class ResourceRelationshipService:
                         "sourceKind": item["kind"],
                         "sourceIdentity": item["identity"],
                         "sourceRevisionId": item["revisionId"],
+                        "sourceDigest": item["digest"],
+                        "relationshipId": self._relationship_id(item, relation),
                         **relation,
                     }
                 )
         return edges
+
+    @staticmethod
+    def _relationship_id(source: dict[str, Any], relation: dict[str, Any]) -> str:
+        return "|".join(
+            str(value or "")
+            for value in (
+                source["kind"],
+                source["identity"],
+                source["revisionId"],
+                relation.get("relation"),
+                relation.get("targetKind"),
+                relation.get("targetIdentity"),
+                relation.get("targetRevisionId"),
+            )
+        )
