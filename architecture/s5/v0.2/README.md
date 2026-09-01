@@ -6,6 +6,13 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Active architecture reviews
 
+- [v0.2.3 Execution and Runtime Authority v1](S5-ARCH-019-V023-EXECUTION-RUNTIME-AUTHORITY-V1.md)
+  proposes canonical execution identities, PostgreSQL/Kubernetes authority,
+  desired/observed reconciliation, a single-writer PostgreSQL Evidence cutover,
+  conceptual migration `0008` ownership, Native reuse, bounded post-Native OpenClaw
+  lifecycle and two future backend tracks. It is `PROPOSED /
+  READY_FOR_HUMAN_ARCHITECTURE_REVIEW / NOT_STARTED`; no code, CRD/API, migration,
+  Contract freeze, implementation allocation or production claim is granted.
 - [Bounded Product Continuity Persistence Architecture v1](S5-ARCH-018-BOUNDED-PRODUCT-CONTINUITY-PERSISTENCE-V1.md)
   proposes the consolidated v0.2.2–v0.2.4 domain authority, typed repository
   ports, PostgreSQL primary deployment adapter, bounded existing-Evidence SQLite

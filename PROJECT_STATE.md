@@ -100,6 +100,15 @@ representation remain `NOT_AUTHORIZED / NOT_APPROVED / UNDECIDED`.
 
 ## Current release focus
 
+S5-ARCH-019 is `ACTIVE / AUTHORIZED / CHECKPOINT_A` at exact baseline
+`c06c5d8da89e1df960e64f48036c9dea2f8166a5`. Its proposed v0.2.3 G2 decision
+separates PostgreSQL Product execution authority from Kubernetes actual workload
+authority, defines desired/observed reconciliation and a single-writer PostgreSQL
+Evidence cutover, preserves Native Runtime reuse, bounds later OpenClaw execution,
+and separates two future backend tracks. It is architecture-only and awaits Human
+Architecture Review and Durable Integration; no implementation, migration `0008`,
+public CRD/API, track allocation, completion or production authority is granted.
+
 Human-confirmed product sequencing after v0.2.1 is now exactly
 `v0.2.2 → v0.2.3 → v0.2.4 → v0.3.0`; no v0.2.5 is present in the confirmed
 sequence. v0.2.2 is Factory, Resource Workbench and bounded product-continuity
