@@ -26,6 +26,9 @@ from agent_runtime.providers.native.models import (
     HealthState,
     LifecycleResult,
     NativeInvocation,
+    NativeLifecycleDriver,
+    NativeLifecycleObservation,
+    NativeLifecycleState,
     ProviderExecutionRequest,
     ReadinessInformation,
     ReadinessState,
@@ -40,6 +43,10 @@ class NativeInvocationFailure(RuntimeError):
 
 class NativeInvocationAmbiguousTimeout(TimeoutError):
     """Invocation outcome is unknown because effects may have occurred."""
+
+
+class NativeLifecycleAmbiguous(RuntimeError):
+    """A lifecycle effect may have occurred and must not be blindly retried."""
 
 
 def deterministic_mock_invoker(
@@ -66,10 +73,12 @@ class NativeRuntimeProvider:
         invoker: Callable[
             [str, str, tuple[tuple[str, str], ...]], NativeInvocation
         ] = deterministic_mock_invoker,
+        lifecycle_driver: NativeLifecycleDriver | None = None,
     ) -> None:
         self._invoker = invoker
         self._results: dict[str, ExecutionEvidence] = {}
         self._native_ids: set[str] = set()
+        self._lifecycle_driver = lifecycle_driver
 
     def health(self) -> HealthInformation:
         return HealthInformation(HealthState.HEALTHY, "NATIVE_PROVIDER_HEALTHY")
@@ -163,6 +172,7 @@ class NativeRuntimeProvider:
         return self._results.get(platform_execution_identity)
 
     def start(self, platform_execution_identity: str) -> LifecycleResult:
+        """Preserved legacy candidate surface; use ``start_runtime`` internally."""
         return LifecycleResult(
             operation="start",
             state=SupportState.NOT_YET_PROVEN,
@@ -170,12 +180,80 @@ class NativeRuntimeProvider:
             reason=DiagnosticReason.OPERATION_NOT_SUPPORTED,
         )
 
+    def start_runtime(self, platform_execution_identity: str) -> LifecycleResult:
+        if self._lifecycle_driver is None:
+            return LifecycleResult(
+                operation="start",
+                state=SupportState.NOT_YET_PROVEN,
+                platform_execution_identity=platform_execution_identity,
+                reason=DiagnosticReason.OPERATION_NOT_SUPPORTED,
+            )
+        existing = self._lifecycle_driver.observe(platform_execution_identity)
+        if existing is not None and existing.state is NativeLifecycleState.RUNNING:
+            return LifecycleResult(
+                operation="start",
+                state=SupportState.SUPPORTED,
+                platform_execution_identity=platform_execution_identity,
+                reason=DiagnosticReason.LIFECYCLE_OBSERVED,
+                native_correlation=existing.native_correlation,
+            )
+        applied = self._lifecycle_driver.start(platform_execution_identity)
+        return LifecycleResult(
+            operation="start",
+            state=SupportState.SUPPORTED,
+            platform_execution_identity=platform_execution_identity,
+            reason=DiagnosticReason.LIFECYCLE_APPLIED,
+            native_correlation=applied.native_correlation,
+        )
+
     def stop(self, platform_execution_identity: str) -> LifecycleResult:
+        """Preserved legacy candidate surface; use ``stop_runtime`` internally."""
         return LifecycleResult(
             operation="stop",
             state=SupportState.NOT_YET_PROVEN,
             platform_execution_identity=platform_execution_identity,
             reason=DiagnosticReason.OPERATION_NOT_SUPPORTED,
+        )
+
+    def stop_runtime(self, platform_execution_identity: str) -> LifecycleResult:
+        if self._lifecycle_driver is None:
+            return LifecycleResult(
+                operation="stop",
+                state=SupportState.NOT_YET_PROVEN,
+                platform_execution_identity=platform_execution_identity,
+                reason=DiagnosticReason.OPERATION_NOT_SUPPORTED,
+            )
+        applied = self._lifecycle_driver.stop(platform_execution_identity)
+        return LifecycleResult(
+            operation="stop",
+            state=SupportState.SUPPORTED,
+            platform_execution_identity=platform_execution_identity,
+            reason=DiagnosticReason.LIFECYCLE_APPLIED,
+            native_correlation=applied.native_correlation,
+        )
+
+    def observe_runtime(
+        self, platform_runtime_identity: str
+    ) -> NativeLifecycleObservation | None:
+        if self._lifecycle_driver is None:
+            return None
+        return self._lifecycle_driver.observe(platform_runtime_identity)
+
+    def replace(self, platform_runtime_identity: str) -> LifecycleResult:
+        if self._lifecycle_driver is None:
+            return LifecycleResult(
+                operation="replace",
+                state=SupportState.NOT_YET_PROVEN,
+                platform_execution_identity=platform_runtime_identity,
+                reason=DiagnosticReason.OPERATION_NOT_SUPPORTED,
+            )
+        applied = self._lifecycle_driver.replace(platform_runtime_identity)
+        return LifecycleResult(
+            operation="replace",
+            state=SupportState.SUPPORTED,
+            platform_execution_identity=platform_runtime_identity,
+            reason=DiagnosticReason.LIFECYCLE_APPLIED,
+            native_correlation=applied.native_correlation,
         )
 
     def cleanup(self, platform_execution_identity: str) -> CleanupResult:
