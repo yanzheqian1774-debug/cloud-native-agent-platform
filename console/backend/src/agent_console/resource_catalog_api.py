@@ -13,6 +13,8 @@ from agent_console import (
 from agent_console.attention_service import AttentionService
 from agent_console.digital_employee_service import DigitalEmployeeService
 from agent_console.product_dashboard_service import ProductDashboardService
+from agent_console.product_evidence_schemas import TraceabilityDTO
+from agent_console.product_evidence_service import ProductEvidenceService
 from agent_console.resource_catalog_service import (
     ProductAssemblyFailure,
     ProductScope,
@@ -111,6 +113,22 @@ def dashboard(scope: Scope, service: Catalog):
 @router.get("/relationships")
 def relationships(scope: Scope, service: Catalog):
     return call(lambda: ResourceRelationshipService(service).list(scope))
+
+
+@router.get("/traceability/{kind}/{identity}", response_model=TraceabilityDTO)
+def traceability(
+    kind: str,
+    identity: str,
+    revisionId: str,
+    digest: str,
+    scope: Scope,
+    service: Catalog,
+):
+    return call(
+        lambda: ProductEvidenceService(service).get(
+            scope, kind, identity, revisionId, digest
+        )
+    )
 
 
 @router.get("/attention")

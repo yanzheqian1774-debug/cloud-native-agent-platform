@@ -209,6 +209,9 @@ def test_catalog_dashboard_relationship_attention_and_template_are_derived():
         ResourceRelationshipService(catalog).list(SCOPE)[0]["targetIdentity"]
         == "skill:quality"
     )
+    relationship = ResourceRelationshipService(catalog).list(SCOPE)[0]
+    assert relationship["sourceDigest"] == "sha256:exact"
+    assert relationship["relationshipId"].startswith("AGENT|agent:quality|revision:1")
     assert AttentionService(catalog).list(SCOPE)[0]["identity"] == "skill:quality"
     template = DigitalEmployeeService(catalog).list(SCOPE)[0]
     assert template["readiness"] == "MATCHABLE"
@@ -241,5 +244,41 @@ def test_product_api_uses_one_catalog_for_identical_product_and_technical_identi
             "revisionId": catalog[0]["revisionId"],
             "digest": catalog[0]["digest"],
         }
+        traceability = client.get(
+            "/api/internal/v0.2.2/product/traceability/AGENT/agent:quality",
+            params={"revisionId": "revision:1", "digest": "sha256:exact"},
+        )
+        assert traceability.status_code == 200
+        assert traceability.json()["subject"] == {
+            "kind": "AGENT",
+            "resourceId": "agent:quality",
+            "revisionId": "revision:1",
+            "digest": "sha256:exact",
+        }
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_traceability_denied_and_absent_do_not_disclose_resource_context():
+    app.dependency_overrides[get_catalog] = _catalog
+    try:
+        client = TestClient(app)
+        denied = client.get(
+            "/api/internal/v0.2.2/product/traceability/AGENT/agent:quality",
+            params={"revisionId": "revision:1", "digest": "sha256:exact"},
+            headers={"X-Product-Read-Authorized": "false"},
+        )
+        absent = client.get(
+            "/api/internal/v0.2.2/product/traceability/AGENT/agent:absent",
+            params={"revisionId": "revision:1", "digest": "sha256:exact"},
+        )
+        assert denied.status_code == 403
+        assert denied.json() == {
+            "detail": {"reasonCode": "PRODUCT_ASSEMBLY_ACCESS_DENIED"}
+        }
+        assert absent.status_code == 404
+        assert absent.json() == {"detail": {"reasonCode": "PRODUCT_CONTEXT_NOT_FOUND"}}
+        assert "agent:quality" not in denied.text
+        assert "agent:absent" not in absent.text
     finally:
         app.dependency_overrides.clear()
