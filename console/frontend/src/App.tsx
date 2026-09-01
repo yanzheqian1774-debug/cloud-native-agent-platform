@@ -52,6 +52,11 @@ function EvidencePage() {
   return <EvidenceInspector context={parsed.context} onClose={close} data={traceability} error={traceabilityError} retry={()=>setRetry(value=>value+1)}/>;
 }
 
+function ResourceCatalogAlias() {
+  const location = useLocation();
+  return <Navigate to={`/catalog${location.search}`} replace />;
+}
+
 type AppPreviewState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "ERROR";
 
 function useDemoJourney(journeyId: string | null) {
@@ -207,7 +212,7 @@ function App() {
     return () => controller.abort();
   }, [mode, supplierQualityLive]);
   if (supplierQualityLive) {
-    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<ProductDashboardPage/>}/><Route path="/catalog" element={<ResourceCatalogPage/>}/><Route path="/digital-employees" element={<DigitalEmployeesPage/>}/><Route path="/attention" element={<AttentionPage/>}/><Route path="/relationships" element={<UnifiedRelationshipsPage/>}/><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workflow-definitions" element={<WorkflowWorkbenchPage/>} /><Route path="/runtime-profiles" element={<RuntimeProfileWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product-view" element={<ProductViewPage/>}/><Route path="/technical-view" element={<TechPage/>}/><Route path="/evidence" element={<EvidencePage/>}/><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<DigitalEmployeesPage/>} /><Route path="/resources" element={<ResourceCatalogPage/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
+    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<ProductDashboardPage/>}/><Route path="/catalog" element={<ResourceCatalogPage/>}/><Route path="/digital-employees" element={<DigitalEmployeesPage/>}/><Route path="/attention" element={<AttentionPage/>}/><Route path="/relationships" element={<UnifiedRelationshipsPage/>}/><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workflow-definitions" element={<WorkflowWorkbenchPage/>} /><Route path="/runtime-profiles" element={<RuntimeProfileWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product-view" element={<ProductViewPage/>}/><Route path="/technical-view" element={<TechPage/>}/><Route path="/evidence" element={<EvidencePage/>}/><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<DigitalEmployeesPage/>} /><Route path="/resources" element={<ResourceCatalogAlias/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
   }
   if (previewState !== "READY") {
     return <main className="product-page"><section className="preview-warning" role={previewState === "LOADING" ? "status" : "alert"} aria-live="polite"><strong>{mode.toUpperCase()} · {previewState}</strong><span className="stable-id">{reasonCode}</span></section></main>;
@@ -232,6 +237,12 @@ function App() {
           />
 
           <Route path="/product" element={<ProductViewPage />} />
+
+          <Route path="/dashboard" element={<ProductDashboardPage />} />
+
+          <Route path="/catalog" element={<ResourceCatalogPage />} />
+
+          <Route path="/resources" element={<ResourceCatalogAlias />} />
 
           <Route path={technicalPath} element={<TechPage />} />
 
