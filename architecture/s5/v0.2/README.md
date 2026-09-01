@@ -4,15 +4,19 @@ This directory is the durable architecture record integrated by S5-REL-001.
 It preserves accepted architecture separately from current implementation.
 Source code and tests remain authoritative for implemented behavior.
 
-## Active architecture reviews
+## Architecture records
 
 - [v0.2.3 Execution and Runtime Authority v1](S5-ARCH-019-V023-EXECUTION-RUNTIME-AUTHORITY-V1.md)
   proposes canonical execution identities, PostgreSQL/Kubernetes authority,
   desired/observed reconciliation, a single-writer PostgreSQL Evidence cutover,
-  conceptual migration `0008` ownership, Native reuse, bounded post-Native OpenClaw
-  lifecycle and two future backend tracks. It is `PROPOSED /
-  READY_FOR_HUMAN_ARCHITECTURE_REVIEW / NOT_STARTED`; no code, CRD/API, migration,
-  Contract freeze, implementation allocation or production claim is granted.
+  future-reserved migration `0008` ownership, Native reuse, bounded post-Native
+  OpenClaw lifecycle and two future backend tracks. PR #106 merged at durable main
+  `4200bd33c489bd544c04c3209f58b5b84c80bd14` and exact-main CI `33467767800`
+  succeeded. It is `CLOSED / COMPLETED / SESSION_CLOSED / DURABLY_INTEGRATED /
+  BINDING`; implementation remains `NOT_STARTED / NOT_ALLOCATED`. Migration `0008`
+  is reserved for future v0.2.3 Execution Authority/PostgreSQL Evidence and is not
+  implemented. No code, CRD/API, migration, Contract freeze, implementation
+  allocation or production claim is granted, and reopening is prohibited.
 - [Bounded Product Continuity Persistence Architecture v1](S5-ARCH-018-BOUNDED-PRODUCT-CONTINUITY-PERSISTENCE-V1.md)
   proposes the consolidated v0.2.2–v0.2.4 domain authority, typed repository
   ports, PostgreSQL primary deployment adapter, bounded existing-Evidence SQLite

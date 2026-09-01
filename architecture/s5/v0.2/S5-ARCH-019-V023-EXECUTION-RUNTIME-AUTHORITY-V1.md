@@ -5,17 +5,19 @@
 | Field | Value |
 | --- | --- |
 | Session | `S5-ARCH-019` |
-| Type / checkpoint | `ARCH / G2`; `A — PROPOSED_DECISION_AND_VALIDATION` |
+| Type / checkpoint | `ARCH / G2`; terminal reconciliation after Checkpoint A |
 | Authorized baseline | `c06c5d8da89e1df960e64f48036c9dea2f8166a5` |
-| Decision status | `PROPOSED / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
-| Implementation status | `NOT_STARTED` |
+| Decision status | `CLOSED / COMPLETED / SESSION_CLOSED / DURABLY_INTEGRATED / BINDING` |
+| Durable integration | PR #106; main `4200bd33c489bd544c04c3209f58b5b84c80bd14`; CI `33467767800 / SUCCESS` |
+| Implementation status | `NOT_STARTED / NOT_ALLOCATED`; authority `NONE` pending separate Human allocation |
 | Contract status | internal v0.2.3 architecture; `NOT_FROZEN` |
 | Supersession | specializes S5-ARCH-018 for v0.2.3; does not reopen or supersede it |
 
-This proposal establishes the smallest binding authority boundary needed for later
+This binding decision establishes the smallest authority boundary needed for later
 v0.2.3 closed-loop execution. It changes no public CRD or Kubernetes API group,
 creates no migration, implements no Runtime adapter, and allocates no implementation
-Session. Human acceptance and separate implementation allocations remain required.
+Session. Separate Human implementation allocations remain required. S5-ARCH-019 and
+its integrating S5-REL-060 Session are closed and may not be reopened.
 
 ## 2. Decision
 
@@ -195,17 +197,22 @@ STOP cutover and require recovery; no incomplete store may serve as complete.
 
 ## 8. Migration `0008`
 
-Migration number `0008` is conceptually reserved for the first separately authorized
-v0.2.3 implementation. Track A is its sole writer. One transactionally applied
+Migration number `0008` is `FUTURE_RESERVED_FOR_V0.2.3_EXECUTION_AUTHORITY /
+NOT_IMPLEMENTED / NOT_ALLOCATED` for the first separately authorized v0.2.3
+Execution Authority/PostgreSQL Evidence implementation. Future Track A is its sole
+writer if separately allocated. One transactionally applied
 migration should introduce the mutually constrained execution identities, Runtime
 Instance/reconciliation facts, PostgreSQL Execution Evidence and Intervention/Outcome
 relations together, because splitting them would permit invalid intermediate schemas.
 If PostgreSQL DDL or import mechanics require non-transactional steps, `0008` remains
 the schema owner while the data cutover is a separately checkpointed startup barrier.
 
-Track B supplies schema requirements and compatibility fixtures before `0008` is
+Future Track B supplies schema requirements and compatibility fixtures before `0008` is
 frozen, but cannot edit a migration or own a competing migration. This proposal does
-not create `0008`, freeze its physical schema or authorize a dependency.
+not create `0008`, freeze its physical schema or authorize a dependency. The v0.2.2
+migration chain remains `0001` through `0007`; Wave 3B requires no migration. Any
+Wave 3B requirement for `0008` or another migration is `STOP / G2` and requires new
+Human authority.
 
 ## 9. Native Runtime reuse
 
@@ -308,8 +315,9 @@ expose the same native object.
 This decision provides no implementation, migration, deployment, track allocation,
 public Contract freeze, CRD change, State/Model/Tenant/IAM architecture, HA, recovery,
 exactly-once, certification, production readiness, v0.2.3 completion, release or
-Session closure. OpenClaw remains unsupported until separately implemented and proven.
+automatic downstream authority. OpenClaw remains unsupported until separately
+implemented and proven.
 
-Next gate: Human Architecture Review and Durable Integration decision. Only after
-acceptance and durable integration may Humans separately allocate bounded Tracks A
-and B and their G1 implementation plans.
+S5-ARCH-019 and S5-REL-060 are closed, durably integrated and may not be reopened.
+The only future gate is a separate Human allocation decision for bounded Tracks A
+and B and their G1 implementation plans; none is allocated by this decision.
