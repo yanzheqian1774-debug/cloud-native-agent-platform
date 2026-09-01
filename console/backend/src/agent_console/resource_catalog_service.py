@@ -132,11 +132,70 @@ class ResourceCatalogService:
             if active
             and any(
                 r.get("digest") == active.get("digest")
-                and r.get("decision", "APPROVE") == "APPROVE"
+                and r.get("decision", "APPROVE") in {"APPROVE", "APPROVED"}
                 for r in reviews
             )
             else "REVIEW_REQUIRED",
-            "deepLink": f"{WORKBENCH_PATHS[kind]}?resource={record[identity_key]}",
+            "deepLink": ResourceCatalogService._deep_link(
+                kind, record[identity_key], active
+            ),
+            "traceabilitySources": ResourceCatalogService._traceability_sources(
+                record, active
+            ),
+        }
+
+    @staticmethod
+    def _deep_link(kind: str, identity: str, active: dict[str, Any] | None) -> str:
+        from urllib.parse import urlencode
+
+        values = {"kind": kind, "resourceId": identity}
+        if active:
+            values.update(
+                revisionId=active.get("revisionId"), digest=active.get("digest")
+            )
+        return f"{WORKBENCH_PATHS[kind]}?{urlencode(values)}"
+
+    @staticmethod
+    def _traceability_sources(
+        record: dict[str, Any], active: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        digest = (active or {}).get("digest")
+        reviews = [
+            {
+                "reviewId": item.get("reviewId"),
+                "decision": item.get("decision"),
+                "actor": item.get("actor"),
+                "reviewedAt": item.get("reviewedAt"),
+            }
+            for item in record.get("reviews", [])
+            if item.get("reviewId") and item.get("digest") == digest
+        ]
+        citations = [
+            {
+                "citationId": item.get("citationId"),
+                "recordedAt": retrieval.get("recordedAt"),
+            }
+            for retrieval in record.get("retrievals", [])
+            for item in retrieval.get("citations", [])
+            if item.get("revisionDigest") == digest
+        ]
+        return {
+            "reviews": reviews,
+            "citations": citations,
+            "discoverySnapshots": [
+                {
+                    "snapshotId": item.get("snapshotId"),
+                    "discoveredAt": item.get("discoveredAt"),
+                }
+                for item in record.get("discoverySnapshots", [])
+            ],
+            "invocations": [
+                {
+                    "invocationId": item.get("invocationId"),
+                    "recordedAt": item.get("recordedAt"),
+                }
+                for item in record.get("invocations", [])
+            ],
         }
 
     @staticmethod

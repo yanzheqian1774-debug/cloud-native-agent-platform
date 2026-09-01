@@ -8,6 +8,22 @@
   text-rendering: optimizeLegibility;
 }
 
+.traceability-projection{max-width:76rem;margin:0 auto;padding:clamp(1rem,3vw,2.5rem)}
+.traceability-projection header code,.evidence-inspector code{overflow-wrap:anywhere}
+.traceability-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem;margin-top:1rem}
+.traceability-list article{display:grid;gap:.65rem;padding:1rem;border:1px solid var(--border,#d4d8df);border-radius:.75rem;background:var(--surface,#fff)}
+.traceability-list pre,.evidence-inspector pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.evidence-backdrop{position:fixed;inset:0;z-index:100;background:rgb(12 18 28/.55);display:flex;justify-content:flex-end}
+.evidence-inspector{width:min(42rem,100%);height:100%;overflow:auto;background:var(--surface,#fff);padding:clamp(1rem,3vw,2rem);box-shadow:-.5rem 0 2rem rgb(0 0 0/.2)}
+.evidence-inspector>header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;position:sticky;top:0;background:inherit;z-index:1;padding-bottom:.75rem}
+.traceability-links{display:grid;gap:.5rem;margin-top:1rem}
+.controlled-state{padding:1rem;border:1px solid var(--border,#d4d8df);border-radius:.75rem}
+.controlled-state[role="alert"]{border-inline-start:.35rem solid #a14812}
+.resource-detail>.primary-link,.resource-detail>a{display:block;margin-top:.75rem}
+.relationship-list article.selected{outline:3px solid currentColor;outline-offset:2px}
+:where(a,button,input,select,summary):focus-visible{outline:3px solid #1264a3;outline-offset:3px}
+@media(max-width:600px){.evidence-inspector{width:100%;padding:1rem}.evidence-inspector>header{align-items:center}.traceability-list{grid-template-columns:1fr}}
+
 /* v0.2.2 unified product assembly */
 :root{--assembly-bg:#f6f7f9;--assembly-surface:#fff;--assembly-secondary:#f0f4f8;--assembly-text:#17202a;--assembly-muted:#627085;--assembly-line:#dfe5ec;--assembly-accent:#0f766e;--assembly-accent-hover:#115e59;--assembly-info:#2563eb;--assembly-warning:#b7791f;--assembly-danger:#b42318;--assembly-sidebar:#101820}
 body{background:var(--assembly-bg);color:var(--assembly-text)}

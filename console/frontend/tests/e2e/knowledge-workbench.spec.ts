@@ -1,9 +1,9 @@
-import { execFileSync, spawn } from "node:child_process";
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { backendUrl, restartOwnedBackend } from "../harness/ownedBackend";
 
-const backend = "http://127.0.0.1:8000";
-const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL ?? "http://127.0.0.1:6333";
+const backend = backendUrl();
+const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL;
+if (!qdrant) throw new Error("KNOWLEDGE_QDRANT_DIRECT_URL is required");
 const authorizedHeaders = {
   "X-Tenant-ID": "tenant-a",
   "X-Security-Domain": "supplier-quality",
@@ -18,20 +18,7 @@ async function publish(page: import("@playwright/test").Page) {
 }
 
 async function restartBackend(request: import("@playwright/test").APIRequestContext) {
-  execFileSync("pkill", ["-f", "uvicorn agent_console.app:app"]);
-  await expect.poll(async () => {
-    try { return (await request.get(`${backend}/healthz`, { timeout: 500 })).status(); }
-    catch { return 0; }
-  }, { timeout: 10_000 }).toBe(0);
-  const root = path.resolve(process.cwd(), "../..");
-  const pythonPath = ["conformance_harness/src", "core/src", "gateway/src", "operator/src", "runtime/src", "console/backend/src", "experiments/s5-spike-005-runtime-target-manifest", "experiments/s5-spike-007-capability-rest-fixtures"].map((entry) => path.join(root, entry)).join(path.delimiter);
-  const child = spawn("uv", ["run", "uvicorn", "agent_console.app:app", "--host", "127.0.0.1", "--port", "8000"], {
-    cwd: root,
-    env: { ...process.env, PYTHONPATH: pythonPath },
-    detached: true,
-    stdio: "inherit",
-  });
-  child.unref();
+  await restartOwnedBackend();
   await expect.poll(async () => {
     try { return (await request.get(`${backend}/healthz`, { timeout: 500 })).status(); }
     catch { return 0; }
@@ -158,14 +145,94 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
     const response = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(partialIdentity)}`, { headers: authorizedHeaders });
     return (await response.json()).knowledge.lifecycleState;
   }).toBe("AVAILABLE");
+  const indexed = await (await request.get(
+    `${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(partialIdentity)}`,
+    { headers: authorizedHeaders },
+  )).json();
+  expect(indexed).toMatchObject({
+    knowledge: { knowledgeId: partialIdentity, lifecycleState: "AVAILABLE" },
+    productProjection: { knowledgeId: partialIdentity },
+    technicalProjection: { knowledgeId: partialIdentity },
+  });
+  const indexedKnowledge = indexed.knowledge;
+  const indexedRevision = indexedKnowledge.revisions.find(
+    (revision: { revisionId: string }) => revision.revisionId === indexedKnowledge.publishedRevisionId,
+  );
+  expect(indexedRevision).toBeDefined();
+  const indexedSnapshot = indexedKnowledge.indexSnapshots.find(
+    (snapshot: { snapshotId: string }) => snapshot.snapshotId === indexedKnowledge.activeIndexSnapshotId,
+  );
+  expect(indexedSnapshot).toMatchObject({
+    snapshotId: indexedKnowledge.activeIndexSnapshotId,
+    revisionId: indexedKnowledge.publishedRevisionId,
+    revisionDigest: indexedRevision.digest,
+    status: "ACTIVE",
+  });
+  const indexedChunkIds = indexedRevision.content.documents.flatMap(
+    (document: { chunks: Array<{ chunkId: string }> }) => document.chunks.map((chunk) => chunk.chunkId),
+  );
+  expect(indexedChunkIds.length).toBeGreaterThan(0);
+  const qdrantPoints = await request.post(`${qdrant}/collections/knowledge_v1/points/scroll`, {
+    data: {
+      filter: {
+        must: [
+          { key: "namespace", match: { value: "tenant-a" } },
+          { key: "securityDomain", match: { value: "supplier-quality" } },
+          { key: "knowledgeId", match: { value: partialIdentity } },
+          { key: "snapshotId", match: { value: indexedSnapshot.snapshotId } },
+        ],
+      },
+      limit: 100,
+      with_payload: true,
+      with_vector: false,
+    },
+  });
+  expect(qdrantPoints.status()).toBe(200);
+  const pointBody = await qdrantPoints.json();
+  expect(pointBody.status).toBe("ok");
+  expect(pointBody.result.points.length).toBeGreaterThan(0);
+  for (const point of pointBody.result.points) {
+    expect(point.id).toBeTruthy();
+    expect(point.payload).toMatchObject({
+      namespace: "tenant-a",
+      securityDomain: "supplier-quality",
+      knowledgeId: partialIdentity,
+      revisionId: indexedKnowledge.publishedRevisionId,
+      revisionDigest: indexedRevision.digest,
+      snapshotId: indexedSnapshot.snapshotId,
+    });
+    expect(indexedChunkIds).toContain(point.payload.chunkId);
+  }
   const deletedCollection = await request.delete(`${qdrant}/collections/knowledge_v1`);
   expect(deletedCollection.ok()).toBe(true);
   await expect.poll(async () => (await request.get(`${qdrant}/collections/knowledge_v1`)).status()).toBe(404);
+  const recoveryRegion = page.locator(".agent-detail").filter({ hasText: partialIdentity });
+  await expect(recoveryRegion).toBeVisible();
   await page.getByRole("button", { name: "Review purge impact" }).click();
   await page.getByLabel("Authorization identity").fill("authorization:compliance-two");
   await page.getByLabel("Non-sensitive reason classification").fill("PROHIBITED_CONTENT");
+  const partialPurge = page.waitForResponse((response) =>
+    response.url().includes(`/knowledge/${encodeURIComponent(partialIdentity)}/purge`)
+    && response.request().method() === "POST"
+  );
   await page.getByRole("button", { name: "Confirm authorized purge" }).click();
-  await expect(page.getByText("RECOVERY_REQUIRED", { exact: true }).first()).toBeVisible();
+  const partialPurgeResponse = await partialPurge;
+  expect(partialPurgeResponse.status()).toBe(202);
+  const partialPurgeBody = await partialPurgeResponse.json();
+  expect(partialPurgeBody.knowledge).toMatchObject({
+    knowledgeId: partialIdentity,
+    lifecycleState: "RECOVERY_REQUIRED",
+    purge: {
+      status: "RECOVERY_REQUIRED",
+      remainingSnapshotIds: [indexedSnapshot.snapshotId],
+    },
+  });
+  const persistedRecovery = await (await request.get(
+    `${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(partialIdentity)}`,
+    { headers: authorizedHeaders },
+  )).json();
+  expect(persistedRecovery.knowledge).toMatchObject(partialPurgeBody.knowledge);
+  await expect(recoveryRegion.getByRole("alert").getByText("RECOVERY_REQUIRED", { exact: true })).toBeVisible();
 
   const design = await page.locator(".agent-workbench").evaluate((element) => {
     const style = getComputedStyle(element);
