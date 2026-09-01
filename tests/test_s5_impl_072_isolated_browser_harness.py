@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import socket
 import stat
 import subprocess
 import sys
 import time
 import urllib.request
+import zipfile
 from argparse import Namespace
 from pathlib import Path
 
@@ -16,12 +18,14 @@ import pytest
 MODULE_PATH = (
     Path(__file__).parents[1] / "scripts/acceptance/isolated_browser_harness.py"
 )
+sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("isolated_browser_harness", MODULE_PATH)
 assert SPEC and SPEC.loader
 harness_module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(harness_module)
 Harness = harness_module.Harness
 release_manifest = harness_module.release_manifest
+minimum_disclosure = importlib.import_module("minimum_disclosure")
 
 
 def free_port() -> int:
@@ -178,3 +182,84 @@ def test_authorized_harness_paths_have_no_broad_process_matcher() -> None:
             if file.is_file():
                 text = file.read_text(encoding="utf-8", errors="ignore").lower()
                 assert all(term not in text for term in prohibited), (file, prohibited)
+
+
+def test_minimum_disclosure_extraction_is_allowlisted_and_fail_closed() -> None:
+    record = {
+        "schemaVersion": 1,
+        "acceptanceState": "PASSED",
+        "backendPid": 123,
+        "backendStartTimeNs": 456,
+        "backendRestartCount": 2,
+        "releaseEntryCount": 42,
+        "releaseManifestBeforeDigest": "a" * 64,
+        "releaseManifestAfterDigest": "a" * 64,
+        "completedAt": "2026-09-01T00:00:00+00:00",
+        "sourceText": "must never be emitted",
+    }
+    result = minimum_disclosure.extract_allowlisted(
+        record, set(minimum_disclosure.EVIDENCE_FIELDS)
+    )
+    assert set(result) == minimum_disclosure.EVIDENCE_FIELDS
+    assert "sourceText" not in result
+    with pytest.raises(minimum_disclosure.DisclosureViolation):
+        minimum_disclosure.extract_allowlisted(record, {"sourceText"})
+
+
+@pytest.mark.parametrize(
+    "prohibited",
+    [
+        "supplier source_text must not escape",
+        "bounded-test-key",
+        "DATABASE_URL=unavailable",
+        "postgresql://user@database.example/test",
+        '{"vector":[0.1,0.2]}',
+        '{"payload":{"content":"synthetic source"}}',
+        "S5_PLANNING_API_KEY=placeholder-key",
+    ],
+)
+def test_generated_artifact_scan_rejects_disclosure(
+    tmp_path: Path, prohibited: str
+) -> None:
+    artifact = tmp_path / "browser.log"
+    artifact.write_text(prohibited, encoding="utf-8")
+    with pytest.raises(minimum_disclosure.DisclosureViolation) as error:
+        minimum_disclosure.scan_generated_artifacts([tmp_path])
+    assert prohibited not in str(error.value)
+
+
+def test_generated_trace_scan_rejects_compressed_payload_content(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "trace.zip"
+    with zipfile.ZipFile(trace, "w") as archive:
+        archive.writestr("trace.network", '{"payload":{"content":"private"}}')
+    with pytest.raises(minimum_disclosure.DisclosureViolation):
+        minimum_disclosure.scan_generated_artifacts([trace])
+
+
+def test_clean_generated_evidence_contains_only_correlation_fields(
+    tmp_path: Path,
+) -> None:
+    evidence = tmp_path / "acceptance-evidence.json"
+    evidence.write_text(
+        '{"acceptanceState":"PASSED","backendPid":123,'
+        '"completedAt":"2026-09-01T00:00:00+00:00",'
+        '"releaseEntryCount":42}',
+        encoding="utf-8",
+    )
+    minimum_disclosure.scan_generated_artifacts([evidence])
+
+
+def test_validation_helpers_prohibit_broad_file_dump_commands() -> None:
+    root = Path(__file__).parents[1]
+    files = [
+        *sorted((root / "scripts/acceptance").glob("*")),
+        root / ".github/workflows/ci.yml",
+    ]
+    command_names = "|".join(("s" + "ed", "c" + "at", "h" + "ead", "t" + "ail"))
+    prohibited = re.compile(rf"(?m)^\s*(?:{command_names})\s")
+    for file in files:
+        if file.is_file():
+            text = file.read_text(encoding="utf-8", errors="ignore").lower()
+            assert prohibited.search(text) is None, file

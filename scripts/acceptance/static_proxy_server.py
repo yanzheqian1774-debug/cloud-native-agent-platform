@@ -67,6 +67,9 @@ class Handler(BaseHTTPRequestHandler):
     do_PATCH = dispatch
     do_DELETE = dispatch
 
+    def log_message(self, format: str, *args: object) -> None:
+        """Keep request paths and query values out of acceptance output."""
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()

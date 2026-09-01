@@ -15,8 +15,15 @@ import sys
 import threading
 import time
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
+
+from minimum_disclosure import (
+    EVIDENCE_FIELDS,
+    extract_allowlisted,
+    scan_generated_artifacts,
+)
 
 
 def release_manifest(root: Path) -> dict[str, dict[str, str | int]]:
@@ -80,6 +87,8 @@ class Harness:
         if caches:
             raise RuntimeError(f"release already contains Python cache: {caches[0]}")
         self.before = release_manifest(self.release)
+        self.before_digest = self.manifest_digest(self.before)
+        self.restart_count = 0
         (self.runtime / "release-manifest-before.json").write_text(
             json.dumps(self.before, indent=2, sort_keys=True), encoding="utf-8"
         )
@@ -88,6 +97,11 @@ class Harness:
     @property
     def url(self) -> str:
         return f"http://{self.args.backend_host}:{self.args.backend_port}"
+
+    @staticmethod
+    def manifest_digest(manifest: dict[str, dict[str, str | int]]) -> str:
+        encoded = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(encoded).hexdigest()
 
     def assert_port_free(self) -> None:
         with socket.socket() as connection_probe:
@@ -206,7 +220,17 @@ class Harness:
             "--header",
             f"X-Harness-Ownership-Token:{self.token}",
         ]
-        self.child = subprocess.Popen(command, cwd=self.release, env=env)
+        backend_log = (self.runtime / "backend.log").open("ab")
+        try:
+            self.child = subprocess.Popen(
+                command,
+                cwd=self.release,
+                env=env,
+                stdout=backend_log,
+                stderr=subprocess.STDOUT,
+            )
+        finally:
+            backend_log.close()
         self.child_started_ns = time.time_ns()
         self.write_metadata()
         self.wait_health(True)
@@ -294,6 +318,7 @@ class Harness:
     def restart(self, overrides: dict[str, str] | None = None) -> None:
         self.stop()
         self.start(overrides)
+        self.restart_count += 1
 
     def serve(self, ready: threading.Event) -> None:
         with socket.socket(socket.AF_UNIX) as server:
@@ -349,7 +374,7 @@ class Harness:
                         response = {"ok": False, "error": "unsupported action"}
                     connection.sendall(json.dumps(response).encode())
 
-    def verify_release(self) -> None:
+    def verify_release(self) -> dict[str, dict[str, str | int]]:
         after = release_manifest(self.release)
         (self.runtime / "release-manifest-after.json").write_text(
             json.dumps(after, indent=2, sort_keys=True), encoding="utf-8"
@@ -365,6 +390,27 @@ class Harness:
         ]
         if caches:
             raise RuntimeError(f"Python cache appeared inside release: {caches[0]}")
+        return after
+
+    def write_minimum_disclosure_evidence(
+        self, after: dict[str, dict[str, str | int]], command_result: int
+    ) -> Path:
+        assert self.child is not None
+        record = {
+            "schemaVersion": 1,
+            "acceptanceState": "PASSED" if command_result == 0 else "FAILED",
+            "backendPid": self.child.pid,
+            "backendStartTimeNs": self.child_started_ns,
+            "backendRestartCount": self.restart_count,
+            "releaseEntryCount": len(after),
+            "releaseManifestBeforeDigest": self.before_digest,
+            "releaseManifestAfterDigest": self.manifest_digest(after),
+            "completedAt": datetime.now(UTC).isoformat(),
+        }
+        evidence = extract_allowlisted(record, set(EVIDENCE_FIELDS))
+        path = self.runtime / "acceptance-evidence.json"
+        path.write_text(json.dumps(evidence, sort_keys=True), encoding="utf-8")
+        return path
 
 
 def parse_args() -> argparse.Namespace:
@@ -409,14 +455,29 @@ def main() -> int:
                 "S5_HARNESS_PYTHON": sys.executable,
             }
         )
-        command_result = subprocess.run(
-            args.command, cwd=harness.release, env=env, check=False
-        ).returncode
+        with (harness.runtime / "browser.log").open("wb") as browser_log:
+            command_result = subprocess.run(
+                args.command,
+                cwd=harness.release,
+                env=env,
+                stdout=browser_log,
+                stderr=subprocess.STDOUT,
+                check=False,
+            ).returncode
     finally:
         try:
             harness.stop()
         finally:
-            harness.verify_release()
+            after = harness.verify_release()
+            evidence = harness.write_minimum_disclosure_evidence(after, command_result)
+            scan_generated_artifacts(
+                [
+                    harness.runtime / "backend.log",
+                    harness.runtime / "browser.log",
+                    harness.runtime / "playwright-output",
+                    evidence,
+                ]
+            )
     return command_result
 
 
