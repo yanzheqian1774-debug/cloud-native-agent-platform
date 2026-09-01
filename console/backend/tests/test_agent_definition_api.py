@@ -28,6 +28,12 @@ def test_private_api_runs_exact_digest_publication() -> None:
             json={"expectedVersion": 1},
         ).json()["definition"]
         digest = validated["revisions"][-1]["digest"]
+        stale = client.post(
+            f"/api/internal/v0.2.2/agent-definitions/{definition_id}/validation",
+            json={"expectedVersion": 1},
+        )
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["reasonCode"] == "STALE_AGENT_DEFINITION"
         reviewed = client.post(
             f"/api/internal/v0.2.2/agent-definitions/{definition_id}/reviews",
             json={"expectedVersion": 2, "digest": digest, "reason": "verified"},
