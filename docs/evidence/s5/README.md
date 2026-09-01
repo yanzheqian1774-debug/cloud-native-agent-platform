@@ -7,9 +7,12 @@ API, schema, or frontend implementation.
 ## Evidence sets
 
 - [S5-ARCH-019 architecture evidence](v0.2/s5-arch-019/README.md) records the
-  exact-baseline/CI and collision revalidation, proposed v0.2.3 execution/runtime
+  exact-baseline/CI and collision revalidation, binding v0.2.3 execution/runtime
   authority, PostgreSQL Evidence cutover, Native/OpenClaw boundary and future track
-  separation. It contains no implementation and awaits Human Architecture Review.
+  separation. PR #106 merged at durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`
+  with exact-main CI `33467767800 / SUCCESS`; S5-ARCH-019 and S5-REL-060 are closed
+  and reopening is prohibited. It contains no implementation or implementation
+  allocation.
 - [S5-ARCH-018 architecture evidence](v0.2/s5-arch-018/README.md) records
   entry revalidation, the PostgreSQL-primary amended product-continuity persistence
   proposal, bounded existing-Evidence SQLite transition, implementation handoff and

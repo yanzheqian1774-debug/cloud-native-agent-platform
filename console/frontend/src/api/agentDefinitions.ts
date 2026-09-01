@@ -51,6 +51,17 @@ export type AgentProjection = {
   technicalProjection: Record<string, unknown>;
 };
 
+export type ControlledState = "validation error" | "denied" | "not found" | "conflict" | "stale" | "backend unavailable" | "partial" | "retryable" | "recovery required" | "unsupported";
+export function agentControlledState(error: AgentDefinitionRequestError): ControlledState {
+  if (error.status === 403) return "denied";
+  if (error.status === 404) return "not found";
+  if (error.status === 409) return error.reasonCode.includes("STALE") ? "stale" : "conflict";
+  if (error.status === 422) return "validation error";
+  if (error.status === 501) return "unsupported";
+  if (error.status >= 500) return "backend unavailable";
+  return "retryable";
+}
+
 export class AgentDefinitionRequestError extends Error {
   reasonCode: string;
   status: number;

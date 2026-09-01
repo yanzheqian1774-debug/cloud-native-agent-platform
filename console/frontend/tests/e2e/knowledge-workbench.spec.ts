@@ -43,6 +43,10 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await expect(page.locator(".demo-primary-nav")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Knowledge Workbench" })).toBeVisible();
   await page.getByRole("button", { name: "Create governed source" }).click();
+  await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Search, Retrieval and Citations");
+  await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Quality Evaluation");
+  await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Import and Duplicate Review");
+  await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Rebuild, Purge and Recovery");
   const identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
   await expect(page.getByRole("definition").filter({ hasText: "source:supplier-quality" })).toBeVisible();
   await publish(page);
