@@ -1,4 +1,21 @@
-# S5-ARCH-019 Checkpoint A Evidence
+# S5-ARCH-019 Checkpoint A and Terminal Reconciliation Evidence
+
+## Terminal reconciliation
+
+| Field | Result |
+| --- | --- |
+| S5-ARCH-019 | `CLOSED / COMPLETED / SESSION_CLOSED / DURABLY_INTEGRATED / BINDING` |
+| S5-REL-060 | `CLOSED / COMPLETED / SESSION_CLOSED` |
+| Durable integration | PR #106, `MERGED` |
+| Durable main | `4200bd33c489bd544c04c3209f58b5b84c80bd14` |
+| Exact-main CI | `33467767800 / SUCCESS` |
+| Migration `0008` | `FUTURE_RESERVED_FOR_V0.2.3_EXECUTION_AUTHORITY / NOT_IMPLEMENTED / NOT_ALLOCATED` |
+| Implementation authority | `NONE`; separate Human allocation required |
+
+The v0.2.2 migration chain remains exactly `0001` through `0007`, and Wave 3B
+requires no migration. Any Wave 3B discovery requiring `0008` or another migration
+is `STOP / G2` and requires new Human authority. S5-ARCH-019 and S5-REL-060 cannot be
+reopened. All Checkpoint A limitations below remain binding.
 
 ## Entry revalidation
 
@@ -14,7 +31,7 @@
 | GitHub PR / Issue collision | none for S5-ARCH-019 |
 | Registry/repository collision | none; ID absent and Human allocation visible only in control packet |
 | S5-IMPL-053 collision | no authorized architecture path owned; protected assembly paths unchanged |
-| Decision classification | `PROPOSED / READY_FOR_HUMAN_ARCHITECTURE_REVIEW` |
+| Decision classification at entry | `PROPOSED / READY_FOR_HUMAN_ARCHITECTURE_REVIEW`; superseded by terminal reconciliation above |
 
 GitHub connectivity was available. The control-recorded exact-main CI was freshly
 verified rather than merely repeated.
@@ -35,7 +52,7 @@ Current source confirms Native behavior and Kubernetes control state are impleme
 first-class Runtime/Agent Instance management, PostgreSQL Execution Evidence and an
 OpenClaw adapter are not. No relevant accepted-decision conflict was found.
 
-## Proposed result
+## Checkpoint A proposed result
 
 The proposed [S5-ARCH-019 decision](../../../../../architecture/s5/v0.2/S5-ARCH-019-V023-EXECUTION-RUNTIME-AUTHORITY-V1.md)
 assigns Product execution identity/history and reconciliation facts to PostgreSQL,
@@ -60,7 +77,8 @@ No code, migration, database, adapter, dependency, CRD, public API, deployment,
 frontend or Runtime behavior changed. No implementation track is allocated. There is
 no exactly-once, uninterrupted continuity, HA, automatic failover, multi-cluster,
 State migration, certification, production-readiness, v0.2.3 completion, release or
-Session-closure claim.
+automatic downstream authority claim. Terminal Session closure records architecture
+status only and does not weaken these limitations.
 
 ## Validation record
 
@@ -73,9 +91,10 @@ Session-closure claim.
 | `git diff --check` | passed |
 | `make check` | passed: Ruff lint/format; `1101 passed, 13 skipped`; one existing Starlette/httpx deprecation warning |
 | `uv run pre-commit run --all-files` | passed: Ruff lint, Ruff format and pytest |
-| Commit / Draft PR / exact-head CI | pending |
+| Architecture commit / PR / exact-head CI | PR #106 merged; durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`; run `33467767800`, success |
 
-## Next gate
+## Future implementation gate
 
-Human Architecture Review and Durable Integration decision. Acceptance does not
-automatically allocate Tracks A/B or authorize implementation.
+S5-ARCH-019 and S5-REL-060 are terminal and may not be reopened. Any future Track A
+or B implementation requires a separate Human allocation and G1 plan. No such
+allocation or implementation authority exists in this record.
