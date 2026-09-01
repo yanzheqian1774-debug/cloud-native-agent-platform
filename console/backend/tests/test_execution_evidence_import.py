@@ -115,6 +115,40 @@ def test_real_import_is_exact_resumable_and_identity_preserving(tmp_path: Path) 
         }
     )
     recorded_at = "2026-09-01T08:01:00Z"
+    second_payload = dict(original.canonical_payload)
+    second_payload["evidence_record_id"] = "evidence:import-exact-002"
+    second_payload["event_ordinal"] = 2
+    second = ExecutionEvidenceRecord.from_allowlisted(second_payload)
+
+    def row_values(record, timestamp):
+        return (
+            record.evidence_record_id,
+            record.schema_version,
+            record.namespace,
+            record.security_domain,
+            record.platform_execution_identity,
+            record.workflow_identity,
+            record.task_identity,
+            record.attempt_ordinal,
+            record.event_ordinal,
+            record.event_type.value,
+            record.occurred_at,
+            timestamp,
+            record.payload_digest,
+            record.runtime_classification,
+            record.selected_instance_identity,
+            record.capability_identity,
+            record.authorization_decision.value,
+            record.reason_code,
+            record.provider_correlation_id,
+            record.provider_call_count,
+            record.outcome_classification.value,
+            record.outcome_reference,
+            json.dumps(record.canonical_payload["references"]),
+            record.limitation_code,
+            record.supersedes_record_id,
+        )
+
     with sqlite3.connect(source_path) as connection:
         connection.execute(
             "CREATE TABLE execution_evidence (storage_sequence INTEGER PRIMARY KEY,"
@@ -133,33 +167,12 @@ def test_real_import_is_exact_resumable_and_identity_preserving(tmp_path: Path) 
         connection.execute(
             "INSERT INTO execution_evidence VALUES "
             "(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                original.evidence_record_id,
-                original.schema_version,
-                original.namespace,
-                original.security_domain,
-                original.platform_execution_identity,
-                original.workflow_identity,
-                original.task_identity,
-                original.attempt_ordinal,
-                original.event_ordinal,
-                original.event_type.value,
-                original.occurred_at,
-                recorded_at,
-                original.payload_digest,
-                original.runtime_classification,
-                original.selected_instance_identity,
-                original.capability_identity,
-                original.authorization_decision.value,
-                original.reason_code,
-                original.provider_correlation_id,
-                original.provider_call_count,
-                original.outcome_classification.value,
-                original.outcome_reference,
-                json.dumps(original.canonical_payload["references"]),
-                original.limitation_code,
-                original.supersedes_record_id,
-            ),
+            row_values(original, recorded_at),
+        )
+        connection.execute(
+            "INSERT INTO execution_evidence VALUES "
+            "(2,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            row_values(second, "2026-09-01T08:02:00Z"),
         )
     authority = PostgresExecutionAuthorityRepository(
         DATABASE_URL or "", migration_path=MIGRATION
@@ -169,25 +182,63 @@ def test_real_import_is_exact_resumable_and_identity_preserving(tmp_path: Path) 
     with authority.pool.connection() as connection, connection.transaction():
         connection.execute("TRUNCATE execution_authority.execution_evidence")
         connection.execute(
+            "SELECT setval("
+            "'execution_authority.execution_evidence_storage_sequence_seq',100,true)"
+        )
+        connection.execute(
             "UPDATE execution_authority.evidence_cutover SET "
             "state='SQLITE_ACTIVE',authoritative_writer='SQLITE',"
             "source_backup_identity=NULL,source_backup_digest=NULL,"
             "last_storage_sequence=0,last_record_id=NULL,target_high_water=0,"
             "importer_version='v1',verification_status='NOT_STARTED'"
         )
+    unrelated_payload = dict(original.canonical_payload)
+    unrelated_payload["evidence_record_id"] = "evidence:unrelated-live"
+    unrelated_payload["platform_execution_identity"] = "execution-unrelated"
+    target.append(ExecutionEvidenceRecord.from_allowlisted(unrelated_payload))
+
+    class InterruptedTarget:
+        pool = target.pool
+
+        def __init__(self):
+            self.calls = 0
+
+        def import_exact(self, record, *, import_set_identity):
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("simulated process interruption")
+            return target.import_exact(record, import_set_identity=import_set_identity)
+
+    interrupted = SQLiteEvidenceImporter(source_path, authority, InterruptedTarget())
+    with pytest.raises(EvidenceImportError, match="IMPORT_RECOVERY_REQUIRED"):
+        interrupted.import_all(writer_quiesced=True)
+    recovery = authority.load_checkpoint()
+    assert recovery.state is CutoverState.RECOVERY_REQUIRED
+    assert recovery.last_storage_sequence == 1
+
     importer = SQLiteEvidenceImporter(source_path, authority, target)
-    first = importer.import_all(writer_quiesced=True)
-    second = importer.import_all(writer_quiesced=True)
-    assert first.verification_status == second.verification_status == "PARITY_VERIFIED"
-    assert first.last_storage_sequence == second.last_storage_sequence == 1
+    resumed = importer.import_all(writer_quiesced=True)
+    repeated = importer.import_all(writer_quiesced=True)
+    assert (
+        resumed.verification_status == repeated.verification_status == "PARITY_VERIFIED"
+    )
+    assert resumed.last_storage_sequence == repeated.last_storage_sequence == 2
     with target.pool.connection() as connection:
         imported = connection.execute(
             "SELECT evidence_record_id,payload_digest,storage_sequence,recorded_at "
-            "FROM execution_authority.execution_evidence"
-        ).fetchone()
-    assert imported["evidence_record_id"] == original.evidence_record_id
-    assert imported["payload_digest"] == original.payload_digest
-    assert imported["storage_sequence"] == 1
-    assert imported["recorded_at"].isoformat().replace("+00:00", "Z") == recorded_at
+            "FROM execution_authority.execution_evidence "
+            "WHERE import_set_identity=%s ORDER BY storage_sequence",
+            (resumed.source_backup_identity,),
+        ).fetchall()
+    assert [row["evidence_record_id"] for row in imported] == [
+        original.evidence_record_id,
+        second.evidence_record_id,
+    ]
+    assert [row["payload_digest"] for row in imported] == [
+        original.payload_digest,
+        second.payload_digest,
+    ]
+    assert [row["storage_sequence"] for row in imported] == [1, 2]
+    assert imported[0]["recorded_at"].isoformat().replace("+00:00", "Z") == recorded_at
     target.pool.close()
     authority.pool.close()

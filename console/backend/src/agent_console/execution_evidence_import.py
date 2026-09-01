@@ -49,9 +49,16 @@ class SQLiteEvidenceImporter:
             raise EvidenceImportError("SQLITE_WRITER_NOT_QUIESCED")
         identity, digest = self.source_identity()
         checkpoint = self.authority.load_checkpoint()
-        if checkpoint.state not in {CutoverState.SQLITE_ACTIVE, CutoverState.IMPORTING}:
+        if checkpoint.state not in {
+            CutoverState.SQLITE_ACTIVE,
+            CutoverState.IMPORTING,
+            CutoverState.RECOVERY_REQUIRED,
+        }:
             raise EvidenceImportError("IMPORT_STATE_INVALID")
-        if checkpoint.state is CutoverState.IMPORTING and (
+        if checkpoint.state in {
+            CutoverState.IMPORTING,
+            CutoverState.RECOVERY_REQUIRED,
+        } and (
             checkpoint.source_backup_identity != identity
             or checkpoint.source_backup_digest != digest
         ):
@@ -65,7 +72,7 @@ class SQLiteEvidenceImporter:
             importer_version=IMPORTER_VERSION,
             verification_status="IN_PROGRESS",
         )
-        self.authority.replace_checkpoint(checkpoint)
+        checkpoint = self.authority.replace_checkpoint(checkpoint)
         try:
             rows = self._rows(checkpoint.last_storage_sequence)
             for row in rows:
@@ -77,7 +84,9 @@ class SQLiteEvidenceImporter:
                 )
                 if record.payload_digest != row["payload_digest"]:
                     raise EvidenceImportError("SOURCE_DIGEST_MISMATCH")
-                imported = self.target.import_exact(record).record
+                imported = self.target.import_exact(
+                    record, import_set_identity=identity
+                ).record
                 if imported.payload_digest != record.payload_digest:
                     raise EvidenceImportError("TARGET_PARITY_MISMATCH")
                 checkpoint = replace(
@@ -88,9 +97,9 @@ class SQLiteEvidenceImporter:
                         checkpoint.target_high_water, row["storage_sequence"]
                     ),
                 )
-                self.authority.replace_checkpoint(checkpoint)
+                checkpoint = self.authority.replace_checkpoint(checkpoint)
             source_count, source_high = self._count_and_high_water()
-            target_count, target_high = self._target_count_and_high_water()
+            target_count, target_high = self._target_count_and_high_water(identity)
             if (source_count, source_high) != (target_count, target_high):
                 raise EvidenceImportError("IMPORT_PARITY_MISMATCH")
             checkpoint = replace(
@@ -165,10 +174,12 @@ class SQLiteEvidenceImporter:
             ).fetchone()
             return row["count"], row["high"]
 
-    def _target_count_and_high_water(self) -> tuple[int, int]:
+    def _target_count_and_high_water(self, import_set_identity: str) -> tuple[int, int]:
         with self.target.pool.connection() as connection:
             row = connection.execute(
                 "SELECT COUNT(*) AS count,COALESCE(MAX(storage_sequence),0) AS high "
-                "FROM execution_authority.execution_evidence"
+                "FROM execution_authority.execution_evidence "
+                "WHERE import_set_identity=%s",
+                (import_set_identity,),
             ).fetchone()
             return row["count"], row["high"]

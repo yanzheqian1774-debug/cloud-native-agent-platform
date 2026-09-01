@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from agent_core.execution_contract import ScopeIdentity
+from agent_core.execution_contract import CommandId, CommandResult, ScopeIdentity
 
 
 class ExecutionPersistenceError(RuntimeError):
@@ -75,3 +75,24 @@ class ImportCheckpoint:
     target_high_water: int
     importer_version: str
     verification_status: str
+    checkpoint_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.checkpoint_version < 1:
+            raise ExecutionPersistenceError("CHECKPOINT_VERSION_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
+class CommandResultFact:
+    command_id: CommandId
+    ordinal: int
+    result: CommandResult
+    record: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.command_id, CommandId):
+            raise ExecutionPersistenceError("COMMAND_ID_REQUIRED")
+        if isinstance(self.ordinal, bool) or self.ordinal < 1:
+            raise ExecutionPersistenceError("COMMAND_RESULT_ORDINAL_INVALID")
+        if not isinstance(self.result, CommandResult):
+            raise ExecutionPersistenceError("COMMAND_RESULT_INVALID")

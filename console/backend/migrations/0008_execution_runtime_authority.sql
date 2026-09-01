@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS execution_authority.agent_instances (
   agent_instance_id text NOT NULL CHECK (octet_length(agent_instance_id) BETWEEN 1 AND 200),
   agent_revision_id text NOT NULL, runtime_instance_id text,
   aggregate_version bigint NOT NULL CHECK (aggregate_version > 0), record jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (namespace, security_domain, agent_instance_id)
 );
 CREATE TABLE IF NOT EXISTS execution_authority.runtime_instances (
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS execution_authority.runtime_instances (
   runtime_instance_id text NOT NULL CHECK (octet_length(runtime_instance_id) BETWEEN 1 AND 200),
   current_generation bigint NOT NULL CHECK (current_generation > 0),
   aggregate_version bigint NOT NULL CHECK (aggregate_version > 0), record jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (namespace, security_domain, runtime_instance_id)
 );
 ALTER TABLE execution_authority.agent_instances DROP CONSTRAINT IF EXISTS agent_instances_runtime_fk;
@@ -51,7 +53,8 @@ CREATE TABLE IF NOT EXISTS execution_authority.workflow_runs (
   predecessor_workflow_run_id text, correction_of_workflow_run_id text, record jsonb NOT NULL,
   PRIMARY KEY (namespace, security_domain, workflow_run_id),
   FOREIGN KEY (namespace, security_domain, assignment_id) REFERENCES execution_authority.assignments(namespace, security_domain, assignment_id),
-  FOREIGN KEY (namespace, security_domain, predecessor_workflow_run_id) REFERENCES execution_authority.workflow_runs(namespace, security_domain, workflow_run_id)
+  FOREIGN KEY (namespace, security_domain, predecessor_workflow_run_id) REFERENCES execution_authority.workflow_runs(namespace, security_domain, workflow_run_id),
+  FOREIGN KEY (namespace, security_domain, correction_of_workflow_run_id) REFERENCES execution_authority.workflow_runs(namespace, security_domain, workflow_run_id)
 );
 CREATE TABLE IF NOT EXISTS execution_authority.task_runs (
   namespace text NOT NULL, security_domain text NOT NULL, task_run_id text NOT NULL,
@@ -61,7 +64,7 @@ CREATE TABLE IF NOT EXISTS execution_authority.task_runs (
 );
 CREATE TABLE IF NOT EXISTS execution_authority.attempts (
   namespace text NOT NULL, security_domain text NOT NULL, attempt_id text NOT NULL,
-  task_run_id text NOT NULL, predecessor_attempt_id text, record jsonb NOT NULL,
+  task_run_id text NOT NULL, predecessor_attempt_id text, aggregate_digest text NOT NULL CHECK (length(aggregate_digest)=64), record jsonb NOT NULL,
   PRIMARY KEY (namespace, security_domain, attempt_id),
   FOREIGN KEY (namespace, security_domain, task_run_id) REFERENCES execution_authority.task_runs(namespace, security_domain, task_run_id),
   FOREIGN KEY (namespace, security_domain, predecessor_attempt_id) REFERENCES execution_authority.attempts(namespace, security_domain, attempt_id)
@@ -118,7 +121,8 @@ CREATE TABLE IF NOT EXISTS execution_authority.execution_evidence (
   event_ordinal bigint NOT NULL CHECK (event_ordinal>0), event_type text NOT NULL,
   occurred_at timestamptz NOT NULL, recorded_at timestamptz NOT NULL,
   payload_digest text NOT NULL CHECK (length(payload_digest)=64), canonical_bytes bytea NOT NULL,
-  record jsonb NOT NULL, supersedes_record_id text REFERENCES execution_authority.execution_evidence(evidence_record_id)
+  record jsonb NOT NULL, import_set_identity text,
+  supersedes_record_id text REFERENCES execution_authority.execution_evidence(evidence_record_id)
 );
 CREATE INDEX IF NOT EXISTS execution_evidence_execution_idx ON execution_authority.execution_evidence(namespace,security_domain,platform_execution_identity,storage_sequence);
 CREATE INDEX IF NOT EXISTS execution_evidence_subject_idx ON execution_authority.execution_evidence(namespace,security_domain,workflow_identity,task_identity,storage_sequence);
@@ -133,7 +137,10 @@ CREATE TABLE IF NOT EXISTS execution_authority.interventions (
   storage_sequence bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   namespace text NOT NULL, security_domain text NOT NULL, intervention_id text NOT NULL,
   runtime_instance_id text, assignment_id text, fact_digest text NOT NULL CHECK (length(fact_digest)=64), fact jsonb NOT NULL,
-  UNIQUE (namespace, security_domain, intervention_id)
+  UNIQUE (namespace, security_domain, intervention_id),
+  CHECK (runtime_instance_id IS NOT NULL OR assignment_id IS NOT NULL),
+  FOREIGN KEY (namespace, security_domain, runtime_instance_id) REFERENCES execution_authority.runtime_instances(namespace, security_domain, runtime_instance_id),
+  FOREIGN KEY (namespace, security_domain, assignment_id) REFERENCES execution_authority.assignments(namespace, security_domain, assignment_id)
 );
 
 CREATE TABLE IF NOT EXISTS execution_authority.evidence_cutover (
@@ -144,6 +151,7 @@ CREATE TABLE IF NOT EXISTS execution_authority.evidence_cutover (
   last_storage_sequence bigint NOT NULL DEFAULT 0 CHECK (last_storage_sequence >= 0),
   last_record_id text, target_high_water bigint NOT NULL DEFAULT 0 CHECK (target_high_water >= 0),
   importer_version text NOT NULL, verification_status text NOT NULL,
+  checkpoint_version bigint NOT NULL DEFAULT 1 CHECK (checkpoint_version > 0),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (NOT (state='POSTGRES_ACTIVE' AND authoritative_writer<>'POSTGRES'))
 );

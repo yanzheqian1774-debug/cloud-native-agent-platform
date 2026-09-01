@@ -151,3 +151,31 @@ frontend, CRD, deployment, S5-IMPL-057, or S5-IMPL-058 scope is included.
 Checkpoint A1 validation and exact-head CI identifiers are reported in the Human
 Checkpoint result after the evidence-bearing commit and Draft PR exist, avoiding
 self-referential or stale evidence.
+
+### Checkpoint A correction and bounded operational limitations
+
+The correction adds durable typed identity save/readback, Outcome and Intervention
+reads, execution relationship queries, command-result facts, complete aggregate
+column validation, versioned checkpoint compare-and-set, bounded import-set identity,
+interrupted-import resumption, scope isolation, relationship foreign keys, and
+restart coverage across every Track A repository surface.
+
+Four operational responsibilities remain deliberately outside this repository-only
+checkpoint and fail closed at their existing barriers:
+
+- SQLite writer quiescence must be independently proven by the downstream Track H
+  operational cutover gate; the importer rejects invocation unless its caller
+  supplies explicit quiescence evidence.
+- Post-cutover SQLite read-only enforcement belongs to the Track H/deployment gate;
+  the cutover coordinator never selects SQLite and PostgreSQL simultaneously and
+  provides no silent fallback.
+- Complete SQLite authority restoration belongs to the Track H/deployment rollback
+  gate; rollback is rejected unless all writers are stopped, the backup is verified,
+  and no PostgreSQL fact would be discarded.
+- The legacy SQLite schema stores decomposed fields rather than original canonical
+  bytes. Track A reconstructs canonical form deterministically and verifies the
+  durable payload digest; no claim of independent original-byte comparison is made.
+
+These limitations prohibit any production cutover-readiness claim at Checkpoint A.
+No deployment, production/staging mutation, Kubernetes wiring, OpenClaw work, or
+A+B production assembly is included.

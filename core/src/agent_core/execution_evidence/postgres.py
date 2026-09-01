@@ -78,6 +78,7 @@ class PostgresExecutionEvidenceRepository:
                     "payload_digest",
                     "canonical_bytes",
                     "record",
+                    "import_set_identity",
                 }
                 if (
                     row is None
@@ -91,15 +92,23 @@ class PostgresExecutionEvidenceRepository:
             raise EvidenceSchemaIncompatible("EVIDENCE_SCHEMA_INCOMPATIBLE") from exc
 
     def append(self, record: ExecutionEvidenceRecord) -> AppendResult:
-        return self._append(record, storage_sequence=None, recorded_at=None)
+        return self._append(
+            record,
+            storage_sequence=None,
+            recorded_at=None,
+            import_set_identity=None,
+        )
 
-    def import_exact(self, record: ExecutionEvidenceRecord) -> AppendResult:
+    def import_exact(
+        self, record: ExecutionEvidenceRecord, *, import_set_identity: str
+    ) -> AppendResult:
         if record.storage_sequence is None or record.recorded_at is None:
             raise EvidenceRepositoryUnavailable("EVIDENCE_IMPORT_METADATA_REQUIRED")
         return self._append(
             record,
             storage_sequence=record.storage_sequence,
             recorded_at=record.recorded_at,
+            import_set_identity=import_set_identity,
         )
 
     def _append(
@@ -108,6 +117,7 @@ class PostgresExecutionEvidenceRepository:
         *,
         storage_sequence: int | None,
         recorded_at: str | None,
+        import_set_identity: str | None,
     ) -> AppendResult:
         try:
             with self.pool.connection() as connection, connection.transaction():
@@ -132,16 +142,22 @@ class PostgresExecutionEvidenceRepository:
                         (storage_sequence,evidence_record_id,schema_version,namespace,
                         security_domain,platform_execution_identity,workflow_identity,
                         task_identity,attempt_ordinal,event_ordinal,event_type,occurred_at,
-                        recorded_at,payload_digest,canonical_bytes,record,supersedes_record_id)
+                        recorded_at,payload_digest,canonical_bytes,record,
+                        import_set_identity,supersedes_record_id)
                         OVERRIDING SYSTEM VALUE
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
                         ON CONFLICT (evidence_record_id) DO NOTHING
                         RETURNING storage_sequence,recorded_at""",
-                        (storage_sequence, *params),
+                        (
+                            storage_sequence,
+                            *params[:-1],
+                            import_set_identity,
+                            params[-1],
+                        ),
                     ).fetchone()
                 if row is None:
                     existing = connection.execute(
-                        "SELECT storage_sequence,recorded_at,payload_digest,canonical_bytes "
+                        "SELECT storage_sequence,recorded_at,payload_digest,canonical_bytes,import_set_identity "
                         "FROM execution_authority.execution_evidence "
                         "WHERE evidence_record_id=%s",
                         (record.evidence_record_id,),
@@ -152,7 +168,11 @@ class PostgresExecutionEvidenceRepository:
                         or bytes(existing["canonical_bytes"]) != canonical
                         or (
                             storage_sequence is not None
-                            and existing["storage_sequence"] != storage_sequence
+                            and (
+                                existing["storage_sequence"] != storage_sequence
+                                or existing["import_set_identity"]
+                                != import_set_identity
+                            )
                         )
                     ):
                         raise EvidenceDigestConflict("EVIDENCE_DIGEST_CONFLICT")
