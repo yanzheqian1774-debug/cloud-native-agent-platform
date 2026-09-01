@@ -133,9 +133,6 @@ jobs:
       - name: Sync backend dependencies
         run: uv sync --frozen
 
-      - name: Start real backend
-        run: uv run uvicorn agent_console.app:app --host 127.0.0.1 --port 8000 &
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -149,6 +146,33 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Run real browser acceptance
+      - name: Build immutable browser release
         working-directory: console/frontend
-        run: npm run test:e2e
+        env:
+          VITE_SUPPLIER_QUALITY_DEMO_MODE: live
+          VITE_BACKEND_URL: http://127.0.0.1:18072
+        run: npm run build
+
+      - name: Run real browser acceptance
+        env:
+          CONSOLE_FRONTEND_PORT: "14173"
+        run: |
+          mkdir "$RUNNER_TEMP/s5-impl-072-release"
+          rsync -a \
+            --exclude .git \
+            --exclude .venv \
+            --exclude __pycache__ \
+            --exclude '*.pyc' \
+            --exclude .pytest_cache \
+            --exclude .ruff_cache \
+            "$GITHUB_WORKSPACE/" "$RUNNER_TEMP/s5-impl-072-release/"
+          chmod -R a-w "$RUNNER_TEMP/s5-impl-072-release"
+          .venv/bin/python "$RUNNER_TEMP/s5-impl-072-release/scripts/acceptance/isolated_browser_harness.py" \
+            --release-root "$RUNNER_TEMP/s5-impl-072-release" \
+            --runtime-dir "$RUNNER_TEMP/s5-impl-072-${GITHUB_RUN_ID}" \
+            --backend-host 127.0.0.1 \
+            --backend-port 18072 \
+            --postgres-url postgresql://postgres@127.0.0.1:5432/agent_platform \
+            --qdrant-url http://127.0.0.1:6333 \
+            --python-path conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures \
+            -- npm --prefix console/frontend run test:e2e
