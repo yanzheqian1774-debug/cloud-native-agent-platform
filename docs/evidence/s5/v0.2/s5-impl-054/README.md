@@ -1,11 +1,15 @@
-# S5-IMPL-054 Checkpoint A Evidence
+# S5-IMPL-054 Final Assembly Evidence
 
 ## Status
 
-`PRE_ASSEMBLY_IMPLEMENTED / TRACK_B_INTEGRATION_REQUIRED / DO_NOT_MERGE`
+`ASSEMBLED / COMPLETE_SUITE_BLOCKED_BY_TRACK_B_SELECTOR / DRAFT / DO_NOT_MERGE`
 
-- Authorized baseline: `4200bd33c489bd544c04c3209f58b5b84c80bd14`.
-- Exact baseline CI: `33467767800 / SUCCESS`.
+- Current durable main: `bd0644dc32303799f6cad57267da742d4bacbca6`.
+- Exact-main CI: `33473035538 / SUCCESS`.
+- Old source head: `6705620c0e60f58a9fad5b47c8ff1e9552b7b3f1`.
+- Source update: normal merge, commit `e68295d170236e376fbfc2a469d5655b6211a9bc`;
+  parents are the old source head followed by current durable main. No rebase,
+  squash, cherry-pick, or accepted-history rewrite occurred.
 - Branch: `codex/s5-impl-054-cross-view-context-evidence-inspector`.
 - Architecture gate: G1. No migration, public Contract, lifecycle, execution, or
   Evidence-authority change is included.
@@ -25,7 +29,7 @@ resolution precede mapping. It reads existing resource lifecycle, Human review,
 Citation, discovery, invocation, and relationship facts without persisting or minting
 a generalized Evidence authority.
 
-## Implemented pre-assembly result
+## Assembled result
 
 - Exact Product, Technical, and Evidence routes preserve one subject tuple.
 - Claim-to-Evidence-to-Fact and Fact-to-Claim/business-step links are bidirectional.
@@ -39,6 +43,12 @@ a generalized Evidence authority.
 - Shared controlled states cover loading, saving, empty, validation, denied,
   not-found, conflict, stale, unavailable, partial, retryable, recovery-required, and
   unsupported presentations.
+- Track B's 20 paths are inherited byte-for-byte from durable main and are absent from
+  this branch's diff against main. No migration or new Evidence authority is present.
+- Exact relationship provenance supplies all five Agent bindings through Evidence
+  navigation. Technical facts link back to affected Product claims and business steps.
+- Focus restoration waits for the exact invoking claim or fact to render after closing
+  the Inspector, including the 390 by 844 keyboard journey.
 
 ## Current validation
 
@@ -46,12 +56,21 @@ a generalized Evidence authority.
 - Frontend lint: passed.
 - Frontend production build: passed.
 - URL Context Playwright contract tests: `2 passed`.
-- `make check`: Ruff passed; `1112 passed`, 13 explicit external-service skips.
-- Pre-commit: Ruff lint, Ruff format, and pytest passed outside the socket sandbox.
+- Focused real-service Wave 3B Playwright: `3 passed`, including all twelve ordered,
+  unconditional journeys against the production frontend, PostgreSQL, Qdrant, and a
+  restarted real backend.
+- `make check` with real PostgreSQL and Qdrant: Ruff and format passed; `1125 passed`
+  with no service skips.
+- Complete Playwright authoritative attempt 1: `11 passed, 1 failed`. The Wave 3B
+  twelve-journey test passed. The failure is the pre-existing Track B
+  `skill-mcp-workbench.spec.ts` selector `getByRole("status")`, which resolved both
+  the transient saving status and Invocation Evidence status. No manual rerun was
+  used.
 
-## Controlled pause
+## Controlled stop
 
-S5-IMPL-055 is still active and is not durably integrated. The final 12-journey
-real-service browser assembly, full regression, restart recovery, and final exact-head
-CI must occur only after Track B is integrated into durable main and normally merged
-into this branch. Track B paths must remain inherited and absent from this task's diff.
+The timing ambiguity cannot be corrected within Track A's exact whitelist: both the
+ambiguous test and its `SkillWorkbenchPage` product state are Track B paths. Changing
+either would violate the authorized-path and Track B inheritance conditions. PR #109
+must remain Draft. A Human must authorize the Track B selector/product-state correction
+and a new complete-suite gate before Ready for Review or Durable Integration routing.

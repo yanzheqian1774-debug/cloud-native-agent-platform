@@ -137,6 +137,7 @@ class ProductEvidenceService:
                     provenance={
                         "authority": "RESOURCE_DOMAIN_REPOSITORIES",
                         "relationshipCount": len(resource["relationships"]),
+                        "exactReferences": resource["relationships"],
                     },
                     affectedClaimKeys=["resource.composition"],
                     affectedBusinessStepIds=["compose-resource"],
