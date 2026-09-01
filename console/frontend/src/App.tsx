@@ -25,13 +25,17 @@ import { fetchLivePlanningJourney } from "./api/livePlanningJourney";
 import type { LivePlanningJourney, JourneyTaskProjection } from "./shared/livePlanningJourneyTypes";
 import { ProblemPlanningPage } from "./problems/ProblemPlanningPage";
 import { PlanningDirectoryPage } from "./problems/PlanningDirectoryPage";
-import { useI18n } from "./i18n/useI18n";
 import { AgentWorkbenchPage } from "./resources/AgentWorkbenchPage";
 import { SkillWorkbenchPage } from "./resources/SkillWorkbenchPage";
 import { McpWorkbenchPage } from "./resources/McpWorkbenchPage";
 import { KnowledgeWorkbenchPage } from "./resources/KnowledgeWorkbenchPage";
 import { WorkflowWorkbenchPage } from "./workflows/WorkflowWorkbenchPage";
 import { RuntimeProfileWorkbenchPage } from "./runtime/RuntimeProfileWorkbenchPage";
+import { ProductDashboardPage } from "./dashboard/ProductDashboardPage";
+import { ResourceCatalogPage } from "./catalog/ResourceCatalogPage";
+import { RelationshipsPage as UnifiedRelationshipsPage } from "./relationships/RelationshipsPage";
+import { AttentionPage } from "./attention/AttentionPage";
+import { DigitalEmployeesPage } from "./digital-employees/DigitalEmployeesPage";
 
 type AppPreviewState = "LOADING" | "READY" | "DENIED" | "NOT_FOUND" | "AUTHORITY_MISSING" | "ERROR";
 
@@ -44,13 +48,6 @@ function useDemoJourney(journeyId: string | null) {
     return () => controller.abort();
   }, [journeyId]);
   return journeyId && loaded?.id === journeyId ? loaded.journey : null;
-}
-
-function DemoPrimaryNavigation() {
-  const {locale}=useI18n(); const zh=locale==="zh-CN";
-  const { pathname } = useLocation();
-  const items = zh?[["/problems","业务问题"],["/agents","Agent 工作台"],["/skills","Skill 工作台"],["/mcp","MCP 工作台"],["/knowledge","知识工作台"],["/workflow-definitions","Workflow 工作台"],["/runtime-profiles","Runtime Profile 工作台"],["/tasks","计划与任务"],["/employees","数字员工与 Agent"],["/resources","Skills（技能）· MCP · 知识"],["/runtime","运行环境要求"],["/relationships","对象关系"],["/technical","技术视图"]]:[["/problems","Problems"],["/agents","Agent Workbench"],["/skills","Skill Workbench"],["/mcp","MCP Workbench"],["/knowledge","Knowledge Workbench"],["/workflow-definitions","Workflow Workbench"],["/runtime-profiles","Runtime Profile Workbench"],["/tasks","Plans and Tasks"],["/employees","Digital Employees and Agents"],["/resources","Skills · MCP · Knowledge"],["/runtime","Runtime Requirements"],["/relationships","Relationships"],["/technical","Technical View"]];
-  return <><div className="demo-environment"><span>{zh?"受控供应商质量演示":"Controlled Supplier Quality Demo"}</span><small>{zh?"进程内技术预览 · 受控模型 + 混合检索":"Process-local technical preview · Controlled model + hybrid retrieval"}</small></div><nav className="demo-primary-nav" aria-label={zh?"演示主导航":"Demo navigation"}>{items.map(([to,label])=><NavLink key={to} to={to} aria-current={pathname===to?"page":undefined}>{label}</NavLink>)}</nav></>;
 }
 
 function Breadcrumb({ current, detail }: { current: string; detail?: string }) {
@@ -195,7 +192,7 @@ function App() {
     return () => controller.abort();
   }, [mode, supplierQualityLive]);
   if (supplierQualityLive) {
-    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><DemoPrimaryNavigation/><Routes><Route path="/" element={<Navigate to="/problems" replace />} /><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workflow-definitions" element={<WorkflowWorkbenchPage/>} /><Route path="/runtime-profiles" element={<RuntimeProfileWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<PlanningDirectoryPage kind="agents"/>} /><Route path="/resources" element={<PlanningDirectoryPage kind="resources"/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path="/relationships" element={<PlanningDirectoryPage kind="relationships"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/problems" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
+    return <BrowserRouter><SelectedExecutionContext><ConsoleShell><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<ProductDashboardPage/>}/><Route path="/catalog" element={<ResourceCatalogPage/>}/><Route path="/digital-employees" element={<DigitalEmployeesPage/>}/><Route path="/attention" element={<AttentionPage/>}/><Route path="/relationships" element={<UnifiedRelationshipsPage/>}/><Route path="/problems" element={<ProblemPlanningPage/>} /><Route path="/agents" element={<AgentWorkbenchPage/>} /><Route path="/skills" element={<SkillWorkbenchPage/>} /><Route path="/mcp" element={<McpWorkbenchPage/>} /><Route path="/knowledge" element={<KnowledgeWorkbenchPage/>} /><Route path="/workflow-definitions" element={<WorkflowWorkbenchPage/>} /><Route path="/runtime-profiles" element={<RuntimeProfileWorkbenchPage/>} /><Route path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/product" element={<PlanningDirectoryPage kind="workspace"/>} /><Route path="/tasks" element={<PlanningDirectoryPage kind="plans"/>} /><Route path="/employees" element={<DigitalEmployeesPage/>} /><Route path="/resources" element={<ResourceCatalogPage/>} /><Route path="/runtime" element={<PlanningDirectoryPage kind="runtime"/>} /><Route path={technicalPath} element={<PlanningDirectoryPage kind="technical"/>} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></ConsoleShell></SelectedExecutionContext></BrowserRouter>;
   }
   if (previewState !== "READY") {
     return <main className="product-page"><section className="preview-warning" role={previewState === "LOADING" ? "status" : "alert"} aria-live="polite"><strong>{mode.toUpperCase()} · {previewState}</strong><span className="stable-id">{reasonCode}</span></section></main>;

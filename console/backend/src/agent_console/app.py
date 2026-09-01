@@ -1,4 +1,4 @@
-"""FastAPI application for the AgentOS Workflow Execution Console."""
+"""FastAPI application for the Cloud-Native Agent Platform Console."""
 
 import hashlib
 import json
@@ -113,6 +113,7 @@ from agent_console.repository import (
     KubernetesWorkflowRepository,
     WorkflowRepository,
 )
+from agent_console.resource_catalog_api import router as resource_catalog_router
 from agent_console.runtime_profile_api import (
     binding_resolver as runtime_binding_resolver,
 )
@@ -140,13 +141,14 @@ from agent_console.workflow_definition_api import (
 from agent_console.workflow_definition_api import router as workflow_definition_router
 
 app = FastAPI(
-    title="AgentOS Workflow Execution Console",
+    title="Cloud-Native Agent Platform Console",
     version="0.1.0",
 )
 app.include_router(skill_mcp_router)
 app.include_router(knowledge_router)
 app.include_router(runtime_profile_router)
 app.include_router(workflow_definition_router)
+app.include_router(resource_catalog_router)
 
 
 class _SupplierQualityExecutionEvidence:
