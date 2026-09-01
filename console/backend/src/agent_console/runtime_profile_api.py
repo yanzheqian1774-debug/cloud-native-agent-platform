@@ -6,6 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
+from agent_console.agent_binding_validation import BindingResolution
+from agent_console.agent_definition_repository import DefinitionScope
 from agent_console.runtime_profile_postgres import PostgresRuntimeProfileRepository
 from agent_console.runtime_profile_repository import RuntimeProfileRepositoryError
 from agent_console.runtime_profile_schemas import (
@@ -23,6 +25,48 @@ from agent_console.runtime_profile_service import (
 router = APIRouter(prefix="/api/internal/v0.2.2/runtime-profiles")
 _service = None
 _startup_error = "RUNTIME_PROFILE_STORAGE_UNAVAILABLE"
+
+
+class RuntimeProfileBindingResolver:
+    """Expose published Runtime Profile facts through the Agent binding port."""
+
+    def resolve(
+        self, scope: DefinitionScope, kind: str, resource_id: str
+    ) -> BindingResolution | None:
+        if kind != "runtime-profile" or _service is None:
+            return None
+        try:
+            record = _service.repository.get(
+                _service.scope(scope.namespace, scope.security_domain), resource_id
+            )
+        except Exception:
+            return None
+        revision_id = record.get("publishedRevisionId")
+        revision = next(
+            (
+                item
+                for item in record.get("revisions", [])
+                if item["revisionId"] == revision_id
+            ),
+            None,
+        )
+        if revision is None:
+            return None
+        digest = revision["digest"]
+        if digest.startswith("sha256:"):
+            digest = digest.removeprefix("sha256:")
+        return BindingResolution(
+            resource_id=record["runtimeProfileId"],
+            revision_id=revision["revisionId"],
+            digest=digest,
+            published=revision["state"] == "PUBLISHED",
+            enabled=record.get("enabled", True),
+            deprecated=record.get("lifecycleState") == "DEPRECATED",
+            compatible=record.get("compatible", True),
+        )
+
+
+binding_resolver = RuntimeProfileBindingResolver()
 
 
 def configure():

@@ -113,6 +113,9 @@ from agent_console.repository import (
     KubernetesWorkflowRepository,
     WorkflowRepository,
 )
+from agent_console.runtime_profile_api import (
+    binding_resolver as runtime_binding_resolver,
+)
 from agent_console.runtime_profile_api import router as runtime_profile_router
 from agent_console.schemas import (
     WorkflowExecutionDetail,
@@ -130,6 +133,9 @@ from agent_console.supplier_quality_demo_schemas import (
     SupplierQualityDemoResetResponse,
     SupplierQualityDemoStartRequest,
     SupplierQualityDemoStartResponse,
+)
+from agent_console.workflow_definition_api import (
+    binding_resolver as workflow_binding_resolver,
 )
 from agent_console.workflow_definition_api import router as workflow_definition_router
 
@@ -386,6 +392,17 @@ _agent_definition_service: AgentDefinitionService | None = None
 _agent_definition_startup_error: str | None = None
 
 
+class _WorkbenchBindingResolver:
+    """Route only governed Workflow and Runtime references to Track B adapters."""
+
+    def resolve(self, scope, kind, resource_id):
+        if kind == "workflow":
+            return workflow_binding_resolver.resolve(scope, kind, resource_id)
+        if kind == "runtime-profile":
+            return runtime_binding_resolver.resolve(scope, kind, resource_id)
+        return None
+
+
 def _configure_agent_definitions() -> None:
     global _agent_definition_service, _agent_definition_startup_error
     database_url = os.environ.get("AGENT_DEFINITION_DATABASE_URL", "")
@@ -401,12 +418,19 @@ def _configure_agent_definitions() -> None:
         repository = PostgresAgentDefinitionRepository(
             database_url,
             migration_path=migration,
+            governed_bindings_migration_path=(
+                Path(__file__).parents[2]
+                / "migrations"
+                / "0006_agent_governed_bindings.sql"
+            ),
             min_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MIN", "1")),
             max_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MAX", "4")),
             timeout=float(os.environ.get("AGENT_DEFINITION_DB_TIMEOUT_SECONDS", "5")),
         )
         repository.migrate()
-        _agent_definition_service = AgentDefinitionService(repository)
+        _agent_definition_service = AgentDefinitionService(
+            repository, binding_resolver=_WorkbenchBindingResolver()
+        )
         _agent_definition_startup_error = None
     except (AgentDefinitionRepositoryError, ValueError):
         _agent_definition_service = None

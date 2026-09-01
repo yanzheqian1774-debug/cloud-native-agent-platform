@@ -6,6 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
+from agent_console.agent_binding_validation import BindingResolution
+from agent_console.agent_definition_repository import DefinitionScope
 from agent_console.runtime_profile_api import get_service as get_runtime_profile_service
 from agent_console.workflow_definition_postgres import (
     PostgresWorkflowDefinitionRepository,
@@ -28,6 +30,48 @@ from agent_console.workflow_definition_service import (
 router = APIRouter(prefix="/api/internal/v0.2.2/workflow-definitions")
 _service = None
 _startup_error = "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
+
+
+class WorkflowDefinitionBindingResolver:
+    """Expose published Workflow facts through the durable Agent binding port."""
+
+    def resolve(
+        self, scope: DefinitionScope, kind: str, resource_id: str
+    ) -> BindingResolution | None:
+        if kind != "workflow" or _service is None:
+            return None
+        try:
+            record = _service.repository.get(
+                _service.scope(scope.namespace, scope.security_domain), resource_id
+            )
+        except Exception:
+            return None
+        revision_id = record.get("publishedRevisionId")
+        revision = next(
+            (
+                item
+                for item in record.get("revisions", [])
+                if item["revisionId"] == revision_id
+            ),
+            None,
+        )
+        if revision is None:
+            return None
+        digest = revision["digest"]
+        if digest.startswith("sha256:"):
+            digest = digest.removeprefix("sha256:")
+        return BindingResolution(
+            resource_id=record["workflowDefinitionId"],
+            revision_id=revision["revisionId"],
+            digest=digest,
+            published=revision["state"] == "PUBLISHED",
+            enabled=record.get("enabled", True),
+            deprecated=record.get("lifecycleState") == "DEPRECATED",
+            compatible=record.get("compatible", True),
+        )
+
+
+binding_resolver = WorkflowDefinitionBindingResolver()
 
 
 def configure():
@@ -58,6 +102,7 @@ def configure():
                 return False
             return any(
                 revision["revisionId"] == reference["revisionId"]
+                and revision["digest"] == reference.get("digest", revision["digest"])
                 and revision["state"] == "PUBLISHED"
                 for revision in profile["revisions"]
             )

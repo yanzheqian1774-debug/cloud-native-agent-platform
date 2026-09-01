@@ -1,150 +1,114 @@
-# S5-IMPL-052 Checkpoint A1 Evidence
+# S5-IMPL-052 Final Checkpoint A Evidence
 
-## Status
+## Status and provenance
 
-`CHECKPOINT_A1_IMPLEMENTATION_COMPLETE / DRAFT_PR_ONLY / AWAITING_TRACK_A`
+`FINAL_CHECKPOINT_A_COMPLETE / READY_FOR_REVIEW_CANDIDATE / DO_NOT_MERGE`
 
-This evidence covers independently implementable Workflow Definition and Runtime
-Profile product work. It does not claim final Checkpoint A, Integration Ready,
-v0.2.2 completion, deployment, release, runtime execution, or migration-chain
-completion.
+- Accepted Track B head: `1e15b0ee10f35b47c01a4326b3aaede6e449d628`.
+- Durable Agent baseline: `f5c44e6d8ddccaf1ad122ef3a6b78d3068c53a54`;
+  exact-main CI `33452545550 / SUCCESS`.
+- Source update: normal `--no-ff` merge, never rebase or squash.
+- Merge commit: `921523d21f6892fa96b6c275856247e0a076f47e`;
+  parents `1e15b0ee10f35b47c01a4326b3aaede6e449d628` and
+  `f5c44e6d8ddccaf1ad122ef3a6b78d3068c53a54`.
+- S5-IMPL-051 and S5-REL-057 remain durably closed and were not reopened.
 
-## Entry revalidation
+## Durable Agent resolver assembly
 
-- Authorized baseline and worktree HEAD: `6c3b72e416fa21dc77be94d9be4bb054b39caef4`.
-- `origin/main` revalidated at the same commit before implementation.
-- Branch: `codex/s5-impl-052-workflow-runtime-profile`.
-- Initial worktree was clean and isolated.
-- No S5-IMPL-052 Registry, repository, branch, worktree, PR, issue, or visible
-  Human-allocation collision was found.
-- Track A owns migration `0006` and Agent-domain paths. No Track A source was
-  copied or imported.
+- Track B API adapters expose authoritative published Workflow Definition and
+  Runtime Profile facts through the durable Agent `BindingResolver` contract.
+- `app.py` only routes the two kinds to those adapters and supplies migration
+  0006 to the existing Agent PostgreSQL adapter. It contains no lifecycle policy.
+- Exact resolution requires trusted namespace/security-domain scope, identity,
+  current published revision, raw 64-hex digest, enabled state, non-deprecated
+  state, and compatibility.
+- Tests prove valid Workflow and Runtime Profile bindings plus fail-closed wrong
+  digest, wrong revision, foreign scope, disabled, deprecated, incompatible, and
+  unresolved outcomes.
+- Agent publication grants no Workflow Run, Runtime, Pod, MCP invocation, or
+  execution authority. Workflow and Runtime services cannot mutate Agent history.
+- No Agent-domain source, test, schema, migration, or semantic path was modified.
 
-## Implemented result
+## Migration assembly
 
-### Workflow Definition
+- The ordered files are exactly `0001` through `0007`; there are no gaps,
+  duplicates, placeholders, reordering, or symlinks.
+- Migrations 0001–0006 are byte-identical to durable main.
+- Migration 0006 SHA-256:
+  `8865d0977d1e028ec711dfe0022adc3454b869b30aac3869c87f138d7b66442d`.
+- Track B owns only `0007_workflow_runtime_profiles.sql`; SHA-256:
+  `8dedfae42df768714a25d4c3980d60ee66b5f5b8537278020d3acf4beda4f773`.
+- The complete chain was applied on a clean PostgreSQL 15 database. Durable
+  ledgers recorded exact checksums for Agent, Skill/MCP, Knowledge, Workflow,
+  and Runtime schemas.
+- Startup compatibility, checksum binding, controlled incompatible/newer schema
+  rejection, optimistic concurrency, and restart recovery passed.
 
-- Scoped canonical aggregate, immutable revisions, canonical digest, optimistic
-  concurrency, append-only lifecycle facts, exact-digest Human review,
-  publication, successor history, and deterministic version comparison.
-- Canonical Tasks with deterministic topological ordering, duplicate/unknown/
-  self-dependency rejection, cycle rejection, inputs, outputs, capability
-  requirements, exact typed references, retry limits, timeouts, and bounded
-  failure policies.
-- Runtime Profile references resolve only through the routed typed service seam.
-  Unknown or unpublished exact revisions fail closed. Agent/Skill/MCP/Knowledge
-  reference resolver composition remains unavailable until durable Track A
-  assembly and therefore fails closed.
-- Catalog, dashboard, list/detail, Builder, DAG/policy inspection, review,
-  publication, successor/history/comparison, relationship/consumer inspection,
-  and Product/Technical sibling projections are present.
+## Product result
 
-### Runtime Profile
+Workflow Definition provides the scoped catalog/dashboard/list/detail,
+Workbench Builder, canonical Task DAG, stable ordering and cycle rejection,
+inputs/outputs/capability requirements, bounded retry/timeout/failure policies,
+typed references, exact-digest review, immutable publication, successors,
+history/comparison, relationships/consumers, and consistent Product/Technical
+projections.
 
-- Scoped canonical aggregate, immutable revisions, canonical digest, optimistic
-  concurrency, append-only lifecycle facts, exact-digest Human review,
-  publication, and successors.
-- Declarative Native Kubernetes and bounded OpenClaw definitions with requests/
-  limits, isolation, state mode, session affinity, typed Secret references, and
-  provider-specific compatibility validation.
-- Catalog, dashboard, detail, lifecycle actions, history, and Product/Technical
-  sibling projections are present.
+Runtime Profile provides the scoped catalog/dashboard/detail, declarative Native
+Kubernetes and bounded OpenClaw definitions, requests/limits, isolation, state
+mode, session affinity, typed Secret references, validation, exact-digest review,
+immutable publication, successors/history, and consistent Product/Technical
+projections. OpenClaw remains declaration-only.
 
-## Migration 0007
+## Shared-path audit
 
-- Track B exclusively adds
-  `console/backend/migrations/0007_workflow_runtime_profiles.sql`.
-- The migration adds separate `workflow_definition` and `runtime_profile`
-  schemas, scoped aggregate rows, append-only fact tables, primary/unique/
-  foreign-key constraints, and checksum-bound migration metadata.
-- Migration 0007 was applied from an empty PostgreSQL 15 database and its
-  checksum compatibility was validated by both adapters.
-- Migrations `0001`–`0005` are unchanged. No placeholder or copied migration
-  `0006` exists. The complete `0001`→`0007` chain is intentionally not claimed.
+- `console/backend/src/agent_console/app.py`: two router registrations and bounded
+  resolver/storage composition only. Wave 1 and Agent routes are preserved;
+  lifecycle and execution authority remain in domain services.
+- `console/frontend/src/App.tsx`: authorized module routes/navigation only;
+  existing routes remain present.
+- `console/frontend/src/components/ConsoleShell.tsx`: direct Workflow and Runtime
+  navigation without changing Product/Technical authority.
+- `console/frontend/src/styles/app.css`: module-local responsive Workbench styles
+  using established tokens and spacing; no lifecycle state is synthesized.
+- `.github/workflows/ci.yml`: only Workflow/Runtime PostgreSQL variables in
+  existing quality and real-browser jobs.
 
-## Shared paths used and justification
+No dependency manifest or lockfile changed. Frontend state remains presentation
+state; counts and statuses come from backend records.
 
-- `console/backend/src/agent_console/app.py`: exactly two router imports and two
-  `include_router` calls. No Wave 1 route, Agent route, lifecycle authority,
-  execution authority, Pod authority, or Track A resolver composition moved
-  into the composition root.
-- `console/frontend/src/App.tsx`: imports and routes the two authorized
-  Workbenches and adds their navigation entries; all Wave 1 routes are retained.
-- `console/frontend/src/components/ConsoleShell.tsx`: adds direct navigation to
-  the two product modules while retaining Product, Technical, and Workflow Run
-  links.
-- `console/frontend/src/styles/app.css`: adds module-local responsive Workbench
-  layout styles; existing selectors are not changed.
-- `.github/workflows/ci.yml`: adds only `WORKFLOW_RUNTIME_DATABASE_URL` and
-  `WORKFLOW_RUNTIME_TEST_DATABASE_URL` to the existing PostgreSQL jobs so the
-  new real adapters and browser journey are exercised. No dependency, job
-  authority, or validation weakening was introduced.
+## Runtime and Kubernetes safety
 
-No package manifest, lockfile, Python dependency, or migration `0001`–`0006`
-path was changed.
+Schemas/services reject Pod YAML, Pod names, raw environment, arbitrary exec or
+command, raw Secret values, direct Pod deletion controls, Pod UID as business
+identity, Pod Running as business success, restart count as Attempt, and
+unsanitized log fields. Only typed `secret-ref:` values are accepted. No Pod or
+OpenClaw execution occurred. Kubernetes remains execution infrastructure and the
+current Control Plane source of truth; public CRDs, API groups, controllers, and
+runtime providers are unchanged.
 
-## Runtime safety boundaries
+## Validation
 
-- Schemas reject unknown fields and services recursively reject Pod YAML, Pod
-  names, raw environment, exec/command, raw Secret values, and unsanitized-log
-  fields.
-- Only `secret-ref:` typed references are accepted; secret values are neither
-  persisted nor digested.
-- Runtime Profiles contain no operation that creates/deletes Pods, executes
-  commands or OpenClaw, selects Pod names, observes Pod state, routes instances,
-  scales workloads, or treats Kubernetes as Product authority.
-- Product and Technical views project the same backend-owned records and cannot
-  mutate authority independently.
-
-## Validation evidence
-
-- Focused repository/service/API/PostgreSQL/restart suite: `20 passed`.
-- Real PostgreSQL 15 migration, scope, optimistic concurrency, checksum, and
-  restart tests: `4 passed` within the focused suite.
+- `make check` against real PostgreSQL 15 and Qdrant: Ruff and format passed;
+  `1114 passed`, zero skipped, one existing Starlette/httpx warning.
 - Frontend `npm run lint`: passed.
-- Frontend `npm run build`: passed; Vite production build completed.
-- Real backend + PostgreSQL 15 + Qdrant + Chromium Workflow/Runtime acceptance:
-  `3 passed`, including publication, exact Runtime binding, validation failure,
-  empty/loading presentation, bounded OpenClaw projection, and denied state.
-- Final clean full Playwright suite: `6 passed`, covering Agent, Skill/MCP,
-  Knowledge, Workflow Definition, Runtime Profile, restart recovery, validation
-  failure, and disclosure-safe denial.
-- Pre-commit: Ruff lint, Ruff format, and full pytest hooks passed with the real
-  integration services available.
-- `make check`: Ruff passed, format check passed (`234 files`), pytest
-  `1103 passed, 1 skipped, 1 warning`; Kubernetes Workflow/Task controllers and
-  CRD regressions were included unchanged.
-- The one skip is the repository's separately gated direct-Qdrant test; the real
-  Knowledge Chromium journey using Qdrant passed.
-- Warning: existing Starlette/httpx deprecation warning only.
+- Frontend `npm run build`: passed; Vite production output completed.
+- Full real Chromium suite: `7 passed (18.9s)` against real FastAPI, PostgreSQL,
+  Qdrant, and production-built frontend, including backend restart recovery.
+- Kubernetes Workflow/Task CRD and controller regressions passed unchanged.
+- The prior skip was `test_knowledge_qdrant.py`, an external-service gate. It ran
+  against Qdrant `v1.15.4`; both tests passed and zero unexplained skips remain.
+- Pre-commit, final non-mutating checks, `git diff --check`, audit, and fresh
+  exact-head CI are recorded before the Ready transition.
 
-## Browser and state behavior
+## Routing and limitations
 
-The browser journey used the real FastAPI backend, PostgreSQL 15, Qdrant for the
-Wave 1 regression, and Chromium. Browser state is presentation state only.
-Loading, empty, denial, validation failure, retryable failure, and ready states
-are explicit and do not synthesize authoritative resources.
-
-## Agent dependency and limitations
-
-- S5-IMPL-051 and migration `0006` are not durably integrated.
-- No unmerged Agent source or migration was copied or imported.
-- Final exact Agent/Skill/MCP/Knowledge reference composition, byte-for-byte
-  verification of migrations `0001`–`0006`, complete `0001`→`0007` migration
-  validation, cross-module binding acceptance, fresh exact-head CI, and final
-  Checkpoint A remain blocked on durable Track A integration.
-- OpenClaw is declaration-only; actual execution remains v0.2.3 scope.
-
-## Next gate
-
-Controlled pause after a clean Draft PR. Await S5-IMPL-051 and migration `0006`
-Durable Integration, merge advanced `origin/main` normally without rebase, then
-perform final assembly and cross-module validation. Do not mark the PR Ready or
-route it for integration before that gate.
-
-## Commit and Draft PR
-
-- A1 implementation commit: `e6e47f6` (`Implement workflow and runtime profile workbenches`).
-- Draft PR: [#105](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/105).
-- PR state requirement: `DRAFT`; merge and Ready-for-review conversion are
-  prohibited until the Track A dependency and final assembly gate are satisfied.
+- PR: [#105](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/105).
+- S5-REL-058 is the next candidate after closed S5-REL-057. Repository text,
+  branches/worktrees, GitHub PRs/issues, and visible allocations show no collision;
+  it is not allocated or started by this Session.
+- Recommended integration: normal merge commit; no rebase or squash.
+- Expected tree: the validated PR head preserving Track A and Track B provenance.
+  No conflicts are currently known.
+- Do not merge, deploy, allocate REL, close S5-IMPL-052, start v0.2.3 execution,
+  or claim v0.2.2/release completion. Next gate: Human Durable Integration
+  allocation and merge decision for PR #105.

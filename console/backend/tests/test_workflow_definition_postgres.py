@@ -6,7 +6,10 @@ import pytest
 from agent_console.workflow_definition_postgres import (
     PostgresWorkflowDefinitionRepository,
 )
-from agent_console.workflow_definition_repository import WorkflowDefinitionConflict
+from agent_console.workflow_definition_repository import (
+    WorkflowDefinitionConflict,
+    WorkflowDefinitionRepositoryError,
+)
 from agent_console.workflow_definition_service import WorkflowDefinitionService
 
 DATABASE_URL = os.environ.get("WORKFLOW_RUNTIME_TEST_DATABASE_URL")
@@ -53,3 +56,32 @@ def test_real_postgresql_migration_scope_and_optimistic_concurrency():
             fact={"factId": f"workflow-fact:{uuid.uuid4()}", "event": "STALE"},
         )
     store.pool.close()
+
+
+def test_migration_0007_checksum_mismatch_fails_closed():
+    store = PostgresWorkflowDefinitionRepository(
+        DATABASE_URL or "", migration_path=MIGRATION
+    )
+    store.migrate()
+    try:
+        with store.pool.connection() as connection:
+            connection.execute(
+                "UPDATE workflow_definition.schema_migrations "
+                "SET checksum=%s WHERE version=1",
+                ("0" * 64,),
+            )
+            connection.commit()
+        with pytest.raises(
+            WorkflowDefinitionRepositoryError,
+            match="WORKFLOW_DEFINITION_SCHEMA_INCOMPATIBLE",
+        ):
+            store.compatibility()
+    finally:
+        with store.pool.connection() as connection:
+            connection.execute(
+                "UPDATE workflow_definition.schema_migrations "
+                "SET checksum=%s WHERE version=1",
+                (store.migration_checksum,),
+            )
+            connection.commit()
+        store.pool.close()
