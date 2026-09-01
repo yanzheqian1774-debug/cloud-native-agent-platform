@@ -26,18 +26,33 @@ PostgreSQL and Qdrant remain protected external services: their explicit
 endpoints are passed to the owned backend and the harness never manages their
 processes.
 
+Before backend or browser startup, the harness verifies two external
+preconditions. The immutable frontend build must have an external,
+exact-content-digest-bound identity created only for the approved `LIVE_DEMO`
+build mode; a missing, malformed, stale or non-live identity fails closed. The
+PostgreSQL URL must authenticate as the explicitly named validation role. That
+exact role must successfully exercise transactional schema/table migration and
+insert, select, update and delete operations. Identity or privilege failure
+stops acceptance before the browser command.
+
 ## Minimum-disclosure extraction
 
 Acceptance Evidence is produced only through `minimum_disclosure.py`. Its
 allowlist is limited to sanitized state, PID/start correlation, restart and
-release-entry counts, manifest digests, schema version and completion timestamp.
+release-entry counts, manifest digests, journey ID, phase, assertion category,
+status code, sanitized exception class, correlation digest, restart relation,
+schema version and completion timestamp.
 Requests for any other field fail closed. URLs, environment values, source or
 prompt text, vectors, Qdrant payloads, credentials and credential-shaped test or
 placeholder values are not Evidence fields and are redacted by exclusion.
 
-Backend and browser output are captured outside the release. Successful and
-failed Playwright artifacts, including compressed traces, are scanned before
-acceptance. A prohibited value fails the run without echoing that value. The
+Raw backend/browser output, Playwright traces, screenshots, videos and error
+contexts are not retained. Playwright output is removed before the sanitized
+diagnostic is scanned. The diagnostic remains useful through allowlisted
+journey/phase/assertion/status/exception/correlation/restart fields. Recursive
+plain-file and compressed-file negative controls cover request bodies, runtime
+settings, test-key-shaped values, source/instruction content and internal paths;
+a prohibited value fails scanning without echoing that value. The
 immutable frontend server suppresses request-path logging. Validation helpers
 must use structured parsing or exact-field extraction; broad `sed`, `cat`,
 `head`, or `tail` file dumps are prohibited for potentially sensitive files.

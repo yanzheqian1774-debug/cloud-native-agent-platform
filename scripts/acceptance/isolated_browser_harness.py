@@ -7,7 +7,9 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
+import shutil
 import socket
 import stat
 import subprocess
@@ -19,11 +21,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
+import psycopg
+from browser_build_preflight import verify_build_identity
 from minimum_disclosure import (
     EVIDENCE_FIELDS,
     extract_allowlisted,
     scan_generated_artifacts,
 )
+from psycopg import sql
 
 
 def release_manifest(root: Path) -> dict[str, dict[str, str | int]]:
@@ -64,6 +69,47 @@ def endpoint(value: str, name: str) -> str:
     ):
         raise ValueError(f"{name} must include an explicit scheme, host and port")
     return value
+
+
+def verify_postgres_role_readiness(postgres_url: str, expected_role: str) -> None:
+    if not re.fullmatch(r"[a-z_][a-z0-9_]{0,62}", expected_role):
+        raise RuntimeError("PostgreSQL validation role identity is invalid")
+    schema_name = f"acceptance_preflight_{secrets.token_hex(8)}"
+    try:
+        with psycopg.connect(postgres_url) as connection:
+            identity = connection.execute(
+                "SELECT current_user, session_user"
+            ).fetchone()
+            if identity != (expected_role, expected_role):
+                raise RuntimeError("PostgreSQL validation role identity mismatch")
+            schema = sql.Identifier(schema_name)
+            table = sql.Identifier(schema_name, "migration_read_write_probe")
+            connection.execute(sql.SQL("CREATE SCHEMA {}").format(schema))
+            connection.execute(
+                sql.SQL(
+                    "CREATE TABLE {} (id INTEGER PRIMARY KEY, state TEXT NOT NULL)"
+                ).format(table)
+            )
+            connection.execute(
+                sql.SQL("INSERT INTO {} (id, state) VALUES (1, 'CREATED')").format(
+                    table
+                )
+            )
+            row = connection.execute(
+                sql.SQL("SELECT state FROM {} WHERE id = 1").format(table)
+            ).fetchone()
+            if row != ("CREATED",):
+                raise RuntimeError("PostgreSQL validation role read check failed")
+            connection.execute(
+                sql.SQL("UPDATE {} SET state = 'UPDATED' WHERE id = 1").format(table)
+            )
+            connection.execute(sql.SQL("DELETE FROM {} WHERE id = 1").format(table))
+            connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(schema))
+            connection.rollback()
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("PostgreSQL validation role readiness failed") from exc
 
 
 class Harness:
@@ -220,17 +266,13 @@ class Harness:
             "--header",
             f"X-Harness-Ownership-Token:{self.token}",
         ]
-        backend_log = (self.runtime / "backend.log").open("ab")
-        try:
-            self.child = subprocess.Popen(
-                command,
-                cwd=self.release,
-                env=env,
-                stdout=backend_log,
-                stderr=subprocess.STDOUT,
-            )
-        finally:
-            backend_log.close()
+        self.child = subprocess.Popen(
+            command,
+            cwd=self.release,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         self.child_started_ns = time.time_ns()
         self.write_metadata()
         self.wait_health(True)
@@ -405,6 +447,24 @@ class Harness:
             "releaseEntryCount": len(after),
             "releaseManifestBeforeDigest": self.before_digest,
             "releaseManifestAfterDigest": self.manifest_digest(after),
+            "journeyId": self.args.journey_id,
+            "phase": "BROWSER_EXECUTION",
+            "assertionCategory": "BROWSER_ACCEPTANCE",
+            "statusCode": command_result,
+            "exceptionClass": (
+                "NONE" if command_result == 0 else "BROWSER_COMMAND_FAILED"
+            ),
+            "correlationDigest": hashlib.sha256(
+                (
+                    f"{self.args.journey_id}:{command_result}:{self.restart_count}:"
+                    f"{self.before_digest}:{self.manifest_digest(after)}"
+                ).encode()
+            ).hexdigest(),
+            "restartRelation": (
+                "NO_RESTART"
+                if self.restart_count == 0
+                else f"OWNED_RESTART_COUNT_{self.restart_count}"
+            ),
             "completedAt": datetime.now(UTC).isoformat(),
         }
         evidence = extract_allowlisted(record, set(EVIDENCE_FIELDS))
@@ -420,7 +480,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--backend-host", required=True)
     parser.add_argument("--backend-port", required=True, type=int)
     parser.add_argument("--postgres-url", required=True)
+    parser.add_argument("--postgres-validation-role", required=True)
     parser.add_argument("--qdrant-url", required=True)
+    parser.add_argument("--build-mode-identity", required=True, type=Path)
+    parser.add_argument("--journey-id", required=True)
     parser.add_argument("--python-path", required=True)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -435,6 +498,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    verify_build_identity(
+        args.release_root.resolve() / "console/frontend/dist",
+        args.build_mode_identity.resolve(),
+    )
+    verify_postgres_role_readiness(args.postgres_url, args.postgres_validation_role)
     harness = Harness(args)
     command_result = 1
     try:
@@ -455,31 +523,37 @@ def main() -> int:
                 "S5_HARNESS_PYTHON": sys.executable,
             }
         )
-        with (harness.runtime / "browser.log").open("wb") as browser_log:
-            command_result = subprocess.run(
-                args.command,
-                cwd=harness.release,
-                env=env,
-                stdout=browser_log,
-                stderr=subprocess.STDOUT,
-                check=False,
-            ).returncode
+        command_result = subprocess.run(
+            args.command,
+            cwd=harness.release,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
     finally:
         try:
             harness.stop()
         finally:
+            playwright_output = harness.runtime / "playwright-output"
+            if playwright_output.exists():
+                shutil.rmtree(playwright_output)
+            if playwright_output.exists():
+                raise RuntimeError("raw browser artifacts were retained")
             after = harness.verify_release()
             evidence = harness.write_minimum_disclosure_evidence(after, command_result)
-            scan_generated_artifacts(
-                [
-                    harness.runtime / "backend.log",
-                    harness.runtime / "browser.log",
-                    harness.runtime / "playwright-output",
-                    evidence,
-                ]
-            )
+            scan_generated_artifacts([args.build_mode_identity, evidence])
     return command_result
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        safe_class = (
+            "PREFLIGHT_FAILURE"
+            if isinstance(exc, (RuntimeError, ValueError))
+            else "INTERNAL_FAILURE"
+        )
+        print(f"isolated browser acceptance failed: {safe_class}", file=sys.stderr)
+        raise SystemExit(2) from None
