@@ -9,10 +9,12 @@
 - Reopen: prohibited. Any deployment requires a separately allocated Session.
 - Latest durable main: `4200bd33c489bd544c04c3209f58b5b84c80bd14`.
 - Exact-main CI: run `33467767800`, `SUCCESS`.
-- S5-REL-060: `CLOSED / COMPLETED / SESSION_CLOSED`.
+- S5-ARCH-019: `CLOSED / COMPLETED / SESSION_CLOSED / DURABLY_INTEGRATED /
+  BINDING`; reopening prohibited.
+- S5-REL-060: `CLOSED / COMPLETED / SESSION_CLOSED`; reopening prohibited.
 - Future deployment Session: `S5-DEPLOY-004 / CANDIDATE_ONLY / NOT_ALLOCATED`.
 
-This record grants no deployment, restart, provisioning, migration execution,
+This record grants no implementation, deployment, restart, provisioning, migration execution,
 Secret mutation, public activation, release, certification or production authority.
 
 ## Human corrections
@@ -31,7 +33,8 @@ Secret mutation, public activation, release, certification or production authori
    and requires new Human authority.
 6. Wave 3B is not expected to add deployment environment-variable names. Final
    verification remains required; no new names may be inferred.
-7. S5-REL-060 and S5-ARCH-019 are durably integrated and closed.
+7. S5-REL-060 and S5-ARCH-019 are durably integrated and closed; S5-ARCH-019 is
+   binding architecture authority. Neither Session nor this preflight may be reopened.
 
 ## Preserved preflight result
 

@@ -2,7 +2,12 @@
 
 ## Status
 
-`ACTIVE / AUTHORIZED / CHECKPOINT_A / G2_ARCHITECTURE_ONLY`
+`CLOSED / COMPLETED / SESSION_CLOSED / DURABLY_INTEGRATED / BINDING /
+G2_ARCHITECTURE_ONLY`
+
+PR #106 merged at durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`;
+exact-main CI run `33467767800` succeeded. S5-REL-060 is also `CLOSED /
+COMPLETED / SESSION_CLOSED`. Reopening either Session is prohibited.
 
 ## Objective
 
@@ -18,6 +23,11 @@ Native reuse, bounded OpenClaw lifecycle and two future backend track boundaries
 - S5-IMPL-053 may proceed in parallel and owns protected assembly/frontend paths.
 - No code, migration `0008`, CRD/API, dependency, deployment, implementation Session
   allocation, Contract freeze, completion or production claim is authorized.
+- Migration `0008` is `FUTURE_RESERVED_FOR_V0.2.3_EXECUTION_AUTHORITY /
+  NOT_IMPLEMENTED / NOT_ALLOCATED`; implementation authority is `NONE` until a
+  separate Human allocation.
+- The v0.2.2 chain remains `0001`–`0007`; Wave 3B requires no migration. Any Wave 3B
+  migration requirement is `STOP / G2` and requires new Human authority.
 
 ## Checkpoint 0
 
@@ -51,7 +61,8 @@ Native reuse, bounded OpenClaw lifecycle and two future backend track boundaries
   validation;
 - Draft PR and exact-head CI.
 
-## Next gate
+## Future implementation gate
 
-Human Architecture Review and Durable Integration decision. Implementation remains
-unallocated and prohibited until that gate passes.
+Architecture review and Durable Integration are complete. S5-ARCH-019 and S5-REL-060
+remain closed. Any future Track A/B implementation requires a separate Human
+allocation and G1 plan; none is granted here.
