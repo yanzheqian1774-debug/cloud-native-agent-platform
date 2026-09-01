@@ -8,6 +8,8 @@ import {
   purgeKnowledge,
   retrieveKnowledge,
   KnowledgeRequestError,
+  knowledgeControlledState,
+  type KnowledgeControlledState,
   type KnowledgeProjection,
   type KnowledgeResource,
   type KnowledgeDashboard,
@@ -51,10 +53,14 @@ export function KnowledgeWorkbenchPage() {
   const [evaluationRun, setEvaluationRun] = useState<QualityEntity | null>(null);
   const [importJob, setImportJob] = useState<QualityEntity | null>(null);
   const [duplicateQueue, setDuplicateQueue] = useState<QualityEntity[]>([]);
+  const [controlledState, setControlledState] = useState<KnowledgeControlledState | null>(null);
+  const [recovery, setRecovery] = useState<{attemptedVersion:number;authoritative:KnowledgeProjection;safeSuccessorContent:string}|null>(null);
   const purgeDialog = useRef<HTMLDialogElement>(null);
 
   function recordError(reason: unknown) {
-    const code = reason instanceof KnowledgeRequestError ? reason.reasonCode : "KNOWLEDGE_UNAVAILABLE";
+    const failure = reason instanceof KnowledgeRequestError ? reason : new KnowledgeRequestError("KNOWLEDGE_UNAVAILABLE", 503);
+    const code = failure.reasonCode;
+    setControlledState(knowledgeControlledState(failure));
     setError(denialCodes.has(code) ? "KNOWLEDGE_UNAVAILABLE_OR_NOT_AUTHORIZED" : code);
     setState("ERROR");
   }
@@ -96,7 +102,13 @@ export function KnowledgeWorkbenchPage() {
     try {
       const value = await knowledgeAction(selected.knowledge.knowledgeId, action, selected.knowledge.aggregateVersion, digest);
       setSelected(value); setItems(await listKnowledge()); setError(null); setNotice("Knowledge operation recorded by the backend."); setState("READY");
-    } catch (reason) { recordError(reason); }
+    } catch (reason) {
+      if (reason instanceof KnowledgeRequestError && reason.status === 409) {
+        const authoritative = await getKnowledge(selected.knowledge.knowledgeId);
+        setSelected(authoritative); setRecovery({attemptedVersion:selected.knowledge.aggregateVersion,authoritative,safeSuccessorContent:successorContent}); setControlledState(knowledgeControlledState(reason)); setState("READY"); return;
+      }
+      recordError(reason);
+    }
   }
 
   async function purge() {
@@ -129,7 +141,13 @@ export function KnowledgeWorkbenchPage() {
     try {
       const result = await createKnowledgeSuccessor(selected.knowledge.knowledgeId, selected.knowledge.aggregateVersion, successorContent);
       setSelected(result); setError(null); setNotice("Successor draft created without changing published history."); setState("READY");
-    } catch (reason) { recordError(reason); }
+    } catch (reason) {
+      if (reason instanceof KnowledgeRequestError && reason.status === 409) {
+        const authoritative = await getKnowledge(selected.knowledge.knowledgeId);
+        setSelected(authoritative); setRecovery({attemptedVersion:selected.knowledge.aggregateVersion,authoritative,safeSuccessorContent:successorContent}); setControlledState(knowledgeControlledState(reason)); setState("READY"); return;
+      }
+      recordError(reason);
+    }
   }
 
   async function qualitySearch() {
@@ -184,7 +202,8 @@ export function KnowledgeWorkbenchPage() {
     {state === "LOADING" && <p role="status" className="agent-state">Loading authorized Knowledge resources…</p>}
     {state === "SAVING" && <p role="status" className="agent-state">Recording the authorized operation…</p>}
     {notice && <div role="status" className="notice"><strong>{notice}</strong><button onClick={() => setNotice(null)}>Dismiss</button></div>}
-    {error && <div role="alert" className="qto-alert"><strong>Knowledge unavailable</strong><span>{error === "KNOWLEDGE_UNAVAILABLE_OR_NOT_AUTHORIZED" ? "The resource is unavailable or you are not authorized to access it." : "The operation could not be completed."}</span><span className="technical-value">{error}</span><button onClick={() => void refresh(value?.knowledgeId)}>Retry</button></div>}
+    {error && <div role="alert" className="qto-alert" aria-label={`${controlledState ?? "retryable"} state`}><strong>{controlledState ?? "Knowledge unavailable"}</strong><span>{error === "KNOWLEDGE_UNAVAILABLE_OR_NOT_AUTHORIZED" ? "The resource is unavailable or you are not authorized to access it." : "The operation could not be completed."}</span><span className="technical-value">{error}</span><button onClick={() => void refresh(value?.knowledgeId)}>Retry authoritative fetch</button></div>}
+    {recovery && <section role="alert" aria-label="Guided conflict recovery"><h2>{controlledState}: explicit recovery required</h2><dl><dt>Attempted aggregate version</dt><dd>{recovery.attemptedVersion}</dd><dt>Authoritative aggregate version</dt><dd>{recovery.authoritative.knowledge.aggregateVersion}</dd><dt>Authoritative revision</dt><dd>{recovery.authoritative.knowledge.revisions.at(-1)?.revisionId}</dd></dl><p>The authoritative Pack was fetched. Only sanitized successor text is retained; lifecycle and high-impact operations are never replayed automatically.</p><button onClick={() => {setSuccessorContent(recovery.safeSuccessorContent);setRecovery(null)}}>Explicitly reapply safe successor input</button><button onClick={() => {setSuccessorContent("");setRecovery(null)}}>Discard retained input</button></section>}
 
     <section className="agent-dashboard" aria-label="Authorized Knowledge summary">
       <article><strong>{items.length}</strong><span>Knowledge Packs in authorized scope</span></article>
@@ -204,6 +223,8 @@ export function KnowledgeWorkbenchPage() {
 
       {view === "PRODUCT" ? <>
 
+      <nav aria-label="Knowledge information hierarchy"><h3>Knowledge operation hierarchy</h3><ol><li><strong>Routine:</strong> Search, Retrieval and Citations</li><li><strong>Quality Evaluation:</strong> evidence and comparison</li><li><strong>Managed operations:</strong> Import and Duplicate Review</li><li><strong>Advanced high-impact:</strong> Rebuild, Purge and Recovery</li></ol></nav>
+
       <section className="agent-review-card" aria-label="Knowledge quality dashboard"><div className="section-heading"><div><p className="eyebrow">Knowledge Dashboard</p><h3>Retrieval quality and operations</h3></div><span className="status success">{dashboard?.authority ?? "POSTGRESQL"}</span></div>
         <div className="agent-dashboard"><article><strong>{dashboard?.authorizedKnowledgeCount ?? items.length}</strong><span>Authorized Packs</span></article><article><strong>{dashboard?.activeSnapshotCount ?? 0}</strong><span>Active Qdrant snapshots</span></article><article><strong>{dashboard?.evaluationRunCount ?? 0}</strong><span>Evaluation runs</span></article><article><strong>{dashboard?.duplicateCandidateCount ?? 0}</strong><span>Duplicate candidates</span></article></div>
         <p className="qto-disclosure">Counts are scoped after authorization. PostgreSQL is authoritative; Qdrant is a derived semantic index.</p>
@@ -216,7 +237,7 @@ export function KnowledgeWorkbenchPage() {
         <div className="agent-actions">{currentRevision?.state === "DRAFT" && <button onClick={() => void act("validation")}>Validate draft</button>}{currentRevision?.state === "VALIDATED" && <button onClick={() => void act("reviews", currentRevision.digest)}>Human review exact digest</button>}{currentRevision?.state === "HUMAN_REVIEWED" && <button className="primary" onClick={() => void act("publications", currentRevision.digest)}>Publish immutable revision</button>}</div>
       </section>
 
-      <section><div className="section-heading"><div><p className="eyebrow">Knowledge Operations</p><h3>Ingestion and derived index</h3></div><span className={`status ${latestJob?.status === "COMPLETED" ? "success" : latestJob ? "warning" : "neutral"}`}>{latestJob?.status ?? "NOT_INGESTED"}</span></div>
+      <section aria-label="Advanced Rebuild and Recovery"><div className="section-heading"><div><p className="eyebrow">Advanced high-impact operations</p><h3>Ingestion, Rebuild and Recovery</h3></div><span className={`status ${latestJob?.status === "COMPLETED" ? "success" : latestJob ? "warning" : "neutral"}`}>{latestJob?.status ?? "NOT_INGESTED"}</span></div><p>Impact and authorization must be reviewed before changing derived index state. Recovery is required whenever cross-store completion cannot be proven.</p>
         <dl><dt>Ingestion job</dt><dd className="technical-value">{latestJob?.jobId ?? "NOT_STARTED"}</dd><dt>Source high-water mark</dt><dd>{latestJob?.highWaterMark ?? "NOT_RECORDED"}</dd><dt>Active index snapshot</dt><dd className="technical-value">{value.activeIndexSnapshotId ?? "NOT_INDEXED"}</dd></dl>
         <div className="agent-actions">{value.publishedRevisionId && !recoveryRequired && <button className="primary" onClick={() => void act("ingestion")}>Ingest and index</button>}{value.activeIndexSnapshotId && !recoveryRequired && <button onClick={() => void act("rebuild")}>Rebuild derived index</button>}{recoveryRequired && <button className="primary" onClick={() => void act("recovery")}>Resume recovery</button>}</div>
       </section>

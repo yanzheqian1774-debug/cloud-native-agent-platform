@@ -31,6 +31,12 @@ def test_private_workbench_api_creates_and_validates() -> None:
             validated.status_code == 200
             and validated.json()["productProjection"]["state"] == "VALIDATED"
         )
+        stale = client.post(
+            f"/api/internal/v0.2.2/resources/skill/{resource['resourceId']}/validation",
+            json={"expectedVersion": 1},
+        )
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["reasonCode"] == "STALE_RESOURCE"
         manifest = client.get(
             f"/api/internal/v0.2.2/resources/skill/{resource['resourceId']}/manifest"
         )

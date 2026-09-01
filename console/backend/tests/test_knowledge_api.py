@@ -36,6 +36,12 @@ def test_standalone_private_api_runs_exact_digest_lifecycle():
         json={"expectedVersion": 1},
     ).json()["knowledge"]
     digest = validated["revisions"][-1]["digest"]
+    stale = client.post(
+        f"/api/internal/v0.2.2/knowledge/{identity}/validation",
+        json={"expectedVersion": 1},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["reasonCode"] == "STALE_KNOWLEDGE"
     assert (
         client.post(
             f"/api/internal/v0.2.2/knowledge/{identity}/reviews",
