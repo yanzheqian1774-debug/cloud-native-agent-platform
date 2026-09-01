@@ -1,9 +1,9 @@
-import { execFileSync, spawn } from "node:child_process";
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { backendUrl, restartOwnedBackend } from "../harness/ownedBackend";
 
-const backend = "http://127.0.0.1:8000";
-const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL ?? "http://127.0.0.1:6333";
+const backend = backendUrl();
+const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL;
+if (!qdrant) throw new Error("KNOWLEDGE_QDRANT_DIRECT_URL is required");
 const authorizedHeaders = {
   "X-Tenant-ID": "tenant-a",
   "X-Security-Domain": "supplier-quality",
@@ -18,20 +18,7 @@ async function publish(page: import("@playwright/test").Page) {
 }
 
 async function restartBackend(request: import("@playwright/test").APIRequestContext) {
-  execFileSync("pkill", ["-f", "uvicorn agent_console.app:app"]);
-  await expect.poll(async () => {
-    try { return (await request.get(`${backend}/healthz`, { timeout: 500 })).status(); }
-    catch { return 0; }
-  }, { timeout: 10_000 }).toBe(0);
-  const root = path.resolve(process.cwd(), "../..");
-  const pythonPath = ["conformance_harness/src", "core/src", "gateway/src", "operator/src", "runtime/src", "console/backend/src", "experiments/s5-spike-005-runtime-target-manifest", "experiments/s5-spike-007-capability-rest-fixtures"].map((entry) => path.join(root, entry)).join(path.delimiter);
-  const child = spawn("uv", ["run", "uvicorn", "agent_console.app:app", "--host", "127.0.0.1", "--port", "8000"], {
-    cwd: root,
-    env: { ...process.env, PYTHONPATH: pythonPath },
-    detached: true,
-    stdio: "inherit",
-  });
-  child.unref();
+  await restartOwnedBackend();
   await expect.poll(async () => {
     try { return (await request.get(`${backend}/healthz`, { timeout: 500 })).status(); }
     catch { return 0; }
