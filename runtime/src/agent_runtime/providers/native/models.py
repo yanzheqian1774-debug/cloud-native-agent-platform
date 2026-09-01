@@ -7,6 +7,7 @@ API, wire schema, CRD, or frozen Runtime Contract.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Protocol
 
 
 class DiagnosticReason(StrEnum):
@@ -34,6 +35,9 @@ class DiagnosticReason(StrEnum):
     OPERATION_NOT_SUPPORTED = "OPERATION_NOT_SUPPORTED"
     CLEANUP_COMPLETED = "CLEANUP_COMPLETED"
     CLEANUP_FAILED = "CLEANUP_FAILED"
+    LIFECYCLE_APPLIED = "LIFECYCLE_APPLIED"
+    LIFECYCLE_OBSERVED = "LIFECYCLE_OBSERVED"
+    LIFECYCLE_AMBIGUOUS = "LIFECYCLE_AMBIGUOUS"
 
 
 class CompatibilityMode(StrEnum):
@@ -187,6 +191,35 @@ class LifecycleResult:
     state: SupportState
     platform_execution_identity: str
     reason: DiagnosticReason
+    native_correlation: str | None = None
+
+
+class NativeLifecycleState(StrEnum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    STOPPED = "STOPPED"
+    TERMINATED = "TERMINATED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class NativeLifecycleObservation:
+    platform_runtime_identity: str
+    state: NativeLifecycleState
+    native_correlation: str | None
+    reason: DiagnosticReason
+
+
+class NativeLifecycleDriver(Protocol):
+    """Fixed lifecycle operations implemented by an owning substrate adapter."""
+
+    def start(self, platform_runtime_identity: str) -> NativeLifecycleObservation: ...
+    def stop(self, platform_runtime_identity: str) -> NativeLifecycleObservation: ...
+    def replace(self, platform_runtime_identity: str) -> NativeLifecycleObservation: ...
+    def observe(
+        self, platform_runtime_identity: str
+    ) -> NativeLifecycleObservation | None: ...
 
 
 @dataclass(frozen=True)
