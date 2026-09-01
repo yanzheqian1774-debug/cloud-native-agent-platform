@@ -26,6 +26,7 @@ SPEC.loader.exec_module(harness_module)
 Harness = harness_module.Harness
 release_manifest = harness_module.release_manifest
 minimum_disclosure = importlib.import_module("minimum_disclosure")
+build_preflight = importlib.import_module("browser_build_preflight")
 
 
 def free_port() -> int:
@@ -62,6 +63,7 @@ def args(release: Path, runtime: Path, port: int) -> Namespace:
         postgres_url="postgresql://postgres@127.0.0.1:55432/test",
         qdrant_url="http://127.0.0.1:56333",
         python_path=".",
+        journey_id="s5-impl-075-test-journey",
     )
 
 
@@ -194,6 +196,13 @@ def test_minimum_disclosure_extraction_is_allowlisted_and_fail_closed() -> None:
         "releaseEntryCount": 42,
         "releaseManifestBeforeDigest": "a" * 64,
         "releaseManifestAfterDigest": "a" * 64,
+        "journeyId": "s5-impl-075-test-journey",
+        "phase": "BROWSER_EXECUTION",
+        "assertionCategory": "BROWSER_ACCEPTANCE",
+        "statusCode": 0,
+        "exceptionClass": "NONE",
+        "correlationDigest": "b" * 64,
+        "restartRelation": "NO_RESTART",
         "completedAt": "2026-09-01T00:00:00+00:00",
         "sourceText": "must never be emitted",
     }
@@ -216,6 +225,10 @@ def test_minimum_disclosure_extraction_is_allowlisted_and_fail_closed() -> None:
         '{"vector":[0.1,0.2]}',
         '{"payload":{"content":"synthetic source"}}',
         "S5_PLANNING_API_KEY=placeholder-key",
+        'request_body={"supplier":"ACME"}',
+        "runtime_setting=VITE_MODE:live",
+        "instruction_content=classify the supplied complaint",
+        "/Users/operator/private/browser/error-context.md",
     ],
 )
 def test_generated_artifact_scan_rejects_disclosure(
@@ -249,6 +262,155 @@ def test_clean_generated_evidence_contains_only_correlation_fields(
         encoding="utf-8",
     )
     minimum_disclosure.scan_generated_artifacts([evidence])
+
+
+def test_build_mode_missing_or_incorrect_fails_closed(tmp_path: Path) -> None:
+    frontend = tmp_path / "dist"
+    frontend.mkdir()
+    (frontend / "index.html").write_text("immutable", encoding="utf-8")
+    identity = tmp_path / "build-identity.json"
+    with pytest.raises(build_preflight.BuildPreflightError):
+        build_preflight.verify_build_identity(frontend, identity)
+    with pytest.raises(build_preflight.BuildPreflightError):
+        build_preflight.record_build_identity(frontend, identity, "synthetic")
+
+
+class FakePostgresConnection:
+    def __init__(self, identity: tuple[str, str]) -> None:
+        self.identity = identity
+        self.statements: list[object] = []
+        self.rolled_back = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, statement: object):
+        self.statements.append(statement)
+        return self
+
+    def fetchone(self):
+        if len(self.statements) == 1:
+            return self.identity
+        return ("CREATED",)
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+
+def test_exact_postgres_validation_role_migration_read_write_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = FakePostgresConnection(("browser_validation", "browser_validation"))
+    monkeypatch.setattr(harness_module.psycopg, "connect", lambda _url: connection)
+    harness_module.verify_postgres_role_readiness(
+        "postgresql://redacted", "browser_validation"
+    )
+    assert len(connection.statements) == 8
+    assert connection.rolled_back
+
+
+def test_incorrect_postgres_validation_role_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = FakePostgresConnection(("postgres", "postgres"))
+    monkeypatch.setattr(harness_module.psycopg, "connect", lambda _url: connection)
+    with pytest.raises(RuntimeError, match="role identity mismatch"):
+        harness_module.verify_postgres_role_readiness(
+            "postgresql://redacted", "browser_validation"
+        )
+
+
+def test_missing_postgres_validation_grants_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = FakePostgresConnection(("browser_validation", "browser_validation"))
+
+    def fail_on_schema(statement: object):
+        connection.statements.append(statement)
+        if len(connection.statements) == 2:
+            raise PermissionError("prohibited detail")
+        return connection
+
+    monkeypatch.setattr(connection, "execute", fail_on_schema)
+    monkeypatch.setattr(harness_module.psycopg, "connect", lambda _url: connection)
+    with pytest.raises(RuntimeError, match="role readiness failed") as error:
+        harness_module.verify_postgres_role_readiness(
+            "postgresql://redacted", "browser_validation"
+        )
+    assert "prohibited detail" not in str(error.value)
+
+
+def test_live_build_identity_is_external_digest_bound_and_sanitized(
+    tmp_path: Path,
+) -> None:
+    release = tmp_path / "release"
+    frontend = release / "console/frontend/dist"
+    frontend.mkdir(parents=True)
+    (frontend / "index.html").write_text("immutable", encoding="utf-8")
+    identity = tmp_path / "runtime/build-identity.json"
+    identity.parent.mkdir()
+    build_preflight.record_build_identity(frontend, identity, "live")
+    assert not identity.is_relative_to(release)
+    record = build_preflight.verify_build_identity(frontend, identity)
+    assert set(record) == build_preflight.BUILD_IDENTITY_FIELDS
+    assert record["buildModeIdentity"] == build_preflight.APPROVED_BUILD_MODE
+    minimum_disclosure.scan_generated_artifacts([identity])
+    (frontend / "index.html").write_text("changed", encoding="utf-8")
+    with pytest.raises(build_preflight.BuildPreflightError):
+        build_preflight.verify_build_identity(frontend, identity)
+
+
+def test_raw_playwright_retention_is_disabled() -> None:
+    config = (
+        Path(__file__).parents[1] / "console/frontend/playwright.config.ts"
+    ).read_text(encoding="utf-8")
+    assert 'trace: "off"' in config
+    assert 'screenshot: "off"' in config
+    assert 'video: "off"' in config
+    assert "retain-on-failure" not in config
+
+
+def test_recursive_plain_and_compressed_diagnostics_scan(tmp_path: Path) -> None:
+    nested = tmp_path / "diagnostics/nested"
+    nested.mkdir(parents=True)
+    (nested / "acceptance.json").write_text(
+        '{"journeyId":"journey-075","phase":"BROWSER_EXECUTION",'
+        '"assertionCategory":"BROWSER_ACCEPTANCE","statusCode":1,'
+        '"exceptionClass":"BROWSER_COMMAND_FAILED",'
+        '"correlationDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",'
+        '"restartRelation":"NO_RESTART",'
+        '"completedAt":"2026-09-02T00:00:00+00:00"}',
+        encoding="utf-8",
+    )
+    with zipfile.ZipFile(nested / "sanitized.zip", "w") as archive:
+        archive.writestr(
+            "diagnostic.json",
+            '{"journeyId":"journey-075","exceptionClass":"ASSERTION_FAILURE"}',
+        )
+    minimum_disclosure.scan_generated_artifacts([tmp_path])
+
+
+def test_attempt_05_categories_are_negative_controls_for_old_scanner(
+    tmp_path: Path,
+) -> None:
+    old_patterns = tuple(
+        minimum_disclosure._FORBIDDEN_TEXT[index] for index in (0, 1, 2, 3, 5, 6)
+    )
+    controls = [
+        'request_body={"supplier":"ACME"}',
+        "runtime_setting=VITE_MODE:live",
+        "instruction_content=classify the supplied complaint",
+        "/Users/operator/private/browser/error-context.md",
+    ]
+    for index, control in enumerate(controls):
+        assert not any(pattern.search(control) for pattern in old_patterns)
+        artifact = tmp_path / f"negative-control-{index}.txt"
+        artifact.write_text(control, encoding="utf-8")
+        with pytest.raises(minimum_disclosure.DisclosureViolation):
+            minimum_disclosure.scan_artifact(artifact)
 
 
 def test_validation_helpers_prohibit_broad_file_dump_commands() -> None:

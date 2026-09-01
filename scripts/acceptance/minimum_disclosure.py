@@ -17,6 +17,13 @@ EVIDENCE_FIELDS = frozenset(
         "releaseEntryCount",
         "releaseManifestBeforeDigest",
         "releaseManifestAfterDigest",
+        "journeyId",
+        "phase",
+        "assertionCategory",
+        "statusCode",
+        "exceptionClass",
+        "correlationDigest",
+        "restartRelation",
         "completedAt",
     }
 )
@@ -26,8 +33,10 @@ _FORBIDDEN_TEXT = (
     re.compile(r"(?i)\b(?:database_url|api_key|authorization|password|secret)\b"),
     re.compile(r"(?i)\b(?:bounded[-_]test[-_]key|placeholder[-_]key)\b"),
     re.compile(r"(?i)\b(?:source_text|prompt|environment)\b"),
+    re.compile(r"(?i)\b(?:request_body|runtime_setting|instruction_content)\b"),
     re.compile(r'(?i)["\'](?:content|vector|vectors|payload)["\']\s*:'),
     re.compile(r"\b(?:AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})\b"),
+    re.compile(r"(?:^|[\s\"'])(?:/Users/|/home/|/private/|/tmp/|[A-Za-z]:\\\\)"),
 )
 
 

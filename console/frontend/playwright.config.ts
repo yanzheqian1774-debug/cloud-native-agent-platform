@@ -10,7 +10,9 @@ export default defineConfig({
   workers: 1,
   use: {
     baseURL: `http://127.0.0.1:${frontendPort}`,
-    trace: "retain-on-failure",
+    trace: "off",
+    screenshot: "off",
+    video: "off",
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     },
