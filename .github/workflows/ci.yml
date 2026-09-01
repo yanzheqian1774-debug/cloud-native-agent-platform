@@ -151,7 +151,23 @@ jobs:
         env:
           VITE_SUPPLIER_QUALITY_DEMO_MODE: live
           VITE_BACKEND_URL: http://127.0.0.1:18072
-        run: npm run build
+        run: |
+          npm run build
+          ../../.venv/bin/python ../../scripts/acceptance/browser_build_preflight.py \
+            --frontend-root dist \
+            --output "$RUNNER_TEMP/s5-impl-075-build-identity.json" \
+            --build-mode "$VITE_SUPPLIER_QUALITY_DEMO_MODE"
+
+      - name: Provision exact browser validation role
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGDATABASE: agent_platform
+          PGUSER: postgres
+        run: |
+          psql --set ON_ERROR_STOP=1 \
+            --command "CREATE ROLE browser_validation LOGIN" \
+            --command "GRANT CONNECT, CREATE ON DATABASE agent_platform TO browser_validation"
 
       - name: Run real browser acceptance
         env:
@@ -172,7 +188,10 @@ jobs:
             --runtime-dir "$RUNNER_TEMP/s5-impl-072-${GITHUB_RUN_ID}" \
             --backend-host 127.0.0.1 \
             --backend-port 18072 \
-            --postgres-url postgresql://postgres@127.0.0.1:5432/agent_platform \
+            --postgres-url postgresql://browser_validation@127.0.0.1:5432/agent_platform \
+            --postgres-validation-role browser_validation \
             --qdrant-url http://127.0.0.1:6333 \
+            --build-mode-identity "$RUNNER_TEMP/s5-impl-075-build-identity.json" \
+            --journey-id s5-impl-075-agent-workbench \
             --python-path conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures \
             -- npm --prefix console/frontend run test:e2e
