@@ -22,8 +22,8 @@ objective, or durable-main integration changes.
 - Objective classification: `WORKING_RELEASE_OBJECTIVE`
 - v0.2 release acceptance: `NOT_GRANTED`
 - v0.2 production readiness: `NOT_GRANTED`
-- Current durable-main head: `5b990fe561d2044de61dc3ce3899e024327aab33`
-- Exact-main CI: run `33369618464`, `SUCCESS`
+- Current durable-main head: `4200bd33c489bd544c04c3209f58b5b84c80bd14`
+- Exact-main CI: run `33467767800`, `SUCCESS`
 - S5-GOV-003 authorized durable-main baseline:
   `474b19e7bf32a342d93b4b891f6c7a799b9261b6`
 - S5-PLAN-003 authorized durable-main baseline:
@@ -41,6 +41,9 @@ records lifecycle and provenance.
 
 | Session | Current state | Durable basis |
 | --- | --- | --- |
+| v0.2-CONTROL-003 Wave 4 Release Preflight | `CLOSED / COMPLETED / ACCEPTED_WITH_CORRECTIONS` | Human-confirmed read-only v0.2.2 release preflight closure at durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`; exact-main CI run `33467767800` succeeded; v0.2.2 migration chain remains exactly `0001` through `0007`; `0008` is reserved for future v0.2.3 Execution Authority/PostgreSQL Evidence work; S5-DEPLOY-004 is candidate-only and not allocated; [Evidence](docs/evidence/s5/v0.2/v0.2-control-003-wave-4-release-preflight/README.md) |
+| S5-REL-060 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / SESSION_CLOSED` | S5-ARCH-019 integrated through PR #106 at durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`; exact-main CI run `33467767800` succeeded; closure grants no Track A/B, migration, deployment, release or production authority; reopen prohibited |
+| S5-ARCH-019 | `HUMAN_CONFIRMED_CLOSED / COMPLETED / DURABLY_INTEGRATED / SESSION_CLOSED` | PR #106 merged at durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`; exact-main CI run `33467767800` succeeded; migration `0008` remains reserved for the separately authorized future v0.2.3 Execution Authority/PostgreSQL Evidence track and is not a Wave 3B migration |
 | S5-GOV-004 | `ACTIVE / AUTHORIZED / CHECKPOINT_A / REVIEW_READY` | Human-confirmed v0.2.x Product Capability and Runtime Charter v1 at exact baseline `5b990fe561d2044de61dc3ce3899e024327aab33`; governance/product/Evidence only; preserves S5-ARCH-018 and S5-IMPL-046 limitations; no implementation, architecture change, downstream allocation, release or completion authority |
 | S5-IMPL-046 | `ACTIVE / IMPLEMENTATION_COMPLETE / DURABLY_INTEGRATED / AWAITING_HUMAN_CLOSE_CONFIRMATION` | Human-authorized G1 Agent Definition product vertical slice from exact baseline `440cd31dff6959bcaf11a9c66becc973c70d77f6`; PR #98 merged at durable main `5b990fe561d2044de61dc3ce3899e024327aab33`, exact-main CI run `33369618464` succeeded; all bounded Agent lifecycle, PostgreSQL continuity, Workbench and governed rematch limitations remain; no public Contract/CRD, Runtime, deployment, release or closure authority |
 | S5-GOV-003 | `ACTIVE / AUTHORIZED / CHECKPOINT_A` | Governance-only reconciliation at exact baseline `474b19e7bf32a342d93b4b891f6c7a799b9261b6`; records Human-confirmed v0.2.2–v0.2.4 definitions, bounded persistence direction, sequence and unreconciled architecture-number debt; grants no implementation, architecture implementation, deployment, release, certification or public Contract authority |
@@ -100,14 +103,16 @@ representation remain `NOT_AUTHORIZED / NOT_APPROVED / UNDECIDED`.
 
 ## Current release focus
 
-S5-ARCH-019 is `ACTIVE / AUTHORIZED / CHECKPOINT_A` at exact baseline
-`c06c5d8da89e1df960e64f48036c9dea2f8166a5`. Its proposed v0.2.3 G2 decision
+S5-ARCH-019 is `CLOSED / COMPLETED / DURABLY_INTEGRATED / SESSION_CLOSED` at
+durable main `4200bd33c489bd544c04c3209f58b5b84c80bd14`; exact-main CI run
+`33467767800` succeeded. Its accepted v0.2.3 G2 decision
 separates PostgreSQL Product execution authority from Kubernetes actual workload
 authority, defines desired/observed reconciliation and a single-writer PostgreSQL
 Evidence cutover, preserves Native Runtime reuse, bounds later OpenClaw execution,
-and separates two future backend tracks. It is architecture-only and awaits Human
-Architecture Review and Durable Integration; no implementation, migration `0008`,
-public CRD/API, track allocation, completion or production authority is granted.
+and separates two future backend tracks. Migration `0008` is reserved for the future
+v0.2.3 Execution Authority/PostgreSQL Evidence track; it is not a Wave 3B migration.
+No implementation, public CRD/API, Track A/B allocation, deployment, release or
+production authority is granted by closure.
 
 Human-confirmed product sequencing after v0.2.1 is now exactly
 `v0.2.2 → v0.2.3 → v0.2.4 → v0.3.0`; no v0.2.5 is present in the confirmed
