@@ -28,8 +28,9 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.getByText("1 Tool(s) · 1 Resource(s) · 1 Prompt(s)")).toBeVisible();
   await page.getByRole("button",{name:"Govern Tool selection"}).click();
   await page.getByRole("button",{name:"Authorize real bounded invocation"}).click();
-  await expect(page.getByRole("status")).toContainText("Invocation Evidence recorded");
-  await expect(page.getByRole("status")).toContainText("credential values redacted: true");
+  const mcpInvocationStatus=page.getByRole("region",{name:"MCP professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
+  await expect(mcpInvocationStatus).toContainText("Invocation Evidence recorded");
+  await expect(mcpInvocationStatus).toContainText("credential values redacted: true");
   await publish(page,"/skills","Create governed SKILL");
   await page.getByLabel("Search catalog").fill("Supplier Quality");
   await page.getByLabel("Lifecycle filter").selectOption("PUBLISHED");
@@ -39,8 +40,9 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.getByText(/expected equals actual/)).toBeVisible();
   await page.getByRole("button",{name:"Bind exact MCP capability"}).click();
   await page.getByRole("button",{name:"Authorize bounded capability test"}).click();
-  await expect(page.getByRole("status")).toContainText("Invocation Evidence recorded");
-  await expect(page.getByRole("status")).toContainText("credential values redacted: true");
+  const skillInvocationStatus=page.getByRole("region",{name:"SKILL professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
+  await expect(skillInvocationStatus).toContainText("Invocation Evidence recorded");
+  await expect(skillInvocationStatus).toContainText("credential values redacted: true");
   await page.getByRole("tab", {name:"Technical View"}).click();
   await expect(page.getByText("Canonical identity")).toBeVisible();
   await expect(page.getByRole("tab", {name:"Technical View"})).toHaveAttribute("aria-selected", "true");
