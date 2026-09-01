@@ -1,4 +1,6 @@
-from agent_console.app import app
+import agent_console.app as app_module
+from agent_console.agent_definition_repository import DefinitionScope
+from agent_console.app import _WorkbenchBindingResolver, app
 from agent_console.attention_service import AttentionService
 from agent_console.digital_employee_service import DigitalEmployeeService
 from agent_console.product_dashboard_service import ProductDashboardService
@@ -8,6 +10,115 @@ from agent_console.resource_relationship_service import ResourceRelationshipServ
 from fastapi.testclient import TestClient
 
 SCOPE = ProductScope("tenant-a", "supplier-quality")
+
+
+class _Repository:
+    def __init__(self, records):
+        self.records = records
+
+    def get(self, scope, *identity):
+        key = (scope.namespace, scope.security_domain, *identity)
+        if key not in self.records:
+            raise LookupError("RESOURCE_NOT_FOUND")
+        return self.records[key]
+
+
+class _Service:
+    def __init__(self, records):
+        self.repository = _Repository(records)
+
+    @staticmethod
+    def scope(namespace, security_domain):
+        return ProductScope(namespace, security_domain)
+
+
+def _bound_record(kind, identity, *, state="PUBLISHED", **overrides):
+    revision_id = f"{kind}-revision:1"
+    identity_key = "knowledgeId" if kind == "knowledge" else "resourceId"
+    return {
+        identity_key: identity,
+        "publishedRevisionId": revision_id if state == "PUBLISHED" else None,
+        "lifecycleState": state,
+        "enabled": True,
+        "archived": False,
+        "compatible": True,
+        "revisions": [
+            {"revisionId": revision_id, "digest": f"{kind}-digest", "state": state}
+        ],
+        **overrides,
+    }
+
+
+def test_workbench_resolver_composes_exact_scope_authorities_and_fails_closed(
+    monkeypatch,
+):
+    scope = DefinitionScope("tenant-a", "supplier-quality")
+    skill = _bound_record("skill", "skill:quality")
+    mcp = _bound_record(
+        "mcp",
+        "mcp:quality",
+        discoverySnapshots=[{"snapshotId": "mcp-snapshot:1"}],
+        toolSelections=[
+            {"snapshotId": "mcp-snapshot:1", "toolNames": ["quality.lookup"]}
+        ],
+    )
+    knowledge = _bound_record(
+        "knowledge",
+        "knowledge:quality",
+        activeIndexSnapshotId="knowledge-snapshot:1",
+    )
+    resource_service = _Service(
+        {
+            ("tenant-a", "supplier-quality", "skill", "skill:quality"): skill,
+            ("tenant-a", "supplier-quality", "mcp", "mcp:quality"): mcp,
+        }
+    )
+    knowledge_service = _Service(
+        {("tenant-a", "supplier-quality", "knowledge:quality"): knowledge}
+    )
+    monkeypatch.setattr(app_module, "get_skill_mcp_service", lambda: resource_service)
+    monkeypatch.setattr(app_module, "get_knowledge_service", lambda: knowledge_service)
+
+    resolver = _WorkbenchBindingResolver()
+    resolved_skill = resolver.resolve(scope, "skill", "skill:quality")
+    resolved_mcp = resolver.resolve(scope, "mcp", "mcp:quality")
+    resolved_knowledge = resolver.resolve(scope, "knowledge", "knowledge:quality")
+    assert resolved_skill and resolved_skill.digest == "skill-digest"
+    assert resolved_mcp and resolved_mcp.tools == ("quality.lookup",)
+    assert resolved_mcp.snapshots == ("mcp-snapshot:1",)
+    assert resolved_knowledge and resolved_knowledge.snapshots == (
+        "knowledge-snapshot:1",
+    )
+    assert resolver.resolve(scope, "skill", "skill:absent") is None
+    assert (
+        resolver.resolve(
+            DefinitionScope("tenant-b", "supplier-quality"),
+            "skill",
+            "skill:quality",
+        )
+        is None
+    )
+
+
+def test_workbench_resolver_preserves_fail_closed_resource_states(monkeypatch):
+    scope = DefinitionScope("tenant-a", "supplier-quality")
+    records = {}
+    for name, changes in (
+        ("unpublished", {"publishedRevisionId": None}),
+        ("disabled", {"enabled": False}),
+        ("deprecated", {"lifecycleState": "DEPRECATED"}),
+        ("incompatible", {"compatible": False}),
+    ):
+        identity = f"skill:{name}"
+        records[("tenant-a", "supplier-quality", "skill", identity)] = _bound_record(
+            "skill", identity, **changes
+        )
+    monkeypatch.setattr(app_module, "get_skill_mcp_service", lambda: _Service(records))
+    resolver = _WorkbenchBindingResolver()
+    assert resolver.resolve(scope, "skill", "skill:unpublished") is None
+    assert resolver.resolve(scope, "skill", "skill:disabled").enabled is False
+    assert resolver.resolve(scope, "skill", "skill:deprecated").deprecated is True
+    assert resolver.resolve(scope, "skill", "skill:incompatible").compatible is False
 
 
 def _revision(revision_id="revision:1", state="DRAFT", bindings=None):

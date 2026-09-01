@@ -39,6 +39,7 @@ from fastapi.responses import StreamingResponse
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, ValidationError
 
+from agent_console.agent_binding_validation import BindingResolution
 from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepository
 from agent_console.agent_definition_repository import AgentDefinitionRepositoryError
 from agent_console.agent_definition_schemas import (
@@ -69,6 +70,7 @@ from agent_console.intervention_feedback_schemas import (
     InterventionLifecycleCommand,
     OutcomeFeedbackCommand,
 )
+from agent_console.knowledge_api import get_knowledge_service
 from agent_console.knowledge_api import router as knowledge_router
 from agent_console.live_journey import (
     LiveJourneyCoordinator,
@@ -123,6 +125,7 @@ from agent_console.schemas import (
     WorkflowRunList,
 )
 from agent_console.service import WorkflowService
+from agent_console.skill_mcp_api import get_skill_mcp_service
 from agent_console.skill_mcp_api import router as skill_mcp_router
 from agent_console.supplier_quality_demo import (
     SupplierQualityDemoFailure,
@@ -395,14 +398,89 @@ _agent_definition_startup_error: str | None = None
 
 
 class _WorkbenchBindingResolver:
-    """Route only governed Workflow and Runtime references to Track B adapters."""
+    """Compose domain-owned exact binding reads without becoming authority."""
 
     def resolve(self, scope, kind, resource_id):
+        if kind in {"skill", "mcp"}:
+            return self._skill_mcp(scope, kind, resource_id)
+        if kind == "knowledge":
+            return self._knowledge(scope, resource_id)
         if kind == "workflow":
             return workflow_binding_resolver.resolve(scope, kind, resource_id)
         if kind == "runtime-profile":
             return runtime_binding_resolver.resolve(scope, kind, resource_id)
         return None
+
+    @staticmethod
+    def _published(record):
+        revision_id = record.get("publishedRevisionId")
+        return next(
+            (
+                revision
+                for revision in record.get("revisions", [])
+                if revision.get("revisionId") == revision_id
+            ),
+            None,
+        )
+
+    def _skill_mcp(self, scope, kind, resource_id):
+        try:
+            service = get_skill_mcp_service()
+            record = service.repository.get(
+                service.scope(scope.namespace, scope.security_domain), kind, resource_id
+            )
+        except Exception:
+            return None
+        revision = self._published(record)
+        if revision is None:
+            return None
+        selections = record.get("toolSelections", []) if kind == "mcp" else []
+        return BindingResolution(
+            resource_id=record["resourceId"],
+            revision_id=revision["revisionId"],
+            digest=revision["digest"],
+            published=revision.get("state") == "PUBLISHED",
+            enabled=record.get("enabled", True) and not record.get("archived", False),
+            deprecated=record.get("lifecycleState") == "DEPRECATED",
+            compatible=record.get("compatible", True),
+            tools=tuple(
+                sorted(
+                    {
+                        tool
+                        for selection in selections
+                        for tool in selection.get("toolNames", [])
+                    }
+                )
+            ),
+            snapshots=tuple(
+                snapshot.get("snapshotId")
+                for snapshot in record.get("discoverySnapshots", [])
+                if snapshot.get("snapshotId")
+            ),
+        )
+
+    def _knowledge(self, scope, resource_id):
+        try:
+            service = get_knowledge_service()
+            record = service.repository.get(
+                service.scope(scope.namespace, scope.security_domain), resource_id
+            )
+        except Exception:
+            return None
+        revision = self._published(record)
+        if revision is None:
+            return None
+        snapshot_id = record.get("activeIndexSnapshotId")
+        return BindingResolution(
+            resource_id=record["knowledgeId"],
+            revision_id=revision["revisionId"],
+            digest=revision["digest"],
+            published=revision.get("state") == "PUBLISHED",
+            enabled=record.get("enabled", True) and not record.get("archived", False),
+            deprecated=record.get("lifecycleState") == "DEPRECATED",
+            compatible=record.get("compatible", True),
+            snapshots=(snapshot_id,) if snapshot_id else (),
+        )
 
 
 def _configure_agent_definitions() -> None:
