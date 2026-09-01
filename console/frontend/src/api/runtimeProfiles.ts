@@ -1,0 +1,14 @@
+export type RuntimeContent={provider:"NATIVE_KUBERNETES"|"OPENCLAW";resources:{cpuRequest:string;cpuLimit:string;memoryRequest:string;memoryLimit:string};isolation:"NAMESPACE"|"DEDICATED_RUNTIME";stateMode:"STATELESS"|"EXTERNAL_REFERENCE";sessionAffinity:"NONE"|"REQUIRED";secretReferences:string[];openClawPackageRef:string|null};
+export type RuntimeRevision={revisionId:string;predecessorRevisionId:string|null;state:string;digest:string;content:RuntimeContent;createdAt:string};
+export type RuntimeProfile={runtimeProfileId:string;name:string;aggregateVersion:number;lifecycleState:string;currentDraftRevisionId:string|null;publishedRevisionId:string|null;revisions:RuntimeRevision[];reviews:Array<{reviewId:string;digest:string}>};
+export type RuntimeProjection={profile:RuntimeProfile;productProjection:Record<string,unknown>;technicalProjection:Record<string,unknown>};
+export class RuntimeProfileRequestError extends Error{reasonCode:string;status:number;constructor(reasonCode:string,status:number){super(reasonCode);this.reasonCode=reasonCode;this.status=status}}
+async function request<T>(path:string,init?:RequestInit):Promise<T>{let response:Response;try{response=await fetch(path,{...init,headers:{Accept:"application/json","Content-Type":"application/json",...init?.headers}})}catch{throw new RuntimeProfileRequestError("RUNTIME_PROFILE_NETWORK_UNAVAILABLE",503)}const body=await response.json().catch(()=>null);if(!response.ok)throw new RuntimeProfileRequestError(body?.detail?.reasonCode??"RUNTIME_PROFILE_UNAVAILABLE",response.status);return body as T}
+const root="/api/internal/v0.2.2/runtime-profiles";
+export const listRuntimeProfiles=()=>request<RuntimeProjection[]>(root);
+export const getRuntimeProfile=(id:string)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}`);
+export const createRuntimeProfile=(name:string,content:RuntimeContent)=>request<RuntimeProjection>(root,{method:"POST",body:JSON.stringify({name,content})});
+export const validateRuntimeProfile=(id:string,expectedVersion:number)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/validation`,{method:"POST",body:JSON.stringify({expectedVersion})});
+export const reviewRuntimeProfile=(id:string,expectedVersion:number,digest:string)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/reviews`,{method:"POST",body:JSON.stringify({expectedVersion,digest,decision:"APPROVE",reason:"Human reviewed exact Runtime Profile digest"})});
+export const publishRuntimeProfile=(id:string,expectedVersion:number,digest:string,reviewId:string)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/publications`,{method:"POST",body:JSON.stringify({expectedVersion,digest,reviewId})});
+export const successorRuntimeProfile=(id:string,expectedVersion:number)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/successors`,{method:"POST",body:JSON.stringify({expectedVersion})});
