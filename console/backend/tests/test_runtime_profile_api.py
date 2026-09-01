@@ -41,6 +41,12 @@ def test_private_api_publishes_native_and_declares_openclaw_without_execution():
             json={"expectedVersion": 1},
         ).json()["profile"]
         digest = validated["revisions"][-1]["digest"]
+        stale = client.post(
+            f"/api/internal/v0.2.2/runtime-profiles/{rid}/validation",
+            json={"expectedVersion": 1},
+        )
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["reasonCode"] == "STALE_RUNTIME_PROFILE"
         reviewed = client.post(
             f"/api/internal/v0.2.2/runtime-profiles/{rid}/reviews",
             json={"expectedVersion": 2, "digest": digest, "reason": "bounded"},

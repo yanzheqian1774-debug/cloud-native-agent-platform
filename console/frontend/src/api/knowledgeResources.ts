@@ -50,6 +50,8 @@ export class KnowledgeRequestError extends Error {
     this.status = status;
   }
 }
+export type KnowledgeControlledState = "validation error"|"denied"|"not found"|"conflict"|"stale"|"backend unavailable"|"partial"|"retryable"|"recovery required"|"unsupported";
+export const knowledgeControlledState=(error:KnowledgeRequestError):KnowledgeControlledState=>error.status===403?"denied":error.status===404?"not found":error.status===409?(error.reasonCode.includes("STALE")?"stale":"conflict"):error.status===422?"validation error":error.status===501?"unsupported":error.status>=500?"backend unavailable":"retryable";
 async function request<T>(path:string,init?:RequestInit):Promise<T>{let response:Response;try{response=await fetch(path,{...init,headers:{Accept:"application/json","Content-Type":"application/json",...init?.headers}})}catch{throw new KnowledgeRequestError("KNOWLEDGE_NETWORK_UNAVAILABLE",503)}const body=await response.json().catch(()=>null);if(!response.ok)throw new KnowledgeRequestError(body?.detail?.reasonCode??"KNOWLEDGE_UNAVAILABLE",response.status);return body as T}
 const root="/api/internal/v0.2.2/knowledge";
 export const listKnowledge=()=>request<KnowledgeResource[]>(root);
