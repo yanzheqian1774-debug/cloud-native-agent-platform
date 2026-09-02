@@ -7,11 +7,11 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 import re
 import secrets
 import shutil
 import socket
-import stat
 import subprocess
 import sys
 import tarfile
@@ -33,7 +33,6 @@ from browser_build_preflight import (  # noqa: E402
     verify_build_identity,
 )
 from isolated_browser_harness import (  # noqa: E402
-    assert_immutable,
     release_manifest,
 )
 from minimum_disclosure import scan_generated_artifacts  # noqa: E402
@@ -395,8 +394,14 @@ class Runner:
     )
     runtime_dir: Path | None = None
     candidate_dir: Path | None = None
+    candidate_source_dir: Path | None = None
+    candidate_mount_owned: bool = False
+    validation_uid: int | None = None
+    validation_gid: int | None = None
     build_identity_path: Path | None = None
     candidate_before: dict[str, dict[str, str | int]] | None = None
+    candidate_mounted_after: dict[str, dict[str, str | int]] | None = None
+    candidate_unmounted_after: dict[str, dict[str, str | int]] | None = None
     sentinel_before: dict[str, tuple[str, int]] = field(default_factory=dict)
     chromium_path: Path | None = None
 
@@ -821,8 +826,8 @@ class Runner:
     def present_candidate(self) -> None:
         self.ensure_runtime()
         assert self.runtime_dir is not None
-        self.candidate_dir = self.runtime_dir / "candidate"
-        self.candidate_dir.mkdir(mode=0o700)
+        self.candidate_source_dir = self.runtime_dir / "candidate-source"
+        self.candidate_source_dir.mkdir(mode=0o700)
         source = self.contract["product"]["sourceSha"]
         archive = run_command(
             ["git", "archive", "--format=tar", source], self.workspace
@@ -833,7 +838,7 @@ class Runner:
         archive_path.write_bytes(archive.stdout)
         try:
             with tarfile.open(archive_path) as bundle:
-                bundle.extractall(self.candidate_dir, filter="data")
+                bundle.extractall(self.candidate_source_dir, filter="data")
         except (OSError, tarfile.TarError) as exc:
             raise RunnerError("CANDIDATE", "candidate presentation failed") from exc
         archive_path.unlink()
@@ -850,16 +855,19 @@ class Runner:
             fail("PROVENANCE", "acceptance configuration overlay is unavailable")
         config = overlay.stdout.decode("utf-8")
         relative = "../../scripts/acceptance/static_proxy_server.py --root dist"
+        mounted_candidate = self.runtime_dir / "candidate"
         explicit = (
-            f"{self.candidate_dir}/scripts/acceptance/static_proxy_server.py "
-            f"--root {self.candidate_dir}/console/frontend/dist"
+            f"{mounted_candidate}/scripts/acceptance/static_proxy_server.py "
+            f"--root {mounted_candidate}/console/frontend/dist"
         )
         if config.count(relative) != 1:
             fail("PROVENANCE", "acceptance configuration command is ambiguous")
-        (self.candidate_dir / config_path).write_text(
+        (self.candidate_source_dir / config_path).write_text(
             config.replace(relative, explicit), encoding="utf-8"
         )
-        manifest = self.candidate_dir / self.contract["build"]["frontendManifestPath"]
+        manifest = (
+            self.candidate_source_dir / self.contract["build"]["frontendManifestPath"]
+        )
         if (
             not manifest.is_file()
             or digest_bytes(manifest.read_bytes())
@@ -868,8 +876,8 @@ class Runner:
             fail("PROVENANCE", "candidate frontend manifest identity mismatch")
 
     def build_candidate(self) -> None:
-        assert self.candidate_dir is not None and self.runtime_dir is not None
-        frontend = self.candidate_dir / "console/frontend"
+        assert self.candidate_source_dir is not None and self.runtime_dir is not None
+        frontend = self.candidate_source_dir / "console/frontend"
         environment = {
             "PATH": os.environ.get("PATH", ""),
             "HOME": str(self.runtime_dir / "npm-home"),
@@ -910,25 +918,187 @@ class Runner:
         self.build_identity_path = self.runtime_dir / "build-identity.json"
         record_build_identity(frontend / "dist", self.build_identity_path, "live")
         verify_build_identity(frontend / "dist", self.build_identity_path)
-        for path in sorted(self.candidate_dir.rglob("*"), reverse=True):
+        uid, gid = self.select_validation_identity()
+        for path in (self.candidate_source_dir, *self.candidate_source_dir.rglob("*")):
             if not path.is_symlink():
-                executable = path.stat().st_mode & 0o111
-                path.chmod(0o555 if path.is_dir() or executable else 0o444)
-        self.candidate_dir.chmod(0o555)
-        self.candidate_before = release_manifest(self.candidate_dir)
-        assert_immutable(self.candidate_dir)
+                os.chown(path, uid, gid)
+                path.chmod(path.stat().st_mode | 0o600)
+        self.candidate_before = release_manifest(self.candidate_source_dir)
+        self.present_read_only_candidate()
+
+    def select_validation_identity(self) -> tuple[int, int]:
+        if os.geteuid() != 0:
+            fail(
+                "CANDIDATE",
+                "filesystem read-only presentation authority is unavailable",
+                "READ_ONLY_MOUNT_MISSING",
+            )
+        try:
+            identity = pwd.getpwnam("nobody")
+        except KeyError as exc:
+            raise RunnerError(
+                "CANDIDATE",
+                "unprivileged validation identity is unavailable",
+                "VALIDATION_IDENTITY_MISMATCH",
+            ) from exc
+        if identity.pw_uid == 0 or identity.pw_gid == 0:
+            fail(
+                "CANDIDATE",
+                "root denial-probe identity is forbidden",
+                "ROOT_PROBE_FORBIDDEN",
+            )
+        self.validation_uid, self.validation_gid = identity.pw_uid, identity.pw_gid
+        return identity.pw_uid, identity.pw_gid
+
+    def verify_mount_target_owned(self) -> None:
+        if self.runtime_dir is None or self.candidate_dir is None:
+            fail("OWNERSHIP", "candidate mount ownership is unavailable")
+        expected = self.runtime_dir / "candidate"
+        if not self.candidate_mount_owned or self.candidate_dir != expected:
+            fail("OWNERSHIP", "candidate mount target is not runner-owned")
+        self.verify_runtime_owned()
+
+    def mount_options(self) -> set[str]:
+        assert self.candidate_dir is not None
+        result = run_command(
+            [
+                "findmnt",
+                "--noheadings",
+                "--output",
+                "TARGET,VFS-OPTIONS",
+                "--target",
+                str(self.candidate_dir),
+            ],
+            self.workspace,
+        )
+        if result.returncode:
+            fail(
+                "CANDIDATE",
+                "read-only candidate mount is missing",
+                "READ_ONLY_MOUNT_MISSING",
+            )
+        try:
+            target, options = result.stdout.decode().strip().split(maxsplit=1)
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise RunnerError(
+                "CANDIDATE",
+                "read-only candidate mount verification failed",
+                "READ_ONLY_MOUNT_VERIFICATION_FAILED",
+            ) from exc
+        if Path(target) != self.candidate_dir:
+            fail(
+                "CANDIDATE",
+                "read-only candidate mount verification failed",
+                "READ_ONLY_MOUNT_VERIFICATION_FAILED",
+            )
+        return set(options.split(","))
+
+    def present_read_only_candidate(self) -> None:
+        assert self.runtime_dir is not None and self.candidate_source_dir is not None
+        uid, gid = self.select_validation_identity()
+        if (
+            shutil.which("mount") is None
+            or shutil.which("umount") is None
+            or shutil.which("findmnt") is None
+            or shutil.which("setpriv") is None
+        ):
+            fail(
+                "CANDIDATE",
+                "filesystem read-only presentation tooling is unavailable",
+                "READ_ONLY_MOUNT_MISSING",
+            )
+        self.candidate_dir = self.runtime_dir / "candidate"
+        self.candidate_dir.mkdir(mode=0o700)
+        mounted = run_command(
+            [
+                "mount",
+                "--bind",
+                str(self.candidate_source_dir),
+                str(self.candidate_dir),
+            ],
+            self.workspace,
+        )
+        if mounted.returncode:
+            fail(
+                "CANDIDATE",
+                "filesystem read-only presentation could not be created",
+                "READ_ONLY_MOUNT_MISSING",
+            )
+        self.candidate_mount_owned = True
+        remounted = run_command(
+            ["mount", "-o", "remount,bind,ro", str(self.candidate_dir)],
+            self.workspace,
+        )
+        if remounted.returncode:
+            fail(
+                "CANDIDATE",
+                "read-only candidate mount verification failed",
+                "READ_ONLY_MOUNT_VERIFICATION_FAILED",
+            )
+        if "ro" not in self.mount_options():
+            fail(
+                "CANDIDATE",
+                "candidate presentation is mode-bit-only or writable",
+                "MODE_BITS_ONLY_NOT_ENFORCED",
+            )
+        source_stat = self.candidate_source_dir.stat()
+        target_stat = self.candidate_dir.stat()
+        if (
+            (source_stat.st_dev, source_stat.st_ino)
+            != (target_stat.st_dev, target_stat.st_ino)
+            or (source_stat.st_uid, source_stat.st_gid) != (uid, gid)
+            or (target_stat.st_uid, target_stat.st_gid) != (uid, gid)
+        ):
+            fail(
+                "CANDIDATE",
+                "candidate mount source and target ownership mismatch",
+                "READ_ONLY_MOUNT_VERIFICATION_FAILED",
+            )
+        probe_runtime = self.runtime_dir / "validation-runtime"
+        probe_runtime.mkdir(mode=0o700)
+        os.chown(probe_runtime, uid, gid)
+        mounted = release_manifest(self.candidate_dir)
+        if mounted != self.candidate_before:
+            fail("CANDIDATE", "mounted candidate manifest equality failed")
 
     def denial_probes(self) -> None:
         assert self.candidate_dir is not None and self.runtime_dir is not None
-        ordinary = self.candidate_dir / "ordinary-write-denied"
-        try:
-            descriptor = os.open(ordinary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except PermissionError:
-            pass
-        else:
-            os.close(descriptor)
-            ordinary.unlink(missing_ok=True)
-            fail("CANDIDATE", "ordinary candidate write was not denied")
+        if self.validation_uid in {None, 0} or self.validation_gid in {None, 0}:
+            fail(
+                "CANDIDATE",
+                "root denial-probe identity is forbidden",
+                "ROOT_PROBE_FORBIDDEN",
+            )
+        if "ro" not in self.mount_options():
+            fail(
+                "CANDIDATE",
+                "read-only candidate mount is missing",
+                "READ_ONLY_MOUNT_MISSING",
+            )
+        prefix = [
+            "setpriv",
+            f"--reuid={self.validation_uid}",
+            f"--regid={self.validation_gid}",
+            "--clear-groups",
+        ]
+        identity = run_command([*prefix, "id", "-u"], self.workspace)
+        if identity.returncode or identity.stdout.decode().strip() != str(
+            self.validation_uid
+        ):
+            fail(
+                "CANDIDATE",
+                "validation identity mismatch",
+                "VALIDATION_IDENTITY_MISMATCH",
+            )
+        ordinary = run_command(
+            [*prefix, "sh", "-c", ": > ordinary-write-denied"], self.candidate_dir
+        )
+        if ordinary.returncode == 0:
+            fail(
+                "CANDIDATE",
+                "ordinary candidate write was not denied",
+                "WRITE_UNEXPECTEDLY_SUCCEEDED",
+            )
         configured = (self.workspace / self.contract["pythonInterpreter"]).absolute()
         environment = {
             "PATH": os.environ.get("PATH", ""),
@@ -939,6 +1109,7 @@ class Runner:
         }
         probe = run_command(
             [
+                *prefix,
                 str(configured),
                 "-c",
                 "open('bytecode-write-denied.pyc','wb').write(b'x')",
@@ -947,8 +1118,31 @@ class Runner:
             environment,
         )
         if probe.returncode == 0:
-            (self.candidate_dir / "bytecode-write-denied.pyc").unlink(missing_ok=True)
-            fail("CANDIDATE", "Python bytecode write was not denied")
+            fail(
+                "CANDIDATE",
+                "Python bytecode write was not denied",
+                "BYTECODE_UNEXPECTEDLY_SUCCEEDED",
+            )
+        cache = self.runtime_dir / "validation-runtime"
+        external = run_command(
+            [
+                *prefix,
+                str(configured),
+                "-c",
+                "open('authorized-cache','wb').write(b'x')",
+            ],
+            cache,
+            {"PATH": os.environ.get("PATH", "")},
+        )
+        if external.returncode or not (cache / "authorized-cache").is_file():
+            fail(
+                "CANDIDATE",
+                "authorized external runtime is not writable",
+                "VALIDATION_IDENTITY_MISMATCH",
+            )
+        self.candidate_mounted_after = release_manifest(self.candidate_dir)
+        if self.candidate_mounted_after != self.candidate_before:
+            fail("CANDIDATE", "mounted candidate manifest equality failed")
 
     def sentinel_snapshot(self) -> dict[str, tuple[str, int]]:
         result: dict[str, tuple[str, int]] = {}
@@ -1130,14 +1324,52 @@ class Runner:
     def verify_candidate_manifest(self) -> None:
         assert self.candidate_dir is not None and self.candidate_before is not None
         after = release_manifest(self.candidate_dir)
+        self.candidate_mounted_after = after
         if after != self.candidate_before:
             fail("CANDIDATE", "candidate manifest equality failed")
-        assert_immutable(self.candidate_dir)
         if any(
             path.name == "__pycache__" or path.suffix == ".pyc"
             for path in self.candidate_dir.rglob("*")
         ):
             fail("CANDIDATE", "candidate cache contamination detected")
+
+    def unmount_candidate(self) -> None:
+        if self.candidate_dir is None or not self.candidate_mount_owned:
+            return
+        self.verify_mount_target_owned()
+        if self.candidate_mounted_after is None:
+            self.candidate_mounted_after = release_manifest(self.candidate_dir)
+        result = run_command(["umount", str(self.candidate_dir)], self.workspace)
+        if result.returncode:
+            fail("OWNERSHIP", "owned candidate mount could not be unmounted")
+        self.candidate_mount_owned = False
+        assert self.candidate_source_dir is not None
+        self.candidate_unmounted_after = release_manifest(self.candidate_source_dir)
+        if self.candidate_unmounted_after != self.candidate_before:
+            fail("CANDIDATE", "underlying candidate changed after unmount")
+
+    def write_candidate_manifests(self) -> None:
+        if not all(
+            (
+                self.candidate_before,
+                self.candidate_mounted_after,
+                self.candidate_unmounted_after,
+            )
+        ):
+            return
+        path = self.output.with_suffix(".candidate-manifests.json")
+        path.write_text(
+            json.dumps(
+                {
+                    "preMount": self.candidate_before,
+                    "mountedPostProbe": self.candidate_mounted_after,
+                    "unmountedPostProbe": self.candidate_unmounted_after,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
 
     def cleanup(self) -> None:
         if self.runtime_dir is not None:
@@ -1150,10 +1382,8 @@ class Runner:
             self.docker(["rm", "--force", name], "OWNERSHIP")
             self.owned_containers.remove(name)
         if self.runtime_dir is not None:
-            if self.candidate_dir is not None and self.candidate_dir.exists():
-                for path in (self.candidate_dir, *self.candidate_dir.rglob("*")):
-                    if not path.is_symlink():
-                        path.chmod(path.stat().st_mode | stat.S_IWUSR)
+            self.unmount_candidate()
+            self.write_candidate_manifests()
             shutil.rmtree(self.runtime_dir)
 
     def write_evidence(self) -> None:
