@@ -1,0 +1,10 @@
+{
+  "provider": "openclaw",
+  "runtime_exact_version": "2026.7.1-2",
+  "runtime_tag_commit": "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
+  "npm_integrity": "sha512-ycF3yPcbjN6bUPeaUx6Mh6vze1hQWoD3CT/wWcmD7a8xaHHHRUaAlaq+lFxMHf1ssEgODVAwjlzYqp2twkYZ7g==",
+  "profile": "external-single-gateway-isolated-agent-workspace",
+  "operations": ["preflight", "start", "observe_runtime", "execute", "observe_execution", "stop", "replace"],
+  "prohibited_surfaces": ["arbitrary_command", "yaml", "environment", "logs", "secret_values"],
+  "claim": "PROVIDER_LOCAL_COMPONENT_ACCEPTANCE_ONLY_NOT_CERTIFIED"
+}
