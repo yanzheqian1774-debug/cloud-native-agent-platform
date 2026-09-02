@@ -20,9 +20,11 @@ harness_module = sys.modules["isolated_browser_harness"]
 
 
 def checked_contract() -> dict:
-    return json.loads(
+    contract = json.loads(
         (ROOT / "scripts/acceptance/release_contract.v1.json").read_text()
     )
+    contract["identity"]["workspaceRoot"] = str(ROOT)
+    return contract
 
 
 def write_contract(tmp_path: Path, value: object, raw: str | None = None) -> Path:
@@ -75,7 +77,9 @@ def test_duplicate_and_malformed_contract_fail_closed(tmp_path: Path) -> None:
         release_runner.load_contract(write_contract(tmp_path, {}, "{"))
 
 
-def test_all_fault_injections_have_fixed_sanitized_categories(tmp_path: Path) -> None:
+def test_all_fault_injections_have_fixed_sanitized_categories(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     runner = release_runner.Runner(
         checked_contract(), "micro-postgres", tmp_path / "evidence.json"
     )
@@ -87,6 +91,13 @@ def test_all_fault_injections_have_fixed_sanitized_categories(tmp_path: Path) ->
         "storage-resource-failure": "RESOURCE",
         "invalid-configuration": "CONFIGURATION",
     }
+    monkeypatch.setattr(
+        release_runner,
+        "run_command",
+        lambda *_args, **_kwargs: type(
+            "R", (), {"returncode": 1, "stdout": b"", "stderr": b""}
+        )(),
+    )
     for fault, category in expected.items():
         runner.fault = fault
         with pytest.raises(release_runner.RunnerError) as error:

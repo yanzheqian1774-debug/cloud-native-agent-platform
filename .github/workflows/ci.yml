@@ -196,4 +196,5 @@ jobs:
             --build-mode-identity "$RUNNER_TEMP/s5-impl-075-build-identity.json" \
             --journey-id s5-impl-075-agent-workbench \
             --python-path conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures \
-            -- npm --prefix console/frontend run test:e2e
+            -- npm --prefix console/frontend run test:e2e -- \
+              --workers 1 --retries 0 --forbid-only --reporter json
