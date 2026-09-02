@@ -164,6 +164,15 @@ KNOWLEDGE_WORKBENCH_OPERATION_IDS = frozenset(
         "KNOWLEDGE_PURGE_RECOVERY",
     }
 )
+KNOWLEDGE_WORKBENCH_OPERATION_ORDER = (
+    "KNOWLEDGE_GOVERNED_CREATE_PUBLISH",
+    "KNOWLEDGE_INDEX_RETRIEVE",
+    "KNOWLEDGE_UPDATE",
+    "KNOWLEDGE_RESTART_READBACK",
+    "KNOWLEDGE_PURGE_RECOVERY",
+)
+KNOWLEDGE_REPORTER_FIELDS = frozenset({"operationId", "resultState"})
+KNOWLEDGE_REPORTER_HTTP_FIELDS = KNOWLEDGE_REPORTER_FIELDS | {"structuredHttpStatus"}
 FIRST_FAILURE_OPERATION_IDS = {
     "KNOWLEDGE_WORKBENCH_LIFECYCLE": KNOWLEDGE_WORKBENCH_OPERATION_IDS,
     **{
@@ -220,6 +229,41 @@ def _structured_http_classification(status: object) -> tuple[str, str]:
     if type(status) is not int or not 100 <= status <= 599:
         raise ValueError("browser structured HTTP status violation")
     return "STRUCTURED_RESPONSE_STATUS", f"HTTP_{status // 100}XX"
+
+
+def parse_knowledge_reporter_output(data: bytes) -> list[dict[str, object]]:
+    """Parse the frozen reporter's closed, minimum-disclosure output."""
+    try:
+        value = json.loads(data)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Knowledge reporter output is malformed") from exc
+    if not isinstance(value, list) or len(value) > len(
+        KNOWLEDGE_WORKBENCH_OPERATION_ORDER
+    ):
+        raise ValueError("Knowledge reporter output is not a bounded list")
+    order = {
+        operation_id: index
+        for index, operation_id in enumerate(KNOWLEDGE_WORKBENCH_OPERATION_ORDER)
+    }
+    seen: set[str] = set()
+    normalized: list[dict[str, object]] = []
+    for item in value:
+        if not isinstance(item, dict) or frozenset(item) not in {
+            KNOWLEDGE_REPORTER_FIELDS,
+            KNOWLEDGE_REPORTER_HTTP_FIELDS,
+        }:
+            raise ValueError("Knowledge reporter operation field violation")
+        operation_id = item.get("operationId")
+        if operation_id not in KNOWLEDGE_WORKBENCH_OPERATION_IDS:
+            raise ValueError("Knowledge reporter operation identity violation")
+        if operation_id in seen:
+            raise ValueError("Knowledge reporter operation is duplicated")
+        seen.add(str(operation_id))
+        if item.get("resultState") not in {"EXPECTED", "UNEXPECTED"}:
+            raise ValueError("Knowledge reporter result state violation")
+        _structured_http_classification(item.get("structuredHttpStatus"))
+        normalized.append(item)
+    return sorted(normalized, key=lambda item: order[str(item["operationId"])])
 
 
 def _failure_details(
@@ -292,7 +336,10 @@ def _failure_details(
 
 
 def sanitized_first_failure_record(
-    stdout: bytes, journey_id: str, restart_count: int
+    stdout: bytes,
+    journey_id: str,
+    restart_count: int,
+    knowledge_reporter_output: bytes | None = None,
 ) -> dict[str, object] | None:
     report = _browser_json(stdout)
     if report is None:
@@ -351,8 +398,31 @@ def sanitized_first_failure_record(
             {},
         )
         operation = result
+        if (
+            assertion_id == "KNOWLEDGE_WORKBENCH_LIFECYCLE"
+            and knowledge_reporter_output
+        ):
+            reporter_operations = parse_knowledge_reporter_output(
+                knowledge_reporter_output
+            )
+            operation = next(
+                (
+                    {
+                        "operationId": item["operationId"],
+                        "status": "failed",
+                        **(
+                            {"structuredHttpStatus": item["structuredHttpStatus"]}
+                            if "structuredHttpStatus" in item
+                            else {}
+                        ),
+                    }
+                    for item in reporter_operations
+                    if item["resultState"] == "UNEXPECTED"
+                ),
+                {},
+            )
         operations = result.get("operations") if isinstance(result, dict) else None
-        if operations is not None:
+        if operations is not None and knowledge_reporter_output is None:
             if not isinstance(operations, list):
                 raise ValueError("browser operation result source violation")
             operation = next(
@@ -1112,6 +1182,9 @@ def main() -> int:
                 "S5_IMMUTABLE_ACCEPTANCE": "1",
                 "PLAYWRIGHT_OUTPUT_DIR": str(harness.runtime / "playwright-output"),
                 "S5_HARNESS_PYTHON": sys.executable,
+                "KNOWLEDGE_STRUCTURED_REPORT_PATH": str(
+                    harness.runtime / "knowledge-operation-result.json"
+                ),
             }
         )
         browser_result = subprocess.run(
@@ -1131,7 +1204,14 @@ def main() -> int:
             )
             print(f"browser acceptance failed: {category}", file=sys.stderr)
             failure = sanitized_first_failure_record(
-                browser_result.stdout, args.journey_id, harness.restart_count
+                browser_result.stdout,
+                args.journey_id,
+                harness.restart_count,
+                (
+                    (harness.runtime / "knowledge-operation-result.json").read_bytes()
+                    if (harness.runtime / "knowledge-operation-result.json").is_file()
+                    else None
+                ),
             )
             if failure is None:
                 failure = sanitized_first_failure_record(
@@ -1152,6 +1232,9 @@ def main() -> int:
             playwright_output = harness.runtime / "playwright-output"
             if playwright_output.exists():
                 shutil.rmtree(playwright_output)
+            structured_report = harness.runtime / "knowledge-operation-result.json"
+            if structured_report.exists():
+                structured_report.unlink()
             if playwright_output.exists():
                 raise RuntimeError("raw browser artifacts were retained")
             after = harness.verify_release()

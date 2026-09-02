@@ -29,6 +29,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import release_contract_v2 as contract_v2  # noqa: E402
 from browser_build_preflight import (  # noqa: E402
     record_build_identity,
     verify_build_identity,
@@ -40,6 +41,9 @@ from isolated_browser_harness import (  # noqa: E402
 from minimum_disclosure import scan_generated_artifacts  # noqa: E402
 
 SCHEMA_VERSION = 1
+HISTORICAL_SCHEMA_1_ATTEMPTS = frozenset(
+    {f"v0.2.2-attempt-{number:02d}" for number in range(1, 6)}
+)
 MODES = frozenset(
     {
         "preflight",
@@ -199,6 +203,116 @@ class RunnerError(RuntimeError):
 
 def fail(category: str, message: str, code: str | None = None) -> NoReturn:
     raise RunnerError(category, message, code)
+
+
+def _read_json_file(path: Path, label: str) -> dict[str, Any]:
+    try:
+        return contract_v2.load_json_exact(path.read_bytes())
+    except (OSError, contract_v2.ContractV2Error) as exc:
+        raise RunnerError("CONTRACT", f"{label} is unavailable or invalid") from exc
+
+
+def load_schema_2_entry_gate(
+    path: Path,
+    *,
+    workspace: Path,
+    declared_instance_digest: str,
+    declared_schema_blob: str,
+    declared_evidence_envelope_digest: str,
+    evidence_envelope_path: Path,
+    product_ci_observation_path: Path,
+    tool_ci_observation_path: Path,
+) -> dict[str, Any]:
+    """Validate every external trust input before constructing a Runner."""
+    try:
+        data = path.read_bytes()
+        if contract_v2.contract_instance_digest(data) != declared_instance_digest:
+            contract_v2.fail("Contract instance digest mismatch")
+        contract = contract_v2.validate_contract(contract_v2.load_json_exact(data))
+        contract_v2.validate_frozen_product(contract)
+        contract_v2.verify_git_provenance(contract, workspace)
+        tool = contract["acceptanceToolProvenance"]
+        schema_path = "scripts/acceptance/release_contract.v2.schema.json"
+        actual_schema_blob = contract_v2._git(
+            ["rev-parse", f"{tool['sourceSha']}:{schema_path}"], workspace
+        )
+        if actual_schema_blob != declared_schema_blob:
+            contract_v2.fail("approved Contract schema blob mismatch")
+        product_observed = _read_json_file(
+            product_ci_observation_path, "product CI observation"
+        )
+        tool_observed = _read_json_file(tool_ci_observation_path, "tool CI observation")
+        contract_v2.validate_observed_ci(
+            contract["productProvenance"]["exactSourceCi"],
+            product_observed,
+            "product CI",
+        )
+        contract_v2.validate_observed_ci(
+            tool["exactMainCi"], tool_observed, "acceptance-tool CI"
+        )
+        envelope_data = evidence_envelope_path.read_bytes()
+        if (
+            contract_v2.contract_instance_digest(envelope_data)
+            != declared_evidence_envelope_digest
+        ):
+            contract_v2.fail("Evidence envelope digest mismatch")
+        envelope = contract_v2.load_json_exact(envelope_data)
+        contract_v2.validate_evidence_envelope(
+            envelope,
+            contract_data=data,
+            schema_blob=declared_schema_blob,
+            pairing=contract["approvedPairing"]["pairingDigest"],
+            observed_ci=tool_observed,
+        )
+        return contract
+    except (OSError, contract_v2.ContractV2Error) as exc:
+        raise RunnerError(
+            "PROVENANCE", "schema-2 entry gate rejected provenance"
+        ) from exc
+
+
+def adapt_schema_2_for_runner(
+    contract: dict[str, Any],
+    *,
+    workspace: Path,
+    runtime_root: Path,
+    browser_executable: Path,
+    browser_executable_digest: str,
+) -> dict[str, Any]:
+    """Map validated v2 environment-neutral fields into the legacy executor."""
+    profile = contract["executionProfile"]
+    product = contract["productProvenance"]
+    tool = contract["acceptanceToolProvenance"]
+    return {
+        "schemaVersion": 1,
+        "product": {"sourceSha": product["sourceSha"], "treeSha": product["treeSha"]},
+        "acceptanceToolSourceSha": tool["sourceSha"],
+        "build": {
+            "mode": profile["mode"],
+            "frontendManifestPath": product["frontendManifest"]["path"],
+            "frontendManifestDigest": product["frontendManifest"][
+                "sha256"
+            ].removeprefix("sha256:"),
+        },
+        "images": profile["images"],
+        "ports": profile["ports"],
+        "identity": {"runtimeRoot": str(runtime_root), "workspaceRoot": str(workspace)},
+        "validationRolePolicy": profile["validationRolePolicy"],
+        "pythonInterpreter": profile["pythonInterpreter"],
+        "applicationSourceDirectories": profile["applicationSourceDirectories"],
+        "diagnosticRetentionPolicy": profile["diagnosticRetentionPolicy"],
+        "migrations": {
+            key: value.removeprefix("sha256:")
+            for key, value in profile["migrations"].items()
+        },
+        "browser": {
+            "command": profile["browser"]["command"],
+            "journeyId": profile["browser"]["journeyId"],
+            "executablePath": str(browser_executable),
+            "executableDigest": browser_executable_digest,
+        },
+        "continuitySentinels": [],
+    }
 
 
 def _exact(value: Any, fields: frozenset[str], label: str) -> dict[str, Any]:
@@ -400,6 +514,7 @@ class Runner:
     mode: str
     output: Path
     fault: str | None = None
+    exact_dual_provenance: bool = False
     token: str = field(default_factory=lambda: secrets.token_hex(16))
     records: list[dict[str, Any]] = field(default_factory=list)
     owned_containers: set[str] = field(default_factory=set)
@@ -492,18 +607,30 @@ class Runner:
             fail(
                 "PROVENANCE", "candidate provenance does not match the release contract"
             )
-        minimum = run_command(
-            [
-                "git",
-                "merge-base",
-                "--is-ancestor",
-                self.contract["acceptanceToolSourceSha"],
-                "HEAD",
-            ],
-            self.workspace,
-        )
-        if minimum.returncode:
-            fail("PROVENANCE", "acceptance tooling is older than the contract minimum")
+        if self.exact_dual_provenance:
+            exact = run_command(["git", "rev-parse", "HEAD"], self.workspace)
+            if (
+                exact.returncode
+                or exact.stdout.decode().strip()
+                != self.contract["acceptanceToolSourceSha"]
+            ):
+                fail("PROVENANCE", "acceptance tooling exact identity mismatch")
+        else:
+            minimum = run_command(
+                [
+                    "git",
+                    "merge-base",
+                    "--is-ancestor",
+                    self.contract["acceptanceToolSourceSha"],
+                    "HEAD",
+                ],
+                self.workspace,
+            )
+            if minimum.returncode:
+                fail(
+                    "PROVENANCE",
+                    "acceptance tooling is older than the contract minimum",
+                )
 
     def frontend_lock(self) -> None:
         build = self.contract["build"]
@@ -860,29 +987,30 @@ class Runner:
         except (OSError, tarfile.TarError) as exc:
             raise RunnerError("CANDIDATE", "candidate presentation failed") from exc
         archive_path.unlink()
-        config_path = "console/frontend/playwright.config.ts"
-        overlay = run_command(
-            [
-                "git",
-                "show",
-                f"{self.contract['acceptanceToolSourceSha']}:{config_path}",
-            ],
-            self.workspace,
-        )
-        if overlay.returncode:
-            fail("PROVENANCE", "acceptance configuration overlay is unavailable")
-        config = overlay.stdout.decode("utf-8")
-        relative = "../../scripts/acceptance/static_proxy_server.py --root dist"
-        mounted_candidate = self.runtime_dir / "candidate"
-        explicit = (
-            f"{mounted_candidate}/scripts/acceptance/static_proxy_server.py "
-            f"--root {mounted_candidate}/console/frontend/dist"
-        )
-        if config.count(relative) != 1:
-            fail("PROVENANCE", "acceptance configuration command is ambiguous")
-        (self.candidate_source_dir / config_path).write_text(
-            config.replace(relative, explicit), encoding="utf-8"
-        )
+        if not self.exact_dual_provenance:
+            config_path = "console/frontend/playwright.config.ts"
+            overlay = run_command(
+                [
+                    "git",
+                    "show",
+                    f"{self.contract['acceptanceToolSourceSha']}:{config_path}",
+                ],
+                self.workspace,
+            )
+            if overlay.returncode:
+                fail("PROVENANCE", "acceptance configuration overlay is unavailable")
+            config = overlay.stdout.decode("utf-8")
+            relative = "../../scripts/acceptance/static_proxy_server.py --root dist"
+            mounted_candidate = self.runtime_dir / "candidate"
+            explicit = (
+                f"{mounted_candidate}/scripts/acceptance/static_proxy_server.py "
+                f"--root {mounted_candidate}/console/frontend/dist"
+            )
+            if config.count(relative) != 1:
+                fail("PROVENANCE", "acceptance configuration command is ambiguous")
+            (self.candidate_source_dir / config_path).write_text(
+                config.replace(relative, explicit), encoding="utf-8"
+            )
         manifest = (
             self.candidate_source_dir / self.contract["build"]["frontendManifestPath"]
         )
@@ -1728,17 +1856,79 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contract", required=True, type=Path)
     parser.add_argument("--evidence", required=True, type=Path)
     parser.add_argument("--fault", choices=sorted(FAULTS))
+    parser.add_argument("--attempt-id")
+    parser.add_argument("--contract-instance-sha256")
+    parser.add_argument("--contract-schema-blob")
+    parser.add_argument("--evidence-envelope", type=Path)
+    parser.add_argument("--evidence-envelope-sha256")
+    parser.add_argument("--product-ci-observation", type=Path)
+    parser.add_argument("--tool-ci-observation", type=Path)
+    parser.add_argument("--runtime-root", type=Path)
+    parser.add_argument("--browser-executable", type=Path)
+    parser.add_argument("--browser-executable-digest")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        contract = load_contract(args.contract)
+        raw = contract_v2.load_json_exact(args.contract.read_bytes())
+        if raw.get("schemaVersion") == 1:
+            if args.attempt_id not in HISTORICAL_SCHEMA_1_ATTEMPTS:
+                fail(
+                    "CONTRACT",
+                    "schema 1 is restricted to historical attempts 01 through 05",
+                )
+            contract = load_contract(args.contract)
+            exact_v2 = False
+        elif raw.get("schemaVersion") == 2:
+            required = (
+                args.contract_instance_sha256,
+                args.contract_schema_blob,
+                args.evidence_envelope,
+                args.evidence_envelope_sha256,
+                args.product_ci_observation,
+                args.tool_ci_observation,
+                args.runtime_root,
+                args.browser_executable,
+                args.browser_executable_digest,
+            )
+            if any(value is None for value in required):
+                fail("CONTRACT", "schema-2 external trust inputs are required")
+            workspace = Path.cwd().resolve()
+            v2 = load_schema_2_entry_gate(
+                args.contract,
+                workspace=workspace,
+                declared_instance_digest=args.contract_instance_sha256,
+                declared_schema_blob=args.contract_schema_blob,
+                declared_evidence_envelope_digest=args.evidence_envelope_sha256,
+                evidence_envelope_path=args.evidence_envelope,
+                product_ci_observation_path=args.product_ci_observation,
+                tool_ci_observation_path=args.tool_ci_observation,
+            )
+            contract = adapt_schema_2_for_runner(
+                v2,
+                workspace=workspace,
+                runtime_root=args.runtime_root,
+                browser_executable=args.browser_executable,
+                browser_executable_digest=args.browser_executable_digest,
+            )
+            exact_v2 = True
+        else:
+            fail("CONTRACT", "release contract schema version is unsupported")
+    except (OSError, contract_v2.ContractV2Error):
+        print("release runner failed: CONTRACT", file=sys.stderr)
+        return 2
     except RunnerError as exc:
         print(f"release runner failed: {exc.category}", file=sys.stderr)
         return 2
-    return Runner(contract, args.mode, args.evidence, args.fault).run()
+    return Runner(
+        contract,
+        args.mode,
+        args.evidence,
+        args.fault,
+        exact_dual_provenance=exact_v2,
+    ).run()
 
 
 if __name__ == "__main__":

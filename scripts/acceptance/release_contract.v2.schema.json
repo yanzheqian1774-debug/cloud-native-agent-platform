@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-platform.invalid/contracts/v0.2.2-release-contract-v2.schema.json",
+  "title": "v0.2.2 Exact Dual-Provenance Release Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contractType", "productProvenance", "acceptanceToolProvenance", "approvedPairing", "executionProfile"],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "contractType": {"const": "V0_2_2_EXACT_DUAL_PROVENANCE_RELEASE"},
+    "productProvenance": {"type": "object"},
+    "acceptanceToolProvenance": {"type": "object"},
+    "approvedPairing": {"type": "object"},
+    "executionProfile": {"type": "object"}
+  },
+  "description": "The executable closed-field definition is release_contract_v2.py; this artifact identifies schema version 2 without creating a production instance."
+}
