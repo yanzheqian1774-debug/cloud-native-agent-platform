@@ -42,6 +42,10 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
     }
     authorized_console_imports = {
         "console/backend/src/agent_console/app.py",
+        "console/backend/src/agent_console/execution_domain.py",
+        "console/backend/src/agent_console/execution_evidence_import.py",
+        "console/backend/src/agent_console/execution_postgres.py",
+        "console/backend/src/agent_console/execution_repository.py",
         "console/backend/src/agent_console/execution_snapshot.py",
         "console/backend/src/agent_console/preview_service.py",
         "console/backend/src/agent_console/shared_views.py",

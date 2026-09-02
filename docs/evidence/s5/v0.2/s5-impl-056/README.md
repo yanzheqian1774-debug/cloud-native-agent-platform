@@ -123,3 +123,59 @@ automatic recovery, exactly-once effect, certification, production readiness or
 release authority. Product ID uniqueness and authorization-context provenance are
 repository/application enforcement responsibilities outside this Contract-only
 Checkpoint.
+
+## Checkpoint A1 — execution persistence
+
+Checkpoint A1 starts from durable baseline
+`b077c6ec1172dbd6ec33cf08691212a98c8c6d22` and implements only the authorized
+PostgreSQL execution-authority storage, immutable Evidence adapter, verified
+SQLite Evidence import, and single-writer cutover/rollback barrier. Migration
+`0008_execution_runtime_authority.sql` follows the complete existing `0001` through
+`0007` chain and records its exact SHA-256 checksum and adapter identity.
+
+The PostgreSQL validation uses a real PostgreSQL 15 instance. It covers clean-chain
+migration, repeat application, checksum verification, rejection of missing,
+corrupt, and newer migration metadata, pooled connections, atomic concurrent
+Evidence replay, digest conflicts, scope isolation, restart durability, and bounded
+failure mapping. The import validation verifies a quiesced immutable SQLite backup,
+deterministic sequence-order import, resumable checkpoints, exact record identity,
+payload digest, storage sequence and recorded-time preservation, and full count/high
+water parity. Cutover and rollback tests prohibit dual writers, silent SQLite
+fallback, and rollback that would discard post-cutover PostgreSQL facts.
+
+The compatibility consumer assertion remains an exact fail-closed allowlist. Its
+only A1 change is the four Human-authorized Console consumers; the pre-existing
+authorized set is unchanged. No Runtime Manager, provider effect, OpenClaw,
+frontend, CRD, deployment, S5-IMPL-057, or S5-IMPL-058 scope is included.
+
+Checkpoint A1 validation and exact-head CI identifiers are reported in the Human
+Checkpoint result after the evidence-bearing commit and Draft PR exist, avoiding
+self-referential or stale evidence.
+
+### Checkpoint A correction and bounded operational limitations
+
+The correction adds durable typed identity save/readback, Outcome and Intervention
+reads, execution relationship queries, command-result facts, complete aggregate
+column validation, versioned checkpoint compare-and-set, bounded import-set identity,
+interrupted-import resumption, scope isolation, relationship foreign keys, and
+restart coverage across every Track A repository surface.
+
+Four operational responsibilities remain deliberately outside this repository-only
+checkpoint and fail closed at their existing barriers:
+
+- SQLite writer quiescence must be independently proven by the downstream Track H
+  operational cutover gate; the importer rejects invocation unless its caller
+  supplies explicit quiescence evidence.
+- Post-cutover SQLite read-only enforcement belongs to the Track H/deployment gate;
+  the cutover coordinator never selects SQLite and PostgreSQL simultaneously and
+  provides no silent fallback.
+- Complete SQLite authority restoration belongs to the Track H/deployment rollback
+  gate; rollback is rejected unless all writers are stopped, the backup is verified,
+  and no PostgreSQL fact would be discarded.
+- The legacy SQLite schema stores decomposed fields rather than original canonical
+  bytes. Track A reconstructs canonical form deterministically and verifies the
+  durable payload digest; no claim of independent original-byte comparison is made.
+
+These limitations prohibit any production cutover-readiness claim at Checkpoint A.
+No deployment, production/staging mutation, Kubernetes wiring, OpenClaw work, or
+A+B production assembly is included.
