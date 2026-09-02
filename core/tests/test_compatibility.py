@@ -61,6 +61,7 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "operator/src/agent_operator/compatibility_interpreter/interpreter.py",
         "operator/src/agent_operator/execution_coordinator.py",
         "operator/src/agent_operator/identity_adapter.py",
+        "operator/src/agent_operator/openclaw_runtime_driver.py",
         "operator/src/agent_operator/runtime_identity_translation.py",
         "operator/src/agent_operator/runtime_kubernetes_observer.py",
         "operator/src/agent_operator/runtime_manager.py",
@@ -68,6 +69,7 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "operator/tests/test_compatibility_interpreter.py",
         "operator/tests/test_execution_coordinator.py",
         "operator/tests/test_identity_adapter.py",
+        "operator/tests/test_openclaw_runtime_driver.py",
     }
     assert {
         path for path in discovered_imports if path.startswith("gateway/")
