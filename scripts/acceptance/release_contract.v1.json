@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "product": {
+    "sourceSha": "4a4ebd69eff5d9559fd723432b8b6b335291417f",
+    "treeSha": "7840bca89c32c68c3de92b7e3a18129a52851258"
+  },
+  "acceptanceToolSourceSha": "811d0688ffd87208f2718df9dd808f7f061f3a73",
+  "build": {
+    "mode": "LIVE_DEMO",
+    "frontendManifestPath": "console/frontend/package-lock.json",
+    "frontendManifestDigest": "3b8af617257ca08e77c0cfe2879026bad5a8203b972639ca8ad77d6250bec98c"
+  },
+  "images": {
+    "postgres": "postgres@sha256:bfee8fabec7c662311eff39111a890f68a46a78a3b35e91353e185e7d5918517",
+    "qdrant": "qdrant/qdrant@sha256:6ac4807063bbecddca0250bfbcff52acf18c22263b904d12919349e6d0a408f1"
+  },
+  "ports": {"postgres": 55478, "qdrant": 56378, "backend": 18078, "frontend": 14178},
+  "identity": {
+    "runtimeRoot": "/private/tmp/s5-impl-078-runtime",
+    "workspaceRoot": "/Users/tristan/.codex/worktrees/2b63/cloud-native-agent-platform"
+  },
+  "validationRolePolicy": {
+    "administrativeRole": "postgres",
+    "validationRole": "release_validation",
+    "database": "agent_platform"
+  },
+  "pythonInterpreter": ".venv/bin/python",
+  "applicationSourceDirectories": [
+    "conformance_harness/src", "core/src", "gateway/src", "operator/src", "runtime/src", "console/backend/src"
+  ],
+  "diagnosticRetentionPolicy": {
+    "retainRaw": false, "retainSanitized": true, "scanCompressed": true, "disposeBrowserArtifacts": true
+  },
+  "migrations": {
+    "0001": "53b40c4c8dce0a350cbf91865b4d111ce57714c1be1bce9b48df21b25496c288",
+    "0002": "ad6a64f4af8fa0c9bf0bb343a3f6ce1b5cfdac1db30168644cbc503e9aa29c14",
+    "0003": "82f5126fc9064418b8f118b43e50be06b0df87e75928a60f86f377ce11b63815",
+    "0004": "437b128d3439cd961a0c8b4f210fc175cfe347c07cdc93035814376f4f35cc82",
+    "0005": "f481454ca9e217663cb151baa4b702a9a03337e77198f8e922266e75b15bca36",
+    "0006": "8865d0977d1e028ec711dfe0022adc3454b869b30aac3869c87f138d7b66442d",
+    "0007": "8dedfae42df768714a25d4c3980d60ee66b5f5b8537278020d3acf4beda4f773"
+  },
+  "browser": {
+    "command": ["npm", "--prefix", "console/frontend", "run", "test:e2e", "--", "--workers", "1", "--retries", "0", "--forbid-only", "--reporter", "json"],
+    "journeyId": "s5-impl-078-release-rehearsal",
+    "executablePath": "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "executableDigest": "4c69f8170731deb03bba85588847c906ba6b76506791fc8d932b83f78607fe72"
+  },
+  "continuitySentinels": []
+}

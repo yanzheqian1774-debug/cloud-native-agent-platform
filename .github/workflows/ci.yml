@@ -188,6 +188,7 @@ jobs:
             --runtime-dir "$RUNNER_TEMP/s5-impl-072-${GITHUB_RUN_ID}" \
             --backend-host 127.0.0.1 \
             --backend-port 18072 \
+            --frontend-port 14173 \
             --postgres-url postgresql://browser_validation@127.0.0.1:5432/agent_platform \
             --postgres-validation-role browser_validation \
             --qdrant-url http://127.0.0.1:6333 \
