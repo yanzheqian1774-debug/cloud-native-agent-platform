@@ -5,6 +5,7 @@ const immutable=process.env.S5_IMMUTABLE_ACCEPTANCE === "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  reporter: [["line"], ["./tests/harness/structuredKnowledgeReporter.ts"]],
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,
   timeout: 60_000,
   workers: 1,
