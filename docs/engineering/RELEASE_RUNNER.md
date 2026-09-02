@@ -61,7 +61,22 @@ never taken from ambient release-related environment variables.
 The candidate is assembled from the exact product tree plus the exact
 acceptance-source Playwright configuration. Its frontend dependencies are
 installed from the lockfile and its LIVE_DEMO output is externally
-digest-bound. For readiness and private-precheck modes, Linux mount authority,
+digest-bound. Before the authoritative pre-mount manifest is sealed, the Runner
+audits its newly created owned copy without following symlinks, rejects escaping
+symlinks, regular files with additional hard links, unsupported entry types,
+ownership mismatch, and traversal or chmod failure. It then assigns the exact
+non-root validation identity and deterministically normalizes non-executable
+regular files to `0444`, executable regular files to `0555`, and directories to
+`0555`. Symlink targets are never chmodded. A second complete audit requires
+zero writable entries and verifies every preserved executable.
+
+The aggregate normalization Evidence contains only entry count,
+writable-before count, writable-after count, executable-preserved count,
+unsupported-entry count, and a correlation digest. It contains no absolute path
+or individual file name. The Browser Harness independently requires a zero
+writable-mode count before browser execution.
+
+For readiness and private-precheck modes, Linux mount authority,
 `findmnt`, `setpriv`, and an unprivileged `nobody` identity are mandatory. The
 runner bind-mounts an exact runner-owned target, remounts it read-only, verifies
 the effective operating-system mount options and source/target inode
