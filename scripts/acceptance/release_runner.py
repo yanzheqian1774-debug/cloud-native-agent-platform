@@ -12,6 +12,7 @@ import re
 import secrets
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
@@ -76,6 +77,16 @@ RECORD_FIELDS = frozenset(
         "errorCode",
         "correlationDigest",
         "completedAt",
+    }
+)
+MODE_NORMALIZATION_FIELDS = frozenset(
+    {
+        "entryCount",
+        "writableBeforeCount",
+        "writableAfterCount",
+        "executablePreservedCount",
+        "unsupportedEntryCount",
+        "correlationDigest",
     }
 )
 ERROR_CATEGORIES = frozenset(
@@ -402,6 +413,8 @@ class Runner:
     candidate_before: dict[str, dict[str, str | int]] | None = None
     candidate_mounted_after: dict[str, dict[str, str | int]] | None = None
     candidate_unmounted_after: dict[str, dict[str, str | int]] | None = None
+    candidate_executables: set[str] = field(default_factory=set)
+    mode_normalization_evidence: dict[str, int | str] | None = None
     sentinel_before: dict[str, tuple[str, int]] = field(default_factory=dict)
     chromium_path: Path | None = None
 
@@ -919,12 +932,225 @@ class Runner:
         record_build_identity(frontend / "dist", self.build_identity_path, "live")
         verify_build_identity(frontend / "dist", self.build_identity_path)
         uid, gid = self.select_validation_identity()
-        for path in (self.candidate_source_dir, *self.candidate_source_dir.rglob("*")):
-            if not path.is_symlink():
-                os.chown(path, uid, gid)
-                path.chmod(path.stat().st_mode | 0o600)
+        self.normalize_candidate_modes(uid, gid)
         self.candidate_before = release_manifest(self.candidate_source_dir)
         self.present_read_only_candidate()
+
+    def candidate_entries(self) -> list[Path]:
+        assert self.candidate_source_dir is not None and self.runtime_dir is not None
+        expected = self.runtime_dir / "candidate-source"
+        if self.candidate_source_dir != expected:
+            fail("OWNERSHIP", "candidate source is not runner-owned")
+        self.verify_runtime_owned()
+        entries = [self.candidate_source_dir]
+
+        def traversal_failed(_error: OSError) -> None:
+            fail(
+                "CANDIDATE",
+                "candidate traversal failed",
+                "MODE_NORMALIZATION_TRAVERSAL_FAILED",
+            )
+
+        try:
+            for directory, names, files in os.walk(
+                self.candidate_source_dir,
+                topdown=True,
+                onerror=traversal_failed,
+                followlinks=False,
+            ):
+                base = Path(directory)
+                entries.extend(base / name for name in sorted((*names, *files)))
+        except RunnerError:
+            raise
+        except (OSError, RuntimeError) as exc:
+            raise RunnerError(
+                "CANDIDATE",
+                "candidate traversal failed",
+                "MODE_NORMALIZATION_TRAVERSAL_FAILED",
+            ) from exc
+        return entries
+
+    def write_mode_normalization_evidence(
+        self,
+        *,
+        entry_count: int,
+        writable_before: int,
+        writable_after: int,
+        executable_preserved: int,
+        unsupported: int,
+    ) -> None:
+        correlation = digest_bytes(
+            (
+                f"{self.token}:candidate-mode-normalization:{entry_count}:"
+                f"{writable_before}:{writable_after}:{executable_preserved}:"
+                f"{unsupported}"
+            ).encode()
+        )
+        evidence: dict[str, int | str] = {
+            "entryCount": entry_count,
+            "writableBeforeCount": writable_before,
+            "writableAfterCount": writable_after,
+            "executablePreservedCount": executable_preserved,
+            "unsupportedEntryCount": unsupported,
+            "correlationDigest": correlation,
+        }
+        if set(evidence) != MODE_NORMALIZATION_FIELDS:
+            fail("INTERNAL", "mode-normalization evidence schema violation")
+        self.mode_normalization_evidence = evidence
+        self.output.parent.mkdir(parents=True, exist_ok=True)
+        self.output.with_suffix(".candidate-mode-normalization.json").write_text(
+            json.dumps(evidence, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    def verify_candidate_mode_normalization(self) -> None:
+        entries = self.candidate_entries()
+        writable_after = 0
+        executable_preserved = 0
+        unsupported = 0
+        for path in entries:
+            try:
+                metadata = path.lstat()
+            except OSError as exc:
+                raise RunnerError(
+                    "CANDIDATE",
+                    "candidate traversal failed",
+                    "MODE_NORMALIZATION_TRAVERSAL_FAILED",
+                ) from exc
+            mode = stat.S_IMODE(metadata.st_mode)
+            if stat.S_ISLNK(metadata.st_mode):
+                continue
+            if mode & 0o222:
+                writable_after += 1
+            relative = path.relative_to(self.candidate_source_dir).as_posix()
+            if stat.S_ISDIR(metadata.st_mode):
+                expected = 0o555
+            elif stat.S_ISREG(metadata.st_mode):
+                expected = 0o555 if relative in self.candidate_executables else 0o444
+                executable_preserved += relative in self.candidate_executables
+            else:
+                unsupported += 1
+                continue
+            if mode != expected:
+                fail(
+                    "CANDIDATE",
+                    "candidate mode normalization verification failed",
+                    "MODE_NORMALIZATION_VERIFICATION_FAILED",
+                )
+        if unsupported:
+            fail(
+                "CANDIDATE",
+                "candidate contains an unsupported entry type",
+                "MODE_NORMALIZATION_UNSUPPORTED_ENTRY",
+            )
+        if writable_after:
+            fail(
+                "CANDIDATE",
+                "candidate contains a writable entry after normalization",
+                "MODE_NORMALIZATION_WRITABLE_REMAINS",
+            )
+        if executable_preserved != len(self.candidate_executables):
+            fail(
+                "CANDIDATE",
+                "required candidate executable mode was not preserved",
+                "MODE_NORMALIZATION_EXECUTABLE_REMOVED",
+            )
+
+    def normalize_candidate_modes(self, uid: int, gid: int) -> None:
+        assert self.candidate_source_dir is not None
+        entries = self.candidate_entries()
+        root = self.candidate_source_dir.resolve()
+        writable_before = 0
+        unsupported = 0
+        regular_files: list[Path] = []
+        directories: list[Path] = []
+        symlinks: list[Path] = []
+        self.candidate_executables.clear()
+        try:
+            for path in entries:
+                metadata = path.lstat()
+                if stat.S_ISLNK(metadata.st_mode):
+                    symlinks.append(path)
+                    target = (path.parent / os.readlink(path)).resolve(strict=False)
+                    if target != root and root not in target.parents:
+                        fail(
+                            "CANDIDATE",
+                            "candidate symlink escapes the owned boundary",
+                            "MODE_NORMALIZATION_SYMLINK_ESCAPE",
+                        )
+                elif stat.S_ISDIR(metadata.st_mode):
+                    directories.append(path)
+                    writable_before += bool(metadata.st_mode & 0o222)
+                elif stat.S_ISREG(metadata.st_mode):
+                    regular_files.append(path)
+                    writable_before += bool(metadata.st_mode & 0o222)
+                    if metadata.st_nlink != 1:
+                        fail(
+                            "CANDIDATE",
+                            "candidate regular file has an unsafe hard link",
+                            "MODE_NORMALIZATION_HARDLINK_REJECTED",
+                        )
+                    if metadata.st_mode & 0o111:
+                        self.candidate_executables.add(
+                            path.relative_to(self.candidate_source_dir).as_posix()
+                        )
+                else:
+                    unsupported += 1
+        except RunnerError:
+            raise
+        except (OSError, RuntimeError) as exc:
+            raise RunnerError(
+                "CANDIDATE",
+                "candidate traversal failed",
+                "MODE_NORMALIZATION_TRAVERSAL_FAILED",
+            ) from exc
+        if unsupported:
+            self.write_mode_normalization_evidence(
+                entry_count=len(entries),
+                writable_before=writable_before,
+                writable_after=writable_before,
+                executable_preserved=0,
+                unsupported=unsupported,
+            )
+            fail(
+                "CANDIDATE",
+                "candidate contains an unsupported entry type",
+                "MODE_NORMALIZATION_UNSUPPORTED_ENTRY",
+            )
+        try:
+            for path in (*directories, *regular_files, *symlinks):
+                os.chown(path, uid, gid, follow_symlinks=False)
+            for path in (*directories, *regular_files, *symlinks):
+                metadata = path.lstat()
+                if (metadata.st_uid, metadata.st_gid) != (uid, gid):
+                    fail(
+                        "OWNERSHIP",
+                        "candidate entry ownership mismatch",
+                        "MODE_NORMALIZATION_OWNERSHIP_MISMATCH",
+                    )
+            for path in regular_files:
+                relative = path.relative_to(self.candidate_source_dir).as_posix()
+                path.chmod(0o555 if relative in self.candidate_executables else 0o444)
+            for path in sorted(
+                directories, key=lambda item: len(item.parts), reverse=True
+            ):
+                path.chmod(0o555)
+        except RunnerError:
+            raise
+        except (OSError, PermissionError) as exc:
+            raise RunnerError(
+                "CANDIDATE",
+                "candidate mode normalization failed",
+                "MODE_NORMALIZATION_CHMOD_FAILED",
+            ) from exc
+        self.verify_candidate_mode_normalization()
+        self.write_mode_normalization_evidence(
+            entry_count=len(entries),
+            writable_before=writable_before,
+            writable_after=0,
+            executable_preserved=len(self.candidate_executables),
+            unsupported=0,
+        )
 
     def select_validation_identity(self) -> tuple[int, int]:
         if os.geteuid() != 0:

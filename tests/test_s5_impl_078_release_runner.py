@@ -226,6 +226,229 @@ def prepared_mount_runner(tmp_path: Path) -> object:
     return runner
 
 
+def owned_candidate_runner(tmp_path: Path) -> object:
+    contract = checked_contract()
+    contract["identity"]["runtimeRoot"] = str(tmp_path / "runtime-root")
+    runner = release_runner.Runner(
+        contract, "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.ensure_runtime()
+    assert runner.runtime_dir is not None
+    runner.candidate_source_dir = runner.runtime_dir / "candidate-source"
+    runner.candidate_source_dir.mkdir()
+    return runner
+
+
+def restore_candidate_permissions(runner: object) -> None:
+    if runner.candidate_source_dir is None:
+        return
+    for path in (runner.candidate_source_dir, *runner.candidate_source_dir.rglob("*")):
+        if not path.is_symlink() and path.is_dir():
+            path.chmod(0o700)
+
+
+def test_candidate_mode_normalization_positive_control(tmp_path: Path) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    source = runner.candidate_source_dir / "package"
+    source.mkdir()
+    regular = source / "module.py"
+    regular.write_text("value = 1\n", encoding="utf-8")
+    executable = source / "entrypoint"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    regular.chmod(0o666)
+    executable.chmod(0o777)
+    try:
+        before = sum(
+            bool(path.lstat().st_mode & 0o222)
+            for path in (
+                runner.candidate_source_dir,
+                *runner.candidate_source_dir.rglob("*"),
+            )
+            if not path.is_symlink()
+        )
+        assert before > 0
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+        runner.candidate_before = release_runner.release_manifest(
+            runner.candidate_source_dir
+        )
+        assert stat.S_IMODE(regular.stat().st_mode) == 0o444
+        assert stat.S_IMODE(executable.stat().st_mode) == 0o555
+        assert stat.S_IMODE(source.stat().st_mode) == 0o555
+        assert all(
+            not path.lstat().st_mode & 0o222
+            for path in (
+                runner.candidate_source_dir,
+                *runner.candidate_source_dir.rglob("*"),
+            )
+            if not path.is_symlink()
+        )
+        evidence_path = tmp_path / "evidence.candidate-mode-normalization.json"
+        evidence = json.loads(evidence_path.read_text())
+        assert set(evidence) == release_runner.MODE_NORMALIZATION_FIELDS
+        assert evidence["writableBeforeCount"] == before
+        assert evidence["writableAfterCount"] == 0
+        assert evidence["executablePreservedCount"] == 1
+        assert evidence["unsupportedEntryCount"] == 0
+        assert all("/" not in str(value) for value in evidence.values())
+        assert runner.candidate_before is not None
+        release_runner.scan_generated_artifacts([evidence_path])
+        harness_module.assert_immutable(runner.candidate_source_dir)
+        harness = harness_module.Harness(
+            type(
+                "Args",
+                (),
+                {
+                    "release_root": runner.candidate_source_dir,
+                    "runtime_dir": tmp_path / "browser-runtime",
+                    "backend_host": "127.0.0.1",
+                    "backend_port": 18083,
+                    "postgres_url": "postgresql://redacted@127.0.0.1:55483/test",
+                    "qdrant_url": "http://127.0.0.1:56383",
+                    "python_path": ".",
+                    "journey_id": "s5-impl-083-mode-normalization",
+                },
+            )()
+        )
+        assert harness.before == runner.candidate_before
+    finally:
+        restore_candidate_permissions(runner)
+
+
+def test_candidate_mode_normalization_rejects_escaping_symlink(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    (runner.candidate_source_dir / "escape").symlink_to(tmp_path / "outside")
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == "MODE_NORMALIZATION_SYMLINK_ESCAPE"
+
+
+def test_candidate_mode_normalization_does_not_chmod_internal_symlink_target(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    target = runner.candidate_source_dir / "target"
+    target.write_text("immutable", encoding="utf-8")
+    link = runner.candidate_source_dir / "link"
+    link.symlink_to("target")
+    try:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+        assert link.is_symlink()
+        assert stat.S_IMODE(target.stat().st_mode) == 0o444
+    finally:
+        restore_candidate_permissions(runner)
+
+
+def test_candidate_mode_normalization_rejects_hard_link_to_outside(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    outside = tmp_path / "outside"
+    outside.write_text("must not change", encoding="utf-8")
+    original_mode = stat.S_IMODE(outside.stat().st_mode)
+    os.link(outside, runner.candidate_source_dir / "linked")
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == "MODE_NORMALIZATION_HARDLINK_REJECTED"
+    assert stat.S_IMODE(outside.stat().st_mode) == original_mode
+
+
+@pytest.mark.skipif(platform.system() == "Windows", reason="FIFO control is POSIX-only")
+def test_candidate_mode_normalization_rejects_unsupported_file_type(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    os.mkfifo(runner.candidate_source_dir / "unsupported")
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == "MODE_NORMALIZATION_UNSUPPORTED_ENTRY"
+    evidence = json.loads(
+        (tmp_path / "evidence.candidate-mode-normalization.json").read_text()
+    )
+    assert evidence["unsupportedEntryCount"] == 1
+
+
+def test_candidate_mode_normalization_chmod_failure_is_sanitized(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    candidate_file = runner.candidate_source_dir / "candidate"
+    candidate_file.write_text("content", encoding="utf-8")
+    original_chmod = Path.chmod
+
+    def fail_candidate_chmod(path: Path, mode: int) -> None:
+        if path == candidate_file:
+            raise PermissionError("/private/secret/path")
+        original_chmod(path, mode)
+
+    monkeypatch.setattr(Path, "chmod", fail_candidate_chmod)
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == "MODE_NORMALIZATION_CHMOD_FAILED"
+    assert "/private/secret/path" not in str(error.value)
+
+
+def test_candidate_mode_normalization_ownership_mismatch_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    (runner.candidate_source_dir / "candidate").write_text("content", encoding="utf-8")
+    monkeypatch.setattr(release_runner.os, "chown", lambda *_args, **_kwargs: None)
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid() + 10000, os.getgid() + 10000)
+    assert error.value.code == "MODE_NORMALIZATION_OWNERSHIP_MISMATCH"
+
+
+def test_candidate_mode_normalization_traversal_failure_is_sanitized(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+
+    def traversal_failure(*_args, **_kwargs):
+        raise PermissionError("/private/secret/path")
+
+    monkeypatch.setattr(release_runner.os, "walk", traversal_failure)
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == "MODE_NORMALIZATION_TRAVERSAL_FAILED"
+    assert "/private/secret/path" not in str(error.value)
+
+
+def test_candidate_mode_verification_rejects_removed_executable_bit(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    executable = runner.candidate_source_dir / "entrypoint"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o755)
+    try:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+        executable.chmod(0o444)
+        with pytest.raises(release_runner.RunnerError) as error:
+            runner.verify_candidate_mode_normalization()
+        assert error.value.code == "MODE_NORMALIZATION_VERIFICATION_FAILED"
+    finally:
+        restore_candidate_permissions(runner)
+
+
+def test_candidate_mode_verification_rejects_writable_entry(tmp_path: Path) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    candidate_file = runner.candidate_source_dir / "candidate"
+    candidate_file.write_text("content", encoding="utf-8")
+    try:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+        candidate_file.chmod(0o644)
+        with pytest.raises(release_runner.RunnerError) as error:
+            runner.verify_candidate_mode_normalization()
+        assert error.value.code in {
+            "MODE_NORMALIZATION_VERIFICATION_FAILED",
+            "MODE_NORMALIZATION_WRITABLE_REMAINS",
+        }
+    finally:
+        restore_candidate_permissions(runner)
+
+
 def test_writable_mount_fails_as_mode_bits_only_boundary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
