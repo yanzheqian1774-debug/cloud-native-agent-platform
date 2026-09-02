@@ -60,7 +60,22 @@ never taken from ambient release-related environment variables.
 
 The candidate is assembled from the exact product tree plus the exact
 acceptance-source Playwright configuration. Its frontend dependencies are
-installed from the lockfile, its LIVE_DEMO output is externally digest-bound,
-and its files are sealed read-only while preserving pre-existing execute bits.
+installed from the lockfile and its LIVE_DEMO output is externally
+digest-bound. For readiness and private-precheck modes, Linux mount authority,
+`findmnt`, `setpriv`, and an unprivileged `nobody` identity are mandatory. The
+runner bind-mounts an exact runner-owned target, remounts it read-only, verifies
+the effective operating-system mount options and source/target inode
+correlation, and only then runs ordinary-write and Python-bytecode denial probes
+as that exact non-root identity. Mode bits alone are never accepted as the
+immutable boundary.
+
+The external validation runtime remains writable by only the selected probe
+identity. Pre-mount, mounted-post-probe, and unmounted-post-probe manifests are
+written beside the stage evidence. Cleanup verifies the runtime ownership token
+and exact target before unmounting; an unowned target is never unmounted or
+removed. The underlying candidate must remain manifest-identical after
+unmount. Unsupported, non-root, missing-tool, writable-mount, identity-mismatch,
+or ownership-mismatch environments fail closed with fixed sanitized codes.
+
 The browser executable path and digest are contract-pinned. PostgreSQL and
 Qdrant use exact image digests and loopback-only ports.

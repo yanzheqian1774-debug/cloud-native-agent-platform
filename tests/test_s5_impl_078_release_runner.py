@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import platform
 import stat
 import sys
 from pathlib import Path
@@ -143,6 +144,252 @@ def test_unowned_cleanup_attempt_fails_before_docker(tmp_path: Path) -> None:
     )
     with pytest.raises(release_runner.RunnerError, match="not runner-owned"):
         runner.verify_owned("somebody-elses-container")
+
+
+def test_non_root_runner_fails_closed_without_mount_authority(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    monkeypatch.setattr(release_runner.os, "geteuid", lambda: 501)
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.select_validation_identity()
+    assert error.value.code == "READ_ONLY_MOUNT_MISSING"
+
+
+def test_root_probe_identity_is_forbidden(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    monkeypatch.setattr(release_runner.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        release_runner.pwd,
+        "getpwnam",
+        lambda _name: type("Identity", (), {"pw_uid": 0, "pw_gid": 0})(),
+    )
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.select_validation_identity()
+    assert error.value.code == "ROOT_PROBE_FORBIDDEN"
+
+
+def test_mount_options_require_exact_target(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.candidate_dir = tmp_path / "candidate"
+    runner.candidate_dir.mkdir()
+    monkeypatch.setattr(
+        release_runner,
+        "run_command",
+        lambda *_args, **_kwargs: type(
+            "R", (), {"returncode": 0, "stdout": b"/somebody/else ro\n"}
+        )(),
+    )
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.mount_options()
+    assert error.value.code == "READ_ONLY_MOUNT_VERIFICATION_FAILED"
+
+
+def test_mount_options_preserve_effective_ro_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.candidate_dir = tmp_path / "candidate"
+    runner.candidate_dir.mkdir()
+    output = f"{runner.candidate_dir} ro,nosuid,nodev\n".encode()
+    monkeypatch.setattr(
+        release_runner,
+        "run_command",
+        lambda *_args, **_kwargs: type("R", (), {"returncode": 0, "stdout": output})(),
+    )
+    assert "ro" in runner.mount_options()
+
+
+def prepared_mount_runner(tmp_path: Path) -> object:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    runner.runtime_dir.mkdir()
+    runner.candidate_source_dir = runner.runtime_dir / "candidate-source"
+    runner.candidate_source_dir.mkdir()
+    runner.candidate_before = release_runner.release_manifest(
+        runner.candidate_source_dir
+    )
+    return runner
+
+
+def test_writable_mount_fails_as_mode_bits_only_boundary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = prepared_mount_runner(tmp_path)
+    monkeypatch.setattr(runner, "select_validation_identity", lambda: (65534, 65534))
+    monkeypatch.setattr(release_runner.shutil, "which", lambda _name: "/bin/tool")
+    monkeypatch.setattr(
+        release_runner,
+        "run_command",
+        lambda *_args, **_kwargs: type("R", (), {"returncode": 0})(),
+    )
+    monkeypatch.setattr(runner, "mount_options", lambda: {"rw"})
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.present_read_only_candidate()
+    assert error.value.code == "MODE_BITS_ONLY_NOT_ENFORCED"
+
+
+def test_mount_source_target_ownership_mismatch_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = prepared_mount_runner(tmp_path)
+    monkeypatch.setattr(runner, "select_validation_identity", lambda: (65534, 65534))
+    monkeypatch.setattr(release_runner.shutil, "which", lambda _name: "/bin/tool")
+    monkeypatch.setattr(
+        release_runner,
+        "run_command",
+        lambda *_args, **_kwargs: type("R", (), {"returncode": 0})(),
+    )
+    monkeypatch.setattr(runner, "mount_options", lambda: {"ro"})
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.present_read_only_candidate()
+    assert error.value.code == "READ_ONLY_MOUNT_VERIFICATION_FAILED"
+
+
+def test_unowned_mount_target_cannot_be_unmounted(tmp_path: Path) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    runner.runtime_dir.mkdir()
+    runner.candidate_dir = tmp_path / "somebody-elses-candidate"
+    runner.candidate_mount_owned = True
+    with pytest.raises(release_runner.RunnerError, match="not runner-owned"):
+        runner.verify_mount_target_owned()
+
+
+def test_denial_probe_preserves_fixed_write_classification(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    runner.runtime_dir.mkdir()
+    runner.candidate_dir = tmp_path / "candidate"
+    runner.candidate_dir.mkdir()
+    runner.validation_uid = 65534
+    runner.validation_gid = 65534
+    monkeypatch.setattr(runner, "mount_options", lambda: {"ro"})
+    calls = iter(
+        [
+            type("R", (), {"returncode": 0, "stdout": b"65534\n"})(),
+            type("R", (), {"returncode": 0, "stdout": b""})(),
+        ]
+    )
+    monkeypatch.setattr(release_runner, "run_command", lambda *_a, **_k: next(calls))
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.denial_probes()
+    assert error.value.code == "WRITE_UNEXPECTEDLY_SUCCEEDED"
+
+
+def test_denial_probe_identity_mismatch_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    runner.runtime_dir.mkdir()
+    runner.candidate_dir = tmp_path / "candidate"
+    runner.candidate_dir.mkdir()
+    runner.validation_uid = 65534
+    runner.validation_gid = 65534
+    monkeypatch.setattr(runner, "mount_options", lambda: {"ro"})
+    monkeypatch.setattr(
+        release_runner,
+        "run_command",
+        lambda *_args, **_kwargs: type(
+            "R", (), {"returncode": 0, "stdout": b"1234\n"}
+        )(),
+    )
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.denial_probes()
+    assert error.value.code == "VALIDATION_IDENTITY_MISMATCH"
+
+
+def test_denial_probe_preserves_fixed_bytecode_classification(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    runner.runtime_dir.mkdir()
+    runner.candidate_dir = tmp_path / "candidate"
+    runner.candidate_dir.mkdir()
+    runner.validation_uid = 65534
+    runner.validation_gid = 65534
+    monkeypatch.setattr(runner, "mount_options", lambda: {"ro"})
+    calls = iter(
+        [
+            type("R", (), {"returncode": 0, "stdout": b"65534\n"})(),
+            type("R", (), {"returncode": 1, "stdout": b""})(),
+            type("R", (), {"returncode": 0, "stdout": b""})(),
+        ]
+    )
+    monkeypatch.setattr(release_runner, "run_command", lambda *_a, **_k: next(calls))
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.denial_probes()
+    assert error.value.code == "BYTECODE_UNEXPECTEDLY_SUCCEEDED"
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux" or os.geteuid() != 0,
+    reason="real bind-remount control requires root in an isolated Linux environment",
+)
+def test_real_read_only_bind_mount_positive_control(tmp_path: Path) -> None:
+    contract = checked_contract()
+    contract["identity"]["runtimeRoot"] = str(tmp_path / "runtime-root")
+    contract["pythonInterpreter"] = sys.executable
+    runner = release_runner.Runner(
+        contract, "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.ensure_runtime()
+    assert runner.runtime_dir is not None
+    runner.candidate_source_dir = runner.runtime_dir / "candidate-source"
+    runner.candidate_source_dir.mkdir()
+    (runner.candidate_source_dir / "probe.py").write_text(
+        "value = 1\n", encoding="utf-8"
+    )
+    uid, gid = runner.select_validation_identity()
+    for path in (
+        runner.candidate_source_dir,
+        *runner.candidate_source_dir.rglob("*"),
+    ):
+        os.chown(path, uid, gid)
+        path.chmod(path.stat().st_mode | 0o600)
+    runner.candidate_before = release_runner.release_manifest(
+        runner.candidate_source_dir
+    )
+    try:
+        runner.present_read_only_candidate()
+        runner.denial_probes()
+        runner.verify_candidate_manifest()
+        runner.unmount_candidate()
+        runner.write_candidate_manifests()
+        assert runner.candidate_before == runner.candidate_mounted_after
+        assert runner.candidate_before == runner.candidate_unmounted_after
+        assert (
+            runner.runtime_dir / "validation-runtime" / "authorized-cache"
+        ).is_file()
+    finally:
+        if runner.candidate_mount_owned:
+            runner.unmount_candidate()
 
 
 def test_stage_records_are_exactly_allowlisted_and_do_not_echo_errors(
