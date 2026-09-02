@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { backendUrl, restartOwnedBackend } from "../harness/ownedBackend";
+import { runKnowledgeOperation } from "../harness/structuredKnowledgeReporter";
 
 const backend = backendUrl();
 const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL;
@@ -25,7 +26,17 @@ async function restartBackend(request: import("@playwright/test").APIRequestCont
   }, { timeout: 20_000 }).toBe(200);
 }
 
-test("completes the real Knowledge lifecycle, retrieval, recovery and purge journey", async ({ page, request }) => {
+test("completes the real Knowledge lifecycle, retrieval, recovery and purge journey", async ({ page, request }, testInfo) => {
+  let identity = "";
+  let firstRevision = "";
+  let firstDigest = "";
+  let firstSnapshot = "";
+  let rebuilt: {
+    knowledge: { publishedRevisionId: string; activeIndexSnapshotId: string };
+    technicalProjection: { revisionDigests: Array<{ digest: string }> };
+  };
+
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_GOVERNED_CREATE_PUBLISH", async () => {
   await page.goto("/knowledge");
   await expect(page.locator(".demo-primary-nav")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Knowledge Workbench" })).toBeVisible();
@@ -34,16 +45,18 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Quality Evaluation");
   await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Import and Duplicate Review");
   await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Rebuild, Purge and Recovery");
-  const identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
+  identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
   await expect(page.getByRole("definition").filter({ hasText: "source:supplier-quality" })).toBeVisible();
   await publish(page);
   await page.getByRole("button", { name: "Ingest and index" }).click();
   await expect(page.getByText("COMPLETED", { exact: true })).toBeVisible();
+  });
 
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_INDEX_RETRIEVE", async () => {
   const first = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
-  const firstRevision = first.knowledge.publishedRevisionId;
-  const firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
-  const firstSnapshot = first.knowledge.activeIndexSnapshotId;
+  firstRevision = first.knowledge.publishedRevisionId;
+  firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
+  firstSnapshot = first.knowledge.activeIndexSnapshotId;
   expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
 
   await page.getByRole("button", { name: "Run authorized retrieval" }).click();
@@ -96,7 +109,9 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   expect(await denied.text()).toBe(await absent.text());
   const foreignList = await request.get(`${backend}/api/internal/v0.2.2/knowledge`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
   expect(await foreignList.json()).toEqual([]);
+  });
 
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_UPDATE", async () => {
   const deniedRetrieval = page.waitForResponse((response) =>
     response.url().includes(`/knowledge/${encodeURIComponent(identity)}/retrievals`)
     && response.request().method() === "POST"
@@ -112,11 +127,13 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
     const response = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders });
     return (await response.json()).knowledge.activeIndexSnapshotId;
   }).not.toBe(firstSnapshot);
-  const rebuilt = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
+  rebuilt = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
   expect(rebuilt.knowledge.publishedRevisionId).not.toBe(firstRevision);
   expect(rebuilt.technicalProjection.revisionDigests.at(-1).digest).not.toBe(firstDigest);
   expect(rebuilt.knowledge.activeIndexSnapshotId).not.toBe(firstSnapshot);
+  });
 
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_RESTART_READBACK", async () => {
   await restartBackend(request);
   await page.reload();
   await page.getByLabel("Filter authorized Packs").fill(identity);
@@ -131,6 +148,9 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await page.getByRole("tab", { name: "Product View" }).click();
   await page.getByRole("button", { name: "Archive Pack" }).click();
   await expect(page.getByText(/ARCHIVED · Archived/)).toBeVisible();
+  });
+
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_PURGE_RECOVERY", async () => {
   await page.getByRole("button", { name: "Review purge impact" }).click();
   await page.getByLabel("Authorization identity").fill("authorization:compliance-one");
   await page.getByLabel("Non-sensitive reason classification").fill("PROHIBITED_CONTENT");
@@ -239,4 +259,6 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
     return { background: style.backgroundColor, color: style.color };
   });
   expect(design).toEqual({ background: "rgb(246, 247, 249)", color: "rgb(23, 32, 42)" });
+  return partialPurgeResponse.status();
+  }, (structuredHttpStatus) => structuredHttpStatus);
 });
