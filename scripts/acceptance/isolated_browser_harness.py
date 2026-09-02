@@ -19,6 +19,7 @@ import time
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import urlparse
 
 import psycopg
@@ -29,6 +30,81 @@ from minimum_disclosure import (
     scan_generated_artifacts,
 )
 from psycopg import sql
+
+
+class SafeArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        if "required" in message:
+            category = "REQUIRED"
+        elif "unrecognized" in message:
+            category = "UNKNOWN"
+        elif "credential file mode" in message:
+            category = "CREDENTIAL_MODE"
+        else:
+            category = "VALUE"
+        print(f"harness argument failure: {category}", file=sys.stderr)
+        super().error("invalid Harness arguments")
+
+
+def sanitized_browser_failure_class(stdout: bytes, stderr: bytes) -> str:
+    try:
+        start = stdout.find(b"{")
+        end = stdout.rfind(b"}")
+        report = json.loads(stdout[start : end + 1])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        report = None
+    if isinstance(report, dict):
+        stats = report.get("stats")
+        if isinstance(stats, dict) and stats.get("unexpected", 0) > 0:
+            return "ASSERTION"
+        if report.get("errors"):
+            return "INVOCATION"
+    combined = stdout + stderr
+    if not combined:
+        return "EMPTY"
+    if (
+        b"npm error" in combined
+        or b"Unknown option" in combined
+        or b"not found" in combined
+        or b"ENOENT" in combined
+    ):
+        return "INVOCATION"
+    if b"EACCES" in combined or b"Permission denied" in combined:
+        return "PERMISSION"
+    if re.search(rb'"unexpected"\s*:\s*[1-9]', combined) or re.search(
+        rb'"status"\s*:\s*"(?:failed|timedOut)"', combined
+    ):
+        return "ASSERTION"
+    patterns = (
+        (b"browserType.launch", "LAUNCH"),
+        (b"Timed out", "TIMEOUT"),
+        (b"TimeoutError", "TIMEOUT"),
+        (b"expect(", "ASSERTION"),
+        (b"ERR_CONNECTION", "CONNECTION"),
+        (b"webServer", "SERVER"),
+        (b"Process from config.webServer", "SERVER"),
+    )
+    return next(
+        (category for marker, category in patterns if marker in combined), "COMMAND"
+    )
+
+
+def verify_browser_report(stdout: bytes) -> bool:
+    try:
+        start = stdout.find(b"{")
+        end = stdout.rfind(b"}")
+        report = json.loads(stdout[start : end + 1])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    stats = report.get("stats") if isinstance(report, dict) else None
+    return bool(
+        isinstance(stats, dict)
+        and type(stats.get("expected")) is int
+        and stats["expected"] > 0
+        and stats.get("unexpected") == 0
+        and stats.get("skipped") == 0
+        and stats.get("flaky") == 0
+    )
 
 
 def release_manifest(root: Path) -> dict[str, dict[str, str | int]]:
@@ -474,12 +550,15 @@ class Harness:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = SafeArgumentParser()
     parser.add_argument("--release-root", required=True, type=Path)
     parser.add_argument("--runtime-dir", required=True, type=Path)
     parser.add_argument("--backend-host", required=True)
     parser.add_argument("--backend-port", required=True, type=int)
-    parser.add_argument("--postgres-url", required=True)
+    parser.add_argument("--frontend-port", required=True, type=int)
+    postgres = parser.add_mutually_exclusive_group(required=True)
+    postgres.add_argument("--postgres-url")
+    postgres.add_argument("--postgres-url-file", type=Path)
     parser.add_argument("--postgres-validation-role", required=True)
     parser.add_argument("--qdrant-url", required=True)
     parser.add_argument("--build-mode-identity", required=True, type=Path)
@@ -491,6 +570,10 @@ def parse_args() -> argparse.Namespace:
         args.command = args.command[1:]
     if not args.command:
         parser.error("a browser command is required after --")
+    if args.postgres_url_file is not None:
+        if stat.S_IMODE(args.postgres_url_file.stat().st_mode) != 0o600:
+            parser.error("PostgreSQL credential file mode must be 0600")
+        args.postgres_url = args.postgres_url_file.read_text(encoding="utf-8")
     args.postgres_url = endpoint(args.postgres_url, "PostgreSQL endpoint")
     args.qdrant_url = endpoint(args.qdrant_url, "Qdrant endpoint")
     return args
@@ -498,15 +581,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    print("harness phase: ARGUMENTS", file=sys.stderr)
     verify_build_identity(
         args.release_root.resolve() / "console/frontend/dist",
         args.build_mode_identity.resolve(),
     )
+    print("harness phase: BUILD_IDENTITY", file=sys.stderr)
     verify_postgres_role_readiness(args.postgres_url, args.postgres_validation_role)
+    print("harness phase: POSTGRES_ROLE", file=sys.stderr)
     harness = Harness(args)
+    print("harness phase: CANDIDATE", file=sys.stderr)
     command_result = 1
     try:
         harness.start()
+        print("harness phase: BACKEND", file=sys.stderr)
         ready = threading.Event()
         threading.Thread(target=harness.serve, args=(ready,), daemon=True).start()
         ready.wait(timeout=5)
@@ -517,20 +605,29 @@ def main() -> int:
                 "S5_HARNESS_OWNERSHIP_TOKEN": harness.token,
                 "CONSOLE_BACKEND_URL": harness.url,
                 "VITE_BACKEND_URL": harness.url,
+                "CONSOLE_FRONTEND_PORT": str(args.frontend_port),
                 "KNOWLEDGE_QDRANT_DIRECT_URL": args.qdrant_url,
                 "S5_IMMUTABLE_ACCEPTANCE": "1",
                 "PLAYWRIGHT_OUTPUT_DIR": str(harness.runtime / "playwright-output"),
                 "S5_HARNESS_PYTHON": sys.executable,
             }
         )
-        command_result = subprocess.run(
+        browser_result = subprocess.run(
             args.command,
             cwd=harness.release,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
             check=False,
-        ).returncode
+        )
+        command_result = browser_result.returncode
+        if command_result == 0 and not verify_browser_report(browser_result.stdout):
+            command_result = 1
+        print("harness phase: BROWSER_COMMAND", file=sys.stderr)
+        if command_result:
+            category = sanitized_browser_failure_class(
+                browser_result.stdout, browser_result.stderr
+            )
+            print(f"browser acceptance failed: {category}", file=sys.stderr)
     finally:
         try:
             harness.stop()
@@ -547,6 +644,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    print("harness phase: MODULE", file=sys.stderr)
     try:
         raise SystemExit(main())
     except Exception as exc:
