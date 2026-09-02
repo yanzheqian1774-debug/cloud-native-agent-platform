@@ -895,6 +895,36 @@ def test_runner_rejects_malformed_browser_failure_before_persistence(
     assert not (tmp_path / "evidence.browser-first-failure.json").exists()
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda value: value.update(schemaVersion=99),
+        lambda value: value.pop("firstFailureOperationId"),
+        lambda value: value.pop("httpStatusSourceClass"),
+        lambda value: value.update(extraField="forbidden"),
+        lambda value: value.update(
+            httpStatusCategory="HTTP_5XX",
+            httpStatusSourceClass="NO_STRUCTURED_HTTP_STATUS",
+        ),
+    ],
+)
+def test_runner_rejects_unsupported_partial_extra_and_contradictory_v2_records(
+    tmp_path: Path, mutation
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "preflight", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    source = runner.runtime_dir / "browser-runtime/browser-first-failure.json"
+    source.parent.mkdir(parents=True)
+    record = _first_failure()
+    mutation(record)
+    source.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.capture_browser_first_failure()
+    assert error.value.category == "BROWSER_DIAGNOSTIC_GAP"
+
+
 def test_browser_failure_is_persisted_before_owned_cleanup(
     tmp_path: Path, monkeypatch
 ) -> None:
