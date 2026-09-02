@@ -31,6 +31,365 @@ from minimum_disclosure import (
 )
 from psycopg import sql
 
+FIRST_FAILURE_SCHEMA_VERSION = 1
+MAX_DIAGNOSTIC_COUNT = 100_000
+FIRST_FAILURE_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "journeyId",
+        "runnerPhase",
+        "harnessPhase",
+        "firstFailureAssertionId",
+        "expectedResultClass",
+        "observedResultClass",
+        "failureCategory",
+        "failureSubtype",
+        "exceptionClass",
+        "httpStatusCategory",
+        "correlationDigest",
+        "completedJourneyCount",
+        "completedAssertionCount",
+        "unexpectedAssertionCount",
+        "backendStateClass",
+        "frontendStateClass",
+        "listenerStateClass",
+        "restartCountClass",
+        "completionState",
+    }
+)
+FIRST_FAILURE_ASSERTION_IDS = {
+    (
+        "agent-workbench.spec.ts",
+        "publishes an exact reviewed revision through the real Workbench",
+    ): "AGENT_WORKBENCH_PUBLISH_REVIEWED_REVISION",
+    (
+        "agent-workbench.spec.ts",
+        "creates a governed draft through the guided Builder",
+    ): "AGENT_WORKBENCH_CREATE_GOVERNED_DRAFT",
+    (
+        "knowledge-workbench.spec.ts",
+        "completes the real Knowledge lifecycle, retrieval, recovery and purge journey",
+    ): "KNOWLEDGE_WORKBENCH_LIFECYCLE",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "publishes, binds and authorizes one bounded real capability test",
+    ): "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE",
+    (
+        "unified-product-assembly.spec.ts",
+        "proves the complete durable unified-product browser journey",
+    ): "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
+    (
+        "unified-product-assembly.spec.ts",
+        "keeps denial disclosure-safe and responsive navigation accessible",
+    ): "UNIFIED_PRODUCT_ASSEMBLY_DISCLOSURE_DENIAL",
+    (
+        "wave-3b-product-technical-evidence.spec.ts",
+        "canonical URL context is deterministic and round-trip stable",
+    ): "WAVE_3B_CANONICAL_CONTEXT_ROUND_TRIP",
+    (
+        "wave-3b-product-technical-evidence.spec.ts",
+        "invalid URL context fails closed",
+    ): "WAVE_3B_INVALID_CONTEXT_FAIL_CLOSED",
+    (
+        "wave-3b-product-technical-evidence.spec.ts",
+        "proves all twelve Wave 3B real-service browser journeys",
+    ): "WAVE_3B_REAL_SERVICE_JOURNEYS",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "publishes a Runtime Profile then a governed Workflow through real Workbenches",
+    ): "WORKFLOW_RUNTIME_PUBLISH_GOVERNED_WORKFLOW",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "shows controlled empty and validation failure states",
+    ): "WORKFLOW_RUNTIME_CONTROLLED_FAILURE_STATES",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "renders a disclosure-safe denied state",
+    ): "WORKFLOW_RUNTIME_DISCLOSURE_DENIAL",
+}
+FAILURE_CATEGORIES = frozenset(
+    {
+        "BROWSER_ASSERTION",
+        "BROWSER_TIMEOUT",
+        "BROWSER_HTTP_ERROR",
+        "BROWSER_NAVIGATION_ERROR",
+        "BROWSER_PROCESS_ERROR",
+        "BROWSER_DIAGNOSTIC_GAP",
+    }
+)
+FAILURE_SUBTYPES = frozenset(
+    {
+        "ASSERTION_MISMATCH",
+        "TIMEOUT",
+        "HTTP_ERROR",
+        "NAVIGATION_ERROR",
+        "SELECTOR_STATE_MISMATCH",
+        "APPLICATION_STATE_MISMATCH",
+        "PROCESS_EXIT",
+        "UNKNOWN",
+    }
+)
+HTTP_STATUS_CATEGORIES = frozenset(
+    {
+        "NONE",
+        "HTTP_1XX",
+        "HTTP_2XX",
+        "HTTP_3XX",
+        "HTTP_4XX",
+        "HTTP_5XX",
+        "CONNECTION_FAILURE",
+        "TIMEOUT",
+        "UNKNOWN",
+    }
+)
+EXCEPTION_CLASSES = frozenset(
+    {
+        "NONE",
+        "ASSERTION_ERROR",
+        "TIMEOUT_ERROR",
+        "HTTP_ERROR",
+        "NAVIGATION_ERROR",
+        "PROCESS_ERROR",
+        "UNKNOWN",
+    }
+)
+_ASSERTION_ID = re.compile(r"[A-Z][A-Z0-9_]{2,95}\Z")
+
+
+def _browser_json(stdout: bytes) -> dict[str, object] | None:
+    try:
+        start = stdout.find(b"{")
+        end = stdout.rfind(b"}")
+        value = json.loads(stdout[start : end + 1])
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _ordered_specs(suites: object):
+    if not isinstance(suites, list):
+        return
+    for suite in suites:
+        if not isinstance(suite, dict):
+            continue
+        yield from _ordered_specs(suite.get("suites"))
+        specs = suite.get("specs")
+        if isinstance(specs, list):
+            for spec in specs:
+                if isinstance(spec, dict):
+                    yield suite, spec
+
+
+def _bounded_count(value: object) -> int:
+    return value if type(value) is int and 0 <= value <= MAX_DIAGNOSTIC_COUNT else 0
+
+
+def _failure_details(text: str, status: str) -> tuple[str, str, str, str]:
+    lowered = text.lower()
+    if status == "interrupted":
+        return "BROWSER_PROCESS_ERROR", "PROCESS_EXIT", "PROCESS_ERROR", "NONE"
+    if status == "timedOut" or "timeout" in lowered or "timed out" in lowered:
+        return "BROWSER_TIMEOUT", "TIMEOUT", "TIMEOUT_ERROR", "TIMEOUT"
+    status_match = re.search(r"(?<!\d)([1-5]\d\d)(?!\d)", text)
+    if status_match and (
+        "http" in lowered or "status" in lowered or "response" in lowered
+    ):
+        return (
+            "BROWSER_HTTP_ERROR",
+            "HTTP_ERROR",
+            "HTTP_ERROR",
+            f"HTTP_{status_match.group(1)[0]}XX",
+        )
+    if "net::err_" in lowered or "connection" in lowered:
+        return (
+            "BROWSER_NAVIGATION_ERROR",
+            "NAVIGATION_ERROR",
+            "NAVIGATION_ERROR",
+            "CONNECTION_FAILURE",
+        )
+    if "goto" in lowered or "navigation" in lowered:
+        return (
+            "BROWSER_NAVIGATION_ERROR",
+            "NAVIGATION_ERROR",
+            "NAVIGATION_ERROR",
+            "NONE",
+        )
+    if (
+        "locator" in lowered
+        or "selector" in lowered
+        or "tobevisible" in lowered
+        or "tohave" in lowered
+    ):
+        return "BROWSER_ASSERTION", "SELECTOR_STATE_MISMATCH", "ASSERTION_ERROR", "NONE"
+    if "expect(" in lowered or "assert" in lowered:
+        return "BROWSER_ASSERTION", "ASSERTION_MISMATCH", "ASSERTION_ERROR", "NONE"
+    return "BROWSER_ASSERTION", "APPLICATION_STATE_MISMATCH", "UNKNOWN", "UNKNOWN"
+
+
+def sanitized_first_failure_record(
+    stdout: bytes, journey_id: str, restart_count: int
+) -> dict[str, object] | None:
+    report = _browser_json(stdout)
+    if report is None:
+        return None
+    stats = report.get("stats") if isinstance(report.get("stats"), dict) else {}
+    unexpected = _bounded_count(stats.get("unexpected"))
+    first = None
+    for suite, spec in _ordered_specs(report.get("suites")):
+        tests = spec.get("tests")
+        if not isinstance(tests, list):
+            continue
+        for test in tests:
+            if not isinstance(test, dict):
+                continue
+            results = test.get("results")
+            if test.get("status") == "unexpected" or any(
+                isinstance(item, dict)
+                and item.get("status") in {"failed", "timedOut", "interrupted"}
+                for item in (results if isinstance(results, list) else [])
+            ):
+                first = (suite, spec, test)
+                break
+        if first:
+            break
+    if first is None and unexpected == 0:
+        return None
+    assertion_id = "NOT_RETAINED"
+    category, subtype, exception_class, http_category = (
+        "BROWSER_DIAGNOSTIC_GAP",
+        "UNKNOWN",
+        "UNKNOWN",
+        "UNKNOWN",
+    )
+    if first is not None:
+        suite, spec, test = first
+        title = spec.get("title")
+        mapped = (
+            FIRST_FAILURE_ASSERTION_IDS.get(
+                (Path(str(suite.get("file", ""))).name, title)
+            )
+            if isinstance(title, str)
+            else None
+        )
+        if mapped:
+            assertion_id = mapped
+        results = test.get("results")
+        result = next(
+            (
+                item
+                for item in (results if isinstance(results, list) else [])
+                if isinstance(item, dict)
+                and item.get("status") in {"failed", "timedOut", "interrupted"}
+            ),
+            {},
+        )
+        errors = result.get("errors") if isinstance(result, dict) else []
+        transient = " ".join(
+            str(item.get("message", "")) for item in errors if isinstance(item, dict)
+        )[:65_536]
+        category, subtype, exception_class, http_category = _failure_details(
+            transient, str(result.get("status", ""))
+        )
+        if assertion_id == "NOT_RETAINED":
+            category, subtype, exception_class, http_category = (
+                "BROWSER_DIAGNOSTIC_GAP",
+                "UNKNOWN",
+                "UNKNOWN",
+                "UNKNOWN",
+            )
+    completed = _bounded_count(stats.get("expected")) + unexpected
+    record: dict[str, object] = {
+        "schemaVersion": FIRST_FAILURE_SCHEMA_VERSION,
+        "journeyId": journey_id,
+        "runnerPhase": "browser-harness",
+        "harnessPhase": "BROWSER_COMMAND",
+        "firstFailureAssertionId": assertion_id,
+        "expectedResultClass": "EXPECTED",
+        "observedResultClass": "UNEXPECTED",
+        "failureCategory": category,
+        "failureSubtype": subtype,
+        "exceptionClass": exception_class,
+        "httpStatusCategory": http_category,
+        "completedJourneyCount": 0,
+        "completedAssertionCount": min(completed, MAX_DIAGNOSTIC_COUNT),
+        "unexpectedAssertionCount": unexpected,
+        "backendStateClass": "RUNNING",
+        "frontendStateClass": "UNKNOWN",
+        "listenerStateClass": "ACTIVE",
+        "restartCountClass": "NONE" if restart_count == 0 else "ONE_OR_MORE",
+        "completionState": "FAILED",
+    }
+    normalized = json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+    record["correlationDigest"] = hashlib.sha256(normalized).hexdigest()
+    return validate_first_failure_record(record)
+
+
+def validate_first_failure_record(record: object) -> dict[str, object]:
+    if not isinstance(record, dict) or set(record) != FIRST_FAILURE_FIELDS:
+        raise ValueError("browser first-failure schema violation")
+    if record["schemaVersion"] != FIRST_FAILURE_SCHEMA_VERSION:
+        raise ValueError("browser first-failure schema version violation")
+    if not isinstance(record["journeyId"], str) or not re.fullmatch(
+        r"[a-z0-9][a-z0-9-]{2,95}", record["journeyId"]
+    ):
+        raise ValueError("browser first-failure journey identity violation")
+    assertion_id = record["firstFailureAssertionId"]
+    if assertion_id != "NOT_RETAINED" and (
+        not isinstance(assertion_id, str) or not _ASSERTION_ID.fullmatch(assertion_id)
+    ):
+        raise ValueError("browser first-failure assertion identity violation")
+    if (
+        assertion_id != "NOT_RETAINED"
+        and assertion_id not in FIRST_FAILURE_ASSERTION_IDS.values()
+    ):
+        raise ValueError("browser first-failure assertion identity is not versioned")
+    enum_fields = {
+        "runnerPhase": {"browser-harness"},
+        "harnessPhase": {"BROWSER_COMMAND"},
+        "expectedResultClass": {"EXPECTED"},
+        "observedResultClass": {"UNEXPECTED"},
+        "failureCategory": FAILURE_CATEGORIES,
+        "failureSubtype": FAILURE_SUBTYPES,
+        "exceptionClass": EXCEPTION_CLASSES,
+        "httpStatusCategory": HTTP_STATUS_CATEGORIES,
+        "backendStateClass": {"RUNNING", "STOPPED", "UNKNOWN"},
+        "frontendStateClass": {"RUNNING", "STOPPED", "UNKNOWN"},
+        "listenerStateClass": {"ACTIVE", "INACTIVE", "UNKNOWN"},
+        "restartCountClass": {"NONE", "ONE_OR_MORE", "UNKNOWN"},
+        "completionState": {"FAILED"},
+    }
+    if any(record[name] not in allowed for name, allowed in enum_fields.items()):
+        raise ValueError("browser first-failure enum violation")
+    for name in (
+        "completedJourneyCount",
+        "completedAssertionCount",
+        "unexpectedAssertionCount",
+    ):
+        if (
+            type(record[name]) is not int
+            or not 0 <= record[name] <= MAX_DIAGNOSTIC_COUNT
+        ):
+            raise ValueError("browser first-failure count violation")
+    if not isinstance(record["correlationDigest"], str) or not re.fullmatch(
+        r"[0-9a-f]{64}", record["correlationDigest"]
+    ):
+        raise ValueError("browser first-failure digest violation")
+    digest_source = {
+        key: value for key, value in record.items() if key != "correlationDigest"
+    }
+    expected_digest = hashlib.sha256(
+        json.dumps(digest_source, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if record["correlationDigest"] != expected_digest:
+        raise ValueError("browser first-failure digest mismatch")
+    encoded = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    if len(encoded) > 4096 or re.search(
+        r"(?i)(https?://|[?&][a-z]+=|/Users/|/home/|/tmp/|password|token|secret|trace|screenshot|video|error-context)",
+        encoded,
+    ):
+        raise ValueError("browser first-failure disclosure violation")
+    return record
+
 
 class SafeArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
@@ -628,6 +987,21 @@ def main() -> int:
                 browser_result.stdout, browser_result.stderr
             )
             print(f"browser acceptance failed: {category}", file=sys.stderr)
+            failure = sanitized_first_failure_record(
+                browser_result.stdout, args.journey_id, harness.restart_count
+            )
+            if failure is None:
+                failure = sanitized_first_failure_record(
+                    json.dumps({"stats": {"unexpected": 1}}).encode(),
+                    args.journey_id,
+                    harness.restart_count,
+                )
+            failure_path = harness.runtime / "browser-first-failure.json"
+            failure_path.write_text(
+                json.dumps(failure, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            scan_generated_artifacts([failure_path])
     finally:
         try:
             harness.stop()

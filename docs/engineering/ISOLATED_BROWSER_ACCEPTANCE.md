@@ -56,3 +56,27 @@ a prohibited value fails scanning without echoing that value. The
 immutable frontend server suppresses request-path logging. Validation helpers
 must use structured parsing or exact-field extraction; broad `sed`, `cat`,
 `head`, or `tail` file dumps are prohibited for potentially sensitive files.
+
+## Sanitized first-failure evidence
+
+On a browser-command failure the Harness writes exactly one
+`browser-first-failure.json` record before it stops its owned backend and removes
+raw Playwright output. A successful command writes no first-failure record.
+
+Schema version 1 contains only the 20 closed fields `schemaVersion`, `journeyId`,
+`runnerPhase`, `harnessPhase`, `firstFailureAssertionId`,
+`expectedResultClass`, `observedResultClass`, `failureCategory`,
+`failureSubtype`, `exceptionClass`, `httpStatusCategory`, `correlationDigest`,
+the three bounded completion counts, the backend/frontend/listener state
+classes, `restartCountClass`, and `completionState`.
+
+Assertion identities are opaque identifiers from the versioned Harness mapping;
+test titles and Playwright error text are used only transiently and are never
+written or hashed. Failure categories are `BROWSER_ASSERTION`,
+`BROWSER_TIMEOUT`, `BROWSER_HTTP_ERROR`, `BROWSER_NAVIGATION_ERROR`,
+`BROWSER_PROCESS_ERROR`, and `BROWSER_DIAGNOSTIC_GAP`. Unsafe, absent, or
+unmapped identities fail closed to `NOT_RETAINED` and
+`BROWSER_DIAGNOSTIC_GAP`. HTTP results retain only an HTTP class, connection,
+timeout, none, or unknown category. The closed validator rejects extra fields,
+unversioned identifiers, invalid enums, unbounded counts, paths, URLs,
+credential-shaped values, and raw-artifact references.

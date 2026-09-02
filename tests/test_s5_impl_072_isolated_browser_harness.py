@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import socket
@@ -262,6 +263,140 @@ def test_clean_generated_evidence_contains_only_correlation_fields(
         encoding="utf-8",
     )
     minimum_disclosure.scan_generated_artifacts([evidence])
+
+
+def browser_report(
+    *failures: tuple[str, str, str], unexpected: int | None = None
+) -> bytes:
+    specs = []
+    for _file_name, title, message in failures:
+        status = "timedOut" if "timeout" in message.lower() else "failed"
+        specs.append(
+            {
+                "title": title,
+                "tests": [
+                    {
+                        "status": "unexpected",
+                        "results": [
+                            {"status": status, "errors": [{"message": message}]}
+                        ],
+                    }
+                ],
+            }
+        )
+    return json.dumps(
+        {
+            "stats": {
+                "expected": 3,
+                "unexpected": len(failures) if unexpected is None else unexpected,
+            },
+            "suites": [{"file": failures[0][0] if failures else "", "specs": specs}],
+        }
+    ).encode()
+
+
+def test_successful_browser_report_has_no_first_failure_record() -> None:
+    report = json.dumps(
+        {"stats": {"expected": 3, "unexpected": 0}, "suites": []}
+    ).encode()
+    assert (
+        harness_module.sanitized_first_failure_record(report, "journey-086", 0) is None
+    )
+
+
+def test_first_failure_is_stable_and_deterministic_without_raw_message() -> None:
+    report = browser_report(
+        (
+            "agent-workbench.spec.ts",
+            "publishes an exact reviewed revision through the real Workbench",
+            "expect(locator('#private')).toBeVisible() token=secret",
+        ),
+        (
+            "agent-workbench.spec.ts",
+            "creates a governed draft through the guided Builder",
+            "second assertion",
+        ),
+    )
+    record = harness_module.sanitized_first_failure_record(report, "journey-086", 0)
+    assert (
+        record["firstFailureAssertionId"] == "AGENT_WORKBENCH_PUBLISH_REVIEWED_REVISION"
+    )
+    assert record["failureSubtype"] == "SELECTOR_STATE_MISMATCH"
+    assert record["unexpectedAssertionCount"] == 2
+    assert "private" not in json.dumps(record)
+    assert "secret" not in json.dumps(record)
+
+
+@pytest.mark.parametrize(
+    ("message", "category", "subtype", "http"),
+    [
+        ("Timeout 30000ms exceeded", "BROWSER_TIMEOUT", "TIMEOUT", "TIMEOUT"),
+        ("HTTP response status 503", "BROWSER_HTTP_ERROR", "HTTP_ERROR", "HTTP_5XX"),
+        (
+            "page.goto navigation failed",
+            "BROWSER_NAVIGATION_ERROR",
+            "NAVIGATION_ERROR",
+            "NONE",
+        ),
+        (
+            "unknown opaque exception",
+            "BROWSER_ASSERTION",
+            "APPLICATION_STATE_MISMATCH",
+            "UNKNOWN",
+        ),
+    ],
+)
+def test_first_failure_closed_classification(message, category, subtype, http) -> None:
+    report = browser_report(
+        (
+            "agent-workbench.spec.ts",
+            "creates a governed draft through the guided Builder",
+            message,
+        )
+    )
+    record = harness_module.sanitized_first_failure_record(report, "journey-086", 1)
+    assert (
+        record["failureCategory"],
+        record["failureSubtype"],
+        record["httpStatusCategory"],
+    ) == (category, subtype, http)
+
+
+def test_missing_assertion_id_fails_closed_to_diagnostic_gap() -> None:
+    report = browser_report(("unknown.spec.ts", "free form test", "password=private"))
+    record = harness_module.sanitized_first_failure_record(report, "journey-086", 0)
+    assert record["firstFailureAssertionId"] == "NOT_RETAINED"
+    assert record["failureCategory"] == "BROWSER_DIAGNOSTIC_GAP"
+    assert "private" not in json.dumps(record)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda value: value.update(extraField="forbidden"),
+        lambda value: value.update(firstFailureAssertionId="../../private"),
+        lambda value: value.update(firstFailureAssertionId="UNVERSIONED_IDENTIFIER"),
+        lambda value: value.update(journeyId="https://example.test/path?token=secret"),
+        lambda value: value.update(journeyId="secret-value"),
+        lambda value: value.update(completedAssertionCount=-1),
+        lambda value: value.update(completedAssertionCount=100_001),
+        lambda value: value.update(failureSubtype="raw assertion message"),
+        lambda value: value.update(exceptionClass="/tmp/error-context.md"),
+        lambda value: value.update(httpStatusCategory="screenshot.png"),
+    ],
+)
+def test_first_failure_schema_rejects_extra_raw_and_unbounded_values(mutation) -> None:
+    report = browser_report(
+        (
+            "agent-workbench.spec.ts",
+            "creates a governed draft through the guided Builder",
+            "expect(value)",
+        )
+    )
+    record = harness_module.sanitized_first_failure_record(report, "journey-086", 0)
+    mutation(record)
+    with pytest.raises(ValueError):
+        harness_module.validate_first_failure_record(record)
 
 
 def test_build_mode_missing_or_incorrect_fails_closed(tmp_path: Path) -> None:

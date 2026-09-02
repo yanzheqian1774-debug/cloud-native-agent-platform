@@ -836,3 +836,114 @@ def test_sanitized_browser_classifier_never_echoes_raw_output() -> None:
         "COMMAND",
         "INVOCATION",
     }
+
+
+def _first_failure() -> dict[str, object]:
+    report = json.dumps(
+        {
+            "stats": {"expected": 4, "unexpected": 1},
+            "suites": [
+                {
+                    "file": "agent-workbench.spec.ts",
+                    "specs": [
+                        {
+                            "title": (
+                                "creates a governed draft through the guided Builder"
+                            ),
+                            "tests": [
+                                {
+                                    "status": "unexpected",
+                                    "results": [
+                                        {
+                                            "status": "failed",
+                                            "errors": [
+                                                {
+                                                    "message": (
+                                                        "expect(locator('#private'))"
+                                                        ".toBeVisible()"
+                                                    )
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ).encode()
+    return harness_module.sanitized_first_failure_record(report, "journey-086", 0)
+
+
+def test_runner_rejects_malformed_browser_failure_before_persistence(
+    tmp_path: Path,
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "preflight", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    source = runner.runtime_dir / "browser-runtime/browser-first-failure.json"
+    source.parent.mkdir(parents=True)
+    malformed = _first_failure()
+    malformed["rawMessage"] = "private assertion"
+    source.write_text(json.dumps(malformed), encoding="utf-8")
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.capture_browser_first_failure()
+    assert error.value.category == "BROWSER_DIAGNOSTIC_GAP"
+    assert not (tmp_path / "evidence.browser-first-failure.json").exists()
+
+
+def test_browser_failure_is_persisted_before_owned_cleanup(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(), "readiness-rehearsal", tmp_path / "evidence.json"
+    )
+    runner.runtime_dir = tmp_path / "runtime"
+    source = runner.runtime_dir / "browser-runtime/browser-first-failure.json"
+    source.parent.mkdir(parents=True)
+    source.write_text(json.dumps(_first_failure()), encoding="utf-8")
+    for name in (
+        "provenance",
+        "frontend_lock",
+        "interpreter",
+        "docker_preflight",
+        "postgres_start",
+        "postgres_provision",
+        "apply_migrations",
+        "qdrant_start",
+        "continuity_before",
+        "present_candidate",
+        "build_candidate",
+        "denial_probes",
+    ):
+        monkeypatch.setattr(runner, name, lambda: None)
+
+    def fail_browser() -> None:
+        record = runner.capture_browser_first_failure()
+        raise release_runner.RunnerError(str(record["failureCategory"]), "sanitized")
+
+    persisted = tmp_path / "evidence.browser-first-failure.json"
+    monkeypatch.setattr(runner, "browser_harness", fail_browser)
+    monkeypatch.setattr(
+        runner,
+        "cleanup",
+        lambda: (
+            persisted.is_file() or pytest.fail("cleanup preceded evidence persistence")
+        ),
+    )
+    assert runner.run() == 2
+    assert (
+        json.loads(persisted.read_text())["firstFailureAssertionId"]
+        == "AGENT_WORKBENCH_CREATE_GOVERNED_DRAFT"
+    )
+    records = json.loads((tmp_path / "evidence.json").read_text())
+    assert (
+        next(record for record in records if record["stageId"] == "browser-harness")[
+            "errorCategory"
+        ]
+        == "BROWSER_ASSERTION"
+    )
+    assert records[-1]["stageId"] == "owned-cleanup"

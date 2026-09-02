@@ -35,6 +35,7 @@ from browser_build_preflight import (  # noqa: E402
 )
 from isolated_browser_harness import (  # noqa: E402
     release_manifest,
+    validate_first_failure_record,
 )
 from minimum_disclosure import scan_generated_artifacts  # noqa: E402
 
@@ -109,6 +110,10 @@ ERROR_CATEGORIES = frozenset(
         "BROWSER",
         "BROWSER_ASSERTION",
         "BROWSER_TIMEOUT",
+        "BROWSER_HTTP_ERROR",
+        "BROWSER_NAVIGATION_ERROR",
+        "BROWSER_PROCESS_ERROR",
+        "BROWSER_DIAGNOSTIC_GAP",
         "BROWSER_CONNECTION",
         "BROWSER_SERVER",
         "BROWSER_INVOCATION",
@@ -1462,7 +1467,13 @@ class Runner:
             fail("BROWSER", "browser executable identity is unavailable")
         environment["PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"] = str(self.chromium_path)
         result = run_command(command, self.workspace, environment, timeout=900)
+        failure_record = self.capture_browser_first_failure()
         if result.returncode:
+            if failure_record is not None:
+                fail(
+                    str(failure_record["failureCategory"]),
+                    "browser Harness reported a sanitized first failure",
+                )
             argument = re.search(
                 rb"harness argument failure: "
                 rb"(REQUIRED|UNKNOWN|CREDENTIAL_MODE|VALUE)",
@@ -1532,6 +1543,29 @@ class Runner:
                 }[phase]
                 detail = "browser Harness preflight failed"
             fail(category, detail)
+
+    def capture_browser_first_failure(self) -> dict[str, object] | None:
+        assert self.runtime_dir is not None
+        source = self.runtime_dir / "browser-runtime/browser-first-failure.json"
+        if not source.exists():
+            return None
+        try:
+            record = validate_first_failure_record(
+                json.loads(source.read_text(encoding="utf-8"))
+            )
+            scan_generated_artifacts([source])
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise RunnerError(
+                "BROWSER_DIAGNOSTIC_GAP",
+                "browser first-failure evidence failed closed validation",
+            ) from exc
+        destination = self.output.with_suffix(".browser-first-failure.json")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            json.dumps(record, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        return record
 
     def verify_diagnostics(self) -> None:
         assert self.runtime_dir is not None and self.build_identity_path is not None
