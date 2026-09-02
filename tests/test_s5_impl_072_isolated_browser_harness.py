@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -28,6 +29,9 @@ Harness = harness_module.Harness
 release_manifest = harness_module.release_manifest
 minimum_disclosure = importlib.import_module("minimum_disclosure")
 build_preflight = importlib.import_module("browser_build_preflight")
+KNOWLEDGE_LIFECYCLE_TITLE = (
+    "completes the real Knowledge lifecycle, retrieval, recovery and purge journey"
+)
 
 
 def free_port() -> int:
@@ -266,20 +270,24 @@ def test_clean_generated_evidence_contains_only_correlation_fields(
 
 
 def browser_report(
-    *failures: tuple[str, str, str], unexpected: int | None = None
+    *failures: tuple[object, ...], unexpected: int | None = None
 ) -> bytes:
     specs = []
-    for _file_name, title, message in failures:
+    for failure in failures:
+        _file_name, title, message, *structured = failure
         status = "timedOut" if "timeout" in message.lower() else "failed"
+        result = {"status": status, "errors": [{"message": message}]}
+        if structured:
+            result["structuredHttpStatus"] = structured[0]
+        if len(structured) > 1:
+            result["operationId"] = structured[1]
         specs.append(
             {
                 "title": title,
                 "tests": [
                     {
                         "status": "unexpected",
-                        "results": [
-                            {"status": status, "errors": [{"message": message}]}
-                        ],
+                        "results": [result],
                     }
                 ],
             }
@@ -330,8 +338,13 @@ def test_first_failure_is_stable_and_deterministic_without_raw_message() -> None
 @pytest.mark.parametrize(
     ("message", "category", "subtype", "http"),
     [
-        ("Timeout 30000ms exceeded", "BROWSER_TIMEOUT", "TIMEOUT", "TIMEOUT"),
-        ("HTTP response status 503", "BROWSER_HTTP_ERROR", "HTTP_ERROR", "HTTP_5XX"),
+        ("Timeout 30000ms exceeded", "BROWSER_TIMEOUT", "TIMEOUT", "NONE"),
+        (
+            "HTTP response status 503",
+            "BROWSER_ASSERTION",
+            "APPLICATION_STATE_MISMATCH",
+            "UNKNOWN",
+        ),
         (
             "page.goto navigation failed",
             "BROWSER_NAVIGATION_ERROR",
@@ -362,6 +375,168 @@ def test_first_failure_closed_classification(message, category, subtype, http) -
     ) == (category, subtype, http)
 
 
+@pytest.mark.parametrize(
+    ("status", "category"),
+    [
+        (100, "HTTP_1XX"),
+        (199, "HTTP_1XX"),
+        (200, "HTTP_2XX"),
+        (299, "HTTP_2XX"),
+        (300, "HTTP_3XX"),
+        (399, "HTTP_3XX"),
+        (400, "HTTP_4XX"),
+        (499, "HTTP_4XX"),
+        (500, "HTTP_5XX"),
+        (599, "HTTP_5XX"),
+    ],
+)
+def test_structured_integer_http_status_maps_to_category(status, category) -> None:
+    report = browser_report(
+        (
+            "agent-workbench.spec.ts",
+            "creates a governed draft through the guided Builder",
+            "opaque failure",
+            status,
+        )
+    )
+    record = harness_module.sanitized_first_failure_record(report, "journey-088", 0)
+    assert record["httpStatusSourceClass"] == "STRUCTURED_RESPONSE_STATUS"
+    assert record["httpStatusCategory"] == category
+    assert str(status) not in json.dumps(record)
+
+
+@pytest.mark.parametrize("status", ["503", True, 503.0, 99, 600])
+def test_invalid_structured_http_status_is_rejected(status) -> None:
+    report = browser_report(
+        (
+            "agent-workbench.spec.ts",
+            "creates a governed draft through the guided Builder",
+            "opaque failure",
+            status,
+        )
+    )
+    with pytest.raises(ValueError, match="structured HTTP status"):
+        harness_module.sanitized_first_failure_record(report, "journey-088", 0)
+
+
+def test_numbers_in_text_exit_code_and_assertion_count_never_make_http_claim() -> None:
+    report = browser_report(
+        (
+            "agent-workbench.spec.ts",
+            "creates a governed draft through the guided Builder",
+            "HTTP response status 503; exit code 404; assertion count 500",
+        ),
+        unexpected=599,
+    )
+    record = harness_module.sanitized_first_failure_record(report, "journey-088", 0)
+    assert record["httpStatusSourceClass"] == "NO_STRUCTURED_HTTP_STATUS"
+    assert record["httpStatusCategory"] in {"NONE", "UNKNOWN"}
+
+
+@pytest.mark.parametrize(
+    "operation_id",
+    sorted(harness_module.KNOWLEDGE_WORKBENCH_OPERATION_IDS),
+)
+def test_knowledge_lifecycle_operation_ids_are_closed_and_stable(operation_id) -> None:
+    report = browser_report(
+        (
+            "knowledge-workbench.spec.ts",
+            KNOWLEDGE_LIFECYCLE_TITLE,
+            "opaque failure",
+            None,
+            operation_id,
+        )
+    )
+    record = harness_module.sanitized_first_failure_record(report, "journey-088", 0)
+    assert record["firstFailureOperationId"] == operation_id
+
+
+def test_first_failed_operation_is_deterministic_and_only_one_is_retained() -> None:
+    report = json.loads(
+        browser_report(
+            (
+                "knowledge-workbench.spec.ts",
+                KNOWLEDGE_LIFECYCLE_TITLE,
+                "opaque failure",
+            )
+        )
+    )
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["operations"] = [
+        {"operationId": "KNOWLEDGE_INDEX_RETRIEVE", "status": "failed"},
+        {"operationId": "KNOWLEDGE_UPDATE", "status": "failed"},
+    ]
+    record = harness_module.sanitized_first_failure_record(
+        json.dumps(report).encode(), "journey-088", 0
+    )
+    assert record["firstFailureOperationId"] == "KNOWLEDGE_INDEX_RETRIEVE"
+    assert "KNOWLEDGE_UPDATE" not in json.dumps(record)
+
+
+@pytest.mark.parametrize(
+    "operation_id",
+    [
+        None,
+        "FREE_FORM_OPERATION",
+        "https://example.test/path",
+        "#selector",
+        "/route",
+        "token=secret",
+    ],
+)
+def test_missing_or_unsafe_knowledge_operation_fails_closed(operation_id) -> None:
+    failure = [
+        "knowledge-workbench.spec.ts",
+        KNOWLEDGE_LIFECYCLE_TITLE,
+        "opaque failure",
+        None,
+        operation_id,
+    ]
+    record = harness_module.sanitized_first_failure_record(
+        browser_report(tuple(failure)), "journey-088", 0
+    )
+    assert record["firstFailureOperationId"] == "NOT_RETAINED"
+    assert record["failureCategory"] == "BROWSER_DIAGNOSTIC_GAP"
+
+
+def test_schema_versions_have_exact_distinct_fields_and_reject_mixing() -> None:
+    record = harness_module.sanitized_first_failure_record(
+        browser_report(
+            (
+                "agent-workbench.spec.ts",
+                "creates a governed draft through the guided Builder",
+                "opaque failure",
+            )
+        ),
+        "journey-088",
+        0,
+    )
+    assert record["schemaVersion"] == 2
+    assert set(record) == harness_module.FIRST_FAILURE_FIELDS
+    version_one = {
+        key: value
+        for key, value in record.items()
+        if key not in {"firstFailureOperationId", "httpStatusSourceClass"}
+    }
+    version_one["schemaVersion"] = 1
+    digest_source = {
+        key: value for key, value in version_one.items() if key != "correlationDigest"
+    }
+    version_one["correlationDigest"] = hashlib.sha256(
+        json.dumps(digest_source, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert set(harness_module.validate_first_failure_record(version_one)) == (
+        harness_module.FIRST_FAILURE_V1_FIELDS
+    )
+    for mixed in (
+        {**record, "schemaVersion": 1},
+        {**version_one, "schemaVersion": 2},
+        {**record, "schemaVersion": 99},
+    ):
+        with pytest.raises(ValueError):
+            harness_module.validate_first_failure_record(mixed)
+
+
 def test_missing_assertion_id_fails_closed_to_diagnostic_gap() -> None:
     report = browser_report(("unknown.spec.ts", "free form test", "password=private"))
     record = harness_module.sanitized_first_failure_record(report, "journey-086", 0)
@@ -383,6 +558,12 @@ def test_missing_assertion_id_fails_closed_to_diagnostic_gap() -> None:
         lambda value: value.update(failureSubtype="raw assertion message"),
         lambda value: value.update(exceptionClass="/tmp/error-context.md"),
         lambda value: value.update(httpStatusCategory="screenshot.png"),
+        lambda value: value.update(httpStatusSourceClass="FREE_FORM"),
+        lambda value: value.update(firstFailureOperationId="https://example.test"),
+        lambda value: value.update(
+            httpStatusCategory="HTTP_5XX",
+            httpStatusSourceClass="NO_STRUCTURED_HTTP_STATUS",
+        ),
     ],
 )
 def test_first_failure_schema_rejects_extra_raw_and_unbounded_values(mutation) -> None:

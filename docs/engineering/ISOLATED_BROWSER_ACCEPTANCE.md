@@ -63,10 +63,13 @@ On a browser-command failure the Harness writes exactly one
 `browser-first-failure.json` record before it stops its owned backend and removes
 raw Playwright output. A successful command writes no first-failure record.
 
-Schema version 1 contains only the 20 closed fields `schemaVersion`, `journeyId`,
+Schema version 1 remains recognized only with its original exact 20-field set.
+Schema version 2 contains exactly 22 closed fields: `schemaVersion`, `journeyId`,
 `runnerPhase`, `harnessPhase`, `firstFailureAssertionId`,
+`firstFailureOperationId`,
 `expectedResultClass`, `observedResultClass`, `failureCategory`,
-`failureSubtype`, `exceptionClass`, `httpStatusCategory`, `correlationDigest`,
+`failureSubtype`, `exceptionClass`, `httpStatusCategory`,
+`httpStatusSourceClass`, `correlationDigest`,
 the three bounded completion counts, the backend/frontend/listener state
 classes, `restartCountClass`, and `completionState`.
 
@@ -76,7 +79,21 @@ written or hashed. Failure categories are `BROWSER_ASSERTION`,
 `BROWSER_TIMEOUT`, `BROWSER_HTTP_ERROR`, `BROWSER_NAVIGATION_ERROR`,
 `BROWSER_PROCESS_ERROR`, and `BROWSER_DIAGNOSTIC_GAP`. Unsafe, absent, or
 unmapped identities fail closed to `NOT_RETAINED` and
-`BROWSER_DIAGNOSTIC_GAP`. HTTP results retain only an HTTP class, connection,
-timeout, none, or unknown category. The closed validator rejects extra fields,
+`BROWSER_DIAGNOSTIC_GAP`. Knowledge lifecycle operations use only
+`KNOWLEDGE_GOVERNED_CREATE_PUBLISH`, `KNOWLEDGE_INDEX_RETRIEVE`,
+`KNOWLEDGE_UPDATE`, `KNOWLEDGE_RESTART_READBACK`, and
+`KNOWLEDGE_PURGE_RECOVERY`. Their order in the structured result is authoritative;
+only the first unexpected operation is retained. Missing or unmapped operation
+identity becomes `NOT_RETAINED` and `BROWSER_DIAGNOSTIC_GAP`.
+
+HTTP categories `HTTP_1XX` through `HTTP_5XX` are reduced only from an explicitly
+typed integer `structuredHttpStatus` in the range 100–599 supplied by the selected
+structured Browser result or operation. The exact number is never retained.
+`httpStatusSourceClass` is limited to `STRUCTURED_RESPONSE_STATUS`,
+`NO_STRUCTURED_HTTP_STATUS`, and `NOT_RETAINED`. Without structured status the
+HTTP category is `NONE` or `UNKNOWN`; messages, exit codes, and assertion counts
+are never inspected for HTTP classification. The closed validator rejects extra fields,
 unversioned identifiers, invalid enums, unbounded counts, paths, URLs,
-credential-shaped values, and raw-artifact references.
+credential-shaped values, raw-artifact references, unsupported or mixed schema
+versions, invalid structured status types/ranges, and contradictory HTTP
+source/category pairs.

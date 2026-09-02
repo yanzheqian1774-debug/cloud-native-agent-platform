@@ -105,9 +105,12 @@ prohibited disclosure, and establishes the Runner-side
 the only sanitized diagnostic record. The original stage failure remains first;
 a later cleanup failure is appended and never overwrites it.
 
-The Runner accepts only Harness schema version 1 and the 20-field closed schema
-documented in `ISOLATED_BROWSER_ACCEPTANCE.md`. Its browser-stage categories
+The Runner recognizes Harness schema version 1 only with its original exact
+20-field set and schema version 2 only with its exact 22-field set documented in
+`ISOLATED_BROWSER_ACCEPTANCE.md`. Mixed, partial, extra-field, contradictory, and
+unknown-version records fail closed. Its browser-stage categories
 preserve assertion, timeout, HTTP, navigation, process, and diagnostic-gap
 boundaries. Missing, malformed, or disclosure-unsafe records fail closed as
 `BROWSER_DIAGNOSTIC_GAP`; the Runner never copies raw Playwright reports,
-messages, paths, URLs, selectors, or browser artifacts.
+messages, paths, URLs, selectors, exact HTTP status, or browser artifacts. It
+does not infer HTTP status or operation identity independently.

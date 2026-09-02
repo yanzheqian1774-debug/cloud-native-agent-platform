@@ -31,7 +31,7 @@ from minimum_disclosure import (
 )
 from psycopg import sql
 
-FIRST_FAILURE_SCHEMA_VERSION = 1
+FIRST_FAILURE_SCHEMA_VERSION = 2
 MAX_DIAGNOSTIC_COUNT = 100_000
 FIRST_FAILURE_FIELDS = frozenset(
     {
@@ -40,12 +40,14 @@ FIRST_FAILURE_FIELDS = frozenset(
         "runnerPhase",
         "harnessPhase",
         "firstFailureAssertionId",
+        "firstFailureOperationId",
         "expectedResultClass",
         "observedResultClass",
         "failureCategory",
         "failureSubtype",
         "exceptionClass",
         "httpStatusCategory",
+        "httpStatusSourceClass",
         "correlationDigest",
         "completedJourneyCount",
         "completedAssertionCount",
@@ -57,6 +59,10 @@ FIRST_FAILURE_FIELDS = frozenset(
         "completionState",
     }
 )
+FIRST_FAILURE_V1_FIELDS = FIRST_FAILURE_FIELDS - {
+    "firstFailureOperationId",
+    "httpStatusSourceClass",
+}
 FIRST_FAILURE_ASSERTION_IDS = {
     (
         "agent-workbench.spec.ts",
@@ -142,6 +148,30 @@ HTTP_STATUS_CATEGORIES = frozenset(
         "UNKNOWN",
     }
 )
+HTTP_STATUS_SOURCE_CLASSES = frozenset(
+    {
+        "STRUCTURED_RESPONSE_STATUS",
+        "NO_STRUCTURED_HTTP_STATUS",
+        "NOT_RETAINED",
+    }
+)
+KNOWLEDGE_WORKBENCH_OPERATION_IDS = frozenset(
+    {
+        "KNOWLEDGE_GOVERNED_CREATE_PUBLISH",
+        "KNOWLEDGE_INDEX_RETRIEVE",
+        "KNOWLEDGE_UPDATE",
+        "KNOWLEDGE_RESTART_READBACK",
+        "KNOWLEDGE_PURGE_RECOVERY",
+    }
+)
+FIRST_FAILURE_OPERATION_IDS = {
+    "KNOWLEDGE_WORKBENCH_LIFECYCLE": KNOWLEDGE_WORKBENCH_OPERATION_IDS,
+    **{
+        assertion_id: frozenset({assertion_id})
+        for assertion_id in FIRST_FAILURE_ASSERTION_IDS.values()
+        if assertion_id != "KNOWLEDGE_WORKBENCH_LIFECYCLE"
+    },
+}
 EXCEPTION_CLASSES = frozenset(
     {
         "NONE",
@@ -184,28 +214,44 @@ def _bounded_count(value: object) -> int:
     return value if type(value) is int and 0 <= value <= MAX_DIAGNOSTIC_COUNT else 0
 
 
-def _failure_details(text: str, status: str) -> tuple[str, str, str, str]:
-    lowered = text.lower()
-    if status == "interrupted":
-        return "BROWSER_PROCESS_ERROR", "PROCESS_EXIT", "PROCESS_ERROR", "NONE"
-    if status == "timedOut" or "timeout" in lowered or "timed out" in lowered:
-        return "BROWSER_TIMEOUT", "TIMEOUT", "TIMEOUT_ERROR", "TIMEOUT"
-    status_match = re.search(r"(?<!\d)([1-5]\d\d)(?!\d)", text)
-    if status_match and (
-        "http" in lowered or "status" in lowered or "response" in lowered
-    ):
+def _structured_http_classification(status: object) -> tuple[str, str]:
+    if status is None:
+        return "NO_STRUCTURED_HTTP_STATUS", "NONE"
+    if type(status) is not int or not 100 <= status <= 599:
+        raise ValueError("browser structured HTTP status violation")
+    return "STRUCTURED_RESPONSE_STATUS", f"HTTP_{status // 100}XX"
+
+
+def _failure_details(
+    text: str, status: str, structured_http_status: object = None
+) -> tuple[str, str, str, str, str]:
+    http_source, http_category = _structured_http_classification(structured_http_status)
+    if http_source == "STRUCTURED_RESPONSE_STATUS":
         return (
             "BROWSER_HTTP_ERROR",
             "HTTP_ERROR",
             "HTTP_ERROR",
-            f"HTTP_{status_match.group(1)[0]}XX",
+            http_category,
+            http_source,
         )
+    lowered = text.lower()
+    if status == "interrupted":
+        return (
+            "BROWSER_PROCESS_ERROR",
+            "PROCESS_EXIT",
+            "PROCESS_ERROR",
+            "NONE",
+            http_source,
+        )
+    if status == "timedOut" or "timeout" in lowered or "timed out" in lowered:
+        return "BROWSER_TIMEOUT", "TIMEOUT", "TIMEOUT_ERROR", "NONE", http_source
     if "net::err_" in lowered or "connection" in lowered:
         return (
             "BROWSER_NAVIGATION_ERROR",
             "NAVIGATION_ERROR",
             "NAVIGATION_ERROR",
-            "CONNECTION_FAILURE",
+            "NONE",
+            http_source,
         )
     if "goto" in lowered or "navigation" in lowered:
         return (
@@ -213,6 +259,7 @@ def _failure_details(text: str, status: str) -> tuple[str, str, str, str]:
             "NAVIGATION_ERROR",
             "NAVIGATION_ERROR",
             "NONE",
+            http_source,
         )
     if (
         "locator" in lowered
@@ -220,10 +267,28 @@ def _failure_details(text: str, status: str) -> tuple[str, str, str, str]:
         or "tobevisible" in lowered
         or "tohave" in lowered
     ):
-        return "BROWSER_ASSERTION", "SELECTOR_STATE_MISMATCH", "ASSERTION_ERROR", "NONE"
+        return (
+            "BROWSER_ASSERTION",
+            "SELECTOR_STATE_MISMATCH",
+            "ASSERTION_ERROR",
+            "NONE",
+            http_source,
+        )
     if "expect(" in lowered or "assert" in lowered:
-        return "BROWSER_ASSERTION", "ASSERTION_MISMATCH", "ASSERTION_ERROR", "NONE"
-    return "BROWSER_ASSERTION", "APPLICATION_STATE_MISMATCH", "UNKNOWN", "UNKNOWN"
+        return (
+            "BROWSER_ASSERTION",
+            "ASSERTION_MISMATCH",
+            "ASSERTION_ERROR",
+            "NONE",
+            http_source,
+        )
+    return (
+        "BROWSER_ASSERTION",
+        "APPLICATION_STATE_MISMATCH",
+        "UNKNOWN",
+        "UNKNOWN",
+        http_source,
+    )
 
 
 def sanitized_first_failure_record(
@@ -255,11 +320,13 @@ def sanitized_first_failure_record(
     if first is None and unexpected == 0:
         return None
     assertion_id = "NOT_RETAINED"
-    category, subtype, exception_class, http_category = (
+    operation_id = "NOT_RETAINED"
+    category, subtype, exception_class, http_category, http_source = (
         "BROWSER_DIAGNOSTIC_GAP",
         "UNKNOWN",
         "UNKNOWN",
         "UNKNOWN",
+        "NOT_RETAINED",
     )
     if first is not None:
         suite, spec, test = first
@@ -283,19 +350,53 @@ def sanitized_first_failure_record(
             ),
             {},
         )
+        operation = result
+        operations = result.get("operations") if isinstance(result, dict) else None
+        if operations is not None:
+            if not isinstance(operations, list):
+                raise ValueError("browser operation result source violation")
+            operation = next(
+                (
+                    item
+                    for item in operations
+                    if isinstance(item, dict)
+                    and item.get("status") in {"failed", "timedOut", "interrupted"}
+                ),
+                {},
+            )
+        supplied_operation_id = (
+            operation.get("operationId") if isinstance(operation, dict) else None
+        )
+        allowed_operations = FIRST_FAILURE_OPERATION_IDS.get(assertion_id, frozenset())
+        if supplied_operation_id in allowed_operations:
+            operation_id = supplied_operation_id
+        elif len(allowed_operations) == 1:
+            operation_id = next(iter(allowed_operations))
         errors = result.get("errors") if isinstance(result, dict) else []
         transient = " ".join(
             str(item.get("message", "")) for item in errors if isinstance(item, dict)
         )[:65_536]
-        category, subtype, exception_class, http_category = _failure_details(
-            transient, str(result.get("status", ""))
+        structured_http_status = (
+            operation.get("structuredHttpStatus")
+            if isinstance(operation, dict)
+            else None
         )
-        if assertion_id == "NOT_RETAINED":
-            category, subtype, exception_class, http_category = (
+        category, subtype, exception_class, http_category, http_source = (
+            _failure_details(
+                transient,
+                str(operation.get("status", result.get("status", "")))
+                if isinstance(operation, dict)
+                else str(result.get("status", "")),
+                structured_http_status,
+            )
+        )
+        if assertion_id == "NOT_RETAINED" or operation_id == "NOT_RETAINED":
+            category, subtype, exception_class, http_category, http_source = (
                 "BROWSER_DIAGNOSTIC_GAP",
                 "UNKNOWN",
                 "UNKNOWN",
                 "UNKNOWN",
+                "NOT_RETAINED",
             )
     completed = _bounded_count(stats.get("expected")) + unexpected
     record: dict[str, object] = {
@@ -304,12 +405,14 @@ def sanitized_first_failure_record(
         "runnerPhase": "browser-harness",
         "harnessPhase": "BROWSER_COMMAND",
         "firstFailureAssertionId": assertion_id,
+        "firstFailureOperationId": operation_id,
         "expectedResultClass": "EXPECTED",
         "observedResultClass": "UNEXPECTED",
         "failureCategory": category,
         "failureSubtype": subtype,
         "exceptionClass": exception_class,
         "httpStatusCategory": http_category,
+        "httpStatusSourceClass": http_source,
         "completedJourneyCount": 0,
         "completedAssertionCount": min(completed, MAX_DIAGNOSTIC_COUNT),
         "unexpectedAssertionCount": unexpected,
@@ -325,10 +428,17 @@ def sanitized_first_failure_record(
 
 
 def validate_first_failure_record(record: object) -> dict[str, object]:
-    if not isinstance(record, dict) or set(record) != FIRST_FAILURE_FIELDS:
+    if not isinstance(record, dict):
         raise ValueError("browser first-failure schema violation")
-    if record["schemaVersion"] != FIRST_FAILURE_SCHEMA_VERSION:
+    schema_version = record.get("schemaVersion")
+    expected_fields = {
+        1: FIRST_FAILURE_V1_FIELDS,
+        FIRST_FAILURE_SCHEMA_VERSION: FIRST_FAILURE_FIELDS,
+    }.get(schema_version)
+    if expected_fields is None:
         raise ValueError("browser first-failure schema version violation")
+    if set(record) != expected_fields:
+        raise ValueError("browser first-failure schema violation")
     if not isinstance(record["journeyId"], str) or not re.fullmatch(
         r"[a-z0-9][a-z0-9-]{2,95}", record["journeyId"]
     ):
@@ -343,6 +453,14 @@ def validate_first_failure_record(record: object) -> dict[str, object]:
         and assertion_id not in FIRST_FAILURE_ASSERTION_IDS.values()
     ):
         raise ValueError("browser first-failure assertion identity is not versioned")
+    if schema_version == FIRST_FAILURE_SCHEMA_VERSION:
+        operation_id = record["firstFailureOperationId"]
+        if operation_id != "NOT_RETAINED" and operation_id not in (
+            FIRST_FAILURE_OPERATION_IDS.get(assertion_id, frozenset())
+        ):
+            raise ValueError(
+                "browser first-failure operation identity is not versioned"
+            )
     enum_fields = {
         "runnerPhase": {"browser-harness"},
         "harnessPhase": {"BROWSER_COMMAND"},
@@ -360,6 +478,31 @@ def validate_first_failure_record(record: object) -> dict[str, object]:
     }
     if any(record[name] not in allowed for name, allowed in enum_fields.items()):
         raise ValueError("browser first-failure enum violation")
+    if schema_version == FIRST_FAILURE_SCHEMA_VERSION:
+        http_source = record["httpStatusSourceClass"]
+        http_category = record["httpStatusCategory"]
+        if http_source not in HTTP_STATUS_SOURCE_CLASSES:
+            raise ValueError("browser HTTP status source violation")
+        if (
+            (
+                http_category.startswith("HTTP_")
+                and http_source != "STRUCTURED_RESPONSE_STATUS"
+            )
+            or (
+                http_source == "STRUCTURED_RESPONSE_STATUS"
+                and http_category not in {f"HTTP_{value}XX" for value in range(1, 6)}
+            )
+            or (
+                http_source in {"NO_STRUCTURED_HTTP_STATUS", "NOT_RETAINED"}
+                and http_category not in {"NONE", "UNKNOWN"}
+            )
+        ):
+            raise ValueError("browser HTTP source/category contradiction")
+        if (
+            operation_id == "NOT_RETAINED"
+            and record["failureCategory"] != "BROWSER_DIAGNOSTIC_GAP"
+        ):
+            raise ValueError("browser operation diagnostic-gap contradiction")
     for name in (
         "completedJourneyCount",
         "completedAssertionCount",
