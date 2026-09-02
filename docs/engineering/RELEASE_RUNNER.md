@@ -94,3 +94,20 @@ or ownership-mismatch environments fail closed with fixed sanitized codes.
 
 The browser executable path and digest are contract-pinned. PostgreSQL and
 Qdrant use exact image digests and loopback-only ports.
+
+## Browser first-failure preservation
+
+When the Harness exits unsuccessfully after browser execution, the Runner first
+loads and strictly validates `browser-first-failure.json`, scans it for
+prohibited disclosure, and establishes the Runner-side
+`<evidence>.browser-first-failure.json` record before raising the classified
+`browser-harness` stage failure. Owned-runtime cleanup therefore cannot erase
+the only sanitized diagnostic record. The original stage failure remains first;
+a later cleanup failure is appended and never overwrites it.
+
+The Runner accepts only Harness schema version 1 and the 20-field closed schema
+documented in `ISOLATED_BROWSER_ACCEPTANCE.md`. Its browser-stage categories
+preserve assertion, timeout, HTTP, navigation, process, and diagnostic-gap
+boundaries. Missing, malformed, or disclosure-unsafe records fail closed as
+`BROWSER_DIAGNOSTIC_GAP`; the Runner never copies raw Playwright reports,
+messages, paths, URLs, selectors, or browser artifacts.
