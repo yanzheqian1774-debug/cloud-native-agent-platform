@@ -51,6 +51,10 @@ def test_problem_workspace_preserves_governed_execution_boundaries() -> None:
     assert "只有 Attempt 事实才能证明本次实际使用" in workspace
     assert "规划采用的知识引用" in workspace
     assert "不是执行成功证据" in workspace
+    assert "getKnowledge" in workspace
+    for knowledge_state in ("已发布", "已绑定", "已选择", "已检索", "已引用"):
+        assert knowledge_state in workspace
+    assert "尚无该页面可调用的 HTTP 投影" in workspace
 
 
 def test_shared_styles_cover_desktop_narrow_and_keyboard_states() -> None:

@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
 import {Link,useSearchParams} from "react-router-dom";
+import {getKnowledge,type KnowledgeProjection} from "../api/knowledgeResources";
 import {listDigitalEmployeeTemplates,type DigitalEmployeeTemplate} from "../api/productAssembly";
 import {listProblems,type PlanTask,type ProblemPlan} from "../api/problemPlanning";
 
@@ -7,15 +8,16 @@ function state(problem:ProblemPlan){if(problem.status.includes("FAIL"))return ["
 function compact(value:string){return value.length>30?`${value.slice(0,14)}…${value.slice(-10)}`:value}
 
 export function ProblemWorkspacePage(){
-  const [params,setParams]=useSearchParams(),[problems,setProblems]=useState<ProblemPlan[]>([]),[employees,setEmployees]=useState<DigitalEmployeeTemplate[]|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
+  const [params,setParams]=useSearchParams(),[problems,setProblems]=useState<ProblemPlan[]>([]),[employees,setEmployees]=useState<DigitalEmployeeTemplate[]|null>(null),[knowledgeLoad,setKnowledgeLoad]=useState<{id:string;projection:KnowledgeProjection|null;unavailable:boolean}|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
   useEffect(()=>{let active=true;Promise.all([listProblems(),listDigitalEmployeeTemplates().catch(()=>null)]).then(([problemItems,employeeItems])=>{if(active){setProblems(problemItems);setEmployees(employeeItems);setLoading(false)}}).catch(reason=>{if(active){setError(reason.reasonCode??"WORKSPACE_UNAVAILABLE");setLoading(false)}});return()=>{active=false}},[]);
   const selected=useMemo(()=>problems.find(item=>item.problemId===params.get("problem"))??problems.at(-1)??null,[params,problems]);
+  useEffect(()=>{let active=true;const id=selected?.knowledge.knowledgeBaseId;if(!id)return()=>{active=false};getKnowledge(id).then(projection=>{if(active)setKnowledgeLoad({id,projection,unavailable:false})}).catch(()=>{if(active)setKnowledgeLoad({id,projection:null,unavailable:true})});return()=>{active=false}},[selected?.knowledge.knowledgeBaseId]);
   if(loading)return <main className="px-page"><section className="px-state" role="status"><span className="px-spinner"/><strong>正在读取业务工作记录</strong></section></main>;
   if(error)return <main className="px-page"><section className="px-state danger" role="alert"><strong>业务工作台暂不可用</strong><p>无法读取规范业务问题投影。</p><code>{error}</code></section></main>;
   return <main className="px-page px-workspace"><header className="px-page-title"><div><p>工作与流程 <small>Governed Problem Workspace</small></p><h1>业务问题工作台</h1><span>围绕业务问题查看计划、人工决定、资源绑定与真实执行边界。</span></div><Link className="px-primary-button" to="/problems">新建业务问题</Link></header><div className="px-workspace-grid">
     <aside className="px-work-list"><label><span className="sr-only">搜索业务问题</span><input placeholder="搜索业务问题"/></label><div className="px-work-filter"><button className="active">全部</button><button>待处理</button><button>已批准</button></div>{problems.length?<nav aria-label="业务问题历史">{[...problems].reverse().map(problem=>{const [label,tone]=state(problem);return <button className={selected?.problemId===problem.problemId?"selected":""} key={problem.problemId} onClick={()=>setParams({problem:problem.problemId})}><span><strong>{problem.name}</strong><small>{problem.displayCode}</small></span><i className={`px-status ${tone}`}>{label}</i></button>})}</nav>:<Empty title="尚无业务问题" copy="这里不会生成示例记录。"/>}</aside>
     <section className="px-work-main">{selected?<ProblemDetail problem={selected}/>:<div className="px-empty large"><strong>从一个真实业务问题开始</strong><p>描述目标和成功标准，系统将形成可审核的计划。</p><Link className="px-primary-button" to="/problems">提出业务问题</Link></div>}</section>
-    <aside className="px-work-context">{selected?<ContextPanel problem={selected} employees={employees}/>:<Empty title="尚未选择工作" copy="数字员工和资源状态将在选择问题后显示。"/>}</aside>
+    <aside className="px-work-context">{selected?<ContextPanel problem={selected} employees={employees} knowledge={knowledgeLoad?.id===selected.knowledge.knowledgeBaseId?knowledgeLoad.projection:null} knowledgeUnavailable={knowledgeLoad?.id===selected.knowledge.knowledgeBaseId&&knowledgeLoad.unavailable}/>:<Empty title="尚未选择工作" copy="数字员工和资源状态将在选择问题后显示。"/>}</aside>
   </div></main>
 }
 
@@ -31,12 +33,13 @@ function ProblemDetail({problem}:{problem:ProblemPlan}){
   </>
 }
 
-function ContextPanel({problem,employees}:{problem:ProblemPlan;employees:DigitalEmployeeTemplate[]|null}){
+function ContextPanel({problem,employees,knowledge,knowledgeUnavailable}:{problem:ProblemPlan;employees:DigitalEmployeeTemplate[]|null;knowledge:KnowledgeProjection|null;knowledgeUnavailable:boolean}){
   const revision=problem.planRevisions.at(-1),tasks=revision?.tasks??[],agentIds=new Set(tasks.map(task=>task.agentRevision).filter(Boolean)),matched=(employees??[]).filter(employee=>agentIds.has(employee.agentDefinition.revisionId??"")||agentIds.has(employee.agentDefinition.identity)),resources=[...new Set(tasks.flatMap(task=>[...task.skillRevisions,...task.mcpRevisions,task.knowledgeSnapshotId,...task.runtimeRequirements]).filter(Boolean))];
   return <><section><span className="px-eyebrow">当前数字员工</span>{employees===null?<><h2>暂不可用</h2><p>数字员工模板投影当前不可用。</p></>:<><h2>{matched[0]?.name??"未绑定"}</h2>{matched[0]?<><span className="px-status info">已配置模板</span><p>{matched[0].purpose}</p><dl><dt>Definition</dt><dd>{compact(matched[0].agentDefinition.identity)}</dd><dt>Instance</dt><dd>未执行</dd><dt>Assignment</dt><dd>暂不可用</dd><dt>Placement</dt><dd>未执行</dd></dl></>:<p>计划尚未绑定可识别的数字员工模板。</p>}</>}</section>
     <section><span className="px-eyebrow">当前计划</span><h3>{revision?.displayCode??"未配置"}</h3><dl><dt>Workflow / Plan</dt><dd>{revision?"已配置":"未配置"}</dd><dt>Run</dt><dd>未执行</dd><dt>Task / Attempt</dt><dd>未执行</dd></dl></section>
+    <section><span className="px-eyebrow">Knowledge 事实</span><dl><dt>已发布</dt><dd>{knowledgeUnavailable?"不可用":knowledge?.knowledge.publishedRevisionId?"是":"未确认"}</dd><dt>已绑定</dt><dd>{problem.knowledge.indexSnapshotId?"是":"否"}</dd><dt>已检索</dt><dd>{problem.knowledge.retrievalState||"未执行"}</dd><dt>已选择</dt><dd>{problem.knowledge.selectedCitationIds.length} 项</dd><dt>已引用</dt><dd>{problem.knowledge.citations.length} 项</dd></dl>{problem.knowledge.citations.length?<ul className="px-resource-use">{problem.knowledge.citations.slice(0,3).map(citation=><li key={citation.citationId}><span>{citation.documentTitle} · {citation.documentVersion}</span><i className="px-status info">已引用</i></li>)}</ul>:<p>当前计划没有引用事实。</p>}<p className="px-truth-note">发布状态来自 Knowledge 生命周期接口；绑定、检索、选择与引用来自当前业务问题投影。</p></section>
     <section><span className="px-eyebrow">本次实际资源使用</span>{resources.length?<ul className="px-resource-use">{resources.slice(0,8).map(item=><li key={item}><span>{compact(item)}</span><i className="px-status neutral">未执行</i></li>)}</ul>:<Empty title="未绑定" copy="当前计划没有资源引用。"/>}<p className="px-truth-note">“已配置/已绑定”仅描述计划关系；只有 Attempt 事实才能证明本次实际使用。</p></section>
-    <section><span className="px-eyebrow">Evidence / Outcome</span><dl><dt>规划知识依据</dt><dd>{problem.knowledge.citations.length} 项</dd><dt>执行 Evidence</dt><dd>未执行</dd><dt>业务 Outcome</dt><dd>未执行</dd></dl></section>
+    <section><span className="px-eyebrow">Attempt / Evidence / Outcome</span><dl><dt>规划 Attempt</dt><dd>{problem.planningAttempts.at(-1)?.displayCode??"未执行"}</dd><dt>执行 Attempt</dt><dd>不可用</dd><dt>检索 Evidence</dt><dd>不可用</dd><dt>执行 Evidence</dt><dd>未执行</dd><dt>业务 Outcome</dt><dd>未执行</dd></dl><p className="px-truth-note">REL-245 的执行 Attempt、检索 Evidence 与确定性引用事实尚无该页面可调用的 HTTP 投影，因此不作推断。</p></section>
   </>
 }
 function ResourceSummary({task}:{task:PlanTask}){const count=task.skillRevisions.length+task.mcpRevisions.length+(task.knowledgeSnapshotId?1:0)+task.runtimeRequirements.length;return <small>{count?`已绑定 ${count} 项候选资源；本次实际使用：未执行`:"未绑定资源"}</small>}
