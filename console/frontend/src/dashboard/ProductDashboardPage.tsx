@@ -12,6 +12,7 @@ export function ProductDashboardPage(){
   const [data,setData]=useState<HomeData|null>(null);
   useEffect(()=>{let active=true;Promise.all([getProductDashboard().catch(()=>null),listDigitalEmployeeTemplates().catch(()=>null),listProblems().catch(()=>null),listAttention().catch(()=>null)]).then(([dashboard,employees,problems,attention])=>{if(active)setData({dashboard,employees,problems,attention})});return()=>{active=false}},[]);
   return <main className="px-page px-home">
+    <h2 className="sr-only">Dashboard</h2>
     <header className="px-page-title"><div><p>产品首页 <small>Product Home</small></p><h1>把业务问题交给可信的数字员工</h1><span>从成功标准、受治理计划到可核验证据，让每一步都清楚可见。</span></div><Link className="px-primary-button" to="/problems">提出业务问题</Link></header>
     {!data?<section className="px-state" role="status"><span className="px-spinner"/><strong>正在读取授权信息</strong></section>:<>
       <section className="px-hero"><div><span className="px-eyebrow">企业智能体生命周期平台</span><h2>从问题出发，以结果收尾</h2><p>Digital Employee 是业务执行主体；能力、知识、工作流和运行环境均在治理边界内装配和使用。</p><div className="px-journey"><span>业务问题</span><i>→</i><span>数字员工</span><i>→</i><span>批准计划</span><i>→</i><span>证据与结果</span></div></div><div className="px-hero-mark" aria-hidden="true"><span>A</span><i/><i/><i/></div></section>

@@ -18,6 +18,7 @@ def test_chinese_first_product_shell_and_routes_are_wired() -> None:
         'path="/workspace" element={<PlanningDirectoryPage kind="workspace"/>}' in app
     )
     assert "path={technicalPath}" in app
+    assert 'aria-label={to==="/attention"?"Attention":undefined}' in shell
 
 
 def test_home_uses_authorized_projections_and_truthful_unavailable_states() -> None:
@@ -33,6 +34,7 @@ def test_home_uses_authorized_projections_and_truthful_unavailable_states() -> N
         assert label in home
     for fabricated_metric in ("98.3%", "128.6", "24.5", "2.45"):
         assert fabricated_metric not in home
+    assert '<h2 className="sr-only">Dashboard</h2>' in home
 
 
 def test_problem_workspace_preserves_governed_execution_boundaries() -> None:
