@@ -48,6 +48,14 @@ The entry gate requires externally supplied schema-blob, instance-digest,
 product-CI observation, tool-CI observation, and Evidence-envelope inputs.
 These trust anchors are not accepted from the Contract's own assertions.
 
+Schema 2 additionally requires a closed `executionProfile.continuityMonitor`
+object. It names exactly the `PUBLIC` and `ORIGINAL_STAGING` server-local
+sentinels, their system service identities and loopback health/listener ports,
+plus a bounded interval and maximum runtime. This is a nested extension: the
+six top-level fields, exact dual provenance, role separation and pairing
+preimage are unchanged. Empty, partial, duplicated, unapproved or expanded
+sentinel definitions fail before Runner construction.
+
 `generate_release_contract_v2.py` accepts one explicit input file, validates
 the instance, computes the pairing, emits RFC 8785 canonical JSON atomically,
 refuses overwrite, sets mode `0444`, and can seal its directory to `0555`. It
@@ -79,6 +87,24 @@ PostgreSQL credentials are generated per execution, written with mode `0600`,
 mounted read-only, never passed as arguments, and unlinked even when a stage
 fails. The runner invokes only `psql` inside the pinned PostgreSQL container and
 does not depend on a host client.
+
+For Schema-2 readiness and private-precheck execution, the Runner starts the
+versioned server-local continuity monitor before the first rehearsal service
+mutation. The token is delivered through an inherited protected descriptor,
+never argv or Evidence. The detached monitor atomically appends closed
+categorical records to a mode-restricted Runner-owned runtime directory and
+therefore continues when the initiating management session disappears. A
+SHA-256 chain binds sequence, order, content and prior record. The Runner will
+not stop a monitor whose workspace/token digest differs, and it will not report
+success until it retrieves the completed Evidence, validates full sentinel
+coverage and the chain, and independently verifies owned cleanup.
+
+Persistent monitor Evidence contains no endpoint, URL, PID, start timestamp,
+response body, exception, log, SSH address, credential or service
+configuration. Management reachability is `NOT_OBSERVED_INDEPENDENTLY`; its
+loss alone is never converted into public or staging failure. Missing coverage,
+unhealthy observations, PID/start/restart/listener drift, timeout, unexpected
+exit, tampering or cleanup failure stops progression.
 
 ## Fault controls
 

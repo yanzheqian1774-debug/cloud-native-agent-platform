@@ -105,6 +105,27 @@ def contract() -> dict[str, object]:
             ],
             "journeyId": "s5-impl-092-successor-acceptance",
         },
+        "continuityMonitor": {
+            "contractVersion": "SERVER_LOCAL_CONTINUITY_V1",
+            "intervalSeconds": 3,
+            "maximumRuntimeSeconds": 1800,
+            "sentinels": [
+                {
+                    "sentinelClass": "PUBLIC",
+                    "serviceUnit": "agent-console.service",
+                    "healthPort": 8000,
+                    "listenerPort": 8000,
+                    "listenerRequired": True,
+                },
+                {
+                    "sentinelClass": "ORIGINAL_STAGING",
+                    "serviceUnit": "agent-console-v022-staging.service",
+                    "healthPort": 18000,
+                    "listenerPort": 18000,
+                    "listenerRequired": True,
+                },
+            ],
+        },
     }
     pairing = {
         "canonicalization": "RFC8785",
@@ -123,6 +144,8 @@ def contract() -> dict[str, object]:
 
 def test_exact_pairing_is_jcs_deterministic_and_git_objects_match() -> None:
     value = contract()
+    assert set(value) == contract_v2.TOP_FIELDS
+    assert len(value) == 6
     assert contract_v2.validate_contract(copy.deepcopy(value)) == value
     shuffled = json.loads(json.dumps(value, sort_keys=True))
     assert contract_v2.jcs_bytes(shuffled) == contract_v2.jcs_bytes(value)
@@ -162,6 +185,19 @@ def test_exact_pairing_is_jcs_deterministic_and_git_objects_match() -> None:
         lambda c: c["productProvenance"]["exactSourceCi"].update(runAttempt=2),
         lambda c: c.update(extra="forbidden"),
         lambda c: c["executionProfile"].update(workspaceRoot="/Users/private"),
+        lambda c: c["executionProfile"]["continuityMonitor"].update(sentinels=[]),
+        lambda c: c["executionProfile"]["continuityMonitor"]["sentinels"][0].update(
+            sentinelClass="FOREIGN"
+        ),
+        lambda c: c["executionProfile"]["continuityMonitor"]["sentinels"][0].update(
+            rawEndpoint="http://127.0.0.1:8000/healthz"
+        ),
+        lambda c: c["executionProfile"]["continuityMonitor"]["sentinels"][0].update(
+            pid=1234
+        ),
+        lambda c: c["executionProfile"]["continuityMonitor"]["sentinels"][0].update(
+            startTime="raw"
+        ),
         lambda c: c.update(contractDigest="sha256:" + "0" * 64),
     ],
 )
