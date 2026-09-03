@@ -25,8 +25,41 @@ Example read-only preflight:
 ```sh
 .venv/bin/python scripts/acceptance/release_runner.py preflight \
   --contract scripts/acceptance/release_contract.v1.json \
+  --attempt-id v0.2.2-attempt-01 \
   --evidence /private/tmp/s5-impl-078-preflight.json
 ```
+
+## Release Contract versions
+
+Schema 1 is historical and retains its original meaning. In particular,
+`acceptanceToolSourceSha` is a minimum compatible ancestor checked with
+`git merge-base --is-ancestor`; it is accepted only when the caller explicitly
+selects `v0.2.2-attempt-01` through `v0.2.2-attempt-05`. It is never upgraded,
+reinterpreted, or accepted for a newly authorized attempt.
+
+Schema 2 is the G2-approved exact dual-provenance contract. It has exactly six
+top-level fields: `schemaVersion`, `contractType`, `productProvenance`,
+`acceptanceToolProvenance`, `approvedPairing`, and `executionProfile`.
+Product and tool commits, trees, CI observations, and path/blob identities are
+independent and exact. The Runner rejects ancestor substitution and validates
+the frozen product successor before constructing any service-owning Runner.
+
+The entry gate requires externally supplied schema-blob, instance-digest,
+product-CI observation, tool-CI observation, and Evidence-envelope inputs.
+These trust anchors are not accepted from the Contract's own assertions.
+
+`generate_release_contract_v2.py` accepts one explicit input file, validates
+the instance, computes the pairing, emits RFC 8785 canonical JSON atomically,
+refuses overwrite, sets mode `0444`, and can seal its directory to `0555`. It
+returns the instance SHA-256 for a later external Evidence envelope.
+
+The pairing preimage contains exactly `pairingType`, complete
+`productProvenance`, and complete `acceptanceToolProvenance`. JCS canonical
+UTF-8 bytes are hashed with SHA-256 and formatted as
+`sha256:<lowercase hex>`. Schema 2 restricts numbers to interoperable integers
+and keys to its ASCII closed vocabulary, defining canonicalization for every
+accepted value. Self-identifying Contract, envelope, storage, approval, and
+signature fields are forbidden.
 
 The evidence file is a JSON array. Every item contains exactly schema version,
 stage ID, state, start/completion timestamps, exit code, sanitized error

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -42,6 +43,98 @@ def test_checked_contract_is_strict_and_complete() -> None:
     assert contract["build"]["mode"] == "LIVE_DEMO"
     assert all("@sha256:" in image for image in contract["images"].values())
     assert len(set(contract["ports"].values())) == 4
+
+
+def test_schema_1_is_byte_identical_and_historical_semantics_are_unchanged() -> None:
+    data = (ROOT / "scripts/acceptance/release_contract.v1.json").read_bytes()
+    assert hashlib.sha1(
+        b"blob " + str(len(data)).encode() + b"\0" + data
+    ).hexdigest() == ("f0fa75bac8222e2f084015069aca17cba0062c5d")
+    assert {
+        "v0.2.2-attempt-01",
+        "v0.2.2-attempt-02",
+        "v0.2.2-attempt-03",
+        "v0.2.2-attempt-04",
+        "v0.2.2-attempt-05",
+    } == release_runner.HISTORICAL_SCHEMA_1_ATTEMPTS
+
+
+def test_schema_2_runner_rejects_ancestor_only_tool_substitution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(),
+        "preflight",
+        tmp_path / "evidence.json",
+        exact_dual_provenance=True,
+    )
+    calls = []
+
+    def command(args, *_args, **_kwargs):
+        calls.append(args)
+        output = (
+            runner.contract["product"]["treeSha"]
+            if args[-1].endswith("^{tree}")
+            else "0000000000000000000000000000000000000000"
+        )
+        return type("R", (), {"returncode": 0, "stdout": f"{output}\n".encode()})()
+
+    monkeypatch.setattr(release_runner, "run_command", command)
+    with pytest.raises(release_runner.RunnerError, match="exact identity mismatch"):
+        runner.provenance()
+    assert not any("merge-base" in call for call in calls)
+
+
+def test_schema_2_runner_accepts_only_exact_tool_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    runner = release_runner.Runner(
+        checked_contract(),
+        "preflight",
+        tmp_path / "evidence.json",
+        exact_dual_provenance=True,
+    )
+
+    def command(args, *_args, **_kwargs):
+        output = (
+            runner.contract["product"]["treeSha"]
+            if args[-1].endswith("^{tree}")
+            else runner.contract["acceptanceToolSourceSha"]
+        )
+        return type("R", (), {"returncode": 0, "stdout": f"{output}\n".encode()})()
+
+    monkeypatch.setattr(release_runner, "run_command", command)
+    runner.provenance()
+
+
+def test_new_attempt_rejects_schema_1_before_runner_construction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    contract_path = write_contract(tmp_path, checked_contract())
+    invoked = False
+
+    def forbidden_run(_self):
+        nonlocal invoked
+        invoked = True
+        return 0
+
+    monkeypatch.setattr(release_runner.Runner, "run", forbidden_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "release_runner.py",
+            "preflight",
+            "--contract",
+            str(contract_path),
+            "--evidence",
+            str(tmp_path / "evidence.json"),
+            "--attempt-id",
+            "v0.2.2-attempt-06",
+        ],
+    )
+    assert release_runner.main() == 2
+    assert invoked is False
 
 
 @pytest.mark.parametrize(

@@ -49,6 +49,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Fetch frozen v0.2.2 compatibility source
+        run: |
+          git fetch --no-tags origin 51fa5fcb266f1e58083c917dd4c99a02d9165c65
+          git fetch --no-tags origin 9a515446f9f7baf551b6f3d5762fac9a70dac27a
+
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:

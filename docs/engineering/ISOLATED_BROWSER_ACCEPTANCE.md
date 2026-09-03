@@ -86,6 +86,15 @@ unmapped identities fail closed to `NOT_RETAINED` and
 only the first unexpected operation is retained. Missing or unmapped operation
 identity becomes `NOT_RETAINED` and `BROWSER_DIAGNOSTIC_GAP`.
 
+For the frozen v0.2.2 successor, the actual product reporter writes one closed
+array of `operationId`, `resultState`, and optional integer
+`structuredHttpStatus` values. The Harness reads that file only transiently,
+validates the exact field set and five-value operation vocabulary, sorts by the
+versioned lifecycle order, and selects the first `UNEXPECTED` operation. The
+file is removed with browser output before final disclosure scanning. Reporter
+messages, URLs, selectors, payloads, exit codes, assertion counts, and raw
+artifacts are neither parser inputs nor retained Evidence.
+
 HTTP categories `HTTP_1XX` through `HTTP_5XX` are reduced only from an explicitly
 typed integer `structuredHttpStatus` in the range 100–599 supplied by the selected
 structured Browser result or operation. The exact number is never retained.
