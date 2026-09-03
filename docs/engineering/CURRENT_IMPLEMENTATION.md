@@ -73,6 +73,18 @@ implementation. See the [Candidate artifact](../../S5-ARCH-005-CORE-SCHEMA-DRAFT
 
 ## Implemented Core
 
+### Attempt-scoped managed Knowledge retrieval
+
+The internal v0.2.3 backend can bind an exact published Knowledge revision and
+derived Qdrant snapshot to an existing canonical Attempt and Digital Employee
+Instance, authorize before lookup, execute snapshot-filtered retrieval, and append
+deterministic citation-bearing retrieval Evidence to PostgreSQL. PostgreSQL remains
+the lifecycle, binding, and Evidence authority; Qdrant remains rebuildable derived
+state. The bounded path reports stale, no-result, unavailable, revision/snapshot
+conflict, and scope-denial states without fabricating citations. It does not add
+general Attempt orchestration, MCP/Skill invocation, frontend state, or release
+acceptance.
+
 The repository currently contains implementation for the following
 core concepts.
 
