@@ -54,6 +54,12 @@ from agent_console.agent_definition_service import (
     AgentDefinitionFailure,
     AgentDefinitionService,
 )
+from agent_console.digital_employee_api import router as digital_employee_router
+from agent_console.digital_employee_bootstrap import (
+    DigitalEmployeeProductAssembly,
+    build_digital_employee_assembly,
+)
+from agent_console.execution_domain import ExecutionPersistenceError
 from agent_console.intervention_feedback import (
     CaptureDenied,
     CaptureNotFound,
@@ -138,6 +144,7 @@ from agent_console.supplier_quality_demo_schemas import (
     SupplierQualityDemoStartRequest,
     SupplierQualityDemoStartResponse,
 )
+from agent_console.workflow_control_domain import WorkflowControlError
 from agent_console.workflow_definition_api import (
     binding_resolver as workflow_binding_resolver,
 )
@@ -152,6 +159,7 @@ app.include_router(knowledge_router)
 app.include_router(runtime_profile_router)
 app.include_router(workflow_definition_router)
 app.include_router(resource_catalog_router)
+app.include_router(digital_employee_router)
 
 
 class _SupplierQualityExecutionEvidence:
@@ -395,6 +403,8 @@ _supplier_quality_demo_service = SupplierQualityDemoService(
 )
 _agent_definition_service: AgentDefinitionService | None = None
 _agent_definition_startup_error: str | None = None
+_digital_employee_assembly: DigitalEmployeeProductAssembly | None = None
+_digital_employee_startup_error: str | None = None
 
 
 class _WorkbenchBindingResolver:
@@ -518,6 +528,35 @@ def _configure_agent_definitions() -> None:
 
 
 _configure_agent_definitions()
+
+
+def _configure_digital_employees() -> None:
+    global _digital_employee_assembly, _digital_employee_startup_error
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if not database_url or _agent_definition_service is None:
+        _digital_employee_assembly = None
+        _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+        return
+    try:
+        _digital_employee_assembly = build_digital_employee_assembly(
+            database_url,
+            _agent_definition_service,
+            migration_path=(
+                Path(__file__).parents[2]
+                / "migrations"
+                / "0008_execution_runtime_authority.sql"
+            ),
+            min_pool_size=int(os.environ.get("EXECUTION_DB_POOL_MIN", "1")),
+            max_pool_size=int(os.environ.get("EXECUTION_DB_POOL_MAX", "4")),
+            timeout=float(os.environ.get("EXECUTION_DB_TIMEOUT_SECONDS", "5")),
+        )
+        _digital_employee_startup_error = None
+    except (ExecutionPersistenceError, WorkflowControlError, ValueError):
+        _digital_employee_assembly = None
+        _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+
+
+_configure_digital_employees()
 _problem_planning_service = ProblemPlanningService(
     agent_definitions=lambda scope: (
         []
@@ -525,6 +564,18 @@ _problem_planning_service = ProblemPlanningService(
         else _agent_definition_service.eligible(scope)
     )
 )
+
+
+def get_digital_employee_assembly() -> DigitalEmployeeProductAssembly:
+    if _digital_employee_assembly is None:
+        raise HTTPException(
+            503,
+            detail={
+                "reasonCode": _digital_employee_startup_error
+                or "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+            },
+        )
+    return _digital_employee_assembly
 
 
 def get_live_journey_principal() -> TrustedJourneyPrincipal:
