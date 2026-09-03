@@ -842,6 +842,7 @@ def test_all_four_modes_are_orchestrated_without_ambient_release_parameters(
             "postgres_readiness",
             "apply_migrations",
             "qdrant_start",
+            "start_server_local_continuity_monitor",
             "continuity_before",
             "present_candidate",
             "build_candidate",
@@ -850,6 +851,7 @@ def test_all_four_modes_are_orchestrated_without_ambient_release_parameters(
             "verify_diagnostics",
             "verify_candidate_manifest",
             "continuity_after",
+            "stop_and_validate_server_local_continuity_monitor",
             "cleanup",
         ):
             monkeypatch.setattr(

@@ -77,6 +77,7 @@ PROFILE_FIELDS = frozenset(
         "diagnosticRetentionPolicy",
         "migrations",
         "browser",
+        "continuityMonitor",
     }
 )
 IMAGE_FIELDS = frozenset({"postgres", "qdrant"})
@@ -86,6 +87,12 @@ DIAGNOSTIC_FIELDS = frozenset(
     {"retainRaw", "retainSanitized", "scanCompressed", "disposeBrowserArtifacts"}
 )
 BROWSER_FIELDS = frozenset({"command", "journeyId"})
+CONTINUITY_MONITOR_FIELDS = frozenset(
+    {"contractVersion", "intervalSeconds", "maximumRuntimeSeconds", "sentinels"}
+)
+CONTINUITY_SENTINEL_FIELDS = frozenset(
+    {"sentinelClass", "serviceUnit", "healthPort", "listenerPort", "listenerRequired"}
+)
 ENVELOPE_FIELDS = frozenset(
     {
         "provider",
@@ -366,6 +373,41 @@ def validate_execution_profile(value: Any) -> dict[str, Any]:
     if command != expected_command:
         fail("browser command is malformed")
     _closed_string(browser["journeyId"], "browser journey")
+    monitor = _exact(
+        profile["continuityMonitor"],
+        CONTINUITY_MONITOR_FIELDS,
+        "continuity monitor",
+    )
+    if monitor["contractVersion"] != "SERVER_LOCAL_CONTINUITY_V1":
+        fail("continuity monitor contract version is unsupported")
+    interval = monitor["intervalSeconds"]
+    maximum = monitor["maximumRuntimeSeconds"]
+    if type(interval) is not int or not 1 <= interval <= 60:
+        fail("continuity monitor interval is outside the accepted bound")
+    if type(maximum) is not int or not interval <= maximum <= 21600:
+        fail("continuity monitor runtime is outside the accepted bound")
+    sentinels = monitor["sentinels"]
+    if not isinstance(sentinels, list) or len(sentinels) != 2:
+        fail("continuity sentinels are absent or incomplete")
+    identities: set[str] = set()
+    for value in sentinels:
+        sentinel = _exact(value, CONTINUITY_SENTINEL_FIELDS, "continuity sentinel")
+        identity = sentinel["sentinelClass"]
+        if (
+            identity not in {"PUBLIC", "ORIGINAL_STAGING"}
+            or identity in identities
+            or not isinstance(sentinel["serviceUnit"], str)
+            or not IDENTIFIER.fullmatch(sentinel["serviceUnit"])
+            or type(sentinel["healthPort"]) is not int
+            or not 1 <= sentinel["healthPort"] <= 65535
+            or type(sentinel["listenerPort"]) is not int
+            or not 1 <= sentinel["listenerPort"] <= 65535
+            or type(sentinel["listenerRequired"]) is not bool
+        ):
+            fail("continuity sentinel identity is malformed or unapproved")
+        identities.add(identity)
+    if identities != {"PUBLIC", "ORIGINAL_STAGING"}:
+        fail("continuity sentinel set is unapproved")
     return profile
 
 
