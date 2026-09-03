@@ -21,7 +21,7 @@ export function TraceabilityProjection({context,perspective,data,error,retry}:{c
   </section>;
 }
 
-function ViewLinks({context}:{context:CanonicalUrlContext}) {return <nav className="view-switcher" aria-label="精确对象投影"><Link to={resourceViewLink(context,"product")}>产品</Link><Link to={resourceViewLink(context,"technical")}>技术详情</Link><Link to={resourceViewLink(context,"evidence")}>证据</Link></nav>}
+function ViewLinks({context}:{context:CanonicalUrlContext}) {return <nav className="view-switcher" aria-label="精确对象投影"><Link aria-label="Product" to={resourceViewLink(context,"product")}>产品</Link><Link aria-label="Technical" to={resourceViewLink(context,"technical")}>技术详情</Link><Link aria-label="Evidence" to={resourceViewLink(context,"evidence")}>证据</Link></nav>}
 
 export function EvidenceInspector({context,onClose,data,error,retry}:{context:CanonicalUrlContext;onClose:()=>void;data:TraceabilityDTO|null;error:ProductAssemblyError|null;retry:()=>void}) {
   const closeRef=useRef<HTMLButtonElement>(null);
