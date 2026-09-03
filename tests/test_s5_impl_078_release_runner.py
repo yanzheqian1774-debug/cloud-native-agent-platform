@@ -411,10 +411,156 @@ def test_candidate_mode_normalization_rejects_escaping_symlink(
     tmp_path: Path,
 ) -> None:
     runner = owned_candidate_runner(tmp_path)
-    (runner.candidate_source_dir / "escape").symlink_to(tmp_path / "outside")
+    outside = tmp_path / "outside"
+    outside.write_text("outside", encoding="utf-8")
+    (runner.candidate_source_dir / "escape").symlink_to(outside)
     with pytest.raises(release_runner.RunnerError) as error:
         runner.normalize_candidate_modes(os.getuid(), os.getgid())
-    assert error.value.code == "MODE_NORMALIZATION_SYMLINK_ESCAPE"
+    assert error.value.code == "SYMLINK_CANONICAL_ESCAPE"
+
+
+def test_candidate_internal_relative_absolute_and_nested_symlinks_pass(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    nested = runner.candidate_source_dir / "nested"
+    nested.mkdir()
+    target = nested / "target"
+    target.write_text("immutable", encoding="utf-8")
+    (runner.candidate_source_dir / "relative").symlink_to("nested/target")
+    (runner.candidate_source_dir / "absolute").symlink_to(target.absolute())
+    (nested / "link").symlink_to("target")
+    try:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+        evidence = runner.symlink_classification_evidence
+        assert evidence is not None
+        assert evidence["symlinkCount"] == 3
+        assert evidence["classification"] == "CANDIDATE_INTERNAL_SYMLINK"
+        assert evidence["state"] == "PASS"
+    finally:
+        restore_candidate_permissions(runner)
+
+
+def test_exact_21_candidate_internal_symlinks_are_not_escape(tmp_path: Path) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    target = runner.candidate_source_dir / "target"
+    target.write_text("immutable", encoding="utf-8")
+    for number in range(21):
+        (runner.candidate_source_dir / f"link-{number:02d}").symlink_to("target")
+    try:
+        before = release_runner.release_manifest(runner.candidate_source_dir)
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+        after = release_runner.release_manifest(runner.candidate_source_dir)
+        evidence = runner.symlink_classification_evidence
+        assert evidence is not None
+        assert evidence["symlinkCount"] == 21
+        assert evidence["classification"] == "CANDIDATE_INTERNAL_SYMLINK"
+        assert before.keys() == after.keys()
+        assert release_runner.release_manifest(runner.candidate_source_dir) == after
+    finally:
+        restore_candidate_permissions(runner)
+
+
+@pytest.mark.parametrize(
+    ("fixture", "classification"),
+    [
+        ("relative-escape", "SYMLINK_CANONICAL_ESCAPE"),
+        ("absolute-escape", "SYMLINK_CANONICAL_ESCAPE"),
+        ("broken", "BROKEN_SYMLINK"),
+        ("loop", "SYMLINK_LOOP"),
+        ("chained-escape", "SYMLINK_CANONICAL_ESCAPE"),
+        ("prefix-collision", "SYMLINK_CANONICAL_ESCAPE"),
+        ("traversal", "SYMLINK_CANONICAL_ESCAPE"),
+        ("unsupported", "UNSUPPORTED_SYMLINK_TARGET"),
+    ],
+)
+def test_candidate_symlink_negative_classifications(
+    tmp_path: Path, fixture: str, classification: str
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    outside = tmp_path / "outside"
+    outside.write_text("outside", encoding="utf-8")
+    link = runner.candidate_source_dir / "link"
+    if fixture == "relative-escape":
+        link.symlink_to(os.path.relpath(outside, link.parent))
+    elif fixture == "absolute-escape":
+        link.symlink_to(outside.absolute())
+    elif fixture == "broken":
+        link.symlink_to("missing")
+    elif fixture == "loop":
+        link.symlink_to("link")
+    elif fixture == "chained-escape":
+        (runner.candidate_source_dir / "chain").symlink_to(outside.absolute())
+        link.symlink_to("chain")
+    elif fixture == "prefix-collision":
+        collision = runner.candidate_source_dir.with_name(
+            runner.candidate_source_dir.name + "-collision"
+        )
+        collision.mkdir()
+        target = collision / "target"
+        target.write_text("outside", encoding="utf-8")
+        link.symlink_to(target.absolute())
+    elif fixture == "traversal":
+        nested = runner.candidate_source_dir / "nested"
+        nested.mkdir()
+        link = nested / "link"
+        link.symlink_to(os.path.relpath(outside, link.parent))
+    else:
+        unsupported = runner.candidate_source_dir / "unsupported"
+        os.mkfifo(unsupported)
+        link.symlink_to("unsupported")
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == classification
+    evidence_path = tmp_path / "evidence.candidate-symlinks.json"
+    evidence = json.loads(evidence_path.read_text())
+    assert set(evidence) == release_runner.SYMLINK_EVIDENCE_FIELDS
+    assert evidence["classification"] == classification
+    assert evidence["state"] == "FAIL"
+    assert all(str(tmp_path) not in str(value) for value in evidence.values())
+
+
+def test_candidate_symlink_canonicalization_ambiguity_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    target = runner.candidate_source_dir / "target"
+    target.write_text("immutable", encoding="utf-8")
+    link = runner.candidate_source_dir / "link"
+    link.symlink_to("target")
+    monkeypatch.setattr(
+        runner,
+        "_resolve_symlink_target",
+        lambda _path: (_ for _ in ()).throw(PermissionError("denied")),
+    )
+    with pytest.raises(release_runner.RunnerError) as error:
+        runner.normalize_candidate_modes(os.getuid(), os.getgid())
+    assert error.value.code == "SYMLINK_CANONICALIZATION_ERROR"
+
+
+def test_persistent_candidate_manifest_evidence_retains_digests_only(
+    tmp_path: Path,
+) -> None:
+    runner = owned_candidate_runner(tmp_path)
+    raw_manifest = {
+        "private/internal/link": {
+            "mode": 0o777,
+            "type": "symlink",
+            "target": "private/internal/target",
+        }
+    }
+    runner.candidate_before = raw_manifest
+    runner.candidate_mounted_after = raw_manifest
+    runner.candidate_unmounted_after = raw_manifest
+    runner.write_candidate_manifests()
+    evidence = (tmp_path / "evidence.candidate-manifests.json").read_text()
+    assert "private" not in evidence
+    assert "target" not in evidence
+    assert set(json.loads(evidence)) == {
+        "preMountDigest",
+        "mountedPostProbeDigest",
+        "unmountedPostProbeDigest",
+    }
 
 
 def test_candidate_mode_normalization_does_not_chmod_internal_symlink_target(

@@ -129,6 +129,15 @@ regular files to `0444`, executable regular files to `0555`, and directories to
 `0555`. Symlink targets are never chmodded. A second complete audit requires
 zero writable entries and verifies every preserved executable.
 
+Symlink validation resolves the candidate root once and resolves each relative
+or absolute target strictly. A path-aware canonical relative-to-root check
+accepts only regular-file or directory targets inside that root. Broken links,
+loops, unsupported target types, resolution ambiguity, chained escapes,
+traversal escapes, and prefix-collision escapes fail with distinct fixed
+classifications. The aggregate symlink Evidence contains only the symlink
+count, classification enum, manifest digest, correlation digest, stage and
+PASS/FAIL state; it never retains a link name, target or filesystem path.
+
 The aggregate normalization Evidence contains only entry count,
 writable-before count, writable-after count, executable-preserved count,
 unsupported-entry count, and a correlation digest. It contains no absolute path
@@ -144,11 +153,13 @@ as that exact non-root identity. Mode bits alone are never accepted as the
 immutable boundary.
 
 The external validation runtime remains writable by only the selected probe
-identity. Pre-mount, mounted-post-probe, and unmounted-post-probe manifests are
-written beside the stage evidence. Cleanup verifies the runtime ownership token
-and exact target before unmounting; an unowned target is never unmounted or
-removed. The underlying candidate must remain manifest-identical after
-unmount. Unsupported, non-root, missing-tool, writable-mount, identity-mismatch,
+identity. Digests of the pre-mount, mounted-post-probe, and
+unmounted-post-probe manifests are written beside the stage evidence; raw
+internal paths and symlink targets are not persisted. Cleanup verifies the
+runtime ownership token and exact target before unmounting; an unowned target
+is never unmounted or removed. The underlying candidate must remain
+manifest-identical after unmount. Unsupported, non-root, missing-tool,
+writable-mount, identity-mismatch,
 or ownership-mismatch environments fail closed with fixed sanitized codes.
 
 The browser executable path and digest are contract-pinned. PostgreSQL and
