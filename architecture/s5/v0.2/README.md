@@ -10,6 +10,11 @@ Source code and tests remain authoritative for implemented behavior.
   is the proposed complete capability, Chinese-first journey, sibling-view,
   visual/accessibility, ownership, acceptance and 210–299 routing baseline. It is
   ready for Human Checkpoint A and grants no implementation, deployment or release.
+- [v0.2.3 Product Workflow, Operations and Fleet-ready Addendum v1](S5-V023-ARCH-204-PRODUCT-WORKFLOW-OPERATIONS-FLEET-READY-ADDENDUM-V1.md)
+  adds Workflow intervention, Product operations, resource closure, cross-view
+  acceptance and the bounded
+  `MANAGED_RESOURCE_PORTFOLIO_AND_FLEET_READY_OPERATIONS_FOUNDATION`. It activates
+  no downstream identifier.
 - [v0.2.3 Execution and Runtime Authority v1](S5-ARCH-019-V023-EXECUTION-RUNTIME-AUTHORITY-V1.md)
   proposes canonical execution identities, PostgreSQL/Kubernetes authority,
   desired/observed reconciliation, a single-writer PostgreSQL Evidence cutover,
