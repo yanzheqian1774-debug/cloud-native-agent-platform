@@ -6,6 +6,10 @@ API, schema, or frontend implementation.
 
 ## Evidence sets
 
+- [S5-V023-ARCH-208 Checkpoint A evidence](v0.2/s5-v023-arch-208/README.md)
+  records the collision-free Human allocation, exact baseline, confirmed IMPL-240
+  blocker and proposed additive PostgreSQL persistence decision. It changes no
+  migration or implementation, allocates no task and grants no release authority.
 - [S5-V023-ARCH-201 Checkpoint A evidence](v0.2/s5-v023-arch-201/README.md)
   records the collision-free Human allocation and proposed complete v0.2.3 Product
   Capability, Interaction and Acceptance Architecture. It grants no implementation,
