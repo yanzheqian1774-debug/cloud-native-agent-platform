@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -49,11 +49,122 @@ class InterventionState(StrEnum):
 class AtomicCommandType(StrEnum):
     APPROVE_AND_CONTINUE = "APPROVE_AND_CONTINUE"
     REJECT_PLAN = "REJECT_PLAN"
+    CORRECT_PLAN = "CORRECT_PLAN"
+    REQUEST_INTERVENTION = "REQUEST_INTERVENTION"
+    REVIEW_INTERVENTION = "REVIEW_INTERVENTION"
     APPLY_INTERVENTION_DECISION = "APPLY_INTERVENTION_DECISION"
     RETRY_ATTEMPT = "RETRY_ATTEMPT"
     CREATE_SUCCESSOR_RUN = "CREATE_SUCCESSOR_RUN"
     REPLACE_RUNTIME = "REPLACE_RUNTIME"
     CANCEL_CONTROLLED_EXECUTION = "CANCEL_CONTROLLED_EXECUTION"
+    COMPLETE_EXECUTION_WITH_OUTCOME = "COMPLETE_EXECUTION_WITH_OUTCOME"
+
+
+@dataclass(frozen=True)
+class CommandPersistenceContract:
+    state_precondition: str
+    creates: tuple[str, ...]
+    transitions: tuple[str, ...]
+    evidence_required: bool
+    outcome_required: bool
+    successor_required: str | None
+
+
+COMMAND_PERSISTENCE_CONTRACTS = {
+    AtomicCommandType.APPROVE_AND_CONTINUE: CommandPersistenceContract(
+        "PENDING_APPROVAL_AND_PAUSED",
+        ("approval_decision", "control_command", "idempotency_result"),
+        ("plan:APPROVED", "run:RESUME_REQUESTED"),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.REJECT_PLAN: CommandPersistenceContract(
+        "PENDING_APPROVAL",
+        ("approval_decision", "control_command", "idempotency_result"),
+        ("plan:REJECTED",),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.CORRECT_PLAN: CommandPersistenceContract(
+        "CORRECTABLE_EXACT_PLAN",
+        ("successor_plan", "plan_correction", "control_command", "idempotency_result"),
+        ("predecessor_plan:SUPERSEDED",),
+        True,
+        False,
+        "PLAN",
+    ),
+    AtomicCommandType.REQUEST_INTERVENTION: CommandPersistenceContract(
+        "ELIGIBLE_EXACT_TARGET",
+        (
+            "intervention_request",
+            "request_transition",
+            "control_command",
+            "idempotency_result",
+        ),
+        (),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.REVIEW_INTERVENTION: CommandPersistenceContract(
+        "REQUESTED",
+        ("intervention_review", "control_command", "idempotency_result"),
+        (),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.APPLY_INTERVENTION_DECISION: CommandPersistenceContract(
+        "AUTHORIZED",
+        ("application_transitions", "control_command", "idempotency_result"),
+        ("target:GUARDED",),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.RETRY_ATTEMPT: CommandPersistenceContract(
+        "FAILED_ATTEMPT",
+        ("successor_attempt", "control_command", "idempotency_result"),
+        (),
+        True,
+        False,
+        "ATTEMPT",
+    ),
+    AtomicCommandType.CREATE_SUCCESSOR_RUN: CommandPersistenceContract(
+        "TERMINAL_RUN_WITH_EXACT_APPROVED_PLAN",
+        ("successor_run", "control_command", "idempotency_result"),
+        (),
+        True,
+        False,
+        "RUN",
+    ),
+    AtomicCommandType.REPLACE_RUNTIME: CommandPersistenceContract(
+        "AFFECTED_ATTEMPT_WITH_ELIGIBLE_PLACEMENT",
+        ("control_command", "idempotency_result"),
+        (),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.CANCEL_CONTROLLED_EXECUTION: CommandPersistenceContract(
+        "NONTERMINAL_TARGET",
+        ("control_command", "idempotency_result"),
+        ("target:CANCELLATION_PENDING",),
+        True,
+        False,
+        None,
+    ),
+    AtomicCommandType.COMPLETE_EXECUTION_WITH_OUTCOME: CommandPersistenceContract(
+        "NONTERMINAL_TARGET_WITH_ACTUAL_TERMINAL_RESULT",
+        ("outcome", "control_command", "idempotency_result"),
+        ("target:TERMINAL",),
+        True,
+        True,
+        None,
+    ),
+}
 
 
 TERMINAL_INTERVENTION_STATES = frozenset(
@@ -83,6 +194,11 @@ class PlanRecord:
     updated_at: datetime
     predecessor_plan_id: str | None = None
     predecessor_plan_version: int | None = None
+    source_plan_revision: int | None = None
+    source_plan_digest: str | None = None
+    actor_id: str | None = None
+    authority_classification: str | None = None
+    correction_reason_category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +214,24 @@ class ApprovalDecision:
     reason_category: str
     decision_digest: str
     decided_at: datetime
+
+
+@dataclass(frozen=True)
+class PlanCorrection:
+    correction_id: str
+    predecessor_plan_id: str
+    predecessor_plan_version: int
+    successor_plan_id: str
+    successor_plan_version: int
+    actor_id: str
+    authority_classification: str
+    reason_category: str
+    normalized_correction: dict[str, Any]
+    corrected_at: datetime
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self.normalized_correction)
 
 
 @dataclass(frozen=True)
@@ -225,10 +359,34 @@ class WorkflowControlOperation:
     affected_attempt_id: str | None = None
     evidence_ids: tuple[str, ...] = ()
     outcome_ids: tuple[str, ...] = ()
+    request: InterventionRequest | None = None
+    successor_plan: PlanRecord | None = None
+    correction: PlanCorrection | None = None
+    evidence_records: tuple[dict[str, Any], ...] = ()
+    outcome_records: tuple[dict[str, Any], ...] = ()
+    terminal_state: str | None = None
 
     @property
     def payload_digest(self) -> str:
-        return canonical_digest(self.payload)
+        return canonical_digest(
+            {
+                "payload": self.payload,
+                "target": self.target,
+                "target_expected_version": self.target_expected_version,
+                "plan": [self.plan_id, self.plan_version, self.plan_digest],
+                "successor_id": self.successor_id,
+                "successor_plan": self.successor_plan,
+                "correction": self.correction,
+                "placement_id": self.placement_id,
+                "runtime_command_id": self.runtime_command_id,
+                "affected_attempt_id": self.affected_attempt_id,
+                "evidence": [
+                    item.get("payload_digest") for item in self.evidence_records
+                ],
+                "outcomes": [item.get("digest") for item in self.outcome_records],
+                "terminal_state": self.terminal_state,
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -244,6 +402,10 @@ class WorkflowControlOperationResult:
     successor_attempt_id: str | None = None
     successor_workflow_run_id: str | None = None
     runtime_command_id: str | None = None
+    successor_plan_id: str | None = None
+    successor_plan_version: int | None = None
+    evidence_ids: tuple[str, ...] = ()
+    outcome_ids: tuple[str, ...] = ()
 
     def record(self) -> dict[str, Any]:
         return {
@@ -257,6 +419,10 @@ class WorkflowControlOperationResult:
             "successor_attempt_id": self.successor_attempt_id,
             "successor_workflow_run_id": self.successor_workflow_run_id,
             "runtime_command_id": self.runtime_command_id,
+            "successor_plan_id": self.successor_plan_id,
+            "successor_plan_version": self.successor_plan_version,
+            "evidence_ids": list(self.evidence_ids),
+            "outcome_ids": list(self.outcome_ids),
         }
 
 
@@ -293,8 +459,10 @@ def canonical_digest(value: Any) -> str:
     def default(item: Any) -> str:
         if isinstance(item, (datetime, StrEnum)):
             return item.isoformat() if isinstance(item, datetime) else item.value
-        if hasattr(item, "__dataclass_fields__"):
-            return item.__dict__
+        if isinstance(item, bytes):
+            return item.hex()
+        if is_dataclass(item):
+            return asdict(item)
         raise TypeError(type(item).__name__)
 
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=default)

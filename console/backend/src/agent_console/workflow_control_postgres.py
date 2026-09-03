@@ -31,6 +31,7 @@ from .workflow_control_domain import (
     WorkflowControlNotAuthorized,
     WorkflowControlOperation,
     WorkflowControlOperationResult,
+    canonical_digest,
 )
 
 ADAPTER = "workflow-control-postgresql-v1"
@@ -122,6 +123,7 @@ class PostgresWorkflowControlRepository:
         if not database_url:
             raise WorkflowControlError("WORKFLOW_CONTROL_STORAGE_UNAVAILABLE")
         self.migration_path = migration_path
+        self.schema_version = int(migration_path.name[:4])
         try:
             self.pool = ConnectionPool(
                 database_url,
@@ -141,7 +143,7 @@ class PostgresWorkflowControlRepository:
 
     def migrate(self) -> None:
         version = int(self.migration_path.name[:4])
-        if version not in {9, 10}:
+        if version not in {9, 10, 11}:
             raise WorkflowControlError("WORKFLOW_CONTROL_SCHEMA_INCOMPATIBLE")
         try:
             with self.pool.connection() as connection, connection.transaction():
@@ -197,6 +199,8 @@ class PostgresWorkflowControlRepository:
         }
         if version >= 10:
             required |= {"intervention_reviews", "intervention_decisions"}
+        if version >= 11:
+            required |= {"plan_corrections"}
         if (
             row != {"checksum": self.migration_checksum, "adapter": ADAPTER}
             or not required <= tables
@@ -733,6 +737,8 @@ class PostgresWorkflowControlRepository:
         """Persist one bounded successor/decision command as one transaction."""
         if not authorized:
             raise WorkflowControlNotAuthorized("NOT_AUTHORIZED")
+        if self.schema_version >= 11 and not operation.evidence_records:
+            raise WorkflowControlConflict("OPERATION_EVIDENCE_REQUIRED")
         target_column, target_id = next(
             (key, value)
             for key, value in zip(
@@ -773,6 +779,35 @@ class PostgresWorkflowControlRepository:
                 )
                 if operation.intervention_id is None:
                     raise WorkflowControlConflict("INTERVENTION_REQUIRED")
+                if operation.command_type is AtomicCommandType.REQUEST_INTERVENTION:
+                    if (
+                        operation.request is None
+                        or operation.request.intervention_id
+                        != operation.intervention_id
+                        or operation.request.target != operation.target
+                        or operation.request.expected_target_version
+                        != operation.target_expected_version
+                    ):
+                        raise WorkflowControlConflict(
+                            "EXACT_INTERVENTION_REQUEST_REQUIRED"
+                        )
+                    self._insert_request(connection, operation.scope, operation.request)
+                    self._insert_transition(
+                        connection,
+                        operation.scope,
+                        InterventionTransition(
+                            operation.transition_id
+                            or f"{operation.intervention_id}:requested",
+                            operation.intervention_id,
+                            1,
+                            None,
+                            InterventionState.REQUESTED,
+                            operation.request.actor_id,
+                            operation.request.authority_basis,
+                            operation.request.reason_category,
+                            operation.request.requested_at,
+                        ),
+                    )
                 intervention = connection.execute(
                     "SELECT current_state,aggregate_version,workflow_run_id,task_run_id,attempt_id FROM execution_authority.interventions WHERE namespace=%s AND security_domain=%s AND intervention_id=%s FOR UPDATE",
                     (*key[:2], operation.intervention_id),
@@ -810,12 +845,25 @@ class PostgresWorkflowControlRepository:
                     )
                 if operation.decision is not None:
                     if (
-                        operation.review is None
-                        or operation.decision.review_id != operation.review.review_id
+                        (
+                            operation.review is not None
+                            and operation.decision.review_id
+                            != operation.review.review_id
+                        )
                         or operation.decision.intervention_id
                         != operation.intervention_id
                         or intervention["current_state"] != "REQUESTED"
                     ):
+                        raise WorkflowControlConflict("INTERVENTION_NOT_DECIDABLE")
+                    stored_review = connection.execute(
+                        "SELECT review_id FROM execution_authority.intervention_reviews WHERE namespace=%s AND security_domain=%s AND intervention_id=%s AND review_id=%s",
+                        (
+                            *key[:2],
+                            operation.intervention_id,
+                            operation.decision.review_id,
+                        ),
+                    ).fetchone()
+                    if stored_review is None:
                         raise WorkflowControlConflict("INTERVENTION_NOT_DECIDABLE")
                     to_state = (
                         InterventionState.AUTHORIZED
@@ -881,6 +929,8 @@ class PostgresWorkflowControlRepository:
                 runtime_command_id = None
                 approval_decision_id = None
                 kind = operation.command_type
+                successor_plan_id = None
+                successor_plan_version = None
                 if kind in {
                     AtomicCommandType.APPROVE_AND_CONTINUE,
                     AtomicCommandType.REJECT_PLAN,
@@ -888,6 +938,39 @@ class PostgresWorkflowControlRepository:
                     target_version, approval_decision_id = self._persist_plan_operation(
                         connection, operation, target_column, target
                     )
+                elif kind is AtomicCommandType.CORRECT_PLAN:
+                    successor_plan_id, successor_plan_version = (
+                        self._persist_correction(connection, operation)
+                    )
+                elif kind is AtomicCommandType.REQUEST_INTERVENTION:
+                    if (
+                        operation.request is None
+                        or intervention["current_state"] != "REQUESTED"
+                    ):
+                        raise WorkflowControlConflict(
+                            "EXACT_INTERVENTION_REQUEST_REQUIRED"
+                        )
+                    transition_ordinal = 1
+                    transition_id = (
+                        operation.transition_id
+                        or f"{operation.intervention_id}:requested"
+                    )
+                elif kind is AtomicCommandType.REVIEW_INTERVENTION:
+                    if (
+                        operation.review is None
+                        or intervention["current_state"] != "REQUESTED"
+                    ):
+                        raise WorkflowControlConflict("INTERVENTION_NOT_REVIEWABLE")
+                    transition_ordinal = intervention["aggregate_version"]
+                    transition = connection.execute(
+                        "SELECT transition_id FROM execution_authority.intervention_transitions WHERE namespace=%s AND security_domain=%s AND intervention_id=%s AND ordinal=%s",
+                        (*key[:2], operation.intervention_id, transition_ordinal),
+                    ).fetchone()
+                    if transition is None:
+                        raise WorkflowControlConflict(
+                            "INTERVENTION_TRANSITION_REQUIRED"
+                        )
+                    transition_id = transition["transition_id"]
                 elif kind is AtomicCommandType.RETRY_ATTEMPT:
                     if (
                         target_column != "attempt_id"
@@ -968,6 +1051,10 @@ class PostgresWorkflowControlRepository:
                     if changed is None:
                         raise WorkflowControlConflict("STALE_AGGREGATE_VERSION")
                     target_version = changed["aggregate_version"]
+                elif kind is AtomicCommandType.COMPLETE_EXECUTION_WITH_OUTCOME:
+                    target_version = self._complete_terminal_target(
+                        connection, operation, target_column, target_id, target
+                    )
                 elif kind is AtomicCommandType.APPLY_INTERVENTION_DECISION:
                     if intervention["current_state"] != "AUTHORIZED":
                         raise WorkflowControlConflict("APPROVED_DECISION_REQUIRED")
@@ -1056,8 +1143,11 @@ class PostgresWorkflowControlRepository:
                         transition["transition_id"],
                         transition["ordinal"],
                     )
+                self._create_operation_facts(
+                    connection, operation, target_column, target_id
+                )
                 connection.execute(
-                    "INSERT INTO execution_authority.control_commands(namespace,security_domain,control_command_id,command_type,intervention_id,transition_ordinal,workflow_run_id,task_run_id,attempt_id,expected_target_version,successor_workflow_run_id,successor_attempt_id,affected_attempt_id,runtime_command_id,placement_id,command_digest,canonical_record,requested_at,result_record) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,'{}'::jsonb)",
+                    "INSERT INTO execution_authority.control_commands(namespace,security_domain,control_command_id,command_type,intervention_id,transition_ordinal,workflow_run_id,task_run_id,attempt_id,expected_target_version,successor_plan_id,successor_plan_version,successor_workflow_run_id,successor_attempt_id,affected_attempt_id,runtime_command_id,placement_id,command_digest,canonical_record,requested_at,result_record) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,'{}'::jsonb)",
                     (
                         *key[:2],
                         operation.control_command_id,
@@ -1066,6 +1156,8 @@ class PostgresWorkflowControlRepository:
                         transition_ordinal,
                         *operation.target.values(),
                         operation.target_expected_version,
+                        successor_plan_id,
+                        successor_plan_version,
                         successor_run_id,
                         successor_attempt_id,
                         operation.affected_attempt_id
@@ -1090,6 +1182,15 @@ class PostgresWorkflowControlRepository:
                     successor_attempt_id,
                     successor_run_id,
                     runtime_command_id,
+                    successor_plan_id,
+                    successor_plan_version,
+                    operation.evidence_ids
+                    + tuple(
+                        item["evidence_record_id"]
+                        for item in operation.evidence_records
+                    ),
+                    operation.outcome_ids
+                    + tuple(item["outcome_id"] for item in operation.outcome_records),
                 )
                 record = result.record()
                 connection.execute(
@@ -1136,7 +1237,288 @@ class PostgresWorkflowControlRepository:
             record.get("successor_attempt_id"),
             record.get("successor_workflow_run_id"),
             record.get("runtime_command_id"),
+            record.get("successor_plan_id"),
+            record.get("successor_plan_version"),
+            tuple(record.get("evidence_ids", ())),
+            tuple(record.get("outcome_ids", ())),
         )
+
+    @staticmethod
+    def _persist_correction(
+        connection: Any, operation: WorkflowControlOperation
+    ) -> tuple[str, int]:
+        correction = operation.correction
+        successor = operation.successor_plan
+        if (
+            correction is None
+            or successor is None
+            or operation.plan_id is None
+            or operation.plan_version is None
+            or operation.plan_digest is None
+            or successor.scope != operation.scope
+            or successor.status is not PlanStatus.PENDING_APPROVAL
+            or successor.predecessor_plan_id != operation.plan_id
+            or successor.predecessor_plan_version != operation.plan_version
+            or successor.source_plan_revision != operation.plan_version
+            or successor.source_plan_digest != operation.plan_digest
+            or correction.predecessor_plan_id != operation.plan_id
+            or correction.predecessor_plan_version != operation.plan_version
+            or correction.successor_plan_id != successor.plan_id
+            or correction.successor_plan_version != successor.plan_version
+            or correction.actor_id != operation.actor_id
+            or correction.authority_classification != successor.authority_classification
+            or correction.reason_category != successor.correction_reason_category
+        ):
+            raise WorkflowControlConflict("EXACT_SUCCESSOR_PLAN_REQUIRED")
+        predecessor = connection.execute(
+            "SELECT * FROM execution_authority.plans WHERE namespace=%s AND security_domain=%s AND plan_id=%s AND plan_version=%s FOR UPDATE",
+            (
+                operation.scope.namespace,
+                operation.scope.security_domain,
+                operation.plan_id,
+                operation.plan_version,
+            ),
+        ).fetchone()
+        expected_plan_version = operation.payload.get("expected_plan_aggregate_version")
+        if (
+            predecessor is None
+            or predecessor["plan_digest"] != operation.plan_digest
+            or predecessor["aggregate_version"] != expected_plan_version
+            or predecessor["status"]
+            in {"SUPERSEDED", "REJECTED", "CANCELLED", "INVALIDATED"}
+            or successor.workflow_definition_id != predecessor["workflow_definition_id"]
+        ):
+            raise WorkflowControlConflict("SOURCE_PLAN_NOT_CORRECTABLE")
+        connection.execute(
+            "INSERT INTO execution_authority.plans(namespace,security_domain,plan_id,plan_version,predecessor_plan_id,predecessor_plan_version,workflow_definition_id,workflow_definition_revision_id,workflow_definition_digest,status,aggregate_version,plan_digest,canonical_bytes,created_at,updated_at,source_plan_revision,source_plan_digest,actor_id,authority_classification,correction_reason_category) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (
+                successor.scope.namespace,
+                successor.scope.security_domain,
+                successor.plan_id,
+                successor.plan_version,
+                successor.predecessor_plan_id,
+                successor.predecessor_plan_version,
+                successor.workflow_definition_id,
+                successor.workflow_definition_revision_id,
+                successor.workflow_definition_digest,
+                successor.status.value,
+                successor.aggregate_version,
+                successor.plan_digest,
+                successor.canonical_bytes,
+                successor.created_at,
+                successor.updated_at,
+                successor.source_plan_revision,
+                successor.source_plan_digest,
+                successor.actor_id,
+                successor.authority_classification,
+                successor.correction_reason_category,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO execution_authority.plan_corrections(namespace,security_domain,correction_id,predecessor_plan_id,predecessor_plan_version,successor_plan_id,successor_plan_version,actor_id,authority_classification,reason_category,correction_digest,normalized_correction,corrected_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)",
+            (
+                operation.scope.namespace,
+                operation.scope.security_domain,
+                correction.correction_id,
+                correction.predecessor_plan_id,
+                correction.predecessor_plan_version,
+                correction.successor_plan_id,
+                correction.successor_plan_version,
+                correction.actor_id,
+                correction.authority_classification,
+                correction.reason_category,
+                correction.digest,
+                json.dumps(correction.normalized_correction),
+                correction.corrected_at,
+            ),
+        )
+        changed = connection.execute(
+            "UPDATE execution_authority.plans SET status='SUPERSEDED',aggregate_version=aggregate_version+1,updated_at=%s WHERE namespace=%s AND security_domain=%s AND plan_id=%s AND plan_version=%s AND aggregate_version=%s RETURNING aggregate_version",
+            (
+                operation.requested_at,
+                operation.scope.namespace,
+                operation.scope.security_domain,
+                operation.plan_id,
+                operation.plan_version,
+                expected_plan_version,
+            ),
+        ).fetchone()
+        if changed is None:
+            raise WorkflowControlConflict("STALE_AGGREGATE_VERSION")
+        return successor.plan_id, successor.plan_version
+
+    @staticmethod
+    def _complete_terminal_target(
+        connection: Any,
+        operation: WorkflowControlOperation,
+        target_column: str,
+        target_id: str,
+        target: dict[str, Any],
+    ) -> int:
+        allowed = {
+            "workflow_run_id": {"SUCCEEDED", "FAILED", "CANCELLED"},
+            "task_run_id": {"SUCCEEDED", "FAILED", "SKIPPED", "CANCELLED"},
+            "attempt_id": {"SUCCEEDED", "FAILED", "CANCELLED"},
+        }
+        if (
+            operation.terminal_state not in allowed[target_column]
+            or target["control_state"]
+            in {"SUCCEEDED", "FAILED", "SKIPPED", "CANCELLED", "RECOVERY_REQUIRED"}
+            or len(operation.outcome_records) != 1
+            or not operation.evidence_records
+        ):
+            raise WorkflowControlConflict("ACTUAL_TERMINAL_RESULT_REQUIRED")
+        table, id_column = _TARGETS[target_column]
+        row = connection.execute(
+            f"UPDATE execution_authority.{table} SET control_state=%s,aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND {id_column}=%s AND aggregate_version=%s RETURNING aggregate_version",
+            (
+                operation.terminal_state,
+                operation.scope.namespace,
+                operation.scope.security_domain,
+                target_id,
+                operation.target_expected_version,
+            ),
+        ).fetchone()
+        if row is None:
+            raise WorkflowControlConflict("STALE_AGGREGATE_VERSION")
+        return row["aggregate_version"]
+
+    @staticmethod
+    def _create_operation_facts(
+        connection: Any,
+        operation: WorkflowControlOperation,
+        target_column: str,
+        target_id: str,
+    ) -> None:
+        if (
+            operation.outcome_records
+            and operation.command_type
+            is not AtomicCommandType.COMPLETE_EXECUTION_WITH_OUTCOME
+        ):
+            raise WorkflowControlConflict("OUTCOME_ONLY_FOR_TERMINAL_COMPLETION")
+        prohibited = {
+            "prompt",
+            "credentials",
+            "credential",
+            "request_body",
+            "logs",
+            "log",
+            "diagnostic_text",
+            "secret",
+            "token",
+        }
+
+        def safe(value: Any) -> bool:
+            if isinstance(value, dict):
+                return not any(
+                    term in str(key).lower() for key in value for term in prohibited
+                ) and all(safe(item) for item in value.values())
+            if isinstance(value, (list, tuple)):
+                return all(safe(item) for item in value)
+            return True
+
+        for evidence in operation.evidence_records:
+            required = {
+                "evidence_record_id",
+                "platform_execution_identity",
+                "workflow_identity",
+                "task_identity",
+                "attempt_ordinal",
+                "event_ordinal",
+                "event_type",
+                "occurred_at",
+                "recorded_at",
+                "payload_digest",
+                "canonical_bytes",
+                "record",
+            }
+            canonical_bytes = json.dumps(
+                evidence["record"], sort_keys=True, separators=(",", ":")
+            ).encode()
+            if (
+                not required <= evidence.keys()
+                or not safe(evidence["record"])
+                or evidence["canonical_bytes"] != canonical_bytes
+                or evidence["payload_digest"]
+                != hashlib.sha256(canonical_bytes).hexdigest()
+            ):
+                raise WorkflowControlConflict("INVALID_MINIMUM_DISCLOSURE_EVIDENCE")
+            connection.execute(
+                "INSERT INTO execution_authority.execution_evidence(evidence_record_id,schema_version,namespace,security_domain,platform_execution_identity,workflow_identity,task_identity,attempt_ordinal,event_ordinal,event_type,occurred_at,recorded_at,payload_digest,canonical_bytes,record) VALUES (%s,1,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)",
+                (
+                    evidence["evidence_record_id"],
+                    operation.scope.namespace,
+                    operation.scope.security_domain,
+                    evidence["platform_execution_identity"],
+                    evidence["workflow_identity"],
+                    evidence["task_identity"],
+                    evidence["attempt_ordinal"],
+                    evidence["event_ordinal"],
+                    evidence["event_type"],
+                    evidence["occurred_at"],
+                    evidence["recorded_at"],
+                    evidence["payload_digest"],
+                    evidence["canonical_bytes"],
+                    json.dumps(evidence["record"]),
+                ),
+            )
+        for outcome in operation.outcome_records:
+            if not safe(outcome.get("record", {})) or outcome.get(
+                "digest"
+            ) != canonical_digest(outcome.get("record", {})):
+                raise WorkflowControlConflict("INVALID_MINIMUM_DISCLOSURE_OUTCOME")
+            kind = {
+                "workflow_run_id": "RUN",
+                "task_run_id": "TASK_RUN",
+                "attempt_id": "ATTEMPT",
+            }[target_column]
+            if (
+                outcome.get("terminal_target_id") != target_id
+                or outcome.get("terminal_state") != operation.terminal_state
+            ):
+                raise WorkflowControlConflict("ACTUAL_TERMINAL_RESULT_REQUIRED")
+            if target_column == "workflow_run_id":
+                run_id, task_id, attempt_id = target_id, None, None
+            elif target_column == "task_run_id":
+                row = connection.execute(
+                    "SELECT workflow_run_id FROM execution_authority.task_runs WHERE namespace=%s AND security_domain=%s AND task_run_id=%s",
+                    (
+                        operation.scope.namespace,
+                        operation.scope.security_domain,
+                        target_id,
+                    ),
+                ).fetchone()
+                run_id, task_id, attempt_id = row["workflow_run_id"], target_id, None
+            else:
+                row = connection.execute(
+                    "SELECT tr.workflow_run_id,a.task_run_id FROM execution_authority.attempts a JOIN execution_authority.task_runs tr USING(namespace,security_domain,task_run_id) WHERE a.namespace=%s AND a.security_domain=%s AND a.attempt_id=%s",
+                    (
+                        operation.scope.namespace,
+                        operation.scope.security_domain,
+                        target_id,
+                    ),
+                ).fetchone()
+                run_id, task_id, attempt_id = (
+                    row["workflow_run_id"],
+                    row["task_run_id"],
+                    target_id,
+                )
+            connection.execute(
+                "INSERT INTO execution_authority.outcomes(namespace,security_domain,outcome_id,workflow_run_id,digest,record,task_run_id,attempt_id,terminal_target_kind,terminal_target_id,terminal_state) VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s)",
+                (
+                    operation.scope.namespace,
+                    operation.scope.security_domain,
+                    outcome["outcome_id"],
+                    run_id,
+                    outcome["digest"],
+                    json.dumps(outcome["record"]),
+                    task_id,
+                    attempt_id,
+                    kind,
+                    target_id,
+                    operation.terminal_state,
+                ),
+            )
 
     @staticmethod
     def _persist_plan_operation(
@@ -1262,26 +1644,34 @@ class PostgresWorkflowControlRepository:
     def _link_operation_facts(
         connection: Any, operation: WorkflowControlOperation, transition_ordinal: int
     ) -> None:
-        for ordinal, evidence_id in enumerate(operation.evidence_ids, 1):
+        evidence_ids = operation.evidence_ids + tuple(
+            item["evidence_record_id"] for item in operation.evidence_records
+        )
+        outcome_ids = operation.outcome_ids + tuple(
+            item["outcome_id"] for item in operation.outcome_records
+        )
+        for ordinal, evidence_id in enumerate(evidence_ids, 1):
             connection.execute(
-                "INSERT INTO execution_authority.intervention_evidence_links(namespace,security_domain,intervention_id,transition_ordinal,ordinal,evidence_record_id) VALUES (%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO execution_authority.intervention_evidence_links(namespace,security_domain,intervention_id,transition_ordinal,control_command_id,ordinal,evidence_record_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 (
                     operation.scope.namespace,
                     operation.scope.security_domain,
                     operation.intervention_id,
                     transition_ordinal,
+                    operation.control_command_id,
                     ordinal,
                     evidence_id,
                 ),
             )
-        for ordinal, outcome_id in enumerate(operation.outcome_ids, 1):
+        for ordinal, outcome_id in enumerate(outcome_ids, 1):
             connection.execute(
-                "INSERT INTO execution_authority.intervention_outcome_links(namespace,security_domain,intervention_id,transition_ordinal,ordinal,outcome_id) VALUES (%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO execution_authority.intervention_outcome_links(namespace,security_domain,intervention_id,transition_ordinal,control_command_id,ordinal,outcome_id) VALUES (%s,%s,%s,%s,%s,%s,%s)",
                 (
                     operation.scope.namespace,
                     operation.scope.security_domain,
                     operation.intervention_id,
                     transition_ordinal,
+                    operation.control_command_id,
                     ordinal,
                     outcome_id,
                 ),
@@ -1403,6 +1793,11 @@ class PostgresWorkflowControlRepository:
             row["updated_at"],
             row["predecessor_plan_id"],
             row["predecessor_plan_version"],
+            row.get("source_plan_revision"),
+            row.get("source_plan_digest"),
+            row.get("actor_id"),
+            row.get("authority_classification"),
+            row.get("correction_reason_category"),
         )
 
     @staticmethod
