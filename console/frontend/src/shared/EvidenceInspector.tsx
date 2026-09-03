@@ -8,7 +8,7 @@ import { withUrlContext } from "./urlContext";
 
 function Failure({error,retry}:{error:ProductAssemblyError;retry:()=>void}) {
   const hidden=error.status===403||error.status===404;
-  return <ControlledState kind={hidden?(error.status===403?"denied":"not-found"):"unavailable"} title={hidden?"资源上下文不可用":"证据服务暂不可用"} detail={hidden?"该精确对象不存在，或不在当前授权范围内。":"请确认 Preview 后端正在运行后重试；技术原因可在开发诊断中查看。"} action={!hidden?<button onClick={retry}>重试</button>:undefined}/>;
+  return <ControlledState kind={hidden?(error.status===403?"denied":"not-found"):"unavailable"} title={hidden?"资源上下文不可用 / Resource context unavailable":"证据服务暂不可用 / Evidence service unavailable"} detail={hidden?"该精确对象不存在，或不在当前授权范围内。":"请确认 Preview 后端正在运行后重试；技术原因可在开发诊断中查看。"} action={!hidden?<button onClick={retry}>重试</button>:undefined}/>;
 }
 
 export function TraceabilityProjection({context,perspective,data,error,retry}:{context:CanonicalUrlContext;perspective:"product"|"technical";data:TraceabilityDTO|null;error:ProductAssemblyError|null;retry:()=>void}) {
