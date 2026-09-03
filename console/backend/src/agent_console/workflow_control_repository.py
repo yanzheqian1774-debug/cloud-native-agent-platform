@@ -6,11 +6,15 @@ from .workflow_control_domain import (
     ApprovalDecision,
     AtomicControlCommand,
     AtomicControlResult,
+    InterventionDecision,
     InterventionRequest,
+    InterventionReview,
     InterventionTransition,
     PlanRecord,
     PlanStatus,
     ScopeIdentity,
+    WorkflowControlOperation,
+    WorkflowControlOperationResult,
 )
 
 
@@ -53,6 +57,12 @@ class InterventionRepository(Protocol):
     def read_transitions(
         self, scope: ScopeIdentity, intervention_id: str
     ) -> tuple[InterventionTransition, ...]: ...
+    def append_review(
+        self, scope: ScopeIdentity, review: InterventionReview
+    ) -> InterventionReview: ...
+    def append_decision(
+        self, scope: ScopeIdentity, decision: InterventionDecision
+    ) -> InterventionDecision: ...
 
 
 class ExecutionControlRepository(Protocol):
@@ -68,6 +78,10 @@ class ExecutionControlRepository(Protocol):
 
     def read_successor_runs(
         self, scope: ScopeIdentity, workflow_run_id: str
+    ) -> tuple[str, ...]: ...
+
+    def read_successor_attempts(
+        self, scope: ScopeIdentity, attempt_id: str
     ) -> tuple[str, ...]: ...
 
 
@@ -101,3 +115,7 @@ class WorkflowControlUnitOfWork(Protocol):
     def persist(
         self, command: AtomicControlCommand, *, authorized: bool
     ) -> AtomicControlResult: ...
+
+    def persist_operation(
+        self, operation: WorkflowControlOperation, *, authorized: bool
+    ) -> WorkflowControlOperationResult: ...
