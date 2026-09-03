@@ -46,6 +46,16 @@ class InterventionState(StrEnum):
     FAILED = "FAILED"
 
 
+class AtomicCommandType(StrEnum):
+    APPROVE_AND_CONTINUE = "APPROVE_AND_CONTINUE"
+    REJECT_PLAN = "REJECT_PLAN"
+    APPLY_INTERVENTION_DECISION = "APPLY_INTERVENTION_DECISION"
+    RETRY_ATTEMPT = "RETRY_ATTEMPT"
+    CREATE_SUCCESSOR_RUN = "CREATE_SUCCESSOR_RUN"
+    REPLACE_RUNTIME = "REPLACE_RUNTIME"
+    CANCEL_CONTROLLED_EXECUTION = "CANCEL_CONTROLLED_EXECUTION"
+
+
 TERMINAL_INTERVENTION_STATES = frozenset(
     {
         InterventionState.OBSERVED,
@@ -151,6 +161,106 @@ class InterventionTransition:
 
 
 @dataclass(frozen=True)
+class InterventionReview:
+    review_id: str
+    intervention_id: str
+    actor_id: str
+    authority_basis: str
+    reviewed_at: datetime
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+
+@dataclass(frozen=True)
+class InterventionDecision:
+    decision_id: str
+    intervention_id: str
+    review_id: str
+    decision: str
+    actor_id: str
+    authority_basis: str
+    reason_category: str
+    decided_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.decision not in {"AUTHORIZE", "REJECT"}:
+            raise ValueError("INVALID_INTERVENTION_DECISION")
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+
+@dataclass(frozen=True)
+class WorkflowControlOperation:
+    """One already-authorized atomic persistence operation.
+
+    The application layer owns authorization and identity allocation. This record
+    contains only exact identities and facts needed for guarded persistence.
+    """
+
+    scope: ScopeIdentity
+    command_type: AtomicCommandType
+    actor_id: str
+    idempotency_key: str
+    payload: dict[str, Any]
+    control_command_id: str
+    requested_at: datetime
+    retain_until: datetime
+    target: InterventionTarget
+    target_expected_version: int
+    intervention_id: str | None = None
+    transition_id: str | None = None
+    review: InterventionReview | None = None
+    decision: InterventionDecision | None = None
+    plan_id: str | None = None
+    plan_version: int | None = None
+    plan_digest: str | None = None
+    approval: ApprovalDecision | None = None
+    successor_id: str | None = None
+    placement_id: str | None = None
+    runtime_command_id: str | None = None
+    affected_attempt_id: str | None = None
+    evidence_ids: tuple[str, ...] = ()
+    outcome_ids: tuple[str, ...] = ()
+
+    @property
+    def payload_digest(self) -> str:
+        return canonical_digest(self.payload)
+
+
+@dataclass(frozen=True)
+class WorkflowControlOperationResult:
+    replayed: bool
+    command_type: AtomicCommandType
+    control_command_id: str
+    target_id: str
+    target_version: int
+    intervention_id: str | None = None
+    transition_id: str | None = None
+    approval_decision_id: str | None = None
+    successor_attempt_id: str | None = None
+    successor_workflow_run_id: str | None = None
+    runtime_command_id: str | None = None
+
+    def record(self) -> dict[str, Any]:
+        return {
+            "command_type": self.command_type.value,
+            "control_command_id": self.control_command_id,
+            "target_id": self.target_id,
+            "target_version": self.target_version,
+            "intervention_id": self.intervention_id,
+            "transition_id": self.transition_id,
+            "approval_decision_id": self.approval_decision_id,
+            "successor_attempt_id": self.successor_attempt_id,
+            "successor_workflow_run_id": self.successor_workflow_run_id,
+            "runtime_command_id": self.runtime_command_id,
+        }
+
+
+@dataclass(frozen=True)
 class AtomicControlCommand:
     scope: ScopeIdentity
     command_type: str
@@ -183,6 +293,8 @@ def canonical_digest(value: Any) -> str:
     def default(item: Any) -> str:
         if isinstance(item, (datetime, StrEnum)):
             return item.isoformat() if isinstance(item, datetime) else item.value
+        if hasattr(item, "__dataclass_fields__"):
+            return item.__dict__
         raise TypeError(type(item).__name__)
 
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"), default=default)
