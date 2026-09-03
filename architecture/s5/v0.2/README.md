@@ -6,6 +6,10 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Architecture records
 
+- [v0.2.3 Product Capability, Interaction and Acceptance Architecture v1](S5-V023-ARCH-201-PRODUCT-CAPABILITY-INTERACTION-ACCEPTANCE-V1.md)
+  is the proposed complete capability, Chinese-first journey, sibling-view,
+  visual/accessibility, ownership, acceptance and 210–299 routing baseline. It is
+  ready for Human Checkpoint A and grants no implementation, deployment or release.
 - [v0.2.3 Execution and Runtime Authority v1](S5-ARCH-019-V023-EXECUTION-RUNTIME-AUTHORITY-V1.md)
   proposes canonical execution identities, PostgreSQL/Kubernetes authority,
   desired/observed reconciliation, a single-writer PostgreSQL Evidence cutover,

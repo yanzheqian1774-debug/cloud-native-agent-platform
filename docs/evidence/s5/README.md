@@ -6,6 +6,10 @@ API, schema, or frontend implementation.
 
 ## Evidence sets
 
+- [S5-V023-ARCH-201 Checkpoint A evidence](v0.2/s5-v023-arch-201/README.md)
+  records the collision-free Human allocation and proposed complete v0.2.3 Product
+  Capability, Interaction and Acceptance Architecture. It grants no implementation,
+  deployment, Preview activation or release authority.
 - [S5-ARCH-019 architecture evidence](v0.2/s5-arch-019/README.md) records the
   exact-baseline/CI and collision revalidation, binding v0.2.3 execution/runtime
   authority, PostgreSQL Evidence cutover, Native/OpenClaw boundary and future track
