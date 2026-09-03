@@ -72,6 +72,10 @@ class KnowledgeLifecycleService:
             "name": normalize_text(name, "INVALID_NAME"),
             "source": {
                 "sourceId": source_id,
+                "collectionId": identifier(
+                    source.get("collectionId", f"collection:{source_id}"),
+                    "INVALID_COLLECTION_ID",
+                ),
                 "kind": identifier(source.get("kind", "TEXT"), "INVALID_SOURCE_KIND"),
                 "provenance": identifier(
                     source.get("provenance"), "INVALID_PROVENANCE"
@@ -80,6 +84,10 @@ class KnowledgeLifecycleService:
             "documents": [
                 {
                     "documentId": document_id,
+                    "documentVersion": identifier(
+                        source.get("documentVersion", "1"),
+                        "INVALID_DOCUMENT_VERSION",
+                    ),
                     "contentDigest": content_digest,
                     "chunks": chunks,
                 }
@@ -308,6 +316,9 @@ class KnowledgeLifecycleService:
         knowledge_id: str,
         actor: str,
         expected_version: int,
+        *,
+        job_id: str | None = None,
+        snapshot_id: str | None = None,
     ) -> dict[str, Any]:
         def mutate(record: dict[str, Any], fact: dict[str, Any]) -> None:
             revision = next(
@@ -320,9 +331,18 @@ class KnowledgeLifecycleService:
             )
             if revision is None:
                 raise KnowledgeLifecycleFailure("PUBLISHED_REVISION_REQUIRED")
-            job_id, snapshot_id = identity("ingestion-job"), identity("index-snapshot")
+            resolved_job_id = (
+                identifier(job_id, "INVALID_INGESTION_JOB_ID")
+                if job_id is not None
+                else identity("ingestion-job")
+            )
+            resolved_snapshot_id = (
+                identifier(snapshot_id, "INVALID_INDEX_SNAPSHOT_ID")
+                if snapshot_id is not None
+                else identity("index-snapshot")
+            )
             job = {
-                "jobId": job_id,
+                "jobId": resolved_job_id,
                 "revisionId": revision["revisionId"],
                 "status": "RUNNING",
                 "highWaterMark": len(record["facts"]),
@@ -335,16 +355,37 @@ class KnowledgeLifecycleService:
                 for chunk in document["chunks"]:
                     points.append(
                         {
-                            "id": str(uuid5(NAMESPACE_URL, chunk["contentDigest"])),
+                            "id": str(
+                                uuid5(
+                                    NAMESPACE_URL,
+                                    canonical_digest(
+                                        [
+                                            scope.namespace,
+                                            scope.security_domain,
+                                            knowledge_id,
+                                            revision["revisionId"],
+                                            resolved_snapshot_id,
+                                            document["documentId"],
+                                            chunk["chunkId"],
+                                            chunk["contentDigest"],
+                                        ],
+                                        domain="knowledge-index-point.v1",
+                                    ),
+                                )
+                            ),
                             "vector": deterministic_vector(chunk["content"]),
                             "payload": {
                                 "namespace": scope.namespace,
                                 "securityDomain": scope.security_domain,
                                 "knowledgeId": knowledge_id,
+                                "collectionId": revision["content"]["source"][
+                                    "collectionId"
+                                ],
                                 "revisionId": revision["revisionId"],
                                 "revisionDigest": revision["digest"],
-                                "snapshotId": snapshot_id,
+                                "snapshotId": resolved_snapshot_id,
                                 "documentId": document["documentId"],
+                                "documentVersion": document["documentVersion"],
                                 "documentDigest": document["contentDigest"],
                                 "chunkId": chunk["chunkId"],
                                 "chunkDigest": chunk["contentDigest"],
@@ -359,24 +400,31 @@ class KnowledgeLifecycleService:
                 job.update(status="COMPLETED", completedAt=now())
                 record["indexSnapshots"].append(
                     {
-                        "snapshotId": snapshot_id,
+                        "snapshotId": resolved_snapshot_id,
                         "revisionId": revision["revisionId"],
                         "revisionDigest": revision["digest"],
                         "indexDigest": canonical_digest(
                             [point["payload"] for point in points],
                             domain="knowledge-index.v1",
                         ),
-                        "qdrantReference": f"{self.qdrant.collection}:{snapshot_id}",
+                        "qdrantReference": (
+                            f"{self.qdrant.collection}:{resolved_snapshot_id}"
+                        ),
                         "status": "ACTIVE",
+                        "freshness": "FRESH",
                         "createdAt": now(),
                     }
                 )
-                record["activeIndexSnapshotId"] = snapshot_id
+                record["activeIndexSnapshotId"] = resolved_snapshot_id
                 record["lifecycleState"] = "AVAILABLE"
             except QdrantKnowledgeError:
                 job["status"] = "RECOVERY_REQUIRED"
                 record["lifecycleState"] = "RECOVERY_REQUIRED"
-            fact.update(jobId=job_id, snapshotId=snapshot_id, status=job["status"])
+            fact.update(
+                jobId=resolved_job_id,
+                snapshotId=resolved_snapshot_id,
+                status=job["status"],
+            )
 
         return self._change(
             scope,
