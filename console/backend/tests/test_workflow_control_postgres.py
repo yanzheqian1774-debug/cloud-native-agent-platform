@@ -1,4 +1,5 @@
 # ruff: noqa: E501
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,9 @@ from agent_console.workflow_control_domain import (
     InterventionState,
     InterventionTarget,
     InterventionTransition,
+    PlanCorrection,
+    PlanRecord,
+    PlanStatus,
     WorkflowControlConflict,
     WorkflowControlNotAuthorized,
     WorkflowControlOperation,
@@ -33,6 +37,7 @@ MIGRATIONS = Path(__file__).parents[1] / "migrations"
 MIGRATION_8 = MIGRATIONS / "0008_execution_runtime_authority.sql"
 MIGRATION_9 = MIGRATIONS / "0009_workflow_control_persistence.sql"
 MIGRATION_10 = MIGRATIONS / "0010_workflow_control_uow_extension.sql"
+MIGRATION_11 = MIGRATIONS / "0011_workflow_control_plan_evidence_outcome.sql"
 
 
 def repository() -> PostgresWorkflowControlRepository:
@@ -72,6 +77,35 @@ def extended_repository() -> PostgresWorkflowControlRepository:
     )
     value.migrate()
     return value
+
+
+def completed_repository() -> PostgresWorkflowControlRepository:
+    old = extended_repository()
+    old.pool.close()
+    value = PostgresWorkflowControlRepository(
+        DATABASE_URL or "", migration_path=MIGRATION_11
+    )
+    value.migrate()
+    return value
+
+
+def operation_evidence(suffix: str, now: datetime) -> dict[str, object]:
+    record = {"category": "CONTROL_OPERATION", "operation_id": suffix}
+    canonical = json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+    return {
+        "evidence_record_id": f"evidence-{suffix}",
+        "platform_execution_identity": f"execution-{suffix}",
+        "workflow_identity": f"workflow-{suffix}",
+        "task_identity": f"task-{suffix}",
+        "attempt_ordinal": 1,
+        "event_ordinal": 1,
+        "event_type": "CONTROL_OPERATION",
+        "occurred_at": now,
+        "recorded_at": now,
+        "payload_digest": canonical_digest(record),
+        "canonical_bytes": canonical,
+        "record": record,
+    }
 
 
 def seed_run(
@@ -732,4 +766,294 @@ def test_0010_runtime_replacement_requires_scoped_placement_and_command_linkage(
     )
     with pytest.raises(WorkflowControlConflict, match="INELIGIBLE_PLACEMENT"):
         value.persist_operation(foreign, authorized=True)
+    value.pool.close()
+
+
+def test_0011_successor_plan_correction_is_immutable_atomic_and_replayable() -> None:
+    value = completed_repository()
+    suffix = uuid.uuid4().hex
+    scope, run_id = seed_run(value, suffix)
+    now = datetime.now(UTC)
+    request = InterventionRequest(
+        f"correction-intervention-{suffix}",
+        "CORRECT_BUSINESS_INTENT",
+        "BUSINESS_CORRECTION",
+        "actor",
+        "role:business-owner",
+        1,
+        InterventionTarget(workflow_run_id=run_id),
+        {"category": "business-correction"},
+        now,
+    )
+    value.request_intervention(scope, request)
+    authorize_request(value, scope, request, suffix)
+    successor = PlanRecord(
+        scope,
+        f"successor-plan-{suffix}",
+        2,
+        f"workflow-{suffix}",
+        "revision",
+        "b" * 64,
+        PlanStatus.PENDING_APPROVAL,
+        1,
+        "d" * 64,
+        b'{"normalized":"correction"}',
+        now,
+        now,
+        f"plan-{suffix}",
+        1,
+        1,
+        "c" * 64,
+        "actor",
+        "BUSINESS_OWNER",
+        "BUSINESS_CORRECTION",
+    )
+    correction = PlanCorrection(
+        f"correction-{suffix}",
+        f"plan-{suffix}",
+        1,
+        successor.plan_id,
+        successor.plan_version,
+        "actor",
+        "BUSINESS_OWNER",
+        "BUSINESS_CORRECTION",
+        {"field": "business_goal", "value_digest": "e" * 64},
+        now,
+    )
+    operation = WorkflowControlOperation(
+        scope,
+        AtomicCommandType.CORRECT_PLAN,
+        "actor",
+        f"correction-key-{suffix}",
+        {"expected_plan_aggregate_version": 1, "correction_digest": correction.digest},
+        f"correction-command-{suffix}",
+        now,
+        now + timedelta(days=30),
+        request.target,
+        1,
+        intervention_id=request.intervention_id,
+        plan_id=f"plan-{suffix}",
+        plan_version=1,
+        plan_digest="c" * 64,
+        successor_plan=successor,
+        correction=correction,
+        evidence_records=(operation_evidence(suffix, now),),
+    )
+    result = value.persist_operation(operation, authorized=True)
+    assert (result.successor_plan_id, result.successor_plan_version) == (
+        successor.plan_id,
+        2,
+    )
+    assert value.persist_operation(operation, authorized=True).replayed is True
+    predecessor = value.get_plan(scope, f"plan-{suffix}", 1)
+    readback = value.get_plan(scope, successor.plan_id, 2)
+    assert predecessor is not None and predecessor.status is PlanStatus.SUPERSEDED
+    assert predecessor.canonical_bytes == b"{}" and predecessor.plan_digest == "c" * 64
+    assert readback == successor
+    assert value.read_successor_plans(scope, f"plan-{suffix}", 1) == (successor,)
+    value.pool.close()
+
+
+def test_0011_terminal_outcome_is_exact_atomic_and_premature_outcome_is_rejected() -> (
+    None
+):
+    value = completed_repository()
+    suffix = uuid.uuid4().hex
+    scope, run_id = seed_run(value, suffix)
+    now = datetime.now(UTC)
+    request = InterventionRequest(
+        f"completion-intervention-{suffix}",
+        "STOP",
+        "BUSINESS_REQUEST",
+        "actor",
+        "role:operator",
+        1,
+        InterventionTarget(workflow_run_id=run_id),
+        {"category": "terminal-completion"},
+        now,
+    )
+    value.request_intervention(scope, request)
+    authorize_request(value, scope, request, suffix)
+    outcome = {
+        "outcome_id": f"outcome-{suffix}",
+        "digest": canonical_digest(
+            {"category": "EXECUTION_RESULT", "result_digest": "a" * 64}
+        ),
+        "terminal_target_id": run_id,
+        "terminal_state": "SUCCEEDED",
+        "record": {"category": "EXECUTION_RESULT", "result_digest": "a" * 64},
+    }
+    operation = WorkflowControlOperation(
+        scope,
+        AtomicCommandType.COMPLETE_EXECUTION_WITH_OUTCOME,
+        "actor",
+        f"complete-key-{suffix}",
+        {"result_digest": "a" * 64},
+        f"complete-command-{suffix}",
+        now,
+        now + timedelta(days=30),
+        request.target,
+        1,
+        intervention_id=request.intervention_id,
+        evidence_records=(operation_evidence(suffix, now),),
+        outcome_records=(outcome,),
+        terminal_state="SUCCEEDED",
+    )
+    result = value.persist_operation(operation, authorized=True)
+    assert result.target_version == 2 and result.outcome_ids == (outcome["outcome_id"],)
+    assert value.persist_operation(operation, authorized=True).replayed is True
+    with value.pool.connection() as connection:
+        exact = connection.execute(
+            "SELECT terminal_target_kind,terminal_target_id,terminal_state FROM execution_authority.outcomes WHERE namespace=%s AND security_domain=%s AND outcome_id=%s",
+            (scope.namespace, scope.security_domain, outcome["outcome_id"]),
+        ).fetchone()
+    assert exact == {
+        "terminal_target_kind": "RUN",
+        "terminal_target_id": run_id,
+        "terminal_state": "SUCCEEDED",
+    }
+
+    second_suffix = uuid.uuid4().hex
+    second_scope, second_run = seed_run(value, second_suffix)
+    second_request = InterventionRequest(
+        f"cancel-intervention-{second_suffix}",
+        "CANCEL",
+        "BUSINESS_REQUEST",
+        "actor",
+        "role:operator",
+        1,
+        InterventionTarget(workflow_run_id=second_run),
+        {"category": "cancel"},
+        now,
+    )
+    value.request_intervention(second_scope, second_request)
+    authorize_request(value, second_scope, second_request, second_suffix)
+    premature = WorkflowControlOperation(
+        second_scope,
+        AtomicCommandType.CANCEL_CONTROLLED_EXECUTION,
+        "actor",
+        f"cancel-key-{second_suffix}",
+        {"category": "cancel"},
+        f"cancel-command-{second_suffix}",
+        now,
+        now + timedelta(days=30),
+        second_request.target,
+        1,
+        intervention_id=second_request.intervention_id,
+        evidence_records=(operation_evidence(second_suffix, now),),
+        outcome_records=(
+            {
+                **outcome,
+                "outcome_id": f"premature-{second_suffix}",
+                "terminal_target_id": second_run,
+            },
+        ),
+    )
+    with pytest.raises(
+        WorkflowControlConflict, match="OUTCOME_ONLY_FOR_TERMINAL_COMPLETION"
+    ):
+        value.persist_operation(premature, authorized=True)
+    with value.pool.connection() as connection:
+        unchanged = connection.execute(
+            "SELECT control_state,aggregate_version FROM execution_authority.workflow_runs WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s",
+            (second_scope.namespace, second_scope.security_domain, second_run),
+        ).fetchone()
+    assert unchanged == {"control_state": "RUNNING", "aggregate_version": 1}
+    value.pool.close()
+
+
+def test_0011_request_review_decision_application_are_distinct_atomic_commands() -> (
+    None
+):
+    value = completed_repository()
+    suffix = uuid.uuid4().hex
+    scope, run_id = seed_run(value, suffix)
+    now = datetime.now(UTC)
+    target = InterventionTarget(workflow_run_id=run_id)
+    request = InterventionRequest(
+        f"intervention-{suffix}",
+        "PAUSE",
+        "BUSINESS_REQUEST",
+        "requester",
+        "role:requester",
+        1,
+        target,
+        {"category": "pause"},
+        now,
+    )
+    request_operation = WorkflowControlOperation(
+        scope,
+        AtomicCommandType.REQUEST_INTERVENTION,
+        "requester",
+        f"request-key-{suffix}",
+        {"category": "pause"},
+        f"request-command-{suffix}",
+        now,
+        now + timedelta(days=30),
+        target,
+        1,
+        intervention_id=request.intervention_id,
+        request=request,
+        evidence_records=(operation_evidence(f"request-{suffix}", now),),
+    )
+    assert value.persist_operation(request_operation, authorized=True).replayed is False
+    assert value.persist_operation(request_operation, authorized=True).replayed is True
+
+    review = InterventionReview(
+        f"review-{suffix}", request.intervention_id, "reviewer", "role:reviewer", now
+    )
+    review_operation = WorkflowControlOperation(
+        scope,
+        AtomicCommandType.REVIEW_INTERVENTION,
+        "reviewer",
+        f"review-key-{suffix}",
+        {"review_id": review.review_id},
+        f"review-command-{suffix}",
+        now,
+        now + timedelta(days=30),
+        target,
+        1,
+        intervention_id=request.intervention_id,
+        review=review,
+        evidence_records=(operation_evidence(f"review-{suffix}", now),),
+    )
+    assert value.persist_operation(review_operation, authorized=True).replayed is False
+
+    decision = InterventionDecision(
+        f"decision-{suffix}",
+        request.intervention_id,
+        review.review_id,
+        "AUTHORIZE",
+        "decider",
+        "role:decider",
+        "POLICY",
+        now,
+    )
+    apply_operation = WorkflowControlOperation(
+        scope,
+        AtomicCommandType.APPLY_INTERVENTION_DECISION,
+        "decider",
+        f"apply-key-{suffix}",
+        {"target_state": "PAUSE_REQUESTED"},
+        f"apply-command-{suffix}",
+        now,
+        now + timedelta(days=30),
+        target,
+        1,
+        intervention_id=request.intervention_id,
+        decision=decision,
+        evidence_records=(operation_evidence(f"apply-{suffix}", now),),
+    )
+    applied = value.persist_operation(apply_operation, authorized=True)
+    assert applied.target_version == 2
+    with value.pool.connection() as connection:
+        commands = connection.execute(
+            "SELECT command_type FROM execution_authority.control_commands WHERE namespace=%s AND security_domain=%s AND intervention_id=%s ORDER BY requested_at,control_command_id",
+            (scope.namespace, scope.security_domain, request.intervention_id),
+        ).fetchall()
+    assert {row["command_type"] for row in commands} == {
+        "REQUEST_INTERVENTION",
+        "REVIEW_INTERVENTION",
+        "APPLY_INTERVENTION_DECISION",
+    }
     value.pool.close()
