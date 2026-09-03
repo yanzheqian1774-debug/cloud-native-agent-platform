@@ -29,6 +29,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+import continuity_monitor  # noqa: E402
 import release_contract_v2 as contract_v2  # noqa: E402
 from browser_build_preflight import (  # noqa: E402
     record_build_identity,
@@ -57,6 +58,7 @@ STAGES = (
     "locked-frontend-build",
     "live-demo-build-identity",
     "docker-preflight",
+    "continuity-monitor-start",
     "postgres-start",
     "postgres-provision",
     "migrations-readiness",
@@ -312,6 +314,7 @@ def adapt_schema_2_for_runner(
             "executableDigest": browser_executable_digest,
         },
         "continuitySentinels": [],
+        "continuityMonitor": profile["continuityMonitor"],
     }
 
 
@@ -536,6 +539,9 @@ class Runner:
     candidate_executables: set[str] = field(default_factory=set)
     mode_normalization_evidence: dict[str, int | str] | None = None
     sentinel_before: dict[str, tuple[str, int]] = field(default_factory=dict)
+    continuity_process: subprocess.Popen[bytes] | None = None
+    continuity_runtime: Path | None = None
+    continuity_evidence: Path | None = None
     chromium_path: Path | None = None
 
     @property
@@ -1535,6 +1541,125 @@ class Runner:
         if self.sentinel_snapshot() != self.sentinel_before:
             fail("CANDIDATE", "continuity sentinel correlation drifted")
 
+    def start_server_local_continuity_monitor(self) -> None:
+        self.ensure_runtime()
+        assert self.runtime_dir is not None
+        monitor_runtime = self.runtime_dir / "continuity-monitor"
+        monitor_runtime.mkdir(mode=0o700)
+        contract_path = self.runtime_dir / "continuity-contract.json"
+        contract_path.write_text(
+            json.dumps(
+                self.contract["continuityMonitor"],
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        contract_path.chmod(0o400)
+        read_fd, write_fd = os.pipe()
+        try:
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SCRIPT_DIR / "continuity_monitor.py"),
+                    "--workspace",
+                    str(self.workspace),
+                    "--runtime",
+                    str(monitor_runtime),
+                    "--contract",
+                    str(contract_path),
+                    "--token-fd",
+                    str(read_fd),
+                ],
+                cwd=self.workspace,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                pass_fds=(read_fd,),
+                start_new_session=True,
+            )
+            os.close(read_fd)
+            read_fd = -1
+            os.write(write_fd, (self.token + "\n").encode())
+        except OSError as exc:
+            raise RunnerError(
+                "OWNERSHIP", "continuity monitor could not start"
+            ) from exc
+        finally:
+            if read_fd >= 0:
+                os.close(read_fd)
+            os.close(write_fd)
+        evidence = monitor_runtime / "evidence.jsonl"
+        expected = continuity_monitor.ownership_digest(self.workspace, self.token)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                fail("CANDIDATE", "continuity monitor exited before readiness")
+            if evidence.is_file():
+                try:
+                    first = json.loads(
+                        evidence.read_text(encoding="utf-8").splitlines()[0]
+                    )
+                except (OSError, IndexError, json.JSONDecodeError):
+                    pass
+                else:
+                    if (
+                        first.get("phase") == "START"
+                        and first.get("workspaceOwnershipDigest") == expected
+                    ):
+                        self.continuity_process = process
+                        self.continuity_runtime = monitor_runtime
+                        self.continuity_evidence = evidence
+                        return
+            time.sleep(0.05)
+        process.terminate()
+        process.wait(timeout=5)
+        fail("CANDIDATE", "continuity monitor readiness deadline expired")
+
+    def stop_and_validate_server_local_continuity_monitor(self) -> None:
+        if (
+            self.continuity_process is None
+            or self.continuity_runtime is None
+            or self.continuity_evidence is None
+        ):
+            fail("OWNERSHIP", "owned continuity monitor is unavailable")
+        expected = continuity_monitor.ownership_digest(self.workspace, self.token)
+        try:
+            first = json.loads(
+                self.continuity_evidence.read_text(encoding="utf-8").splitlines()[0]
+            )
+        except (OSError, IndexError, json.JSONDecodeError) as exc:
+            raise RunnerError(
+                "OWNERSHIP", "continuity ownership evidence is unavailable"
+            ) from exc
+        if first.get("workspaceOwnershipDigest") != expected:
+            fail("OWNERSHIP", "foreign continuity monitor cannot be stopped")
+        stop = self.continuity_runtime / "stop"
+        fd = os.open(stop, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
+        os.close(fd)
+        try:
+            self.continuity_process.wait(
+                timeout=self.contract["continuityMonitor"]["intervalSeconds"] + 10
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RunnerError(
+                "RESOURCE", "continuity monitor stop deadline expired"
+            ) from exc
+        if self.continuity_process.returncode != 0:
+            fail("CANDIDATE", "continuity monitor exited unexpectedly")
+        data = self.continuity_evidence.read_bytes()
+        continuity_monitor.validate_evidence(data, expected_ownership_digest=expected)
+        preserved = self.output.with_name(self.output.name + ".continuity.jsonl")
+        fd = os.open(
+            preserved, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400
+        )
+        try:
+            os.write(fd, data)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        self.continuity_process = None
+
     def browser_harness(self) -> None:
         assert self.candidate_dir is not None
         assert self.runtime_dir is not None
@@ -1760,8 +1885,23 @@ class Runner:
         )
 
     def cleanup(self) -> None:
+        continuity_error: RunnerError | None = None
         if self.runtime_dir is not None:
             self.verify_runtime_owned()
+        if self.continuity_process is not None:
+            if self.continuity_process.poll() is None:
+                try:
+                    self.stop_and_validate_server_local_continuity_monitor()
+                except RunnerError as exc:
+                    if self.continuity_process.poll() is None:
+                        raise
+                    self.continuity_process = None
+                    continuity_error = exc
+            else:
+                self.continuity_process = None
+                continuity_error = RunnerError(
+                    "OWNERSHIP", "continuity monitor cleanup found an unexpected exit"
+                )
         for credential in tuple(self.credential_files):
             credential.unlink(missing_ok=True)
             self.credential_files.discard(credential)
@@ -1773,6 +1913,10 @@ class Runner:
             self.unmount_candidate()
             self.write_candidate_manifests()
             shutil.rmtree(self.runtime_dir)
+            if self.runtime_dir.exists():
+                fail("OWNERSHIP", "owned runtime cleanup could not be verified")
+        if continuity_error is not None:
+            raise continuity_error
 
     def write_evidence(self) -> None:
         self.output.parent.mkdir(parents=True, exist_ok=True)
@@ -1796,6 +1940,11 @@ class Runner:
                     ):
                         self.skip(name)
             else:
+                if self.exact_dual_provenance and self.mode != "micro-postgres":
+                    self.stage(
+                        "continuity-monitor-start",
+                        self.start_server_local_continuity_monitor,
+                    )
                 self.stage("docker-preflight", self.docker_preflight)
                 self.stage("postgres-start", self.postgres_start)
                 self.stage("postgres-provision", self.postgres_provision)
@@ -1814,7 +1963,8 @@ class Runner:
                             self.skip(name)
                 else:
                     self.stage("qdrant-health", self.qdrant_start)
-                    self.continuity_before()
+                    if not self.exact_dual_provenance:
+                        self.continuity_before()
                     self.stage("candidate-presentation", self.present_candidate)
                     self.stage("live-demo-build-identity", self.build_candidate)
                     self.stage("write-bytecode-denial", self.denial_probes)
@@ -1822,7 +1972,12 @@ class Runner:
                     self.stage("sanitized-diagnostics", self.verify_diagnostics)
                     self.stage("nondisclosure-scan", self.verify_diagnostics)
                     self.stage("manifest-immutability", self.verify_candidate_manifest)
-                    self.stage("continuity-monitoring", self.continuity_after)
+                    self.stage(
+                        "continuity-monitoring",
+                        self.stop_and_validate_server_local_continuity_monitor
+                        if self.exact_dual_provenance
+                        else self.continuity_after,
+                    )
         except RunnerError as exc:
             failure = exc
             result_code = 2

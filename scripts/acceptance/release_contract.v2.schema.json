@@ -11,7 +11,23 @@
     "productProvenance": {"type": "object"},
     "acceptanceToolProvenance": {"type": "object"},
     "approvedPairing": {"type": "object"},
-    "executionProfile": {"type": "object"}
+    "executionProfile": {
+      "type": "object",
+      "properties": {
+        "continuityMonitor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["contractVersion", "intervalSeconds", "maximumRuntimeSeconds", "sentinels"],
+          "properties": {
+            "contractVersion": {"const": "SERVER_LOCAL_CONTINUITY_V1"},
+            "intervalSeconds": {"type": "integer", "minimum": 1, "maximum": 60},
+            "maximumRuntimeSeconds": {"type": "integer", "minimum": 1, "maximum": 21600},
+            "sentinels": {"type": "array", "minItems": 2, "maxItems": 2}
+          }
+        }
+      },
+      "required": ["continuityMonitor"]
+    }
   },
   "description": "The executable closed-field definition is release_contract_v2.py; this artifact identifies schema version 2 without creating a production instance."
 }
