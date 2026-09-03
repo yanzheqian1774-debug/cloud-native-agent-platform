@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -94,6 +95,26 @@ MODE_NORMALIZATION_FIELDS = frozenset(
         "executablePreservedCount",
         "unsupportedEntryCount",
         "correlationDigest",
+    }
+)
+SYMLINK_CLASSIFICATIONS = frozenset(
+    {
+        "CANDIDATE_INTERNAL_SYMLINK",
+        "SYMLINK_CANONICAL_ESCAPE",
+        "BROKEN_SYMLINK",
+        "SYMLINK_LOOP",
+        "UNSUPPORTED_SYMLINK_TARGET",
+        "SYMLINK_CANONICALIZATION_ERROR",
+    }
+)
+SYMLINK_EVIDENCE_FIELDS = frozenset(
+    {
+        "symlinkCount",
+        "classification",
+        "manifestDigest",
+        "correlationDigest",
+        "stage",
+        "state",
     }
 )
 ERROR_CATEGORIES = frozenset(
@@ -484,6 +505,12 @@ def digest_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def manifest_digest(manifest: dict[str, dict[str, str | int]]) -> str:
+    return digest_bytes(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    )
+
+
 def run_command(
     command: list[str],
     cwd: Path,
@@ -538,6 +565,7 @@ class Runner:
     candidate_unmounted_after: dict[str, dict[str, str | int]] | None = None
     candidate_executables: set[str] = field(default_factory=set)
     mode_normalization_evidence: dict[str, int | str] | None = None
+    symlink_classification_evidence: dict[str, int | str] | None = None
     sentinel_before: dict[str, tuple[str, int]] = field(default_factory=dict)
     continuity_process: subprocess.Popen[bytes] | None = None
     continuity_runtime: Path | None = None
@@ -1195,10 +1223,103 @@ class Runner:
                 "MODE_NORMALIZATION_EXECUTABLE_REMOVED",
             )
 
+    def _resolve_symlink_target(self, path: Path) -> Path:
+        raw_target = Path(os.readlink(path))
+        unresolved = (
+            raw_target if raw_target.is_absolute() else path.parent / raw_target
+        )
+        return unresolved.resolve(strict=True)
+
+    def _classify_symlink(self, path: Path, canonical_root: Path) -> str:
+        try:
+            canonical_target = self._resolve_symlink_target(path)
+        except FileNotFoundError:
+            return "BROKEN_SYMLINK"
+        except RuntimeError:
+            return "SYMLINK_LOOP"
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                return "SYMLINK_LOOP"
+            return "SYMLINK_CANONICALIZATION_ERROR"
+        try:
+            canonical_target.relative_to(canonical_root)
+        except ValueError:
+            return "SYMLINK_CANONICAL_ESCAPE"
+        try:
+            target_metadata = canonical_target.stat()
+        except OSError:
+            return "SYMLINK_CANONICALIZATION_ERROR"
+        if not (
+            stat.S_ISREG(target_metadata.st_mode)
+            or stat.S_ISDIR(target_metadata.st_mode)
+        ):
+            return "UNSUPPORTED_SYMLINK_TARGET"
+        return "CANDIDATE_INTERNAL_SYMLINK"
+
+    def write_symlink_classification_evidence(
+        self,
+        *,
+        symlink_count: int,
+        classification: str,
+        state: str,
+    ) -> None:
+        if classification not in SYMLINK_CLASSIFICATIONS or state not in {
+            "PASS",
+            "FAIL",
+        }:
+            fail("INTERNAL", "symlink classification evidence schema violation")
+        assert self.candidate_source_dir is not None
+        candidate_manifest_digest = manifest_digest(
+            release_manifest(self.candidate_source_dir)
+        )
+        correlation = digest_bytes(
+            (
+                f"{self.token}:candidate-symlink-classification:{symlink_count}:"
+                f"{classification}:{candidate_manifest_digest}:{state}"
+            ).encode()
+        )
+        evidence: dict[str, int | str] = {
+            "symlinkCount": symlink_count,
+            "classification": classification,
+            "manifestDigest": candidate_manifest_digest,
+            "correlationDigest": correlation,
+            "stage": "candidate-presentation",
+            "state": state,
+        }
+        if set(evidence) != SYMLINK_EVIDENCE_FIELDS:
+            fail("INTERNAL", "symlink classification evidence schema violation")
+        self.symlink_classification_evidence = evidence
+        self.output.parent.mkdir(parents=True, exist_ok=True)
+        self.output.with_suffix(".candidate-symlinks.json").write_text(
+            json.dumps(evidence, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    def reject_symlink_classification(
+        self, classification: str, symlink_count: int
+    ) -> NoReturn:
+        self.write_symlink_classification_evidence(
+            symlink_count=symlink_count,
+            classification=classification,
+            state="FAIL",
+        )
+        fail(
+            "CANDIDATE",
+            "candidate symlink classification failed",
+            classification,
+        )
+
     def normalize_candidate_modes(self, uid: int, gid: int) -> None:
         assert self.candidate_source_dir is not None
         entries = self.candidate_entries()
-        root = self.candidate_source_dir.resolve()
+        try:
+            root = self.candidate_source_dir.resolve(strict=True)
+        except OSError as exc:
+            raise RunnerError(
+                "CANDIDATE",
+                "candidate root canonicalization failed",
+                "SYMLINK_CANONICALIZATION_ERROR",
+            ) from exc
         writable_before = 0
         unsupported = 0
         regular_files: list[Path] = []
@@ -1210,13 +1331,6 @@ class Runner:
                 metadata = path.lstat()
                 if stat.S_ISLNK(metadata.st_mode):
                     symlinks.append(path)
-                    target = (path.parent / os.readlink(path)).resolve(strict=False)
-                    if target != root and root not in target.parents:
-                        fail(
-                            "CANDIDATE",
-                            "candidate symlink escapes the owned boundary",
-                            "MODE_NORMALIZATION_SYMLINK_ESCAPE",
-                        )
                 elif stat.S_ISDIR(metadata.st_mode):
                     directories.append(path)
                     writable_before += bool(metadata.st_mode & 0o222)
@@ -1235,6 +1349,10 @@ class Runner:
                         )
                 else:
                     unsupported += 1
+            for path in symlinks:
+                classification = self._classify_symlink(path, root)
+                if classification != "CANDIDATE_INTERNAL_SYMLINK":
+                    self.reject_symlink_classification(classification, len(symlinks))
         except RunnerError:
             raise
         except (OSError, RuntimeError) as exc:
@@ -1243,6 +1361,12 @@ class Runner:
                 "candidate traversal failed",
                 "MODE_NORMALIZATION_TRAVERSAL_FAILED",
             ) from exc
+        if symlinks:
+            self.write_symlink_classification_evidence(
+                symlink_count=len(symlinks),
+                classification="CANDIDATE_INTERNAL_SYMLINK",
+                state="PASS",
+            )
         if unsupported:
             self.write_mode_normalization_evidence(
                 entry_count=len(entries),
@@ -1874,9 +1998,13 @@ class Runner:
         path.write_text(
             json.dumps(
                 {
-                    "preMount": self.candidate_before,
-                    "mountedPostProbe": self.candidate_mounted_after,
-                    "unmountedPostProbe": self.candidate_unmounted_after,
+                    "preMountDigest": manifest_digest(self.candidate_before),
+                    "mountedPostProbeDigest": manifest_digest(
+                        self.candidate_mounted_after
+                    ),
+                    "unmountedPostProbeDigest": manifest_digest(
+                        self.candidate_unmounted_after
+                    ),
                 },
                 sort_keys=True,
                 separators=(",", ":"),
