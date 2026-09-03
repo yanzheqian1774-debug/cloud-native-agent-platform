@@ -25,9 +25,13 @@ dashboard counts, a graph, an approval queue, or a Digital Employee aggregate.
 Digital Employee templates are reusable composition inputs only. They grant no
 Agent Instance, Runtime Instance, Assignment, Run, Task Run, Attempt,
 Placement, Pod, or execution authority. The assembled experience remains
-Preview, not certified, and not production-ready. MCP acceptance remains
-bounded to the documented localhost fixture where applicable, OpenClaw Runtime
-Profiles remain declaration-only, and Model references remain unverified.
+Preview, not certified, and not production-ready. The Public Preview governs
+and publishes an MCP Definition but configures no callable formal MCP endpoint
+and performs no MCP discovery or invocation. Its Skill Definition is governed
+and published without a claimed execution. Its Knowledge path performs real
+PostgreSQL/Qdrant-backed ingestion and authorized retrieval with citation
+readback. OpenClaw Runtime Profiles remain declaration-only, and Model
+references remain unverified.
 
 ## Current Release Planning Context
 

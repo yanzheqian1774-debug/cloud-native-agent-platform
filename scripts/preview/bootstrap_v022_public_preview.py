@@ -10,14 +10,11 @@ Attempt, Placement, or runtime process.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
-import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 PREFIX = "PV103 · "
@@ -120,85 +117,6 @@ def ensure_simple(
     return publish_reviewed(client, root, record, "resourceId", "resource")
 
 
-@contextlib.contextmanager
-def local_mcp_fixture():
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            length = int(self.headers.get("Content-Length", "0"))
-            message = json.loads(self.rfile.read(length) or b"{}")
-            if message.get("method") == "notifications/initialized":
-                self.send_response(202)
-                self.end_headers()
-                return
-            result = {
-                "initialize": {
-                    "protocolVersion": "2025-06-18",
-                    "capabilities": {},
-                    "serverInfo": {"name": "pv103-local-read-only", "version": "1"},
-                },
-                "tools/list": {
-                    "tools": [
-                        {
-                            "name": "read_quality_records",
-                            "description": "Read sanitized Preview quality facts",
-                            "inputSchema": {"type": "object"},
-                        }
-                    ]
-                },
-                "resources/list": {"resources": []},
-                "prompts/list": {"prompts": []},
-            }.get(message.get("method"), {})
-            payload = json.dumps(
-                {"jsonrpc": "2.0", "id": message.get("id"), "result": result}
-            ).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Mcp-Session-Id", "pv103-bounded-fixture")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
-
-        def log_message(self, _format, *_args):
-            return
-
-    server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
-
-
-def govern_mcp_tool(
-    client: Client, record: dict[str, Any]
-) -> tuple[dict[str, Any], str]:
-    selections = record.get("toolSelections", [])
-    if selections:
-        return record, selections[-1]["snapshotId"]
-    with local_mcp_fixture():
-        value = client.request(
-            "POST",
-            f"/api/internal/v0.2.2/resources/mcp/{urllib.parse.quote(record['resourceId'], safe='')}/discovery",
-            {"expectedVersion": record["aggregateVersion"], "timeoutSeconds": 3},
-        )
-    record = value["resource"]
-    snapshot_id = record["discoverySnapshots"][-1]["snapshotId"]
-    value = client.request(
-        "POST",
-        f"/api/internal/v0.2.2/resources/mcp/{urllib.parse.quote(record['resourceId'], safe='')}/tool-selections",
-        {
-            "expectedVersion": record["aggregateVersion"],
-            "snapshotId": snapshot_id,
-            "toolNames": ["read_quality_records"],
-            "reason": "PV103 approved bounded read-only fixture",
-        },
-    )
-    return value["resource"], snapshot_id
-
-
 def bootstrap(client: Client) -> dict[str, Any]:
     skill = ensure_simple(
         client,
@@ -215,17 +133,16 @@ def bootstrap(client: Client) -> dict[str, Any]:
     mcp = ensure_simple(
         client,
         "mcp",
-        PREFIX + "本地只读质量 MCP",
+        PREFIX + "供应商质量 MCP 定义",
         {
-            "description": "仅用于本地 Preview 的受限只读 MCP fixture",
+            "description": "治理定义占位；Public Preview 未配置可调用的正式 MCP 端点。",
             "capabilities": ["supplier-quality.read"],
-            "endpoint": "http://127.0.0.1:8765/mcp",
+            "endpoint": "https://unconfigured.invalid/mcp",
             "permissions": ["quality:read"],
             "sideEffect": "NONE",
             "idempotency": "IDEMPOTENT",
         },
     )
-    mcp, mcp_snapshot_id = govern_mcp_tool(client, mcp)
 
     knowledge_root = "/api/internal/v0.2.2/knowledge"
     knowledge = existing(client, knowledge_root, PREFIX + "供应商质量知识包")
@@ -256,6 +173,41 @@ def bootstrap(client: Client) -> dict[str, Any]:
     if knowledge.get("lifecycleState") != "AVAILABLE":
         raise RuntimeError(
             "Knowledge ingestion did not produce an AVAILABLE indexed snapshot"
+        )
+    retrieval = knowledge
+    if not knowledge.get("retrievals"):
+        retrieval = client.request(
+            "POST",
+            f"{knowledge_root}/{urllib.parse.quote(knowledge['knowledgeId'], safe='')}/retrievals",
+            {
+                "expectedVersion": knowledge["aggregateVersion"],
+                "authorization": "ALLOW",
+                "authorizationDecisionId": "authorization:pv106:bounded-knowledge-read",
+                "query": "供应商质量异常如何形成整改计划?",
+            },
+        )["knowledge"]
+    knowledge = client.request(
+        "GET",
+        f"{knowledge_root}/{urllib.parse.quote(knowledge['knowledgeId'], safe='')}",
+    )["knowledge"]
+    latest_retrieval = knowledge.get("retrievals", [])[-1]
+    citations = latest_retrieval.get("citations", [])
+    revision = current_revision(knowledge)
+    if (
+        retrieval["knowledgeId"] != knowledge["knowledgeId"]
+        or latest_retrieval.get("snapshotId") != knowledge["activeIndexSnapshotId"]
+        or not citations
+        or any(
+            citation.get("knowledgeId") != knowledge["knowledgeId"]
+            or citation.get("revisionId") != revision["revisionId"]
+            or citation.get("revisionDigest") != revision["digest"]
+            or not citation.get("documentDigest")
+            or not citation.get("chunkDigest")
+            for citation in citations
+        )
+    ):
+        raise RuntimeError(
+            "Knowledge retrieval did not read back an exact bounded citation"
         )
 
     runtime_root = "/api/internal/v0.2.2/runtime-profiles"
@@ -361,13 +313,7 @@ def bootstrap(client: Client) -> dict[str, Any]:
         "businessPurpose": "帮助质量负责人理解异常并准备受治理的后续计划。",
         "bindings": {
             "skills": [exact(skill, "resourceId")],
-            "mcpTools": [
-                {
-                    **exact(mcp, "resourceId"),
-                    "toolName": "read_quality_records",
-                    "snapshotId": mcp_snapshot_id,
-                }
-            ],
+            "mcpTools": [],
             "knowledge": [
                 {
                     **exact(knowledge, "knowledgeId"),
@@ -421,6 +367,22 @@ def bootstrap(client: Client) -> dict[str, Any]:
             "runtimeProfile": runtime["runtimeProfileId"],
         },
         "template": template,
+        "capabilityProof": {
+            "mcp": "UNAVAILABLE_NOT_INVOKED",
+            "skill": "GOVERNED_NOT_EXECUTED",
+            "knowledge": {
+                "classification": "REAL_RETRIEVAL_WITH_BOUNDED_CITATION",
+                "knowledgeId": knowledge["knowledgeId"],
+                "revisionId": revision["revisionId"],
+                "revisionDigest": revision["digest"],
+                "snapshotId": latest_retrieval["snapshotId"],
+                "retrievalId": latest_retrieval["retrievalId"],
+                "queryDigest": latest_retrieval["queryDigest"],
+                "citationIds": [item["citationId"] for item in citations],
+                "documentDigests": [item["documentDigest"] for item in citations],
+                "chunkDigests": [item["chunkDigest"] for item in citations],
+            },
+        },
         "prohibitedLifecycleCreated": False,
     }
 
