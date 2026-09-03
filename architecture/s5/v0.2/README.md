@@ -6,6 +6,12 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Architecture records
 
+- [v0.2.3 Workflow Control, Plan Approval and Intervention Persistence v1](S5-V023-ARCH-208-WORKFLOW-CONTROL-PLAN-APPROVAL-INTERVENTION-PERSISTENCE-V1.md)
+  defines the proposed G2 PostgreSQL aggregate, exact Intervention target,
+  append-only history, replay protection, CAS, Evidence/Outcome, atomic Unit of Work
+  and additive migration `0009` contract required to unblock Workflow Control. It
+  preserves migration `0008`, IMPL-220 and provider boundaries, allocates no task and
+  is ready only for Human Checkpoint A.
 - [v0.2.3 Product Capability, Interaction and Acceptance Architecture v1](S5-V023-ARCH-201-PRODUCT-CAPABILITY-INTERACTION-ACCEPTANCE-V1.md)
   is the proposed complete capability, Chinese-first journey, sibling-view,
   visual/accessibility, ownership, acceptance and 210–299 routing baseline. It is
