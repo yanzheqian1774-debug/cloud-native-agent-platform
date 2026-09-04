@@ -64,8 +64,10 @@ may be claimed complete:
 7. unified lifecycle and Attempt resource-use facts; and
 8. Chinese-first managed-capability Product surfaces.
 
-An incremental visual or read-only assembly design may proceed earlier, but it
-is not P1-A or P1-B acceptance.
+These are independent engineering capability acceptances, not intermediate
+Human Product demonstrations. An internal visual or read-only assembly design
+may proceed earlier, but it is not P1-A or P1-B Product acceptance and does not
+block a path-disjoint, dependency-ready task.
 
 ### P1-B — Digital Employee business-problem assembly
 
@@ -102,7 +104,7 @@ entry commit. `PARTIAL` is never an acceptance result.
 | Runtime | approved type; exact identity; Profile; provider selection; startup; readiness; execution; observation; stop/shutdown; restart readback; Instance/Placement and Attempt relations; failure/unavailable; Evidence; one real executable P1 path; Chinese-first availability | `APPLICATION_COMPLETE / PARTIAL` — Native continuity and Native/OpenClaw provider/profile foundations exist | One approved real end-to-end Runtime path and truthful status for the other provider, exact execution relationships, Evidence and local Product acceptance remain unproven |
 | Unified managed-resource lifecycle | canonical vocabulary: 草稿, 待验证, 已验证, 待审阅, 已发布, 已绑定, 已选择, 已调用, 已成功, 已失败, 暂不可用, 已停用, 已归档, 等待人工, 规划中; exact per-kind applicability | `PARTIAL` — several domain enums and frontend mappings exist | Backend-authoritative cross-resource mapping, applicability table and exhaustive UI mapping remain absent; health/actions must not be projected onto non-Runtime resources |
 | Unified Attempt resource use | Digital Employee; optional Agent; Workflow; Skill; MCP endpoint/tool; Knowledge revision/snapshot; Runtime; Assignment; Placement; exact versions/revisions/digests; selected vs invoked; state/duration; bounded I/O; Evidence; Outcome contribution; failure/recovery | `PARTIAL` — Knowledge use and execution identities have bounded projections | One authoritative unified projection and Business Problem right-side panel remain missing; configured/bound never implies selected/invoked |
-| Product Experience | Chinese-first shell; business home; Business Problem workspace; Digital Employee, Skill, MCP, Knowledge, Workflow and Runtime management; Evidence Inspector; Outcome; work history; desktop and 390px; keyboard focus; loading/empty/unavailable/failed/planned; Product/Technical disclosure | `ACTIVE / NOT_DURABLE` under IMPL-253 for P1-V1 paths only | IMPL-253 cannot absorb all feature Workbenches. Serialize feature UI tasks after its visual checkpoint and reuse its accepted shared system |
+| Product Experience | Chinese-first shell; business home; Business Problem workspace; Digital Employee, Skill, MCP, Knowledge, Workflow and Runtime management; Evidence Inspector; Outcome; work history; desktop and 390px; keyboard focus; loading/empty/unavailable/failed/planned; Product/Technical disclosure | `ACTIVE / NOT_DURABLE` under IMPL-253 for the initial internal visual-validation paths only | IMPL-253 cannot absorb all feature Workbenches. Serialize feature UI tasks after its engineering visual checkpoint and reuse its accepted shared system; no intermediate Human demo gate applies |
 | Outcome | Business Problem and Success Criteria relationships; terminal basis; findings; actions; exact Evidence; Digital Employee; actual resource use; intervention history; criterion evaluation; unresolved risks; follow-up; export/share boundary; Chinese-first explanation | `FOUNDATION_COMPLETE / PARTIAL` — terminal-only Outcome and Evidence rules exist | Complete business projection, criterion evaluation, resource-use summary, Product UI and acceptance are missing |
 
 ## Complete Product page and prototype inventory
@@ -110,16 +112,18 @@ entry commit. `PARTIAL` is never an acceptance result.
 This inventory is the required Product information architecture before any
 feature Workbench implementation begins. It establishes page intent and
 prototype coverage, not implementation authority. Every major surface receives
-a bounded local visual prototype before its final backend assembly. Prototype
-tasks and implementation tasks remain separate, reviewable units with explicit
-path ownership.
+a bounded local engineering visual prototype before its final backend assembly.
+Prototype tasks and implementation tasks remain separate, reviewable units with
+explicit path ownership. They require screenshots and responsive evidence, but
+not a separate Human clickable review or separately maintained demonstration
+environment, and they do not delay a disjoint dependency-ready capability task.
 
 | Level-1 Product area | Required Level-2 pages/surfaces | Primary governed narrative | Prototype gate |
 | --- | --- | --- | --- |
 | Shared Product shell | global navigation; scoped search; Product/Operations/Technical/Evidence disclosure; Attention entry; loading/empty/error shell | start from business work and progressively disclose technical facts | shared Chinese-first system accepted before feature Workbenches |
-| Business home | work overview; active Business Problems; pending Human actions; recent Outcomes; truthful capability availability | what business work needs attention and what value was produced | P1-V1 desktop and 390px |
-| Business Problem | problem list/intake; problem detail; Success Criteria; history/related work; close/reopen/follow-up | problem → governed work → evidence-backed result | P1-V1 desktop and 390px |
-| Business Problem workspace | left business context/history; center assistant-style conversation, Plan and execution; right Digital Employee, bindings and actual resource use | primary cross-capability assembly surface; the assistant interaction never replaces Plan, Run, Evidence or Outcome authority | P1-V1 three-region review |
+| Business home | work overview; active Business Problems; pending Human actions; recent Outcomes; truthful capability availability | what business work needs attention and what value was produced | internal V1 desktop and 390px validation |
+| Business Problem | problem list/intake; problem detail; Success Criteria; history/related work; close/reopen/follow-up | problem → governed work → evidence-backed result | internal V1 desktop and 390px validation |
+| Business Problem workspace | left business context/history; center assistant-style conversation, Plan and execution; right Digital Employee, bindings and actual resource use | primary cross-capability assembly surface; the assistant interaction never replaces Plan, Run, Evidence or Outcome authority | internal V1 three-region validation |
 | Digital Employee | Definition list/detail; revision/review/publication; assembly/bindings; Instance list/detail; Assignment/Placement; current work; use/Evidence/Outcome history | who the managed employee is, what it may use, where it works and what it actually did | dedicated bounded prototype before DE Workbench implementation |
 | Skill | Definition list/detail; schemas/revision/review/publication; bindings; invocation detail; recent-use/failure history | governed reusable capability and exact Attempt use | dedicated bounded prototype before Skill Workbench implementation |
 | MCP | endpoint list/detail; trust/credential boundary; connectivity/initialize; discovered tools/schema; bindings/selection; invocation result/history | approved endpoint and tool authority through real governed calls | dedicated bounded prototype after endpoint authority is known |
@@ -164,9 +168,10 @@ All Product prototypes and Workbenches reuse one accepted shared system:
 IMPL-253 remains limited to its accepted six paths: `App.tsx`,
 `ConsoleShell.tsx`, `ProductDashboardPage.tsx`, `ProblemWorkspacePage.tsx`,
 `product-experience.css`, and `test_v023_product_experience.py`. It owns only
-the P1-V1 visual foundation. No page or task in this inventory enlarges that
-boundary. After the IMPL-253 visual checkpoint, frontend path ownership is
-serialized across separate feature Workbench tasks.
+the initial internal visual foundation. No page or task in this inventory
+enlarges that boundary. After the IMPL-253 engineering visual checkpoint,
+frontend path ownership is serialized across separate feature Workbench tasks;
+no intermediate Human demo is required.
 
 ### Mandatory visible-data classification
 
@@ -222,17 +227,19 @@ Every implementation and Product surface must preserve:
 | Product surfaces | serialized feature Workbenches | accepted IMPL-253 shared foundation | P1-A/UX |
 | Outcome | business projection and criterion assessment | unified resource use and terminal Workflow | Before P1-B acceptance |
 
-Critical path:
+Critical path and parallel preparation lanes:
 
 ```text
 authority audits/G2 where required
 → stable shared Product foundation
-→ backend capability completion
-→ serialized capability Workbenches
-→ independent ACCEPT gates
+→ [backend capability writer || serialized Product/Workbench writer]
+→ independent module engineering acceptance and durable integration
 → governed P1 data/bootstrap
 → P1-B ASSEMBLY
-→ local clickable ACCEPT
+→ P1_COMPLETE_END_TO_END_LOCAL_PRODUCT_ACCEPTANCE
+
+parallel throughout when read-only/path-disjoint:
+next-task architecture + path ownership + acceptance preparation
 ```
 
 ## Canonical lifecycle vocabulary
@@ -277,9 +284,9 @@ collision audit at activation.
 | 16 | Unified Attempt resource-use projection | `IMPL`; execution read-model owner | 4, 7, 9, 12, 14 facts | backend projection/API/tests | G1; G2 on ownership change | Yes | selected/invoked distinctions, versions, durations, Evidence/Outcome links | cross-plane authority or inferred use | authoritative projection only |
 | 17 | Outcome business projection | `IMPL`; Workflow/Product owner | terminal Workflow, 16, Business authority | backend projection/API/frontend/tests | G1 | Yes | criterion evaluation, Evidence/resource/intervention links, truthful partial failure | nonterminal Outcome or fabricated business result | bounded Outcome capability |
 | 18 | P1 real governed data/bootstrap | `ASSEMBLY`; integration-data owner | completed APIs for all P1-A candidates | bootstrap/config/integration fixtures explicitly approved for setup | G1 | Yes; after APIs stabilize | authoritative create/readback manifest and owned cleanup | fake success, v0.2.2 state reuse, uncontrolled external data | reusable local acceptance data only |
-| 19 | Capability-specific local ACCEPT tasks | `ACCEPT`; independent acceptance owner per capability | corresponding candidate and real services | Evidence/reports only | G0 | No; may parallel if environments isolated | real-browser/API proof, negatives, restart, isolation, cleanup | fixture-created success or shared-resource collision | one named P1-A capability accepted |
+| 19 | Capability-specific engineering ACCEPT tasks | `ACCEPT`; independent acceptance owner per capability | corresponding candidate and real services | Evidence/reports only | G0 | No; may parallel if environments are isolated; no intermediate Human demo | automated tests, real dependency integration where applicable, Product screenshots/responsive proof, truthful state inventory, exact-head CI, restart/isolation and cleanup | fixture-created success or shared-resource collision | one named P1-A capability engineering-accepted; no Product completion claim |
 | 20 | P1 Business Assembly | `ASSEMBLY`; cross-domain integration owner | all eight P1-A gates accepted | minimal integration/bootstrap/Evidence paths | G1; G2 on discovered authority gap | Yes; serialize after capability acceptance | exact end-to-end identities and real effects | any P1-A gate absent or demo authority needed | assembled candidate; not Product acceptance |
-| 21 | P1 local clickable Product Acceptance | `ACCEPT`; independent Product acceptance owner | 20, exact services/build/data | acceptance Evidence/screenshots/reports | G0 | No | complete Chinese-first desktop/390px journey, restart, cleanup, limitations | fabricated state, unavailable real service, provenance mismatch | local P1-B acceptance only; no Preview/release |
+| 21 | P1 complete end-to-end local Product acceptance | `ACCEPT`; independent Product acceptance owner | 20, exact services/build/data | acceptance Evidence/screenshots/reports | G0 | No | one complete Chinese-first desktop/390px Business Problem-to-Outcome journey, restart, cleanup and limitations | fabricated state, unavailable real service, provenance mismatch or any module gate absent | `P1_COMPLETE_END_TO_END_LOCAL_PRODUCT_ACCEPTANCE` only; no Preview/release |
 | 22 | Runtime Management Workbench | `IMPL`; Product UI owner | 14, shared UI and required HTTP projections | Runtime frontend/tests/browser Evidence | G1 | Yes; serialized UI after IMPL-253 | provider/Profile/Instance/Placement/availability and real Attempt state at both viewports | inferred readiness, collapsed provider identities or shared-path overlap | Runtime UI available only |
 | 23 | Run/Task/Attempt Operations Workbench | `IMPL`; Product UI owner | 12, 14, 16 and required HTTP projections | execution frontend/tests/browser Evidence | G1 | Yes; serialized UI after IMPL-253 | exact hierarchy, timeline, selected/invoked resources and failure/recovery states | frontend-minted execution identity or inferred resource use | execution UI available only |
 | 24 | Evidence Inspector Workbench | `IMPL`; Product UI owner | canonical Evidence projection and required HTTP projections | Evidence frontend/tests/browser Evidence | G1 | Yes; serialized UI after IMPL-253 | exact provenance, citations, bounded I/O and cross-view identity | disclosure violation, frontend-generated Evidence or path overlap | Evidence UI available only |
@@ -295,39 +302,52 @@ owned backend projection task, never permission for frontend inference.
 
 Maximum heavy repository writers: **2**.
 
-At this baseline IMPL-253 occupies writer slot 1 and retains exactly its six
-accepted paths. Slot 2 is unoccupied after the durable Knowledge integration.
-This CONTROL documentation is not a heavy writer and touches no Product path.
-The next backend task may use slot 2 only after its fresh ownership audit. All
-feature frontend prototypes and Workbench implementations wait until IMPL-253
-reaches its accepted visual checkpoint; they are then serialized with one
-explicit frontend path owner at a time.
+At this baseline IMPL-253 occupies the Product/Workbench writer slot and retains
+exactly its six accepted paths. The backend capability writer slot is
+unoccupied after the durable Knowledge integration. This CONTROL documentation
+is not a heavy writer and touches no Product path. Keep one backend capability
+writer and one Product/Workbench writer active whenever dependencies and path
+ownership allow. All feature frontend prototypes and Workbench implementations
+wait only for IMPL-253 to release shared shell/navigation/style ownership at its
+engineering visual checkpoint; they are then serialized with one explicit
+frontend path owner at a time.
 
-Read-only authority audits for Business Problem, Skill executable candidates,
-MCP endpoint/trust, Workflow Definition/API, Digital Employee completeness,
-and acceptance-data design may proceed concurrently. Durable integrations are
-serialized. After each integration: fetch main, reconcile PRs, refresh only
-affected branches, run complete validation, obtain exact-head CI, and repeat
-routing.
+Read-only authority, architecture, path and acceptance preparation for the next
+tasks proceeds concurrently. Fill a writer slot immediately after its preceding
+task enters durable integration; do not wait for an intermediate Human demo.
+Path-disjoint dependency-ready work may advance while an internal V1/V2/V3 gate
+is being collected. Shared frontend shell/navigation/style ownership and
+durable merges remain serialized. When main advancement affects an accepted
+branch: fetch main, reconcile PRs, refresh only affected branches, rerun complete
+validation, obtain exact-head CI, and repeat routing.
 
-## Incremental local acceptance plan
+## Internal engineering validation gates and single Human target
 
-| Checkpoint | Required content | Required local proof | Claim limit |
+V1, V2 and V3 are internal engineering evidence gates only. They do not require
+a separately maintained local demonstration environment, a separate Human
+clickable review, a public or Product-completion claim, or waiting before the
+next disjoint dependency-ready task begins.
+
+| Internal gate | Required content | Required engineering proof | Claim limit |
 | --- | --- | --- | --- |
-| P1-V1 | global Product shell; business home; Business Problem workspace; truthful Digital Employee/resource panel | real services/data plus desktop and 390px screenshots | visual/information foundation only |
-| P1-V2 | Digital Employee, Skill, MCP, Knowledge, Workflow and Runtime management surfaces | authoritative lifecycle/availability states, negative states, browser operation | surfaces available; no capability accepted without its backend gate |
-| P1-V3 | Attempt-bound Skill/MCP/Knowledge use; Workflow execution; Evidence; basic intervention; Outcome | real calls/execution, exact identities and Evidence, restart readback | integrated candidate only |
-| P1-B | complete Business Problem-to-Outcome journey | all P1-A acceptance records plus local clickable Chinese-first journey | bounded local Product acceptance only |
+| V1 | global Product shell; business home; Business Problem workspace; truthful Digital Employee/resource panel | automated tests, desktop/390px screenshots, responsive checks, truthful state inventory and exact-head CI | internal visual/information evidence only |
+| V2 | Digital Employee, Skill, MCP, Knowledge, Workflow and Runtime management surfaces | authoritative lifecycle/availability states, negative states, real dependency integration where applicable, screenshots/responsive checks and cleanup | internal module evidence only |
+| V3 | Attempt-bound Skill/MCP/Knowledge use; Workflow execution; Evidence; basic intervention; Outcome | real calls/execution, exact identities, Evidence, restart readback, tests, exact-head CI and cleanup | internal integration evidence only |
+| Final Human target | complete Business Problem-to-Outcome journey | all P1-A module acceptances plus one local clickable Chinese-first end-to-end journey | `P1_COMPLETE_END_TO_END_LOCAL_PRODUCT_ACCEPTANCE` only |
 
 Use task types `ASSEMBLY` and `ACCEPT`; do not allocate a `DEMO` task type.
-Every checkpoint states limitations and performs owned-resource cleanup.
+Every module retains automated tests, applicable real-dependency integration,
+Product screenshots, responsive validation, truthful state inventory,
+exact-head CI, owned-resource cleanup and independent capability acceptance.
 
 ## Independent P1-A acceptance gates
 
 Each gate must independently prove authoritative state, exact identities and
 revisions, restart readback where applicable, isolation, truthful negative
-states, no fixture-created success, owned cleanup, and clickable local Evidence
-when a Product surface applies.
+states, no fixture-created success, owned cleanup, automated and real-dependency
+evidence, and screenshots/responsive evidence when a Product surface applies.
+Passing a module gate does not require or constitute an intermediate Human
+Product demonstration.
 
 | Gate | Passing proof |
 | --- | --- |
@@ -341,6 +361,9 @@ when a Product surface applies.
 | Chinese-first Product | complete applicable management surfaces, desktop/390px, keyboard and all truth states |
 
 ## P1-B assembly acceptance
+
+The next and only Human local demonstration target is
+`P1_COMPLETE_END_TO_END_LOCAL_PRODUCT_ACCEPTANCE`.
 
 The one coherent real-data journey must:
 
