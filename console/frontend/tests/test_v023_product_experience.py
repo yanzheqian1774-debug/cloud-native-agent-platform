@@ -11,7 +11,15 @@ def source(path: str) -> str:
 def test_chinese_first_product_shell_and_routes_are_wired() -> None:
     shell = source("components/ConsoleShell.tsx")
     app = source("App.tsx")
-    for label in ("首页", "业务问题", "数字员工", "工作与流程", "知识", "能力资源"):
+    for label in (
+        "首页",
+        "业务问题",
+        "数字员工",
+        "Skill",
+        "Knowledge",
+        "Evidence",
+        "Outcome",
+    ):
         assert label in shell
     assert 'path="/work" element={<ProblemWorkspacePage/>}' in app
     assert (

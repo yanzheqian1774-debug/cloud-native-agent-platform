@@ -35,8 +35,8 @@ export function ResourceWorkbench({kind}:{kind:ResourceKind}){
   const filtered=useMemo(()=>items.filter(item=>(state==="ALL"||item.lifecycleState===state)&&`${item.name} ${item.resourceId}`.toLowerCase().includes(query.toLowerCase())),[items,query,state]);
   const resource=selected?.resource;const draft=resource?.revisions.find(item=>item.revisionId===resource.currentDraftRevisionId);const review=resource?.reviews.at(-1);
   const eligibleMcp=mcps.find(item=>item.publishedRevisionId&&item.enabled);const snapshot=resource?.discoverySnapshots.at(-1);const tool=snapshot?.catalog.tools[0];const selection=resource?.toolSelections.at(-1);
-  const title=kind==="skill"?"Skill Workbench":"MCP Workbench";
-  return <main className="agent-workbench"><header className="agent-page-header"><div><p className="eyebrow">Enterprise Resource Workbench</p><h1>{title}</h1><p>Author, test, discover, govern, invoke and inspect one canonical backend-owned resource.</p></div><span className="agent-authority-note">PostgreSQL authoritative</span></header>
+  const title=kind==="skill"?"Skill 技能中心":"MCP 连接中心";
+  return <main className="agent-workbench"><header className="agent-page-header"><div><p className="eyebrow">企业资源工作台</p><h1>{title}</h1><p>管理由后端持有的规范资源，包括编写、测试、发现、治理、调用与检查。</p></div><span className="agent-authority-note">PostgreSQL 权威数据</span></header>
     {loading&&<p role="status" className="agent-state">Loading authoritative {kind.toUpperCase()} resources…</p>}
     {busy&&<p role="status" aria-label="Workbench save status" className="agent-state">Saving governed {kind.toUpperCase()} state…</p>}
     {error&&<div role="alert" className="agent-error" aria-label={`${controlledState??"retryable"} state`}><strong>{controlledState??"Action unavailable"}</strong><span>{controlledState==="denied"||controlledState==="not found"?"The resource is unavailable or access is not authorized.":error}</span><button onClick={()=>void refresh(resource?.resourceId)}>Retry authoritative fetch</button></div>}
