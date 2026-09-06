@@ -30,6 +30,10 @@ test("exposes nine truthful Chinese-first platform support surfaces", async ({ p
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
   }
+  await page.goto("/outcomes");
+  const search = page.getByLabel("搜索业务问题");
+  await search.fill("供应商");
+  await expect(search).toBeFocused();
 });
 
 test("keeps unsupported actions disabled and preserves real navigation", async ({ page }) => {
