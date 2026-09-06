@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("publishes a Runtime Profile then a governed Workflow through real Workbenches", async ({ page }) => {
   await page.goto("/runtime-profiles");
-  await expect(page.getByRole("heading", { name: "Runtime Profile Workbench" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "运行配置中心", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create Native Kubernetes Profile" }).click();
   await expect(page.getByRole("heading", { name: "NATIVE_KUBERNETES declaration" })).toBeVisible();
   await page.getByRole("button", { name: "Validate Runtime Profile" }).click();
@@ -22,7 +22,7 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   const runtimeRevisionId = published.profile.publishedRevisionId;
 
   await page.goto("/workflow-definitions");
-  await expect(page.getByRole("heading", { name: "Workflow Workbench" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "工作流中心", exact: true })).toBeVisible();
   await page.getByLabel("Published Runtime Profile ID").fill(runtimeId);
   await page.getByLabel("Published Runtime revision ID").fill(runtimeRevisionId);
   await page.getByRole("button", { name: "Open Workflow Builder" }).click();

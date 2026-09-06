@@ -35,7 +35,7 @@ export function ResourceWorkbench({kind}:{kind:ResourceKind}){
   const filtered=useMemo(()=>items.filter(item=>(state==="ALL"||item.lifecycleState===state)&&`${item.name} ${item.resourceId}`.toLowerCase().includes(query.toLowerCase())),[items,query,state]);
   const resource=selected?.resource;const draft=resource?.revisions.find(item=>item.revisionId===resource.currentDraftRevisionId);const review=resource?.reviews.at(-1);
   const eligibleMcp=mcps.find(item=>item.publishedRevisionId&&item.enabled);const snapshot=resource?.discoverySnapshots.at(-1);const tool=snapshot?.catalog.tools[0];const selection=resource?.toolSelections.at(-1);
-  const title=kind==="skill"?"Skill 技能中心":"MCP 连接中心";
+  const title=kind==="skill"?"技能中心":"MCP 连接中心";
   return <main className="agent-workbench"><header className="agent-page-header"><div><p className="eyebrow">企业资源工作台</p><h1>{title}</h1><p>管理由后端持有的规范资源，包括编写、测试、发现、治理、调用与检查。</p></div><span className="agent-authority-note">PostgreSQL 权威数据</span></header>
     {loading&&<p role="status" className="agent-state">Loading authoritative {kind.toUpperCase()} resources…</p>}
     {busy&&<p role="status" aria-label="Workbench save status" className="agent-state">Saving governed {kind.toUpperCase()} state…</p>}

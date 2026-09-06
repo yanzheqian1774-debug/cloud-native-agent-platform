@@ -198,7 +198,7 @@ export function KnowledgeWorkbenchPage() {
   const importBody = importJob?.body as { status?: string; processedCount?: number; inputRecordCount?: number; acceptedCount?: number; rejectedCount?: number; retryable?: boolean; importedKnowledgeIds?: string[] } | undefined;
 
   return <main className="agent-workbench">
-    <header><p className="eyebrow">企业资源工作台</p><h1>Knowledge 知识中心</h1><p>治理知识来源、不可变知识包、导入、授权检索依据和派生索引恢复；浏览器状态不作为生命周期权威。</p></header>
+    <header><p className="eyebrow">企业 Knowledge 资源工作台</p><h1>知识中心</h1><p>治理知识来源、不可变知识包、导入、授权检索依据和派生索引恢复；浏览器状态不作为生命周期权威。</p></header>
     {state === "LOADING" && <p role="status" className="agent-state">Loading authorized Knowledge resources…</p>}
     {state === "SAVING" && <p role="status" className="agent-state">Recording the authorized operation…</p>}
     {notice && <div role="status" className="notice"><strong>{notice}</strong><button onClick={() => setNotice(null)}>Dismiss</button></div>}
