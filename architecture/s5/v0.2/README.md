@@ -6,6 +6,29 @@ Source code and tests remain authoritative for implemented behavior.
 
 ## Architecture records
 
+- [v0.2.3 Unified Attempt Resource Use and Measurement Authority v1](S5-V023-ARCH-266-UNIFIED-ATTEMPT-RESOURCE-USE-MEASUREMENT-AUTHORITY-V1.md)
+  records the Human-accepted Execution-domain Resource Use identity, exact Attempt
+  binding, append-only fact reducer, measurement vocabulary, immutable snapshot,
+  authorization and Product/Technical projection authority. It keeps Business and
+  Technical Outcome, Capability maturity and execution status separate; missing
+  measurements are never zero. It is architecture-only and grants no implementation.
+- [v0.2.3 Success Criteria Evaluation, Human Confirmation and Outcome Contract v1](S5-V023-ARCH-264-SUCCESS-CRITERIA-EVALUATION-HUMAN-CONFIRMATION-OUTCOME-CONTRACT-V1.md)
+  narrows ARCH-258 with the Human-accepted terminal-Run evaluation, append-only Human
+  Confirmation, successor Outcome and shared OutcomeSnapshot contract. It grants no
+  implementation, P1 completion, Preview, release or certification.
+- [v0.2.3 Skill Attempt Executor and Side-Effect Contract v1](S5-V023-ARCH-263-SKILL-ATTEMPT-EXECUTOR-SIDE-EFFECT-CONTRACT-V1.md)
+  records the Human-accepted Platform/provider ownership, persist-before-dispatch,
+  append-only Invocation facts, unknown-result recovery and mandatory real read-only
+  P1 executor. Write effects and implementation remain unauthorized.
+- [v0.2.3 MCP Endpoint, Trust and Credential Authority v1](S5-V023-ARCH-259-MCP-ENDPOINT-TRUST-CREDENTIAL-AUTHORITY-V1.md)
+  records the Human-accepted independent Endpoint identity, dual activation approval,
+  bounded trust reassessment, provider-neutral credential resolution, Secret Reference,
+  bounded transport and real read/idempotent P1 boundary. It grants no implementation.
+- [v0.2.3 Business Problem and Success Criteria Authority v1](S5-V023-ARCH-258-BUSINESS-PROBLEM-SUCCESS-CRITERIA-AUTHORITY-V1.md)
+  records the Human-accepted PostgreSQL Product authority for stable Business Problem,
+  immutable Problem/Criterion/Criteria Set revisions, exact Plan binding, evaluation
+  vocabulary, append-only Human Confirmation and deletion protection. It grants no
+  implementation or P1 completion.
 - [v0.2.3 Workflow Control, Plan Approval and Intervention Persistence v1](S5-V023-ARCH-208-WORKFLOW-CONTROL-PLAN-APPROVAL-INTERVENTION-PERSISTENCE-V1.md)
   defines the proposed G2 PostgreSQL aggregate, exact Intervention target,
   append-only history, replay protection, CAS, Evidence/Outcome, atomic Unit of Work
