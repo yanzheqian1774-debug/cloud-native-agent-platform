@@ -11,6 +11,12 @@ const pages = [
   ["/settings", "系统设置"],
   ["/help", "帮助中心"],
 ] as const;
+const primaryRoutes = ["/dashboard", "/work", "/digital-employees", "/agent-center", "/skills", "/mcp", "/knowledge", "/workflow-definitions", "/runtime-profiles", "/evidence", "/outcomes", ...pages.filter(([route]) => route !== "/agent-center").map(([route]) => route)] as const;
+const journeys = [
+  { launch: "业务闭环", name: "业务闭环总览演示路径", steps: ["业务问题", "成功标准", "已批准 Plan", "数字员工", "Skill", "MCP", "Knowledge", "Workflow", "Runtime / Attempt", "Evidence", "Outcome"] },
+  { launch: "数字员工装配", name: "数字员工装配演示路径", steps: ["数字员工", "Agent Definition", "Skill 绑定", "MCP 端点边界", "Knowledge 绑定", "Workflow 定义", "Runtime 配置", "Evidence 入口"] },
+  { launch: "平台治理", name: "平台治理与运营演示路径", steps: ["首页", "权限中心", "安全中心", "运维监控", "模型中心", "费用与使用量", "系统设置", "帮助中心"] },
+] as const;
 
 test("exposes nine truthful Chinese-first platform support surfaces", async ({ page }) => {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
@@ -49,4 +55,31 @@ test("keeps all support pages reachable from the mobile navigation", async ({ pa
   await navigation.getByRole("link", { name: "帮助中心" }).focus();
   await expect(navigation.getByRole("link", { name: "帮助中心" })).toBeFocused();
   expect(await navigation.getByRole("link", { name: "帮助中心" }).evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+});
+
+test("keeps all nineteen primary surfaces responsive and restores heading focus", async ({ page }) => {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    for (const route of primaryRoutes) {
+      await page.goto(route);
+      await expect(page.locator("main h1").first()).toBeVisible();
+      await expect(page.locator("main h1").first()).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+});
+
+for (const journey of journeys) test(`navigates the repeatable ${journey.launch} journey with browser history`, async ({ page }) => {
+  await page.goto("/dashboard");
+  await page.getByRole("navigation", { name: "可重复演示路径" }).getByRole("link", { name: journey.launch, exact: true }).click();
+  const rail = page.getByRole("navigation", { name: journey.name });
+  for (let index = 0; index < journey.steps.length; index += 1) {
+    await expect(rail.getByText(`第 ${index + 1} / ${journey.steps.length} 步`, { exact: false })).toBeVisible();
+    await expect(rail.getByRole("link", { name: journey.steps[index], exact: true })).toHaveAttribute("aria-current", "step");
+    if (index < journey.steps.length - 1) await rail.getByRole("link", { name: "下一步", exact: true }).click();
+  }
+  await page.goBack();
+  await expect(rail.getByText(`第 ${journey.steps.length - 1} / ${journey.steps.length} 步`, { exact: false })).toBeVisible();
+  await rail.getByRole("link", { name: "上一步", exact: true }).click();
+  await expect(page.locator("main h1").first()).toBeFocused();
 });
