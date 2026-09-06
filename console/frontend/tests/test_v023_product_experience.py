@@ -59,6 +59,33 @@ def test_problem_workspace_preserves_governed_execution_boundaries() -> None:
     assert "尚无该页面可调用的 HTTP 投影" in workspace
 
 
+def test_problem_rematch_exposes_one_authoritative_accessible_lifecycle() -> None:
+    planning = source("problems/ProblemPlanningPage.tsx")
+    api = source("api/problemPlanning.ts")
+    assert 'type RematchState="idle"|"pending"|"succeeded"|"failed"' in planning
+    assert 'setRematchState("pending")' in planning
+    assert (
+        "const authoritativeProblem=await rematchProblem(problem.problemId)" in planning
+    )
+    assert planning.count("rematchProblem(problem.problemId)") == 1
+    assert planning.index("setProblem(authoritativeProblem)") < planning.index(
+        'setRematchState("succeeded")'
+    )
+    assert "disabled={busy} onClick={rematch}" in planning
+    assert 'role="status" aria-label="重新匹配状态" aria-live="polite"' in planning
+    assert "正在重新匹配已发布的 Agent 定义……" in planning
+    assert "已完成重新匹配" in planning
+    assert 'rematchState==="failed"' in planning
+    assert 'role="alert"' in planning
+    assert "重新匹配失败\uff0c请检查当前状态后重试" in planning
+    assert (
+        api.count(
+            'request<ProblemPlan>(`/api/internal/v0.2.1/problems/${encodeURIComponent(id)}/rematches`,{method:"POST"}'
+        )
+        == 1
+    )
+
+
 def test_shared_styles_cover_desktop_narrow_and_keyboard_states() -> None:
     styles = source("styles/product-experience.css")
     assert "grid-template-columns:258px minmax(430px,1fr) 300px" in styles
