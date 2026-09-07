@@ -90,6 +90,19 @@ class PostgresEmployeeDefinitionRepository:
                 conn, scope, identifier(definition_id), identifier(revision_id)
             )
 
+    def list(self, scope):
+        with self.pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT definition_id,revision_id FROM "
+                "digital_employee_definition.revisions WHERE namespace=%s "
+                "AND security_domain=%s ORDER BY definition_id,revision_id",
+                (scope.namespace, scope.security_domain),
+            ).fetchall()
+            return [
+                self._read(conn, scope, row["definition_id"], row["revision_id"])
+                for row in rows
+            ]
+
     @staticmethod
     def validate_members(conn, revision):
         tables = {

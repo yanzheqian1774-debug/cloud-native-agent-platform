@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
 
 from .agent_definition_repository import AgentDefinitionNotFound, DefinitionScope
 from .agent_definition_service import AgentDefinitionService
@@ -15,6 +14,10 @@ from .digital_employee_application import (
     DigitalEmployeeError,
 )
 from .digital_employee_definition import (
+    CompositionMember,
+    EmployeeDefinitionService,
+    EmployeeRevision,
+    MemberKind,
     PublishedEmployeeDefinitionAuthority,
     ScopedEmployeeAuthorization,
 )
@@ -24,6 +27,8 @@ from .digital_employee_schemas import (
     CreateDigitalEmployeeAssignment,
     CreateDigitalEmployeeInstance,
     CreateDigitalEmployeePlacement,
+    CreateEmployeeDefinition,
+    DecideEmployeeDefinition,
 )
 from .execution_domain import ExecutionSchemaIncompatible
 from .execution_postgres import (
@@ -64,14 +69,99 @@ class DigitalEmployeeProductAssembly:
             raise DigitalEmployeeError("TRUSTED_SCOPE_REQUIRED")
         return ScopeIdentity(tenant_id, security_domain)
 
-    def list_definitions(self, scope: ScopeIdentity) -> list[dict[str, Any]]:
-        return self.definitions.list(
-            DefinitionScope(scope.namespace, scope.security_domain)
+    @staticmethod
+    def _employee_authorization(scope, principal_id, permissions, decision_id):
+        return ScopedEmployeeAuthorization(
+            scope, principal_id, frozenset(permissions), decision_id
         )
 
-    def get_definition(self, scope: ScopeIdentity, definition_id: str):
-        return self.definitions.get(
-            DefinitionScope(scope.namespace, scope.security_domain), definition_id
+    def _employee_service(self, scope, principal_id, permissions, decision_id):
+        return EmployeeDefinitionService(
+            self.employee_definitions,
+            self._employee_authorization(scope, principal_id, permissions, decision_id),
+        )
+
+    def list_definitions(self, scope: ScopeIdentity, principal_id: str):
+        service = self._employee_service(
+            scope, principal_id, {"LIST"}, f"list:{principal_id}"
+        )
+        return [self.employee_definition_projection(row) for row in service.list(scope)]
+
+    def get_definition(
+        self,
+        scope: ScopeIdentity,
+        principal_id: str,
+        definition_id: str,
+        revision_id: str,
+    ):
+        service = self._employee_service(
+            scope,
+            principal_id,
+            {"READ"},
+            f"read:{principal_id}:{definition_id}:{revision_id}",
+        )
+        return self.employee_definition_projection(
+            service.read(scope, definition_id, revision_id)
+        )
+
+    def create_definition(
+        self, scope: ScopeIdentity, principal_id: str, command: CreateEmployeeDefinition
+    ):
+        service = self._employee_service(
+            scope,
+            principal_id,
+            {"CREATE"},
+            f"create:{principal_id}:{command.commandId}",
+        )
+        revision = EmployeeRevision(
+            scope,
+            command.employeeDefinitionId,
+            command.employeeDefinitionRevisionId,
+            command.role,
+            tuple(command.responsibilities),
+            tuple(
+                CompositionMember(
+                    MemberKind(member.kind),
+                    member.resourceId,
+                    member.revisionId,
+                    member.digest,
+                )
+                for member in command.members
+            ),
+            command.predecessorEmployeeRevisionId,
+        )
+        return self.employee_definition_projection(
+            service.create(
+                revision,
+                expected_version=command.expectedVersion,
+                command_id=command.commandId,
+            )
+        )
+
+    def decide_definition(
+        self,
+        scope: ScopeIdentity,
+        principal_id: str,
+        definition_id: str,
+        action: str,
+        command: DecideEmployeeDefinition,
+    ):
+        service = self._employee_service(
+            scope,
+            principal_id,
+            {action, "READ_MEMBER"},
+            f"{action.lower()}:{principal_id}:{command.commandId}",
+        )
+        return self.employee_definition_projection(
+            service.decide(
+                scope,
+                definition_id,
+                command.employeeDefinitionRevisionId,
+                command.employeeDefinitionDigest,
+                action,
+                expected_version=command.expectedVersion,
+                command_id=command.commandId,
+            )
         )
 
     def create_instance(
@@ -95,8 +185,8 @@ class DigitalEmployeeProductAssembly:
         value, disposition = service.create_instance(
             scope=scope,
             instance_id=DigitalEmployeeInstanceId(command.instanceId),
-            definition_id=command.definitionId,
-            definition_revision_id=command.definitionRevisionId,
+            definition_id=command.employeeDefinitionId,
+            definition_revision_id=command.employeeDefinitionRevisionId,
             owner_id=principal_id,
             organization_id=scope.namespace,
             command_id=command.commandId,
@@ -274,12 +364,18 @@ class DigitalEmployeeProductAssembly:
             raise DigitalEmployeeError("PLACEMENT_EXECUTION_NOT_ASSEMBLED")
 
     def instance_projection(self, value, disposition: str | None = None):
+        definition_key = (
+            "employeeDefinition"
+            if value.definition.authority_kind == "DIGITAL_EMPLOYEE_DEFINITION_V1"
+            else "legacyDefinitionReference"
+        )
         result = {
             "instanceId": str(value.instance_id),
             "version": value.version,
-            "definition": {
-                "definitionId": value.definition.definition_id,
-                "revisionId": value.definition.revision_id,
+            definition_key: {
+                "authorityKind": value.definition.authority_kind,
+                "employeeDefinitionId": value.definition.definition_id,
+                "employeeDefinitionRevisionId": value.definition.revision_id,
                 "digest": value.definition.digest,
             },
             "ownerId": value.owner_id,
@@ -300,6 +396,39 @@ class DigitalEmployeeProductAssembly:
         if disposition:
             result["disposition"] = disposition
         return result
+
+    @staticmethod
+    def employee_definition_projection(value):
+        revision = value["revision"]
+        return {
+            "resourceKind": "DIGITAL_EMPLOYEE_DEFINITION",
+            "employeeDefinitionId": revision["definitionId"],
+            "employeeDefinitionRevisionId": revision["revisionId"],
+            "employeeDefinitionDigest": value["digest"],
+            "aggregateVersion": value["aggregateVersion"],
+            "role": revision["role"],
+            "responsibilities": list(revision["responsibilities"]),
+            "members": [
+                {
+                    "kind": member["kind"],
+                    "resourceId": member["resource_id"],
+                    "revisionId": member["revision_id"],
+                    "digest": member["digest"],
+                }
+                for member in revision["members"]
+            ],
+            "predecessorEmployeeRevisionId": revision["predecessorRevisionId"],
+            "published": value["published"],
+            "matchable": value["matchable"],
+            "facts": [
+                {
+                    "action": fact["action"],
+                    "decisionId": fact["decision_id"],
+                    "ordinal": fact["ordinal"],
+                }
+                for fact in value["facts"]
+            ],
+        }
 
     def _relationship_projection(self, value):
         if value.definition.authority_kind == "DIGITAL_EMPLOYEE_DEFINITION_V1":

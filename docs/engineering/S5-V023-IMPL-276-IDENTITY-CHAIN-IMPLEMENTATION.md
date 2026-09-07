@@ -39,10 +39,41 @@ is branch-recorded, not main-durable until separately authorized integration.
    the requested revision, and Runtime Instance relationship in one transaction.
    A mismatch leaves no placement request or decision.
 
-The executable normal-flow example is `employee_identity_support.py` with real
-Agent, Workflow and Runtime Profile publication and real Workflow Control approval;
+`employee_identity_support.py` is test support, not a stable operator tool or
+production CLI. It assembles real Agent, Workflow and Runtime Profile publication
+and real Workflow Control approval for the PostgreSQL acceptance suite;
 `test_employee_identity_chain_postgres.py` exercises both execution retry paths.
-No new public endpoint, frontend or provider execution is introduced.
+No frontend, provider execution or public endpoint is introduced.
+
+## Internal HTTP boundary and compatibility
+
+The existing internal v0.2.3 Digital Employee API now uses the independent
+Employee Definition authority consistently. Its Definition list and exact-revision
+detail endpoints no longer return Agent Definitions. Separate internal operations
+create, validate, approve and publish an Employee Definition; publication does not
+grant matching. Instance creation consumes the returned
+`employeeDefinitionId` and `employeeDefinitionRevisionId`. Agent Definitions
+remain independently managed by the Agent API and appear only as exact composition
+members.
+
+The wire change is intentional and compatibility-significant. The old ambiguous
+`definitionId` and `definitionRevisionId` Instance fields are rejected; clients
+must use the explicitly named Employee Definition fields and must first create and
+publish that independent object. An Agent Definition ID cannot be submitted as an
+Employee Definition ID, and no historical Agent identity is converted. New
+Employee-backed Instance responses use `employeeDefinition`; historical records
+remain authorized read-only results classified as `legacyDefinitionReference` and
+cannot enter the new exact execution chain.
+
+Authorization decisions are constructed from the authenticated internal principal,
+not accepted from request DTOs. Missing authentication is distinct from scoped
+non-disclosure. An absent or cross-scope Employee Definition returns the same
+`EMPLOYEE_NOT_FOUND` response without partial writes. The real HTTP/PostgreSQL
+acceptance creates and reads one Employee Definition, advances its exact revision
+through validation, approval and publication, creates an Instance and Assignment,
+rejects Agent identity masquerading, and proves stale-version, replay, restart and
+cross-scope behavior. Start/retry remain internal application-service operations;
+HTTP creation does not imply an HTTP execution endpoint.
 
 ## Migration and historical compatibility
 
@@ -59,14 +90,22 @@ history remains supported; it does not authorize Product employee placement.
 
 ## Validation
 
-The `Employee Identity Chain` CI workflow provisions PostgreSQL 15 and runs the
-new tests plus affected execution, employee and Workflow Control regressions.
+The `Employee Identity Chain` CI workflow provisions an ephemeral PostgreSQL 15
+service on an isolated GitHub-hosted job and runs the new tests plus affected
+execution, employee and Workflow Control regressions. It runs for selected
+pull-request events, main pushes and manual dispatch, has read-only repository
+permission, persists no checkout credential, and fails if the selected suite reports
+skips.
 Both database environment variables are required. The workflow's test order starts
 with migration-0008 compatibility tests on a disposable database, then exercises
 additive migrations. Do not run schema compatibility fault injection against a
 shared or production database. Every scenario uses unique scope/identity data.
 
-The final repository gates remain pre-commit, `make check`, and exact PR-head CI.
+For a pull request, GitHub reports the source SHA separately while checkout executes
+the platform-generated merge SHA against the selected base. The workflow logs both;
+the merge-SHA result must not be described as a detached exact-source checkout.
+For a main push they are the same commit. The final repository gates remain
+pre-commit, `make check`, and candidate-bound CI.
 The focused database suite separately proves that its tests are not skipped by the
 default local environment. No provider execution, Resource Use, frontend acceptance,
 release, merge or deployment completion is claimed by these backend tests.

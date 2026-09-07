@@ -70,6 +70,7 @@ def test_denial_precedes_every_repository_operation():
     for operation in (
         lambda: service.create(value, expected_version=0, command_id="create"),
         lambda: service.read(value.scope, value.definition_id, value.revision_id),
+        lambda: service.list(value.scope),
         lambda: service.decide(
             value.scope,
             value.definition_id,

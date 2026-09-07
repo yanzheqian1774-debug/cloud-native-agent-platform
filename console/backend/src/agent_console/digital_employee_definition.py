@@ -211,6 +211,7 @@ class EmployeeDefinitionRepository(Protocol):
         decision_id: str,
         command_id: str,
     ): ...
+    def list(self, scope: ScopeIdentity): ...
     def read(self, scope: ScopeIdentity, definition_id: str, revision_id: str): ...
     def decide(
         self,
@@ -251,6 +252,10 @@ class EmployeeDefinitionService:
     def read(self, scope, definition_id, revision_id):
         self.authorization.require(scope, "READ", definition_id)
         return self.repository.read(scope, definition_id, revision_id)
+
+    def list(self, scope):
+        self.authorization.require(scope, "LIST", "employee-definitions")
+        return self.repository.list(scope)
 
     def decide(
         self,
