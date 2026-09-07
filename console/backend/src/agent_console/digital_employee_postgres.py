@@ -41,6 +41,10 @@ class PostgresDigitalEmployeeRepository:
             "definition_digest": value.definition.digest,
             "definition_published": value.definition.published,
             "definition_eligible": value.definition.eligible,
+            "definition_authority": value.definition.authority_kind,
+            "primary_agent_id": value.definition.primary_agent_id,
+            "primary_agent_revision_id": value.definition.primary_agent_revision_id,
+            "primary_agent_digest": value.definition.primary_agent_digest,
             "owner_id": value.owner_id,
             "organization_id": value.organization_id,
             "lifecycle": value.lifecycle.value,
@@ -57,27 +61,75 @@ class PostgresDigitalEmployeeRepository:
         self, value: InstanceRecord, command_id: str
     ) -> AppendDisposition:
         record = self._instance_record(value, command_id)
-        aggregate = VersionedAggregate(
-            value.scope, str(value.instance_id), value.version, record
+        from .digital_employee_definition import EmployeeRevision, MemberKind
+        from .digital_employee_definition_postgres import (
+            PostgresEmployeeDefinitionRepository,
         )
-        existing = self.authority.get_aggregate(
-            "digital_employee_instance", value.scope, str(value.instance_id)
+
+        if value.definition.authority_kind != "DIGITAL_EMPLOYEE_DEFINITION_V1":
+            raise DigitalEmployeeError("EXACT_EMPLOYEE_DEFINITION_REQUIRED")
+        key = (
+            value.scope.namespace,
+            value.scope.security_domain,
+            str(value.instance_id),
         )
-        if existing is not None:
-            comparable = dict(record)
-            comparable["created_at"] = existing.record.get("created_at")
-            comparable["updated_at"] = existing.record.get("updated_at")
-            if (
-                existing.aggregate_version == aggregate.aggregate_version
-                and existing.record == comparable
+
+        def operation(conn):
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                (json.dumps(key),),
+            )
+            definition = PostgresEmployeeDefinitionRepository._read(
+                conn,
+                value.scope,
+                value.definition.definition_id,
+                value.definition.revision_id,
+            )
+            revision = EmployeeRevision.from_record(definition["revision"])
+            agent = next(m for m in revision.members if m.kind is MemberKind.AGENT)
+            if definition["digest"] != value.definition.digest or (
+                agent.resource_id,
+                agent.revision_id,
+                agent.digest,
+            ) != (
+                value.definition.primary_agent_id,
+                value.definition.primary_agent_revision_id,
+                value.definition.primary_agent_digest,
             ):
-                return AppendDisposition.REPLAYED
-            raise DigitalEmployeeError("INSTANCE_IDENTITY_CONFLICT")
-        try:
-            self.authority.create_aggregate("digital_employee_instance", aggregate)
-        except ExecutionConflict as exc:
-            raise DigitalEmployeeError("INSTANCE_IDENTITY_CONFLICT") from exc
-        return AppendDisposition.APPENDED
+                raise DigitalEmployeeError("EMPLOYEE_DEFINITION_MISMATCH")
+            existing = conn.execute(
+                "SELECT record,aggregate_version FROM execution_authority.digital_employee_instances WHERE namespace=%s AND security_domain=%s AND digital_employee_instance_id=%s FOR UPDATE",
+                key,
+            ).fetchone()
+            if existing is not None:
+                comparable = dict(record)
+                comparable["created_at"] = existing["record"].get("created_at")
+                comparable["updated_at"] = existing["record"].get("updated_at")
+                if (
+                    existing["aggregate_version"] == value.version
+                    and existing["record"] == comparable
+                ):
+                    return AppendDisposition.REPLAYED
+                raise DigitalEmployeeError("INSTANCE_IDENTITY_CONFLICT")
+            if not definition["published"]:
+                raise DigitalEmployeeError("DEFINITION_INELIGIBLE")
+            PostgresEmployeeDefinitionRepository.validate_members(conn, revision)
+            conn.execute(
+                "INSERT INTO execution_authority.digital_employee_instances(namespace,security_domain,digital_employee_instance_id,definition_revision_id,aggregate_version,record) VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
+                (*key, value.definition.revision_id, value.version, json.dumps(record)),
+            )
+            conn.execute(
+                "INSERT INTO digital_employee_definition.instance_bindings VALUES (%s,%s,%s,%s,%s,%s)",
+                (
+                    *key,
+                    value.definition.definition_id,
+                    value.definition.revision_id,
+                    value.definition.digest,
+                ),
+            )
+            return AppendDisposition.APPENDED
+
+        return self.authority._transaction(operation)
 
     def get_instance(
         self, scope: ScopeIdentity, instance_id: DigitalEmployeeInstanceId
@@ -94,6 +146,10 @@ class PostgresDigitalEmployeeRepository:
             record["definition_digest"],
             record["definition_published"],
             record["definition_eligible"],
+            record.get("definition_authority", "LEGACY_UNVERIFIED"),
+            record.get("primary_agent_id"),
+            record.get("primary_agent_revision_id"),
+            record.get("primary_agent_digest"),
         )
         return InstanceRecord(
             scope,
@@ -174,6 +230,16 @@ class PostgresDigitalEmployeeRepository:
         }
 
         def operation(connection):
+            instance = connection.execute(
+                "SELECT record FROM execution_authority.digital_employee_instances WHERE namespace=%s AND security_domain=%s AND digital_employee_instance_id=%s FOR UPDATE",
+                (
+                    value.scope.namespace,
+                    value.scope.security_domain,
+                    str(value.instance_id),
+                ),
+            ).fetchone()
+            if instance is None:
+                raise DigitalEmployeeError("INSTANCE_NOT_FOUND")
             existing = connection.execute(
                 "SELECT approved_input_digest FROM execution_authority.assignments WHERE namespace=%s AND security_domain=%s AND assignment_id=%s FOR UPDATE",
                 (
@@ -200,7 +266,7 @@ class PostgresDigitalEmployeeRepository:
                     raise DigitalEmployeeError("ACTIVE_ASSIGNMENT_CONFLICT")
             if value.predecessor_assignment_id is not None:
                 predecessor = connection.execute(
-                    "SELECT record FROM execution_authority.assignments WHERE namespace=%s AND security_domain=%s AND assignment_id=%s FOR UPDATE",
+                    "SELECT record,digital_employee_instance_id FROM execution_authority.assignments WHERE namespace=%s AND security_domain=%s AND assignment_id=%s FOR UPDATE",
                     (
                         value.scope.namespace,
                         value.scope.security_domain,
@@ -209,6 +275,8 @@ class PostgresDigitalEmployeeRepository:
                 ).fetchone()
                 if (
                     predecessor is None
+                    or predecessor["digital_employee_instance_id"]
+                    != str(value.instance_id)
                     or predecessor["record"].get("version") != value.version - 1
                 ):
                     raise DigitalEmployeeError("STALE_ASSIGNMENT_VERSION")
@@ -243,7 +311,9 @@ class PostgresDigitalEmployeeRepository:
         request: PlacementRequest,
         decision: PlacementDecision,
     ) -> PlacementResult:
-        return self.authority.decide(scope, request, decision)
+        return self.authority.decide(
+            scope, request, decision, require_employee_lineage=True
+        )
 
     def runtime_exists(
         self, scope: ScopeIdentity, runtime_id: RuntimeInstanceId

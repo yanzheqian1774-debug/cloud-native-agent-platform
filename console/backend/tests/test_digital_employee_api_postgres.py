@@ -1,6 +1,6 @@
-import json
 import os
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepos
 from agent_console.agent_definition_service import AgentDefinitionService
 from agent_console.digital_employee_application import DigitalEmployeeError
 from agent_console.digital_employee_bootstrap import build_digital_employee_assembly
+from agent_console.digital_employee_definition import EmployeeDefinitionError
 from agent_console.digital_employee_schemas import (
     CreateDigitalEmployeeAssignment,
     CreateDigitalEmployeeInstance,
@@ -19,19 +20,9 @@ from agent_console.digital_employee_schemas import (
 from agent_console.execution_domain import VersionedAggregate
 from agent_console.execution_postgres import (
     AgentInstanceId,
-    AssignmentId,
-    AssignmentIdentity,
-    AttemptId,
-    AttemptIdentity,
     DigitalEmployeeInstanceId,
-    ExecutionIdentityAggregate,
     RuntimeInstanceId,
     ScopeIdentity,
-    TaskRunId,
-    TaskRunIdentity,
-    WorkflowRunId,
-    WorkflowRunIdentity,
-    canonical_bytes,
 )
 
 DATABASE_URL = os.environ.get("EXECUTION_TEST_DATABASE_URL")
@@ -125,6 +116,9 @@ def publish(service, scope):
 
 def seed_execution_chain(assembly, scope, instance_id, assignment_id, revision_id):
     suffix = instance_id.rsplit("-", 1)[-1]
+    instance = assembly.repository.get_instance(
+        scope, DigitalEmployeeInstanceId(instance_id)
+    )
     authority = assembly.repository.authority
     runtime_id = RuntimeInstanceId(f"runtime-{suffix}")
     agent_id = AgentInstanceId(f"agent-{suffix}")
@@ -145,68 +139,46 @@ def seed_execution_chain(assembly, scope, instance_id, assignment_id, revision_i
             1,
             {
                 "agent_revision_id": revision_id,
+                "agent_definition_id": instance.definition.primary_agent_id,
+                "agent_digest": instance.definition.primary_agent_digest,
                 "runtime_instance_id": str(runtime_id),
             },
         ),
     )
-    aggregate = ExecutionIdentityAggregate(
-        scope,
-        AssignmentIdentity(
-            AssignmentId(assignment_id), DigitalEmployeeInstanceId(instance_id)
-        ),
-        WorkflowRunIdentity(
-            WorkflowRunId(f"workflow-{suffix}"),
-            AssignmentId(assignment_id),
-            "approved-plan-r1",
-        ),
-        TaskRunIdentity(
-            TaskRunId(f"task-{suffix}"), WorkflowRunId(f"workflow-{suffix}")
-        ),
-        AttemptIdentity(
-            AttemptId(f"attempt-{suffix}"), TaskRunId(f"task-{suffix}"), None
-        ),
+    from agent_console.execution_application import (
+        ExecutionApplicationService,
+        StartExecutionCommand,
     )
-    payload = json.loads(canonical_bytes(aggregate))["payload"]
-    with authority.pool.connection() as connection, connection.transaction():
-        connection.execute(
-            "INSERT INTO execution_authority.workflow_runs("
-            "namespace,security_domain,workflow_run_id,assignment_id,"
-            "approved_plan_revision_id,record) "
-            "VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
-            (
-                scope.namespace,
-                scope.security_domain,
-                str(aggregate.workflow_run.workflow_run_id),
-                assignment_id,
-                aggregate.workflow_run.approved_plan_revision_id,
-                json.dumps(payload["workflow_run"]),
-            ),
+    from employee_identity_support import approve_plan, authorize
+    from test_execution_application_postgres import approved_plan
+
+    instance = assembly.repository.get_instance(
+        scope, DigitalEmployeeInstanceId(instance_id)
+    )
+    assignment = assembly.repository.assignments_for_instance(
+        scope, instance.instance_id
+    )[0]
+    workflow = replace(
+        approved_plan(suffix),
+        tenant_id=scope.namespace,
+        security_domain=scope.security_domain,
+    )
+    approved = approve_plan(authority, DATABASE_URL, workflow, instance, assignment)
+    aggregate = (
+        ExecutionApplicationService(authority, authorize(scope))
+        .start(
+            StartExecutionCommand(
+                scope,
+                workflow,
+                approved,
+                assignment.assignment_id,
+                instance.instance_id,
+                "collect",
+                "start",
+            )
         )
-        connection.execute(
-            "INSERT INTO execution_authority.task_runs("
-            "namespace,security_domain,task_run_id,workflow_run_id,record) "
-            "VALUES (%s,%s,%s,%s,%s::jsonb)",
-            (
-                scope.namespace,
-                scope.security_domain,
-                str(aggregate.task_run.task_run_id),
-                str(aggregate.workflow_run.workflow_run_id),
-                json.dumps(payload["task_run"]),
-            ),
-        )
-        connection.execute(
-            "INSERT INTO execution_authority.attempts("
-            "namespace,security_domain,attempt_id,task_run_id,aggregate_digest,record) "
-            "VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
-            (
-                scope.namespace,
-                scope.security_domain,
-                str(aggregate.attempt.attempt_id),
-                str(aggregate.task_run.task_run_id),
-                "b" * 64,
-                json.dumps(payload),
-            ),
-        )
+        .identity
+    )
     return aggregate, agent_id, runtime_id
 
 
@@ -220,6 +192,52 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation():
         DATABASE_URL or "",
         definition_service,
         migration_path=MIGRATIONS / "0008_execution_runtime_authority.sql",
+    )
+    from agent_console.digital_employee_definition import (
+        CompositionMember,
+        EmployeeDefinitionService,
+        EmployeeRevision,
+        MemberKind,
+    )
+    from test_digital_employee_definition_postgres import Authorized
+
+    agent_definition_id, agent_revision_id, agent_digest = (
+        definition_id,
+        revision_id,
+        digest,
+    )
+    employee = EmployeeRevision(
+        scope,
+        f"employee-definition-{suffix}",
+        "employee-revision",
+        "Reviewer",
+        ("Review quality",),
+        (
+            CompositionMember(
+                MemberKind.AGENT, agent_definition_id, agent_revision_id, agent_digest
+            ),
+        ),
+    )
+    service = EmployeeDefinitionService(
+        assembly.employee_definitions, Authorized(scope)
+    )
+    current = service.create(
+        employee, expected_version=0, command_id=f"employee-create-{suffix}"
+    )
+    for action in ("VALIDATE", "APPROVE", "PUBLISH"):
+        current = service.decide(
+            scope,
+            employee.definition_id,
+            employee.revision_id,
+            employee.digest,
+            action,
+            expected_version=current["aggregateVersion"],
+            command_id=f"{action}-{suffix}",
+        )
+    definition_id, revision_id, digest = (
+        employee.definition_id,
+        employee.revision_id,
+        employee.digest,
     )
     instance_id = f"employee-{suffix}"
     assignment_id = f"assignment-{suffix}"
@@ -238,11 +256,19 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation():
         "revisionId": revision_id,
         "digest": digest,
     }
-    assert created["relationships"]["capabilities"] == ["supplier-quality-review"]
-    assert created["relationships"]["knowledge"][0]["resourceId"] == "knowledge-1"
+    assert created["relationships"]["directComposition"] == [
+        {
+            "kind": "AGENT",
+            "resource_id": agent_definition_id,
+            "revision_id": agent_revision_id,
+            "digest": agent_digest,
+        }
+    ]
+    # Agent-internal dependencies retain their owner, not employee direct bindings.
+    assert "knowledge" not in created["relationships"]
     assert created["execution"]["state"] == "UNAVAILABLE"
 
-    with pytest.raises(DigitalEmployeeError, match="DEFINITION_NOT_FOUND"):
+    with pytest.raises(EmployeeDefinitionError, match="EMPLOYEE_NOT_FOUND"):
         assembly.create_instance(
             scope,
             "owner-a",
@@ -277,7 +303,7 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation():
                 taskRunId=f"missing-task-{suffix}",
                 attemptId=f"missing-attempt-{suffix}",
                 agentInstanceId=f"missing-agent-{suffix}",
-                agentRevisionId=revision_id,
+                agentRevisionId=agent_revision_id,
                 runtimeProfileRevisionId="runtime-profile-r1",
                 runtimeInstanceId=f"missing-runtime-{suffix}",
                 policyVersion="policy-v1",
@@ -286,7 +312,7 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation():
             ),
         )
     aggregate, agent_id, runtime_id = seed_execution_chain(
-        assembly, scope, instance_id, assignment_id, revision_id
+        assembly, scope, instance_id, assignment_id, agent_revision_id
     )
     placed = assembly.create_placement(
         scope,
@@ -299,7 +325,7 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation():
             taskRunId=str(aggregate.task_run.task_run_id),
             attemptId=str(aggregate.attempt.attempt_id),
             agentInstanceId=str(agent_id),
-            agentRevisionId=revision_id,
+            agentRevisionId=agent_revision_id,
             runtimeProfileRevisionId="runtime-profile-r1",
             runtimeInstanceId=str(runtime_id),
             policyVersion="policy-v1",

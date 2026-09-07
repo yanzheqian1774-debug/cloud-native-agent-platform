@@ -1,0 +1,51 @@
+name: Employee Identity Chain
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity:
+    name: PostgreSQL Identity Chain
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: employee_identity
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d employee_identity"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EXECUTION_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/employee_identity
+      EMPLOYEE_IDENTITY_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/employee_identity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: Run identity and affected execution regressions
+        run: |
+          uv run pytest -q \
+            console/backend/tests/test_execution_postgres.py \
+            console/backend/tests/test_digital_employee_postgres.py \
+            console/backend/tests/test_execution_application_postgres.py \
+            console/backend/tests/test_digital_employee_api_postgres.py \
+            console/backend/tests/test_digital_employee_definition.py \
+            console/backend/tests/test_digital_employee_definition_postgres.py \
+            console/backend/tests/test_employee_identity_chain_postgres.py \
+            console/backend/tests/test_execution_application.py \
+            console/backend/tests/test_digital_employee_application.py \
+            console/backend/tests/test_digital_employee_api.py \
+            console/backend/tests/test_workflow_control_postgres.py \
+            console/backend/tests/test_workflow_control_application_postgres.py \
+            console/backend/tests/test_workflow_control_application.py

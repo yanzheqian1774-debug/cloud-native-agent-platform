@@ -51,6 +51,10 @@ class DefinitionReference:
     digest: str
     published: bool
     eligible: bool
+    authority_kind: str = "LEGACY_UNVERIFIED"
+    primary_agent_id: str | None = None
+    primary_agent_revision_id: str | None = None
+    primary_agent_digest: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

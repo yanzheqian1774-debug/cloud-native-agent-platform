@@ -7,7 +7,6 @@ import pytest
 from agent_console.digital_employee_application import (
     AssignmentLifecycle,
     AssignmentRecord,
-    DefinitionReference,
     DigitalEmployeeApplicationService,
     DigitalEmployeeError,
 )
@@ -26,11 +25,6 @@ MIGRATIONS = Path(__file__).parents[1] / "migrations"
 MIGRATION = MIGRATIONS / "0008_execution_runtime_authority.sql"
 
 
-class Definitions:
-    def resolve(self, scope, definition_id, revision_id):
-        return DefinitionReference(definition_id, revision_id, "d" * 64, True, True)
-
-
 def authority():
     value = PostgresExecutionAuthorityRepository(
         DATABASE_URL or "", migration_path=MIGRATION
@@ -44,12 +38,26 @@ def test_restart_readback_replay_history_conflict_and_isolation():
     scope = ScopeIdentity(f"tenant-{suffix}", "domain")
     raw = authority()
     repository = PostgresDigitalEmployeeRepository(raw)
-    service = DigitalEmployeeApplicationService(repository, Definitions())
+    from agent_console.digital_employee_definition import (
+        PublishedEmployeeDefinitionAuthority,
+    )
+    from agent_console.digital_employee_definition_postgres import (
+        PostgresEmployeeDefinitionRepository,
+    )
+    from employee_identity_support import migrate
+    from test_digital_employee_definition_postgres import Authorized, publish_employee
+
+    migrate(raw)
+    store = PostgresEmployeeDefinitionRepository(raw)
+    revision, _, _ = publish_employee(store, scope, DATABASE_URL)
+    service = DigitalEmployeeApplicationService(
+        repository, PublishedEmployeeDefinitionAuthority(store, Authorized(scope))
+    )
     instance, disposition = service.create_instance(
         scope=scope,
         instance_id=DigitalEmployeeInstanceId(f"employee-{suffix}"),
-        definition_id="definition",
-        definition_revision_id="revision-1",
+        definition_id=revision.definition_id,
+        definition_revision_id=revision.revision_id,
         owner_id="owner",
         organization_id="org",
         command_id=f"create-{suffix}",
@@ -59,8 +67,8 @@ def test_restart_readback_replay_history_conflict_and_isolation():
         service.create_instance(
             scope=scope,
             instance_id=instance.instance_id,
-            definition_id="definition",
-            definition_revision_id="revision-1",
+            definition_id=revision.definition_id,
+            definition_revision_id=revision.revision_id,
             owner_id="owner",
             organization_id="org",
             command_id=f"create-{suffix}",

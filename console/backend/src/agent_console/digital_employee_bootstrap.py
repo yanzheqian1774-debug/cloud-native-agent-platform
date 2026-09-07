@@ -11,10 +11,14 @@ from .agent_definition_service import AgentDefinitionService
 from .digital_employee_application import (
     AssignmentLifecycle,
     AssignmentRecord,
-    DefinitionReference,
     DigitalEmployeeApplicationService,
     DigitalEmployeeError,
 )
+from .digital_employee_definition import (
+    PublishedEmployeeDefinitionAuthority,
+    ScopedEmployeeAuthorization,
+)
+from .digital_employee_definition_postgres import PostgresEmployeeDefinitionRepository
 from .digital_employee_postgres import PostgresDigitalEmployeeRepository
 from .digital_employee_schemas import (
     CreateDigitalEmployeeAssignment,
@@ -41,45 +45,6 @@ from .execution_postgres import (
 from .workflow_control_postgres import PostgresWorkflowControlRepository
 
 
-class PublishedDefinitionAuthority:
-    """Resolve one exact published revision in one trusted scope."""
-
-    def __init__(self, definitions: AgentDefinitionService) -> None:
-        self.definitions = definitions
-
-    def resolve(self, scope, definition_id, revision_id):
-        definition_scope = DefinitionScope(scope.namespace, scope.security_domain)
-        try:
-            record = self.definitions.repository.get(definition_scope, definition_id)
-        except AgentDefinitionNotFound:
-            return None
-        published_id = record.get("publishedRevisionId")
-        revision = next(
-            (
-                item
-                for item in record.get("revisions", ())
-                if item["revisionId"] == revision_id
-            ),
-            None,
-        )
-        if revision is None:
-            return None
-        eligible = (
-            revision_id == published_id
-            and revision.get("state") == "PUBLISHED"
-            and record.get("enabled") is True
-            and record.get("archived") is False
-            and record.get("lifecycleState") not in {"DEPRECATED", "ARCHIVED"}
-        )
-        return DefinitionReference(
-            definition_id,
-            revision_id,
-            revision["digest"],
-            revision_id == published_id and revision.get("state") == "PUBLISHED",
-            eligible,
-        )
-
-
 class DigitalEmployeeProductAssembly:
     def __init__(
         self,
@@ -88,9 +53,10 @@ class DigitalEmployeeProductAssembly:
     ) -> None:
         self.definitions = definitions
         self.repository = repository
-        self.application = DigitalEmployeeApplicationService(
-            repository, PublishedDefinitionAuthority(definitions)
+        self.employee_definitions = PostgresEmployeeDefinitionRepository(
+            repository.authority
         )
+        self.application = DigitalEmployeeApplicationService(repository, None)
 
     @staticmethod
     def scope(tenant_id: str, security_domain: str) -> ScopeIdentity:
@@ -114,7 +80,19 @@ class DigitalEmployeeProductAssembly:
         principal_id: str,
         command: CreateDigitalEmployeeInstance,
     ):
-        value, disposition = self.application.create_instance(
+        authorization = ScopedEmployeeAuthorization(
+            scope,
+            principal_id,
+            frozenset({"INSTANTIATE", "READ_MEMBER"}),
+            f"instantiate:{command.commandId}",
+        )
+        service = DigitalEmployeeApplicationService(
+            self.repository,
+            PublishedEmployeeDefinitionAuthority(
+                self.employee_definitions, authorization
+            ),
+        )
+        value, disposition = service.create_instance(
             scope=scope,
             instance_id=DigitalEmployeeInstanceId(command.instanceId),
             definition_id=command.definitionId,
@@ -262,6 +240,19 @@ class DigitalEmployeeProductAssembly:
             or str(aggregate.assignment.digital_employee_instance_id) != instance_id
             or agent is None
             or (
+                instance.definition.authority_kind == "DIGITAL_EMPLOYEE_DEFINITION_V1"
+                and (
+                    agent.record.get("agent_definition_id"),
+                    agent.record.get("agent_revision_id"),
+                    agent.record.get("agent_digest"),
+                )
+                != (
+                    instance.definition.primary_agent_id,
+                    instance.definition.primary_agent_revision_id,
+                    instance.definition.primary_agent_digest,
+                )
+            )
+            or (
                 workflow_run_id is not None
                 and str(aggregate.workflow_run.workflow_run_id) != workflow_run_id
             )
@@ -273,7 +264,10 @@ class DigitalEmployeeProductAssembly:
                 agent_revision_id is not None
                 and (
                     agent.record.get("agent_revision_id") != agent_revision_id
-                    or instance.definition.revision_id != agent_revision_id
+                    or instance.definition.authority_kind
+                    != "DIGITAL_EMPLOYEE_DEFINITION_V1"
+                    or instance.definition.primary_agent_revision_id
+                    != agent_revision_id
                 )
             )
         ):
@@ -308,6 +302,16 @@ class DigitalEmployeeProductAssembly:
         return result
 
     def _relationship_projection(self, value):
+        if value.definition.authority_kind == "DIGITAL_EMPLOYEE_DEFINITION_V1":
+            current = self.employee_definitions.read(
+                value.scope,
+                value.definition.definition_id,
+                value.definition.revision_id,
+            )
+            return {
+                "directComposition": current["revision"]["members"],
+                "compositionDigest": current["digest"],
+            }
         scope = DefinitionScope(value.scope.namespace, value.scope.security_domain)
         try:
             record = self.definitions.repository.get(
@@ -429,6 +433,9 @@ def build_digital_employee_assembly(
             control.migrate()
         finally:
             control.pool.close()
+    PostgresEmployeeDefinitionRepository(authority).migrate(
+        migration_path.with_name("0014_digital_employee_identity.sql")
+    )
     return DigitalEmployeeProductAssembly(
         definitions, PostgresDigitalEmployeeRepository(authority)
     )
