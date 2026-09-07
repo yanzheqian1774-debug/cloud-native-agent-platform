@@ -6,6 +6,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from agent_console import runtime_profile_api, workflow_definition_api
 from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepository
 from agent_console.agent_definition_service import AgentDefinitionService
 from agent_console.digital_employee_definition import (
@@ -20,6 +21,12 @@ from agent_console.digital_employee_definition_postgres import (
 )
 from agent_console.execution_domain import ScopeIdentity
 from agent_console.execution_postgres import PostgresExecutionAuthorityRepository
+from agent_console.runtime_profile_postgres import PostgresRuntimeProfileRepository
+from agent_console.runtime_profile_service import RuntimeProfileService
+from agent_console.workflow_definition_postgres import (
+    PostgresWorkflowDefinitionRepository,
+)
+from agent_console.workflow_definition_service import WorkflowDefinitionService
 
 DATABASE_URL = os.environ.get("EMPLOYEE_IDENTITY_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -127,6 +134,121 @@ def publish_employee(store, scope, database_url=None):
             command_id=f"{action}:{revision.definition_id}",
         )
     return revision, service, current
+
+
+def publish_runtime_and_workflow(scope):
+    migration = MIGRATIONS / "0007_workflow_runtime_profiles.sql"
+    runtime_repository = PostgresRuntimeProfileRepository(
+        DATABASE_URL, migration_path=migration
+    )
+    workflow_repository = PostgresWorkflowDefinitionRepository(
+        DATABASE_URL, migration_path=migration
+    )
+    runtime_repository.migrate()
+    workflow_repository.migrate()
+    runtime_service = RuntimeProfileService(runtime_repository)
+    runtime_scope = runtime_service.scope(scope.namespace, scope.security_domain)
+    runtime = runtime_service.create(
+        runtime_scope,
+        "human:runtime-owner",
+        "Employee compatibility runtime",
+        {
+            "provider": "OPENCLAW",
+            "resources": {
+                "cpuRequest": "100m",
+                "cpuLimit": "500m",
+                "memoryRequest": "128Mi",
+                "memoryLimit": "512Mi",
+            },
+            "isolation": "NAMESPACE",
+            "stateMode": "STATELESS",
+            "sessionAffinity": "NONE",
+            "secretReferences": [],
+            "openClawPackageRef": "openclaw://bounded/employee-compatibility@1",
+        },
+    )
+    runtime_id = runtime["runtimeProfileId"]
+    runtime = runtime_service.validate(
+        runtime_scope, runtime_id, "human:runtime-owner", runtime["aggregateVersion"]
+    )
+    runtime_revision = runtime["revisions"][-1]
+    runtime = runtime_service.review(
+        runtime_scope,
+        runtime_id,
+        "human:runtime-reviewer",
+        runtime["aggregateVersion"],
+        runtime_revision["digest"],
+        "APPROVE",
+        "Exact compatibility review",
+    )
+    runtime_service.publish(
+        runtime_scope,
+        runtime_id,
+        "human:runtime-publisher",
+        runtime["aggregateVersion"],
+        runtime_revision["digest"],
+        runtime["reviews"][-1]["reviewId"],
+    )
+
+    workflow_service = WorkflowDefinitionService(
+        workflow_repository, lambda _scope, _reference: True
+    )
+    workflow_scope = workflow_service.scope(scope.namespace, scope.security_domain)
+    workflow = workflow_service.create(
+        workflow_scope,
+        "human:workflow-owner",
+        "Employee compatibility workflow",
+        {
+            "description": "Validate exact composition compatibility",
+            "inputs": ["request"],
+            "outputs": ["result"],
+            "runtimeProfile": {
+                "kind": "RUNTIME_PROFILE",
+                "resourceId": runtime_id,
+                "revisionId": runtime_revision["revisionId"],
+            },
+            "tasks": [
+                {
+                    "taskId": "validate",
+                    "name": "Validate composition",
+                    "dependsOn": [],
+                    "inputs": ["request"],
+                    "outputs": ["result"],
+                    "capabilityRequirements": ["composition-validation"],
+                    "references": [],
+                    "retryLimit": 1,
+                    "timeoutSeconds": 300,
+                    "failurePolicy": "FAIL_WORKFLOW",
+                }
+            ],
+        },
+    )
+    workflow_id = workflow["workflowDefinitionId"]
+    workflow = workflow_service.validate(
+        workflow_scope,
+        workflow_id,
+        "human:workflow-owner",
+        workflow["aggregateVersion"],
+    )
+    workflow_revision = workflow["revisions"][-1]
+    workflow = workflow_service.review(
+        workflow_scope,
+        workflow_id,
+        "human:workflow-reviewer",
+        workflow["aggregateVersion"],
+        workflow_revision["digest"],
+        "APPROVE",
+        "Exact compatibility review",
+    )
+    workflow_service.publish(
+        workflow_scope,
+        workflow_id,
+        "human:workflow-publisher",
+        workflow["aggregateVersion"],
+        workflow_revision["digest"],
+        workflow["reviews"][-1]["reviewId"],
+    )
+    return runtime_service, workflow_service
 
 
 def test_real_publication_replay_cas_restart_and_immutability():
@@ -256,4 +378,134 @@ def test_real_mismatch_rolls_back_validation():
             )
         assert service.read(scope, "employee", "employee-v1") == before
     finally:
+        authority.pool.close()
+
+
+def test_real_agent_binding_digest_projection_is_accepted_without_history_rewrite(
+    monkeypatch,
+):
+    authority, store = setup_authority()
+    scope = ScopeIdentity(f"employee-binding-{uuid.uuid4().hex}", "quality")
+    runtime_service, workflow_service = publish_runtime_and_workflow(scope)
+    try:
+        monkeypatch.setattr(runtime_profile_api, "_service", runtime_service)
+        monkeypatch.setattr(workflow_definition_api, "_service", workflow_service)
+        runtime_record_before = runtime_service.repository.get(
+            runtime_service.scope(scope.namespace, scope.security_domain),
+            runtime_service.repository.list(
+                runtime_service.scope(scope.namespace, scope.security_domain)
+            )[0]["runtimeProfileId"],
+        )
+        workflow_record_before = workflow_service.repository.get(
+            workflow_service.scope(scope.namespace, scope.security_domain),
+            workflow_service.repository.list(
+                workflow_service.scope(scope.namespace, scope.security_domain)
+            )[0]["workflowDefinitionId"],
+        )
+        runtime_resolution = runtime_profile_api.binding_resolver.resolve(
+            scope, "runtime-profile", runtime_record_before["runtimeProfileId"]
+        )
+        workflow_resolution = workflow_definition_api.binding_resolver.resolve(
+            scope, "workflow", workflow_record_before["workflowDefinitionId"]
+        )
+        assert runtime_resolution is not None and workflow_resolution is not None
+        assert len(runtime_resolution.digest) == len(workflow_resolution.digest) == 64
+        assert runtime_record_before["revisions"][-1]["digest"] == (
+            "sha256:" + runtime_resolution.digest
+        )
+        assert workflow_record_before["revisions"][-1]["digest"] == (
+            "sha256:" + workflow_resolution.digest
+        )
+
+        members = (
+            publish_agent(scope),
+            CompositionMember(
+                MemberKind.WORKFLOW,
+                workflow_resolution.resource_id,
+                workflow_resolution.revision_id,
+                workflow_resolution.digest,
+            ),
+            CompositionMember(
+                MemberKind.RUNTIME_PROFILE,
+                runtime_resolution.resource_id,
+                runtime_resolution.revision_id,
+                runtime_resolution.digest,
+            ),
+        )
+        revision = EmployeeRevision(
+            scope,
+            f"employee-definition:{uuid.uuid4().hex}",
+            "employee-revision:1",
+            "Quality owner",
+            ("Validate exact compatibility",),
+            members,
+        )
+        employee_digest_before = revision.digest
+        service = EmployeeDefinitionService(store, Authorized(scope))
+        current = service.create(
+            revision, expected_version=0, command_id=f"create:{revision.definition_id}"
+        )
+        stored_before = service.read(
+            scope, revision.definition_id, revision.revision_id
+        )
+        for action in ("VALIDATE", "APPROVE", "PUBLISH"):
+            current = service.decide(
+                scope,
+                revision.definition_id,
+                revision.revision_id,
+                employee_digest_before,
+                action,
+                expected_version=current["aggregateVersion"],
+                command_id=f"{action}:{revision.definition_id}",
+            )
+        assert current["published"] is True
+        assert current["digest"] == employee_digest_before
+        assert stored_before["revision"]["members"] == revision.record["members"]
+        assert (
+            runtime_service.repository.get(
+                runtime_service.scope(scope.namespace, scope.security_domain),
+                runtime_resolution.resource_id,
+            )
+            == runtime_record_before
+        )
+        assert (
+            workflow_service.repository.get(
+                workflow_service.scope(scope.namespace, scope.security_domain),
+                workflow_resolution.resource_id,
+            )
+            == workflow_record_before
+        )
+
+        for suffix, changed in (
+            ("digest", {"digest": "0" * 64}),
+            ("revision", {"revision_id": "workflow-revision:wrong"}),
+            ("identity", {"resource_id": "workflow-definition:wrong"}),
+        ):
+            invalid_member = replace(members[1], **changed)
+            invalid = replace(
+                revision,
+                definition_id=f"employee-definition:{suffix}:{uuid.uuid4().hex}",
+                members=(members[0], invalid_member, members[2]),
+            )
+            invalid_current = service.create(
+                invalid,
+                expected_version=0,
+                command_id=f"create:{invalid.definition_id}",
+            )
+            with pytest.raises(
+                EmployeeDefinitionError,
+                match=r"BOUND_RESOURCE_(?:MISMATCH|NOT_FOUND)",
+            ):
+                service.decide(
+                    scope,
+                    invalid.definition_id,
+                    invalid.revision_id,
+                    invalid.digest,
+                    "VALIDATE",
+                    expected_version=invalid_current["aggregateVersion"],
+                    command_id=f"validate:{invalid.definition_id}",
+                )
+    finally:
+        runtime_service.repository.pool.close()
+        workflow_service.repository.pool.close()
         authority.pool.close()

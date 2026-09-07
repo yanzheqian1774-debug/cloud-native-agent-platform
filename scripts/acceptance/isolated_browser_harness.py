@@ -256,6 +256,59 @@ def _ordered_specs(suites: object):
                     yield suite, spec
 
 
+_FAILURE_CONTEXT_UNSET = object()
+
+
+def first_failure_context(
+    report: dict[str, object],
+) -> (
+    tuple[
+        dict[str, object],
+        dict[str, object],
+        dict[str, object],
+        dict[str, object],
+    ]
+    | None
+):
+    """Return one unambiguous failed result from the first failing spec."""
+    ordered = list(_ordered_specs(report.get("suites")))
+    for suite, spec in ordered:
+        tests = spec.get("tests")
+        if not isinstance(tests, list):
+            continue
+        candidates = []
+        for test in tests:
+            if not isinstance(test, dict):
+                return None
+            results = test.get("results")
+            if not isinstance(results, list):
+                if test.get("status") == "unexpected":
+                    return None
+                continue
+            if any(not isinstance(result, dict) for result in results):
+                return None
+            failed = [
+                result
+                for result in results
+                if result.get("status") in {"failed", "timedOut", "interrupted"}
+            ]
+            if test.get("status") == "unexpected" or failed:
+                if len(results) != 1 or len(failed) != 1:
+                    return None
+                candidates.append((suite, spec, test, failed[0]))
+        if not candidates:
+            continue
+        if len(candidates) != 1:
+            return None
+        key = (Path(str(suite.get("file", ""))).name, spec.get("title"))
+        occurrences = sum(
+            (Path(str(item_suite.get("file", ""))).name, item_spec.get("title")) == key
+            for item_suite, item_spec in ordered
+        )
+        return candidates[0] if occurrences == 1 else None
+    return None
+
+
 def _bounded_count(value: object) -> int:
     return value if type(value) is int and 0 <= value <= MAX_DIAGNOSTIC_COUNT else 0
 
@@ -377,30 +430,18 @@ def sanitized_first_failure_record(
     journey_id: str,
     restart_count: int,
     knowledge_reporter_output: bytes | None = None,
+    failure_context: object = _FAILURE_CONTEXT_UNSET,
 ) -> dict[str, object] | None:
     report = _browser_json(stdout)
     if report is None:
         return None
     stats = report.get("stats") if isinstance(report.get("stats"), dict) else {}
     unexpected = _bounded_count(stats.get("unexpected"))
-    first = None
-    for suite, spec in _ordered_specs(report.get("suites")):
-        tests = spec.get("tests")
-        if not isinstance(tests, list):
-            continue
-        for test in tests:
-            if not isinstance(test, dict):
-                continue
-            results = test.get("results")
-            if test.get("status") == "unexpected" or any(
-                isinstance(item, dict)
-                and item.get("status") in {"failed", "timedOut", "interrupted"}
-                for item in (results if isinstance(results, list) else [])
-            ):
-                first = (suite, spec, test)
-                break
-        if first:
-            break
+    first = (
+        first_failure_context(report)
+        if failure_context is _FAILURE_CONTEXT_UNSET
+        else failure_context
+    )
     if first is None and unexpected == 0:
         return None
     assertion_id = "NOT_RETAINED"
@@ -413,7 +454,7 @@ def sanitized_first_failure_record(
         "NOT_RETAINED",
     )
     if first is not None:
-        suite, spec, test = first
+        suite, spec, _test, result = first
         title = spec.get("title")
         mapped = (
             FIRST_FAILURE_ASSERTION_IDS.get(
@@ -424,16 +465,6 @@ def sanitized_first_failure_record(
         )
         if mapped:
             assertion_id = mapped
-        results = test.get("results")
-        result = next(
-            (
-                item
-                for item in (results if isinstance(results, list) else [])
-                if isinstance(item, dict)
-                and item.get("status") in {"failed", "timedOut", "interrupted"}
-            ),
-            {},
-        )
         operation = result
         if (
             assertion_id == "KNOWLEDGE_WORKBENCH_LIFECYCLE"
@@ -821,11 +852,47 @@ WAVE_3B_STEP_IDS = {
         "DESKTOP",
         "HIERARCHY_CHECK",
     ),
-    "8 stale conflict refreshes and explicitly reapplies": (
-        "WAVE3B_08_CONFLICT_RECOVERY",
+    "WAVE3B_08_NAVIGATION": (
+        "WAVE3B_08_NAVIGATION",
         "WORKFLOWS",
         "DESKTOP",
-        "CONFLICT_RECOVERY",
+        "NAVIGATION",
+    ),
+    "WAVE3B_08_MAKE_STALE": (
+        "WAVE3B_08_MAKE_STALE",
+        "WORKFLOWS",
+        "DESKTOP",
+        "STALE_PREPARATION",
+    ),
+    "WAVE3B_08_CONFLICT_WRITE": (
+        "WAVE3B_08_CONFLICT_WRITE",
+        "WORKFLOWS",
+        "DESKTOP",
+        "CONFLICT_WRITE",
+    ),
+    "WAVE3B_08_ERROR_UI": (
+        "WAVE3B_08_ERROR_UI",
+        "WORKFLOWS",
+        "DESKTOP",
+        "ERROR_STATE",
+    ),
+    "WAVE3B_08_AUTHORITATIVE_READBACK": (
+        "WAVE3B_08_AUTHORITATIVE_READBACK",
+        "WORKFLOWS",
+        "DESKTOP",
+        "AUTHORITATIVE_READBACK",
+    ),
+    "WAVE3B_08_EXPLICIT_RECOVERY": (
+        "WAVE3B_08_EXPLICIT_RECOVERY",
+        "WORKFLOWS",
+        "DESKTOP",
+        "EXPLICIT_RECOVERY",
+    ),
+    "WAVE3B_08_FINAL_ASSERTION": (
+        "WAVE3B_08_FINAL_ASSERTION",
+        "WORKFLOWS",
+        "DESKTOP",
+        "STATE_CHECK",
     ),
     "9 denied and absent are nondisclosing": (
         "WAVE3B_09_BOUNDED_DISCLOSURE",
@@ -894,6 +961,29 @@ WAVE_3B_STEP_IDS = {
         "FOCUS_CHECK",
     ),
 }
+UNIFIED_PRODUCT_STEP_IDS = {
+    "UNIFIED_01_PROBLEM_GAP": ("WORK", "DESKTOP", "STATE_CHECK"),
+    "UNIFIED_02_AGENT_PUBLISH": ("AGENTS", "DESKTOP", "LIFECYCLE_CHECK"),
+    "UNIFIED_03_EMPLOYEE_INPUT_CONTRACT": (
+        "EMPLOYEES",
+        "DESKTOP",
+        "INPUT_CHECK",
+    ),
+    "UNIFIED_03_EMPLOYEE_CREATE": ("EMPLOYEES", "DESKTOP", "CREATE"),
+    "UNIFIED_03_EMPLOYEE_VALIDATE": ("EMPLOYEES", "DESKTOP", "VALIDATE"),
+    "UNIFIED_03_EMPLOYEE_APPROVE": ("EMPLOYEES", "DESKTOP", "APPROVE"),
+    "UNIFIED_03_EMPLOYEE_PUBLISH": ("EMPLOYEES", "DESKTOP", "PUBLISH"),
+    "UNIFIED_03_AGENT_AUTHORITY_ASSERTIONS": (
+        "AGENTS",
+        "DESKTOP",
+        "IDENTITY_CHECK",
+    ),
+    "UNIFIED_04_AGENT_MATCHING": ("WORK", "DESKTOP", "MATCHING_CHECK"),
+    "UNIFIED_05_CATALOG": ("CATALOG", "DESKTOP", "IDENTITY_CHECK"),
+    "UNIFIED_06_RELATIONSHIPS": ("CATALOG", "DESKTOP", "RELATIONSHIP_CHECK"),
+    "UNIFIED_07_EMPLOYEE_MANAGEMENT": ("EMPLOYEES", "DESKTOP", "IDENTITY_CHECK"),
+    "UNIFIED_08_RESTART_READBACK": ("EMPLOYEES", "DESKTOP", "RESTART_READINESS"),
+}
 DIAGNOSTIC_STEP_IDS = {
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
@@ -903,6 +993,7 @@ DIAGNOSTIC_STEP_IDS = {
         step_id: (route, viewport, action)
         for step_id, route, viewport, action in WAVE_3B_STEP_IDS.values()
     },
+    **UNIFIED_PRODUCT_STEP_IDS,
 }
 ACTION_CLASSES = frozenset(
     {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
@@ -920,63 +1011,64 @@ def _step_identity(scenario: str, title: object):
         return title, route, viewport, _primary_action_class(title)
     if scenario == "WAVE_3B_REAL_SERVICE_JOURNEYS":
         return WAVE_3B_STEP_IDS.get(title)
+    if scenario == "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY":
+        identity = UNIFIED_PRODUCT_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     return None
 
 
-def step_diagnostic(report: dict[str, object]) -> dict[str, object] | None:
-    for suite, spec in _ordered_specs(report.get("suites")):
-        scenario = FIRST_FAILURE_ASSERTION_IDS.get(
-            (Path(str(suite.get("file", ""))).name, spec.get("title"))
-        )
-        if scenario not in {
-            "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
-            "WAVE_3B_REAL_SERVICE_JOURNEYS",
-        }:
-            continue
-        for test in spec.get("tests", []):
-            for result in test.get("results", []):
-                if result.get("status") not in {"failed", "timedOut", "interrupted"}:
-                    continue
-                steps = result.get("steps")
-                if not isinstance(steps, list):
-                    return None
-                completed = 0
-                last = failed = None
-                for step in steps:
-                    if not isinstance(step, dict):
-                        return None
-                    identity = _step_identity(scenario, step.get("title"))
-                    if identity is None:
-                        return None
-                    step_id, route, viewport, action = identity
-                    duration = step.get("duration")
-                    item = {
-                        "routeKey": route,
-                        "viewportKey": viewport,
-                        "stepId": step_id,
-                        "actionClass": action,
-                        "elapsedMs": duration
-                        if type(duration) is int and 0 <= duration <= 3600000
-                        else None,
-                    }
-                    if step.get("error"):
-                        failed = item
-                        break
-                    completed += 1
-                    last = item
-                elapsed = result.get("duration")
-                return {
-                    "failedStep": failed,
-                    "lastCompletedStep": last,
-                    "completedStepCount": completed,
-                    "elapsedMs": elapsed
-                    if type(elapsed) is int and 0 <= elapsed <= 3600000
-                    else None,
-                    "timeoutKind": "SCENARIO"
-                    if result.get("status") == "timedOut"
-                    else "UNKNOWN",
-                }
-    return None
+def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object] | None:
+    if not isinstance(failure_context, tuple) or len(failure_context) != 4:
+        return None
+    suite, spec, _test, result = failure_context
+    if not all(isinstance(value, dict) for value in failure_context):
+        return None
+    mapped = FIRST_FAILURE_ASSERTION_IDS.get(
+        (Path(str(suite.get("file", ""))).name, spec.get("title"))
+    )
+    if mapped != scenario or scenario not in {
+        "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
+        "WAVE_3B_REAL_SERVICE_JOURNEYS",
+        "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
+    }:
+        return None
+    steps = result.get("steps")
+    if not isinstance(steps, list):
+        return None
+    completed = 0
+    last = failed = None
+    for step in steps:
+        if not isinstance(step, dict):
+            return None
+        identity = _step_identity(scenario, step.get("title"))
+        if identity is None:
+            return None
+        step_id, route, viewport, action = identity
+        duration = step.get("duration")
+        item = {
+            "routeKey": route,
+            "viewportKey": viewport,
+            "stepId": step_id,
+            "actionClass": action,
+            "elapsedMs": duration
+            if type(duration) is int and 0 <= duration <= 3600000
+            else None,
+        }
+        if step.get("error"):
+            failed = item
+            break
+        completed += 1
+        last = item
+    elapsed = result.get("duration")
+    return {
+        "failedStep": failed,
+        "lastCompletedStep": last,
+        "completedStepCount": completed,
+        "elapsedMs": elapsed
+        if type(elapsed) is int and 0 <= elapsed <= 3600000
+        else None,
+        "timeoutKind": "SCENARIO" if result.get("status") == "timedOut" else "UNKNOWN",
+    }
 
 
 def validate_step_diagnostic(value: object) -> None:
@@ -1074,7 +1166,10 @@ def summary_counts(report: dict[str, object]) -> dict[str, int | None]:
 
 
 def build_failure_summary(
-    stdout: bytes, failure: dict[str, object], identity: dict[str, object]
+    stdout: bytes,
+    failure: dict[str, object],
+    identity: dict[str, object],
+    failure_context: object = _FAILURE_CONTEXT_UNSET,
 ) -> dict[str, object]:
     validate_first_failure_record(failure)
     scenario = failure["firstFailureAssertionId"]
@@ -1087,6 +1182,11 @@ def build_failure_summary(
         None,
     )
     report = _browser_json(stdout) or {}
+    context = (
+        first_failure_context(report)
+        if failure_context is _FAILURE_CONTEXT_UNSET
+        else failure_context
+    )
     line = None
     if mapping:
         for suite, spec in _ordered_specs(report.get("suites")):
@@ -1110,7 +1210,7 @@ def build_failure_summary(
         "buildModeIdentity": identity["buildModeIdentity"],
         "frontendManifestDigest": identity["frontendManifestDigest"],
     }
-    diagnostic = step_diagnostic(report)
+    diagnostic = step_diagnostic(context, str(scenario))
     if diagnostic is not None:
         validate_step_diagnostic(diagnostic)
         summary["stepDiagnostic"] = diagnostic
@@ -1202,13 +1302,16 @@ def encode_failure_summary(summary: dict[str, object]) -> str:
 
 
 def emit_failure_summary(
-    stdout: bytes, failure: dict[str, object], identity: dict[str, object]
+    stdout: bytes,
+    failure: dict[str, object],
+    identity: dict[str, object],
+    failure_context: object = _FAILURE_CONTEXT_UNSET,
 ) -> None:
     # Only the new optional log channel is best-effort. Existing scanners and
     # cleanup remain outside this exception boundary and retain their gates.
     try:
         encoded = encode_failure_summary(
-            build_failure_summary(stdout, failure, identity)
+            build_failure_summary(stdout, failure, identity, failure_context)
         )
         print(SUMMARY_PREFIX + encoded, file=sys.stderr, flush=True)
     except Exception:
@@ -1411,6 +1514,7 @@ class Harness:
                 "SKILL_MCP_DATABASE_URL": self.args.postgres_url,
                 "KNOWLEDGE_DATABASE_URL": self.args.postgres_url,
                 "WORKFLOW_RUNTIME_DATABASE_URL": self.args.postgres_url,
+                "EXECUTION_DATABASE_URL": self.args.postgres_url,
                 "KNOWLEDGE_QDRANT_URL": self.args.qdrant_url,
                 "S5_IMPL_041_QDRANT_URL": self.args.qdrant_url,
                 "S5_HARNESS_OWNERSHIP_TOKEN": self.token,
@@ -1744,6 +1848,10 @@ def main() -> int:
                 browser_result.stdout, browser_result.stderr
             )
             print(f"browser acceptance failed: {category}", file=sys.stderr)
+            report = _browser_json(browser_result.stdout)
+            failure_context = (
+                first_failure_context(report) if report is not None else None
+            )
             failure = sanitized_first_failure_record(
                 browser_result.stdout,
                 args.journey_id,
@@ -1753,6 +1861,7 @@ def main() -> int:
                     if (harness.runtime / "knowledge-operation-result.json").is_file()
                     else None
                 ),
+                failure_context,
             )
             if failure is None:
                 failure = sanitized_first_failure_record(
@@ -1766,7 +1875,12 @@ def main() -> int:
                 encoding="utf-8",
             )
             scan_generated_artifacts([failure_path])
-            emit_failure_summary(browser_result.stdout, failure, build_identity)
+            emit_failure_summary(
+                browser_result.stdout,
+                failure,
+                build_identity,
+                failure_context,
+            )
     finally:
         try:
             harness.stop()

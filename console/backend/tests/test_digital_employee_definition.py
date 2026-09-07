@@ -8,6 +8,7 @@ from agent_console.digital_employee_definition import (
     EmployeeRevision,
     MemberKind,
 )
+from agent_console.digital_employee_definition_postgres import _same_sha256_digest
 from agent_console.execution_domain import ScopeIdentity
 
 
@@ -54,6 +55,34 @@ def test_cardinality_and_canonical_composition():
             value, revision_id="successor", predecessor_revision_id=value.revision_id
         ).digest
     )
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    (
+        ("a" * 64, "a" * 64),
+        ("sha256:" + "a" * 64, "a" * 64),
+        ("a" * 64, "sha256:" + "a" * 64),
+    ),
+)
+def test_sha256_member_digest_encodings_are_strictly_equivalent(left, right):
+    assert _same_sha256_digest(left, right)
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    (
+        ("a" * 64, "b" * 64),
+        ("sha512:" + "a" * 64, "a" * 64),
+        ("sha256:" + "a" * 63, "a" * 64),
+        ("SHA256:" + "a" * 64, "a" * 64),
+        ("sha256:" + "A" * 64, "a" * 64),
+        ("sha256:sha256:" + "a" * 64, "a" * 64),
+        (None, "a" * 64),
+    ),
+)
+def test_sha256_member_digest_comparison_rejects_mismatch_and_malformed(left, right):
+    assert not _same_sha256_digest(left, right)
 
 
 def test_denial_precedes_every_repository_operation():

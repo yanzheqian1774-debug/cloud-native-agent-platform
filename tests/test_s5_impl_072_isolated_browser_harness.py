@@ -345,7 +345,8 @@ const {runnerReporters}=require(path);
 (async()=>{
  const config={configDir:process.cwd(),config:{tags:[],reporter:[['json']]}};
  const [r]=await runnerReporters.createReporters(config,'test');
- const values=['PRIMARY_HOME_DESKTOP_NAVIGATE','WAVE3B_11_RESTART_READINESS']
+ const values=['PRIMARY_HOME_DESKTOP_NAVIGATE','WAVE3B_11_RESTART_READINESS',
+   'UNIFIED_07_EMPLOYEE_MANAGEMENT']
    .map(title=>r._serializeTestStep({title,duration:12,
      error:{message:'SYNTHETIC'},steps:[]}));
  console.log(JSON.stringify(values));
@@ -367,6 +368,7 @@ const {runnerReporters}=require(path);
         for title in (
             "PRIMARY_HOME_DESKTOP_NAVIGATE",
             "WAVE3B_11_RESTART_READINESS",
+            "UNIFIED_07_EMPLOYEE_MANAGEMENT",
         )
     ]
 
@@ -418,7 +420,10 @@ def wave_3b_step_report():
         duration=240_000,
         steps=[
             {"title": title, "duration": 1}
-            for title in list(harness_module.WAVE_3B_STEP_IDS)[:16]
+            for title in list(harness_module.WAVE_3B_STEP_IDS)[
+                : list(harness_module.WAVE_3B_STEP_IDS).index("WAVE3B_12_OPEN_EVIDENCE")
+                + 1
+            ]
         ]
         + [
             {
@@ -442,7 +447,9 @@ def test_wave_3b_steps_are_static_sanitized_and_distinguish_failure():
         "elapsedMs": 5000,
     }
     assert diagnostic["lastCompletedStep"]["stepId"] == "WAVE3B_12_OPEN_EVIDENCE"
-    assert diagnostic["completedStepCount"] == 16
+    assert diagnostic["completedStepCount"] == (
+        list(harness_module.WAVE_3B_STEP_IDS).index("WAVE3B_12_OPEN_EVIDENCE") + 1
+    )
     assert diagnostic["elapsedMs"] == 240_000
     assert diagnostic["timeoutKind"] == "SCENARIO"
     assert summary["actionClass"] == "FOCUS_CHECK"
@@ -451,6 +458,184 @@ def test_wave_3b_steps_are_static_sanitized_and_distinguish_failure():
     encoded = harness_module.encode_failure_summary(summary)
     assert "PRIVATE" not in encoded
     assert "locator" not in encoded
+
+
+def test_wave_3b_conflict_recovery_uses_exact_static_top_level_steps():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'await test\.step\("(WAVE3B_08_[A-Z_]+)"', source)
+    expected = [
+        title
+        for title in harness_module.WAVE_3B_STEP_IDS
+        if title.startswith("WAVE3B_08_")
+    ]
+    assert titles == expected
+    assert expected == [
+        "WAVE3B_08_NAVIGATION",
+        "WAVE3B_08_MAKE_STALE",
+        "WAVE3B_08_CONFLICT_WRITE",
+        "WAVE3B_08_ERROR_UI",
+        "WAVE3B_08_AUTHORITATIVE_READBACK",
+        "WAVE3B_08_EXPLICIT_RECOVERY",
+        "WAVE3B_08_FINAL_ASSERTION",
+    ]
+    assert "test.setTimeout(240_000)" in source
+    assert "waitForTimeout(" not in source
+
+
+def test_wave_3b_conflict_write_failure_is_bounded_and_distinct():
+    report = wave_3b_step_report()
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    conflict_index = list(harness_module.WAVE_3B_STEP_IDS).index(
+        "WAVE3B_08_CONFLICT_WRITE"
+    )
+    result["steps"] = result["steps"][: conflict_index + 1]
+    result["steps"][-1].update(
+        duration=5000, error={"message": "PRIVATE response and URL"}
+    )
+    summary = make_summary(report)
+    diagnostic = summary["stepDiagnostic"]
+    assert diagnostic["failedStep"] == {
+        "routeKey": "WORKFLOWS",
+        "viewportKey": "DESKTOP",
+        "stepId": "WAVE3B_08_CONFLICT_WRITE",
+        "actionClass": "CONFLICT_WRITE",
+        "elapsedMs": 5000,
+    }
+    assert diagnostic["lastCompletedStep"]["stepId"] == "WAVE3B_08_MAKE_STALE"
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
+def unified_step_report():
+    report = summary_report("timedOut")
+    report["suites"][0]["file"] = "unified-product-assembly.spec.ts"
+    report["suites"][0]["specs"][0]["title"] = (
+        "proves the complete durable unified-product browser journey"
+    )
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result.update(
+        duration=7000,
+        steps=[
+            {"title": "UNIFIED_01_PROBLEM_GAP", "duration": 100},
+            {
+                "title": "UNIFIED_02_AGENT_PUBLISH",
+                "duration": 5000,
+                "error": {"message": "PRIVATE selector and URL"},
+            },
+        ],
+    )
+    return report
+
+
+def test_unified_source_uses_exact_static_top_level_steps_without_retry_controls():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/unified-product-assembly.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'await test\.step\("([A-Z0-9_]+)"', source)
+    assert titles == list(harness_module.UNIFIED_PRODUCT_STEP_IDS)
+    assert "test.setTimeout(180_000)" in source
+    assert "test.slow(" not in source
+    assert "test.fixme(" not in source
+    assert "waitForTimeout(" not in source
+
+
+def append_failed_report(target, source):
+    target["suites"].extend(source["suites"])
+    target["stats"]["unexpected"] += source["stats"]["unexpected"]
+
+
+def test_first_unified_uses_only_its_exact_failed_result_steps():
+    report = unified_step_report()
+    append_failed_report(report, wave_3b_step_report())
+    summary = make_summary(report)
+    assert summary["scenarioId"] == "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY"
+    assert summary["stepDiagnostic"]["failedStep"]["stepId"] == (
+        "UNIFIED_02_AGENT_PUBLISH"
+    )
+    assert "WAVE3B" not in harness_module.encode_failure_summary(summary)
+
+
+def test_first_wave_uses_only_its_exact_failed_result_steps():
+    report = wave_3b_step_report()
+    append_failed_report(report, unified_step_report())
+    summary = make_summary(report)
+    assert summary["scenarioId"] == "WAVE_3B_REAL_SERVICE_JOURNEYS"
+    assert summary["stepDiagnostic"]["failedStep"]["stepId"] == (
+        "WAVE3B_12_CLOSE_FOCUS_CHECK"
+    )
+    assert "UNIFIED_02" not in harness_module.encode_failure_summary(summary)
+
+
+def test_same_spec_passing_project_does_not_replace_failed_result():
+    report = unified_step_report()
+    report["suites"][0]["specs"][0]["tests"].append(
+        {
+            "status": "expected",
+            "projectName": "other",
+            "results": [{"status": "passed"}],
+        }
+    )
+    report["stats"]["expected"] = 1
+    summary = make_summary(report)
+    assert summary["stepDiagnostic"]["failedStep"]["stepId"] == (
+        "UNIFIED_02_AGENT_PUBLISH"
+    )
+
+
+@pytest.mark.parametrize(
+    "ambiguity", ["failed_test", "duplicate_title", "multi_result"]
+)
+def test_ambiguous_failure_context_omits_steps(ambiguity):
+    report = unified_step_report()
+    spec = report["suites"][0]["specs"][0]
+    if ambiguity == "failed_test":
+        spec["tests"].append(
+            {"status": "unexpected", "results": [{"status": "failed"}]}
+        )
+        report["stats"]["unexpected"] = 2
+    elif ambiguity == "duplicate_title":
+        report["suites"].append(json.loads(json.dumps(report["suites"][0])))
+        report["stats"]["unexpected"] = 2
+    else:
+        spec["tests"][0]["results"].append({"status": "passed"})
+    raw = json.dumps(report).encode()
+    context = harness_module.first_failure_context(report)
+    failure = harness_module.sanitized_first_failure_record(
+        raw, "journey-281", 0, failure_context=context
+    )
+    summary = harness_module.build_failure_summary(
+        raw,
+        failure,
+        {"buildModeIdentity": "LIVE_DEMO", "frontendManifestDigest": "a" * 64},
+        context,
+    )
+    assert context is None
+    assert failure["firstFailureAssertionId"] == "NOT_RETAINED"
+    assert "stepDiagnostic" not in summary
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
+@pytest.mark.parametrize("raw", [b"not-json PRIVATE", b'{"stats":{"unexpected":1}}'])
+def test_missing_or_damaged_report_omits_steps(raw):
+    parsed = harness_module._browser_json(raw)
+    context = harness_module.first_failure_context(parsed) if parsed else None
+    failure = harness_module.sanitized_first_failure_record(
+        b'{"stats":{"unexpected":1}}',
+        "journey-281",
+        0,
+        failure_context=context,
+    )
+    summary = harness_module.build_failure_summary(
+        raw,
+        failure,
+        {"buildModeIdentity": "LIVE_DEMO", "frontendManifestDigest": "a" * 64},
+        context,
+    )
+    assert "stepDiagnostic" not in summary
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
 
 
 def test_wave_3b_step_identity_and_action_fail_closed():
@@ -1191,3 +1376,8 @@ def test_validation_helpers_prohibit_broad_file_dump_commands() -> None:
         if file.is_file():
             text = file.read_text(encoding="utf-8", errors="ignore").lower()
             assert prohibited.search(text) is None, file
+
+
+def test_harness_connects_digital_employee_authority_to_validated_postgres() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert '"EXECUTION_DATABASE_URL": self.args.postgres_url' in source

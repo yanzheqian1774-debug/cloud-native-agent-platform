@@ -54,7 +54,16 @@ function EvidencePage() {
   useEffect(()=>{if(!context.kind||!context.resourceId||!context.revisionId||!context.digest)return;let active=true;getProductTraceability(context.kind,context.resourceId,context.revisionId,context.digest).then(value=>{if(active){setTraceability(value);setTraceabilityError(null)}}).catch(value=>active&&setTraceabilityError(value));return()=>{active=false}},[context.kind,context.resourceId,context.revisionId,context.digest,retry]);
   if(!location.search)return <EvidenceCenterPage/>;
   if(parsed.state==="INVALID"||!parsed.context.resourceId)return <main className="assembly-page"><ControlledState kind="not-found" title="Evidence 上下文不可用" detail="URL 中的资源身份无效或当前不受支持。"/></main>;
-  const close=()=>{const focusId=parsed.context.claimKey?`claim-${parsed.context.claimKey}`:parsed.context.factKey?`fact-${parsed.context.factKey}`:"";navigate(parsed.context.claimKey?`/product-view?${location.search.slice(1)}`:parsed.context.factKey?`/technical-view?${location.search.slice(1)}`:parsed.context.returnTo&&parsed.context.returnTo.startsWith("/")?parsed.context.returnTo:"/catalog");let attempts=0;const restoreFocus=()=>{const target=focusId&&document.getElementById(focusId);if(target){target.focus();return}if(attempts++<10)requestAnimationFrame(restoreFocus)};requestAnimationFrame(restoreFocus)};
+  const close=()=>{
+    const focusId=parsed.context.claimKey?`claim-${parsed.context.claimKey}`:parsed.context.factKey?`fact-${parsed.context.factKey}`:"";
+    navigate(parsed.context.claimKey?`/product-view?${location.search.slice(1)}`:parsed.context.factKey?`/technical-view?${location.search.slice(1)}`:parsed.context.returnTo&&parsed.context.returnTo.startsWith("/")?parsed.context.returnTo:"/catalog");
+    if(!focusId)return;
+    const focusTarget=()=>{const target=focusId&&document.getElementById(focusId);if(!target)return false;target.focus();return true};
+    if(focusTarget())return;
+    const observer=new MutationObserver(()=>{if(focusTarget())observer.disconnect()});
+    observer.observe(document.body,{childList:true,subtree:true});
+    window.setTimeout(()=>observer.disconnect(),5_000);
+  };
   return <EvidenceInspector context={parsed.context} onClose={close} data={traceability} error={traceabilityError} retry={()=>setRetry(value=>value+1)}/>;
 }
 
