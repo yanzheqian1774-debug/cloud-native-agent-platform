@@ -47,6 +47,8 @@ import { EvidenceCenterPage } from "./evidence/EvidenceCenterPage";
 import { OutcomeCenterPage } from "./outcomes/OutcomeCenterPage";
 import { AgentCenterPage, ApplicationMarketPage, HelpCenterPage, ModelCenterPage, OperationsCenterPage, PermissionCenterPage, SecurityCenterPage, SettingsPage, UsageCenterPage } from "./administration/PlatformSupportPages";
 
+let cancelPendingEvidenceFocus: (() => void) | null = null;
+
 function EvidencePage() {
   const location=useLocation(),navigate=useNavigate(),parsed=parseUrlContext(location.search);
   const context=parsed.state==="VALID"?parsed.context:{};
@@ -56,13 +58,19 @@ function EvidencePage() {
   if(parsed.state==="INVALID"||!parsed.context.resourceId)return <main className="assembly-page"><ControlledState kind="not-found" title="Evidence 上下文不可用" detail="URL 中的资源身份无效或当前不受支持。"/></main>;
   const close=()=>{
     const focusId=parsed.context.claimKey?`claim-${parsed.context.claimKey}`:parsed.context.factKey?`fact-${parsed.context.factKey}`:"";
-    navigate(parsed.context.claimKey?`/product-view?${location.search.slice(1)}`:parsed.context.factKey?`/technical-view?${location.search.slice(1)}`:parsed.context.returnTo&&parsed.context.returnTo.startsWith("/")?parsed.context.returnTo:"/catalog");
+    const destination=parsed.context.claimKey?`/product-view?${location.search.slice(1)}`:parsed.context.factKey?`/technical-view?${location.search.slice(1)}`:parsed.context.returnTo&&parsed.context.returnTo.startsWith("/")?parsed.context.returnTo:"/catalog";
+    navigate(destination);
+    cancelPendingEvidenceFocus?.();
     if(!focusId)return;
-    const focusTarget=()=>{const target=focusId&&document.getElementById(focusId);if(!target)return false;target.focus();return true};
-    if(focusTarget())return;
-    const observer=new MutationObserver(()=>{if(focusTarget())observer.disconnect()});
+    const expectedUrl=new URL(destination,window.location.href);let observer:MutationObserver|null=null,timeoutId=0,frameId=0,stopped=false;
+    const cleanup=()=>{if(stopped)return;stopped=true;observer?.disconnect();window.clearTimeout(timeoutId);window.cancelAnimationFrame(frameId);document.removeEventListener("pointerdown",cleanup,true);document.removeEventListener("keydown",cleanup,true);if(cancelPendingEvidenceFocus===cleanup)cancelPendingEvidenceFocus=null};
+    const onExpectedRoute=()=>window.location.pathname===expectedUrl.pathname&&window.location.search===expectedUrl.search;
+    const focusTarget=()=>{if(!onExpectedRoute())return false;const target=document.getElementById(focusId);if(!target)return false;target.focus();cleanup();return true};
+    const monitorRoute=()=>{if(!onExpectedRoute()){cleanup();return}frameId=window.requestAnimationFrame(monitorRoute)};
+    observer=new MutationObserver(()=>focusTarget());cancelPendingEvidenceFocus=cleanup;
     observer.observe(document.body,{childList:true,subtree:true});
-    window.setTimeout(()=>observer.disconnect(),5_000);
+    document.addEventListener("pointerdown",cleanup,true);document.addEventListener("keydown",cleanup,true);
+    timeoutId=window.setTimeout(cleanup,5_000);frameId=window.requestAnimationFrame(monitorRoute);focusTarget();
   };
   return <EvidenceInspector context={parsed.context} onClose={close} data={traceability} error={traceabilityError} retry={()=>setRetry(value=>value+1)}/>;
 }
