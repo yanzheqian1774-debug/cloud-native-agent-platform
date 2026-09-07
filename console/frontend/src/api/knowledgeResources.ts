@@ -2,6 +2,8 @@ export type KnowledgeRevision = {
   revisionId: string;
   state: string;
   digest: string;
+  predecessorRevisionId?: string;
+  createdAt?: string;
   content: {
     name: string;
     source: { sourceId: string; kind: string; provenance: string };
@@ -28,8 +30,15 @@ export type KnowledgeResource = {
     retrievalId: string;
     authorizationDecisionId: string;
     snapshotId: string;
+    queryDigest: string;
+    recordedAt: string;
     citations: Array<{
       citationId: string;
+      knowledgeId: string;
+      revisionId: string;
+      revisionDigest: string;
+      documentDigest: string;
+      chunkDigest: string;
       sourceId: string;
       provenance: string;
       documentId: string;
@@ -51,12 +60,30 @@ export class KnowledgeRequestError extends Error {
   }
 }
 export type KnowledgeControlledState = "validation error"|"denied"|"not found"|"conflict"|"stale"|"backend unavailable"|"partial"|"retryable"|"recovery required"|"unsupported";
-export const knowledgeControlledState=(error:KnowledgeRequestError):KnowledgeControlledState=>error.status===403?"denied":error.status===404?"not found":error.status===409?(error.reasonCode.includes("STALE")?"stale":"conflict"):error.status===422?"validation error":error.status===501?"unsupported":error.status>=500?"backend unavailable":"retryable";
+const fieldError = /^(INVALID_|EMPTY_|TEXT_LIMIT|SOURCE_LIMIT|CHUNK_LIMIT|IMPORT_SIZE|RESULT_LIMIT)/;
+export const knowledgeControlledState = (error: KnowledgeRequestError): KnowledgeControlledState =>
+  error.status === 403 ? "denied" : error.status === 404 ? "not found" :
+  error.status === 422 || fieldError.test(error.reasonCode) ? "validation error" :
+  error.status === 409 ? (error.reasonCode.includes("STALE") ? "stale" : "conflict") :
+  error.status === 501 ? "unsupported" : error.status >= 500 ? "backend unavailable" : "retryable";
+export const knowledgeErrorMessage = (error: KnowledgeRequestError): string => {
+  const messages: Record<KnowledgeControlledState, string> = {
+    "validation error": "字段格式或内容不符合要求，请检查输入后重新提交。",
+    denied: "资源不可用或当前访问未获授权。", "not found": "资源不可用或当前访问未获授权。",
+    stale: "资源版本已变化，请核对最新版本后明确决定是否再次操作。",
+    conflict: "当前生命周期或操作条件不允许此操作，请核对权威状态。",
+    "backend unavailable": "知识服务暂不可用，请稍后重新读取。提交结果可能尚未确认，请勿重复执行危险操作。",
+    partial: "操作部分完成，请查看后端结果。", retryable: "操作未完成，请检查后端错误。",
+    "recovery required": "操作需要恢复，请核对后端状态。", unsupported: "当前接口不支持此操作。",
+  };
+  return messages[knowledgeControlledState(error)];
+};
 async function request<T>(path:string,init?:RequestInit):Promise<T>{let response:Response;try{response=await fetch(path,{...init,headers:{Accept:"application/json","Content-Type":"application/json",...init?.headers}})}catch{throw new KnowledgeRequestError("KNOWLEDGE_NETWORK_UNAVAILABLE",503)}const body=await response.json().catch(()=>null);if(!response.ok)throw new KnowledgeRequestError(body?.detail?.reasonCode??"KNOWLEDGE_UNAVAILABLE",response.status);return body as T}
 const root="/api/internal/v0.2.2/knowledge";
 export const listKnowledge=()=>request<KnowledgeResource[]>(root);
 export const getKnowledge=(id:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}`);
-export const createKnowledge=()=>request<KnowledgeProjection>(root,{method:"POST",body:JSON.stringify({name:"Supplier Quality Procedures",source:{sourceId:"source:supplier-quality",documentId:"document:8d-procedure",kind:"TEXT",provenance:"human:quality-owner",content:"Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure."}})});
+export type KnowledgeInput = { name: string; source: {sourceId: string; documentId: string; kind: string; provenance: string; content: string} };
+export const createKnowledge=(input: KnowledgeInput)=>request<KnowledgeProjection>(root,{method:"POST",body:JSON.stringify(input)});
 export const knowledgeAction=(id:string,action:string,expectedVersion:number,digest?:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/${action}`,{method:"POST",body:JSON.stringify({expectedVersion,...(digest?{digest}:{})})});
 export const createKnowledgeSuccessor = (id: string, expectedVersion: number, content: string) =>
   request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/successors`, { method: "POST", body: JSON.stringify({ expectedVersion, content }) });
@@ -83,3 +110,5 @@ export const decideKnowledgeDuplicate=(candidateId:string,classification:"DUPLIC
 export const previewKnowledgeImport=(format:"txt"|"md"|"jsonl",content:string)=>request<QualityEntity>(`${root}/operations/imports/preview`,{method:"POST",body:JSON.stringify({format,content})});
 export const executeKnowledgeImport=(jobId:string)=>request<QualityEntity>(`${root}/operations/imports/${encodeURIComponent(jobId)}/execute`,{method:"POST"});
 export const exportKnowledge=()=>request<Record<string,unknown>>(`${root}/operations/export`);
+
+export const listKnowledgeEvaluations=()=>request<QualityEntity[]>(`${root}/operations/evaluations`);
