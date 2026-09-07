@@ -76,3 +76,48 @@ jobs:
             echo "Selected identity-chain tests must not be skipped" >&2
             exit 1
           fi
+
+  skill-invocation:
+    name: PostgreSQL Skill Invocation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres@sha256:bfee8fabec7c662311eff39111a890f68a46a78a3b35e91353e185e7d5918517
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: skill_invocation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d skill_invocation"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SKILL_INVOCATION_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/skill_invocation
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Report source and executed revisions
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          echo "source_sha=${SOURCE_SHA}"
+          echo "executed_sha=$(git rev-parse HEAD)"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+      - name: Run governed Skill PostgreSQL and protocol acceptance
+        run: |
+          set -o pipefail
+          uv run pytest -q \
+            console/backend/tests/test_skill_invocation_domain.py \
+            console/backend/tests/test_skill_invocation_postgres.py \
+            | tee "$RUNNER_TEMP/skill-invocation-pytest.txt"
+          if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/skill-invocation-pytest.txt"; then
+            echo "Selected Skill invocation tests must not be skipped" >&2
+            exit 1
+          fi
