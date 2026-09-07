@@ -27,8 +27,8 @@ async function restartBackend(request: import("@playwright/test").APIRequestCont
 
 test("completes the real Knowledge lifecycle, retrieval, recovery and purge journey", async ({ page, request }) => {
   await page.goto("/knowledge");
-  await expect(page.locator(".demo-primary-nav")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Knowledge Workbench" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "P1 核心产品导航" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "知识中心", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create governed source" }).click();
   await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Search, Retrieval and Citations");
   await expect(page.getByLabel("Knowledge information hierarchy")).toContainText("Quality Evaluation");
