@@ -34,6 +34,294 @@ KNOWLEDGE_LIFECYCLE_TITLE = (
 )
 
 
+def summary_report(status="failed", *, known=True):
+    name, title = next(iter(harness_module.FIRST_FAILURE_ASSERTION_IDS))
+    return {
+        "stats": {"expected": 0, "unexpected": 1, "skipped": 0, "flaky": 0},
+        "suites": [
+            {
+                "file": name if known else "private-dynamic.spec.ts",
+                "specs": [
+                    {
+                        "title": title if known else "PRIVATE_DYNAMIC_TITLE",
+                        "line": 42,
+                        "tests": [
+                            {
+                                "status": "unexpected",
+                                "results": [
+                                    {
+                                        "status": status,
+                                        "errors": [
+                                            {
+                                                "message": "PRIVATE_MESSAGE "
+                                                "expect(locator)"
+                                            }
+                                        ],
+                                        "attachments": [
+                                            {"path": "/tmp/PRIVATE_ATTACHMENT"}
+                                        ],
+                                        "locator": "PRIVATE_LOCATOR",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def make_summary(report):
+    raw = json.dumps(report).encode()
+    failure = harness_module.sanitized_first_failure_record(raw, "journey-274", 0)
+    return harness_module.build_failure_summary(
+        raw,
+        failure,
+        {
+            "buildModeIdentity": "LIVE_DEMO",
+            "frontendManifestDigest": "a" * 64,
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "mapping", list(harness_module.FIRST_FAILURE_ASSERTION_IDS.items())
+)
+def test_summary_static_scenarios(mapping):
+    (name, title), scenario = mapping
+    report = summary_report()
+    report["suites"][0]["file"] = name
+    report["suites"][0]["specs"][0]["title"] = title
+    summary = make_summary(report)
+    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 19
+    assert summary["scenarioId"] == scenario
+    assert summary["spec"] == "console/frontend/tests/e2e/" + name
+    assert summary["sourceLine"] == 42
+    assert summary["locationKind"] == "TEST_DECLARATION"
+    encoded = harness_module.encode_failure_summary(summary)
+    assert "PRIVATE" not in encoded
+    assert "\n" not in encoded
+
+
+@pytest.mark.parametrize("status", ["failed", "timedOut", "interrupted"])
+def test_summary_counts_and_unknown_scenario(status):
+    summary = make_summary(summary_report(status, known=False))
+    assert summary["scenarioId"] == "NOT_RETAINED"
+    assert summary["spec"] is None and summary["sourceLine"] is None
+    assert summary["counts"] == {
+        "selected": 1,
+        "executed": 1,
+        "passed": 0,
+        "failed": 1,
+        "skipped": 0,
+        "flaky": 0,
+    }
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
+def test_summary_multiple_suites_skips_and_missing_counts():
+    report = summary_report()
+    report["suites"].append(
+        {
+            "specs": [
+                {
+                    "tests": [
+                        {"status": "expected", "results": [{"status": "passed"}]},
+                        {"status": "skipped", "results": []},
+                    ]
+                }
+            ]
+        }
+    )
+    report["stats"].update(expected=1, skipped=1)
+    assert harness_module.summary_counts(report) == {
+        "selected": 3,
+        "executed": 2,
+        "passed": 1,
+        "failed": 1,
+        "skipped": 1,
+        "flaky": 0,
+    }
+    report["stats"]["expected"] = 4
+    assert all(v is None for v in harness_module.summary_counts(report).values())
+    assert all(v is None for v in harness_module.summary_counts({}).values())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("extra", "PRIVATE"),
+        ("sourceLine", True),
+        ("sourceLine", -1),
+        ("spec", "/tmp/PRIVATE"),
+        ("locationKind", "FAILURE_LINE"),
+        ("scenarioId", "PRIVATE"),
+        ("actionClass", "PRIVATE"),
+        ("frontendManifestDigest", "x" * 5000),
+    ],
+)
+def test_summary_rejects_unsafe_or_unbounded_fields(field, value):
+    summary = make_summary(summary_report())
+    summary[field] = value
+    with pytest.raises(ValueError):
+        harness_module.encode_failure_summary(summary)
+
+
+def test_summary_malformed_output_is_fixed_gap(monkeypatch, capsys):
+    failure = harness_module.sanitized_first_failure_record(
+        b'{"stats":{"unexpected":1}}', "journey-274", 0
+    )
+    harness_module.emit_failure_summary(b"not json PRIVATE", failure, {})
+    assert (
+        capsys.readouterr().err
+        == harness_module.SUMMARY_PREFIX + '{"diagnosticState":"DIAGNOSTIC_GAP"}\n'
+    )
+
+
+@pytest.mark.parametrize("returncode", [0, 1, 7])
+@pytest.mark.parametrize("broken_summary", [False, True])
+@pytest.mark.parametrize("gate_failure", [None, "scan", "immutable"])
+def test_summary_main_preserves_exit_and_cleanup(
+    tmp_path, monkeypatch, capsys, returncode, broken_summary, gate_failure
+):
+    events = []
+    output = tmp_path / "playwright-output"
+    output.mkdir()
+    (output / "raw.txt").write_text("PRIVATE")
+    args = Namespace(
+        release_root=tmp_path,
+        build_mode_identity=tmp_path / "identity",
+        postgres_url="unused",
+        postgres_validation_role="unused",
+        frontend_port=1,
+        qdrant_url="unused",
+        command=["synthetic"],
+        journey_id="journey-274",
+    )
+
+    class FakeHarness:
+        runtime = release = tmp_path
+        metadata_path = tmp_path / "metadata"
+        token = "unused"
+        url = "unused"
+        restart_count = 0
+
+        def __init__(self, args):
+            pass
+
+        def start(self):
+            pass
+
+        def serve(self, ready):
+            ready.set()
+
+        def stop(self):
+            events.append("stop")
+
+        def verify_release(self):
+            events.append("immutable")
+            assert not output.exists()
+            if gate_failure == "immutable":
+                raise RuntimeError("mandatory immutable gate")
+            return {}
+
+        def write_minimum_disclosure_evidence(self, after, code):
+            assert code == (returncode or 1)
+            return tmp_path / "evidence"
+
+    monkeypatch.setattr(harness_module, "parse_args", lambda: args)
+    monkeypatch.setattr(harness_module, "Harness", FakeHarness)
+    monkeypatch.setattr(
+        harness_module,
+        "verify_build_identity",
+        lambda *a: {
+            "buildModeIdentity": "LIVE_DEMO",
+            "frontendManifestDigest": "a" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        harness_module, "verify_postgres_role_readiness", lambda *a: None
+    )
+    monkeypatch.setattr(
+        harness_module.subprocess,
+        "run",
+        lambda *a, **kw: subprocess.CompletedProcess(
+            [], returncode, json.dumps(summary_report()).encode(), b"PRIVATE"
+        ),
+    )
+    original = harness_module.build_failure_summary
+
+    def build(*a):
+        events.append("summary")
+        assert output.exists()
+        if broken_summary:
+            raise ValueError("PRIVATE")
+        return original(*a)
+
+    monkeypatch.setattr(harness_module, "build_failure_summary", build)
+    if gate_failure == "scan":
+
+        def fail_scan(paths):
+            raise RuntimeError("mandatory disclosure gate")
+
+        monkeypatch.setattr(harness_module, "scan_generated_artifacts", fail_scan)
+    if gate_failure:
+        with pytest.raises(RuntimeError, match="mandatory"):
+            harness_module.main()
+    else:
+        assert harness_module.main() == (returncode or 1)
+    assert events == (
+        ["stop", "immutable"]
+        if gate_failure == "scan"
+        else ["summary", "stop", "immutable"]
+    )
+    assert "PRIVATE" not in capsys.readouterr().err
+
+
+def test_summary_print_failure_is_best_effort(monkeypatch):
+    calls = []
+
+    def fail_print(value, **kwargs):
+        calls.append(value)
+        raise OSError("PRIVATE")
+
+    monkeypatch.setattr(harness_module, "print", fail_print, raising=False)
+    raw = json.dumps(summary_report()).encode()
+    failure = harness_module.sanitized_first_failure_record(raw, "journey-274", 0)
+    harness_module.emit_failure_summary(
+        raw,
+        failure,
+        {"buildModeIdentity": "LIVE_DEMO", "frontendManifestDigest": "a" * 64},
+    )
+    assert len(calls) == 2
+    assert (
+        calls[1]
+        == harness_module.SUMMARY_PREFIX + '{"diagnosticState":"DIAGNOSTIC_GAP"}'
+    )
+    assert "PRIVATE" not in str(calls)
+
+
+def test_summary_encoded_content_passes_existing_scanner(tmp_path):
+    summary = make_summary(summary_report())
+    encoded = harness_module.encode_failure_summary(summary)
+    assert len((harness_module.SUMMARY_PREFIX + encoded).encode()) <= 4096
+    artifact = tmp_path / "summary.json"
+    artifact.write_text(encoded)
+    minimum_disclosure.scan_generated_artifacts([artifact])
+
+
+def test_summary_flaky_and_malformed_counts():
+    report = summary_report()
+    test = report["suites"][0]["specs"][0]["tests"][0]
+    test.update(status="flaky", results=[{"status": "failed"}, {"status": "passed"}])
+    report["stats"].update(unexpected=0, flaky=1)
+    assert harness_module.summary_counts(report)["flaky"] == 1
+    assert harness_module.summary_counts(report)["executed"] == 1
+    test["results"] = [{"status": "skipped"}]
+    assert all(v is None for v in harness_module.summary_counts(report).values())
+
+
 def free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
