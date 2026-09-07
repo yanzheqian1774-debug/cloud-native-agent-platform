@@ -35,6 +35,34 @@ test("exposes nine truthful Chinese-first platform support surfaces", async ({ p
   const search = page.getByLabel("搜索业务问题");
   await search.fill("供应商");
   await expect(search).toBeFocused();
+  // Deterministic replacement mirrors an asynchronous loading heading becoming
+  // the page heading. Once the user transfers focus, replacement must not steal it.
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/outcomes");
+    const heading = page.locator("main h1").first();
+    await expect(heading).toBeFocused();
+    await heading.evaluate(element => element.replaceWith(element.cloneNode(true)));
+    await expect(heading).toBeFocused();
+    const input = page.getByLabel("搜索业务问题");
+    await input.fill("供应商");
+    await heading.evaluate(element => element.replaceWith(element.cloneNode(true)));
+    await expect(input).toBeFocused();
+    await page.evaluate(() => {
+      const panel = document.createElement("section");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-label", "合成焦点面板");
+      const close = document.createElement("button");
+      close.textContent = "合成关闭按钮";
+      panel.append(close);
+      document.body.append(panel);
+      close.focus();
+      const current = document.querySelector("main h1")!;
+      current.replaceWith(current.cloneNode(true));
+    });
+    await expect(page.getByRole("button", { name: "合成关闭按钮" })).toBeFocused();
+    await page.getByRole("dialog", { name: "合成焦点面板" }).evaluate(element => element.remove());
+  }
 });
 
 test("keeps unsupported actions disabled and preserves real navigation", async ({ page }) => {
