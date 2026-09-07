@@ -48,10 +48,16 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "console/backend/src/agent_console/execution_repository.py",
         "console/backend/src/agent_console/execution_snapshot.py",
         "console/backend/src/agent_console/preview_service.py",
+        "console/backend/src/agent_console/resource_use_application.py",
+        "console/backend/src/agent_console/resource_use_domain.py",
+        "console/backend/src/agent_console/resource_use_knowledge.py",
+        "console/backend/src/agent_console/resource_use_postgres.py",
+        "console/backend/src/agent_console/resource_use_repository.py",
         "console/backend/src/agent_console/shared_views.py",
         "console/backend/tests/test_execution_evidence_security.py",
         "console/backend/tests/test_execution_snapshot.py",
         "console/backend/tests/test_preview_api.py",
+        "console/backend/tests/test_resource_use_postgres.py",
         "console/backend/tests/test_shared_views.py",
     }
 
