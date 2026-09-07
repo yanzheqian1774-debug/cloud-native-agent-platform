@@ -10,9 +10,10 @@
   worktree.
 - Governing decisions: `S5-V023-ARCH-263`, `S5-V023-ARCH-266`, and, only if an
   MCP adapter is used, `S5-V023-ARCH-259`. This implementation uses no MCP adapter.
-- Active `S5-V023-IMPL-281` owns `.github/workflows/employee-identity.yml` and
-  `core/tests/test_compatibility.py`; those paths remain untouched until its ownership
-  ends or a controlled integration supplies the CI extension.
+- The controlled handoff found no active writer for
+  `.github/workflows/employee-identity.yml`; the task's explicit bounded CI
+  authorization therefore applies. `core/tests/test_compatibility.py` remains
+  untouched because no new compatibility consumer is required.
 
 ## One-time exact reuse map
 
@@ -57,8 +58,8 @@ projection may infer business success from technical Skill success.
    immutability and regression tests. A deterministic local HTTP read-only service
    provides real boundary evidence and counts actual requests.
 7. Run focused tests, PostgreSQL/protocol acceptance, then `make check`; inspect
-   status/diff. CI workflow extension remains an integration checkpoint while 281
-   owns that path.
+   status/diff. Add an isolated PostgreSQL Skill Invocation CI job after confirming
+   the workflow has no other active writer.
 
 ## Compatibility and risks
 
@@ -75,14 +76,18 @@ projection may infer business success from technical Skill success.
 - Completed: authority read, baseline/branch/session uniqueness, active-path check,
   reuse map, G1 plan, migration 0016, typed domain/application/repository/composition,
   PostgreSQL adapter, live HTTP executor, canonical read model, atomic Skill
-  Evidence/Resource Use terminal UoW, focused tests and local quality gate.
-- Pending: commit/push, Draft PR, and PR CI. The isolated CI workflow addition is
-  intentionally deferred because active IMPL-281 still owns that exact file.
+  Evidence/Resource Use terminal UoW, focused tests, local quality gate, Draft PR,
+  original four PR checks, and the isolated Skill CI workflow extension.
+- Delivery gate: the updated Draft PR must pass the original checks and the new
+  `PostgreSQL Skill Invocation` check at the exact updated source revision.
 - Migration 0016 SHA-256:
   `2c1a6c663ce607705c7d6c3cca9ff21feec6a1bb513831cebc740b0732bdb657`.
 - Local evidence: focused live PostgreSQL/protocol and affected regression gate
   `58 passed / 0 skipped`; `make check` passed with `1507 passed / 86 environment
   skipped`, Ruff clean, and all 353 Python files formatted.
+- CI-equivalent Skill selection: the two new Skill test files run against a fresh
+  PostgreSQL database and their real local HTTP protocol service with
+  `18 passed / 0 skipped`; the workflow fails if that selected suite reports a skip.
 - Task-owned external resource used during validation:
   `s5-v023-impl-284-postgres`, accepted pinned image
   `postgres@sha256:bfee8fabec7c662311eff39111a890f68a46a78a3b35e91353e185e7d5918517`,
@@ -168,9 +173,10 @@ revision, operation, schema, binding, executor and policy mismatch codes,
   governed Attempt scheduler is separate work; test assembly is not described as a
   complete platform scheduler.
 - No public HTTP or frontend surface is included or claimed.
-- PR CI has not yet run. The new live Skill suite is not yet added to
-  `.github/workflows/employee-identity.yml` because IMPL-281 owns that active path;
-  controlled integration must add `SKILL_INVOCATION_TEST_DATABASE_URL`, select both
-  new test files, and retain the selected-suite no-skip assertion.
+- `.github/workflows/employee-identity.yml` now retains the existing identity,
+  Knowledge, and Resource Use selection and adds an isolated
+  `PostgreSQL Skill Invocation` job. It sets
+  `SKILL_INVOCATION_TEST_DATABASE_URL`, selects both new test files, uses the accepted
+  pinned PostgreSQL image identity, and fails when the selected suite reports a skip.
 - `IDEMPOTENT_WRITE`, `NON_IDEMPOTENT_WRITE`, multi-Skill orchestration, automatic
   unknown retry, compensation, HA and provider certification remain out of scope.
