@@ -1,7 +1,7 @@
 # S5-V023-IMPL-282 Resource Use Implementation
 
-Status: correction implementation and local acceptance validation complete;
-Draft PR #152 update and CI remain pending.
+Status: correction implementation and acceptance validation complete; Draft PR
+#152 remains open for human review.
 
 The validation results below describe the previously committed candidate
 `7bb45fdeed5ae82d440356c8824e44b89ce29b7b`. They are retained as historical
@@ -58,9 +58,15 @@ represented by a null value and explicit availability, never zero.
 - Active task resources: containers
   `s5-v023-impl-282-takeover-postgres` (database `resource_use_282`, local port
   55482) and `s5-v023-impl-282-takeover-qdrant` (local port 63283). No command or
-  test remains running. The next unfinished step is final diff review, normal
-  commit, explicit non-force push to the original remote branch, and Draft PR
-  #152 CI verification.
+  test remains running.
+- Delivery: implementation commit
+  `11a67f223761969a44de0b39966655e16146279b` preserves candidate `7bb45fd` as
+  its parent and was non-force pushed with an explicit refspec from local branch
+  `codex/s5-v023-impl-282-takeover` to remote branch
+  `codex/s5-v023-impl-282-resource-use-foundation`. On that commit, Draft PR
+  #152 passed Quality Gates, Frontend Quality Gates, PostgreSQL Identity Chain,
+  and Agent Workbench Browser Acceptance. No implementation step remains;
+  human review is next. The PR was not marked Ready, merged, or deployed.
 
 - Takeover: branch `codex/s5-v023-impl-282-resource-use-foundation`; source
   `8160adbc04ff1508ba5c9d093407edf5948be611`; tree
