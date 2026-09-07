@@ -69,6 +69,12 @@ class PostgresAttemptKnowledgeEvidenceRepository:
     def _append(
         self, table: str, id_column: str, record: dict[str, Any]
     ) -> dict[str, Any]:
+        with self.pool.connection() as connection, connection.transaction():
+            return self.append_with_connection(connection, table, id_column, record)
+
+    def append_with_connection(
+        self, connection, table: str, id_column: str, record: dict[str, Any]
+    ) -> dict[str, Any]:
         identity = record[id_column]
         if table == "bindings":
             columns = "binding_id,attempt_id,knowledge_id,digest,record"
@@ -88,21 +94,16 @@ class PostgresAttemptKnowledgeEvidenceRepository:
                 record["evidenceDigest"],
                 json.dumps(record),
             )
-        with self.pool.connection() as connection, connection.transaction():
-            connection.execute(
-                f"INSERT INTO knowledge_attempt.{table}(namespace,security_domain,{columns}) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING",
-                (
-                    record["namespace"],
-                    record["securityDomain"],
-                    *values,
-                ),
-            )
-            row = connection.execute(
-                f"SELECT record FROM knowledge_attempt.{table} WHERE namespace=%s AND security_domain=%s AND {self._snake(id_column)}=%s",
-                (record["namespace"], record["securityDomain"], identity),
-            ).fetchone()
-            if row is None or row["record"] != record:
-                raise AttemptKnowledgeFailure("KNOWLEDGE_REPLAY_CONFLICT")
+        connection.execute(
+            f"INSERT INTO knowledge_attempt.{table}(namespace,security_domain,{columns}) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING",
+            (record["namespace"], record["securityDomain"], *values),
+        )
+        row = connection.execute(
+            f"SELECT record FROM knowledge_attempt.{table} WHERE namespace=%s AND security_domain=%s AND {self._snake(id_column)}=%s",
+            (record["namespace"], record["securityDomain"], identity),
+        ).fetchone()
+        if row is None or row["record"] != record:
+            raise AttemptKnowledgeFailure("KNOWLEDGE_REPLAY_CONFLICT")
         return record
 
     @staticmethod
@@ -112,8 +113,20 @@ class PostgresAttemptKnowledgeEvidenceRepository:
     def append_binding(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append("bindings", "bindingId", record)
 
+    def append_binding_with_connection(
+        self, connection, record: dict[str, Any]
+    ) -> dict[str, Any]:
+        return self.append_with_connection(connection, "bindings", "bindingId", record)
+
     def append_evidence(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append("retrieval_evidence", "evidenceId", record)
+
+    def append_evidence_with_connection(
+        self, connection, record: dict[str, Any]
+    ) -> dict[str, Any]:
+        return self.append_with_connection(
+            connection, "retrieval_evidence", "evidenceId", record
+        )
 
     def get_evidence(
         self, scope: KnowledgeScope, evidence_id: str
@@ -122,5 +135,15 @@ class PostgresAttemptKnowledgeEvidenceRepository:
             row = connection.execute(
                 "SELECT record FROM knowledge_attempt.retrieval_evidence WHERE namespace=%s AND security_domain=%s AND evidence_id=%s",
                 (scope.namespace, scope.security_domain, evidence_id),
+            ).fetchone()
+        return None if row is None else row["record"]
+
+    def get_evidence_for_binding(
+        self, scope: KnowledgeScope, binding_id: str
+    ) -> dict[str, Any] | None:
+        with self.pool.connection() as connection:
+            row = connection.execute(
+                "SELECT record FROM knowledge_attempt.retrieval_evidence WHERE namespace=%s AND security_domain=%s AND binding_id=%s ORDER BY created_at,evidence_id LIMIT 1",
+                (scope.namespace, scope.security_domain, binding_id),
             ).fetchone()
         return None if row is None else row["record"]
