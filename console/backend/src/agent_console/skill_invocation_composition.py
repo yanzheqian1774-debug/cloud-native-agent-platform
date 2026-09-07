@@ -23,6 +23,17 @@ class SkillInvocationComposition:
     invocation_repository: PostgresSkillInvocationRepository
     resource_use_repository: PostgresResourceUseRepository
 
+    def service(
+        self, authorization: SkillInvocationAuthorization | None
+    ) -> GovernedAttemptSkillInvocationService:
+        """Reuse durable pools while binding authorization to one trusted request."""
+        return GovernedAttemptSkillInvocationService(
+            self.invocation_repository,
+            authorization,
+            self.application.policy_authority,
+            self.application.executors,
+        )
+
     def close(self) -> None:
         self.invocation_repository.close()
         self.resource_use_repository.close()

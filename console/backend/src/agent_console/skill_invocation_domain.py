@@ -345,7 +345,12 @@ class SkillInvocationSnapshot:
             "schemaVersion": "skill-invocation-read.v1",
             "invocationId": self.invocation_id,
             "state": self.state.value,
-            "resultKnown": self.state is not InvocationState.OUTCOME_UNKNOWN,
+            "resultKnown": self.state
+            in {
+                InvocationState.SUCCEEDED,
+                InvocationState.FAILED,
+                InvocationState.CANCELLED,
+            },
             "technicalSuccessNotBusinessSuccess": True,
             "resourceUseId": self.resource_use_id,
             "evidenceId": self.evidence_id,
