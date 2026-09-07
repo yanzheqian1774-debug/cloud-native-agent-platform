@@ -15,15 +15,43 @@ class Assembly:
     def scope(tenant_id, security_domain):
         return ScopeIdentity(tenant_id, security_domain)
 
-    def list_definitions(self, scope):
-        self.calls.append(("definitions", scope))
-        return [{"definitionId": "definition-1"}]
+    def list_definitions(self, scope, principal_id):
+        self.calls.append(("definitions", scope, principal_id))
+        return [{"employeeDefinitionId": "employee-definition-1"}]
 
-    def get_definition(self, scope, definition_id):
-        self.calls.append(("definition", scope, definition_id))
+    def get_definition(self, scope, principal_id, definition_id, revision_id):
+        self.calls.append(
+            ("definition", scope, principal_id, definition_id, revision_id)
+        )
         if definition_id == "foreign":
-            raise DigitalEmployeeError("DEFINITION_NOT_FOUND")
-        return {"definition": {"definitionId": definition_id}}
+            raise DigitalEmployeeError("EMPLOYEE_NOT_FOUND")
+        return {
+            "resourceKind": "DIGITAL_EMPLOYEE_DEFINITION",
+            "employeeDefinitionId": definition_id,
+            "employeeDefinitionRevisionId": revision_id,
+        }
+
+    def create_definition(self, scope, principal_id, command):
+        self.calls.append(("create-definition", scope, principal_id, command))
+        return {
+            "resourceKind": "DIGITAL_EMPLOYEE_DEFINITION",
+            "employeeDefinitionId": command.employeeDefinitionId,
+            "employeeDefinitionRevisionId": command.employeeDefinitionRevisionId,
+            "employeeDefinitionDigest": "a" * 64,
+            "aggregateVersion": 1,
+        }
+
+    def decide_definition(self, scope, principal_id, definition_id, action, command):
+        self.calls.append(
+            ("decide-definition", scope, principal_id, definition_id, action, command)
+        )
+        return {
+            "resourceKind": "DIGITAL_EMPLOYEE_DEFINITION",
+            "employeeDefinitionId": definition_id,
+            "employeeDefinitionRevisionId": command.employeeDefinitionRevisionId,
+            "employeeDefinitionDigest": command.employeeDefinitionDigest,
+            "aggregateVersion": command.expectedVersion + 1,
+        }
 
     def create_instance(self, scope, principal_id, command):
         self.calls.append(("create-instance", scope, principal_id, command))
@@ -107,8 +135,8 @@ def test_definition_instance_assignment_and_placement_routes_use_trusted_scope()
             headers=headers(),
             json={
                 "instanceId": "employee-1",
-                "definitionId": "definition-1",
-                "definitionRevisionId": "revision-1",
+                "employeeDefinitionId": "employee-definition-1",
+                "employeeDefinitionRevisionId": "employee-revision-1",
                 "commandId": "create-1",
             },
         )
@@ -172,21 +200,80 @@ def test_foreign_definition_is_disclosure_safe_and_extra_input_is_rejected():
         response = client.get(
             "/api/internal/v0.2.3/digital-employees/definitions/foreign",
             headers=headers(),
+            params={"employeeDefinitionRevisionId": "revision-1"},
         )
         assert response.status_code == 404
-        assert response.json() == {"detail": {"reasonCode": "DEFINITION_NOT_FOUND"}}
+        assert response.json() == {"detail": {"reasonCode": "EMPLOYEE_NOT_FOUND"}}
 
         invalid = client.post(
             "/api/internal/v0.2.3/digital-employees/instances",
             headers=headers(),
             json={
                 "instanceId": "employee-1",
-                "definitionId": "definition-1",
-                "definitionRevisionId": "revision-1",
+                "employeeDefinitionId": "employee-definition-1",
+                "employeeDefinitionRevisionId": "employee-revision-1",
                 "commandId": "create-1",
                 "ownerId": "attacker-selected-owner",
             },
         )
         assert invalid.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_definition_lifecycle_routes_are_explicit_and_authentication_is_required():
+    assembly = Assembly()
+    app.dependency_overrides[get_assembly] = lambda: assembly
+    client = TestClient(app)
+    digest = "a" * 64
+    try:
+        missing = client.get("/api/internal/v0.2.3/digital-employees/definitions")
+        assert missing.status_code == 401
+        assert missing.json() == {"detail": {"reasonCode": "AUTHENTICATION_REQUIRED"}}
+
+        created = client.post(
+            "/api/internal/v0.2.3/digital-employees/definitions",
+            headers=headers(),
+            json={
+                "employeeDefinitionId": "employee-definition-1",
+                "employeeDefinitionRevisionId": "employee-revision-1",
+                "role": "Reviewer",
+                "responsibilities": ["Review quality"],
+                "members": [
+                    {
+                        "kind": "AGENT",
+                        "resourceId": "agent-definition-1",
+                        "revisionId": "agent-revision-1",
+                        "digest": digest,
+                    }
+                ],
+                "expectedVersion": 0,
+                "commandId": "create-definition-1",
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["resourceKind"] == "DIGITAL_EMPLOYEE_DEFINITION"
+
+        read = client.get(
+            "/api/internal/v0.2.3/digital-employees/definitions/employee-definition-1",
+            headers=headers(),
+            params={"employeeDefinitionRevisionId": "employee-revision-1"},
+        )
+        assert read.status_code == 200
+
+        for expected_version, action in enumerate(
+            ("validate", "approve", "publish"), start=1
+        ):
+            decided = client.post(
+                f"/api/internal/v0.2.3/digital-employees/definitions/employee-definition-1/{action}",
+                headers=headers(),
+                json={
+                    "employeeDefinitionRevisionId": "employee-revision-1",
+                    "employeeDefinitionDigest": digest,
+                    "expectedVersion": expected_version,
+                    "commandId": f"{action}-definition-1",
+                },
+            )
+            assert decided.status_code == 200
     finally:
         app.dependency_overrides.clear()

@@ -8,6 +8,7 @@ from agent_console.execution_application import (
     ExecutionOutcomeService,
     RecordOutcomeCommand,
     RetryExecutionCommand,
+    ScopedExecutionAuthorization,
     StartExecutionCommand,
     successor_workflow,
 )
@@ -31,7 +32,7 @@ class MemoryIdentities:
         self.values = {}
         self.calls = 0
 
-    def save(self, scope, aggregate):
+    def save(self, scope, aggregate, **kwargs):
         self.calls += 1
         self.values[(scope, aggregate.attempt.attempt_id)] = aggregate
         return aggregate
@@ -148,16 +149,18 @@ def command(**changes) -> StartExecutionCommand:
 def test_exact_approval_rejects_before_any_persistence(change, reason) -> None:
     identities = MemoryIdentities()
     with pytest.raises(ExecutionApplicationError, match=reason):
-        ExecutionApplicationService(identities).start(command(**change))
+        ExecutionApplicationService(
+            identities, replace(authorization(), scope=command(**change).scope)
+        ).start(command(**change))
     assert identities.calls == 0
     assert identities.values == {}
 
 
 def test_start_replay_retry_restart_and_scope_isolation() -> None:
     identities = MemoryIdentities()
-    service = ExecutionApplicationService(identities)
+    service = ExecutionApplicationService(identities, authorization())
     first = service.start(command())
-    replay = ExecutionApplicationService(identities).start(command())
+    replay = ExecutionApplicationService(identities, authorization()).start(command())
     assert first.disposition is AppendDisposition.APPENDED
     assert replay.disposition is AppendDisposition.REPLAYED
     assert replay.identity == first.identity
@@ -188,7 +191,7 @@ def test_start_replay_retry_restart_and_scope_isolation() -> None:
 
 def test_outcome_is_scoped_identity_bound_and_idempotent() -> None:
     identities = MemoryIdentities()
-    started = ExecutionApplicationService(identities).start(command())
+    started = ExecutionApplicationService(identities, authorization()).start(command())
     outcomes = MemoryOutcomes()
     service = ExecutionOutcomeService(identities, outcomes)
     record = {
@@ -211,7 +214,7 @@ def test_outcome_is_scoped_identity_bound_and_idempotent() -> None:
 
 def test_successor_identity_never_mutates_predecessor() -> None:
     previous = (
-        ExecutionApplicationService(MemoryIdentities())
+        ExecutionApplicationService(MemoryIdentities(), authorization())
         .start(command())
         .identity.workflow_run
     )
@@ -224,3 +227,32 @@ def test_successor_identity_never_mutates_predecessor() -> None:
     assert rerun.predecessor_workflow_run_id == previous.workflow_run_id
     assert correction.correction_of_workflow_run_id == previous.workflow_run_id
     assert correction.approved_plan_revision_id == "plan-revision-2"
+
+
+def authorization():
+    return ScopedExecutionAuthorization(
+        command().scope, "owner", frozenset({"START", "RETRY"}), "execution-decision"
+    )
+
+
+@pytest.mark.parametrize("action", ["START", "RETRY"])
+def test_execution_authorization_precedes_lookup(action):
+    class Never:
+        def __getattr__(self, name):
+            pytest.fail("denied execution reached repository")
+
+    for auth in (
+        None,
+        ScopedExecutionAuthorization(
+            ScopeIdentity("other", "domain"), "owner", frozenset({action}), "decision"
+        ),
+        ScopedExecutionAuthorization(command().scope, "owner", frozenset(), "decision"),
+    ):
+        service = ExecutionApplicationService(Never(), auth)
+        with pytest.raises(ExecutionApplicationError, match="EXECUTION_NOT_FOUND"):
+            if action == "START":
+                service.start(command())
+            else:
+                service.retry(
+                    RetryExecutionCommand(command().scope, "missing", "retry")
+                )

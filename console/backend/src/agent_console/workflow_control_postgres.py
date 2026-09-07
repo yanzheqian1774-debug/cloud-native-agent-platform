@@ -985,6 +985,11 @@ class PostgresWorkflowControlRepository:
                     )
                     if next_ordinal is None:
                         raise WorkflowControlConflict("ATTEMPT_ORDINAL_REQUIRED")
+                    from .execution_lineage import append_lineage, prepare_control_retry
+
+                    lineage = prepare_control_retry(connection, operation, target)
+                    if lineage is not None and lineage[4] != next_ordinal:
+                        raise WorkflowControlConflict("ATTEMPT_ORDINAL_MISMATCH")
                     connection.execute(
                         "INSERT INTO execution_authority.attempts(namespace,security_domain,attempt_id,task_run_id,predecessor_attempt_id,aggregate_digest,record,aggregate_version,control_state,attempt_ordinal) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,1,'PENDING',%s)",
                         (
@@ -992,11 +997,17 @@ class PostgresWorkflowControlRepository:
                             operation.successor_id,
                             target["task_run_id"],
                             target_id,
-                            operation.payload_digest,
-                            json.dumps(operation.payload),
+                            operation.payload_digest if lineage is None else lineage[6],
+                            json.dumps(
+                                operation.payload if lineage is None else lineage[5]
+                            ),
                             next_ordinal,
                         ),
                     )
+                    if lineage is not None:
+                        append_lineage(
+                            connection, *lineage[:4], operation.control_command_id
+                        )
                     successor_attempt_id = operation.successor_id
                 elif kind is AtomicCommandType.CREATE_SUCCESSOR_RUN:
                     if (

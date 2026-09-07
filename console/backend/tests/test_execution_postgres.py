@@ -166,6 +166,7 @@ def seed_runtime_agent(
     value: PostgresExecutionAuthorityRepository,
     scope: ScopeIdentity,
     suffix: str,
+    member=None,
 ) -> tuple[RuntimeInstanceId, AgentInstanceId]:
     runtime_id = RuntimeInstanceId(f"runtime-{suffix}")
     agent_id = AgentInstanceId(f"agent-{suffix}")
@@ -185,7 +186,11 @@ def seed_runtime_agent(
             str(agent_id),
             1,
             {
-                "agent_revision_id": f"agent-revision-{suffix}",
+                "agent_revision_id": member.revision_id
+                if member
+                else f"agent-revision-{suffix}",
+                "agent_definition_id": member.resource_id if member else None,
+                "agent_digest": member.digest if member else None,
                 "runtime_instance_id": str(runtime_id),
             },
         ),
@@ -196,9 +201,19 @@ def seed_runtime_agent(
 def test_identity_generic_aggregates_ports_conflicts_and_scope() -> None:
     value = repository()
     suffix = uuid.uuid4().hex
-    aggregate = identities(suffix)
-    assert value.save(aggregate.scope, aggregate) == aggregate
-    assert value.save(aggregate.scope, aggregate) == aggregate
+    from employee_identity_support import start_chain
+    from test_execution_application_postgres import approved_plan
+
+    *_, command, started = start_chain(value, DATABASE_URL, approved_plan(suffix))
+    aggregate = started.identity
+    kwargs = dict(
+        approved_plan=command.approved_plan,
+        plan=command.plan,
+        task_id=command.task_id,
+        authorization_decision_id="execution-decision",
+    )
+    assert value.save(aggregate.scope, aggregate, **kwargs) == aggregate
+    assert value.save(aggregate.scope, aggregate, **kwargs) == aggregate
     assert value.get_attempt(aggregate.scope, aggregate.attempt.attempt_id) == aggregate
     other_scope = ScopeIdentity("other-scope", "quality")
     assert value.get_attempt(other_scope, aggregate.attempt.attempt_id) is None
@@ -208,10 +223,10 @@ def test_identity_generic_aggregates_ports_conflicts_and_scope() -> None:
             aggregate.workflow_run, approved_plan_revision_id="conflicting-plan"
         ),
     )
-    with pytest.raises(ExecutionConflict, match="EXECUTION_IDENTITY_CONFLICT"):
-        value.save(aggregate.scope, changed)
+    with pytest.raises(ExecutionConflict, match="PLAN_RELATIONSHIP_MISMATCH"):
+        value.save(aggregate.scope, changed, **kwargs)
     with pytest.raises(ExecutionConflict, match="EXECUTION_IDENTITY_SCOPE_MISMATCH"):
-        value.save(other_scope, aggregate)
+        value.save(other_scope, aggregate, **kwargs)
 
     digital = VersionedAggregate(
         aggregate.scope,
@@ -260,9 +275,14 @@ def test_identity_generic_aggregates_ports_conflicts_and_scope() -> None:
 def test_all_typed_surfaces_replay_scope_restart_and_relationships() -> None:
     value = repository()
     suffix = uuid.uuid4().hex
-    aggregate = identities(suffix)
-    value.save(aggregate.scope, aggregate)
-    runtime_id, agent_id = seed_runtime_agent(value, aggregate.scope, suffix)
+    from employee_identity_support import start_chain
+    from test_execution_application_postgres import approved_plan
+
+    revision, _, _, _, started = start_chain(value, DATABASE_URL, approved_plan(suffix))
+    aggregate = started.identity
+    runtime_id, agent_id = seed_runtime_agent(
+        value, aggregate.scope, suffix, revision.members[0]
+    )
     now = datetime.now(UTC)
     request = PlacementRequest(
         PlacementRequestId(f"request-{suffix}"),
@@ -271,7 +291,7 @@ def test_all_typed_surfaces_replay_scope_restart_and_relationships() -> None:
         aggregate.task_run.task_run_id,
         aggregate.attempt.attempt_id,
         agent_id,
-        f"agent-revision-{suffix}",
+        revision.members[0].revision_id,
         f"runtime-profile-{suffix}",
         (),
         (),
