@@ -72,9 +72,11 @@ def summary_report(status="failed", *, known=True):
     }
 
 
-def make_summary(report):
+def make_summary(report, restart_count=0):
     raw = json.dumps(report).encode()
-    failure = harness_module.sanitized_first_failure_record(raw, "journey-274", 0)
+    failure = harness_module.sanitized_first_failure_record(
+        raw, "journey-274", restart_count
+    )
     return harness_module.build_failure_summary(
         raw,
         failure,
@@ -158,6 +160,8 @@ def test_summary_multiple_suites_skips_and_missing_counts():
         ("locationKind", "FAILURE_LINE"),
         ("scenarioId", "PRIVATE"),
         ("actionClass", "PRIVATE"),
+        ("restartCountClass", "PRIVATE"),
+        ("restartCountScope", "SCENARIO"),
         ("frontendManifestDigest", "x" * 5000),
     ],
 )
@@ -341,9 +345,10 @@ const {runnerReporters}=require(path);
 (async()=>{
  const config={configDir:process.cwd(),config:{tags:[],reporter:[['json']]}};
  const [r]=await runnerReporters.createReporters(config,'test');
- const value=r._serializeTestStep({title:'PRIMARY_HOME_DESKTOP_NAVIGATE',
-   duration:12,error:{message:'SYNTHETIC'},steps:[]});
- console.log(JSON.stringify(value));
+ const values=['PRIMARY_HOME_DESKTOP_NAVIGATE','WAVE3B_11_RESTART_READINESS']
+   .map(title=>r._serializeTestStep({title,duration:12,
+     error:{message:'SYNTHETIC'},steps:[]}));
+ console.log(JSON.stringify(values));
 })();
 """
     result = subprocess.run(
@@ -353,11 +358,17 @@ const {runnerReporters}=require(path);
         check=True,
     )
     value = json.loads(result.stdout)
-    assert value == {
-        "title": "PRIMARY_HOME_DESKTOP_NAVIGATE",
-        "duration": 12,
-        "error": {"message": "SYNTHETIC"},
-    }
+    assert value == [
+        {
+            "title": title,
+            "duration": 12,
+            "error": {"message": "SYNTHETIC"},
+        }
+        for title in (
+            "PRIMARY_HOME_DESKTOP_NAVIGATE",
+            "WAVE3B_11_RESTART_READINESS",
+        )
+    ]
 
 
 def primary_step_report():
@@ -394,6 +405,64 @@ def test_step_failure_and_last_completion_are_distinct():
     assert diagnostic["elapsedMs"] == 5008
     assert diagnostic["timeoutKind"] == "UNKNOWN"
     assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
+def wave_3b_step_report():
+    report = summary_report("timedOut")
+    report["suites"][0]["file"] = "wave-3b-product-technical-evidence.spec.ts"
+    report["suites"][0]["specs"][0]["title"] = (
+        "proves all twelve Wave 3B real-service browser journeys"
+    )
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result.update(
+        duration=240_000,
+        steps=[
+            {"title": title, "duration": 1}
+            for title in list(harness_module.WAVE_3B_STEP_IDS)[:16]
+        ]
+        + [
+            {
+                "title": "WAVE3B_12_CLOSE_FOCUS_CHECK",
+                "duration": 5000,
+                "error": {"message": "PRIVATE locator state"},
+            }
+        ],
+    )
+    return report
+
+
+def test_wave_3b_steps_are_static_sanitized_and_distinguish_failure():
+    summary = make_summary(wave_3b_step_report(), restart_count=4)
+    diagnostic = summary["stepDiagnostic"]
+    assert diagnostic["failedStep"] == {
+        "routeKey": "EVIDENCE",
+        "viewportKey": "MOBILE",
+        "stepId": "WAVE3B_12_CLOSE_FOCUS_CHECK",
+        "actionClass": "FOCUS_CHECK",
+        "elapsedMs": 5000,
+    }
+    assert diagnostic["lastCompletedStep"]["stepId"] == "WAVE3B_12_OPEN_EVIDENCE"
+    assert diagnostic["completedStepCount"] == 16
+    assert diagnostic["elapsedMs"] == 240_000
+    assert diagnostic["timeoutKind"] == "SCENARIO"
+    assert summary["actionClass"] == "FOCUS_CHECK"
+    assert summary["restartCountClass"] == "ONE_OR_MORE"
+    assert summary["restartCountScope"] == "SUITE_CUMULATIVE"
+    encoded = harness_module.encode_failure_summary(summary)
+    assert "PRIVATE" not in encoded
+    assert "locator" not in encoded
+
+
+def test_wave_3b_step_identity_and_action_fail_closed():
+    report = wave_3b_step_report()
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["steps"][10]["title"] = "WAVE3B_PRIVATE_DYNAMIC"
+    assert "stepDiagnostic" not in make_summary(report)
+
+    summary = make_summary(wave_3b_step_report())
+    summary["stepDiagnostic"]["failedStep"]["actionClass"] = "PRIVATE"
+    with pytest.raises(ValueError):
+        harness_module.encode_failure_summary(summary)
 
 
 @pytest.mark.parametrize("mutation", ["unknown", "elapsed", "scenario", "no_failure"])

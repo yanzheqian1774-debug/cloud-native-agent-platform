@@ -59,17 +59,29 @@ must use structured parsing or exact-field extraction; broad `sed`, `cat`,
 
 ## Sanitized first-failure evidence
 
-For the primary responsive/focus scenario, the log envelope may additionally
-contain `stepDiagnostic`. Static Playwright `test.step` titles identify one of
-19 route keys, two viewport keys and four actions. The installed JSON serializer
-is exercised with synthetic steps before relying on these fields. Only exact
-allowlisted identities and bounded structured durations are retained; raw step
-errors remain transient. `failedStep` requires a structured step error and is
-separate from `lastCompletedStep`; absent failure location remains null.
+For the primary responsive/focus and Wave 3B real-service scenarios, the log
+envelope may additionally contain `stepDiagnostic`. Static Playwright
+`test.step` titles identify an allowlisted route, viewport, step ID and action
+class. Wave 3B keeps its first ten journey boundaries and splits restart/reload
+and mobile Evidence focus handling into static top-level action boundaries. The
+JSON reporter does not serialize nested steps, so these boundaries remain
+top-level without changing the underlying operations, assertions or order. The
+installed JSON serializer is exercised with synthetic primary and Wave 3B steps
+before relying on these fields. Only exact allowlisted identities and bounded
+structured durations are retained; raw step errors remain transient.
+`failedStep` requires a structured step error and is separate from
+`lastCompletedStep`; absent failure location remains null.
 `elapsedMs` is reporter duration, not inferred wall-clock job time. A structured
 test result of `timedOut` identifies the scenario timeout manager; other timeout
 ownership remains `UNKNOWN` unless independently established. Existing summary
 envelopes without steps remain valid. No timeout or test selection is changed.
+
+`restartCountClass` in the failure summary is explicitly
+`SUITE_CUMULATIVE`: the Harness counter starts when one serialized browser suite
+starts and includes every owned restart requested by every selected test. It is
+not a scenario restart count. Scenario-level restart totals remain unknown unless
+a separately authorized structured source provides them; step position must not
+be used to fabricate a count.
 
 The CI log also emits one bounded `BROWSER_FAILURE_SUMMARY_V1` JSON line before
 cleanup. This independent log envelope does not change first-failure schemas
