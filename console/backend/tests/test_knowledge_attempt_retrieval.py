@@ -1,4 +1,5 @@
 import copy
+from types import SimpleNamespace
 
 import pytest
 from agent_console.knowledge_attempt_retrieval import (
@@ -10,8 +11,16 @@ from agent_console.knowledge_attempt_retrieval import (
 )
 from agent_console.knowledge_lifecycle_service import KnowledgeLifecycleService
 from agent_console.knowledge_p1_bootstrap import bootstrap_p1_knowledge
+from agent_console.knowledge_pack import canonical_digest
 from agent_console.knowledge_qdrant import QdrantKnowledgeError
 from agent_console.knowledge_repository import InMemoryKnowledgeRepository
+from agent_console.resource_use_domain import (
+    ResourceKind,
+    ResourceUseBinding,
+    ResourceUseFactKind,
+    stable_id,
+)
+from agent_core.execution_contract import ScopeIdentity
 
 
 class Index:
@@ -46,6 +55,83 @@ class Index:
                 if key != "limit"
             )
         ]
+
+
+class ResourceUse:
+    def __init__(self):
+        self.prepared = False
+        self.committed = False
+        self.terminal_facts = ()
+
+    def prepare_dispatch(self, *args, transaction_hook=None, **kwargs):
+        if not self.prepared:
+            transaction_hook(object())
+            self.prepared = True
+        return SimpleNamespace(high_water=1)
+
+    def commit_observation(self, *args, transaction_hook=None, **kwargs):
+        if not self.committed:
+            transaction_hook(object())
+            self.committed = True
+            self.terminal_facts = args[2]
+        return SimpleNamespace(high_water=2)
+
+
+def resource_binding(scope, request):
+    knowledge_binding = {
+        "namespace": scope.namespace,
+        "securityDomain": scope.security_domain,
+        "bindingId": request.binding_id,
+        "attemptId": request.attempt_id,
+        "digitalEmployeeInstanceId": request.digital_employee_instance_id,
+        "agentInstanceId": request.agent_instance_id,
+        "knowledgeId": request.knowledge_id,
+        "revisionId": request.revision_id,
+        "revisionDigest": request.revision_digest,
+        "snapshotId": request.snapshot_id,
+        "authorizationDecisionId": request.authorization_decision_id,
+    }
+    knowledge_binding["digest"] = canonical_digest(
+        knowledge_binding, domain="attempt-knowledge-binding.v1"
+    )
+    use_id = stable_id(
+        "resource-use",
+        scope.namespace,
+        scope.security_domain,
+        request.attempt_id,
+        "KNOWLEDGE",
+        "knowledge:primary",
+        "1",
+    )
+    return ResourceUseBinding(
+        ScopeIdentity(scope.namespace, scope.security_domain),
+        use_id,
+        request.attempt_id,
+        ResourceKind.KNOWLEDGE,
+        "knowledge:primary",
+        1,
+        request.knowledge_id,
+        request.revision_id,
+        request.revision_digest,
+        request.binding_id,
+        knowledge_binding["digest"],
+        "plan:1",
+        1,
+        "a" * 64,
+        "workflow:1",
+        "task:1",
+        "definition:1",
+        "definition-revision:1",
+        "b" * 64,
+        request.digital_employee_instance_id,
+        request.agent_instance_id,
+        "runtime:1",
+        "knowledge-retrieval.v1",
+        "1",
+        "qdrant",
+        "1",
+        request.authorization_decision_id,
+    )
 
 
 def setup_subject():
@@ -94,6 +180,41 @@ def test_attempt_scoped_real_index_retrieval_citation_evidence_and_replay():
     assert first["evidence"]["attemptId"] == "attempt:p1"
     assert subject.readback(scope, first["evidence"]["evidenceId"]) == first["evidence"]
     assert len(evidence.evidence) == 1
+
+
+def test_formal_resource_use_path_dispatches_qdrant_once_and_replays_evidence():
+    subject, scope, request, _, _, index = setup_subject()
+    use = ResourceUse()
+    binding = resource_binding(scope, request)
+    first = subject.retrieve_with_resource_use(scope, request, use, binding)
+    second = subject.retrieve_with_resource_use(scope, request, use, binding)
+    assert second == first
+    assert index.search_count == 1
+    assert use.prepared and use.committed
+
+
+def test_prepared_dispatch_without_terminal_result_never_redispatches():
+    subject, scope, request, _, _, index = setup_subject()
+    use = ResourceUse()
+    use.prepared = True
+    with pytest.raises(
+        AttemptKnowledgeFailure, match="KNOWLEDGE_RESULT_PENDING_CONFIRMATION"
+    ):
+        subject.retrieve_with_resource_use(
+            scope, request, use, resource_binding(scope, request)
+        )
+    assert index.search_count == 0
+
+
+def test_formal_no_result_maps_to_distinct_resource_use_terminal_state():
+    subject, scope, request, _, _, index = setup_subject()
+    index.points = []
+    use = ResourceUse()
+    result = subject.retrieve_with_resource_use(
+        scope, request, use, resource_binding(scope, request)
+    )
+    assert result["retrievalState"] == "NO_RESULT"
+    assert use.terminal_facts[0].kind is ResourceUseFactKind.NO_RESULT
 
 
 def test_denial_happens_before_attempt_knowledge_or_qdrant_lookup():

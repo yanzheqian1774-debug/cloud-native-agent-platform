@@ -27,6 +27,7 @@ from agent_core.execution_contract import ScopeIdentity
 DATABASE_URL = os.environ.get("RESOURCE_USE_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="real PostgreSQL 15 required")
 MIGRATION = Path(__file__).parents[1] / "migrations/0015_resource_use_measurement.sql"
+MIGRATIONS = Path(__file__).parents[1] / "migrations"
 
 
 def test_postgres_cas_idempotency_cardinality_restart_and_scope() -> None:
@@ -48,6 +49,10 @@ def test_postgres_cas_idempotency_cardinality_restart_and_scope() -> None:
     }
     digest = "a" * 64
     with psycopg.connect(DATABASE_URL or "") as connection:
+        for version in (*range(1, 13), 14):
+            connection.execute(
+                next(MIGRATIONS.glob(f"{version:04d}_*.sql")).read_text()
+            )
         connection.execute(
             "INSERT INTO workflow_definition.definitions(namespace,security_domain,workflow_definition_id,aggregate_version,record) VALUES(%s,%s,%s,1,'{}')",
             (scope.namespace, scope.security_domain, ids["workflow-definition"]),
@@ -68,6 +73,20 @@ def test_postgres_cas_idempotency_cardinality_restart_and_scope() -> None:
         connection.execute(
             "INSERT INTO execution_authority.digital_employee_instances(namespace,security_domain,digital_employee_instance_id,definition_revision_id,aggregate_version,record) VALUES(%s,%s,%s,%s,1,'{}')",
             (scope.namespace, scope.security_domain, ids["employee"], ids["revision"]),
+        )
+        connection.execute(
+            """INSERT INTO execution_authority.plan_approval_decisions(
+            namespace,security_domain,approval_decision_id,plan_id,plan_version,
+            plan_digest,ordinal,decision,actor_id,authority_basis,reason_category,
+            decision_digest,decided_at) VALUES(%s,%s,'approval:1',%s,1,%s,1,
+            'APPROVE','reviewer','HUMAN_REVIEW','BUSINESS_APPROVAL',%s,now())""",
+            (
+                scope.namespace,
+                scope.security_domain,
+                ids["plan"],
+                digest,
+                "d" * 64,
+            ),
         )
         connection.execute(
             "INSERT INTO execution_authority.assignments(namespace,security_domain,assignment_id,digital_employee_instance_id,approved_input_digest,record) VALUES(%s,%s,%s,%s,%s,'{}')",
@@ -300,5 +319,22 @@ def test_postgres_cas_idempotency_cardinality_restart_and_scope() -> None:
     restarted = PostgresResourceUseRepository(
         DATABASE_URL or "", migration_path=MIGRATION
     )
+    assert restarted.get_snapshot(scope, use_id) == observed
+    with (
+        psycopg.connect(DATABASE_URL or "") as connection,
+        pytest.raises(Exception, match="IMMUTABLE_RESOURCE_USE_HISTORY"),
+    ):
+        connection.execute(
+            "UPDATE resource_use.facts SET kind='FAILED' WHERE namespace=%s AND security_domain=%s AND resource_use_id=%s",
+            (scope.namespace, scope.security_domain, use_id),
+        )
+    with (
+        psycopg.connect(DATABASE_URL or "") as connection,
+        pytest.raises(Exception, match="IMMUTABLE_RESOURCE_USE_HISTORY"),
+    ):
+        connection.execute(
+            "DELETE FROM resource_use.snapshots WHERE namespace=%s AND security_domain=%s AND resource_use_id=%s",
+            (scope.namespace, scope.security_domain, use_id),
+        )
     assert restarted.get_snapshot(scope, use_id) == observed
     restarted.close()

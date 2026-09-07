@@ -2,20 +2,88 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 from agent_core.execution_contract import ScopeIdentity
 
 from .resource_use_application import ResourceUseApplicationService
 from .resource_use_domain import (
     MeasurementAvailability,
+    ResourceKind,
     ResourceMeasurement,
+    ResourceUseBinding,
     ResourceUseFact,
     ResourceUseFactKind,
     canonical_digest,
     canonical_record,
     stable_id,
 )
+
+
+def validate_knowledge_lineage(
+    binding: ResourceUseBinding,
+    scope: ScopeIdentity,
+    knowledge_binding: dict[str, object],
+) -> None:
+    expected = {
+        "scope": scope,
+        "attempt_id": knowledge_binding["attemptId"],
+        "resource_kind": ResourceKind.KNOWLEDGE,
+        "resource_id": knowledge_binding["knowledgeId"],
+        "resource_revision_id": knowledge_binding["revisionId"],
+        "resource_digest": knowledge_binding["revisionDigest"],
+        "binding_id": knowledge_binding["bindingId"],
+        "binding_digest": knowledge_binding["digest"],
+        "digital_employee_instance_id": knowledge_binding["digitalEmployeeInstanceId"],
+        "agent_instance_id": knowledge_binding["agentInstanceId"],
+        "authorization_decision_id": knowledge_binding["authorizationDecisionId"],
+    }
+    if any(getattr(binding, key) != value for key, value in expected.items()):
+        raise ValueError("KNOWLEDGE_RESOURCE_USE_LINEAGE_MISMATCH")
+
+
+def prepare_knowledge_retrieval(
+    service: ResourceUseApplicationService,
+    binding: ResourceUseBinding,
+    knowledge_binding: dict[str, object],
+    *,
+    observed_at: datetime,
+    idempotency_key: str,
+    transaction_hook: Callable[[Any], None],
+) -> tuple[object, bool]:
+    """Durably prepare a Knowledge dispatch before the external call."""
+    validate_knowledge_lineage(binding, binding.scope, knowledge_binding)
+    fact = ResourceUseFact(
+        stable_id("resource-use-dispatch", binding.resource_use_id, binding.binding_id),
+        binding.resource_use_id,
+        ResourceUseFactKind.DISPATCH_RECORDED,
+        "KNOWLEDGE_ATTEMPT",
+        binding.binding_id,
+        binding.binding_digest,
+        observed_at,
+        observed_at,
+    )
+    semantic = {
+        "binding": canonical_record(binding),
+        "facts": [canonical_record(fact)],
+    }
+    created = False
+
+    def mark_and_append(connection: Any) -> None:
+        nonlocal created
+        transaction_hook(connection)
+        created = True
+
+    snapshot = service.prepare_dispatch(
+        binding,
+        (fact,),
+        idempotency_key=idempotency_key,
+        payload_digest=canonical_digest(semantic),
+        transaction_hook=mark_and_append,
+    )
+    return snapshot, created
 
 
 def commit_knowledge_retrieval(
@@ -27,6 +95,7 @@ def commit_knowledge_retrieval(
     observed_at: datetime,
     expected_high_water: int,
     idempotency_key: str,
+    transaction_hook: Callable[[Any], None] | None = None,
 ) -> object:
     """Commit only Evidence returned by the governed retrieval path.
 
@@ -39,7 +108,7 @@ def commit_knowledge_retrieval(
     state = evidence["retrievalState"]
     kind = {
         "RETRIEVED": ResourceUseFactKind.SUCCEEDED,
-        "NO_RESULT": ResourceUseFactKind.NOT_EXECUTED,
+        "NO_RESULT": ResourceUseFactKind.NO_RESULT,
         "STALE": ResourceUseFactKind.STALE,
         "UNAVAILABLE": ResourceUseFactKind.OUTCOME_UNKNOWN,
     }[str(state)]
@@ -116,4 +185,5 @@ def commit_knowledge_retrieval(
         idempotency_key=idempotency_key,
         payload_digest=canonical_digest(semantic),
         expected_high_water=expected_high_water,
+        transaction_hook=transaction_hook,
     )

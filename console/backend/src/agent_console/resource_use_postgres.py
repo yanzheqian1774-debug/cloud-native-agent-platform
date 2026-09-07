@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,7 @@ class PostgresResourceUseRepository:
         *,
         idempotency_key: str,
         payload_digest: str,
+        transaction_hook: Callable[[Any], None] | None = None,
     ) -> ResourceUseSnapshot:
         if not facts or any(
             f.resource_use_id != binding.resource_use_id for f in facts
@@ -94,12 +96,16 @@ class PostgresResourceUseRepository:
         ):
             raise ResourceUseError("RESOURCE_USE_PAYLOAD_DIGEST_MISMATCH")
         with self.pool.connection() as connection, connection.transaction():
+            self._lock_idempotency(connection, binding.scope, idempotency_key)
             replay = self._replay(
                 connection, binding.scope, idempotency_key, payload_digest
             )
             if replay is not None:
                 return replay
             b = binding
+            self._validate_lineage(connection, b)
+            if transaction_hook is not None:
+                transaction_hook(connection)
             connection.execute(
                 """INSERT INTO resource_use.uses(
                 namespace,security_domain,resource_use_id,attempt_id,resource_kind,slot_key,
@@ -172,6 +178,7 @@ class PostgresResourceUseRepository:
         idempotency_key: str,
         payload_digest: str,
         expected_high_water: int,
+        transaction_hook: Callable[[Any], None] | None = None,
     ) -> ResourceUseSnapshot:
         semantic = {
             "resourceUseId": resource_use_id,
@@ -184,6 +191,7 @@ class PostgresResourceUseRepository:
         if payload_digest != canonical_digest(semantic):
             raise ResourceUseError("RESOURCE_USE_PAYLOAD_DIGEST_MISMATCH")
         with self.pool.connection() as connection, connection.transaction():
+            self._lock_idempotency(connection, scope, idempotency_key)
             replay = self._replay(connection, scope, idempotency_key, payload_digest)
             if replay is not None:
                 return replay
@@ -195,6 +203,8 @@ class PostgresResourceUseRepository:
                 raise ResourceUseError("RESOURCE_USE_NOT_FOUND")
             if row["high_water"] != expected_high_water:
                 raise ResourceUseConflict("RESOURCE_USE_CAS_MISMATCH")
+            if transaction_hook is not None:
+                transaction_hook(connection)
             self._insert_facts(connection, scope, facts, expected_high_water)
             for item in measurements:
                 connection.execute(
@@ -261,6 +271,109 @@ class PostgresResourceUseRepository:
                 connection, scope, idempotency_key, payload_digest, snapshot
             )
             return snapshot
+
+    def _validate_lineage(self, connection, binding: ResourceUseBinding) -> None:
+        row = connection.execute(
+            """SELECT a.task_run_id,a.predecessor_attempt_id,
+            tr.workflow_run_id,wr.assignment_id,wr.predecessor_workflow_run_id,
+            wr.plan_id,wr.plan_version,wr.approved_plan_digest,
+            ass.digital_employee_instance_id,p.plan_digest,p.status AS plan_status,
+            eb.digital_employee_instance_id AS employee_binding_instance_id,
+            eb.definition_id,eb.revision_id,eb.digest AS definition_digest,
+            eb.plan_digest AS employee_plan_digest,eb.approval_id,
+            eb.authorization_decision_id,
+            ib.definition_id AS instance_definition_id,
+            ib.revision_id AS instance_revision_id,
+            ib.digest AS instance_definition_digest,
+            pad.approval_decision_id,pad.plan_digest AS approval_plan_digest,
+            pad.decision AS approval_decision
+            FROM execution_authority.attempts a
+            JOIN execution_authority.task_runs tr USING(namespace,security_domain,task_run_id)
+            JOIN execution_authority.workflow_runs wr USING(namespace,security_domain,workflow_run_id)
+            JOIN execution_authority.assignments ass USING(namespace,security_domain,assignment_id)
+            JOIN execution_authority.plans p
+              ON p.namespace=wr.namespace AND p.security_domain=wr.security_domain
+             AND p.plan_id=wr.plan_id AND p.plan_version=wr.plan_version
+            JOIN digital_employee_definition.execution_bindings eb
+              ON eb.namespace=a.namespace AND eb.security_domain=a.security_domain
+             AND eb.attempt_id=a.attempt_id
+            JOIN digital_employee_definition.instance_bindings ib
+              ON ib.namespace=eb.namespace AND ib.security_domain=eb.security_domain
+             AND ib.digital_employee_instance_id=eb.digital_employee_instance_id
+            LEFT JOIN execution_authority.plan_approval_decisions pad
+              ON pad.namespace=p.namespace AND pad.security_domain=p.security_domain
+             AND pad.plan_id=p.plan_id AND pad.plan_version=p.plan_version
+             AND pad.approval_decision_id=eb.approval_id
+            WHERE a.namespace=%s AND a.security_domain=%s AND a.attempt_id=%s""",
+            (*self._scope(binding.scope), binding.attempt_id),
+        ).fetchone()
+        expected = {
+            "task_run_id": binding.task_run_id,
+            "predecessor_attempt_id": binding.predecessor_attempt_id,
+            "workflow_run_id": binding.workflow_run_id,
+            "predecessor_workflow_run_id": binding.predecessor_workflow_run_id,
+            "plan_id": binding.plan_id,
+            "plan_version": binding.plan_version,
+            "approved_plan_digest": binding.plan_digest,
+            "digital_employee_instance_id": binding.digital_employee_instance_id,
+            "plan_digest": binding.plan_digest,
+            "plan_status": "APPROVED",
+            "employee_binding_instance_id": binding.digital_employee_instance_id,
+            "definition_id": binding.digital_employee_definition_id,
+            "revision_id": binding.digital_employee_definition_revision_id,
+            "definition_digest": binding.digital_employee_definition_digest,
+            "instance_definition_id": binding.digital_employee_definition_id,
+            "instance_revision_id": binding.digital_employee_definition_revision_id,
+            "instance_definition_digest": binding.digital_employee_definition_digest,
+            "employee_plan_digest": binding.plan_digest,
+            "authorization_decision_id": binding.authorization_decision_id,
+        }
+        if row is None or any(row[key] != value for key, value in expected.items()):
+            raise ResourceUseError("RESOURCE_USE_LINEAGE_MISMATCH")
+        if row["approval_decision_id"] is None or row["approval_decision"] != "APPROVE":
+            raise ResourceUseError("RESOURCE_USE_APPROVAL_MISMATCH")
+        if row["approval_plan_digest"] != binding.plan_digest:
+            raise ResourceUseError("RESOURCE_USE_APPROVAL_MISMATCH")
+        placements = connection.execute(
+            """SELECT DISTINCT pr.agent_instance_id,
+            ai.runtime_instance_id AS agent_runtime_instance_id,
+            pd.runtime_instance_id AS placed_runtime_instance_id,
+            pd.decision AS placement_decision
+            FROM execution_authority.placement_requests pr
+            JOIN execution_authority.agent_instances ai
+              ON ai.namespace=pr.namespace AND ai.security_domain=pr.security_domain
+             AND ai.agent_instance_id=pr.agent_instance_id
+            LEFT JOIN execution_authority.placement_decisions pd
+              ON pd.namespace=pr.namespace AND pd.security_domain=pr.security_domain
+             AND pd.request_id=pr.request_id
+            WHERE pr.namespace=%s AND pr.security_domain=%s AND pr.attempt_id=%s""",
+            (*self._scope(binding.scope), binding.attempt_id),
+        ).fetchall()
+        if not placements:
+            if (
+                binding.agent_instance_id is not None
+                or binding.runtime_instance_id is not None
+            ):
+                raise ResourceUseError("RESOURCE_USE_PLACEMENT_MISMATCH")
+            return
+        if len(placements) != 1:
+            raise ResourceUseError("RESOURCE_USE_PLACEMENT_MISMATCH")
+        placement = placements[0]
+        placed_runtime = placement["placed_runtime_instance_id"]
+        if (
+            placement["agent_instance_id"] != binding.agent_instance_id
+            or placement["placement_decision"] != "PLACED"
+            or placed_runtime != binding.runtime_instance_id
+            or placement["agent_runtime_instance_id"] != placed_runtime
+        ):
+            raise ResourceUseError("RESOURCE_USE_PLACEMENT_MISMATCH")
+
+    def _lock_idempotency(self, connection, scope, key):
+        identity = canonical_digest([scope.namespace, scope.security_domain, key])
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+            (identity,),
+        )
 
     def _replay(self, connection, scope, key, digest):
         row = connection.execute(

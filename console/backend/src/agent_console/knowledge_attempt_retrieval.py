@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import Any, Protocol
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Protocol
+
+from agent_core.execution_contract import ScopeIdentity
 
 from agent_console.knowledge_ingestion import deterministic_vector
 from agent_console.knowledge_pack import canonical_digest, identifier, normalize_text
 from agent_console.knowledge_qdrant import QdrantKnowledgeError, QdrantKnowledgeIndex
 from agent_console.knowledge_repository import KnowledgeRepository, KnowledgeScope
+
+if TYPE_CHECKING:
+    from agent_console.resource_use_application import ResourceUseApplicationService
+    from agent_console.resource_use_domain import ResourceUseBinding
 
 
 class AttemptKnowledgeFailure(ValueError):
@@ -34,6 +41,15 @@ class AttemptKnowledgeEvidenceRepository(Protocol):
     def get_evidence(
         self, scope: KnowledgeScope, evidence_id: str
     ) -> dict[str, Any] | None: ...
+    def get_evidence_for_binding(
+        self, scope: KnowledgeScope, binding_id: str
+    ) -> dict[str, Any] | None: ...
+    def append_binding_with_connection(
+        self, connection: Any, record: dict[str, Any]
+    ) -> dict[str, Any]: ...
+    def append_evidence_with_connection(
+        self, connection: Any, record: dict[str, Any]
+    ) -> dict[str, Any]: ...
 
 
 class InMemoryAttemptKnowledgeEvidenceRepository:
@@ -70,8 +86,18 @@ class InMemoryAttemptKnowledgeEvidenceRepository:
     def append_binding(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append(self.bindings, record)
 
+    def append_binding_with_connection(
+        self, connection: Any, record: dict[str, Any]
+    ) -> dict[str, Any]:
+        return self.append_binding(record)
+
     def append_evidence(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._append(self.evidence, record)
+
+    def append_evidence_with_connection(
+        self, connection: Any, record: dict[str, Any]
+    ) -> dict[str, Any]:
+        return self.append_evidence(record)
 
     def get_evidence(
         self, scope: KnowledgeScope, evidence_id: str
@@ -85,6 +111,21 @@ class InMemoryAttemptKnowledgeEvidenceRepository:
         ):
             return None
         return copy.deepcopy(value)
+
+    def get_evidence_for_binding(
+        self, scope: KnowledgeScope, binding_id: str
+    ) -> dict[str, Any] | None:
+        value = next(
+            (
+                item
+                for item in self.evidence.values()
+                if item["bindingId"] == binding_id
+                and (item["namespace"], item["securityDomain"])
+                == (scope.namespace, scope.security_domain)
+            ),
+            None,
+        )
+        return None if value is None else copy.deepcopy(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +160,13 @@ class AttemptKnowledgeRetrievalService:
         self.qdrant = qdrant
 
     def retrieve(
-        self, scope: KnowledgeScope, request: AttemptKnowledgeRequest
+        self,
+        scope: KnowledgeScope,
+        request: AttemptKnowledgeRequest,
+        *,
+        resource_use_service: ResourceUseApplicationService | None = None,
+        resource_use_binding: ResourceUseBinding | None = None,
+        observed_at: datetime | None = None,
     ) -> dict[str, Any]:
         # This check intentionally precedes every repository and Qdrant read.
         if request.authorization_state != "ALLOW":
@@ -185,12 +232,76 @@ class AttemptKnowledgeRetrievalService:
         binding["digest"] = canonical_digest(
             binding, domain="attempt-knowledge-binding.v1"
         )
-        self.evidence.append_binding(binding)
+        if (resource_use_service is None) != (resource_use_binding is None):
+            raise AttemptKnowledgeFailure("KNOWLEDGE_RESOURCE_USE_REQUIRED")
+        prepared = None
+        integrated = resource_use_service is not None
+        if integrated:
+            from agent_console.resource_use_knowledge import (
+                prepare_knowledge_retrieval,
+            )
+
+            timestamp = observed_at or datetime.fromisoformat(
+                snapshot["createdAt"].replace("Z", "+00:00")
+            )
+            prepared, created = prepare_knowledge_retrieval(
+                resource_use_service,
+                resource_use_binding,
+                binding,
+                observed_at=timestamp,
+                idempotency_key=f"knowledge-dispatch:{resource_use_binding.resource_use_id}",
+                transaction_hook=lambda connection: (
+                    self.evidence.append_binding_with_connection(connection, binding)
+                ),
+            )
+            if not created:
+                prior = self.evidence.get_evidence_for_binding(
+                    scope, request.binding_id
+                )
+                if prior is None:
+                    raise AttemptKnowledgeFailure(
+                        "KNOWLEDGE_RESULT_PENDING_CONFIRMATION"
+                    )
+                return self._response_from_evidence(request, record, snapshot, prior)
+        else:
+            self.evidence.append_binding(binding)
+
+        def finalize(freshness, state, reason, citations):
+            result = self._result(
+                scope,
+                request,
+                record,
+                snapshot,
+                freshness,
+                state,
+                reason,
+                citations,
+                persist=not integrated,
+            )
+            if integrated:
+                from agent_console.resource_use_knowledge import (
+                    commit_knowledge_retrieval,
+                )
+
+                commit_knowledge_retrieval(
+                    resource_use_service,
+                    ScopeIdentity(scope.namespace, scope.security_domain),
+                    resource_use_binding.resource_use_id,
+                    result,
+                    observed_at=observed_at or datetime.now(UTC),
+                    expected_high_water=prepared.high_water,
+                    idempotency_key=f"knowledge-terminal:{result['evidence']['evidenceId']}",
+                    transaction_hook=lambda connection: (
+                        self.evidence.append_evidence_with_connection(
+                            connection, result["evidence"]
+                        )
+                    ),
+                )
+            return result
+
         freshness = "FRESH" if snapshot["status"] == "ACTIVE" else "STALE"
         if freshness == "STALE" and not request.allow_stale:
-            return self._failure(
-                scope, request, record, snapshot, "STALE", "STALE", "INDEX_STALE"
-            )
+            return finalize("STALE", "STALE", "INDEX_STALE", [])
         try:
             hits = self.qdrant.search(
                 deterministic_vector(query),
@@ -201,15 +312,7 @@ class AttemptKnowledgeRetrievalService:
                 limit=5,
             )
         except QdrantKnowledgeError:
-            return self._failure(
-                scope,
-                request,
-                record,
-                snapshot,
-                freshness,
-                "UNAVAILABLE",
-                "QDRANT_UNAVAILABLE",
-            )
+            return finalize(freshness, "UNAVAILABLE", "QDRANT_UNAVAILABLE", [])
         chunks = {
             chunk["chunkId"]: (document, chunk)
             for document in revision["content"]["documents"]
@@ -247,8 +350,24 @@ class AttemptKnowledgeRetrievalService:
             )
         state = "RETRIEVED" if citations else "NO_RESULT"
         reason = None if citations else "NO_RESULT"
-        return self._result(
-            scope, request, record, snapshot, freshness, state, reason, citations
+        return finalize(freshness, state, reason, citations)
+
+    def retrieve_with_resource_use(
+        self,
+        scope: KnowledgeScope,
+        request: AttemptKnowledgeRequest,
+        resource_use_service: ResourceUseApplicationService,
+        resource_use_binding: ResourceUseBinding,
+        *,
+        observed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Use the durable two-stage PostgreSQL boundary around Qdrant."""
+        return self.retrieve(
+            scope,
+            request,
+            resource_use_service=resource_use_service,
+            resource_use_binding=resource_use_binding,
+            observed_at=observed_at,
         )
 
     def _failure(self, scope, request, record, snapshot, freshness, state, reason):
@@ -257,7 +376,17 @@ class AttemptKnowledgeRetrievalService:
         )
 
     def _result(
-        self, scope, request, record, snapshot, freshness, state, reason, citations
+        self,
+        scope,
+        request,
+        record,
+        snapshot,
+        freshness,
+        state,
+        reason,
+        citations,
+        *,
+        persist: bool = True,
     ):
         semantic = {
             "schemaVersion": "attempt-knowledge-evidence.v1",
@@ -281,7 +410,8 @@ class AttemptKnowledgeRetrievalService:
         evidence["evidenceDigest"] = canonical_digest(
             evidence, domain="attempt-knowledge-evidence.v1"
         )
-        self.evidence.append_evidence(evidence)
+        if persist:
+            self.evidence.append_evidence(evidence)
         source = next(
             item
             for item in record["revisions"]
@@ -311,6 +441,39 @@ class AttemptKnowledgeRetrievalService:
             "citations": citations,
             "evidence": evidence,
             "reason": reason,
+        }
+
+    @staticmethod
+    def _response_from_evidence(request, record, snapshot, evidence):
+        source = next(
+            item
+            for item in record["revisions"]
+            if item["revisionId"] == request.revision_id
+        )["content"]["source"]
+        return {
+            "knowledgeName": record["name"],
+            "source": source,
+            "collection": {"collectionId": source["collectionId"]},
+            "revision": {
+                "revisionId": request.revision_id,
+                "digest": request.revision_digest,
+            },
+            "indexSnapshot": {
+                "snapshotId": request.snapshot_id,
+                "indexDigest": snapshot["indexDigest"],
+            },
+            "freshness": evidence["freshness"],
+            "binding": {
+                "bindingId": request.binding_id,
+                "attemptId": request.attempt_id,
+                "digitalEmployeeInstanceId": request.digital_employee_instance_id,
+                "agentInstanceId": request.agent_instance_id,
+            },
+            "authorizationState": "ALLOW",
+            "retrievalState": evidence["retrievalState"],
+            "citations": evidence["citations"],
+            "evidence": evidence,
+            "reason": evidence["reason"],
         }
 
     def readback(self, scope: KnowledgeScope, evidence_id: str) -> dict[str, Any]:

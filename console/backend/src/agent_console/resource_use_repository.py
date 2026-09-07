@@ -1,6 +1,7 @@
 """Repository ports for the PostgreSQL-owned Resource Use authority."""
 
-from typing import Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 from agent_core.execution_contract import ScopeIdentity
 
@@ -20,6 +21,7 @@ class ResourceUseRepository(Protocol):
         *,
         idempotency_key: str,
         payload_digest: str,
+        transaction_hook: Callable[[Any], None] | None = None,
     ) -> ResourceUseSnapshot: ...
 
     def commit_observation(
@@ -34,6 +36,7 @@ class ResourceUseRepository(Protocol):
         idempotency_key: str,
         payload_digest: str,
         expected_high_water: int,
+        transaction_hook: Callable[[Any], None] | None = None,
     ) -> ResourceUseSnapshot: ...
 
     def get_binding(

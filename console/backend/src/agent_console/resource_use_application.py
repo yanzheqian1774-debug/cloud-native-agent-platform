@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from agent_core.execution_contract import ScopeIdentity
 
@@ -64,6 +65,7 @@ class ResourceUseApplicationService:
         *,
         idempotency_key: str,
         payload_digest: str,
+        transaction_hook: Callable[[Any], None] | None = None,
     ) -> ResourceUseSnapshot:
         decision = self._authorize(binding.scope, "WRITE", binding.resource_use_id)
         if binding.authorization_decision_id != decision:
@@ -73,6 +75,7 @@ class ResourceUseApplicationService:
             facts,
             idempotency_key=idempotency_key,
             payload_digest=payload_digest,
+            transaction_hook=transaction_hook,
         )
 
     def commit_observation(
@@ -87,8 +90,12 @@ class ResourceUseApplicationService:
         idempotency_key: str,
         payload_digest: str,
         expected_high_water: int,
+        transaction_hook: Callable[[Any], None] | None = None,
     ) -> ResourceUseSnapshot:
-        self._authorize(scope, "WRITE", resource_use_id)
+        decision = self._authorize(scope, "WRITE", resource_use_id)
+        binding = self.repository.get_binding(scope, resource_use_id)
+        if binding is None or binding.authorization_decision_id != decision:
+            raise ResourceUseError("RESOURCE_USE_AUTHORIZATION_MISMATCH")
         return self.repository.commit_observation(
             scope,
             resource_use_id,
@@ -99,6 +106,7 @@ class ResourceUseApplicationService:
             idempotency_key=idempotency_key,
             payload_digest=payload_digest,
             expected_high_water=expected_high_water,
+            transaction_hook=transaction_hook,
         )
 
     def get_snapshot(

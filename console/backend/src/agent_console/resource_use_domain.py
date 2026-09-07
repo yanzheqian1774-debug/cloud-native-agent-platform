@@ -46,6 +46,7 @@ class ResourceUseFactKind(StrEnum):
     UNAVAILABLE = "UNAVAILABLE"
     STALE = "STALE"
     NOT_EXECUTED = "NOT_EXECUTED"
+    NO_RESULT = "NO_RESULT"
     MEASUREMENT_RECORDED = "MEASUREMENT_RECORDED"
     MEASUREMENT_NOT_COLLECTED = "MEASUREMENT_NOT_COLLECTED"
     MEASUREMENT_NOT_MEASURABLE = "MEASUREMENT_NOT_MEASURABLE"
@@ -68,6 +69,7 @@ class EffectiveUseState(StrEnum):
     UNAVAILABLE = "UNAVAILABLE"
     STALE = "STALE"
     NOT_EXECUTED = "NOT_EXECUTED"
+    NO_RESULT = "NO_RESULT"
     CONFLICTED = "CONFLICTED"
 
 
@@ -319,6 +321,18 @@ _TERMINAL = {
     EffectiveUseState.REJECTED,
     EffectiveUseState.UNAVAILABLE,
     EffectiveUseState.NOT_EXECUTED,
+    EffectiveUseState.NO_RESULT,
+}
+
+_STATE_RANK = {
+    EffectiveUseState.CONFIGURED: 0,
+    EffectiveUseState.BOUND: 1,
+    EffectiveUseState.SELECTED: 2,
+    EffectiveUseState.REQUESTED: 3,
+    EffectiveUseState.DISPATCH_RECORDED: 4,
+    EffectiveUseState.ACCEPTED: 5,
+    EffectiveUseState.RUNNING: 6,
+    EffectiveUseState.CANCELLATION_REQUESTED: 7,
 }
 
 
@@ -344,6 +358,24 @@ def reduce_resource_use(
     conflicts: list[str] = []
     if len(terminal) > 1:
         conflicts.append("CONFLICTING_TERMINAL_FACTS")
+    seen_sources: dict[tuple[str, str], str] = {}
+    for item in selected:
+        source = (item.source_owner, item.source_observation_id)
+        prior = seen_sources.setdefault(source, item.source_digest)
+        if prior != item.source_digest:
+            conflicts.append("CONFLICTING_SOURCE_OBSERVATION")
+    prior_state: EffectiveUseState | None = None
+    for state in states:
+        if prior_state in _TERMINAL and state != prior_state:
+            conflicts.append("STATE_AFTER_TERMINAL")
+        elif (
+            prior_state in _STATE_RANK
+            and state in _STATE_RANK
+            and _STATE_RANK[state] < _STATE_RANK[prior_state]
+        ):
+            conflicts.append("ILLEGAL_STATE_REGRESSION")
+        prior_state = state
+    conflicts = list(dict.fromkeys(conflicts))
     effective = EffectiveUseState.CONFLICTED if conflicts else states[-1]
     evidence = tuple(
         dict.fromkeys(ref for fact in selected for ref in fact.evidence_references)

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS resource_use.uses (
 CREATE TABLE IF NOT EXISTS resource_use.facts (
   namespace text NOT NULL, security_domain text NOT NULL,
   resource_use_id text NOT NULL, ordinal bigint NOT NULL CHECK(ordinal>0), fact_id text NOT NULL,
-  kind text NOT NULL, source_owner text NOT NULL, source_observation_id text NOT NULL,
+  kind text NOT NULL CHECK(kind IN ('CONFIGURED','BOUND','SELECTED','REQUESTED','DISPATCH_RECORDED','ACCEPTED','RUNNING','SUCCEEDED','FAILED','CANCELLATION_REQUESTED','CANCELLATION_CONFIRMED','OUTCOME_UNKNOWN','REJECTED','UNAVAILABLE','STALE','NOT_EXECUTED','NO_RESULT','MEASUREMENT_RECORDED','MEASUREMENT_NOT_COLLECTED','MEASUREMENT_NOT_MEASURABLE')),
+  source_owner text NOT NULL, source_observation_id text NOT NULL,
   source_digest text NOT NULL, observed_at timestamptz NOT NULL,
   recorded_at timestamptz NOT NULL, supersedes_fact_id text,
   record jsonb NOT NULL,

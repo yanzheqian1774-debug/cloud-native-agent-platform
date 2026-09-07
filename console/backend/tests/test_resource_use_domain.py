@@ -71,7 +71,42 @@ def test_conflicting_terminal_facts_fail_closed() -> None:
         high_water=2,
     )
     assert snapshot.effective_state is EffectiveUseState.CONFLICTED
-    assert snapshot.conflicts == ("CONFLICTING_TERMINAL_FACTS",)
+    assert snapshot.conflicts == (
+        "CONFLICTING_TERMINAL_FACTS",
+        "STATE_AFTER_TERMINAL",
+    )
+
+
+def test_no_result_is_a_distinct_terminal_state() -> None:
+    snapshot = reduce_resource_use(
+        "use:1", (fact(ResourceUseFactKind.NO_RESULT),), (), high_water=1
+    )
+    assert snapshot.effective_state is EffectiveUseState.NO_RESULT
+
+
+def test_regression_and_conflicting_source_observation_fail_closed() -> None:
+    now = datetime.now(UTC)
+    conflict = ResourceUseFact(
+        "fact:conflict",
+        "use:1",
+        ResourceUseFactKind.REQUESTED,
+        "knowledge",
+        "observation:1",
+        "b" * 64,
+        now,
+        now,
+    )
+    snapshot = reduce_resource_use(
+        "use:1",
+        (fact(ResourceUseFactKind.DISPATCH_RECORDED), conflict),
+        (),
+        high_water=2,
+    )
+    assert snapshot.effective_state is EffectiveUseState.CONFLICTED
+    assert snapshot.conflicts == (
+        "CONFLICTING_SOURCE_OBSERVATION",
+        "ILLEGAL_STATE_REGRESSION",
+    )
 
 
 def test_missing_measurement_is_null_not_zero() -> None:
