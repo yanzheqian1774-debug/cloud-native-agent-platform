@@ -59,22 +59,37 @@ must use structured parsing or exact-field extraction; broad `sed`, `cat`,
 
 ## Sanitized first-failure evidence
 
-For the primary responsive/focus and Wave 3B real-service scenarios, the log
-envelope may additionally contain `stepDiagnostic`. Static Playwright
+For the primary responsive/focus, Unified Product Assembly durable journey and
+Wave 3B real-service scenarios, the log envelope may additionally contain
+`stepDiagnostic`. Static Playwright
 `test.step` titles identify an allowlisted route, viewport, step ID and action
-class. Wave 3B keeps its first ten journey boundaries and splits restart/reload
-and mobile Evidence focus handling into static top-level action boundaries. The
-JSON reporter does not serialize nested steps, so these boundaries remain
-top-level without changing the underlying operations, assertions or order. The
-installed JSON serializer is exercised with synthetic primary and Wave 3B steps
-before relying on these fields. Only exact allowlisted identities and bounded
-structured durations are retained; raw step errors remain transient.
+class. Unified keeps static top-level boundaries for problem state, Agent
+publication, Employee input and create/validate/approve/publish, Agent
+authority assertions, matching, catalog, relationships, Employee management and restart
+readback. Wave 3B keeps static journey boundaries and splits conflict-recovery
+navigation, stale preparation, conflict write, error UI, authoritative readback,
+explicit recovery and final state assertion, as well as restart/reload and mobile
+Evidence focus handling, into static top-level action boundaries. The JSON reporter does not serialize nested steps,
+so these boundaries remain top-level without changing the underlying
+operations, assertions or order. The installed JSON serializer is exercised
+with synthetic primary, Unified and Wave 3B steps before relying on these
+fields. Only exact allowlisted identities and bounded structured durations are
+retained; raw step errors remain transient.
 `failedStep` requires a structured step error and is separate from
 `lastCompletedStep`; absent failure location remains null.
 `elapsedMs` is reporter duration, not inferred wall-clock job time. A structured
 test result of `timedOut` identifies the scenario timeout manager; other timeout
 ownership remains `UNKNOWN` unless independently established. Existing summary
 envelopes without steps remain valid. No timeout or test selection is changed.
+
+First-failure classification and step extraction share one transient,
+unambiguous Playwright `(suite, spec, test, result)` object. Step extraction
+never independently scans another suite or result. A repeated file/title pair,
+multiple failing tests in one spec, multiple results for the failing test, or an
+incomplete result fails closed: the record retains only bounded scenario-level
+diagnostic-gap data and the summary omits `stepDiagnostic`. Project names,
+dynamic titles, raw errors, stacks, locators and URLs are neither retained nor
+hashed. Historical summaries are not retroactively reinterpreted.
 
 `restartCountClass` in the failure summary is explicitly
 `SUITE_CUMULATIVE`: the Harness counter starts when one serialized browser suite

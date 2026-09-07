@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import re
 from pathlib import Path
 
 from .digital_employee_definition import (
@@ -14,6 +16,29 @@ from .digital_employee_definition import (
     digest,
     identifier,
 )
+
+_SHA256_DIGEST = re.compile(r"(?:(?P<algorithm>sha256):)?(?P<value>[a-f0-9]{64})")
+
+
+def _same_sha256_digest(left: object, right: object) -> bool:
+    """Compare the two accepted SHA-256 encodings without rewriting either value."""
+
+    def parse(value: object) -> bytes | None:
+        if not isinstance(value, str):
+            return None
+        matched = _SHA256_DIGEST.fullmatch(value)
+        if matched is None:
+            return None
+        # An absent algorithm is the existing compact SHA-256 representation;
+        # an explicit algorithm is accepted only when it is exactly ``sha256``.
+        return bytes.fromhex(matched.group("value"))
+
+    left_value, right_value = parse(left), parse(right)
+    return (
+        left_value is not None
+        and right_value is not None
+        and hmac.compare_digest(left_value, right_value)
+    )
 
 
 class PostgresEmployeeDefinitionRepository:
@@ -148,7 +173,9 @@ class PostgresEmployeeDefinitionRepository:
                 ),
                 None,
             )
-            if exact is None or exact.get("digest") != member.digest:
+            if exact is None or not _same_sha256_digest(
+                exact.get("digest"), member.digest
+            ):
                 raise EmployeeDefinitionError("BOUND_RESOURCE_MISMATCH")
             if (
                 record.get("publishedRevisionId") != member.revision_id
