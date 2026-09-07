@@ -8,10 +8,13 @@ from .agent_definition_repository import AgentDefinitionRepositoryError
 from .agent_definition_service import AgentDefinitionFailure
 from .digital_employee_application import DigitalEmployeeError
 from .digital_employee_bootstrap import DigitalEmployeeProductAssembly
+from .digital_employee_definition import EmployeeDefinitionError
 from .digital_employee_schemas import (
     CreateDigitalEmployeeAssignment,
     CreateDigitalEmployeeInstance,
     CreateDigitalEmployeePlacement,
+    CreateEmployeeDefinition,
+    DecideEmployeeDefinition,
 )
 from .execution_domain import ExecutionPersistenceError
 from .problems import TrustedPrincipal
@@ -26,14 +29,14 @@ def get_assembly() -> DigitalEmployeeProductAssembly:
 
 
 def get_principal(
-    tenant_id: Annotated[str, Header(alias="X-Tenant-ID")] = "tenant-a",
-    security_domain: Annotated[
-        str, Header(alias="X-Security-Domain")
-    ] = "supplier-quality",
-    principal_id: Annotated[
-        str, Header(alias="X-Principal-ID")
-    ] = "human:supplier-quality-manager",
+    tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    security_domain: Annotated[str | None, Header(alias="X-Security-Domain")] = None,
+    principal_id: Annotated[str | None, Header(alias="X-Principal-ID")] = None,
 ) -> TrustedPrincipal:
+    if not principal_id:
+        raise HTTPException(401, detail={"reasonCode": "AUTHENTICATION_REQUIRED"})
+    if not tenant_id or not security_domain:
+        raise HTTPException(403, detail={"reasonCode": "TRUSTED_SCOPE_REQUIRED"})
     return TrustedPrincipal(tenant_id, security_domain, principal_id)
 
 
@@ -56,6 +59,19 @@ def _call(operation):
         if reason == "TRUSTED_SCOPE_REQUIRED":
             status = 403
         raise HTTPException(status, detail={"reasonCode": reason}) from exc
+    except EmployeeDefinitionError as exc:
+        reason = str(exc)
+        if reason in {"EMPLOYEE_NOT_FOUND", "BOUND_RESOURCE_NOT_FOUND"}:
+            status = 404
+            reason = "EMPLOYEE_NOT_FOUND"
+        elif reason == "EMPLOYEE_RECORD_CORRUPT":
+            status = 503
+            reason = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+        elif reason.startswith("INVALID_"):
+            status = 422
+        else:
+            status = 409
+        raise HTTPException(status, detail={"reasonCode": reason}) from exc
     except AgentDefinitionFailure as exc:
         raise HTTPException(exc.status, detail={"reasonCode": exc.reason}) from exc
     except ValueError as exc:
@@ -72,13 +88,94 @@ def _call(operation):
 
 @router.get("/definitions")
 def list_definitions(principal: Principal, assembly: Assembly):
-    return _call(lambda: assembly.list_definitions(_scope(principal, assembly)))
-
-
-@router.get("/definitions/{definition_id}")
-def read_definition(definition_id: str, principal: Principal, assembly: Assembly):
     return _call(
-        lambda: assembly.get_definition(_scope(principal, assembly), definition_id)
+        lambda: assembly.list_definitions(
+            _scope(principal, assembly), principal.principal_id
+        )
+    )
+
+
+@router.post("/definitions", status_code=201)
+def create_definition(
+    command: CreateEmployeeDefinition, principal: Principal, assembly: Assembly
+):
+    return _call(
+        lambda: assembly.create_definition(
+            _scope(principal, assembly), principal.principal_id, command
+        )
+    )
+
+
+@router.get("/definitions/{employee_definition_id}")
+def read_definition(
+    employee_definition_id: str,
+    principal: Principal,
+    assembly: Assembly,
+    revision_id: Annotated[
+        str, Query(alias="employeeDefinitionRevisionId", min_length=1, max_length=200)
+    ],
+):
+    return _call(
+        lambda: assembly.get_definition(
+            _scope(principal, assembly),
+            principal.principal_id,
+            employee_definition_id,
+            revision_id,
+        )
+    )
+
+
+def _decide_definition(
+    action: str,
+    employee_definition_id: str,
+    command: DecideEmployeeDefinition,
+    principal: TrustedPrincipal,
+    assembly: DigitalEmployeeProductAssembly,
+):
+    return _call(
+        lambda: assembly.decide_definition(
+            _scope(principal, assembly),
+            principal.principal_id,
+            employee_definition_id,
+            action,
+            command,
+        )
+    )
+
+
+@router.post("/definitions/{employee_definition_id}/validate")
+def validate_definition(
+    employee_definition_id: str,
+    command: DecideEmployeeDefinition,
+    principal: Principal,
+    assembly: Assembly,
+):
+    return _decide_definition(
+        "VALIDATE", employee_definition_id, command, principal, assembly
+    )
+
+
+@router.post("/definitions/{employee_definition_id}/approve")
+def approve_definition(
+    employee_definition_id: str,
+    command: DecideEmployeeDefinition,
+    principal: Principal,
+    assembly: Assembly,
+):
+    return _decide_definition(
+        "APPROVE", employee_definition_id, command, principal, assembly
+    )
+
+
+@router.post("/definitions/{employee_definition_id}/publish")
+def publish_definition(
+    employee_definition_id: str,
+    command: DecideEmployeeDefinition,
+    principal: Principal,
+    assembly: Assembly,
+):
+    return _decide_definition(
+        "PUBLISH", employee_definition_id, command, principal, assembly
     )
 
 

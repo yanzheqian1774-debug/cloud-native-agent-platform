@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Protocol
 
 from .execution_evidence_import import ExecutionEvidenceRecord
@@ -31,7 +31,14 @@ from .planning import CanonicalWorkflowRevision, PlanningState
 
 class ExecutionIdentityRepository(Protocol):
     def save(
-        self, scope: ScopeIdentity, aggregate: ExecutionIdentityAggregate
+        self,
+        scope: ScopeIdentity,
+        aggregate: ExecutionIdentityAggregate,
+        *,
+        approved_plan: ApprovedPlanIdentity | None = None,
+        plan: CanonicalWorkflowRevision | None = None,
+        task_id: str | None = None,
+        authorization_decision_id: str,
     ) -> ExecutionIdentityAggregate: ...
 
     def get_attempt(
@@ -69,6 +76,9 @@ class ApprovedPlanIdentity:
     revision_id: str
     digest: str
     approval_id: str
+    plan_id: str | None = None
+    plan_version: int | None = None
+    plan_digest: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,13 +171,77 @@ def _assert_exact_approval(command: StartExecutionCommand) -> None:
         raise ExecutionApplicationError("CORRECTION_BINDING_MISMATCH")
 
 
+class ExecutionAuthorization(Protocol):
+    def require(self, scope: ScopeIdentity, action: str, identity: str) -> str:
+        """Authorize before lookup; return a trusted audit decision ID."""
+        ...
+
+
+@dataclass(frozen=True)
+class ScopedExecutionAuthorization:
+    """Authenticated internal context, never accepted from a request DTO."""
+
+    scope: ScopeIdentity
+    actor_id: str
+    permissions: frozenset[str]
+    decision_id: str
+
+    def require(self, scope, action, identity):
+        if (
+            scope != self.scope
+            or action not in self.permissions
+            or not self.actor_id
+            or not self.decision_id
+        ):
+            raise ExecutionApplicationError("EXECUTION_NOT_FOUND")
+        return self.decision_id
+
+
+def execution_plan_bytes(plan, assignment_id, instance_id):
+    """New Plan content submitted to the existing Workflow Control approval owner.
+
+    Candidate approval and durable Plan approval retain independent digests.
+    Historical Plan content is never inferred or rewritten into this envelope.
+    """
+    return json.dumps(
+        {
+            "schemaVersion": "employee-execution-plan.v1",
+            "workflow": asdict(plan),
+            "assignmentId": str(assignment_id),
+            "instanceId": str(instance_id),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+
+
 class ExecutionApplicationService:
     """Create and read durable execution identities after exact Plan approval."""
 
-    def __init__(self, identities: ExecutionIdentityRepository) -> None:
+    def __init__(
+        self,
+        identities: ExecutionIdentityRepository,
+        authorization: ExecutionAuthorization | None = None,
+    ) -> None:
         self._identities = identities
+        self._authorization = authorization
 
-    def start(self, command: StartExecutionCommand) -> StartExecutionResult:
+    def _authorize(self, scope, action, identity):
+        if self._authorization is None:
+            raise ExecutionApplicationError("EXECUTION_NOT_FOUND")
+        decision = self._authorization.require(scope, action, str(identity))
+        if not decision:
+            raise ExecutionApplicationError("EXECUTION_NOT_FOUND")
+        return decision
+
+    def start(
+        self,
+        command: StartExecutionCommand,
+    ) -> StartExecutionResult:
+        authorization_decision_id = self._authorize(
+            command.scope, "START", command.assignment_id
+        )
         _assert_exact_approval(command)
         seed = (
             command.scope.namespace,
@@ -206,16 +280,29 @@ class ExecutionApplicationService:
             attempt,
         )
         existing = self._identities.get_attempt(command.scope, attempt.attempt_id)
-        if existing is not None:
-            if existing != aggregate:
-                raise ExecutionApplicationError("EXECUTION_REPLAY_CONFLICT")
-            return StartExecutionResult(AppendDisposition.REPLAYED, existing)
+        if existing is not None and existing != aggregate:
+            raise ExecutionApplicationError("EXECUTION_REPLAY_CONFLICT")
         return StartExecutionResult(
-            AppendDisposition.APPENDED,
-            self._identities.save(command.scope, aggregate),
+            AppendDisposition.REPLAYED
+            if existing is not None
+            else AppendDisposition.APPENDED,
+            self._identities.save(
+                command.scope,
+                aggregate,
+                approved_plan=command.approved_plan,
+                plan=command.plan,
+                task_id=command.task_id,
+                authorization_decision_id=authorization_decision_id,
+            ),
         )
 
-    def retry(self, command: RetryExecutionCommand) -> RetryExecutionResult:
+    def retry(
+        self,
+        command: RetryExecutionCommand,
+    ) -> RetryExecutionResult:
+        authorization_decision_id = self._authorize(
+            command.scope, "RETRY", command.previous_attempt_id
+        )
         previous = self._identities.get_attempt(
             command.scope, command.previous_attempt_id
         )
@@ -241,13 +328,17 @@ class ExecutionApplicationService:
             attempt,
         )
         existing = self._identities.get_attempt(command.scope, attempt.attempt_id)
-        if existing is not None:
-            if existing != aggregate:
-                raise ExecutionApplicationError("EXECUTION_REPLAY_CONFLICT")
-            return RetryExecutionResult(AppendDisposition.REPLAYED, existing)
+        if existing is not None and existing != aggregate:
+            raise ExecutionApplicationError("EXECUTION_REPLAY_CONFLICT")
         return RetryExecutionResult(
-            AppendDisposition.APPENDED,
-            self._identities.save(command.scope, aggregate),
+            AppendDisposition.REPLAYED
+            if existing is not None
+            else AppendDisposition.APPENDED,
+            self._identities.save(
+                command.scope,
+                aggregate,
+                authorization_decision_id=authorization_decision_id,
+            ),
         )
 
     def read_attempt(

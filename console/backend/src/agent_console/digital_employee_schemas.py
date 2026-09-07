@@ -1,6 +1,7 @@
 """Strict internal Product API schemas for Digital Employee assembly."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,10 +10,35 @@ class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class EmployeeCompositionMember(_StrictModel):
+    kind: Literal["AGENT", "WORKFLOW", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE"]
+    resourceId: str = Field(min_length=1, max_length=200)
+    revisionId: str = Field(min_length=1, max_length=200)
+    digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
+
+
+class CreateEmployeeDefinition(_StrictModel):
+    employeeDefinitionId: str = Field(min_length=1, max_length=200)
+    employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
+    role: str = Field(min_length=1, max_length=200)
+    responsibilities: list[str] = Field(min_length=1, max_length=32)
+    members: list[EmployeeCompositionMember] = Field(min_length=1, max_length=128)
+    predecessorEmployeeRevisionId: str | None = Field(default=None, max_length=200)
+    expectedVersion: int = Field(ge=0)
+    commandId: str = Field(min_length=1, max_length=200)
+
+
+class DecideEmployeeDefinition(_StrictModel):
+    employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
+    employeeDefinitionDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expectedVersion: int = Field(ge=1)
+    commandId: str = Field(min_length=1, max_length=200)
+
+
 class CreateDigitalEmployeeInstance(_StrictModel):
     instanceId: str = Field(min_length=1, max_length=200)
-    definitionId: str = Field(min_length=1, max_length=200)
-    definitionRevisionId: str = Field(min_length=1, max_length=200)
+    employeeDefinitionId: str = Field(min_length=1, max_length=200)
+    employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
     commandId: str = Field(min_length=1, max_length=200)
     workspaceReference: str | None = Field(default=None, max_length=200)
     modelReference: str | None = Field(default=None, max_length=200)

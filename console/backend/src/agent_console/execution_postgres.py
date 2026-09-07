@@ -295,46 +295,39 @@ class PostgresExecutionAuthorityRepository:
         return values
 
     def save(
-        self, scope: ScopeIdentity, aggregate: ExecutionIdentityAggregate
+        self,
+        scope: ScopeIdentity,
+        aggregate: ExecutionIdentityAggregate,
+        *,
+        approved_plan=None,
+        plan=None,
+        task_id=None,
+        authorization_decision_id: str | None = None,
     ) -> ExecutionIdentityAggregate:
+        if not authorization_decision_id:
+            raise ExecutionConflict("EXECUTION_NOT_FOUND")
         if scope != aggregate.scope:
             raise ExecutionConflict("EXECUTION_IDENTITY_SCOPE_MISMATCH")
         aggregate_payload = json.loads(canonical_bytes(aggregate))["payload"]
         aggregate_digest = canonical_digest(aggregate)
 
         def operation(connection):
-            de_id = str(aggregate.assignment.digital_employee_instance_id)
+            from .execution_lineage import append_lineage, validate_lineage
+
+            employee, stored_plan, approval_id, ordinal = validate_lineage(
+                connection,
+                aggregate,
+                approved_plan,
+                authorization_decision_id,
+                plan,
+                task_id,
+            )
             values = (
-                (
-                    "digital_employee_instances",
-                    "digital_employee_instance_id",
-                    de_id,
-                    "definition_revision_id,aggregate_version,record",
-                    (
-                        aggregate.workflow_run.approved_plan_revision_id,
-                        1,
-                        {
-                            "digital_employee_instance_id": de_id,
-                            "definition_revision_id": aggregate.workflow_run.approved_plan_revision_id,
-                        },
-                    ),
-                ),
-                (
-                    "assignments",
-                    "assignment_id",
-                    str(aggregate.assignment.assignment_id),
-                    "digital_employee_instance_id,approved_input_digest,record",
-                    (
-                        de_id,
-                        canonical_digest(aggregate.assignment),
-                        json.loads(canonical_bytes(aggregate.assignment))["payload"],
-                    ),
-                ),
                 (
                     "workflow_runs",
                     "workflow_run_id",
                     str(aggregate.workflow_run.workflow_run_id),
-                    "assignment_id,approved_plan_revision_id,predecessor_workflow_run_id,correction_of_workflow_run_id,record",
+                    "assignment_id,approved_plan_revision_id,predecessor_workflow_run_id,correction_of_workflow_run_id,plan_id,plan_version,approved_plan_digest,control_state,record",
                     (
                         str(aggregate.workflow_run.assignment_id),
                         aggregate.workflow_run.approved_plan_revision_id,
@@ -344,6 +337,10 @@ class PostgresExecutionAuthorityRepository:
                         None
                         if aggregate.workflow_run.correction_of_workflow_run_id is None
                         else str(aggregate.workflow_run.correction_of_workflow_run_id),
+                        stored_plan["plan_id"],
+                        stored_plan["plan_version"],
+                        stored_plan["plan_digest"],
+                        "PENDING",
                         json.loads(canonical_bytes(aggregate.workflow_run))["payload"],
                     ),
                 ),
@@ -351,9 +348,11 @@ class PostgresExecutionAuthorityRepository:
                     "task_runs",
                     "task_run_id",
                     str(aggregate.task_run.task_run_id),
-                    "workflow_run_id,record",
+                    "workflow_run_id,workflow_node_id,control_state,record",
                     (
                         str(aggregate.task_run.workflow_run_id),
+                        stored_plan["task_id"],
+                        "READY",
                         json.loads(canonical_bytes(aggregate.task_run))["payload"],
                     ),
                 ),
@@ -361,13 +360,15 @@ class PostgresExecutionAuthorityRepository:
                     "attempts",
                     "attempt_id",
                     str(aggregate.attempt.attempt_id),
-                    "task_run_id,predecessor_attempt_id,aggregate_digest,record",
+                    "task_run_id,predecessor_attempt_id,aggregate_digest,attempt_ordinal,control_state,record",
                     (
                         str(aggregate.attempt.task_run_id),
                         None
                         if aggregate.attempt.predecessor_attempt_id is None
                         else str(aggregate.attempt.predecessor_attempt_id),
                         aggregate_digest,
+                        ordinal,
+                        "PENDING",
                         aggregate_payload,
                     ),
                 ),
@@ -385,12 +386,23 @@ class PostgresExecutionAuthorityRepository:
                     ),
                 )
                 stored = connection.execute(
-                    f"SELECT record FROM execution_authority.{table} WHERE namespace=%s AND security_domain=%s AND {id_column}=%s",
+                    f"SELECT {columns} FROM execution_authority.{table} WHERE namespace=%s AND security_domain=%s AND {id_column}=%s",
                     (scope.namespace, scope.security_domain, identity),
                 ).fetchone()
-                expected_record = extra[-1]
-                if stored is None or stored["record"] != expected_record:
+                if stored is None or any(
+                    stored[column] != expected
+                    for column, expected in zip(columns.split(","), extra, strict=True)
+                    if column != "control_state"
+                ):
                     raise ExecutionConflict("EXECUTION_IDENTITY_CONFLICT")
+            append_lineage(
+                connection,
+                aggregate,
+                employee,
+                stored_plan,
+                approval_id,
+                authorization_decision_id,
+            )
             return aggregate
 
         return self._transaction(operation)
@@ -405,7 +417,10 @@ class PostgresExecutionAuthorityRepository:
             ).fetchone()
         if row is None:
             return None
-        payload = row["record"]
+        return self.identity_from_record(scope, row["record"])
+
+    @staticmethod
+    def identity_from_record(scope, payload):
         assignment = payload["assignment"]
         workflow = payload["workflow_run"]
         task = payload["task_run"]
@@ -444,11 +459,18 @@ class PostgresExecutionAuthorityRepository:
         scope: ScopeIdentity,
         request: PlacementRequest,
         decision: PlacementDecision,
+        *,
+        require_employee_lineage: bool = False,
     ) -> PlacementResult:
         if scope != request.scope or decision.request_id != request.request_id:
             raise ExecutionConflict("PLACEMENT_SCOPE_OR_REQUEST_MISMATCH")
 
         def operation(connection):
+            from .execution_lineage import validate_placement
+
+            validate_placement(
+                connection, scope, request, decision, required=require_employee_lineage
+            )
             existing = connection.execute(
                 "SELECT request_digest FROM execution_authority.placement_requests WHERE namespace=%s AND security_domain=%s AND request_id=%s FOR UPDATE",
                 (scope.namespace, scope.security_domain, str(request.request_id)),

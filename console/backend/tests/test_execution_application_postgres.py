@@ -5,19 +5,15 @@ from pathlib import Path
 import psycopg
 import pytest
 from agent_console.execution_application import (
-    ApprovedPlanIdentity,
     ExecutionApplicationService,
     ExecutionCompletionService,
     ExecutionEvidenceRecord,
     PostgresExecutionCompletionWriter,
     RecordCompletionCommand,
     RetryExecutionCommand,
-    StartExecutionCommand,
 )
 from agent_console.execution_postgres import (
     AppendDisposition,
-    AssignmentId,
-    DigitalEmployeeInstanceId,
     PostgresExecutionAuthorityRepository,
     ScopeIdentity,
 )
@@ -99,22 +95,18 @@ def approved_plan(suffix: str) -> CanonicalWorkflowRevision:
     )
 
 
+_starts = {}
+
+
 def start(value, suffix: str):
-    plan = approved_plan(suffix)
-    command = StartExecutionCommand(
-        ScopeIdentity(plan.tenant_id, plan.security_domain),
-        plan,
-        ApprovedPlanIdentity(
-            plan.canonical_workflow_revision_id,
-            plan.approved_candidate_digest,
-            plan.approval_id,
-        ),
-        AssignmentId(f"assignment-{suffix}"),
-        DigitalEmployeeInstanceId(f"employee-{suffix}"),
-        "collect",
-        f"start-{suffix}",
-    )
-    return ExecutionApplicationService(value).start(command)
+    from employee_identity_support import authorize, start_chain
+
+    if suffix not in _starts:
+        *_, command, result = start_chain(value, DATABASE_URL, approved_plan(suffix))
+        _starts[suffix] = command
+        return result
+    command = _starts[suffix]
+    return ExecutionApplicationService(value, authorize(command.scope)).start(command)
 
 
 def evidence(identity, suffix: str, ordinal: int) -> ExecutionEvidenceRecord:
@@ -176,7 +168,9 @@ def test_postgres_replay_restart_retry_scope_and_order() -> None:
     restarted = PostgresExecutionAuthorityRepository(
         DATABASE_URL or "", migration_path=MIGRATION
     )
-    service = ExecutionApplicationService(restarted)
+    from employee_identity_support import authorize, fail_attempt
+
+    service = ExecutionApplicationService(restarted, authorize(started.identity.scope))
     assert (
         service.read_attempt(
             started.identity.scope, started.identity.attempt.attempt_id
@@ -189,6 +183,7 @@ def test_postgres_replay_restart_retry_scope_and_order() -> None:
         )
         is None
     )
+    fail_attempt(restarted, started.identity)
     retried = service.retry(
         RetryExecutionCommand(
             started.identity.scope, started.identity.attempt.attempt_id, "retry"
