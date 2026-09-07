@@ -12,6 +12,7 @@ const pages = [
   ["/help", "帮助中心"],
 ] as const;
 const primaryRoutes = ["/dashboard", "/work", "/digital-employees", "/agent-center", "/skills", "/mcp", "/knowledge", "/workflow-definitions", "/runtime-profiles", "/evidence", "/outcomes", ...pages.filter(([route]) => route !== "/agent-center").map(([route]) => route)] as const;
+const routeKeys = ["HOME", "WORK", "EMPLOYEES", "AGENTS", "SKILLS", "MCP", "KNOWLEDGE", "WORKFLOWS", "RUNTIMES", "EVIDENCE", "OUTCOMES", "APPLICATIONS", "PERMISSIONS", "SECURITY", "OPERATIONS", "MODELS", "USAGE", "SETTINGS", "HELP"] as const;
 const journeys = [
   { launch: "业务闭环", name: "业务闭环总览演示路径", steps: ["业务问题", "成功标准", "已批准 Plan", "数字员工", "Skill", "MCP", "Knowledge", "Workflow", "Runtime / Attempt", "Evidence", "Outcome"] },
   { launch: "数字员工装配", name: "数字员工装配演示路径", steps: ["数字员工", "Agent Definition", "Skill 绑定", "MCP 端点边界", "Knowledge 绑定", "Workflow 定义", "Runtime 配置", "Evidence 入口"] },
@@ -64,11 +65,12 @@ test("keeps all support pages reachable from the mobile navigation", async ({ pa
 test("keeps all nineteen primary surfaces responsive and restores heading focus", async ({ page }) => {
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    for (const route of primaryRoutes) {
-      await page.goto(route);
-      await expect(page.locator("main h1").first()).toBeVisible();
-      await expect(page.locator("main h1").first()).toBeFocused();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    for (const [index, route] of primaryRoutes.entries()) {
+      const key = `PRIMARY_${routeKeys[index]}_${viewport.width === 1440 ? "DESKTOP" : "MOBILE"}`;
+      await test.step(`${key}_NAVIGATE`, async () => { await page.goto(route); });
+      await test.step(`${key}_HEADING_VISIBLE`, async () => { await expect(page.locator("main h1").first()).toBeVisible(); });
+      await test.step(`${key}_HEADING_FOCUSED`, async () => { await expect(page.locator("main h1").first()).toBeFocused(); });
+      await test.step(`${key}_NO_OVERFLOW`, async () => { expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); });
     }
   }
 });

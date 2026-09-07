@@ -735,6 +735,127 @@ SUMMARY_FIELDS = frozenset(
 SUMMARY_COUNT_FIELDS = frozenset(
     {"selected", "executed", "passed", "failed", "skipped", "flaky"}
 )
+PRIMARY_ROUTE_KEYS = (
+    "HOME",
+    "WORK",
+    "EMPLOYEES",
+    "AGENTS",
+    "SKILLS",
+    "MCP",
+    "KNOWLEDGE",
+    "WORKFLOWS",
+    "RUNTIMES",
+    "EVIDENCE",
+    "OUTCOMES",
+    "APPLICATIONS",
+    "PERMISSIONS",
+    "SECURITY",
+    "OPERATIONS",
+    "MODELS",
+    "USAGE",
+    "SETTINGS",
+    "HELP",
+)
+PRIMARY_STEP_IDS = {
+    f"PRIMARY_{route}_{viewport}_{action}": (route, viewport)
+    for viewport in ("DESKTOP", "MOBILE")
+    for route in PRIMARY_ROUTE_KEYS
+    for action in ("NAVIGATE", "HEADING_VISIBLE", "HEADING_FOCUSED", "NO_OVERFLOW")
+}
+
+
+def step_diagnostic(report: dict[str, object]) -> dict[str, object] | None:
+    for suite, spec in _ordered_specs(report.get("suites")):
+        if (
+            FIRST_FAILURE_ASSERTION_IDS.get(
+                (Path(str(suite.get("file", ""))).name, spec.get("title"))
+            )
+            != "PLATFORM_PRIMARY_RESPONSIVE_FOCUS"
+        ):
+            continue
+        for test in spec.get("tests", []):
+            for result in test.get("results", []):
+                if result.get("status") not in {"failed", "timedOut", "interrupted"}:
+                    continue
+                steps = result.get("steps")
+                if not isinstance(steps, list):
+                    return None
+                completed = 0
+                last = failed = None
+                for step in steps:
+                    if (
+                        not isinstance(step, dict)
+                        or step.get("title") not in PRIMARY_STEP_IDS
+                    ):
+                        return None
+                    step_id = step["title"]
+                    route, viewport = PRIMARY_STEP_IDS[step_id]
+                    duration = step.get("duration")
+                    item = {
+                        "routeKey": route,
+                        "viewportKey": viewport,
+                        "stepId": step_id,
+                        "elapsedMs": duration
+                        if type(duration) is int and 0 <= duration <= 3600000
+                        else None,
+                    }
+                    if step.get("error"):
+                        failed = item
+                        break
+                    completed += 1
+                    last = item
+                elapsed = result.get("duration")
+                return {
+                    "failedStep": failed,
+                    "lastCompletedStep": last,
+                    "completedStepCount": completed,
+                    "elapsedMs": elapsed
+                    if type(elapsed) is int and 0 <= elapsed <= 3600000
+                    else None,
+                    "timeoutKind": "SCENARIO"
+                    if result.get("status") == "timedOut"
+                    else "UNKNOWN",
+                }
+    return None
+
+
+def validate_step_diagnostic(value: object) -> None:
+    if not isinstance(value, dict) or set(value) != {
+        "failedStep",
+        "lastCompletedStep",
+        "completedStepCount",
+        "elapsedMs",
+        "timeoutKind",
+    }:
+        raise ValueError("step diagnostic schema violation")
+    if value["timeoutKind"] not in {"SCENARIO", "NAVIGATION", "ASSERTION", "UNKNOWN"}:
+        raise ValueError("step timeout violation")
+    if type(value["completedStepCount"]) is not int or not 0 <= value[
+        "completedStepCount"
+    ] <= len(PRIMARY_STEP_IDS):
+        raise ValueError("step count violation")
+    for item in (value, value["failedStep"], value["lastCompletedStep"]):
+        if item is None:
+            continue
+        if not isinstance(item, dict):
+            raise ValueError("step schema violation")
+        duration = item.get("elapsedMs")
+        if duration is not None and (
+            type(duration) is not int or not 0 <= duration <= 3600000
+        ):
+            raise ValueError("step duration violation")
+        if item is value:
+            continue
+        if set(item) != {
+            "routeKey",
+            "viewportKey",
+            "stepId",
+            "elapsedMs",
+        } or PRIMARY_STEP_IDS.get(item["stepId"]) != (
+            item["routeKey"],
+            item["viewportKey"],
+        ):
+            raise ValueError("step identity violation")
 
 
 def summary_counts(report: dict[str, object]) -> dict[str, int | None]:
@@ -812,7 +933,7 @@ def build_failure_summary(
                 if type(candidate) is int and 1 <= candidate <= MAX_DIAGNOSTIC_COUNT:
                     line = candidate
                 break
-    return {
+    summary = {
         "schemaVersion": 1,
         "scenarioId": scenario,
         "spec": f"console/frontend/tests/e2e/{mapping[0]}" if mapping else None,
@@ -825,15 +946,22 @@ def build_failure_summary(
         "buildModeIdentity": identity["buildModeIdentity"],
         "frontendManifestDigest": identity["frontendManifestDigest"],
     }
+    diagnostic = step_diagnostic(report)
+    if diagnostic is not None:
+        validate_step_diagnostic(diagnostic)
+        summary["stepDiagnostic"] = diagnostic
+    return summary
 
 
 def encode_failure_summary(summary: dict[str, object]) -> str:
     if (
-        set(summary) != SUMMARY_FIELDS
+        set(summary) not in (SUMMARY_FIELDS, SUMMARY_FIELDS | {"stepDiagnostic"})
         or type(summary["schemaVersion"]) is not int
         or summary["schemaVersion"] != 1
     ):
         raise ValueError("summary schema violation")
+    if "stepDiagnostic" in summary:
+        validate_step_diagnostic(summary["stepDiagnostic"])
     scenario = summary["scenarioId"]
     mapping = next(
         (

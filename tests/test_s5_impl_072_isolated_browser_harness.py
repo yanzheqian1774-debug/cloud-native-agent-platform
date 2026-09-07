@@ -328,6 +328,99 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
+def test_installed_json_reporter_serializes_synthetic_steps():
+    # Exercise the installed serializer, without loading tests or a browser.
+    if not (
+        MODULE_PATH.parents[2]
+        / "console/frontend/node_modules/playwright/lib/runner/index.js"
+    ).is_file():
+        pytest.skip("installed frontend dependencies required for serializer probe")
+    script = """
+const path='./console/frontend/node_modules/playwright/lib/runner/index.js';
+const {runnerReporters}=require(path);
+(async()=>{
+ const config={configDir:process.cwd(),config:{tags:[],reporter:[['json']]}};
+ const [r]=await runnerReporters.createReporters(config,'test');
+ const value=r._serializeTestStep({title:'PRIMARY_HOME_DESKTOP_NAVIGATE',
+   duration:12,error:{message:'SYNTHETIC'},steps:[]});
+ console.log(JSON.stringify(value));
+})();
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        cwd=MODULE_PATH.parents[2],
+        capture_output=True,
+        check=True,
+    )
+    value = json.loads(result.stdout)
+    assert value == {
+        "title": "PRIMARY_HOME_DESKTOP_NAVIGATE",
+        "duration": 12,
+        "error": {"message": "SYNTHETIC"},
+    }
+
+
+def primary_step_report():
+    report = summary_report()
+    report["suites"][0]["file"] = "platform-support-surfaces.spec.ts"
+    report["suites"][0]["specs"][0]["title"] = (
+        "keeps all nineteen primary surfaces responsive and restores heading focus"
+    )
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result.update(
+        duration=5008,
+        steps=[
+            {"title": "PRIMARY_WORK_DESKTOP_NAVIGATE", "duration": 8},
+            {"title": "PRIMARY_WORK_DESKTOP_HEADING_VISIBLE", "duration": 1},
+            {
+                "title": "PRIMARY_WORK_DESKTOP_HEADING_FOCUSED",
+                "duration": 4999,
+                "error": {"message": "PRIVATE locator URL"},
+            },
+        ],
+    )
+    return report
+
+
+def test_step_failure_and_last_completion_are_distinct():
+    summary = make_summary(primary_step_report())
+    diagnostic = summary["stepDiagnostic"]
+    assert diagnostic["failedStep"]["stepId"] == "PRIMARY_WORK_DESKTOP_HEADING_FOCUSED"
+    assert (
+        diagnostic["lastCompletedStep"]["stepId"]
+        == "PRIMARY_WORK_DESKTOP_HEADING_VISIBLE"
+    )
+    assert diagnostic["completedStepCount"] == 2
+    assert diagnostic["elapsedMs"] == 5008
+    assert diagnostic["timeoutKind"] == "UNKNOWN"
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
+@pytest.mark.parametrize("mutation", ["unknown", "elapsed", "scenario", "no_failure"])
+def test_step_diagnostic_fail_closed(mutation):
+    report = primary_step_report()
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    if mutation == "unknown":
+        result["steps"][0]["title"] = "PRIVATE_DYNAMIC"
+        assert "stepDiagnostic" not in make_summary(report)
+    elif mutation == "elapsed":
+        result["duration"] = "PRIVATE"
+        assert make_summary(report)["stepDiagnostic"]["elapsedMs"] is None
+    elif mutation == "scenario":
+        result["status"] = "timedOut"
+        assert make_summary(report)["stepDiagnostic"]["timeoutKind"] == "SCENARIO"
+    else:
+        result["steps"].pop()
+        assert make_summary(report)["stepDiagnostic"]["failedStep"] is None
+
+
+def test_step_fields_are_closed_and_bounded():
+    value = make_summary(primary_step_report())
+    value["stepDiagnostic"]["failedStep"]["url"] = "PRIVATE"
+    with pytest.raises(ValueError):
+        harness_module.encode_failure_summary(value)
+
+
 def make_release(tmp_path: Path) -> Path:
     release = tmp_path / "release"
     package = release / "agent_console"

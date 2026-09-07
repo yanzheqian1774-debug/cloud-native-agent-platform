@@ -59,6 +59,18 @@ must use structured parsing or exact-field extraction; broad `sed`, `cat`,
 
 ## Sanitized first-failure evidence
 
+For the primary responsive/focus scenario, the log envelope may additionally
+contain `stepDiagnostic`. Static Playwright `test.step` titles identify one of
+19 route keys, two viewport keys and four actions. The installed JSON serializer
+is exercised with synthetic steps before relying on these fields. Only exact
+allowlisted identities and bounded structured durations are retained; raw step
+errors remain transient. `failedStep` requires a structured step error and is
+separate from `lastCompletedStep`; absent failure location remains null.
+`elapsedMs` is reporter duration, not inferred wall-clock job time. A structured
+test result of `timedOut` identifies the scenario timeout manager; other timeout
+ownership remains `UNKNOWN` unless independently established. Existing summary
+envelopes without steps remain valid. No timeout or test selection is changed.
+
 The CI log also emits one bounded `BROWSER_FAILURE_SUMMARY_V1` JSON line before
 cleanup. This independent log envelope does not change first-failure schemas
 v1/v2 or the frozen release contract. Its scenario and repository-relative spec
