@@ -727,6 +727,8 @@ SUMMARY_FIELDS = frozenset(
         "failureCategory",
         "failureSubtype",
         "actionClass",
+        "restartCountClass",
+        "restartCountScope",
         "counts",
         "buildModeIdentity",
         "frontendManifestDigest",
@@ -762,16 +764,174 @@ PRIMARY_STEP_IDS = {
     for route in PRIMARY_ROUTE_KEYS
     for action in ("NAVIGATE", "HEADING_VISIBLE", "HEADING_FOCUSED", "NO_OVERFLOW")
 }
+PRIMARY_ACTION_CLASSES = (
+    "NAVIGATE",
+    "HEADING_VISIBLE",
+    "HEADING_FOCUSED",
+    "NO_OVERFLOW",
+)
+
+
+def _primary_action_class(step_id: str) -> str:
+    return next(
+        action for action in PRIMARY_ACTION_CLASSES if step_id.endswith(f"_{action}")
+    )
+
+
+WAVE_3B_STEP_IDS = {
+    "1 context-preserving catalog round trip": (
+        "WAVE3B_01_CATALOG_ROUND_TRIP",
+        "CATALOG",
+        "DESKTOP",
+        "NAVIGATION",
+    ),
+    "2 claim Evidence fact business-step chain": (
+        "WAVE3B_02_EVIDENCE_CHAIN",
+        "EVIDENCE",
+        "DESKTOP",
+        "EVIDENCE_CHAIN",
+    ),
+    "3 fact reverses to exact claim": (
+        "WAVE3B_03_FACT_TO_CLAIM",
+        "EVIDENCE",
+        "DESKTOP",
+        "IDENTITY_CHECK",
+    ),
+    "4 Agent retains five exact bindings": (
+        "WAVE3B_04_AGENT_BINDINGS",
+        "AGENTS",
+        "DESKTOP",
+        "IDENTITY_CHECK",
+    ),
+    "5 Workflow task edge and lifecycle Evidence survive": (
+        "WAVE3B_05_WORKFLOW_EVIDENCE",
+        "WORKFLOWS",
+        "DESKTOP",
+        "EVIDENCE_CHAIN",
+    ),
+    "6 Runtime remains declaration-only": (
+        "WAVE3B_06_RUNTIME_DECLARATION",
+        "RUNTIMES",
+        "DESKTOP",
+        "IDENTITY_CHECK",
+    ),
+    "7 Knowledge routine precedes advanced": (
+        "WAVE3B_07_KNOWLEDGE_HIERARCHY",
+        "KNOWLEDGE",
+        "DESKTOP",
+        "HIERARCHY_CHECK",
+    ),
+    "8 stale conflict refreshes and explicitly reapplies": (
+        "WAVE3B_08_CONFLICT_RECOVERY",
+        "WORKFLOWS",
+        "DESKTOP",
+        "CONFLICT_RECOVERY",
+    ),
+    "9 denied and absent are nondisclosing": (
+        "WAVE3B_09_BOUNDED_DISCLOSURE",
+        "EVIDENCE",
+        "DESKTOP",
+        "DISCLOSURE_CHECK",
+    ),
+    "10 unavailable backend shows no false success": (
+        "WAVE3B_10_BACKEND_UNAVAILABLE",
+        "EVIDENCE",
+        "DESKTOP",
+        "SERVICE_AVAILABILITY",
+    ),
+    "WAVE3B_11_ENTER_TECHNICAL_PAGE": (
+        "WAVE3B_11_ENTER_TECHNICAL_PAGE",
+        "EVIDENCE",
+        "DESKTOP",
+        "NAVIGATION",
+    ),
+    "WAVE3B_11_RESTART_READINESS": (
+        "WAVE3B_11_RESTART_READINESS",
+        "EVIDENCE",
+        "DESKTOP",
+        "RESTART_READINESS",
+    ),
+    "WAVE3B_11_RELOAD": (
+        "WAVE3B_11_RELOAD",
+        "EVIDENCE",
+        "DESKTOP",
+        "RELOAD",
+    ),
+    "WAVE3B_11_REVISION_IDENTITY_CHECK": (
+        "WAVE3B_11_REVISION_IDENTITY_CHECK",
+        "EVIDENCE",
+        "DESKTOP",
+        "IDENTITY_CHECK",
+    ),
+    "WAVE3B_12_MOBILE_NAVIGATION": (
+        "WAVE3B_12_MOBILE_NAVIGATION",
+        "EVIDENCE",
+        "MOBILE",
+        "NAVIGATION",
+    ),
+    "WAVE3B_12_OPEN_EVIDENCE": (
+        "WAVE3B_12_OPEN_EVIDENCE",
+        "EVIDENCE",
+        "MOBILE",
+        "OPEN_EVIDENCE",
+    ),
+    "WAVE3B_12_CLOSE_FOCUS_CHECK": (
+        "WAVE3B_12_CLOSE_FOCUS_CHECK",
+        "EVIDENCE",
+        "MOBILE",
+        "FOCUS_CHECK",
+    ),
+    "WAVE3B_12_CLOSE_ACTION": (
+        "WAVE3B_12_CLOSE_ACTION",
+        "EVIDENCE",
+        "MOBILE",
+        "CLOSE_ACTION",
+    ),
+    "WAVE3B_12_CLAIM_FOCUS_RESTORED": (
+        "WAVE3B_12_CLAIM_FOCUS_RESTORED",
+        "EVIDENCE",
+        "MOBILE",
+        "FOCUS_CHECK",
+    ),
+}
+DIAGNOSTIC_STEP_IDS = {
+    **{
+        step_id: (route, viewport, _primary_action_class(step_id))
+        for step_id, (route, viewport) in PRIMARY_STEP_IDS.items()
+    },
+    **{
+        step_id: (route, viewport, action)
+        for step_id, route, viewport, action in WAVE_3B_STEP_IDS.values()
+    },
+}
+ACTION_CLASSES = frozenset(
+    {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
+)
+
+
+def _step_identity(scenario: str, title: object):
+    if not isinstance(title, str):
+        return None
+    if scenario == "PLATFORM_PRIMARY_RESPONSIVE_FOCUS":
+        identity = PRIMARY_STEP_IDS.get(title)
+        if identity is None:
+            return None
+        route, viewport = identity
+        return title, route, viewport, _primary_action_class(title)
+    if scenario == "WAVE_3B_REAL_SERVICE_JOURNEYS":
+        return WAVE_3B_STEP_IDS.get(title)
+    return None
 
 
 def step_diagnostic(report: dict[str, object]) -> dict[str, object] | None:
     for suite, spec in _ordered_specs(report.get("suites")):
-        if (
-            FIRST_FAILURE_ASSERTION_IDS.get(
-                (Path(str(suite.get("file", ""))).name, spec.get("title"))
-            )
-            != "PLATFORM_PRIMARY_RESPONSIVE_FOCUS"
-        ):
+        scenario = FIRST_FAILURE_ASSERTION_IDS.get(
+            (Path(str(suite.get("file", ""))).name, spec.get("title"))
+        )
+        if scenario not in {
+            "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
+            "WAVE_3B_REAL_SERVICE_JOURNEYS",
+        }:
             continue
         for test in spec.get("tests", []):
             for result in test.get("results", []):
@@ -783,18 +943,18 @@ def step_diagnostic(report: dict[str, object]) -> dict[str, object] | None:
                 completed = 0
                 last = failed = None
                 for step in steps:
-                    if (
-                        not isinstance(step, dict)
-                        or step.get("title") not in PRIMARY_STEP_IDS
-                    ):
+                    if not isinstance(step, dict):
                         return None
-                    step_id = step["title"]
-                    route, viewport = PRIMARY_STEP_IDS[step_id]
+                    identity = _step_identity(scenario, step.get("title"))
+                    if identity is None:
+                        return None
+                    step_id, route, viewport, action = identity
                     duration = step.get("duration")
                     item = {
                         "routeKey": route,
                         "viewportKey": viewport,
                         "stepId": step_id,
+                        "actionClass": action,
                         "elapsedMs": duration
                         if type(duration) is int and 0 <= duration <= 3600000
                         else None,
@@ -832,7 +992,7 @@ def validate_step_diagnostic(value: object) -> None:
         raise ValueError("step timeout violation")
     if type(value["completedStepCount"]) is not int or not 0 <= value[
         "completedStepCount"
-    ] <= len(PRIMARY_STEP_IDS):
+    ] <= len(DIAGNOSTIC_STEP_IDS):
         raise ValueError("step count violation")
     for item in (value, value["failedStep"], value["lastCompletedStep"]):
         if item is None:
@@ -850,10 +1010,12 @@ def validate_step_diagnostic(value: object) -> None:
             "routeKey",
             "viewportKey",
             "stepId",
+            "actionClass",
             "elapsedMs",
-        } or PRIMARY_STEP_IDS.get(item["stepId"]) != (
+        } or DIAGNOSTIC_STEP_IDS.get(item["stepId"]) != (
             item["routeKey"],
             item["viewportKey"],
+            item["actionClass"],
         ):
             raise ValueError("step identity violation")
 
@@ -942,6 +1104,8 @@ def build_failure_summary(
         "failureCategory": failure["failureCategory"],
         "failureSubtype": failure["failureSubtype"],
         "actionClass": "UNKNOWN",
+        "restartCountClass": failure["restartCountClass"],
+        "restartCountScope": "SUITE_CUMULATIVE",
         "counts": summary_counts(report),
         "buildModeIdentity": identity["buildModeIdentity"],
         "frontendManifestDigest": identity["frontendManifestDigest"],
@@ -950,6 +1114,8 @@ def build_failure_summary(
     if diagnostic is not None:
         validate_step_diagnostic(diagnostic)
         summary["stepDiagnostic"] = diagnostic
+        if diagnostic["failedStep"] is not None:
+            summary["actionClass"] = diagnostic["failedStep"]["actionClass"]
     return summary
 
 
@@ -991,9 +1157,21 @@ def encode_failure_summary(summary: dict[str, object]) -> str:
     if (
         summary["failureCategory"] not in FAILURE_CATEGORIES
         or summary["failureSubtype"] not in FAILURE_SUBTYPES
-        or summary["actionClass"] != "UNKNOWN"
+        or summary["actionClass"] not in ACTION_CLASSES
     ):
         raise ValueError("summary category violation")
+    diagnostic = summary.get("stepDiagnostic")
+    expected_action = (
+        diagnostic["failedStep"]["actionClass"]
+        if isinstance(diagnostic, dict) and diagnostic.get("failedStep") is not None
+        else "UNKNOWN"
+    )
+    if summary["actionClass"] != expected_action:
+        raise ValueError("summary action identity violation")
+    if summary["restartCountScope"] != "SUITE_CUMULATIVE" or summary[
+        "restartCountClass"
+    ] not in {"NONE", "ONE_OR_MORE", "UNKNOWN"}:
+        raise ValueError("summary restart scope violation")
     counts = summary["counts"]
     if not isinstance(counts, dict) or set(counts) != SUMMARY_COUNT_FIELDS:
         raise ValueError("summary counts violation")
