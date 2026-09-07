@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import urllib.request
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
@@ -113,6 +114,42 @@ FIRST_FAILURE_ASSERTION_IDS = {
         "renders a disclosure-safe denied state",
     ): "WORKFLOW_RUNTIME_DISCLOSURE_DENIAL",
 }
+FIRST_FAILURE_ASSERTION_IDS.update(
+    {
+        ("platform-support-surfaces.spec.ts", title): scenario
+        for title, scenario in (
+            (
+                "exposes nine truthful Chinese-first platform support surfaces",
+                "PLATFORM_SUPPORT_TRUTHFUL_SURFACES",
+            ),
+            (
+                "keeps unsupported actions disabled and preserves real navigation",
+                "PLATFORM_SUPPORT_DISABLED_ACTIONS",
+            ),
+            (
+                "keeps all support pages reachable from the mobile navigation",
+                "PLATFORM_SUPPORT_MOBILE_NAVIGATION",
+            ),
+            (
+                "keeps all nineteen primary surfaces responsive "
+                "and restores heading focus",
+                "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
+            ),
+            (
+                "navigates the repeatable 业务闭环 journey with browser history",
+                "PLATFORM_BUSINESS_JOURNEY",
+            ),
+            (
+                "navigates the repeatable 数字员工装配 journey with browser history",
+                "PLATFORM_ASSEMBLY_JOURNEY",
+            ),
+            (
+                "navigates the repeatable 平台治理 journey with browser history",
+                "PLATFORM_GOVERNANCE_JOURNEY",
+            ),
+        )
+    }
+)
 FAILURE_CATEGORIES = frozenset(
     {
         "BROWSER_ASSERTION",
@@ -679,6 +716,332 @@ def verify_browser_report(stdout: bytes) -> bool:
     )
 
 
+SUMMARY_PREFIX = "BROWSER_FAILURE_SUMMARY_V1 "
+SUMMARY_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "scenarioId",
+        "spec",
+        "sourceLine",
+        "locationKind",
+        "failureCategory",
+        "failureSubtype",
+        "actionClass",
+        "counts",
+        "buildModeIdentity",
+        "frontendManifestDigest",
+    }
+)
+SUMMARY_COUNT_FIELDS = frozenset(
+    {"selected", "executed", "passed", "failed", "skipped", "flaky"}
+)
+PRIMARY_ROUTE_KEYS = (
+    "HOME",
+    "WORK",
+    "EMPLOYEES",
+    "AGENTS",
+    "SKILLS",
+    "MCP",
+    "KNOWLEDGE",
+    "WORKFLOWS",
+    "RUNTIMES",
+    "EVIDENCE",
+    "OUTCOMES",
+    "APPLICATIONS",
+    "PERMISSIONS",
+    "SECURITY",
+    "OPERATIONS",
+    "MODELS",
+    "USAGE",
+    "SETTINGS",
+    "HELP",
+)
+PRIMARY_STEP_IDS = {
+    f"PRIMARY_{route}_{viewport}_{action}": (route, viewport)
+    for viewport in ("DESKTOP", "MOBILE")
+    for route in PRIMARY_ROUTE_KEYS
+    for action in ("NAVIGATE", "HEADING_VISIBLE", "HEADING_FOCUSED", "NO_OVERFLOW")
+}
+
+
+def step_diagnostic(report: dict[str, object]) -> dict[str, object] | None:
+    for suite, spec in _ordered_specs(report.get("suites")):
+        if (
+            FIRST_FAILURE_ASSERTION_IDS.get(
+                (Path(str(suite.get("file", ""))).name, spec.get("title"))
+            )
+            != "PLATFORM_PRIMARY_RESPONSIVE_FOCUS"
+        ):
+            continue
+        for test in spec.get("tests", []):
+            for result in test.get("results", []):
+                if result.get("status") not in {"failed", "timedOut", "interrupted"}:
+                    continue
+                steps = result.get("steps")
+                if not isinstance(steps, list):
+                    return None
+                completed = 0
+                last = failed = None
+                for step in steps:
+                    if (
+                        not isinstance(step, dict)
+                        or step.get("title") not in PRIMARY_STEP_IDS
+                    ):
+                        return None
+                    step_id = step["title"]
+                    route, viewport = PRIMARY_STEP_IDS[step_id]
+                    duration = step.get("duration")
+                    item = {
+                        "routeKey": route,
+                        "viewportKey": viewport,
+                        "stepId": step_id,
+                        "elapsedMs": duration
+                        if type(duration) is int and 0 <= duration <= 3600000
+                        else None,
+                    }
+                    if step.get("error"):
+                        failed = item
+                        break
+                    completed += 1
+                    last = item
+                elapsed = result.get("duration")
+                return {
+                    "failedStep": failed,
+                    "lastCompletedStep": last,
+                    "completedStepCount": completed,
+                    "elapsedMs": elapsed
+                    if type(elapsed) is int and 0 <= elapsed <= 3600000
+                    else None,
+                    "timeoutKind": "SCENARIO"
+                    if result.get("status") == "timedOut"
+                    else "UNKNOWN",
+                }
+    return None
+
+
+def validate_step_diagnostic(value: object) -> None:
+    if not isinstance(value, dict) or set(value) != {
+        "failedStep",
+        "lastCompletedStep",
+        "completedStepCount",
+        "elapsedMs",
+        "timeoutKind",
+    }:
+        raise ValueError("step diagnostic schema violation")
+    if value["timeoutKind"] not in {"SCENARIO", "NAVIGATION", "ASSERTION", "UNKNOWN"}:
+        raise ValueError("step timeout violation")
+    if type(value["completedStepCount"]) is not int or not 0 <= value[
+        "completedStepCount"
+    ] <= len(PRIMARY_STEP_IDS):
+        raise ValueError("step count violation")
+    for item in (value, value["failedStep"], value["lastCompletedStep"]):
+        if item is None:
+            continue
+        if not isinstance(item, dict):
+            raise ValueError("step schema violation")
+        duration = item.get("elapsedMs")
+        if duration is not None and (
+            type(duration) is not int or not 0 <= duration <= 3600000
+        ):
+            raise ValueError("step duration violation")
+        if item is value:
+            continue
+        if set(item) != {
+            "routeKey",
+            "viewportKey",
+            "stepId",
+            "elapsedMs",
+        } or PRIMARY_STEP_IDS.get(item["stepId"]) != (
+            item["routeKey"],
+            item["viewportKey"],
+        ):
+            raise ValueError("step identity violation")
+
+
+def summary_counts(report: dict[str, object]) -> dict[str, int | None]:
+    unknown = dict.fromkeys(SUMMARY_COUNT_FIELDS)
+    counts = dict.fromkeys(SUMMARY_COUNT_FIELDS, 0)
+    for _, spec in _ordered_specs(report.get("suites")):
+        tests = spec.get("tests")
+        if not isinstance(tests, list) or not tests:
+            return unknown
+        for test in tests:
+            if not isinstance(test, dict) or not isinstance(test.get("results"), list):
+                return unknown
+            status = test.get("status")
+            if status not in {"expected", "unexpected", "skipped", "flaky"}:
+                return unknown
+            results = test["results"]
+            if any(
+                not isinstance(r, dict)
+                or r.get("status")
+                not in {"passed", "failed", "timedOut", "interrupted", "skipped"}
+                for r in results
+            ):
+                return unknown
+            if not results and status != "skipped":
+                return unknown
+            if status != "skipped" and not any(
+                r["status"] != "skipped" for r in results
+            ):
+                return unknown
+            counts["selected"] += 1
+            counts["executed"] += int(any(r["status"] != "skipped" for r in results))
+            counts[
+                {
+                    "expected": "passed",
+                    "unexpected": "failed",
+                    "skipped": "skipped",
+                    "flaky": "flaky",
+                }[status]
+            ] += 1
+    stats = report.get("stats")
+    if not counts["selected"] or not isinstance(stats, dict):
+        return unknown
+    for source, target in (
+        ("expected", "passed"),
+        ("unexpected", "failed"),
+        ("skipped", "skipped"),
+        ("flaky", "flaky"),
+    ):
+        if type(stats.get(source)) is not int or stats[source] != counts[target]:
+            return unknown
+    if any(value > MAX_DIAGNOSTIC_COUNT for value in counts.values()):
+        return unknown
+    return counts
+
+
+def build_failure_summary(
+    stdout: bytes, failure: dict[str, object], identity: dict[str, object]
+) -> dict[str, object]:
+    validate_first_failure_record(failure)
+    scenario = failure["firstFailureAssertionId"]
+    mapping = next(
+        (
+            key
+            for key, value in FIRST_FAILURE_ASSERTION_IDS.items()
+            if value == scenario
+        ),
+        None,
+    )
+    report = _browser_json(stdout) or {}
+    line = None
+    if mapping:
+        for suite, spec in _ordered_specs(report.get("suites")):
+            if (Path(str(suite.get("file", ""))).name, spec.get("title")) == mapping:
+                candidate = spec.get("line")
+                if type(candidate) is int and 1 <= candidate <= MAX_DIAGNOSTIC_COUNT:
+                    line = candidate
+                break
+    summary = {
+        "schemaVersion": 1,
+        "scenarioId": scenario,
+        "spec": f"console/frontend/tests/e2e/{mapping[0]}" if mapping else None,
+        "sourceLine": line,
+        "locationKind": "TEST_DECLARATION" if line is not None else "UNKNOWN",
+        "failureCategory": failure["failureCategory"],
+        "failureSubtype": failure["failureSubtype"],
+        "actionClass": "UNKNOWN",
+        "counts": summary_counts(report),
+        "buildModeIdentity": identity["buildModeIdentity"],
+        "frontendManifestDigest": identity["frontendManifestDigest"],
+    }
+    diagnostic = step_diagnostic(report)
+    if diagnostic is not None:
+        validate_step_diagnostic(diagnostic)
+        summary["stepDiagnostic"] = diagnostic
+    return summary
+
+
+def encode_failure_summary(summary: dict[str, object]) -> str:
+    if (
+        set(summary) not in (SUMMARY_FIELDS, SUMMARY_FIELDS | {"stepDiagnostic"})
+        or type(summary["schemaVersion"]) is not int
+        or summary["schemaVersion"] != 1
+    ):
+        raise ValueError("summary schema violation")
+    if "stepDiagnostic" in summary:
+        validate_step_diagnostic(summary["stepDiagnostic"])
+    scenario = summary["scenarioId"]
+    mapping = next(
+        (
+            key
+            for key, value in FIRST_FAILURE_ASSERTION_IDS.items()
+            if value == scenario
+        ),
+        None,
+    )
+    if mapping is None and scenario != "NOT_RETAINED":
+        raise ValueError("summary identity violation")
+    if summary["spec"] != (
+        f"console/frontend/tests/e2e/{mapping[0]}" if mapping else None
+    ):
+        raise ValueError("summary path violation")
+    line = summary["sourceLine"]
+    if line is not None and (
+        mapping is None
+        or type(line) is not int
+        or not 1 <= line <= MAX_DIAGNOSTIC_COUNT
+    ):
+        raise ValueError("summary location violation")
+    if summary["locationKind"] != (
+        "TEST_DECLARATION" if line is not None else "UNKNOWN"
+    ):
+        raise ValueError("summary location violation")
+    if (
+        summary["failureCategory"] not in FAILURE_CATEGORIES
+        or summary["failureSubtype"] not in FAILURE_SUBTYPES
+        or summary["actionClass"] != "UNKNOWN"
+    ):
+        raise ValueError("summary category violation")
+    counts = summary["counts"]
+    if not isinstance(counts, dict) or set(counts) != SUMMARY_COUNT_FIELDS:
+        raise ValueError("summary counts violation")
+    if not all(v is None for v in counts.values()):
+        if any(
+            type(v) is not int or not 0 <= v <= MAX_DIAGNOSTIC_COUNT
+            for v in counts.values()
+        ):
+            raise ValueError("summary counts violation")
+        if (
+            counts["selected"]
+            != counts["passed"] + counts["failed"] + counts["skipped"] + counts["flaky"]
+            or counts["executed"] > counts["selected"]
+        ):
+            raise ValueError("summary counts mismatch")
+    if (
+        summary["buildModeIdentity"] != "LIVE_DEMO"
+        or not isinstance(summary["frontendManifestDigest"], str)
+        or not re.fullmatch(r"[0-9a-f]{64}", summary["frontendManifestDigest"])
+    ):
+        raise ValueError("summary build identity violation")
+    encoded = json.dumps(
+        summary, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    if len((SUMMARY_PREFIX + encoded).encode()) > 4096:
+        raise ValueError("summary size violation")
+    return encoded
+
+
+def emit_failure_summary(
+    stdout: bytes, failure: dict[str, object], identity: dict[str, object]
+) -> None:
+    # Only the new optional log channel is best-effort. Existing scanners and
+    # cleanup remain outside this exception boundary and retain their gates.
+    try:
+        encoded = encode_failure_summary(
+            build_failure_summary(stdout, failure, identity)
+        )
+        print(SUMMARY_PREFIX + encoded, file=sys.stderr, flush=True)
+    except Exception:
+        with suppress(Exception):
+            print(
+                SUMMARY_PREFIX + '{"diagnosticState":"DIAGNOSTIC_GAP"}',
+                file=sys.stderr,
+                flush=True,
+            )
+
+
 def release_manifest(root: Path) -> dict[str, dict[str, str | int]]:
     result: dict[str, dict[str, str | int]] = {}
     for path in sorted(root.rglob("*")):
@@ -1154,7 +1517,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     print("harness phase: ARGUMENTS", file=sys.stderr)
-    verify_build_identity(
+    build_identity = verify_build_identity(
         args.release_root.resolve() / "console/frontend/dist",
         args.build_mode_identity.resolve(),
     )
@@ -1225,6 +1588,7 @@ def main() -> int:
                 encoding="utf-8",
             )
             scan_generated_artifacts([failure_path])
+            emit_failure_summary(browser_result.stdout, failure, build_identity)
     finally:
         try:
             harness.stop()

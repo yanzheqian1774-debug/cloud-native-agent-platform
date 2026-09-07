@@ -59,6 +59,39 @@ must use structured parsing or exact-field extraction; broad `sed`, `cat`,
 
 ## Sanitized first-failure evidence
 
+For the primary responsive/focus scenario, the log envelope may additionally
+contain `stepDiagnostic`. Static Playwright `test.step` titles identify one of
+19 route keys, two viewport keys and four actions. The installed JSON serializer
+is exercised with synthetic steps before relying on these fields. Only exact
+allowlisted identities and bounded structured durations are retained; raw step
+errors remain transient. `failedStep` requires a structured step error and is
+separate from `lastCompletedStep`; absent failure location remains null.
+`elapsedMs` is reporter duration, not inferred wall-clock job time. A structured
+test result of `timedOut` identifies the scenario timeout manager; other timeout
+ownership remains `UNKNOWN` unless independently established. Existing summary
+envelopes without steps remain valid. No timeout or test selection is changed.
+
+The CI log also emits one bounded `BROWSER_FAILURE_SUMMARY_V1` JSON line before
+cleanup. This independent log envelope does not change first-failure schemas
+v1/v2 or the frozen release contract. Its scenario and repository-relative spec
+come from the static 19-scenario mapping, never a dynamically echoed title/path.
+Unknown scenarios use `NOT_RETAINED` and a null spec/location. `sourceLine`, when
+available, is explicitly `TEST_DECLARATION`, not a claimed failing assertion line.
+Action is `UNKNOWN`; raw locators, expected/observed values, messages, stacks,
+snippets, attachments and their hashes are omitted.
+
+The closed envelope includes validated build mode/manifest digest, failure enums,
+and selected/executed/passed/failed/skipped/flaky test counts. Counts are per test,
+not per assertion: passed means Playwright's expected outcome (including an
+expected failure), executed requires a non-skipped result, and flaky is separate.
+Counts are cross-checked against reporter stats; incomplete/inconsistent reports
+produce null counts rather than fabricated zeroes. The entire log line is limited
+to 4096 bytes. Generation/output failure emits only fixed `DIAGNOSTIC_GAP` and
+does not change the browser exit code. Existing first-failure artifact scanning,
+cleanup, immutable validation and final evidence scanning remain mandatory and
+outside this best-effort log boundary. A zero browser code with an invalid report
+continues to fail closed. No raw browser output is forwarded to CI logs.
+
 On a browser-command failure the Harness writes exactly one
 `browser-first-failure.json` record before it stops its owned backend and removes
 raw Playwright output. A successful command writes no first-failure record.
