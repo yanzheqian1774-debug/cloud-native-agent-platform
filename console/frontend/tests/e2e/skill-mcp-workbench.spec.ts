@@ -41,12 +41,27 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.getByText("1 Tool(s) · 1 Resource(s) · 1 Prompt(s)")).toBeVisible();
   await page.getByRole("checkbox",{name:/quality.lookup/}).check();
   await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
+  const resourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
+  const first=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(id)}`)).json()).resource,resourceId);
+  const firstSnapshot=first.discoverySnapshots.at(-1).snapshotId;
+  await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
+  await expect(page.getByRole("status").filter({hasText:"当前 snapshot 尚无"})).toBeVisible();
+  await expect(page.getByRole("checkbox",{name:/quality.lookup/})).not.toBeChecked();
+  await expect(page.getByLabel("管理调用 Tool")).toHaveCount(0);
+  await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(firstSnapshot);
+  await page.getByRole("checkbox",{name:/quality.lookup/}).check();
+  await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
   await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
   await page.getByLabel("管理调用输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
   await page.getByRole("button",{name:"Authorize bounded management invocation"}).click();
   const mcpInvocationStatus=page.getByRole("region",{name:"MCP professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
   await expect(mcpInvocationStatus).toContainText("管理调用即时结果已保留");
   await expect(mcpInvocationStatus).toContainText("credential values redacted: true");
+  const current=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(id)}`)).json()).resource,resourceId);
+  expect(current.discoverySnapshots).toHaveLength(2);expect(current.toolSelections).toHaveLength(2);
+  expect(current.toolSelections[0].snapshotId).toBe(firstSnapshot);
+  expect(current.toolSelections[1].snapshotId).toBe(current.discoverySnapshots[1].snapshotId);
+  expect(current.invocations.at(-1).selectionId).toBe(current.toolSelections[1].selectionId);
   const publishedMcpId=await page.locator(".agent-detail > header code").textContent();
   await publish(page,"/skills","Create governed SKILL");
   await page.getByLabel("Search catalog").fill("Supplier Quality");
@@ -82,6 +97,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   const editDraft=page.getByRole("button", {name:"编辑当前 Skill Draft"});
   await expect(editDraft).toBeEnabled();
   await editDraft.click();
+  await expect(page.getByLabel("Skill 名称")).toHaveAttribute("readonly","");
   await page.getByLabel("说明", {exact:true}).fill("Edited governed supplier quality contract");
   const saveDraft=page.getByRole("button", {name:"保存 Skill Draft"});
   await expect(saveDraft).toBeEnabled();
@@ -139,4 +155,44 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.locator(".agent-detail").getByRole("heading",{name:"Alternate Supplier Skill"})).toBeVisible();
   await expect(alternateButton).toHaveClass(/selected/);
   expect(new URL(page.url()).searchParams.get("resourceId")).toBe(alternate.resource.resourceId);
+});
+
+for(const operation of ["edit","lifecycle"] as const)test("skill write directory readback cannot own later selection or write: "+operation,async({page})=>{
+  await page.goto("/skills");
+  const suffix=Date.now(),names=[`race A skill ${suffix}`, `race B skill ${suffix}`];const ids:string[]=[];
+  for(const name of names){await page.getByRole("button",{name:"Create governed SKILL"}).click();await page.getByLabel("Skill 名称").fill(name);await page.getByRole("button",{name:"保存 SKILL Draft"}).click();await expect(page.getByRole("heading",{name,exact:true})).toBeVisible();ids.push((await page.locator(".agent-detail > header code").textContent())!.trim())}
+  const read=()=>page.evaluate(async root=>(await(await fetch(root)).json()),"/api/internal/v0.2.2/resources/skill");const before=await read();
+  await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
+  let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>release=resolve),waiting=new Promise<void>(resolve=>started=resolve);let delayed=false;
+  await page.route("**/api/internal/**",async route=>{if(route.request().method()==="GET"&&new URL(route.request().url()).pathname==="/api/internal/v0.2.2/resources/skill"&&!delayed){delayed=true;const response=await route.fetch();started();await held;await route.fulfill({response})}else await route.continue()});
+  if(operation==="edit"){await page.getByRole("button",{name:"编辑当前 SKILL Draft"}).click();await expect(page.getByLabel("Skill 名称")).toHaveAttribute("readonly","");await page.getByLabel("说明",{exact:true}).fill("directory race saved content");await page.getByRole("button",{name:"保存 SKILL Draft"}).click()}else await page.getByRole("button",{name:"Disable",exact:true}).click();
+  await waiting;await page.locator(".agent-list button").filter({hasText:names[1]}).click();await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();
+  let releaseB!:()=>void,startedB!:()=>void;const heldB=new Promise<void>(resolve=>releaseB=resolve),waitingB=new Promise<void>(resolve=>startedB=resolve);
+  await page.route("**/disable",async route=>{startedB();await heldB;await route.continue()});
+  await page.getByRole("button",{name:"Disable",exact:true}).click();await waitingB;
+  const responseA=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/internal/v0.2.2/resources/skill"&&response.request().method()==="GET");release();await responseA;await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.get("resourceId")).toBe(ids[1]);
+  await expect(page.getByRole("status",{name:"Workbench save status"})).toBeVisible();await expect(page.getByRole("button",{name:"Disable",exact:true})).toBeDisabled();
+  releaseB();await expect(page.getByRole("button",{name:"Enable",exact:true})).toBeEnabled();await expect(page.getByRole("alert")).toHaveCount(0);
+  const after=await read();expect(after).toHaveLength(before.length);expect(after.some((item:{resourceId:string})=>item.resourceId===ids[0])).toBe(true);
+});
+
+for(const operation of ["edit","lifecycle"] as const)test("mcp write directory readback cannot own later selection or write: "+operation,async({page})=>{
+  await page.goto("/mcp");
+  const suffix=Date.now(),names=[`race A mcp ${suffix}`, `race B mcp ${suffix}`];const ids:string[]=[];
+  for(const name of names){await page.getByRole("button",{name:"Create governed MCP"}).click();await page.getByLabel("MCP 名称").fill(name);await page.getByRole("button",{name:"保存 MCP Draft"}).click();await expect(page.getByRole("heading",{name,exact:true})).toBeVisible();ids.push((await page.locator(".agent-detail > header code").textContent())!.trim())}
+  const read=()=>page.evaluate(async root=>(await(await fetch(root)).json()),"/api/internal/v0.2.2/resources/mcp");const before=await read();
+  await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
+  let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>release=resolve),waiting=new Promise<void>(resolve=>started=resolve);let delayed=false;
+  await page.route("**/api/internal/**",async route=>{if(route.request().method()==="GET"&&new URL(route.request().url()).pathname==="/api/internal/v0.2.2/resources/mcp"&&!delayed){delayed=true;const response=await route.fetch();started();await held;await route.fulfill({response})}else await route.continue()});
+  if(operation==="edit"){await page.getByRole("button",{name:"编辑当前 MCP Draft"}).click();await expect(page.getByLabel("MCP 名称")).toHaveAttribute("readonly","");await page.getByLabel("说明",{exact:true}).fill("directory race saved content");await page.getByRole("button",{name:"保存 MCP Draft"}).click()}else await page.getByRole("button",{name:"Disable",exact:true}).click();
+  await waiting;await page.locator(".agent-list button").filter({hasText:names[1]}).click();await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();
+  let releaseB!:()=>void,startedB!:()=>void;const heldB=new Promise<void>(resolve=>releaseB=resolve),waitingB=new Promise<void>(resolve=>startedB=resolve);
+  await page.route("**/disable",async route=>{startedB();await heldB;await route.continue()});
+  await page.getByRole("button",{name:"Disable",exact:true}).click();await waitingB;
+  const responseA=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/internal/v0.2.2/resources/mcp"&&response.request().method()==="GET");release();await responseA;await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.get("resourceId")).toBe(ids[1]);
+  await expect(page.getByRole("status",{name:"Workbench save status"})).toBeVisible();await expect(page.getByRole("button",{name:"Disable",exact:true})).toBeDisabled();
+  releaseB();await expect(page.getByRole("button",{name:"Enable",exact:true})).toBeEnabled();await expect(page.getByRole("alert")).toHaveCount(0);
+  const after=await read();expect(after).toHaveLength(before.length);expect(after.some((item:{resourceId:string})=>item.resourceId===ids[0])).toBe(true);
 });

@@ -115,3 +115,5 @@
   .agent-management select,
   .skill-mcp-workbench select { max-width: 100%; }
 }
+
+.agent-management .agent-binding-details dd { margin: 0; overflow-wrap: anywhere; white-space: normal; }
