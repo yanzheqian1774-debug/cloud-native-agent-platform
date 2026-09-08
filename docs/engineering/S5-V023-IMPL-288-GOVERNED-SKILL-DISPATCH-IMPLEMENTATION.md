@@ -215,16 +215,22 @@ checkpoint is based on source
 retained task-owned PostgreSQL with no skip. The
 new governed cases use actual supervisor and Uvicorn child processes, actual
 process exit, real PostgreSQL session termination and the real local HTTP provider.
-A fresh-database candidate CI run and the repository-wide post-correction quality
-gate are still required. Earlier focused evidence remains historical and is not
-substituted for the new supervised recovery-window acceptance.
+After the controlled main merge, the same 49-case selection passed again with no
+skip. Repository-wide `make check` passed with Ruff, 362-file formatting and
+`1544 passed / 103 environment-dependent skipped`; those skips are not real-service
+evidence. Frontend lint and production build also passed after installing the exact
+lockfile dependencies. A fresh-database candidate CI run is still required. Earlier
+focused evidence remains historical and is not substituted for the new supervised
+recovery-window acceptance.
 
 Checkpoint assets are the retained `s5-v023-impl-288-postgres` and
 `s5-v023-impl-288-qdrant` containers. Test supervisor/child processes were stopped;
-the fixed host-local supervisor status records a confirmed child exit. The unique
-next step is a normal checkpoint commit, followed by the already authorized
-controlled merge only if live main remains exactly
-`0b62d649bc587f4bde0a3ffaa1acda5fc8666014`.
+the fixed host-local supervisor status records a confirmed child exit. Checkpoint
+`87f07c2cfc1c386aec6e6fab9e0874ad8c135094` was merged with still-exact durable
+main `0b62d649bc587f4bde0a3ffaa1acda5fc8666014` by ordinary `--no-ff` merge
+`6fec8c0542a97d66691b9a920fa326114d9921e6`. Its parents are the checkpoint and
+durable main in that order. The unique next step is non-force push, Draft PR update
+and exact-source CI observation.
 
 ## Explicit limitations
 
