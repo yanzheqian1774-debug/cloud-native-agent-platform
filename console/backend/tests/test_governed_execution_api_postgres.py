@@ -29,6 +29,8 @@ TEST_TOKEN = "governed-execution-test-token"
 class _Protocol(BaseHTTPRequestHandler):
     calls: ClassVar[list[dict]] = []
     mode: ClassVar[str] = "success"
+    entered: ClassVar[threading.Event] = threading.Event()
+    release: ClassVar[threading.Event] = threading.Event()
 
     def log_message(self, *_args):
         return
@@ -36,6 +38,10 @@ class _Protocol(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         type(self).calls.append(body)
+        if type(self).mode == "block":
+            type(self).entered.set()
+            if not type(self).release.wait(timeout=2):
+                raise RuntimeError("blocked protocol call was not released")
         if type(self).mode == "timeout":
             time.sleep(0.2)
             return
@@ -66,6 +72,8 @@ class _Protocol(BaseHTTPRequestHandler):
 def protocol_service(mode="success"):
     _Protocol.calls = []
     _Protocol.mode = mode
+    _Protocol.entered = threading.Event()
+    _Protocol.release = threading.Event()
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Protocol)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -622,6 +630,7 @@ def _write_authority(
     include_reads=True,
     include_resource_read=True,
     include_evidence=True,
+    extra_grants=(),
 ):
     from agent_console.governed_execution_authorization import (
         evidence_reference_resource,
@@ -684,6 +693,7 @@ def _write_authority(
                 "resource": evidence_reference_resource(identities["evidenceId"]),
             }
         )
+    grants.extend(extra_grants)
     configuration = {
         "schemaVersion": "governed-execution-auth.v1",
         "policyVersion": "acceptance.v1",
@@ -981,6 +991,35 @@ def test_concurrent_http_start_has_one_identity_and_one_dispatch(monkeypatch, tm
         assert len(calls) == 1
 
 
+def test_active_http_request_owns_dispatch_until_terminal(monkeypatch, tmp_path):
+    with protocol_service("block") as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command,), identities)
+        module = importlib.import_module("agent_console.app")
+        _configure(module, monkeypatch, endpoint, authority_file)
+        client = TestClient(module.app)
+
+        def start():
+            return client.post(
+                "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            active = executor.submit(start)
+            assert _Protocol.entered.wait(timeout=2)
+            replay = executor.submit(start)
+            time.sleep(0.05)
+            assert not replay.done()
+            _Protocol.release.set()
+            responses = (active.result(timeout=2), replay.result(timeout=2))
+        assert {item.status_code for item in responses} <= {200, 201}
+        assert {item.json()["invocation"]["state"] for item in responses} == {
+            "SUCCEEDED"
+        }
+        assert len(calls) == 1
+
+
 def test_execution_claim_failure_rolls_back_run_task_and_attempt(monkeypatch, tmp_path):
     with protocol_service() as (endpoint, calls):
         scope, command, identities = _prepare(endpoint)
@@ -1010,6 +1049,58 @@ def test_execution_claim_failure_rolls_back_run_task_and_attempt(monkeypatch, tm
                 (scope.namespace,) * 4,
             ).fetchone()
         assert counts == (0, 0, 0, 0)
+
+
+def test_execution_commit_before_skill_preparation_replays_exact_payload_only(
+    monkeypatch, tmp_path
+):
+    with protocol_service() as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        changed = (
+            {**command, "skillId": "skill:other"},
+            {**command, "operation": "supplier-quality.other"},
+            {
+                **command,
+                "input": {"supplier": "OTHER", "defects": [{"severity": 1}]},
+            },
+        )
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command, *changed), identities)
+        module = importlib.import_module("agent_console.app")
+        _configure(module, monkeypatch, endpoint, authority_file)
+        governed = importlib.import_module("agent_console.governed_execution")
+        original = governed.GovernedExecutionApplication._skill_request
+
+        def interrupt_after_execution_commit(*_args, **_kwargs):
+            raise RuntimeError("simulated process loss before Skill preparation")
+
+        monkeypatch.setattr(
+            governed.GovernedExecutionApplication,
+            "_skill_request",
+            interrupt_after_execution_commit,
+        )
+        failed = TestClient(module.app, raise_server_exceptions=False).post(
+            "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+        )
+        assert failed.status_code == 500
+        assert calls == []
+        for mismatch in changed:
+            rejected = TestClient(module.app).post(
+                "/api/internal/v0.2.3/executions", json=mismatch, headers=_headers()
+            )
+            assert rejected.status_code == 409
+        assert calls == []
+
+        monkeypatch.setattr(
+            governed.GovernedExecutionApplication, "_skill_request", original
+        )
+        module._configure_governed_execution()
+        continued = TestClient(module.app).post(
+            "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+        )
+        assert continued.status_code == 200
+        assert continued.json()["invocation"]["state"] == "SUCCEEDED"
+        assert len(calls) == 1
 
 
 def test_existing_execution_without_payload_claim_is_not_backfilled(
@@ -1043,6 +1134,59 @@ def test_existing_execution_without_payload_claim_is_not_backfilled(
             "GOVERNED_EXECUTION_CLAIM_REQUIRED"
         )
         assert len(calls) == 1
+
+
+def test_pre_provider_crash_recovers_unknown_and_failed_recovery_never_dispatches(
+    monkeypatch, tmp_path
+):
+    with protocol_service() as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command,), identities)
+        module = importlib.import_module("agent_console.app")
+        _configure(module, monkeypatch, endpoint, authority_file)
+        repository = module._skill_invocation_composition.invocation_repository
+        prepare_dispatch = repository.prepare_dispatch
+
+        def crash_after_durable_dispatch(*args, **kwargs):
+            snapshot, created = prepare_dispatch(*args, **kwargs)
+            assert created
+            assert snapshot.state.value == "DISPATCH_RECORDED"
+            raise RuntimeError("simulated process loss before provider call")
+
+        monkeypatch.setattr(
+            repository, "prepare_dispatch", crash_after_durable_dispatch
+        )
+        failed = TestClient(module.app, raise_server_exceptions=False).post(
+            "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+        )
+        assert failed.status_code == 500
+        assert calls == []
+
+        module._configure_governed_execution()
+        recovering = module._skill_invocation_composition.invocation_repository
+
+        def fail_recovery_commit(*_args, **_kwargs):
+            raise RuntimeError("simulated recovery persistence failure")
+
+        monkeypatch.setattr(recovering, "commit_terminal", fail_recovery_commit)
+        recovery_failed = TestClient(module.app, raise_server_exceptions=False).post(
+            "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+        )
+        assert recovery_failed.status_code == 500
+        assert calls == []
+        assert (
+            recovering.get_snapshot(scope, identities["invocationId"]).state.value
+            == "DISPATCH_RECORDED"
+        )
+
+        module._configure_governed_execution()
+        recovered = TestClient(module.app).post(
+            "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+        )
+        assert recovered.status_code == 200
+        assert recovered.json()["invocation"]["state"] == "OUTCOME_UNKNOWN"
+        assert calls == []
 
 
 def test_timeout_restart_remains_unknown_and_never_redispatches(monkeypatch, tmp_path):
@@ -1105,5 +1249,80 @@ def test_terminal_commit_crash_restart_never_redispatches(monkeypatch, tmp_path)
             "/api/internal/v0.2.3/executions", json=command, headers=_headers()
         )
         assert recovered.status_code == 200
-        assert recovered.json()["invocation"]["state"] == "DISPATCH_RECORDED"
+        assert recovered.json()["invocation"]["state"] == "OUTCOME_UNKNOWN"
+        assert len(calls) == 1
+
+        identity = recovered.json()["identity"]
+        read = TestClient(module.app).get(
+            f"/api/internal/v0.2.3/executions/{identity['workflowRunId']}"
+            f"/attempts/{identity['attemptId']}/skill-invocations/"
+            f"{identities['invocationId']}",
+            headers=_headers(),
+        )
+        assert read.status_code == 200
+        assert read.json()["invocation"]["state"] == "OUTCOME_UNKNOWN"
+        assert read.json()["resourceUse"]["state"] == "OUTCOME_UNKNOWN"
+
+
+def test_wrong_execution_parent_combinations_are_non_disclosing(monkeypatch, tmp_path):
+    from agent_console.governed_execution_authorization import (
+        execution_read_resource,
+        skill_read_resource,
+    )
+
+    with protocol_service() as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        wrong_run = "workflow-run:wrong"
+        wrong_attempt = "attempt:wrong"
+        wrong_invocation = "skill-invocation:wrong"
+        authority_file = tmp_path / "authority.json"
+        _write_authority(
+            authority_file,
+            scope,
+            (command,),
+            identities,
+            extra_grants=(
+                {
+                    "owner": "EXECUTION",
+                    "action": "READ",
+                    "resource": execution_read_resource(
+                        wrong_run, identities["attemptId"]
+                    ),
+                },
+                {
+                    "owner": "EXECUTION",
+                    "action": "READ",
+                    "resource": execution_read_resource(
+                        identities["workflowRunId"], wrong_attempt
+                    ),
+                },
+                {
+                    "owner": "SKILL",
+                    "action": "READ_SKILL_INVOCATION",
+                    "resource": skill_read_resource(wrong_invocation),
+                },
+            ),
+        )
+        module = importlib.import_module("agent_console.app")
+        _configure(module, monkeypatch, endpoint, authority_file)
+        client = TestClient(module.app)
+        started = client.post(
+            "/api/internal/v0.2.3/executions", json=command, headers=_headers()
+        )
+        assert started.status_code == 201
+        assert len(calls) == 1
+        paths = (
+            f"/api/internal/v0.2.3/executions/{wrong_run}/attempts/"
+            f"{identities['attemptId']}/skill-invocations/{identities['invocationId']}",
+            f"/api/internal/v0.2.3/executions/{identities['workflowRunId']}/attempts/"
+            f"{wrong_attempt}/skill-invocations/{identities['invocationId']}",
+            f"/api/internal/v0.2.3/executions/{identities['workflowRunId']}/attempts/"
+            f"{identities['attemptId']}/skill-invocations/{wrong_invocation}",
+        )
+        for path in paths:
+            rejected = client.get(path, headers=_headers())
+            assert rejected.status_code == 404
+            assert rejected.json() == {
+                "detail": {"reasonCode": "GOVERNED_EXECUTION_NOT_FOUND"}
+            }
         assert len(calls) == 1

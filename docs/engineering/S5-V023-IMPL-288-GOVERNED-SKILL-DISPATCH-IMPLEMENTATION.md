@@ -9,6 +9,10 @@ Workflow Control, Digital Employee identity, Skill Invocation, Evidence, and
 Resource Use authorities. It adds the additive checksum-bound migration `0017`
 for the governed HTTP request claim. It adds no scheduler, matching algorithm,
 queue, retry behavior, public API, CRD, API group, frontend, or Business Outcome.
+The Human-accepted decisions specific to this increment are recorded in
+[`S5-V023-IMPL-288-GOVERNED-EXECUTION-AUTHORITY-ADDENDUM-V1.md`](../../architecture/s5/v0.2/S5-V023-IMPL-288-GOVERNED-EXECUTION-AUTHORITY-ADDENDUM-V1.md)
+as `HUMAN_ACCEPTED / BRANCH_RECORDED / NOT_MAIN_DURABLE`. The older IMPL-276
+composition addendum remains a referenced prerequisite and is not a substitute.
 
 ## Formal entry and complete normal path
 
@@ -56,12 +60,18 @@ collapsed into one synthetic authorization identifier.
 | Skill dispatch | `GovernedAttemptSkillInvocationService.invoke` | request/claim/`DISPATCH_RECORDED` commit before HTTP | one managed `READ_ONLY` Skill slot only |
 | Provider | `HttpReadOnlySkillExecutor` from the bootstrap allowlist | external HTTP effect after durable dispatch | localhost bounded executor only; no MCP or writes |
 | Terminal facts | Skill Invocation plus Resource Use repositories | Invocation facts, redacted Evidence, Resource Use facts/measurements/snapshot commit atomically | exactly-once external effects are not claimed |
+| Recovery | existing Skill `recover` under process-local invocation ownership | predecessor-process durable dispatch becomes one atomic `OUTCOME_UNKNOWN` terminal bundle; no provider call | no durable lease, background recovery or automatic successor retry |
 | Readback | exact governed Execution GET | separately authorized Execution, Invocation, Resource Use and Evidence-reference projections | Evidence content is deliberately not dereferenced |
 
 No test helper is used by the production entry. The acceptance test uses existing
 domain services to create and publish its isolated Agent, Workflow, Runtime Profile,
 Skill, Employee, Instance, Assignment, and approved Plan. That preparation is test
-resource provisioning, not a new user-facing matching or Plan-authoring route.
+resource provisioning, not a new user-facing matching or Plan-authoring route. In
+particular, Workflow preparation injects a test reference resolver around the
+production domain service and PostgreSQL repository. The ordinary Workflow API
+cannot yet publish this Skill reference path end to end. Its resolver/authoring
+completion remains an M2 required OPEN item. This increment proves only execution
+and authorized readback for an already existing legal exact approved Plan.
 
 ## HTTP contract
 
@@ -111,14 +121,19 @@ complete HTTP semantic payload, including an input digest, and is created with t
 Run/Task Run/Attempt in one transaction. Claim insertion failure rolls back every
 identity. An existing identity without its claim is rejected rather than backfilled.
 Concurrent starts converge on one Run/Task Run/Attempt and one Invocation dispatch.
-Dispatch preparation commits before the provider request.
+Dispatch preparation commits before the provider request. Process-local invocation
+ownership serializes an active synchronous call without creating a durable lease or
+new scheduling authority, so a concurrent replay cannot recover an active call.
 If validation fails before dispatch, provider call count is zero. Timeout or
 transport ambiguity commits `OUTCOME_UNKNOWN`; replay and process restart return the
-same terminal unknown record and never redispatch. A crash or terminal-commit failure
-after durable dispatch leaves `DISPATCH_RECORDED`; existing explicit Skill recovery
-may mark the original Invocation unknown, but this HTTP entry neither retries nor
-automatically creates a successor Attempt. Any retry remains a separately authorized
-Workflow Control operation and must create a successor Attempt/Invocation.
+same terminal unknown record and never redispatch. After process loss, the formal
+entry detects an existing non-terminal durable dispatch and calls the existing Skill
+recovery operation. Recovery atomically appends the Invocation, Evidence and Resource
+Use `OUTCOME_UNKNOWN` terminal bundle without calling the provider. If that commit
+fails, the request fails and the durable state remains `DISPATCH_RECORDED`; the entry
+does not claim that unknown was saved and still does not redispatch. This HTTP entry
+does not automatically create a successor Attempt. Any retry remains a separately
+authorized Workflow Control operation and must create a successor Attempt/Invocation.
 
 ## Acceptance and CI
 
@@ -134,28 +149,33 @@ client-minted authority or endpoint selection, cross-scope nondisclosure, exact
 digest and input-schema rejection with zero additional calls, Evidence/Resource Use
 linkage, restricted Evidence-reference projection, full-payload mismatch, atomic
 claim rollback, refusal to backfill an unclaimed existing execution, same-request
-replay, concurrent single dispatch, timeout/restart unknown, and process loss after
-provider dispatch but before terminal commit without redispatch.
+replay, concurrent single dispatch, active-call ownership, safe continuation after
+Execution commit but before Skill preparation, pre-provider crash recovery, recovery
+persistence failure, timeout/restart unknown, process loss after provider return but
+before terminal commit, and non-disclosing wrong-parent reads without redispatch.
 
 The existing `PostgreSQL Skill Invocation` CI job now selects this test together
 with the Skill domain and PostgreSQL/protocol tests. Its existing skip-fail guard is
 retained, so this selected capability cannot pass by skipping. All other workflow
 checks remain unchanged.
 
-Current post-fix validation evidence is recorded against the final candidate rather
-than inherited from `4fccd34`. The exact governed Skill CI selection completed with
-`26 passed / 0 skipped` on a fresh task-owned PostgreSQL database. Focused Workflow
-successor/binding tests completed with `7 passed`; clean Execution migration tests
-completed with `4 passed`; Workflow PostgreSQL tests completed with `2 passed`.
-`make check` completed with `1539 passed / 95 environment-dependent skipped`; Ruff,
-the 360-file format check, and pre-commit passed. The only emitted warning was the
-repository's existing Starlette `TestClient` deprecation warning. Candidate CI is
-still required before this implementation is reported complete.
+The preceding correction candidate completed the then-current exact selection with
+`26 passed / 0 skipped` on a fresh task-owned PostgreSQL database. This recovery
+correction expands the selected suite to 30 cases: 12 governed HTTP/PostgreSQL/
+protocol cases, 16 existing Skill PostgreSQL/protocol cases, and 2 Skill domain
+cases. The 30-case selection passed on the retained task-owned PostgreSQL database;
+a fresh-database candidate CI run is still required. The recovery correction's
+repository-wide `make check` completed with `1539 passed / 99 environment-dependent
+skipped`; Ruff, the 360-file format check and pre-commit passed. Those skips are not
+counted as real-service evidence. Earlier focused Workflow and Execution migration
+evidence remains historical and is not substituted for the new recovery-window
+acceptance.
 
 ## Explicit limitations
 
-Still absent and not claimed: automatic Plan/resource matching, a general scheduler
-or queue, background dispatch, automatic recovery/retry, successor retry HTTP,
+Still absent and not claimed: end-to-end ordinary Workflow API Skill-reference
+authoring/resolution, automatic Plan/resource matching, a general scheduler or queue,
+background recovery/dispatch, automatic retry, successor retry HTTP,
 MCP dispatch, write-capable Skills, multiple Skill slots, arbitrary remote executor
 URLs, frontend/Runtime Operations UI, Kubernetes Runtime placement, OpenClaw,
 M2/P1 resource orchestration breadth, enterprise IAM, HA, exactly-once external

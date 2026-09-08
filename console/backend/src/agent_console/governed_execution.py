@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any
+from weakref import WeakValueDictionary
 
 from psycopg import Error as PsycopgError
 
@@ -121,6 +123,17 @@ class GovernedExecutionApplication:
         self.workflow_control = workflow_control
         self.skill = skill
         self.authority = authority
+        self._ownership_guard = Lock()
+        self._invocation_ownership = WeakValueDictionary()
+
+    def _ownership_for(self, invocation_id: str):
+        """Serialize one in-process caller without creating durable lease authority."""
+        with self._ownership_guard:
+            ownership = self._invocation_ownership.get(invocation_id)
+            if ownership is None:
+                ownership = Lock()
+                self._invocation_ownership[invocation_id] = ownership
+            return ownership
 
     @staticmethod
     def _scope(principal: GovernedPrincipal) -> ScopeIdentity:
@@ -220,7 +233,13 @@ class GovernedExecutionApplication:
                     skill_decision.decision_id,
                 )
             )
-            invocation = skill_service.invoke(request, command.input)
+            # Only the caller holding this process-local ownership may cross the
+            # provider boundary or recover a predecessor process's durable dispatch.
+            # A concurrent request waits for the active caller's terminal commit.
+            with self._ownership_for(request.invocation_id):
+                invocation = skill_service.invoke(request, command.input)
+                if invocation.state is InvocationState.DISPATCH_RECORDED:
+                    invocation = skill_service.recover(request, command.input)
         except (ExecutionApplicationError, SkillInvocationError) as exc:
             raise GovernedExecutionError(str(exc)) from exc
         return GovernedExecutionResult(
