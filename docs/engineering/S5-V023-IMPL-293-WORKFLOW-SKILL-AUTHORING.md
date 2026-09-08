@@ -3,9 +3,11 @@
 ## Authority, baseline and isolation
 
 Session `S5-V023-IMPL-293`; original bounded implementation plus Human-approved
-bounded Skill operations scope supplement. G1 implementation uses the accepted
+bounded Skill operations scope supplement and the later Human-approved UI
+compatibility regression supplement. G1 implementation uses the accepted
 [288 authority addendum](../../architecture/s5/v0.2/S5-V023-IMPL-288-GOVERNED-EXECUTION-AUTHORITY-ADDENDUM-V1.md).
-No new migration, issuer, scheduling authority, provider protocol or frontend.
+No new migration, issuer, scheduling authority, provider protocol or product
+frontend behavior is introduced.
 
 Fixed base: `adcd648a0fc8ca60066f52665ce0e83d7332b7dd`.
 Base tree: `73c136b927aaa87d7234c46b110f3d75d5872213`.
@@ -56,6 +58,15 @@ historical Workflow, Skill or Plan is backfilled or recomputed. Workflow GET/edi
 binding preservation, explicit-null/omission protection, successor history, CAS,
 Runtime Profile resolution and immutable publication remain in force.
 
+The compatibility supplement exercises the real browser management path over
+the production Skill HTTP API. It creates an operation-backed Draft through the
+API, opens that exact Draft in the normal Skill page, changes only description,
+observes the unmodified PUT request, and compares its operations with the prior
+authoritative GET. A second authoritative GET must retain the same resource ID
+and operations while returning the edited description. This adds no operations
+authoring UI and does not replace the existing historical no-operations edit
+coverage.
+
 ## Exact execution connection and product limitation
 
 The acceptance prepares **Skill and Workflow through normal production HTTP APIs**
@@ -96,6 +107,7 @@ readiness or business success is claimed.
 - `console/backend/tests/test_workflow_skill_authoring_postgres.py`
 - `console/backend/tests/test_governed_execution_api_postgres.py`
 - `.github/workflows/employee-identity.yml`
+- `console/frontend/tests/e2e/skill-mcp-workbench.spec.ts`
 - `docs/engineering/S5-V023-IMPL-293-WORKFLOW-SKILL-AUTHORING.md`
 
 ## Validation and CI selection
@@ -106,6 +118,12 @@ protection, changed successor binding without modifying history, unpublished and
 cross-scope Skills, missing revision, wrong digest, unknown operation, contradictory
 reference/binding, historical reads and execution refusal, supervised successful
 dispatch and same-request replay.
+
+The real-browser Skill regression additionally verifies that the actual normal
+UI PUT carries the exact operation list returned by the authoritative pre-edit
+GET, receives HTTP success, and is confirmed by an authoritative post-edit GET.
+The pre-existing browser successor edit continues to cover historical Skills
+without operations.
 
 The existing Skill CI job is reused with all prior tests and fail-on-any-skip
 behavior retained. It adds the real authoring module and resolver/schema/Skill

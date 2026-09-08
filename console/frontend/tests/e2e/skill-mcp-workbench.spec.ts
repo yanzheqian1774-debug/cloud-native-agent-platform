@@ -25,6 +25,54 @@ async function publish(page: import("@playwright/test").Page, path: string, crea
   await expect(page.getByText("Enabled", {exact:true})).toBeVisible();
 }
 
+test("editing an operation-backed Skill through the UI preserves exact operations",async({page})=>{
+  await page.goto("/skills");
+  const operation={
+    name:"quality.ui-preservation",
+    inputSchema:{type:"object",properties:{supplier:{type:"string"}}},
+    outputSchema:{type:"object",properties:{status:{type:"string"}}},
+    sideEffectClass:"READ_ONLY",
+    executorId:"ui-preservation-readonly",
+    executorRevision:"1.0.0",
+    executorConfigurationDigest:"a".repeat(64),
+    sideEffectPolicy:{policyId:"ui-preservation",policyRevision:"1",policyDigest:"b".repeat(64)},
+    ioLimits:{policyId:"ui-bounds",policyRevision:"1",maxInputBytes:4096,maxOutputBytes:4096,maxObjectDepth:8,maxProperties:64,timeoutMs:1000},
+  };
+  const created=await page.evaluate(async({name,operation})=>{
+    const response=await fetch("/api/internal/v0.2.2/resources/skill",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name,content:{description:"Operation-backed Skill before UI edit",capabilities:[operation.name],instructions:"Perform the exact bounded read-only operation.",operations:[operation]}}),
+    });
+    return {status:response.status,body:await response.json()};
+  },{name:`UI preservation Skill ${Date.now()}`,operation});
+  expect(created.status).toBe(201);
+  const resourceId=created.body.resource.resourceId as string;
+  const before=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(id)}`)).json()),resourceId);
+  const beforeDraft=before.resource.revisions.find((item:{revisionId:string})=>item.revisionId===before.resource.currentDraftRevisionId);
+  const authoritativeOperations=beforeDraft.content.operations;
+
+  await page.goto(`/skills?resourceId=${encodeURIComponent(resourceId)}`);
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:created.body.resource.name,exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"编辑当前 Skill Draft"}).click();
+  const editedDescription="Operation-backed Skill after normal UI edit";
+  await page.getByLabel("说明",{exact:true}).fill(editedDescription);
+  const draftPath=`/api/internal/v0.2.2/resources/skill/${resourceId}/draft`;
+  const requestPromise=page.waitForRequest(request=>request.method()==="PUT");
+  const responsePromise=page.waitForResponse(response=>response.request().method()==="PUT");
+  await page.getByRole("button",{name:"保存 Skill Draft"}).click();
+  const [actualRequest,actualResponse]=await Promise.all([requestPromise,responsePromise]);
+  expect(decodeURIComponent(new URL(actualRequest.url()).pathname)).toBe(draftPath);
+  expect(decodeURIComponent(new URL(actualResponse.url()).pathname)).toBe(draftPath);
+  expect(actualRequest.postDataJSON().content.operations).toEqual(authoritativeOperations);
+  expect(actualResponse.status()).toBe(200);
+
+  const after=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(id)}`)).json()),resourceId);
+  const afterDraft=after.resource.revisions.find((item:{revisionId:string})=>item.revisionId===after.resource.currentDraftRevisionId);
+  expect(after.resource.resourceId).toBe(resourceId);
+  expect(afterDraft.content.description).toBe(editedDescription);
+  expect(afterDraft.content.operations).toEqual(authoritativeOperations);
+});
+
 test("publishes, binds and authorizes one bounded real capability test",async({page})=>{
   await page.setViewportSize({width:1440,height:900});
   await publish(page,"/mcp","Create governed MCP");
