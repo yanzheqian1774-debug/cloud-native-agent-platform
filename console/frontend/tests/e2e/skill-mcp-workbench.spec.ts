@@ -5,6 +5,12 @@ let mcp:Server;
 test.beforeAll(async()=>{mcp=createServer((request,response)=>{let raw="";request.on("data",chunk=>{raw+=chunk});request.on("end",()=>{const message=JSON.parse(raw);const method=message.method;if(method==="notifications/initialized"){response.writeHead(202);response.end();return}const result=method==="initialize"?{protocolVersion:"2025-06-18",capabilities:{},serverInfo:{name:"browser-acceptance",version:"1"}}:method==="tools/list"?{tools:[{name:"quality.lookup",description:"Deterministic quality lookup",inputSchema:{type:"object"}}]}:method==="resources/list"?{resources:[{uri:"quality://guide",name:"Quality guide"}]}:method==="prompts/list"?{prompts:[{name:"quality-summary",description:"Quality summary"}]}:{content:[{type:"text",text:"healthy"}],structuredContent:{supplier:"ACME",token:"must-redact"}};const body=JSON.stringify({jsonrpc:"2.0",id:message.id,result});response.writeHead(200,{"Content-Type":"application/json","Mcp-Session-Id":"browser-session","Content-Length":Buffer.byteLength(body)});response.end(body)})});await new Promise<void>((resolve,reject)=>{mcp.once("error",reject);mcp.listen(8765,"127.0.0.1",resolve)})});
 test.afterAll(async()=>{await new Promise<void>((resolve,reject)=>mcp.close(error=>error?reject(error):resolve()))});
 
+test.afterEach(async({page},info)=>{
+  if(info.status===info.expectedStatus)return;
+  const codes=(await page.getByRole("alert").allTextContents()).flatMap(text=>text.match(/\b[A-Z][A-Z0-9_]{4,}\b/g)??[]);
+  info.annotations.push({type:"controlled-state-codes",description:JSON.stringify(codes)});
+});
+
 async function publish(page: import("@playwright/test").Page, path: string, create: string) {
   await page.goto(path);
   await expect(page.locator(".demo-primary-nav")).toBeVisible();
@@ -53,7 +59,10 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
   await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
   await page.getByLabel("管理调用输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
+  const invocationResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/tool-invocations")&&response.request().method()==="POST");
   await page.getByRole("button",{name:"Authorize bounded management invocation"}).click();
+  const invocationHttp=await invocationResponse;expect(invocationHttp.status()).toBe(200);
+  const invocationBody=await invocationHttp.json();expect(invocationBody.invocation.status).toBe("SUCCEEDED");
   const mcpInvocationStatus=page.getByRole("region",{name:"MCP professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
   await expect(mcpInvocationStatus).toContainText("管理调用即时结果已保留");
   await expect(mcpInvocationStatus).toContainText("credential values redacted: true");
@@ -160,7 +169,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
 for(const operation of ["edit","lifecycle"] as const)test("skill write directory readback cannot own later selection or write: "+operation,async({page})=>{
   await page.goto("/skills");
   const suffix=Date.now(),names=[`race A skill ${suffix}`, `race B skill ${suffix}`];const ids:string[]=[];
-  for(const name of names){await page.getByRole("button",{name:"Create governed SKILL"}).click();await page.getByLabel("Skill 名称").fill(name);await page.getByRole("button",{name:"保存 SKILL Draft"}).click();await expect(page.getByRole("heading",{name,exact:true})).toBeVisible();ids.push((await page.locator(".agent-detail > header code").textContent())!.trim())}
+  for(const name of names){await page.getByRole("button",{name:"Create governed SKILL"}).click();await page.getByLabel("Skill 名称").fill(name);const created=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/internal/v0.2.2/resources/skill"&&response.request().method()==="POST");await page.getByRole("button",{name:"保存 SKILL Draft"}).click();expect((await created).status()).toBe(201);await expect(page.getByRole("heading",{name,exact:true})).toBeVisible();ids.push((await page.locator(".agent-detail > header code").textContent())!.trim())}
   const read=()=>page.evaluate(async root=>(await(await fetch(root)).json()),"/api/internal/v0.2.2/resources/skill");const before=await read();
   await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
   let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>release=resolve),waiting=new Promise<void>(resolve=>started=resolve);let delayed=false;
