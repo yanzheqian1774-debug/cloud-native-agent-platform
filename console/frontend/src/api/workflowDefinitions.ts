@@ -12,6 +12,7 @@ const root="/api/internal/v0.2.2/workflow-definitions";
 export const listWorkflowDefinitions=()=>request<WorkflowProjection[]>(root);
 export const getWorkflowDefinition=(id:string)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}`);
 export const createWorkflowDefinition=(name:string,content:WorkflowContent)=>request<WorkflowProjection>(root,{method:"POST",body:JSON.stringify({name,content})});
+export const editWorkflowDefinition=(definition:WorkflowDefinition,content:WorkflowContent)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(definition.workflowDefinitionId)}/draft`,{method:"PUT",body:JSON.stringify({expectedVersion:definition.aggregateVersion,content})});
 export const validateWorkflowDefinition=(id:string,expectedVersion:number)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/validation`,{method:"POST",body:JSON.stringify({expectedVersion})});
 export const reviewWorkflowDefinition=(id:string,expectedVersion:number,digest:string)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/reviews`,{method:"POST",body:JSON.stringify({expectedVersion,digest,decision:"APPROVE",reason:"Human reviewed exact Workflow digest"})});
 export const publishWorkflowDefinition=(id:string,expectedVersion:number,digest:string,reviewId:string)=>request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/publications`,{method:"POST",body:JSON.stringify({expectedVersion,digest,reviewId})});
