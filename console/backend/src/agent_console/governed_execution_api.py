@@ -2,13 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
-from .digital_employee_api import get_principal
 from .execution_domain import ExecutionPersistenceError
 from .governed_execution import GovernedExecutionApplication, GovernedExecutionError
+from .governed_execution_authorization import (
+    GovernedAuthorizationError,
+    GovernedPrincipal,
+)
 from .governed_execution_schemas import StartGovernedExecution
-from .problems import TrustedPrincipal
 from .resource_use_domain import ResourceUseError
 from .skill_invocation_domain import SkillInvocationError
 from .workflow_control_domain import WorkflowControlError
@@ -22,8 +24,21 @@ def get_service() -> GovernedExecutionApplication:
     return get_governed_execution_application()
 
 
+def get_principal(
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> GovernedPrincipal:
+    from .app import get_governed_execution_authority
+
+    try:
+        return get_governed_execution_authority().authenticate(authorization)
+    except GovernedAuthorizationError as exc:
+        reason = str(exc)
+        status = 503 if reason == "GOVERNED_AUTHORITY_UNAVAILABLE" else 401
+        raise HTTPException(status, detail={"reasonCode": reason}) from exc
+
+
 Service = Annotated[GovernedExecutionApplication, Depends(get_service)]
-Principal = Annotated[TrustedPrincipal, Depends(get_principal)]
+Principal = Annotated[GovernedPrincipal, Depends(get_principal)]
 
 
 def _http_error(exc: GovernedExecutionError) -> HTTPException:
@@ -49,7 +64,11 @@ def _http_error(exc: GovernedExecutionError) -> HTTPException:
         "SKILL_INPUT_SCHEMA_MISMATCH",
     }:
         status = 422
-    elif "STORAGE" in reason or "SCHEMA_INCOMPATIBLE" in reason:
+    elif (
+        "STORAGE" in reason
+        or "SCHEMA_INCOMPATIBLE" in reason
+        or reason == "GOVERNED_AUTHORITY_UNAVAILABLE"
+    ):
         status = 503
         reason = "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
     else:
@@ -66,7 +85,7 @@ def start_execution(
 ):
     try:
         result = service.start(principal, command)
-    except GovernedExecutionError as exc:
+    except (GovernedExecutionError, GovernedAuthorizationError) as exc:
         raise _http_error(exc) from exc
     except (
         ExecutionPersistenceError,
@@ -96,7 +115,7 @@ def read_execution(
             attempt_id=attempt_id,
             invocation_id=invocation_id,
         )
-    except GovernedExecutionError as exc:
+    except (GovernedExecutionError, GovernedAuthorizationError) as exc:
         raise _http_error(exc) from exc
     except (
         ExecutionPersistenceError,

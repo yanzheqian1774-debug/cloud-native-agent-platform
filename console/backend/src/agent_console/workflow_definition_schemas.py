@@ -12,6 +12,14 @@ class ExactReference(BaseModel):
     revisionId: str = Field(min_length=1)
 
 
+class SkillOperationBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    skillId: str = Field(min_length=1)
+    skillRevisionId: str = Field(min_length=1)
+    skillDigest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
+    operation: str = Field(min_length=1, max_length=200)
+
+
 class WorkflowTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
     taskId: str = Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")
@@ -21,6 +29,7 @@ class WorkflowTask(BaseModel):
     outputs: list[str] = []
     capabilityRequirements: list[str] = []
     references: list[ExactReference] = []
+    skillOperationBindings: list[SkillOperationBinding] | None = None
     retryLimit: int = Field(default=0, ge=0, le=10)
     timeoutSeconds: int = Field(default=300, ge=1, le=86400)
     failurePolicy: Literal["FAIL_WORKFLOW", "SKIP_DEPENDENTS"] = "FAIL_WORKFLOW"

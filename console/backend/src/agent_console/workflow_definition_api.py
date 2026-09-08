@@ -158,7 +158,7 @@ def create_definition(
                 service.scope(p[0], p[1]),
                 p[2],
                 command.name,
-                command.content.model_dump(),
+                command.content.model_dump(exclude_none=True),
             )
         )
     )
@@ -198,7 +198,7 @@ def edit_definition(
                 resource_id,
                 p[2],
                 command.expectedVersion,
-                command.content.model_dump(),
+                command.content.model_dump(exclude_none=True),
             )
         )
     )

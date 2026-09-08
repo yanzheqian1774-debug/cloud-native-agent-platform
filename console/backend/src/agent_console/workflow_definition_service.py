@@ -290,6 +290,33 @@ class WorkflowDefinitionService:
             content["runtimeProfile"],
             *(r for t in content["tasks"] for r in t.get("references", [])),
         ]
+        for task in content["tasks"]:
+            bindings = task.get("skillOperationBindings")
+            if bindings is None:
+                continue
+            if not bindings:
+                raise WorkflowDefinitionFailure("SKILL_OPERATION_BINDING_REQUIRED")
+            identities = {
+                (
+                    item["skillId"],
+                    item["skillRevisionId"],
+                    item["skillDigest"],
+                    item["operation"],
+                )
+                for item in bindings
+            }
+            if len(identities) != len(bindings):
+                raise WorkflowDefinitionFailure("DUPLICATE_SKILL_OPERATION_BINDING")
+            references = {
+                (item["resourceId"], item["revisionId"])
+                for item in task.get("references", ())
+                if item.get("kind") == "SKILL"
+            }
+            if any(
+                (item["skillId"], item["skillRevisionId"]) not in references
+                for item in bindings
+            ):
+                raise WorkflowDefinitionFailure("SKILL_OPERATION_REFERENCE_REQUIRED")
         if resolve:
             if self.reference_resolver is None:
                 raise WorkflowDefinitionFailure("REFERENCE_RESOLVER_UNAVAILABLE", 503)

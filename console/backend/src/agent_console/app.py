@@ -62,6 +62,10 @@ from agent_console.digital_employee_bootstrap import (
 from agent_console.execution_domain import ExecutionPersistenceError
 from agent_console.governed_execution import GovernedExecutionApplication
 from agent_console.governed_execution_api import router as governed_execution_router
+from agent_console.governed_execution_authorization import (
+    GovernedAuthorizationError,
+    GovernedExecutionAuthority,
+)
 from agent_console.intervention_feedback import (
     CaptureDenied,
     CaptureNotFound,
@@ -422,6 +426,7 @@ _digital_employee_assembly: DigitalEmployeeProductAssembly | None = None
 _digital_employee_startup_error: str | None = None
 _governed_execution_application: GovernedExecutionApplication | None = None
 _governed_execution_startup_error: str | None = None
+_governed_execution_authority: GovernedExecutionAuthority | None = None
 _skill_invocation_composition: SkillInvocationComposition | None = None
 
 
@@ -579,12 +584,26 @@ _configure_digital_employees()
 
 def _configure_governed_execution() -> None:
     global _governed_execution_application, _governed_execution_startup_error
-    global _skill_invocation_composition
+    global _governed_execution_authority, _skill_invocation_composition
     database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
     endpoint = os.environ.get("SKILL_EXECUTOR_ENDPOINT", "")
+    authority_file = os.environ.get("GOVERNED_EXECUTION_AUTHORITY_FILE", "")
+    if not authority_file:
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_AUTHORITY_UNAVAILABLE"
+        return
     if not database_url or not endpoint or _digital_employee_assembly is None:
         _governed_execution_application = None
+        _governed_execution_authority = None
         _governed_execution_startup_error = "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+        return
+    try:
+        governed_authority = GovernedExecutionAuthority.from_file(authority_file)
+    except GovernedAuthorizationError:
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_AUTHORITY_UNAVAILABLE"
         return
     try:
         executor = HttpReadOnlySkillExecutor(
@@ -625,15 +644,26 @@ def _configure_governed_execution() -> None:
             timeout=float(os.environ.get("EXECUTION_DB_TIMEOUT_SECONDS", "5")),
         )
         control.migrate()
+        execution = _digital_employee_assembly.repository.authority
+        execution.migrate_governed_execution_claims(
+            migrations / "0017_governed_execution_claim.sql"
+        )
         _skill_invocation_composition = composition
+        _governed_execution_authority = governed_authority
         _governed_execution_application = GovernedExecutionApplication(
-            _digital_employee_assembly.repository.authority,
+            execution,
             control,
             composition,
+            governed_authority,
         )
         _governed_execution_startup_error = None
-    except (ExecutionPersistenceError, WorkflowControlError, ValueError):
+    except (
+        ExecutionPersistenceError,
+        WorkflowControlError,
+        ValueError,
+    ):
         _governed_execution_application = None
+        _governed_execution_authority = None
         _governed_execution_startup_error = "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
 
 
@@ -669,6 +699,18 @@ def get_governed_execution_application() -> GovernedExecutionApplication:
             },
         )
     return _governed_execution_application
+
+
+def get_governed_execution_authority() -> GovernedExecutionAuthority:
+    if _governed_execution_authority is None:
+        raise HTTPException(
+            503,
+            detail={
+                "reasonCode": _governed_execution_startup_error
+                or "GOVERNED_AUTHORITY_UNAVAILABLE"
+            },
+        )
+    return _governed_execution_authority
 
 
 def get_live_journey_principal() -> TrustedJourneyPrincipal:

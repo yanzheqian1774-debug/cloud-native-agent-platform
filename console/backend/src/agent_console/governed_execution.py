@@ -7,10 +7,13 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from psycopg import Error as PsycopgError
+
 from .execution_application import (
     ApprovedPlanIdentity,
     ExecutionApplicationError,
     ExecutionApplicationService,
+    ExecutionRequestClaim,
     ScopedExecutionAuthorization,
     StartExecutionCommand,
 )
@@ -21,6 +24,17 @@ from .execution_postgres import (
     DigitalEmployeeInstanceId,
     PostgresExecutionAuthorityRepository,
 )
+from .governed_execution_authorization import (
+    GovernedExecutionAuthority,
+    GovernedPrincipal,
+    evidence_reference_resource,
+    execution_read_resource,
+    execution_start_resource,
+    request_semantic,
+    resource_use_read_resource,
+    skill_invoke_resource,
+    skill_read_resource,
+)
 from .governed_execution_schemas import StartGovernedExecution
 from .planning import (
     CanonicalWorkflowRevision,
@@ -28,7 +42,6 @@ from .planning import (
     PlanningState,
     TaskRequirement,
 )
-from .problems import TrustedPrincipal
 from .resource_use_application import (
     ResourceUseApplicationService,
     ScopedResourceUseAuthorization,
@@ -63,21 +76,6 @@ class GovernedExecutionError(ValueError):
 class GovernedExecutionResult:
     replayed: bool
     document: dict[str, Any]
-
-
-def _decision_id(principal: TrustedPrincipal, key: str) -> str:
-    digest = hashlib.sha256(
-        "\x00".join(
-            (
-                principal.tenant_id,
-                principal.security_domain,
-                principal.principal_id,
-                "START_AND_INVOKE_SKILL",
-                key,
-            )
-        ).encode()
-    ).hexdigest()
-    return f"execution-authorization:{digest}"
 
 
 def _workflow_from_plan(raw: bytes) -> tuple[CanonicalWorkflowRevision, str, str]:
@@ -117,13 +115,15 @@ class GovernedExecutionApplication:
         execution: PostgresExecutionAuthorityRepository,
         workflow_control: PostgresWorkflowControlRepository,
         skill: SkillInvocationComposition,
+        authority: GovernedExecutionAuthority,
     ) -> None:
         self.execution = execution
         self.workflow_control = workflow_control
         self.skill = skill
+        self.authority = authority
 
     @staticmethod
-    def _scope(principal: TrustedPrincipal) -> ScopeIdentity:
+    def _scope(principal: GovernedPrincipal) -> ScopeIdentity:
         if not principal.principal_id:
             raise GovernedExecutionError("AUTHENTICATION_REQUIRED")
         if not principal.tenant_id or not principal.security_domain:
@@ -131,13 +131,20 @@ class GovernedExecutionApplication:
         return ScopeIdentity(principal.tenant_id, principal.security_domain)
 
     def start(
-        self, principal: TrustedPrincipal, command: StartGovernedExecution
+        self, principal: GovernedPrincipal, command: StartGovernedExecution
     ) -> GovernedExecutionResult:
         scope = self._scope(principal)
-        decision_id = _decision_id(principal, command.idempotencyKey)
-        # Trusted authorization is established before any protected lookup.
+        execution_decision = self.authority.require(
+            principal, "EXECUTION", "START", execution_start_resource(command)
+        )
+        skill_decision = self.authority.require(
+            principal, "SKILL", "INVOKE_SKILL", skill_invoke_resource(command)
+        )
         authorization = ScopedExecutionAuthorization(
-            scope, principal.principal_id, frozenset({"START"}), decision_id
+            scope,
+            principal.principal_id,
+            frozenset({"START"}),
+            execution_decision.decision_id,
         )
         authorization.require(scope, "START", command.assignmentId)
         plan = self.workflow_control.get_plan(
@@ -180,6 +187,7 @@ class GovernedExecutionApplication:
             command.planVersion,
             command.planDigest,
         )
+        approved_binding = self._approved_operation(scope, plan, command)
         try:
             started = ExecutionApplicationService(self.execution, authorization).start(
                 StartExecutionCommand(
@@ -189,16 +197,27 @@ class GovernedExecutionApplication:
                     AssignmentId(command.assignmentId),
                     DigitalEmployeeInstanceId(command.digitalEmployeeInstanceId),
                     command.taskId,
-                    command.idempotencyKey,
+                    f"{principal.principal_id}:{command.idempotencyKey}",
+                    request_claim=ExecutionRequestClaim(
+                        principal.principal_id,
+                        command.idempotencyKey,
+                        canonical_digest(request_semantic(command)),
+                    ),
                 )
             )
-            request = self._skill_request(scope, decision_id, command, started.identity)
+            request = self._skill_request(
+                scope,
+                skill_decision.decision_id,
+                command,
+                started.identity,
+                approved_binding,
+            )
             skill_service = self.skill.service(
                 ScopedSkillInvocationAuthorization(
                     scope,
                     principal.principal_id,
                     frozenset({"INVOKE_SKILL", "READ_SKILL_INVOCATION"}),
-                    decision_id,
+                    skill_decision.decision_id,
                 )
             )
             invocation = skill_service.invoke(request, command.input)
@@ -206,21 +225,29 @@ class GovernedExecutionApplication:
             raise GovernedExecutionError(str(exc)) from exc
         return GovernedExecutionResult(
             started.disposition.value == "REPLAYED",
-            self._projection(started.identity, invocation),
+            self._projection(principal, started.identity, invocation),
         )
 
     def read(
         self,
-        principal: TrustedPrincipal,
+        principal: GovernedPrincipal,
         *,
         workflow_run_id: str,
         attempt_id: str,
         invocation_id: str,
     ) -> dict[str, Any]:
         scope = self._scope(principal)
-        decision_id = _decision_id(principal, f"read:{invocation_id}")
+        execution_decision = self.authority.require(
+            principal,
+            "EXECUTION",
+            "READ",
+            execution_read_resource(workflow_run_id, attempt_id),
+        )
         authorization = ScopedExecutionAuthorization(
-            scope, principal.principal_id, frozenset({"READ"}), decision_id
+            scope,
+            principal.principal_id,
+            frozenset({"READ"}),
+            execution_decision.decision_id,
         )
         authorization.require(scope, "READ", attempt_id)
         identity = self.execution.get_attempt(scope, AttemptId(attempt_id))
@@ -229,6 +256,27 @@ class GovernedExecutionApplication:
             or str(identity.workflow_run.workflow_run_id) != workflow_run_id
         ):
             raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND")
+        skill_decision = self.authority.require(
+            principal,
+            "SKILL",
+            "READ_SKILL_INVOCATION",
+            skill_read_resource(invocation_id),
+        )
+        expected_resource_use_id = stable_id(
+            "resource-use",
+            scope.namespace,
+            scope.security_domain,
+            attempt_id,
+            "SKILL",
+            "skill:primary",
+            "1",
+        )
+        resource_decision = self.authority.require(
+            principal,
+            "RESOURCE_USE",
+            "READ",
+            resource_use_read_resource(expected_resource_use_id),
+        )
         exact = self._invocation_exact(scope, invocation_id)
         if exact is None:
             if self._attempt_has_invocation(scope, attempt_id):
@@ -246,6 +294,7 @@ class GovernedExecutionApplication:
                 "exactBinding": None,
                 "resourceUse": None,
                 "evidenceContentDisclosed": False,
+                "evidenceReferenceAccess": "NOT_APPLICABLE",
                 "businessOutcome": None,
             }
         if exact["attempt_id"] != attempt_id:
@@ -255,13 +304,15 @@ class GovernedExecutionApplication:
                 scope,
                 principal.principal_id,
                 frozenset({"READ_SKILL_INVOCATION"}),
-                decision_id,
+                skill_decision.decision_id,
             )
         )
         try:
             read = skill_service.read(scope, invocation_id)
         except SkillInvocationError as exc:
             raise GovernedExecutionError(str(exc)) from exc
+        if read["resourceUseId"] != expected_resource_use_id:
+            raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND")
         try:
             resource = ResourceUseApplicationService(
                 self.skill.resource_use_repository,
@@ -269,15 +320,44 @@ class GovernedExecutionApplication:
                     scope,
                     principal.principal_id,
                     frozenset({"READ"}),
-                    decision_id,
+                    resource_decision.decision_id,
                 ),
             ).get_snapshot(scope, read["resourceUseId"])
         except ResourceUseError as exc:
             raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND") from exc
+        disclosed_evidence = [
+            item
+            for item in resource.evidence_references
+            if self.authority.allows(
+                principal,
+                "EVIDENCE",
+                "READ_REFERENCE",
+                evidence_reference_resource(item),
+            )
+        ]
+        projected_invocation = dict(read)
+        invocation_evidence = read.get("evidenceId")
+        if (
+            invocation_evidence is not None
+            and invocation_evidence not in disclosed_evidence
+        ):
+            projected_invocation["evidenceId"] = None
+        evidence_restricted = len(disclosed_evidence) != len(
+            resource.evidence_references
+        )
+        immutable_snapshot = (
+            None
+            if evidence_restricted
+            else {
+                "snapshotId": resource.snapshot_id,
+                "snapshotDigest": resource.digest,
+                "highWater": resource.high_water,
+            }
+        )
         return {
             "schemaVersion": "governed-execution-read.v1",
             "identity": self._identity(identity),
-            "invocation": read,
+            "invocation": projected_invocation,
             "exactBinding": {
                 "planId": exact["plan_id"],
                 "planVersion": exact["plan_version"],
@@ -303,74 +383,165 @@ class GovernedExecutionApplication:
                 "authorizationDecisionId": exact["authorization_decision_id"],
             },
             "resourceUse": {
-                "snapshotId": resource.snapshot_id,
-                "snapshotDigest": resource.digest,
+                "projectionCompleteness": (
+                    "FILTERED" if evidence_restricted else "COMPLETE"
+                ),
+                "immutableSnapshot": immutable_snapshot,
                 "resourceUseId": resource.resource_use_id,
-                "highWater": resource.high_water,
                 "state": resource.effective_state.value,
-                "evidenceIds": list(resource.evidence_references),
+                "evidenceIds": disclosed_evidence,
                 "measurementIds": list(resource.measurement_ids),
                 "limitations": list(resource.limitation_codes),
                 "conflicts": list(resource.conflicts),
             },
             "evidenceContentDisclosed": False,
+            "evidenceReferenceAccess": (
+                "RESTRICTED" if evidence_restricted else "AUTHORIZED"
+            ),
             "businessOutcome": None,
         }
 
     def _invocation_exact(
         self, scope: ScopeIdentity, invocation_id: str
     ) -> dict[str, Any] | None:
-        with self.skill.invocation_repository.pool.connection() as connection:
-            row = connection.execute(
-                """SELECT attempt_id,plan_id,plan_version,plan_digest,approval_id,
-                assignment_id,digital_employee_definition_id,
-                digital_employee_definition_revision_id,
-                digital_employee_definition_digest,digital_employee_instance_id,
-                skill_id,skill_revision_id,skill_digest,operation,binding_id,
-                binding_digest,executor_id,executor_revision,
-                authorization_decision_id
-                FROM skill_invocation.invocations WHERE """
-                "namespace=%s AND security_domain=%s AND skill_invocation_id=%s",
-                (scope.namespace, scope.security_domain, invocation_id),
-            ).fetchone()
-        return row
+        try:
+            with self.skill.invocation_repository.pool.connection() as connection:
+                return connection.execute(
+                    """SELECT attempt_id,plan_id,plan_version,plan_digest,approval_id,
+                    assignment_id,digital_employee_definition_id,
+                    digital_employee_definition_revision_id,
+                    digital_employee_definition_digest,digital_employee_instance_id,
+                    skill_id,skill_revision_id,skill_digest,operation,binding_id,
+                    binding_digest,executor_id,executor_revision,
+                    authorization_decision_id
+                    FROM skill_invocation.invocations WHERE """
+                    "namespace=%s AND security_domain=%s AND skill_invocation_id=%s",
+                    (scope.namespace, scope.security_domain, invocation_id),
+                ).fetchone()
+        except PsycopgError as exc:
+            raise GovernedExecutionError(
+                "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+            ) from exc
 
     def _attempt_has_invocation(self, scope: ScopeIdentity, attempt_id: str) -> bool:
-        with self.skill.invocation_repository.pool.connection() as connection:
-            row = connection.execute(
-                "SELECT 1 FROM skill_invocation.invocations WHERE namespace=%s "
-                "AND security_domain=%s AND attempt_id=%s LIMIT 1",
-                (scope.namespace, scope.security_domain, attempt_id),
-            ).fetchone()
-        return row is not None
+        try:
+            with self.skill.invocation_repository.pool.connection() as connection:
+                row = connection.execute(
+                    "SELECT 1 FROM skill_invocation.invocations WHERE namespace=%s "
+                    "AND security_domain=%s AND attempt_id=%s LIMIT 1",
+                    (scope.namespace, scope.security_domain, attempt_id),
+                ).fetchone()
+            return row is not None
+        except PsycopgError as exc:
+            raise GovernedExecutionError(
+                "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+            ) from exc
 
-    def _skill_request(self, scope, decision_id, command, identity):
-        attempt_id = str(identity.attempt.attempt_id)
-        with self.skill.invocation_repository.pool.connection() as connection:
-            binding = connection.execute(
-                "SELECT definition_id,revision_id,digest FROM "
-                "digital_employee_definition.execution_bindings WHERE namespace=%s "
-                "AND security_domain=%s AND attempt_id=%s",
-                (scope.namespace, scope.security_domain, attempt_id),
-            ).fetchone()
-            if binding is None:
-                raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND")
-            employee = connection.execute(
-                "SELECT record FROM digital_employee_definition.revisions WHERE "
-                "namespace=%s AND security_domain=%s AND definition_id=%s "
-                "AND revision_id=%s",
+    def _approved_operation(self, scope, plan, command):
+        try:
+            with self.skill.invocation_repository.pool.connection() as connection:
+                row = connection.execute(
+                    "SELECT record FROM workflow_definition.definitions "
+                    "WHERE namespace=%s "
+                    "AND security_domain=%s AND workflow_definition_id=%s",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        plan.workflow_definition_id,
+                    ),
+                ).fetchone()
+        except PsycopgError as exc:
+            raise GovernedExecutionError(
+                "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+            ) from exc
+        if row is None:
+            raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND")
+        record = row["record"]
+        revision = next(
+            (
+                item
+                for item in record.get("revisions", ())
+                if item.get("revisionId") == plan.workflow_definition_revision_id
+            ),
+            None,
+        )
+        expected_digest = plan.workflow_definition_digest.removeprefix("sha256:")
+        actual_digest = (
+            ""
+            if revision is None
+            else revision.get("digest", "").removeprefix("sha256:")
+        )
+        task = (
+            None
+            if revision is None
+            else next(
                 (
-                    scope.namespace,
-                    scope.security_domain,
-                    binding["definition_id"],
-                    binding["revision_id"],
+                    item
+                    for item in revision.get("content", {}).get("tasks", ())
+                    if item.get("taskId") == command.taskId
                 ),
-            ).fetchone()
-            skill = connection.execute(
-                "SELECT record FROM skill_mcp_resource.resources WHERE namespace=%s "
-                "AND security_domain=%s AND kind='skill' AND resource_id=%s",
-                (scope.namespace, scope.security_domain, command.skillId),
-            ).fetchone()
+                None,
+            )
+        )
+        approved = (
+            None
+            if task is None
+            else next(
+                (
+                    item
+                    for item in task.get("skillOperationBindings", ())
+                    if item.get("skillId") == command.skillId
+                    and item.get("skillRevisionId") == command.skillRevisionId
+                    and item.get("skillDigest", "").removeprefix("sha256:")
+                    == command.skillDigest.removeprefix("sha256:")
+                    and item.get("operation") == command.operation
+                ),
+                None,
+            )
+        )
+        if (
+            revision is None
+            or record.get("publishedRevisionId") != plan.workflow_definition_revision_id
+            or revision.get("state") != "PUBLISHED"
+            or actual_digest != expected_digest
+            or approved is None
+        ):
+            raise GovernedExecutionError("PLAN_SKILL_OPERATION_NOT_AUTHORIZED")
+        return approved
+
+    def _skill_request(self, scope, decision_id, command, identity, approved_binding):
+        attempt_id = str(identity.attempt.attempt_id)
+        try:
+            with self.skill.invocation_repository.pool.connection() as connection:
+                binding = connection.execute(
+                    "SELECT definition_id,revision_id,digest FROM "
+                    "digital_employee_definition.execution_bindings WHERE namespace=%s "
+                    "AND security_domain=%s AND attempt_id=%s",
+                    (scope.namespace, scope.security_domain, attempt_id),
+                ).fetchone()
+                if binding is None:
+                    raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND")
+                employee = connection.execute(
+                    "SELECT record FROM digital_employee_definition.revisions WHERE "
+                    "namespace=%s AND security_domain=%s AND definition_id=%s "
+                    "AND revision_id=%s",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        binding["definition_id"],
+                        binding["revision_id"],
+                    ),
+                ).fetchone()
+                skill = connection.execute(
+                    "SELECT record FROM skill_mcp_resource.resources "
+                    "WHERE namespace=%s "
+                    "AND security_domain=%s AND kind='skill' AND resource_id=%s",
+                    (scope.namespace, scope.security_domain, command.skillId),
+                ).fetchone()
+        except PsycopgError as exc:
+            raise GovernedExecutionError(
+                "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+            ) from exc
         if employee is None or skill is None:
             raise GovernedExecutionError("GOVERNED_EXECUTION_NOT_FOUND")
         exact_member = next(
@@ -412,6 +583,7 @@ class GovernedExecutionApplication:
             or record.get("publishedRevisionId") != command.skillRevisionId
             or revision.get("state") != "PUBLISHED"
             or operation is None
+            or approved_binding["operation"] != operation.get("name")
         ):
             raise GovernedExecutionError("SKILL_INVOCATION_NOT_ELIGIBLE")
         try:
@@ -542,13 +714,29 @@ class GovernedExecutionApplication:
             ),
         }
 
-    @classmethod
-    def _projection(cls, identity, invocation) -> dict[str, Any]:
+    def _projection(self, principal, identity, invocation) -> dict[str, Any]:
+        invocation_projection = invocation.canonical_read_model()
+        evidence_id = invocation_projection.get("evidenceId")
+        evidence_authorized = evidence_id is not None and self.authority.allows(
+            principal,
+            "EVIDENCE",
+            "READ_REFERENCE",
+            evidence_reference_resource(evidence_id),
+        )
+        if evidence_id is not None and not evidence_authorized:
+            invocation_projection["evidenceId"] = None
         return {
             "schemaVersion": "governed-execution-start.v1",
-            "identity": cls._identity(identity),
-            "invocation": invocation.canonical_read_model(),
+            "identity": self._identity(identity),
+            "invocation": invocation_projection,
             "executionStarted": True,
             "skillCallSucceeded": invocation.state is InvocationState.SUCCEEDED,
+            "evidenceReferenceAccess": (
+                "AUTHORIZED"
+                if evidence_authorized
+                else "RESTRICTED"
+                if evidence_id is not None
+                else "NOT_APPLICABLE"
+            ),
             "businessOutcome": None,
         }

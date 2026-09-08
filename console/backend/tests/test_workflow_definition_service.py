@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 from agent_console.workflow_definition_repository import (
     InMemoryWorkflowDefinitionRepository,
@@ -113,3 +115,100 @@ def test_validation_requires_resolved_exact_revision():
     record = service.create(scope, "human:a", "Flow", content())
     with pytest.raises(WorkflowDefinitionFailure, match="EXACT_REFERENCE_NOT_FOUND"):
         service.validate(scope, record["workflowDefinitionId"], "human:a", 1)
+
+
+def test_skill_operation_binding_is_added_only_by_successor_revision():
+    service = WorkflowDefinitionService(
+        InMemoryWorkflowDefinitionRepository(), lambda _scope, _ref: True
+    )
+    scope = service.scope("tenant-a", "domain-a")
+    record = service.create(scope, "human:a", "Flow", content())
+    record = service.validate(scope, record["workflowDefinitionId"], "human:a", 1)
+    published = record["revisions"][-1]
+    record = service.review(
+        scope,
+        record["workflowDefinitionId"],
+        "human:a",
+        2,
+        published["digest"],
+        "APPROVE",
+        "reviewed",
+    )
+    record = service.publish(
+        scope,
+        record["workflowDefinitionId"],
+        "human:a",
+        3,
+        published["digest"],
+        record["reviews"][-1]["reviewId"],
+    )
+    original_content = record["revisions"][0]["content"]
+    original_digest = record["revisions"][0]["digest"]
+    record = service.successor(scope, record["workflowDefinitionId"], "human:a", 4)
+    successor_content = copy.deepcopy(record["revisions"][-1]["content"])
+    successor_content["tasks"][0]["references"] = [
+        {
+            "kind": "SKILL",
+            "resourceId": "skill:one",
+            "revisionId": "skill-revision:one",
+        }
+    ]
+    successor_content["tasks"][0]["skillOperationBindings"] = [
+        {
+            "skillId": "skill:one",
+            "skillRevisionId": "skill-revision:one",
+            "skillDigest": "a" * 64,
+            "operation": "quality.read",
+        }
+    ]
+    record = service.edit(
+        scope,
+        record["workflowDefinitionId"],
+        "human:a",
+        5,
+        successor_content,
+    )
+    bound = record["revisions"][-1]
+    assert "skillOperationBindings" not in original_content["tasks"][0]
+    assert record["revisions"][0]["digest"] == original_digest
+    assert bound["predecessorRevisionId"] == record["revisions"][-2]["revisionId"]
+    assert bound["digest"] != original_digest
+    service.validate(scope, record["workflowDefinitionId"], "human:a", 6)
+
+
+@pytest.mark.parametrize(
+    ("bindings", "reason"),
+    (
+        ([], "SKILL_OPERATION_BINDING_REQUIRED"),
+        (
+            [
+                {
+                    "skillId": "skill:one",
+                    "skillRevisionId": "skill-revision:one",
+                    "skillDigest": "a" * 64,
+                    "operation": "quality.read",
+                }
+            ]
+            * 2,
+            "DUPLICATE_SKILL_OPERATION_BINDING",
+        ),
+        (
+            [
+                {
+                    "skillId": "skill:missing",
+                    "skillRevisionId": "skill-revision:missing",
+                    "skillDigest": "a" * 64,
+                    "operation": "quality.read",
+                }
+            ],
+            "SKILL_OPERATION_REFERENCE_REQUIRED",
+        ),
+    ),
+)
+def test_invalid_skill_operation_bindings_fail_closed(bindings, reason):
+    service = WorkflowDefinitionService(InMemoryWorkflowDefinitionRepository())
+    scope = service.scope("tenant-a", "domain-a")
+    value = content()
+    value["tasks"][0]["skillOperationBindings"] = bindings
+    with pytest.raises(WorkflowDefinitionFailure, match=reason):
+        service.create(scope, "human:a", "Flow", value)
