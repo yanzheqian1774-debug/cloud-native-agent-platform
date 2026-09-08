@@ -25,6 +25,7 @@ for(const operation of ["edit","lifecycle"] as const)test("agent write directory
 });
 
 test("Builder explicitly selects every governed binding and exposes authoritative identities before review",async({page})=>{
+  await page.setExtraHTTPHeaders({"X-Tenant-ID":`s5-builder-${Date.now()}`,"X-Security-Domain":"supplier-quality","X-Principal-ID":"console-user"});
   const {createServer}=await import("node:http");
   const server=createServer((request,response)=>{let raw="";request.on("data",chunk=>raw+=chunk);request.on("end",()=>{const message=JSON.parse(raw);if(message.method==="notifications/initialized"){response.writeHead(202);response.end();return}const result=message.method==="initialize"?{protocolVersion:"2025-06-18",capabilities:{},serverInfo:{name:"builder-test",version:"1"}}:message.method==="tools/list"?{tools:[{name:"quality.lookup",inputSchema:{type:"object"}}]}:message.method==="resources/list"?{resources:[]}:message.method==="prompts/list"?{prompts:[]}:{};response.writeHead(200,{"Content-Type":"application/json","Mcp-Session-Id":"builder-test"});response.end(JSON.stringify({jsonrpc:"2.0",id:message.id,result}))})});
   await new Promise<void>((resolve,reject)=>{server.once("error",reject);server.listen(8769,"127.0.0.1",resolve)});
