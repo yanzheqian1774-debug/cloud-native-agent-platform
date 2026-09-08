@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from agent_console.agent_binding_validation import BindingResolution
 from agent_console.agent_definition_repository import DefinitionScope
-from agent_console.runtime_profile_api import get_service as get_runtime_profile_service
 from agent_console.workflow_definition_postgres import (
     PostgresWorkflowDefinitionRepository,
 )
 from agent_console.workflow_definition_repository import (
     WorkflowDefinitionRepositoryError,
 )
+from agent_console.workflow_definition_resolver import resolve_workflow_reference
 from agent_console.workflow_definition_schemas import (
     CreateWorkflowDefinition,
     EditWorkflowDefinition,
@@ -88,26 +88,7 @@ def configure():
         )
         repository.migrate()
 
-        def resolve(scope, reference):
-            if reference["kind"] != "RUNTIME_PROFILE":
-                return False
-            try:
-                profile = get_runtime_profile_service().repository.get(
-                    get_runtime_profile_service().scope(
-                        scope.namespace, scope.security_domain
-                    ),
-                    reference["resourceId"],
-                )
-            except Exception:
-                return False
-            return any(
-                revision["revisionId"] == reference["revisionId"]
-                and revision["digest"] == reference.get("digest", revision["digest"])
-                and revision["state"] == "PUBLISHED"
-                for revision in profile["revisions"]
-            )
-
-        _service = WorkflowDefinitionService(repository, resolve)
+        _service = WorkflowDefinitionService(repository, resolve_workflow_reference)
         _startup_error = ""
     except (WorkflowDefinitionRepositoryError, ValueError):
         _service = None

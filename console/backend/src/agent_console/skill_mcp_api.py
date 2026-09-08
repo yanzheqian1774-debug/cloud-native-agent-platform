@@ -89,6 +89,14 @@ def call(operation):
         raise HTTPException(exc.status, detail={"reasonCode": exc.reason}) from exc
 
 
+def resource_content(kind, content):
+    """Preserve old payloads exactly and keep operations exclusive to Skill."""
+    supplied = "operations" in content.model_fields_set
+    if supplied and kind != "skill":
+        raise HTTPException(422, detail={"reasonCode": "SKILL_OPERATIONS_ONLY"})
+    return content.model_dump(exclude=set() if supplied else {"operations"})
+
+
 @router.get("/{kind}")
 def list_resources(kind: str, p: Principal, service: Service):
     return call(lambda: service.list(service.scope(p[0], p[1]), kind))
@@ -103,7 +111,7 @@ def create_resource(kind: str, command: CreateResource, p: Principal, service: S
                 kind,
                 p[2],
                 command.name,
-                command.content.model_dump(),
+                resource_content(kind, command.content),
             )
         )
     )
@@ -120,7 +128,7 @@ def import_manifest(kind: str, command: ImportManifest, p: Principal, service: S
                 kind,
                 p[2],
                 command.name,
-                command.content.model_dump(),
+                resource_content(kind, command.content),
             )
         )
     )
@@ -169,7 +177,7 @@ def edit_resource(
             resource_id,
             p[2],
             command.expectedVersion,
-            command.content.model_dump(),
+            resource_content(kind, command.content),
         )
     )
 

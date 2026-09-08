@@ -188,6 +188,7 @@ class WorkflowDefinitionService:
             or draft["state"] != "HUMAN_REVIEWED"
         ):
             raise WorkflowDefinitionFailure("EXACT_REVIEW_REQUIRED", 409)
+        self._validate_content(scope, draft["content"], resolve=True)
         draft["state"] = "PUBLISHED"
         draft["publishedAt"] = _now()
         record["publishedRevisionId"] = draft["revisionId"]
@@ -337,6 +338,16 @@ class WorkflowDefinitionService:
                 for item in bindings
             ):
                 raise WorkflowDefinitionFailure("SKILL_OPERATION_REFERENCE_REQUIRED")
+            refs.extend(
+                {
+                    "kind": "SKILL",
+                    "resourceId": item["skillId"],
+                    "revisionId": item["skillRevisionId"],
+                    "digest": item["skillDigest"],
+                    "operation": item["operation"],
+                }
+                for item in bindings
+            )
         if resolve:
             if self.reference_resolver is None:
                 raise WorkflowDefinitionFailure("REFERENCE_RESOLVER_UNAVAILABLE", 503)
