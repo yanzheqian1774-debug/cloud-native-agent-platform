@@ -10,6 +10,7 @@ const root="/api/internal/v0.2.2/runtime-profiles";
 export const listRuntimeProfiles=()=>request<RuntimeProjection[]>(root);
 export const getRuntimeProfile=(id:string)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}`);
 export const createRuntimeProfile=(name:string,content:RuntimeContent)=>request<RuntimeProjection>(root,{method:"POST",body:JSON.stringify({name,content})});
+export const editRuntimeProfile=(profile:RuntimeProfile,content:RuntimeContent)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(profile.runtimeProfileId)}/draft`,{method:"PUT",body:JSON.stringify({expectedVersion:profile.aggregateVersion,content})});
 export const validateRuntimeProfile=(id:string,expectedVersion:number)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/validation`,{method:"POST",body:JSON.stringify({expectedVersion})});
 export const reviewRuntimeProfile=(id:string,expectedVersion:number,digest:string)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/reviews`,{method:"POST",body:JSON.stringify({expectedVersion,digest,decision:"APPROVE",reason:"Human reviewed exact Runtime Profile digest"})});
 export const publishRuntimeProfile=(id:string,expectedVersion:number,digest:string,reviewId:string)=>request<RuntimeProjection>(`${root}/${encodeURIComponent(id)}/publications`,{method:"POST",body:JSON.stringify({expectedVersion,digest,reviewId})});

@@ -1,0 +1,96 @@
+.resource-management label,
+.resource-form label,
+.skill-mcp-workbench .resource-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin: .5rem 0;
+}
+
+.resource-form input,
+.resource-form select,
+.resource-form textarea,
+.resource-management input,
+.resource-management select,
+.resource-management textarea,
+.skill-mcp-workbench .resource-form-grid input,
+.skill-mcp-workbench .resource-form-grid select,
+.skill-mcp-workbench .resource-form-grid textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: .65rem .75rem;
+  border: 1px solid #aeb9ca;
+  border-radius: 8px;
+  color: inherit;
+  background: #fff;
+}
+
+.resource-form textarea,
+.resource-management textarea,
+.skill-mcp-workbench .resource-form-grid textarea {
+  min-height: 7rem;
+  resize: vertical;
+  font: inherit;
+}
+
+.resource-form-grid,
+.resource-reference {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.resource-reference-list {
+  grid-column: 1 / -1;
+  padding: .75rem;
+  border: 1px solid #d7dde8;
+  border-radius: 10px;
+}
+
+.resource-management .module-layout > *,
+.resource-management .workbench-card,
+.resource-management .technical-projection {
+  min-width: 0;
+}
+
+.resource-management :is(dl,dt,dd,ol,ul,li,code,span,p) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.resource-management .technical-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.resource-management pre.technical-value {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.resource-form :is(input,select,textarea,button):focus-visible,
+.resource-management :is(input,select,textarea,button):focus-visible,
+.skill-mcp-workbench .resource-form-grid :is(input,select,textarea,button):focus-visible {
+  outline: 3px solid #3157d5;
+  outline-offset: 2px;
+}
+
+@media (max-width: 800px) {
+  .resource-form-grid,
+  .resource-reference {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-management,
+  .skill-mcp-workbench {
+    padding-inline: 1rem;
+  }
+
+  .resource-management .technical-projection dl > div {
+    grid-template-columns: 1fr;
+  }
+}

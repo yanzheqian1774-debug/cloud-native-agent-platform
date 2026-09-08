@@ -19,6 +19,7 @@ import { SelectedExecutionContext } from "./shared/SelectedExecutionContext";
 import { TechPage } from "./pages/Technical\u0056iewPage";
 import "./styles/app.css";
 import "./styles/product-experience.css";
+import "./styles/resource-management.css";
 import { ExecutionPreviewError, fetchExecutionPreview, type PreviewMode } from "./api/executionPreview";
 import { configureProductPreview, loadLiveProductPreview } from "./product/adapter";
 import { configureTechnicalPreview, loadLiveTechnicalPreview } from "./technical/adapter";
