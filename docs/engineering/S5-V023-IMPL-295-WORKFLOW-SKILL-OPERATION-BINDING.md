@@ -114,7 +114,7 @@ successor behavior. The same real case exercises invalid operation and unavailab
 Skill rejection, CAS recovery without replay, duplicate-write suppression, a delayed
 real detail response, keyboard focus order and 390 px overflow.
 
-## Candidate validation and changed paths
+## Prior candidate validation and changed paths
 
 Focused validation on the refreshed candidate passed:
 
@@ -148,3 +148,47 @@ Evidence/focus path or delivery matrix was modified by 295. Backend, browser-reg
 and CI changes visible in the branch are preserved second-parent content from formal
 main `ae002a2...`, not 295 scope expansion. Full immutable Browser Acceptance and the
 five new-source CI checks remain final-candidate gates before Human Pre-Merge review.
+
+## Bounded in-flight editor protection correction
+
+Human authorization: `BOUNDED_IN_FLIGHT_EDITOR_PROTECTION_FIX`, starting at
+source `9202b84c7dd20ae2a7ed91d8cbfaadb54d0b36ab`, tree
+`b94824887c4088aac9204aaa21a3cb1dfeca62d2`, with unchanged base
+`ae002a2e9a4b765fe311e1e74328a9b6111a4929`. This is a G0 bounded frontend fix;
+operation identity, binding rules and backend lifecycle authority are unchanged.
+
+The existing synchronous save latch captures the complete submitted content. While
+it is held, a disabled fieldset freezes the Workflow name, ordinary inputs, task
+structure, exact references and all Skill/revision/operation controls. Event capture,
+content-update handlers and binding picker handlers also consult the synchronous
+latch, including before React has rendered the disabled state. An accessible busy
+status explains the freeze. The request and editor identities jointly guard save
+success, errors and conflict readback. Closing or switching resources detaches the
+editor; it does not cancel the backend write. An old response cannot clear a later
+editor. Same-kind write serialization remains in place until the request finishes.
+Failures restore editing with the submitted input retained. CAS continues to perform
+an authoritative read and requires explicit restoration rather than automatic replay.
+
+The existing real Workflow browser journey now holds actual production PUT responses
+with `route.fetch()` and releases those unchanged responses. It covers exact description
+and binding submission, disabled fields and structural/binding actions, keyboard and
+click attempts during the hold, one write, complete authoritative content equality,
+a later editor surviving the old response, and a genuine 409 CAS response followed
+by enabled controls and retained input. Existing lifecycle and race assertions remain.
+No retry, timeout, skip guard, backend, CI workflow or shared harness is changed.
+
+The validation record for this correction is external to the repository at
+`/Users/tristan/.codex/validation/s5-295-inflight-20260908/`. It retains new sanitized
+source manifests, selected test titles/results, immutable-release acceptance summaries
+and final source/CI correspondence. These are newly produced correction evidence,
+not recovered copies of the deleted earlier release or raw acceptance artifacts.
+The previous eight-file correspondence report remains historical; it never proves
+that all tracked files of the earlier local release were checked. The final correction
+record identifies the candidate tested after this document was finalized. Earlier
+validation counts in this note refer to the prior candidate, not to this correction.
+
+Published-revision selection and the unchanged binding contract retain their prior
+review conclusions. Draft task deletion is distinct from implicit binding omission
+on a retained task; retained-task identity semantics and broader multi-binding test
+coverage remain explicit limitations rather than newly imposed architecture rules.
+Human acceptance, Ready transition, merge and Session closure remain ungranted.

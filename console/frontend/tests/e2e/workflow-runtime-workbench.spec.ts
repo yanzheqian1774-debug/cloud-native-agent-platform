@@ -123,6 +123,34 @@ test("binds a formally published Skill operation through the real Workflow UI", 
     const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
     return {status:response.status,body:response.status===204?null:await response.json()};
   },{method,path,body});
+  async function holdDraftResponse(){
+    let release!:()=>void,received!:(value:{status:number;content:Record<string,unknown>})=>void;
+    const held=new Promise<void>(resolve=>release=resolve);
+    const responseReady=new Promise<{status:number;content:Record<string,unknown>}>(resolve=>received=resolve);
+    let writes=0;
+    const countWrite=(request:import("@playwright/test").Request)=>{if(request.method()==="PUT"&&new URL(request.url()).pathname.endsWith("/draft"))writes+=1};
+    page.on("request",countWrite);
+    await page.route("**/api/internal/v0.2.2/workflow-definitions/*/draft",async route=>{
+      if(route.request().method()!=="PUT"){await route.continue();return}
+      const content=route.request().postDataJSON().content;
+      const actual=await route.fetch();
+      received({status:actual.status(),content});
+      await held;
+      await route.fulfill({response:actual});
+    },{times:1});
+    return {responseReady,release:()=>{page.off("request",countWrite);release()},writes:()=>writes};
+  }
+  async function expectFrozenEditor(description:string){
+    const fields=page.getByRole("group",{name:"Workflow editor fields",exact:true});
+    await expect(page.getByLabel("Workflow authoring")).toHaveAttribute("aria-busy","true");
+    await expect(page.getByRole("status").filter({hasText:"提交内容已锁定"})).toBeVisible();
+    for(const control of await fields.locator("input,textarea,select,button").all())await expect(control).toBeDisabled();
+    await page.keyboard.type("must-not-change-submitted-input");
+    await fields.getByRole("button",{name:"添加步骤",exact:true}).click({force:true});
+    await fields.getByRole("button",{name:"保存精确 Skill operation binding"}).click({force:true});
+    await expect(page.getByLabel("用途说明")).toHaveValue(description);
+    await expect(fields.getByLabel("步骤 ID",{exact:true})).toHaveCount(1);
+  }
   const runtimeContent={provider:"NATIVE_KUBERNETES",resources:{cpuRequest:"250m",cpuLimit:"500m",memoryRequest:"256Mi",memoryLimit:"1Gi"},isolation:"NAMESPACE",stateMode:"STATELESS",sessionAffinity:"NONE",secretReferences:[],openClawPackageRef:null};
   const operation={name:`quality.read-${suffix}`,inputSchema:{type:"object",properties:{supplier:{type:"string"}}},outputSchema:{type:"object",properties:{status:{type:"string"}}},sideEffectClass:"READ_ONLY",executorId:"workflow-ui-readonly",executorRevision:"1.0.0",executorConfigurationDigest:"1".repeat(64),sideEffectPolicy:{policyId:"workflow-ui-readonly",policyRevision:"1",policyDigest:"2".repeat(64)},ioLimits:{policyId:"workflow-ui-bounds",policyRevision:"1",maxInputBytes:4096,maxOutputBytes:4096,maxObjectDepth:8,maxProperties:64,timeoutMs:1000}};
   const skillContent={description:"Formal Skill operation for the Workflow UI",capabilities:[operation.name],instructions:"Read only.",operations:[operation]};
@@ -168,11 +196,19 @@ test("binds a formally published Skill operation through the real Workflow UI", 
   await expect(preview).toContainText(skill.resourceId);await expect(preview).toContainText(skill.publishedRevisionId);await expect(preview).toContainText(skillRevision.digest);await expect(preview).toContainText(operation.name);
   await page.getByRole("button",{name:"保存精确 Skill operation binding"}).click();
   await page.getByLabel("用途说明").fill("Exact Skill operation binding saved through real UI");
-  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  const heldSave=await holdDraftResponse();
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).dblclick();
+  const submitted=await heldSave.responseReady;
+  try{
+    expect(submitted.status).toBe(200);
+    await expectFrozenEditor("Exact Skill operation binding saved through real UI");
+    expect(heldSave.writes()).toBe(1);
+  }finally{heldSave.release()}
   await expect(page.getByLabel("Workflow authoring")).toHaveCount(0);
   const workflowId=(await page.locator(".module-layout > section > header .technical-value").textContent())!.trim();
   response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);expect(response.status).toBe(200);
   let workflow=response.body.definition,task=workflow.revisions.at(-1).content.tasks[0];
+  expect(workflow.revisions.at(-1).content).toEqual(submitted.content);
   const binding={skillId:skill.resourceId,skillRevisionId:skill.publishedRevisionId,skillDigest:skillRevision.digest,operation:operation.name};
   expect(task.skillOperationBindings).toEqual([binding]);
   expect(task.references).toEqual([{kind:"SKILL",resourceId:binding.skillId,revisionId:binding.skillRevisionId,digest:binding.skillDigest}]);
@@ -182,7 +218,21 @@ test("binds a formally published Skill operation through the real Workflow UI", 
   await page.getByRole("button",{name:"编辑当前 Draft"}).click();
   await page.getByLabel("用途说明").fill("Unrelated real UI edit retains binding");
   let realPutCount=0;page.on("request",request=>{if(request.method()==="PUT"&&decodeURIComponent(new URL(request.url()).pathname)===`/api/internal/v0.2.2/workflow-definitions/${workflowId}/draft`)realPutCount+=1});
+  const detachedSave=await holdDraftResponse();
   await page.getByRole("button",{name:"Save governed Workflow draft"}).dblclick();
+  const detached=await detachedSave.responseReady;
+  try{
+    expect(detached.status).toBe(200);
+    await page.getByRole("button",{name:"关闭编写器并保留权威版本"}).click();
+    await page.getByRole("button",{name:"新建 Workflow Definition",exact:true}).click();
+  }finally{detachedSave.release()}
+  await expect(page.getByLabel("Workflow authoring")).toBeVisible();
+  await expect(page.getByLabel("用途说明")).toBeEnabled();
+  await expect(page.getByLabel("用途说明")).toHaveValue("");
+  await page.getByLabel("用途说明").fill("Later editor survives the old save response");
+  await expect(page.getByLabel("用途说明")).toHaveValue("Later editor survives the old save response");
+  await page.getByRole("button",{name:"关闭编写器并保留权威版本"}).click();
+  await page.getByRole("button",{name:new RegExp(`Real Skill-bound Workflow ${suffix}`)}).click();
   await expect(page.getByText("Unrelated real UI edit retains binding",{exact:true})).toBeVisible();
   expect(realPutCount).toBe(1);
   response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);workflow=response.body.definition;task=workflow.revisions.at(-1).content.tasks[0];expect(task.skillOperationBindings).toEqual([binding]);
@@ -197,8 +247,18 @@ test("binds a formally published Skill operation through the real Workflow UI", 
   response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);workflow=response.body.definition;
   const authoritativeContent=structuredClone(workflow.revisions.at(-1).content);authoritativeContent.description="Concurrent authoritative edit";
   response=await json("PUT",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}/draft`,{expectedVersion:workflow.aggregateVersion,content:authoritativeContent});expect(response.status).toBe(200);
-  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  const heldConflict=await holdDraftResponse();
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).dblclick();
+  const conflicted=await heldConflict.responseReady;
+  try{
+    expect(conflicted.status).toBe(409);
+    await expectFrozenEditor("Retained input after real CAS conflict");
+    expect(heldConflict.writes()).toBe(1);
+  }finally{heldConflict.release()}
   await expect(page.getByLabel("Guided conflict recovery")).toContainText("stale");
+  await expect(page.getByLabel("用途说明")).toBeEnabled();
+  await expect(page.getByLabel("用途说明")).toHaveValue("Retained input after real CAS conflict");
+  await expect(page.getByLabel("步骤 step-1 选择 Skill",{exact:true})).toBeEnabled();
   await page.getByRole("button",{name:"Explicitly reapply safe draft input"}).click();
   await expect(page.getByLabel("用途说明")).toHaveValue("Retained input after real CAS conflict");
   await expect(page.getByLabel("Workflow authoring").getByLabel("步骤 step-1 的 Skill operation 绑定")).toContainText(binding.operation);
