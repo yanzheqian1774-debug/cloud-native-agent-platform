@@ -59,7 +59,7 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   }, {id:workflow.definition.workflowDefinitionId,version:workflow.definition.aggregateVersion});
   await page.getByRole("button", { name: "Create Workflow successor" }).click();
   await expect(page.getByLabel("Guided conflict recovery")).toContainText("stale");
-  await expect(page.getByLabel("Guided conflict recovery")).toContainText("生命周期命令不会自动重放");
+  await expect(page.getByLabel("Guided conflict recovery")).toContainText("写请求不会自动重放");
   await page.getByRole("button", { name: "确认权威版本" }).click();
   await page.getByRole("button", { name: "编辑当前 Draft" }).click();
   await page.getByLabel("用途说明").fill("Edited Workflow Definition after explicit CAS recovery");
@@ -100,7 +100,7 @@ test("shows controlled empty and validation failure states", async ({ page }) =>
   await page.getByRole("button", { name: "Validate DAG and references" }).click();
   await expect(page.getByLabel("Guided conflict recovery")).toContainText("尝试的聚合版本");
   await expect(page.getByLabel("Guided conflict recovery")).toContainText("权威聚合版本");
-  await expect(page.getByLabel("Guided conflict recovery")).toContainText("生命周期命令不会自动重放");
+  await expect(page.getByLabel("Guided conflict recovery")).toContainText("写请求不会自动重放");
   await expect(page.getByRole("button", { name: "明确恢复保留的定义输入" })).toHaveCount(0);
   await page.getByRole("button", { name: "确认权威版本" }).click();
   await expect(page.getByLabel("Guided conflict recovery")).toHaveCount(0);
