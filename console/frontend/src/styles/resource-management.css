@@ -94,3 +94,24 @@
     grid-template-columns: 1fr;
   }
 }
+
+.agent-management .agent-authoring,
+.skill-mcp-workbench [aria-label$="Draft authoring"] { margin: 1rem 0; }
+.agent-management .agent-binding-editor { display: grid; gap: .8rem; }
+.agent-management .agent-binding-editor fieldset,
+.skill-mcp-workbench fieldset { border: 1px solid #d8dee8; border-radius: .75rem; padding: .8rem; }
+.agent-management .agent-choice,
+.skill-mcp-workbench .agent-choice { display: flex; gap: .65rem; align-items: flex-start; margin: .5rem 0; }
+.agent-management .agent-choice input,
+.skill-mcp-workbench .agent-choice input { width: auto; margin-top: .25rem; }
+.agent-management .agent-choice span,
+.skill-mcp-workbench .agent-choice span { min-width: 0; }
+.agent-management .agent-choice small,
+.skill-mcp-workbench .agent-choice small { display: block; overflow-wrap: anywhere; color: #596579; }
+.skill-mcp-workbench .agent-invocation pre { max-height: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+  .agent-management .resource-form-grid,
+  .skill-mcp-workbench .resource-form-grid { grid-template-columns: 1fr; }
+  .agent-management select,
+  .skill-mcp-workbench select { max-width: 100%; }
+}

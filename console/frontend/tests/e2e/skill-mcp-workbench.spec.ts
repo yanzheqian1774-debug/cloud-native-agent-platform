@@ -14,6 +14,13 @@ async function publish(page: import("@playwright/test").Page, path: string, crea
     await page.getByLabel("Skill 名称").fill("Supplier Quality Skill");
     await page.getByLabel("能力 / operation（逗号分隔）").fill("quality.lookup");
     await page.getByRole("button", {name:"保存 Skill Draft"}).click();
+  } else {
+    await page.getByLabel("MCP 名称").fill("Local Acceptance MCP");
+    await page.getByLabel("说明", {exact:true}).fill("Local deterministic MCP acceptance server");
+    await page.getByLabel("能力 / operation（逗号分隔）").fill("quality.lookup");
+    await page.getByLabel("Streamable HTTP endpoint").fill("http://127.0.0.1:8765/mcp");
+    await page.getByLabel("Credential reference").fill("secret-ref:supplier-quality/mcp");
+    await page.getByRole("button", {name:"保存 MCP Draft"}).click();
   }
   await expect(page.getByText("Validation required")).toBeVisible();
   await page.getByRole("button", {name:"Validate draft"}).click();
@@ -32,10 +39,13 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.getByText(/HEALTHY/).first()).toBeVisible();
   await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
   await expect(page.getByText("1 Tool(s) · 1 Resource(s) · 1 Prompt(s)")).toBeVisible();
-  await page.getByRole("button",{name:"Govern Tool selection"}).click();
-  await page.getByRole("button",{name:"Authorize real bounded invocation"}).click();
+  await page.getByRole("checkbox",{name:/quality.lookup/}).check();
+  await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
+  await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
+  await page.getByLabel("管理调用输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
+  await page.getByRole("button",{name:"Authorize bounded management invocation"}).click();
   const mcpInvocationStatus=page.getByRole("region",{name:"MCP professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
-  await expect(mcpInvocationStatus).toContainText("Invocation Evidence recorded");
+  await expect(mcpInvocationStatus).toContainText("管理调用即时结果已保留");
   await expect(mcpInvocationStatus).toContainText("credential values redacted: true");
   const publishedMcpId=await page.locator(".agent-detail > header code").textContent();
   await publish(page,"/skills","Create governed SKILL");
@@ -114,8 +124,8 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
     }
     await route.continue();
   });
-  const firstButton=page.locator(".agent-list button").filter({hasText:"Supplier Quality Skill"});
-  const alternateButton=page.locator(".agent-list button").filter({hasText:"Alternate Supplier Skill"});
+  const firstButton=page.locator(".agent-list button").filter({hasText:"Supplier Quality Skill"}).last();
+  const alternateButton=page.locator(".agent-list button").filter({hasText:"Alternate Supplier Skill"}).last();
   await firstButton.click();
   await firstStarted;
   await alternateButton.click();
