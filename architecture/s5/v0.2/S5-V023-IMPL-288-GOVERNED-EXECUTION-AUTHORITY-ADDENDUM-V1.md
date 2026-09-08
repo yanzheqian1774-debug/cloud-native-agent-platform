@@ -70,6 +70,53 @@ leaves `DISPATCH_RECORDED` durable; it does not claim that unknown was persisted
 does not redispatch. A retry remains a separately authorized successor Attempt and
 Invocation. Exactly-once external effects are not claimed.
 
+## Supervised recovery correction
+
+The Human additionally accepts one bounded, same-host supervised process
+constraint for this entry. Every `GovernedExecutionApplication` in one process
+uses one process-wide, database-scoped Invocation ownership registry. Releasing
+or closing an unrelated application cannot remove another application's active
+Invocation ownership.
+
+The governed entry is enabled only in the single Uvicorn child created by
+`agent_console.governed_execution_supervisor`. The supervisor holds a
+credential-free execution-database keyed lock in a fixed host-local state
+directory and passes that same locked file description plus a one-way lifetime
+pipe to its child. The child validates the lock inode, database fingerprint,
+handshake token and actual parent PID. These are bootstrap facts and cannot be
+minted by an HTTP header or request parameter. Ordinary unsupervised startup
+leaves only the governed entry unavailable; unrelated Console capabilities are
+unchanged.
+
+The supervisor releases ownership only after its managed child has actually
+exited. If the supervisor disappears first, the child observes lifetime-pipe
+EOF and stops accepting new governed invoke, replay, read or recovery requests,
+while its inherited host lock remains held until that child exits. A replacement
+supervisor therefore fails closed until the kernel can reacquire the same lock
+inode. PostgreSQL connection loss, heartbeat age, missing PID, free port, or a
+new PostgreSQL advisory lock is never treated as predecessor-exit proof.
+
+Confirmed platform-process exit says nothing about provider completion. After
+confirmed child exit, a successor maps an existing durable dispatch without an
+authoritative terminal fact to `OUTCOME_UNKNOWN` and never calls the provider
+again. This is not provider cancellation, provider fencing, business failure or
+exactly-once external execution.
+
+This constraint is only enforceable on one host through its fixed local lock
+directory and one normalized database target. It does not coordinate independent
+local state on another host and therefore grants no cross-host takeover, HA or
+failover claim. A second host must remain disabled absent a separately accepted
+coordination/fencing design.
+
+## Workflow binding edit preservation
+
+Workflow draft edit compares tasks by stable `taskId` against the prior draft.
+When a retained prior task has non-empty `skillOperationBindings`, omission or
+explicit `null` is rejected before revision persistence. An explicit binding
+value continues through the existing validation and revision rules. Historical
+content without bindings remains compatible and no historical content or digest
+is backfilled or recomputed.
+
 ## Bounded proof and open upstream capability
 
 This increment proves execution and authorized readback for an already existing,

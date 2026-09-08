@@ -10,6 +10,7 @@ class ExactReference(BaseModel):
     kind: Literal["AGENT", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE"]
     resourceId: str = Field(min_length=1)
     revisionId: str = Field(min_length=1)
+    digest: str | None = Field(default=None, pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
 
 
 class SkillOperationBinding(BaseModel):

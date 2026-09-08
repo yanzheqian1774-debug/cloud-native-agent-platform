@@ -66,6 +66,10 @@ from agent_console.governed_execution_authorization import (
     GovernedAuthorizationError,
     GovernedExecutionAuthority,
 )
+from agent_console.governed_execution_ownership import (
+    SupervisedRecoveryGuard,
+    execution_database_fingerprint,
+)
 from agent_console.intervention_feedback import (
     CaptureDenied,
     CaptureNotFound,
@@ -428,6 +432,7 @@ _governed_execution_application: GovernedExecutionApplication | None = None
 _governed_execution_startup_error: str | None = None
 _governed_execution_authority: GovernedExecutionAuthority | None = None
 _skill_invocation_composition: SkillInvocationComposition | None = None
+_governed_execution_supervision = SupervisedRecoveryGuard.from_environment()
 
 
 class _WorkbenchBindingResolver:
@@ -588,6 +593,11 @@ def _configure_governed_execution() -> None:
     database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
     endpoint = os.environ.get("SKILL_EXECUTOR_ENDPOINT", "")
     authority_file = os.environ.get("GOVERNED_EXECUTION_AUTHORITY_FILE", "")
+    if not database_url or not _governed_execution_supervision.allows(database_url):
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+        return
     if not authority_file:
         _governed_execution_application = None
         _governed_execution_authority = None
@@ -655,6 +665,7 @@ def _configure_governed_execution() -> None:
             control,
             composition,
             governed_authority,
+            ownership_scope=execution_database_fingerprint(database_url),
         )
         _governed_execution_startup_error = None
     except (
@@ -690,24 +701,40 @@ def get_digital_employee_assembly() -> DigitalEmployeeProductAssembly:
 
 
 def get_governed_execution_application() -> GovernedExecutionApplication:
-    if _governed_execution_application is None:
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if (
+        _governed_execution_application is None
+        or not _governed_execution_supervision.allows(database_url)
+    ):
         raise HTTPException(
             503,
             detail={
-                "reasonCode": _governed_execution_startup_error
-                or "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+                "reasonCode": (
+                    "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+                    if _governed_execution_application is not None
+                    else _governed_execution_startup_error
+                    or "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+                )
             },
         )
     return _governed_execution_application
 
 
 def get_governed_execution_authority() -> GovernedExecutionAuthority:
-    if _governed_execution_authority is None:
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if (
+        _governed_execution_authority is None
+        or not _governed_execution_supervision.allows(database_url)
+    ):
         raise HTTPException(
             503,
             detail={
-                "reasonCode": _governed_execution_startup_error
-                or "GOVERNED_AUTHORITY_UNAVAILABLE"
+                "reasonCode": (
+                    "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+                    if _governed_execution_authority is not None
+                    else _governed_execution_startup_error
+                    or "GOVERNED_AUTHORITY_UNAVAILABLE"
+                )
             },
         )
     return _governed_execution_authority

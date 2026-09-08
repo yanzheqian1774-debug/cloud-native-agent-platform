@@ -191,6 +191,13 @@ def compare_definitions(
 def edit_definition(
     resource_id: str, command: EditWorkflowDefinition, p: Principal, service: Service
 ):
+    content = command.content.model_dump(exclude_none=True)
+    for index, task in enumerate(command.content.tasks):
+        if (
+            "skillOperationBindings" in task.model_fields_set
+            and task.skillOperationBindings is None
+        ):
+            content["tasks"][index]["skillOperationBindings"] = None
     return call(
         lambda: service.project(
             service.edit(
@@ -198,7 +205,7 @@ def edit_definition(
                 resource_id,
                 p[2],
                 command.expectedVersion,
-                command.content.model_dump(exclude_none=True),
+                content,
             )
         )
     )

@@ -1,19 +1,25 @@
 """Production-bootstrap HTTP/PostgreSQL/protocol acceptance for governed execution."""
 
+import copy
 import hashlib
 import importlib
 import json
 import os
+import signal
+import socket
+import subprocess
+import sys
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
 
+import httpx
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
@@ -40,7 +46,7 @@ class _Protocol(BaseHTTPRequestHandler):
         type(self).calls.append(body)
         if type(self).mode == "block":
             type(self).entered.set()
-            if not type(self).release.wait(timeout=2):
+            if not type(self).release.wait(timeout=15):
                 raise RuntimeError("blocked protocol call was not released")
         if type(self).mode == "timeout":
             time.sleep(0.2)
@@ -612,6 +618,8 @@ def _prepare(endpoint, *, timeout_ms=1000):
             "invocationId": invocation_id,
             "resourceUseId": resource_use_id,
             "evidenceId": stable_id("skill-invocation-evidence", invocation_id),
+            "workflowDefinitionId": workflow[0],
+            "workflowRevisionId": workflow[1],
         },
     )
 
@@ -719,9 +727,112 @@ def _configure(module, monkeypatch, endpoint, authority_file):
     monkeypatch.setenv("EXECUTION_DATABASE_URL", DATABASE_URL or "")
     monkeypatch.setenv("SKILL_EXECUTOR_ENDPOINT", endpoint)
     monkeypatch.setenv("GOVERNED_EXECUTION_AUTHORITY_FILE", str(authority_file))
+    monkeypatch.setattr(
+        module,
+        "_governed_execution_supervision",
+        type("ActiveSupervision", (), {"allows": lambda _self, _url: True})(),
+    )
     module._configure_agent_definitions()
     module._configure_digital_employees()
     module._configure_governed_execution()
+
+
+def _free_port():
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        return listener.getsockname()[1]
+
+
+def _spawn_supervisor(port, endpoint, authority_file):
+    environment = dict(os.environ)
+    repository_root = Path(__file__).parents[3]
+    source_roots = (
+        repository_root / "conformance_harness" / "src",
+        repository_root / "core" / "src",
+        repository_root / "gateway" / "src",
+        repository_root / "operator" / "src",
+        repository_root / "runtime" / "src",
+        repository_root / "console" / "backend" / "src",
+    )
+    environment["PYTHONPATH"] = os.pathsep.join(
+        value
+        for value in (
+            *(str(path) for path in source_roots),
+            environment.get("PYTHONPATH", ""),
+        )
+        if value
+    )
+    environment.update(
+        {
+            "AGENT_DEFINITION_DATABASE_URL": DATABASE_URL or "",
+            "SKILL_MCP_DATABASE_URL": DATABASE_URL or "",
+            "EXECUTION_DATABASE_URL": DATABASE_URL or "",
+            "SKILL_EXECUTOR_ENDPOINT": endpoint,
+            "GOVERNED_EXECUTION_AUTHORITY_FILE": str(authority_file),
+        }
+    )
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "agent_console.governed_execution_supervisor",
+            "--port",
+            str(port),
+        ],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def _start_supervisor(port, endpoint, authority_file):
+    from agent_console.governed_execution_supervisor import supervision_paths
+
+    process = _spawn_supervisor(port, endpoint, authority_file)
+    base_url = f"http://127.0.0.1:{port}"
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            raise AssertionError(
+                f"supervisor exited {process.returncode}: {stdout} {stderr}"
+            )
+        try:
+            if httpx.get(f"{base_url}/healthz", timeout=0.2).status_code == 200:
+                break
+        except httpx.HTTPError:
+            pass
+        time.sleep(0.05)
+    else:
+        process.kill()
+        process.wait(timeout=5)
+        raise AssertionError("supervised application did not become healthy")
+    _, status_path = supervision_paths(DATABASE_URL or "")
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    return process, status, base_url
+
+
+def _stop_process(process):
+    if process is None or process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def _wait_process_gone(pid):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"process {pid} did not exit")
 
 
 def test_production_bootstrap_http_dispatch_read_replay_and_non_disclosure(
@@ -1015,6 +1126,44 @@ def test_active_http_request_owns_dispatch_until_terminal(monkeypatch, tmp_path)
             responses = (active.result(timeout=2), replay.result(timeout=2))
         assert {item.status_code for item in responses} <= {200, 201}
         assert {item.json()["invocation"]["state"] for item in responses} == {
+            "SUCCEEDED"
+        }
+        assert len(calls) == 1
+
+
+def test_process_registry_is_shared_by_two_applications_and_survives_peer_close(
+    monkeypatch, tmp_path
+):
+    from agent_console.governed_execution_schemas import StartGovernedExecution
+
+    with protocol_service("block") as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command,), identities)
+        module = importlib.import_module("agent_console.app")
+        _configure(module, monkeypatch, endpoint, authority_file)
+        standby = module._skill_invocation_composition
+        module._configure_governed_execution()
+        first = module._governed_execution_application
+        module._configure_governed_execution()
+        second = module._governed_execution_application
+        assert standby is not None and first is not None and second is not None
+        first_principal = first.authority.authenticate(f"Bearer {TEST_TOKEN}")
+        second_principal = second.authority.authenticate(f"Bearer {TEST_TOKEN}")
+        parsed = StartGovernedExecution.model_validate(command)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            active = executor.submit(first.start, first_principal, parsed)
+            assert _Protocol.entered.wait(timeout=2)
+            replay = executor.submit(second.start, second_principal, parsed)
+            time.sleep(0.05)
+            assert not replay.done()
+            standby.close()
+            time.sleep(0.05)
+            assert not replay.done()
+            _Protocol.release.set()
+            results = (active.result(timeout=5), replay.result(timeout=5))
+        assert {item.document["invocation"]["state"] for item in results} == {
             "SUCCEEDED"
         }
         assert len(calls) == 1
@@ -1326,3 +1475,291 @@ def test_wrong_execution_parent_combinations_are_non_disclosing(monkeypatch, tmp
                 "detail": {"reasonCode": "GOVERNED_EXECUTION_NOT_FOUND"}
             }
         assert len(calls) == 1
+
+
+def test_postgres_workflow_edit_preserves_binding_and_history(monkeypatch):
+    from agent_console.workflow_definition_api import get_service
+    from agent_console.workflow_definition_postgres import (
+        PostgresWorkflowDefinitionRepository,
+    )
+    from agent_console.workflow_definition_service import WorkflowDefinitionService
+
+    with protocol_service() as (endpoint, _calls):
+        scope, _command, identities = _prepare(endpoint)
+        repository = PostgresWorkflowDefinitionRepository(
+            DATABASE_URL or "",
+            migration_path=MIGRATIONS / "0007_workflow_runtime_profiles.sql",
+        )
+        repository.migrate()
+        service = WorkflowDefinitionService(repository)
+        module = importlib.import_module("agent_console.app")
+        module.app.dependency_overrides[get_service] = lambda: service
+        headers = {
+            "X-Tenant-ID": scope.namespace,
+            "X-Security-Domain": scope.security_domain,
+            "X-Principal-ID": "human:workflow-owner",
+        }
+        client = TestClient(module.app)
+        resource_id = identities["workflowDefinitionId"]
+        try:
+            successor = client.post(
+                f"/api/internal/v0.2.2/workflow-definitions/{resource_id}/successors",
+                json={"expectedVersion": 4},
+                headers=headers,
+            )
+            assert successor.status_code == 200, successor.text
+            read = client.get(
+                f"/api/internal/v0.2.2/workflow-definitions/{resource_id}",
+                headers=headers,
+            ).json()["definition"]
+            original_digest = read["revisions"][0]["digest"]
+            draft = copy.deepcopy(read["revisions"][-1]["content"])
+            binding = draft["tasks"][0]["skillOperationBindings"]
+            draft["description"] = "unrelated governed edit"
+            saved = client.put(
+                f"/api/internal/v0.2.2/workflow-definitions/{resource_id}/draft",
+                json={"expectedVersion": 5, "content": draft},
+                headers=headers,
+            )
+            assert saved.status_code == 200, saved.text
+            assert (
+                saved.json()["definition"]["revisions"][-1]["content"]["tasks"][0][
+                    "skillOperationBindings"
+                ]
+                == binding
+            )
+
+            for explicit_null in (False, True):
+                invalid = copy.deepcopy(draft)
+                if explicit_null:
+                    invalid["tasks"][0]["skillOperationBindings"] = None
+                else:
+                    invalid["tasks"][0].pop("skillOperationBindings")
+                rejected = client.put(
+                    f"/api/internal/v0.2.2/workflow-definitions/{resource_id}/draft",
+                    json={"expectedVersion": 6, "content": invalid},
+                    headers=headers,
+                )
+                assert rejected.status_code == 409
+                assert rejected.json()["detail"]["reasonCode"] == (
+                    "SKILL_OPERATION_BINDING_PRESERVATION_REQUIRED"
+                )
+            unchanged = client.get(
+                f"/api/internal/v0.2.2/workflow-definitions/{resource_id}",
+                headers=headers,
+            ).json()["definition"]
+            assert unchanged["aggregateVersion"] == 6
+            assert len(unchanged["revisions"]) == 3
+            assert unchanged["revisions"][0]["digest"] == original_digest
+
+            historical_content = copy.deepcopy(draft)
+            historical_content["tasks"][0].pop("skillOperationBindings")
+            historical_content["tasks"][0]["references"] = []
+            historical = client.post(
+                "/api/internal/v0.2.2/workflow-definitions",
+                json={
+                    "name": "Historical compatible flow",
+                    "content": historical_content,
+                },
+                headers=headers,
+            ).json()["definition"]
+            historical_digest = historical["revisions"][0]["digest"]
+            historical_content["description"] = "historical unrelated edit"
+            compatible = client.put(
+                "/api/internal/v0.2.2/workflow-definitions/"
+                f"{historical['workflowDefinitionId']}/draft",
+                json={"expectedVersion": 1, "content": historical_content},
+                headers=headers,
+            )
+            assert compatible.status_code == 200
+            assert (
+                compatible.json()["definition"]["revisions"][0]["digest"]
+                == historical_digest
+            )
+        finally:
+            module.app.dependency_overrides.pop(get_service, None)
+            repository.pool.close()
+
+
+def test_ordinary_unsupervised_bootstrap_keeps_governed_entry_unavailable(
+    monkeypatch, tmp_path
+):
+    from agent_console.governed_execution_ownership import SupervisedRecoveryGuard
+
+    with protocol_service() as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command,), identities)
+        module = importlib.import_module("agent_console.app")
+        monkeypatch.setenv("AGENT_DEFINITION_DATABASE_URL", DATABASE_URL or "")
+        monkeypatch.setenv("SKILL_MCP_DATABASE_URL", DATABASE_URL or "")
+        monkeypatch.setenv("EXECUTION_DATABASE_URL", DATABASE_URL or "")
+        monkeypatch.setenv("SKILL_EXECUTOR_ENDPOINT", endpoint)
+        monkeypatch.setenv("GOVERNED_EXECUTION_AUTHORITY_FILE", str(authority_file))
+        monkeypatch.setattr(
+            module, "_governed_execution_supervision", SupervisedRecoveryGuard()
+        )
+        module._configure_agent_definitions()
+        module._configure_digital_employees()
+        module._configure_governed_execution()
+        response = TestClient(module.app).post(
+            "/api/internal/v0.2.3/executions",
+            json=command,
+            headers={
+                **_headers(),
+                "X-Governed-Execution-Supervised": "true",
+            },
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"]["reasonCode"] == (
+            "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+        )
+        assert calls == []
+
+
+def test_supervisor_restart_fails_closed_until_managed_child_exit(
+    monkeypatch, tmp_path
+):
+    with protocol_service() as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command,), identities)
+        first = None
+        successor = None
+        child_pid = None
+        try:
+            first, status, base_url = _start_supervisor(
+                _free_port(), endpoint, authority_file
+            )
+            child_pid = int(status["childPid"])
+            os.kill(first.pid, signal.SIGKILL)
+            first.wait(timeout=5)
+
+            read_path = (
+                f"{base_url}/api/internal/v0.2.3/executions/"
+                f"{identities['workflowRunId']}/attempts/{identities['attemptId']}"
+                f"/skill-invocations/{identities['invocationId']}"
+            )
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                response = httpx.get(read_path, headers=_headers(), timeout=0.5)
+                if response.status_code == 503:
+                    break
+                time.sleep(0.05)
+            else:
+                raise AssertionError("orphan child did not revoke governed entry")
+            assert response.json()["detail"]["reasonCode"] == (
+                "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+            )
+
+            overlap = _spawn_supervisor(_free_port(), endpoint, authority_file)
+            assert overlap.wait(timeout=5) == 75
+            assert "SUPERVISED_RECOVERY_PREDECESSOR_UNCONFIRMED" in (
+                overlap.stderr.read()
+            )
+            assert calls == []
+
+            os.kill(child_pid, signal.SIGKILL)
+            _wait_process_gone(child_pid)
+            successor, _, _ = _start_supervisor(_free_port(), endpoint, authority_file)
+        finally:
+            if child_pid is not None:
+                with suppress(ProcessLookupError):
+                    os.kill(child_pid, signal.SIGKILL)
+            _stop_process(successor)
+            _stop_process(first)
+
+
+def test_confirmed_child_exit_allows_unknown_recovery_without_redispatch(
+    monkeypatch, tmp_path
+):
+    with protocol_service("block") as (endpoint, calls):
+        scope, command, identities = _prepare(endpoint)
+        authority_file = tmp_path / "authority.json"
+        _write_authority(authority_file, scope, (command,), identities)
+        predecessor = None
+        successor = None
+        request = None
+        child_pid = None
+        try:
+            predecessor, status, base_url = _start_supervisor(
+                _free_port(), endpoint, authority_file
+            )
+            child_pid = int(status["childPid"])
+            executor = ThreadPoolExecutor(max_workers=1)
+            request = executor.submit(
+                httpx.post,
+                f"{base_url}/api/internal/v0.2.3/executions",
+                json=command,
+                headers=_headers(),
+                timeout=20,
+            )
+            assert _Protocol.entered.wait(timeout=5)
+
+            with psycopg.connect(DATABASE_URL or "", autocommit=True) as connection:
+                pids = connection.execute(
+                    "SELECT pid FROM pg_stat_activity "
+                    "WHERE datname=current_database() AND pid<>pg_backend_pid()"
+                ).fetchall()
+                terminated = sum(
+                    bool(
+                        connection.execute(
+                            "SELECT pg_terminate_backend(%s)", (pid,)
+                        ).fetchone()[0]
+                    )
+                    for (pid,) in pids
+                )
+            assert terminated > 0
+
+            overlap = _spawn_supervisor(_free_port(), endpoint, authority_file)
+            assert overlap.wait(timeout=5) == 75
+            assert len(calls) == 1
+
+            os.kill(child_pid, signal.SIGKILL)
+            predecessor.wait(timeout=10)
+            with suppress(httpx.HTTPError):
+                request.result(timeout=5)
+            executor.shutdown(wait=True)
+
+            successor, _, successor_url = _start_supervisor(
+                _free_port(), endpoint, authority_file
+            )
+            recovered = httpx.post(
+                f"{successor_url}/api/internal/v0.2.3/executions",
+                json=command,
+                headers=_headers(),
+                timeout=10,
+            )
+            assert recovered.status_code == 200, recovered.text
+            assert recovered.json()["invocation"]["state"] == "OUTCOME_UNKNOWN"
+            assert len(calls) == 1
+
+            identity = recovered.json()["identity"]
+            read = httpx.get(
+                f"{successor_url}/api/internal/v0.2.3/executions/"
+                f"{identity['workflowRunId']}/attempts/{identity['attemptId']}"
+                f"/skill-invocations/{identities['invocationId']}",
+                headers=_headers(),
+                timeout=10,
+            )
+            replay = httpx.post(
+                f"{successor_url}/api/internal/v0.2.3/executions",
+                json=command,
+                headers=_headers(),
+                timeout=10,
+            )
+            assert read.status_code == 200
+            assert read.json()["invocation"]["state"] == "OUTCOME_UNKNOWN"
+            assert replay.status_code == 200
+            assert replay.json()["invocation"]["state"] == "OUTCOME_UNKNOWN"
+            assert len(calls) == 1
+        finally:
+            _Protocol.release.set()
+            if request is not None and not request.done():
+                with suppress(httpx.HTTPError, TimeoutError):
+                    request.result(timeout=5)
+            if child_pid is not None:
+                with suppress(ProcessLookupError):
+                    os.kill(child_pid, signal.SIGKILL)
+            _stop_process(successor)
+            _stop_process(predecessor)

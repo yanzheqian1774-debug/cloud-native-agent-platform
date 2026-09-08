@@ -106,19 +106,39 @@ class WorkflowDefinitionService:
     def edit(self, scope, resource_id, actor, expected, content):
         record = self._load(scope, resource_id)
         self._expected(record, expected)
-        self._validate_content(scope, content, resolve=False)
         prior = self._draft(record)
+        candidate = copy.deepcopy(content)
+        self._preserve_prior_skill_bindings(prior["content"], candidate)
+        self._validate_content(scope, candidate, resolve=False)
         revision = {
             "revisionId": _id("workflow-revision"),
             "predecessorRevisionId": prior["revisionId"],
             "state": "DRAFT",
-            "content": copy.deepcopy(content),
+            "content": candidate,
             "createdAt": _now(),
         }
         revision["digest"] = _digest(record, revision)
         record["revisions"].append(revision)
         record["currentDraftRevisionId"] = revision["revisionId"]
         return self._replace(record, expected, "DRAFT_EDITED", actor, revision)
+
+    @staticmethod
+    def _preserve_prior_skill_bindings(prior_content, candidate):
+        prior_tasks = {item["taskId"]: item for item in prior_content["tasks"]}
+        for task in candidate["tasks"]:
+            prior = prior_tasks.get(task["taskId"])
+            prior_bindings = (
+                None if prior is None else prior.get("skillOperationBindings")
+            )
+            if prior_bindings and (
+                "skillOperationBindings" not in task
+                or task["skillOperationBindings"] is None
+            ):
+                raise WorkflowDefinitionFailure(
+                    "SKILL_OPERATION_BINDING_PRESERVATION_REQUIRED", 409
+                )
+            if task.get("skillOperationBindings") is None:
+                task.pop("skillOperationBindings", None)
 
     def validate(self, scope, resource_id, actor, expected):
         record = self._load(scope, resource_id)

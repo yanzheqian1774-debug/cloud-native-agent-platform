@@ -118,6 +118,8 @@ jobs:
             console/backend/tests/test_governed_execution_api_postgres.py \
             console/backend/tests/test_skill_invocation_domain.py \
             console/backend/tests/test_skill_invocation_postgres.py \
+            console/backend/tests/test_workflow_definition_api.py \
+            console/backend/tests/test_workflow_definition_service.py \
             | tee "$RUNNER_TEMP/skill-invocation-pytest.txt"
           if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/skill-invocation-pytest.txt"; then
             echo "Selected Skill invocation tests must not be skipped" >&2

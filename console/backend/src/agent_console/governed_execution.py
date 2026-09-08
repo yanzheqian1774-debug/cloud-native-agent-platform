@@ -5,9 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from threading import Lock
 from typing import Any
-from weakref import WeakValueDictionary
 
 from psycopg import Error as PsycopgError
 
@@ -37,6 +35,7 @@ from .governed_execution_authorization import (
     skill_invoke_resource,
     skill_read_resource,
 )
+from .governed_execution_ownership import PROCESS_INVOCATION_OWNERSHIP
 from .governed_execution_schemas import StartGovernedExecution
 from .planning import (
     CanonicalWorkflowRevision,
@@ -118,22 +117,14 @@ class GovernedExecutionApplication:
         workflow_control: PostgresWorkflowControlRepository,
         skill: SkillInvocationComposition,
         authority: GovernedExecutionAuthority,
+        *,
+        ownership_scope: str,
     ) -> None:
         self.execution = execution
         self.workflow_control = workflow_control
         self.skill = skill
         self.authority = authority
-        self._ownership_guard = Lock()
-        self._invocation_ownership = WeakValueDictionary()
-
-    def _ownership_for(self, invocation_id: str):
-        """Serialize one in-process caller without creating durable lease authority."""
-        with self._ownership_guard:
-            ownership = self._invocation_ownership.get(invocation_id)
-            if ownership is None:
-                ownership = Lock()
-                self._invocation_ownership[invocation_id] = ownership
-            return ownership
+        self.ownership_scope = ownership_scope
 
     @staticmethod
     def _scope(principal: GovernedPrincipal) -> ScopeIdentity:
@@ -233,10 +224,12 @@ class GovernedExecutionApplication:
                     skill_decision.decision_id,
                 )
             )
-            # Only the caller holding this process-local ownership may cross the
-            # provider boundary or recover a predecessor process's durable dispatch.
-            # A concurrent request waits for the active caller's terminal commit.
-            with self._ownership_for(request.invocation_id):
+            # Only the caller holding process-wide application ownership may cross
+            # the provider boundary or recover a supervised predecessor's durable
+            # dispatch. A concurrent request waits for the active terminal commit.
+            with PROCESS_INVOCATION_OWNERSHIP.own(
+                self.ownership_scope, request.invocation_id
+            ):
                 invocation = skill_service.invoke(request, command.input)
                 if invocation.state is InvocationState.DISPATCH_RECORDED:
                     invocation = skill_service.recover(request, command.input)

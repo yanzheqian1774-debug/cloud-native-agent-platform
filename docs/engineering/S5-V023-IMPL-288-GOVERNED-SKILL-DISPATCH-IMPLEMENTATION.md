@@ -60,7 +60,7 @@ collapsed into one synthetic authorization identifier.
 | Skill dispatch | `GovernedAttemptSkillInvocationService.invoke` | request/claim/`DISPATCH_RECORDED` commit before HTTP | one managed `READ_ONLY` Skill slot only |
 | Provider | `HttpReadOnlySkillExecutor` from the bootstrap allowlist | external HTTP effect after durable dispatch | localhost bounded executor only; no MCP or writes |
 | Terminal facts | Skill Invocation plus Resource Use repositories | Invocation facts, redacted Evidence, Resource Use facts/measurements/snapshot commit atomically | exactly-once external effects are not claimed |
-| Recovery | existing Skill `recover` under process-local invocation ownership | predecessor-process durable dispatch becomes one atomic `OUTCOME_UNKNOWN` terminal bundle; no provider call | no durable lease, background recovery or automatic successor retry |
+| Recovery | existing Skill `recover` under process-wide Invocation ownership and same-host supervised child lifetime | only after managed predecessor child exit is proven, its durable dispatch becomes one atomic `OUTCOME_UNKNOWN` terminal bundle; no provider call | same-host only; no cross-host coordination, durable lease, background recovery or automatic successor retry |
 | Readback | exact governed Execution GET | separately authorized Execution, Invocation, Resource Use and Evidence-reference projections | Evidence content is deliberately not dereferenced |
 
 No test helper is used by the production entry. The acceptance test uses existing
@@ -121,19 +121,62 @@ complete HTTP semantic payload, including an input digest, and is created with t
 Run/Task Run/Attempt in one transaction. Claim insertion failure rolls back every
 identity. An existing identity without its claim is rejected rather than backfilled.
 Concurrent starts converge on one Run/Task Run/Attempt and one Invocation dispatch.
-Dispatch preparation commits before the provider request. Process-local invocation
-ownership serializes an active synchronous call without creating a durable lease or
-new scheduling authority, so a concurrent replay cannot recover an active call.
+Dispatch preparation commits before the provider request. One process-wide,
+database-scoped Invocation ownership registry serializes an active synchronous call
+across multiple application/composition instances without creating a durable lease
+or new scheduling authority. Application close does not remove another active
+owner, so a concurrent replay cannot recover an active call.
 If validation fails before dispatch, provider call count is zero. Timeout or
 transport ambiguity commits `OUTCOME_UNKNOWN`; replay and process restart return the
-same terminal unknown record and never redispatch. After process loss, the formal
-entry detects an existing non-terminal durable dispatch and calls the existing Skill
-recovery operation. Recovery atomically appends the Invocation, Evidence and Resource
-Use `OUTCOME_UNKNOWN` terminal bundle without calling the provider. If that commit
-fails, the request fails and the durable state remains `DISPATCH_RECORDED`; the entry
-does not claim that unknown was saved and still does not redispatch. This HTTP entry
-does not automatically create a successor Attempt. Any retry remains a separately
-authorized Workflow Control operation and must create a successor Attempt/Invocation.
+same terminal unknown record and never redispatch. After supervisor-confirmed child
+exit, the formal entry detects an existing non-terminal durable dispatch and calls
+the existing Skill recovery operation. Recovery atomically appends the Invocation,
+Evidence and Resource Use `OUTCOME_UNKNOWN` terminal bundle without calling the
+provider. If that commit fails, the request fails and the durable state remains
+`DISPATCH_RECORDED`; the entry does not claim that unknown was saved and still does
+not redispatch. Platform child exit does not prove that the external provider
+stopped. This HTTP entry does not automatically create a successor Attempt. Any retry
+remains a separately authorized Workflow Control operation and must create a
+successor Attempt/Invocation.
+
+## Supervised startup and failure boundary
+
+The only supported startup for this governed entry is:
+
+```text
+uv run python -m agent_console.governed_execution_supervisor --port <port>
+```
+
+The existing server-owned database, authority and executor environment variables
+remain required. The supervisor fixes one worker and uses a non-selectable
+host-local state root keyed by a credential-free normalized execution-database
+fingerprint. It passes an inherited locked descriptor and a one-way lifetime pipe
+to the child. The bootstrap validates those descriptors, the lock inode, a random
+handshake token and the actual parent PID. Direct Uvicorn startup, HTTP headers and
+request fields cannot enable governed execution; other Console routes continue to
+start normally.
+
+Database session loss cannot release the host lock. If the supervisor dies, its
+child revokes new governed entry access on pipe EOF but keeps the inherited lock; a
+replacement supervisor therefore cannot start until that exact child has exited.
+The replacement checks the prior lock device/inode and fails closed on replaced or
+malformed identity state. PID absence, heartbeat expiry, port vacancy and PostgreSQL
+advisory lock acquisition are not used as exit evidence.
+
+This is a same-host constraint. Independent state on another host cannot be
+coordinated by this implementation, so cross-host takeover remains unsupported and
+must not be enabled without a future accepted coordination or provider-fencing
+design.
+
+## Workflow edit compatibility correction
+
+Draft edit now compares retained tasks by `taskId` with the prior draft before any
+write. If a prior task has non-empty `skillOperationBindings`, omitting the field or
+sending `null` returns `SKILL_OPERATION_BINDING_PRESERVATION_REQUIRED`; revision and
+aggregate version remain unchanged. Explicit values continue through the existing
+binding validation. Optional reference digests allow a formal GET response to be
+submitted back through an unrelated edit. Historical unbound content remains
+unchanged and its old digest is never recalculated.
 
 ## Acceptance and CI
 
@@ -152,24 +195,36 @@ claim rollback, refusal to backfill an unclaimed existing execution, same-reques
 replay, concurrent single dispatch, active-call ownership, safe continuation after
 Execution commit but before Skill preparation, pre-provider crash recovery, recovery
 persistence failure, timeout/restart unknown, process loss after provider return but
-before terminal commit, and non-disclosing wrong-parent reads without redispatch.
+before terminal commit, non-disclosing wrong-parent reads, ordinary unsupervised
+startup denial, same-process dual-application ownership, overlapping supervisor
+denial, supervisor-loss fail-closed behavior, database-session loss during an active
+provider call, confirmed-child-exit recovery and Workflow binding-preserving edit
+round trips without redispatch.
 
 The existing `PostgreSQL Skill Invocation` CI job now selects this test together
-with the Skill domain and PostgreSQL/protocol tests. Its existing skip-fail guard is
-retained, so this selected capability cannot pass by skipping. All other workflow
-checks remain unchanged.
+with the Skill domain, Skill PostgreSQL/protocol, Workflow API and Workflow service
+tests. Its existing skip-fail guard is retained, so this selected capability cannot
+pass by skipping. All other workflow checks remain unchanged.
 
-The preceding correction candidate completed the then-current exact selection with
-`26 passed / 0 skipped` on a fresh task-owned PostgreSQL database. This recovery
-correction expands the selected suite to 30 cases: 12 governed HTTP/PostgreSQL/
-protocol cases, 16 existing Skill PostgreSQL/protocol cases, and 2 Skill domain
-cases. The 30-case selection passed on the retained task-owned PostgreSQL database;
-a fresh-database candidate CI run is still required. The recovery correction's
-repository-wide `make check` completed with `1539 passed / 99 environment-dependent
-skipped`; Ruff, the 360-file format check and pre-commit passed. Those skips are not
-counted as real-service evidence. Earlier focused Workflow and Execution migration
-evidence remains historical and is not substituted for the new recovery-window
-acceptance.
+The preceding recovery candidate completed its 30-case exact selection. This
+supervised correction expands the existing isolated CI selection to 49 cases: 17
+governed HTTP/PostgreSQL/protocol cases, 16 existing Skill PostgreSQL/protocol
+cases, 2 Skill domain cases, and 14 Workflow API/service cases. The correction
+checkpoint is based on source
+`58a24dea96276c3b469dfa0e764dbc78c2adabcf`; its 49-case selection passed against
+retained task-owned PostgreSQL with no skip. The
+new governed cases use actual supervisor and Uvicorn child processes, actual
+process exit, real PostgreSQL session termination and the real local HTTP provider.
+A fresh-database candidate CI run and the repository-wide post-correction quality
+gate are still required. Earlier focused evidence remains historical and is not
+substituted for the new supervised recovery-window acceptance.
+
+Checkpoint assets are the retained `s5-v023-impl-288-postgres` and
+`s5-v023-impl-288-qdrant` containers. Test supervisor/child processes were stopped;
+the fixed host-local supervisor status records a confirmed child exit. The unique
+next step is a normal checkpoint commit, followed by the already authorized
+controlled merge only if live main remains exactly
+`0b62d649bc587f4bde0a3ffaa1acda5fc8666014`.
 
 ## Explicit limitations
 
@@ -178,5 +233,6 @@ authoring/resolution, automatic Plan/resource matching, a general scheduler or q
 background recovery/dispatch, automatic retry, successor retry HTTP,
 MCP dispatch, write-capable Skills, multiple Skill slots, arbitrary remote executor
 URLs, frontend/Runtime Operations UI, Kubernetes Runtime placement, OpenClaw,
-M2/P1 resource orchestration breadth, enterprise IAM, HA, exactly-once external
-effects, certification, deployment, release readiness, or production readiness.
+M2/P1 resource orchestration breadth, enterprise IAM, HA, cross-host recovery
+coordination, exactly-once external effects, certification, deployment, release
+readiness, or production readiness.
