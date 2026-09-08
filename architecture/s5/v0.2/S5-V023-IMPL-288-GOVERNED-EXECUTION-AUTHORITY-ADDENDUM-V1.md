@@ -129,3 +129,37 @@ OPEN item; this decision does not authorize a frontend or management-module expa
 Implementation and this addendum are reviewed together in the existing Draft PR.
 Session remains open. Human acceptance, Ready transition, merge, deployment and
 main durability are not granted by this record.
+
+## Subsequent Human scope acceptance: single-host support
+
+Checkpoint `SINGLE_HOST_SCOPE_ACCEPTED_AND_FINAL_REVIEW` records a subsequent
+Human decision about the supported scope of this increment. IMPL-288 formally
+supports governed execution and recovery only when one designated supervisor
+starts the execution child on one host for one execution database. Within that
+scope, non-overlapping child lifetimes, process-wide Invocation ownership,
+supervisor-loss revocation, confirmed predecessor-child exit and recovery to
+`OUTCOME_UNKNOWN` remain required implementation and acceptance constraints.
+
+The previously identified cross-host gap remains an implementation fact, but is
+no longer an acceptance blocker for this bounded increment. If independent hosts
+connect to the same execution database and enable the governed entry, the current
+host-local lock, database fingerprint and `EXIT_CONFIRMED` status cannot detect or
+exclude the other host. Cross-host ownership, takeover coordination and provider
+fencing remain unsupported and OPEN. This scope decision does not declare those
+capabilities implemented, waive them for complete P1 or production readiness, or
+assign them automatically to a release.
+
+`OUTCOME_UNKNOWN` continues to mean only that the platform has no authoritative
+terminal provider result. It does not establish provider termination,
+cancellation, business failure or externally exactly-once execution, and recovery
+must not redispatch the existing Invocation.
+
+No deployment is authorized or inspected by this decision. Any demonstration or
+deployment that relies on IMPL-288 must separately verify that only one execution
+host enables this entry for the database. A future cross-host effort must enter
+through a separately scoped Human-owned architecture and implementation decision;
+this addendum does not preselect a lease, fencing or HA design.
+
+The addendum status remains `HUMAN_ACCEPTED / BRANCH_RECORDED /
+NOT_MAIN_DURABLE`. This scope acceptance does not itself accept the final code
+candidate, make the PR Ready, authorize merge or deployment, or close the Session.

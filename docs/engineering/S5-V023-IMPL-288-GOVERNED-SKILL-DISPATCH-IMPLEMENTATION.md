@@ -242,3 +242,37 @@ URLs, frontend/Runtime Operations UI, Kubernetes Runtime placement, OpenClaw,
 M2/P1 resource orchestration breadth, enterprise IAM, HA, cross-host recovery
 coordination, exactly-once external effects, certification, deployment, release
 readiness, or production readiness.
+
+## Checkpoint: single-host scope accepted and final review
+
+The Human subsequently accepted the bounded support scope for IMPL-288. The
+supported configuration is one designated host, one execution database and the
+governed entry started through `agent_console.governed_execution_supervisor`.
+Within that boundary, the executable entry guard, shared process-wide Invocation
+lock, non-overlapping supervised child lifetime, supervisor-loss revocation,
+confirmed child-exit handling and no-redispatch `OUTCOME_UNKNOWN` recovery remain
+mandatory and are unchanged from source
+`6d519ab9ea6da6a153745b058b36c17c04e6156b`.
+
+The earlier cross-host finding has not been reclassified as implemented. A second
+host can use independent local lock state while connecting to the same execution
+database; the database fingerprint and `EXIT_CONFIRMED` record do not provide
+cross-host ownership proof. Cross-host exclusion, safe takeover and provider
+fencing remain unsupported and OPEN, but are not acceptance blockers for this
+single-host increment. They remain relevant to complete P1 and production
+readiness and require a future separately scoped Human decision.
+
+The accepted support scope is not deployment evidence. This task has no deployment
+authorization and has not verified that a later demonstration or deployment uses
+only one execution host. That prerequisite must be checked independently before
+the governed entry is enabled outside this bounded validation environment.
+
+The normal-path proof remains limited to executing and authoritatively reading an
+already existing legal exact approved Plan. Ordinary Workflow Skill-reference
+resolution/authoring, operation-binding UI, the execution product frontend, MCP
+dispatch and broader M2/M3/P1 resource integration remain OPEN.
+
+This checkpoint only records the support-scope decision. It does not retroactively
+change the earlier validation chronology, claim that old CI directly tested this
+documentation commit, accept the final code candidate, make Draft PR #155 Ready,
+authorize merge or deployment, or close Session `S5-V023-IMPL-288`.
