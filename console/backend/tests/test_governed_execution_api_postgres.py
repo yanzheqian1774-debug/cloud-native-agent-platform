@@ -132,7 +132,7 @@ def _publish(service, scope, key, content):
     return resource_id, revision["revisionId"], revision["digest"]
 
 
-def _prepare(endpoint, *, timeout_ms=1000):
+def _prepare(endpoint, *, timeout_ms=1000, author_resources=None):
     from agent_console.agent_definition_postgres import (
         PostgresAgentDefinitionRepository,
     )
@@ -311,49 +311,61 @@ def _prepare(endpoint, *, timeout_ms=1000):
             "capabilities": ["supplier-quality.summary"],
         },
     )
-    skill_service = SkillMcpService(skill_repo)
-    skill_scope = skill_service.scope(scope.namespace, scope.security_domain)
-    skill_record = skill_service.create(
-        skill_scope,
-        "skill",
-        "preparation:owner",
-        "Governed execution Skill",
-        {
-            "description": "Read supplier defects",
-            "capabilities": ["supplier-quality.summary"],
-            "instructions": "Summarize supplied defect facts",
-            "operations": [operation],
-        },
-    )
-    skill_id = skill_record["resourceId"]
-    skill_record = skill_service.validate(
-        skill_scope,
-        "skill",
-        skill_id,
-        "preparation:owner",
-        skill_record["aggregateVersion"],
-    )["resource"]
-    skill_revision = skill_record["revisions"][0]
-    skill_record = skill_service.review(
-        skill_scope,
-        "skill",
-        skill_id,
-        "preparation:reviewer",
-        skill_record["aggregateVersion"],
-        skill_revision["digest"],
-        "APPROVE",
-        "Exact test preparation review",
-    )["resource"]
-    skill_service.publish(
-        skill_scope,
-        "skill",
-        skill_id,
-        "preparation:publisher",
-        skill_record["aggregateVersion"],
-        skill_revision["digest"],
-        skill_record["reviews"][0]["reviewId"],
-    )
-    skill = (skill_id, skill_revision["revisionId"], skill_revision["digest"])
+    if author_resources is not None:
+        skill = author_resources(
+            "skill",
+            scope,
+            {
+                "description": "Read supplier defects",
+                "capabilities": ["supplier-quality.summary"],
+                "instructions": "Summarize supplied defect facts",
+                "operations": [operation],
+            },
+        )
+    else:
+        skill_service = SkillMcpService(skill_repo)
+        skill_scope = skill_service.scope(scope.namespace, scope.security_domain)
+        skill_record = skill_service.create(
+            skill_scope,
+            "skill",
+            "preparation:owner",
+            "Governed execution Skill",
+            {
+                "description": "Read supplier defects",
+                "capabilities": ["supplier-quality.summary"],
+                "instructions": "Summarize supplied defect facts",
+                "operations": [operation],
+            },
+        )
+        skill_id = skill_record["resourceId"]
+        skill_record = skill_service.validate(
+            skill_scope,
+            "skill",
+            skill_id,
+            "preparation:owner",
+            skill_record["aggregateVersion"],
+        )["resource"]
+        skill_revision = skill_record["revisions"][0]
+        skill_record = skill_service.review(
+            skill_scope,
+            "skill",
+            skill_id,
+            "preparation:reviewer",
+            skill_record["aggregateVersion"],
+            skill_revision["digest"],
+            "APPROVE",
+            "Exact test preparation review",
+        )["resource"]
+        skill_service.publish(
+            skill_scope,
+            "skill",
+            skill_id,
+            "preparation:publisher",
+            skill_record["aggregateVersion"],
+            skill_revision["digest"],
+            skill_record["reviews"][0]["reviewId"],
+        )
+        skill = (skill_id, skill_revision["revisionId"], skill_revision["digest"])
     runtime_service = RuntimeProfileService(runtime_repo)
     runtime_scope = runtime_service.scope(scope.namespace, scope.security_domain)
     runtime = _publish(
@@ -374,52 +386,53 @@ def _prepare(endpoint, *, timeout_ms=1000):
             "secretReferences": [],
         },
     )
-    workflow_service = WorkflowDefinitionService(workflow_repo, lambda _s, _r: True)
-    workflow_scope = workflow_service.scope(scope.namespace, scope.security_domain)
-    workflow = _publish(
-        workflow_service,
-        workflow_scope,
-        "workflowDefinitionId",
-        {
-            "description": "Governed supplier quality execution",
-            "inputs": ["request"],
-            "outputs": ["result"],
-            "runtimeProfile": {
-                "kind": "RUNTIME_PROFILE",
-                "resourceId": runtime[0],
-                "revisionId": runtime[1],
-                "digest": runtime[2],
-            },
-            "tasks": [
-                {
-                    "taskId": "collect",
-                    "name": "Collect",
-                    "dependsOn": [],
-                    "inputs": ["request"],
-                    "outputs": ["result"],
-                    "capabilityRequirements": ["supplier-quality.summary"],
-                    "references": [
-                        {
-                            "kind": "SKILL",
-                            "resourceId": skill[0],
-                            "revisionId": skill[1],
-                        }
-                    ],
-                    "skillOperationBindings": [
-                        {
-                            "skillId": skill[0],
-                            "skillRevisionId": skill[1],
-                            "skillDigest": skill[2],
-                            "operation": operation["name"],
-                        }
-                    ],
-                    "retryLimit": 0,
-                    "timeoutSeconds": 30,
-                    "failurePolicy": "FAIL_WORKFLOW",
-                }
-            ],
+    workflow_content = {
+        "description": "Governed supplier quality execution",
+        "inputs": ["request"],
+        "outputs": ["result"],
+        "runtimeProfile": {
+            "kind": "RUNTIME_PROFILE",
+            "resourceId": runtime[0],
+            "revisionId": runtime[1],
+            "digest": runtime[2],
         },
-    )
+        "tasks": [
+            {
+                "taskId": "collect",
+                "name": "Collect",
+                "dependsOn": [],
+                "inputs": ["request"],
+                "outputs": ["result"],
+                "capabilityRequirements": ["supplier-quality.summary"],
+                "references": [
+                    {
+                        "kind": "SKILL",
+                        "resourceId": skill[0],
+                        "revisionId": skill[1],
+                    }
+                ],
+                "skillOperationBindings": [
+                    {
+                        "skillId": skill[0],
+                        "skillRevisionId": skill[1],
+                        "skillDigest": skill[2],
+                        "operation": operation["name"],
+                    }
+                ],
+                "retryLimit": 0,
+                "timeoutSeconds": 30,
+                "failurePolicy": "FAIL_WORKFLOW",
+            }
+        ],
+    }
+    if author_resources is not None:
+        workflow = author_resources("workflow", scope, workflow_content)
+    else:
+        workflow_service = WorkflowDefinitionService(workflow_repo, lambda _s, _r: True)
+        workflow_scope = workflow_service.scope(scope.namespace, scope.security_domain)
+        workflow = _publish(
+            workflow_service, workflow_scope, "workflowDefinitionId", workflow_content
+        )
     revision = EmployeeRevision(
         scope,
         f"employee-definition:{suffix}",
@@ -743,7 +756,7 @@ def _free_port():
         return listener.getsockname()[1]
 
 
-def _spawn_supervisor(port, endpoint, authority_file):
+def _spawn_supervisor(port, endpoint, authority_file, *, output=None):
     environment = dict(os.environ)
     repository_root = Path(__file__).parents[3]
     source_roots = (
@@ -780,16 +793,16 @@ def _spawn_supervisor(port, endpoint, authority_file):
             str(port),
         ],
         env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE if output is None else output,
+        stderr=subprocess.PIPE if output is None else output,
         text=True,
     )
 
 
-def _start_supervisor(port, endpoint, authority_file):
+def _start_supervisor(port, endpoint, authority_file, *, output=None):
     from agent_console.governed_execution_supervisor import supervision_paths
 
-    process = _spawn_supervisor(port, endpoint, authority_file)
+    process = _spawn_supervisor(port, endpoint, authority_file, output=output)
     base_url = f"http://127.0.0.1:{port}"
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
@@ -807,7 +820,10 @@ def _start_supervisor(port, endpoint, authority_file):
     else:
         process.kill()
         process.wait(timeout=5)
-        raise AssertionError("supervised application did not become healthy")
+        diagnostic = "" if output is None else Path(output.name).read_text()[-8000:]
+        raise AssertionError(
+            f"supervised application did not become healthy: {diagnostic}"
+        )
     _, status_path = supervision_paths(DATABASE_URL or "")
     status = json.loads(status_path.read_text(encoding="utf-8"))
     return process, status, base_url
