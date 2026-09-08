@@ -39,6 +39,7 @@ class ExecutionIdentityRepository(Protocol):
         plan: CanonicalWorkflowRevision | None = None,
         task_id: str | None = None,
         authorization_decision_id: str,
+        request_claim: ExecutionRequestClaim | None = None,
     ) -> ExecutionIdentityAggregate: ...
 
     def get_attempt(
@@ -82,6 +83,13 @@ class ApprovedPlanIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class ExecutionRequestClaim:
+    principal_id: str
+    idempotency_key: str
+    request_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class StartExecutionCommand:
     scope: ScopeIdentity
     plan: CanonicalWorkflowRevision
@@ -92,6 +100,7 @@ class StartExecutionCommand:
     replay_identity: str
     predecessor_workflow_run_id: WorkflowRunId | None = None
     correction_of_workflow_run_id: WorkflowRunId | None = None
+    request_claim: ExecutionRequestClaim | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,6 +302,7 @@ class ExecutionApplicationService:
                 plan=command.plan,
                 task_id=command.task_id,
                 authorization_decision_id=authorization_decision_id,
+                request_claim=command.request_claim,
             ),
         )
 

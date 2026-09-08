@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 from agent_console.workflow_definition_repository import (
     InMemoryWorkflowDefinitionRepository,
@@ -34,6 +36,26 @@ def content(tasks=None):
             "revisionId": "runtime-profile-revision:1",
         },
     }
+
+
+def bound_content():
+    value = content()
+    value["tasks"][0]["references"] = [
+        {
+            "kind": "SKILL",
+            "resourceId": "skill:one",
+            "revisionId": "skill-revision:one",
+        }
+    ]
+    value["tasks"][0]["skillOperationBindings"] = [
+        {
+            "skillId": "skill:one",
+            "skillRevisionId": "skill-revision:one",
+            "skillDigest": "a" * 64,
+            "operation": "quality.read",
+        }
+    ]
+    return value
 
 
 def test_stable_dag_and_exact_digest_lifecycle():
@@ -113,3 +135,155 @@ def test_validation_requires_resolved_exact_revision():
     record = service.create(scope, "human:a", "Flow", content())
     with pytest.raises(WorkflowDefinitionFailure, match="EXACT_REFERENCE_NOT_FOUND"):
         service.validate(scope, record["workflowDefinitionId"], "human:a", 1)
+
+
+def test_skill_operation_binding_is_added_only_by_successor_revision():
+    service = WorkflowDefinitionService(
+        InMemoryWorkflowDefinitionRepository(), lambda _scope, _ref: True
+    )
+    scope = service.scope("tenant-a", "domain-a")
+    record = service.create(scope, "human:a", "Flow", content())
+    record = service.validate(scope, record["workflowDefinitionId"], "human:a", 1)
+    published = record["revisions"][-1]
+    record = service.review(
+        scope,
+        record["workflowDefinitionId"],
+        "human:a",
+        2,
+        published["digest"],
+        "APPROVE",
+        "reviewed",
+    )
+    record = service.publish(
+        scope,
+        record["workflowDefinitionId"],
+        "human:a",
+        3,
+        published["digest"],
+        record["reviews"][-1]["reviewId"],
+    )
+    original_content = record["revisions"][0]["content"]
+    original_digest = record["revisions"][0]["digest"]
+    record = service.successor(scope, record["workflowDefinitionId"], "human:a", 4)
+    successor_content = copy.deepcopy(record["revisions"][-1]["content"])
+    successor_content["tasks"][0]["references"] = [
+        {
+            "kind": "SKILL",
+            "resourceId": "skill:one",
+            "revisionId": "skill-revision:one",
+        }
+    ]
+    successor_content["tasks"][0]["skillOperationBindings"] = [
+        {
+            "skillId": "skill:one",
+            "skillRevisionId": "skill-revision:one",
+            "skillDigest": "a" * 64,
+            "operation": "quality.read",
+        }
+    ]
+    record = service.edit(
+        scope,
+        record["workflowDefinitionId"],
+        "human:a",
+        5,
+        successor_content,
+    )
+    bound = record["revisions"][-1]
+    assert "skillOperationBindings" not in original_content["tasks"][0]
+    assert record["revisions"][0]["digest"] == original_digest
+    assert bound["predecessorRevisionId"] == record["revisions"][-2]["revisionId"]
+    assert bound["digest"] != original_digest
+    service.validate(scope, record["workflowDefinitionId"], "human:a", 6)
+
+
+@pytest.mark.parametrize(
+    ("bindings", "reason"),
+    (
+        ([], "SKILL_OPERATION_BINDING_REQUIRED"),
+        (
+            [
+                {
+                    "skillId": "skill:one",
+                    "skillRevisionId": "skill-revision:one",
+                    "skillDigest": "a" * 64,
+                    "operation": "quality.read",
+                }
+            ]
+            * 2,
+            "DUPLICATE_SKILL_OPERATION_BINDING",
+        ),
+        (
+            [
+                {
+                    "skillId": "skill:missing",
+                    "skillRevisionId": "skill-revision:missing",
+                    "skillDigest": "a" * 64,
+                    "operation": "quality.read",
+                }
+            ],
+            "SKILL_OPERATION_REFERENCE_REQUIRED",
+        ),
+    ),
+)
+def test_invalid_skill_operation_bindings_fail_closed(bindings, reason):
+    service = WorkflowDefinitionService(InMemoryWorkflowDefinitionRepository())
+    scope = service.scope("tenant-a", "domain-a")
+    value = content()
+    value["tasks"][0]["skillOperationBindings"] = bindings
+    with pytest.raises(WorkflowDefinitionFailure, match=reason):
+        service.create(scope, "human:a", "Flow", value)
+
+
+@pytest.mark.parametrize("replacement", ["omitted", None])
+def test_edit_rejects_omitted_or_null_prior_binding_without_writing(replacement):
+    repository = InMemoryWorkflowDefinitionRepository()
+    service = WorkflowDefinitionService(repository)
+    scope = service.scope("tenant-a", "domain-a")
+    record = service.create(scope, "human:a", "Flow", bound_content())
+    candidate = copy.deepcopy(record["revisions"][-1]["content"])
+    candidate["description"] = "unrelated edit"
+    if replacement == "omitted":
+        candidate["tasks"][0].pop("skillOperationBindings")
+    else:
+        candidate["tasks"][0]["skillOperationBindings"] = None
+
+    with pytest.raises(
+        WorkflowDefinitionFailure,
+        match="SKILL_OPERATION_BINDING_PRESERVATION_REQUIRED",
+    ):
+        service.edit(scope, record["workflowDefinitionId"], "human:a", 1, candidate)
+
+    unchanged = repository.get(scope, record["workflowDefinitionId"])
+    assert unchanged["aggregateVersion"] == 1
+    assert len(unchanged["revisions"]) == 1
+
+
+def test_explicit_binding_round_trip_and_historical_omission_compatibility():
+    repository = InMemoryWorkflowDefinitionRepository()
+    service = WorkflowDefinitionService(repository)
+    scope = service.scope("tenant-a", "domain-a")
+    bound = service.create(scope, "human:a", "Bound", bound_content())
+    candidate = copy.deepcopy(bound["revisions"][-1]["content"])
+    candidate["description"] = "unrelated edit"
+    edited = service.edit(scope, bound["workflowDefinitionId"], "human:a", 1, candidate)
+    assert (
+        edited["revisions"][-1]["content"]["tasks"][0]["skillOperationBindings"]
+        == bound["revisions"][-1]["content"]["tasks"][0]["skillOperationBindings"]
+    )
+
+    historical = service.create(scope, "human:a", "Historical", content())
+    original_digest = historical["revisions"][0]["digest"]
+    historical_candidate = copy.deepcopy(historical["revisions"][-1]["content"])
+    historical_candidate["description"] = "historical compatible edit"
+    historical_edited = service.edit(
+        scope,
+        historical["workflowDefinitionId"],
+        "human:a",
+        1,
+        historical_candidate,
+    )
+    assert (
+        "skillOperationBindings"
+        not in historical_edited["revisions"][0]["content"]["tasks"][0]
+    )
+    assert historical_edited["revisions"][0]["digest"] == original_digest

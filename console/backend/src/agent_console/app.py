@@ -60,6 +60,16 @@ from agent_console.digital_employee_bootstrap import (
     build_digital_employee_assembly,
 )
 from agent_console.execution_domain import ExecutionPersistenceError
+from agent_console.governed_execution import GovernedExecutionApplication
+from agent_console.governed_execution_api import router as governed_execution_router
+from agent_console.governed_execution_authorization import (
+    GovernedAuthorizationError,
+    GovernedExecutionAuthority,
+)
+from agent_console.governed_execution_ownership import (
+    SupervisedRecoveryGuard,
+    execution_database_fingerprint,
+)
 from agent_console.intervention_feedback import (
     CaptureDenied,
     CaptureNotFound,
@@ -122,6 +132,7 @@ from agent_console.repository import (
     WorkflowRepository,
 )
 from agent_console.resource_catalog_api import router as resource_catalog_router
+from agent_console.resource_use_domain import canonical_digest as resource_digest
 from agent_console.runtime_profile_api import (
     binding_resolver as runtime_binding_resolver,
 )
@@ -131,6 +142,16 @@ from agent_console.schemas import (
     WorkflowRunList,
 )
 from agent_console.service import WorkflowService
+from agent_console.skill_executor import (
+    HttpReadOnlySkillExecutor,
+    SkillExecutorRegistry,
+)
+from agent_console.skill_invocation_application import FixedReadOnlyPolicyAuthority
+from agent_console.skill_invocation_composition import (
+    SkillInvocationComposition,
+    compose_governed_skill_invocation,
+)
+from agent_console.skill_invocation_domain import SideEffectClass, SideEffectPolicy
 from agent_console.skill_mcp_api import get_skill_mcp_service
 from agent_console.skill_mcp_api import router as skill_mcp_router
 from agent_console.supplier_quality_demo import (
@@ -145,6 +166,7 @@ from agent_console.supplier_quality_demo_schemas import (
     SupplierQualityDemoStartResponse,
 )
 from agent_console.workflow_control_domain import WorkflowControlError
+from agent_console.workflow_control_postgres import PostgresWorkflowControlRepository
 from agent_console.workflow_definition_api import (
     binding_resolver as workflow_binding_resolver,
 )
@@ -160,6 +182,7 @@ app.include_router(runtime_profile_router)
 app.include_router(workflow_definition_router)
 app.include_router(resource_catalog_router)
 app.include_router(digital_employee_router)
+app.include_router(governed_execution_router)
 
 
 class _SupplierQualityExecutionEvidence:
@@ -405,6 +428,11 @@ _agent_definition_service: AgentDefinitionService | None = None
 _agent_definition_startup_error: str | None = None
 _digital_employee_assembly: DigitalEmployeeProductAssembly | None = None
 _digital_employee_startup_error: str | None = None
+_governed_execution_application: GovernedExecutionApplication | None = None
+_governed_execution_startup_error: str | None = None
+_governed_execution_authority: GovernedExecutionAuthority | None = None
+_skill_invocation_composition: SkillInvocationComposition | None = None
+_governed_execution_supervision = SupervisedRecoveryGuard.from_environment()
 
 
 class _WorkbenchBindingResolver:
@@ -557,6 +585,100 @@ def _configure_digital_employees() -> None:
 
 
 _configure_digital_employees()
+
+
+def _configure_governed_execution() -> None:
+    global _governed_execution_application, _governed_execution_startup_error
+    global _governed_execution_authority, _skill_invocation_composition
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    endpoint = os.environ.get("SKILL_EXECUTOR_ENDPOINT", "")
+    authority_file = os.environ.get("GOVERNED_EXECUTION_AUTHORITY_FILE", "")
+    if not database_url or not _governed_execution_supervision.allows(database_url):
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+        return
+    if not authority_file:
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_AUTHORITY_UNAVAILABLE"
+        return
+    if not database_url or not endpoint or _digital_employee_assembly is None:
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+        return
+    try:
+        governed_authority = GovernedExecutionAuthority.from_file(authority_file)
+    except GovernedAuthorizationError:
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_AUTHORITY_UNAVAILABLE"
+        return
+    try:
+        executor = HttpReadOnlySkillExecutor(
+            executor_id=os.environ.get(
+                "SKILL_EXECUTOR_ID", "supplier-quality-readonly"
+            ),
+            executor_revision=os.environ.get("SKILL_EXECUTOR_REVISION", "1.0.0"),
+            endpoint=endpoint,
+        )
+        policy_semantic = {
+            "policyId": os.environ.get(
+                "SKILL_SIDE_EFFECT_POLICY_ID", "skill-readonly-policy"
+            ),
+            "policyRevision": os.environ.get("SKILL_SIDE_EFFECT_POLICY_REVISION", "1"),
+            "allowedClass": "READ_ONLY",
+        }
+        policy = SideEffectPolicy(
+            policy_semantic["policyId"],
+            policy_semantic["policyRevision"],
+            resource_digest(policy_semantic),
+            SideEffectClass.READ_ONLY,
+        )
+        migrations = Path(__file__).parents[2] / "migrations"
+        composition = compose_governed_skill_invocation(
+            database_url,
+            migrations,
+            None,
+            FixedReadOnlyPolicyAuthority(policy),
+            SkillExecutorRegistry((executor,)),
+        )
+        control = PostgresWorkflowControlRepository(
+            database_url,
+            migration_path=(
+                migrations / "0011_workflow_control_plan_evidence_outcome.sql"
+            ),
+            min_pool_size=int(os.environ.get("EXECUTION_DB_POOL_MIN", "1")),
+            max_pool_size=int(os.environ.get("EXECUTION_DB_POOL_MAX", "4")),
+            timeout=float(os.environ.get("EXECUTION_DB_TIMEOUT_SECONDS", "5")),
+        )
+        control.migrate()
+        execution = _digital_employee_assembly.repository.authority
+        execution.migrate_governed_execution_claims(
+            migrations / "0017_governed_execution_claim.sql"
+        )
+        _skill_invocation_composition = composition
+        _governed_execution_authority = governed_authority
+        _governed_execution_application = GovernedExecutionApplication(
+            execution,
+            control,
+            composition,
+            governed_authority,
+            ownership_scope=execution_database_fingerprint(database_url),
+        )
+        _governed_execution_startup_error = None
+    except (
+        ExecutionPersistenceError,
+        WorkflowControlError,
+        ValueError,
+    ):
+        _governed_execution_application = None
+        _governed_execution_authority = None
+        _governed_execution_startup_error = "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+
+
+_configure_governed_execution()
 _problem_planning_service = ProblemPlanningService(
     agent_definitions=lambda scope: (
         []
@@ -576,6 +698,46 @@ def get_digital_employee_assembly() -> DigitalEmployeeProductAssembly:
             },
         )
     return _digital_employee_assembly
+
+
+def get_governed_execution_application() -> GovernedExecutionApplication:
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if (
+        _governed_execution_application is None
+        or not _governed_execution_supervision.allows(database_url)
+    ):
+        raise HTTPException(
+            503,
+            detail={
+                "reasonCode": (
+                    "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+                    if _governed_execution_application is not None
+                    else _governed_execution_startup_error
+                    or "GOVERNED_EXECUTION_STORAGE_UNAVAILABLE"
+                )
+            },
+        )
+    return _governed_execution_application
+
+
+def get_governed_execution_authority() -> GovernedExecutionAuthority:
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if (
+        _governed_execution_authority is None
+        or not _governed_execution_supervision.allows(database_url)
+    ):
+        raise HTTPException(
+            503,
+            detail={
+                "reasonCode": (
+                    "GOVERNED_EXECUTION_SUPERVISION_REQUIRED"
+                    if _governed_execution_authority is not None
+                    else _governed_execution_startup_error
+                    or "GOVERNED_AUTHORITY_UNAVAILABLE"
+                )
+            },
+        )
+    return _governed_execution_authority
 
 
 def get_live_journey_principal() -> TrustedJourneyPrincipal:
