@@ -186,3 +186,28 @@ class PostgresWorkflowDefinitionRepository:
                 json.dumps(fact),
             ),
         )
+
+    def read_for_plan(
+        self, connection, scope, resource_id, revision_id, digest, *, authorized
+    ):
+        if not authorized:
+            raise WorkflowDefinitionNotFound("WORKFLOW_DEFINITION_NOT_FOUND")
+        row = connection.execute(
+            "SELECT record FROM workflow_definition.definitions WHERE namespace=%s "
+            "AND security_domain=%s AND workflow_definition_id=%s FOR SHARE",
+            (scope.namespace, scope.security_domain, resource_id),
+        ).fetchone()
+        record = {} if row is None else row["record"]
+        revision = next(
+            (r for r in record.get("revisions", ()) if r["revisionId"] == revision_id),
+            None,
+        )
+        if (
+            revision is None
+            or revision["state"] != "PUBLISHED"
+            or record.get("lifecycleState") in {"DEPRECATED", "ARCHIVED"}
+            or revision["digest"].removeprefix("sha256:")
+            != digest.removeprefix("sha256:")
+        ):
+            raise WorkflowDefinitionConflict("WORKFLOW_PLAN_REFERENCE_INVALID")
+        return revision

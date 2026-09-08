@@ -43,6 +43,19 @@ class CriterionType(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class BusinessProblemAggregate:
+    scope: ScopeIdentity
+    business_problem_id: str
+    owner_id: str
+    current_state: BusinessProblemState
+    aggregate_version: int
+    current_revision_id: str
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class BusinessProblemLifecycleEvent:
     event_id: str
     business_problem_id: str

@@ -101,7 +101,10 @@ def _workflow_from_plan(raw: bytes) -> tuple[CanonicalWorkflowRevision, str, str
             workflow["matching_eligible"],
             lifecycle,
         )
-        if envelope["schemaVersion"] != "employee-execution-plan.v1":
+        if envelope["schemaVersion"] not in {
+            "employee-execution-plan.v1",
+            "employee-execution-plan.v2",
+        }:
             raise ValueError
         return parsed, envelope["assignmentId"], envelope["instanceId"]
     except (KeyError, TypeError, ValueError) as exc:

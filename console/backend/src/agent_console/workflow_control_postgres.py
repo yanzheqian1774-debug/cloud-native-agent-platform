@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,15 @@ _TARGET_TRANSITIONS = {
 
 
 class PostgresWorkflowControlRepository:
+    @contextmanager
+    def connection_scope(self, connection=None):
+        """A supplied connection belongs to the caller; never commit it here."""
+        if connection is not None:
+            yield connection
+        else:
+            with self.pool.connection() as owned, owned.transaction():
+                yield owned
+
     def __init__(
         self,
         database_url: str,
@@ -207,8 +217,8 @@ class PostgresWorkflowControlRepository:
         ):
             raise WorkflowControlError("WORKFLOW_CONTROL_SCHEMA_INCOMPATIBLE")
 
-    def create_plan(self, plan: PlanRecord) -> PlanRecord:
-        with self.pool.connection() as connection, connection.transaction():
+    def create_plan(self, plan: PlanRecord, *, connection=None) -> PlanRecord:
+        with self.connection_scope(connection) as connection:
             connection.execute(
                 "INSERT INTO execution_authority.plans(namespace,security_domain,plan_id,plan_version,predecessor_plan_id,predecessor_plan_version,workflow_definition_id,workflow_definition_revision_id,workflow_definition_digest,status,aggregate_version,plan_digest,canonical_bytes,created_at,updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 (
@@ -232,11 +242,11 @@ class PostgresWorkflowControlRepository:
         return plan
 
     def get_plan(
-        self, scope: ScopeIdentity, plan_id: str, plan_version: int
+        self, scope: ScopeIdentity, plan_id: str, plan_version: int, *, connection=None
     ) -> PlanRecord | None:
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             row = connection.execute(
-                "SELECT * FROM execution_authority.plans WHERE namespace=%s AND security_domain=%s AND plan_id=%s AND plan_version=%s",
+                "SELECT * FROM execution_authority.plans WHERE namespace=%s AND security_domain=%s AND plan_id=%s AND plan_version=%s FOR SHARE",
                 (scope.namespace, scope.security_domain, plan_id, plan_version),
             ).fetchone()
         return None if row is None else self._plan(scope, row)
@@ -279,9 +289,9 @@ class PostgresWorkflowControlRepository:
         return self._plan(scope, row)
 
     def append_approval(
-        self, scope: ScopeIdentity, decision: ApprovalDecision
+        self, scope: ScopeIdentity, decision: ApprovalDecision, *, connection=None
     ) -> ApprovalDecision:
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             plan = connection.execute(
                 "SELECT status,plan_digest FROM execution_authority.plans WHERE namespace=%s AND security_domain=%s AND plan_id=%s AND plan_version=%s FOR UPDATE",
                 (
@@ -328,9 +338,9 @@ class PostgresWorkflowControlRepository:
         return decision
 
     def read_approvals(
-        self, scope: ScopeIdentity, plan_id: str, plan_version: int
+        self, scope: ScopeIdentity, plan_id: str, plan_version: int, *, connection=None
     ) -> tuple[ApprovalDecision, ...]:
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             rows = connection.execute(
                 "SELECT * FROM execution_authority.plan_approval_decisions WHERE namespace=%s AND security_domain=%s AND plan_id=%s AND plan_version=%s ORDER BY ordinal,approval_decision_id",
                 (scope.namespace, scope.security_domain, plan_id, plan_version),
@@ -1929,3 +1939,84 @@ class PostgresWorkflowControlRepository:
             ),
         )
         return None
+
+    def claim_plan_entry(
+        self, connection, scope, actor, command, key, digest, *, authorized
+    ):
+        """Workflow Control owns these claims, separately from dispatch claims."""
+        if not authorized:
+            raise WorkflowControlNotAuthorized("PLAN_NOT_FOUND")
+        if command not in {"PLAN_ENTRY_PREPARE_V1", "PLAN_ENTRY_APPROVE_V1"}:
+            raise WorkflowControlError("PLAN_COMMAND_INVALID")
+        identity = (scope.namespace, scope.security_domain, actor, command, key)
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 297))",
+            (json.dumps(identity),),
+        )
+        row = connection.execute(
+            "SELECT payload_digest,state,result_record FROM execution_authority.idempotency_claims "
+            "WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND command_type=%s AND idempotency_key=%s",
+            identity,
+        ).fetchone()
+        if row is not None:
+            if row["payload_digest"] != digest:
+                raise WorkflowControlConflict("IDEMPOTENCY_PAYLOAD_MISMATCH")
+            if row["state"] != "COMPLETED" or row["result_record"] is None:
+                raise WorkflowControlConflict("COMMAND_IN_PROGRESS")
+            return row["result_record"]
+        return None
+
+    def complete_plan_entry(
+        self, connection, scope, actor, command, key, digest, result, *, authorized
+    ):
+        if not authorized:
+            raise WorkflowControlNotAuthorized("PLAN_NOT_FOUND")
+        if command not in {"PLAN_ENTRY_PREPARE_V1", "PLAN_ENTRY_APPROVE_V1"}:
+            raise WorkflowControlError("PLAN_COMMAND_INVALID")
+        connection.execute(
+            "INSERT INTO execution_authority.idempotency_claims "
+            "(namespace,security_domain,actor_id,command_type,idempotency_key,payload_digest,state,"
+            "result_identity,claimed_at,completed_at,retain_until,result_record) "
+            "VALUES (%s,%s,%s,%s,%s,%s,'COMPLETED',%s,now(),now(),'infinity',%s::jsonb)",
+            (
+                scope.namespace,
+                scope.security_domain,
+                actor,
+                command,
+                key,
+                digest,
+                result["planId"],
+                json.dumps(result),
+            ),
+        )
+
+    def approve_plan_entry(
+        self, connection, scope, decision, *, expected_version, authorized
+    ):
+        if not authorized:
+            raise WorkflowControlNotAuthorized("PLAN_NOT_FOUND")
+        row = connection.execute(
+            "SELECT aggregate_version FROM execution_authority.plans WHERE namespace=%s "
+            "AND security_domain=%s AND plan_id=%s AND plan_version=%s FOR UPDATE",
+            (
+                scope.namespace,
+                scope.security_domain,
+                decision.plan_id,
+                decision.plan_version,
+            ),
+        ).fetchone()
+        if row is None or row["aggregate_version"] != expected_version:
+            raise WorkflowControlConflict("STALE_AGGREGATE_VERSION")
+        return self.append_approval(scope, decision, connection=connection)
+
+    def prepare_plan_entry(self, connection, plan, *, authorized):
+        if not authorized:
+            raise WorkflowControlNotAuthorized("PLAN_NOT_FOUND")
+        if (
+            plan.status != PlanStatus.PENDING_APPROVAL
+            or plan.aggregate_version != 1
+            or plan.plan_version != 1
+            or hashlib.sha256(plan.canonical_bytes).hexdigest() != plan.plan_digest
+        ):
+            raise WorkflowControlConflict("PLAN_CONTENT_INVALID")
+        return self.create_plan(plan, connection=connection)
