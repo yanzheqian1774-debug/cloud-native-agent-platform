@@ -5,6 +5,10 @@
 - Session: `S5-V023-IMPL-295`; type: bounded frontend implementation.
 - Source: `6035917d7a6f31ee12cf121ff9958d2326f9879d`; tree:
   `eb88a36cfd15d93280aa51a656690e9e6c732ccf`.
+- Controlled refresh source: `ae002a2e9a4b765fe311e1e74328a9b6111a4929`;
+  tree: `d007b63a4ab4a6bd38849d3c03df5ff6927d07a7`. The ordinary
+  `--no-ff` merge has parents `9157bf3e2c94f3772084fb8e837182784ad1a7cb`
+  and `ae002a2e9a4b765fe311e1e74328a9b6111a4929`.
 - Branch: `codex/s5-v023-impl-295-workflow-skill-operation-binding` in the
   isolated `a8e2` worktree.
 - Architecture gate: G1. This task adds a Console capability behind the existing
@@ -35,7 +39,7 @@ validate, review, publish, approve a Plan or grant execution. Binding and public
 do not create a Run, Task Run, Attempt, executor selection, credential authority or
 dispatch authority.
 
-## 293 dependency checkpoint
+## 293 dependency and controlled-refresh checkpoint
 
 At implementation start, the local 293 branch
 `codex/s5-v023-impl-293-workflow-skill-authoring` still pointed to
@@ -59,14 +63,14 @@ Skill ID, revision, digest and operation during validate and publication.
 
 The frontend uses a dedicated strict read adapter over that confirmed GET projection.
 It does not change the shared Skill adapter and does not treat `capabilities`, Skill
-names or revision-level schemas as operation identities. Before a combined candidate
-is available, current main returns no authorable operation records and the UI reports
-the directory as empty/unavailable without synthesizing metadata.
+names or revision-level schemas as operation identities.
 
-This branch can prove the complete selector and local request lifecycle with a
-contract-shaped browser fixture, but real frontend/backend Browser Acceptance still
-requires a separately identified combined candidate containing 293 and 295. A mock
-does not replace that integration or Human acceptance.
+The 293 implementation subsequently entered formal main through REL-296. This branch
+was refreshed only to the fixed commit and tree above, without rebase, squash, amend,
+force-push or use of the 293 worktree/runtime. Migrations `0001` through `0017` match
+that main tree exactly. The refreshed candidate therefore exercises the same strict
+GET projection and Workflow resolver used by the production backend rather than a
+copied or test-only resolver.
 
 ## Frontend behavior
 
@@ -100,16 +104,19 @@ controlled error responses.
 ## Validation boundary
 
 Frontend lint, production build and focused Workflow/Runtime regression are required
-for this checkpoint. Mocked error/latency tests may prove local state handling but do
-not replace the missing 293 production API lifecycle. Final real Browser Acceptance
-must provision an eligible published Skill through the formal API, select and save the
-binding through the real UI, read it back through the Workflow GET, and exercise the
-normal successor, validation, review and publication path against the exact combined
-frontend/backend candidate.
+for this checkpoint. Mocked error/latency tests prove deterministic local state
+handling but do not replace the production API lifecycle. The real combined browser
+case provisions Runtime and Skill dependencies through formal HTTP, creates a
+historical unbound Workflow revision, explicitly selects and saves the published
+Skill revision and operation through the Workflow UI, then confirms the authoritative
+GET, unrelated-edit retention, exact pre-review identity, validate/review/publish and
+successor behavior. The same real case exercises invalid operation and unavailable
+Skill rejection, CAS recovery without replay, duplicate-write suppression, a delayed
+real detail response, keyboard focus order and 390 px overflow.
 
 ## Candidate validation and changed paths
 
-Local frontend validation passed:
+Focused validation on the refreshed candidate passed:
 
 - `npm run lint`;
 - `npm run build` with 106 transformed modules;
@@ -117,6 +124,9 @@ Local frontend validation passed:
   exact operation metadata, invalid-resource exclusion, 390 px overflow, edit CAS
   retention/no replay, successor-Draft eligibility, exact reference-digest matching,
   FastAPI validation-detail handling and late detail response suppression.
+- one real combined frontend/backend Playwright case using dedicated PostgreSQL and
+  Qdrant containers, formal Skill/Runtime/Workflow HTTP, and the real Workflow UI;
+- the refreshed 293 Skill-operation schema and resolver tests (`4 passed`).
 
 The current-main Workflow contract tests passed `14` cases. Repository-wide
 `make check` passed Ruff, formatting and `1544 passed / 103 environment-dependent
@@ -134,5 +144,7 @@ Changed paths are limited to:
 - this implementation note.
 
 No backend, migration, CI, shared browser harness, App/Agent/MCP management page,
-Evidence/focus path or delivery matrix was modified. Real integration remains pending
-for the explicit combined identity `main 6035917... + 293 932afa... + 295 candidate`.
+Evidence/focus path or delivery matrix was modified by 295. Backend, browser-regression
+and CI changes visible in the branch are preserved second-parent content from formal
+main `ae002a2...`, not 295 scope expansion. Full immutable Browser Acceptance and the
+five new-source CI checks remain final-candidate gates before Human Pre-Merge review.

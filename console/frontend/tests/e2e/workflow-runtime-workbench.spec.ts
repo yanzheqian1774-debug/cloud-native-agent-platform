@@ -118,6 +118,107 @@ test("renders a disclosure-safe denied state", async ({ page }) => {
   await expect(page.getByRole("alert")).not.toContainText("WORKFLOW_ACCESS_DENIED");
 });
 
+test("binds a formally published Skill operation through the real Workflow UI", async ({ page }) => {
+  const suffix=Date.now(),json=async(method:string,path:string,body?:unknown)=>page.evaluate(async({method,path,body})=>{
+    const response=await fetch(path,{method,headers:{"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
+    return {status:response.status,body:response.status===204?null:await response.json()};
+  },{method,path,body});
+  const runtimeContent={provider:"NATIVE_KUBERNETES",resources:{cpuRequest:"250m",cpuLimit:"500m",memoryRequest:"256Mi",memoryLimit:"1Gi"},isolation:"NAMESPACE",stateMode:"STATELESS",sessionAffinity:"NONE",secretReferences:[],openClawPackageRef:null};
+  const operation={name:`quality.read-${suffix}`,inputSchema:{type:"object",properties:{supplier:{type:"string"}}},outputSchema:{type:"object",properties:{status:{type:"string"}}},sideEffectClass:"READ_ONLY",executorId:"workflow-ui-readonly",executorRevision:"1.0.0",executorConfigurationDigest:"1".repeat(64),sideEffectPolicy:{policyId:"workflow-ui-readonly",policyRevision:"1",policyDigest:"2".repeat(64)},ioLimits:{policyId:"workflow-ui-bounds",policyRevision:"1",maxInputBytes:4096,maxOutputBytes:4096,maxObjectDepth:8,maxProperties:64,timeoutMs:1000}};
+  const skillContent={description:"Formal Skill operation for the Workflow UI",capabilities:[operation.name],instructions:"Read only.",operations:[operation]};
+
+  await page.goto("/dashboard");
+  let response=await json("POST","/api/internal/v0.2.2/runtime-profiles",{name:`Workflow binding Runtime ${suffix}`,content:runtimeContent});expect(response.status).toBe(201);
+  let runtime=response.body.profile;const runtimeRevision=runtime.revisions.at(-1);
+  response=await json("POST",`/api/internal/v0.2.2/runtime-profiles/${encodeURIComponent(runtime.runtimeProfileId)}/validation`,{expectedVersion:runtime.aggregateVersion});expect(response.status).toBe(200);runtime=response.body.profile;
+  response=await json("POST",`/api/internal/v0.2.2/runtime-profiles/${encodeURIComponent(runtime.runtimeProfileId)}/reviews`,{expectedVersion:runtime.aggregateVersion,digest:runtimeRevision.digest,decision:"APPROVE",reason:"Exact real UI integration review"});expect(response.status).toBe(200);runtime=response.body.profile;
+  response=await json("POST",`/api/internal/v0.2.2/runtime-profiles/${encodeURIComponent(runtime.runtimeProfileId)}/publications`,{expectedVersion:runtime.aggregateVersion,digest:runtimeRevision.digest,reviewId:runtime.reviews.at(-1).reviewId});expect(response.status).toBe(200);runtime=response.body.profile;
+
+  response=await json("POST","/api/internal/v0.2.2/resources/skill",{name:`Workflow binding Skill ${suffix}`,content:skillContent});expect(response.status).toBe(201);
+  let skill=response.body.resource;const skillRevision=skill.revisions.at(-1);
+  response=await json("POST",`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skill.resourceId)}/validation`,{expectedVersion:skill.aggregateVersion});expect(response.status).toBe(200);skill=response.body.resource;
+  response=await json("POST",`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skill.resourceId)}/reviews`,{expectedVersion:skill.aggregateVersion,digest:skillRevision.digest,decision:"APPROVE",reason:"Exact real UI integration review"});expect(response.status).toBe(200);skill=response.body.resource;
+  response=await json("POST",`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skill.resourceId)}/publications`,{expectedVersion:skill.aggregateVersion,digest:skillRevision.digest,reviewId:skill.reviews.at(-1).reviewId});expect(response.status).toBe(200);skill=response.body.resource;
+  response=await json("POST",`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skill.resourceId)}/successors`,{expectedVersion:skill.aggregateVersion});expect(response.status).toBe(200);skill=response.body.resource;
+  expect(skill.publishedRevisionId).toBe(skillRevision.revisionId);
+  expect(skill.revisions.at(-1).revisionId).not.toBe(skill.publishedRevisionId);
+
+  response=await json("POST","/api/internal/v0.2.2/resources/skill",{name:`Unpublished Workflow Skill ${suffix}`,content:skillContent});expect(response.status).toBe(201);
+  const unpublished=response.body.resource,unpublishedRevision=unpublished.revisions.at(-1);
+  response=await json("POST","/api/internal/v0.2.2/resources/skill",{name:`Invalid Workflow Skill ${suffix}`,content:{...skillContent,operations:[{name:"incomplete"}]}});expect(response.status).toBe(422);
+
+  await page.goto("/workflow-definitions");
+  await expect(page.getByLabel("Skill operation directory status")).toContainText("个合格 operation");
+  await expect(page.getByLabel("步骤 step-1 选择 Skill",{exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:"新建 Workflow Definition"}).click();
+  await page.getByLabel("Workflow 名称").fill(`Real Skill-bound Workflow ${suffix}`);
+  await page.getByLabel("资源 ID").fill(runtime.runtimeProfileId);
+  await page.getByLabel("修订 ID").fill(runtime.publishedRevisionId);
+  await page.getByLabel("用途说明").fill("Historical unbound Workflow revision");
+  await page.getByLabel("名称",{exact:true}).fill("Read supplier quality");
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  await expect(page.getByRole("heading",{name:"Canonical DAG"})).toBeVisible();
+  await page.getByRole("button",{name:"编辑当前 Draft"}).click();
+  const skillSelect=page.getByLabel("步骤 step-1 选择 Skill",{exact:true}),revisionSelect=page.getByLabel("步骤 step-1 选择 Skill revision",{exact:true}),operationSelect=page.getByLabel("步骤 step-1 选择 operation",{exact:true});
+  await expect(skillSelect.locator(`option[value="${unpublished.resourceId}"]`)).toHaveCount(0);
+  await skillSelect.selectOption(skill.resourceId);
+  await revisionSelect.selectOption(skill.publishedRevisionId);
+  await operationSelect.selectOption(operation.name);
+  const preview=page.getByLabel("Selected Skill operation details");
+  await expect(preview).toContainText(skill.resourceId);await expect(preview).toContainText(skill.publishedRevisionId);await expect(preview).toContainText(skillRevision.digest);await expect(preview).toContainText(operation.name);
+  await page.getByRole("button",{name:"保存精确 Skill operation binding"}).click();
+  await page.getByLabel("用途说明").fill("Exact Skill operation binding saved through real UI");
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  await expect(page.getByLabel("Workflow authoring")).toHaveCount(0);
+  const workflowId=(await page.locator(".module-layout > section > header .technical-value").textContent())!.trim();
+  response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);expect(response.status).toBe(200);
+  let workflow=response.body.definition,task=workflow.revisions.at(-1).content.tasks[0];
+  const binding={skillId:skill.resourceId,skillRevisionId:skill.publishedRevisionId,skillDigest:skillRevision.digest,operation:operation.name};
+  expect(task.skillOperationBindings).toEqual([binding]);
+  expect(task.references).toEqual([{kind:"SKILL",resourceId:binding.skillId,revisionId:binding.skillRevisionId,digest:binding.skillDigest}]);
+  expect(workflow.revisions[0].content.tasks[0].skillOperationBindings).toBeUndefined();
+  expect(workflow.revisions.at(-1).content.runtimeProfile).toEqual({kind:"RUNTIME_PROFILE",resourceId:runtime.runtimeProfileId,revisionId:runtime.publishedRevisionId});
+
+  await page.getByRole("button",{name:"编辑当前 Draft"}).click();
+  await page.getByLabel("用途说明").fill("Unrelated real UI edit retains binding");
+  let realPutCount=0;page.on("request",request=>{if(request.method()==="PUT"&&decodeURIComponent(new URL(request.url()).pathname)===`/api/internal/v0.2.2/workflow-definitions/${workflowId}/draft`)realPutCount+=1});
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).dblclick();
+  await expect(page.getByText("Unrelated real UI edit retains binding",{exact:true})).toBeVisible();
+  expect(realPutCount).toBe(1);
+  response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);workflow=response.body.definition;task=workflow.revisions.at(-1).content.tasks[0];expect(task.skillOperationBindings).toEqual([binding]);
+  const review=page.getByLabel("Workflow Skill operation binding review");await expect(review).toContainText(binding.skillId);await expect(review).toContainText(binding.skillRevisionId);await expect(review).toContainText(binding.skillDigest);await expect(review).toContainText(binding.operation);
+  await page.getByRole("button",{name:"Validate DAG and references"}).click();
+  await page.getByRole("button",{name:"Review exact Workflow digest"}).click();
+  await page.getByRole("button",{name:"Publish immutable Workflow"}).click();
+  await expect(page.locator(".module-layout > section").getByText("PUBLISHED",{exact:true}).first()).toBeVisible();
+  await page.getByRole("button",{name:"Create Workflow successor"}).click();
+  await page.getByRole("button",{name:"编辑当前 Draft"}).click();
+  await page.getByLabel("用途说明").fill("Retained input after real CAS conflict");
+  response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);workflow=response.body.definition;
+  const authoritativeContent=structuredClone(workflow.revisions.at(-1).content);authoritativeContent.description="Concurrent authoritative edit";
+  response=await json("PUT",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}/draft`,{expectedVersion:workflow.aggregateVersion,content:authoritativeContent});expect(response.status).toBe(200);
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  await expect(page.getByLabel("Guided conflict recovery")).toContainText("stale");
+  await page.getByRole("button",{name:"Explicitly reapply safe draft input"}).click();
+  await expect(page.getByLabel("用途说明")).toHaveValue("Retained input after real CAS conflict");
+  await expect(page.getByLabel("Workflow authoring").getByLabel("步骤 step-1 的 Skill operation 绑定")).toContainText(binding.operation);
+  await page.setViewportSize({width:390,height:844});await skillSelect.focus();await expect(skillSelect).toBeFocused();await skillSelect.press("Tab");await expect(revisionSelect).toBeFocused();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  await expect(page.getByLabel("Workflow authoring")).toHaveCount(0);
+
+  response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);workflow=response.body.definition;
+  const invalidCases=[
+    {name:`Wrong operation ${suffix}`,identity:{...binding,operation:`${binding.operation}.missing`}},
+    {name:`Unavailable Skill ${suffix}`,identity:{skillId:unpublished.resourceId,skillRevisionId:unpublishedRevision.revisionId,skillDigest:unpublishedRevision.digest,operation:operation.name}},
+  ];
+  for(const invalid of invalidCases){const content=structuredClone(workflow.revisions.at(-1).content),target=content.tasks[0];target.skillOperationBindings=[invalid.identity];target.references=[{kind:"SKILL",resourceId:invalid.identity.skillId,revisionId:invalid.identity.skillRevisionId,digest:invalid.identity.skillDigest}];response=await json("POST","/api/internal/v0.2.2/workflow-definitions",{name:invalid.name,content});expect(response.status).toBe(201);const invalidWorkflow=response.body.definition;response=await json("POST",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(invalidWorkflow.workflowDefinitionId)}/validation`,{expectedVersion:invalidWorkflow.aggregateVersion});expect(response.status).toBe(409);expect(response.body.detail.reasonCode).toBe("EXACT_REFERENCE_NOT_FOUND")}
+
+  const secondContent=structuredClone(workflow.revisions.at(-1).content);response=await json("POST","/api/internal/v0.2.2/workflow-definitions",{name:`Late response target ${suffix}`,content:secondContent});expect(response.status).toBe(201);const secondId=response.body.definition.workflowDefinitionId;
+  await page.goto("/workflow-definitions");let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>release=resolve),waiting=new Promise<void>(resolve=>started=resolve);const delayedPath=`/api/internal/v0.2.2/workflow-definitions/${workflowId}`;
+  await page.route("**/api/internal/v0.2.2/workflow-definitions/*",async route=>{if(route.request().method()==="GET"&&decodeURIComponent(new URL(route.request().url()).pathname)===delayedPath){const actual=await route.fetch();started();await held;await route.fulfill({response:actual})}else await route.continue()});
+  await page.getByRole("button",{name:new RegExp(`Real Skill-bound Workflow ${suffix}`)}).click();await waiting;await page.getByRole("button",{name:new RegExp(`Late response target ${suffix}`)}).click();await expect(page.getByRole("heading",{name:`Late response target ${suffix}`,exact:true})).toBeVisible();release();await page.waitForTimeout(100);await expect(page.getByRole("heading",{name:`Late response target ${suffix}`,exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.get("resourceId")).toBe(secondId);
+});
+
 test("explicitly selects and round-trips an exact Skill operation binding", async ({ page }) => {
   const binding={skillId:"skill-definition:quality",skillRevisionId:"skill-revision:published-7",skillDigest:`sha256:${"a".repeat(64)}`,operation:"quality.read"};
   const operation={name:binding.operation,inputSchema:{type:"object",required:["supplier"]},outputSchema:{type:"object"},sideEffectClass:"READ_ONLY",executorId:"readonly",executorRevision:"1",executorConfigurationDigest:"1".repeat(64),sideEffectPolicy:{policyId:"readonly",policyRevision:"1",policyDigest:"2".repeat(64)},ioLimits:{policyId:"bounded",policyRevision:"1",maxInputBytes:1024,maxOutputBytes:2048,maxObjectDepth:8,maxProperties:64,timeoutMs:1000}};
