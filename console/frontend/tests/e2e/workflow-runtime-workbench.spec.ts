@@ -80,7 +80,8 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
 
 test("shows controlled empty and validation failure states", async ({ page }) => {
   await page.goto("/workflow-definitions");
-  await expect(page.locator(".empty-state")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "选择 Workflow Definition", exact: true })).toBeVisible();
+  await expect(page.getByText("DAG、精确资源绑定、digest、消费者与历史会显示在这里。", { exact: true })).toBeVisible();
   await page.goto("/runtime-profiles");
   await page.getByRole("button", { name: "Create bounded OpenClaw Profile" }).click();
   await page.getByLabel("名称").fill("OpenClaw declaration");

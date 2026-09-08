@@ -1,6 +1,6 @@
 .resource-management label,
 .resource-form label,
-.agent-workbench .resource-form-grid label {
+.skill-mcp-workbench .resource-form-grid label {
   display: flex;
   flex-direction: column;
   gap: .35rem;
@@ -13,9 +13,9 @@
 .resource-management input,
 .resource-management select,
 .resource-management textarea,
-.agent-workbench .resource-form-grid input,
-.agent-workbench .resource-form-grid select,
-.agent-workbench .resource-form-grid textarea {
+.skill-mcp-workbench .resource-form-grid input,
+.skill-mcp-workbench .resource-form-grid select,
+.skill-mcp-workbench .resource-form-grid textarea {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -28,7 +28,7 @@
 
 .resource-form textarea,
 .resource-management textarea,
-.agent-workbench .resource-form-grid textarea {
+.skill-mcp-workbench .resource-form-grid textarea {
   min-height: 7rem;
   resize: vertical;
   font: inherit;
@@ -74,7 +74,7 @@
 
 .resource-form :is(input,select,textarea,button):focus-visible,
 .resource-management :is(input,select,textarea,button):focus-visible,
-.agent-workbench .resource-form-grid :is(input,select,textarea,button):focus-visible {
+.skill-mcp-workbench .resource-form-grid :is(input,select,textarea,button):focus-visible {
   outline: 3px solid #3157d5;
   outline-offset: 2px;
 }
@@ -86,7 +86,7 @@
   }
 
   .resource-management,
-  .agent-workbench {
+  .skill-mcp-workbench {
     padding-inline: 1rem;
   }
 

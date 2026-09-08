@@ -90,4 +90,43 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
     return {background:style.backgroundColor,color:style.color};
   });
   expect(design).toEqual({background:"rgb(246, 247, 249)",color:"rgb(23, 32, 42)"});
+
+  const alternate = await page.evaluate(async (resource: {name:string;content:Record<string,unknown>}) => {
+    const response = await fetch("/api/internal/v0.2.2/resources/skill", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name:resource.name,content:resource.content}),
+    });
+    return response.json();
+  }, {name:"Alternate Supplier Skill",content:publishedSkill.resource.revisions.at(-1).content});
+  await page.reload();
+  await page.getByLabel("Search catalog").fill("");
+  await page.getByLabel("Lifecycle filter").selectOption("ALL");
+
+  let releaseFirst!:()=>void,markFirstStarted!:()=>void;
+  const firstStarted=new Promise<void>(resolve=>{markFirstStarted=resolve});
+  const firstRelease=new Promise<void>(resolve=>{releaseFirst=resolve});
+  const delayedPath=`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId!)}`;
+  await page.route("**/api/internal/v0.2.2/resources/skill/*",async route=>{
+    if(route.request().method()==="GET"&&new URL(route.request().url()).pathname===delayedPath){
+      markFirstStarted();
+      await firstRelease;
+    }
+    await route.continue();
+  });
+  const firstButton=page.locator(".agent-list button").filter({hasText:"Supplier Quality Skill"});
+  const alternateButton=page.locator(".agent-list button").filter({hasText:"Alternate Supplier Skill"});
+  await firstButton.click();
+  await firstStarted;
+  await alternateButton.click();
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:"Alternate Supplier Skill"})).toBeVisible();
+  await expect(alternateButton).toHaveClass(/selected/);
+  expect(new URL(page.url()).searchParams.get("resourceId")).toBe(alternate.resource.resourceId);
+  const delayedResponse=page.waitForResponse(response=>new URL(response.url()).pathname===delayedPath&&response.request().method()==="GET");
+  releaseFirst();
+  await delayedResponse;
+  await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:"Alternate Supplier Skill"})).toBeVisible();
+  await expect(alternateButton).toHaveClass(/selected/);
+  expect(new URL(page.url()).searchParams.get("resourceId")).toBe(alternate.resource.resourceId);
 });
