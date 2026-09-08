@@ -119,3 +119,43 @@ class WorkflowControlUnitOfWork(Protocol):
     def persist_operation(
         self, operation: WorkflowControlOperation, *, authorized: bool
     ) -> WorkflowControlOperationResult: ...
+
+
+class PlanEntryRepository(Protocol):
+    """297 Workflow Control owner ports; supplied transactions never commit here."""
+
+    def prepare_plan_entry(
+        self, connection, plan: PlanRecord, *, authorized: bool
+    ) -> PlanRecord: ...
+    def approve_plan_entry(
+        self,
+        connection,
+        scope: ScopeIdentity,
+        decision: ApprovalDecision,
+        *,
+        expected_version: int,
+        authorized: bool,
+    ) -> ApprovalDecision: ...
+    def claim_plan_entry(
+        self,
+        connection,
+        scope: ScopeIdentity,
+        actor: str,
+        command: str,
+        key: str,
+        digest: str,
+        *,
+        authorized: bool,
+    ) -> dict | None: ...
+    def complete_plan_entry(
+        self,
+        connection,
+        scope: ScopeIdentity,
+        actor: str,
+        command: str,
+        key: str,
+        digest: str,
+        result: dict,
+        *,
+        authorized: bool,
+    ) -> None: ...

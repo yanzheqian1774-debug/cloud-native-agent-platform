@@ -206,15 +206,28 @@ class ScopedExecutionAuthorization:
         return self.decision_id
 
 
-def execution_plan_bytes(plan, assignment_id, instance_id):
+def execution_plan_bytes(
+    plan, assignment_id, instance_id, *, business_problem_id=None, preparation=None
+):
     """New Plan content submitted to the existing Workflow Control approval owner.
 
     Candidate approval and durable Plan approval retain independent digests.
     Historical Plan content is never inferred or rewritten into this envelope.
     """
+    additional = (
+        {}
+        if business_problem_id is None
+        else {
+            "businessProblemId": business_problem_id,
+            "preparation": preparation,
+        }
+    )
     return json.dumps(
         {
-            "schemaVersion": "employee-execution-plan.v1",
+            **additional,
+            "schemaVersion": "employee-execution-plan.v1"
+            if not additional
+            else "employee-execution-plan.v2",
             "workflow": asdict(plan),
             "assignmentId": str(assignment_id),
             "instanceId": str(instance_id),

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from psycopg_pool import ConnectionPool
 
 from agent_console.business_problem_domain import (
     TRANSITIONS,
+    BusinessProblemAggregate,
     BusinessProblemConflict,
     BusinessProblemError,
     BusinessProblemLifecycleEvent,
@@ -32,6 +34,15 @@ ADAPTER = "business-problem-postgresql-v1"
 
 
 class PostgresBusinessProblemRepository:
+    @contextmanager
+    def connection_scope(self, connection=None):
+        """A supplied connection belongs to the caller; never commit it here."""
+        if connection is not None:
+            yield connection
+        else:
+            with self.pool.connection() as owned, owned.transaction():
+                yield owned
+
     def __init__(
         self, database_url: str, *, migration_path: Path, timeout: float = 5.0
     ):
@@ -97,6 +108,10 @@ class PostgresBusinessProblemRepository:
         key: str,
         digest: str,
     ) -> dict[str, Any] | None:
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 297))",
+            (json.dumps([*self._scope(scope), actor, command, key]),),
+        )
         row = connection.execute(
             "SELECT payload_digest,result_record FROM business_problem_authority.idempotency_claims WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND command_type=%s AND idempotency_key=%s FOR UPDATE",
             (*self._scope(scope), actor, command, key),
@@ -154,11 +169,12 @@ class PostgresBusinessProblemRepository:
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
     ) -> BusinessProblemRevision:
         self._authorize(authorized)
         if revision.revision != 1 or revision.predecessor_revision_id is not None:
             raise BusinessProblemError("BUSINESS_PROBLEM_REVISION_STALE")
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
                 revision.scope,
@@ -243,10 +259,15 @@ class PostgresBusinessProblemRepository:
         return self._revision(row)
 
     def get_problem(
-        self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
+        self,
+        scope: ScopeIdentity,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
     ) -> tuple[BusinessProblemRevision, ...]:
         self._authorize(authorized)
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             rows = connection.execute(
                 "SELECT * FROM business_problem_authority.problem_revisions WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s ORDER BY revision",
                 (*self._scope(scope), business_problem_id),
@@ -256,15 +277,43 @@ class PostgresBusinessProblemRepository:
         return tuple(self._revision(row) for row in rows)
 
     def list_problems(
-        self, scope: ScopeIdentity, *, authorized: bool
+        self, scope: ScopeIdentity, *, authorized: bool, connection=None
     ) -> tuple[BusinessProblemRevision, ...]:
         self._authorize(authorized)
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             rows = connection.execute(
                 "SELECT r.* FROM business_problem_authority.problems p JOIN business_problem_authority.problem_revisions r ON r.namespace=p.namespace AND r.security_domain=p.security_domain AND r.revision_id=p.current_revision_id WHERE p.namespace=%s AND p.security_domain=%s ORDER BY p.updated_at,p.business_problem_id",
                 self._scope(scope),
             ).fetchall()
         return tuple(self._revision(row) for row in rows)
+
+    def get_aggregate(
+        self,
+        scope: ScopeIdentity,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> BusinessProblemAggregate:
+        self._authorize(authorized)
+        with self.connection_scope(connection) as connection:
+            row = connection.execute(
+                "SELECT * FROM business_problem_authority.problems WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s FOR SHARE",
+                (*self._scope(scope), business_problem_id),
+            ).fetchone()
+        if row is None:
+            raise BusinessProblemError("BUSINESS_PROBLEM_NOT_FOUND")
+        return BusinessProblemAggregate(
+            scope,
+            row["business_problem_id"],
+            row["owner_id"],
+            BusinessProblemState(row["current_state"]),
+            row["aggregate_version"],
+            row["current_revision_id"],
+            row["created_by"],
+            row["created_at"],
+            row["updated_at"],
+        )
 
     def add_problem_revision(
         self,
@@ -274,9 +323,10 @@ class PostgresBusinessProblemRepository:
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
     ) -> BusinessProblemRevision:
         self._authorize(authorized)
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
                 revision.scope,
@@ -336,9 +386,10 @@ class PostgresBusinessProblemRepository:
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
     ) -> SuccessCriterionRevision:
         self._authorize(authorized)
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
                 revision.scope,
@@ -448,11 +499,59 @@ class PostgresBusinessProblemRepository:
         )
 
     def get_criterion_revision(
-        self, scope: ScopeIdentity, revision_id: str, *, authorized: bool
+        self,
+        scope: ScopeIdentity,
+        revision_id: str,
+        *,
+        authorized: bool,
+        connection=None,
     ) -> SuccessCriterionRevision:
         self._authorize(authorized)
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             return self._read_criterion(connection, scope, revision_id)
+
+    def list_criterion_revisions(
+        self,
+        scope: ScopeIdentity,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> tuple[SuccessCriterionRevision, ...]:
+        self._authorize(authorized)
+        with self.connection_scope(connection) as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM business_problem_authority.problems WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s",
+                (*self._scope(scope), business_problem_id),
+            ).fetchone()
+            if exists is None:
+                raise BusinessProblemError("BUSINESS_PROBLEM_NOT_FOUND")
+            rows = connection.execute(
+                "SELECT DISTINCT r.* FROM business_problem_authority.criterion_revisions r JOIN business_problem_authority.criteria_set_members m ON m.namespace=r.namespace AND m.security_domain=r.security_domain AND m.criterion_revision_id=r.revision_id JOIN business_problem_authority.criteria_sets s ON s.namespace=m.namespace AND s.security_domain=m.security_domain AND s.set_revision_id=m.set_revision_id WHERE s.namespace=%s AND s.security_domain=%s AND s.business_problem_id=%s ORDER BY r.success_criterion_id,r.revision",
+                (*self._scope(scope), business_problem_id),
+            ).fetchall()
+        return tuple(self._read_criterion_row(scope, row) for row in rows)
+
+    @staticmethod
+    def _read_criterion_row(
+        scope: ScopeIdentity, row: dict[str, Any]
+    ) -> SuccessCriterionRevision:
+        return SuccessCriterionRevision(
+            scope,
+            row["success_criterion_id"],
+            row["revision_id"],
+            row["revision"],
+            row["predecessor_revision_id"],
+            CriterionType(row["criterion_type"]),
+            row["measurement"],
+            tuple(row["required_evidence_kinds"]),
+            row["evaluator_type"],
+            row["evaluator_version"],
+            row["applicability"],
+            row["created_by"],
+            row["created_at"],
+            row["digest"],
+        )
 
     def add_criteria_set_revision(
         self,
@@ -462,9 +561,10 @@ class PostgresBusinessProblemRepository:
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
     ) -> SuccessCriteriaSetRevision:
         self._authorize(authorized)
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
                 revision.scope,
@@ -562,11 +662,51 @@ class PostgresBusinessProblemRepository:
         )
 
     def get_criteria_set_revision(
-        self, scope: ScopeIdentity, set_revision_id: str, *, authorized: bool
+        self,
+        scope: ScopeIdentity,
+        set_revision_id: str,
+        *,
+        authorized: bool,
+        connection=None,
+        business_problem_id: str | None = None,
     ) -> SuccessCriteriaSetRevision:
         self._authorize(authorized)
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
+            if business_problem_id is not None:
+                exists = connection.execute(
+                    "SELECT 1 FROM business_problem_authority.criteria_sets WHERE namespace=%s "
+                    "AND security_domain=%s AND business_problem_id=%s AND set_revision_id=%s",
+                    (*self._scope(scope), business_problem_id, set_revision_id),
+                ).fetchone()
+                if exists is None:
+                    raise BusinessProblemError("BUSINESS_PROBLEM_NOT_FOUND")
             return self._read_set(connection, scope, set_revision_id)
+
+    def list_criteria_set_revisions(
+        self,
+        scope: ScopeIdentity,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> tuple[SuccessCriteriaSetRevision, ...]:
+        self._authorize(authorized)
+        with self.connection_scope(connection) as connection:
+            rows = connection.execute(
+                "SELECT set_revision_id FROM business_problem_authority.criteria_sets WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s ORDER BY revision",
+                (*self._scope(scope), business_problem_id),
+            ).fetchall()
+            if not rows:
+                exists = connection.execute(
+                    "SELECT 1 FROM business_problem_authority.problems WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s",
+                    (*self._scope(scope), business_problem_id),
+                ).fetchone()
+                if exists is None:
+                    raise BusinessProblemError("BUSINESS_PROBLEM_NOT_FOUND")
+            return tuple(
+                self._read_set(connection, scope, row["set_revision_id"])
+                for row in rows
+            )
 
     def transition(
         self,
@@ -580,9 +720,10 @@ class PostgresBusinessProblemRepository:
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
     ) -> int:
         self._authorize(authorized)
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
                 scope,
@@ -660,10 +801,15 @@ class PostgresBusinessProblemRepository:
         return version
 
     def get_lifecycle(
-        self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
+        self,
+        scope: ScopeIdentity,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
     ) -> tuple[BusinessProblemLifecycleEvent, ...]:
         self._authorize(authorized)
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             rows = connection.execute(
                 "SELECT * FROM business_problem_authority.lifecycle_events WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s ORDER BY ordinal",
                 (*self._scope(scope), business_problem_id),
@@ -693,14 +839,16 @@ class PostgresBusinessProblemRepository:
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
+        _prepared=False,
     ) -> PlanProblemBinding:
         self._authorize(authorized)
-        with self.pool.connection() as connection, connection.transaction():
+        with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
                 binding.scope,
                 binding.actor_id,
-                "BIND_PLAN_TO_PROBLEM",
+                "PLAN_ENTRY_BIND_PREPARED_V1" if _prepared else "BIND_PLAN_TO_PROBLEM",
                 idempotency_key,
                 payload_digest,
             )
@@ -722,7 +870,7 @@ class PostgresBusinessProblemRepository:
             ).fetchone()
             if (
                 plan is None
-                or plan["status"] != "APPROVED"
+                or plan["status"] != ("PENDING_APPROVAL" if _prepared else "APPROVED")
                 or plan["plan_digest"] != binding.plan_digest
             ):
                 raise BusinessProblemConflict("PLAN_NOT_EXACTLY_APPROVED")
@@ -765,7 +913,7 @@ class PostgresBusinessProblemRepository:
                 connection,
                 binding.scope,
                 binding.actor_id,
-                "BIND_PLAN_TO_PROBLEM",
+                "PLAN_ENTRY_BIND_PREPARED_V1" if _prepared else "BIND_PLAN_TO_PROBLEM",
                 idempotency_key,
                 payload_digest,
                 "PLAN_BINDING",
@@ -800,8 +948,141 @@ class PostgresBusinessProblemRepository:
         )
 
     def get_plan_binding(
-        self, scope: ScopeIdentity, binding_id: str, *, authorized: bool
+        self,
+        scope: ScopeIdentity,
+        binding_id: str,
+        *,
+        authorized: bool,
+        connection=None,
     ) -> PlanProblemBinding:
         self._authorize(authorized)
-        with self.pool.connection() as connection:
+        with self.connection_scope(connection) as connection:
             return self._read_binding(connection, scope, binding_id)
+
+    def validate_plan_target(
+        self, connection, binding, expected_version, *, authorized
+    ):
+        """Lock Product facts and validate exact, current preparation/approval input."""
+        self._authorize(authorized)
+        scope = binding.scope
+        row = connection.execute(
+            "SELECT * FROM business_problem_authority.problems WHERE namespace=%s "
+            "AND security_domain=%s AND business_problem_id=%s FOR UPDATE",
+            (*self._scope(scope), binding.business_problem_id),
+        ).fetchone()
+        if row is None:
+            raise BusinessProblemError("BUSINESS_PROBLEM_NOT_FOUND")
+        if row["current_revision_id"] != binding.problem_revision_id:
+            raise BusinessProblemConflict("PLAN_PROBLEM_BINDING_MISMATCH")
+        revision = self._read_revision(connection, scope, binding.problem_revision_id)
+        criteria = self.get_criteria_set_revision(
+            scope,
+            binding.criteria_set_revision_id,
+            authorized=authorized,
+            connection=connection,
+            business_problem_id=binding.business_problem_id,
+        )
+        if (
+            row["aggregate_version"] != expected_version
+            or row["current_revision_id"] != revision.revision_id
+            or row["current_state"] not in {"ACTIVE", "IN_PROGRESS"}
+            or revision.business_problem_id != binding.business_problem_id
+            or revision.digest != binding.problem_revision_digest
+            or criteria.business_problem_id != binding.business_problem_id
+            or criteria.problem_revision_id != revision.revision_id
+            or criteria.digest != binding.criteria_set_digest
+        ):
+            raise BusinessProblemConflict("PLAN_PROBLEM_BINDING_MISMATCH")
+        latest = connection.execute(
+            "SELECT set_revision_id FROM business_problem_authority.criteria_sets "
+            "WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s "
+            "ORDER BY revision DESC LIMIT 1",
+            (*self._scope(scope), binding.business_problem_id),
+        ).fetchone()
+        if latest["set_revision_id"] != criteria.set_revision_id:
+            raise BusinessProblemConflict("PLAN_CRITERIA_STALE")
+        for revision_id in sorted(criteria.ordered_criterion_revision_ids):
+            criterion = self._read_criterion(connection, scope, revision_id)
+            head = connection.execute(
+                "SELECT current_revision_id FROM business_problem_authority.criteria "
+                "WHERE namespace=%s AND security_domain=%s AND success_criterion_id=%s FOR SHARE",
+                (*self._scope(scope), criterion.success_criterion_id),
+            ).fetchone()
+            if head["current_revision_id"] != revision_id:
+                raise BusinessProblemConflict("PLAN_CRITERIA_STALE")
+        return revision, criteria
+
+    def bind_prepared_plan(
+        self,
+        connection,
+        binding,
+        *,
+        expected_problem_version,
+        idempotency_key,
+        payload_digest,
+        authorized,
+    ):
+        self.validate_plan_target(
+            connection, binding, expected_problem_version, authorized=authorized
+        )
+        return self.bind_plan(
+            binding,
+            expected_problem_version=expected_problem_version,
+            idempotency_key=idempotency_key,
+            payload_digest=payload_digest,
+            authorized=authorized,
+            connection=connection,
+            _prepared=True,
+        )
+
+    def validate_approval_binding(
+        self, connection, binding, *, expected_problem_version, authorized
+    ):
+        self.validate_plan_target(
+            connection, binding, expected_problem_version, authorized=authorized
+        )
+        stored = self._read_binding(connection, binding.scope, binding.binding_id)
+        if stored.digest != binding.digest:
+            raise BusinessProblemConflict("PLAN_PROBLEM_BINDING_MISMATCH")
+        return stored
+
+    @staticmethod
+    def validate_execution_binding(
+        connection, scope, plan_id, version, digest, content, *, authorized
+    ):
+        """Consume immutable approval-time Product facts; never infer a latest binding."""
+        PostgresBusinessProblemRepository._authorize(authorized)
+        row = connection.execute(
+            "SELECT * FROM business_problem_authority.plan_bindings WHERE namespace=%s "
+            "AND security_domain=%s AND plan_id=%s AND plan_version=%s",
+            (scope.namespace, scope.security_domain, plan_id, version),
+        ).fetchone()
+        try:
+            preparation = content["preparation"]
+            expected = (
+                digest,
+                content["businessProblemId"],
+                preparation["problemRevisionId"],
+                preparation["problemRevisionDigest"],
+                preparation["criteriaSetRevisionId"],
+                preparation["criteriaSetDigest"],
+            )
+            actual = (
+                None
+                if row is None
+                else tuple(
+                    row[k]
+                    for k in (
+                        "plan_digest",
+                        "business_problem_id",
+                        "problem_revision_id",
+                        "problem_revision_digest",
+                        "criteria_set_revision_id",
+                        "criteria_set_digest",
+                    )
+                )
+            )
+            if actual != expected:
+                raise BusinessProblemConflict("PLAN_PROBLEM_BINDING_MISMATCH")
+        except (KeyError, TypeError) as exc:
+            raise BusinessProblemConflict("PLAN_PROBLEM_BINDING_MISMATCH") from exc

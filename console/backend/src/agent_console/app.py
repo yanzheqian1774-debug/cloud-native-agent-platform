@@ -54,6 +54,7 @@ from agent_console.agent_definition_service import (
     AgentDefinitionFailure,
     AgentDefinitionService,
 )
+from agent_console.business_problem_api import router as business_problem_router
 from agent_console.digital_employee_api import router as digital_employee_router
 from agent_console.digital_employee_bootstrap import (
     DigitalEmployeeProductAssembly,
@@ -183,6 +184,8 @@ app.include_router(workflow_definition_router)
 app.include_router(resource_catalog_router)
 app.include_router(digital_employee_router)
 app.include_router(governed_execution_router)
+
+app.include_router(business_problem_router)
 
 
 class _SupplierQualityExecutionEvidence:
@@ -1683,3 +1686,27 @@ def approve_problem_plan(
         return service.approve(problem_id, command, principal)
     except ProblemPlanningError as exc:
         raise _problem_http_error(exc) from exc
+
+
+# Durable Product entry is independent of preview and does not enable dispatch.
+_business_problem_application = None
+
+
+def _configure_business_problems():
+    global _business_problem_application
+    from agent_console.business_problem_bootstrap import (
+        build_business_problem_application,
+    )
+
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if not database_url or _digital_employee_assembly is None:
+        return
+    try:
+        _business_problem_application = build_business_problem_application(
+            database_url, _digital_employee_assembly
+        )
+    except Exception:
+        _business_problem_application = None
+
+
+_configure_business_problems()

@@ -358,3 +358,22 @@ class PostgresEmployeeDefinitionRepository:
                 payload,
             )
             return self._read(conn, scope, definition_id, revision_id)
+
+    def read_for_plan(
+        self,
+        connection,
+        scope,
+        definition_id,
+        revision_id,
+        expected_digest,
+        *,
+        authorized,
+    ):
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        value = self._read(
+            connection, scope, identifier(definition_id), identifier(revision_id)
+        )
+        if not value["published"] or value["digest"] != expected_digest:
+            raise EmployeeDefinitionError("EMPLOYEE_PLAN_REFERENCE_INVALID")
+        return value

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .digital_employee_application import (
     AssignmentLifecycle,
@@ -345,3 +345,45 @@ class PostgresDigitalEmployeeRepository:
         agent_id: AgentInstanceId,
     ):
         return self.authority.attempts_for_runtime_agent(scope, runtime_id, agent_id)
+
+    def validate_plan_identity(
+        self,
+        connection,
+        scope,
+        instance_id,
+        assignment_id,
+        definition_id,
+        revision_id,
+        digest,
+        *,
+        authorized,
+    ):
+        if not authorized:
+            raise DigitalEmployeeError("EMPLOYEE_NOT_FOUND")
+        row = connection.execute(
+            "SELECT i.record AS instance,a.record AS assignment FROM "
+            "execution_authority.digital_employee_instances i JOIN execution_authority.assignments a "
+            "ON a.namespace=i.namespace AND a.security_domain=i.security_domain "
+            "AND a.digital_employee_instance_id=i.digital_employee_instance_id "
+            "WHERE i.namespace=%s AND i.security_domain=%s AND i.digital_employee_instance_id=%s "
+            "AND a.assignment_id=%s FOR SHARE OF i,a",
+            (scope.namespace, scope.security_domain, instance_id, assignment_id),
+        ).fetchone()
+        if row is None:
+            raise DigitalEmployeeError("EMPLOYEE_NOT_FOUND")
+        instance, assignment = row["instance"], row["assignment"]
+        now = datetime.now(UTC)
+        if (
+            instance["definition_id"] != definition_id
+            or instance["definition_revision_id"] != revision_id
+            or instance["definition_digest"] != digest
+            or instance.get("definition_authority") != "DIGITAL_EMPLOYEE_DEFINITION_V1"
+            or instance["lifecycle"] != "ENABLED"
+            or assignment["lifecycle"] != "ACTIVE"
+            or datetime.fromisoformat(assignment["effective_from"]) > now
+            or (
+                assignment.get("effective_until") is not None
+                and datetime.fromisoformat(assignment["effective_until"]) <= now
+            )
+        ):
+            raise DigitalEmployeeError("EMPLOYEE_PLAN_BINDING_MISMATCH")

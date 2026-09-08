@@ -3,6 +3,7 @@
 from typing import Protocol
 
 from agent_console.business_problem_domain import (
+    BusinessProblemAggregate,
     BusinessProblemLifecycleEvent,
     BusinessProblemRevision,
     BusinessProblemState,
@@ -28,6 +29,9 @@ class BusinessProblemRepository(Protocol):
     def list_problems(
         self, scope: ScopeIdentity, *, authorized: bool
     ) -> tuple[BusinessProblemRevision, ...]: ...
+    def get_aggregate(
+        self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
+    ) -> BusinessProblemAggregate: ...
     def add_problem_revision(
         self,
         revision: BusinessProblemRevision,
@@ -49,6 +53,9 @@ class BusinessProblemRepository(Protocol):
     def get_criterion_revision(
         self, scope: ScopeIdentity, revision_id: str, *, authorized: bool
     ) -> SuccessCriterionRevision: ...
+    def list_criterion_revisions(
+        self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
+    ) -> tuple[SuccessCriterionRevision, ...]: ...
     def add_criteria_set_revision(
         self,
         revision: SuccessCriteriaSetRevision,
@@ -61,6 +68,9 @@ class BusinessProblemRepository(Protocol):
     def get_criteria_set_revision(
         self, scope: ScopeIdentity, set_revision_id: str, *, authorized: bool
     ) -> SuccessCriteriaSetRevision: ...
+    def list_criteria_set_revisions(
+        self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
+    ) -> tuple[SuccessCriteriaSetRevision, ...]: ...
     def transition(
         self,
         scope: ScopeIdentity,
@@ -88,4 +98,35 @@ class BusinessProblemRepository(Protocol):
     ) -> PlanProblemBinding: ...
     def get_plan_binding(
         self, scope: ScopeIdentity, binding_id: str, *, authorized: bool
+    ) -> PlanProblemBinding: ...
+
+
+class BusinessProblemPlanRepository(Protocol):
+    """Product-owned ports participating in a caller-owned transaction."""
+
+    def validate_plan_target(
+        self,
+        connection,
+        binding: PlanProblemBinding,
+        expected_version: int,
+        *,
+        authorized: bool,
+    ): ...
+    def bind_prepared_plan(
+        self,
+        connection,
+        binding: PlanProblemBinding,
+        *,
+        expected_problem_version: int,
+        idempotency_key: str,
+        payload_digest: str,
+        authorized: bool,
+    ) -> PlanProblemBinding: ...
+    def validate_approval_binding(
+        self,
+        connection,
+        binding: PlanProblemBinding,
+        *,
+        expected_problem_version: int,
+        authorized: bool,
     ) -> PlanProblemBinding: ...

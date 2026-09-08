@@ -144,7 +144,8 @@ def validate_lineage(
     try:
         content = json.loads(raw)
         valid = (
-            content["schemaVersion"] == "employee-execution-plan.v1"
+            content["schemaVersion"]
+            in {"employee-execution-plan.v1", "employee-execution-plan.v2"}
             and content["assignmentId"] == assignment_id
             and content["instanceId"] == employee_id
             and content["workflow"]["canonical_workflow_revision_id"]
@@ -156,13 +157,35 @@ def validate_lineage(
         valid = False
     if not valid:
         raise ExecutionConflict("PLAN_RELATIONSHIP_MISMATCH")
+    additional = {}
+    if content["schemaVersion"] == "employee-execution-plan.v2":
+        from .business_problem_domain import BusinessProblemError
+        from .business_problem_postgres import PostgresBusinessProblemRepository
+
+        try:
+            PostgresBusinessProblemRepository.validate_execution_binding(
+                conn,
+                scope,
+                plan["plan_id"],
+                plan["plan_version"],
+                plan["plan_digest"],
+                content,
+                authorized=True,
+            )
+        except BusinessProblemError as exc:
+            raise ExecutionConflict("PLAN_PROBLEM_BINDING_MISMATCH") from exc
+        additional = {
+            "business_problem_id": content["businessProblemId"],
+            "preparation": content["preparation"],
+        }
     if predecessor is None:
         from .execution_application import execution_plan_bytes
 
         if (
             workflow is None
             or task_id not in workflow.ordered_task_ids
-            or raw != execution_plan_bytes(workflow, assignment_id, employee_id)
+            or raw
+            != execution_plan_bytes(workflow, assignment_id, employee_id, **additional)
         ):
             raise ExecutionConflict("PLAN_CONTENT_MISMATCH")
     else:
