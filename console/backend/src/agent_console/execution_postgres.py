@@ -64,6 +64,7 @@ from .execution_domain import (
 
 ADAPTER = "execution-authority-postgresql-v1"
 SCHEMA_VERSION = 8
+GOVERNED_EXECUTION_ADAPTER = "governed-execution-claim-postgresql-v17"
 __all__ = [
     "Generation",
     "PlacementDecisionKind",
@@ -131,6 +132,44 @@ class PostgresExecutionAuthorityRepository:
                 "EXECUTION_MIGRATION_UNAVAILABLE"
             ) from exc
         self.compatibility()
+
+    def migrate_governed_execution_claims(self, migration_path: Path) -> None:
+        checksum = hashlib.sha256(migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET LOCAL statement_timeout='10s'")
+                connection.execute("SET LOCAL lock_timeout='3s'")
+                connection.execute(migration_path.read_text())
+                newer = connection.execute(
+                    "SELECT version FROM governed_execution.schema_migrations "
+                    "WHERE version>17 ORDER BY version LIMIT 1"
+                ).fetchone()
+                if newer is not None:
+                    raise ExecutionSchemaIncompatible(
+                        "GOVERNED_EXECUTION_SCHEMA_INCOMPATIBLE"
+                    )
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM governed_execution.schema_migrations WHERE version=17"
+                ).fetchone()
+                expected = {
+                    "checksum": checksum,
+                    "adapter": GOVERNED_EXECUTION_ADAPTER,
+                }
+                if row is None:
+                    connection.execute(
+                        "INSERT INTO governed_execution.schema_migrations(version,checksum,adapter) VALUES(17,%s,%s)",
+                        (checksum, GOVERNED_EXECUTION_ADAPTER),
+                    )
+                elif row != expected:
+                    raise ExecutionSchemaIncompatible(
+                        "GOVERNED_EXECUTION_SCHEMA_INCOMPATIBLE"
+                    )
+        except ExecutionSchemaIncompatible:
+            raise
+        except PsycopgError as exc:
+            raise ExecutionStorageUnavailable(
+                "GOVERNED_EXECUTION_MIGRATION_UNAVAILABLE"
+            ) from exc
 
     def compatibility(self) -> None:
         try:
@@ -303,6 +342,7 @@ class PostgresExecutionAuthorityRepository:
         plan=None,
         task_id=None,
         authorization_decision_id: str | None = None,
+        request_claim=None,
     ) -> ExecutionIdentityAggregate:
         if not authorization_decision_id:
             raise ExecutionConflict("EXECUTION_NOT_FOUND")
@@ -322,6 +362,63 @@ class PostgresExecutionAuthorityRepository:
                 plan,
                 task_id,
             )
+            if request_claim is not None:
+                connection.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                    (
+                        json.dumps(
+                            (
+                                scope.namespace,
+                                scope.security_domain,
+                                request_claim.principal_id,
+                                request_claim.idempotency_key,
+                            )
+                        ),
+                    ),
+                )
+                claimed = connection.execute(
+                    "SELECT request_digest,workflow_run_id,task_run_id,attempt_id,state "
+                    "FROM execution_authority.governed_execution_claims "
+                    "WHERE namespace=%s AND security_domain=%s AND principal_id=%s "
+                    "AND idempotency_key=%s FOR UPDATE",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        request_claim.principal_id,
+                        request_claim.idempotency_key,
+                    ),
+                ).fetchone()
+                expected_claim = {
+                    "request_digest": request_claim.request_digest,
+                    "workflow_run_id": str(aggregate.workflow_run.workflow_run_id),
+                    "task_run_id": str(aggregate.task_run.task_run_id),
+                    "attempt_id": str(aggregate.attempt.attempt_id),
+                    "state": "EXECUTION_CREATED",
+                }
+                if claimed is not None and claimed != expected_claim:
+                    raise ExecutionConflict("GOVERNED_EXECUTION_PAYLOAD_MISMATCH")
+                if claimed is None:
+                    existing_identity = connection.execute(
+                        "SELECT EXISTS(SELECT 1 FROM execution_authority.workflow_runs "
+                        "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s) "
+                        "OR EXISTS(SELECT 1 FROM execution_authority.task_runs "
+                        "WHERE namespace=%s AND security_domain=%s AND task_run_id=%s) "
+                        "OR EXISTS(SELECT 1 FROM execution_authority.attempts "
+                        "WHERE namespace=%s AND security_domain=%s AND attempt_id=%s) AS present",
+                        (
+                            scope.namespace,
+                            scope.security_domain,
+                            str(aggregate.workflow_run.workflow_run_id),
+                            scope.namespace,
+                            scope.security_domain,
+                            str(aggregate.task_run.task_run_id),
+                            scope.namespace,
+                            scope.security_domain,
+                            str(aggregate.attempt.attempt_id),
+                        ),
+                    ).fetchone()
+                    if existing_identity["present"]:
+                        raise ExecutionConflict("GOVERNED_EXECUTION_CLAIM_REQUIRED")
             values = (
                 (
                     "workflow_runs",
@@ -403,6 +500,24 @@ class PostgresExecutionAuthorityRepository:
                 approval_id,
                 authorization_decision_id,
             )
+            if request_claim is not None:
+                connection.execute(
+                    "INSERT INTO execution_authority.governed_execution_claims("
+                    "namespace,security_domain,principal_id,idempotency_key,request_digest,"
+                    "workflow_run_id,task_run_id,attempt_id,state) "
+                    "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'EXECUTION_CREATED') "
+                    "ON CONFLICT DO NOTHING",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        request_claim.principal_id,
+                        request_claim.idempotency_key,
+                        request_claim.request_digest,
+                        str(aggregate.workflow_run.workflow_run_id),
+                        str(aggregate.task_run.task_run_id),
+                        str(aggregate.attempt.attempt_id),
+                    ),
+                )
             return aggregate
 
         return self._transaction(operation)

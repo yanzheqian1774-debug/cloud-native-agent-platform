@@ -281,7 +281,6 @@ class PostgresResourceUseRepository:
             eb.digital_employee_instance_id AS employee_binding_instance_id,
             eb.definition_id,eb.revision_id,eb.digest AS definition_digest,
             eb.plan_digest AS employee_plan_digest,eb.approval_id,
-            eb.authorization_decision_id,
             ib.definition_id AS instance_definition_id,
             ib.revision_id AS instance_revision_id,
             ib.digest AS instance_definition_digest,
@@ -326,8 +325,9 @@ class PostgresResourceUseRepository:
             "instance_revision_id": binding.digital_employee_definition_revision_id,
             "instance_definition_digest": binding.digital_employee_definition_digest,
             "employee_plan_digest": binding.plan_digest,
-            "authorization_decision_id": binding.authorization_decision_id,
         }
+        # Execution lineage and the Skill-owned Resource Use operation have
+        # independent, exact authorization decisions; their IDs must not collapse.
         if row is None or any(row[key] != value for key, value in expected.items()):
             raise ResourceUseError("RESOURCE_USE_LINEAGE_MISMATCH")
         if row["approval_decision_id"] is None or row["approval_decision"] != "APPROVE":

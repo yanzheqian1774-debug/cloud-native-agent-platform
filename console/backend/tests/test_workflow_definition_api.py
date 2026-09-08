@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 from agent_console import runtime_profile_api, workflow_definition_api
 from agent_console.agent_binding_validation import (
@@ -55,6 +57,26 @@ def payload():
     }
 
 
+def bound_payload():
+    value = payload()
+    value["content"]["tasks"][0]["references"] = [
+        {
+            "kind": "SKILL",
+            "resourceId": "skill:one",
+            "revisionId": "skill-revision:one",
+        }
+    ]
+    value["content"]["tasks"][0]["skillOperationBindings"] = [
+        {
+            "skillId": "skill:one",
+            "skillRevisionId": "skill-revision:one",
+            "skillDigest": "a" * 64,
+            "operation": "quality.read",
+        }
+    ]
+    return value
+
+
 def test_private_api_exact_digest_publication_and_comparison():
     service = WorkflowDefinitionService(
         InMemoryWorkflowDefinitionRepository(), lambda _scope, _reference: True
@@ -103,6 +125,77 @@ def test_private_api_exact_digest_publication_and_comparison():
         )
         assert comparison.status_code == 200
         assert comparison.json()["digestChanged"] is True
+    finally:
+        app.dependency_overrides.pop(get_service, None)
+
+
+def test_api_binding_round_trip_and_omission_null_rejection_are_zero_write():
+    repository = InMemoryWorkflowDefinitionRepository()
+    service = WorkflowDefinitionService(repository)
+    app.dependency_overrides[get_service] = lambda: service
+    try:
+        client = TestClient(app)
+        created = client.post(
+            "/api/internal/v0.2.2/workflow-definitions", json=bound_payload()
+        )
+        assert created.status_code == 201
+        definition = created.json()["definition"]
+        resource_id = definition["workflowDefinitionId"]
+        read = client.get(
+            f"/api/internal/v0.2.2/workflow-definitions/{resource_id}"
+        ).json()["definition"]
+        binding = read["revisions"][-1]["content"]["tasks"][0]["skillOperationBindings"]
+
+        unrelated = copy.deepcopy(read["revisions"][-1]["content"])
+        unrelated["description"] = "unrelated edit"
+        saved = client.put(
+            f"/api/internal/v0.2.2/workflow-definitions/{resource_id}/draft",
+            json={"expectedVersion": 1, "content": unrelated},
+        )
+        assert saved.status_code == 200
+        assert (
+            saved.json()["definition"]["revisions"][-1]["content"]["tasks"][0][
+                "skillOperationBindings"
+            ]
+            == binding
+        )
+
+        for explicit_null in (False, True):
+            invalid = copy.deepcopy(unrelated)
+            if explicit_null:
+                invalid["tasks"][0]["skillOperationBindings"] = None
+            else:
+                invalid["tasks"][0].pop("skillOperationBindings")
+            rejected = client.put(
+                f"/api/internal/v0.2.2/workflow-definitions/{resource_id}/draft",
+                json={"expectedVersion": 2, "content": invalid},
+            )
+            assert rejected.status_code == 409
+            assert rejected.json()["detail"]["reasonCode"] == (
+                "SKILL_OPERATION_BINDING_PRESERVATION_REQUIRED"
+            )
+        unchanged = client.get(
+            f"/api/internal/v0.2.2/workflow-definitions/{resource_id}"
+        ).json()["definition"]
+        assert unchanged["aggregateVersion"] == 2
+        assert len(unchanged["revisions"]) == 2
+
+        historical = client.post(
+            "/api/internal/v0.2.2/workflow-definitions", json=payload()
+        ).json()["definition"]
+        historical_id = historical["workflowDefinitionId"]
+        historical_digest = historical["revisions"][0]["digest"]
+        historical_content = copy.deepcopy(historical["revisions"][0]["content"])
+        historical_content["description"] = "compatible historical edit"
+        compatible = client.put(
+            f"/api/internal/v0.2.2/workflow-definitions/{historical_id}/draft",
+            json={"expectedVersion": 1, "content": historical_content},
+        )
+        assert compatible.status_code == 200
+        assert (
+            compatible.json()["definition"]["revisions"][0]["digest"]
+            == historical_digest
+        )
     finally:
         app.dependency_overrides.pop(get_service, None)
 
