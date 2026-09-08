@@ -55,6 +55,7 @@ export function SkillMcpTechnicalProjection({
         <dt>Invocation Evidence</dt>
         <dd>{projection.resource.invocations.length} record(s), credential material not recorded</dd>
       </dl>
+      {projection.resource.kind === "mcp" && <><h4>Exact MCP binding facts</h4><dl><dt>Endpoint</dt><dd><code>{projection.resource.revisions.at(-1)?.content.endpoint ?? "NOT_CONFIGURED"}</code></dd><dt>Credential reference</dt><dd><code>{projection.resource.revisions.at(-1)?.content.secretReference ?? "NOT_CONFIGURED"}</code> (external reference only)</dd><dt>Trust configuration</dt><dd>NOT_EXPOSED_BY_CURRENT_API</dd><dt>Latest discovery snapshot</dt><dd><code>{projection.resource.discoverySnapshots.at(-1)?.snapshotId ?? "NOT_DISCOVERED"}</code></dd><dt>Selected tools</dt><dd>{projection.resource.toolSelections.at(-1)?.toolNames.join(", ") || "NOT_SELECTED"}</dd></dl><h4>Discovered input schemas</h4><ul>{projection.resource.discoverySnapshots.at(-1)?.catalog.tools.map(tool=><li key={tool.name}><strong>{tool.name}</strong> <code>{JSON.stringify(tool.inputSchema??{})}</code></li>)}</ul><p>连接、发现、选择与管理调用是不同事实；均不授予 Attempt-level invocation authority。</p></>}
       <p className="agent-limitations">{technical.limitations.join(" · ")}</p>
     </section>
   );
