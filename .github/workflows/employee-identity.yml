@@ -49,6 +49,8 @@ jobs:
         run: |
           echo "source_sha=${SOURCE_SHA}"
           echo "executed_sha=$(git rev-parse HEAD)"
+          echo "executed_tree=$(git rev-parse HEAD^{tree})"
+          echo "executed_parents=$(git show -s --format=%P HEAD)"
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: uv python install 3.12
       - run: uv sync --frozen
@@ -108,6 +110,8 @@ jobs:
         run: |
           echo "source_sha=${SOURCE_SHA}"
           echo "executed_sha=$(git rev-parse HEAD)"
+          echo "executed_tree=$(git rev-parse HEAD^{tree})"
+          echo "executed_parents=$(git show -s --format=%P HEAD)"
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: uv python install 3.12
       - run: uv sync --frozen
@@ -116,6 +120,11 @@ jobs:
           set -o pipefail
           uv run pytest -q \
             console/backend/tests/test_governed_execution_api_postgres.py \
+            console/backend/tests/test_workflow_skill_authoring_postgres.py \
+            console/backend/tests/test_workflow_definition_resolver.py \
+            console/backend/tests/test_skill_operation_schema.py \
+            console/backend/tests/test_skill_mcp_api.py \
+            console/backend/tests/test_skill_mcp_service.py \
             console/backend/tests/test_skill_invocation_domain.py \
             console/backend/tests/test_skill_invocation_postgres.py \
             console/backend/tests/test_workflow_definition_api.py \

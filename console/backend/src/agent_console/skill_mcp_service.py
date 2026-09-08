@@ -14,6 +14,7 @@ from agent_console.skill_mcp_repository import (
     SkillMcpNotFound,
     SkillMcpRepository,
 )
+from agent_console.skill_mcp_schemas import validate_skill_operations
 from agent_console.skill_mcp_transport import (
     PROTOCOL_REVISION,
     McpTransportFailure,
@@ -202,6 +203,12 @@ class SkillMcpService:
         record = self._load(scope, kind, resource_id)
         self._expected(record, expected)
         predecessor = self._draft(record)
+        if (
+            kind == "skill"
+            and predecessor["content"].get("operations")
+            and not content.get("operations")
+        ):
+            raise SkillMcpFailure("SKILL_OPERATIONS_PRESERVATION_REQUIRED")
         revision = {
             "revisionId": _id(f"{kind}-revision"),
             "predecessorRevisionId": predecessor["revisionId"],
@@ -795,6 +802,13 @@ class SkillMcpService:
 
     @staticmethod
     def _content(kind: str, value: dict[str, Any]) -> None:
+        if "operations" in value:
+            if kind != "skill":
+                raise SkillMcpFailure("SKILL_OPERATIONS_ONLY")
+            try:
+                validate_skill_operations(value["operations"])
+            except (ValueError, TypeError) as exc:
+                raise SkillMcpFailure("SKILL_OPERATIONS_INVALID") from exc
         if not str(value.get("description", "")).strip() or not value.get(
             "capabilities"
         ):

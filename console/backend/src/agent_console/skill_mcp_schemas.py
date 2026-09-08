@@ -2,10 +2,97 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from agent_console.skill_invocation_domain import (
+    ExecutorRevision,
+    SideEffectClass,
+    SideEffectPolicy,
+    SkillIOLimits,
+)
+
+
+def validate_skill_operations(value: Any) -> list[dict[str, Any]]:
+    """Validate the existing governed operation wire record using its domain types."""
+    if not isinstance(value, list) or not value:
+        raise ValueError("SKILL_OPERATIONS_REQUIRED")
+    names = set()
+    for operation in value:
+        if not isinstance(operation, dict) or set(operation) != {
+            "name",
+            "inputSchema",
+            "outputSchema",
+            "sideEffectClass",
+            "executorId",
+            "executorRevision",
+            "executorConfigurationDigest",
+            "sideEffectPolicy",
+            "ioLimits",
+        }:
+            raise ValueError("SKILL_OPERATION_FIELDS_INVALID")
+        name = operation["name"]
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or len(name) > 200
+            or name in names
+        ):
+            raise ValueError("SKILL_OPERATION_NAME_INVALID")
+        names.add(name)
+        if not all(
+            isinstance(operation[key], dict) for key in ("inputSchema", "outputSchema")
+        ):
+            raise ValueError("SKILL_OPERATION_SCHEMA_INVALID")
+        ExecutorRevision(
+            operation["executorId"],
+            operation["executorRevision"],
+            operation["executorConfigurationDigest"],
+        )
+        policy = operation["sideEffectPolicy"]
+        if not isinstance(policy, dict) or set(policy) != {
+            "policyId",
+            "policyRevision",
+            "policyDigest",
+        }:
+            raise ValueError("SKILL_OPERATION_POLICY_INVALID")
+        SideEffectPolicy(
+            policy["policyId"],
+            policy["policyRevision"],
+            policy["policyDigest"],
+            SideEffectClass(operation["sideEffectClass"]),
+        )
+        limits = operation["ioLimits"]
+        if not isinstance(limits, dict) or set(limits) != {
+            "policyId",
+            "policyRevision",
+            "maxInputBytes",
+            "maxOutputBytes",
+            "maxObjectDepth",
+            "maxProperties",
+            "timeoutMs",
+        }:
+            raise ValueError("SKILL_OPERATION_LIMITS_INVALID")
+        SkillIOLimits(
+            limits["policyId"],
+            limits["policyRevision"],
+            limits["maxInputBytes"],
+            limits["maxOutputBytes"],
+            limits["maxObjectDepth"],
+            limits["maxProperties"],
+            limits["timeoutMs"],
+        )
+    return value
 
 
 class ResourceContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operations: list[dict[str, Any]] | None = None
+
+    @field_validator("operations", mode="before")
+    @classmethod
+    def operations_contract(cls, value):
+        return validate_skill_operations(value)
+
     description: str = Field(min_length=1)
     capabilities: list[str] = Field(min_length=1)
     instructions: str | None = None
@@ -24,6 +111,7 @@ class ResourceContent(BaseModel):
 
 
 class CreateResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1)
     content: ResourceContent
 
@@ -41,6 +129,7 @@ class CloneCommand(BaseModel):
 
 
 class EditResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     expectedVersion: int
     content: ResourceContent
 
