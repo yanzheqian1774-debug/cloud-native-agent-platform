@@ -129,12 +129,18 @@ devices.
   attempted without the trusted backend. The three failures require the real
   service at `127.0.0.1:8000`, which was not running; they are not reported as
   product journey success.
+- Draft PR CI `Agent Workbench Browser Acceptance`: PASS at the final code
+  head, including the complete 41-scenario immutable-release suite against its
+  owned PostgreSQL, Qdrant, and formal backend. The existing real Skill
+  operation binding, CAS/no-replay, late-response, lifecycle, and responsive
+  journeys therefore remain green in the trusted harness.
 
 ## Service and evidence boundary
 
 The code continues to call the existing formal Workflow and Skill APIs. No
-test identity, fallback success, or bypass was added. Trusted real-service
-browser completion remains conditional on the 305 service/identity environment.
-The screenshots under `docs/evidence/s5/v0.2/s5-v023-impl-311/` show actual
-branch UI rendered with the deterministic TEST_ADAPTER and are labelled as
-presentation/interaction evidence only.
+test identity, fallback success, or bypass was added. The Draft PR CI provides
+the trusted owned-service browser result; a separate local attempt without the
+305 service/identity environment does not. The screenshots under
+`docs/evidence/s5/v0.2/s5-v023-impl-311/` show actual branch UI rendered with
+the deterministic TEST_ADAPTER and are labelled as presentation/interaction
+evidence only.
