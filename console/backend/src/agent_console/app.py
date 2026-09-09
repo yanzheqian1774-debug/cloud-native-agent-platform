@@ -1873,14 +1873,12 @@ def _configure_business_problems():
     )
 
     database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    _business_problem_application = None
     if not database_url or _digital_employee_assembly is None:
         return
-    try:
-        _business_problem_application = build_business_problem_application(
-            database_url, _digital_employee_assembly
-        )
-    except Exception:
-        _business_problem_application = None
+    _business_problem_application = build_business_problem_application(
+        database_url, _digital_employee_assembly
+    )
 
 
 _configure_business_problems()
