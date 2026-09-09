@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { backendUrl, restartOwnedBackend } from "../harness/ownedBackend";
+import { runKnowledgeOperation } from "../harness/structuredKnowledgeReporter";
 
 const backend = backendUrl();
 const qdrant = process.env.KNOWLEDGE_QDRANT_DIRECT_URL;
@@ -41,6 +42,16 @@ async function restartBackend(request: import("@playwright/test").APIRequestCont
 }
 
 test("completes the real Knowledge lifecycle, retrieval, recovery and purge journey", async ({ page, request }, testInfo) => {
+  let identity = "";
+  let firstRevision = "";
+  let firstDigest = "";
+  let firstSnapshot = "";
+  let rebuilt: {
+    knowledge: { publishedRevisionId: string; activeIndexSnapshotId: string };
+    technicalProjection: { revisionDigests: Array<{ digest: string }> };
+  } | undefined;
+
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_GOVERNED_CREATE_PUBLISH", async () => {
   await page.setViewportSize({width:1440,height:900});
   await page.goto("/knowledge");
   await expect(page.getByRole("navigation", { name: "P1 核心产品导航" })).toBeVisible();
@@ -50,16 +61,19 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await expect(hierarchy.getByRole("link")).toHaveCount(4);
   await expect(hierarchy).toContainText("文档列表");
   await expect(hierarchy).toContainText("检索测试与出处");
-  const identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
+  identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
   await expect(page.getByRole("definition").filter({ hasText: "质量部门正式制度" })).toBeVisible();
   await publish(page);
+  });
+
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_INDEX_RETRIEVE", async () => {
   await page.getByRole("button", { name: "导入并建立索引" }).click();
   await expect(page.getByText(/ingestion-job.*COMPLETED/)).toBeVisible();
 
   const first = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
-  const firstRevision = first.knowledge.publishedRevisionId;
-  const firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
-  const firstSnapshot = first.knowledge.activeIndexSnapshotId;
+  firstRevision = first.knowledge.publishedRevisionId;
+  firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
+  firstSnapshot = first.knowledge.activeIndexSnapshotId;
   expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
 
   await page.getByLabel("中文问题", {exact:true}).fill("缺陷报告需要多久提交");
@@ -117,7 +131,9 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   expect(await denied.text()).toBe(await absent.text());
   const foreignList = await request.get(`${backend}/api/internal/v0.2.2/knowledge`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
   expect(await foreignList.json()).toEqual([]);
+  });
 
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_UPDATE", async () => {
   const deniedRetrieval = page.waitForResponse((response) =>
     response.url().includes(`/knowledge/${encodeURIComponent(identity)}/retrievals`)
     && response.request().method() === "POST"
@@ -143,25 +159,30 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
     const response = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders });
     return (await response.json()).knowledge.activeIndexSnapshotId;
   }).not.toBe(firstSnapshot);
-  const rebuilt = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
+  rebuilt = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
   expect(rebuilt.knowledge.publishedRevisionId).not.toBe(firstRevision);
   expect(rebuilt.technicalProjection.revisionDigests.at(-1).digest).not.toBe(firstDigest);
   expect(rebuilt.knowledge.activeIndexSnapshotId).not.toBe(firstSnapshot);
+  });
 
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_RESTART_READBACK", async () => {
   await restartBackend(request);
   await page.reload();
   await page.getByLabel("筛选文档").fill(identity);
   await page.getByRole("button", { name: /供应商质量管理制度/ }).click();
   const recovered = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
   expect(recovered.knowledge.knowledgeId).toBe(identity);
-  expect(recovered.knowledge.publishedRevisionId).toBe(rebuilt.knowledge.publishedRevisionId);
-  expect(recovered.knowledge.activeIndexSnapshotId).toBe(rebuilt.knowledge.activeIndexSnapshotId);
+  expect(recovered.knowledge.publishedRevisionId).toBe(rebuilt!.knowledge.publishedRevisionId);
+  expect(recovered.knowledge.activeIndexSnapshotId).toBe(rebuilt!.knowledge.activeIndexSnapshotId);
   await page.getByRole("button", { name: "技术视图" }).click();
   await expect(page.getByLabel("Knowledge Technical View").getByText(identity, { exact: true })).toBeVisible();
   await expect(page.getByText(/Qdrant仅包含派生向量/)).toBeVisible();
   await page.getByRole("button", { name: "产品视图" }).click();
   await page.getByRole("button", { name: "归档知识包" }).click();
   await expect(page.getByText(/ARCHIVED · 已归档/)).toBeVisible();
+  });
+
+  await runKnowledgeOperation(testInfo, "KNOWLEDGE_PURGE_RECOVERY", async () => {
   await page.getByRole("button", { name: "审查清除影响" }).click();
   await page.getByLabel("授权标识").fill("authorization:compliance-one");
   await page.getByLabel("非敏感原因分类").fill("PROHIBITED_CONTENT");
@@ -271,6 +292,7 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
     return { background: style.backgroundColor, color: style.color };
   });
   expect(design).toEqual({ background: "rgb(246, 247, 249)", color: "rgb(23, 32, 42)" });
+  });
 });
 
 // Transport fixtures isolate frontend race/error behavior; the journey above proves real services.

@@ -187,6 +187,7 @@ jobs:
       - name: Run real browser acceptance
         env:
           CONSOLE_FRONTEND_PORT: "14173"
+          KNOWLEDGE_DIAGNOSTIC_REPORT_PATH: ${{ runner.temp }}/s5-v023-impl-312-browser-diagnostics/browser-diagnostics.v1.json
         run: |
           mkdir "$RUNNER_TEMP/s5-impl-072-release"
           rsync -a \
@@ -211,4 +212,14 @@ jobs:
             --journey-id s5-impl-075-agent-workbench \
             --python-path conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures \
             -- npm --prefix console/frontend run test:e2e -- \
-              --workers 1 --retries 0 --forbid-only --reporter json
+              --workers 1 --retries 0 --forbid-only \
+              --reporter json,./tests/harness/structuredKnowledgeReporter.ts
+
+      - name: Retain sanitized browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5-v023-impl-312-browser-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/s5-v023-impl-312-browser-diagnostics/browser-diagnostics.v1.json
+          if-no-files-found: error
+          retention-days: 7

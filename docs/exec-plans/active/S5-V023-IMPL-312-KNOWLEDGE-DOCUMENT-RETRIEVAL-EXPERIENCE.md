@@ -136,6 +136,39 @@ migration, retrieval blending, or permission semantics are added.
   journey was not rerun without new readiness evidence. Delivery remains
   `PARTIAL_DRAFT`; no mock result substitutes for this failure.
 
+## Browser diagnostic evidence supplement (2026-09-10)
+
+The Human-authorized diagnostic supplement adds no product behavior and changes no
+browser assertion, selection, retry, skip, timeout, worker count, or success gate.
+The real Knowledge journey now attaches five closed operation identities through a
+dedicated reporter. The reporter retains only validated repository-relative test
+paths, allowlisted scenario identity or `UNKNOWN`, closed operation identity or
+`UNKNOWN`, final test status, closed static error classification, and
+selected/executed/passed/failed/skipped/flaky counts.
+It never serializes test titles, error text, request/response data, document content,
+environment variables, screenshots, traces, videos, or the raw Playwright report.
+
+The reporter continues to provide the harness-owned transient operation file, while
+also writing a separate sanitized aggregate to
+`$RUNNER_TEMP/s5-v023-impl-312-browser-diagnostics/browser-diagnostics.v1.json`.
+The harness may delete its transient file without affecting the aggregate. The
+Browser CI job invokes both JSON and structured reporters, then uses an unconditional
+artifact step to retain only the sanitized aggregate for seven days. Missing output
+fails that artifact step independently; reporter attachment or file-write failure
+does not swallow or replace the original test result.
+
+Focused validation before push:
+
+- synthetic reporter success, two-failure, absent-stage, sanitization, attachment
+  failure, and diagnostic-write failure cases: 3 passed;
+- reporter compatibility and release-contract tests: 37 passed;
+- frontend ESLint and production build: passed;
+- CI YAML parse and `git diff --check`: passed.
+
+Automatic CI checkout identity, counts, retained artifact readability, and any new
+failure stage remain pending the ordinary non-force push. A new result will not be
+used to infer or backfill the two unknown failures from run `34370621442`.
+
 ## Risks and compatibility
 
 - Parser resource exhaustion is bounded by byte, archive, count, and time limits.
