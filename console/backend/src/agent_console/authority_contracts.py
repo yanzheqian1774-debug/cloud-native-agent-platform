@@ -314,6 +314,28 @@ class GrantAdministrationRepository(Protocol):
 
 
 class CurrentAuthorizationReader(Protocol):
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]: ...
+
+    def has_current_grants(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+    ) -> tuple[bool, ...]: ...
+
     def read_linearized_authorization_state(
         self,
         context: TrustedRequestContext,
