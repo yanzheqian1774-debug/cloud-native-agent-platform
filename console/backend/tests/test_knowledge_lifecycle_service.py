@@ -112,3 +112,29 @@ def test_denied_retrieval_does_not_read_repository():
             "authorization:denied",
             "query",
         )
+
+
+def test_missing_source_and_document_ids_are_generated_without_changing_legacy_ids():
+    service = KnowledgeLifecycleService(InMemoryKnowledgeRepository())
+    scope = service.scope("tenant-a", "quality")
+    generated = service.create(
+        scope,
+        "human:owner",
+        "中文知识",
+        {"sourceDescription": "人工录入", "content": "正文依据。"},
+    )["knowledge"]
+    revision = generated["revisions"][0]
+    assert revision["content"]["source"]["sourceId"].startswith("knowledge-source:")
+    assert revision["content"]["documents"][0]["documentId"].startswith(
+        "knowledge-document:"
+    )
+
+    legacy = service.create(
+        scope,
+        "human:owner",
+        "Legacy",
+        source(),
+    )["knowledge"]
+    legacy_revision = legacy["revisions"][0]
+    assert legacy_revision["content"]["source"]["sourceId"] == "source:one"
+    assert legacy_revision["content"]["documents"][0]["documentId"] == ("document:one")
