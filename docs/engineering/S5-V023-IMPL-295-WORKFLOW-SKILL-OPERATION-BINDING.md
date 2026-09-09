@@ -371,3 +371,58 @@ After removing the rejected parallel-activation helper and its two obsolete test
 the final repository-wide gate passed Ruff, formatting and `1556 passed / 104`
 environment-dependent skips. The retained bootstrap tests cover concurrent pool
 preparation, single-thread migration order, and failure cleanup.
+
+## Batched restart structure validation
+
+The final restart-path optimization replaces each owner's per-table relation,
+column, constraint and trigger round trips with one read-only PostgreSQL catalog
+query. The query returns one row keyed by the exact requested relation and includes
+that relation's kind, required column types/nullability, primary/unique/foreign-key
+constraints and non-internal triggers. Validation still fails closed for a missing
+table, column, type, non-null marker, constraint, referenced relation/column or
+required trigger. It does not cache results between calls, bypass a recorded-ledger
+check, weaken an error, change the 20-second health deadline or change the serialized
+fresh-writer order.
+
+A focused unit regression requires one `execute` call for a multi-table owner and
+checks a successful primary/unique/foreign-key/trigger mapping. Four negative cases
+independently remove the second relation's table kind, column, constraint and trigger
+while leaving the first relation complete. This prevents one table's catalog result
+from proving another table's structure and prevents a future return to per-table
+queries.
+
+The focused unit run passed `5` tests. The first correctly authenticated destructive
+PostgreSQL run passed `8` tests, while one test failed and three fixture phases errored
+because new connections exceeded their existing five-second connection timeout; it
+remains a failed run. After a separate successful read-only readiness probe, the same
+unchanged destructive suite passed all `11` tests in `18.15` seconds. An earlier
+invocation with an incorrectly assembled local validation connection string failed
+all `11` fixture setups before creating the test database; it is retained as an
+invalid validation invocation, not a product result.
+
+Repository-wide `make check` then passed Ruff, formatting for `379` files and `1571`
+tests with `121` environment-dependent skips. This supersedes neither the earlier
+test counts nor their execution times; the five-count increase is the new unit
+regression only.
+
+Startup validation subsequently observed independent provider variance. The original
+task PostgreSQL accepted a host `SELECT 1` in `1.619` and later `0.577` seconds, but
+also produced repeated five-second connection timeouts and one container-control
+readiness timeout. A task-owned isolated PostgreSQL 15 provider removed that original
+container from the comparison, yet two fresh application attempts remained alive
+without health at `20.028` and `20.081` seconds. The first attempt left zero committed
+domain ledgers. Direct read-only batched catalog probes against that still-empty
+database ranged from `0.0683` to `4.7225` seconds by owner. A runtime-only bytecode
+preparation attempt then stopped at its pre-application database readiness probe.
+None of these failed or never-started attempts is a fresh, restart, error-startup or
+Browser Acceptance pass. They distinguish observed database/control-path latency
+from catalog round-trip cost, but do not establish an environment root cause or make
+unrelated control-plane load the sole explanation.
+
+The additional final paths are limited to
+`console/backend/src/agent_console/postgres_schema_compatibility.py`,
+`console/backend/tests/test_postgres_schema_compatibility.py` and this note. The
+candidate still requires successful fresh/restart/error startup evidence, one exact
+frozen-candidate Browser Acceptance, tracked-source/manifest correspondence and
+new-candidate CI. PR #159 remains Draft; Ready, merge, deployment and Human acceptance
+remain ungranted.

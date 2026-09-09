@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 """Focused PostgreSQL structure checks for initialized Console domains."""
 
 from __future__ import annotations
@@ -29,75 +28,76 @@ class Table:
     triggers: tuple[str, ...] = ()
 
 
-def _columns(connection: Any, relation: str) -> dict[str, tuple[str, bool]]:
-    rows = connection.execute(
-        """SELECT attribute.attname AS name,
-                  pg_catalog.format_type(attribute.atttypid, attribute.atttypmod) AS data_type,
-                  attribute.attnotnull AS not_null
-           FROM pg_catalog.pg_attribute AS attribute
-           WHERE attribute.attrelid = to_regclass(%s)
-             AND attribute.attnum > 0
-             AND NOT attribute.attisdropped""",
-        (relation,),
-    ).fetchall()
-    return {row["name"]: (row["data_type"], row["not_null"]) for row in rows}
-
-
-def _constraints(connection: Any, relation: str) -> set[tuple[Any, ...]]:
-    rows = connection.execute(
-        """SELECT con.contype AS kind,
-                  ARRAY(
-                    SELECT attribute.attname
-                    FROM unnest(con.conkey) WITH ORDINALITY AS key(attnum, ordinal)
-                    JOIN pg_catalog.pg_attribute AS attribute
-                      ON attribute.attrelid = con.conrelid
-                     AND attribute.attnum = key.attnum
-                    ORDER BY key.ordinal
-                  ) AS columns,
-                  CASE WHEN con.contype = 'f'
-                    THEN con.confrelid::regclass::text ELSE NULL END AS references,
-                  CASE WHEN con.contype = 'f' THEN ARRAY(
-                    SELECT attribute.attname
-                    FROM unnest(con.confkey) WITH ORDINALITY AS key(attnum, ordinal)
-                    JOIN pg_catalog.pg_attribute AS attribute
-                      ON attribute.attrelid = con.confrelid
-                     AND attribute.attnum = key.attnum
-                    ORDER BY key.ordinal
-                  ) ELSE ARRAY[]::name[] END AS referenced_columns
-           FROM pg_catalog.pg_constraint AS con
-           WHERE con.conrelid = to_regclass(%s)
-             AND con.contype IN ('p', 'u', 'f')""",
-        (relation,),
-    ).fetchall()
-    return {
-        (
-            row["kind"],
-            tuple(row["columns"]),
-            row["references"],
-            tuple(row["referenced_columns"]),
-        )
-        for row in rows
-    }
-
-
 def schema_is_compatible(connection: Any, tables: tuple[Table, ...]) -> bool:
     """Check required relations, non-null columns/types, and identity constraints."""
+    rows = connection.execute(
+        """WITH required(relation) AS (SELECT unnest(%s::text[]))
+           SELECT required.relation,
+                  class.relkind AS kind,
+                  COALESCE((
+                    SELECT jsonb_object_agg(
+                      attribute.attname,
+                      jsonb_build_array(
+                        pg_catalog.format_type(attribute.atttypid, attribute.atttypmod),
+                        attribute.attnotnull
+                      )
+                    )
+                    FROM pg_catalog.pg_attribute AS attribute
+                    WHERE attribute.attrelid = class.oid
+                      AND attribute.attnum > 0
+                      AND NOT attribute.attisdropped
+                  ), '{}'::jsonb) AS columns,
+                  COALESCE((
+                    SELECT jsonb_agg(jsonb_build_array(
+                      con.contype,
+                      ARRAY(
+                        SELECT attribute.attname
+                        FROM unnest(con.conkey) WITH ORDINALITY AS key(attnum, ordinal)
+                        JOIN pg_catalog.pg_attribute AS attribute
+                          ON attribute.attrelid = con.conrelid
+                         AND attribute.attnum = key.attnum
+                        ORDER BY key.ordinal
+                      ),
+                      CASE WHEN con.contype = 'f'
+                        THEN con.confrelid::regclass::text ELSE NULL END,
+                      CASE WHEN con.contype = 'f' THEN ARRAY(
+                        SELECT attribute.attname
+                        FROM unnest(con.confkey) WITH ORDINALITY AS key(attnum, ordinal)
+                        JOIN pg_catalog.pg_attribute AS attribute
+                          ON attribute.attrelid = con.confrelid
+                         AND attribute.attnum = key.attnum
+                        ORDER BY key.ordinal
+                      ) ELSE ARRAY[]::name[] END
+                    ))
+                    FROM pg_catalog.pg_constraint AS con
+                    WHERE con.conrelid = class.oid
+                      AND con.contype IN ('p', 'u', 'f')
+                  ), '[]'::jsonb) AS constraints,
+                  COALESCE((
+                    SELECT jsonb_agg(trigger.tgname)
+                    FROM pg_catalog.pg_trigger AS trigger
+                    WHERE trigger.tgrelid = class.oid
+                      AND NOT trigger.tgisinternal
+                  ), '[]'::jsonb) AS triggers
+           FROM required
+           LEFT JOIN pg_catalog.pg_class AS class
+             ON class.oid = to_regclass(required.relation)""",
+        ([table.relation for table in tables],),
+    ).fetchall()
+    actual = {row["relation"]: row for row in rows}
     for table in tables:
-        relation = connection.execute(
-            """SELECT class.relkind AS kind
-               FROM pg_catalog.pg_class AS class
-               WHERE class.oid = to_regclass(%s)""",
-            (table.relation,),
-        ).fetchone()
+        relation = actual[table.relation]
         if relation is None or relation["kind"] not in {"r", "p"}:
             return False
-        actual_columns = _columns(connection, table.relation)
         if any(
-            actual_columns.get(column.name) != (column.data_type, True)
+            relation["columns"].get(column.name) != [column.data_type, True]
             for column in table.columns
         ):
             return False
-        actual_constraints = _constraints(connection, table.relation)
+        actual_constraints = {
+            (kind, tuple(names), references, tuple(referenced_names))
+            for kind, names, references, referenced_names in relation["constraints"]
+        }
         if any(
             (
                 constraint.kind,
@@ -109,19 +109,8 @@ def schema_is_compatible(connection: Any, tables: tuple[Table, ...]) -> bool:
             for constraint in table.constraints
         ):
             return False
-        if table.triggers:
-            actual_triggers = {
-                row["name"]
-                for row in connection.execute(
-                    """SELECT trigger.tgname AS name
-                       FROM pg_catalog.pg_trigger AS trigger
-                       WHERE trigger.tgrelid = to_regclass(%s)
-                         AND NOT trigger.tgisinternal""",
-                    (table.relation,),
-                ).fetchall()
-            }
-            if not set(table.triggers).issubset(actual_triggers):
-                return False
+        if not set(table.triggers).issubset(relation["triggers"]):
+            return False
     return True
 
 
