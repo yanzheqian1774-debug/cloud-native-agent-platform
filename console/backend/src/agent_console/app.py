@@ -126,7 +126,6 @@ from agent_console.live_journey_stream_schemas import (
 from agent_console.persistence_bootstrap import (
     BootstrapStep,
     activate_in_order,
-    activate_in_parallel,
     migration_recorded,
     prepare_in_parallel,
 )
@@ -299,12 +298,10 @@ def _activate_execution_base(prepared) -> None:
 
 _FIRST_MIGRATION_WAVE = (
     BootstrapStep("knowledge", lambda: None, knowledge_api.activate),
-    BootstrapStep("skill_mcp", lambda: None, skill_mcp_api.activate),
     BootstrapStep("runtime_workflow", lambda: None, _activate_runtime_workflow),
 )
 _first_wave_prepared = {
     "knowledge": _prepared_persistence["knowledge"],
-    "skill_mcp": _prepared_persistence["skill_mcp"],
     "runtime_workflow": (
         _prepared_persistence["runtime_profile"],
         _prepared_persistence["workflow_definition"],
@@ -316,7 +313,7 @@ activate_in_order(
     (BootstrapStep("digital_employee", lambda: None, _activate_execution_base),),
     _prepared_persistence,
 )
-activate_in_parallel(_FIRST_MIGRATION_WAVE, _first_wave_prepared)
+activate_in_order(_FIRST_MIGRATION_WAVE, _first_wave_prepared)
 
 app = FastAPI(
     title="Cloud-Native Agent Platform Console",
@@ -725,18 +722,22 @@ def _activate_workflow_controls(prepared) -> None:
 
 
 _SECOND_MIGRATION_WAVE = (
-    BootstrapStep("agent_definition", lambda: None, _activate_agent_definitions),
+    BootstrapStep("skill_mcp", lambda: None, skill_mcp_api.activate),
     BootstrapStep("workflow_controls", lambda: None, _activate_workflow_controls),
 )
 _second_wave_prepared = {
-    "agent_definition": _prepared_persistence["agent_definition"],
+    "skill_mcp": _prepared_persistence["skill_mcp"],
     "workflow_controls": _prepared_persistence["digital_employee"],
     "knowledge_active": _prepared_persistence["knowledge"],
     "runtime_active": _prepared_persistence["runtime_profile"],
-    "skill_active": _prepared_persistence["skill_mcp"],
     "workflow_active": _prepared_persistence["workflow_definition"],
+    "agent_pending": _prepared_persistence["agent_definition"],
 }
-activate_in_parallel(_SECOND_MIGRATION_WAVE, _second_wave_prepared)
+activate_in_order(_SECOND_MIGRATION_WAVE, _second_wave_prepared)
+activate_in_order(
+    (BootstrapStep("agent_definition", lambda: None, _activate_agent_definitions),),
+    _prepared_persistence,
+)
 activate_in_order(
     (BootstrapStep("digital_employee", lambda: None, _activate_digital_employees),),
     _prepared_persistence,

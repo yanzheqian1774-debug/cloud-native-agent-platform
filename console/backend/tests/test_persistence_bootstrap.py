@@ -6,7 +6,6 @@ from agent_console.persistence_bootstrap import (
     BootstrapStep,
     ConsoleBootstrapError,
     activate_in_order,
-    activate_in_parallel,
     prepare_in_parallel,
 )
 
@@ -68,34 +67,6 @@ def test_migration_activation_is_ordered_on_one_writer_thread():
     assert writers == [caller] * len(steps)
 
 
-def test_proven_independent_migration_chains_overlap():
-    barrier = threading.Barrier(3)
-    writers = []
-
-    def activate(name):
-        writers.append((name, threading.get_ident()))
-        barrier.wait(timeout=1)
-
-    steps = tuple(
-        BootstrapStep(
-            name,
-            Prepared,
-            lambda _value, name=name: activate(name),
-        )
-        for name in ("knowledge", "skill", "execution")
-    )
-    prepared = {step.name: Prepared() for step in steps}
-
-    activate_in_parallel(steps, prepared)
-
-    assert {name for name, _thread in writers} == {
-        "knowledge",
-        "skill",
-        "execution",
-    }
-    assert len({thread for _name, thread in writers}) == 3
-
-
 def test_preparation_failure_closes_completed_pools():
     first = Prepared()
     release = threading.Event()
@@ -141,31 +112,4 @@ def test_activation_failure_closes_all_pools_and_never_runs_later_step():
         activate_in_order(steps, values)
 
     assert activated == ["first", "failed"]
-    assert all(value.pool.closed for value in values.values())
-
-
-def test_parallel_activation_failure_waits_and_closes_all_pools():
-    values = {name: Prepared() for name in ("slow", "failed", "pending")}
-    release = threading.Event()
-    completed = []
-
-    def slow(_value):
-        release.wait(timeout=1)
-        completed.append("slow")
-
-    def fail(_value):
-        release.set()
-        raise ValueError("migration failed")
-
-    steps = (
-        BootstrapStep("slow", Prepared, slow),
-        BootstrapStep("failed", Prepared, fail),
-    )
-
-    with pytest.raises(
-        ConsoleBootstrapError, match="CONSOLE_PERSISTENCE_ACTIVATION_FAILED"
-    ):
-        activate_in_parallel(steps, values)
-
-    assert completed == ["slow"]
     assert all(value.pool.closed for value in values.values())

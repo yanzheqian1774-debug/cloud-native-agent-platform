@@ -259,13 +259,13 @@ last. Governed execution's optional `0015`, `0016`, `0011`, `0017` path is uncha
 The correction removes module-import side effects from the four domain API modules.
 The production composition root first opens independent persistence pools in
 parallel without running migrations. It then gives the large Execution `0008`
-migration one PostgreSQL DDL writer before concurrently running Knowledge, Skill/MCP
-and the internally serial Runtime-to-Workflow chain. Agent Definition and the
-internally serial Workflow Control chain form the next dependency wave. Digital
-Employee `0014` remains a final serial step before the FastAPI import can finish and
-the server can report healthy. Each chain keeps its own connection and a single
-migration writer. Required preparation or activation errors propagate before health;
-legacy direct configure helpers retain their previous unavailable-state behavior.
+migration one PostgreSQL DDL writer before running Knowledge, Skill/MCP and the
+Runtime-to-Workflow chain in dependency order. Agent Definition, Workflow Control
+and Digital Employee follow in their existing order before the FastAPI import can
+finish and the server can report healthy. Fresh PostgreSQL DDL remains globally
+single-writer; each domain keeps its own connection. Required preparation or
+activation errors propagate before health; legacy direct configure helpers retain
+their previous unavailable-state behavior.
 
 An initial pool-preparation-only attempt still missed the 20-second deadline and was
 not promoted to browser acceptance. After the dependency waves were implemented, a
@@ -352,3 +352,22 @@ then completed four consecutive initialized restarts in `5.553`, `5.188`, `4.316
 and `4.195` seconds. The unavailable-Qdrant process exited with code `1` after
 `7.465` seconds and never reported health. All 12 expected ledger rows remained
 unique and the run removed its owned providers.
+
+The attempted parallel fresh migration waves were subsequently rejected as unsafe
+for this shared PostgreSQL deployment. In a formal run, `0008` committed about 3.5
+seconds after backend launch, but the three following domain DDL transactions were
+all still uncommitted at the 20-second boundary. This was catalog lock contention,
+not an unmet domain dependency. The final composition therefore retains parallel
+pool opening only and serializes every fresh migration writer; the shared-`0007`
+deduplication and recorded-ledger restart fast path retain the bounded performance
+gain without concurrent DDL.
+
+The final single-writer cold validation reached fresh health in `15.031` seconds and
+restart health in `6.310` seconds. Its unavailable-Qdrant process exited with code
+`1` after `8.504` seconds without health, all 12 expected ledgers were unique, no
+migration was pre-applied, and both owned providers were removed.
+
+After removing the rejected parallel-activation helper and its two obsolete tests,
+the final repository-wide gate passed Ruff, formatting and `1556 passed / 104`
+environment-dependent skips. The retained bootstrap tests cover concurrent pool
+preparation, single-thread migration order, and failure cleanup.

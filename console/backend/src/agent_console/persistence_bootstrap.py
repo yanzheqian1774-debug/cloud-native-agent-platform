@@ -89,31 +89,3 @@ def activate_in_order(
         for value in prepared.values():
             _close(value)
         raise ConsoleBootstrapError("CONSOLE_PERSISTENCE_ACTIVATION_FAILED") from exc
-
-
-def activate_in_parallel(
-    steps: Iterable[BootstrapStep], prepared: Mapping[str, Any]
-) -> None:
-    """Run only caller-proven independent migration writers concurrently."""
-    ordered = tuple(steps)
-    if not ordered:
-        return
-    failures: list[Exception] = []
-    with ThreadPoolExecutor(
-        max_workers=len(ordered), thread_name_prefix="console-persistence-activate"
-    ) as executor:
-        futures = {
-            executor.submit(step.activate, prepared[step.name]): step
-            for step in ordered
-        }
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as exc:
-                failures.append(exc)
-    if failures:
-        for value in prepared.values():
-            _close(value)
-        raise ConsoleBootstrapError(
-            "CONSOLE_PERSISTENCE_ACTIVATION_FAILED"
-        ) from failures[0]
