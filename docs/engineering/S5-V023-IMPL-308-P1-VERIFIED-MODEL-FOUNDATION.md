@@ -69,13 +69,57 @@ observable from Git branch metadata and are not assumed free.
 
 ## Validation plan
 
-Focused tests cover exact success/readback, revision/digest/provider/profile
-mismatch, scope and authorization denial, unpublished/disabled/unavailable
-configuration, separated provider evidence, absent authority, and no implicit
-selection. Repository quality gates follow after the focused suite.
+Focused tests cover exact success/readback, authorization subject/scope/binding
+mismatch, resolved scope/identity/revision/digest mismatch,
+unpublished/disabled/unavailable configuration, absent authority or resolver,
+authorization-before-lookup, denial nondisclosure, and no implicit selection.
+Provider Evidence is excluded because no formal source contract exists.
+Repository quality gates follow after the focused suite.
+
+## Contract recheck and bounded implementation
+
+The post-checkpoint source/decision recheck found no current formal Model owner
+for identity, revision, digest, or secret-free configuration readback. The
+Model Definition and immutable Revision catalog remains v0.2.4 product/roadmap
+direction. Accepted ADR-0005 defines future platform-level Model abstractions,
+but records the runtime-local provider interface and embedded Agent model
+configuration as partial implementation with known architecture drift.
+
+The existing authority foundation accepts exact owner/action/resource grants,
+but no accepted Model-specific owner, action, or resource encoding exists.
+Therefore this task does not mint `USE_MODEL`, `READ_MODEL`, or equivalent
+authorization semantics. The injected authorization port returns an opaque
+decision bound to the current subject, scope, and exact requested binding; a
+future authorized composition owner must adapt its accepted vocabulary.
+
+Existing Execution Evidence records execution-scoped provider correlation and
+call count, but do not define provider-connection or model-invocation Evidence
+bound to an exact Model identity/revision/digest, including health freshness.
+No Evidence reader, verification-state system, or provider probe is added.
+
+The bounded implementation is isolated to:
+
+- `console/backend/src/agent_console/model_binding_resolution.py`
+- `console/backend/tests/test_model_binding_resolution.py`
+
+It provides internal typed values and injected authorization/resolution ports,
+then enforces authorization before lookup, exact scope/identity/revision/digest
+matching, published/enabled/configuration-available checks, and fail-closed
+absence/denial. It exposes no default/list/display-name resolution path and
+contains no credentials, persistence, external call, or shared consumer wiring.
+
+Validation on the implementation worktree:
+
+- focused: `18 passed`;
+- repository `make check`: Ruff lint and format checks passed, then
+  `1601 passed, 134 skipped` (the skips require separately provisioned external
+  services or environments).
 
 ## Current delivery state
 
-`PARTIAL_DRAFT`: the independent foundation is authorized. Agent, Digital
-Employee, Runtime, 305 BFF and browser wiring remain explicit follow-up work
-until path ownership and trusted authorization context are available.
+`PARTIAL_DRAFT`: the independent contract-preparation module and test fakes are
+implemented. They are not a formal Model owner, production authorization
+adapter, or provider Evidence source. Agent, Digital Employee, Runtime, 305 BFF
+and browser wiring remain explicit follow-up work until path ownership, a
+formal Model owner, accepted authorization semantics, and Evidence contracts
+are available.
