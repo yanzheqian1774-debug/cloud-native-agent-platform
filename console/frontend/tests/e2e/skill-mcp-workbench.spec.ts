@@ -66,6 +66,10 @@ test("editing an operation-backed Skill through the UI preserves exact operation
 
   await page.goto(`/skills?resourceId=${encodeURIComponent(resourceId)}`);
   await expect(page.locator(".agent-detail").getByRole("heading",{name:created.body.resource.name,exact:true})).toBeVisible();
+  const identity=page.getByRole("region",{name:"正式资源身份与能力"});
+  await expect(identity).toContainText(resourceId);
+  await expect(identity.getByRole("region",{name:"Skill capabilities"})).toContainText(operation.name);
+  await expect(identity.getByRole("region",{name:"Skill operations"})).toContainText(operation.executorId);
   await page.getByRole("button",{name:"编辑当前 Skill Draft"}).click();
   const editedDescription="Operation-backed Skill after normal UI edit";
   await page.getByLabel("说明",{exact:true}).fill(editedDescription);
@@ -86,6 +90,25 @@ test("editing an operation-backed Skill through the UI preserves exact operation
   expect(afterDraft.content.operations).toEqual(authoritativeOperations);
 });
 
+test("capability directory switches views, searches Chinese content and paginates the full list response",async({page})=>{
+  const suffix=Date.now();
+  const resources=Array.from({length:7},(_,index)=>({resourceId:`skill-directory-${suffix}-${index}`,kind:"skill",name:`分页能力 ${suffix}-${index}`,aggregateVersion:1,lifecycleState:"DRAFT",enabled:true,archived:false,currentDraftRevisionId:`revision-${index}`,publishedRevisionId:null,revisions:[{revisionId:`revision-${index}`,predecessorRevisionId:null,state:"DRAFT",digest:`sha256:${String(index).repeat(64)}`,content:{description:index===6?"中文供应商巡检":"目录分页样例",capabilities:[`catalog.sample.${index}`],instructions:"Read-only catalog sample."},createdAt:"2026-09-09T00:00:00Z"}],reviews:[],relationships:[],bindings:[],invocations:[],savedTests:[],testResults:[],discoverySnapshots:[],toolSelections:[],healthObservations:[],driftRecords:[],limitations:[]}));
+  await page.route("**/api/internal/v0.2.2/resources/skill",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(resources)}));
+  await page.route("**/api/internal/v0.2.2/resources/mcp",route=>route.fulfill({status:200,contentType:"application/json",body:"[]"}));
+  await page.goto("/skills");
+  const directory=page.getByRole("complementary",{name:"SKILL 能力目录"});
+  await expect(directory.getByText(/当前完整响应共 \d+ 项/)).toBeVisible();
+  await directory.getByRole("button",{name:"紧凑列表"}).click();
+  await expect(directory.getByRole("button",{name:"紧凑列表"})).toHaveAttribute("aria-pressed","true");
+  await expect(directory.getByRole("navigation",{name:"能力目录分页"})).toBeVisible();
+  await directory.getByRole("button",{name:"下一页"}).click();
+  await expect(directory.getByText(/第 2 \/ \d+ 页/)).toBeVisible();
+  await page.getByLabel("Search catalog").fill("中文供应商巡检");
+  await expect(directory.getByText(`分页能力 ${suffix}-6`,{exact:true})).toBeVisible();
+  await expect(directory.getByText("筛选后 1 项",{exact:false})).toBeVisible();
+  await expect(directory.getByRole("navigation",{name:"能力目录分页"})).toHaveCount(0);
+});
+
 test("publishes, binds and authorizes one bounded real capability test",async({page})=>{
   await page.setViewportSize({width:1440,height:900});
   await publish(page,"/mcp","Create governed MCP");
@@ -93,6 +116,9 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.getByText(/HEALTHY/).first()).toBeVisible();
   await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
   await expect(page.getByText("1 Tool(s) · 1 Resource(s) · 1 Prompt(s)")).toBeVisible();
+  const mcpIdentity=page.getByRole("region",{name:"正式资源身份与能力"});
+  await expect(mcpIdentity.getByRole("region",{name:"MCP capabilities"})).toContainText("quality.lookup");
+  await expect(mcpIdentity.getByRole("region",{name:"MCP tools"})).toContainText("quality.lookup");
   await page.getByRole("checkbox",{name:/quality.lookup/}).check();
   await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
   const resourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
