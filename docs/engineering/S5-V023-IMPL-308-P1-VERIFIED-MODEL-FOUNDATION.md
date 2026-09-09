@@ -8,7 +8,38 @@
 - Branch: `codex/s5-v023-impl-308-p1-verified-model-foundation`
 - Recovery source commit: `503e2b9c26eed962a720253ce2ac43b9328cd03b`
 - Recovery source tree: `4f91210a74bfe13cb4e143d879c43c37c56ea927`
+- Fixed Human decision source: `451c971b120521333ae46a51830fe17239899a5d`
+- Fixed Human decision tree: `3a3339b19c5f90078b305b417eefd0994592d5ad`
 - Checkpoint: `BOUNDED_CONTRACT_CHECK_AND_IMPLEMENTATION`
+
+Human accepted H308-01, H308-02, and H308-03A with constraints. H308-03B,
+H308-03C, H308-04A, and H308-04B remain `PROPOSED`; they are not authorized in
+this implementation batch and are not prerequisites for the selection
+foundation. Contract acceptance is not implementation acceptance.
+
+## Authorized implementation map
+
+```text
+Model Governance owner
+  -> typed Model domain and repository ports
+  -> PostgreSQL primary adapter
+  -> Model exact-target and Grant Administration adapter
+  -> authorization-first ExactModelResolver
+  -> Agent / Digital Employee / Runtime consumer ports
+```
+
+The implementation may create formal Model identity, immutable revision/digest,
+minimum lifecycle, restart-stable persistence, pre-ID create, exact target
+construction, continuation validation, and exact selection/binding readback.
+Consumer integration is limited to the independent typed port and the existing
+`model_binding_resolution.py`; 305 BFF/authority wiring and 310 Employee files
+receive interface handoff only and are not edited here.
+
+After fetching current remote refs, every local and `origin/*` ref contains
+migrations only through `0018_browser_session_grant_authority.sql`. Active 305
+and 310 branches add no migration, and 311/312/313 have no implementation commit.
+This task therefore allocates `0019_model_governance.sql` to the Model Governance
+owner. Historical migrations `0001`–`0018` remain unchanged.
 
 The local and remote task branch names and repository text had no prior 308
 occupant at entry. The worktree was detached at the fixed base before the task
@@ -169,6 +200,8 @@ are available.
 
 The minimum implementable contract decision candidate is recorded at
 `architecture/s5/v0.2/S5-V023-IMPL-308-P1-VERIFIED-MODEL-CONTRACT-CANDIDATE-V1.md`.
-Its status is `PROPOSED / NOT_ACCEPTED / NOT_FROZEN`; it does not authorize the
-production, persistence, authority, Evidence, or shared-consumer changes it
-recommends.
+Its minimum H308-01/02/03A selection contract is
+`HUMAN_MODEL_MINIMUM_CONTRACT_ACCEPTED_WITH_CONSTRAINTS / NOT_FROZEN` and
+authorizes only this bounded implementation. H308-03B/03C/04A/04B remain
+`PROPOSED`; no production acceptance, Evidence/Resource Use extension, shared
+browser wiring, Ready, merge, or deployment is authorized.

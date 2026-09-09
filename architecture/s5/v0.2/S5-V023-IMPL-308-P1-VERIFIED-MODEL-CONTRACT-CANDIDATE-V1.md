@@ -8,10 +8,36 @@
 | Type | Same-session bounded contract decision preparation |
 | Recovery source commit / tree | `503e2b9c26eed962a720253ce2ac43b9328cd03b` / `4f91210a74bfe13cb4e143d879c43c37c56ea927` |
 | Pull request | `#163`; must remain Draft |
-| Decision status | `PROPOSED / AWAITING_HUMAN_CONTRACT_DECISION` |
+| Fixed Human decision object | `451c971b120521333ae46a51830fe17239899a5d` / `3a3339b19c5f90078b305b417eefd0994592d5ad` |
+| Decision status | `HUMAN_MODEL_MINIMUM_CONTRACT_ACCEPTED_WITH_CONSTRAINTS` for H308-01, H308-02, and H308-03A |
 | Implementation status | `PARTIAL_DRAFT`; internal consumer preparation only |
-| Contract status | Internal v0.2 candidate; `NOT_ACCEPTED / NOT_FROZEN` |
-| Implementation authority from this record | `NO`; Human acceptance is required before authority, persistence, Evidence, or shared-consumer changes |
+| Contract status | Minimum verified-selection contract accepted; `NOT_FROZEN`; H308-03B/03C/04A/04B remain `PROPOSED` |
+| Implementation authority from this record | `YES`, bounded to H308-01, H308-02, and H308-03A; no authority for the four retained proposals |
+
+### 1.1 Human decision overlay
+
+The Human decision accepts this document exactly as recorded at source
+`451c971b120521333ae46a51830fe17239899a5d`, tree
+`3a3339b19c5f90078b305b417eefd0994592d5ad`, with these severable results:
+
+- **accepted:** H308-01 Model Governance ownership and minimum restart-stable
+  persistence; H308-02 scope-bound pre-ID creation, owner-generated identity,
+  continuation, and independent exact grants; H308-03A exact resolution plus
+  current exact authorization as the minimum verified-selection contract;
+- **retained as proposed:** H308-03B connection freshness, H308-03C real-provider
+  acceptance, H308-04A `MODEL` Resource Use, and H308-04B Model Evidence schema.
+
+The retained proposals are neither rejected, cancelled, reassigned, nor a gate
+for the accepted selection foundation. This acceptance creates the internal
+Model Governance owner/persistence and Model-specific exact-target
+responsibilities described by H308-01/02. It does not accept an implementation,
+freeze a public Contract, authorize a public API/CRD, or authorize connection
+probes, real Model calls, Resource Use, Evidence, Ready, merge, or deployment.
+
+The candidate prose below is preserved as the proposal reviewed at the fixed
+object. Its `Recommend Human accept` wording records the historical review
+position and must be read through this decision overlay; the old commit is not
+retroactively described as accepted.
 
 This candidate makes the smallest concrete decisions needed to implement the
 existing P1 verified Model obligation. It does not change M1/M2/M3, P1/P2/P3,
@@ -594,7 +620,7 @@ gate to begin the H308-03A selection foundation. If an item is amended or
 rejected, implementation must honor that result without silently assigning the
 capability to another version.
 
-## 13. Candidate terminal state
+## 13. Historical candidate terminal state at the fixed object
 
 ```text
 PARTIAL_DRAFT
@@ -605,3 +631,15 @@ SESSION_OPEN
 
 This document cannot mark itself Accepted. Only a Human decision may change the
 contract status and authorize the next bounded implementation plan.
+
+## 14. Current post-decision state
+
+```text
+HUMAN_MODEL_MINIMUM_CONTRACT_ACCEPTED_WITH_CONSTRAINTS
+SELECTION_FOUNDATION_IMPLEMENTATION_AUTHORIZED
+H308_03B_03C_04A_04B_PROPOSED
+PARTIAL_DRAFT
+SESSION_OPEN
+```
+
+Implementation acceptance remains a later Human decision.
