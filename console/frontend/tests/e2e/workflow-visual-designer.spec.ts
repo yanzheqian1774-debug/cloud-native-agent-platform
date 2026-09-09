@@ -1,7 +1,7 @@
 import {expect,test,type Page} from "@playwright/test";
 
 const digest=(value:string)=>`sha256:${value.repeat(64)}`;
-const markTestAdapter=(page:Page)=>page.evaluate(()=>{if(document.getElementById("s5-311-test-adapter"))return;const badge=document.createElement("div");badge.id="s5-311-test-adapter";badge.textContent="TEST_ADAPTER · INTERACTION EVIDENCE";badge.style.cssText="position:fixed;z-index:99999;right:12px;top:72px;padding:6px 10px;border:2px solid #9b2c2c;border-radius:6px;color:#7f1d1d;background:#fff7f7;font:700 12px system-ui;box-shadow:0 3px 12px #0002";document.body.appendChild(badge)});
+const markTestAdapter=(page:Page)=>page.evaluate(()=>{let badge=document.getElementById("s5-311-test-adapter");if(!badge){badge=document.createElement("div");badge.id="s5-311-test-adapter";badge.textContent="TEST_ADAPTER · INTERACTION EVIDENCE";document.body.appendChild(badge)}badge.style.cssText=`position:fixed;z-index:99999;right:8px;${innerWidth<=720?"top:108px":"top:58px"};padding:4px 7px;border:2px solid #9b2c2c;border-radius:6px;color:#7f1d1d;background:#fff7f7e8;font:700 10px system-ui;box-shadow:0 3px 12px #0002`});
 
 test("edits a dependency-derived node without changing sibling content or exact bindings",async({page})=>{
   const binding={skillId:"skill-definition:quality",skillRevisionId:"skill-revision:7",skillDigest:digest("a"),operation:"quality.read"};
@@ -27,7 +27,7 @@ test("edits a dependency-derived node without changing sibling content or exact 
   await page.goto("/workflow-definitions");
   await page.getByRole("button",{name:/Visual Workflow/}).click();
   await expect(page.getByLabel("Workflow 流程画布")).toBeVisible();
-  await expect(page.getByLabel("Workflow 节点详情")).toContainText("这是 Definition 配置，不是运行进度");
+  await expect(page.getByLabel("Workflow 节点详情")).toContainText("这里不是运行进度");
   const collectNode=page.getByRole("button",{name:"查看步骤 Collect"});
   await collectNode.focus();await page.keyboard.press("Enter");
   await expect(page.getByLabel("步骤 collect 的资源详情")).toContainText("Quality Skill");
@@ -49,6 +49,7 @@ test("edits a dependency-derived node without changing sibling content or exact 
   await page.getByRole("button",{name:"编辑当前 Draft"}).click();
   await page.getByRole("button",{name:"编辑步骤 Collect"}).click();
   await page.setViewportSize({width:390,height:844});
+  await page.getByLabel("Workflow authoring").getByRole("tab",{name:"节点详情"}).click();
   const narrowSkillSelect=page.getByLabel("步骤 collect 选择 Skill",{exact:true});
   await narrowSkillSelect.focus();await expect(narrowSkillSelect).toBeFocused();
   await page.setViewportSize({width:1440,height:1000});
@@ -79,7 +80,9 @@ test("edits a dependency-derived node without changing sibling content or exact 
   await authoring.getByLabel("等价 Workflow 步骤列表").getByRole("button",{name:/Analyze precisely/}).click();
   await expect(page.getByLabel("步骤 analyze 配置")).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
-  if(process.env.S5_311_SCREENSHOT_DIR){await markTestAdapter(page);await page.getByLabel("步骤 analyze 配置").scrollIntoViewIfNeeded();await page.screenshot({path:`${process.env.S5_311_SCREENSHOT_DIR}/workflow-designer-390px.png`})}
+  if(process.env.S5_311_SCREENSHOT_DIR){await markTestAdapter(page);await page.locator(".workflow-mobile-pane-tabs").evaluate(element=>{let top=0,current:HTMLElement|null=element as HTMLElement;while(current){top+=current.offsetTop;current=current.offsetParent as HTMLElement|null}window.scrollTo({top:Math.max(0,top-56)})});await page.screenshot({path:`${process.env.S5_311_SCREENSHOT_DIR}/workflow-designer-390px.png`})}
+  const mobileBarsDoNotOverlap=await page.evaluate(()=>{const save=document.querySelector(".workflow-savebar")?.getBoundingClientRect(),nav=document.querySelector(".px-mobile-nav")?.getBoundingClientRect();return !save||!nav||save.bottom<=nav.top||save.top>=nav.bottom});
+  expect(mobileBarsDoNotOverlap).toBe(true);
 });
 
 test("requires an explicit decision before switching away from unsaved authoring",async({page})=>{
@@ -94,6 +97,7 @@ test("requires an explicit decision before switching away from unsaved authoring
   await warning.getByRole("button",{name:"继续编辑当前 Workflow"}).click();await expect(page.getByLabel("用途说明")).toHaveValue("unsaved authoring");
   await page.getByRole("button",{name:/Second Workflow/}).click();await page.getByRole("button",{name:"放弃未保存输入并切换"}).click();
   await expect(page.getByRole("heading",{name:"Second Workflow",exact:true})).toBeVisible();
+  await page.setViewportSize({width:390,height:844});
   await expect(page.getByRole("tab",{name:"流程设计"})).toHaveAttribute("aria-selected","true");
 });
 
