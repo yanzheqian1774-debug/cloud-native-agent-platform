@@ -15,7 +15,7 @@ export function CapabilityResourceDetails({kind,resource}:{kind:ResourceKind;res
   const operations=kind==="skill"?skillOperations(exactRevision):[];
   const tools=kind==="mcp"?(resource.discoverySnapshots.at(-1)?.catalog.tools??[]):[];
   return <section className="capability-resource-identity" aria-label="正式资源身份与能力">
-    <header><div><p className="eyebrow">正式资源身份</p><h3>{kind==="skill"?"Skill Definition":"MCP Server"}</h3></div><span className={`agent-availability ${resource.enabled?"enabled":"disabled"}`}>{resource.enabled?"Enabled":"Disabled"}</span></header>
+    <header><div><p className="eyebrow">正式资源身份</p><h3>{kind==="skill"?"Skill Definition":"MCP Server"}</h3></div></header>
     <dl className="capability-identity-grid"><div><dt>规范资源 ID</dt><dd><code>{resource.resourceId}</code></dd></div><div><dt>当前详情 revision</dt><dd><code>{exactRevision?.revisionId??"NO_REVISION"}</code></dd></div><div><dt>当前 Draft revision</dt><dd><code>{resource.currentDraftRevisionId??"NO_CURRENT_DRAFT"}</code></dd></div><div><dt>已发布 revision</dt><dd><code>{resource.publishedRevisionId??"NOT_PUBLISHED"}</code></dd></div><div><dt>Revision digest</dt><dd><code>{exactRevision?.digest??"NO_DIGEST"}</code></dd></div><div><dt>Aggregate version</dt><dd>{resource.aggregateVersion}</dd></div></dl>
     <div className="capability-taxonomy">
       <section aria-label={`${kind.toUpperCase()} capabilities`}><h4>{kind==="skill"?"Skill capabilities":"MCP capabilities"}</h4>{exactRevision?.content.capabilities.length?<ul>{exactRevision.content.capabilities.map(capability=><li key={capability}><code>{capability}</code></li>)}</ul>:<p>未声明 capability。</p>}</section>

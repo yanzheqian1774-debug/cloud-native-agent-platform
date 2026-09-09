@@ -16,6 +16,8 @@ async function publish(page: import("@playwright/test").Page, path: string, crea
   await expect(page.locator(".demo-primary-nav")).toBeVisible();
   await expect(page.getByRole("region", {name:"Resource metrics"})).toBeVisible();
   await page.getByRole("button", {name:create}).click();
+  const kind=path==="/skills"?"skill":"mcp";
+  const createResponse=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/internal/v0.2.2/resources/${kind}`&&response.request().method()==="POST");
   if (path === "/skills") {
     await page.getByLabel("Skill 名称").fill("Supplier Quality Skill");
     await page.getByLabel("能力 / operation（逗号分隔）").fill("quality.lookup");
@@ -28,12 +30,19 @@ async function publish(page: import("@playwright/test").Page, path: string, crea
     await page.getByLabel("Credential reference").fill("secret-ref:supplier-quality/mcp");
     await page.getByRole("button", {name:"保存 MCP Draft"}).click();
   }
+  expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Validation required")).toBeVisible();
+  const validationResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/validation")&&response.request().method()==="POST");
   await page.getByRole("button", {name:"Validate draft"}).click();
+  expect((await validationResponse).status()).toBe(200);
   await expect(page.getByText("Validation passed — exact review required")).toBeVisible();
+  const reviewResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/reviews")&&response.request().method()==="POST");
   await page.getByRole("button", {name:"Human review exact digest"}).click();
+  expect((await reviewResponse).status()).toBe(200);
   await expect(page.getByText("Exact digest reviewed — ready to publish")).toBeVisible();
+  const publicationResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/publications")&&response.request().method()==="POST");
   await page.getByRole("button", {name:"Publish immutable revision"}).click();
+  expect((await publicationResponse).status()).toBe(200);
   await expect(page.locator(".agent-detail").getByText("PUBLISHED", {exact:true}).first()).toBeVisible();
   await expect(page.getByText("Enabled", {exact:true})).toBeVisible();
 }
@@ -68,6 +77,8 @@ test("editing an operation-backed Skill through the UI preserves exact operation
   await expect(page.locator(".agent-detail").getByRole("heading",{name:created.body.resource.name,exact:true})).toBeVisible();
   const identity=page.getByRole("region",{name:"正式资源身份与能力"});
   await expect(identity).toContainText(resourceId);
+  await expect(identity).toContainText(beforeDraft.revisionId);
+  await expect(identity).toContainText(beforeDraft.digest);
   await expect(identity.getByRole("region",{name:"Skill capabilities"})).toContainText(operation.name);
   await expect(identity.getByRole("region",{name:"Skill operations"})).toContainText(operation.executorId);
   await page.getByRole("button",{name:"编辑当前 Skill Draft"}).click();
@@ -124,11 +135,29 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   const resourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
   const first=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(id)}`)).json()).resource,resourceId);
   const firstSnapshot=first.discoverySnapshots.at(-1).snapshotId;
+  const rediscoveryPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/discovery`;
+  const rediscoveryResponse=page.waitForResponse(response=>new URL(response.url()).pathname===rediscoveryPath&&response.request().method()==="POST");
+  const rediscoveryReadback=page.waitForResponse(async response=>{
+    if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
+    const discoveryHttp=await rediscoveryResponse;
+    if(discoveryHttp.status()!==200||response.status()!==200)return false;
+    const discoveryBody=await discoveryHttp.json() as {resource:{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}};
+    const snapshotId=discoveryBody.resource.discoverySnapshots.at(-1)?.snapshotId;
+    const directoryBody=await response.json() as Array<{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}>;
+    return Boolean(snapshotId&&directoryBody.find(item=>item.resourceId===resourceId)?.discoverySnapshots.at(-1)?.snapshotId===snapshotId);
+  });
   await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
+  const rediscoveryHttp=await rediscoveryResponse;expect(rediscoveryHttp.status()).toBe(200);
+  const rediscoveryBody=await rediscoveryHttp.json();
+  const secondSnapshot=rediscoveryBody.resource.discoverySnapshots.at(-1).snapshotId;
+  expect(secondSnapshot).not.toBe(firstSnapshot);
+  expect(rediscoveryBody.resource.toolSelections.some((item:{snapshotId:string})=>item.snapshotId===secondSnapshot)).toBe(false);
+  const readbackHttp=await rediscoveryReadback;expect(readbackHttp.status()).toBe(200);
   await expect(page.getByRole("status").filter({hasText:"当前 snapshot 尚无"})).toBeVisible();
   await expect(page.getByRole("checkbox",{name:/quality.lookup/})).not.toBeChecked();
   await expect(page.getByLabel("管理调用 Tool")).toHaveCount(0);
   await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(firstSnapshot);
+  await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(secondSnapshot);
   await page.getByRole("checkbox",{name:/quality.lookup/}).check();
   await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
   await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
@@ -147,6 +176,10 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   expect(current.invocations.at(-1).selectionId).toBe(current.toolSelections[1].selectionId);
   const publishedMcpId=await page.locator(".agent-detail > header code").textContent();
   await publish(page,"/skills","Create governed SKILL");
+  const realDirectory=page.getByRole("complementary",{name:"SKILL 能力目录"});
+  await expect(realDirectory.getByRole("button",{name:"卡片"})).toHaveAttribute("aria-pressed","true");
+  await realDirectory.getByRole("button",{name:"紧凑列表"}).click();
+  await expect(realDirectory.getByRole("button",{name:"紧凑列表"})).toHaveAttribute("aria-pressed","true");
   await page.getByLabel("Search catalog").fill("Supplier Quality");
   await page.getByLabel("Lifecycle filter").selectOption("PUBLISHED");
   await expect(page.locator(".agent-detail").getByRole("heading",{name:"Supplier Quality Skill"})).toBeVisible();
@@ -245,11 +278,11 @@ for(const operation of ["edit","lifecycle"] as const)test("skill write directory
   const suffix=Date.now(),names=[`race A skill ${suffix}`, `race B skill ${suffix}`];const ids:string[]=[];
   for(const name of names){await page.getByRole("button",{name:"Create governed SKILL"}).click();await page.getByLabel("Skill 名称").fill(name);const created=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/internal/v0.2.2/resources/skill"&&response.request().method()==="POST");await page.getByRole("button",{name:"保存 SKILL Draft"}).click();expect((await created).status()).toBe(201);await expect(page.getByRole("heading",{name,exact:true})).toBeVisible();ids.push((await page.locator(".agent-detail > header code").textContent())!.trim())}
   const read=()=>page.evaluate(async root=>(await(await fetch(root)).json()),"/api/internal/v0.2.2/resources/skill");const before=await read();
-  await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
+  await page.getByLabel("Search catalog").fill(names[0]);await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
   let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>release=resolve),waiting=new Promise<void>(resolve=>started=resolve);let delayed=false;
   await page.route("**/api/internal/**",async route=>{if(route.request().method()==="GET"&&new URL(route.request().url()).pathname==="/api/internal/v0.2.2/resources/skill"&&!delayed){delayed=true;const response=await route.fetch();started();await held;await route.fulfill({response})}else await route.continue()});
   if(operation==="edit"){await page.getByRole("button",{name:"编辑当前 SKILL Draft"}).click();await expect(page.getByLabel("Skill 名称")).toHaveAttribute("readonly","");await page.getByLabel("说明",{exact:true}).fill("directory race saved content");await page.getByRole("button",{name:"保存 SKILL Draft"}).click()}else await page.getByRole("button",{name:"Disable",exact:true}).click();
-  await waiting;await page.locator(".agent-list button").filter({hasText:names[1]}).click();await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();
+  await waiting;await page.getByLabel("Search catalog").fill(names[1]);await page.locator(".agent-list button").filter({hasText:names[1]}).click();await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();
   let releaseB!:()=>void,startedB!:()=>void;const heldB=new Promise<void>(resolve=>releaseB=resolve),waitingB=new Promise<void>(resolve=>startedB=resolve);
   await page.route("**/disable",async route=>{startedB();await heldB;await route.continue()});
   await page.getByRole("button",{name:"Disable",exact:true}).click();await waitingB;
@@ -265,11 +298,11 @@ for(const operation of ["edit","lifecycle"] as const)test("mcp write directory r
   const suffix=Date.now(),names=[`race A mcp ${suffix}`, `race B mcp ${suffix}`];const ids:string[]=[];
   for(const name of names){await page.getByRole("button",{name:"Create governed MCP"}).click();await page.getByLabel("MCP 名称").fill(name);await page.getByRole("button",{name:"保存 MCP Draft"}).click();await expect(page.getByRole("heading",{name,exact:true})).toBeVisible();ids.push((await page.locator(".agent-detail > header code").textContent())!.trim())}
   const read=()=>page.evaluate(async root=>(await(await fetch(root)).json()),"/api/internal/v0.2.2/resources/mcp");const before=await read();
-  await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
+  await page.getByLabel("Search catalog").fill(names[0]);await page.locator(".agent-list button").filter({hasText:names[0]}).click();await expect(page.getByRole("heading",{name:names[0],exact:true})).toBeVisible();
   let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>release=resolve),waiting=new Promise<void>(resolve=>started=resolve);let delayed=false;
   await page.route("**/api/internal/**",async route=>{if(route.request().method()==="GET"&&new URL(route.request().url()).pathname==="/api/internal/v0.2.2/resources/mcp"&&!delayed){delayed=true;const response=await route.fetch();started();await held;await route.fulfill({response})}else await route.continue()});
   if(operation==="edit"){await page.getByRole("button",{name:"编辑当前 MCP Draft"}).click();await expect(page.getByLabel("MCP 名称")).toHaveAttribute("readonly","");await page.getByLabel("说明",{exact:true}).fill("directory race saved content");await page.getByRole("button",{name:"保存 MCP Draft"}).click()}else await page.getByRole("button",{name:"Disable",exact:true}).click();
-  await waiting;await page.locator(".agent-list button").filter({hasText:names[1]}).click();await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();
+  await waiting;await page.getByLabel("Search catalog").fill(names[1]);await page.locator(".agent-list button").filter({hasText:names[1]}).click();await expect(page.getByRole("heading",{name:names[1],exact:true})).toBeVisible();
   let releaseB!:()=>void,startedB!:()=>void;const heldB=new Promise<void>(resolve=>releaseB=resolve),waitingB=new Promise<void>(resolve=>startedB=resolve);
   await page.route("**/disable",async route=>{startedB();await heldB;await route.continue()});
   await page.getByRole("button",{name:"Disable",exact:true}).click();await waitingB;
