@@ -510,10 +510,17 @@ class BusinessProblemApplication:
     def prepare(self, principal, problem_id, command, *, connection=None):
         self.require(principal, "PLAN", "PREPARE", f"plan:prepare:{problem_id}")
         self.require(principal, "PLAN", "READ", f"plan:prepared:{problem_id}")
+        caller_owned = connection is not None
+        if not caller_owned:
+            # Preserve the existing private Bearer route's transaction order.
+            self._authorize_plan(principal, problem_id, command)
         scope = self.scope(principal)
         digest = self.payload(command, problem_id)
         with self.uow.transaction(connection) as connection:
-            self._authorize_plan(principal, problem_id, command, connection=connection)
+            if caller_owned:
+                self._authorize_plan(
+                    principal, problem_id, command, connection=connection
+                )
             replay = self.control.claim_plan_entry(
                 connection,
                 scope,
@@ -659,11 +666,9 @@ class BusinessProblemApplication:
         )
         scope = self.scope(principal)
         # Plan read permission precedes discovering the bound Problem identity.
-        digest = self.payload(command, plan_id)
-        with self.uow.transaction(connection) as connection:
-            plan = self.control.get_plan(
-                scope, plan_id, command.planVersion, connection=connection
-            )
+        caller_owned = connection is not None
+        if not caller_owned:
+            plan = self.control.get_plan(scope, plan_id, command.planVersion)
             if plan is None:
                 raise BusinessProblemError("PLAN_NOT_FOUND")
             envelope = json.loads(plan.canonical_bytes)
@@ -672,7 +677,24 @@ class BusinessProblemApplication:
                 include=set(PreparePlan.model_fields) - {"idempotencyKey"}
             ):
                 raise BusinessProblemConflict("PLAN_PREPARATION_MISMATCH")
-            self._authorize_plan(principal, problem_id, command, connection=connection)
+            self._authorize_plan(principal, problem_id, command)
+        digest = self.payload(command, plan_id)
+        with self.uow.transaction(connection) as connection:
+            if caller_owned:
+                plan = self.control.get_plan(
+                    scope, plan_id, command.planVersion, connection=connection
+                )
+                if plan is None:
+                    raise BusinessProblemError("PLAN_NOT_FOUND")
+                envelope = json.loads(plan.canonical_bytes)
+                problem_id = envelope.get("businessProblemId")
+                if not problem_id or envelope.get("preparation") != command.model_dump(
+                    include=set(PreparePlan.model_fields) - {"idempotencyKey"}
+                ):
+                    raise BusinessProblemConflict("PLAN_PREPARATION_MISMATCH")
+                self._authorize_plan(
+                    principal, problem_id, command, connection=connection
+                )
             replay = self.control.claim_plan_entry(
                 connection,
                 scope,
