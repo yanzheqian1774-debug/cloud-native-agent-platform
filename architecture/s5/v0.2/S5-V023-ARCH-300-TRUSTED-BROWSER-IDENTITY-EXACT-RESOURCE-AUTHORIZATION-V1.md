@@ -113,6 +113,12 @@ They are new application authorities and schemas, even though they introduce no
 new database product or infrastructure dependency. Human acceptance of this
 record is required before either is implemented.
 
+It also introduces two candidate protocols that do not exist in the current
+implementation: immutable static-authority generations activated through a
+PostgreSQL generation record, and a dual-route-set/dual-listener child bootstrap
+inside the existing supervisor. They are architecture candidate scope, not
+ordinary configuration or already-supported topology.
+
 ## 5. Identity, session, and browser security
 
 ### 5.1 Bootstrap login
@@ -120,8 +126,9 @@ record is required before either is implemented.
 The first bounded implementation uses an individually provisioned bootstrap
 credential as follows:
 
-1. a server-rendered same-origin login form posts the credential over TLS directly
-   to the BFF;
+1. a server-rendered same-origin login form first receives an opaque, single-use
+   login nonce, bound to exact Origin/Host and expiring after 5 minutes, then posts
+   that nonce and the credential over TLS directly to the BFF;
 2. the BFF excludes the field and request body from access/application logs and
    passes it once to the existing credential verifier;
 3. the BFF immediately discards the plaintext and stores neither the credential
@@ -135,7 +142,9 @@ The server-rendered form submits without exposing the credential to the SPA. The
 credential is not stored in JavaScript state, Web Storage, IndexedDB,
 service-worker cache, URL, source map, bundle, or cookie.
 
-An administrator must provision distinct credentials outside this product. This
+An administrator must provision distinct credentials with at least 256 bits of
+entropy outside this product. A credential expires no later than 30 days after
+issuance and may be configured shorter. This
 is an explicit P1 operational limitation, not a self-service login or SSO claim.
 A shared high-privilege credential is prohibited.
 
@@ -180,6 +189,11 @@ as an external Secret Reference and never persisted in the database or bundle.
 CSRF tokens expire within 10 minutes and after session rotation/revocation. CORS
 does not admit credentialed foreign origins. State-changing GET endpoints are
 prohibited.
+
+The 5-minute login nonce, at-least-256-bit bootstrap credential with a maximum
+30-day lifetime, 30-minute session idle lifetime, 8-hour absolute session
+lifetime, and 10-minute CSRF and continuation lifetimes are candidate recommended
+defaults. They are not Human-accepted production parameters.
 
 Browser responses use `Cache-Control: no-store`; security headers require TLS,
 deny framing, constrain content sources, and prevent referrer leakage. Session and
@@ -231,6 +245,27 @@ named grant administrators and scoped collection/create entitlements. It remains
 external configuration, uses distinct administrator credentials, and does not
 become the dynamic grant store. There is no organization-wide wildcard fallback.
 
+Authorization sources are closed and typed:
+
+- the immutable static-authority generation owns credential identity/status,
+  explicitly marked `SERVICE_ONLY` exact grants, explicitly marked
+  `BROWSER_BOOTSTRAP` collection/create grants, non-grant requestability rules,
+  and the initial `GRANT_ADMIN`/continuation-assignment meta-grants;
+- PostgreSQL owns approved dynamic exact grants, their decisions, expiry and
+  revocation; and
+- a request is allowed only by an applicable, current source. `SERVICE_ONLY`
+  grants are ignored for browser-session contexts and never flow through
+  credential-to-session mapping. A tuple present in both sources is still one
+  permission, while an explicit credential/config revocation, session revocation,
+  dynamic grant revocation, expiry, or scope mismatch wins over allow.
+
+Dynamic grant administration can never issue or request a `GRANT_ADMIN` or
+continuation-assignment meta-grant. Requestability only permits submission;
+continuation possession only identifies a server-approved request candidate; and
+neither produces an effective grant. Thus a meta-grant, requestability rule, grant
+request, or continuation cannot recursively authorize its own creation or widen
+its issuer.
+
 Two-person separation is not imposed by this candidate because accepted IMPL-297
 does not require it. Nevertheless, authority is independent: being the creator,
 Problem owner, PREPARE caller, approver, or START caller never derives another
@@ -275,22 +310,113 @@ CAS-protected current projection. An approval may issue one bounded bundle, but
 every bundle member receives its own `grant_id` and exact
 owner/action/resource tuple. Partial bundle activation is prohibited.
 
-### 6.3 Dynamic identities and continuations
+### 6.3 Dynamic identities and subject-facing continuations
 
 An exact resource becomes grantable only after its domain owner has durably
-committed the canonical identity. A creation response may include an
-`authorizationContinuationId`: an opaque, expiring, single-purpose owner-minted
-reference to a server-side set of exact resource candidates. It is not a grant,
-does not disclose a hidden ID, and cannot be changed by the browser.
+committed the canonical identity. A continuation is an opaque, authenticated
+envelope minted by the resource owner and containing a random nonce plus
+server-verifiable subject, tenant, security domain, purpose, owner/action set,
+canonical-resource reference, owner revision/policy generation, issued time and
+expiry. Its lifetime is at most 10 minutes. It is not a bearer credential or a
+grant: presenting it under any other authenticated subject/scope fails, and the
+browser cannot change its contents.
+
+Each participant obtains a different continuation addressed to that participant:
+
+- after a canonical create/prepare commit, the owner returns the creator's
+  creator-facing continuation in that creator's authenticated response;
+- an administrator holding the static, scoped continuation-assignment meta-grant
+  may create an approval or execution *offer* for an exact committed owner fact
+  and a named target principal; the owner validates the fact and mints a distinct
+  approver- or executor-facing continuation; and
+- the target retrieves only its own offers through its authenticated continuation
+  inbox. Another participant never forwards or shares its envelope. The ID alone
+  is useless without the bound session principal and scope.
+
+Minting is idempotent over owner, exact resource revision, subject, purpose and the
+originating domain/assignment command idempotency identity. The Grant
+Administration Authority persists the resulting offer before returning its opaque
+envelope. If a domain commit succeeds but offer persistence or the response fails,
+replaying the original domain command does not repeat the domain effect; it resumes
+the same keyed mint and returns the original offer. A different mint payload under
+that key conflicts. This is a recoverable cross-authority protocol, not a claim
+that unrelated owner transactions and authorization administration always share
+one database transaction.
+
+Assignment is an audited request opportunity, not approval. The assignee must
+submit a grant request, and an independently authorized grant decision must still
+create every exact grant. The assignment issuer cannot target itself unless a
+separate static policy explicitly allows that case; no dynamic decision can create
+that policy or its meta-grant.
 
 The Grant Administration Authority resolves the continuation through the owning
-port, validates current scope/requestability, and stores the resulting exact
-resource strings in the request transaction. This permits requesting Resource Use
-or Evidence-reference access without first leaking a restricted Evidence ID. A
-continuation cannot specify arbitrary URLs, methods, headers, SQL, owners, actions,
-or resources.
+port, revalidates current canonical identity/status/scope/requestability, and in
+one PostgreSQL transaction inserts a unique continuation-consumption hash plus the
+grant request and its exact resource members. Concurrent consumption has one
+winner. Same subject, continuation and idempotency digest returns the original
+request; a different subject, purpose or payload fails. An expired, revoked,
+already-consumed-with-different-key, stale-owner-revision or non-requestable
+continuation creates no request.
 
-### 6.4 Consistency, revocation, and replay
+This permits requesting Resource Use or Evidence-reference access without first
+leaking a restricted Evidence ID. A continuation cannot specify arbitrary URLs,
+methods, headers, SQL, owners, actions, resources or meta-grants. If response loss
+leaves consumption uncertain, the bound subject reads by the same idempotency key;
+the envelope is never transferred or replaced by automatic READ/APPROVE authority.
+
+### 6.4 Static generation coordination and request linearization
+
+The existing authority file and PostgreSQL cannot participate in one transaction.
+This candidate therefore does not claim cross-medium atomicity. Instead, static
+configuration becomes a set of immutable, digest-addressed generation files, and
+PostgreSQL stores the single active generation/digest. The active database row,
+not filesystem rename time or process reload time, is the activation authority.
+
+The external configuration owner performs a configuration update in this order:
+
+1. write and durably publish a new immutable generation file without replacing or
+   deleting the currently active file;
+2. ask the single supervised child to load it, validate schema, monotonic
+   generation, canonical digest, references, absence of wildcards, and all source
+   classifications;
+3. under the process activation write barrier, commit the new active
+   generation/digest in PostgreSQL; for credential removal/revocation, the same
+   PostgreSQL transaction also revokes every session derived from that credential;
+   and
+4. only after commit, publish the already validated in-memory snapshot and release
+   the barrier. The PostgreSQL commit is the configuration or credential-revocation
+   linearization point.
+
+Activation is an operator/deployment control operation available only on a
+host-local privileged control channel; it is absent from both browser and normal
+service HTTP route sets. Its caller identity, generation, digest, result and bounded
+failure reason are audited without file contents or credentials.
+
+Failure before step 3 leaves the old generation active. Failure after its commit
+causes the child to fail closed rather than serve with the old snapshot; restart
+loads the exact active immutable generation by digest before readiness. Missing or
+mismatched active files keep both protected route sets unready. Old generations
+remain retained while referenced and are garbage-collected only by a separately
+validated retention operation. This activation row, immutable-file protocol and
+recovery behavior are new persistent/protocol architecture candidate state.
+
+Session revocation is PostgreSQL-only: exact-session logout/admin revoke or
+credential-wide revoke commits the session revocation rows/projection, and that
+commit is its linearization point. Dynamic grant revocation is also PostgreSQL-only:
+the revocation fact and removal from the effective projection commit together, and
+that commit is its linearization point. Neither operation rewrites the static file.
+
+Each protected request passes the process activation read barrier, pins the active
+static generation, then reads current session and applicable dynamic-grant state
+from PostgreSQL. The successful final current-authorization read is that request's
+authorization linearization point. A revocation committed before it is observed;
+a revocation committed after it does not retroactively cancel an already
+authorized in-flight call. Authorization material is scoped to that one typed
+domain call and is never cached for a later request. A process crash between a
+configuration commit and in-memory publication cannot serve because the child
+exits/fails readiness and reconstructs the committed generation on restart.
+
+### 6.5 Grant consistency, revocation, and replay
 
 Within the approved PostgreSQL database, each grant decision and all of its
 effective grant rows commit in one transaction. Revocation fact and removal from
@@ -315,10 +441,11 @@ it never repeats a protected domain effect merely to infer authorization.
 
 | Owner / boundary | Trusted input | Output | Validation responsibility | Write responsibility | Bypass constraint |
 | --- | --- | --- | --- | --- | --- |
-| Bootstrap Credential Verifier | credential submitted once over TLS; server authority file | verified credential/principal/scope/expiry | digest, expiry, distinct identity, source policy | external admin owns authority-file provisioning | no shared browser credential; no credential recovery from digest |
+| Static Authority Configuration | immutable generation file plus PostgreSQL active-generation row | credential facts, source-typed static grants/requestability/meta-grants | digest, monotonic generation, source type, expiry/revocation, no wildcard | external admin stages file; supervised child activates generation; PostgreSQL owns active pointer | file publish/reload is not activation; `SERVICE_ONLY` never enters a browser session |
+| Bootstrap Credential Verifier | credential submitted once over TLS; active static generation | verified credential/principal/scope/expiry/generation | digest, expiry, revocation, distinct identity, source policy | no request-time write | no shared browser credential; no credential recovery from digest |
 | Browser Session Authority **(new)** | verified principal/scope and secure randomness | opaque cookie, trusted request context, CSRF token | current credential/session, expiry, rotation, origin/CSRF | `browser_identity` PostgreSQL schema | browser cannot set principal/scope; internal session values never accepted as headers |
 | Workbench BFF **(new)** | typed routes, validated session, bounded body | domain response or minimum-disclosure error | request schema, size, CSRF, current exact grant before dispatch | no domain or grant facts directly | fixed route registry only; no arbitrary proxy target or header forwarding |
-| Grant Administration Authority **(new)** | trusted context, exact target/continuation, meta-grant, idempotency/CAS | request, decision, individual exact grants, revocation projection | subject/scope, owner namespace, action, exact resource, requestability, issuer authority, validity | `authorization_admin` PostgreSQL schema | neither creator nor model/client can sign; no wildcard/prefix matching |
+| Grant Administration Authority **(new)** | trusted context, exact target/subject-bound continuation, static meta-grant, idempotency/CAS | request, decision, individual exact grants, continuation consumption, revocation projection | subject/scope, owner namespace, action, exact resource, requestability, issuer authority, validity | `authorization_admin` PostgreSQL schema | dynamic grants cannot create meta-grants; neither creator nor model/client can sign; no wildcard/prefix matching |
 | Business Problem | trusted context and authorized typed command | Problem/Criterion/Criteria Set identities/revisions | existing exact grants and domain invariants | existing Product PostgreSQL schemas | old header adapters not browser reachable |
 | Workflow Control | trusted context, exact prepared Plan/decision | Plan, append-only approval | independent PREPARE/READ/APPROVE and bindings | existing Workflow Control PostgreSQL schema | PREPARE never implies APPROVE; approval never implies START |
 | Definition owners | trusted context and authorized Workflow/Employee commands | immutable definitions/revisions | exact owner/action/resource and lifecycle | existing definition schemas | caller headers no longer construct scope/actor |
@@ -326,6 +453,55 @@ it never repeats a protected domain effect merely to infer authorization.
 | Resource Use | trusted context, exact Attempt/use grant | authorized snapshot/projection | separate Resource Use READ and Evidence filtering | existing Execution-owned Resource Use schema | Execution READ does not imply Resource Use READ |
 | Evidence | trusted context, exact reference/content grant | authorized reference or content projection | separate reference/dereference/export decision | existing Evidence authority | READ elsewhere never implies Evidence disclosure |
 | Edge/ingress | TLS request to an allowlisted Workbench route | BFF request only | host, TLS, path, size; strip/reject identity headers | deployment configuration only | `/api/internal/*` is not exposed to browser networks |
+
+### 7.1 Runtime topology and enforceable isolation
+
+The verified current implementation is narrower than this recommendation:
+`agent_console.governed_execution_supervisor` starts one one-worker Uvicorn child
+for `agent_console.app:app` with one host/port. It already owns the database-keyed
+host lock, lifetime pipe, confirmed-child-exit status and process-wide Invocation
+ownership. It does **not** currently provide two listeners or two route sets.
+
+The bounded implementation must extend that supervisor rather than run a second
+backend or execution process. The one supervisor starts exactly one child process;
+that child pre-binds a public Workbench socket and a private internal socket and,
+in one asyncio process with one worker, serves two distinct ASGI applications:
+
+- the public application registers only static/login/session and the closed typed
+  `/api/workbench/v1` route set; and
+- the private application registers existing internal/service Bearer routes,
+  including governed Execution.
+
+Both applications share the same composition root, PostgreSQL pools, supervised
+recovery guard and process-wide Invocation ownership. The child reports ready only
+after both sockets are bound, both route registries pass the closed-route check,
+the active authority generation is loaded, and required PostgreSQL authorities are
+ready. Because the current supervisor records `RUNNING` immediately after spawn,
+the extension must add a bounded child-to-supervisor readiness handshake and keep
+status `STARTING` until the supervisor verifies both listener identities. If either
+bind, application startup, handshake or readiness step fails, the child
+closes both sockets and exits. If either server task exits unexpectedly, the child
+stops the sibling server and exits; the existing supervisor then records the exact
+child exit and retains/releases ownership under the already accepted rules. On
+SIGTERM, both listeners stop accepting, drain within the shared bounded shutdown,
+then the child exits. Supervisor lifetime-pipe EOF triggers the same coordinated
+shutdown; the inherited host lock remains held until child exit. There is no
+public-only partial-success mode and no second owner of Execution.
+
+Application startup can verify only local facts: distinct bound addresses/ports,
+the exact public/private route inventories, rejected identity headers, single
+worker/child identity and authority-generation readiness. Those checks do not
+prove network isolation. A Kubernetes deployment must expose only the public port
+through the public Service/Ingress, place the private port behind a distinct
+ClusterIP Service, default-deny private-port ingress, and allow only named service
+accounts/pod selectors that require the non-browser contract. Equivalent non-Kubernetes
+firewall rules must name the allowed callers. A deployment may claim bypass closure
+only after those controls are applied and an independent client in the
+browser-reachable network proves the private address/port and
+`/api/internal/*` unreachable while the public typed routes remain reachable.
+Configuration declarations, route documentation, loopback binding in a local test,
+or BFF header stripping alone are not isolation evidence. If the deployment cannot
+produce that proof, affected resources remain `OPEN / NOT_BROWSER_AVAILABLE`.
 
 ## 8. Candidate HTTP contracts
 
@@ -336,9 +512,16 @@ CSRF tokens, protected target IDs, grants outside the caller's view, or existenc
 ### 8.1 Session
 
 ```http
+GET /api/workbench/v1/login
+
+200 <server-rendered form containing one opaque, 5-minute, single-use login nonce>
+```
+
+```http
 POST /api/workbench/v1/session
 Content-Type: application/x-www-form-urlencoded
 
+loginNonce=<opaque, single-use>
 bootstrapCredential=<sensitive, never logged>
 ```
 
@@ -395,7 +578,29 @@ Possible states are `ALLOWED`, `REQUESTABLE`, `PENDING`, and `NOT_AVAILABLE`.
 cross-scope targets. Grant IDs appear only to their subject or authorized grant
 administrator.
 
-### 8.3 Grant request
+### 8.3 Subject-facing continuation inbox
+
+```http
+GET /api/workbench/v1/authorization/continuations?state=AVAILABLE
+
+200 {
+  "continuations": [{
+    "continuationId": "opaque-subject-bound-envelope",
+    "purpose": "APPROVE_PLAN",
+    "expiresAt": "...",
+    "requestableActions": ["APPROVE"]
+  }]
+}
+```
+
+Only envelopes bound to the authenticated principal/tenant/security-domain are
+returned; protected resource IDs are omitted until independently readable. An
+administrator with a static scoped continuation-assignment meta-grant may call a
+typed assignment endpoint with a named target principal, exact purpose, and owner
+fact reference. The owner validates and mints the target's envelope. The endpoint
+cannot assign meta-grants, approve a request, or return the envelope to the issuer.
+
+### 8.4 Grant request
 
 ```http
 POST /api/workbench/v1/authorization/grant-requests
@@ -418,7 +623,7 @@ request cannot name or override it. Success is `202` with
 `requestId`, `state: PENDING`, `aggregateVersion`, `submittedAt`, and bounded
 requested action labels. It does not assert that authorization is approved.
 
-### 8.4 Decision and revocation
+### 8.5 Decision and revocation
 
 ```http
 POST /api/workbench/v1/authorization/grant-requests/{requestId}/decisions
@@ -455,7 +660,7 @@ Success returns the immutable `revocationId`, `grantId`, `revokedAt`, and
 different payload returns `409 IDEMPOTENCY_PAYLOAD_MISMATCH`. Stale CAS returns
 `409 AUTHORIZATION_STATE_STALE`.
 
-### 8.5 Grant request status and minimum disclosure
+### 8.6 Grant request status and minimum disclosure
 
 `GET /api/workbench/v1/authorization/grant-requests/{requestId}` is available to
 the applicant and authorized grant administrators. States are `PENDING`,
@@ -548,7 +753,8 @@ independence visible; the architecture does not mandate distinct humans.
 2. A bootstrap-configured exact collection entitlement permits
    `BUSINESS_PROBLEM/CREATE/business-problem:collection` and the existing
    collection READ required by creation. Alice creates Problem `P1`.
-3. The Product owner returns `P1` and an authorization continuation. Alice
+3. The Product owner returns `P1` and a creator-facing continuation bound to
+   Alice's principal/scope. Alice
    requests exact `BUSINESS_PROBLEM/READ/business-problem:P1`, required
    Criterion/Criteria Set permissions, and `PLAN/PREPARE/plan:prepare:P1`.
    The Workbench shows `PENDING_AUTHORIZATION`, not success or approval.
@@ -556,18 +762,26 @@ independence visible; the architecture does not mandate distinct humans.
    Each tuple receives its own grant/decision identity. Alice creates Criteria,
    a Criteria Set, and prepares Plan `PL1` version 1. Preparation does not approve
    it.
-5. Bob requests `PLAN/READ/plan:PL1:1` and
-   `PLAN/APPROVE/plan:PL1:1`. A grant administrator explicitly approves those
-   grants. Alice's creator/PREPARE grants do not let her approve.
+5. A statically meta-authorized administrator creates an `APPROVE_PLAN` offer for
+   named principal Bob against exact `PL1:1`. Workflow Control validates the
+   committed Plan and mints a Bob-bound continuation; only Bob retrieves it from
+   his authenticated inbox. Bob atomically consumes it to request
+   `PLAN/READ/plan:PL1:1` and `PLAN/APPROVE/plan:PL1:1`. A grant administrator
+   explicitly approves those grants. Alice never receives Bob's continuation,
+   and Alice's creator/PREPARE grants do not let her approve.
 6. Bob approves exact `PL1:1`; Workflow Control appends the approval fact. Approval
    does not start execution.
-7. Carol submits the owner-minted continuation for the exact approved command.
-   A grant administrator separately issues
+7. A statically meta-authorized administrator similarly creates an
+   `EXECUTE_APPROVED_PLAN` offer for named principal Carol. Workflow Control mints
+   a different Carol-bound continuation only after approval; Carol retrieves and
+   atomically consumes it through her own session. A grant administrator separately issues
    `EXECUTION/START/governed-execution:start:<request-semantic-digest>` and the
    required exact Skill invocation grant. Carol starts the existing approved
    Plan through the supervised Execution owner.
-8. The start response returns Run/Task Run/Attempt identities plus an opaque
-   read-authorization continuation. It does not disclose restricted Evidence IDs.
+8. The start response returns Run/Task Run/Attempt identities plus a Carol-bound
+   read-authorization continuation. Other readers receive their own
+   administrator-assigned, owner-minted offers; nobody shares Carol's envelope.
+   The response does not disclose restricted Evidence IDs.
 9. Separate requests and decisions issue:
    `EXECUTION/READ/governed-execution:read:<run>:<attempt>`,
    `SKILL/READ_SKILL_INVOCATION/skill-invocation:read:<invocation>`,
@@ -615,6 +829,11 @@ independence visible; the architecture does not mandate distinct humans.
 | normal browser completes Problem→Plan→approve→execute→authorized reads | real browser, real BFF/backend/PostgreSQL, independent grants and identities, filtered then authorized Resource Use/Evidence reference |
 | timeout/UNKNOWN never auto-repeats execution | disconnect/crash after durable dispatch; restart/replay stays UNKNOWN with provider call count unchanged |
 | grant transaction and revocation are atomic | fault injection before/after commit; no partial bundle; retry returns original decision identity |
+| static/PG generation coordination is recoverable | fault injection at file publish, activation commit and in-memory publish; old or committed generation is recovered exactly and no mismatched generation serves |
+| revocation classes have exact linearization | config, credential, session and dynamic-grant revoke races prove the documented commit/request ordering and no later request uses revoked state |
+| continuations are per-subject and atomic | creator, approver and executor retrieve different envelopes; transfer fails; concurrent consume has one request identity; replay is idempotent |
+| one supervised child owns both listeners | one child PID/worker and shared ownership; either-listener startup/exit failure closes both; supervisor-loss behavior remains accepted behavior |
+| deployed network isolation is effective | independent browser-network probe reaches public typed routes but cannot connect to private listener or any internal route; manifests alone are insufficient |
 | non-disclosure is preserved | foreign/hidden/nonexistent target responses have the same status/body class and no count/timing-sensitive payload |
 
 ## 13. Rejected alternatives
@@ -658,15 +877,23 @@ independence visible; the architecture does not mandate distinct humans.
    adapter exists;
 5. private-listener/network-policy isolation of every legacy internal route that
    can reach the same protected facts;
-6. owner-minted authorization continuations for newly committed or undisclosed
-   exact child resources.
+6. one supervised child serving distinct public/private ASGI route sets and
+   listeners under a common fail-closed lifecycle;
+7. immutable static-authority generations with PostgreSQL activation and the
+   documented configuration/credential/session/grant revocation ordering; and
+8. per-subject owner-minted continuation offers, statically meta-authorized
+   assignment, and atomic consumption for newly committed or undisclosed exact
+   resources.
 
 ### Truly unresolved decisions
 
 - the enterprise identity provider and protocol that may later replace bootstrap
   credentials;
 - the named initial grant administrators, credential delivery/rotation procedure,
-  deployment hostnames, Secret References, and exact production lifetimes;
+  deployment hostnames and Secret References;
+- whether to accept or revise the candidate recommended lifetimes: 5-minute login
+  nonce, at-least-256-bit/at-most-30-day bootstrap credential, 30-minute idle and
+  8-hour absolute session, and 10-minute CSRF/continuation;
 - whether future policy requires mandatory two-person grant administration;
 - Evidence content/dereference and standalone Resource Use browser contracts;
 - cross-host/HA session and execution coordination, outside this bounded scope.
