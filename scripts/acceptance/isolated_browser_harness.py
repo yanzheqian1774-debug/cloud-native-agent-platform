@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import socket
 import stat
@@ -20,7 +22,7 @@ import urllib.request
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NoReturn
+from typing import BinaryIO, NoReturn
 from urllib.parse import urlparse
 
 import psycopg
@@ -1404,6 +1406,123 @@ def verify_postgres_role_readiness(postgres_url: str, expected_role: str) -> Non
         raise RuntimeError("PostgreSQL validation role readiness failed") from exc
 
 
+STARTUP_EXCEPTION_TYPES = frozenset(
+    {
+        "RuntimeError",
+        "ValueError",
+        "OSError",
+        "PermissionError",
+        "FileNotFoundError",
+        "ModuleNotFoundError",
+        "ImportError",
+        "SyntaxError",
+        "ConnectionRefusedError",
+        "ConnectionResetError",
+        "TimeoutError",
+        "OperationalError",
+        "InterfaceError",
+        "URLError",
+        "HTTPError",
+        "CalledProcessError",
+        "TimeoutExpired",
+        "AssertionError",
+    }
+)
+
+
+def startup_exception_type(exc: BaseException) -> str:
+    name = type(exc).__name__
+    return name if name in STARTUP_EXCEPTION_TYPES else "UNKNOWN"
+
+
+class StartupStderr:
+    """Discard raw stderr while retaining bounded static classifications."""
+
+    LINE_LIMIT = 4096
+    RECORD_LIMIT = 32
+
+    def __init__(self, release: Path):
+        self.release = release
+        self.lock = threading.Lock()
+        self.exceptions: list[str] = []
+        self.locations: list[dict[str, str | int]] = []
+        self.truncated = False
+        self.eof = threading.Event()
+        self.read_error = False
+
+    def consume_line(self, line: bytes) -> None:
+        text = line.decode("utf-8", errors="replace")
+        exception = re.match(r"^(?:[a-zA-Z_][\w]*\.)*([A-Za-z_][\w]*):", text)
+        if exception and exception[1] in STARTUP_EXCEPTION_TYPES:
+            with self.lock:
+                if len(self.exceptions) < self.RECORD_LIMIT:
+                    self.exceptions.append(exception[1])
+        frame = re.fullmatch(r'\s*File "([^"]+)", line (\d+), in ([\w<>]+)\s*', text)
+        if frame:
+            try:
+                path = Path(frame[1]).resolve()
+                relative = path.relative_to(self.release)
+                if path.suffix != ".py" or "site-packages" in relative.parts:
+                    return
+                source = path.read_text(encoding="utf-8")
+                functions = {"<module>"} | {
+                    node.name
+                    for node in ast.walk(ast.parse(source))
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                if frame[3] not in functions or not 1 <= int(frame[2]) <= len(
+                    source.splitlines()
+                ):
+                    return
+                location = {
+                    "file": relative.as_posix(),
+                    "function": frame[3],
+                    "line": int(frame[2]),
+                }
+                with self.lock:
+                    if len(self.locations) < self.RECORD_LIMIT:
+                        self.locations.append(location)
+            except (OSError, ValueError, SyntaxError):
+                pass
+
+    def drain(self, stream: BinaryIO) -> None:
+        pending = bytearray()
+        dropping = False
+        try:
+            while chunk := stream.read1(self.LINE_LIMIT):
+                for byte in chunk:
+                    if byte == 10:
+                        if not dropping:
+                            self.consume_line(bytes(pending))
+                        pending.clear()
+                        dropping = False
+                    elif not dropping:
+                        if len(pending) < self.LINE_LIMIT:
+                            pending.append(byte)
+                        else:
+                            pending.clear()
+                            dropping = True
+                            self.truncated = True
+            if pending and not dropping:
+                self.consume_line(bytes(pending))
+        except Exception:
+            self.read_error = True
+        finally:
+            stream.close()
+            self.eof.set()
+
+    def snapshot(self) -> dict[str, object]:
+        with self.lock:
+            return {
+                "exceptionTypes": list(self.exceptions),
+                "locations": list(self.locations),
+                "classification": "CLASSIFIED" if self.exceptions else "UNKNOWN",
+                "oversizedLineDiscarded": self.truncated,
+                "eof": self.eof.is_set(),
+                "readError": self.read_error,
+            }
+
+
 class Harness:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
@@ -1415,6 +1534,10 @@ class Harness:
         self.token = secrets.token_urlsafe(32)
         self.child: subprocess.Popen[bytes] | None = None
         self.child_started_ns = 0
+        self.startup_records: list[dict[str, object]] = []
+        self.startup_stderr: StartupStderr | None = None
+        self.stderr_thread: threading.Thread | None = None
+        self.health_error_class = "NONE"
         self.socket_path = self.runtime / "control.sock"
         self.metadata_path = self.runtime / "backend.json"
         caches = [
@@ -1492,14 +1615,24 @@ class Harness:
                     f"{self.url}/healthz", timeout=0.5
                 ) as response:
                     healthy = response.status == 200
-            except Exception:
-                pass
+            except Exception as exc:
+                reason = getattr(exc, "reason", exc)
+                self.health_error_class = startup_exception_type(reason)
             if healthy is expected:
                 return
             time.sleep(0.1)
         raise RuntimeError(f"backend health did not become {expected}")
 
     def start(self, overrides: dict[str, str] | None = None) -> None:
+        self.health_error_class = "NONE"
+        try:
+            self._start(overrides)
+        except BaseException as exc:
+            self.record_startup("STARTUP_FAILED", exc)
+            raise
+        self.record_startup("STARTUP_READY")
+
+    def _start(self, overrides: dict[str, str] | None = None) -> None:
         self.assert_port_free()
         env = os.environ.copy()
         python_paths = [
@@ -1564,8 +1697,14 @@ class Harness:
             cwd=self.release,
             env=env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
+        self.startup_stderr = StartupStderr(self.release)
+        assert self.child.stderr is not None
+        self.stderr_thread = threading.Thread(
+            target=self.startup_stderr.drain, args=(self.child.stderr,), daemon=True
+        )
+        self.stderr_thread.start()
         self.child_started_ns = time.time_ns()
         self.write_metadata()
         self.wait_health(True)
@@ -1579,24 +1718,41 @@ class Harness:
             self.child.pid,
             str(self.release),
             self.args.backend_port,
+            os.getpid(),
+            self.child_started_ns,
         )
         actual = (
             metadata.get("ownershipToken"),
             metadata.get("backendPid"),
             metadata.get("releaseRoot"),
             metadata.get("backendPort"),
+            metadata.get("supervisorPid"),
+            metadata.get("backendStartTimeNs"),
         )
         if actual != expected:
             raise RuntimeError("backend ownership metadata mismatch")
         if Path(f"/proc/{self.child.pid}").exists():
             cwd = Path(f"/proc/{self.child.pid}/cwd").resolve()
-            command = Path(f"/proc/{self.child.pid}/cmdline").read_bytes().split(b"\0")
+            command = (
+                Path(f"/proc/{self.child.pid}/cmdline")
+                .read_bytes()
+                .rstrip(b"\0")
+                .split(b"\0")
+            )
             joined = b" ".join(command)
+            parent = re.search(
+                r"^PPid:\s+(\d+)$",
+                Path(f"/proc/{self.child.pid}/status").read_text(),
+                re.MULTILINE,
+            )
             if (
                 cwd != self.release
                 or b"uvicorn" not in joined
                 or str(self.args.backend_port).encode() not in command
                 or self.token.encode() not in joined
+                or command != [os.fsencode(arg) for arg in self.child.args]
+                or parent is None
+                or parent[1] != str(os.getpid())
             ):
                 raise RuntimeError("backend process identity mismatch")
         else:
@@ -1612,32 +1768,40 @@ class Harness:
                 text=True,
                 check=True,
             ).stdout
-            listener = subprocess.run(
-                [
-                    "lsof",
-                    "-nP",
-                    "-a",
-                    "-p",
-                    str(self.child.pid),
-                    f"-iTCP:{self.args.backend_port}",
-                    "-sTCP:LISTEN",
-                ],
+            parent = subprocess.run(
+                ["ps", "-p", str(self.child.pid), "-o", "ppid="],
                 capture_output=True,
                 text=True,
-                check=False,
+                check=True,
             ).stdout
             if (
                 "uvicorn" not in command
                 or self.token not in command
                 or str(self.args.backend_port) not in command
                 or f"n{self.release}" not in cwd
-                or not listener
+                or parent.strip() != str(os.getpid())
+                or shlex.split(command) != list(self.child.args)
             ):
                 raise RuntimeError(
-                    "backend executable, command, cwd, token, or listener mismatch"
+                    "backend executable, command, cwd, token, or parent mismatch"
                 )
 
     def stop(self) -> None:
+        self.record_startup("CLEANUP_ENTER")
+        try:
+            self._stop()
+        except BaseException as exc:
+            self.record_startup("CLEANUP_FAILED", exc)
+            raise
+        if (
+            self.stderr_thread is not None
+            and self.child is not None
+            and self.child.poll() is not None
+        ):
+            self.stderr_thread.join(timeout=1)
+        self.record_startup("CLEANUP_COMPLETE")
+
+    def _stop(self) -> None:
         if self.child is None or self.child.poll() is not None:
             return
         self.verify_owned()
@@ -1649,6 +1813,79 @@ class Harness:
             self.child.kill()
             self.child.wait(timeout=5)
         self.wait_health(False)
+
+    def record_startup(self, phase: str, exc: BaseException | None = None) -> None:
+        """Evidence failures cannot replace the failure being diagnosed."""
+        try:
+            code = self.child.poll() if self.child is not None else None
+            record: dict[str, object] = {
+                "phase": phase,
+                "backendCreated": self.child is not None,
+                "backendAlive": self.child is not None and code is None,
+                "backendExitCode": code
+                if code is not None
+                else "NOT_EXITED"
+                if self.child is not None
+                else "NOT_CREATED",
+                "exceptionType": startup_exception_type(exc) if exc else "NONE",
+                "healthErrorClass": self.health_error_class,
+                "stderr": self.startup_stderr.snapshot()
+                if self.startup_stderr
+                else {"classification": "UNKNOWN"},
+                "locations": [],
+            }
+            tb = exc.__traceback__ if exc else None
+            while tb and len(record["locations"]) < 16:
+                if (
+                    tb.tb_frame.f_code.co_filename == __file__
+                    and tb.tb_frame.f_code.co_name
+                    in {
+                        "start",
+                        "_start",
+                        "stop",
+                        "_stop",
+                        "wait_health",
+                        "verify_owned",
+                        "write_metadata",
+                        "assert_port_free",
+                    }
+                ):
+                    record["locations"].append(
+                        {
+                            "file": "scripts/acceptance/isolated_browser_harness.py",
+                            "function": tb.tb_frame.f_code.co_name,
+                            "line": tb.tb_lineno,
+                        }
+                    )
+                tb = tb.tb_next
+            if len(self.startup_records) < 64:
+                self.startup_records.append(record)
+            self.write_startup_diagnostics()
+        except Exception:
+            pass
+
+    def write_startup_diagnostics(
+        self, primary: BaseException | None = None, cleanup: BaseException | None = None
+    ) -> None:
+        path = self.runtime / "startup-diagnostics.json"
+        temporary = path.with_suffix(".tmp")
+        with temporary.open("w", encoding="utf-8") as output:
+            json.dump(
+                {
+                    "schemaVersion": 1,
+                    "events": self.startup_records,
+                    "primaryExceptionType": startup_exception_type(primary)
+                    if primary
+                    else "NONE",
+                    "cleanupExceptionType": startup_exception_type(cleanup)
+                    if cleanup
+                    else "NONE",
+                },
+                output,
+            )
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(path)
 
     def restart(self, overrides: dict[str, str] | None = None) -> None:
         self.stop()
@@ -1809,6 +2046,7 @@ def main() -> int:
     harness = Harness(args)
     print("harness phase: CANDIDATE", file=sys.stderr)
     command_result = 1
+    primary_error: BaseException | None = None
     try:
         harness.start()
         print("harness phase: BACKEND", file=sys.stderr)
@@ -1881,10 +2119,16 @@ def main() -> int:
                 build_identity,
                 failure_context,
             )
+    except BaseException as exc:
+        primary_error = exc
+        raise
     finally:
+        cleanup_error: BaseException | None = None
         try:
             harness.stop()
-        finally:
+        except BaseException as exc:
+            cleanup_error = exc
+        try:
             playwright_output = harness.runtime / "playwright-output"
             if playwright_output.exists():
                 shutil.rmtree(playwright_output)
@@ -1896,6 +2140,16 @@ def main() -> int:
             after = harness.verify_release()
             evidence = harness.write_minimum_disclosure_evidence(after, command_result)
             scan_generated_artifacts([args.build_mode_identity, evidence])
+        except BaseException as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+        try:
+            harness.write_startup_diagnostics(primary_error, cleanup_error)
+        except BaseException as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+        if primary_error is None and cleanup_error is not None:
+            raise cleanup_error
     return command_result
 
 

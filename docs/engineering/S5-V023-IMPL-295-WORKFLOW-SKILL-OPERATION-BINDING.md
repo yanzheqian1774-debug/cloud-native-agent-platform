@@ -143,11 +143,55 @@ Changed paths are limited to:
 - `console/frontend/tests/e2e/workflow-runtime-workbench.spec.ts`;
 - this implementation note.
 
-No backend, migration, CI, shared browser harness, App/Agent/MCP management page,
+At that earlier checkpoint, no backend, migration, CI, shared browser harness, App/Agent/MCP management page,
 Evidence/focus path or delivery matrix was modified by 295. Backend, browser-regression
 and CI changes visible in the branch are preserved second-parent content from formal
 main `ae002a2...`, not 295 scope expansion. Full immutable Browser Acceptance and the
 five new-source CI checks remain final-candidate gates before Human Pre-Merge review.
+
+## Consolidated diagnostic authorization and harness correction
+
+The Human `CONSOLIDATED_DIAGNOSTIC_AND_ACCEPTANCE` instruction extends this same
+Session from source `33be91a6a117b780fc5f984d72856c07c37a102d`, tree
+`0620e6b1af5e1e9bbaadc3509798e5a35dec9275`, to the existing formal harness and
+its existing tests. There is no baseline refresh or Knowledge product change.
+The additional paths are `scripts/acceptance/isolated_browser_harness.py`,
+`tests/test_s5_impl_072_isolated_browser_harness.py`, and this scope/validation note.
+
+The diagnosed harness defects were discarded backend stderr, a macOS cleanup
+identity check that also required an already-listening service, and cleanup
+exceptions replacing a primary startup exception. The harness now continuously
+drains stderr with bounded line storage and bounded static classifications. Raw
+stderr, exception messages, credentials and environment values are not evidence.
+Oversized lines are discarded while draining continues; unknown classifications
+remain `UNKNOWN`. `startup-diagnostics.json` records ready/failure and cleanup
+phases separately, including whether the child was created, still running, or
+actually exited. An exit observed after cleanup never replaces the original
+failure-time process state.
+
+Cleanup still checks the ownership token, exact child command, cwd, recorded
+supervisor/start identity and OS parent relationship. A listener is not required
+to establish ownership of an unready child. Unknown or mismatched ownership fails
+closed. Primary exceptions remain primary even when cleanup or mandatory artifact
+checks also fail; cleanup failures remain separately recorded and cannot turn a
+failure into a pass. Browser selection, assertions, health/test deadlines, retries,
+skip/flaky guards and release immutability checks are unchanged.
+
+The concentrated diagnostic run `s5-295-consolidated-dTtocStS` first recorded a
+provider preparation failure before any harness invocation. A later recorded
+host PostgreSQL readiness check succeeded, allowing its never-invoked harness
+phase to continue exactly once. The observed complete Knowledge scenario passed:
+the second ingestion returned `COMPLETED` with a snapshot different from S0;
+the original authoritative GETs subsequently returned that new snapshot and the
+unchanged snapshot assertion passed. The observer exists only in its diagnostic
+copy, not in the repository test or final acceptance candidate.
+
+This does not establish the cause of historical product startup or Knowledge
+failures. Historical full 36/37 failure, the previous Knowledge snapshot assertion
+failure, pre-browser failures, and the identity-unconfirmed run retain their
+original classifications. Final exact-candidate browser/quality and CI results
+are recorded separately in the delivery evidence. PR #159 stays Draft and the
+Session stays OPEN pending a Human acceptance decision.
 
 ## Bounded in-flight editor protection correction
 
