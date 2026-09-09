@@ -95,6 +95,77 @@
   }
 }
 
+.employee-management .employee-profile,
+.employee-management .employee-agent-profile,
+.employee-management .employee-work-participation {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid #d7dde8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.employee-management :is(.employee-profile, .employee-agent-profile, .employee-work-participation) > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.employee-management .employee-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.employee-management .employee-profile-grid > div {
+  min-width: 0;
+  padding: .75rem;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+
+.employee-management .employee-profile-grid .wide { grid-column: 1 / -1; }
+.employee-management .employee-profile-grid dt { color: #596579; font-size: .8rem; }
+.employee-management .employee-profile-grid dd { margin: .25rem 0 0; overflow-wrap: anywhere; }
+.employee-management .employee-profile-grid dd small { display: block; margin-top: .25rem; color: #596579; }
+.employee-management .employee-capabilities { display: flex; flex-wrap: wrap; gap: .4rem; padding: 0; list-style: none; }
+.employee-management .employee-capabilities li { padding: .25rem .55rem; border-radius: 999px; background: #e8eefc; }
+.employee-management .employee-disclosure { padding: .75rem; border-left: 4px solid #6d7f9e; background: #f7f9fc; }
+
+.employee-management .employee-work-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .65rem;
+  margin: 1rem 0;
+}
+
+.employee-management .employee-work-stage {
+  min-width: 0;
+  padding: .8rem;
+  border: 1px solid #cbd5e3;
+  border-radius: 9px;
+}
+
+.employee-management .employee-work-stage span,
+.employee-management .employee-work-stage strong { display: block; }
+.employee-management .employee-work-stage span { margin-bottom: .35rem; color: #596579; font-size: .78rem; }
+.employee-management .employee-work-stage.unknown { border-style: dashed; background: #f8f8f6; }
+.employee-management .employee-work-participation fieldset { min-width: 0; border: 1px solid #cbd5e3; border-radius: 10px; }
+.employee-management .employee-work-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.employee-management .employee-work-links { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; }
+
+@media (max-width: 700px) {
+  .employee-management .employee-profile-grid,
+  .employee-management .employee-work-stages,
+  .employee-management .employee-work-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-management .employee-profile-grid .wide { grid-column: auto; }
+  .employee-management :is(.employee-profile, .employee-agent-profile, .employee-work-participation) > header { flex-direction: column; }
+}
+
 .agent-management .agent-authoring,
 .skill-mcp-workbench [aria-label$="Draft authoring"] { margin: 1rem 0; }
 .agent-management .agent-binding-editor { display: grid; gap: .8rem; }
