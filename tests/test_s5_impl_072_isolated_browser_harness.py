@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -222,6 +223,9 @@ def test_summary_main_preserves_exit_and_cleanup(
 
         def stop(self):
             events.append("stop")
+
+        def write_startup_diagnostics(self, primary=None, cleanup=None):
+            pass
 
         def verify_release(self):
             events.append("immutable")
@@ -792,6 +796,11 @@ def test_three_services_restart_and_cleanup_are_isolated_and_immutable(
         assert identity(public, public_port) == public_identity
         assert identity(staging, staging_port) == staging_identity
         harness.stop()
+        startup = json.loads((harness.runtime / "startup-diagnostics.json").read_text())
+        assert startup["events"][0]["phase"] == "STARTUP_READY"
+        assert startup["events"][0]["backendExitCode"] == "NOT_EXITED"
+        assert startup["events"][-1]["phase"] == "CLEANUP_COMPLETE"
+        assert isinstance(startup["events"][-1]["backendExitCode"], int)
         assert public.poll() is None
         assert staging.poll() is None
         assert release_manifest(release) == before
@@ -824,6 +833,149 @@ def test_authorized_harness_paths_have_no_broad_process_matcher() -> None:
             if file.is_file():
                 text = file.read_text(encoding="utf-8", errors="ignore").lower()
                 assert all(term not in text for term in prohibited), (file, prohibited)
+
+
+def test_startup_stderr_is_bounded_and_never_retains_dynamic_text(tmp_path):
+    source = tmp_path / "app.py"
+    source.write_text("def initialize():\n    pass\n")
+    collector = harness_module.StartupStderr(tmp_path)
+    raw = (
+        b"PRIVATE_SECRET" * 100_000
+        + b"\n"
+        + f'  File "{source}", line 2, in initialize\n'.encode()
+        + b"OperationalError: PRIVATE_CREDENTIAL_AND_DOCUMENT\n"
+        + b'  File "/private/PRIVATE_PATH.py", line 1, in PRIVATE_FUNCTION\n'
+        + b"PRIVATE_EXCEPTION: PRIVATE\n"
+    )
+    collector.drain(io.BufferedReader(io.BytesIO(raw)))
+    result = collector.snapshot()
+    assert result["oversizedLineDiscarded"] and result["eof"]
+    assert result["exceptionTypes"] == ["OperationalError"]
+    assert result["locations"] == [
+        {"file": "app.py", "function": "initialize", "line": 2}
+    ]
+    assert "PRIVATE" not in json.dumps(result)
+
+
+def test_unlistening_owned_child_can_be_cleaned_without_weakening_identity(
+    tmp_path, monkeypatch
+):
+    release = make_release(tmp_path)
+    harness = Harness(args(release, tmp_path / "runtime", free_port()))
+    # Real child with the expected command, blocked before any listener exists.
+    app = release / "agent_console/app.py"
+    app.chmod(0o644)
+    app.write_text("import time\ntime.sleep(60)\n")
+    app.chmod(0o444)
+
+    def failed_health(expected, timeout=20):
+        if expected:
+            raise RuntimeError("PRIVATE_STARTUP")
+
+    monkeypatch.setattr(harness, "wait_health", failed_health)
+    try:
+        with pytest.raises(RuntimeError, match="PRIVATE_STARTUP"):
+            harness.start()
+        assert harness.child.poll() is None
+        metadata = json.loads(harness.metadata_path.read_text())
+        forged = dict(metadata, supervisorPid=-1)
+        harness.metadata_path.write_text(json.dumps(forged))
+        with pytest.raises(RuntimeError, match="metadata mismatch"):
+            harness.stop()
+        assert harness.child.poll() is None
+        harness.metadata_path.write_text(json.dumps(metadata))
+        harness.stop()
+        assert harness.child.returncode is not None
+        record = json.loads((harness.runtime / "startup-diagnostics.json").read_text())
+        assert record["events"][0]["backendExitCode"] == "NOT_EXITED"
+        assert record["events"][-1]["phase"] == "CLEANUP_COMPLETE"
+        assert isinstance(record["events"][-1]["backendExitCode"], int)
+        assert "PRIVATE_STARTUP" not in json.dumps(record)
+    finally:
+        if harness.child is not None and harness.child.poll() is None:
+            harness.child.terminate()
+            harness.child.wait(timeout=5)
+
+
+def test_main_preserves_startup_exception_when_cleanup_also_fails(
+    tmp_path, monkeypatch
+):
+    primary = ValueError("PRIVATE_STARTUP")
+    cleanup = RuntimeError("PRIVATE_CLEANUP")
+    observed = []
+
+    class FailedHarness:
+        runtime = tmp_path
+
+        def __init__(self, args):
+            pass
+
+        def start(self):
+            raise primary
+
+        def stop(self):
+            raise cleanup
+
+        def verify_release(self):
+            observed.append("manifest_checked")
+            return {}
+
+        def write_minimum_disclosure_evidence(self, after, code):
+            return tmp_path / "evidence.json"
+
+        def write_startup_diagnostics(self, first, second):
+            observed.append((first, second))
+
+    monkeypatch.setattr(harness_module, "Harness", FailedHarness)
+    monkeypatch.setattr(
+        harness_module,
+        "parse_args",
+        lambda: Namespace(
+            release_root=tmp_path,
+            build_mode_identity=tmp_path / "identity.json",
+            postgres_url="unused",
+            postgres_validation_role="unused",
+        ),
+    )
+    monkeypatch.setattr(harness_module, "verify_build_identity", lambda *a: {})
+    monkeypatch.setattr(
+        harness_module, "verify_postgres_role_readiness", lambda *a: None
+    )
+    monkeypatch.setattr(harness_module, "scan_generated_artifacts", lambda *a: None)
+    with pytest.raises(ValueError) as raised:
+        harness_module.main()
+    assert raised.value is primary
+    assert observed == ["manifest_checked", (primary, cleanup)]
+
+
+def test_failed_child_stderr_and_original_exit_are_retained(tmp_path, monkeypatch):
+    release = make_release(tmp_path)
+    app = release / "agent_console/app.py"
+    app.chmod(0o644)
+    app.write_text('raise RuntimeError("PRIVATE_DOCUMENT_CREDENTIAL")\n')
+    app.chmod(0o444)
+    harness = Harness(args(release, tmp_path / "runtime", free_port()))
+
+    def health(expected, timeout=20):
+        assert expected
+        harness.child.wait(timeout=5)
+        raise RuntimeError("PRIVATE_HEALTH")
+
+    monkeypatch.setattr(harness, "wait_health", health)
+    with pytest.raises(RuntimeError, match="PRIVATE_HEALTH"):
+        harness.start()
+    original_exit = harness.child.returncode
+    harness.stop()
+    record = json.loads((harness.runtime / "startup-diagnostics.json").read_text())
+    assert original_exit != 0
+    assert record["events"][0]["backendExitCode"] == original_exit
+    last = record["events"][-1]
+    assert last["backendExitCode"] == original_exit
+    assert "RuntimeError" in last["stderr"]["exceptionTypes"]
+    assert last["stderr"]["locations"] == [
+        {"file": "agent_console/app.py", "function": "<module>", "line": 1}
+    ]
+    assert "PRIVATE" not in json.dumps(record)
 
 
 def test_minimum_disclosure_extraction_is_allowlisted_and_fail_closed() -> None:

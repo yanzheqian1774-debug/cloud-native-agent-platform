@@ -117,3 +117,77 @@
 }
 
 .agent-management .agent-binding-details dd { margin: 0; overflow-wrap: anywhere; white-space: normal; }
+
+.workflow-skill-binding {
+  min-width: 0;
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #cbd5e3;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.workflow-skill-binding > header,
+.workflow-skill-binding .binding-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.workflow-skill-binding h4,
+.workflow-skill-binding .eyebrow { margin: 0; }
+
+.workflow-skill-binding-list {
+  display: grid;
+  gap: .75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-skill-binding-list > li,
+.binding-unavailable {
+  min-width: 0;
+  padding: .85rem;
+  border: 1px solid #d7dde8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.workflow-skill-binding dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem 1rem;
+}
+
+.workflow-skill-binding dl > div { min-width: 0; }
+.workflow-skill-binding dt { color: #596579; font-size: .8rem; }
+.workflow-skill-binding dd { margin: .2rem 0 0; overflow-wrap: anywhere; }
+
+.binding-status {
+  flex: 0 0 auto;
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.binding-status.bound,
+.binding-status.verified { color: #14532d; background: #dcfce7; }
+.binding-status.unbound { color: #475569; background: #e2e8f0; }
+.binding-status.invalid { color: #991b1b; background: #fee2e2; }
+.binding-lock-note,
+.binding-authority-note { color: #475569; }
+.workflow-binding-review { min-width: 0; margin-block: 1rem; }
+.workflow-skill-binding pre { box-sizing: border-box; max-width: 100%; margin: .35rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workflow-skill-binding .binding-picker { display: grid; gap: .65rem; margin-top: .8rem; }
+.workflow-skill-binding .binding-edit-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; }
+.workflow-skill-binding .binding-selection-preview { min-width: 0; padding: .8rem; border-left: 3px solid #3157d5; background: #eef2ff; }
+.workflow-operation-directory-status { min-width: 0; }
+
+@media (max-width: 800px) {
+  .workflow-skill-binding dl { grid-template-columns: 1fr; }
+  .workflow-skill-binding > header,
+  .workflow-skill-binding .binding-heading { align-items: stretch; flex-direction: column; }
+  .workflow-skill-binding .binding-status { align-self: flex-start; }
+}
