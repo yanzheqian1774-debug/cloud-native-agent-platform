@@ -1,5 +1,6 @@
-import {expect,test} from "@playwright/test";
+import {expect,test,type Response} from "@playwright/test";
 import {createServer,type Server} from "node:http";
+import {recordSkillMcpOperationResult} from "../harness/structuredSkillMcpReporter";
 
 let mcp:Server;
 test.beforeAll(async()=>{mcp=createServer((request,response)=>{let raw="";request.on("data",chunk=>{raw+=chunk});request.on("end",()=>{const message=JSON.parse(raw);const method=message.method;if(method==="notifications/initialized"){response.writeHead(202);response.end();return}const result=method==="initialize"?{protocolVersion:"2025-06-18",capabilities:{},serverInfo:{name:"browser-acceptance",version:"1"}}:method==="tools/list"?{tools:[{name:"quality.lookup",description:"Deterministic quality lookup",inputSchema:{type:"object"}}]}:method==="resources/list"?{resources:[{uri:"quality://guide",name:"Quality guide"}]}:method==="prompts/list"?{prompts:[{name:"quality-summary",description:"Quality summary"}]}:{content:[{type:"text",text:"healthy"}],structuredContent:{supplier:"ACME",token:"must-redact"}};const body=JSON.stringify({jsonrpc:"2.0",id:message.id,result});response.writeHead(200,{"Content-Type":"application/json","Mcp-Session-Id":"browser-session","Content-Length":Buffer.byteLength(body)});response.end(body)})});await new Promise<void>((resolve,reject)=>{mcp.once("error",reject);mcp.listen(8765,"127.0.0.1",resolve)})});
@@ -120,94 +121,254 @@ test("capability directory switches views, searches Chinese content and paginate
   await expect(directory.getByRole("navigation",{name:"能力目录分页"})).toHaveCount(0);
 });
 
-test("publishes, binds and authorizes one bounded real capability test",async({page})=>{
+test("publishes, binds and authorizes one bounded real capability test",async({page},testInfo)=>{
   await page.setViewportSize({width:1440,height:900});
-  await publish(page,"/mcp","Create governed MCP");
-  await page.getByRole("button",{name:"Test connection"}).click();
-  await expect(page.getByText(/HEALTHY/).first()).toBeVisible();
-  await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
-  await expect(page.getByText("1 Tool(s) · 1 Resource(s) · 1 Prompt(s)")).toBeVisible();
-  const mcpIdentity=page.getByRole("region",{name:"正式资源身份与能力"});
-  await expect(mcpIdentity.getByRole("region",{name:"MCP capabilities"})).toContainText("quality.lookup");
-  await expect(mcpIdentity.getByRole("region",{name:"MCP tools"})).toContainText("quality.lookup");
-  await page.getByRole("checkbox",{name:/quality.lookup/}).check();
-  await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
-  const resourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
-  const first=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(id)}`)).json()).resource,resourceId);
-  const firstSnapshot=first.discoverySnapshots.at(-1).snapshotId;
-  const rediscoveryPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/discovery`;
-  const rediscoveryResponse=page.waitForResponse(response=>new URL(response.url()).pathname===rediscoveryPath&&response.request().method()==="POST");
-  const rediscoveryReadback=page.waitForResponse(async response=>{
-    if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
-    const discoveryHttp=await rediscoveryResponse;
-    if(discoveryHttp.status()!==200||response.status()!==200)return false;
-    const discoveryBody=await discoveryHttp.json() as {resource:{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}};
-    const snapshotId=discoveryBody.resource.discoverySnapshots.at(-1)?.snapshotId;
-    const directoryBody=await response.json() as Array<{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}>;
-    return Boolean(snapshotId&&directoryBody.find(item=>item.resourceId===resourceId)?.discoverySnapshots.at(-1)?.snapshotId===snapshotId);
+  await test.step("SKILL_MCP_BACKEND_READY",async()=>{
+    const response=await page.request.get("/api/internal/v0.2.2/resources/mcp");
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_BACKEND_READY",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
   });
-  await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
-  const rediscoveryHttp=await rediscoveryResponse;expect(rediscoveryHttp.status()).toBe(200);
-  const rediscoveryBody=await rediscoveryHttp.json();
-  const secondSnapshot=rediscoveryBody.resource.discoverySnapshots.at(-1).snapshotId;
-  expect(secondSnapshot).not.toBe(firstSnapshot);
-  expect(rediscoveryBody.resource.toolSelections.some((item:{snapshotId:string})=>item.snapshotId===secondSnapshot)).toBe(false);
-  const readbackHttp=await rediscoveryReadback;expect(readbackHttp.status()).toBe(200);
-  await expect(page.getByRole("status").filter({hasText:"当前 snapshot 尚无"})).toBeVisible();
-  await expect(page.getByRole("checkbox",{name:/quality.lookup/})).not.toBeChecked();
-  await expect(page.getByLabel("管理调用 Tool")).toHaveCount(0);
-  await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(firstSnapshot);
-  await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(secondSnapshot);
-  await page.getByRole("checkbox",{name:/quality.lookup/}).check();
-  await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
-  await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
-  await page.getByLabel("管理调用输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
-  const invocationResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/tool-invocations")&&response.request().method()==="POST");
-  await page.getByRole("button",{name:"Authorize bounded management invocation"}).click();
-  const invocationHttp=await invocationResponse;expect(invocationHttp.status()).toBe(200);
-  const invocationBody=await invocationHttp.json();expect(invocationBody.invocation.status).toBe("SUCCEEDED");
-  const mcpInvocationStatus=page.getByRole("region",{name:"MCP professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
-  await expect(mcpInvocationStatus).toContainText("管理调用即时结果已保留");
-  await expect(mcpInvocationStatus).toContainText("credential values redacted: true");
-  const current=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(id)}`)).json()).resource,resourceId);
-  expect(current.discoverySnapshots).toHaveLength(2);expect(current.toolSelections).toHaveLength(2);
-  expect(current.toolSelections[0].snapshotId).toBe(firstSnapshot);
-  expect(current.toolSelections[1].snapshotId).toBe(current.discoverySnapshots[1].snapshotId);
-  expect(current.invocations.at(-1).selectionId).toBe(current.toolSelections[1].selectionId);
+  await test.step("SKILL_MCP_MCP_PUBLISHED",()=>publish(page,"/mcp","Create governed MCP"));
+  const resourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
+  const healthPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/health`;
+  let healthResponse!:Promise<Response>;
+  await test.step("SKILL_MCP_HEALTH_SUBMIT",async()=>{
+    healthResponse=page.waitForResponse(response=>new URL(response.url()).pathname===healthPath&&response.request().method()==="POST");
+    await page.getByRole("button",{name:"Test connection"}).click();
+  });
+  await test.step("SKILL_MCP_HEALTH_HTTP_COMPLETION",async()=>{
+    const response=await healthResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_HEALTH_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+  });
+  await test.step("SKILL_MCP_HEALTH_UI_RENDERED",async()=>{
+    await expect(page.getByText(/HEALTHY/).first()).toBeVisible();
+  });
+  const discoveryPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/discovery`;
+  let discoveryResponse!:Promise<Response>,discoveryReadback!:Promise<Response>;
+  let firstSnapshot="";
+  await test.step("SKILL_MCP_DISCOVERY_SUBMIT",async()=>{
+    discoveryResponse=page.waitForResponse(response=>new URL(response.url()).pathname===discoveryPath&&response.request().method()==="POST");
+    discoveryReadback=page.waitForResponse(async response=>{
+      if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
+      const discoveryHttp=await discoveryResponse;
+      if(discoveryHttp.status()!==200||response.status()!==200)return false;
+      const discoveryBody=await discoveryHttp.json() as {resource:{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}};
+      const snapshotId=discoveryBody.resource.discoverySnapshots.at(-1)?.snapshotId;
+      const directoryBody=await response.json() as Array<{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}>;
+      return discoveryBody.resource.resourceId===resourceId&&Boolean(snapshotId&&directoryBody.find(item=>item.resourceId===resourceId)?.discoverySnapshots.at(-1)?.snapshotId===snapshotId);
+    });
+    await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
+  });
+  await test.step("SKILL_MCP_DISCOVERY_HTTP_COMPLETION",async()=>{
+    const response=await discoveryResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_DISCOVERY_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    const body=await response.json();firstSnapshot=body.resource.discoverySnapshots.at(-1).snapshotId;
+  });
+  await test.step("SKILL_MCP_DISCOVERY_SNAPSHOT_READBACK",async()=>{
+    const response=await discoveryReadback;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_DISCOVERY_SNAPSHOT_READBACK",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+  });
+  await test.step("SKILL_MCP_DISCOVERY_UI_RENDERED",async()=>{
+    await expect(page.getByText("1 Tool(s) · 1 Resource(s) · 1 Prompt(s)")).toBeVisible();
+    const mcpIdentity=page.getByRole("region",{name:"正式资源身份与能力"});
+    await expect(mcpIdentity.getByRole("region",{name:"MCP capabilities"})).toContainText("quality.lookup");
+    await expect(mcpIdentity.getByRole("region",{name:"MCP tools"})).toContainText("quality.lookup");
+  });
+  const selectionPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/tool-selections`;
+  let selectionResponse!:Promise<Response>,selectionReadback!:Promise<Response>;
+  let firstSelectionId="";
+  await test.step("SKILL_MCP_TOOL_SELECTION_SUBMIT",async()=>{
+    selectionResponse=page.waitForResponse(response=>new URL(response.url()).pathname===selectionPath&&response.request().method()==="POST");
+    selectionReadback=page.waitForResponse(async response=>{
+      if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
+      const selectionHttp=await selectionResponse;
+      if(selectionHttp.status()!==200||response.status()!==200)return false;
+      const selectionBody=await selectionHttp.json() as {resource:{resourceId:string;toolSelections:Array<{selectionId:string;snapshotId:string}>}};
+      const selected=selectionBody.resource.toolSelections.at(-1);
+      const directoryBody=await response.json() as Array<{resourceId:string;toolSelections:Array<{selectionId:string;snapshotId:string}>}>;
+      return selectionBody.resource.resourceId===resourceId&&Boolean(selected&&directoryBody.find(item=>item.resourceId===resourceId)?.toolSelections.some(item=>item.selectionId===selected.selectionId&&item.snapshotId===firstSnapshot));
+    });
+    await page.getByRole("checkbox",{name:/quality.lookup/}).check();
+    await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
+  });
+  await test.step("SKILL_MCP_TOOL_SELECTION_HTTP_COMPLETION",async()=>{
+    const response=await selectionResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_TOOL_SELECTION_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    const body=await response.json();firstSelectionId=body.resource.toolSelections.at(-1).selectionId;
+  });
+  await test.step("SKILL_MCP_TOOL_SELECTION_READBACK",async()=>{
+    const response=await selectionReadback;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_TOOL_SELECTION_READBACK",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    await expect(page.getByLabel("管理调用 Tool")).toBeVisible();
+  });
+  const rediscoveryPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/discovery`;
+  let rediscoveryResponse!:Promise<Response>,rediscoveryReadback!:Promise<Response>;
+  let secondSnapshot="";
+  await test.step("SKILL_MCP_REDISCOVERY_SUBMIT",async()=>{
+    rediscoveryResponse=page.waitForResponse(response=>new URL(response.url()).pathname===rediscoveryPath&&response.request().method()==="POST");
+    rediscoveryReadback=page.waitForResponse(async response=>{
+      if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
+      const discoveryHttp=await rediscoveryResponse;
+      if(discoveryHttp.status()!==200||response.status()!==200)return false;
+      const discoveryBody=await discoveryHttp.json() as {resource:{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}};
+      const snapshotId=discoveryBody.resource.discoverySnapshots.at(-1)?.snapshotId;
+      const directoryBody=await response.json() as Array<{resourceId:string;discoverySnapshots:Array<{snapshotId:string}>}>;
+      return discoveryBody.resource.resourceId===resourceId&&Boolean(snapshotId&&directoryBody.find(item=>item.resourceId===resourceId)?.discoverySnapshots.at(-1)?.snapshotId===snapshotId);
+    });
+    await page.getByRole("button",{name:"Discover Tools, Resources and Prompts"}).click();
+  });
+  await test.step("SKILL_MCP_REDISCOVERY_HTTP_COMPLETION",async()=>{
+    const response=await rediscoveryResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_REDISCOVERY_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    const body=await response.json();secondSnapshot=body.resource.discoverySnapshots.at(-1).snapshotId;
+    expect(secondSnapshot).not.toBe(firstSnapshot);
+    expect(body.resource.toolSelections.some((item:{snapshotId:string})=>item.snapshotId===secondSnapshot)).toBe(false);
+  });
+  await test.step("SKILL_MCP_REDISCOVERY_SNAPSHOT_READBACK",async()=>{
+    const response=await rediscoveryReadback;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_REDISCOVERY_SNAPSHOT_READBACK",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+  });
+  await test.step("SKILL_MCP_REDISCOVERY_UI_RENDERED",async()=>{
+    await expect(page.getByRole("status").filter({hasText:"当前 snapshot 尚无"})).toBeVisible();
+    await expect(page.getByRole("checkbox",{name:/quality.lookup/})).not.toBeChecked();
+    await expect(page.getByLabel("管理调用 Tool")).toHaveCount(0);
+    await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(firstSnapshot);
+    await expect(page.getByRole("region",{name:"MCP snapshot and selection history"})).toContainText(secondSnapshot);
+  });
+  let reselectionResponse!:Promise<Response>,reselectionReadback!:Promise<Response>;
+  let secondSelectionId="";
+  await test.step("SKILL_MCP_RESELECTION_SUBMIT",async()=>{
+    reselectionResponse=page.waitForResponse(response=>new URL(response.url()).pathname===selectionPath&&response.request().method()==="POST");
+    reselectionReadback=page.waitForResponse(async response=>{
+      if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
+      const selectionHttp=await reselectionResponse;
+      if(selectionHttp.status()!==200||response.status()!==200)return false;
+      const selectionBody=await selectionHttp.json() as {resource:{resourceId:string;toolSelections:Array<{selectionId:string;snapshotId:string}>}};
+      const selected=selectionBody.resource.toolSelections.at(-1);
+      const directoryBody=await response.json() as Array<{resourceId:string;toolSelections:Array<{selectionId:string;snapshotId:string}>}>;
+      return selectionBody.resource.resourceId===resourceId&&Boolean(selected&&selected.snapshotId===secondSnapshot&&directoryBody.find(item=>item.resourceId===resourceId)?.toolSelections.some(item=>item.selectionId===selected.selectionId));
+    });
+    await page.getByRole("checkbox",{name:/quality.lookup/}).check();
+    await page.getByRole("button",{name:"Govern explicit Tool selection"}).click();
+  });
+  await test.step("SKILL_MCP_RESELECTION_HTTP_COMPLETION",async()=>{
+    const response=await reselectionResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_RESELECTION_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    const body=await response.json();secondSelectionId=body.resource.toolSelections.at(-1).selectionId;
+  });
+  await test.step("SKILL_MCP_RESELECTION_READBACK",async()=>{
+    const response=await reselectionReadback;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_RESELECTION_READBACK",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    expect(secondSelectionId).not.toBe(firstSelectionId);
+    await expect(page.getByLabel("管理调用 Tool")).toBeVisible();
+  });
+  let invocationResponse!:Promise<Response>;
+  await test.step("SKILL_MCP_MCP_INVOCATION_SUBMIT",async()=>{
+    await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
+    await page.getByLabel("管理调用输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
+    invocationResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/tool-invocations")&&response.request().method()==="POST");
+    await page.getByRole("button",{name:"Authorize bounded management invocation"}).click();
+  });
+  await test.step("SKILL_MCP_MCP_INVOCATION_HTTP_COMPLETION",async()=>{
+    const response=await invocationResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_MCP_INVOCATION_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    const body=await response.json();expect(body.invocation.status).toBe("SUCCEEDED");
+  });
+  await test.step("SKILL_MCP_MCP_INVOCATION_UI_RENDERED",async()=>{
+    const status=page.getByRole("region",{name:"MCP professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
+    await expect(status).toContainText("管理调用即时结果已保留");
+    await expect(status).toContainText("credential values redacted: true");
+    const current=await page.evaluate(async id=>(await(await fetch(`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(id)}`)).json()).resource,resourceId);
+    expect(current.discoverySnapshots).toHaveLength(2);expect(current.toolSelections).toHaveLength(2);
+    expect(current.toolSelections[0].snapshotId).toBe(firstSnapshot);
+    expect(current.toolSelections[1].snapshotId).toBe(current.discoverySnapshots[1].snapshotId);
+    expect(current.invocations.at(-1).selectionId).toBe(current.toolSelections[1].selectionId);
+  });
   const publishedMcpId=await page.locator(".agent-detail > header code").textContent();
-  await publish(page,"/skills","Create governed SKILL");
-  const realDirectory=page.getByRole("complementary",{name:"SKILL 能力目录"});
-  await expect(realDirectory.getByRole("button",{name:"卡片"})).toHaveAttribute("aria-pressed","true");
-  await realDirectory.getByRole("button",{name:"紧凑列表"}).click();
-  await expect(realDirectory.getByRole("button",{name:"紧凑列表"})).toHaveAttribute("aria-pressed","true");
-  await page.getByLabel("Search catalog").fill("Supplier Quality");
-  await page.getByLabel("Lifecycle filter").selectOption("PUBLISHED");
-  await expect(page.locator(".agent-detail").getByRole("heading",{name:"Supplier Quality Skill"})).toBeVisible();
-  expect(new URL(page.url()).searchParams.get("query")).toBe("Supplier Quality");
-  expect(new URL(page.url()).searchParams.get("lifecycle")).toBe("PUBLISHED");
-  expect(new URL(page.url()).searchParams.get("resourceId")).toBeTruthy();
-  await page.getByLabel("测试名称").fill("Supplier quality regression");
-  await page.getByLabel("测试输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
-  await page.getByLabel("期望输出（JSON）").fill(JSON.stringify({status:"healthy"}));
-  await page.getByRole("button",{name:"Save test case"}).click();
-  await page.getByRole("button",{name:"Run saved test"}).click();
-  await expect(page.getByText(/expected equals actual/)).toBeVisible();
-  await page.getByLabel("选择精确 MCP").selectOption(publishedMcpId!);
-  await page.getByLabel("选择共同能力").selectOption("quality.lookup");
-  await page.getByRole("button",{name:"Bind exact MCP capability"}).click();
-  await page.getByLabel("管理测试输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
-  await page.getByRole("button",{name:"Authorize bounded capability test"}).click();
-  const skillInvocationStatus=page.getByRole("region",{name:"SKILL professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
-  await expect(skillInvocationStatus).toContainText("Invocation Evidence recorded");
-  await expect(skillInvocationStatus).toContainText("credential values redacted: true");
-  await page.getByRole("tab", {name:"Technical View"}).click();
+  await test.step("SKILL_MCP_SKILL_PUBLISHED",()=>publish(page,"/skills","Create governed SKILL"));
+  const skillId=(await page.locator(".agent-detail > header code").textContent())!.trim();
+  await test.step("SKILL_MCP_SKILL_TEST_UI_RENDERED",async()=>{
+    const realDirectory=page.getByRole("complementary",{name:"SKILL 能力目录"});
+    await expect(realDirectory.getByRole("button",{name:"卡片"})).toHaveAttribute("aria-pressed","true");
+    await realDirectory.getByRole("button",{name:"紧凑列表"}).click();
+    await expect(realDirectory.getByRole("button",{name:"紧凑列表"})).toHaveAttribute("aria-pressed","true");
+    await page.getByLabel("Search catalog").fill("Supplier Quality");
+    await page.getByLabel("Lifecycle filter").selectOption("PUBLISHED");
+    await expect(page.locator(".agent-detail").getByRole("heading",{name:"Supplier Quality Skill"})).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("query")).toBe("Supplier Quality");
+    expect(new URL(page.url()).searchParams.get("lifecycle")).toBe("PUBLISHED");
+    expect(new URL(page.url()).searchParams.get("resourceId")).toBeTruthy();
+    await page.getByLabel("测试名称").fill("Supplier quality regression");
+    await page.getByLabel("测试输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
+    await page.getByLabel("期望输出（JSON）").fill(JSON.stringify({status:"healthy"}));
+    await page.getByRole("button",{name:"Save test case"}).click();
+    await page.getByRole("button",{name:"Run saved test"}).click();
+    await expect(page.getByText(/expected equals actual/)).toBeVisible();
+  });
+  const bindingPath=`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId)}/bindings`;
+  let bindingResponse!:Promise<Response>,bindingReadback!:Promise<Response>;
+  let bindingId="";
+  await test.step("SKILL_MCP_BIND_SUBMIT",async()=>{
+    bindingResponse=page.waitForResponse(response=>new URL(response.url()).pathname===bindingPath&&response.request().method()==="POST");
+    bindingReadback=page.waitForResponse(async response=>{
+      if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/skill"||response.request().method()!=="GET")return false;
+      const bindingHttp=await bindingResponse;
+      if(bindingHttp.status()!==200||response.status()!==200)return false;
+      const bindingBody=await bindingHttp.json() as {resource:{resourceId:string;bindings:Array<{bindingId:string}>}};
+      const currentBinding=bindingBody.resource.bindings.at(-1);
+      const directoryBody=await response.json() as Array<{resourceId:string;bindings:Array<{bindingId:string}>}>;
+      return bindingBody.resource.resourceId===skillId&&Boolean(currentBinding&&directoryBody.find(item=>item.resourceId===skillId)?.bindings.some(item=>item.bindingId===currentBinding.bindingId));
+    });
+    await page.getByLabel("选择精确 MCP").selectOption(publishedMcpId!);
+    await page.getByLabel("选择共同能力").selectOption("quality.lookup");
+    await page.getByRole("button",{name:"Bind exact MCP capability"}).click();
+  });
+  await test.step("SKILL_MCP_BIND_HTTP_COMPLETION",async()=>{
+    const response=await bindingResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_BIND_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+    const body=await response.json();bindingId=body.resource.bindings.at(-1).bindingId;
+  });
+  await test.step("SKILL_MCP_BIND_READBACK",async()=>{
+    const response=await bindingReadback;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_BIND_READBACK",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);expect(bindingId).toBeTruthy();
+    await expect(page.getByRole("button",{name:"Authorize bounded capability test"})).toBeEnabled();
+  });
+  let skillInvocationResponse!:Promise<Response>;
+  await test.step("SKILL_MCP_SKILL_INVOCATION_SUBMIT",async()=>{
+    skillInvocationResponse=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId)}/invocations`&&response.request().method()==="POST");
+    await page.getByLabel("管理测试输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
+    await page.getByRole("button",{name:"Authorize bounded capability test"}).click();
+  });
+  await test.step("SKILL_MCP_SKILL_INVOCATION_HTTP_COMPLETION",async()=>{
+    const response=await skillInvocationResponse;
+    await recordSkillMcpOperationResult(testInfo,{operationId:"SKILL_MCP_SKILL_INVOCATION_HTTP_COMPLETION",resultState:response.status()===200?"EXPECTED":"UNEXPECTED",structuredHttpStatus:response.status()});
+    expect(response.status()).toBe(200);
+  });
+  await test.step("SKILL_MCP_SKILL_INVOCATION_UI_RENDERED",async()=>{
+    const status=page.getByRole("region",{name:"SKILL professional operations"}).getByRole("status",{name:"Invocation Evidence status"});
+    await expect(status).toContainText("Invocation Evidence recorded");
+    await expect(status).toContainText("credential values redacted: true");
+  });
+  await test.step("SKILL_MCP_FINAL_UI_INTERACTION",async()=>{
+    await page.getByRole("tab", {name:"Technical View"}).click();
   await expect(page.getByText("Canonical identity")).toBeVisible();
   await expect(page.getByRole("tab", {name:"Technical View"})).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Governed lifecycle")).not.toBeVisible();
   await page.getByRole("tab", {name:"Product View"}).click();
   await expect(page.getByText("Governed lifecycle")).toBeVisible();
-  const skillId = await page.locator(".agent-detail > header code").textContent();
-  const publishedSkill = await page.evaluate(async (id:string) => (await fetch(`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(id)}`)).json(), skillId!);
+  const publishedSkill = await page.evaluate(async (id:string) => (await fetch(`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(id)}`)).json(), skillId);
   const publishedDigest = publishedSkill.resource.revisions.find((item:{revisionId:string})=>item.revisionId===publishedSkill.resource.publishedRevisionId).digest;
   await page.getByRole("button", {name:"Create successor Draft"}).click();
   const editDraft=page.getByRole("button", {name:"编辑当前 Skill Draft"});
@@ -248,7 +409,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   let releaseFirst!:()=>void,markFirstStarted!:()=>void;
   const firstStarted=new Promise<void>(resolve=>{markFirstStarted=resolve});
   const firstRelease=new Promise<void>(resolve=>{releaseFirst=resolve});
-  const delayedPath=`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId!)}`;
+  const delayedPath=`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId)}`;
   await page.route("**/api/internal/v0.2.2/resources/skill/*",async route=>{
     if(route.request().method()==="GET"&&new URL(route.request().url()).pathname===delayedPath){
       markFirstStarted();
@@ -271,6 +432,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await expect(page.locator(".agent-detail").getByRole("heading",{name:"Alternate Supplier Skill"})).toBeVisible();
   await expect(alternateButton).toHaveClass(/selected/);
   expect(new URL(page.url()).searchParams.get("resourceId")).toBe(alternate.resource.resourceId);
+  });
 });
 
 for(const operation of ["edit","lifecycle"] as const)test("skill write directory readback cannot own later selection or write: "+operation,async({page})=>{
