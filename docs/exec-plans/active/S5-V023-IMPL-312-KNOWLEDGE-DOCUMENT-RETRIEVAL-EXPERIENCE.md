@@ -169,6 +169,33 @@ Automatic CI checkout identity, counts, retained artifact readability, and any n
 failure stage remain pending the ordinary non-force push. A new result will not be
 used to infer or backfill the two unknown failures from run `34370621442`.
 
+## Recovery continuation checkpoint (2026-09-10)
+
+- Recovery confirmed branch HEAD `fb0fe3b85882c86f247c13b46e43bb8abc6c546b`
+  and tree `d73510f875bf75ecadaf0b1a63b35af56e40ea4f`; no prior edit, test,
+  commit, push, or CI-observer process remained active in the mounted worktree.
+- The Knowledge real-service lifecycle now exposes closed steps for index submit
+  and readiness, authority readback, retrieval submit/render/citation, search,
+  evaluation, summary, import preview/execute/retry, duplicate review, and scoped
+  denial readback. Existing assertions and the five compatibility operation
+  attachments remain unchanged.
+- The Wave 3B real-service journey now exposes closed setup and journey steps. Its
+  backend start and health readiness share the existing 20-second deadline measured
+  before the owned start/restart control request; health polling does not add a new
+  timeout budget or relax the 200 success condition.
+- The sanitized reporter records the last completed closed step and the first
+  failed or, when interruption leaves no explicit failing step, first incomplete
+  closed step. An explicit coarse Knowledge operation failure remains authoritative,
+  while an already observed finer completed step is not discarded. Unknown paths,
+  scenarios, or stages still fail closed to `UNKNOWN`, and raw failures remain absent.
+- Continuation validation: task reporter plus producer/release compatibility tests
+  `40 passed`; affected frontend ESLint passed; TypeScript and production build
+  passed; `make check` passed with `1597 passed, 133 skipped`; `git diff --check`
+  passed. The local formal harness was not rerun.
+
+Ordinary commit, non-force push, and automatic CI observation remain pending this
+checkpoint review. PR #167 remains Draft.
+
 ## Risks and compatibility
 
 - Parser resource exhaustion is bounded by byte, archive, count, and time limits.

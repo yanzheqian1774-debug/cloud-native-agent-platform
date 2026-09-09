@@ -32,15 +32,129 @@ export type KnowledgeOperationResult = {
 const attachmentName = "knowledge-operation-result.v1";
 const attachmentContentType =
   "application/vnd.agent-platform.knowledge-operation-result.v1+json";
-const knowledgeSpec =
-  "console/frontend/tests/e2e/knowledge-workbench.spec.ts" as const;
-const scenarioByTitle: Readonly<Record<string, string>> = {
-  "completes the real Knowledge lifecycle, retrieval, recovery and purge journey":
+const scenarioByIdentity: Readonly<Record<string, string>> = {
+  "knowledge-workbench.spec.ts\0completes the real Knowledge lifecycle, retrieval, recovery and purge journey":
     "KNOWLEDGE_WORKBENCH_LIFECYCLE",
-  "isolates late retrieval responses and preserves filter and exact revision context":
+  "knowledge-workbench.spec.ts\0isolates late retrieval responses and preserves filter and exact revision context":
     "KNOWLEDGE_WORKBENCH_LATE_RESPONSE_CONTEXT",
-  "validates real form inputs and keeps denied and service failures distinct at mobile width":
+  "knowledge-workbench.spec.ts\0validates real form inputs and keeps denied and service failures distinct at mobile width":
     "KNOWLEDGE_WORKBENCH_INPUT_DENIAL_MOBILE",
+  "wave-3b-product-technical-evidence.spec.ts\0proves all twelve Wave 3B real-service browser journeys":
+    "WAVE_3B_REAL_SERVICE_JOURNEYS",
+};
+
+const diagnosticOperationByStepTitle: Readonly<Record<string, string>> = {
+  KNOWLEDGE_INDEX_SUBMIT: "KNOWLEDGE_INDEX_SUBMIT",
+  KNOWLEDGE_INDEX_READY: "KNOWLEDGE_INDEX_READY",
+  KNOWLEDGE_INDEX_AUTHORITY_READBACK: "KNOWLEDGE_INDEX_AUTHORITY_READBACK",
+  KNOWLEDGE_RETRIEVAL_SUBMIT: "KNOWLEDGE_RETRIEVAL_SUBMIT",
+  KNOWLEDGE_RETRIEVAL_RESULT_RENDERED: "KNOWLEDGE_RETRIEVAL_RESULT_RENDERED",
+  KNOWLEDGE_RETRIEVAL_CITATION_VERIFIED: "KNOWLEDGE_RETRIEVAL_CITATION_VERIFIED",
+  KNOWLEDGE_SEARCH_RESULT_RENDERED: "KNOWLEDGE_SEARCH_RESULT_RENDERED",
+  KNOWLEDGE_EVALUATION_RECORDED: "KNOWLEDGE_EVALUATION_RECORDED",
+  KNOWLEDGE_SUMMARY_RECORDED: "KNOWLEDGE_SUMMARY_RECORDED",
+  KNOWLEDGE_IMPORT_PREVIEW: "KNOWLEDGE_IMPORT_PREVIEW",
+  KNOWLEDGE_IMPORT_EXECUTE: "KNOWLEDGE_IMPORT_EXECUTE",
+  KNOWLEDGE_IMPORT_RETRY: "KNOWLEDGE_IMPORT_RETRY",
+  KNOWLEDGE_DUPLICATE_REVIEW: "KNOWLEDGE_DUPLICATE_REVIEW",
+  KNOWLEDGE_SCOPE_DENIAL_READBACK: "KNOWLEDGE_SCOPE_DENIAL_READBACK",
+  WAVE3B_SETUP_BACKEND_READY: "WAVE3B_SETUP_BACKEND_READY",
+  WAVE3B_SETUP_SKILL_PUBLISHED: "WAVE3B_SETUP_SKILL_PUBLISHED",
+  WAVE3B_SETUP_MCP_SELECTED: "WAVE3B_SETUP_MCP_SELECTED",
+  WAVE3B_SETUP_KNOWLEDGE_INDEXED: "WAVE3B_SETUP_KNOWLEDGE_INDEXED",
+  WAVE3B_SETUP_RUNTIME_PUBLISHED: "WAVE3B_SETUP_RUNTIME_PUBLISHED",
+  WAVE3B_SETUP_WORKFLOW_PUBLISHED: "WAVE3B_SETUP_WORKFLOW_PUBLISHED",
+  WAVE3B_SETUP_AGENT_PUBLISHED: "WAVE3B_SETUP_AGENT_PUBLISHED",
+  WAVE3B_SETUP_TRACEABILITY_READBACK: "WAVE3B_SETUP_TRACEABILITY_READBACK",
+  "1 context-preserving catalog round trip": "WAVE3B_01_CATALOG_ROUND_TRIP",
+  "2 claim Evidence fact business-step chain": "WAVE3B_02_EVIDENCE_CHAIN",
+  "3 fact reverses to exact claim": "WAVE3B_03_FACT_TO_CLAIM",
+  "4 Agent retains five exact bindings": "WAVE3B_04_AGENT_BINDINGS",
+  "5 Workflow task edge and lifecycle Evidence survive":
+    "WAVE3B_05_WORKFLOW_EVIDENCE",
+  "6 Runtime remains declaration-only": "WAVE3B_06_RUNTIME_DECLARATION",
+  "7 Knowledge routine precedes advanced": "WAVE3B_07_KNOWLEDGE_HIERARCHY",
+  WAVE3B_08_NAVIGATION: "WAVE3B_08_NAVIGATION",
+  WAVE3B_08_MAKE_STALE: "WAVE3B_08_MAKE_STALE",
+  WAVE3B_08_CONFLICT_WRITE: "WAVE3B_08_CONFLICT_WRITE",
+  WAVE3B_08_ERROR_UI: "WAVE3B_08_ERROR_UI",
+  WAVE3B_08_AUTHORITATIVE_READBACK: "WAVE3B_08_AUTHORITATIVE_READBACK",
+  WAVE3B_08_EXPLICIT_RECOVERY: "WAVE3B_08_EXPLICIT_RECOVERY",
+  WAVE3B_08_FINAL_ASSERTION: "WAVE3B_08_FINAL_ASSERTION",
+  "9 denied and absent are nondisclosing": "WAVE3B_09_BOUNDED_DISCLOSURE",
+  "10 unavailable backend shows no false success": "WAVE3B_10_BACKEND_UNAVAILABLE",
+  WAVE3B_10_BACKEND_READY: "WAVE3B_10_BACKEND_READY",
+  WAVE3B_11_ENTER_TECHNICAL_PAGE: "WAVE3B_11_ENTER_TECHNICAL_PAGE",
+  WAVE3B_11_RESTART_READINESS: "WAVE3B_11_RESTART_READINESS",
+  WAVE3B_11_RELOAD: "WAVE3B_11_RELOAD",
+  WAVE3B_11_REVISION_IDENTITY_CHECK: "WAVE3B_11_REVISION_IDENTITY_CHECK",
+  WAVE3B_12_MOBILE_NAVIGATION: "WAVE3B_12_MOBILE_NAVIGATION",
+  WAVE3B_12_OPEN_EVIDENCE: "WAVE3B_12_OPEN_EVIDENCE",
+  WAVE3B_12_CLOSE_FOCUS_CHECK: "WAVE3B_12_CLOSE_FOCUS_CHECK",
+  WAVE3B_12_CLOSE_ACTION: "WAVE3B_12_CLOSE_ACTION",
+  WAVE3B_12_CLAIM_FOCUS_RESTORED: "WAVE3B_12_CLAIM_FOCUS_RESTORED",
+  WAVE3B_12_USER_FOCUS_TRANSFER_SETUP:
+    "WAVE3B_12_USER_FOCUS_TRANSFER_SETUP",
+  WAVE3B_12_USER_FOCUS_TRANSFER: "WAVE3B_12_USER_FOCUS_TRANSFER",
+  WAVE3B_12_USER_FOCUS_PRESERVED: "WAVE3B_12_USER_FOCUS_PRESERVED",
+};
+
+const diagnosticOperationsByScenario: Readonly<Record<string, readonly string[]>> = {
+  KNOWLEDGE_WORKBENCH_LIFECYCLE: [
+    "KNOWLEDGE_INDEX_SUBMIT",
+    "KNOWLEDGE_INDEX_READY",
+    "KNOWLEDGE_INDEX_AUTHORITY_READBACK",
+    "KNOWLEDGE_RETRIEVAL_SUBMIT",
+    "KNOWLEDGE_RETRIEVAL_RESULT_RENDERED",
+    "KNOWLEDGE_RETRIEVAL_CITATION_VERIFIED",
+    "KNOWLEDGE_SEARCH_RESULT_RENDERED",
+    "KNOWLEDGE_EVALUATION_RECORDED",
+    "KNOWLEDGE_SUMMARY_RECORDED",
+    "KNOWLEDGE_IMPORT_PREVIEW",
+    "KNOWLEDGE_IMPORT_EXECUTE",
+    "KNOWLEDGE_IMPORT_RETRY",
+    "KNOWLEDGE_DUPLICATE_REVIEW",
+    "KNOWLEDGE_SCOPE_DENIAL_READBACK",
+  ],
+  WAVE_3B_REAL_SERVICE_JOURNEYS: [
+    "WAVE3B_SETUP_BACKEND_READY",
+    "WAVE3B_SETUP_SKILL_PUBLISHED",
+    "WAVE3B_SETUP_MCP_SELECTED",
+    "WAVE3B_SETUP_KNOWLEDGE_INDEXED",
+    "WAVE3B_SETUP_RUNTIME_PUBLISHED",
+    "WAVE3B_SETUP_WORKFLOW_PUBLISHED",
+    "WAVE3B_SETUP_AGENT_PUBLISHED",
+    "WAVE3B_SETUP_TRACEABILITY_READBACK",
+    "WAVE3B_01_CATALOG_ROUND_TRIP",
+    "WAVE3B_02_EVIDENCE_CHAIN",
+    "WAVE3B_03_FACT_TO_CLAIM",
+    "WAVE3B_04_AGENT_BINDINGS",
+    "WAVE3B_05_WORKFLOW_EVIDENCE",
+    "WAVE3B_06_RUNTIME_DECLARATION",
+    "WAVE3B_07_KNOWLEDGE_HIERARCHY",
+    "WAVE3B_08_NAVIGATION",
+    "WAVE3B_08_MAKE_STALE",
+    "WAVE3B_08_CONFLICT_WRITE",
+    "WAVE3B_08_ERROR_UI",
+    "WAVE3B_08_AUTHORITATIVE_READBACK",
+    "WAVE3B_08_EXPLICIT_RECOVERY",
+    "WAVE3B_08_FINAL_ASSERTION",
+    "WAVE3B_09_BOUNDED_DISCLOSURE",
+    "WAVE3B_10_BACKEND_UNAVAILABLE",
+    "WAVE3B_10_BACKEND_READY",
+    "WAVE3B_11_ENTER_TECHNICAL_PAGE",
+    "WAVE3B_11_RESTART_READINESS",
+    "WAVE3B_11_RELOAD",
+    "WAVE3B_11_REVISION_IDENTITY_CHECK",
+    "WAVE3B_12_MOBILE_NAVIGATION",
+    "WAVE3B_12_OPEN_EVIDENCE",
+    "WAVE3B_12_CLOSE_FOCUS_CHECK",
+    "WAVE3B_12_CLOSE_ACTION",
+    "WAVE3B_12_CLAIM_FOCUS_RESTORED",
+    "WAVE3B_12_USER_FOCUS_TRANSFER_SETUP",
+    "WAVE3B_12_USER_FOCUS_TRANSFER",
+    "WAVE3B_12_USER_FOCUS_PRESERVED",
+  ],
 };
 
 type SafeTestStatus = "FAILED" | "INTERRUPTED" | "TIMED_OUT";
@@ -56,7 +170,8 @@ type SafeFailure = {
   scenarioId: string;
   testStatus: SafeTestStatus;
   errorClass: SafeErrorClass;
-  firstFailureOperationId: KnowledgeOperationId | "UNKNOWN";
+  lastCompletedOperationId: string;
+  firstFailureOperationId: string;
 };
 
 type DiagnosticResult = {
@@ -203,11 +318,50 @@ function safeIdentity(test: TestCase) {
     && /^[A-Za-z0-9][A-Za-z0-9._/-]*\.spec\.ts$/.test(suffix)
     ? `console/frontend/tests/e2e/${suffix}`
     : "UNKNOWN";
-  const scenarioId = scenarioByTitle[test.title];
-  if (testPath !== knowledgeSpec || !scenarioId) {
-    return { testPath, scenarioId: "UNKNOWN" };
+  const scenarioId = scenarioByIdentity[`${suffix}\0${test.title}`];
+  return { testPath, scenarioId: scenarioId ?? "UNKNOWN" };
+}
+
+export function diagnosticProgressFromTestResult(
+  result: Pick<TestResult, "steps">,
+  scenarioId: string,
+  operations: readonly KnowledgeOperationResult[] = [],
+) {
+  let lastCompletedOperationId = "UNKNOWN";
+  let firstFailureOperationId = "UNKNOWN";
+  const steps = result.steps ?? [];
+  for (const step of steps) {
+    const operationId = diagnosticOperationByStepTitle[step.title];
+    if (!operationId) continue;
+    if (step.error) {
+      firstFailureOperationId = operationId;
+      break;
+    }
+    lastCompletedOperationId = operationId;
   }
-  return { testPath: knowledgeSpec, scenarioId };
+  if (firstFailureOperationId === "UNKNOWN") {
+    const ordered = orderKnowledgeOperationResults(operations);
+    const failureIndex = ordered.findIndex(
+      (operation) => operation.resultState === "UNEXPECTED",
+    );
+    if (failureIndex >= 0) {
+      firstFailureOperationId = ordered[failureIndex].operationId;
+      lastCompletedOperationId = lastCompletedOperationId === "UNKNOWN" && failureIndex > 0
+        ? ordered[failureIndex - 1].operationId
+        : lastCompletedOperationId;
+    }
+  }
+  if (firstFailureOperationId === "UNKNOWN") {
+    const expected = diagnosticOperationsByScenario[scenarioId] ?? [];
+    const completed = new Set(steps
+      .filter((step) => !step.error)
+      .map((step) => diagnosticOperationByStepTitle[step.title])
+      .filter((operationId): operationId is string => operationId !== undefined));
+    firstFailureOperationId = expected.find(
+      (operationId) => !completed.has(operationId),
+    ) ?? "UNKNOWN";
+  }
+  return { lastCompletedOperationId, firstFailureOperationId };
 }
 
 function safeStatus(status: TestResult["status"]): SafeTestStatus {
@@ -295,12 +449,16 @@ class StructuredKnowledgeReporter implements Reporter {
       .filter(({ result }) => ["failed", "timedOut", "interrupted"].includes(result.status))
       .map(({ test, result, operations }) => {
         const identity = safeIdentity(test);
+        const progress = diagnosticProgressFromTestResult(
+          result,
+          identity.scenarioId,
+          operations,
+        );
         return {
           ...identity,
           testStatus: safeStatus(result.status),
           errorClass: safeErrorClass(result),
-          firstFailureOperationId:
-            firstUnexpectedKnowledgeOperation(operations)?.operationId ?? "UNKNOWN",
+          ...progress,
         };
       });
     const passed = finalAttempts.filter(({ result }) => result.status === "passed").length;

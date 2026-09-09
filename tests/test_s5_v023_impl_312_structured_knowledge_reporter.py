@@ -98,6 +98,7 @@ await reporter.onEnd({status: 'failed'});
                 "scenarioId": "KNOWLEDGE_WORKBENCH_LIFECYCLE",
                 "testStatus": "FAILED",
                 "errorClass": "ASSERTION",
+                "lastCompletedOperationId": "KNOWLEDGE_GOVERNED_CREATE_PUBLISH",
                 "firstFailureOperationId": "KNOWLEDGE_INDEX_RETRIEVE",
             },
             {
@@ -105,6 +106,7 @@ await reporter.onEnd({status: 'failed'});
                 "scenarioId": "KNOWLEDGE_WORKBENCH_INPUT_DENIAL_MOBILE",
                 "testStatus": "FAILED",
                 "errorClass": "NAVIGATION",
+                "lastCompletedOperationId": "UNKNOWN",
                 "firstFailureOperationId": "UNKNOWN",
             },
         ],
@@ -231,6 +233,7 @@ await reporter.onEnd({status: 'failed'});
             "scenarioId": "UNKNOWN",
             "testStatus": "FAILED",
             "errorClass": "UNKNOWN",
+            "lastCompletedOperationId": "UNKNOWN",
             "firstFailureOperationId": "UNKNOWN",
         }
     ]
@@ -238,3 +241,97 @@ await reporter.onEnd({status: 'failed'});
     assert "PRIVATE_DYNAMIC_CUSTOMER_TITLE" not in encoded
     assert "PRIVATE_DYNAMIC_ERROR" not in encoded
     assert "/private/root" not in encoded
+
+
+def test_reporter_records_closed_last_completed_and_first_incomplete_steps(
+    tmp_path: Path,
+) -> None:
+    reporter = tmp_path / REPORTER.name
+    reporter.write_bytes(REPORTER.read_bytes())
+    output = tmp_path / "step-progress.json"
+    run_node(
+        tmp_path,
+        """
+import Reporter from './structuredKnowledgeReporter.ts';
+
+const test = {
+  id: 'wave-3b',
+  title: 'proves all twelve Wave 3B real-service browser journeys',
+  location: {
+    file: '/repo/console/frontend/tests/e2e/' +
+      'wave-3b-product-technical-evidence.spec.ts',
+  },
+};
+const reporter = new Reporter();
+reporter.onBegin({}, {allTests: () => [test]});
+await reporter.onTestEnd(test, {
+  status: 'interrupted',
+  errors: [],
+  attachments: [],
+  steps: [
+    {title: 'WAVE3B_SETUP_BACKEND_READY'},
+    {title: 'WAVE3B_SETUP_SKILL_PUBLISHED'},
+  ],
+});
+await reporter.onEnd({status: 'interrupted'});
+""",
+        KNOWLEDGE_DIAGNOSTIC_REPORT_PATH=str(output),
+    )
+    diagnostic = json.loads(output.read_text(encoding="utf-8"))
+    assert diagnostic["failures"] == [
+        {
+            "testPath": (
+                "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+            ),
+            "scenarioId": "WAVE_3B_REAL_SERVICE_JOURNEYS",
+            "testStatus": "INTERRUPTED",
+            "errorClass": "INTERRUPTED",
+            "lastCompletedOperationId": "WAVE3B_SETUP_SKILL_PUBLISHED",
+            "firstFailureOperationId": "WAVE3B_SETUP_MCP_SELECTED",
+        }
+    ]
+
+
+def test_reporter_preserves_finer_completed_stage_before_coarse_failure(
+    tmp_path: Path,
+) -> None:
+    reporter = tmp_path / REPORTER.name
+    reporter.write_bytes(REPORTER.read_bytes())
+    run_node(
+        tmp_path,
+        """
+import {diagnosticProgressFromTestResult} from './structuredKnowledgeReporter.ts';
+
+const titles = [
+  'KNOWLEDGE_INDEX_SUBMIT',
+  'KNOWLEDGE_INDEX_READY',
+  'KNOWLEDGE_INDEX_AUTHORITY_READBACK',
+  'KNOWLEDGE_RETRIEVAL_SUBMIT',
+  'KNOWLEDGE_RETRIEVAL_RESULT_RENDERED',
+  'KNOWLEDGE_RETRIEVAL_CITATION_VERIFIED',
+  'KNOWLEDGE_SEARCH_RESULT_RENDERED',
+  'KNOWLEDGE_EVALUATION_RECORDED',
+  'KNOWLEDGE_SUMMARY_RECORDED',
+  'KNOWLEDGE_IMPORT_PREVIEW',
+  'KNOWLEDGE_IMPORT_EXECUTE',
+  'KNOWLEDGE_IMPORT_RETRY',
+  'KNOWLEDGE_DUPLICATE_REVIEW',
+  'KNOWLEDGE_SCOPE_DENIAL_READBACK',
+];
+const progress = diagnosticProgressFromTestResult(
+  {steps: titles.map(title => ({title}))},
+  'KNOWLEDGE_WORKBENCH_LIFECYCLE',
+  [
+    {operationId: 'KNOWLEDGE_GOVERNED_CREATE_PUBLISH', resultState: 'EXPECTED'},
+    {operationId: 'KNOWLEDGE_INDEX_RETRIEVE', resultState: 'EXPECTED'},
+    {operationId: 'KNOWLEDGE_UPDATE', resultState: 'UNEXPECTED'},
+  ],
+);
+if (progress.lastCompletedOperationId !== 'KNOWLEDGE_SCOPE_DENIAL_READBACK') {
+  throw new Error('finer completed stage was replaced');
+}
+if (progress.firstFailureOperationId !== 'KNOWLEDGE_UPDATE') {
+  throw new Error('coarse operation failure was not retained');
+}
+""",
+    )

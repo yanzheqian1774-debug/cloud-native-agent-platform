@@ -67,70 +67,98 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   });
 
   await runKnowledgeOperation(testInfo, "KNOWLEDGE_INDEX_RETRIEVE", async () => {
-  await page.getByRole("button", { name: "导入并建立索引" }).click();
-  await expect(page.getByText(/ingestion-job.*COMPLETED/)).toBeVisible();
-
-  const first = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
-  firstRevision = first.knowledge.publishedRevisionId;
-  firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
-  firstSnapshot = first.knowledge.activeIndexSnapshotId;
-  expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
-
-  await page.getByLabel("中文问题", {exact:true}).fill("缺陷报告需要多久提交");
-  await page.getByRole("button", { name: "检索当前文档" }).click();
-  await expect(page.getByText(/原文出处 · 供应商质量管理制度.docx/).first()).toBeVisible();
-  await expect(page.getByLabel("Workbench retrieval history")).toContainText("第 2 段");
-  await expect(page.getByLabel("Knowledge quality dashboard")).toContainText("POSTGRESQL");
-  await page.screenshot({path:testInfo.outputPath("knowledge-1440.png")});
-  await page.getByLabel("检索方式").selectOption("HYBRID");
-  const generatedSourceId = await page.getByRole("definition").filter({hasText:"knowledge-source:"}).textContent();
-  await page.getByLabel("Filter sourceId").selectOption((generatedSourceId??"").trim());
-  await page.getByRole("button", { name: "执行检索实验" }).click();
-  await expect(page.getByLabel("Search Playground")).toContainText("CJK_BIGRAM_V1");
-  await expect(page.getByLabel("Search Playground")).toContainText("排序信号，不是正确率");
-  await page.getByRole("button", { name: "评估当前结果" }).click();
-  await expect(page.getByLabel("Evaluation comparison")).toContainText("EVALUATION_RUN");
-  await expect(page.getByLabel("Evaluation comparison")).toContainText("entityId");
-  await page.getByRole("button", { name: "比较评估记录" }).click();
-  await expect(page.getByLabel("Evaluation comparison")).toContainText("NO_IMPROVEMENT_CLAIM");
-  await page.getByRole("button", { name: "生成抽取式摘要" }).click();
-  await expect(page.getByLabel("Knowledge operations")).toContainText("DETERMINISTIC_EXTRACTIVE_V1");
-  await page.getByLabel("导入格式").selectOption("jsonl");
-  await page.getByLabel("导入内容", {exact:true}).fill('{"name":"Imported procedure","content":"Authorized draft content."}\n{"name":"","content":"Rejected without disclosure"}');
-  await page.getByRole("button", { name: "预览导入" }).click();
-  await expect(page.getByLabel("Import execution")).toContainText("导入状态 PREVIEW");
-  await page.getByRole("button", { name: "执行已确认预览" }).click();
-  await expect(page.getByLabel("Import execution")).toContainText("导入状态 PARTIAL");
-  await expect(page.getByLabel("Import execution").getByRole("definition").nth(3)).toHaveText("1");
-  await expect(page.getByLabel("Import execution").getByRole("definition").nth(4)).toHaveText("1");
-  await page.getByRole("button", { name: "重试部分导入" }).click();
-  await expect(page.getByLabel("Import execution").getByRole("definition").nth(3)).toHaveText("1");
-
-  const duplicateDraft = await request.post(`${backend}/api/internal/v0.2.2/knowledge`, {
-    headers: authorizedHeaders,
-    data: {
-      name: "Duplicate supplier procedure",
-      source: {
-        sourceId: "source:supplier-quality-copy",
-        documentId: "document:8d-procedure-copy",
-        kind: "TEXT",
-        provenance: "human:quality-owner",
-        content: "Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure.",
-      },
-    },
+  await test.step("KNOWLEDGE_INDEX_SUBMIT", async () => {
+    await page.getByRole("button", { name: "导入并建立索引" }).click();
   });
-  expect(duplicateDraft.status()).toBe(201);
-  await page.getByRole("button", { name: "扫描重复项" }).click();
-  await expect(page.getByLabel("Duplicate review queue")).toContainText("EXACT candidate");
-  await page.getByRole("button", { name: "判定不同" }).first().click();
-  await expect(page.getByLabel("Duplicate review queue")).toContainText("人工决定已记录");
+  await test.step("KNOWLEDGE_INDEX_READY", async () => {
+    await expect(page.getByText(/ingestion-job.*COMPLETED/)).toBeVisible();
+  });
 
-  const denied = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
-  const absent = await request.get(`${backend}/api/internal/v0.2.2/knowledge/knowledge:absent`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
-  expect(denied.status()).toBe(404);
-  expect(await denied.text()).toBe(await absent.text());
-  const foreignList = await request.get(`${backend}/api/internal/v0.2.2/knowledge`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
-  expect(await foreignList.json()).toEqual([]);
+  await test.step("KNOWLEDGE_INDEX_AUTHORITY_READBACK", async () => {
+    const first = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
+    firstRevision = first.knowledge.publishedRevisionId;
+    firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
+    firstSnapshot = first.knowledge.activeIndexSnapshotId;
+    expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
+  });
+
+  await test.step("KNOWLEDGE_RETRIEVAL_SUBMIT", async () => {
+    await page.getByLabel("中文问题", {exact:true}).fill("缺陷报告需要多久提交");
+    await page.getByRole("button", { name: "检索当前文档" }).click();
+  });
+  await test.step("KNOWLEDGE_RETRIEVAL_RESULT_RENDERED", async () => {
+    await expect(page.getByText(/原文出处 · 供应商质量管理制度.docx/).first()).toBeVisible();
+  });
+  await test.step("KNOWLEDGE_RETRIEVAL_CITATION_VERIFIED", async () => {
+    await expect(page.getByLabel("Workbench retrieval history")).toContainText("第 2 段");
+    await expect(page.getByLabel("Knowledge quality dashboard")).toContainText("POSTGRESQL");
+    await page.screenshot({path:testInfo.outputPath("knowledge-1440.png")});
+  });
+  await test.step("KNOWLEDGE_SEARCH_RESULT_RENDERED", async () => {
+    await page.getByLabel("检索方式").selectOption("HYBRID");
+    const generatedSourceId = await page.getByRole("definition").filter({hasText:"knowledge-source:"}).textContent();
+    await page.getByLabel("Filter sourceId").selectOption((generatedSourceId??"").trim());
+    await page.getByRole("button", { name: "执行检索实验" }).click();
+    await expect(page.getByLabel("Search Playground")).toContainText("CJK_BIGRAM_V1");
+    await expect(page.getByLabel("Search Playground")).toContainText("排序信号，不是正确率");
+  });
+  await test.step("KNOWLEDGE_EVALUATION_RECORDED", async () => {
+    await page.getByRole("button", { name: "评估当前结果" }).click();
+    await expect(page.getByLabel("Evaluation comparison")).toContainText("EVALUATION_RUN");
+    await expect(page.getByLabel("Evaluation comparison")).toContainText("entityId");
+    await page.getByRole("button", { name: "比较评估记录" }).click();
+    await expect(page.getByLabel("Evaluation comparison")).toContainText("NO_IMPROVEMENT_CLAIM");
+  });
+  await test.step("KNOWLEDGE_SUMMARY_RECORDED", async () => {
+    await page.getByRole("button", { name: "生成抽取式摘要" }).click();
+    await expect(page.getByLabel("Knowledge operations")).toContainText("DETERMINISTIC_EXTRACTIVE_V1");
+  });
+  await test.step("KNOWLEDGE_IMPORT_PREVIEW", async () => {
+    await page.getByLabel("导入格式").selectOption("jsonl");
+    await page.getByLabel("导入内容", {exact:true}).fill('{"name":"Imported procedure","content":"Authorized draft content."}\n{"name":"","content":"Rejected without disclosure"}');
+    await page.getByRole("button", { name: "预览导入" }).click();
+    await expect(page.getByLabel("Import execution")).toContainText("导入状态 PREVIEW");
+  });
+  await test.step("KNOWLEDGE_IMPORT_EXECUTE", async () => {
+    await page.getByRole("button", { name: "执行已确认预览" }).click();
+    await expect(page.getByLabel("Import execution")).toContainText("导入状态 PARTIAL");
+    await expect(page.getByLabel("Import execution").getByRole("definition").nth(3)).toHaveText("1");
+    await expect(page.getByLabel("Import execution").getByRole("definition").nth(4)).toHaveText("1");
+  });
+  await test.step("KNOWLEDGE_IMPORT_RETRY", async () => {
+    await page.getByRole("button", { name: "重试部分导入" }).click();
+    await expect(page.getByLabel("Import execution").getByRole("definition").nth(3)).toHaveText("1");
+  });
+
+  await test.step("KNOWLEDGE_DUPLICATE_REVIEW", async () => {
+    const duplicateDraft = await request.post(`${backend}/api/internal/v0.2.2/knowledge`, {
+      headers: authorizedHeaders,
+      data: {
+        name: "Duplicate supplier procedure",
+        source: {
+          sourceId: "source:supplier-quality-copy",
+          documentId: "document:8d-procedure-copy",
+          kind: "TEXT",
+          provenance: "human:quality-owner",
+          content: "Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure.",
+        },
+      },
+    });
+    expect(duplicateDraft.status()).toBe(201);
+    await page.getByRole("button", { name: "扫描重复项" }).click();
+    await expect(page.getByLabel("Duplicate review queue")).toContainText("EXACT candidate");
+    await page.getByRole("button", { name: "判定不同" }).first().click();
+    await expect(page.getByLabel("Duplicate review queue")).toContainText("人工决定已记录");
+  });
+
+  await test.step("KNOWLEDGE_SCOPE_DENIAL_READBACK", async () => {
+    const denied = await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
+    const absent = await request.get(`${backend}/api/internal/v0.2.2/knowledge/knowledge:absent`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
+    expect(denied.status()).toBe(404);
+    expect(await denied.text()).toBe(await absent.text());
+    const foreignList = await request.get(`${backend}/api/internal/v0.2.2/knowledge`, { headers: { ...authorizedHeaders, "X-Tenant-ID": "tenant-b" } });
+    expect(await foreignList.json()).toEqual([]);
+  });
   });
 
   await runKnowledgeOperation(testInfo, "KNOWLEDGE_UPDATE", async () => {
