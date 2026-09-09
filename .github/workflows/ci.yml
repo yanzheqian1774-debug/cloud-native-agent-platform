@@ -42,6 +42,7 @@ jobs:
       KNOWLEDGE_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       WORKFLOW_RUNTIME_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       WORKFLOW_RUNTIME_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
+      AUTHORITY_I1_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agent_platform
       KNOWLEDGE_QDRANT_URL: http://127.0.0.1:6333
       KNOWLEDGE_TEST_QDRANT_URL: http://127.0.0.1:6333
 
@@ -67,6 +68,14 @@ jobs:
 
       - name: Run quality gates
         run: make check
+
+      - name: Run authority I1 PostgreSQL acceptance with zero skips
+        run: |
+          result="$(uv run pytest -q console/backend/tests/test_authority_foundation_postgres.py -r s)"
+          echo "$result"
+          if echo "$result" | grep -Eq '(^|[[:space:]])skipped([[:space:]]|$)'; then
+            exit 1
+          fi
 
   frontend:
     name: Frontend Quality Gates
