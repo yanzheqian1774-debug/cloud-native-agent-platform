@@ -123,3 +123,9 @@ adapter, or provider Evidence source. Agent, Digital Employee, Runtime, 305 BFF
 and browser wiring remain explicit follow-up work until path ownership, a
 formal Model owner, accepted authorization semantics, and Evidence contracts
 are available.
+
+The minimum implementable contract decision candidate is recorded at
+`architecture/s5/v0.2/S5-V023-IMPL-308-P1-VERIFIED-MODEL-CONTRACT-CANDIDATE-V1.md`.
+Its status is `PROPOSED / NOT_ACCEPTED / NOT_FROZEN`; it does not authorize the
+production, persistence, authority, Evidence, or shared-consumer changes it
+recommends.
