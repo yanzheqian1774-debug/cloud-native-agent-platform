@@ -52,14 +52,17 @@ SameSite=Strict, and Path `/`; responses are no-store with bounded errors.
 
 ## Linearization boundary
 
-The BFF opens one transaction from the authority repository. The first current
-authorization read sets REPEATABLE READ, validates active generation/recovery,
-locks the browser session row `FOR SHARE`, and locks every matching dynamic grant
-row `FOR SHARE`. Exact session revoke now locks the session row `FOR UPDATE`; grant
-revoke already locks the grant row `FOR UPDATE`. Therefore an owner effect which
-has passed authorization commits before a racing revocation, while a revocation
-that wins first makes the request fail closed. The activation read barrier remains
-held through the owner commit, covering static credential/grant revocation.
+The BFF opens one READ COMMITTED transaction from the authority repository. The
+first current authorization read validates active generation/recovery, locks the
+browser session row `FOR SHARE`, and locks every matching dynamic grant row `FOR
+SHARE`. READ COMMITTED is required because an equal owner request may wait on the
+owner's idempotency advisory lock after authorization and must then observe the
+winner's completed claim. Exact session revoke locks the session row `FOR UPDATE`;
+grant revoke locks the grant row `FOR UPDATE`. Those locks and the activation read
+barrier remain held through replay or owner commit. Therefore an authorized owner
+effect/replay commits before a racing revocation, while a revocation that wins
+first makes the request fail closed; switching snapshots does not allow an effect
+to escape current authorization.
 
 The owner adapter constructs the legacy principal only from
 `TrustedRequestContext`, supplies a current-grant authority bound to that same
@@ -132,6 +135,9 @@ capabilities.
 - dedicated PostgreSQL 15 container, isolated databases per case: grant revoke and
   session revoke both blocked behind the owner commit, and subsequent requests
   failed current authorization;
+- event- and PostgreSQL-lock-driven owner replay cases prove equal concurrent
+  payloads return one stored effect, changed payloads conflict, and grant/session
+  revocations waiting behind the replay take effect before any later request;
 - local dual-listener tests prove route separation and common shutdown only, not
   deployment isolation. Deterministic lifecycle cases cover supervisor loss,
   either-listener unexpected exit, partial startup failure, and expected signal

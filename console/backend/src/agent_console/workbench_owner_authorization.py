@@ -163,6 +163,11 @@ class WorkbenchOwnerAuthorization:
             self.controller.protected_request() as generation,
             self.repository.connection_scope() as connection,
         ):
+            # Owner idempotency claims intentionally serialize after this
+            # authorization read. READ COMMITTED lets a waiter observe the
+            # winner's completed claim while the session/grant share locks and
+            # generation barrier still hold revocation behind this transaction.
+            connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
             allowed = self.authorization.has_current_grants(
                 context,
                 grants,
@@ -170,6 +175,7 @@ class WorkbenchOwnerAuthorization:
                 generation=generation.generation,
                 recovery_epoch=self.controller.readiness.recovery_epoch,
                 connection=connection,
+                configure_transaction=False,
             )
             if not all(allowed):
                 raise AuthorityError("AUTHORIZATION_NOT_FOUND")

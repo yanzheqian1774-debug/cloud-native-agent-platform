@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Event
+from threading import Event, current_thread
 from types import SimpleNamespace
 
 import psycopg
@@ -31,7 +33,10 @@ from agent_console.authority_contracts import (
 )
 from agent_console.authority_postgres import PostgresAuthorityRepository
 from agent_console.grant_administration_application import GenerationAuthorizationReader
-from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
+from agent_console.workbench_owner_authorization import (
+    WorkbenchOwnerAuthorization,
+    WorkbenchOwnerError,
+)
 
 DATABASE_URL = os.environ.get("AUTHORITY_I2_TEST_DATABASE_URL")
 MIGRATION = (
@@ -53,20 +58,30 @@ class FakeController:
 
 class FakeRepository:
     def __init__(self) -> None:
-        self.connection = object()
+        self.connection = FakeConnection()
 
     @contextmanager
     def connection_scope(self):
         yield self.connection
 
 
+class FakeConnection:
+    def __init__(self) -> None:
+        self.statements = []
+
+    def execute(self, statement):
+        self.statements.append(statement)
+
+
 class FakeReader:
     def __init__(self, allowed: tuple[bool, ...]) -> None:
         self.allowed = allowed
         self.connection = None
+        self.configure_transaction = None
 
     def has_current_grants(self, context, grants, **values):
         self.connection = values["connection"]
+        self.configure_transaction = values["configure_transaction"]
         return self.allowed
 
 
@@ -124,6 +139,10 @@ def test_adapter_shares_authorization_connection_and_denies_atomically() -> None
     )
     assert result is repository.connection
     assert reader.connection is repository.connection
+    assert reader.configure_transaction is False
+    assert repository.connection.statements == [
+        "SET TRANSACTION ISOLATION LEVEL READ COMMITTED"
+    ]
 
     denied = WorkbenchOwnerAuthorization(
         FakeController(generation(now)),  # type: ignore[arg-type]
@@ -163,6 +182,7 @@ def repository():
         value = PostgresAuthorityRepository(
             database_url, migration_path=MIGRATION, timeout=30.0
         )
+        value.pool.resize(1, 8)
         value.migrate()
         yield value
     finally:
@@ -242,6 +262,11 @@ def seed(repository: PostgresAuthorityRepository):
             (now - timedelta(minutes=1), now + timedelta(hours=1)),
         )
         connection.execute("CREATE TABLE owner_effects (effect_id text PRIMARY KEY)")
+        connection.execute(
+            "CREATE TABLE owner_replay_effects ("
+            "idempotency_key text PRIMARY KEY,payload_digest text NOT NULL,"
+            "result_record jsonb NOT NULL)"
+        )
     static = generation(now)
     reader = GenerationAuthorizationReader(
         static, repository, repository, recovery_epoch=1
@@ -253,6 +278,86 @@ def seed(repository: PostgresAuthorityRepository):
         clock=lambda: now,
     )
     return now, grant, adapter
+
+
+def wait_for_database_waiters(
+    repository: PostgresAuthorityRepository, minimum: int
+) -> None:
+    """Wait for PostgreSQL lock registration, not a guessed timing window."""
+    deadline = time.monotonic() + 5
+    with psycopg.connect(repository.pool.conninfo, autocommit=True) as connection:
+        while time.monotonic() < deadline:
+            total = connection.execute(
+                "SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a "
+                "USING (pid) WHERE a.datname=current_database() AND NOT l.granted"
+            ).fetchone()[0]
+            if total >= minimum:
+                return
+            time.sleep(0.01)
+    pytest.fail(f"expected at least {minimum} PostgreSQL lock waiters")
+
+
+def replaying_owner_handler(
+    *,
+    payload_digest: str,
+    first_has_claim: Event,
+    release_first: Event,
+    replay_entered_claim: Event,
+):
+    def handler(call):
+        is_first = current_thread().name.startswith("owner-effect")
+        if not is_first:
+            replay_entered_claim.set()
+        call.connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 297))",
+            ("workbench-owner-replay",),
+        )
+        if is_first:
+            first_has_claim.set()
+            assert release_first.wait(timeout=30)
+        row = call.connection.execute(
+            "SELECT payload_digest,result_record FROM owner_replay_effects "
+            "WHERE idempotency_key='same-key' FOR UPDATE"
+        ).fetchone()
+        if row is not None:
+            if row["payload_digest"] != payload_digest:
+                raise WorkbenchOwnerError("BUSINESS_PROBLEM_CONFLICT", 409)
+            return row["result_record"]
+        result = {"effectId": "effect-one"}
+        call.connection.execute(
+            "INSERT INTO owner_replay_effects "
+            "(idempotency_key,payload_digest,result_record) "
+            "VALUES ('same-key',%s,%s::jsonb)",
+            (payload_digest, json.dumps(result)),
+        )
+        return result
+
+    return handler
+
+
+def execute_replay_candidate(
+    adapter: WorkbenchOwnerAuthorization,
+    grant: ExactGrant,
+    *,
+    payload_digest: str,
+    first_has_claim: Event,
+    release_first: Event,
+    replay_entered_claim: Event,
+):
+    return adapter.execute(
+        context(),
+        (grant,),
+        operation="OWNER_REPLAY",
+        payload={"payloadDigest": payload_digest},
+        path={},
+        query={},
+        handler=replaying_owner_handler(
+            payload_digest=payload_digest,
+            first_has_claim=first_has_claim,
+            release_first=release_first,
+            replay_entered_claim=replay_entered_claim,
+        ),
+    )
 
 
 @pytest.mark.parametrize("revocation", ["grant", "session"])
@@ -327,3 +432,128 @@ def test_revocation_serializes_after_owner_commit(repository, revocation: str) -
             query={},
             handler=lambda call: {},
         )
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_waiting_same_payload_replays_once_before_revocation(
+    repository, revocation: str
+) -> None:
+    now, grant, adapter = seed(repository)
+    first_has_claim = Event()
+    release_first = Event()
+    replay_entered_claim = Event()
+    revocation_started = Event()
+    payload_digest = "e" * 64
+
+    def invoke(digest: str):
+        return execute_replay_candidate(
+            adapter,
+            grant,
+            payload_digest=digest,
+            first_has_claim=first_has_claim,
+            release_first=release_first,
+            replay_entered_claim=replay_entered_claim,
+        )
+
+    def revoke():
+        revocation_started.set()
+        if revocation == "grant":
+            return repository.revoke_grant(
+                GrantId("grant-one"),
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-during-replay",
+                payload_digest="f" * 64,
+                now=now,
+            )
+        return repository.revoke_session(
+            SessionId("session-one"),
+            reason="LOGOUT",
+            actor_id="human:alice",
+            now=now,
+        )
+
+    with (
+        ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="owner-effect"
+        ) as owner_executor,
+        ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="owner-replay"
+        ) as replay_executor,
+        ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="owner-revoke"
+        ) as revoke_executor,
+    ):
+        owner = owner_executor.submit(invoke, payload_digest)
+        assert first_has_claim.wait(timeout=5)
+        replay = replay_executor.submit(invoke, payload_digest)
+        assert replay_entered_claim.wait(timeout=5)
+        wait_for_database_waiters(repository, 1)
+        revoke_future = revoke_executor.submit(revoke)
+        assert revocation_started.wait(timeout=5)
+        wait_for_database_waiters(repository, 2)
+        release_first.set()
+
+        expected = {"effectId": "effect-one"}
+        assert owner.result(timeout=5) == expected
+        assert replay.result(timeout=5) == expected
+        assert revoke_future.result(timeout=5)
+
+    assert replay_entered_claim.is_set()
+    with repository.pool.connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) AS total FROM owner_replay_effects"
+            ).fetchone()["total"]
+            == 1
+        )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+        invoke(payload_digest)
+
+
+def test_waiting_different_payload_conflicts_without_repeating_effect(
+    repository,
+) -> None:
+    _, grant, adapter = seed(repository)
+    first_has_claim = Event()
+    release_first = Event()
+    replay_entered_claim = Event()
+
+    def invoke(digest: str):
+        return execute_replay_candidate(
+            adapter,
+            grant,
+            payload_digest=digest,
+            first_has_claim=first_has_claim,
+            release_first=release_first,
+            replay_entered_claim=replay_entered_claim,
+        )
+
+    with (
+        ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="owner-effect"
+        ) as owner_executor,
+        ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="owner-replay"
+        ) as replay_executor,
+    ):
+        owner = owner_executor.submit(invoke, "1" * 64)
+        assert first_has_claim.wait(timeout=5)
+        conflict = replay_executor.submit(invoke, "2" * 64)
+        assert replay_entered_claim.wait(timeout=5)
+        wait_for_database_waiters(repository, 1)
+        release_first.set()
+
+        assert owner.result(timeout=5) == {"effectId": "effect-one"}
+        with pytest.raises(WorkbenchOwnerError) as raised:
+            conflict.result(timeout=5)
+        assert raised.value.reason_code == "BUSINESS_PROBLEM_CONFLICT"
+        assert raised.value.status_code == 409
+
+    assert replay_entered_claim.is_set()
+    with repository.pool.connection() as connection:
+        row = connection.execute(
+            "SELECT count(*) AS total,min(payload_digest) AS payload_digest "
+            "FROM owner_replay_effects"
+        ).fetchone()
+    assert row == {"total": 1, "payload_digest": "1" * 64}
