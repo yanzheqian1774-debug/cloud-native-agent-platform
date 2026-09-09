@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
+from agent_console.persistence_bootstrap import migration_recorded
 from agent_console.skill_mcp_postgres import PostgresSkillMcpRepository
 from agent_console.skill_mcp_repository import SkillMcpRepositoryError
 from agent_console.skill_mcp_schemas import (
@@ -33,31 +34,45 @@ _service: SkillMcpService | None = None
 _startup_error = "SKILL_MCP_STORAGE_UNAVAILABLE"
 
 
-def configure() -> None:
-    global _service, _startup_error
+def prepare():
     database_url = os.environ.get("SKILL_MCP_DATABASE_URL", "")
     if not database_url:
+        return None
+    migration = (
+        Path(__file__).parents[2] / "migrations" / "0002_skill_mcp_lifecycle.sql"
+    )
+    return PostgresSkillMcpRepository(
+        database_url,
+        migration_path=migration,
+        min_pool_size=int(os.environ.get("SKILL_MCP_DB_POOL_MIN", "1")),
+        max_pool_size=int(os.environ.get("SKILL_MCP_DB_POOL_MAX", "4")),
+        timeout=float(os.environ.get("SKILL_MCP_DB_TIMEOUT_SECONDS", "5")),
+    )
+
+
+def activate(repository) -> None:
+    global _service, _startup_error
+    if repository is None:
         return
-    try:
-        migration = (
-            Path(__file__).parents[2] / "migrations" / "0002_skill_mcp_lifecycle.sql"
-        )
-        repository = PostgresSkillMcpRepository(
-            database_url,
-            migration_path=migration,
-            min_pool_size=int(os.environ.get("SKILL_MCP_DB_POOL_MIN", "1")),
-            max_pool_size=int(os.environ.get("SKILL_MCP_DB_POOL_MAX", "4")),
-            timeout=float(os.environ.get("SKILL_MCP_DB_TIMEOUT_SECONDS", "5")),
-        )
+    if migration_recorded(repository, "skill_mcp_resource", 1) and migration_recorded(
+        repository, "skill_mcp_resource", 2
+    ):
+        repository.compatibility()
+    else:
         repository.migrate()
-        _service = SkillMcpService(repository)
-        _startup_error = ""
+    _service = SkillMcpService(repository)
+    _startup_error = ""
+
+
+def configure() -> bool:
+    global _service, _startup_error
+    try:
+        activate(prepare())
+        return True
     except (SkillMcpRepositoryError, ValueError):
         _service = None
         _startup_error = "SKILL_MCP_STORAGE_UNAVAILABLE"
-
-
-configure()
+        return False
 
 
 def get_skill_mcp_service() -> SkillMcpService:

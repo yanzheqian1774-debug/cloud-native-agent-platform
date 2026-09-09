@@ -16,8 +16,147 @@ from .digital_employee_definition import (
     digest,
     identifier,
 )
+from .postgres_schema_compatibility import (
+    LEDGER_COLUMNS,
+    Table,
+    columns,
+    foreign,
+    primary,
+    schema_is_compatible,
+    unique,
+)
 
 _SHA256_DIGEST = re.compile(r"(?:(?P<algorithm>sha256):)?(?P<value>[a-f0-9]{64})")
+_ADAPTER = "employee-definition-v1"
+_DEFINITION_KEY = ("namespace", "security_domain", "definition_id")
+_REVISION_KEY = (*_DEFINITION_KEY, "revision_id")
+EMPLOYEE_DEFINITION_STRUCTURE = (
+    Table(
+        "digital_employee_definition.schema_migrations",
+        LEDGER_COLUMNS,
+        (primary("version"),),
+    ),
+    Table(
+        "digital_employee_definition.definitions",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("aggregate_version", "bigint"),
+        ),
+        (primary(*_DEFINITION_KEY),),
+    ),
+    Table(
+        "digital_employee_definition.revisions",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("revision_id", "text"),
+            ("digest", "text"),
+            ("record", "jsonb"),
+        ),
+        (
+            primary(*_REVISION_KEY),
+            unique(*_DEFINITION_KEY, "predecessor_revision_id"),
+            foreign(
+                _DEFINITION_KEY,
+                "digital_employee_definition.definitions",
+                _DEFINITION_KEY,
+            ),
+            foreign(
+                (*_DEFINITION_KEY, "predecessor_revision_id"),
+                "digital_employee_definition.revisions",
+                _REVISION_KEY,
+            ),
+        ),
+        ("immutable_revisions",),
+    ),
+    Table(
+        "digital_employee_definition.facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("ordinal", "bigint"),
+            ("revision_id", "text"),
+            ("action", "text"),
+            ("revision_digest", "text"),
+            ("decision_id", "text"),
+            ("command_id", "text"),
+            ("payload_digest", "text"),
+        ),
+        (
+            primary(*_DEFINITION_KEY, "ordinal"),
+            unique("namespace", "security_domain", "command_id"),
+            foreign(
+                _REVISION_KEY,
+                "digital_employee_definition.revisions",
+                _REVISION_KEY,
+            ),
+        ),
+        ("immutable_facts",),
+    ),
+    Table(
+        "digital_employee_definition.instance_bindings",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("digital_employee_instance_id", "text"),
+            ("definition_id", "text"),
+            ("revision_id", "text"),
+            ("digest", "text"),
+        ),
+        (
+            primary("namespace", "security_domain", "digital_employee_instance_id"),
+            foreign(
+                _REVISION_KEY,
+                "digital_employee_definition.revisions",
+                _REVISION_KEY,
+            ),
+            foreign(
+                ("namespace", "security_domain", "digital_employee_instance_id"),
+                "execution_authority.digital_employee_instances",
+                ("namespace", "security_domain", "digital_employee_instance_id"),
+            ),
+        ),
+        ("immutable_instance_bindings",),
+    ),
+    Table(
+        "digital_employee_definition.execution_bindings",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("attempt_id", "text"),
+            ("digital_employee_instance_id", "text"),
+            ("definition_id", "text"),
+            ("revision_id", "text"),
+            ("digest", "text"),
+            ("plan_digest", "text"),
+            ("approval_id", "text"),
+            ("authorization_decision_id", "text"),
+        ),
+        (
+            primary("namespace", "security_domain", "attempt_id"),
+            foreign(
+                _REVISION_KEY,
+                "digital_employee_definition.revisions",
+                _REVISION_KEY,
+            ),
+            foreign(
+                ("namespace", "security_domain", "attempt_id"),
+                "execution_authority.attempts",
+                ("namespace", "security_domain", "attempt_id"),
+            ),
+            foreign(
+                ("namespace", "security_domain", "digital_employee_instance_id"),
+                "digital_employee_definition.instance_bindings",
+                ("namespace", "security_domain", "digital_employee_instance_id"),
+            ),
+        ),
+        ("immutable_execution_bindings",),
+    ),
+)
 
 
 def _same_sha256_digest(left: object, right: object) -> bool:
@@ -52,16 +191,29 @@ class PostgresEmployeeDefinitionRepository:
             conn.execute("SELECT pg_advisory_xact_lock(2760014)")
             conn.execute(path.read_text())
             conn.execute(
-                "INSERT INTO digital_employee_definition.schema_migrations VALUES (14,%s,'employee-definition-v1') ON CONFLICT DO NOTHING",
-                (checksum,),
+                "INSERT INTO digital_employee_definition.schema_migrations VALUES (14,%s,%s) ON CONFLICT DO NOTHING",
+                (checksum, _ADAPTER),
             )
-            if (
-                conn.execute(
-                    "SELECT checksum FROM digital_employee_definition.schema_migrations WHERE version=14"
-                ).fetchone()["checksum"]
-                != checksum
-            ):
+            row = conn.execute(
+                "SELECT checksum,adapter FROM digital_employee_definition.schema_migrations WHERE version=14"
+            ).fetchone()
+            if row["checksum"] != checksum or row["adapter"] != _ADAPTER:
                 raise EmployeeDefinitionError("EMPLOYEE_SCHEMA_INCOMPATIBLE")
+
+    def compatibility(self, path: Path) -> None:
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.pool.connection() as conn:
+            row = conn.execute(
+                "SELECT checksum,adapter FROM digital_employee_definition.schema_migrations WHERE version=14"
+            ).fetchone()
+            compatible = schema_is_compatible(conn, EMPLOYEE_DEFINITION_STRUCTURE)
+        if (
+            row is None
+            or row["checksum"] != checksum
+            or row["adapter"] != _ADAPTER
+            or not compatible
+        ):
+            raise EmployeeDefinitionError("EMPLOYEE_SCHEMA_INCOMPATIBLE")
 
     @staticmethod
     def _key(scope, definition_id):

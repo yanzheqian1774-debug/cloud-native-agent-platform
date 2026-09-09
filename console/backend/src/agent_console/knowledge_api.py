@@ -36,6 +36,7 @@ from agent_console.knowledge_schemas import (
     SuccessorCommand,
     VersionCommand,
 )
+from agent_console.persistence_bootstrap import migration_recorded
 
 router = APIRouter(
     prefix="/api/internal/v0.2.2/knowledge", tags=["knowledge-workbench"]
@@ -45,40 +46,56 @@ _quality_service: KnowledgeQualityService | None = None
 _startup_error = "KNOWLEDGE_STORAGE_UNAVAILABLE"
 
 
-def configure() -> None:
-    global _service, _quality_service, _startup_error
+def prepare():
     database_url = os.environ.get("KNOWLEDGE_DATABASE_URL", "")
     qdrant_url = os.environ.get("KNOWLEDGE_QDRANT_URL", "")
     if not database_url or not qdrant_url:
+        return None
+    migration = (
+        Path(__file__).parents[2] / "migrations" / "0003_knowledge_operations.sql"
+    )
+    repository = PostgresKnowledgeRepository(
+        database_url,
+        migration_path=migration,
+        quality_migration_path=Path(__file__).parents[2]
+        / "migrations"
+        / "0005_knowledge_quality_operations.sql",
+        min_pool_size=int(os.environ.get("KNOWLEDGE_DB_POOL_MIN", "1")),
+        max_pool_size=int(os.environ.get("KNOWLEDGE_DB_POOL_MAX", "4")),
+        timeout=float(os.environ.get("KNOWLEDGE_DB_TIMEOUT_SECONDS", "5")),
+    )
+    return repository, QdrantKnowledgeIndex(qdrant_url)
+
+
+def activate(prepared) -> None:
+    global _service, _quality_service, _startup_error
+    if prepared is None:
         return
-    try:
-        migration = (
-            Path(__file__).parents[2] / "migrations" / "0003_knowledge_operations.sql"
-        )
-        repository = PostgresKnowledgeRepository(
-            database_url,
-            migration_path=migration,
-            quality_migration_path=Path(__file__).parents[2]
-            / "migrations"
-            / "0005_knowledge_quality_operations.sql",
-            min_pool_size=int(os.environ.get("KNOWLEDGE_DB_POOL_MIN", "1")),
-            max_pool_size=int(os.environ.get("KNOWLEDGE_DB_POOL_MAX", "4")),
-            timeout=float(os.environ.get("KNOWLEDGE_DB_TIMEOUT_SECONDS", "5")),
-        )
+    repository, qdrant = prepared
+    if migration_recorded(repository, "knowledge_operation", 1):
+        repository.compatibility()
+    else:
         repository.migrate()
+    if migration_recorded(repository, "knowledge_quality", 5):
+        repository.quality_compatibility()
+    else:
         repository.migrate_quality()
-        qdrant = QdrantKnowledgeIndex(qdrant_url)
-        qdrant.ensure_collection()
-        _service = KnowledgeLifecycleService(repository, qdrant)
-        _quality_service = KnowledgeQualityService(repository, qdrant)
-        _startup_error = ""
+    qdrant.ensure_collection()
+    _service = KnowledgeLifecycleService(repository, qdrant)
+    _quality_service = KnowledgeQualityService(repository, qdrant)
+    _startup_error = ""
+
+
+def configure() -> bool:
+    global _service, _quality_service, _startup_error
+    try:
+        activate(prepare())
+        return True
     except (KnowledgeRepositoryError, QdrantKnowledgeError, ValueError):
         _service = None
         _quality_service = None
         _startup_error = "KNOWLEDGE_STORAGE_UNAVAILABLE"
-
-
-configure()
+        return False
 
 
 def get_knowledge_service() -> KnowledgeLifecycleService:
