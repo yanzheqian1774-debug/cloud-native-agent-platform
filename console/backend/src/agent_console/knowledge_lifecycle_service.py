@@ -543,6 +543,11 @@ class KnowledgeLifecycleService:
                         "chunkId": chunk["chunkId"],
                         "chunkDigest": chunk["contentDigest"],
                         "content": chunk["content"],
+                        **(
+                            {"location": chunk["location"]}
+                            if chunk.get("location")
+                            else {}
+                        ),
                     }
                 )
             retrieval = {

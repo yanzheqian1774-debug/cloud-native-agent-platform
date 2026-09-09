@@ -83,6 +83,59 @@ They are specified as minimal candidates in the task implementation record, rema
 unimplemented, and require Human architecture acceptance before any persistence,
 migration, retrieval blending, or permission semantics are added.
 
+### Candidate A: original-file lifecycle
+
+- Authority: a future Knowledge-owned binary object record; PostgreSQL would own
+  metadata/lifecycle and an explicitly selected replaceable blob provider would own
+  bytes. Extracted text must not become the binary authority.
+- Identity and versioning: immutable `fileId` plus content digest, media type, byte
+  length, storage-provider reference, retention state, and exact association to the
+  Knowledge document revision produced from that file.
+- Operations: upload, authorized metadata/read/download, retention or legal hold,
+  and governed purge with auditable partial-failure recovery. Download authorization
+  must be evaluated independently from extracted-text retrieval authorization.
+- Compatibility: existing text-only revisions and citations remain valid and do not
+  acquire invented file references. No migration or provider selection is proposed
+  by this task.
+
+### Candidate B: artificial-QA lifecycle and combined retrieval
+
+- Authority: a future Knowledge-owned, versioned QA record with immutable identity,
+  state, question/synonyms, answer, author, and exact source
+  `knowledgeId/revisionId/documentId/chunkId/chunkDigest` evidence.
+- Governance: draft, validate, Human review, publish, supersede/disable, and purge;
+  source revision changes or loss of authorization make a QA record stale or
+  unavailable rather than silently rebinding it.
+- Retrieval: source chunks and published QA entries remain distinguishable result
+  classes. Any combined ranking policy, weights, evaluation vocabulary, and Qdrant
+  payload shape require an accepted versioned contract. A QA hit must preserve the
+  original evidence reference and cannot widen source visibility.
+- Compatibility: current Knowledge retrieval and citations remain unchanged. No
+  QA persistence, migration, index blend, or permission semantics are implemented
+  by this task.
+
+## Recovery validation evidence (2026-09-09)
+
+- Previous-session focused backend run: 61 tests passed; frontend lint/build passed;
+  two Playwright transport/browser cases passed. The two browser cases use explicit
+  `page.route` fixtures and are not real-service acceptance.
+- Task assets: `s5-v023-impl-312-postgres` on `127.0.0.1:55412` and
+  `s5-v023-impl-312-qdrant` on `127.0.0.1:56312`, with task labels, exclusive
+  volumes/network, and runtime root `/private/tmp/s5-v023-impl-312`.
+- Formal immutable harness attempt passed build-identity and PostgreSQL-role
+  preflight, then failed before backend health and before every target browser
+  assertion. Exit code was 2; diagnostics are retained under
+  `/private/tmp/s5-v023-impl-312/runtime-real-1`.
+- Cold candidate initialization took 72.02 seconds while creating the existing 66
+  schema tables. A warm import still took 28.33 seconds. A Knowledge-only retry then
+  failed its existing five-second PostgreSQL pool deadline with
+  `KNOWLEDGE_STORAGE_UNAVAILABLE`.
+- Twelve direct task-database connection probes produced five successes and seven
+  three-second timeouts; successful samples took 1.688 to 6.786 seconds. Therefore
+  the fixed 20-second backend health deadline was not extended and the real browser
+  journey was not rerun without new readiness evidence. Delivery remains
+  `PARTIAL_DRAFT`; no mock result substitutes for this failure.
+
 ## Risks and compatibility
 
 - Parser resource exhaustion is bounded by byte, archive, count, and time limits.

@@ -9,16 +9,18 @@ const authorizedHeaders = {
   "X-Security-Domain": "supplier-quality",
   "X-Principal-ID": "human:knowledge-owner",
 };
+const chineseDocx = Buffer.from("UEsDBBQAAAAIAGyzKV3GEnoHrAAAAPEAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbF2Puw7CMAxFf6XKihoXBgaUlIEdGPgBK3HbiOahJBT4exKQOjBax/dcWxxfdm4Wisl4J9mWd+zYi9s7UGoKcUmyKedwAEhqIouJ+0CukMFHi7mMcYSA6o4jwa7r9qC8y+Rym6uD9eJS5NFoaq4Y8xktSQZPHzVorx62bPJiY83pF6vNkmEIs1GYy02wOP3X2fphMIrWfLWF6BWlZNxoZ74Si8Ztqh56Ad+n+g9QSwMEFAAAAAgAbLMpXdU4Q/EaAQAAdwEAABEAAAB3b3JkL2RvY3VtZW50LnhtbI2QzUrDQBRGXyXM3k50IRKSdOcT6APEJLaBzkyYRKM7f0iR2lCFSLQibcXqQiyiYGta6sM4MyFvYaKIIC7cnMvl+zhwr1rdQQ1p26aeQ7AGFisykGxsEsvBNQ2sr60urICqrgaKRcwtZGNfKvrYUwIN1H3fVSD0zLqNDK9CXBsX2SahyPCLldZgQKjlUmLanlfoUAMuyfIyRIaDQancINZuOd0StISvs/klT2N+1sxmaX4x5m9hPphm98c8es67cXY7fd87UGHZLEk/6f6W8PFT1htmD7EYHCkSmxzyaJ+lbf7YEckLb4aic8LSG9Ea8tPWf3wi6X/J8mSUX5+zScRmXZbeZXGPt1/zMGLzKxGN/lbB70PhzxP1D1BLAQIUAxQAAAAIAGyzKV3GEnoHrAAAAPEAAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgAbLMpXdU4Q/EaAQAAdwEAABEAAAAAAAAAAAAAAIAB3QAAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAACAAIAgAAAACYCAAAAAA==","base64");
 
 async function createSource(page: import("@playwright/test").Page) {
-  await page.getByRole("button", {name:"创建知识源",exact:true}).click();
-  const dialog=page.getByRole("dialog",{name:"创建知识源"});
-  await dialog.getByLabel("名称",{exact:true}).fill("Supplier Quality Procedures");
-  await dialog.getByLabel("来源ID",{exact:true}).fill("source:supplier-quality");
-  await dialog.getByLabel("文档ID",{exact:true}).fill("document:8d-procedure");
-  await dialog.getByLabel("出处标识",{exact:true}).fill("human:quality-owner");
-  await dialog.getByLabel("知识正文",{exact:true}).fill("Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure.");
-  await dialog.getByRole("button",{name:"创建草稿",exact:true}).click();
+  await page.getByRole("button", {name:"上传或创建文档",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"上传或创建知识文档"});
+  await dialog.getByLabel("文档标题",{exact:true}).fill("供应商质量管理制度");
+  await dialog.getByLabel("来源说明",{exact:true}).fill("质量部门正式制度");
+  await dialog.getByLabel("可选外部编号或 URL",{exact:true}).fill("SQ-2026-09");
+  await dialog.getByLabel("选择 PDF 或 DOCX").setInputFiles({name:"供应商质量管理制度.docx",mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",buffer:chineseDocx});
+  await expect(dialog.getByLabel("解析预览")).toContainText("七十二小时");
+  await expect(dialog.getByLabel("解析预览")).toContainText("原文件未保存");
+  await dialog.getByRole("button",{name:"从解析结果创建草稿",exact:true}).click();
   await expect(dialog).not.toBeVisible();
   await expect(page.locator(".agent-detail > header .technical-value")).toBeVisible();
 }
@@ -44,17 +46,12 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await expect(page.getByRole("navigation", { name: "P1 核心产品导航" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "知识中心", exact: true })).toBeVisible();
   await createSource(page);
-  const hierarchy=page.getByRole("navigation",{name:"Knowledge information hierarchy"});
-  const hierarchyItems=hierarchy.locator("li");
-  await expect(hierarchyItems).toHaveCount(4);
-  await expect(hierarchyItems.first()).toContainText("日常检索与引用");
-  await expect(hierarchyItems.first()).toContainText("Routine: Search, Retrieval and Citations");
-  await expect(hierarchyItems.nth(1)).toContainText("质量评估");
-  await expect(hierarchyItems.nth(2)).toContainText("导入与重复项审查");
-  await expect(hierarchyItems.last()).toContainText("索引重建、清除与恢复");
-  await expect(hierarchyItems.last()).toContainText("Advanced high-impact: Rebuild, Purge and Recovery");
+  const hierarchy=page.getByRole("navigation",{name:"知识中心操作分区"});
+  await expect(hierarchy.getByRole("link")).toHaveCount(4);
+  await expect(hierarchy).toContainText("文档列表");
+  await expect(hierarchy).toContainText("检索测试与出处");
   const identity = (await page.locator(".agent-detail > header .technical-value").textContent())!;
-  await expect(page.getByRole("definition").filter({ hasText: "source:supplier-quality" })).toBeVisible();
+  await expect(page.getByRole("definition").filter({ hasText: "质量部门正式制度" })).toBeVisible();
   await publish(page);
   await page.getByRole("button", { name: "导入并建立索引" }).click();
   await expect(page.getByText(/ingestion-job.*COMPLETED/)).toBeVisible();
@@ -65,18 +62,18 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   const firstSnapshot = first.knowledge.activeIndexSnapshotId;
   expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
 
-  await page.getByLabel("检索词", {exact:true}).fill("supplier defect containment procedure");
-  await page.getByRole("button", { name: "执行授权检索" }).click();
-  await expect(page.getByText(/^CITATION ·/).first()).toBeVisible();
-  await expect(page.getByLabel("Workbench retrieval history")).toContainText("source:supplier-quality");
-  await expect(page.getByLabel("Workbench retrieval history")).toContainText("human:quality-owner");
+  await page.getByLabel("中文问题", {exact:true}).fill("缺陷报告需要多久提交");
+  await page.getByRole("button", { name: "检索当前文档" }).click();
+  await expect(page.getByText(/原文出处 · 供应商质量管理制度.docx/).first()).toBeVisible();
+  await expect(page.getByLabel("Workbench retrieval history")).toContainText("第 2 段");
   await expect(page.getByLabel("Knowledge quality dashboard")).toContainText("POSTGRESQL");
   await page.screenshot({path:testInfo.outputPath("knowledge-1440.png")});
   await page.getByLabel("检索方式").selectOption("HYBRID");
-  await page.getByLabel("Filter sourceId").selectOption("source:supplier-quality");
+  const generatedSourceId = await page.getByRole("definition").filter({hasText:"knowledge-source:"}).textContent();
+  await page.getByLabel("Filter sourceId").selectOption((generatedSourceId??"").trim());
   await page.getByRole("button", { name: "执行检索实验" }).click();
   await expect(page.getByLabel("Search Playground")).toContainText("CJK_BIGRAM_V1");
-  await expect(page.getByLabel("Search Playground").getByRole("table")).toBeVisible();
+  await expect(page.getByLabel("Search Playground")).toContainText("排序信号，不是正确率");
   await page.getByRole("button", { name: "评估当前结果" }).click();
   await expect(page.getByLabel("Evaluation comparison")).toContainText("EVALUATION_RUN");
   await expect(page.getByLabel("Evaluation comparison")).toContainText("entityId");
@@ -153,8 +150,8 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
 
   await restartBackend(request);
   await page.reload();
-  await page.getByLabel("筛选知识包").fill(identity);
-  await page.getByRole("button", { name: /Supplier Quality Procedures/ }).click();
+  await page.getByLabel("筛选文档").fill(identity);
+  await page.getByRole("button", { name: /供应商质量管理制度/ }).click();
   const recovered = await (await request.get(`${backend}/api/internal/v0.2.2/knowledge/${encodeURIComponent(identity)}`, { headers: authorizedHeaders })).json();
   expect(recovered.knowledge.knowledgeId).toBe(identity);
   expect(recovered.knowledge.publishedRevisionId).toBe(rebuilt.knowledge.publishedRevisionId);
@@ -299,7 +296,7 @@ test("isolates late retrieval responses and preserves filter and exact revision 
   await expect(page.locator(".agent-detail h2")).toHaveText("知识包 b");
   await page.getByRole("button",{name:/知识包 a/}).click();
   await expect(page.locator(".agent-detail h2")).toHaveText("知识包 a");
-  await page.getByLabel("检索词",{exact:true}).fill("query a");
+  await page.getByLabel("中文问题",{exact:true}).fill("query a");
   await page.getByRole("button",{name:"执行检索实验",exact:true}).click();
   await expect.poll(()=>requested).toBe(true);
   await page.goBack();
@@ -309,12 +306,12 @@ test("isolates late retrieval responses and preserves filter and exact revision 
   finish();
   await (await lateResponse).finished();
   await expect(page.getByText("late-a-result")).toHaveCount(0);
-  await expect(page.getByLabel("检索词",{exact:true})).toHaveValue("");
+  await expect(page.getByLabel("中文问题",{exact:true})).toHaveValue("");
   await page.getByLabel("查看修订").selectOption("revision:b");
   await expect(page).toHaveURL(/revisionId=revision%3Ab/);
   await page.getByRole("button",{name:"返回筛选列表"}).click();
-  await expect(page.getByLabel("筛选知识包")).toHaveValue("知识包");
-  await expect(page.getByRole("heading",{name:"知识包列表"})).toBeFocused();
+  await expect(page.getByLabel("筛选文档")).toHaveValue("知识包");
+  await expect(page.getByRole("heading",{name:"文档列表"})).toBeFocused();
   await page.goto("/knowledge?resourceId=b&revisionId=missing");
   await expect(page.getByRole("alert")).toContainText("不能用其他修订替代");
 });
@@ -323,32 +320,31 @@ test("validates real form inputs and keeps denied and service failures distinct 
   await installUiFixtures(page);
   await page.setViewportSize({width:390,height:844});
   await page.goto("/knowledge");
-  await page.getByRole("button",{name:"创建知识源",exact:true}).click();
-  const dialog=page.getByRole("dialog",{name:"创建知识源"});
-  await dialog.getByLabel("名称",{exact:true}).fill("278 用户输入");
-  await dialog.getByLabel("来源ID",{exact:true}).fill("非法来源");
-  await dialog.getByLabel("文档ID",{exact:true}).fill("document:278");
-  await dialog.getByLabel("出处标识",{exact:true}).fill("human:278");
+  await page.getByRole("button",{name:"上传或创建文档",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"上传或创建知识文档"});
+  await dialog.getByRole("tab",{name:"粘贴文字"}).click();
+  await dialog.getByLabel("文档标题",{exact:true}).fill("278 用户输入");
+  await dialog.getByLabel("来源说明",{exact:true}).fill("来".repeat(2001));
   await dialog.getByLabel("知识正文",{exact:true}).fill("用户提供的正文");
-  await dialog.getByRole("button",{name:"创建草稿"}).click();
-  await expect(dialog.getByRole("alert")).toContainText("来源ID");
-  await dialog.getByLabel("来源ID",{exact:true}).fill("source:278");
+  await dialog.getByRole("button",{name:"创建文字草稿"}).click();
+  await expect(dialog.getByRole("alert")).toContainText("2000");
+  await dialog.getByLabel("来源说明",{exact:true}).fill("中文人工来源");
   let submissions=0;
   await page.route("**/knowledge",async route=>{
     if(route.request().method()==="POST"){
       submissions++;
-      expect(route.request().postDataJSON()).toMatchObject({name:"278 用户输入",source:{sourceId:"source:278",content:"用户提供的正文"}});
+      expect(route.request().postDataJSON()).toMatchObject({name:"278 用户输入",source:{sourceDescription:"中文人工来源",content:"用户提供的正文"}});
       return route.fulfill({status:503,json:{detail:{reasonCode:"KNOWLEDGE_STORAGE_UNAVAILABLE"}}});
     }
     return route.fallback();
   });
-  await dialog.getByRole("button",{name:"创建草稿"}).evaluate(button=>{button.click();button.click();});
+  await dialog.getByRole("button",{name:"创建文字草稿"}).evaluate(button=>{button.click();button.click();});
   await expect(dialog.getByRole("alert")).toContainText("知识服务暂不可用");
   expect(submissions).toBe(1);
   await expect(dialog.getByLabel("知识正文",{exact:true})).toHaveValue("用户提供的正文");
   await page.screenshot({path:testInfo.outputPath("knowledge-390-form.png")});
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button",{name:"创建知识源",exact:true})).toBeFocused();
+  await expect(page.getByRole("button",{name:"上传或创建文档",exact:true})).toBeFocused();
   await page.route("**/knowledge/b",route=>route.fulfill({status:404,json:{detail:{reasonCode:"KNOWLEDGE_NOT_FOUND"}}}));
   await page.getByRole("button",{name:/知识包 b/}).click();
   await expect(page.getByRole("alert")).toContainText("资源不可用或当前访问未获授权");
