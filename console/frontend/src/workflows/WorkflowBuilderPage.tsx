@@ -1,4 +1,4 @@
-import {useMemo,useState} from "react";
+import {useEffect,useMemo,useState} from "react";
 import type {WorkflowContent,WorkflowTask} from "../api/workflowDefinitions";
 import type {WorkflowSkillOperationEntry} from "../api/workflowSkillOperations";
 import "../styles/workflow-designer.css";
@@ -16,6 +16,13 @@ export function WorkflowBuilderPage({content,onChange,operationDirectory=[],oper
   const effectiveTaskId=content.tasks.some(task=>task.taskId===selectedTaskId)?selectedTaskId:(content.tasks[0]?.taskId??null);
   const selected=content.tasks.find(task=>task.taskId===effectiveTaskId)??null;
   const issues=useMemo(()=>inspectWorkflowGraph(content.tasks),[content.tasks]);
+  useEffect(()=>{
+    const narrow=window.matchMedia("(max-width: 720px)");
+    const enterNarrow=(event:MediaQueryListEvent|MediaQueryList)=>{if(event.matches&&effectiveTaskId)setView("config")};
+    enterNarrow(narrow);
+    narrow.addEventListener("change",enterNarrow);
+    return()=>narrow.removeEventListener("change",enterNarrow);
+  },[effectiveTaskId]);
   function select(taskId:string){setSelectedTaskId(taskId);if(window.matchMedia("(max-width: 720px)").matches)setView("config")}
   function update(task:WorkflowTask){if(!isLocked())onChange(replaceTask(content,task.taskId,task))}
   function rename(nextId:string){if(!selected||isLocked())return;const prior=selected.taskId;onChange(renameTask(content,prior,nextId));setSelectedTaskId(nextId)}

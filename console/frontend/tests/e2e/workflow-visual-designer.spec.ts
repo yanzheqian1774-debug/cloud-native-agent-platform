@@ -47,6 +47,10 @@ test("edits a dependency-derived node without changing sibling content or exact 
 
   await page.getByRole("button",{name:"编辑当前 Draft"}).click();
   await page.getByRole("button",{name:"编辑步骤 Collect"}).click();
+  await page.setViewportSize({width:390,height:844});
+  const narrowSkillSelect=page.getByLabel("步骤 collect 选择 Skill",{exact:true});
+  await narrowSkillSelect.focus();await expect(narrowSkillSelect).toBeFocused();
+  await page.setViewportSize({width:1440,height:1000});
   await page.getByRole("button",{name:"检查并移除此步骤"}).click();
   const impact=page.getByRole("alert").filter({hasText:"此操作会删除步骤 collect"});
   await expect(impact).toContainText("analyze");
