@@ -1906,6 +1906,14 @@ def _configure_workbench() -> None:
     if _business_problem_application is None:
         _workbench_startup_error = "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE"
         return
+    workflow_database_url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
+    workflow_service = None
+    if workflow_database_url:
+        try:
+            workflow_service = workflow_definition_api.get_service()
+        except HTTPException:
+            _workbench_startup_error = "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
+            return
     try:
         _workbench_composition = build_workbench_composition(
             runtime_configuration_path=Path(runtime_path),
@@ -1913,6 +1921,8 @@ def _configure_workbench() -> None:
             allowed_origin=allowed_origin,
             owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
             business_problems=_business_problem_application,
+            workflow_database_url=workflow_database_url,
+            workflows=workflow_service,
         )
         workbench_app = _workbench_composition.application
         _workbench_startup_error = ""

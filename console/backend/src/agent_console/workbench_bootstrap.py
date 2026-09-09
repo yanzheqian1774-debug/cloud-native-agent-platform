@@ -24,6 +24,8 @@ from agent_console.workbench_bff import (
 )
 from agent_console.workbench_business_problem import business_problem_operations
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
+from agent_console.workbench_workflow import workflow_operations
+from agent_console.workflow_definition_service import WorkflowDefinitionService
 
 
 @dataclass(slots=True)
@@ -42,6 +44,8 @@ def build_workbench_composition(
     allowed_origin: str,
     owner_database_url: str,
     business_problems: BusinessProblemApplication,
+    workflow_database_url: str = "",
+    workflows: WorkflowDefinitionService | None = None,
 ) -> WorkbenchComposition:
     """Build only after every external authority and owner dependency is present."""
     if not runtime_configuration_path.is_absolute():
@@ -53,9 +57,15 @@ def build_workbench_composition(
     if not isinstance(document, dict):
         raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
     runtime = AuthorityRuntimeConfiguration.from_mapping(document)
-    if execution_database_fingerprint(
-        runtime.database_url
-    ) != execution_database_fingerprint(owner_database_url):
+    authority_database = execution_database_fingerprint(runtime.database_url)
+    if authority_database != execution_database_fingerprint(owner_database_url):
+        raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    workflow_enabled = bool(workflow_database_url or workflows)
+    if workflow_enabled and not (workflow_database_url and workflows):
+        raise AuthorityError("WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE")
+    if workflow_enabled and authority_database != execution_database_fingerprint(
+        workflow_database_url
+    ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
     foundation = build_authority_foundation(
         runtime,
@@ -76,7 +86,10 @@ def build_workbench_composition(
             foundation.sessions,
             authorizer,
             WorkbenchBffPolicy(allowed_host, allowed_origin),
-            operations=business_problem_operations(business_problems),
+            operations=(
+                *business_problem_operations(business_problems),
+                *(workflow_operations(workflows) if workflows is not None else ()),
+            ),
         )
         return WorkbenchComposition(application, foundation)
     except Exception:

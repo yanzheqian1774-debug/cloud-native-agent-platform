@@ -37,12 +37,20 @@ from agent_console.workbench_owner_authorization import (
     WorkbenchOwnerAuthorization,
     WorkbenchOwnerError,
 )
+from agent_console.workbench_workflow import workflow_operations
+from agent_console.workflow_definition_postgres import (
+    PostgresWorkflowDefinitionRepository,
+)
+from agent_console.workflow_definition_service import WorkflowDefinitionService
 
 DATABASE_URL = os.environ.get("AUTHORITY_I2_TEST_DATABASE_URL")
 MIGRATION = (
     Path(__file__).parents[1]
     / "migrations"
     / "0018_browser_session_grant_authority.sql"
+)
+WORKFLOW_MIGRATION = (
+    Path(__file__).parents[1] / "migrations" / "0007_workflow_runtime_profiles.sql"
 )
 
 
@@ -278,6 +286,182 @@ def seed(repository: PostgresAuthorityRepository):
         clock=lambda: now,
     )
     return now, grant, adapter
+
+
+def seed_workflow_grant(
+    repository: PostgresAuthorityRepository, now: datetime, grant: ExactGrant
+) -> None:
+    with repository.connection_scope() as connection:
+        connection.execute(
+            "INSERT INTO authorization_admin.grant_requests "
+            "(request_id,subject_principal_id,tenant_id,security_domain,"
+            "purpose,state,created_at,decided_at) "
+            "VALUES ('request-workflow','human:alice','tenant-a','quality',"
+            "'READ_WORKFLOW','APPROVED',%s,%s)",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.grant_decisions "
+            "(decision_id,request_id,issuer_principal_id,issuer_meta_decision_id,"
+            "approved,reason_category,basis_type,basis_reference_digest,"
+            "policy_version,audit_source,created_at) "
+            "VALUES ('decision-workflow','request-workflow','human:bob',"
+            "'meta-workflow',true,'ASSIGNED_DUTY','POLICY',%s,'policy-1','test',%s)",
+            ("e" * 64, now),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.grants "
+            "(grant_id,decision_id,request_id,subject_principal_id,tenant_id,"
+            "security_domain,owner,action,exact_resource,basis_type,"
+            "basis_reference_digest,issuer_principal_id,issuer_meta_decision_id,"
+            "policy_version,audit_source,not_before,expires_at,created_at,"
+            "recovery_epoch) VALUES ('grant-workflow','decision-workflow',"
+            "'request-workflow','human:alice','tenant-a','quality',%s,%s,%s,"
+            "'POLICY',%s,'human:bob','meta-workflow','policy-1','test',%s,%s,%s,1)",
+            (
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                "e" * 64,
+                now - timedelta(minutes=1),
+                now + timedelta(hours=1),
+                now,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.effective_grants "
+            "(grant_id,subject_principal_id,tenant_id,security_domain,owner,"
+            "action,exact_resource,not_before,expires_at,recovery_epoch) "
+            "VALUES ('grant-workflow','human:alice','tenant-a','quality',"
+            "%s,%s,%s,%s,%s,1)",
+            (
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                now - timedelta(minutes=1),
+                now + timedelta(hours=1),
+            ),
+        )
+
+
+def workflow_content(description: str) -> dict:
+    return {
+        "description": description,
+        "tasks": [{"taskId": "collect", "name": "Collect", "dependsOn": []}],
+        "inputs": [],
+        "outputs": ["facts"],
+        "runtimeProfile": {
+            "kind": "RUNTIME_PROFILE",
+            "resourceId": "runtime-profile:one",
+            "revisionId": "runtime-profile-revision:one",
+        },
+    }
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_workflow_exact_read_uses_authorization_transaction_and_revocation(
+    repository, monkeypatch, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    workflow_repository = PostgresWorkflowDefinitionRepository(
+        repository.pool.conninfo,
+        migration_path=WORKFLOW_MIGRATION,
+        timeout=30.0,
+    )
+    try:
+        workflow_repository.migrate()
+        service = WorkflowDefinitionService(workflow_repository)
+        scope = service.scope("tenant-a", "quality")
+        created = service.create(
+            scope, "human:alice", "Workflow", workflow_content("first revision")
+        )
+        edited = service.edit(
+            scope,
+            created["workflowDefinitionId"],
+            "human:alice",
+            1,
+            workflow_content("second revision"),
+        )
+        first_revision = created["revisions"][0]["revisionId"]
+        second_revision = edited["revisions"][1]["revisionId"]
+        operation = workflow_operations(service)[1]
+        path = {
+            "workflow_definition_id": created["workflowDefinitionId"],
+            "revision_id": first_revision,
+        }
+        grants = tuple(operation.grant_builder(context(), path, {}, {}))
+        assert len(grants) == 1
+        seed_workflow_grant(repository, now, grants[0])
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_read = workflow_repository.read_revision_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_read(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(
+            workflow_repository, "read_revision_for_workbench", capture_owner
+        )
+        result = adapter.execute(
+            context(),
+            grants,
+            operation=operation.name,
+            payload={},
+            path=path,
+            query={},
+            handler=operation.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert result["revision"]["revisionId"] == first_revision
+        assert second_revision not in repr(result)
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                GrantId("grant-workflow"),
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-workflow",
+                payload_digest="f" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+
+        def protected_owner_query(*args, **kwargs):
+            pytest.fail("protected Workflow owner query ran after authorization denial")
+
+        monkeypatch.setattr(
+            workflow_repository,
+            "read_revision_for_workbench",
+            protected_owner_query,
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
+    finally:
+        workflow_repository.pool.close()
 
 
 def wait_for_database_waiters(

@@ -42,6 +42,8 @@ and durable Business Problem assembly are all available:
 | `POST /api/workbench/v1/problems/{id}/plans` | exact `PLAN PREPARE` and prepared `READ`, Problem/set/reference reads | Workflow Control preparation and Problem binding in one UoW |
 | `GET /api/workbench/v1/plans/{id}?version=N` | `PLAN READ plan:{id}:{N}` | owner plan/approval projection |
 | `POST /api/workbench/v1/plans/{id}/approvals` | independent exact `PLAN APPROVE` plus `READ`; owner-discovered Problem/set/reference reads | owner approval append with decision basis |
+| `GET /api/workbench/v1/workflows` | `WORKFLOW LIST workflow:collection` | minimal Workflow Definition summaries, when the optional Workflow registry is enabled |
+| `GET /api/workbench/v1/workflows/{definition_id}/revisions/{revision_id}` | exact `WORKFLOW READ workflow:{definition_id}:{revision_id}` | only the authorized revision and bounded projections, when the optional Workflow registry is enabled |
 
 All request bodies and the Plan query are strict Pydantic contracts. Incoming
 authorization, proxy-authorization, principal, tenant, domain, product-read, and
@@ -77,7 +79,12 @@ snapshot before their protected read. Replay follows the same current checks.
 routes. `workbench_app` remains `None` unless all production settings succeed:
 `WORKBENCH_AUTHORITY_RUNTIME_FILE`, `WORKBENCH_ALLOWED_HOST`, and
 `WORKBENCH_ALLOWED_ORIGIN`; the authority database fingerprint must equal
-`EXECUTION_DATABASE_URL`.
+`EXECUTION_DATABASE_URL`. Workflow Definition reads are an optional registry
+extension: when `WORKFLOW_RUNTIME_DATABASE_URL` is absent, the original 13
+Business Problem, Criteria, and Plan operations remain enabled; when it is
+present, the Workflow service must be available and its database fingerprint
+must equal the authority and execution database or startup fails closed. Database
+credentials are never included in the failure reason.
 
 The supervisor retains its legacy one-listener form and adds an explicit dual
 mode (`--public-port` plus `--private-port`). Dual mode starts one child and one
@@ -96,9 +103,11 @@ evidence.
   routes require a formal cross-owner exact-target validator. I1 exposes the
   application service but the fixed baseline has no production validator port;
   registering a mock would allow requests without owner fact proof.
-- Workflow and Employee Definition lifecycle, Instance, and Assignment APIs still
-  lack a caller-owned connection plus trusted-context application port. Existing
-  header-based routes stay private.
+- Workflow Definition LIST and exact-revision READ use the caller-owned connection
+  and are registered when their optional same-database dependency is configured.
+  Workflow CREATE and all lifecycle mutations, plus Employee Definition lifecycle,
+  Instance, and Assignment APIs, remain unregistered. Existing header-based routes
+  stay private.
 - Governed Execution START and Skill invocation require their durable
   preparation/dispatch authorization barrier. They are not wrapped as ordinary
   database handlers. Execution read, Resource Use, and Evidence-reference routes
@@ -116,7 +125,8 @@ The default-disabled public BFF does not unlock IMPL-299.
 | Login, current session, rotation, logout, CSRF, Origin and Host | `FORMALLY_REGISTERED` | Five public operations use the I1 Browser Session Authority; unsafe operations require same-origin plus session-bound CSRF. |
 | Business Problem, Criteria and Plan | `FORMALLY_REGISTERED` | The 13 routes above call the durable Product/Workflow Control owner through the same authorization transaction. |
 | Grant requests, decisions, revocation and continuations | `COMPONENT_ONLY / NOT_REGISTERED` | I1 application components exist, but production composition has no formal cross-owner exact-target validator/continuation resolver. |
-| Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | The current service/repository does not expose a caller-owned connection plus trusted-context application port. |
+| Workflow Definition read | `OPTIONAL / FORMALLY_REGISTERED` | LIST and exact-revision READ use the current authorization transaction when the optional same-database Workflow service is configured; no aggregate history or adjacent revisions are disclosed. |
+| Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, edit, validate, review, publish, and other lifecycle mutations are not in the public registry. |
 | Employee Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | The current assembly does not expose the required caller-owned authorization transaction port. |
 | Instance, Assignment and Placement | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | Exact owner facts exist, but their application methods do not accept the BFF caller transaction/trusted-context authority. |
 | Governed Execution START and Skill dispatch | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | Dispatch must consume the existing durable preparation/dispatch authorization barrier; the ordinary database owner adapter is not that barrier. |
@@ -131,6 +141,14 @@ capabilities.
 ## Validation record
 
 - checkpoint `17cccb3`: commit hooks passed Ruff lint, Ruff format, and pytest;
+- Workflow repository, service, and owner-adapter batches from checkpoint
+  `57e95d3` remain 19 passed and were not rerun by the composition increment;
+- composition, public/private route inventory, startup dependency, and fail-closed
+  tests: 28 passed; targeted Ruff lint and format checks passed;
+- dedicated PostgreSQL 15 Workflow increment: 2 passed, 6 deselected. Both grant
+  and session revocation cases first called the formal exact-revision owner on the
+  authorization connection, disclosed no adjacent revision, then denied without
+  executing the protected owner query after revocation;
 - focused BFF/session/owner/business/supervisor tests run as the 305 worktree user;
 - dedicated PostgreSQL 15 container, isolated databases per case: grant revoke and
   session revoke both blocked behind the owner commit, and subsequent requests
