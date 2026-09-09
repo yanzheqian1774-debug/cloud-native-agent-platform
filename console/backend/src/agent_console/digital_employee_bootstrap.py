@@ -296,6 +296,13 @@ class DigitalEmployeeProductAssembly:
             raise DigitalEmployeeError("PLACEMENT_NOT_FOUND")
         if decision.runtime_instance_id is None:
             raise DigitalEmployeeError("PLACEMENT_NOT_ASSEMBLED")
+        if not self.repository.placement_request_matches(
+            scope,
+            decision.placement_id,
+            AttemptId(attempt_id),
+            AgentInstanceId(agent_id),
+        ):
+            raise DigitalEmployeeError("PLACEMENT_NOT_FOUND")
         active = self.repository.active_attempts(
             scope, decision.runtime_instance_id, AgentInstanceId(agent_id)
         )

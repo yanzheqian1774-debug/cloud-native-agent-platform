@@ -16,6 +16,7 @@ from .execution_postgres import (
     AttemptId,
     DigitalEmployeeInstanceId,
     PlacementDecision,
+    PlacementId,
     PlacementRequest,
     PlacementResult,
     RuntimeInstanceId,
@@ -139,6 +140,14 @@ class DigitalEmployeeRepository(Protocol):
         runtime_id: RuntimeInstanceId,
         agent_id: AgentInstanceId,
     ) -> tuple[AttemptId, ...]: ...
+
+    def placement_request_matches(
+        self,
+        scope: ScopeIdentity,
+        placement_id: PlacementId,
+        attempt_id: AttemptId,
+        agent_id: AgentInstanceId,
+    ) -> bool: ...
 
 
 class DefinitionAuthority(Protocol):

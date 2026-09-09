@@ -49,7 +49,7 @@ export function EmployeeProfile({ item, agent, agentState }: { item: EmployeeDef
   const agentExact = Boolean(primary && agent && agent.definitionId === primary.resourceId && agent.revision.revisionId === primary.revisionId && agent.revision.digest === primary.digest.replace(/^sha256:/, ""));
   return <>
     <section className="employee-profile" aria-labelledby="employee-profile-title">
-      <header><div><p className="eyebrow">数字员工档案 · Definition</p><h2 id="employee-profile-title">{item.role}</h2><p>这是 Digital Employee Definition 自身的角色描述，不代表企业 HR 岗位身份。</p></div><span className="px-status info">{item.published ? "已发布" : "未发布"}</span></header>
+      <header><div><p className="eyebrow">数字员工档案 · Definition</p><h2 id="employee-profile-title">{item.role}</h2><p>这是 Digital Employee Definition 自身的角色描述，不代表企业 HR 岗位身份。</p></div><span className="px-status info">{item.published ? "PUBLISHED · 已发布" : "UNPUBLISHED · 未发布"}</span></header>
       <dl className="employee-profile-grid">
         <div><dt>档案名称</dt><dd>未提供 <small>当前正式契约没有 display name 字段</small></dd></div>
         <div><dt>职责角色</dt><dd>{item.role} <small>来源：Digital Employee Definition</small></dd></div>
@@ -57,7 +57,7 @@ export function EmployeeProfile({ item, agent, agentState }: { item: EmployeeDef
         <div><dt>发布修订</dt><dd><code>{item.employeeDefinitionRevisionId}</code></dd></div>
         <div className="wide"><dt>精确摘要</dt><dd><code>{item.employeeDefinitionDigest}</code></dd></div>
         <div><dt>Definition 状态</dt><dd>{item.published ? "已发布" : "尚未发布"}</dd></div>
-        <div><dt>独立匹配授权</dt><dd>{item.matchable ? "已授权" : "未授权"}</dd></div>
+        <div><dt>独立匹配授权</dt><dd>{item.matchable ? "已授权" : "未授权（发布不等于可匹配）"}</dd></div>
       </dl>
       <h3>Definition 自身职责</h3>
       <ul>{item.responsibilities.map(value => <li key={value}>{value}</li>)}</ul>
@@ -81,7 +81,7 @@ export function EmployeeProfile({ item, agent, agentState }: { item: EmployeeDef
     <section aria-labelledby="employee-bindings-title">
       <h3 id="employee-bindings-title">精确能力与资源绑定</h3>
       <p>绑定表示 configured / bound，不表示已经分配、运行或成功。</p>
-      <ul className="px-binding-list">{item.members.map(member => <li key={`${member.kind}:${member.resourceId}`}><span>{kindLabel[member.kind]}</span><strong>{member.resourceId}</strong><small>{member.revisionId}</small><small>{member.digest}</small><Link to={exactCatalogLink(member)}>在资源目录核对</Link></li>)}</ul>
+      <ul className="px-binding-list">{item.members.map(member => <li key={`${member.kind}:${member.resourceId}`}><span><code>{member.kind}</code> · {kindLabel[member.kind]}</span><strong>{member.resourceId}</strong><small>{member.revisionId}</small><small>{member.digest}</small><Link to={exactCatalogLink(member)}>在资源目录核对</Link></li>)}</ul>
     </section>
   </>;
 }

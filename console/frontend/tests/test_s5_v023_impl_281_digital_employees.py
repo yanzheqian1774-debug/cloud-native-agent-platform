@@ -7,7 +7,7 @@ def source(path: str) -> str:
     return (ROOT / path).read_text()
 
 
-def test_employee_management_uses_independent_real_http_authority() -> None:
+def test_employee_management_does_not_claim_trusted_browser_auth() -> None:
     api = source("api/digitalEmployees.ts")
     page = source("digital-employees/DigitalEmployeesPage.tsx")
     for operation in ("/definitions", "/instances", "/assignments"):
@@ -17,7 +17,8 @@ def test_employee_management_uses_independent_real_http_authority() -> None:
     assert "employeeDefinitionRevisionId" in api
     assert "legacyDefinitionReference" in api
     assert "listDigitalEmployeeTemplates" not in page
-    assert "管理已接通真实 HTTP/PostgreSQL authority" in page
+    assert "MANAGEMENT PORTS PRESENT" in page
+    assert "管理端口与存储存在；可信浏览器授权尚未闭合" in page  # noqa: RUF001
     assert "发布不代表 matching" in page
     assert "执行未连接" in page
 

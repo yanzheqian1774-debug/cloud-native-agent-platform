@@ -24,9 +24,9 @@ const agent = {
   publishedRevisionId: "agent-revision:1", reviews: [], facts: [], relationships: [], limitations: [],
   revisions: [{ revisionId: "agent-revision:1", predecessorRevisionId: null, state: "PUBLISHED", digest: digest("a"), createdAt: "2026-09-09T00:00:00Z", content: { title: "质量分析员", duties: ["分析质量异常"], data: [], knowledge: [], skills: [], capabilities: ["supplier-quality-analysis"], runtimes: [], businessPurpose: "形成可核对的质量分析", bindings: { skills: [], mcpTools: [], knowledge: [] } } }],
 };
-const instance = (id: string) => ({
+const instance = (id: string, definition = employee) => ({
   instanceId: id, version: 1,
-  employeeDefinition: { authorityKind: "DIGITAL_EMPLOYEE_DEFINITION_V1", employeeDefinitionId: employee.employeeDefinitionId, employeeDefinitionRevisionId: employee.employeeDefinitionRevisionId, digest: employee.employeeDefinitionDigest },
+  employeeDefinition: { authorityKind: "DIGITAL_EMPLOYEE_DEFINITION_V1", employeeDefinitionId: definition.employeeDefinitionId, employeeDefinitionRevisionId: definition.employeeDefinitionRevisionId, digest: definition.employeeDefinitionDigest },
   ownerId: "owner:quality", organizationId: "tenant-a", lifecycle: "ENABLED",
   workspaceReference: null, modelReference: null, policyReferences: [], relationships: {},
   createdAt: "2026-09-09T00:00:00Z", updatedAt: "2026-09-09T00:00:00Z",
@@ -36,11 +36,17 @@ const instance = (id: string) => ({
 const assignment = { assignmentId: "assignment:quality", instanceId: "instance:quality", assigneeId: "team:quality", businessRole: "质量工作分配", lifecycle: "ACTIVE", effectiveFrom: "2026-09-09T00:00:00Z", effectiveUntil: null, version: 1, binding: { state: "UNAVAILABLE", reasonCode: "WORKFLOW_BINDING_NOT_ASSEMBLED" } };
 const placement = { placementId: "placement:quality", requestId: "placement-request:quality", decision: "PLACED", runtimeInstanceId: "runtime-instance:quality", policyVersion: "policy:1", compatibilityFacts: ["native-compatible"], limitationCodes: [], decidedAt: "2026-09-09T00:00:00Z", digest: digest("c"), observation: { freshness: "UNOBSERVED", observationId: null }, execution: { state: "UNAVAILABLE", reasonCode: "RUNTIME_EXECUTION_NOT_STARTED" }, outcome: { state: "UNAVAILABLE", reasonCode: "OUTCOME_NOT_RECORDED" } };
 
-async function installAdapter(page: Page, onInstance?: (route: Route, id: string) => Promise<void>) {
+async function installAdapter(page: Page, onInstance?: (route: Route, id: string) => Promise<void>, onDefinition?: (route: Route, id: string, revision: string) => Promise<void>, listedEmployee = employee) {
   await page.route("**/api/internal/**", async route => {
     const url = new URL(route.request().url());
     const path = url.pathname;
-    if (path.endsWith("/digital-employees/definitions")) return route.fulfill({ json: [employee] });
+    if (path.endsWith("/digital-employees/definitions")) return route.fulfill({ json: [listedEmployee] });
+    if (path.includes("/digital-employees/definitions/")) {
+      const id = decodeURIComponent(path.split("/definitions/")[1]);
+      const revision = url.searchParams.get("employeeDefinitionRevisionId") ?? "";
+      if (onDefinition) return onDefinition(route, id, revision);
+      return route.fulfill({ json: employee });
+    }
     if (path.endsWith("/agent-definitions")) return route.fulfill({ json: [agent] });
     if (path.endsWith("/agent-definitions/agent%3Aquality")) return route.fulfill({ json: { definition: agent, productProjection: {}, technicalProjection: {} } });
     if (path.includes("/placements/")) return route.fulfill({ json: placement });
@@ -99,4 +105,53 @@ test("TEST_ADAPTER requires exact identities and redacts a denied Placement read
   await expect(alert).toContainText("denied");
   await expect(alert).toContainText("资源不可用或当前访问未获授权");
   await expect(alert).not.toContainText("PLACEMENT_SCOPE_DENIED");
+});
+
+test("TEST_ADAPTER rejects the same Definition ID with a different revision digest", async ({ page }) => {
+  const wrong = { ...employee, employeeDefinitionDigest: digest("f") };
+  await installAdapter(
+    page,
+    async (route, id) => route.fulfill({ json: instance(id) }),
+    async route => route.fulfill({ json: wrong }),
+  );
+  await page.goto("/digital-employees?panel=instance&instanceId=instance%3Aquality");
+  await expect(page.getByRole("alert")).toContainText("INSTANCE_DEFINITION_IDENTITY_MISMATCH");
+  await expect(page.locator(".employee-facts")).toHaveCount(0);
+});
+
+test("TEST_ADAPTER rejects a Definition from another identity", async ({ page }) => {
+  const other = { ...employee, employeeDefinitionId: "employee:other" };
+  await installAdapter(
+    page,
+    async (route, id) => route.fulfill({ json: instance(id, other) }),
+    async route => route.fulfill({ json: employee }),
+  );
+  await page.goto("/digital-employees?panel=instance&instanceId=instance%3Aquality");
+  await expect(page.getByRole("alert")).toContainText("INSTANCE_DEFINITION_IDENTITY_MISMATCH");
+  await expect(page.locator(".employee-facts")).toHaveCount(0);
+});
+
+test("TEST_ADAPTER preserves a valid historical Instance revision", async ({ page }) => {
+  const current = { ...employee, employeeDefinitionRevisionId: "employee-revision:2", employeeDefinitionDigest: digest("2") };
+  const historical = {
+    ...employee,
+    employeeDefinitionRevisionId: "employee-revision:1",
+    employeeDefinitionDigest: digest("1"),
+    members: [
+      employee.members[0],
+      { kind: "RUNTIME_PROFILE", resourceId: "runtime-profile:history", revisionId: "runtime-profile-revision:history", digest: digest("h") },
+    ],
+  };
+  await installAdapter(
+    page,
+    async (route, id) => route.fulfill({ json: instance(id, historical) }),
+    async route => route.fulfill({ json: historical }),
+    current,
+  );
+  const query = new URLSearchParams({ panel: "work", instanceId: "instance:quality", assignmentId: "assignment:quality", placementId: "placement:quality", attemptId: "attempt:quality", agentInstanceId: "agent-instance:quality" });
+  await page.goto(`/digital-employees?${query}`);
+  await expect(page.getByLabel("员工工作参与阶段")).toContainText("runtime-profile-revision:history");
+  await page.getByRole("button", { name: "实例" }).click();
+  await expect(page.locator(".employee-facts")).toContainText("employee-revision:1");
+  await expect(page.locator(".employee-facts")).toContainText("允许合法历史发布版本");
 });

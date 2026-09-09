@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   DigitalEmployeeRequestError,
   employeeControlledState,
@@ -79,13 +78,6 @@ export function EmployeeWorkParticipation({ definition, instance, assignment, in
     setState("READY");
   }
 
-  const technicalParams = placement ? new URLSearchParams({
-    attemptId: coordinates.attemptId,
-    agentInstanceId: coordinates.agentInstanceId,
-    placementId: placement.placementId,
-    runtimeInstanceId: placement.runtimeInstanceId,
-  }).toString() : "";
-
   return <section className="employee-work-participation" aria-labelledby="employee-work-title">
     <header><div><p className="eyebrow">只读工作关联 · exact read only</p><h2 id="employee-work-title">从配置到实际工作的事实链</h2></div><span className="binding-status">不推导在线状态</span></header>
     <p>当前没有 Instance、Assignment 或 Placement 列表端口。这里只读取你提供并经服务端核对的精确身份，不声称“全部实例”或“完整历史”。</p>
@@ -123,11 +115,11 @@ export function EmployeeWorkParticipation({ definition, instance, assignment, in
         <div className="wide"><dt>兼容事实</dt><dd>{placement.compatibilityFacts.length ? placement.compatibilityFacts.join("；") : "未提供"}</dd></div>
         <div className="wide"><dt>限制</dt><dd>{placement.limitationCodes.length ? placement.limitationCodes.join("；") : "未记录限制"}</dd></div>
       </dl>
-      <nav className="employee-work-links" aria-label="执行与证据详情入口">
-        <Link to={`/technical?${technicalParams}`}>携带精确身份打开执行 / Runtime 详情</Link>
-        <Link to={`/evidence?${technicalParams}`}>携带精确身份打开 Evidence 入口</Link>
-      </nav>
-      <p className="employee-disclosure">当前 Placement 投影没有 Evidence reference。入口只传递已核对身份；Evidence 内容仍需独立授权，执行成功也不等于 Business Outcome 完成。</p>
+      <section className="employee-work-links" aria-label="执行与证据未接通状态">
+        <article><strong>执行 / Runtime 详情尚未接通</strong><p><code>{coordinates.attemptId}</code> · <code>{placement.runtimeInstanceId}</code></p><button type="button" disabled title="目标页尚未消费 Placement、Attempt 与 Runtime 精确身份">详情不可用</button></article>
+        <article><strong>Evidence 读取尚未接通</strong><p>当前 Placement 投影没有 Evidence reference。</p><button type="button" disabled title="Evidence 内容需要独立读取授权">Evidence 不可用</button></article>
+      </section>
+      <p className="employee-disclosure">以上精确身份仅供核对，不构成可用详情入口。Evidence reference 即使存在也不等于获准读取内容；执行成功也不等于 Business Outcome 完成。</p>
     </section>}
   </section>;
 }

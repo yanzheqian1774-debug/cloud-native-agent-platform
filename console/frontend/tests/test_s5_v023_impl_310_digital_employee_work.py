@@ -44,7 +44,7 @@ def test_work_participation_uses_only_existing_exact_read_coordinates() -> None:
     ):
         assert boundary in work
     assert "当前 Placement 投影没有 Evidence reference" in work
-    assert "Evidence 内容仍需独立授权" in work
+    assert "Evidence reference 即使存在也不等于获准读取内容" in work
 
 
 def test_unknown_runtime_and_execution_states_are_not_promoted() -> None:
@@ -77,3 +77,21 @@ def test_refresh_race_scope_and_narrow_layout_guards_exist() -> None:
     assert 'error.kind === "denied" || error.kind === "not found"' in work
     assert "@media (max-width: 700px)" in styles
     assert ".employee-work-fields" in styles
+
+
+def test_identity_and_navigation_boundaries_are_explicit() -> None:
+    page = source("digital-employees/DigitalEmployeesPage.tsx")
+    work = source("digital-employees/EmployeeWorkParticipation.tsx")
+    assert "INSTANCE_DEFINITION_IDENTITY_MISMATCH" in page
+    assert "ASSIGNMENT_INSTANCE_IDENTITY_MISMATCH" in page
+    assert "ASSIGNMENT_IDENTITY_MISMATCH" in page
+    assert "readInstanceDefinition" in page
+    assert "setInstanceDefinition" in page
+    assert "boundDefinition={instanceDefinition}" in page
+    assert "执行 / Runtime 详情尚未接通" in work
+    assert "Evidence 读取尚未接通" in work
+    assert "详情不可用" in work
+    assert "Evidence 不可用" in work
+    assert "<Link" not in work
+    assert "MANAGEMENT PORTS PRESENT" in page
+    assert "可信浏览器授权尚未闭合" in page

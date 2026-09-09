@@ -193,7 +193,7 @@ def seed_execution_chain(assembly, scope, instance_id, assignment_id, revision_i
     return aggregate, agent_id, runtime_id
 
 
-def test_real_postgres_exact_chain_restart_and_scope_isolation():
+def test_real_postgres_exact_chain_restart_and_scope_isolation(monkeypatch):
     suffix = uuid.uuid4().hex
     definition_service = definitions()
     definition_scope = definition_service.scope(f"tenant-{suffix}", "domain-a")
@@ -349,6 +349,33 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation():
     assert placed["execution"]["state"] == "UNAVAILABLE"
     assert placed["outcome"]["state"] == "UNAVAILABLE"
     assert assigned["binding"]["state"] == "UNAVAILABLE"
+    assert assembly.repository.placement_request_matches(
+        scope,
+        placed["placementId"],
+        aggregate.attempt.attempt_id,
+        agent_id,
+    )
+    assert not assembly.repository.placement_request_matches(
+        scope,
+        placed["placementId"],
+        "another-attempt",
+        agent_id,
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            assembly.repository,
+            "placement_request_matches",
+            lambda *_args: False,
+        )
+        with pytest.raises(DigitalEmployeeError, match="PLACEMENT_NOT_FOUND"):
+            assembly.get_placement(
+                scope,
+                instance_id,
+                assignment_id,
+                placed["placementId"],
+                str(aggregate.attempt.attempt_id),
+                str(agent_id),
+            )
 
     assembly.repository.authority.pool.close()
     definition_service.repository.pool.close()

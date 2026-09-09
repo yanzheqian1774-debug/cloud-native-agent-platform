@@ -346,6 +346,29 @@ class PostgresDigitalEmployeeRepository:
     ):
         return self.authority.attempts_for_runtime_agent(scope, runtime_id, agent_id)
 
+    def placement_request_matches(
+        self, scope, placement_id, attempt_id, agent_id
+    ) -> bool:
+        with self.authority.pool.connection() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM execution_authority.placement_decisions decision "
+                "JOIN execution_authority.placement_requests request "
+                "ON request.namespace=decision.namespace "
+                "AND request.security_domain=decision.security_domain "
+                "AND request.request_id=decision.request_id "
+                "WHERE decision.namespace=%s AND decision.security_domain=%s "
+                "AND decision.placement_id=%s AND request.attempt_id=%s "
+                "AND request.agent_instance_id=%s",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(placement_id),
+                    str(attempt_id),
+                    str(agent_id),
+                ),
+            ).fetchone()
+        return row is not None
+
     def validate_plan_identity(
         self,
         connection,
