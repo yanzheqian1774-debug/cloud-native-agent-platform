@@ -80,6 +80,21 @@ devices.
 
 ## Implemented result
 
+- The follow-up visual pass introduces a clearer page skeleton: a compact
+  Chinese-first header, a high-contrast catalog with lifecycle hierarchy and
+  disclosure-only technical IDs, a canvas-first workspace, and visibly
+  collapsible catalog and node-detail rails. Secondary canvas and lifecycle
+  actions no longer compete visually with the primary edit/save action.
+- Canvas fitting now occurs once when a designer is mounted for the opened
+  Workflow/revision. Selecting a node or editing ordinary fields does not reset
+  the user's current zoom or pan; explicit fit and automatic-layout controls
+  remain available.
+- Draft forms are grouped into basic information, inputs/outputs, resource
+  binding, dependencies, and execution policy. Unsaved state and authoritative
+  save-readback feedback are visible. At 390px, catalog/workspace and
+  canvas/list/detail switches remain explicit, a top save action stays
+  reachable, and the in-flow save bar does not overlap the product bottom
+  navigation.
 - Desktop keeps the formal Workflow catalog beside the selected Workflow
   revision, visual canvas, and selected-node details. The catalog uses the
   already-loaded formal list response for search, lifecycle filtering, bounded
@@ -112,15 +127,27 @@ devices.
 
 ## Validation record
 
-- `make check`: PASS — Ruff, Ruff format check, and repository pytest;
+- Historical candidate `4020e6239d06f4ba930e07b9899fb2de926bdb8f`
+  remains the source for the earlier results below. Its six Draft PR checks are
+  all `SUCCESS`; those results are not attributed to the later visual changes.
+- Historical `make check`: PASS — Ruff, Ruff format check, and repository pytest;
   `1584 passed, 133 skipped` (environment-dependent integration tests skipped
   by their existing gates).
-- `npm run build`: PASS.
-- `npm run lint`: PASS.
-- `uv run pytest tests/test_s5_v023_impl_311_workflow_visual_designer.py -q`:
+- Visual implementation checkpoint:
+  `3a88cfb17af5e3a0b4f13ae100d4308787d75a01`, tree
+  `e4817bb9e9158dd1450d663b319d147ba79c8578`.
+- New visual pass `npm run build`: PASS.
+- New visual pass `npm run lint`: PASS.
+- New visual pass
+  `uv run pytest -q console/frontend/tests/test_s5_v023_impl_311_workflow_visual_designer.py`:
   PASS, `3 passed`.
-- `npx playwright test tests/e2e/workflow-visual-designer.spec.ts`: PASS,
-  `4 passed`; this is deterministic `TEST_ADAPTER` interaction evidence.
+- New visual pass
+  `npx playwright test tests/e2e/workflow-visual-designer.spec.ts`: PASS,
+  `4 passed`; a subsequent screenshot-only selection also passed `1` test.
+  This is deterministic `TEST_ADAPTER` interaction evidence and includes
+  assertions for preserved zoom after node selection, explicit mobile pane
+  navigation, no document-level horizontal overflow, and no overlap between
+  the save bar and product bottom navigation.
 - Existing mocked Workflow regression selection: PASS, `7 passed`, covering
   denied disclosure, exact binding round-trip, CAS input retention/no replay,
   late-response isolation, ineligible Skill exclusion, digest mismatch, and
@@ -129,11 +156,12 @@ devices.
   attempted without the trusted backend. The three failures require the real
   service at `127.0.0.1:8000`, which was not running; they are not reported as
   product journey success.
-- Draft PR CI `Agent Workbench Browser Acceptance`: PASS at the final code
-  head, including the complete 41-scenario immutable-release suite against its
-  owned PostgreSQL, Qdrant, and formal backend. The existing real Skill
-  operation binding, CAS/no-replay, late-response, lifecycle, and responsive
-  journeys therefore remain green in the trusted harness.
+- Historical Draft PR CI `Agent Workbench Browser Acceptance`: PASS at
+  `4020e6239d06f4ba930e07b9899fb2de926bdb8f`, including the complete 41-scenario
+  immutable-release suite against its owned PostgreSQL, Qdrant, and formal
+  backend. The new visual checkpoint requires its own post-push CI result; the
+  historical result is retained separately and is not used to claim the new
+  source passed.
 
 ## Service and evidence boundary
 
