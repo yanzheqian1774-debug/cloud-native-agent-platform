@@ -236,3 +236,66 @@ review conclusions. Draft task deletion is distinct from implicit binding omissi
 on a retained task; retained-task identity semantics and broader multi-binding test
 coverage remain explicit limitations rather than newly imposed architecture rules.
 Human acceptance, Ready transition, merge and Session closure remain ungranted.
+
+## Fresh-provider bootstrap critical-path correction
+
+Human authorization `启动关键路径有界修复授权` continues this same Session from
+source `d0221768efa85bc1d0d92b6e5ede21b439ccddb1`, tree
+`a207050a2726c6e39399d8e425a24857686a91c2`. It permits only the Console
+composition root, existing domain initialization wiring, regression tests and this
+note. The health contract and 20-second deadline, migrations `0001` through `0017`,
+public contracts, execution ownership, browser assertions and retry/skip guards are
+unchanged.
+
+The pre-fix startup trace showed sequential import-time initialization crossing the
+health deadline before Agent Definition initialization began. Knowledge owns the
+ordered `0003` then `0005` chain; Skill/MCP owns `0002` then `0004`; Runtime Profile
+and Workflow Definition use the same `0007` SQL but retain distinct domain ledgers
+and therefore remain one ordered chain. Agent Definition `0001` then `0006` follows
+Knowledge and Skill. Execution `0008` is independent until Workflow Control `0009`
+then `0010`, which also requires Workflow Definition; Digital Employee `0014` is
+last. Governed execution's optional `0015`, `0016`, `0011`, `0017` path is unchanged.
+
+The correction removes module-import side effects from the four domain API modules.
+The production composition root first opens independent persistence pools in
+parallel without running migrations. It then executes only proven-independent
+migration chains in two dependency waves: Knowledge, Skill/MCP, the internally
+serial Runtime-to-Workflow chain, and Execution `0008`; followed by Agent Definition
+and the internally serial Workflow Control chain. Digital Employee `0014` remains a
+final serial step before the FastAPI import can finish and the server can report
+healthy. Each chain keeps its own connection and a single migration writer. Required
+preparation or activation errors propagate before health; legacy direct configure
+helpers retain their previous unavailable-state behavior.
+
+An initial pool-preparation-only attempt still missed the 20-second deadline and was
+not promoted to browser acceptance. After the dependency waves were implemented, a
+fresh PostgreSQL/Qdrant run with no pre-applied schema reached health in `2.978`
+seconds, restarted in `1.608` seconds, and rejected an unavailable Qdrant without
+ever reporting health. The worktree was then removed externally before the changes
+were committed. The same existing branch and fixed source were remounted at its
+original path and the patch was reconstructed. The rebuilt tracked content was
+therefore tested again: fresh health in `4.327` seconds, initialized restart in
+`4.420` seconds, and unavailable-Qdrant exit code `1` after `5.180` seconds with no
+health response. All 12 expected domain migration ledger rows were present exactly
+once and no migration was pre-applied. Both runs removed their owned containers.
+
+The additional implementation paths are:
+
+- `console/backend/src/agent_console/app.py`;
+- `console/backend/src/agent_console/persistence_bootstrap.py`;
+- `console/backend/src/agent_console/digital_employee_bootstrap.py`;
+- `console/backend/src/agent_console/knowledge_api.py`;
+- `console/backend/src/agent_console/runtime_profile_api.py`;
+- `console/backend/src/agent_console/skill_mcp_api.py`;
+- `console/backend/src/agent_console/workflow_definition_api.py`;
+- `console/backend/tests/test_persistence_bootstrap.py`;
+- this implementation note.
+
+The reconstructed pre-freeze backend suite passed `569` tests with `100`
+environment-dependent skips. After restoring the locked frontend dependencies, the
+shared isolated-browser harness tests passed all `156` cases; frontend lint and the
+production build also passed with 106 transformed modules. Repository-wide
+`make check` then passed Ruff, formatting and `1558 passed / 104`
+environment-dependent skips. Exact frozen-candidate Browser Acceptance, source
+identity and combination CI remain subsequent evidence and do not rewrite the
+historical Knowledge or pre-browser failures.

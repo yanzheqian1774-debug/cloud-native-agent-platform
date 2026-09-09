@@ -74,27 +74,35 @@ class WorkflowDefinitionBindingResolver:
 binding_resolver = WorkflowDefinitionBindingResolver()
 
 
-def configure():
-    global _service, _startup_error
+def prepare():
     url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
     if not url:
-        return
-    try:
-        repository = PostgresWorkflowDefinitionRepository(
-            url,
-            migration_path=Path(__file__).parents[2]
-            / "migrations"
-            / "0007_workflow_runtime_profiles.sql",
-        )
-        repository.migrate()
+        return None
+    return PostgresWorkflowDefinitionRepository(
+        url,
+        migration_path=Path(__file__).parents[2]
+        / "migrations"
+        / "0007_workflow_runtime_profiles.sql",
+    )
 
-        _service = WorkflowDefinitionService(repository, resolve_workflow_reference)
-        _startup_error = ""
+
+def activate(repository) -> None:
+    global _service, _startup_error
+    if repository is None:
+        return
+    repository.migrate()
+    _service = WorkflowDefinitionService(repository, resolve_workflow_reference)
+    _startup_error = ""
+
+
+def configure() -> bool:
+    global _service, _startup_error
+    try:
+        activate(prepare())
+        return True
     except (WorkflowDefinitionRepositoryError, ValueError):
         _service = None
-
-
-configure()
+        return False
 
 
 def get_service():

@@ -39,6 +39,12 @@ from fastapi.responses import StreamingResponse
 from kubernetes.client.exceptions import ApiException
 from pydantic import BaseModel, ValidationError
 
+from agent_console import (
+    knowledge_api,
+    runtime_profile_api,
+    skill_mcp_api,
+    workflow_definition_api,
+)
 from agent_console.agent_binding_validation import BindingResolution
 from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepository
 from agent_console.agent_definition_repository import AgentDefinitionRepositoryError
@@ -57,9 +63,12 @@ from agent_console.agent_definition_service import (
 from agent_console.digital_employee_api import router as digital_employee_router
 from agent_console.digital_employee_bootstrap import (
     DigitalEmployeeProductAssembly,
-    build_digital_employee_assembly,
+    complete_digital_employee_assembly,
+    migrate_execution_authority,
+    migrate_workflow_controls,
 )
 from agent_console.execution_domain import ExecutionPersistenceError
+from agent_console.execution_postgres import PostgresExecutionAuthorityRepository
 from agent_console.governed_execution import GovernedExecutionApplication
 from agent_console.governed_execution_api import router as governed_execution_router
 from agent_console.governed_execution_authorization import (
@@ -113,6 +122,12 @@ from agent_console.live_journey_stream import (
 from agent_console.live_journey_stream_schemas import (
     JourneyEventEnvelope,
     JourneyEventPayload,
+)
+from agent_console.persistence_bootstrap import (
+    BootstrapStep,
+    activate_in_order,
+    activate_in_parallel,
+    prepare_in_parallel,
 )
 from agent_console.preview_schemas import PreviewError, PreviewResponse
 from agent_console.preview_service import (
@@ -171,6 +186,130 @@ from agent_console.workflow_definition_api import (
     binding_resolver as workflow_binding_resolver,
 )
 from agent_console.workflow_definition_api import router as workflow_definition_router
+
+_MIGRATIONS = Path(__file__).parents[2] / "migrations"
+
+
+def _prepare_agent_definition_repository():
+    database_url = os.environ.get("AGENT_DEFINITION_DATABASE_URL", "")
+    if not database_url:
+        return None
+    return PostgresAgentDefinitionRepository(
+        database_url,
+        migration_path=_MIGRATIONS / "0001_agent_definition_lifecycle.sql",
+        governed_bindings_migration_path=_MIGRATIONS
+        / "0006_agent_governed_bindings.sql",
+        min_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MIN", "1")),
+        max_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MAX", "4")),
+        timeout=float(os.environ.get("AGENT_DEFINITION_DB_TIMEOUT_SECONDS", "5")),
+    )
+
+
+def _prepare_digital_employee_persistence():
+    database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
+    if not database_url:
+        return None
+    minimum = int(os.environ.get("EXECUTION_DB_POOL_MIN", "1"))
+    maximum = int(os.environ.get("EXECUTION_DB_POOL_MAX", "4"))
+    timeout = float(os.environ.get("EXECUTION_DB_TIMEOUT_SECONDS", "5"))
+    steps = (
+        BootstrapStep(
+            "authority",
+            lambda: PostgresExecutionAuthorityRepository(
+                database_url,
+                migration_path=_MIGRATIONS / "0008_execution_runtime_authority.sql",
+                min_pool_size=minimum,
+                max_pool_size=maximum,
+                timeout=timeout,
+            ),
+            lambda _prepared: None,
+        ),
+        BootstrapStep(
+            "control_9",
+            lambda: PostgresWorkflowControlRepository(
+                database_url,
+                migration_path=_MIGRATIONS / "0009_workflow_control_persistence.sql",
+                min_pool_size=minimum,
+                max_pool_size=maximum,
+                timeout=timeout,
+            ),
+            lambda _prepared: None,
+        ),
+        BootstrapStep(
+            "control_10",
+            lambda: PostgresWorkflowControlRepository(
+                database_url,
+                migration_path=_MIGRATIONS / "0010_workflow_control_uow_extension.sql",
+                min_pool_size=minimum,
+                max_pool_size=maximum,
+                timeout=timeout,
+            ),
+            lambda _prepared: None,
+        ),
+    )
+    prepared = prepare_in_parallel(steps)
+    return prepared["authority"], (
+        prepared["control_9"],
+        prepared["control_10"],
+    )
+
+
+_PREPARATION_STEPS = (
+    BootstrapStep("knowledge", knowledge_api.prepare, knowledge_api.activate),
+    BootstrapStep(
+        "runtime_profile", runtime_profile_api.prepare, runtime_profile_api.activate
+    ),
+    BootstrapStep("skill_mcp", skill_mcp_api.prepare, skill_mcp_api.activate),
+    BootstrapStep(
+        "workflow_definition",
+        workflow_definition_api.prepare,
+        workflow_definition_api.activate,
+    ),
+)
+_PREPARE_ONLY_STEPS = (
+    BootstrapStep(
+        "agent_definition",
+        _prepare_agent_definition_repository,
+        lambda _prepared: None,
+    ),
+    BootstrapStep(
+        "digital_employee",
+        _prepare_digital_employee_persistence,
+        lambda _prepared: None,
+    ),
+)
+_prepared_persistence = prepare_in_parallel((*_PREPARATION_STEPS, *_PREPARE_ONLY_STEPS))
+
+
+def _activate_runtime_workflow(prepared) -> None:
+    runtime, workflow = prepared
+    runtime_profile_api.activate(runtime)
+    workflow_definition_api.activate(workflow)
+
+
+def _activate_execution_base(prepared) -> None:
+    if prepared is not None:
+        authority, _controls = prepared
+        migrate_execution_authority(authority)
+
+
+_FIRST_MIGRATION_WAVE = (
+    BootstrapStep("knowledge", lambda: None, knowledge_api.activate),
+    BootstrapStep("skill_mcp", lambda: None, skill_mcp_api.activate),
+    BootstrapStep("runtime_workflow", lambda: None, _activate_runtime_workflow),
+    BootstrapStep("execution_base", lambda: None, _activate_execution_base),
+)
+_first_wave_prepared = {
+    "knowledge": _prepared_persistence["knowledge"],
+    "skill_mcp": _prepared_persistence["skill_mcp"],
+    "runtime_workflow": (
+        _prepared_persistence["runtime_profile"],
+        _prepared_persistence["workflow_definition"],
+    ),
+    "execution_base": _prepared_persistence["digital_employee"],
+    "agent_pending": _prepared_persistence["agent_definition"],
+}
+activate_in_parallel(_FIRST_MIGRATION_WAVE, _first_wave_prepared)
 
 app = FastAPI(
     title="Cloud-Native Agent Platform Console",
@@ -521,41 +660,65 @@ class _WorkbenchBindingResolver:
         )
 
 
-def _configure_agent_definitions() -> None:
+def _activate_agent_definitions(repository) -> None:
     global _agent_definition_service, _agent_definition_startup_error
-    database_url = os.environ.get("AGENT_DEFINITION_DATABASE_URL", "")
-    if not database_url:
+    if repository is None:
         _agent_definition_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
         return
+    repository.migrate()
+    _agent_definition_service = AgentDefinitionService(
+        repository, binding_resolver=_WorkbenchBindingResolver()
+    )
+    _agent_definition_startup_error = None
+
+
+def _configure_agent_definitions() -> None:
+    global _agent_definition_service, _agent_definition_startup_error
     try:
-        migration = (
-            Path(__file__).parents[2]
-            / "migrations"
-            / "0001_agent_definition_lifecycle.sql"
-        )
-        repository = PostgresAgentDefinitionRepository(
-            database_url,
-            migration_path=migration,
-            governed_bindings_migration_path=(
-                Path(__file__).parents[2]
-                / "migrations"
-                / "0006_agent_governed_bindings.sql"
-            ),
-            min_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MIN", "1")),
-            max_pool_size=int(os.environ.get("AGENT_DEFINITION_DB_POOL_MAX", "4")),
-            timeout=float(os.environ.get("AGENT_DEFINITION_DB_TIMEOUT_SECONDS", "5")),
-        )
-        repository.migrate()
-        _agent_definition_service = AgentDefinitionService(
-            repository, binding_resolver=_WorkbenchBindingResolver()
-        )
-        _agent_definition_startup_error = None
+        _activate_agent_definitions(_prepare_agent_definition_repository())
     except (AgentDefinitionRepositoryError, ValueError):
         _agent_definition_service = None
         _agent_definition_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
 
 
-_configure_agent_definitions()
+def _activate_digital_employees(prepared) -> None:
+    global _digital_employee_assembly, _digital_employee_startup_error
+    if prepared is None or _agent_definition_service is None:
+        _digital_employee_assembly = None
+        _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+        return
+    authority, _controls = prepared
+    _digital_employee_assembly = complete_digital_employee_assembly(
+        _agent_definition_service,
+        authority,
+        migration_path=_MIGRATIONS / "0008_execution_runtime_authority.sql",
+    )
+    _digital_employee_startup_error = None
+
+
+def _activate_workflow_controls(prepared) -> None:
+    if prepared is not None:
+        _authority, controls = prepared
+        migrate_workflow_controls(controls)
+
+
+_SECOND_MIGRATION_WAVE = (
+    BootstrapStep("agent_definition", lambda: None, _activate_agent_definitions),
+    BootstrapStep("workflow_controls", lambda: None, _activate_workflow_controls),
+)
+_second_wave_prepared = {
+    "agent_definition": _prepared_persistence["agent_definition"],
+    "workflow_controls": _prepared_persistence["digital_employee"],
+    "knowledge_active": _prepared_persistence["knowledge"],
+    "runtime_active": _prepared_persistence["runtime_profile"],
+    "skill_active": _prepared_persistence["skill_mcp"],
+    "workflow_active": _prepared_persistence["workflow_definition"],
+}
+activate_in_parallel(_SECOND_MIGRATION_WAVE, _second_wave_prepared)
+activate_in_order(
+    (BootstrapStep("digital_employee", lambda: None, _activate_digital_employees),),
+    _prepared_persistence,
+)
 
 
 def _configure_digital_employees() -> None:
@@ -566,25 +729,13 @@ def _configure_digital_employees() -> None:
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
         return
     try:
-        _digital_employee_assembly = build_digital_employee_assembly(
-            database_url,
-            _agent_definition_service,
-            migration_path=(
-                Path(__file__).parents[2]
-                / "migrations"
-                / "0008_execution_runtime_authority.sql"
-            ),
-            min_pool_size=int(os.environ.get("EXECUTION_DB_POOL_MIN", "1")),
-            max_pool_size=int(os.environ.get("EXECUTION_DB_POOL_MAX", "4")),
-            timeout=float(os.environ.get("EXECUTION_DB_TIMEOUT_SECONDS", "5")),
-        )
-        _digital_employee_startup_error = None
+        prepared = _prepare_digital_employee_persistence()
+        _activate_execution_base(prepared)
+        _activate_workflow_controls(prepared)
+        _activate_digital_employees(prepared)
     except (ExecutionPersistenceError, WorkflowControlError, ValueError):
         _digital_employee_assembly = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
-
-
-_configure_digital_employees()
 
 
 def _configure_governed_execution() -> None:

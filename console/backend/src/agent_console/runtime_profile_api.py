@@ -69,26 +69,35 @@ class RuntimeProfileBindingResolver:
 binding_resolver = RuntimeProfileBindingResolver()
 
 
-def configure():
-    global _service, _startup_error
+def prepare():
     url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
     if not url:
+        return None
+    return PostgresRuntimeProfileRepository(
+        url,
+        migration_path=Path(__file__).parents[2]
+        / "migrations"
+        / "0007_workflow_runtime_profiles.sql",
+    )
+
+
+def activate(repository) -> None:
+    global _service, _startup_error
+    if repository is None:
         return
+    repository.migrate()
+    _service = RuntimeProfileService(repository)
+    _startup_error = ""
+
+
+def configure() -> bool:
+    global _service, _startup_error
     try:
-        repository = PostgresRuntimeProfileRepository(
-            url,
-            migration_path=Path(__file__).parents[2]
-            / "migrations"
-            / "0007_workflow_runtime_profiles.sql",
-        )
-        repository.migrate()
-        _service = RuntimeProfileService(repository)
-        _startup_error = ""
+        activate(prepare())
+        return True
     except (RuntimeProfileRepositoryError, ValueError):
         _service = None
-
-
-configure()
+        return False
 
 
 def get_service():
