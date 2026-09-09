@@ -284,7 +284,7 @@ _prepared_persistence = prepare_in_parallel((*_PREPARATION_STEPS, *_PREPARE_ONLY
 def _activate_runtime_workflow(prepared) -> None:
     runtime, workflow = prepared
     runtime_profile_api.activate(runtime)
-    workflow_definition_api.activate(workflow)
+    workflow_definition_api.activate_shared(workflow)
 
 
 def _activate_execution_base(prepared) -> None:

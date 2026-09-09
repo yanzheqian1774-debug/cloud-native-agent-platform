@@ -85,6 +85,50 @@ class PostgresWorkflowDefinitionRepository:
                 "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
             ) from exc
 
+    def record_shared_migration(self) -> None:
+        """Record this domain after the shared v7 SQL ran on another writer."""
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET LOCAL statement_timeout = '5s'")
+                connection.execute("SET LOCAL lock_timeout = '3s'")
+                required = (
+                    "workflow_definition.schema_migrations",
+                    "workflow_definition.definitions",
+                    "workflow_definition.lifecycle_facts",
+                )
+                if any(
+                    connection.execute(
+                        "SELECT to_regclass(%s) AS relation", (relation,)
+                    ).fetchone()["relation"]
+                    is None
+                    for relation in required
+                ):
+                    raise WorkflowDefinitionRepositoryError(
+                        "WORKFLOW_DEFINITION_SCHEMA_INCOMPATIBLE"
+                    )
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM workflow_definition.schema_migrations WHERE version=%s",
+                    (SCHEMA_VERSION,),
+                ).fetchone()
+                if row is None:
+                    connection.execute(
+                        "INSERT INTO workflow_definition.schema_migrations(version,checksum,adapter) VALUES (%s,%s,%s)",
+                        (SCHEMA_VERSION, self.migration_checksum, ADAPTER),
+                    )
+                elif (
+                    row["checksum"] != self.migration_checksum
+                    or row["adapter"] != ADAPTER
+                ):
+                    raise WorkflowDefinitionRepositoryError(
+                        "WORKFLOW_DEFINITION_SCHEMA_INCOMPATIBLE"
+                    )
+        except WorkflowDefinitionRepositoryError:
+            raise
+        except PsycopgError as exc:
+            raise WorkflowDefinitionRepositoryError(
+                "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
+            ) from exc
+
     def compatibility(self):
         with self.pool.connection() as connection:
             row = connection.execute(

@@ -313,3 +313,21 @@ same empty-pycache condition, the corrected writer order reached fresh health in
 `10.521` seconds and initialized restart health in `8.484` seconds. An unavailable
 Qdrant exited with code `1` after `7.689` seconds without health; all 12 expected
 ledger rows were unique and the owned providers were removed.
+
+The next frozen candidate `535586372c6b36266aa36e997e49c4462b531e5b`, tree
+`42a808b49f31fc1bd68b0eeea52ba95f95c71ca7`, confirmed that ordering alone did
+not remove the full cold-path variance. Its formal run completed ledgers `0001`
+through `0010` but had not committed `0014` at the 20-second boundary; Browser
+Acceptance again remained `0/0 NOT_EXECUTED`, with failure-time `NOT_EXITED`, clean
+`-15` termination and unchanged release digests preserved.
+
+The final bounded optimization removes only the duplicate execution of the shared
+`0007_workflow_runtime_profiles.sql`. Runtime Profile remains the sole SQL writer.
+After it commits, Workflow Definition checks that its three required relations exist
+and writes or validates its own unchanged version/checksum/adapter ledger in its own
+transaction and connection. Missing relations or ledger mismatch fail closed. The
+migration file and both domain ledgers remain unchanged. With an empty pycache and
+fresh providers, this path reached health in `11.784` seconds and initialized restart
+health in `7.765` seconds. The unavailable-Qdrant case exited with code `1` without
+health in `15.955` seconds; all 12 expected ledgers were unique and provider cleanup
+completed.

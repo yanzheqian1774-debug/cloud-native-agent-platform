@@ -95,6 +95,15 @@ def activate(repository) -> None:
     _startup_error = ""
 
 
+def activate_shared(repository) -> None:
+    global _service, _startup_error
+    if repository is None:
+        return
+    repository.record_shared_migration()
+    _service = WorkflowDefinitionService(repository, resolve_workflow_reference)
+    _startup_error = ""
+
+
 def configure() -> bool:
     global _service, _startup_error
     try:
