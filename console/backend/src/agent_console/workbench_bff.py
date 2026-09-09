@@ -34,6 +34,7 @@ from agent_console.workbench_bff_schemas import (
 from agent_console.workbench_owner_authorization import (
     TransactionalOwnerHandler,
     WorkbenchOwnerAuthorization,
+    WorkbenchOwnerError,
 )
 
 PREFIX = "/api/workbench/v1"
@@ -60,7 +61,13 @@ class WorkbenchBoundaryError(ValueError):
 
 
 GrantBuilder = Callable[
-    [TrustedRequestContext, Mapping[str, str], Mapping[str, Any]], Sequence[ExactGrant]
+    [
+        TrustedRequestContext,
+        Mapping[str, str],
+        Mapping[str, Any],
+        Mapping[str, Any],
+    ],
+    Sequence[ExactGrant],
 ]
 
 
@@ -72,6 +79,7 @@ class WorkbenchOperation:
     method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
     path: str
     request_model: type[BaseModel] | None
+    query_model: type[BaseModel] | None
     grant_builder: GrantBuilder
     handler: TransactionalOwnerHandler[Mapping[str, Any]]
     success_status: int = 200
@@ -193,6 +201,10 @@ def create_workbench_bff(
     async def boundary_failure(_: Request, exc: WorkbenchBoundaryError):
         return _error(exc.reason_code, exc.status_code)
 
+    @app.exception_handler(WorkbenchOwnerError)
+    async def owner_failure(_: Request, exc: WorkbenchOwnerError):
+        return _error(exc.reason_code, exc.status_code)
+
     @app.exception_handler(RequestValidationError)
     async def request_validation_failure(_: Request, __: RequestValidationError):
         return _error("REQUEST_INVALID", 422)
@@ -214,6 +226,10 @@ def create_workbench_bff(
     def require_csrf(request: Request, session) -> None:
         token = request.headers.get("x-csrf-token", "")
         sessions.verify_csrf(token, session)
+
+    @app.get("/healthz")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
 
     @app.get(f"{PREFIX}/login", response_class=HTMLResponse)
     def login_form() -> HTMLResponse:
@@ -317,8 +333,20 @@ def create_workbench_bff(
                 except ValidationError as exc:
                     raise WorkbenchBoundaryError("REQUEST_INVALID", 422) from exc
                 payload = model.model_dump(mode="json", exclude_none=True)
+            try:
+                query = (
+                    {}
+                    if operation.query_model is None
+                    else operation.query_model.model_validate(
+                        dict(request.query_params)
+                    ).model_dump(mode="json", exclude_none=True)
+                )
+            except ValidationError as exc:
+                raise WorkbenchBoundaryError("REQUEST_INVALID", 422) from exc
+            if operation.query_model is None and request.query_params:
+                raise WorkbenchBoundaryError("REQUEST_INVALID", 422)
             grants = tuple(
-                operation.grant_builder(context, request.path_params, payload)
+                operation.grant_builder(context, request.path_params, payload, query)
             )
             result = authorizer.execute(
                 context,
@@ -326,6 +354,7 @@ def create_workbench_bff(
                 operation=operation.name,
                 payload=payload,
                 path=request.path_params,
+                query=query,
                 handler=operation.handler,
             )
             return JSONResponse(

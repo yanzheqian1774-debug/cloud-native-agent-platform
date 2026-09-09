@@ -22,6 +22,13 @@ from agent_console.grant_administration_application import GenerationAuthorizati
 T = TypeVar("T")
 
 
+class WorkbenchOwnerError(ValueError):
+    def __init__(self, reason_code: str, status_code: int) -> None:
+        self.reason_code = reason_code
+        self.status_code = status_code
+        super().__init__(reason_code)
+
+
 @dataclass(frozen=True, slots=True)
 class WorkbenchAuthorizationDecision:
     decision_id: str
@@ -29,6 +36,54 @@ class WorkbenchAuthorizationDecision:
     owner: str
     action: str
     exact_resource: str
+
+
+class AuthorizedOwnerAuthority:
+    """Owner-facing current-grant port pinned to the caller transaction."""
+
+    def __init__(
+        self,
+        adapter: WorkbenchOwnerAuthorization,
+        context: TrustedRequestContext,
+        connection: Any,
+        generation: int,
+        initial: Sequence[WorkbenchAuthorizationDecision],
+    ) -> None:
+        self.adapter = adapter
+        self.context = context
+        self.connection = connection
+        self.generation = generation
+        self.decisions = {
+            (item.owner, item.action, item.exact_resource): item for item in initial
+        }
+
+    def require(self, principal, owner: str, action: str, resource: str):
+        if (
+            principal.principal_id != self.context.principal_id
+            or principal.tenant_id != self.context.scope.tenant_id
+            or principal.security_domain != self.context.scope.security_domain
+        ):
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+        grant = ExactGrant(owner, action, resource)
+        validate_registered_grant(grant, allow_meta=False)
+        key = (owner, action, resource)
+        decision = self.decisions.get(key)
+        if decision is not None:
+            return decision
+        allowed = self.adapter.authorization.has_current_grants(
+            self.context,
+            (grant,),
+            now=self.adapter.clock(),
+            generation=self.generation,
+            recovery_epoch=self.adapter.controller.readiness.recovery_epoch,
+            connection=self.connection,
+            configure_transaction=False,
+        )[0]
+        if not allowed:
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+        decision = self.adapter._decision(self.context, grant, self.generation)
+        self.decisions[key] = decision
+        return decision
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +95,9 @@ class AuthorizedOwnerCall:
     connection: Any
     payload: Mapping[str, Any]
     path: Mapping[str, str]
+    query: Mapping[str, Any]
     decisions: tuple[WorkbenchAuthorizationDecision, ...]
+    authority: AuthorizedOwnerAuthority
 
 
 class TransactionalOwnerHandler(Protocol[T]):
@@ -95,6 +152,7 @@ class WorkbenchOwnerAuthorization:
         operation: str,
         payload: Mapping[str, Any],
         path: Mapping[str, str],
+        query: Mapping[str, Any],
         handler: TransactionalOwnerHandler[T],
     ) -> T:
         if not grants:
@@ -119,6 +177,9 @@ class WorkbenchOwnerAuthorization:
                 self._decision(context, grant, generation.generation)
                 for grant in grants
             )
+            owner_authority = AuthorizedOwnerAuthority(
+                self, context, connection, generation.generation, decisions
+            )
             return handler(
                 AuthorizedOwnerCall(
                     operation=operation,
@@ -126,6 +187,8 @@ class WorkbenchOwnerAuthorization:
                     connection=connection,
                     payload=payload,
                     path=path,
+                    query=query,
                     decisions=decisions,
+                    authority=owner_authority,
                 )
             )

@@ -119,6 +119,7 @@ def test_adapter_shares_authorization_connection_and_denies_atomically() -> None
         operation="READ_PROBLEM",
         payload={},
         path={"problem_id": "problem-1"},
+        query={},
         handler=lambda call: call.connection,
     )
     assert result is repository.connection
@@ -143,6 +144,7 @@ def test_adapter_shares_authorization_connection_and_denies_atomically() -> None
             operation="READ_PROBLEM",
             payload={},
             path={},
+            query={},
             handler=handler,
         )
     assert not called
@@ -156,12 +158,16 @@ def repository():
     admin = psycopg.connect(DATABASE_URL, autocommit=True)
     admin.execute(f'CREATE DATABASE "{database_name}"')
     database_url = DATABASE_URL.rsplit("/", 1)[0] + f"/{database_name}"
-    value = PostgresAuthorityRepository(database_url, migration_path=MIGRATION)
-    value.migrate()
+    value = None
     try:
+        value = PostgresAuthorityRepository(
+            database_url, migration_path=MIGRATION, timeout=30.0
+        )
+        value.migrate()
         yield value
     finally:
-        value.close()
+        if value is not None:
+            value.close()
         admin.execute(
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=%s",
             (database_name,),
@@ -271,6 +277,7 @@ def test_revocation_serializes_after_owner_commit(repository, revocation: str) -
             operation="READ_PROBLEM",
             payload={},
             path={},
+            query={},
             handler=handler,
         )
 
@@ -305,7 +312,10 @@ def test_revocation_serializes_after_owner_commit(repository, revocation: str) -
 
     with repository.pool.connection() as connection:
         assert (
-            connection.execute("SELECT count(*) FROM owner_effects").fetchone()[0] == 1
+            connection.execute(
+                "SELECT count(*) AS total FROM owner_effects"
+            ).fetchone()["total"]
+            == 1
         )
     with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
         adapter.execute(
@@ -314,5 +324,6 @@ def test_revocation_serializes_after_owner_commit(repository, revocation: str) -
             operation="READ_PROBLEM",
             payload={},
             path={},
+            query={},
             handler=lambda call: {},
         )

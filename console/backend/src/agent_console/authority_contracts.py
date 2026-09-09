@@ -323,6 +323,7 @@ class CurrentAuthorizationReader(Protocol):
         generation: int,
         recovery_epoch: int,
         connection: object | None = None,
+        configure_transaction: bool = True,
     ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]: ...
 
     def has_current_grants(
@@ -334,6 +335,7 @@ class CurrentAuthorizationReader(Protocol):
         generation: int,
         recovery_epoch: int,
         connection: object | None = None,
+        configure_transaction: bool = True,
     ) -> tuple[bool, ...]: ...
 
     def read_linearized_authorization_state(

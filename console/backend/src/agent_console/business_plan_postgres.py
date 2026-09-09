@@ -9,8 +9,11 @@ class PostgresProblemPlanUnitOfWork:
         self.control = control
 
     @contextmanager
-    def transaction(self):
+    def transaction(self, connection=None):
         # READ COMMITTED plus owner claim/row locks: equal requests serialize,
         # while all writes and the completed claim share this single commit.
-        with self.problems.pool.connection() as connection, connection.transaction():
+        if connection is not None:
             yield connection
+        else:
+            with self.problems.pool.connection() as owned, owned.transaction():
+                yield owned

@@ -519,13 +519,15 @@ class PostgresAuthorityRepository:
         generation: int,
         recovery_epoch: int,
         connection=None,
+        configure_transaction: bool = True,
     ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]:
         """Read one session and an exact grant bundle in the caller transaction."""
         if not grants:
             raise AuthorityError("INVALID_GRANT_TARGET")
 
         def read(current, *, lock_for_owner: bool):
-            current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            if configure_transaction:
+                current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             credential_id = self._current_credential_id(
                 current,
                 context,

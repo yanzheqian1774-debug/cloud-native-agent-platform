@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from agent_console.authority_contracts import (
@@ -21,6 +22,7 @@ from agent_console.workbench_bff import (
     WorkbenchOperation,
     create_workbench_bff,
 )
+from agent_console.workbench_business_problem import business_problem_operations
 from agent_console.workbench_owner_authorization import AuthorizedOwnerCall
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
@@ -118,7 +120,9 @@ class AuthorizerStub:
                 connection=self.connection,
                 payload=values["payload"],
                 path=values["path"],
+                query=values["query"],
                 decisions=(),
+                authority=SimpleNamespace(),
             )
         )
 
@@ -136,7 +140,8 @@ def build_client():
         method="POST",
         path=f"{PREFIX}/problems/{{problem_id}}/revisions",
         request_model=CreateProblem,
-        grant_builder=lambda context, path, payload: (
+        query_model=None,
+        grant_builder=lambda context, path, payload, query: (
             ExactGrant(
                 "BUSINESS_PROBLEM",
                 "REVISE",
@@ -275,7 +280,8 @@ def test_duplicate_operation_registry_is_rejected() -> None:
         method="GET",
         path=f"{PREFIX}/problems/{{problem_id}}",
         request_model=None,
-        grant_builder=lambda context, path, payload: (),
+        query_model=None,
+        grant_builder=lambda context, path, payload, query: (),
         handler=lambda call: {},
     )
     with pytest.raises(AuthorityError, match="WORKBENCH_OPERATION_INVALID"):
@@ -285,3 +291,24 @@ def test_duplicate_operation_registry_is_rejected() -> None:
             WorkbenchBffPolicy("console.example", "https://console.example"),
             operations=(operation, operation),
         )
+
+
+def test_business_problem_registry_freezes_routes_and_exact_resource_builders() -> None:
+    operations = business_problem_operations(SimpleNamespace())  # type: ignore[arg-type]
+    assert len(operations) == 13
+    assert len({(item.method, item.path) for item in operations}) == 13
+    assert all(item.path.startswith(f"{PREFIX}/") for item in operations)
+
+    read = next(item for item in operations if item.name == "READ_PROBLEM")
+    assert tuple(
+        read.grant_builder(SessionStub().context, {"problem_id": "problem-7"}, {}, {})
+    ) == (ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:problem-7"),)
+    plan = next(item for item in operations if item.name == "READ_PLAN")
+    assert tuple(
+        plan.grant_builder(
+            SessionStub().context,
+            {"plan_id": "plan-9"},
+            {},
+            {"version": 3},
+        )
+    ) == (ExactGrant("PLAN", "READ", "plan:plan-9:3"),)

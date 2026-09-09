@@ -1,6 +1,6 @@
 # S5-V023-IMPL-305 Trusted Workbench BFF
 
-Status: independent implementation in progress; shared startup wiring not complete.
+Status: bounded I2 implementation; Draft delivery, not I3 acceptance.
 
 Base: `9c28fa5b28c0cab6a39dc05f5367e93c8bcc8913`
 
@@ -14,12 +14,125 @@ owner handler. A handler receives the trusted context, authorization decisions,
 and the same PostgreSQL connection used for the current-grant check. Existing
 header-based or separately-transactional owner ports are not silently wrapped.
 
-The shared `app.py`, bootstrap, persistence/schema compatibility, owner
-PostgreSQL adapters, browser harness, and supervisor wiring remain untouched
-while IMPL-295 owns those paths. Consequently the public BFF is not enabled and
-this checkpoint does not claim a production browser-to-owner link.
+IMPL-295 / REL-306 closed at fixed commit
+`f189212232fc194859a695f0307e83b0c7b73c0f`; that baseline was merged without
+rebasing. Its serial migration writer, compatibility checks, failure propagation,
+health deadline, and harness behavior remain intact.
 
-Workflow and Employee lifecycle actions beyond the I1 registered CREATE/LIST/READ
-vocabulary, Assignment start/retry, standalone Resource Use, and Evidence content
-remain unregistered. They require an accepted exact action plus a formal owner
-transaction port; the adapter does not infer authority or create a second writer.
+## Registered routes
+
+The public application always has only `/healthz`, five session operations, and
+the explicitly supplied operation registry. Production composition registers the
+following owner-backed routes only when the external authority runtime file,
+exact Host/Origin, active generation/recovery record, the same execution database,
+and durable Business Problem assembly are all available:
+
+| Browser route | Owner action/resource | Actual owner effect |
+| --- | --- | --- |
+| `POST /api/workbench/v1/problems` | `BUSINESS_PROBLEM CREATE` and `READ` on `business-problem:collection` | owner `create_problem` |
+| `GET /api/workbench/v1/problems` | `BUSINESS_PROBLEM LIST` on the collection | owner `list_problems` |
+| `GET /api/workbench/v1/problems/{id}` | `BUSINESS_PROBLEM READ business-problem:{id}` | owner aggregate/history read |
+| `POST /api/workbench/v1/problems/{id}/revisions` | exact `REVISE` plus `READ` | owner CAS revision write |
+| `POST /api/workbench/v1/problems/{id}/lifecycle` | exact `TRANSITION` plus `READ` | owner lifecycle write |
+| `POST /api/workbench/v1/success-criteria` | collection `CREATE`, or exact `REVISE`; required `READ` facts | owner criterion revision write |
+| `GET /api/workbench/v1/success-criteria/revisions/{id}` | exact revision `READ` | owner revision read |
+| `POST /api/workbench/v1/problems/{id}/criteria-sets` | exact set `CREATE`/`REVISE` and `READ`, Problem `READ`, each submitted criterion revision `READ` | owner criteria-set CAS write |
+| `GET /api/workbench/v1/problems/{id}/criteria-sets` | exact set `READ` | owner set revision read |
+| `GET /api/workbench/v1/problems/{id}/criteria` | set and Problem `READ`, then each owner-discovered revision `READ` | owner filtered criterion read |
+| `POST /api/workbench/v1/problems/{id}/plans` | exact `PLAN PREPARE` and prepared `READ`, Problem/set/reference reads | Workflow Control preparation and Problem binding in one UoW |
+| `GET /api/workbench/v1/plans/{id}?version=N` | `PLAN READ plan:{id}:{N}` | owner plan/approval projection |
+| `POST /api/workbench/v1/plans/{id}/approvals` | independent exact `PLAN APPROVE` plus `READ`; owner-discovered Problem/set/reference reads | owner approval append with decision basis |
+
+All request bodies and the Plan query are strict Pydantic contracts. Incoming
+authorization, proxy-authorization, principal, tenant, domain, product-read, and
+trusted-context headers are rejected. Host is exact on every request; Origin,
+`Sec-Fetch-Site` when present, and session-bound CSRF are required for unsafe
+requests. The cookie is `__Host-workbench_session`, Secure, HttpOnly,
+SameSite=Strict, and Path `/`; responses are no-store with bounded errors.
+
+## Linearization boundary
+
+The BFF opens one transaction from the authority repository. The first current
+authorization read sets REPEATABLE READ, validates active generation/recovery,
+locks the browser session row `FOR SHARE`, and locks every matching dynamic grant
+row `FOR SHARE`. Exact session revoke now locks the session row `FOR UPDATE`; grant
+revoke already locks the grant row `FOR UPDATE`. Therefore an owner effect which
+has passed authorization commits before a racing revocation, while a revocation
+that wins first makes the request fail closed. The activation read barrier remains
+held through the owner commit, covering static credential/grant revocation.
+
+The owner adapter constructs the legacy principal only from
+`TrustedRequestContext`, supplies a current-grant authority bound to that same
+connection, and calls the existing Business Problem/Workflow Control owner. The
+owner UoW accepts the caller connection and does not commit or open another
+connection. Owner-discovered criterion/reference grants are checked on the same
+snapshot before their protected read. Replay follows the same current checks.
+
+## Startup and route separation
+
+`app.py` retains the private service application and never registers Workbench
+routes. `workbench_app` remains `None` unless all production settings succeed:
+`WORKBENCH_AUTHORITY_RUNTIME_FILE`, `WORKBENCH_ALLOWED_HOST`, and
+`WORKBENCH_ALLOWED_ORIGIN`; the authority database fingerprint must equal
+`EXECUTION_DATABASE_URL`.
+
+The supervisor retains its legacy one-listener form and adds an explicit dual
+mode (`--public-port` plus `--private-port`). Dual mode starts one child and one
+event loop, pre-binds both sockets, runs two Uvicorn servers with one worker,
+checks closed route inventories, reports `STARTING`, and changes to `RUNNING` only
+after a bounded 20-second child readiness handshake. Either server exit, listener
+failure, SIGTERM, or supervisor lifetime loss closes both. An expected signal
+shutdown returns zero; either server's unprompted return, partial startup failure,
+readiness failure, or supervisor loss returns nonzero. This is local process
+evidence only; it is not RBAC, admission, NetworkPolicy, ingress, or packet-denial
+evidence.
+
+## Routes deliberately not registered
+
+- Capability discovery and grant request/decision/revocation/continuation HTTP
+  routes require a formal cross-owner exact-target validator. I1 exposes the
+  application service but the fixed baseline has no production validator port;
+  registering a mock would allow requests without owner fact proof.
+- Workflow and Employee Definition lifecycle, Instance, and Assignment APIs still
+  lack a caller-owned connection plus trusted-context application port. Existing
+  header-based routes stay private.
+- Governed Execution START and Skill invocation require their durable
+  preparation/dispatch authorization barrier. They are not wrapped as ordinary
+  database handlers. Execution read, Resource Use, and Evidence-reference routes
+  also remain unregistered until that formal owner port exists.
+- Evidence content/dereference and standalone Resource Use remain outside the
+  accepted contract.
+
+These omissions mean the full 299 browser journey and complete I2 are not claimed.
+The default-disabled public BFF does not unlock IMPL-299.
+
+## I2 route-matrix status
+
+| 299 capability family | Current production status | Why it is or is not public |
+| --- | --- | --- |
+| Login, current session, rotation, logout, CSRF, Origin and Host | `FORMALLY_REGISTERED` | Five public operations use the I1 Browser Session Authority; unsafe operations require same-origin plus session-bound CSRF. |
+| Business Problem, Criteria and Plan | `FORMALLY_REGISTERED` | The 13 routes above call the durable Product/Workflow Control owner through the same authorization transaction. |
+| Grant requests, decisions, revocation and continuations | `COMPONENT_ONLY / NOT_REGISTERED` | I1 application components exist, but production composition has no formal cross-owner exact-target validator/continuation resolver. |
+| Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | The current service/repository does not expose a caller-owned connection plus trusted-context application port. |
+| Employee Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | The current assembly does not expose the required caller-owned authorization transaction port. |
+| Instance, Assignment and Placement | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | Exact owner facts exist, but their application methods do not accept the BFF caller transaction/trusted-context authority. |
+| Governed Execution START and Skill dispatch | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | Dispatch must consume the existing durable preparation/dispatch authorization barrier; the ordinary database owner adapter is not that barrier. |
+| Execution and invocation readback | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | No BFF trusted-context owner port currently couples current authorization to the formal readback. |
+| Resource Use and Evidence reference | `PARTIAL_OWNER_PROJECTION / NOT_REGISTERED` | Some facts are reachable through governed Execution readback, but no accepted standalone BFF owner port exists. Evidence content/dereference remains outside the accepted contract. |
+
+The current main frontend still uses private/preview APIs and does not consume this
+new public registry. Therefore the matrix is `PARTIAL_DRAFT`: absence from the
+public route set is fail-closed behavior, but it is not delivery of the missing I2
+capabilities.
+
+## Validation record
+
+- checkpoint `17cccb3`: commit hooks passed Ruff lint, Ruff format, and pytest;
+- focused BFF/session/owner/business/supervisor tests run as the 305 worktree user;
+- dedicated PostgreSQL 15 container, isolated databases per case: grant revoke and
+  session revoke both blocked behind the owner commit, and subsequent requests
+  failed current authorization;
+- local dual-listener tests prove route separation and common shutdown only, not
+  deployment isolation. Deterministic lifecycle cases cover supervisor loss,
+  either-listener unexpected exit, partial startup failure, and expected signal
+  shutdown; readiness failure also kills a child that does not honor termination.

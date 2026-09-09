@@ -161,6 +161,7 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         generation: int,
         recovery_epoch: int,
         connection: object | None = None,
+        configure_transaction: bool = True,
     ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]:
         reader = getattr(self.dynamic, "read_linearized_authorization_states", None)
         if reader is None:
@@ -187,6 +188,7 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             generation=generation,
             recovery_epoch=recovery_epoch,
             connection=connection,
+            configure_transaction=configure_transaction,
         )
 
     def has_current_grants(
@@ -198,6 +200,7 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         generation: int,
         recovery_epoch: int,
         connection: object | None = None,
+        configure_transaction: bool = True,
     ) -> tuple[bool, ...]:
         if (
             not grants
@@ -212,6 +215,7 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             generation=generation,
             recovery_epoch=recovery_epoch,
             connection=connection,
+            configure_transaction=configure_transaction,
         )
         credential = (
             self.generation.credential_by_id(credential_id)
