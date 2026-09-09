@@ -297,7 +297,6 @@ _FIRST_MIGRATION_WAVE = (
     BootstrapStep("knowledge", lambda: None, knowledge_api.activate),
     BootstrapStep("skill_mcp", lambda: None, skill_mcp_api.activate),
     BootstrapStep("runtime_workflow", lambda: None, _activate_runtime_workflow),
-    BootstrapStep("execution_base", lambda: None, _activate_execution_base),
 )
 _first_wave_prepared = {
     "knowledge": _prepared_persistence["knowledge"],
@@ -306,9 +305,13 @@ _first_wave_prepared = {
         _prepared_persistence["runtime_profile"],
         _prepared_persistence["workflow_definition"],
     ),
-    "execution_base": _prepared_persistence["digital_employee"],
     "agent_pending": _prepared_persistence["agent_definition"],
+    "execution_pending": _prepared_persistence["digital_employee"],
 }
+activate_in_order(
+    (BootstrapStep("digital_employee", lambda: None, _activate_execution_base),),
+    _prepared_persistence,
+)
 activate_in_parallel(_FIRST_MIGRATION_WAVE, _first_wave_prepared)
 
 app = FastAPI(

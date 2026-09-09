@@ -258,14 +258,14 @@ last. Governed execution's optional `0015`, `0016`, `0011`, `0017` path is uncha
 
 The correction removes module-import side effects from the four domain API modules.
 The production composition root first opens independent persistence pools in
-parallel without running migrations. It then executes only proven-independent
-migration chains in two dependency waves: Knowledge, Skill/MCP, the internally
-serial Runtime-to-Workflow chain, and Execution `0008`; followed by Agent Definition
-and the internally serial Workflow Control chain. Digital Employee `0014` remains a
-final serial step before the FastAPI import can finish and the server can report
-healthy. Each chain keeps its own connection and a single migration writer. Required
-preparation or activation errors propagate before health; legacy direct configure
-helpers retain their previous unavailable-state behavior.
+parallel without running migrations. It then gives the large Execution `0008`
+migration one PostgreSQL DDL writer before concurrently running Knowledge, Skill/MCP
+and the internally serial Runtime-to-Workflow chain. Agent Definition and the
+internally serial Workflow Control chain form the next dependency wave. Digital
+Employee `0014` remains a final serial step before the FastAPI import can finish and
+the server can report healthy. Each chain keeps its own connection and a single
+migration writer. Required preparation or activation errors propagate before health;
+legacy direct configure helpers retain their previous unavailable-state behavior.
 
 An initial pool-preparation-only attempt still missed the 20-second deadline and was
 not promoted to browser acceptance. After the dependency waves were implemented, a
@@ -299,3 +299,17 @@ production build also passed with 106 transformed modules. Repository-wide
 environment-dependent skips. Exact frozen-candidate Browser Acceptance, source
 identity and combination CI remain subsequent evidence and do not rewrite the
 historical Knowledge or pre-browser failures.
+
+The first frozen candidate `99d56428108fc4ef811d44f08cd738e3cbf255d8`, tree
+`5f40568060e3225fb8a08cb36549adff2651975a`, exposed a shared-PostgreSQL DDL
+contention boundary in the formal empty-pycache release. At 20.034 seconds the
+Knowledge, Skill/MCP, Runtime Profile and Workflow Definition ledgers were complete,
+while `execution_authority` had not yet been created and the backend was still
+running. Its Browser Acceptance therefore remained `0/0 NOT_EXECUTED`; failure-time
+`NOT_EXITED`, cleanup exit `-15`, unchanged release digests and clean provider cleanup
+remain preserved. The subsequent writer-order correction is evidence-based and does
+not reinterpret the earlier fresh-start passes or this failed formal run. Under the
+same empty-pycache condition, the corrected writer order reached fresh health in
+`10.521` seconds and initialized restart health in `8.484` seconds. An unavailable
+Qdrant exited with code `1` after `7.689` seconds without health; all 12 expected
+ledger rows were unique and the owned providers were removed.
