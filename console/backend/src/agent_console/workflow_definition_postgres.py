@@ -11,6 +11,15 @@ from psycopg.errors import Error as PsycopgError
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from agent_console.postgres_schema_compatibility import (
+    LEDGER_COLUMNS,
+    Table,
+    columns,
+    foreign,
+    primary,
+    schema_is_compatible,
+    unique,
+)
 from agent_console.workflow_definition_repository import (
     WorkflowDefinitionConflict,
     WorkflowDefinitionNotFound,
@@ -20,6 +29,45 @@ from agent_console.workflow_definition_repository import (
 
 ADAPTER = "workflow-definition-postgresql-v1"
 SCHEMA_VERSION = 1
+
+WORKFLOW_DEFINITION_STRUCTURE = (
+    Table(
+        "workflow_definition.schema_migrations", LEDGER_COLUMNS, (primary("version"),)
+    ),
+    Table(
+        "workflow_definition.definitions",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("workflow_definition_id", "text"),
+            ("aggregate_version", "bigint"),
+            ("record", "jsonb"),
+        ),
+        (primary("namespace", "security_domain", "workflow_definition_id"),),
+    ),
+    Table(
+        "workflow_definition.lifecycle_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("workflow_definition_id", "text"),
+            ("ordinal", "bigint"),
+            ("fact_id", "text"),
+            ("fact", "jsonb"),
+        ),
+        (
+            primary(
+                "namespace", "security_domain", "workflow_definition_id", "ordinal"
+            ),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(
+                ("namespace", "security_domain", "workflow_definition_id"),
+                "workflow_definition.definitions",
+                ("namespace", "security_domain", "workflow_definition_id"),
+            ),
+        ),
+    ),
+)
 
 
 class PostgresWorkflowDefinitionRepository:
@@ -139,6 +187,7 @@ class PostgresWorkflowDefinitionRepository:
                 row is None
                 or row["checksum"] != self.migration_checksum
                 or row["adapter"] != ADAPTER
+                or not schema_is_compatible(connection, WORKFLOW_DEFINITION_STRUCTURE)
             ):
                 raise WorkflowDefinitionRepositoryError(
                     "WORKFLOW_DEFINITION_SCHEMA_INCOMPATIBLE"
