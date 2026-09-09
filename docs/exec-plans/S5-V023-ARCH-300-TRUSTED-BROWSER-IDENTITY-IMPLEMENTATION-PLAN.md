@@ -52,12 +52,20 @@ This plan does not assign identifiers or Sessions.
   configuration publish is not activation; credential revocation activates the
   new generation and revokes its derived sessions in one database transaction;
   session and dynamic-grant revocations remain separate PostgreSQL-only commits;
-- expose activation only through a host-local privileged operator control channel,
-  never through either browser or normal service HTTP routes, and audit generation,
-  digest and outcome without credential/config contents;
+- add an owner-restricted host-local activation/recovery control record, outside
+  database backup, with monotonic control/recovery epoch and closed/pending/active
+  state, in an operator-managed persistent path/volume rather than the existing
+  temporary supervisor lock/status directory; expose mutation only through a
+  privileged deployment-operator channel, never browser or service HTTP, and audit
+  generation/digest/outcome without credential/config contents;
 - implement the activation read/write barrier and record the exact request
   authorization linearization point; fail closed across crash windows rather than
   claiming one transaction spans filesystem and database;
+- reject direct old-generation activation and generation/epoch decrease; a
+  configuration rollback is a new higher generation that preserves revocation
+  tombstones and cannot restore authority without a new audited decision;
+- enforce `decision.issuer_principal_id != request.subject_principal_id` in the
+  decision transaction with no static-policy or meta-grant exception;
 - register fixed owner/action/resource builders; reject unknown namespaces and all
   wildcard/prefix forms;
 - make current authorization read the PostgreSQL effective projection on every
@@ -83,15 +91,30 @@ the current highest migration only in a separately authorized implementation:
   credential/session indexes;
 - `authorization_admin.authority_generation_activations`, grant requests,
   immutable request members, continuation offers/consumption hashes, decisions,
-  individual grants, revocations, idempotency claims, and current-effective
-  projection;
+  individual grants, revocations/tombstones, recovery records and grant quarantine,
+  idempotency claims, and current-effective projection;
 - scoped keys/FKs, positive aggregate versions, canonical payload digests, bounded
   reason fields, and expiry indexes;
 - no credential, cookie, CSRF token, private content, raw provider/model payload,
   or arbitrary policy document.
 
-The migration must be atomic and rollback-safe. It must not change migrations
-0001–0017, current domain tables, public CRDs, or the Kubernetes API group.
+The migration must be additive and atomic. It must not change migrations 0001–0017,
+current domain tables, public CRDs, or the Kubernetes API group. Before rollout,
+compatibility tests must prove whether the prior application can safely ignore the
+new schema while still honoring generation/recovery epochs and revocations. After
+the new schema contains writes, destructive down migration is prohibited as a
+normal rollback. A compatible prior application may be redeployed without deleting
+facts; otherwise protected entries remain closed while a forward fix is delivered.
+
+A controlled database restore increments and closes the independent host recovery
+epoch before attachment. Reconciliation invalidates all restored sessions and
+continuations, removes every restored dynamic grant from the effective projection,
+records the new database recovery epoch, and requires a higher/current static
+generation with preserved tombstones. Reopening requires explicit operator
+activation with an exact host/database epoch and digest match. Old dynamic grants
+are not reactivated; any later authorization uses a new request/decision and audit
+link. The implementation does not claim detection of an uncontrolled rollback or
+cross-host coordination.
 
 ### Tests
 
@@ -105,9 +128,17 @@ The migration must be atomic and rollback-safe. It must not change migrations
 - grant request/decision/rejection/revoke/surrender, exact matching, no wildcard,
   static-only meta-grant enforcement, service-only/browser source separation, CAS,
   replay conflict and fault-injected atomicity;
+- issuer-equals-subject decisions fail with zero decision/grant writes even when
+  the issuer holds a valid meta-grant; no static exception is accepted;
 - immutable-file/active-generation failure injection before and after each
   activation step, including credential-wide session revocation and restart from
   the exact committed digest;
+- old-generation activation, epoch decrease and tombstone-removing rollback fail;
+  higher-generation configuration rollback does not revive revoked authority;
+- compatible old-application start preserves facts and enforcement; incompatible
+  application/schema rollback remains closed and uses a forward fix;
+- a restored database starts closed under the independent host epoch; restored
+  sessions/continuations fail and dynamic grants remain quarantined after reopen;
 - creator/approver/executor subject-bound continuation retrieval, transfer denial,
   one-winner atomic consumption and same-idempotency recovery;
 - fault-injected domain-commit/offer-mint response loss proves same-key recovery
@@ -176,9 +207,21 @@ Use product API unless separately accepted.
   held until that exit;
 - bind internal APIs to the private listener/service and enforce ingress plus
   NetworkPolicy/firewall denial from browser-reachable networks;
-- in Kubernetes, expose only the public port through public Service/Ingress; use a
-  distinct ClusterIP Service for the private port with default-deny ingress and
-  allow only named service accounts/pod selectors that need the service contract;
+- in Kubernetes, expose only the public port through public Service/Ingress and use
+  a distinct ClusterIP Service for the private port;
+- make the cluster/deployment operator the only writer of the protected namespace,
+  namespace/workload trust labels, allowlisted ServiceAccounts, NetworkPolicies and
+  workload specifications; RBAC denies ordinary callers create/patch authority for
+  Pods, workload controllers, ServiceAccounts, RoleBindings, Services,
+  NetworkPolicies and those namespace labels;
+- add native `ValidatingAdmissionPolicy`/binding, or a separately approved
+  equivalent when unavailable, that accepts the private-client label only for the
+  closed namespace/workload/service-account tuple and rejects label copying, wrong
+  service account and unapproved workload identity;
+- apply default-deny private ingress and a standard selector-based NetworkPolicy
+  allow rule for only the operator-controlled namespace/pod labels. Treat the
+  service-account name as an admission-validated attribute, not as a NetworkPolicy
+  authenticator; do not assume a new CNI;
 - explicitly deny `/api/internal/*` and the backend internal port at public ingress;
 - configure exact Origin/Host allowlists, request-size limits, timeouts, secure
   response headers, and credential/session/CSRF redaction;
@@ -188,10 +231,11 @@ Use product API unless separately accepted.
   do not introduce a second execution process or cross-host claim.
 
 Startup validation proves only bound addresses/ports, route inventories, one child
-and local readiness. Deployment acceptance must separately prove the applied
-network boundary from an independent browser-network client. Configuration text,
-loopback binding and BFF header stripping are not evidence that isolation is in
-force.
+and local readiness. Deployment acceptance must separately prove the applied trust
+chain: RBAC-controlled writers → admission-enforced workload/service-account/label
+tuple → NetworkPolicy packet selector → private HTTP Bearer/exact-grant check.
+Configuration text, loopback binding and BFF header stripping are not evidence that
+isolation is in force.
 
 ### Tests
 
@@ -201,6 +245,9 @@ force.
   headers rejected;
 - direct public/internal port and `/api/internal/*` bypass tests from the browser
   network;
+- ordinary RBAC subject cannot create/patch the trusted namespace, labels,
+  ServiceAccount or workload; admission rejects forged labels, wrong service
+  account and unapproved workloads; such Pods cannot reach the private listener;
 - one supervised child PID/worker; either-listener startup/exit failure closes
   both; existing supervisor-loss and confirmed-child-exit ownership stays intact;
 - old header-bearing endpoints cannot access the same protected fact through any
@@ -267,29 +314,47 @@ not claim the 299 Workbench is delivered. Do not run unrelated live-service test
 
 ## 6. Human choices and existing gates
 
+### A. Architecture decisions
+
 Architecture acceptance must accept or revise:
 
 - BFF rather than authenticated ingress for the bounded first delivery;
 - Browser Session Authority and Grant Administration Authority ownership;
 - PostgreSQL schemas, immutable static-generation activation and per-subject
   owner-minted continuation model;
+- higher-generation-only configuration rollback, revocation tombstone retention,
+  non-destructive application/schema compatibility, and closed-by-default database
+  restore using a host-local recovery epoch outside database backup;
+- invariant `decision issuer != request subject`, with no static or meta-grant
+  exception, while not requiring different humans for business Plan preparation
+  and approval;
 - per-user bootstrap credential limitation and initial administrator model;
-- single-child dual-listener topology and deployment-proven network cutoff as a
-  release-blocking constraint;
+- single-child dual-listener topology and the RBAC → admission → NetworkPolicy →
+  private HTTP authorization trust chain as a deployment-proven cutoff;
 - candidate lifecycle recommendations: 5-minute login nonce; at-least-256-bit,
   at-most-30-day bootstrap credential; 30-minute idle/8-hour absolute session; and
   10-minute CSRF/continuation. These remain recommendations until accepted.
 
 The existing implementation authorization, architecture-conflict stop, PR
 acceptance and persistent-integration gates remain. They do not multiply into a
-new Human start approval for each of I1, I2 and I3. Before an actual deployment or
-persistent integration, Human must supply or approve the environment-specific
-choices that cannot be inferred from the candidate:
+new Human start approval for each of I1, I2 and I3.
 
-- named identities/administrators, credential delivery and rotation runbook;
+### B. Environment and operator configuration
+
+Before an actual deployment or persistent integration, Human must supply or
+approve the environment-specific choices that instantiate, but do not redefine,
+the accepted A decisions:
+
+- named identities/administrators, deployment operator and permitted private-client
+  workloads/service accounts; credential delivery and rotation runbook;
 - accepted cookie/session/CSRF/continuation lifetimes, allowed hosts/origins,
-  Secret References, ingress and NetworkPolicy manifests;
-- migration execution, rollback plan, evidence environment, and acceptance result.
+  Secret References, ports, namespace/label values, ingress/admission/NetworkPolicy
+  manifests;
+- migration execution window, exact backup identity, recovery-control location,
+  evidence environment and acceptance result. These parameters cannot choose a
+  destructive downgrade or authority-revival behavior forbidden by A.
 
-Enterprise IdP/SSO, two-person administration, cross-host HA, Evidence content,
-and complete Resource Use product APIs remain separately gated future work.
+Enterprise IdP/SSO, requiring separate administrators for continuation assignment
+and grant decision, cross-host HA, Evidence content, and complete Resource Use
+product APIs remain separately gated future work. None relaxes the current
+issuer/subject inequality or dynamic-meta-grant prohibition.
