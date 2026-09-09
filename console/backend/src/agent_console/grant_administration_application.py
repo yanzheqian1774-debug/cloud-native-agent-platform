@@ -19,6 +19,7 @@ from agent_console.authority_contracts import (
     BrowserSessionRepository,
     ContinuationClaim,
     ContinuationOwner,
+    CredentialId,
     CurrentAuthorizationReader,
     DynamicAuthorizationState,
     ExactGrant,
@@ -134,6 +135,23 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             recovery_epoch=recovery_epoch,
         )
 
+    def read_linearized_authorization_state(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+    ) -> tuple[CredentialId | None, DynamicAuthorizationState]:
+        return self.dynamic.read_linearized_authorization_state(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+        )
+
     def has_current_grant(
         self,
         context: TrustedRequestContext,
@@ -148,8 +166,12 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             or recovery_epoch != self.recovery_epoch
         ):
             return False
-        credential_id = self.sessions.current_credential_id(
-            context, now=now, recovery_epoch=recovery_epoch
+        credential_id, dynamic_state = self.read_linearized_authorization_state(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
         )
         credential = (
             self.generation.credential_by_id(credential_id)
@@ -170,13 +192,6 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             or now >= credential.expires_at
         ):
             return False
-        dynamic_state = self.dynamic.read_dynamic_authorization_state(
-            context,
-            grant,
-            now=now,
-            generation=generation,
-            recovery_epoch=recovery_epoch,
-        )
         if dynamic_state in {
             DynamicAuthorizationState.REVOKED,
             DynamicAuthorizationState.UNAVAILABLE,

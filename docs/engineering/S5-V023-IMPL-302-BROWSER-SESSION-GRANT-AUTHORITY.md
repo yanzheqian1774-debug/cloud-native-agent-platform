@@ -29,13 +29,34 @@ credential removal plus derived-session revocation commits with generation
 activation. Session and dynamic-grant revocations remain PostgreSQL-only
 linearization points.
 
+For browser authorization, session currentness and dynamic grant/revocation state
+are read through one PostgreSQL connection and one `REPEATABLE READ` transaction.
+The first session query establishes the snapshot; the grant projection and all
+grant-revocation facts are evaluated from that same snapshot. The authorization
+read therefore linearizes at snapshot establishment: a concurrent change is
+ordered either wholly before that snapshot or after it, rather than combining a
+pre-revocation session with a post-revocation grant.
+
 The owner-only host control record is independent of database backup and the
 existing supervisor temporary state. Missing, malformed, stale, non-owner-only or
 database/generation/recovery-mismatched records close protected readiness.
 Controlled restore increments the recovery epoch, revokes restored sessions and
 continuations, removes restored grants from the effective projection, and
-requires explicit operator completion. It does not claim to detect an arbitrary
-uncontrolled database rollback.
+requires explicit operator completion. Recovery terminates every pre-recovery
+`PENDING` request in place and records a distinct
+`GRANT_REQUEST_RECOVERY_TERMINATED` audit fact; it does not create a Human/admin
+grant decision or delete the historical request. Submit and decision command
+claims are recovery-epoch namespaced, and both operations lock and verify the
+database's current active recovery epoch inside their write transaction before
+claiming or mutating. A `RECOVERY_CLOSED` epoch rejects both operations until
+explicit completion. It does not claim to detect an arbitrary uncontrolled
+database rollback.
+
+Generation activation remains fail closed across the host-pending, PostgreSQL
+commit, in-memory publish and host-active sequence. Retrying the identical
+candidate can finish a host `ACTIVE` write that failed after publication;
+retrying with a later control epoch can also finish publication after the
+PostgreSQL commit succeeded.
 
 ## Migration
 
@@ -94,6 +115,12 @@ domain call. It must:
 - implement the accepted dual-listener/static-route bootstrap without creating a
   second Execution owner or altering current service-only Bearer behavior.
 
+The I1 consistent-snapshot read proves only the session/dynamic-authorization
+decision at that read's linearization point. I2 must still couple that decision
+to each owner write, lookup or dispatch with the accepted transaction/barrier
+integration; an I1 allow result alone is not a complete business-operation
+authorization closure.
+
 I3 must provide the accepted RBAC/admission/NetworkPolicy/browser-network proof.
 Until I2 and I3 pass, the public BFF stays disabled, browser authentication is not
 available, and IMPL-299 is not unblocked.
@@ -123,7 +150,7 @@ dedicated step if pytest reports any skipped test.
 Local candidate validation on 2026-09-09 used a Session-labelled PostgreSQL 15
 container and disposable root databases:
 
-- complete I1 PostgreSQL selection: 8 passed, zero skipped;
-- remaining three 302 test paths: 10 passed;
-- `make check` with I1 enabled: Ruff and format passed; 1574 tests passed and
+- complete I1 PostgreSQL selection: 13 passed, zero skipped;
+- remaining three 302 test paths: 12 passed;
+- `make check` with I1 enabled: Ruff and format passed; 1581 tests passed and
   110 unrelated environment-dependent tests skipped.

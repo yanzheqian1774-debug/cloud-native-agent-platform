@@ -154,8 +154,46 @@ class AuthorityGenerationController:
         now: datetime,
     ) -> AuthorityReadiness:
         current = self.barrier.snapshot
-        if candidate.generation <= current.generation:
+        same_published_candidate = (
+            candidate.generation == current.generation
+            and candidate.digest == current.digest
+        )
+        if candidate.generation < current.generation or (
+            candidate.generation == current.generation and not same_published_candidate
+        ):
             raise AuthorityError("AUTHORITY_GENERATION_STALE")
+        candidate_identity = (
+            candidate.generation,
+            candidate.digest,
+            self.readiness.recovery_epoch,
+        )
+        pending_retry = False
+        pending_control_epoch = control_epoch
+        active_operator_id = operator_id
+        if same_published_candidate:
+            committed = self.repository.active_generation()
+            record = self.control.read()
+            record_matches = (
+                record.database_fingerprint == self.readiness.database_fingerprint
+                and record.recovery_epoch == self.readiness.recovery_epoch
+                and record.generation == candidate.generation
+                and record.generation_digest == candidate.digest
+            )
+            if committed != candidate_identity or not record_matches:
+                raise AuthorityError("AUTHORITY_GENERATION_STALE")
+            if record.state is ControlState.ACTIVE:
+                self.readiness = AuthorityReadiness(
+                    candidate.generation,
+                    candidate.digest,
+                    self.readiness.recovery_epoch,
+                    self.readiness.database_fingerprint,
+                )
+                return self.readiness
+            if record.state is not ControlState.ACTIVATION_PENDING:
+                raise AuthorityError("AUTHORITY_GENERATION_STALE")
+            pending_retry = True
+            pending_control_epoch = record.control_epoch
+            active_operator_id = record.operator_id
         if not current.credential_revocation_tombstones <= (
             candidate.credential_revocation_tombstones
         ):
@@ -189,22 +227,18 @@ class AuthorityGenerationController:
             | removed_credentials
         )
         with self.barrier.write():
-            pending = HostControlRecord(
-                control_epoch=control_epoch,
-                recovery_epoch=self.readiness.recovery_epoch,
-                state=ControlState.ACTIVATION_PENDING,
-                database_fingerprint=self.readiness.database_fingerprint,
-                generation=candidate.generation,
-                generation_digest=candidate.digest,
-                operator_id=operator_id,
-            )
-            self.control.replace(pending)
+            if not pending_retry:
+                pending = HostControlRecord(
+                    control_epoch=control_epoch,
+                    recovery_epoch=self.readiness.recovery_epoch,
+                    state=ControlState.ACTIVATION_PENDING,
+                    database_fingerprint=self.readiness.database_fingerprint,
+                    generation=candidate.generation,
+                    generation_digest=candidate.digest,
+                    operator_id=operator_id,
+                )
+                self.control.replace(pending)
             committed = self.repository.active_generation()
-            candidate_identity = (
-                candidate.generation,
-                candidate.digest,
-                self.readiness.recovery_epoch,
-            )
             if committed != candidate_identity:
                 self.repository.activate_generation(
                     candidate.generation,
@@ -216,13 +250,13 @@ class AuthorityGenerationController:
                 )
             self.barrier.publish(candidate)
             active = HostControlRecord(
-                control_epoch=control_epoch + 1,
+                control_epoch=max(control_epoch, pending_control_epoch) + 1,
                 recovery_epoch=self.readiness.recovery_epoch,
                 state=ControlState.ACTIVE,
                 database_fingerprint=self.readiness.database_fingerprint,
                 generation=candidate.generation,
                 generation_digest=candidate.digest,
-                operator_id=operator_id,
+                operator_id=active_operator_id,
             )
             self.control.replace(active)
             self.readiness = AuthorityReadiness(

@@ -286,8 +286,8 @@ class GrantAdministrationRepository(Protocol):
         idempotency_key: str,
         payload_digest: str,
         target_validation: Callable[[object], bool],
+        recovery_epoch: int,
         continuation_digest: str | None = None,
-        recovery_epoch: int | None = None,
     ) -> GrantRequest: ...
 
     def decide_request(
@@ -314,6 +314,16 @@ class GrantAdministrationRepository(Protocol):
 
 
 class CurrentAuthorizationReader(Protocol):
+    def read_linearized_authorization_state(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+    ) -> tuple[CredentialId | None, DynamicAuthorizationState]: ...
+
     def read_dynamic_authorization_state(
         self,
         context: TrustedRequestContext,

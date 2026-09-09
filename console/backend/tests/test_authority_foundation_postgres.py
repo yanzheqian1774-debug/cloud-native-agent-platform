@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier, Event
 
 import psycopg
 import pytest
@@ -350,12 +351,21 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
         GrantRequestStatus.PENDING,
         now,
     )
+    repository.activate_generation(
+        1,
+        "a" * 64,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
     submitted = repository.submit_request(
         request,
         actor_id="human:alice",
         idempotency_key="request-key",
         payload_digest="1" * 64,
         target_validation=lambda _: True,
+        recovery_epoch=1,
     )
     replay = repository.submit_request(
         GrantRequest(
@@ -371,6 +381,7 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
         idempotency_key="request-key",
         payload_digest="1" * 64,
         target_validation=lambda _: True,
+        recovery_epoch=1,
     )
     assert replay.request_id == submitted.request_id
     with pytest.raises(AuthorityError, match="IDEMPOTENCY_PAYLOAD_MISMATCH"):
@@ -380,6 +391,7 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
             idempotency_key="request-key",
             payload_digest="2" * 64,
             target_validation=lambda _: True,
+            recovery_epoch=1,
         )
 
     def submit_competing(value: int) -> str:
@@ -398,6 +410,7 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
                 idempotency_key="concurrent-request-key",
                 payload_digest=str(value) * 64,
                 target_validation=lambda _: True,
+                recovery_epoch=1,
             ).request_id
         except AuthorityError as exc:
             return exc.reason_code
@@ -441,14 +454,6 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
             is GrantRequestStatus.PENDING
         )
 
-    repository.activate_generation(
-        1,
-        "a" * 64,
-        1,
-        operator_id="operator:test",
-        revoked_credentials=(),
-        now=now,
-    )
     decision = GrantDecision(
         "decision-1",
         request.request_id,
@@ -767,6 +772,7 @@ def test_recovery_epoch_invalidates_sessions_continuations_and_effective_grants(
         idempotency_key="recovery-request",
         payload_digest="1" * 64,
         target_validation=lambda _: True,
+        recovery_epoch=1,
     )
     decision = GrantDecision(
         "recovery-decision",
@@ -855,4 +861,702 @@ def test_recovery_epoch_invalidates_sessions_continuations_and_effective_grants(
         generation_digest="a" * 64,
         operator_id="operator:test",
         now=now + timedelta(minutes=2),
+    )
+
+
+def test_linearized_browser_authorization_orders_session_and_grant_changes(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:linearized")
+    generation = StaticAuthorityGeneration(
+        1,
+        "a" * 64,
+        "policy-1",
+        "test",
+        (
+            CredentialConfiguration(
+                CredentialId("credential-alice"),
+                "7" * 64,
+                "human:alice",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.BROWSER_BOOTSTRAP,
+                (),
+            ),
+        ),
+        (),
+        frozenset(),
+    )
+    repository.activate_generation(
+        1,
+        generation.digest,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    first_session = session(now, "linearized-first")
+    repository.create_session(first_session, hashlib.sha256(b"first").hexdigest())
+    request = GrantRequest(
+        "linearized-request",
+        "human:alice",
+        scope,
+        (member,),
+        "CONTINUE_PROBLEM_PLAN",
+        GrantRequestStatus.PENDING,
+        now,
+    )
+    repository.submit_request(
+        request,
+        actor_id="human:alice",
+        idempotency_key="linearized-request",
+        payload_digest="1" * 64,
+        target_validation=lambda _: True,
+        recovery_epoch=1,
+    )
+    reader = GenerationAuthorizationReader(
+        generation, repository, repository, recovery_epoch=1
+    )
+    entered = Event()
+    release = Event()
+
+    def checkpoint() -> None:
+        entered.set()
+        assert release.wait(timeout=10)
+
+    repository._authorization_read_checkpoint = checkpoint
+    first_context = TrustedRequestContext(
+        "human:alice",
+        scope,
+        first_session.session_id,
+        AuthenticationSource.BROWSER_SESSION,
+        "policy-1",
+    )
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(
+            reader.has_current_grant,
+            first_context,
+            member,
+            now=now,
+            generation=1,
+            recovery_epoch=1,
+        )
+        assert entered.wait(timeout=10)
+        assert repository.revoke_session(
+            first_session.session_id,
+            reason="SESSION_REVOKED",
+            actor_id="human:alice",
+            now=now + timedelta(seconds=1),
+        )
+        repository.decide_request(
+            GrantDecision(
+                "linearized-decision",
+                request.request_id,
+                "human:admin",
+                "meta-admin",
+                True,
+                "ASSIGNED_DUTY",
+                "TICKET",
+                "2" * 64,
+                "policy-1",
+                "test",
+                now + timedelta(seconds=1),
+            ),
+            grants=(
+                (
+                    GrantId("linearized-grant"),
+                    member,
+                    now,
+                    now + timedelta(hours=1),
+                ),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="linearized-decision",
+            payload_digest="3" * 64,
+            recovery_epoch=1,
+        )
+        release.set()
+        assert result.result(timeout=10) is False
+
+    second_session = session(now, "linearized-second")
+    repository.create_session(second_session, hashlib.sha256(b"second").hexdigest())
+    second_context = replace(
+        first_context, session_id_or_service_credential_id=second_session.session_id
+    )
+    entered.clear()
+    release.clear()
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(
+            reader.has_current_grant,
+            second_context,
+            member,
+            now=now + timedelta(seconds=2),
+            generation=1,
+            recovery_epoch=1,
+        )
+        assert entered.wait(timeout=10)
+        assert repository.revoke_session(
+            second_session.session_id,
+            reason="SESSION_REVOKED",
+            actor_id="human:alice",
+            now=now + timedelta(seconds=3),
+        )
+        release.set()
+        assert result.result(timeout=10) is True
+    repository._authorization_read_checkpoint = lambda: None
+    assert not reader.has_current_grant(
+        second_context,
+        member,
+        now=now + timedelta(seconds=4),
+        generation=1,
+        recovery_epoch=1,
+    )
+    third_session = session(now, "linearized-third")
+    repository.create_session(third_session, hashlib.sha256(b"third").hexdigest())
+    third_context = replace(
+        first_context, session_id_or_service_credential_id=third_session.session_id
+    )
+    entered.clear()
+    release.clear()
+    repository._authorization_read_checkpoint = checkpoint
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(
+            reader.has_current_grant,
+            third_context,
+            member,
+            now=now + timedelta(seconds=5),
+            generation=1,
+            recovery_epoch=1,
+        )
+        assert entered.wait(timeout=10)
+        assert repository.revoke_grant(
+            GrantId("linearized-grant"),
+            actor_id="human:admin",
+            reason="DUTY_ENDED",
+            idempotency_key="linearized-revoke",
+            payload_digest="4" * 64,
+            now=now + timedelta(seconds=6),
+        )
+        release.set()
+        assert result.result(timeout=10) is True
+    repository._authorization_read_checkpoint = lambda: None
+    assert not reader.has_current_grant(
+        third_context,
+        member,
+        now=now + timedelta(seconds=7),
+        generation=1,
+        recovery_epoch=1,
+    )
+
+
+def test_browser_cannot_use_service_only_authority(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:service-only")
+    generation = StaticAuthorityGeneration(
+        1,
+        "a" * 64,
+        "policy-1",
+        "test",
+        (
+            CredentialConfiguration(
+                CredentialId("credential-alice"),
+                "7" * 64,
+                "human:alice",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.SERVICE_ONLY,
+                (StaticGrant(member, GrantSource.SERVICE_ONLY),),
+            ),
+        ),
+        (),
+        frozenset(),
+    )
+    repository.activate_generation(
+        1,
+        generation.digest,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    browser = session(now, "service-only")
+    repository.create_session(browser, hashlib.sha256(b"service-only").hexdigest())
+    context = TrustedRequestContext(
+        "human:alice",
+        scope,
+        browser.session_id,
+        AuthenticationSource.BROWSER_SESSION,
+        "policy-1",
+    )
+    assert not GenerationAuthorizationReader(
+        generation, repository, repository, recovery_epoch=1
+    ).has_current_grant(context, member, now=now, generation=1, recovery_epoch=1)
+
+
+def test_same_continuation_has_one_concurrent_consumer(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:concurrent")
+    generation = StaticAuthorityGeneration(
+        1,
+        "a" * 64,
+        "policy-1",
+        "test",
+        (),
+        (
+            RequestabilityRule(
+                member.owner,
+                member.action,
+                "business-problem:",
+                "CONTINUE_PROBLEM_PLAN",
+            ),
+        ),
+        frozenset(),
+    )
+    repository.activate_generation(
+        1,
+        generation.digest,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    claim = ContinuationClaim(
+        "concurrent-offer",
+        "human:alice",
+        scope,
+        "CONTINUE_PROBLEM_PLAN",
+        (member,),
+        "problem:revision",
+        "revision",
+        1,
+        now,
+        now + timedelta(minutes=10),
+    )
+    digest = "4" * 64
+    repository.store_continuation_offer(
+        claim,
+        continuation_digest=digest,
+        issuer_actor_id="human:admin",
+        mint_key="concurrent-offer",
+        mint_payload_digest="5" * 64,
+        recovery_epoch=1,
+    )
+    start = Barrier(3)
+
+    def consume(number: int) -> str:
+        start.wait(timeout=10)
+        try:
+            return repository.submit_request(
+                GrantRequest(
+                    f"concurrent-continuation-request-{number}",
+                    "human:alice",
+                    scope,
+                    (member,),
+                    "CONTINUE_PROBLEM_PLAN",
+                    GrantRequestStatus.PENDING,
+                    now,
+                ),
+                actor_id="human:alice",
+                idempotency_key=f"concurrent-continuation-{number}",
+                payload_digest=str(number) * 64,
+                target_validation=lambda _: True,
+                continuation_digest=digest,
+                recovery_epoch=1,
+            ).request_id
+        except AuthorityError as exc:
+            return exc.reason_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(consume, number) for number in (6, 7)]
+        start.wait(timeout=10)
+        results = [future.result(timeout=10) for future in futures]
+    assert results.count("CONTINUATION_INVALID") == 1
+    assert (
+        sum(value.startswith("concurrent-continuation-request-") for value in results)
+        == 1
+    )
+
+
+def test_recovery_terminates_old_requests_and_namespaces_commands(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:recovery")
+    repository.activate_generation(
+        1,
+        "a" * 64,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    pending = GrantRequest(
+        "pre-recovery-pending",
+        "human:alice",
+        scope,
+        (member,),
+        "CONTINUE_PROBLEM_PLAN",
+        GrantRequestStatus.PENDING,
+        now,
+    )
+    repository.submit_request(
+        pending,
+        actor_id="human:alice",
+        idempotency_key="pending-command",
+        payload_digest="1" * 64,
+        target_validation=lambda _: True,
+        recovery_epoch=1,
+    )
+    decided = replace(pending, request_id="pre-recovery-decided")
+    repository.submit_request(
+        decided,
+        actor_id="human:alice",
+        idempotency_key="decided-command",
+        payload_digest="2" * 64,
+        target_validation=lambda _: True,
+        recovery_epoch=1,
+    )
+    old_decision = GrantDecision(
+        "pre-recovery-decision",
+        decided.request_id,
+        "human:admin",
+        "meta-admin",
+        True,
+        "ASSIGNED_DUTY",
+        "TICKET",
+        "3" * 64,
+        "policy-1",
+        "test",
+        now,
+    )
+    repository.decide_request(
+        old_decision,
+        grants=(
+            (GrantId("pre-recovery-grant"), member, now, now + timedelta(hours=1)),
+        ),
+        expected_status=GrantRequestStatus.PENDING,
+        idempotency_key="old-decision-command",
+        payload_digest="4" * 64,
+        recovery_epoch=1,
+    )
+    repository.reconcile_recovery(
+        recovery_epoch=2,
+        database_fingerprint="database-restored",
+        generation=1,
+        generation_digest="a" * 64,
+        migration_version=18,
+        operator_id="operator:recovery",
+        audit_continuity_digest="5" * 64,
+        now=now + timedelta(minutes=1),
+    )
+    assert (
+        repository.inspect_request(pending.request_id).status
+        is GrantRequestStatus.REJECTED
+    )
+    with repository.pool.connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) AS count FROM authorization_admin.grant_decisions "
+                "WHERE request_id=%s",
+                (pending.request_id,),
+            ).fetchone()["count"]
+            == 0
+        )
+        recovery_audit = connection.execute(
+            "SELECT event_type,actor_id,outcome,reason_category,recovery_epoch FROM "
+            "authorization_admin.audit_events WHERE subject_id=%s",
+            (pending.subject_principal_id,),
+        ).fetchall()
+    assert {
+        "event_type": "GRANT_REQUEST_RECOVERY_TERMINATED",
+        "actor_id": "operator:recovery",
+        "outcome": "TERMINATED",
+        "reason_category": "DATABASE_RECOVERY",
+        "recovery_epoch": 2,
+    } in recovery_audit
+    with pytest.raises(AuthorityError, match="AUTHORITY_RECOVERY_REQUIRED"):
+        repository.submit_request(
+            replace(pending, request_id="closed-recovery-request"),
+            actor_id="human:alice",
+            idempotency_key="pending-command",
+            payload_digest="1" * 64,
+            target_validation=lambda _: True,
+            recovery_epoch=2,
+        )
+    repository.complete_recovery(
+        recovery_epoch=2,
+        generation=1,
+        generation_digest="a" * 64,
+        operator_id="operator:recovery",
+        now=now + timedelta(minutes=2),
+    )
+    with pytest.raises(AuthorityError, match="AUTHORITY_RECOVERY_REQUIRED"):
+        repository.decide_request(
+            replace(old_decision, decision_id="stale-epoch-decision"),
+            grants=(
+                (
+                    GrantId("stale-epoch-grant"),
+                    member,
+                    now,
+                    now + timedelta(hours=1),
+                ),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="stale-epoch-decision",
+            payload_digest="6" * 64,
+            recovery_epoch=1,
+        )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_STATE_STALE"):
+        repository.decide_request(
+            replace(
+                old_decision,
+                decision_id="terminated-request-decision",
+                request_id=pending.request_id,
+            ),
+            grants=(
+                (
+                    GrantId("terminated-request-grant"),
+                    member,
+                    now,
+                    now + timedelta(hours=1),
+                ),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="terminated-request-decision",
+            payload_digest="6" * 64,
+            recovery_epoch=2,
+        )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_STATE_STALE"):
+        repository.decide_request(
+            old_decision,
+            grants=(
+                (GrantId("replayed-grant"), member, now, now + timedelta(hours=1)),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="old-decision-command",
+            payload_digest="4" * 64,
+            recovery_epoch=2,
+        )
+    new_request = replace(
+        pending,
+        request_id="post-recovery-request",
+        created_at=now + timedelta(minutes=2),
+    )
+    assert (
+        repository.submit_request(
+            new_request,
+            actor_id="human:alice",
+            idempotency_key="pending-command",
+            payload_digest="1" * 64,
+            target_validation=lambda _: True,
+            recovery_epoch=2,
+        ).request_id
+        == new_request.request_id
+    )
+    new_decision = replace(
+        old_decision,
+        decision_id="post-recovery-decision",
+        request_id=new_request.request_id,
+        basis_reference_digest="5" * 64,
+        created_at=now + timedelta(minutes=2),
+    )
+    assert (
+        repository.decide_request(
+            new_decision,
+            grants=(
+                (
+                    GrantId("post-recovery-grant"),
+                    member,
+                    now + timedelta(minutes=2),
+                    now + timedelta(hours=1),
+                ),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="post-recovery-decision",
+            payload_digest="7" * 64,
+            recovery_epoch=2,
+        ).decision_id
+        == new_decision.decision_id
+    )
+    with repository.pool.connection() as connection:
+        submitted_epoch = connection.execute(
+            "SELECT recovery_epoch FROM authorization_admin.audit_events "
+            "WHERE event_type='GRANT_REQUEST_SUBMITTED' AND subject_id=%s "
+            "ORDER BY occurred_at DESC LIMIT 1",
+            (new_request.subject_principal_id,),
+        ).fetchone()["recovery_epoch"]
+    assert submitted_epoch == 2
+
+
+def test_recovery_and_decision_follow_active_epoch_lock_order(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:race")
+    repository.activate_generation(
+        1,
+        "a" * 64,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+
+    def submit(request_id: str, command: str, epoch: int) -> GrantRequest:
+        request = GrantRequest(
+            request_id,
+            "human:alice",
+            scope,
+            (member,),
+            "CONTINUE_PROBLEM_PLAN",
+            GrantRequestStatus.PENDING,
+            now,
+        )
+        return repository.submit_request(
+            request,
+            actor_id="human:alice",
+            idempotency_key=command,
+            payload_digest=hashlib.sha256(command.encode()).hexdigest(),
+            target_validation=lambda _: True,
+            recovery_epoch=epoch,
+        )
+
+    first = submit("decision-first-request", "decision-first-submit", 1)
+    decision_locked = Event()
+    release_decision = Event()
+
+    def decision_checkpoint() -> None:
+        decision_locked.set()
+        assert release_decision.wait(timeout=10)
+
+    repository._decision_request_locked_checkpoint = decision_checkpoint
+    first_decision = GrantDecision(
+        "decision-first",
+        first.request_id,
+        "human:admin",
+        "meta-admin",
+        True,
+        "ASSIGNED_DUTY",
+        "TICKET",
+        "1" * 64,
+        "policy-1",
+        "test",
+        now,
+    )
+
+    def decide_first() -> GrantDecision:
+        return repository.decide_request(
+            first_decision,
+            grants=(
+                (
+                    GrantId("decision-first-grant"),
+                    member,
+                    now,
+                    now + timedelta(hours=1),
+                ),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="decision-first",
+            payload_digest="2" * 64,
+            recovery_epoch=1,
+        )
+
+    recovery_started = Event()
+
+    def recover(epoch: int) -> None:
+        recovery_started.set()
+        repository.reconcile_recovery(
+            recovery_epoch=epoch,
+            database_fingerprint=f"database-restored-{epoch}",
+            generation=1,
+            generation_digest="a" * 64,
+            migration_version=18,
+            operator_id="operator:recovery",
+            audit_continuity_digest=str(epoch) * 64,
+            now=now + timedelta(minutes=epoch),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        decision_future = executor.submit(decide_first)
+        assert decision_locked.wait(timeout=10)
+        recovery_future = executor.submit(recover, 2)
+        assert recovery_started.wait(timeout=10)
+        release_decision.set()
+        assert (
+            decision_future.result(timeout=10).decision_id == first_decision.decision_id
+        )
+        recovery_future.result(timeout=10)
+    repository._decision_request_locked_checkpoint = lambda: None
+    assert (
+        repository.inspect_request(first.request_id).status
+        is GrantRequestStatus.APPROVED
+    )
+    repository.complete_recovery(
+        recovery_epoch=2,
+        generation=1,
+        generation_digest="a" * 64,
+        operator_id="operator:recovery",
+        now=now + timedelta(minutes=3),
+    )
+
+    second = submit("recovery-first-request", "recovery-first-submit", 2)
+    recovery_locked = Event()
+    release_recovery = Event()
+
+    def recovery_checkpoint() -> None:
+        recovery_locked.set()
+        assert release_recovery.wait(timeout=10)
+
+    repository._recovery_requests_locked_checkpoint = recovery_checkpoint
+    second_decision = replace(
+        first_decision,
+        decision_id="recovery-first-decision",
+        request_id=second.request_id,
+    )
+
+    def decide_second() -> GrantDecision:
+        return repository.decide_request(
+            second_decision,
+            grants=(
+                (
+                    GrantId("recovery-first-grant"),
+                    member,
+                    now,
+                    now + timedelta(hours=1),
+                ),
+            ),
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="recovery-first-decision",
+            payload_digest="3" * 64,
+            recovery_epoch=2,
+        )
+
+    decision_started = Event()
+
+    def start_second_decision() -> GrantDecision:
+        decision_started.set()
+        return decide_second()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        recovery_future = executor.submit(recover, 3)
+        assert recovery_locked.wait(timeout=10)
+        decision_future = executor.submit(start_second_decision)
+        assert decision_started.wait(timeout=10)
+        release_recovery.set()
+        recovery_future.result(timeout=10)
+        with pytest.raises(AuthorityError, match="AUTHORITY_RECOVERY_REQUIRED"):
+            decision_future.result(timeout=10)
+    assert (
+        repository.inspect_request(second.request_id).status
+        is GrantRequestStatus.REJECTED
     )

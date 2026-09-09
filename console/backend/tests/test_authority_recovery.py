@@ -172,3 +172,124 @@ def test_generation_activation_uses_pending_gate_and_rejects_decrease(
             operator_id="operator:test",
             now=datetime(2029, 1, 1, tzinfo=UTC),
         )
+
+
+class FailOnceActiveControl(HostRecoveryControl):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path)
+        self.failed = False
+
+    def replace(self, value: HostControlRecord) -> None:
+        if (
+            value.generation == 2
+            and value.state is ControlState.ACTIVE
+            and not self.failed
+        ):
+            self.failed = True
+            raise AuthorityError("AUTHORITY_CONTROL_UNAVAILABLE")
+        super().replace(value)
+
+
+class FailOncePublishBarrier(ActivationBarrier):
+    def __init__(self, snapshot: StaticAuthorityGeneration) -> None:
+        super().__init__(snapshot)
+        self.failed = False
+
+    def publish(self, snapshot: StaticAuthorityGeneration) -> None:
+        if not self.failed:
+            self.failed = True
+            raise AuthorityError("AUTHORITY_PUBLISH_FAILED")
+        super().publish(snapshot)
+
+
+def generation_pair() -> tuple[StaticAuthorityGeneration, StaticAuthorityGeneration]:
+    return (
+        StaticAuthorityGeneration(1, "a" * 64, "policy-1", "test", (), (), frozenset()),
+        StaticAuthorityGeneration(2, "b" * 64, "policy-2", "test", (), (), frozenset()),
+    )
+
+
+def initial_control(control: HostRecoveryControl) -> None:
+    control.replace(
+        HostControlRecord(
+            1,
+            1,
+            ControlState.ACTIVE,
+            "database-a",
+            1,
+            "a" * 64,
+            "operator:test",
+        )
+    )
+
+
+def test_generation_retry_recovers_after_publish_then_active_write_failure(
+    tmp_path: Path,
+) -> None:
+    first, second = generation_pair()
+    control = FailOnceActiveControl(tmp_path / "authority-control.json")
+    initial_control(control)
+    repository = MemoryGenerationRepository((1, first.digest, 1))
+    barrier = ActivationBarrier(first)
+    controller = AuthorityGenerationController(
+        barrier,
+        repository,
+        control,
+        AuthorityReadiness(1, first.digest, 1, "database-a"),
+    )
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONTROL_UNAVAILABLE"):
+        controller.activate(
+            second,
+            control_epoch=2,
+            operator_id="operator:test",
+            now=datetime(2029, 1, 1, tzinfo=UTC),
+        )
+    assert barrier.snapshot is second
+    assert repository.active == (2, second.digest, 1)
+    assert control.read().state is ControlState.ACTIVATION_PENDING
+
+    readiness = controller.activate(
+        second,
+        control_epoch=2,
+        operator_id="operator:test",
+        now=datetime(2029, 1, 1, tzinfo=UTC),
+    )
+    assert readiness.generation == 2
+    assert control.read().state is ControlState.ACTIVE
+    assert control.read().control_epoch == 3
+
+
+def test_generation_retry_recovers_after_database_commit_then_publish_failure(
+    tmp_path: Path,
+) -> None:
+    first, second = generation_pair()
+    control = HostRecoveryControl(tmp_path / "authority-control.json")
+    initial_control(control)
+    repository = MemoryGenerationRepository((1, first.digest, 1))
+    barrier = FailOncePublishBarrier(first)
+    controller = AuthorityGenerationController(
+        barrier,
+        repository,
+        control,
+        AuthorityReadiness(1, first.digest, 1, "database-a"),
+    )
+    with pytest.raises(AuthorityError, match="AUTHORITY_PUBLISH_FAILED"):
+        controller.activate(
+            second,
+            control_epoch=2,
+            operator_id="operator:test",
+            now=datetime(2029, 1, 1, tzinfo=UTC),
+        )
+    assert barrier.snapshot is first
+    assert repository.active == (2, second.digest, 1)
+    assert control.read().state is ControlState.ACTIVATION_PENDING
+
+    readiness = controller.activate(
+        second,
+        control_epoch=3,
+        operator_id="operator:test",
+        now=datetime(2029, 1, 1, tzinfo=UTC),
+    )
+    assert readiness.generation == 2
+    assert barrier.snapshot is second
+    assert control.read().state is ControlState.ACTIVE

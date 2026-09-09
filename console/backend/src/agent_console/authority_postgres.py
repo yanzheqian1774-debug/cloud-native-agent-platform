@@ -427,8 +427,9 @@ class PostgresAuthorityRepository:
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
-    def current_credential_id(
-        self,
+    @staticmethod
+    def _current_credential_id(
+        connection,
         context: TrustedRequestContext,
         *,
         now: datetime,
@@ -436,28 +437,77 @@ class PostgresAuthorityRepository:
     ) -> CredentialId | None:
         if context.authentication_source.value == "SERVICE_CREDENTIAL":
             return CredentialId(context.session_id_or_service_credential_id)
+        row = connection.execute(
+            "SELECT s.credential_id FROM browser_identity.sessions s "
+            "LEFT JOIN browser_identity.session_revocation_facts r "
+            "ON r.session_id=s.session_id WHERE s.session_id=%s "
+            "AND s.principal_id=%s AND s.tenant_id=%s AND s.security_domain=%s "
+            "AND r.session_id IS NULL AND s.rotated_to_session_id IS NULL "
+            "AND s.idle_expires_at>%s AND s.absolute_expires_at>%s "
+            "AND s.credential_expires_at>%s AND s.recovery_epoch=%s",
+            (
+                context.session_id_or_service_credential_id,
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                now,
+                now,
+                now,
+                recovery_epoch,
+            ),
+        ).fetchone()
+        return CredentialId(row["credential_id"]) if row else None
+
+    def current_credential_id(
+        self,
+        context: TrustedRequestContext,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+    ) -> CredentialId | None:
         try:
             with self.connection_scope() as connection:
-                row = connection.execute(
-                    "SELECT s.credential_id FROM browser_identity.sessions s "
-                    "LEFT JOIN browser_identity.session_revocation_facts r "
-                    "ON r.session_id=s.session_id WHERE s.session_id=%s "
-                    "AND s.principal_id=%s AND s.tenant_id=%s AND s.security_domain=%s "
-                    "AND r.session_id IS NULL AND s.rotated_to_session_id IS NULL "
-                    "AND s.idle_expires_at>%s AND s.absolute_expires_at>%s "
-                    "AND s.credential_expires_at>%s AND s.recovery_epoch=%s",
-                    (
-                        context.session_id_or_service_credential_id,
-                        context.principal_id,
-                        context.scope.tenant_id,
-                        context.scope.security_domain,
-                        now,
-                        now,
-                        now,
-                        recovery_epoch,
-                    ),
-                ).fetchone()
-                return CredentialId(row["credential_id"]) if row else None
+                return self._current_credential_id(
+                    connection, context, now=now, recovery_epoch=recovery_epoch
+                )
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def _authorization_read_checkpoint(self) -> None:
+        """Test seam after the session read has established the transaction snapshot."""
+
+    def _decision_request_locked_checkpoint(self) -> None:
+        """Test seam after a grant decision locks its request aggregate."""
+
+    def _recovery_requests_locked_checkpoint(self) -> None:
+        """Test seam after recovery locks every pre-recovery pending request."""
+
+    def read_linearized_authorization_state(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+    ) -> tuple[CredentialId | None, DynamicAuthorizationState]:
+        """Read session and grant state from one PostgreSQL repeatable-read snapshot."""
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                credential_id = self._current_credential_id(
+                    connection, context, now=now, recovery_epoch=recovery_epoch
+                )
+                self._authorization_read_checkpoint()
+                dynamic_state = self._read_dynamic_authorization_state(
+                    connection,
+                    context,
+                    grant,
+                    now=now,
+                    generation=generation,
+                    recovery_epoch=recovery_epoch,
+                )
+                return credential_id, dynamic_state
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
@@ -527,6 +577,28 @@ class PostgresAuthorityRepository:
                 json.dumps({"id": result_id}),
             ),
         )
+
+    @staticmethod
+    def _epoch_command_type(command_type: str, recovery_epoch: int) -> str:
+        if recovery_epoch < 1:
+            raise AuthorityError("AUTHORITY_RECOVERY_REQUIRED")
+        return f"{command_type}:RECOVERY_EPOCH:{recovery_epoch}"
+
+    @staticmethod
+    def _require_current_recovery_epoch(connection, recovery_epoch: int) -> None:
+        row = connection.execute(
+            "SELECT a.recovery_epoch,r.state FROM "
+            "authorization_admin.active_generation a LEFT JOIN "
+            "authorization_admin.recovery_records r "
+            "ON r.recovery_epoch=a.recovery_epoch WHERE a.singleton=true "
+            "FOR SHARE OF a"
+        ).fetchone()
+        if (
+            row is None
+            or row["recovery_epoch"] != recovery_epoch
+            or (row["state"] is not None and row["state"] != "ACTIVE")
+        ):
+            raise AuthorityError("AUTHORITY_RECOVERY_REQUIRED")
 
     @staticmethod
     def _request(connection, request_id: str) -> GrantRequest:
@@ -809,8 +881,8 @@ class PostgresAuthorityRepository:
         idempotency_key: str,
         payload_digest: str,
         target_validation: Callable[[object], bool],
+        recovery_epoch: int,
         continuation_digest: str | None = None,
-        recovery_epoch: int | None = None,
     ) -> GrantRequest:
         require_bounded_label(request.purpose, reason_code="GRANT_REQUEST_INVALID")
         if not idempotency_key or len(idempotency_key) > 200:
@@ -819,21 +891,21 @@ class PostgresAuthorityRepository:
             raise AuthorityError("GRANT_REQUEST_INVALID")
         for member in request.members:
             validate_registered_grant(member, allow_meta=False)
+        command_type = self._epoch_command_type("SUBMIT_GRANT_REQUEST", recovery_epoch)
         try:
             with self.connection_scope() as connection:
+                self._require_current_recovery_epoch(connection, recovery_epoch)
                 replay = self._claim(
                     connection,
                     request.scope,
                     actor_id,
-                    "SUBMIT_GRANT_REQUEST",
+                    command_type,
                     idempotency_key,
                     payload_digest,
                 )
                 if replay is not None:
                     return self._request(connection, replay["id"])
                 if continuation_digest is not None:
-                    if recovery_epoch is None:
-                        raise AuthorityError("CONTINUATION_INVALID")
                     connection.execute(
                         "SELECT pg_advisory_xact_lock(hashtextextended(%s, 302))",
                         (continuation_digest,),
@@ -918,7 +990,7 @@ class PostgresAuthorityRepository:
                     connection,
                     request.scope,
                     actor_id,
-                    "SUBMIT_GRANT_REQUEST",
+                    command_type,
                     idempotency_key,
                     payload_digest,
                     "GRANT_REQUEST",
@@ -933,6 +1005,7 @@ class PostgresAuthorityRepository:
                     occurred_at=request.created_at,
                     scope=request.scope,
                     subject_id=request.subject_principal_id,
+                    recovery_epoch=recovery_epoch,
                 )
                 return request
         except AuthorityError:
@@ -984,14 +1057,16 @@ class PostgresAuthorityRepository:
         require_bounded_label(decision.basis_type, reason_code="INVALID_GRANT_DECISION")
         if not idempotency_key or len(idempotency_key) > 200:
             raise AuthorityError("IDEMPOTENCY_KEY_INVALID")
+        command_type = self._epoch_command_type("DECIDE_GRANT_REQUEST", recovery_epoch)
         try:
             with self.connection_scope() as connection:
+                self._require_current_recovery_epoch(connection, recovery_epoch)
                 request = self._request(connection, decision.request_id)
                 replay = self._claim(
                     connection,
                     request.scope,
                     decision.issuer_principal_id,
-                    "DECIDE_GRANT_REQUEST",
+                    command_type,
                     idempotency_key,
                     payload_digest,
                 )
@@ -1002,6 +1077,7 @@ class PostgresAuthorityRepository:
                     "authorization_admin.grant_requests WHERE request_id=%s FOR UPDATE",
                     (decision.request_id,),
                 ).fetchone()
+                self._decision_request_locked_checkpoint()
                 if row["subject_principal_id"] == decision.issuer_principal_id:
                     raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
                 if row["state"] != expected_status.value:
@@ -1060,7 +1136,7 @@ class PostgresAuthorityRepository:
                     connection,
                     request.scope,
                     decision.issuer_principal_id,
-                    "DECIDE_GRANT_REQUEST",
+                    command_type,
                     idempotency_key,
                     payload_digest,
                     "GRANT_DECISION",
@@ -1163,6 +1239,62 @@ class PostgresAuthorityRepository:
             is DynamicAuthorizationState.ALLOWED
         )
 
+    @staticmethod
+    def _read_dynamic_authorization_state(
+        connection,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+    ) -> DynamicAuthorizationState:
+        row = connection.execute(
+            "SELECT a.generation,a.recovery_epoch,"
+            "(SELECT max(r.revoked_at) FROM authorization_admin.grants g "
+            "JOIN authorization_admin.grant_revocation_facts r "
+            "ON r.grant_id=g.grant_id WHERE g.subject_principal_id=%s "
+            "AND g.tenant_id=%s AND g.security_domain=%s AND g.owner=%s "
+            "AND g.action=%s AND g.exact_resource=%s) AS latest_revocation,"
+            "(SELECT max(g.created_at) FROM authorization_admin.grants g "
+            "JOIN authorization_admin.effective_grants e ON e.grant_id=g.grant_id "
+            "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
+            "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
+            "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
+            "AND g.recovery_epoch=%s) AS latest_grant "
+            "FROM authorization_admin.active_generation a WHERE a.singleton=true",
+            (
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                now,
+                now,
+                recovery_epoch,
+            ),
+        ).fetchone()
+        if (
+            row is None
+            or row["generation"] != generation
+            or row["recovery_epoch"] != recovery_epoch
+        ):
+            return DynamicAuthorizationState.UNAVAILABLE
+        revoked_at = row["latest_revocation"]
+        granted_at = row["latest_grant"]
+        if revoked_at is not None and (granted_at is None or revoked_at >= granted_at):
+            return DynamicAuthorizationState.REVOKED
+        if granted_at is not None:
+            return DynamicAuthorizationState.ALLOWED
+        return DynamicAuthorizationState.NONE
+
     def read_dynamic_authorization_state(
         self,
         context: TrustedRequestContext,
@@ -1174,53 +1306,14 @@ class PostgresAuthorityRepository:
     ) -> DynamicAuthorizationState:
         try:
             with self.connection_scope() as connection:
-                row = connection.execute(
-                    "SELECT a.generation,a.recovery_epoch,"
-                    "(SELECT max(r.revoked_at) FROM authorization_admin.grants g "
-                    "JOIN authorization_admin.grant_revocation_facts r "
-                    "ON r.grant_id=g.grant_id WHERE g.subject_principal_id=%s "
-                    "AND g.tenant_id=%s AND g.security_domain=%s AND g.owner=%s "
-                    "AND g.action=%s AND g.exact_resource=%s) AS latest_revocation,"
-                    "(SELECT max(g.created_at) FROM authorization_admin.grants g "
-                    "JOIN authorization_admin.effective_grants e ON e.grant_id=g.grant_id "
-                    "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
-                    "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
-                    "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
-                    "AND g.recovery_epoch=%s) AS latest_grant "
-                    "FROM authorization_admin.active_generation a WHERE a.singleton=true",
-                    (
-                        context.principal_id,
-                        context.scope.tenant_id,
-                        context.scope.security_domain,
-                        grant.owner,
-                        grant.action,
-                        grant.exact_resource,
-                        context.principal_id,
-                        context.scope.tenant_id,
-                        context.scope.security_domain,
-                        grant.owner,
-                        grant.action,
-                        grant.exact_resource,
-                        now,
-                        now,
-                        recovery_epoch,
-                    ),
-                ).fetchone()
-                if (
-                    row is None
-                    or row["generation"] != generation
-                    or row["recovery_epoch"] != recovery_epoch
-                ):
-                    return DynamicAuthorizationState.UNAVAILABLE
-                revoked_at = row["latest_revocation"]
-                granted_at = row["latest_grant"]
-                if revoked_at is not None and (
-                    granted_at is None or revoked_at >= granted_at
-                ):
-                    return DynamicAuthorizationState.REVOKED
-                if granted_at is not None:
-                    return DynamicAuthorizationState.ALLOWED
-                return DynamicAuthorizationState.NONE
+                return self._read_dynamic_authorization_state(
+                    connection,
+                    context,
+                    grant,
+                    now=now,
+                    generation=generation,
+                    recovery_epoch=recovery_epoch,
+                )
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
@@ -1406,6 +1499,41 @@ class PostgresAuthorityRepository:
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
+    def _terminate_pending_requests_for_recovery(
+        self,
+        connection,
+        *,
+        recovery_epoch: int,
+        generation: int,
+        operator_id: str,
+        now: datetime,
+    ) -> None:
+        requests = connection.execute(
+            "SELECT request_id,subject_principal_id,tenant_id,security_domain "
+            "FROM authorization_admin.grant_requests WHERE state='PENDING' "
+            "ORDER BY request_id FOR UPDATE"
+        ).fetchall()
+        self._recovery_requests_locked_checkpoint()
+        for request in requests:
+            connection.execute(
+                "UPDATE authorization_admin.grant_requests SET state='REJECTED',"
+                "aggregate_version=aggregate_version+1,decided_at=%s "
+                "WHERE request_id=%s AND state='PENDING'",
+                (now, request["request_id"]),
+            )
+            self._audit(
+                connection,
+                event_type="GRANT_REQUEST_RECOVERY_TERMINATED",
+                actor_id=operator_id,
+                outcome="TERMINATED",
+                reason="DATABASE_RECOVERY",
+                occurred_at=now,
+                scope=AuthorityScope(request["tenant_id"], request["security_domain"]),
+                subject_id=request["subject_principal_id"],
+                generation=generation,
+                recovery_epoch=recovery_epoch,
+            )
+
     def reconcile_recovery(
         self,
         *,
@@ -1420,6 +1548,11 @@ class PostgresAuthorityRepository:
     ) -> None:
         try:
             with self.connection_scope() as connection:
+                active = connection.execute(
+                    "SELECT generation,generation_digest,recovery_epoch FROM "
+                    "authorization_admin.active_generation WHERE singleton=true "
+                    "FOR UPDATE"
+                ).fetchone()
                 latest = connection.execute(
                     "SELECT recovery_epoch,database_fingerprint,generation,"
                     "generation_digest,migration_version,operator_id,"
@@ -1441,6 +1574,13 @@ class PostgresAuthorityRepository:
                         latest[key] == value for key, value in expected.items()
                     ):
                         return
+                    raise AuthorityError("AUTHORITY_RECOVERY_EPOCH_STALE")
+                if (
+                    active is None
+                    or active["generation"] != generation
+                    or active["generation_digest"] != generation_digest
+                    or recovery_epoch <= active["recovery_epoch"]
+                ):
                     raise AuthorityError("AUTHORITY_RECOVERY_EPOCH_STALE")
                 connection.execute(
                     "INSERT INTO authorization_admin.recovery_records"
@@ -1471,6 +1611,13 @@ class PostgresAuthorityRepository:
                         actor_id=operator_id,
                         now=now,
                     )
+                self._terminate_pending_requests_for_recovery(
+                    connection,
+                    recovery_epoch=recovery_epoch,
+                    generation=generation,
+                    operator_id=operator_id,
+                    now=now,
+                )
                 connection.execute(
                     "UPDATE authorization_admin.continuation_offers "
                     "SET revoked_at=%s WHERE revoked_at IS NULL",
