@@ -26,7 +26,7 @@ def test_designer_preserves_accessible_list_resource_and_error_views() -> None:
     builder = source("workflows/WorkflowBuilderPage.tsx")
     details = source("workflows/WorkflowResourceDetails.tsx")
     api = source("api/workflowDefinitions.ts")
-    for value in ("流程画布", "步骤列表", "节点配置", "Workflow 校验错误列表"):
+    for value in ("流程画布", "步骤列表", "节点详情", "Workflow 校验错误列表"):
         assert value in builder
     for value in ("资源 ID", "Revision", "Digest", "Input schema", "Output schema"):
         assert value in details
@@ -43,3 +43,7 @@ def test_layout_is_explicitly_view_only_and_responsive() -> None:
     assert "不写入 Workflow content" in builder
     assert "@media (max-width: 720px)" in styles
     assert "overflow: auto" in styles
+    assert 'data-mobile-pane="catalog"' in styles
+    assert "workflow-designer__workspace--inspector-collapsed" in styles
+    assert "useEffect" in canvas
+    assert "initialCanvas" in canvas

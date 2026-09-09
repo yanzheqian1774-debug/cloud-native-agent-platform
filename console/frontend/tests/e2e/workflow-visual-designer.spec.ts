@@ -1,6 +1,7 @@
-import {expect,test} from "@playwright/test";
+import {expect,test,type Page} from "@playwright/test";
 
 const digest=(value:string)=>`sha256:${value.repeat(64)}`;
+const markTestAdapter=(page:Page)=>page.evaluate(()=>{if(document.getElementById("s5-311-test-adapter"))return;const badge=document.createElement("div");badge.id="s5-311-test-adapter";badge.textContent="TEST_ADAPTER · INTERACTION EVIDENCE";badge.style.cssText="position:fixed;z-index:99999;right:12px;top:72px;padding:6px 10px;border:2px solid #9b2c2c;border-radius:6px;color:#7f1d1d;background:#fff7f7;font:700 12px system-ui;box-shadow:0 3px 12px #0002";document.body.appendChild(badge)});
 
 test("edits a dependency-derived node without changing sibling content or exact bindings",async({page})=>{
   const binding={skillId:"skill-definition:quality",skillRevisionId:"skill-revision:7",skillDigest:digest("a"),operation:"quality.read"};
@@ -32,12 +33,12 @@ test("edits a dependency-derived node without changing sibling content or exact 
   await expect(page.getByLabel("步骤 collect 的资源详情")).toContainText("Quality Skill");
   await expect(page.getByLabel("步骤 collect 的资源详情")).toContainText(binding.skillDigest);
   await expect(page.getByLabel("步骤 collect 的资源详情")).toContainText("1024 / 2048 bytes");
-  if(process.env.S5_311_SCREENSHOT_DIR){await page.setViewportSize({width:1440,height:1000});await page.locator(".workflow-catalog-layout").evaluate(element=>window.scrollTo({top:element.getBoundingClientRect().top+window.scrollY-70}));await page.screenshot({path:`${process.env.S5_311_SCREENSHOT_DIR}/workflow-designer-desktop.png`})}
+  if(process.env.S5_311_SCREENSHOT_DIR){await page.setViewportSize({width:1440,height:1000});await markTestAdapter(page);await page.locator(".workflow-catalog-layout").evaluate(element=>window.scrollTo({top:element.getBoundingClientRect().top+window.scrollY-70}));await page.screenshot({path:`${process.env.S5_311_SCREENSHOT_DIR}/workflow-designer-desktop.png`})}
   await page.getByRole("button",{name:"编辑当前 Draft"}).click();
   await page.getByRole("button",{name:"编辑步骤 Analyze"}).click();
   await page.getByLabel("名称",{exact:true}).fill("Analyze precisely");
   await expect(page.getByLabel("步骤 analyze 配置").getByText("collect",{exact:true})).toBeVisible();
-  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  await page.getByRole("button",{name:"保存工作流草稿"}).click();
 
   expect(submitted).toHaveLength(1);
   expect(submitted[0].content.tasks[0]).toEqual(collect);
@@ -66,7 +67,7 @@ test("edits a dependency-derived node without changing sibling content or exact 
   await page.getByRole("button",{name:"编辑步骤 Collect"}).click();
   await page.getByRole("button",{name:"检查并移除此步骤"}).click();
   await page.getByRole("button",{name:"确认删除步骤及上述依赖"}).click();
-  await page.getByRole("button",{name:"Save governed Workflow draft"}).click();
+  await page.getByRole("button",{name:"保存工作流草稿"}).click();
   expect(submitted).toHaveLength(2);
   expect(submitted[1].content.tasks).toEqual([{...analyze,name:"Expanded edit retained",dependsOn:[]}]);
 
@@ -78,7 +79,7 @@ test("edits a dependency-derived node without changing sibling content or exact 
   await authoring.getByLabel("等价 Workflow 步骤列表").getByRole("button",{name:/Analyze precisely/}).click();
   await expect(page.getByLabel("步骤 analyze 配置")).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
-  if(process.env.S5_311_SCREENSHOT_DIR){await page.getByLabel("步骤 analyze 配置").scrollIntoViewIfNeeded();await page.screenshot({path:`${process.env.S5_311_SCREENSHOT_DIR}/workflow-designer-390px.png`})}
+  if(process.env.S5_311_SCREENSHOT_DIR){await markTestAdapter(page);await page.getByLabel("步骤 analyze 配置").scrollIntoViewIfNeeded();await page.screenshot({path:`${process.env.S5_311_SCREENSHOT_DIR}/workflow-designer-390px.png`})}
 });
 
 test("requires an explicit decision before switching away from unsaved authoring",async({page})=>{
@@ -86,13 +87,14 @@ test("requires an explicit decision before switching away from unsaved authoring
   const first=makeProjection("workflow:first","First Workflow"),second=makeProjection("workflow:second","Second Workflow");
   await page.route("**/api/internal/v0.2.2/resources/skill",route=>route.fulfill({contentType:"application/json",body:"[]"}));
   await page.route("**/api/internal/v0.2.2/workflow-definitions**",route=>{const path=decodeURIComponent(new URL(route.request().url()).pathname);route.fulfill({contentType:"application/json",body:JSON.stringify(path.endsWith("/workflow-definitions")?[first,second]:path.endsWith(first.definition.workflowDefinitionId)?first:second)})});
-  await page.goto("/workflow-definitions");await expect(page.getByRole("button",{name:/First Workflow/})).toContainText("摘要：First Workflow");await page.getByRole("button",{name:/First Workflow/}).click();await page.getByRole("button",{name:"编辑当前 Draft"}).click();
+  await page.goto("/workflow-definitions");await page.setViewportSize({width:390,height:844});await expect(page.getByRole("tab",{name:"工作流目录"})).toHaveAttribute("aria-selected","true");await page.setViewportSize({width:1440,height:1000});await expect(page.getByRole("button",{name:/First Workflow/})).toContainText("摘要：First Workflow");await page.getByRole("button",{name:/First Workflow/}).click();await page.getByRole("button",{name:"编辑当前 Draft"}).click();
   await page.getByLabel("用途说明").fill("unsaved authoring");
   await page.getByRole("button",{name:/Second Workflow/}).click();
   const warning=page.getByLabel("未保存 Workflow 编辑");await expect(warning).toContainText("不会被静默丢弃");await expect(page.getByLabel("用途说明")).toHaveValue("unsaved authoring");
   await warning.getByRole("button",{name:"继续编辑当前 Workflow"}).click();await expect(page.getByLabel("用途说明")).toHaveValue("unsaved authoring");
   await page.getByRole("button",{name:/Second Workflow/}).click();await page.getByRole("button",{name:"放弃未保存输入并切换"}).click();
   await expect(page.getByRole("heading",{name:"Second Workflow",exact:true})).toBeVisible();
+  await expect(page.getByRole("tab",{name:"流程设计"})).toHaveAttribute("aria-selected","true");
 });
 
 test("shows local graph issues and keeps invalid legacy dependency editable",async({page})=>{
@@ -122,8 +124,9 @@ test("navigates a complex published Workflow without offering draft edits or cre
   await expect(page.getByLabel("Workflow 列表分页")).toContainText("1 / 2");await page.getByRole("button",{name:"下一页"}).click();await expect(page.getByText("目录 Workflow 9",{exact:true})).toBeVisible();await page.getByRole("button",{name:"上一页"}).click();
   await page.getByRole("button",{name:/复杂已发布 Workflow/}).click();
   await expect(page.getByRole("button",{name:"编辑当前 Draft"})).toHaveCount(0);await expect(page.getByRole("button",{name:"Create Workflow successor"})).toBeVisible();
-  await page.getByLabel("当前 Workflow 节点搜索").fill("step-14");await page.getByRole("button",{name:"定位节点"}).click();await expect(page.getByLabel("Workflow 节点详情")).toContainText("复杂步骤 14");
-  await page.getByRole("button",{name:"恢复 100%"}).click();await page.getByRole("button",{name:"适配画布"}).click();await page.getByRole("button",{name:"折叠 Workflow 列表"}).click();await expect(page.getByRole("button",{name:"展开 Workflow 列表"})).toBeVisible();
+  await page.getByRole("button",{name:"恢复 100%"}).click();await expect(page.getByRole("button",{name:"恢复 100%"})).toHaveText("100%");
+  await page.getByLabel("当前 Workflow 节点搜索").fill("step-14");await page.getByRole("button",{name:"定位节点"}).click();await expect(page.getByLabel("Workflow 节点详情")).toContainText("复杂步骤 14");await expect(page.getByRole("button",{name:"恢复 100%"})).toHaveText("100%");
+  await page.getByRole("button",{name:"适配画布"}).click();await page.getByRole("button",{name:"折叠 Workflow 列表"}).click();await expect(page.getByRole("button",{name:"展开 Workflow 列表"})).toBeVisible();
   expect(writes).toBe(0);
   await page.setViewportSize({width:390,height:844});await page.getByRole("tab",{name:"步骤列表"}).click();await expect(page.getByLabel("等价 Workflow 步骤列表")).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
 });
