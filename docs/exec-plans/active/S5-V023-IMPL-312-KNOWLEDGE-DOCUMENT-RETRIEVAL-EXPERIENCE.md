@@ -196,6 +196,37 @@ used to infer or backfill the two unknown failures from run `34370621442`.
 Ordinary commit, non-force push, and automatic CI observation remain pending this
 checkpoint review. PR #167 remains Draft.
 
+## Focused hierarchy and duplicate-review correction (2026-09-10)
+
+- CI run `34382667329`, attempt `1`, checked out pull-request merge commit
+  `97511456f31a0f76d8475bc38648813d67a0fe55`, tree
+  `b7de9e7a91925561a0ff2618b26960f248f191dc`, with parents
+  `f189212232fc194859a695f0307e83b0c7b73c0f` and
+  `d32f988a135d4c7d40b5a89a1cf297d45ff24d38`.
+- Wave 3B stage 7 used an obsolete English hierarchy name and text. The formal
+  Knowledge page exposes the Chinese `知识中心操作分区` navigation with four links.
+  The journey now selects its created Knowledge object, proves the current detail
+  heading, verifies that `检索测试与出处` precedes `高级管理`, and follows both links
+  to their current headings. No product state or timeout changed.
+- The Knowledge duplicate fixture previously supplied unrelated English content,
+  so it did not prove the backend's exact normalized-content predicate. It also
+  selected the first visible decision button, which could address a historical
+  candidate. The journey now derives duplicate content from the authoritative
+  published revision readback, establishes scan and decision response waits before
+  each action, binds the exact candidate to both current Knowledge identities, and
+  verifies the recorded `DISTINCT` decision through an authoritative queue readback
+  before requiring the current candidate article to update.
+- Focused local validation passed: the existing exact duplicate/decision/scoped
+  readback backend test (`1 passed, 4 deselected`), affected ESLint, TypeScript and
+  production build, six-test Playwright discovery, and `git diff --check`. No
+  task-owned PostgreSQL/Qdrant containers, owned backend, or harness metadata were
+  active, so the previously failed formal local startup was not reconstructed.
+
+The preceding first-incomplete stage evidence identified where observation stopped;
+it was not treated as proof that the stage itself was the root cause. Automatic CI
+after an ordinary push must prove both corrected stages and must show Wave 3B reach
+and complete stage 10 before the startup-readiness correction is considered covered.
+
 ## Risks and compatibility
 
 - Parser resource exhaustion is bounded by byte, archive, count, and time limits.

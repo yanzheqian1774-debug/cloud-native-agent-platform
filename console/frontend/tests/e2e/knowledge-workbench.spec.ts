@@ -46,6 +46,7 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   let firstRevision = "";
   let firstDigest = "";
   let firstSnapshot = "";
+  let firstDocumentContent = "";
   let rebuilt: {
     knowledge: { publishedRevisionId: string; activeIndexSnapshotId: string };
     technicalProjection: { revisionDigests: Array<{ digest: string }> };
@@ -79,6 +80,15 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
     firstRevision = first.knowledge.publishedRevisionId;
     firstDigest = first.technicalProjection.revisionDigests.at(-1).digest;
     firstSnapshot = first.knowledge.activeIndexSnapshotId;
+    const published = first.knowledge.revisions.find(
+      (revision: { revisionId: string }) => revision.revisionId === firstRevision,
+    );
+    expect(published).toBeTruthy();
+    firstDocumentContent = published!.content.documents
+      .flatMap((document: { chunks: Array<{ content: string }> }) => document.chunks)
+      .map((chunk: { content: string }) => chunk.content)
+      .join("\n\n");
+    expect(firstDocumentContent).not.toBe("");
     expect(first.productProjection.knowledgeId).toBe(first.technicalProjection.knowledgeId);
   });
 
@@ -140,15 +150,60 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
           documentId: "document:8d-procedure-copy",
           kind: "TEXT",
           provenance: "human:quality-owner",
-          content: "Containment begins immediately after a supplier defect.\n\nRoot cause evidence must cite the verified procedure.",
+          content: firstDocumentContent,
         },
       },
     });
     expect(duplicateDraft.status()).toBe(201);
+    const duplicateProjection = await duplicateDraft.json();
+    const duplicateIdentity = duplicateProjection.knowledge.knowledgeId as string;
+    const scanResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith("/knowledge/operations/duplicates/scan")
+      && response.request().method() === "POST"
+    );
     await page.getByRole("button", { name: "扫描重复项" }).click();
-    await expect(page.getByLabel("Duplicate review queue")).toContainText("EXACT candidate");
-    await page.getByRole("button", { name: "判定不同" }).first().click();
-    await expect(page.getByLabel("Duplicate review queue")).toContainText("人工决定已记录");
+    const scan = await scanResponse;
+    expect(scan.ok()).toBe(true);
+    const candidates = await scan.json() as Array<{
+      entityId: string;
+      body: {
+        classification: string;
+        left: { knowledgeId: string };
+        right: { knowledgeId: string };
+      };
+    }>;
+    const candidate = candidates.find((item) =>
+      item.body.classification === "EXACT"
+      && [item.body.left.knowledgeId, item.body.right.knowledgeId].includes(identity)
+      && [item.body.left.knowledgeId, item.body.right.knowledgeId].includes(duplicateIdentity)
+    );
+    expect(candidate).toBeTruthy();
+    const review = page.getByLabel("Duplicate review queue")
+      .getByRole("article")
+      .filter({ hasText: candidate!.entityId });
+    await expect(review).toContainText("EXACT candidate");
+    const decisionResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith("/knowledge/operations/duplicates/decisions")
+      && response.request().method() === "POST"
+    );
+    await review.getByRole("button", { name: "判定不同" }).click();
+    const decision = await decisionResponse;
+    expect(decision.ok()).toBe(true);
+    const recordedDecision = await decision.json();
+    expect(recordedDecision.body.candidateId).toBe(candidate!.entityId);
+    expect(recordedDecision.body.classification).toBe("DISTINCT");
+    const readback = await request.get(
+      `${backend}/api/internal/v0.2.2/knowledge/operations/duplicates`,
+      { headers: authorizedHeaders },
+    );
+    expect(readback.ok()).toBe(true);
+    const authoritativeQueue = await readback.json() as Array<{
+      entityId: string;
+      decision?: { body: { candidateId: string; classification: string } };
+    }>;
+    expect(authoritativeQueue.find((item) => item.entityId === candidate!.entityId)?.decision?.body)
+      .toMatchObject({ candidateId: candidate!.entityId, classification: "DISTINCT" });
+    await expect(review).toContainText("人工决定已记录");
   });
 
   await test.step("KNOWLEDGE_SCOPE_DENIAL_READBACK", async () => {
