@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
+from agent_console.persistence_bootstrap import migration_recorded
 from agent_console.skill_mcp_postgres import PostgresSkillMcpRepository
 from agent_console.skill_mcp_repository import SkillMcpRepositoryError
 from agent_console.skill_mcp_schemas import (
@@ -53,7 +54,12 @@ def activate(repository) -> None:
     global _service, _startup_error
     if repository is None:
         return
-    repository.migrate()
+    if migration_recorded(repository, "skill_mcp_resource", 1) and migration_recorded(
+        repository, "skill_mcp_resource", 2
+    ):
+        repository.compatibility()
+    else:
+        repository.migrate()
     _service = SkillMcpService(repository)
     _startup_error = ""
 

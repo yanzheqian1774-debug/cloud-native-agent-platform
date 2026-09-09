@@ -331,3 +331,24 @@ fresh providers, this path reached health in `11.784` seconds and initialized re
 health in `7.765` seconds. The unavailable-Qdrant case exited with code `1` without
 health in `15.955` seconds; all 12 expected ledgers were unique and provider cleanup
 completed.
+
+Candidate `ae39c13011cf9dd8e324df2a707c197f51216d5f`, tree
+`6659a4b0a18582f192a7c7db931480ecb70ee954`, reached the real browser suite with
+the runtime-only bytecode cache and executed all 37 cases. It passed 31 and failed 6
+with no skip, retry or flaky result. Startup evidence showed two successful owned
+starts followed by a restart failure while Skill/MCP replayed its already-recorded
+DDL. That run remains failed and is not treated as final acceptance.
+
+The restart correction uses the existing domain compatibility checks when an exact
+ledger version is already present. A recorded version is never treated as fresh:
+checksum, adapter and required schema checks still fail closed. Missing or partial
+ledgers continue through the original migration path. Knowledge separately validates
+versions 1 and 5; Skill/MCP validates 1 and 2; Runtime, Workflow, Agent, Execution,
+Workflow Control and Digital Employee retain their existing exact version ownership.
+No initializer shares a connection or replays a migration concurrently on restart.
+
+The resulting empty-pycache validation reached fresh health in `15.445` seconds,
+then completed four consecutive initialized restarts in `5.553`, `5.188`, `4.316`
+and `4.195` seconds. The unavailable-Qdrant process exited with code `1` after
+`7.465` seconds and never reported health. All 12 expected ledger rows remained
+unique and the run removed its owned providers.

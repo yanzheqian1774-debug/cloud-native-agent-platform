@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from agent_console.agent_binding_validation import BindingResolution
 from agent_console.agent_definition_repository import DefinitionScope
+from agent_console.persistence_bootstrap import migration_recorded
 from agent_console.workflow_definition_postgres import (
     PostgresWorkflowDefinitionRepository,
 )
@@ -90,7 +91,10 @@ def activate(repository) -> None:
     global _service, _startup_error
     if repository is None:
         return
-    repository.migrate()
+    if migration_recorded(repository, "workflow_definition", 1):
+        repository.compatibility()
+    else:
+        repository.migrate()
     _service = WorkflowDefinitionService(repository, resolve_workflow_reference)
     _startup_error = ""
 
@@ -99,7 +103,10 @@ def activate_shared(repository) -> None:
     global _service, _startup_error
     if repository is None:
         return
-    repository.record_shared_migration()
+    if migration_recorded(repository, "workflow_definition", 1):
+        repository.compatibility()
+    else:
+        repository.record_shared_migration()
     _service = WorkflowDefinitionService(repository, resolve_workflow_reference)
     _startup_error = ""
 

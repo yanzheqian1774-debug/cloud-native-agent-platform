@@ -34,6 +34,23 @@ def _close(value: Any) -> None:
         close()
 
 
+def migration_recorded(value: Any, schema: str, version: int) -> bool:
+    """Detect an existing ledger version without treating mismatch as fresh."""
+    with value.pool.connection() as connection:
+        relation = connection.execute(
+            "SELECT to_regclass(%s) AS relation", (f"{schema}.schema_migrations",)
+        ).fetchone()["relation"]
+        if relation is None:
+            return False
+        return (
+            connection.execute(
+                f"SELECT 1 FROM {schema}.schema_migrations WHERE version=%s",
+                (version,),
+            ).fetchone()
+            is not None
+        )
+
+
 def prepare_in_parallel(steps: Iterable[BootstrapStep]) -> dict[str, Any]:
     """Open independent pools concurrently without executing a migration."""
     ordered = tuple(steps)

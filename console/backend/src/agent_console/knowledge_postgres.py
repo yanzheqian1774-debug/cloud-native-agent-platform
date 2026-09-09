@@ -170,6 +170,27 @@ class PostgresKnowledgeRepository:
         except PsycopgError as exc:
             raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
 
+    def quality_compatibility(self) -> None:
+        if self.quality_migration_path is None:
+            raise KnowledgeRepositoryError("KNOWLEDGE_QUALITY_SCHEMA_UNAVAILABLE")
+        checksum = hashlib.sha256(self.quality_migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection:
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM knowledge_quality.schema_migrations WHERE version=%s",
+                    (QUALITY_SCHEMA_VERSION,),
+                ).fetchone()
+            if (
+                row is None
+                or row["checksum"] != checksum
+                or row["adapter"] != QUALITY_ADAPTER
+            ):
+                raise KnowledgeRepositoryError("KNOWLEDGE_QUALITY_SCHEMA_INCOMPATIBLE")
+        except KnowledgeRepositoryError:
+            raise
+        except PsycopgError as exc:
+            raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
+
     def get(self, scope: KnowledgeScope, knowledge_id: str) -> dict[str, Any]:
         try:
             with self.pool.connection() as connection:

@@ -36,6 +36,7 @@ from agent_console.knowledge_schemas import (
     SuccessorCommand,
     VersionCommand,
 )
+from agent_console.persistence_bootstrap import migration_recorded
 
 router = APIRouter(
     prefix="/api/internal/v0.2.2/knowledge", tags=["knowledge-workbench"]
@@ -71,8 +72,14 @@ def activate(prepared) -> None:
     if prepared is None:
         return
     repository, qdrant = prepared
-    repository.migrate()
-    repository.migrate_quality()
+    if migration_recorded(repository, "knowledge_operation", 1):
+        repository.compatibility()
+    else:
+        repository.migrate()
+    if migration_recorded(repository, "knowledge_quality", 5):
+        repository.quality_compatibility()
+    else:
+        repository.migrate_quality()
     qdrant.ensure_collection()
     _service = KnowledgeLifecycleService(repository, qdrant)
     _quality_service = KnowledgeQualityService(repository, qdrant)

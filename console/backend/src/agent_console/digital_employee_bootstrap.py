@@ -529,7 +529,12 @@ class DigitalEmployeeProductAssembly:
 
 def migrate_execution_authority(
     authority: PostgresExecutionAuthorityRepository,
+    *,
+    already_recorded: bool = False,
 ) -> None:
+    if already_recorded:
+        _validate_execution_v8(authority)
+        return
     try:
         authority.migrate()
     except ExecutionSchemaIncompatible:
@@ -538,10 +543,17 @@ def migrate_execution_authority(
 
 def migrate_workflow_controls(
     controls: tuple[PostgresWorkflowControlRepository, ...],
+    *,
+    recorded_versions: frozenset[int] | None = None,
 ) -> None:
+    recorded_versions = recorded_versions or frozenset()
     for control in controls:
         try:
-            control.migrate()
+            version = int(control.migration_path.name[:4])
+            if version in recorded_versions:
+                control.compatibility(version=version)
+            else:
+                control.migrate()
         finally:
             control.pool.close()
 
@@ -550,10 +562,15 @@ def complete_digital_employee_assembly(
     definitions: AgentDefinitionService,
     authority: PostgresExecutionAuthorityRepository,
     migration_path: Path,
+    *,
+    already_recorded: bool = False,
 ) -> DigitalEmployeeProductAssembly:
-    PostgresEmployeeDefinitionRepository(authority).migrate(
-        migration_path.with_name("0014_digital_employee_identity.sql")
-    )
+    employee_definitions = PostgresEmployeeDefinitionRepository(authority)
+    identity_migration = migration_path.with_name("0014_digital_employee_identity.sql")
+    if already_recorded:
+        employee_definitions.compatibility(identity_migration)
+    else:
+        employee_definitions.migrate(identity_migration)
     return DigitalEmployeeProductAssembly(
         definitions, PostgresDigitalEmployeeRepository(authority)
     )

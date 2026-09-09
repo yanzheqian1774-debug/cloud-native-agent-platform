@@ -127,6 +127,7 @@ from agent_console.persistence_bootstrap import (
     BootstrapStep,
     activate_in_order,
     activate_in_parallel,
+    migration_recorded,
     prepare_in_parallel,
 )
 from agent_console.preview_schemas import PreviewError, PreviewResponse
@@ -290,7 +291,10 @@ def _activate_runtime_workflow(prepared) -> None:
 def _activate_execution_base(prepared) -> None:
     if prepared is not None:
         authority, _controls = prepared
-        migrate_execution_authority(authority)
+        migrate_execution_authority(
+            authority,
+            already_recorded=migration_recorded(authority, "execution_authority", 8),
+        )
 
 
 _FIRST_MIGRATION_WAVE = (
@@ -668,7 +672,12 @@ def _activate_agent_definitions(repository) -> None:
     if repository is None:
         _agent_definition_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
         return
-    repository.migrate()
+    if migration_recorded(repository, "agent_definition", 1) and migration_recorded(
+        repository, "agent_definition", 6
+    ):
+        repository.compatibility()
+    else:
+        repository.migrate()
     _agent_definition_service = AgentDefinitionService(
         repository, binding_resolver=_WorkbenchBindingResolver()
     )
@@ -695,6 +704,9 @@ def _activate_digital_employees(prepared) -> None:
         _agent_definition_service,
         authority,
         migration_path=_MIGRATIONS / "0008_execution_runtime_authority.sql",
+        already_recorded=migration_recorded(
+            authority, "digital_employee_definition", 14
+        ),
     )
     _digital_employee_startup_error = None
 
@@ -702,7 +714,14 @@ def _activate_digital_employees(prepared) -> None:
 def _activate_workflow_controls(prepared) -> None:
     if prepared is not None:
         _authority, controls = prepared
-        migrate_workflow_controls(controls)
+        migrate_workflow_controls(
+            controls,
+            recorded_versions=frozenset(
+                version
+                for version, control in zip((9, 10), controls, strict=True)
+                if migration_recorded(control, "execution_authority", version)
+            ),
+        )
 
 
 _SECOND_MIGRATION_WAVE = (

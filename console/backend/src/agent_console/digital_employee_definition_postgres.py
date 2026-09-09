@@ -63,6 +63,15 @@ class PostgresEmployeeDefinitionRepository:
             ):
                 raise EmployeeDefinitionError("EMPLOYEE_SCHEMA_INCOMPATIBLE")
 
+    def compatibility(self, path: Path) -> None:
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.pool.connection() as conn:
+            row = conn.execute(
+                "SELECT checksum FROM digital_employee_definition.schema_migrations WHERE version=14"
+            ).fetchone()
+        if row is None or row["checksum"] != checksum:
+            raise EmployeeDefinitionError("EMPLOYEE_SCHEMA_INCOMPATIBLE")
+
     @staticmethod
     def _key(scope, definition_id):
         return scope.namespace, scope.security_domain, identifier(definition_id)

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from agent_console.agent_binding_validation import BindingResolution
 from agent_console.agent_definition_repository import DefinitionScope
+from agent_console.persistence_bootstrap import migration_recorded
 from agent_console.runtime_profile_postgres import PostgresRuntimeProfileRepository
 from agent_console.runtime_profile_repository import RuntimeProfileRepositoryError
 from agent_console.runtime_profile_schemas import (
@@ -85,7 +86,10 @@ def activate(repository) -> None:
     global _service, _startup_error
     if repository is None:
         return
-    repository.migrate()
+    if migration_recorded(repository, "runtime_profile", 1):
+        repository.compatibility()
+    else:
+        repository.migrate()
     _service = RuntimeProfileService(repository)
     _startup_error = ""
 
