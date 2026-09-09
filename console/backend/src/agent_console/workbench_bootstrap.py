@@ -17,12 +17,14 @@ from agent_console.authority_foundation import (
 )
 from agent_console.browser_session_application import BrowserSessionPolicy
 from agent_console.business_problem_application import BusinessProblemApplication
+from agent_console.digital_employee_definition import EmployeeDefinitionRepository
 from agent_console.governed_execution_ownership import execution_database_fingerprint
 from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
     create_workbench_bff,
 )
 from agent_console.workbench_business_problem import business_problem_operations
+from agent_console.workbench_employee import employee_operations
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_service import WorkflowDefinitionService
@@ -44,6 +46,7 @@ def build_workbench_composition(
     allowed_origin: str,
     owner_database_url: str,
     business_problems: BusinessProblemApplication,
+    employee_definitions: EmployeeDefinitionRepository,
     workflow_database_url: str = "",
     workflows: WorkflowDefinitionService | None = None,
 ) -> WorkbenchComposition:
@@ -88,6 +91,7 @@ def build_workbench_composition(
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             operations=(
                 *business_problem_operations(business_problems),
+                *employee_operations(employee_definitions),
                 *(workflow_operations(workflows) if workflows is not None else ()),
             ),
         )

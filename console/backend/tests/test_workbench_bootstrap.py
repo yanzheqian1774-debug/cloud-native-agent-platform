@@ -59,13 +59,19 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         owner_database_url=database_url,
         workflow_database_url=database_url,
         business_problems=SimpleNamespace(),
+        employee_definitions=SimpleNamespace(),
         workflows=SimpleNamespace(),
     )
 
     assert composition.foundation is foundation
     operations = captured["operations"]
-    assert len(operations) == 15
-    assert [(item.name, item.method, item.path) for item in operations[-2:]] == [
+    assert len(operations) == 16
+    assert [(item.name, item.method, item.path) for item in operations[-3:]] == [
+        (
+            "READ_EMPLOYEE_REVISION",
+            "GET",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/{revision_id}",
+        ),
         ("LIST_WORKFLOWS", "GET", "/api/workbench/v1/workflows"),
         (
             "READ_WORKFLOW_REVISION",
@@ -106,10 +112,12 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         allowed_origin="https://console.example",
         owner_database_url=database_url,
         business_problems=SimpleNamespace(),
+        employee_definitions=SimpleNamespace(),
     )
 
     operations = captured["operations"]
-    assert len(operations) == 13
+    assert len(operations) == 14
+    assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
     assert not any(
         item.name in {"LIST_WORKFLOWS", "READ_WORKFLOW_REVISION"} for item in operations
     )
@@ -134,6 +142,7 @@ def test_configured_workflow_cannot_silently_degrade_when_service_is_unavailable
             owner_database_url="postgresql://db.example/platform",
             workflow_database_url="postgresql://db.example/platform",
             business_problems=SimpleNamespace(),
+            employee_definitions=SimpleNamespace(),
         )
 
 
@@ -148,6 +157,11 @@ def test_app_does_not_require_optional_workflow_for_existing_composition(
     monkeypatch.setenv("EXECUTION_DATABASE_URL", "postgresql://db.example/platform")
     monkeypatch.delenv("WORKFLOW_RUNTIME_DATABASE_URL", raising=False)
     monkeypatch.setattr(console_app, "_business_problem_application", object())
+    monkeypatch.setattr(
+        console_app,
+        "_digital_employee_assembly",
+        SimpleNamespace(employee_definitions=object()),
+    )
     monkeypatch.setattr(console_app, "_workbench_composition", None)
     monkeypatch.setattr(console_app, "workbench_app", None)
     monkeypatch.setattr(console_app, "_workbench_startup_error", "WORKBENCH_DISABLED")
@@ -168,6 +182,7 @@ def test_app_does_not_require_optional_workflow_for_existing_composition(
     assert console_app.workbench_app is application
     assert built["workflow_database_url"] == ""
     assert built["workflows"] is None
+    assert built["employee_definitions"] is not None
 
 
 def test_app_fails_closed_when_configured_workflow_service_is_unavailable(
@@ -181,6 +196,11 @@ def test_app_fails_closed_when_configured_workflow_service_is_unavailable(
         "WORKFLOW_RUNTIME_DATABASE_URL", "postgresql://db.example/platform"
     )
     monkeypatch.setattr(console_app, "_business_problem_application", object())
+    monkeypatch.setattr(
+        console_app,
+        "_digital_employee_assembly",
+        SimpleNamespace(employee_definitions=object()),
+    )
     monkeypatch.setattr(console_app, "_workbench_composition", None)
     monkeypatch.setattr(console_app, "workbench_app", None)
     monkeypatch.setattr(console_app, "_workbench_startup_error", "WORKBENCH_DISABLED")
@@ -224,6 +244,7 @@ def test_composition_rejects_workflow_database_outside_authorization_transaction
             owner_database_url="postgresql://owner:secret@db.example/platform",
             workflow_database_url="postgresql://workflow:secret@db.example/workflow",
             business_problems=SimpleNamespace(),
+            employee_definitions=SimpleNamespace(),
             workflows=SimpleNamespace(),
         )
 

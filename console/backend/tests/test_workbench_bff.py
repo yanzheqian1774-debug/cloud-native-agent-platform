@@ -23,6 +23,7 @@ from agent_console.workbench_bff import (
     create_workbench_bff,
 )
 from agent_console.workbench_business_problem import business_problem_operations
+from agent_console.workbench_employee import employee_operations
 from agent_console.workbench_owner_authorization import AuthorizedOwnerCall
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
@@ -312,3 +313,33 @@ def test_business_problem_registry_freezes_routes_and_exact_resource_builders() 
             {"version": 3},
         )
     ) == (ExactGrant("PLAN", "READ", "plan:plan-9:3"),)
+
+
+def test_employee_registry_exposes_only_exact_revision_read() -> None:
+    operations = employee_operations(SimpleNamespace())  # type: ignore[arg-type]
+
+    assert [(item.name, item.method, item.path) for item in operations] == [
+        (
+            "READ_EMPLOYEE_REVISION",
+            "GET",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/{{revision_id}}",
+        )
+    ]
+    operation = operations[0]
+    assert tuple(
+        operation.grant_builder(
+            SessionStub().context,
+            {
+                "employee_definition_id": "employee-definition:quality",
+                "revision_id": "employee-revision:v1",
+            },
+            {},
+            {},
+        )
+    ) == (
+        ExactGrant(
+            "EMPLOYEE",
+            "READ",
+            "employee:employee-definition:quality:employee-revision:v1",
+        ),
+    )

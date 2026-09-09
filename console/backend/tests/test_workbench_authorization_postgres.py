@@ -32,7 +32,18 @@ from agent_console.authority_contracts import (
     VerifiedPrincipal,
 )
 from agent_console.authority_postgres import PostgresAuthorityRepository
+from agent_console.digital_employee_definition import (
+    CompositionMember,
+    EmployeeRevision,
+    MemberKind,
+)
+from agent_console.digital_employee_definition_postgres import (
+    PostgresEmployeeDefinitionRepository,
+)
+from agent_console.execution_domain import ScopeIdentity
+from agent_console.execution_postgres import PostgresExecutionAuthorityRepository
 from agent_console.grant_administration_application import GenerationAuthorizationReader
+from agent_console.workbench_employee import employee_operations
 from agent_console.workbench_owner_authorization import (
     WorkbenchOwnerAuthorization,
     WorkbenchOwnerError,
@@ -51,6 +62,12 @@ MIGRATION = (
 )
 WORKFLOW_MIGRATION = (
     Path(__file__).parents[1] / "migrations" / "0007_workflow_runtime_profiles.sql"
+)
+EXECUTION_MIGRATION = (
+    Path(__file__).parents[1] / "migrations" / "0008_execution_runtime_authority.sql"
+)
+EMPLOYEE_MIGRATION = (
+    Path(__file__).parents[1] / "migrations" / "0014_digital_employee_identity.sql"
 )
 
 
@@ -344,6 +361,62 @@ def seed_workflow_grant(
         )
 
 
+def seed_employee_grant(
+    repository: PostgresAuthorityRepository, now: datetime, grant: ExactGrant
+) -> None:
+    with repository.connection_scope() as connection:
+        connection.execute(
+            "INSERT INTO authorization_admin.grant_requests "
+            "(request_id,subject_principal_id,tenant_id,security_domain,"
+            "purpose,state,created_at,decided_at) "
+            "VALUES ('request-employee','human:alice','tenant-a','quality',"
+            "'READ_EMPLOYEE','APPROVED',%s,%s)",
+            (now, now),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.grant_decisions "
+            "(decision_id,request_id,issuer_principal_id,issuer_meta_decision_id,"
+            "approved,reason_category,basis_type,basis_reference_digest,"
+            "policy_version,audit_source,created_at) "
+            "VALUES ('decision-employee','request-employee','human:bob',"
+            "'meta-employee',true,'ASSIGNED_DUTY','POLICY',%s,'policy-1','test',%s)",
+            ("d" * 64, now),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.grants "
+            "(grant_id,decision_id,request_id,subject_principal_id,tenant_id,"
+            "security_domain,owner,action,exact_resource,basis_type,"
+            "basis_reference_digest,issuer_principal_id,issuer_meta_decision_id,"
+            "policy_version,audit_source,not_before,expires_at,created_at,"
+            "recovery_epoch) VALUES ('grant-employee','decision-employee',"
+            "'request-employee','human:alice','tenant-a','quality',%s,%s,%s,"
+            "'POLICY',%s,'human:bob','meta-employee','policy-1','test',%s,%s,%s,1)",
+            (
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                "d" * 64,
+                now - timedelta(minutes=1),
+                now + timedelta(hours=1),
+                now,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.effective_grants "
+            "(grant_id,subject_principal_id,tenant_id,security_domain,owner,"
+            "action,exact_resource,not_before,expires_at,recovery_epoch) "
+            "VALUES ('grant-employee','human:alice','tenant-a','quality',"
+            "%s,%s,%s,%s,%s,1)",
+            (
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                now - timedelta(minutes=1),
+                now + timedelta(hours=1),
+            ),
+        )
+
+
 def workflow_content(description: str) -> dict:
     return {
         "description": description,
@@ -356,6 +429,148 @@ def workflow_content(description: str) -> dict:
             "revisionId": "runtime-profile-revision:one",
         },
     }
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_employee_exact_read_uses_authorization_transaction_and_revocation(
+    repository, monkeypatch, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    execution_repository = PostgresExecutionAuthorityRepository(
+        repository.pool.conninfo,
+        migration_path=EXECUTION_MIGRATION,
+        timeout=30.0,
+    )
+    employee_repository = PostgresEmployeeDefinitionRepository(execution_repository)
+    try:
+        execution_repository.migrate()
+        employee_repository.migrate(EMPLOYEE_MIGRATION)
+        scope = ScopeIdentity("tenant-a", "quality")
+        first = EmployeeRevision(
+            scope,
+            "employee-definition:quality",
+            "employee-revision:v1",
+            "Quality owner",
+            ("Review quality",),
+            (
+                CompositionMember(
+                    MemberKind.AGENT,
+                    "agent-definition:quality",
+                    "agent-revision:v1",
+                    "a" * 64,
+                ),
+            ),
+        )
+        second = EmployeeRevision(
+            scope,
+            first.definition_id,
+            "employee-revision:v2",
+            "Quality owner successor",
+            ("Review quality", "Coordinate remediation"),
+            first.members,
+            first.revision_id,
+        )
+        with execution_repository.pool.connection() as connection:
+            connection.execute(
+                "INSERT INTO digital_employee_definition.definitions "
+                "VALUES (%s,%s,%s,2)",
+                (scope.namespace, scope.security_domain, first.definition_id),
+            )
+            for revision in (first, second):
+                connection.execute(
+                    "INSERT INTO digital_employee_definition.revisions "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        revision.definition_id,
+                        revision.revision_id,
+                        revision.predecessor_revision_id,
+                        revision.digest,
+                        json.dumps(revision.record),
+                    ),
+                )
+
+        operation = employee_operations(employee_repository)[0]
+        path = {
+            "employee_definition_id": first.definition_id,
+            "revision_id": first.revision_id,
+        }
+        grants = tuple(operation.grant_builder(context(), path, {}, {}))
+        seed_employee_grant(repository, now, grants[0])
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_read = employee_repository.read_revision_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_read(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(
+            employee_repository, "read_revision_for_workbench", capture_owner
+        )
+        result = adapter.execute(
+            context(),
+            grants,
+            operation=operation.name,
+            payload={},
+            path=path,
+            query={},
+            handler=operation.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert result["employeeDefinitionRevisionId"] == first.revision_id
+        assert first.digest == result["employeeDefinitionDigest"]
+        assert second.revision_id not in repr(result)
+        assert "predecessor" not in repr(result).lower()
+        assert "facts" not in repr(result).lower()
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                GrantId("grant-employee"),
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-employee",
+                payload_digest="e" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+
+        def protected_owner_query(*args, **kwargs):
+            pytest.fail("protected Employee owner query ran after authorization denial")
+
+        monkeypatch.setattr(
+            employee_repository,
+            "read_revision_for_workbench",
+            protected_owner_query,
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
+    finally:
+        execution_repository.pool.close()
 
 
 @pytest.mark.parametrize("revocation", ["grant", "session"])

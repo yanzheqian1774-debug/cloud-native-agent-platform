@@ -267,6 +267,42 @@ class PostgresEmployeeDefinitionRepository:
                 conn, scope, identifier(definition_id), identifier(revision_id)
             )
 
+    @staticmethod
+    def read_revision_for_workbench(
+        connection,
+        scope,
+        definition_id,
+        revision_id,
+        *,
+        authorized,
+    ):
+        """Read one authorized immutable revision on the caller transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        key = (
+            scope.namespace,
+            scope.security_domain,
+            identifier(definition_id),
+            identifier(revision_id),
+        )
+        row = connection.execute(
+            "SELECT r.record,r.digest FROM digital_employee_definition.revisions r "
+            "JOIN digital_employee_definition.definitions d "
+            "USING(namespace,security_domain,definition_id) "
+            "WHERE r.namespace=%s AND r.security_domain=%s "
+            "AND r.definition_id=%s AND r.revision_id=%s FOR SHARE OF d",
+            key,
+        ).fetchone()
+        if row is None:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        try:
+            revision = EmployeeRevision.from_record(row["record"])
+        except (EmployeeDefinitionError, KeyError, TypeError) as exc:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT") from exc
+        if revision.digest != row["digest"]:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        return {"revision": row["record"], "digest": row["digest"]}
+
     def list(self, scope):
         with self.pool.connection() as conn:
             rows = conn.execute(

@@ -1,6 +1,6 @@
 # S5-V023-IMPL-305 Trusted Workbench BFF
 
-Status: bounded I2 implementation; Draft delivery, not I3 acceptance.
+Status: `PARTIAL_DRAFT / SESSION_OPEN`; bounded I2 implementation, not I3 acceptance.
 
 Base: `9c28fa5b28c0cab6a39dc05f5367e93c8bcc8913`
 
@@ -42,6 +42,7 @@ and durable Business Problem assembly are all available:
 | `POST /api/workbench/v1/problems/{id}/plans` | exact `PLAN PREPARE` and prepared `READ`, Problem/set/reference reads | Workflow Control preparation and Problem binding in one UoW |
 | `GET /api/workbench/v1/plans/{id}?version=N` | `PLAN READ plan:{id}:{N}` | owner plan/approval projection |
 | `POST /api/workbench/v1/plans/{id}/approvals` | independent exact `PLAN APPROVE` plus `READ`; owner-discovered Problem/set/reference reads | owner approval append with decision basis |
+| `GET /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}` | exact `EMPLOYEE READ employee:{definition_id}:{revision_id}` | only the authorized immutable Employee Definition revision and digest |
 | `GET /api/workbench/v1/workflows` | `WORKFLOW LIST workflow:collection` | minimal Workflow Definition summaries, when the optional Workflow registry is enabled |
 | `GET /api/workbench/v1/workflows/{definition_id}/revisions/{revision_id}` | exact `WORKFLOW READ workflow:{definition_id}:{revision_id}` | only the authorized revision and bounded projections, when the optional Workflow registry is enabled |
 
@@ -79,12 +80,14 @@ snapshot before their protected read. Replay follows the same current checks.
 routes. `workbench_app` remains `None` unless all production settings succeed:
 `WORKBENCH_AUTHORITY_RUNTIME_FILE`, `WORKBENCH_ALLOWED_HOST`, and
 `WORKBENCH_ALLOWED_ORIGIN`; the authority database fingerprint must equal
-`EXECUTION_DATABASE_URL`. Workflow Definition reads are an optional registry
-extension: when `WORKFLOW_RUNTIME_DATABASE_URL` is absent, the original 13
-Business Problem, Criteria, and Plan operations remain enabled; when it is
-present, the Workflow service must be available and its database fingerprint
-must equal the authority and execution database or startup fails closed. Database
-credentials are never included in the failure reason.
+`EXECUTION_DATABASE_URL`. Employee Definition exact READ is composed explicitly
+from the already-required Digital Employee assembly and uses that same execution
+database. Workflow Definition reads are an optional registry extension: when
+`WORKFLOW_RUNTIME_DATABASE_URL` is absent, the 13 Business Problem, Criteria, and
+Plan operations plus Employee exact READ remain enabled; when it is present, the
+Workflow service must be available and its database fingerprint must equal the
+authority and execution database or startup fails closed. Database credentials
+are never included in the failure reason.
 
 The supervisor retains its legacy one-listener form and adds an explicit dual
 mode (`--public-port` plus `--private-port`). Dual mode starts one child and one
@@ -105,9 +108,10 @@ evidence.
   registering a mock would allow requests without owner fact proof.
 - Workflow Definition LIST and exact-revision READ use the caller-owned connection
   and are registered when their optional same-database dependency is configured.
-  Workflow CREATE and all lifecycle mutations, plus Employee Definition lifecycle,
-  Instance, and Assignment APIs, remain unregistered. Existing header-based routes
-  stay private.
+  Employee Definition exact-revision READ is registered on the same boundary.
+  Workflow CREATE and all lifecycle mutations, Employee Definition lifecycle
+  mutations, Instance, and Assignment APIs remain unregistered. Existing
+  header-based routes stay private.
 - Governed Execution START and Skill invocation require their durable
   preparation/dispatch authorization barrier. They are not wrapped as ordinary
   database handlers. Execution read, Resource Use, and Evidence-reference routes
@@ -127,7 +131,8 @@ The default-disabled public BFF does not unlock IMPL-299.
 | Grant requests, decisions, revocation and continuations | `COMPONENT_ONLY / NOT_REGISTERED` | I1 application components exist, but production composition has no formal cross-owner exact-target validator/continuation resolver. |
 | Workflow Definition read | `OPTIONAL / FORMALLY_REGISTERED` | LIST and exact-revision READ use the current authorization transaction when the optional same-database Workflow service is configured; no aggregate history or adjacent revisions are disclosed. |
 | Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, edit, validate, review, publish, and other lifecycle mutations are not in the public registry. |
-| Employee Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | The current assembly does not expose the required caller-owned authorization transaction port. |
+| Employee Definition exact revision read | `FORMALLY_REGISTERED` | Exact `EMPLOYEE READ employee:{definition_id}:{revision_id}` uses the current authorization transaction and discloses only the requested revision identity, digest, role, responsibilities, and exact composition members. |
+| Employee Definition lifecycle mutation | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, validation, approval, publication, and matching decisions remain private owner operations. |
 | Instance, Assignment and Placement | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | Exact owner facts exist, but their application methods do not accept the BFF caller transaction/trusted-context authority. |
 | Governed Execution START and Skill dispatch | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | Dispatch must consume the existing durable preparation/dispatch authorization barrier; the ordinary database owner adapter is not that barrier. |
 | Execution and invocation readback | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | No BFF trusted-context owner port currently couples current authorization to the formal readback. |
@@ -138,6 +143,33 @@ new public registry. Therefore the matrix is `PARTIAL_DRAFT`: absence from the
 public route set is fail-closed behavior, but it is not delivery of the missing I2
 capabilities.
 
+## PROPOSED Agent Definition authorization gap
+
+The closed authority registry currently has no Agent Definition owner entry:
+`OWNER_ACTIONS` and `OWNER_RESOURCE_PREFIXES` in
+`console/backend/src/agent_console/authority_configuration.py` contain no `AGENT`
+mapping. Consequently 305 does not register an Agent route, borrow `EMPLOYEE` or
+another owner, or bypass current authorization.
+
+IMPL-310 needs a bounded exact-revision read to render the primary Agent member of
+an Employee Definition without receiving Agent revision history, reviews, facts,
+or adjacent revision pointers. The minimum additive contract decision is
+**PROPOSED**, not accepted or implemented:
+
+- owner/action/resource: `AGENT / READ / agent:{definition_id}:{revision_id}`;
+- owner port: caller-owned connection exact-revision read with digest validation;
+- response: requested Agent revision identity, digest, role content needed by 310,
+  and no aggregate history or lifecycle decision collection.
+
+The proposed implementation would affect
+`console/backend/src/agent_console/authority_configuration.py`,
+`agent_definition_repository.py`, `agent_definition_postgres.py`,
+`agent_definition_service.py`, a new `workbench_agent.py`, explicit
+`workbench_bootstrap.py`/`app.py` composition, and corresponding focused unit and
+PostgreSQL authorization tests. This is an independent additive contract gap; it
+does not reopen accepted ARCH-300 and does not block Employee or other already
+registered owner contracts.
+
 ## Validation record
 
 - checkpoint `17cccb3`: commit hooks passed Ruff lint, Ruff format, and pytest;
@@ -145,6 +177,13 @@ capabilities.
   `57e95d3` remain 19 passed and were not rerun by the composition increment;
 - composition, public/private route inventory, startup dependency, and fail-closed
   tests: 28 passed; targeted Ruff lint and format checks passed;
+- Employee exact READ focused unit/composition batch: 33 passed; targeted Ruff
+  lint and format checks passed. The response excludes scope, facts, publication
+  state, predecessor and adjacent Employee revisions;
+- dedicated PostgreSQL 15 Employee increment: 2 passed, 8 deselected. Exact
+  revision/digest read used the current authorization connection; grant and
+  session revocation each denied the next request before the protected owner
+  query. The disposable local container was removed after validation;
 - dedicated PostgreSQL 15 Workflow increment: 2 passed, 6 deselected. Both grant
   and session revocation cases first called the formal exact-revision owner on the
   authorization connection, disclosed no adjacent revision, then denied without
@@ -153,6 +192,11 @@ capabilities.
 - dedicated PostgreSQL 15 container, isolated databases per case: grant revoke and
   session revoke both blocked behind the owner commit, and subsequent requests
   failed current authorization;
+- prior checkpoint CI evidence was confirmed without rerun: runs `34377904525`
+  (CI) and `34377904624` (Employee Identity Chain) both completed successfully on
+  attempt 1 for source `5e0b77e34a461653764928b489baa0852f4b8592`.
+  Pull-request checkout executed merge commit
+  `dda7a2a3de91329b1d7b76afcd3563dc30e74373`, not the source commit directly;
 - event- and PostgreSQL-lock-driven owner replay cases prove equal concurrent
   payloads return one stored effect, changed payloads conflict, and grant/session
   revocations waiting behind the replay take effect before any later request;
@@ -160,3 +204,6 @@ capabilities.
   deployment isolation. Deterministic lifecycle cases cover supervisor loss,
   either-listener unexpected exit, partial startup failure, and expected signal
   shutdown; readiness failure also kills a child that does not honor termination.
+
+Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. IMPL-299 and IMPL-310 gates stay
+in force; this increment does not make the Draft PR ready, merge, or deploy it.

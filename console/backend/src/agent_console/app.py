@@ -1906,6 +1906,9 @@ def _configure_workbench() -> None:
     if _business_problem_application is None:
         _workbench_startup_error = "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE"
         return
+    if _digital_employee_assembly is None:
+        _workbench_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+        return
     workflow_database_url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
     workflow_service = None
     if workflow_database_url:
@@ -1921,6 +1924,7 @@ def _configure_workbench() -> None:
             allowed_origin=allowed_origin,
             owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
             business_problems=_business_problem_application,
+            employee_definitions=_digital_employee_assembly.employee_definitions,
             workflow_database_url=workflow_database_url,
             workflows=workflow_service,
         )
