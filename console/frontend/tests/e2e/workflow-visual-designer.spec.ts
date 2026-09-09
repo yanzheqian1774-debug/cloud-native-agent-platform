@@ -86,7 +86,7 @@ test("requires an explicit decision before switching away from unsaved authoring
   const first=makeProjection("workflow:first","First Workflow"),second=makeProjection("workflow:second","Second Workflow");
   await page.route("**/api/internal/v0.2.2/resources/skill",route=>route.fulfill({contentType:"application/json",body:"[]"}));
   await page.route("**/api/internal/v0.2.2/workflow-definitions**",route=>{const path=decodeURIComponent(new URL(route.request().url()).pathname);route.fulfill({contentType:"application/json",body:JSON.stringify(path.endsWith("/workflow-definitions")?[first,second]:path.endsWith(first.definition.workflowDefinitionId)?first:second)})});
-  await page.goto("/workflow-definitions");await page.getByRole("button",{name:/First Workflow/}).click();await page.getByRole("button",{name:"编辑当前 Draft"}).click();
+  await page.goto("/workflow-definitions");await expect(page.getByRole("button",{name:/First Workflow/})).toContainText("摘要：First Workflow");await page.getByRole("button",{name:/First Workflow/}).click();await page.getByRole("button",{name:"编辑当前 Draft"}).click();
   await page.getByLabel("用途说明").fill("unsaved authoring");
   await page.getByRole("button",{name:/Second Workflow/}).click();
   const warning=page.getByLabel("未保存 Workflow 编辑");await expect(warning).toContainText("不会被静默丢弃");await expect(page.getByLabel("用途说明")).toHaveValue("unsaved authoring");
