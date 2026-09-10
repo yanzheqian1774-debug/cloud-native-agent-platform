@@ -9,12 +9,24 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class KnowledgeSourceInput(BaseModel):
-    sourceId: str
-    documentId: str
-    kind: str = "TEXT"
-    provenance: str
+class ParsedSegmentInput(StrictModel):
     content: str
+    location: dict[str, int]
+
+
+class KnowledgeSourceInput(BaseModel):
+    sourceId: str | None = None
+    documentId: str | None = None
+    kind: str = "TEXT"
+    provenance: str | None = None
+    content: str
+    sourceDescription: str | None = None
+    externalReference: str | None = None
+    fileName: str | None = None
+    mediaType: str | None = None
+    parserVersion: str | None = None
+    contentDigest: str | None = None
+    segments: list[ParsedSegmentInput] | None = None
 
 
 class CreateKnowledge(BaseModel):

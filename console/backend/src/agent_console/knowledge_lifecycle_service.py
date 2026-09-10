@@ -7,7 +7,11 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
-from agent_console.knowledge_ingestion import deterministic_vector, ingest_text
+from agent_console.knowledge_ingestion import (
+    deterministic_vector,
+    ingest_parsed_segments,
+    ingest_text,
+)
 from agent_console.knowledge_pack import canonical_digest, identifier, normalize_text
 from agent_console.knowledge_qdrant import QdrantKnowledgeError, QdrantKnowledgeIndex
 from agent_console.knowledge_repository import KnowledgeRepository, KnowledgeScope
@@ -60,9 +64,49 @@ class KnowledgeLifecycleService:
         knowledge_id: str | None = None,
         revision_id: str | None = None,
     ) -> dict[str, Any]:
-        source_id = identifier(source.get("sourceId"), "INVALID_SOURCE_ID")
-        document_id = identifier(source.get("documentId"), "INVALID_DOCUMENT_ID")
-        chunks, content_digest = ingest_text(document_id, source.get("content"))
+        source_id = (
+            identifier(source.get("sourceId"), "INVALID_SOURCE_ID")
+            if source.get("sourceId") is not None
+            else identity("knowledge-source")
+        )
+        document_id = (
+            identifier(source.get("documentId"), "INVALID_DOCUMENT_ID")
+            if source.get("documentId") is not None
+            else identity("knowledge-document")
+        )
+        if source.get("segments") is not None:
+            chunks, content_digest = ingest_parsed_segments(
+                document_id,
+                source.get("content"),
+                source.get("segments"),
+                source.get("contentDigest"),
+            )
+        else:
+            chunks, content_digest = ingest_text(document_id, source.get("content"))
+        provenance = source.get("provenance")
+        if provenance is None:
+            provenance = f"document-upload:{content_digest[:24]}"
+        source_content = {
+            "sourceId": source_id,
+            "collectionId": identifier(
+                source.get("collectionId", f"collection:{source_id}"),
+                "INVALID_COLLECTION_ID",
+            ),
+            "kind": identifier(source.get("kind", "TEXT"), "INVALID_SOURCE_KIND"),
+            "provenance": identifier(provenance, "INVALID_PROVENANCE"),
+        }
+        for key in (
+            "sourceDescription",
+            "externalReference",
+            "fileName",
+            "mediaType",
+            "parserVersion",
+        ):
+            value = source.get(key)
+            if value is not None:
+                source_content[key] = normalize_text(
+                    value, f"INVALID_{key.upper()}", limit=2000
+                )
         revision_id = (
             identifier(revision_id, "INVALID_REVISION_ID")
             if revision_id is not None
@@ -70,17 +114,7 @@ class KnowledgeLifecycleService:
         )
         content = {
             "name": normalize_text(name, "INVALID_NAME"),
-            "source": {
-                "sourceId": source_id,
-                "collectionId": identifier(
-                    source.get("collectionId", f"collection:{source_id}"),
-                    "INVALID_COLLECTION_ID",
-                ),
-                "kind": identifier(source.get("kind", "TEXT"), "INVALID_SOURCE_KIND"),
-                "provenance": identifier(
-                    source.get("provenance"), "INVALID_PROVENANCE"
-                ),
-            },
+            "source": source_content,
             "documents": [
                 {
                     "documentId": document_id,
@@ -268,6 +302,14 @@ class KnowledgeLifecycleService:
             if published is None or record["currentDraftRevisionId"] is not None:
                 raise KnowledgeLifecycleFailure("PUBLISHED_REVISION_REQUIRED")
             content = copy.deepcopy(published["content"])
+            source = content["source"]
+            for key in ("externalReference", "fileName", "mediaType", "parserVersion"):
+                source.pop(key, None)
+            source.update(
+                kind="TEXT",
+                provenance=f"human-edit:{identifier(actor, 'INVALID_ACTOR')}",
+                sourceDescription="人工编辑后继修订",
+            )
             document = content["documents"][0]
             chunks, content_digest = ingest_text(document["documentId"], source_content)
             document.update(chunks=chunks, contentDigest=content_digest)
@@ -509,6 +551,11 @@ class KnowledgeLifecycleService:
                         "chunkId": chunk["chunkId"],
                         "chunkDigest": chunk["contentDigest"],
                         "content": chunk["content"],
+                        **(
+                            {"location": chunk["location"]}
+                            if chunk.get("location")
+                            else {}
+                        ),
                     }
                 )
             retrieval = {

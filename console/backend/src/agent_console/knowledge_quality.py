@@ -84,6 +84,9 @@ class KnowledgeQualityService:
                 "revisionId": revision["revisionId"],
                 "revisionDigest": revision["digest"],
                 "sourceId": source["sourceId"],
+                "sourceDescription": source.get("sourceDescription"),
+                "externalReference": source.get("externalReference"),
+                "fileName": source.get("fileName"),
                 "contentType": source["kind"],
                 "provenance": source["provenance"],
                 "documentId": document["documentId"],
@@ -91,6 +94,7 @@ class KnowledgeQualityService:
                 "chunkId": chunk["chunkId"],
                 "chunkDigest": chunk["contentDigest"],
                 "content": chunk["content"],
+                "location": chunk.get("location"),
                 "snapshotId": record.get("activeIndexSnapshotId"),
             }
             for document in revision["content"]["documents"]
@@ -220,6 +224,11 @@ class KnowledgeQualityService:
             )
         return {
             "classification": mode,
+            "scoreMeaning": {
+                "LEXICAL": "QUERY_TOKEN_COVERAGE",
+                "SEMANTIC": "QDRANT_VECTOR_SCORE",
+                "HYBRID": "RECIPROCAL_RANK_FUSION_SCORE",
+            }[mode],
             "queryDigest": _digest(query, "knowledge-quality-query.v1"),
             "topK": top_k,
             "tokenizerVersion": TOKENIZER_VERSION,
