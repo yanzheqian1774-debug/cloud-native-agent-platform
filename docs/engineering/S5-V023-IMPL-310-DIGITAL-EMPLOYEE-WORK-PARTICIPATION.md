@@ -122,3 +122,47 @@ independently authorized read projection for governed execution/Runtime and
 Evidence references, then replace the browser `TEST_ADAPTER` with a real-service
 journey. Do not add a second state store or infer Evidence permission from a
 Placement reference.
+
+## Trusted-read integration checkpoint — 2026-09-10
+
+Status remains `OPEN / G1 / PARTIAL_DRAFT`; the trusted read dependency is now
+integrated, while real-browser completion and the original lifecycle obligations
+remain open.
+
+- The fixed IMPL-305 dependency is
+  `3abb901f30a57218928990adf4f2ae75ca38829b`, tree
+  `eb8480069ccbb3946aa54b33855aadbd8a6ba83a`. It is the second parent of merge
+  checkpoint `b44a7cdb7bc486cb20d0e23d45d84fb55a7348e2`; it was not re-merged.
+- The interaction-design chain is present through
+  `400404ac104801040aadbbc68dd561c5adbc690b`, following product candidate
+  `4ef9ee40b4fb099d93823e3aa98c801e90c2087c` and its recorded tree
+  `ac9f34bedfb3b2d64364126ed2a52cb2127f1d33`.
+- Frontend checkpoint `e605c914139a860da881af0f0969c105c04f2294`, tree
+  `d85d12abc1d6beef33055095a3d0aaf68c7936af`, consumes only the formal
+  Workbench BFF. It sends no browser identity headers, preserves LIST/READ
+  separation, verifies exact Employee/Agent/Instance/Assignment/Placement
+  identities, clears protected state on failure, and keeps all write operations
+  disabled rather than falling back to private APIs.
+- The recovered final pagination artifact reports `passed` with no failed tests.
+  The original process was no longer present, so its shell exit code is
+  `UNKNOWN`; the test was not rerun.
+- The checkpoint hooks completed with Ruff lint, Ruff format, and the repository
+  pytest suite passing. Earlier successful frontend lint, production build, and
+  ten targeted source tests were not repeated.
+- A dedicated real HTTPS Workbench acceptance fixture and Playwright journey now
+  encode legal reads, Employee/Agent pagination, LIST-versus-READ independence,
+  wrong-scope and wrong-exact-grant hiding, session logout, dynamic Placement
+  grant revocation, parent mismatch, refresh recovery, and absence of browser
+  identity headers. Static import, Ruff, TypeScript, ESLint, and Playwright test
+  discovery pass.
+- Real execution is not yet evidence: the exclusive
+  `s5-v023-impl-310-postgres` start could not reach the Docker Desktop socket;
+  both the Docker client and a direct socket `_ping` timed out. The start was
+  interrupted with exit `125`, no 305/309/311 asset was reused, and Docker was
+  not restarted because that would disturb other tasks.
+
+Formal Execution/Runtime and observation reads, Resource Use, Evidence reference
+and content authorization, complete work history, Business Outcome closure,
+Digital Employee lifecycle writes, I3/deployment isolation, Human acceptance,
+and release acceptance remain incomplete. Draft PR #165 remains Draft; this
+checkpoint does not authorize Ready, merge, deployment, or task closure.
