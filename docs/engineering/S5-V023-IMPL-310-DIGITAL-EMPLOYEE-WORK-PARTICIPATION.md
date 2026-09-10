@@ -232,3 +232,14 @@ copied. The status file remains outside the cleaned runtime directory until the
 summary has incorporated its sanitized fields. Raw server and Playwright logs
 remain non-artifacts, and a missing, invalid, failed, or incomplete startup
 status fails closed without promoting browser Evidence.
+
+The first diagnostic candidate then proved `DATABASE_CONNECTION` complete and
+`DATABASE_MIGRATION_FAILED / DATABASE_ERROR`. Source comparison identified a
+fixture-only prerequisite defect: migration 0006 explicitly requires the
+0001–0005 schemas, but the fixture invoked the Agent repository's 0001+0006
+path without first applying 0002–0005; migration 0009 also requires the
+workflow definition schema created by 0007. Existing successful PostgreSQL
+tests apply 0001–0005 in one psycopg transaction, run the Agent repository
+migration, commit 0007 separately, and only then construct the Digital Employee
+assembly. The fixture now reuses that ordering. No production migration,
+database role, extension, timeout, gate, or failure-close behavior changed.

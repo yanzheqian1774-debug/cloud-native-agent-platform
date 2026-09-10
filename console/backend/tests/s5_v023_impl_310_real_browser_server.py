@@ -11,6 +11,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import psycopg
 import uvicorn
 from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepository
 from agent_console.agent_definition_service import AgentDefinitionService
@@ -63,6 +64,8 @@ ATTEMPT_ID = "attempt:quality"
 AGENT_INSTANCE_ID = "agent-instance:quality"
 RUNTIME_INSTANCE_ID = "runtime-instance:quality"
 PLACEMENT_GRANT_ID = GrantId("grant-alice-placement-read")
+AGENT_PREREQUISITE_MIGRATIONS = (1, 2, 3, 4, 5)
+WORKFLOW_PREREQUISITE_MIGRATIONS = (7,)
 
 
 class Authorized:
@@ -70,6 +73,16 @@ class Authorized:
         if scope != SCOPE:
             raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
         return f"acceptance:{action}:{identity}"
+
+
+def apply_prerequisite_migrations(database_url: str, versions: tuple[int, ...]) -> None:
+    """Apply the repository's tested prerequisite chain in one transaction."""
+    with psycopg.connect(database_url) as connection:
+        for version in versions:
+            candidates = tuple(MIGRATIONS.glob(f"{version:04d}_*.sql"))
+            if len(candidates) != 1:
+                raise ValueError("MIGRATION_PREREQUISITE_INVALID")
+            connection.execute(candidates[0].read_text())
 
 
 def publish_agent(service: AgentDefinitionService, name: str) -> dict:
@@ -481,7 +494,9 @@ def build_fixture(args, startup: BoundedStartupStatus):
     )
     startup.complete("DATABASE_CONNECTION")
     startup.begin("DATABASE_MIGRATION")
+    apply_prerequisite_migrations(args.database_url, AGENT_PREREQUISITE_MIGRATIONS)
     agent_repository.migrate()
+    apply_prerequisite_migrations(args.database_url, WORKFLOW_PREREQUISITE_MIGRATIONS)
     agents = AgentDefinitionService(agent_repository)
     assembly = build_digital_employee_assembly(
         args.database_url,
