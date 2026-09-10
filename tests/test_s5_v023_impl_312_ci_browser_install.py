@@ -247,8 +247,9 @@ def test_non_allowed_install_failures_do_not_retry(
 def test_incomplete_allowed_failure_structure_does_not_retry(tmp_path: Path) -> None:
     output = (
         f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch\n"
+        "E: Some index files failed to download. They have been ignored, "
+        "or old ones used instead.\n"
         "Failed to install browsers\n"
-        "Error: Installation process exited with code: 100\n"
     )
     result = run_install_step(tmp_path, [(35, output)])
 
@@ -256,6 +257,27 @@ def test_incomplete_allowed_failure_structure_does_not_retry(tmp_path: Path) -> 
     assert result.attempts == 1
     assert result.sleeps == []
     assert "error_category=playwright_install_failure_unclassified" in (
+        result.completed.stdout
+    )
+
+
+def test_reordered_allowed_failure_structure_does_not_retry(tmp_path: Path) -> None:
+    output = "\n".join(
+        (
+            f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch",
+            "Failed to install browsers",
+            "E: Some index files failed to download. They have been ignored, "
+            "or old ones used instead.",
+            "Error: Installation process exited with code: 100",
+            "",
+        )
+    )
+    result = run_install_step(tmp_path, [(36, output)])
+
+    assert result.completed.returncode == 36
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert "error_category=mixed_playwright_install_failure" in (
         result.completed.stdout
     )
 
