@@ -232,6 +232,93 @@ EXCEPTION_CLASSES = frozenset(
     }
 )
 _ASSERTION_ID = re.compile(r"[A-Z][A-Z0-9_]{2,95}\Z")
+FAILURE_DETAIL_PREFIX = "BROWSER_FAILURE_DETAIL_V1 "
+MAX_FAILURE_DETAILS = 16
+FAILURE_DETAIL_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "diagnosticState",
+        "orderSemantics",
+        "failureCount",
+        "emittedCount",
+        "truncated",
+        "failures",
+    }
+)
+FAILURE_DETAIL_ITEM_FIELDS = frozenset(
+    {
+        "reportIndex",
+        "scenarioId",
+        "spec",
+        "sourceLine",
+        "harnessPhase",
+        "resultStatus",
+        "failureCategory",
+        "failureSubtype",
+        "navigationAction",
+        "navigationTarget",
+        "browserError",
+        "httpStatusCategory",
+        "httpStatusSourceClass",
+    }
+)
+NAVIGATION_ACTIONS = frozenset(
+    {"PAGE_GOTO", "PAGE_RELOAD", "PAGE_GO_BACK", "PAGE_GO_FORWARD", "UNKNOWN"}
+)
+STATIC_NAVIGATION_PATHS = frozenset(
+    {
+        "/",
+        "/agent-definitions",
+        "/catalog",
+        "/digital-employees",
+        "/evidence",
+        "/knowledge",
+        "/mcp-resources",
+        "/product-view",
+        "/runtime-profiles",
+        "/skill-resources",
+        "/technical-view",
+        "/workflow-definitions",
+    }
+)
+NAVIGATION_ROUTE_TEMPLATES = (
+    (
+        re.compile(r"/api/internal/v0\.2\.1/problems/[^/]+\Z"),
+        "/api/internal/v0.2.1/problems/{problemId}",
+    ),
+    (
+        re.compile(r"/api/internal/v0\.2\.2/knowledge/[^/]+\Z"),
+        "/api/internal/v0.2.2/knowledge/{knowledgeId}",
+    ),
+    (
+        re.compile(r"/api/internal/v0\.2\.2/runtime-profiles/[^/]+\Z"),
+        "/api/internal/v0.2.2/runtime-profiles/{runtimeProfileId}",
+    ),
+    (
+        re.compile(r"/api/internal/v0\.2\.2/workflow-definitions/[^/]+\Z"),
+        "/api/internal/v0.2.2/workflow-definitions/{workflowDefinitionId}",
+    ),
+    (
+        re.compile(r"/api/internal/v0\.2\.3/digital-employees/definitions/[^/]+\Z"),
+        "/api/internal/v0.2.3/digital-employees/definitions/{employeeDefinitionId}",
+    ),
+)
+ALLOWLISTED_NAVIGATION_TARGETS = STATIC_NAVIGATION_PATHS | frozenset(
+    template for _, template in NAVIGATION_ROUTE_TEMPLATES
+)
+ALLOWLISTED_BROWSER_ERRORS = frozenset(
+    {
+        "net::ERR_ABORTED",
+        "net::ERR_CONNECTION_CLOSED",
+        "net::ERR_CONNECTION_REFUSED",
+        "net::ERR_CONNECTION_RESET",
+        "net::ERR_EMPTY_RESPONSE",
+        "net::ERR_FAILED",
+        "net::ERR_HTTP_RESPONSE_CODE_FAILURE",
+        "net::ERR_NAME_NOT_RESOLVED",
+        "net::ERR_TIMED_OUT",
+    }
+)
 
 
 def _browser_json(stdout: bytes) -> dict[str, object] | None:
@@ -425,6 +512,256 @@ def _failure_details(
         "UNKNOWN",
         http_source,
     )
+
+
+def _unexpected_report_contexts(
+    report: dict[str, object],
+) -> list[tuple[dict[str, object], dict[str, object]]]:
+    contexts: list[tuple[dict[str, object], dict[str, object]]] = []
+    for suite, spec in _ordered_specs(report.get("suites")):
+        tests = spec.get("tests")
+        if not isinstance(tests, list):
+            continue
+        for test in tests:
+            if not isinstance(test, dict) or test.get("status") != "unexpected":
+                continue
+            results = test.get("results")
+            failed = (
+                [
+                    result
+                    for result in results
+                    if isinstance(result, dict)
+                    and result.get("status") in {"failed", "timedOut", "interrupted"}
+                ]
+                if isinstance(results, list)
+                else []
+            )
+            contexts.append((suite, spec, failed[0] if len(failed) == 1 else {}))
+    return contexts
+
+
+def _failure_message(result: dict[str, object]) -> str:
+    errors = result.get("errors")
+    if not isinstance(errors, list):
+        return ""
+    return " ".join(
+        str(error.get("message", ""))
+        for error in errors
+        if isinstance(error, dict) and isinstance(error.get("message"), str)
+    )[:65_536]
+
+
+def _navigation_action(message: str) -> str:
+    mapping = {
+        "goto": "PAGE_GOTO",
+        "reload": "PAGE_RELOAD",
+        "goBack": "PAGE_GO_BACK",
+        "goForward": "PAGE_GO_FORWARD",
+    }
+    matches = {
+        mapping[value]
+        for value in re.findall(
+            r"\bpage\.(goto|reload|goBack|goForward)(?=\s|:|\()", message
+        )
+    }
+    return next(iter(matches)) if len(matches) == 1 else "UNKNOWN"
+
+
+def _navigation_target(message: str) -> str:
+    paths: set[str] = set()
+    for candidate in re.findall(r"https?://[^\s<>\"']+", message):
+        parsed = urlparse(candidate.rstrip(".,);]"))
+        if parsed.path in STATIC_NAVIGATION_PATHS:
+            paths.add(parsed.path)
+            continue
+        paths.update(
+            template
+            for pattern, template in NAVIGATION_ROUTE_TEMPLATES
+            if pattern.fullmatch(parsed.path)
+        )
+    return next(iter(paths)) if len(paths) == 1 else "UNKNOWN"
+
+
+def _browser_error(message: str) -> str:
+    matches = set(re.findall(r"net::ERR_[A-Z0-9_]+", message))
+    allowed = matches & ALLOWLISTED_BROWSER_ERRORS
+    return next(iter(allowed)) if len(matches) == 1 and len(allowed) == 1 else "UNKNOWN"
+
+
+def _failure_detail_item(
+    report_index: int,
+    suite: dict[str, object],
+    spec: dict[str, object],
+    result: dict[str, object],
+) -> dict[str, object]:
+    key = (Path(str(suite.get("file", ""))).name, spec.get("title"))
+    scenario = FIRST_FAILURE_ASSERTION_IDS.get(key, "UNKNOWN")
+    known = scenario != "UNKNOWN"
+    message = _failure_message(result)
+    status = result.get("status")
+    result_status = (
+        status if status in {"failed", "timedOut", "interrupted"} else "UNKNOWN"
+    )
+    structured_status = result.get("structuredHttpStatus")
+    if structured_status is None:
+        http_source, http_category = "NO_STRUCTURED_HTTP_STATUS", "UNKNOWN"
+        classified_status = None
+    else:
+        try:
+            http_source, http_category = _structured_http_classification(
+                structured_status
+            )
+            classified_status = structured_status
+        except ValueError:
+            http_source, http_category = "NOT_RETAINED", "UNKNOWN"
+            classified_status = None
+    if result_status == "UNKNOWN":
+        category, subtype = "UNKNOWN", "UNKNOWN"
+    else:
+        category, subtype, _, _, _ = _failure_details(
+            message, str(result_status), classified_status
+        )
+    line = spec.get("line")
+    return {
+        "reportIndex": report_index,
+        "scenarioId": scenario,
+        "spec": f"console/frontend/tests/e2e/{key[0]}" if known else "UNKNOWN",
+        "sourceLine": (
+            line
+            if known and type(line) is int and 1 <= line <= MAX_DIAGNOSTIC_COUNT
+            else "UNKNOWN"
+        ),
+        "harnessPhase": "BROWSER_COMMAND",
+        "resultStatus": result_status,
+        "failureCategory": category,
+        "failureSubtype": subtype,
+        "navigationAction": _navigation_action(message),
+        "navigationTarget": _navigation_target(message),
+        "browserError": _browser_error(message),
+        "httpStatusCategory": http_category,
+        "httpStatusSourceClass": http_source,
+    }
+
+
+def build_failure_details(stdout: bytes) -> dict[str, object]:
+    report = _browser_json(stdout)
+    if report is None:
+        return {
+            "schemaVersion": 1,
+            "diagnosticState": "DIAGNOSTIC_GAP",
+            "orderSemantics": "REPORT_ORDER",
+            "failureCount": "UNKNOWN",
+            "emittedCount": 0,
+            "truncated": False,
+            "failures": [],
+        }
+    stats = report.get("stats")
+    failure_count = stats.get("unexpected") if isinstance(stats, dict) else None
+    if type(failure_count) is not int or not 0 <= failure_count <= MAX_DIAGNOSTIC_COUNT:
+        failure_count = "UNKNOWN"
+    contexts = _unexpected_report_contexts(report)
+    emitted = contexts[:MAX_FAILURE_DETAILS]
+    return {
+        "schemaVersion": 1,
+        "diagnosticState": (
+            "COMPLETE" if failure_count == len(contexts) else "PARTIAL"
+        ),
+        "orderSemantics": "REPORT_ORDER",
+        "failureCount": failure_count,
+        "emittedCount": len(emitted),
+        "truncated": len(contexts) > MAX_FAILURE_DETAILS,
+        "failures": [
+            _failure_detail_item(index, *context)
+            for index, context in enumerate(emitted, start=1)
+        ],
+    }
+
+
+def encode_failure_details(details: dict[str, object]) -> str:
+    if set(details) != FAILURE_DETAIL_FIELDS:
+        raise ValueError("failure detail schema violation")
+    failure_count = details["failureCount"]
+    if failure_count != "UNKNOWN" and (
+        type(failure_count) is not int or not 0 <= failure_count <= MAX_DIAGNOSTIC_COUNT
+    ):
+        raise ValueError("failure detail count violation")
+    failures = details["failures"]
+    if (
+        details["schemaVersion"] != 1
+        or details["diagnosticState"] not in {"COMPLETE", "PARTIAL", "DIAGNOSTIC_GAP"}
+        or details["orderSemantics"] != "REPORT_ORDER"
+        or not isinstance(failures, list)
+        or len(failures) > MAX_FAILURE_DETAILS
+        or details["emittedCount"] != len(failures)
+        or type(details["truncated"]) is not bool
+    ):
+        raise ValueError("failure detail envelope violation")
+    for index, item in enumerate(failures, start=1):
+        if not isinstance(item, dict) or set(item) != FAILURE_DETAIL_ITEM_FIELDS:
+            raise ValueError("failure detail item schema violation")
+        scenario = item["scenarioId"]
+        mapping = next(
+            (
+                key
+                for key, value in FIRST_FAILURE_ASSERTION_IDS.items()
+                if value == scenario
+            ),
+            None,
+        )
+        if (
+            item["reportIndex"] != index
+            or (scenario == "UNKNOWN" and item["spec"] != "UNKNOWN")
+            or (
+                scenario != "UNKNOWN"
+                and (
+                    mapping is None
+                    or item["spec"] != f"console/frontend/tests/e2e/{mapping[0]}"
+                )
+            )
+        ):
+            raise ValueError("failure detail identity violation")
+        if item["sourceLine"] != "UNKNOWN" and (
+            mapping is None
+            or type(item["sourceLine"]) is not int
+            or not 1 <= item["sourceLine"] <= MAX_DIAGNOSTIC_COUNT
+        ):
+            raise ValueError("failure detail location violation")
+        if (
+            item["harnessPhase"] != "BROWSER_COMMAND"
+            or item["resultStatus"]
+            not in {"failed", "timedOut", "interrupted", "UNKNOWN"}
+            or item["failureCategory"] not in FAILURE_CATEGORIES | {"UNKNOWN"}
+            or item["failureSubtype"] not in FAILURE_SUBTYPES
+            or item["navigationAction"] not in NAVIGATION_ACTIONS
+            or item["navigationTarget"]
+            not in ALLOWLISTED_NAVIGATION_TARGETS | {"UNKNOWN"}
+            or item["browserError"] not in ALLOWLISTED_BROWSER_ERRORS | {"UNKNOWN"}
+            or item["httpStatusCategory"] not in HTTP_STATUS_CATEGORIES
+            or item["httpStatusSourceClass"] not in HTTP_STATUS_SOURCE_CLASSES
+        ):
+            raise ValueError("failure detail classification violation")
+    encoded = json.dumps(
+        details, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    if len((FAILURE_DETAIL_PREFIX + encoded).encode()) > 16_384:
+        raise ValueError("failure detail size violation")
+    return encoded
+
+
+def emit_failure_details(stdout: bytes) -> None:
+    try:
+        encoded = encode_failure_details(build_failure_details(stdout))
+        print(FAILURE_DETAIL_PREFIX + encoded, file=sys.stderr, flush=True)
+    except Exception:
+        with suppress(Exception):
+            print(
+                FAILURE_DETAIL_PREFIX
+                + '{"diagnosticState":"DIAGNOSTIC_GAP","emittedCount":0,'
+                '"failureCount":"UNKNOWN","failures":[],"orderSemantics":'
+                '"REPORT_ORDER","schemaVersion":1,"truncated":false}',
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def sanitized_first_failure_record(
@@ -2119,6 +2456,7 @@ def main() -> int:
                 build_identity,
                 failure_context,
             )
+            emit_failure_details(browser_result.stdout)
     except BaseException as exc:
         primary_error = exc
         raise
