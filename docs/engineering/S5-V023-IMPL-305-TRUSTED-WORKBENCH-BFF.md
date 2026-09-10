@@ -207,3 +207,185 @@ registered owner contracts.
 
 Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. IMPL-299 and IMPL-310 gates stay
 in force; this increment does not make the Draft PR ready, merge, or deploy it.
+
+## Contract addendum for fixed IMPL-310 candidate
+
+This addendum is a bounded recommendation for the fixed IMPL-310 candidate
+`4ef9ee40b4fb099d93823e3aa98c801e90c2087c`. It records gaps only. ARCH-300 is
+still `Proposed / Not Started`; every authorization owner, action, resource, and
+response field identified below as **PROPOSED** remains unregistered and
+unimplemented. Nothing here authorizes a production route, registry change,
+lifecycle change, merge, or deployment.
+
+### Placement exact READ
+
+- **Accepted basis:** the current source keeps Definition, Instance, Assignment,
+  Placement, Agent Instance, Runtime Instance, and Attempt as distinct identities.
+  The already implemented BFF boundary authorizes before protected lookup, uses a
+  caller-owned PostgreSQL connection, holds current session/grant locks through
+  the owner call, and collapses unauthorized and missing exact resources to a
+  minimum-disclosure `404`. Existing `INSTANCE READ instance:{instance_id}` and
+  `ASSIGNMENT READ assignment:{assignment_id}` mappings are unchanged.
+- **Candidate new decision — PROPOSED:** add `PLACEMENT / READ /
+  placement:{placement_id}` and no other Placement action. A candidate browser
+  route may use
+  `/api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/placements/{placement_id}`
+  with required `attemptId` and `agentInstanceId` query coordinates. The request
+  must carry all three independent exact grants: the existing Instance READ,
+  existing Assignment READ, and proposed Placement READ. Parent possession or a
+  Placement grant must not imply any other grant; in particular, no Execution,
+  Resource Use, Evidence, Runtime, or Agent detail READ is derived.
+- **Current implementation:** the private Digital Employee owner first verifies
+  Assignment belongs to Instance; Attempt belongs to that Assignment and Digital
+  Employee Instance; the Agent Instance exists and matches the Instance's exact
+  primary Agent definition/revision/digest; the Placement decision exists and has
+  a Runtime Instance; its request matches the supplied Attempt and Agent Instance;
+  and the Attempt is still active for that Runtime Instance and Agent Instance.
+  IMPL-310 depends on that exact chain and active-attempt check; neither may be
+  weakened or replaced by client assertions.
+- **Gap:** `PLACEMENT` is absent from `OWNER_ACTIONS` and
+  `OWNER_RESOURCE_PREFIXES`; the private Placement application/repository path
+  opens owner-managed connections for several reads and does not accept the BFF
+  caller connection. There is no registered trusted-context Placement owner port.
+- **Acceptance effect:** accepting the proposal would permit only one exact,
+  parent-bound Placement projection after three current grants. Not accepting it
+  leaves the 310 Placement panel on the private header-based API and therefore not
+  browser-trusted; it does not affect the already registered Instance or
+  Assignment reads.
+- **Minimum DTO and hiding:** disclose only `placementId`, `requestId`,
+  `decision`, `runtimeInstanceId`, `policyVersion`, `compatibilityFacts`,
+  `limitationCodes`, `decidedAt`, and `digest`. Do not return supplied parent
+  coordinates, adjacent decisions, request history, observations, Execution or
+  Outcome claims, Resource Use, or Evidence. Missing grant, missing object,
+  foreign scope, any parent/identity mismatch, non-assembled Runtime, and inactive
+  Attempt must share `404 PLACEMENT_NOT_FOUND` with the same bounded body shape.
+- **Implementation and revocation verification boundary:** a future owner port
+  must perform authorization and every parent-chain/active-attempt read on the
+  caller-owned connection without commit or nested connection. Focused PostgreSQL
+  tests must prove the exact DTO and uniform hiding, and prove both grant and
+  session revocation: a protected read that wins commits before the racing revoke;
+  a revoke that wins makes the first/new request and any replay fail before any
+  Placement or parent fact is disclosed. Tests must also fail closed if any of the
+  fixed IMPL-310 parent or active-attempt checks is removed.
+
+### Agent Definition exact-revision READ
+
+- **Accepted basis:** Agent Definition is distinct from Employee Definition and
+  from Agent Instance. Existing Agent lifecycle persistence has immutable
+  revision IDs and digests, while an Employee Definition member binds one exact
+  Agent definition/revision/digest. The accepted general boundary is exact
+  authorization before disclosure; ARCH-300 does not currently assign an Agent
+  owner/action/resource row.
+- **Candidate new decision — PROPOSED:** retain the recommendation
+  `AGENT / READ / agent:{definition_id}:{revision_id}`. The BFF must construct the
+  exact target from typed path values and must not accept a current/published
+  alias. This permission is independent from proposed Agent LIST, Employee READ,
+  Instance READ, and any Agent lifecycle permission.
+- **Current implementation:** the private Agent API reads a complete aggregate and
+  projects all revisions, reviews, facts, relationships, lifecycle controls, and
+  adjacent identities. Its repository `get` opens its own connection and the
+  closed authority registry has no `AGENT` entry. The existing Employee BFF read
+  returns only the Employee member reference; it is not Agent authorization.
+- **Gap:** there is no caller-connection exact Agent revision repository method,
+  trusted-context owner adapter, strict response DTO, registered route, or grant
+  vocabulary. Reusing the aggregate projection would over-disclose and using
+  `EMPLOYEE` would collapse domain ownership.
+- **Acceptance effect and minimum DTO:** acceptance would allow only the requested
+  `definitionId`, `revisionId`, verified `digest`, `name`, and bounded role content
+  needed by 310: `title`, `duties`, `businessPurpose`, and `capabilities`.
+  Bindings, data, Knowledge/Skill/Runtime requirement text, predecessor or adjacent
+  revisions, reviews, facts, relationships, aggregate version, draft/current/
+  published pointers, and lifecycle decisions remain undisclosed. Non-acceptance
+  leaves Agent detail unavailable through the trusted BFF and does not weaken the
+  already implemented Employee revision route.
+- **Implementation verification boundary:** a future exact-revision method must
+  select and digest-check one revision on the caller-owned authorization
+  connection, return uniform `404 AGENT_NOT_FOUND` for unauthorized, missing,
+  hidden, foreign-scope, or revision/digest-invalid targets, and prove grant and
+  session revocation before lookup/replay disclosure. It must not register Agent
+  lifecycle operations or change the existing private API.
+
+### Employee Definition publication source and field gap
+
+- **Accepted basis:** the current Employee owner persists lifecycle decisions as
+  ordered facts. Its authoritative read derives publication from the latest
+  applicable `PUBLISH`, `UNPUBLISH`, `REVOKE_PUBLICATION`, or `DEPRECATE` action;
+  publication remains independent from `GRANT_MATCH`. An immutable revision and
+  digest alone do not prove current publication.
+- **Candidate new decision — PROPOSED:** add a bounded `publicationState` field to
+  Employee BFF list summaries and, if 310 must label an exact detail without a
+  separate list lookup, to exact Employee READ. Its values should be only
+  `PUBLISHED` or `NOT_PUBLISHED`, derived by the Employee owner at read time from
+  its ordered facts. The browser must not reconstruct the state from returned
+  facts, and `publicationState` must not imply matchability, instantiation, or
+  execution authority.
+- **Current implementation:** the private Employee projection returns `published`,
+  `matchable`, and the full ordered fact list; IMPL-310 currently computes its UI
+  stage from those private fields. The registered exact Employee BFF DTO omits
+  publication, matching, aggregate version, facts, predecessor, and adjacent
+  revisions.
+- **Gap:** the trusted surface therefore has no authoritative field with which 310
+  can distinguish a currently published Employee revision. Exposing the private
+  fact list would exceed the minimum need; inferring publication from revision
+  identity or Agent state would be false.
+- **Acceptance effect:** acceptance permits a current two-state publication label
+  only. Non-acceptance requires 310 to display publication as unavailable on the
+  trusted surface; it must not retain its private-API inference as a BFF claim.
+- **Implementation verification boundary:** compute the field inside the Employee
+  owner using the caller-owned connection and the same authorization snapshot as
+  the protected revision/list read. Tests must cover publish, unpublish,
+  publication revocation, and deprecation ordering; matching changes must not
+  change publication. Grant/session revocation must win before either revision or
+  publication state is disclosed.
+
+### LIST permissions required by IMPL-310
+
+- **Accepted basis:** ARCH-300's candidate registry and the current closed
+  authority configuration already define `EMPLOYEE / LIST /
+  employee:collection`, distinct from exact object READ. The current BFF registers
+  no Employee LIST route. There is no accepted or registered Agent vocabulary.
+- **Candidate new decisions — PROPOSED:** register an Employee list operation only
+  after a caller-connection owner port exists, using the existing
+  `EMPLOYEE LIST employee:collection`; separately add `AGENT / LIST /
+  agent:collection`. Agent LIST is part of the same new owner decision as Agent
+  READ, not an alias for it. Neither collection grant authorizes an exact detail;
+  neither exact READ grant authorizes enumeration.
+- **Minimum summaries:** Employee LIST should return only
+  `employeeDefinitionId`, `employeeDefinitionRevisionId`, verified
+  `employeeDefinitionDigest`, `role`, and the proposed two-state
+  `publicationState`. Agent LIST should return only `definitionId`, `name`, the
+  current published `revisionId` and verified `digest`, bounded `title`, plus
+  `enabled` and `archived` eligibility flags required by 310's selector. Omit
+  responsibilities/member composition, Agent content beyond title, all draft and
+  historical revisions, counts, reviews, facts, relationships, bindings, and
+  adjacent pointers. A list item is discovery metadata, not proof that object
+  READ is allowed.
+- **Current implementation:** IMPL-310 calls private Employee and Agent collection
+  APIs. Those implementations open owner-managed connections and return full
+  revision or aggregate content; 310 then filters Agent candidates by published
+  revision, enabled, and not archived. Instance and Assignment remain known-ID
+  reads, and Placement remains a coordinate-complete exact read; 310 requires no
+  Instance, Assignment, or Placement LIST permission.
+- **Gap:** there are no BFF collection owner ports with bounded summaries on the
+  caller-owned authorization transaction. Agent LIST additionally lacks registry
+  vocabulary. Directly wrapping either private list would over-disclose and break
+  the authorization/revocation linearization boundary.
+- **Acceptance effect:** accepting both proposals supplies only the two discovery
+  lists needed by 310; exact Employee, Agent, Instance, Assignment, and Placement
+  detail still requires its own object READ grant. Rejecting Employee LIST removes
+  the trusted Employee directory; rejecting Agent LIST removes trusted primary
+  Agent discovery, even if a separately known exact Agent revision could later be
+  read.
+- **Implementation verification boundary:** future list ports must authorize
+  before existence, count, or row disclosure; use the caller-owned connection;
+  enforce deterministic bounded pagination/limits before registration; and prove
+  that grant/session revocation prevents the list query and replay disclosure.
+  Tests must show LIST without object READ returns summaries but exact detail is
+  denied, while object READ without LIST returns only the known object and cannot
+  enumerate or disclose collection counts.
+
+These four gaps are intentionally additive. Until Human acceptance freezes the
+new `AGENT` and `PLACEMENT` vocabulary and the bounded publication/list fields,
+they remain `PROPOSED / NOT_REGISTERED / NOT_IMPLEMENTED`. Delivery remains
+`PARTIAL_DRAFT / SESSION_OPEN`; Draft PR #164 must not be made Ready, merged, or
+deployed by this addendum.
