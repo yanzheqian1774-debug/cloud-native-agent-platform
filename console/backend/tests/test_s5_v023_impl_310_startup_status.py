@@ -3,7 +3,15 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
+from agent_console.execution_postgres import (
+    AgentInstanceId,
+    AttemptId,
+    TaskRunId,
+    WorkflowRunId,
+)
 
 MODULE_PATH = Path(__file__).with_name("s5_v023_impl_310_startup_status.py")
 SPEC = importlib.util.spec_from_file_location("s5_310_startup_status", MODULE_PATH)
@@ -104,3 +112,14 @@ def test_prerequisite_migrations_use_exact_order_and_transaction_boundaries(
         ).read_text()
         for version in (1, 2, 3, 4, 5, 7)
     ]
+
+
+def test_sample_placement_request_uses_validated_execution_id_types() -> None:
+    request = SERVER.build_placement_request(
+        "agent-revision:quality", datetime.now(UTC)
+    )
+
+    assert isinstance(request.workflow_run_id, WorkflowRunId)
+    assert isinstance(request.task_run_id, TaskRunId)
+    assert isinstance(request.attempt_id, AttemptId)
+    assert isinstance(request.agent_instance_id, AgentInstanceId)

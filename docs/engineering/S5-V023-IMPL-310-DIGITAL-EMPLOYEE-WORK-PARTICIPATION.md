@@ -243,3 +243,16 @@ tests apply 0001–0005 in one psycopg transaction, run the Agent repository
 migration, commit 0007 separately, and only then construct the Digital Employee
 assembly. The fixture now reuses that ordering. No production migration,
 database role, extension, timeout, gate, or failure-close behavior changed.
+
+The next automatic candidate completed `DATABASE_MIGRATION` and failed during
+`SAMPLE_PREPARATION` with the bounded category `VALIDATION_ERROR`, before any
+browser test executed. A full Docker-free construction pass over the fixture's
+composition members, both Employee revisions, instance command, assignment,
+runtime and Agent aggregates, Placement request, and Placement decision isolated
+the failure to the Placement request: the fixture supplied bare strings where
+the formal execution contract requires `WorkflowRunId`, `TaskRunId`, and
+`AttemptId`. The first rejected field was `workflow_run_id`, with the stable
+contract code `INVALID_WORKFLOW_RUN_ID`. The fixture now constructs all three
+opaque ID types exactly as the existing successful Digital Employee bootstrap
+does. Product validation, publication order, digests, scope and parent
+references, database data, deadlines, and gate criteria remain unchanged.

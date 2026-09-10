@@ -36,6 +36,7 @@ from agent_console.execution_domain import VersionedAggregate
 from agent_console.execution_postgres import (
     AgentInstanceId,
     AssignmentId,
+    AttemptId,
     DigitalEmployeeInstanceId,
     PlacementDecision,
     PlacementDecisionKind,
@@ -44,6 +45,8 @@ from agent_console.execution_postgres import (
     PlacementRequestId,
     RuntimeInstanceId,
     ScopeIdentity,
+    TaskRunId,
+    WorkflowRunId,
     canonical_bytes,
 )
 from agent_console.governed_execution_ownership import execution_database_fingerprint
@@ -158,6 +161,24 @@ def publish_employee(
     return revision
 
 
+def build_placement_request(agent_revision_id: str, now: datetime) -> PlacementRequest:
+    return PlacementRequest(
+        PlacementRequestId("placement-request:quality"),
+        SCOPE,
+        WorkflowRunId("workflow-run:quality"),
+        TaskRunId("task-run:quality"),
+        AttemptId(ATTEMPT_ID),
+        AgentInstanceId(AGENT_INSTANCE_ID),
+        agent_revision_id,
+        "runtime-profile-revision:1",
+        (),
+        (),
+        (),
+        (),
+        now,
+    )
+
+
 def seed_execution_chain(assembly, agent: dict, now: datetime) -> None:
     instance_id = DigitalEmployeeInstanceId(INSTANCE_ID)
     assembly.create_instance(
@@ -204,21 +225,7 @@ def seed_execution_chain(assembly, agent: dict, now: datetime) -> None:
             },
         ),
     )
-    request = PlacementRequest(
-        PlacementRequestId("placement-request:quality"),
-        SCOPE,
-        "workflow-run:quality",
-        "task-run:quality",
-        ATTEMPT_ID,
-        agent_id,
-        agent["revisionId"],
-        "runtime-profile-revision:1",
-        (),
-        (),
-        (),
-        (),
-        now,
-    )
+    request = build_placement_request(agent["revisionId"], now)
     decision = PlacementDecision.create(
         placement_id=PlacementId(PLACEMENT_ID),
         request_id=request.request_id,
