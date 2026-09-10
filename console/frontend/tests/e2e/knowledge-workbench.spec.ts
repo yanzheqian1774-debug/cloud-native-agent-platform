@@ -236,6 +236,10 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await expect(page.getByLabel("后继正文",{exact:true})).toHaveValue("Updated supplier containment procedure.\n\nCorrective action evidence must cite the approved successor.");
   await page.getByRole("button",{name:"核对后保留输入"}).click();
   await page.getByRole("button", { name: "创建后继草稿" }).click();
+  await expect(page.getByLabel("文档处理阶段"))
+    .toContainText("非文件入口或未记录文件");
+  await expect(page.getByRole("definition").filter({ hasText: "human-edit:human:knowledge-owner" }))
+    .toBeVisible();
   await publish(page);
   await page.getByRole("button", { name: "导入并建立索引" }).click();
   await expect.poll(async () => {
@@ -246,6 +250,31 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   expect(rebuilt.knowledge.publishedRevisionId).not.toBe(firstRevision);
   expect(rebuilt.technicalProjection.revisionDigests.at(-1).digest).not.toBe(firstDigest);
   expect(rebuilt.knowledge.activeIndexSnapshotId).not.toBe(firstSnapshot);
+  const historicalUpload = rebuilt.knowledge.revisions.find(
+    (revision: { revisionId: string }) => revision.revisionId === firstRevision,
+  );
+  expect(historicalUpload.content.source).toMatchObject({
+    fileName: "供应商质量管理制度.docx",
+    parserVersion: "KNOWLEDGE_DOCUMENT_PARSER_V1",
+  });
+  expect(historicalUpload.content.documents[0].chunks[0].location).toEqual({ paragraphNumber: 1 });
+  const manualRevision = rebuilt.knowledge.revisions.find(
+    (revision: { revisionId: string }) => revision.revisionId === rebuilt.knowledge.publishedRevisionId,
+  );
+  expect(manualRevision.content.source).toMatchObject({
+    sourceId: historicalUpload.content.source.sourceId,
+    kind: "TEXT",
+    provenance: "human-edit:human:knowledge-owner",
+    sourceDescription: "人工编辑后继修订",
+  });
+  for (const key of ["externalReference", "fileName", "mediaType", "parserVersion"]) {
+    expect(manualRevision.content.source).not.toHaveProperty(key);
+  }
+  expect(manualRevision.content.documents[0].documentId)
+    .toBe(historicalUpload.content.documents[0].documentId);
+  expect(manualRevision.content.documents.flatMap(
+    (document: { chunks: Array<{ location?: unknown }> }) => document.chunks,
+  ).every((chunk: { location?: unknown }) => chunk.location === undefined)).toBe(true);
   });
 
   await runKnowledgeOperation(testInfo, "KNOWLEDGE_RESTART_READBACK", async () => {

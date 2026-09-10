@@ -302,6 +302,14 @@ class KnowledgeLifecycleService:
             if published is None or record["currentDraftRevisionId"] is not None:
                 raise KnowledgeLifecycleFailure("PUBLISHED_REVISION_REQUIRED")
             content = copy.deepcopy(published["content"])
+            source = content["source"]
+            for key in ("externalReference", "fileName", "mediaType", "parserVersion"):
+                source.pop(key, None)
+            source.update(
+                kind="TEXT",
+                provenance=f"human-edit:{identifier(actor, 'INVALID_ACTOR')}",
+                sourceDescription="人工编辑后继修订",
+            )
             document = content["documents"][0]
             chunks, content_digest = ingest_text(document["documentId"], source_content)
             document.update(chunks=chunks, contentDigest=content_digest)
