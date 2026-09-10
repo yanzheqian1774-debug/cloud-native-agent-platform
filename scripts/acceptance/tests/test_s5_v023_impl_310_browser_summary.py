@@ -26,6 +26,21 @@ def report(status: str = "passed", title: str = SUMMARY.EXPECTED_TITLE) -> dict:
     }
 
 
+def step(title: str, line: int, *, failed: bool = False) -> dict:
+    value = {
+        "title": title,
+        "location": {
+            "file": f"/runner/work/repository/{SUMMARY.TEST_SPEC_SUFFIX}",
+            "line": line,
+            "column": 3,
+        },
+        "duration": 5,
+    }
+    if failed:
+        value["error"] = {"message": "locator and secret must not escape"}
+    return value
+
+
 def ready_startup(tmp_path: Path) -> Path:
     path = tmp_path / "startup.json"
     path.write_text(
@@ -165,3 +180,108 @@ def test_summary_fails_closed_for_missing_or_failed_startup_diagnostics(
         "reasonCode": "DATABASE_CONNECTION_FAILED",
     }
     assert "secret" not in json.dumps(summary)
+
+
+def test_summary_emits_only_whitelisted_step_position_and_counts(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    value = report("timedOut")
+    value["suites"][0]["specs"][0]["tests"][0]["results"][0]["steps"] = [
+        step("FULL_LOGIN_FORM", 40),
+        step("FULL_LOGIN_SUBMIT_REDIRECT", 45),
+        step("FULL_SESSION_READY", 50, failed=True),
+        step("untrusted locator https://example.invalid/?token=secret", 999),
+    ]
+    raw.write_text(json.dumps(value))
+
+    summary, passed = SUMMARY.build_summary(
+        report_path=raw,
+        commit_sha="a" * 40,
+        tree_sha="b" * 40,
+        execution_outcome="failure",
+        static_stages={"build": "success"},
+        startup_status_path=ready_startup(tmp_path),
+    )
+
+    assert not passed
+    assert summary["failureCategory"] == "BROWSER_TIMEOUT"
+    assert summary["stepDiagnostics"] == {
+        "availability": "AVAILABLE",
+        "lastCompletedStep": "FULL_LOGIN_SUBMIT_REDIRECT",
+        "lastCompletedLine": 45,
+        "firstFailedOrIncompleteStep": "FULL_SESSION_READY",
+        "firstFailedOrIncompleteLine": 50,
+        "failureCategory": "TIMEOUT",
+        "counts": {
+            "expected": len(SUMMARY.TEST_STEP_IDS),
+            "started": 3,
+            "completed": 2,
+            "failedOrIncomplete": 1,
+        },
+    }
+    serialized = json.dumps(summary)
+    assert "locator" not in serialized
+    assert "example.invalid" not in serialized
+    assert "secret" not in serialized
+
+
+def test_summary_marks_missing_step_without_overriding_browser_result(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    value = report("failed")
+    value["suites"][0]["specs"][0]["tests"][0]["results"][0]["steps"] = [
+        step("FULL_LOGIN_FORM", 40)
+    ]
+    raw.write_text(json.dumps(value))
+
+    summary, passed = SUMMARY.build_summary(
+        report_path=raw,
+        commit_sha="a" * 40,
+        tree_sha="b" * 40,
+        execution_outcome="failure",
+        static_stages={"build": "success"},
+        startup_status_path=ready_startup(tmp_path),
+    )
+
+    assert not passed
+    assert summary["failureCategory"] == "BROWSER_ASSERTION_OR_EXECUTION_FAILURE"
+    assert summary["stepDiagnostics"]["lastCompletedStep"] == "FULL_LOGIN_FORM"
+    assert (
+        summary["stepDiagnostics"]["firstFailedOrIncompleteStep"]
+        == "FULL_LOGIN_SUBMIT_REDIRECT"
+    )
+    assert isinstance(summary["stepDiagnostics"]["firstFailedOrIncompleteLine"], int)
+    assert summary["stepDiagnostics"]["failureCategory"] == "INCOMPLETE"
+
+
+def test_summary_step_allowlist_matches_the_real_spec() -> None:
+    source = (
+        Path(__file__).parents[3]
+        / "console/frontend/tests/e2e/digital-employee-work-participation.real.spec.ts"
+    ).read_text()
+
+    assert all(source.count(f'"{step_id}"') == 1 for step_id in SUMMARY.TEST_STEP_IDS)
+
+
+def test_step_diagnostic_error_does_not_replace_browser_result(
+    tmp_path, monkeypatch
+) -> None:
+    raw = tmp_path / "raw.json"
+    raw.write_text(json.dumps(report("timedOut")))
+    monkeypatch.setattr(
+        SUMMARY,
+        "_step_diagnostics",
+        lambda _test: (_ for _ in ()).throw(ValueError("secret locator")),
+    )
+
+    summary, passed = SUMMARY.build_summary(
+        report_path=raw,
+        commit_sha="a" * 40,
+        tree_sha="b" * 40,
+        execution_outcome="failure",
+        static_stages={"build": "success"},
+        startup_status_path=ready_startup(tmp_path),
+    )
+
+    assert not passed
+    assert summary["failureCategory"] == "BROWSER_TIMEOUT"
+    assert summary["stepDiagnostics"]["availability"] == "INVALID"
+    assert "secret locator" not in json.dumps(summary)

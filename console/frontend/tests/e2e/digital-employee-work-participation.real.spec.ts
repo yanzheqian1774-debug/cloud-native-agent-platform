@@ -17,11 +17,19 @@ const credentials = {
 };
 
 type BrowserObservations = { identityHeaders: string[]; privateRequests: string[] };
+type LoginKind = "FULL" | "LISTER" | "WRONG_SCOPE" | "WRONG_GRANT";
+const loginSteps = {
+  FULL: ["FULL_LOGIN_FORM", "FULL_LOGIN_SUBMIT_REDIRECT", "FULL_SESSION_READY"],
+  LISTER: ["LISTER_LOGIN_FORM", "LISTER_LOGIN_SUBMIT_REDIRECT", "LISTER_SESSION_READY"],
+  WRONG_SCOPE: ["WRONG_SCOPE_LOGIN_FORM", "WRONG_SCOPE_LOGIN_SUBMIT_REDIRECT", "WRONG_SCOPE_SESSION_READY"],
+  WRONG_GRANT: ["WRONG_GRANT_LOGIN_FORM", "WRONG_GRANT_LOGIN_SUBMIT_REDIRECT", "WRONG_GRANT_SESSION_READY"],
+} as const;
 
 async function login(
   browser: Browser,
   credential: string,
   observations: BrowserObservations,
+  kind: LoginKind,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   context.on("request", value => {
@@ -31,12 +39,20 @@ async function login(
     if (new URL(value.url()).pathname.startsWith("/api/internal/")) observations.privateRequests.push(value.url());
   });
   const page = await context.newPage();
-  await page.goto(`${baseURL}/api/workbench/v1/login`);
-  await page.locator('input[name="bootstrapCredential"]').fill(credential);
-  await Promise.all([
-    page.waitForURL(/\/workbench$/),
-    page.getByRole("button", { name: "Sign in" }).click(),
-  ]);
+  const [formStep, submitStep, readyStep] = loginSteps[kind];
+  await test.step(formStep, async () => {
+    await page.goto(`${baseURL}/api/workbench/v1/login`);
+    await expect(page.locator('input[name="bootstrapCredential"]')).toHaveCount(1);
+    await page.locator('input[name="bootstrapCredential"]').fill(credential);
+  });
+  await test.step(submitStep, async () => {
+    const submit = page.getByRole("button", { name: "Sign in", exact: true });
+    await expect(submit).toHaveCount(1);
+    await Promise.all([page.waitForURL(/\/workbench$/), submit.click()]);
+  });
+  await test.step(readyStep, async () => {
+    expect((await browserFetch(page, "/api/workbench/v1/session")).status).toBe(200);
+  });
   return { context, page };
 }
 
@@ -49,85 +65,110 @@ async function browserFetch(page: Page, path: string) {
 
 test("REAL_SERVICE trusted Digital Employee reads preserve authorization and identity", async ({ browser }) => {
   const observations: BrowserObservations = { identityHeaders: [], privateRequests: [] };
-  const full = await login(browser, credentials.full, observations);
+  const full = await login(browser, credentials.full, observations, "FULL");
 
-  await full.page.goto(`${baseURL}/digital-employees`);
-  await expect(full.page.getByRole("button", { name: /Supplier quality owner/ })).toBeVisible();
-  await full.page.getByRole("button", { name: /Supplier quality owner/ }).click();
-  await expect(full.page.getByText("Quality analysis Agent", { exact: true })).toBeVisible();
-  const employee = await browserFetch(
-    full.page,
-    "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
-  );
-  expect(employee.status).toBe(200);
-  expect(employee.body.result).toMatchObject({
-    employeeDefinitionId: "employee-definition:quality",
-    employeeDefinitionRevisionId: "employee-revision:1",
-    publicationState: "PUBLISHED",
+  const employeeButton = full.page.getByRole("button", { name: /Supplier quality owner/ });
+  await test.step("EMPLOYEE_LIST_PAGE_READY", async () => {
+    await full.page.goto(`${baseURL}/digital-employees`);
+    await expect(employeeButton).toHaveCount(1);
+    await expect(employeeButton).toBeVisible();
   });
-  expect(employee.body.result.employeeDefinitionDigest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
-  expect(employee.body.result.members.map((value: { kind: string }) => value.kind).sort()).toEqual([
-    "AGENT",
-    "KNOWLEDGE",
-    "MCP",
-    "RUNTIME_PROFILE",
-    "SKILL",
-    "WORKFLOW",
-  ]);
-  for (const member of employee.body.result.members) {
-    expect(member.resourceId).toBeTruthy();
-    expect(member.revisionId).toBeTruthy();
-    expect(member.digest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
-  }
+  await test.step("EMPLOYEE_EXACT_UI_READ", async () => {
+    await employeeButton.click();
+    const agentName = full.page.getByText("Quality analysis Agent", { exact: true });
+    await expect(agentName).toHaveCount(1);
+    await expect(agentName).toBeVisible();
+  });
+  const employee = await test.step("EMPLOYEE_EXACT_API_READ", async () => {
+    const value = await browserFetch(
+      full.page,
+      "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
+    );
+    expect(value.status).toBe(200);
+    expect(value.body.result).toMatchObject({
+      employeeDefinitionId: "employee-definition:quality",
+      employeeDefinitionRevisionId: "employee-revision:1",
+      publicationState: "PUBLISHED",
+    });
+    expect(value.body.result.employeeDefinitionDigest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
+    expect(value.body.result.members.map((member: { kind: string }) => member.kind).sort()).toEqual([
+      "AGENT",
+      "KNOWLEDGE",
+      "MCP",
+      "RUNTIME_PROFILE",
+      "SKILL",
+      "WORKFLOW",
+    ]);
+    for (const member of value.body.result.members) {
+      expect(member.resourceId).toBeTruthy();
+      expect(member.revisionId).toBeTruthy();
+      expect(member.digest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
+    }
+    return value;
+  });
   const agentMember = employee.body.result.members.find((value: { kind: string }) => value.kind === "AGENT");
   expect(agentMember).toMatchObject({ kind: "AGENT" });
   expect(agentMember.revisionId).toBeTruthy();
   expect(agentMember.digest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
-  const agent = await browserFetch(
-    full.page,
-    `/api/workbench/v1/agents/${encodeURIComponent(agentMember.resourceId)}/revisions/${encodeURIComponent(agentMember.revisionId)}`,
-  );
-  expect(agent).toMatchObject({
-    status: 200,
-    body: { result: {
-      definitionId: agentMember.resourceId,
-      revisionId: agentMember.revisionId,
-      digest: agentMember.digest,
-      name: "Quality analysis Agent",
-    } },
+  await test.step("AGENT_EXACT_API_READ", async () => {
+    const agent = await browserFetch(
+      full.page,
+      `/api/workbench/v1/agents/${encodeURIComponent(agentMember.resourceId)}/revisions/${encodeURIComponent(agentMember.revisionId)}`,
+    );
+    expect(agent).toMatchObject({
+      status: 200,
+      body: { result: {
+        definitionId: agentMember.resourceId,
+        revisionId: agentMember.revisionId,
+        digest: agentMember.digest,
+        name: "Quality analysis Agent",
+      } },
+    });
   });
-  const employeeDetail = full.page.locator(".px-object-detail");
-  await expect(employeeDetail).toContainText("PUBLISHED");
-  await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionRevisionId);
-  await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionDigest);
-  for (const member of employee.body.result.members) {
-    const binding = employeeDetail.getByRole("listitem").filter({ hasText: member.resourceId });
-    await expect(binding).toContainText(member.kind);
-    await expect(binding).toContainText(member.revisionId);
-    await expect(binding).toContainText(member.digest);
-  }
+  await test.step("EMPLOYEE_DETAIL_RENDER", async () => {
+    const employeeDetail = full.page.locator(".px-object-detail");
+    await expect(employeeDetail).toContainText("PUBLISHED");
+    await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionRevisionId);
+    await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionDigest);
+    for (const member of employee.body.result.members) {
+      const binding = employeeDetail.getByRole("listitem").filter({ hasText: member.resourceId });
+      await expect(binding).toContainText(member.kind);
+      await expect(binding).toContainText(member.revisionId);
+      await expect(binding).toContainText(member.digest);
+    }
+  });
 
-  const firstEmployees = await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1");
-  expect(firstEmployees.status).toBe(200);
-  expect(firstEmployees.body.result.items).toHaveLength(1);
-  expect(firstEmployees.body.result.totalCount).toBeUndefined();
-  const nextEmployees = await browserFetch(
-    full.page,
-    `/api/workbench/v1/employees?pageSize=1&cursor=${encodeURIComponent(firstEmployees.body.result.nextCursor)}`,
-  );
-  expect(nextEmployees.status).toBe(200);
-  expect(nextEmployees.body.result.items[0].employeeDefinitionId).not.toBe(
-    firstEmployees.body.result.items[0].employeeDefinitionId,
-  );
+  const firstEmployees = await test.step("EMPLOYEE_PAGINATION_FIRST", async () => {
+    const value = await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1");
+    expect(value.status).toBe(200);
+    expect(value.body.result.items).toHaveLength(1);
+    expect(value.body.result.totalCount).toBeUndefined();
+    return value;
+  });
+  await test.step("EMPLOYEE_PAGINATION_NEXT", async () => {
+    const value = await browserFetch(
+      full.page,
+      `/api/workbench/v1/employees?pageSize=1&cursor=${encodeURIComponent(firstEmployees.body.result.nextCursor)}`,
+    );
+    expect(value.status).toBe(200);
+    expect(value.body.result.items[0].employeeDefinitionId).not.toBe(
+      firstEmployees.body.result.items[0].employeeDefinitionId,
+    );
+  });
 
-  const firstAgents = await browserFetch(full.page, "/api/workbench/v1/agents?pageSize=1");
-  expect(firstAgents.status).toBe(200);
-  const nextAgents = await browserFetch(
-    full.page,
-    `/api/workbench/v1/agents?pageSize=1&cursor=${encodeURIComponent(firstAgents.body.result.nextCursor)}`,
-  );
-  expect(nextAgents.status).toBe(200);
-  expect(nextAgents.body.result.items[0].definitionId).not.toBe(firstAgents.body.result.items[0].definitionId);
+  const firstAgents = await test.step("AGENT_PAGINATION_FIRST", async () => {
+    const value = await browserFetch(full.page, "/api/workbench/v1/agents?pageSize=1");
+    expect(value.status).toBe(200);
+    return value;
+  });
+  await test.step("AGENT_PAGINATION_NEXT", async () => {
+    const value = await browserFetch(
+      full.page,
+      `/api/workbench/v1/agents?pageSize=1&cursor=${encodeURIComponent(firstAgents.body.result.nextCursor)}`,
+    );
+    expect(value.status).toBe(200);
+    expect(value.body.result.items[0].definitionId).not.toBe(firstAgents.body.result.items[0].definitionId);
+  });
 
   const workQuery = new URLSearchParams({
     panel: "work",
@@ -137,73 +178,101 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
     attemptId: "attempt:quality",
     agentInstanceId: "agent-instance:quality",
   });
-  await full.page.goto(`${baseURL}/digital-employees?${workQuery}`);
-  await expect(full.page.getByLabel("Placement 权威详情")).toContainText("runtime-instance:quality");
-  await full.page.reload();
-  await expect(full.page.getByLabel("Placement 权威详情")).toContainText("runtime-instance:quality");
+  await test.step("WORK_CHAIN_INITIAL_READ", async () => {
+    await full.page.goto(`${baseURL}/digital-employees?${workQuery}`);
+    const placement = full.page.getByLabel("Placement 权威详情", { exact: true });
+    await expect(placement).toHaveCount(1);
+    await expect(placement).toContainText("runtime-instance:quality");
+  });
+  await test.step("WORK_CHAIN_RELOAD_READ", async () => {
+    await full.page.reload();
+    await expect(full.page.getByLabel("Placement 权威详情", { exact: true })).toContainText("runtime-instance:quality");
+  });
 
-  const wrongParent = await browserFetch(
-    full.page,
-    "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aother/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aquality",
-  );
-  expect(wrongParent).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
-  const wrongAttempt = await browserFetch(
-    full.page,
-    "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aother&agentInstanceId=agent-instance%3Aquality",
-  );
-  expect(wrongAttempt).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
-  const wrongAgent = await browserFetch(
-    full.page,
-    "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aother",
-  );
-  expect(wrongAgent).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
+  await test.step("PARENT_ASSIGNMENT_DENIAL", async () => {
+    const value = await browserFetch(
+      full.page,
+      "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aother/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aquality",
+    );
+    expect(value).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
+  });
+  await test.step("PARENT_ATTEMPT_DENIAL", async () => {
+    const value = await browserFetch(
+      full.page,
+      "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aother&agentInstanceId=agent-instance%3Aquality",
+    );
+    expect(value).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
+  });
+  await test.step("PARENT_AGENT_DENIAL", async () => {
+    const value = await browserFetch(
+      full.page,
+      "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aother",
+    );
+    expect(value).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
+  });
 
   const control = await request.newContext({ baseURL: controlURL });
-  const revoked = await control.post("/revoke-placement", { headers: { "x-control-token": controlToken } });
-  expect(revoked.ok()).toBe(true);
-  const afterGrantRevoke = await browserFetch(
-    full.page,
-    "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aquality",
-  );
-  expect(afterGrantRevoke).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
-  await control.dispose();
-
-  const session = await browserFetch(full.page, "/api/workbench/v1/session");
-  expect(session.status).toBe(200);
-  const logout = await full.context.request.delete(`${baseURL}/api/workbench/v1/session`, {
-    headers: { "x-csrf-token": session.body.csrfToken, origin: baseURL },
+  await test.step("PLACEMENT_GRANT_REVOKE", async () => {
+    const revoked = await control.post("/revoke-placement", { headers: { "x-control-token": controlToken } });
+    expect(revoked.ok()).toBe(true);
   });
-  expect(logout.status()).toBe(204);
-  expect((await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(401);
-  await full.context.close();
+  await test.step("PLACEMENT_REVOKED_DENIAL", async () => {
+    const value = await browserFetch(
+      full.page,
+      "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aquality",
+    );
+    expect(value).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
+    await control.dispose();
+  });
 
-  const lister = await login(browser, credentials.list, observations);
-  expect((await browserFetch(lister.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(200);
-  expect(
-    await browserFetch(
-      lister.page,
-      "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
-    ),
-  ).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
-  await lister.context.close();
+  await test.step("FULL_SESSION_LOGOUT", async () => {
+    const session = await browserFetch(full.page, "/api/workbench/v1/session");
+    expect(session.status).toBe(200);
+    const logout = await full.context.request.delete(`${baseURL}/api/workbench/v1/session`, {
+      headers: { "x-csrf-token": session.body.csrfToken, origin: baseURL },
+    });
+    expect(logout.status()).toBe(204);
+    expect((await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(401);
+    await full.context.close();
+  });
 
-  const wrongScope = await login(browser, credentials.wrongScope, observations);
-  expect(
-    await browserFetch(
-      wrongScope.page,
-      "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
-    ),
-  ).toMatchObject({ status: 404, body: { reasonCode: "EMPLOYEE_NOT_FOUND" } });
-  await wrongScope.context.close();
+  const lister = await login(browser, credentials.list, observations, "LISTER");
+  await test.step("LISTER_LIST_ALLOWED", async () => {
+    expect((await browserFetch(lister.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(200);
+  });
+  await test.step("LISTER_EXACT_DENIED", async () => {
+    expect(
+      await browserFetch(
+        lister.page,
+        "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
+      ),
+    ).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
+    await lister.context.close();
+  });
 
-  const wrongGrant = await login(browser, credentials.wrongGrant, observations);
-  expect(
-    await browserFetch(
-      wrongGrant.page,
-      "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
-    ),
-  ).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
-  await wrongGrant.context.close();
-  expect(observations.identityHeaders).toEqual([]);
-  expect(observations.privateRequests).toEqual([]);
+  const wrongScope = await login(browser, credentials.wrongScope, observations, "WRONG_SCOPE");
+  await test.step("WRONG_SCOPE_EXACT_DENIED", async () => {
+    expect(
+      await browserFetch(
+        wrongScope.page,
+        "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
+      ),
+    ).toMatchObject({ status: 404, body: { reasonCode: "EMPLOYEE_NOT_FOUND" } });
+    await wrongScope.context.close();
+  });
+
+  const wrongGrant = await login(browser, credentials.wrongGrant, observations, "WRONG_GRANT");
+  await test.step("WRONG_GRANT_EXACT_DENIED", async () => {
+    expect(
+      await browserFetch(
+        wrongGrant.page,
+        "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
+      ),
+    ).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
+    await wrongGrant.context.close();
+  });
+  await test.step("TRANSPORT_BOUNDARY_ASSERTIONS", async () => {
+    expect(observations.identityHeaders).toEqual([]);
+    expect(observations.privateRequests).toEqual([]);
+  });
 });

@@ -17,6 +17,46 @@ SECURITY_REASON_CODES = (
     "EMPLOYEE_NOT_FOUND",
     "PLACEMENT_NOT_FOUND",
 )
+TEST_STEP_IDS = (
+    "FULL_LOGIN_FORM",
+    "FULL_LOGIN_SUBMIT_REDIRECT",
+    "FULL_SESSION_READY",
+    "EMPLOYEE_LIST_PAGE_READY",
+    "EMPLOYEE_EXACT_UI_READ",
+    "EMPLOYEE_EXACT_API_READ",
+    "AGENT_EXACT_API_READ",
+    "EMPLOYEE_DETAIL_RENDER",
+    "EMPLOYEE_PAGINATION_FIRST",
+    "EMPLOYEE_PAGINATION_NEXT",
+    "AGENT_PAGINATION_FIRST",
+    "AGENT_PAGINATION_NEXT",
+    "WORK_CHAIN_INITIAL_READ",
+    "WORK_CHAIN_RELOAD_READ",
+    "PARENT_ASSIGNMENT_DENIAL",
+    "PARENT_ATTEMPT_DENIAL",
+    "PARENT_AGENT_DENIAL",
+    "PLACEMENT_GRANT_REVOKE",
+    "PLACEMENT_REVOKED_DENIAL",
+    "FULL_SESSION_LOGOUT",
+    "LISTER_LOGIN_FORM",
+    "LISTER_LOGIN_SUBMIT_REDIRECT",
+    "LISTER_SESSION_READY",
+    "LISTER_LIST_ALLOWED",
+    "LISTER_EXACT_DENIED",
+    "WRONG_SCOPE_LOGIN_FORM",
+    "WRONG_SCOPE_LOGIN_SUBMIT_REDIRECT",
+    "WRONG_SCOPE_SESSION_READY",
+    "WRONG_SCOPE_EXACT_DENIED",
+    "WRONG_GRANT_LOGIN_FORM",
+    "WRONG_GRANT_LOGIN_SUBMIT_REDIRECT",
+    "WRONG_GRANT_SESSION_READY",
+    "WRONG_GRANT_EXACT_DENIED",
+    "TRANSPORT_BOUNDARY_ASSERTIONS",
+)
+TEST_STEP_SET = frozenset(TEST_STEP_IDS)
+TEST_SPEC_SUFFIX = (
+    "console/frontend/tests/e2e/digital-employee-work-participation.real.spec.ts"
+)
 STARTUP_STAGES = {
     "DATABASE_CONNECTION",
     "DATABASE_MIGRATION",
@@ -103,6 +143,144 @@ def _tests(report: dict[str, Any]) -> list[dict[str, Any]]:
     return found
 
 
+def _declared_step_lines() -> dict[str, int]:
+    try:
+        lines = (Path(__file__).parents[2] / TEST_SPEC_SUFFIX).read_text().splitlines()
+    except OSError:
+        return {}
+    return {
+        step_id: index
+        for step_id in TEST_STEP_IDS
+        for index, line in enumerate(lines, start=1)
+        if f'"{step_id}"' in line
+    }
+
+
+def _step_line(
+    step: dict[str, Any], step_id: str, declared_lines: dict[str, int]
+) -> int | str:
+    location = step.get("location")
+    if not isinstance(location, dict):
+        return declared_lines.get(step_id, "UNKNOWN")
+    path = location.get("file")
+    line = location.get("line")
+    if (
+        not isinstance(path, str)
+        or not path.replace("\\", "/").endswith(TEST_SPEC_SUFFIX)
+        or isinstance(line, bool)
+        or not isinstance(line, int)
+        or not 1 <= line <= 1000
+    ):
+        return declared_lines.get(step_id, "UNKNOWN")
+    return line
+
+
+def _empty_step_diagnostics(availability: str = "UNAVAILABLE") -> dict[str, Any]:
+    return {
+        "availability": availability,
+        "lastCompletedStep": "UNKNOWN",
+        "lastCompletedLine": "UNKNOWN",
+        "firstFailedOrIncompleteStep": "UNKNOWN",
+        "firstFailedOrIncompleteLine": "UNKNOWN",
+        "failureCategory": "UNKNOWN",
+        "counts": {
+            "expected": len(TEST_STEP_IDS),
+            "started": 0,
+            "completed": 0,
+            "failedOrIncomplete": 0,
+        },
+    }
+
+
+def _step_diagnostics(test: dict[str, Any] | None) -> dict[str, Any]:
+    unavailable = _empty_step_diagnostics()
+    if test is None:
+        return unavailable
+    results = test.get("results")
+    if (
+        not isinstance(results, list)
+        or not results
+        or not isinstance(results[-1], dict)
+    ):
+        return unavailable
+    result = results[-1]
+    steps = result.get("steps")
+    if not isinstance(steps, list):
+        return unavailable
+    observed: dict[str, dict[str, Any]] = {}
+
+    def visit(values: list[Any]) -> None:
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+            title = value.get("title")
+            if (
+                isinstance(title, str)
+                and title in TEST_STEP_SET
+                and title not in observed
+            ):
+                observed[title] = value
+            children = value.get("steps")
+            if isinstance(children, list):
+                visit(children)
+
+    visit(steps)
+    if not observed:
+        return unavailable
+    declared_lines = _declared_step_lines()
+    last_completed = "NONE"
+    last_completed_line: int | str = "UNKNOWN"
+    first_incomplete = "NONE"
+    first_incomplete_line: int | str = "UNKNOWN"
+    completed = 0
+    failure_category = "NONE"
+    status = result.get("status")
+    for step_id in TEST_STEP_IDS:
+        step = observed.get(step_id)
+        if step is None:
+            first_incomplete = step_id
+            first_incomplete_line = declared_lines.get(step_id, "UNKNOWN")
+            failure_category = "INCOMPLETE"
+            break
+        if step.get("error") is not None:
+            first_incomplete = step_id
+            first_incomplete_line = _step_line(step, step_id, declared_lines)
+            failure_category = {
+                "timedOut": "TIMEOUT",
+                "interrupted": "INTERRUPTED",
+                "failed": "ASSERTION_OR_EXECUTION_FAILURE",
+            }.get(status, "UNKNOWN")
+            break
+        completed += 1
+        last_completed = step_id
+        last_completed_line = _step_line(step, step_id, declared_lines)
+    if first_incomplete == "NONE" and status != "passed":
+        first_incomplete = "UNKNOWN"
+        failure_category = "TEST_FAILURE_OUTSIDE_STEP"
+    failed_or_incomplete = 0 if first_incomplete == "NONE" else 1
+    return {
+        "availability": "AVAILABLE",
+        "lastCompletedStep": last_completed,
+        "lastCompletedLine": last_completed_line,
+        "firstFailedOrIncompleteStep": first_incomplete,
+        "firstFailedOrIncompleteLine": first_incomplete_line,
+        "failureCategory": failure_category,
+        "counts": {
+            "expected": len(TEST_STEP_IDS),
+            "started": len(observed),
+            "completed": completed,
+            "failedOrIncomplete": failed_or_incomplete,
+        },
+    }
+
+
+def _safe_step_diagnostics(test: dict[str, Any] | None) -> dict[str, Any]:
+    try:
+        return _step_diagnostics(test)
+    except (KeyError, TypeError, ValueError, OSError):
+        return _empty_step_diagnostics("INVALID")
+
+
 def build_summary(
     *,
     report_path: Path,
@@ -139,6 +317,10 @@ def build_summary(
     failed = sum(status in {"failed", "timedOut", "interrupted"} for status in statuses)
     executed = sum(status not in {"skipped", "not-run"} for status in statuses)
     titles = sorted({str(test.get("title", "")) for test in tests})
+    expected_test = next(
+        (test for test in tests if test.get("title") == EXPECTED_TITLE), None
+    )
+    step_diagnostics = _safe_step_diagnostics(expected_test)
     static_ok = bool(static_stages) and all(
         outcome == "success" for outcome in static_stages.values()
     )
@@ -205,6 +387,7 @@ def build_summary(
             "failed": failed,
             "skipped": skipped,
         },
+        "stepDiagnostics": step_diagnostics,
         "expectedScenario": EXPECTED_TITLE,
         "securityEvidence": {
             "available": passed_gate,

@@ -268,3 +268,24 @@ all five lifecycle chains and the six-member Employee construction. The separate
 opaque-ID correction remains because it would otherwise fail later in sample
 preparation. No product validation, database data contract, deadline, or gate
 criterion changed.
+
+Automatic candidate `2f0288409e6117d78b5db9d7e5ffa7c22eda17ea`
+then reached `LISTENER_READINESS`, selected and executed the one dedicated
+scenario, and ended `BROWSER_TIMEOUT`. Its bounded artifact contains no test
+step or repository line, while the retained local `.last-run.json` belongs to a
+different passing run and is not candidate evidence. Source inspection confirms
+that the HTTPS SPA and `/api/workbench/v1` share the public origin, login follows
+the formal 303 `/workbench` session contract, frontend reads use the formal BFF,
+and the current Employee and Placement accessible names are unique. Those are
+source findings, not proof of the CI timeout location.
+
+The real-service spec now wraps each login form, redirect, session readiness,
+list, exact read, pagination, work-chain read, parent denial, revocation, logout,
+scope/grant denial, and transport-boundary assertion in a closed static
+`test.step` identifier. The existing summary accepts only those identifiers and
+an in-repository location for that exact spec, emitting the last completed step,
+the first failed or incomplete step, repository line, bounded counts, and a
+whitelisted safe category. It never copies step titles outside the allowlist,
+errors, locators, dynamic identities, URL parameters, credentials, sessions, or
+tokens. Malformed or missing step data becomes `UNKNOWN`/`UNAVAILABLE`, and the
+diagnostic result is not part of the browser pass/fail calculation.
