@@ -47,3 +47,11 @@ def test_layout_is_explicitly_view_only_and_responsive() -> None:
     assert "workflow-designer__workspace--inspector-collapsed" in styles
     assert "useEffect" in canvas
     assert "initialCanvas" in canvas
+
+
+def test_workbench_preserves_distinct_creation_actions_and_empty_state() -> None:
+    workbench = source("workflows/WorkflowWorkbenchPage.tsx")
+    assert workbench.count(">新建 Workflow Definition</button>") == 1
+    assert workbench.count(">创建新工作流</button>") == 1
+    assert "<h2>选择 Workflow Definition</h2>" in workbench
+    assert "DAG、精确资源绑定、digest、消费者与历史会显示在这里。" in workbench

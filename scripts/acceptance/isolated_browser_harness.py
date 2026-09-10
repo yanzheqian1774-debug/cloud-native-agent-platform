@@ -152,6 +152,56 @@ FIRST_FAILURE_ASSERTION_IDS.update(
         )
     }
 )
+FAILURE_DETAIL_ASSERTION_IDS = {
+    **FIRST_FAILURE_ASSERTION_IDS,
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "binds a formally published Skill operation through the real Workflow UI",
+    ): "WORKFLOW_RUNTIME_BIND_SKILL_OPERATION",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "explicitly selects and round-trips an exact Skill operation binding",
+    ): "WORKFLOW_RUNTIME_SELECT_SKILL_OPERATION_BINDING",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "keeps complete binding input after edit CAS conflict "
+        "and reads authority without replay",
+    ): "WORKFLOW_RUNTIME_CAS_CONFLICT_RECOVERY",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "ignores a late Workflow detail response after the user switches resources",
+    ): "WORKFLOW_RUNTIME_LATE_DETAIL_RESPONSE",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "does not offer an ineligible or operation-less Skill as a valid binding",
+    ): "WORKFLOW_RUNTIME_INELIGIBLE_SKILL_EXCLUSION",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "blocks validation when the Skill reference digest differs from the binding",
+    ): "WORKFLOW_RUNTIME_SKILL_DIGEST_MISMATCH",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "handles FastAPI detail arrays without losing controlled error states",
+    ): "WORKFLOW_RUNTIME_FASTAPI_DETAIL_ARRAYS",
+    (
+        "workflow-visual-designer.spec.ts",
+        "edits a dependency-derived node without changing sibling content "
+        "or exact bindings",
+    ): "WORKFLOW_VISUAL_EDIT_DEPENDENCY_DERIVED_NODE",
+    (
+        "workflow-visual-designer.spec.ts",
+        "requires an explicit decision before switching away from unsaved authoring",
+    ): "WORKFLOW_VISUAL_UNSAVED_SWITCH_DECISION",
+    (
+        "workflow-visual-designer.spec.ts",
+        "shows local graph issues and keeps invalid legacy dependency editable",
+    ): "WORKFLOW_VISUAL_INVALID_LEGACY_DEPENDENCY",
+    (
+        "workflow-visual-designer.spec.ts",
+        "navigates a complex published Workflow without offering draft edits "
+        "or creating writes",
+    ): "WORKFLOW_VISUAL_PUBLISHED_NAVIGATION",
+}
 FAILURE_CATEGORIES = frozenset(
     {
         "BROWSER_ASSERTION",
@@ -476,14 +526,6 @@ def _failure_details(
             "NONE",
             http_source,
         )
-    if "goto" in lowered or "navigation" in lowered:
-        return (
-            "BROWSER_NAVIGATION_ERROR",
-            "NAVIGATION_ERROR",
-            "NAVIGATION_ERROR",
-            "NONE",
-            http_source,
-        )
     if (
         "locator" in lowered
         or "selector" in lowered
@@ -595,7 +637,7 @@ def _failure_detail_item(
     result: dict[str, object],
 ) -> dict[str, object]:
     key = (Path(str(suite.get("file", ""))).name, spec.get("title"))
-    scenario = FIRST_FAILURE_ASSERTION_IDS.get(key, "UNKNOWN")
+    scenario = FAILURE_DETAIL_ASSERTION_IDS.get(key, "UNKNOWN")
     known = scenario != "UNKNOWN"
     message = _failure_message(result)
     status = result.get("status")
@@ -703,7 +745,7 @@ def encode_failure_details(details: dict[str, object]) -> str:
         mapping = next(
             (
                 key
-                for key, value in FIRST_FAILURE_ASSERTION_IDS.items()
+                for key, value in FAILURE_DETAIL_ASSERTION_IDS.items()
                 if value == scenario
             ),
             None,

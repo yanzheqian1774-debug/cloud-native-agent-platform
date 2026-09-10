@@ -326,6 +326,38 @@ def test_failure_details_invalid_http_status_is_unknown_not_fatal():
     assert "PRIVATE" not in harness_module.encode_failure_details(details)
 
 
+def test_failure_details_recognize_static_workflow_specs_without_index_guessing():
+    mappings = {
+        key: value
+        for key, value in harness_module.FAILURE_DETAIL_ASSERTION_IDS.items()
+        if key not in harness_module.FIRST_FAILURE_ASSERTION_IDS
+    }
+    assert len(mappings) == 11
+    for (name, title), scenario in mappings.items():
+        report = summary_report()
+        suite = report["suites"][0]
+        suite["file"] = name
+        suite["specs"][0]["title"] = title
+        details = harness_module.build_failure_details(json.dumps(report).encode())
+        failure = details["failures"][0]
+        assert failure["scenarioId"] == scenario
+        assert failure["spec"] == f"console/frontend/tests/e2e/{name}"
+        assert failure["sourceLine"] == 42
+
+
+def test_goto_context_does_not_prove_navigation_failure():
+    report = failure_detail_report(1)
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["errors"][0]["message"] = "page.goto: expect(locator).toBeVisible()"
+
+    failure = harness_module.build_failure_details(json.dumps(report).encode())[
+        "failures"
+    ][0]
+    assert failure["navigationAction"] == "PAGE_GOTO"
+    assert failure["failureCategory"] == "BROWSER_ASSERTION"
+    assert failure["failureSubtype"] == "SELECTOR_STATE_MISMATCH"
+
+
 @pytest.mark.parametrize("returncode", [0, 1, 7])
 @pytest.mark.parametrize("broken_summary", [False, True])
 @pytest.mark.parametrize("gate_failure", [None, "scan", "immutable"])
@@ -1281,9 +1313,9 @@ def test_first_failure_is_stable_and_deterministic_without_raw_message() -> None
         ),
         (
             "page.goto navigation failed",
-            "BROWSER_NAVIGATION_ERROR",
-            "NAVIGATION_ERROR",
-            "NONE",
+            "BROWSER_ASSERTION",
+            "APPLICATION_STATE_MISMATCH",
+            "UNKNOWN",
         ),
         (
             "unknown opaque exception",

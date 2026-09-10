@@ -80,6 +80,15 @@ devices.
 
 ## Implemented result
 
+- The header and quick-authoring creation actions now have distinct, visible
+  accessible names. The quick-authoring action retains `新建 Workflow
+  Definition`, while the header action is labelled `创建新工作流`. The existing
+  visible empty-state heading and explanatory semantics are restored without
+  changing the visual layout.
+- Bounded browser failure details recognize the repository's static Workflow
+  Runtime and Visual Designer spec identities without inferring identity from
+  report position. A recorded `page.goto` action alone no longer classifies an
+  error as a proven navigation failure.
 - The follow-up visual pass introduces a clearer page skeleton: a compact
   Chinese-first header, a high-contrast catalog with lifecycle hierarchy and
   disclosure-only technical IDs, a canvas-first workspace, and visibly
@@ -127,6 +136,11 @@ devices.
 
 ## Validation record
 
+- Accessibility compatibility continuation: focused Python and diagnostic tests
+  PASS (`168 passed`); frontend lint and build PASS; Visual Designer Playwright
+  PASS (`4 passed`); fixture-driven Workflow Runtime Playwright regression PASS
+  (`7 passed`). The complete real-service browser result remains owned by the
+  normal Draft PR CI candidate.
 - Historical candidate `4020e6239d06f4ba930e07b9899fb2de926bdb8f`
   remains the source for the earlier results below. Its six Draft PR checks are
   all `SUCCESS`; those results are not attributed to the later visual changes.
