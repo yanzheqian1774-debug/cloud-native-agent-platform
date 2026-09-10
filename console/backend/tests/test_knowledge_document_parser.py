@@ -9,18 +9,7 @@ from agent_console.knowledge_document_parser import (
 )
 
 
-def text_pdf(text: str) -> bytes:
-    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-            b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
-        ),
-        f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    ]
+def pdf_bytes(objects: list[bytes]) -> bytes:
     result = bytearray(b"%PDF-1.4\n")
     offsets = [0]
     for index, value in enumerate(objects, 1):
@@ -37,6 +26,77 @@ def text_pdf(text: str) -> bytes:
         ).encode()
     )
     return bytes(result)
+
+
+def text_pdf(text: str) -> bytes:
+    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+    return pdf_bytes(
+        [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            (
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+            ),
+            f"<< /Length {len(stream)} >>\nstream\n".encode() + stream + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        ]
+    )
+
+
+def chinese_text_pdf() -> bytes:
+    content = b"BT /F1 12 Tf 72 720 Td <00010002000300040005000600070008> Tj ET"
+    cmap = b"""/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Adobe-Identity-UCS def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+8 beginbfchar
+<0001> <4F9B>
+<0002> <5E94>
+<0003> <5546>
+<0004> <7F3A>
+<0005> <9677>
+<0006> <62A5>
+<0007> <544A>
+<0008> <3002>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end"""
+    return pdf_bytes(
+        [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            (
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+            ),
+            f"<< /Length {len(content)} >>\nstream\n".encode()
+            + content
+            + b"\nendstream",
+            (
+                b"<< /Type /Font /Subtype /Type0 /BaseFont /NotoSansCJK "
+                b"/Encoding /Identity-H /DescendantFonts [6 0 R] /ToUnicode 7 0 R >>"
+            ),
+            (
+                b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSansCJK "
+                b"/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) "
+                b"/Supplement 0 >> /FontDescriptor 8 0 R /CIDToGIDMap /Identity >>"
+            ),
+            f"<< /Length {len(cmap)} >>\nstream\n".encode() + cmap + b"\nendstream",
+            (
+                b"<< /Type /FontDescriptor /FontName /NotoSansCJK /Flags 4 "
+                b"/FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 880 "
+                b"/Descent -120 /CapHeight 700 /StemV 80 >>"
+            ),
+        ]
+    )
 
 
 def docx(paragraphs: list[str], *, macro: bool = False) -> bytes:
@@ -100,6 +160,18 @@ def test_pdf_requires_signature_and_reports_real_page_location():
     }
     with pytest.raises(KnowledgeDocumentParseFailure, match="DOCUMENT_TYPE_MISMATCH"):
         _parse("renamed.docx", "application/pdf", text_pdf("not docx"))
+
+
+def test_pdf_extracts_real_chinese_tounicode_bytes():
+    result = _parse("供应商报告.pdf", "application/pdf", chinese_text_pdf())
+
+    assert result["content"] == "供应商缺陷报告。"
+    assert result["segments"] == [
+        {
+            "content": "供应商缺陷报告。",
+            "location": {"pageNumber": 1, "paragraphNumber": 1},
+        }
+    ]
 
 
 @pytest.mark.parametrize(

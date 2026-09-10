@@ -121,6 +121,14 @@ def apt_hash_failure(*additional_lines: str) -> str:
     return "\n".join(
         (
             f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch",
+            "   Hashes of expected file:",
+            "    - Filesize:1412 [weak]",
+            "    - SHA256:0123456789abcdef",
+            "   Hashes of received file:",
+            "    - Filesize:1401 [weak]",
+            "    - SHA256:fedcba9876543210",
+            "   Last modification reported: Thu, 10 Sep 2026 01:00:00 +0000",
+            "   Release file created at: Thu, 10 Sep 2026 00:59:00 +0000",
             "E: Some index files failed to download. They have been ignored, "
             "or old ones used instead.",
             "Failed to install browsers",
@@ -187,6 +195,26 @@ def test_known_google_apt_hash_failure_fails_closed_after_three_attempts(
             "mixed_playwright_install_failure",
         ),
         (
+            31,
+            apt_hash_failure("npm error cache write failed"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            32,
+            apt_hash_failure("Killed"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            33,
+            apt_hash_failure("process terminated by signal 9"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            34,
+            apt_hash_failure("unexpected condition 42"),
+            "mixed_playwright_install_failure",
+        ),
+        (
             17,
             "Get:1 https://dl.google.com/linux/chrome-stable/deb Packages\n"
             "E: Failed to fetch https://mirror.invalid/Packages.gz  "
@@ -212,6 +240,22 @@ def test_non_allowed_install_failures_do_not_retry(
     assert result.attempts == 1
     assert result.sleeps == []
     assert f"attempt=1/3 exit_code={exit_code} error_category={category}" in (
+        result.completed.stdout
+    )
+
+
+def test_incomplete_allowed_failure_structure_does_not_retry(tmp_path: Path) -> None:
+    output = (
+        f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch\n"
+        "Failed to install browsers\n"
+        "Error: Installation process exited with code: 100\n"
+    )
+    result = run_install_step(tmp_path, [(35, output)])
+
+    assert result.completed.returncode == 35
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert "error_category=playwright_install_failure_unclassified" in (
         result.completed.stdout
     )
 
