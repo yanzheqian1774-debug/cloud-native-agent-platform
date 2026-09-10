@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import ssl
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -48,6 +50,7 @@ from agent_console.workbench_bootstrap import build_workbench_composition
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from s5_v023_impl_310_startup_status import BoundedStartupStatus
 
 MIGRATIONS = Path(__file__).parents[1] / "migrations"
 SCOPE = ScopeIdentity("tenant-a", "quality")
@@ -467,7 +470,8 @@ def seed_dynamic_grants(repository, agent: dict, now: datetime) -> None:
         )
 
 
-def build_fixture(args, runtime: AuthorityRuntimeConfiguration):
+def build_fixture(args, startup: BoundedStartupStatus):
+    startup.begin("DATABASE_CONNECTION")
     now = datetime.now(UTC)
     agent_repository = PostgresAgentDefinitionRepository(
         args.database_url,
@@ -475,8 +479,17 @@ def build_fixture(args, runtime: AuthorityRuntimeConfiguration):
         governed_bindings_migration_path=MIGRATIONS
         / "0006_agent_governed_bindings.sql",
     )
+    startup.complete("DATABASE_CONNECTION")
+    startup.begin("DATABASE_MIGRATION")
     agent_repository.migrate()
     agents = AgentDefinitionService(agent_repository)
+    assembly = build_digital_employee_assembly(
+        args.database_url,
+        agents,
+        migration_path=MIGRATIONS / "0008_execution_runtime_authority.sql",
+    )
+    startup.complete("DATABASE_MIGRATION")
+    startup.begin("SAMPLE_PREPARATION")
     primary_agent = publish_agent(agents, "Quality analysis Agent")
     publish_agent(agents, "Second page Agent")
     primary_members = (
@@ -517,11 +530,6 @@ def build_fixture(args, runtime: AuthorityRuntimeConfiguration):
             f"sha256:{'5' * 64}",
         ),
     )
-    assembly = build_digital_employee_assembly(
-        args.database_url,
-        agents,
-        migration_path=MIGRATIONS / "0008_execution_runtime_authority.sql",
-    )
     publish_employee(
         assembly.employee_definitions,
         primary_members,
@@ -535,45 +543,8 @@ def build_fixture(args, runtime: AuthorityRuntimeConfiguration):
         "Second page employee",
     )
     seed_execution_chain(assembly, primary_agent, now)
-    initialize_authority_generation(runtime, control_epoch=1, recovery_epoch=1, now=now)
-    problems = build_business_problem_application(args.database_url, assembly)
-    composition = build_workbench_composition(
-        runtime_configuration_path=args.runtime_dir / "runtime.json",
-        allowed_host=f"127.0.0.1:{args.public_port}",
-        allowed_origin=f"https://127.0.0.1:{args.public_port}",
-        owner_database_url=args.database_url,
-        agent_database_url=args.database_url,
-        business_problems=problems,
-        agent_definitions=agent_repository,
-        employee_definitions=assembly.employee_definitions,
-        digital_employees=assembly.repository,
-    )
-    seed_dynamic_grants(composition.foundation.repository, primary_agent, now)
-    public = composition.application
-    public.mount("/assets", StaticFiles(directory=args.dist / "assets"), name="assets")
-
-    @public.get("/{path:path}")
-    def frontend(path: str):
-        return FileResponse(args.dist / "index.html")
-
-    return composition, public
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--database-url", required=True)
-    parser.add_argument("--runtime-dir", required=True, type=Path)
-    parser.add_argument("--dist", required=True, type=Path)
-    parser.add_argument("--public-port", required=True, type=int)
-    parser.add_argument("--control-port", required=True, type=int)
-    parser.add_argument("--cert", required=True)
-    parser.add_argument("--key", required=True)
-    parser.add_argument("--control-token-file", required=True, type=Path)
-    parser.add_argument("--full-credential-sha256", required=True)
-    parser.add_argument("--list-credential-sha256", required=True)
-    parser.add_argument("--wrong-scope-credential-sha256", required=True)
-    parser.add_argument("--wrong-grant-credential-sha256", required=True)
-    args = parser.parse_args()
+    startup.complete("SAMPLE_PREPARATION")
+    startup.begin("AUTHORIZATION_PREPARATION")
     args.runtime_dir.mkdir(parents=True, exist_ok=True)
     control_token = args.control_token_file.read_text().strip()
     if not control_token:
@@ -607,40 +578,118 @@ def main() -> None:
             sort_keys=True,
         )
     )
-    composition, public = build_fixture(args, runtime)
-    control = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-
-    @control.post("/revoke-placement")
-    def revoke_placement(x_control_token: str = Header(default="")):
-        if x_control_token != control_token:
-            raise HTTPException(status_code=404)
-        composition.foundation.repository.revoke_grant(
-            PLACEMENT_GRANT_ID,
-            actor_id="human:grant-admin",
-            reason="DUTY_ENDED",
-            idempotency_key="s5-310-revoke-placement",
-            payload_digest="e" * 64,
-            now=datetime.now(UTC),
-        )
-        return {"status": "revoked"}
-
-    control_server = uvicorn.Server(
-        uvicorn.Config(
-            control, host="127.0.0.1", port=args.control_port, log_level="warning"
-        )
+    initialize_authority_generation(runtime, control_epoch=1, recovery_epoch=1, now=now)
+    problems = build_business_problem_application(args.database_url, assembly)
+    composition = build_workbench_composition(
+        runtime_configuration_path=args.runtime_dir / "runtime.json",
+        allowed_host=f"127.0.0.1:{args.public_port}",
+        allowed_origin=f"https://127.0.0.1:{args.public_port}",
+        owner_database_url=args.database_url,
+        agent_database_url=args.database_url,
+        business_problems=problems,
+        agent_definitions=agent_repository,
+        employee_definitions=assembly.employee_definitions,
+        digital_employees=assembly.repository,
     )
-    threading.Thread(target=control_server.run, daemon=True).start()
+    seed_dynamic_grants(composition.foundation.repository, primary_agent, now)
+    public = composition.application
+    public.mount("/assets", StaticFiles(directory=args.dist / "assets"), name="assets")
+
+    @public.get("/{path:path}")
+    def frontend(path: str):
+        return FileResponse(args.dist / "index.html")
+
+    startup.complete("AUTHORIZATION_PREPARATION")
+    return composition, public, control_token
+
+
+def record_listener_readiness(
+    startup: BoundedStartupStatus,
+    public_server: uvicorn.Server,
+    control_server: uvicorn.Server,
+) -> None:
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if public_server.started and control_server.started:
+            startup.complete("LISTENER_READINESS")
+            return
+        time.sleep(0.025)
+    startup.fail(TimeoutError())
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--database-url", required=True)
+    parser.add_argument("--runtime-dir", required=True, type=Path)
+    parser.add_argument("--dist", required=True, type=Path)
+    parser.add_argument("--public-port", required=True, type=int)
+    parser.add_argument("--control-port", required=True, type=int)
+    parser.add_argument("--cert", required=True)
+    parser.add_argument("--key", required=True)
+    parser.add_argument("--control-token-file", required=True, type=Path)
+    parser.add_argument("--startup-status", required=True, type=Path)
+    parser.add_argument("--full-credential-sha256", required=True)
+    parser.add_argument("--list-credential-sha256", required=True)
+    parser.add_argument("--wrong-scope-credential-sha256", required=True)
+    parser.add_argument("--wrong-grant-credential-sha256", required=True)
+    args = parser.parse_args()
+    startup = BoundedStartupStatus(args.startup_status)
+    composition = None
     try:
-        uvicorn.run(
-            public,
-            host="127.0.0.1",
-            port=args.public_port,
-            ssl_certfile=args.cert,
-            ssl_keyfile=args.key,
-            log_level="warning",
+        composition, public, control_token = build_fixture(args, startup)
+        startup.begin("TLS_CONFIGURATION")
+        tls_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls_context.load_cert_chain(args.cert, args.key)
+        startup.complete("TLS_CONFIGURATION")
+        control = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+        @control.get("/ready", status_code=204)
+        def control_ready() -> None:
+            return None
+
+        @control.post("/revoke-placement")
+        def revoke_placement(x_control_token: str = Header(default="")):
+            if x_control_token != control_token:
+                raise HTTPException(status_code=404)
+            composition.foundation.repository.revoke_grant(
+                PLACEMENT_GRANT_ID,
+                actor_id="human:grant-admin",
+                reason="DUTY_ENDED",
+                idempotency_key="s5-310-revoke-placement",
+                payload_digest="e" * 64,
+                now=datetime.now(UTC),
+            )
+            return {"status": "revoked"}
+
+        control_server = uvicorn.Server(
+            uvicorn.Config(
+                control, host="127.0.0.1", port=args.control_port, log_level="warning"
+            )
         )
+        public_server = uvicorn.Server(
+            uvicorn.Config(
+                public,
+                host="127.0.0.1",
+                port=args.public_port,
+                ssl_certfile=args.cert,
+                ssl_keyfile=args.key,
+                log_level="warning",
+            )
+        )
+        startup.begin("LISTENER_READINESS")
+        threading.Thread(target=control_server.run, daemon=True).start()
+        threading.Thread(
+            target=record_listener_readiness,
+            args=(startup, public_server, control_server),
+            daemon=True,
+        ).start()
+        public_server.run()
+    except BaseException as error:
+        startup.fail(error)
+        raise
     finally:
-        composition.close()
+        if composition is not None:
+            composition.close()
 
 
 if __name__ == "__main__":

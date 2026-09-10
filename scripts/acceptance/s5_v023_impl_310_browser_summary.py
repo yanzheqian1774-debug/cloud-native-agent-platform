@@ -17,6 +17,73 @@ SECURITY_REASON_CODES = (
     "EMPLOYEE_NOT_FOUND",
     "PLACEMENT_NOT_FOUND",
 )
+STARTUP_STAGES = {
+    "DATABASE_CONNECTION",
+    "DATABASE_MIGRATION",
+    "SAMPLE_PREPARATION",
+    "AUTHORIZATION_PREPARATION",
+    "TLS_CONFIGURATION",
+    "LISTENER_READINESS",
+}
+STARTUP_EXCEPTION_CATEGORIES = {
+    "NONE",
+    "CONNECTION_ERROR",
+    "DATABASE_ERROR",
+    "TIMEOUT_ERROR",
+    "FILESYSTEM_ERROR",
+    "VALIDATION_ERROR",
+    "TLS_ERROR",
+    "UNKNOWN",
+}
+STARTUP_REASON_CODES = {
+    "NONE",
+    "DATABASE_CONNECTION_FAILED",
+    "DATABASE_MIGRATION_FAILED",
+    "SAMPLE_PREPARATION_FAILED",
+    "AUTHORIZATION_PREPARATION_FAILED",
+    "TLS_CONFIGURATION_FAILED",
+    "LISTENER_READINESS_FAILED",
+    "UNKNOWN",
+}
+
+
+def _startup_status(path: Path) -> tuple[dict[str, str], str]:
+    unavailable = {
+        "state": "UNKNOWN",
+        "lastStartedStage": "UNKNOWN",
+        "lastCompletedStage": "UNKNOWN",
+        "exceptionCategory": "UNKNOWN",
+        "reasonCode": "UNKNOWN",
+    }
+    try:
+        raw = json.loads(path.read_text())
+    except FileNotFoundError:
+        return unavailable, "UNAVAILABLE"
+    except (OSError, json.JSONDecodeError):
+        return unavailable, "INVALID"
+    if not isinstance(raw, dict):
+        return unavailable, "INVALID"
+    state = raw.get("state")
+    started = raw.get("lastStartedStage")
+    completed = raw.get("lastCompletedStage")
+    if (
+        raw.get("schemaVersion") != "s5-v023-impl-310-fixture-startup.v1"
+        or state not in {"STARTING", "READY", "FAILED"}
+        or started not in STARTUP_STAGES
+        or completed not in {"NONE", *STARTUP_STAGES}
+    ):
+        return unavailable, "INVALID"
+    category = raw.get("exceptionCategory")
+    reason_code = raw.get("reasonCode")
+    return {
+        "state": state,
+        "lastStartedStage": started,
+        "lastCompletedStage": completed,
+        "exceptionCategory": (
+            category if category in STARTUP_EXCEPTION_CATEGORIES else "UNKNOWN"
+        ),
+        "reasonCode": reason_code if reason_code in STARTUP_REASON_CODES else "UNKNOWN",
+    }, "AVAILABLE"
 
 
 def _tests(report: dict[str, Any]) -> list[dict[str, Any]]:
@@ -43,6 +110,7 @@ def build_summary(
     tree_sha: str,
     execution_outcome: str,
     static_stages: dict[str, str],
+    startup_status_path: Path,
 ) -> tuple[dict[str, Any], bool]:
     report: dict[str, Any] | None = None
     report_state = "AVAILABLE"
@@ -75,8 +143,17 @@ def build_summary(
         outcome == "success" for outcome in static_stages.values()
     )
     exact_selection = selected == 1 and titles == [EXPECTED_TITLE]
+    startup, startup_state = _startup_status(startup_status_path)
+    startup_ok = (
+        startup_state == "AVAILABLE"
+        and startup["state"] == "READY"
+        and startup["lastCompletedStage"] == "LISTENER_READINESS"
+        and startup["exceptionCategory"] == "NONE"
+        and startup["reasonCode"] == "NONE"
+    )
     passed_gate = (
         static_ok
+        and startup_ok
         and report_state == "AVAILABLE"
         and execution_outcome == "success"
         and exact_selection
@@ -88,6 +165,14 @@ def build_summary(
 
     if not static_ok:
         failure_category = "STATIC_STAGE_FAILURE"
+    elif startup_state == "UNAVAILABLE":
+        failure_category = "FIXTURE_DIAGNOSTIC_UNAVAILABLE"
+    elif startup_state == "INVALID":
+        failure_category = "FIXTURE_DIAGNOSTIC_INVALID"
+    elif startup["state"] == "FAILED":
+        failure_category = "FIXTURE_STARTUP_FAILURE"
+    elif not startup_ok:
+        failure_category = "FIXTURE_NOT_READY"
     elif report_state == "UNAVAILABLE":
         failure_category = "REPORT_UNAVAILABLE"
     elif report_state == "INVALID":
@@ -111,6 +196,7 @@ def build_summary(
         "failureCategory": failure_category,
         "reportState": report_state,
         "executionOutcome": execution_outcome,
+        "fixtureStartup": {"availability": startup_state, **startup},
         "staticStages": dict(sorted(static_stages.items())),
         "counts": {
             "selected": selected,
@@ -138,6 +224,7 @@ def main() -> int:
     parser.add_argument("--commit-sha", required=True)
     parser.add_argument("--tree-sha", required=True)
     parser.add_argument("--execution-outcome", required=True)
+    parser.add_argument("--startup-status", required=True, type=Path)
     parser.add_argument("--static-stage", action="append", default=[])
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
@@ -153,6 +240,7 @@ def main() -> int:
         tree_sha=args.tree_sha,
         execution_outcome=args.execution_outcome,
         static_stages=stages,
+        startup_status_path=args.startup_status,
     )
     args.output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     print(json.dumps(summary, sort_keys=True))

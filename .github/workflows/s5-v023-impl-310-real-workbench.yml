@@ -95,7 +95,6 @@ jobs:
         run: >-
           npx playwright test
           --config playwright.real-workbench.config.ts
-          tests/e2e/digital-employee-work-participation.real.spec.ts
           --list --workers=1 --retries=0 --forbid-only
 
       - name: Check fixture and bounded summary
@@ -104,14 +103,19 @@ jobs:
         run: |
           uv run ruff check \
             console/backend/tests/s5_v023_impl_310_real_browser_server.py \
+            console/backend/tests/s5_v023_impl_310_startup_status.py \
+            console/backend/tests/test_s5_v023_impl_310_startup_status.py \
             scripts/acceptance/s5_v023_impl_310_browser_summary.py \
             scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py
           uv run ruff format --check \
             console/backend/tests/s5_v023_impl_310_real_browser_server.py \
+            console/backend/tests/s5_v023_impl_310_startup_status.py \
+            console/backend/tests/test_s5_v023_impl_310_startup_status.py \
             scripts/acceptance/s5_v023_impl_310_browser_summary.py \
             scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py
           uv run pytest -q \
             scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py \
+            console/backend/tests/test_s5_v023_impl_310_startup_status.py \
             console/frontend/tests/test_s5_v023_impl_310_digital_employee_work.py
 
       - name: Run PostgreSQL HTTPS Workbench scenario
@@ -129,6 +133,7 @@ jobs:
           server_log="$RUNNER_TEMP/s5-v023-impl-310-server.log"
           stderr_log="$RUNNER_TEMP/s5-v023-impl-310-playwright.stderr"
           raw_report="$RUNNER_TEMP/s5-v023-impl-310-playwright.json"
+          startup_status="$RUNNER_TEMP/s5-v023-impl-310-startup.json"
           server_pid=""
           cleanup() {
             if [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; then
@@ -164,6 +169,7 @@ jobs:
             --cert "$cert_path" \
             --key "$key_path" \
             --control-token-file "$token_path" \
+            --startup-status "$startup_status" \
             --full-credential-sha256 "$(digest "$full_credential")" \
             --list-credential-sha256 "$(digest "$list_credential")" \
             --wrong-scope-credential-sha256 "$(digest "$wrong_scope_credential")" \
@@ -173,7 +179,8 @@ jobs:
 
           ready=false
           for _ in $(seq 1 60); do
-            if curl --insecure --fail --silent https://127.0.0.1:18443/api/workbench/v1/login >/dev/null; then
+            if curl --insecure --fail --silent https://127.0.0.1:18443/api/workbench/v1/login >/dev/null \
+              && curl --fail --silent http://127.0.0.1:18444/ready >/dev/null; then
               ready=true
               break
             fi
@@ -182,7 +189,19 @@ jobs:
             fi
             sleep 0.25
           done
-          test "$ready" = true
+          if [ "$ready" != true ]; then
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              set +e
+              wait "$server_pid"
+              server_status=$?
+              set -e
+              server_pid=""
+              if [ "$server_status" -ne 0 ]; then
+                exit "$server_status"
+              fi
+            fi
+            exit 1
+          fi
 
           set +e
           (
@@ -196,7 +215,6 @@ jobs:
             S5_310_WRONG_GRANT_CREDENTIAL="$wrong_grant_credential" \
             npx playwright test \
               --config playwright.real-workbench.config.ts \
-              tests/e2e/digital-employee-work-participation.real.spec.ts \
               --workers=1 --retries=0 --forbid-only --reporter=json \
               >"$raw_report" 2>"$stderr_log"
           )
@@ -215,6 +233,7 @@ jobs:
             --commit-sha "$(git rev-parse HEAD)" \
             --tree-sha "$(git rev-parse 'HEAD^{tree}')" \
             --execution-outcome "${{ steps.real.outcome }}" \
+            --startup-status "$RUNNER_TEMP/s5-v023-impl-310-startup.json" \
             --static-stage "build=${{ steps.build.outcome }}" \
             --static-stage "eslint=${{ steps.eslint.outcome }}" \
             --static-stage "discovery=${{ steps.discovery.outcome }}" \
@@ -222,6 +241,7 @@ jobs:
             --output "$RUNNER_TEMP/s5-v023-impl-310-browser-evidence.json"
           summary_status=$?
           rm -f "$RUNNER_TEMP/s5-v023-impl-310-playwright.json"
+          rm -f "$RUNNER_TEMP/s5-v023-impl-310-startup.json"
           exit "$summary_status"
 
       - name: Upload bounded acceptance evidence

@@ -207,3 +207,28 @@ This gate does not close Digital Employee lifecycle browser writes, generalized
 execution/Runtime/observation reads, Resource Use, Evidence, Business Outcome,
 complete work history, I3/deployment isolation, Human acceptance, or release
 acceptance. Ordinary CI success cannot substitute for this dedicated gate.
+
+## Collection isolation and startup diagnostics — 2026-09-10
+
+Run `34450664251` did not execute the dedicated browser scenario. Its uploaded
+bounded summary is `FAILED / REPORT_UNAVAILABLE` with zero selected and zero
+executed tests. It provides no scenario-success or security-assertion Evidence,
+and does not support changing the success gate.
+
+The default Playwright configuration now excludes only
+`digital-employee-work-participation.real.spec.ts`; the dedicated configuration
+owns that exact spec through `testMatch`. Local collection with the ordinary
+suite's required read-only endpoint variables selects 45 tests in eight files
+and no real-service spec. Dedicated collection selects exactly one test in one
+file, while missing dedicated variables fails during collection.
+
+The fixture writes a bounded status before its first database connection. It
+records only the last started and completed phase, a whitelisted exception
+category, and a whitelisted reason code across database connection, migration,
+sample preparation, authorization preparation, TLS configuration, and both
+listener readiness. Unknown exceptions remain `UNKNOWN`; exception text, SQL,
+connection strings, credentials, sessions, tokens, and tracebacks are never
+copied. The status file remains outside the cleaned runtime directory until the
+summary has incorporated its sanitized fields. Raw server and Playwright logs
+remain non-artifacts, and a missing, invalid, failed, or incomplete startup
+status fails closed without promoting browser Evidence.
