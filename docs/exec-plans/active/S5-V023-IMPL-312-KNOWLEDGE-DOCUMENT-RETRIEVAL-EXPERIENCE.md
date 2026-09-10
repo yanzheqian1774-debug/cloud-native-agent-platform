@@ -259,10 +259,20 @@ the reviewed source or its historical evidence:
   signature additionally enforces the exact failure-detail and wrapper order. A
   reordered or incomplete signature fails without retry rather than being accepted
   merely because all expected strings occur somewhere in the log.
+- `fe91cfc69f68ece0ea81d0d1e7542647636b21ef`, tree
+  `ea29bc5922f022d4a6045a1d198e03816eb9811f`: the follow-up review found
+  that the preceding phase check did not require the expected and received detail
+  sections themselves. The classifier now requires the target Google Packages.gz
+  failure, an expected section and then a received section, `Filesize` and 64-hex
+  `SHA256` in both, identical field sets with at least one differing value, the two
+  timestamp detail lines, and the existing wrappers in order. Missing, empty,
+  reordered, malformed, equal or otherwise unclassified detail structures fail
+  without retry. No concrete observed hash value is embedded in the classifier.
 
 Focused evidence before the final push: successor lifecycle tests `5 passed`; the
 revision-time route-fixture browser test `1 passed`; frontend ESLint and production
-build passed; install-classification synthetic tests `14 passed`; parser tests
+build passed; the final install-classification synthetic checkpoint has `22 passed`;
+parser tests
 `7 passed`, including actual Type0/CIDFont PDF bytes with a ToUnicode CMap that
 extract the Chinese text `供应商缺陷报告。`. Each checkpoint completed the normal
 commit hooks. The first local Playwright attempt lacked installed frontend packages,
