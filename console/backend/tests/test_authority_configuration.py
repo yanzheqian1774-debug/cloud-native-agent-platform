@@ -136,17 +136,18 @@ def test_existing_service_bearer_verifier_is_preserved_behind_typed_port() -> No
     assert principal.policy_version == "existing-policy"
 
 
-def test_agent_exact_read_is_registered_without_list_or_lifecycle_actions() -> None:
-    validate_registered_grant(
+def test_agent_exact_read_and_list_are_registered_without_lifecycle_actions() -> None:
+    for grant in (
         ExactGrant(
             "AGENT",
             "READ",
             "agent:agent-definition:quality:agent-revision:v1",
         ),
-        allow_meta=False,
-    )
+        ExactGrant("AGENT", "LIST", "agent:collection"),
+    ):
+        validate_registered_grant(grant, allow_meta=False)
 
-    for action in ("LIST", "CREATE", "PUBLISH"):
+    for action in ("CREATE", "PUBLISH"):
         with pytest.raises(AuthorityError, match="UNKNOWN_AUTHORITY_OPERATION"):
             validate_registered_grant(
                 ExactGrant("AGENT", action, "agent:collection"), allow_meta=False

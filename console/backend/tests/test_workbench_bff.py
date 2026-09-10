@@ -22,12 +22,14 @@ from agent_console.workbench_bff import (
     WorkbenchOperation,
     create_workbench_bff,
 )
+from agent_console.workbench_bff_schemas import WorkbenchPageQuery
 from agent_console.workbench_business_problem import business_problem_operations
 from agent_console.workbench_employee import (
     digital_employee_operations,
     employee_operations,
 )
 from agent_console.workbench_owner_authorization import AuthorizedOwnerCall
+from agent_console.workbench_pagination import WorkbenchCursorCodec
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 
@@ -297,6 +299,38 @@ def test_unsafe_boundary_and_strict_schema_fail_before_owner() -> None:
     assert authorizer.calls == []
 
 
+def test_duplicate_query_parameters_fail_before_owner() -> None:
+    sessions = SessionStub()
+    authorizer = AuthorizerStub()
+    operation = WorkbenchOperation(
+        name="LIST_THINGS",
+        method="GET",
+        path=f"{PREFIX}/things",
+        request_model=None,
+        query_model=WorkbenchPageQuery,
+        grant_builder=lambda context, path, payload, query: (
+            ExactGrant("EMPLOYEE", "LIST", "employee:collection"),
+        ),
+        handler=lambda call: {"items": []},
+    )
+    client = TestClient(
+        create_workbench_bff(
+            sessions,  # type: ignore[arg-type]
+            authorizer,  # type: ignore[arg-type]
+            WorkbenchBffPolicy("console.example", "https://console.example"),
+            operations=(operation,),
+        ),
+        base_url="https://console.example",
+    )
+    login(client)
+
+    response = client.get(f"{PREFIX}/things?pageSize=10&pageSize=20")
+
+    assert response.status_code == 422
+    assert response.json()["reasonCode"] == "REQUEST_INVALID"
+    assert authorizer.calls == []
+
+
 def test_route_set_is_closed_and_rotation_invalidates_predecessor_cookie() -> None:
     client, sessions, _ = build_client()
     login(client)
@@ -355,17 +389,23 @@ def test_business_problem_registry_freezes_routes_and_exact_resource_builders() 
     ) == (ExactGrant("PLAN", "READ", "plan:plan-9:3"),)
 
 
-def test_employee_registry_exposes_only_exact_revision_read() -> None:
-    operations = employee_operations(SimpleNamespace())  # type: ignore[arg-type]
+def test_employee_registry_exposes_list_and_exact_revision_read() -> None:
+    operations = employee_operations(  # type: ignore[arg-type]
+        SimpleNamespace(), WorkbenchCursorCodec(b"k" * 32)
+    )
 
     assert [(item.name, item.method, item.path) for item in operations] == [
+        ("LIST_EMPLOYEES", "GET", f"{PREFIX}/employees"),
         (
             "READ_EMPLOYEE_REVISION",
             "GET",
             f"{PREFIX}/employees/{{employee_definition_id}}/revisions/{{revision_id}}",
-        )
+        ),
     ]
-    operation = operations[0]
+    listing, operation = operations
+    assert tuple(
+        listing.grant_builder(SessionStub().context, {}, {}, {"pageSize": 50})
+    ) == (ExactGrant("EMPLOYEE", "LIST", "employee:collection"),)
     assert tuple(
         operation.grant_builder(
             SessionStub().context,

@@ -222,6 +222,15 @@ class EmployeeDefinitionRepository(Protocol):
         *,
         authorized: bool,
     ): ...
+    def list_revisions_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        *,
+        after: tuple[str, str] | None,
+        limit: int,
+        authorized: bool,
+    ): ...
     def decide(
         self,
         scope: ScopeIdentity,

@@ -349,6 +349,50 @@ class PostgresEmployeeDefinitionRepository:
             ),
         }
 
+    def list_revisions_for_workbench(
+        self,
+        connection,
+        scope,
+        *,
+        after,
+        limit,
+        authorized,
+    ):
+        """Read one bounded keyset page on the caller transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        if not isinstance(limit, int) or not 1 <= limit <= 201:
+            raise EmployeeDefinitionError("INVALID_PAGE_SIZE")
+        parameters = [scope.namespace, scope.security_domain]
+        after_clause = ""
+        if after is not None:
+            if not isinstance(after, tuple) or len(after) != 2:
+                raise EmployeeDefinitionError("INVALID_CURSOR")
+            after_clause = (
+                'AND (definition_id COLLATE "C", revision_id COLLATE "C") > (%s, %s) '
+            )
+            parameters.extend((identifier(after[0]), identifier(after[1])))
+        parameters.append(limit)
+        rows = connection.execute(
+            "SELECT definition_id,revision_id FROM "
+            "digital_employee_definition.revisions WHERE namespace=%s "
+            "AND security_domain=%s "
+            + after_clause
+            + 'ORDER BY definition_id COLLATE "C", revision_id COLLATE "C" '
+            "LIMIT %s",
+            tuple(parameters),
+        ).fetchall()
+        return [
+            self.read_revision_for_workbench(
+                connection,
+                scope,
+                row["definition_id"],
+                row["revision_id"],
+                authorized=True,
+            )
+            for row in rows
+        ]
+
     def list(self, scope):
         with self.pool.connection() as conn:
             rows = conn.execute(

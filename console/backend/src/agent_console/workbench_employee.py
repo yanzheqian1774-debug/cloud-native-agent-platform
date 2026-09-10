@@ -21,11 +21,17 @@ from agent_console.execution_postgres import (
     DigitalEmployeeInstanceId,
 )
 from agent_console.workbench_bff import PREFIX, WorkbenchOperation
-from agent_console.workbench_bff_schemas import WorkbenchEmployeeRevision
+from agent_console.workbench_bff_schemas import (
+    WorkbenchEmployeePage,
+    WorkbenchEmployeeRevision,
+    WorkbenchEmployeeSummary,
+    WorkbenchPageQuery,
+)
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
     WorkbenchOwnerError,
 )
+from agent_console.workbench_pagination import WorkbenchCursorCodec
 
 
 class EmployeeDefinitionOwnerAdapter:
@@ -82,6 +88,92 @@ class EmployeeDefinitionOwnerAdapter:
             ],
             publicationState=value["publicationState"],
         ).model_dump(mode="json")
+
+
+class EmployeeDefinitionListOwnerAdapter:
+    """List bounded revision summaries on the authorization transaction."""
+
+    ROUTE = "EMPLOYEE_LIST"
+
+    def __init__(
+        self,
+        repository: EmployeeDefinitionRepository,
+        cursors: WorkbenchCursorCodec,
+    ) -> None:
+        self.repository = repository
+        self.cursors = cursors
+
+    def __call__(self, call: AuthorizedOwnerCall) -> dict[str, Any]:
+        if call.operation != "LIST_EMPLOYEES":
+            raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
+        page_size = call.query["pageSize"]
+        after = None
+        if cursor := call.query.get("cursor"):
+            resolved = self.cursors.resolve(
+                cursor,
+                route=self.ROUTE,
+                context=call.context,
+                page_size=page_size,
+                key_size=2,
+            )
+            after = (resolved[0], resolved[1])
+        scope = ScopeIdentity(
+            call.context.scope.tenant_id,
+            call.context.scope.security_domain,
+        )
+        try:
+            values = self.repository.list_revisions_for_workbench(
+                call.connection,
+                scope,
+                after=after,
+                limit=page_size + 1,
+                authorized=True,
+            )
+            items = tuple(
+                WorkbenchEmployeeSummary(
+                    employeeDefinitionId=value["revision"]["definitionId"],
+                    employeeDefinitionRevisionId=value["revision"]["revisionId"],
+                    employeeDefinitionDigest=value["digest"],
+                    role=value["revision"]["role"],
+                    publicationState=value["publicationState"],
+                )
+                for value in values[:page_size]
+            )
+            keys = [
+                (item.employeeDefinitionId, item.employeeDefinitionRevisionId)
+                for item in items
+            ]
+            if keys != sorted(
+                keys,
+                key=lambda key: (key[0].encode("utf-8"), key[1].encode("utf-8")),
+            ) or len(keys) != len(set(keys)):
+                raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        except EmployeeDefinitionError as exc:
+            reason = str(exc)
+            if reason.startswith("INVALID_"):
+                raise WorkbenchOwnerError("REQUEST_INVALID", 422) from exc
+            raise WorkbenchOwnerError(
+                "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE", 503
+            ) from exc
+        except (PostgresError, KeyError, TypeError, ValueError) as exc:
+            raise WorkbenchOwnerError(
+                "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE", 503
+            ) from exc
+        next_cursor = None
+        if len(values) > page_size:
+            last = items[-1]
+            next_cursor = self.cursors.mint(
+                route=self.ROUTE,
+                context=call.context,
+                page_size=page_size,
+                last_key=(
+                    last.employeeDefinitionId,
+                    last.employeeDefinitionRevisionId,
+                ),
+            )
+        return WorkbenchEmployeePage(items=items, nextCursor=next_cursor).model_dump(
+            mode="json", exclude_none=True
+        )
 
 
 class DigitalEmployeeOwnerAdapter:
@@ -185,6 +277,10 @@ def _employee_revision_read(context, path, payload, query):
     )
 
 
+def _employee_list(context, path, payload, query):
+    return (ExactGrant("EMPLOYEE", "LIST", "employee:collection"),)
+
+
 def _instance_read(context, path, payload, query):
     return (ExactGrant("INSTANCE", "READ", f"instance:{path['instance_id']}"),)
 
@@ -195,8 +291,18 @@ def _assignment_read(context, path, payload, query):
 
 def employee_operations(
     repository: EmployeeDefinitionRepository,
+    cursors: WorkbenchCursorCodec,
 ) -> tuple[WorkbenchOperation, ...]:
     return (
+        WorkbenchOperation(
+            "LIST_EMPLOYEES",
+            "GET",
+            f"{PREFIX}/employees",
+            None,
+            WorkbenchPageQuery,
+            _employee_list,
+            EmployeeDefinitionListOwnerAdapter(repository, cursors),
+        ),
         WorkbenchOperation(
             "READ_EMPLOYEE_REVISION",
             "GET",

@@ -43,6 +43,16 @@ class AgentDefinitionRepository(Protocol):
         authorized: bool,
     ) -> dict[str, Any]: ...
 
+    def list_published_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        *,
+        after_definition_id: str | None,
+        limit: int,
+        authorized: bool,
+    ) -> list[dict[str, Any]]: ...
+
     def create(self, record: dict[str, Any]) -> dict[str, Any]: ...
 
     def replace(

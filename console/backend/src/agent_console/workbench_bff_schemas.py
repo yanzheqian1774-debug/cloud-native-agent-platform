@@ -57,6 +57,26 @@ class WorkbenchAgentRevision(StrictWorkbenchModel):
     role: WorkbenchAgentRole
 
 
+class WorkbenchPageQuery(StrictWorkbenchModel):
+    cursor: str | None = Field(default=None, min_length=1, max_length=2048)
+    pageSize: int = Field(default=50, ge=1, le=200)
+
+
+class WorkbenchAgentSummary(StrictWorkbenchModel):
+    definitionId: str
+    name: str
+    revisionId: str
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    title: str
+    enabled: bool
+    archived: bool
+
+
+class WorkbenchAgentPage(StrictWorkbenchModel):
+    items: tuple[WorkbenchAgentSummary, ...]
+    nextCursor: str | None = None
+
+
 class WorkbenchEmployeeMember(StrictWorkbenchModel):
     kind: str
     resourceId: str
@@ -73,3 +93,16 @@ class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     responsibilities: tuple[str, ...]
     members: tuple[WorkbenchEmployeeMember, ...]
     publicationState: Literal["PUBLISHED", "NOT_PUBLISHED"]
+
+
+class WorkbenchEmployeeSummary(StrictWorkbenchModel):
+    employeeDefinitionId: str
+    employeeDefinitionRevisionId: str
+    employeeDefinitionDigest: str
+    role: str
+    publicationState: Literal["PUBLISHED", "NOT_PUBLISHED"]
+
+
+class WorkbenchEmployeePage(StrictWorkbenchModel):
+    items: tuple[WorkbenchEmployeeSummary, ...]
+    nextCursor: str | None = None

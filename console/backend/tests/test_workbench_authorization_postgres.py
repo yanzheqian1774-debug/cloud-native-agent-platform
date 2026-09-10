@@ -66,6 +66,7 @@ from agent_console.workbench_owner_authorization import (
     WorkbenchOwnerAuthorization,
     WorkbenchOwnerError,
 )
+from agent_console.workbench_pagination import WorkbenchCursorCodec
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_postgres import (
     PostgresWorkflowDefinitionRepository,
@@ -847,7 +848,13 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
                 ),
             )
 
-        operation = employee_operations(employee_repository)[0]
+        operation = next(
+            item
+            for item in employee_operations(
+                employee_repository, WorkbenchCursorCodec(b"k" * 32)
+            )
+            if item.name == "READ_EMPLOYEE_REVISION"
+        )
         path = {
             "employee_definition_id": first.definition_id,
             "revision_id": first.revision_id,
@@ -986,7 +993,13 @@ def test_agent_exact_read_uses_authorization_transaction_and_revocation(
             },
         )
         revision = created["revisions"][0]
-        operation = agent_operations(agent_repository)[0]
+        operation = next(
+            item
+            for item in agent_operations(
+                agent_repository, WorkbenchCursorCodec(b"k" * 32)
+            )
+            if item.name == "READ_AGENT_REVISION"
+        )
         path = {
             "definition_id": created["definitionId"],
             "revision_id": revision["revisionId"],
@@ -1106,6 +1119,426 @@ def test_agent_exact_read_uses_authorization_transaction_and_revocation(
             )
     finally:
         agent_repository.pool.close()
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_agent_list_keyset_scope_independence_and_revocation(
+    repository, monkeypatch, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    agent_repository = PostgresAgentDefinitionRepository(
+        repository.pool.conninfo,
+        migration_path=AGENT_MIGRATION,
+        timeout=30.0,
+    )
+    try:
+        agent_repository.migrate()
+        service = AgentDefinitionService(agent_repository)
+        scope = service.scope("tenant-a", "quality")
+
+        def publish(name: str) -> tuple[dict, dict]:
+            created = service.create(
+                scope,
+                "human:alice",
+                name,
+                {
+                    "title": f"{name} title",
+                    "duties": ["Review quality"],
+                    "capabilities": ["quality.review"],
+                    "businessPurpose": "Prevent defects",
+                },
+            )
+            revision = created["revisions"][0]
+            service.validate(scope, created["definitionId"], "human:alice", 1)
+            reviewed = service.review(
+                scope,
+                created["definitionId"],
+                "human:alice",
+                2,
+                revision["digest"],
+                "APPROVE",
+                "approved",
+            )["definition"]
+            published = service.publish(
+                scope,
+                created["definitionId"],
+                "human:alice",
+                3,
+                revision["digest"],
+                reviewed["reviews"][-1]["reviewId"],
+            )["definition"]
+            return published, revision
+
+        first, first_revision = publish("Alpha agent")
+        second, second_revision = publish("Zeta agent")
+        successor = service.successor(scope, first["definitionId"], "human:alice", 4)[
+            "definition"
+        ]
+        draft_revision_id = successor["currentDraftRevisionId"]
+
+        codec = WorkbenchCursorCodec(b"k" * 32)
+        operations = agent_operations(agent_repository, codec)
+        listing = next(item for item in operations if item.name == "LIST_AGENTS")
+        exact = next(item for item in operations if item.name == "READ_AGENT_REVISION")
+        grants = tuple(listing.grant_builder(context(), {}, {}, {"pageSize": 1}))
+        grant_id = seed_digital_employee_read_grant(
+            repository, now, grants[0], key="agent-list"
+        )
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_list = agent_repository.list_published_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_list(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(
+            agent_repository, "list_published_for_workbench", capture_owner
+        )
+        first_page = adapter.execute(
+            context(),
+            grants,
+            operation=listing.name,
+            payload={},
+            path={},
+            query={"pageSize": 1},
+            handler=listing.handler,
+        )
+        second_page = adapter.execute(
+            context(),
+            grants,
+            operation=listing.name,
+            payload={},
+            path={},
+            query={"pageSize": 1, "cursor": first_page["nextCursor"]},
+            handler=listing.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert [
+            first_page["items"][0]["definitionId"],
+            second_page["items"][0]["definitionId"],
+        ] == sorted(
+            (first["definitionId"], second["definitionId"]),
+            key=lambda value: value.encode("utf-8"),
+        )
+        first_item = next(
+            item
+            for item in (first_page["items"][0], second_page["items"][0])
+            if item["definitionId"] == first["definitionId"]
+        )
+        assert first_item["revisionId"] == first_revision["revisionId"]
+        assert first_item["revisionId"] != draft_revision_id
+        assert second_page.get("nextCursor") is None
+        assert "total" not in repr((first_page, second_page)).lower()
+        assert "facts" not in repr((first_page, second_page)).lower()
+        assert second_revision["digest"] in repr((first_page, second_page))
+
+        def protected_list(*args, **kwargs):
+            pytest.fail("protected Agent list query ran after authorization denial")
+
+        monkeypatch.setattr(
+            agent_repository, "list_published_for_workbench", protected_list
+        )
+        wrong_scope = TrustedRequestContext(
+            "human:alice",
+            AuthorityScope("tenant-b", "quality"),
+            "session-one",
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                wrong_scope,
+                grants,
+                operation=listing.name,
+                payload={},
+                path={},
+                query={"pageSize": 1},
+                handler=listing.handler,
+            )
+
+        def protected_exact(*args, **kwargs):
+            pytest.fail("Agent exact owner query ran without READ authorization")
+
+        monkeypatch.setattr(
+            agent_repository, "read_revision_for_workbench", protected_exact
+        )
+        exact_path = {
+            "definition_id": first["definitionId"],
+            "revision_id": first_revision["revisionId"],
+        }
+        exact_grants = tuple(exact.grant_builder(context(), exact_path, {}, {}))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                exact_grants,
+                operation=exact.name,
+                payload={},
+                path=exact_path,
+                query={},
+                handler=exact.handler,
+            )
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                grant_id,
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-agent-list",
+                payload_digest="e" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=listing.name,
+                payload={},
+                path={},
+                query={"pageSize": 1},
+                handler=listing.handler,
+            )
+    finally:
+        agent_repository.pool.close()
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_employee_list_keyset_scope_independence_and_revocation(
+    repository, monkeypatch, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    execution_repository = PostgresExecutionAuthorityRepository(
+        repository.pool.conninfo,
+        migration_path=EXECUTION_MIGRATION,
+        timeout=30.0,
+    )
+    employee_repository = PostgresEmployeeDefinitionRepository(execution_repository)
+    try:
+        execution_repository.migrate()
+        employee_repository.migrate(EMPLOYEE_MIGRATION)
+        scope = ScopeIdentity("tenant-a", "quality")
+        revisions = (
+            EmployeeRevision(
+                scope,
+                "employee-definition:alpha",
+                "employee-revision:v1",
+                "Alpha owner",
+                ("Review quality",),
+                (
+                    CompositionMember(
+                        MemberKind.AGENT,
+                        "agent-definition:quality",
+                        "agent-revision:v1",
+                        "a" * 64,
+                    ),
+                ),
+            ),
+            EmployeeRevision(
+                scope,
+                "employee-definition:zeta",
+                "employee-revision:v1",
+                "Zeta owner",
+                ("Review quality",),
+                (
+                    CompositionMember(
+                        MemberKind.AGENT,
+                        "agent-definition:quality",
+                        "agent-revision:v1",
+                        "a" * 64,
+                    ),
+                ),
+            ),
+        )
+        with execution_repository.pool.connection() as connection:
+            for index, revision in enumerate(revisions, start=1):
+                connection.execute(
+                    "INSERT INTO digital_employee_definition.definitions "
+                    "VALUES (%s,%s,%s,1)",
+                    (scope.namespace, scope.security_domain, revision.definition_id),
+                )
+                connection.execute(
+                    "INSERT INTO digital_employee_definition.revisions "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        revision.definition_id,
+                        revision.revision_id,
+                        revision.predecessor_revision_id,
+                        revision.digest,
+                        json.dumps(revision.record),
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO digital_employee_definition.facts "
+                    "(namespace,security_domain,definition_id,revision_id,action,"
+                    "ordinal,revision_digest,decision_id,command_id,payload_digest) "
+                    "VALUES (%s,%s,%s,%s,%s,1,%s,%s,%s,%s)",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        revision.definition_id,
+                        revision.revision_id,
+                        "PUBLISH" if index == 1 else "CREATE",
+                        revision.digest,
+                        f"decision-list-{index}",
+                        f"command-list-{index}",
+                        str(index) * 64,
+                    ),
+                )
+
+        codec = WorkbenchCursorCodec(b"k" * 32)
+        operations = employee_operations(employee_repository, codec)
+        listing = next(item for item in operations if item.name == "LIST_EMPLOYEES")
+        exact = next(
+            item for item in operations if item.name == "READ_EMPLOYEE_REVISION"
+        )
+        grants = tuple(listing.grant_builder(context(), {}, {}, {"pageSize": 1}))
+        grant_id = seed_digital_employee_read_grant(
+            repository, now, grants[0], key="employee-list"
+        )
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_list = employee_repository.list_revisions_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_list(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(
+            employee_repository, "list_revisions_for_workbench", capture_owner
+        )
+        first_page = adapter.execute(
+            context(),
+            grants,
+            operation=listing.name,
+            payload={},
+            path={},
+            query={"pageSize": 1},
+            handler=listing.handler,
+        )
+        second_page = adapter.execute(
+            context(),
+            grants,
+            operation=listing.name,
+            payload={},
+            path={},
+            query={"pageSize": 1, "cursor": first_page["nextCursor"]},
+            handler=listing.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert (
+            first_page["items"][0]["employeeDefinitionId"] == revisions[0].definition_id
+        )
+        assert first_page["items"][0]["publicationState"] == "PUBLISHED"
+        assert (
+            second_page["items"][0]["employeeDefinitionId"]
+            == revisions[1].definition_id
+        )
+        assert second_page["items"][0]["publicationState"] == "NOT_PUBLISHED"
+        assert second_page.get("nextCursor") is None
+        assert "total" not in repr((first_page, second_page)).lower()
+        assert "responsibilities" not in repr((first_page, second_page)).lower()
+
+        def protected_list(*args, **kwargs):
+            pytest.fail("protected Employee list query ran after authorization denial")
+
+        monkeypatch.setattr(
+            employee_repository, "list_revisions_for_workbench", protected_list
+        )
+        wrong_scope = TrustedRequestContext(
+            "human:alice",
+            AuthorityScope("tenant-b", "quality"),
+            "session-one",
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                wrong_scope,
+                grants,
+                operation=listing.name,
+                payload={},
+                path={},
+                query={"pageSize": 1},
+                handler=listing.handler,
+            )
+
+        def protected_exact(*args, **kwargs):
+            pytest.fail("Employee exact owner query ran without READ authorization")
+
+        monkeypatch.setattr(
+            employee_repository, "read_revision_for_workbench", protected_exact
+        )
+        exact_path = {
+            "employee_definition_id": revisions[0].definition_id,
+            "revision_id": revisions[0].revision_id,
+        }
+        exact_grants = tuple(exact.grant_builder(context(), exact_path, {}, {}))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                exact_grants,
+                operation=exact.name,
+                payload={},
+                path=exact_path,
+                query={},
+                handler=exact.handler,
+            )
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                grant_id,
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-employee-list",
+                payload_digest="e" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=listing.name,
+                payload={},
+                path={},
+                query={"pageSize": 1},
+                handler=listing.handler,
+            )
+    finally:
+        execution_repository.pool.close()
 
 
 @pytest.mark.parametrize("revocation", ["grant", "session"])

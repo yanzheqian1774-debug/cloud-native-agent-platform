@@ -30,12 +30,14 @@ from agent_console.execution_postgres import (
 )
 from agent_console.workbench_employee import (
     DigitalEmployeeOwnerAdapter,
+    EmployeeDefinitionListOwnerAdapter,
     EmployeeDefinitionOwnerAdapter,
 )
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
     WorkbenchOwnerError,
 )
+from agent_console.workbench_pagination import WorkbenchCursorCodec
 
 
 def call(connection=None):
@@ -180,6 +182,72 @@ def test_employee_publication_source_missing_or_corrupt_fails_closed(facts) -> N
             revision.revision_id,
             authorized=True,
         )
+
+
+def test_employee_list_returns_minimal_page_and_composite_cursor() -> None:
+    connection = object()
+    values = [
+        {
+            "revision": {
+                "definitionId": "employee-definition:alpha",
+                "revisionId": "employee-revision:v1",
+                "role": "Quality owner",
+            },
+            "digest": "a" * 64,
+            "publicationState": "PUBLISHED",
+        },
+        {
+            "revision": {
+                "definitionId": "employee-definition:zeta",
+                "revisionId": "employee-revision:v2",
+                "role": "Zeta owner",
+            },
+            "digest": "b" * 64,
+            "publicationState": "NOT_PUBLISHED",
+        },
+    ]
+
+    class Repository:
+        def list_revisions_for_workbench(
+            self, actual_connection, scope, *, after, limit, authorized
+        ):
+            assert actual_connection is connection
+            assert (scope.namespace, scope.security_domain) == ("tenant-a", "quality")
+            assert after is None
+            assert (limit, authorized) == (2, True)
+            return values
+
+    codec = WorkbenchCursorCodec(b"k" * 32)
+    value = call(connection)
+    list_call = AuthorizedOwnerCall(
+        operation="LIST_EMPLOYEES",
+        context=value.context,
+        connection=connection,
+        payload={},
+        path={},
+        query={"pageSize": 1},
+        decisions=(),
+        authority=SimpleNamespace(),
+    )
+    result = EmployeeDefinitionListOwnerAdapter(Repository(), codec)(list_call)
+
+    assert result["items"] == [
+        {
+            "employeeDefinitionId": "employee-definition:alpha",
+            "employeeDefinitionRevisionId": "employee-revision:v1",
+            "employeeDefinitionDigest": "a" * 64,
+            "role": "Quality owner",
+            "publicationState": "PUBLISHED",
+        }
+    ]
+    assert "responsibilities" not in repr(result)
+    assert codec.resolve(
+        result["nextCursor"],
+        route="EMPLOYEE_LIST",
+        context=value.context,
+        page_size=1,
+        key_size=2,
+    ) == ("employee-definition:alpha", "employee-revision:v1")
 
 
 @pytest.mark.parametrize(

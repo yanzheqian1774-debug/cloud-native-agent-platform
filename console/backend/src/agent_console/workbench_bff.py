@@ -334,11 +334,14 @@ def create_workbench_bff(
                     raise WorkbenchBoundaryError("REQUEST_INVALID", 422) from exc
                 payload = model.model_dump(mode="json", exclude_none=True)
             try:
+                query_items = request.query_params.multi_items()
+                if len(query_items) != len({key for key, _ in query_items}):
+                    raise WorkbenchBoundaryError("REQUEST_INVALID", 422)
                 query = (
                     {}
                     if operation.query_model is None
                     else operation.query_model.model_validate(
-                        dict(request.query_params)
+                        dict(query_items)
                     ).model_dump(mode="json", exclude_none=True)
                 )
             except ValidationError as exc:

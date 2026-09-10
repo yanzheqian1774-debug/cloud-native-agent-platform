@@ -32,6 +32,7 @@ from agent_console.workbench_employee import (
     employee_operations,
 )
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
+from agent_console.workbench_pagination import WorkbenchCursorCodec
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_service import WorkflowDefinitionService
 
@@ -102,8 +103,14 @@ def build_workbench_composition(
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             operations=(
                 *business_problem_operations(business_problems),
-                *agent_operations(agent_definitions),
-                *employee_operations(employee_definitions),
+                *agent_operations(
+                    agent_definitions,
+                    WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                ),
+                *employee_operations(
+                    employee_definitions,
+                    WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                ),
                 *digital_employee_operations(digital_employees),
                 *(workflow_operations(workflows) if workflows is not None else ()),
             ),

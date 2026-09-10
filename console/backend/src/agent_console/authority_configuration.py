@@ -26,7 +26,7 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "SUCCESS_CRITERIA_SET": frozenset({"CREATE", "READ", "REVISE"}),
     "PLAN": frozenset({"PREPARE", "READ", "APPROVE"}),
     "WORKFLOW": frozenset({"CREATE", "LIST", "READ"}),
-    "AGENT": frozenset({"READ"}),
+    "AGENT": frozenset({"LIST", "READ"}),
     "EMPLOYEE": frozenset({"CREATE", "LIST", "READ"}),
     "INSTANCE": frozenset({"CREATE", "READ"}),
     "ASSIGNMENT": frozenset({"CREATE", "READ"}),

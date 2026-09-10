@@ -40,6 +40,7 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         repository=object(),
         grants=SimpleNamespace(authorization=object()),
         sessions=object(),
+        continuation_owner=SimpleNamespace(signing_key=b"k" * 32),
         close=lambda: None,
     )
     monkeypatch.setattr(
@@ -68,13 +69,15 @@ def test_composition_registers_business_and_read_only_workflow_operations(
 
     assert composition.foundation is foundation
     operations = captured["operations"]
-    assert len(operations) == 19
-    assert [(item.name, item.method, item.path) for item in operations[-6:]] == [
+    assert len(operations) == 21
+    assert [(item.name, item.method, item.path) for item in operations[-8:]] == [
+        ("LIST_AGENTS", "GET", "/api/workbench/v1/agents"),
         (
             "READ_AGENT_REVISION",
             "GET",
             "/api/workbench/v1/agents/{definition_id}/revisions/{revision_id}",
         ),
+        ("LIST_EMPLOYEES", "GET", "/api/workbench/v1/employees"),
         (
             "READ_EMPLOYEE_REVISION",
             "GET",
@@ -112,6 +115,7 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         repository=object(),
         grants=SimpleNamespace(authorization=object()),
         sessions=object(),
+        continuation_owner=SimpleNamespace(signing_key=b"k" * 32),
         close=lambda: None,
     )
     monkeypatch.setattr(
@@ -137,8 +141,10 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
     )
 
     operations = captured["operations"]
-    assert len(operations) == 17
+    assert len(operations) == 19
+    assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
+    assert any(item.name == "LIST_EMPLOYEES" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_INSTANCE" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_ASSIGNMENT" for item in operations)
