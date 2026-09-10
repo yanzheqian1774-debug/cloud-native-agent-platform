@@ -157,9 +157,96 @@ jobs:
 
       - name: Install frontend and Chromium
         working-directory: console/frontend
+        timeout-minutes: 5
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          install_log="$(mktemp "$RUNNER_TEMP/playwright-install.XXXXXX.log")"
+          trap 'rm -f "$install_log"' EXIT
+          apt_index_url="https://dl.google.com/linux/chrome-stable/deb/dists/stable/main/binary-amd64/Packages.gz"
+
+          for install_attempt in 1 2 3; do
+            : >"$install_log"
+
+            set +e
+            npx playwright install --with-deps chromium 2>&1 | tee "$install_log"
+            pipeline_status=("${PIPESTATUS[@]}")
+            set -e
+
+            playwright_exit_code="${pipeline_status[0]}"
+            tee_exit_code="${pipeline_status[1]}"
+            if [ "$tee_exit_code" -ne 0 ]; then
+              echo "playwright_install attempt=${install_attempt}/3 exit_code=${playwright_exit_code} error_category=install_log_write_failure"
+              exit "$tee_exit_code"
+            fi
+
+            if [ "$playwright_exit_code" -eq 0 ]; then
+              echo "playwright_install attempt=${install_attempt}/3 exit_code=0 error_category=none"
+              break
+            fi
+
+            set +e
+            awk -v allowed_url="$apt_index_url" '
+              function is_allowed_failure(line, prefix, suffix) {
+                prefix = "E: Failed to fetch " allowed_url
+                if (index(line, prefix) != 1) {
+                  return 0
+                }
+                suffix = substr(line, length(prefix) + 1)
+                return suffix ~ /^[[:space:]]+Hash Sum mismatch[[:space:]]*$/
+              }
+
+              function is_allowed_wrapper(line) {
+                return line == "E: Some index files failed to download. They have been ignored, or old ones used instead." ||
+                  line == "Failed to install browsers" ||
+                  line ~ /^Error: Installation process exited with code: 100[[:space:]]*$/
+              }
+
+              {
+                if (is_allowed_failure($0)) {
+                  found_allowed_failure = 1
+                  next
+                }
+                if ($0 ~ /^(E:|[Ee]rror:|npm ERR!|fatal:)/ && !is_allowed_wrapper($0)) {
+                  found_unexpected_failure = 1
+                }
+              }
+
+              END {
+                if (!found_allowed_failure) {
+                  exit 1
+                }
+                if (found_unexpected_failure) {
+                  exit 2
+                }
+                exit 0
+              }
+            ' "$install_log"
+            classification_exit_code="$?"
+            set -e
+
+            case "$classification_exit_code" in
+              0)
+                error_category="google_apt_index_hash_sum_mismatch"
+                ;;
+              2)
+                error_category="mixed_playwright_install_failure"
+                ;;
+              *)
+                error_category="playwright_install_failure_unclassified"
+                ;;
+            esac
+            echo "playwright_install attempt=${install_attempt}/3 exit_code=${playwright_exit_code} error_category=${error_category}"
+
+            if [ "$error_category" != "google_apt_index_hash_sum_mismatch" ] || [ "$install_attempt" -eq 3 ]; then
+              exit "$playwright_exit_code"
+            fi
+
+            if [ "$install_attempt" -eq 1 ]; then
+              sleep 30
+            else
+              sleep 60
+            fi
+          done
 
       - name: Build immutable browser release
         working-directory: console/frontend
@@ -185,6 +272,7 @@ jobs:
             --command "GRANT CONNECT, CREATE ON DATABASE agent_platform TO browser_validation"
 
       - name: Run real browser acceptance
+        id: browser_acceptance
         env:
           CONSOLE_FRONTEND_PORT: "14173"
           KNOWLEDGE_DIAGNOSTIC_REPORT_PATH: ${{ runner.temp }}/s5-v023-impl-312-browser-diagnostics/browser-diagnostics.v1.json
@@ -216,7 +304,15 @@ jobs:
               --reporter json,./tests/harness/structuredKnowledgeReporter.ts
 
       - name: Retain sanitized browser diagnostics
-        if: always()
+        if: >-
+          ${{
+            always() &&
+            (
+              steps.browser_acceptance.outcome == 'success' ||
+              steps.browser_acceptance.outcome == 'failure' ||
+              steps.browser_acceptance.outcome == 'cancelled'
+            )
+          }}
         uses: actions/upload-artifact@v4
         with:
           name: s5-v023-impl-312-browser-diagnostics-${{ github.run_id }}
