@@ -12,6 +12,12 @@ from agent_console.execution_postgres import (
     TaskRunId,
     WorkflowRunId,
 )
+from agent_console.knowledge_repository import InMemoryKnowledgeRepository
+from agent_console.runtime_profile_repository import InMemoryRuntimeProfileRepository
+from agent_console.skill_mcp_repository import InMemorySkillMcpRepository
+from agent_console.workflow_definition_repository import (
+    InMemoryWorkflowDefinitionRepository,
+)
 
 MODULE_PATH = Path(__file__).with_name("s5_v023_impl_310_startup_status.py")
 SPEC = importlib.util.spec_from_file_location("s5_310_startup_status", MODULE_PATH)
@@ -123,3 +129,31 @@ def test_sample_placement_request_uses_validated_execution_id_types() -> None:
     assert isinstance(request.task_run_id, TaskRunId)
     assert isinstance(request.attempt_id, AttemptId)
     assert isinstance(request.agent_instance_id, AgentInstanceId)
+
+
+def test_all_supporting_samples_publish_before_employee_construction() -> None:
+    members = SERVER.publish_supporting_resources(
+        InMemorySkillMcpRepository(),
+        InMemoryKnowledgeRepository(),
+        InMemoryRuntimeProfileRepository(),
+        InMemoryWorkflowDefinitionRepository(),
+    )
+    primary_agent = SERVER.CompositionMember(
+        SERVER.MemberKind.AGENT,
+        "agent-definition:quality",
+        "agent-revision:quality",
+        "a" * 64,
+    )
+
+    revision = SERVER.EmployeeRevision(
+        SERVER.SCOPE,
+        SERVER.PRIMARY_EMPLOYEE,
+        SERVER.PRIMARY_EMPLOYEE_REVISION,
+        "Supplier quality owner",
+        ("Review supplier quality work",),
+        (primary_agent, *members),
+    )
+
+    assert {member.kind for member in revision.members} == set(SERVER.MemberKind)
+    assert all(member.revision_id for member in members)
+    assert all(member.digest for member in members)

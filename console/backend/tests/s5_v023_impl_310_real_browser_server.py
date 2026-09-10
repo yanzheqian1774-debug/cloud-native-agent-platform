@@ -50,7 +50,17 @@ from agent_console.execution_postgres import (
     canonical_bytes,
 )
 from agent_console.governed_execution_ownership import execution_database_fingerprint
+from agent_console.knowledge_lifecycle_service import KnowledgeLifecycleService
+from agent_console.knowledge_postgres import PostgresKnowledgeRepository
+from agent_console.runtime_profile_postgres import PostgresRuntimeProfileRepository
+from agent_console.runtime_profile_service import RuntimeProfileService
+from agent_console.skill_mcp_postgres import PostgresSkillMcpRepository
+from agent_console.skill_mcp_service import SkillMcpService
 from agent_console.workbench_bootstrap import build_workbench_composition
+from agent_console.workflow_definition_postgres import (
+    PostgresWorkflowDefinitionRepository,
+)
+from agent_console.workflow_definition_service import WorkflowDefinitionService
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -128,6 +138,189 @@ def publish_agent(service: AgentDefinitionService, name: str) -> dict:
         "revisionId": revision["revisionId"],
         "digest": revision["digest"],
     }
+
+
+def publish_versioned_resource(service, scope, key: str, name: str, content: dict):
+    row = service.create(scope, "human:owner", name, content)
+    resource_id = row[key]
+    row = service.validate(scope, resource_id, "human:owner", row["aggregateVersion"])
+    record = row.get("definition", row)
+    revision = record["revisions"][0]
+    row = service.review(
+        scope,
+        resource_id,
+        "human:reviewer",
+        record["aggregateVersion"],
+        revision["digest"],
+        "APPROVE",
+        "Exact acceptance review",
+    )
+    record = row.get("definition", row)
+    service.publish(
+        scope,
+        resource_id,
+        "human:publisher",
+        record["aggregateVersion"],
+        revision["digest"],
+        record["reviews"][0]["reviewId"],
+    )
+    return resource_id, revision["revisionId"], revision["digest"]
+
+
+def publish_skill_mcp_resource(service, scope, kind: str, content: dict):
+    row = service.create(scope, kind, "human:owner", f"Quality {kind.upper()}", content)
+    resource_id = row["resourceId"]
+    row = service.validate(
+        scope, kind, resource_id, "human:owner", row["aggregateVersion"]
+    )["resource"]
+    revision = row["revisions"][0]
+    row = service.review(
+        scope,
+        kind,
+        resource_id,
+        "human:reviewer",
+        row["aggregateVersion"],
+        revision["digest"],
+        "APPROVE",
+        "Exact acceptance review",
+    )["resource"]
+    service.publish(
+        scope,
+        kind,
+        resource_id,
+        "human:publisher",
+        row["aggregateVersion"],
+        revision["digest"],
+        row["reviews"][0]["reviewId"],
+    )
+    return resource_id, revision["revisionId"], revision["digest"]
+
+
+def publish_knowledge_resource(service: KnowledgeLifecycleService):
+    scope = service.scope(SCOPE.namespace, SCOPE.security_domain)
+    row = service.create(
+        scope,
+        "human:owner",
+        "Quality procedure",
+        {
+            "sourceId": "source:quality-procedure",
+            "documentId": "document:quality-procedure",
+            "provenance": "human:owner",
+            "content": "Approved supplier quality review procedure.",
+        },
+    )["knowledge"]
+    resource_id = row["knowledgeId"]
+    row = service.validate(scope, resource_id, "human:owner", row["aggregateVersion"])[
+        "knowledge"
+    ]
+    revision = row["revisions"][0]
+    row = service.review(
+        scope,
+        resource_id,
+        "human:reviewer",
+        row["aggregateVersion"],
+        revision["digest"],
+    )["knowledge"]
+    service.publish(
+        scope,
+        resource_id,
+        "human:publisher",
+        row["aggregateVersion"],
+        revision["digest"],
+    )
+    return resource_id, revision["revisionId"], revision["digest"]
+
+
+def publish_supporting_resources(
+    skill_repository,
+    knowledge_repository,
+    runtime_repository,
+    workflow_repository,
+) -> tuple[CompositionMember, ...]:
+    skill_service = SkillMcpService(skill_repository)
+    skill_scope = skill_service.scope(SCOPE.namespace, SCOPE.security_domain)
+    skill = publish_skill_mcp_resource(
+        skill_service,
+        skill_scope,
+        "skill",
+        {
+            "description": "Review supplier quality",
+            "capabilities": ["supplier-quality.review"],
+            "instructions": "Return a bounded quality review",
+            "endpoint": None,
+        },
+    )
+    mcp = publish_skill_mcp_resource(
+        skill_service,
+        skill_scope,
+        "mcp",
+        {
+            "description": "Quality evidence MCP",
+            "capabilities": ["supplier-quality.review"],
+            "instructions": None,
+            "endpoint": "https://example.invalid/mcp",
+        },
+    )
+    knowledge = publish_knowledge_resource(
+        KnowledgeLifecycleService(knowledge_repository)
+    )
+    runtime_service = RuntimeProfileService(runtime_repository)
+    runtime_scope = runtime_service.scope(SCOPE.namespace, SCOPE.security_domain)
+    runtime = publish_versioned_resource(
+        runtime_service,
+        runtime_scope,
+        "runtimeProfileId",
+        "Quality runtime",
+        {
+            "provider": "NATIVE_KUBERNETES",
+            "resources": {
+                "cpuRequest": "100m",
+                "cpuLimit": "500m",
+                "memoryRequest": "128Mi",
+                "memoryLimit": "512Mi",
+            },
+            "isolation": "NAMESPACE",
+            "stateMode": "STATELESS",
+            "sessionAffinity": "NONE",
+            "secretReferences": [],
+            "openClawPackageRef": None,
+        },
+    )
+    workflow_service = WorkflowDefinitionService(workflow_repository, lambda *_: True)
+    workflow_scope = workflow_service.scope(SCOPE.namespace, SCOPE.security_domain)
+    workflow = publish_versioned_resource(
+        workflow_service,
+        workflow_scope,
+        "workflowDefinitionId",
+        "Quality review workflow",
+        {
+            "description": "Review supplier quality",
+            "inputs": ["request"],
+            "outputs": ["result"],
+            "runtimeProfile": {
+                "kind": "RUNTIME_PROFILE",
+                "resourceId": runtime[0],
+                "revisionId": runtime[1],
+                "digest": runtime[2],
+            },
+            "tasks": [
+                {
+                    "taskId": "review",
+                    "name": "Review",
+                    "dependsOn": [],
+                    "inputs": ["request"],
+                    "outputs": ["result"],
+                }
+            ],
+        },
+    )
+    return (
+        CompositionMember(MemberKind.SKILL, *skill),
+        CompositionMember(MemberKind.MCP, *mcp),
+        CompositionMember(MemberKind.KNOWLEDGE, *knowledge),
+        CompositionMember(MemberKind.WORKFLOW, *workflow),
+        CompositionMember(MemberKind.RUNTIME_PROFILE, *runtime),
+    )
 
 
 def publish_employee(
@@ -504,6 +697,27 @@ def build_fixture(args, startup: BoundedStartupStatus):
     apply_prerequisite_migrations(args.database_url, AGENT_PREREQUISITE_MIGRATIONS)
     agent_repository.migrate()
     apply_prerequisite_migrations(args.database_url, WORKFLOW_PREREQUISITE_MIGRATIONS)
+    skill_repository = PostgresSkillMcpRepository(
+        args.database_url, migration_path=MIGRATIONS / "0002_skill_mcp_lifecycle.sql"
+    )
+    knowledge_repository = PostgresKnowledgeRepository(
+        args.database_url, migration_path=MIGRATIONS / "0003_knowledge_operations.sql"
+    )
+    runtime_repository = PostgresRuntimeProfileRepository(
+        args.database_url,
+        migration_path=MIGRATIONS / "0007_workflow_runtime_profiles.sql",
+    )
+    workflow_repository = PostgresWorkflowDefinitionRepository(
+        args.database_url,
+        migration_path=MIGRATIONS / "0007_workflow_runtime_profiles.sql",
+    )
+    for repository in (
+        skill_repository,
+        knowledge_repository,
+        runtime_repository,
+        workflow_repository,
+    ):
+        repository.migrate()
     agents = AgentDefinitionService(agent_repository)
     assembly = build_digital_employee_assembly(
         args.database_url,
@@ -514,6 +728,21 @@ def build_fixture(args, startup: BoundedStartupStatus):
     startup.begin("SAMPLE_PREPARATION")
     primary_agent = publish_agent(agents, "Quality analysis Agent")
     publish_agent(agents, "Second page Agent")
+    try:
+        supporting_members = publish_supporting_resources(
+            skill_repository,
+            knowledge_repository,
+            runtime_repository,
+            workflow_repository,
+        )
+    finally:
+        for repository in (
+            skill_repository,
+            knowledge_repository,
+            runtime_repository,
+            workflow_repository,
+        ):
+            repository.pool.close()
     primary_members = (
         CompositionMember(
             MemberKind.AGENT,
@@ -521,36 +750,7 @@ def build_fixture(args, startup: BoundedStartupStatus):
             primary_agent["revisionId"],
             primary_agent["digest"],
         ),
-        CompositionMember(
-            MemberKind.SKILL,
-            "skill:quality-review",
-            "skill-revision:1",
-            f"sha256:{'1' * 64}",
-        ),
-        CompositionMember(
-            MemberKind.MCP,
-            "mcp:quality-evidence",
-            "mcp-revision:1",
-            f"sha256:{'2' * 64}",
-        ),
-        CompositionMember(
-            MemberKind.KNOWLEDGE,
-            "knowledge:quality-procedure",
-            "knowledge-revision:1",
-            f"sha256:{'3' * 64}",
-        ),
-        CompositionMember(
-            MemberKind.WORKFLOW,
-            "workflow:quality-review",
-            "workflow-revision:1",
-            f"sha256:{'4' * 64}",
-        ),
-        CompositionMember(
-            MemberKind.RUNTIME_PROFILE,
-            "runtime-profile:quality",
-            "runtime-profile-revision:1",
-            f"sha256:{'5' * 64}",
-        ),
+        *supporting_members,
     )
     publish_employee(
         assembly.employee_definitions,

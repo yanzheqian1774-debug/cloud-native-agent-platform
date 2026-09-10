@@ -244,15 +244,27 @@ migration, commit 0007 separately, and only then construct the Digital Employee
 assembly. The fixture now reuses that ordering. No production migration,
 database role, extension, timeout, gate, or failure-close behavior changed.
 
-The next automatic candidate completed `DATABASE_MIGRATION` and failed during
+The next automatic candidates completed `DATABASE_MIGRATION` and failed during
 `SAMPLE_PREPARATION` with the bounded category `VALIDATION_ERROR`, before any
-browser test executed. A full Docker-free construction pass over the fixture's
-composition members, both Employee revisions, instance command, assignment,
-runtime and Agent aggregates, Placement request, and Placement decision isolated
-the failure to the Placement request: the fixture supplied bare strings where
-the formal execution contract requires `WorkflowRunId`, `TaskRunId`, and
-`AttemptId`. The first rejected field was `workflow_run_id`, with the stable
-contract code `INVALID_WORKFLOW_RUN_ID`. The fixture now constructs all three
-opaque ID types exactly as the existing successful Digital Employee bootstrap
-does. Product validation, publication order, digests, scope and parent
-references, database data, deadlines, and gate criteria remain unchanged.
+browser test executed. The initial Docker-free constructor pass found a separate
+latent Placement request defect: the fixture supplied bare strings where the
+formal execution contract requires `WorkflowRunId`, `TaskRunId`, and
+`AttemptId`. That check did not exercise PostgreSQL parent-resource resolution,
+so it did not establish the CI failure's cause; candidate
+`bc2d4cbade8b506434fafac11199f218509cfc64` correctly disproved sufficiency by
+failing at the same stage with zero browser executions.
+
+Complete source comparison then identified the proven validation root cause.
+The PostgreSQL Employee repository resolves every composition member during
+`VALIDATE`, `APPROVE`, and `PUBLISH`, requiring an exact existing, published,
+eligible revision and matching digest. The fixture had published only its Agent;
+the Skill, MCP, Knowledge, Workflow, and Runtime Profile members were static
+references with no parent records, so the first Employee validation must fail
+closed with `BOUND_RESOURCE_NOT_FOUND` before reaching Placement construction.
+The fixture now uses the same lifecycle services as successful PostgreSQL tests
+to create, validate, review, and publish all five supporting resources before it
+constructs and publishes the Employee. A single in-memory domain pass exercises
+all five lifecycle chains and the six-member Employee construction. The separate
+opaque-ID correction remains because it would otherwise fail later in sample
+preparation. No product validation, database data contract, deadline, or gate
+criterion changed.
