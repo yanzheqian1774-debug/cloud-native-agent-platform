@@ -60,17 +60,28 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         workflow_database_url=database_url,
         business_problems=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
+        digital_employees=SimpleNamespace(),
         workflows=SimpleNamespace(),
     )
 
     assert composition.foundation is foundation
     operations = captured["operations"]
-    assert len(operations) == 16
-    assert [(item.name, item.method, item.path) for item in operations[-3:]] == [
+    assert len(operations) == 18
+    assert [(item.name, item.method, item.path) for item in operations[-5:]] == [
         (
             "READ_EMPLOYEE_REVISION",
             "GET",
             "/api/workbench/v1/employees/{employee_definition_id}/revisions/{revision_id}",
+        ),
+        (
+            "READ_EMPLOYEE_INSTANCE",
+            "GET",
+            "/api/workbench/v1/instances/{instance_id}",
+        ),
+        (
+            "READ_EMPLOYEE_ASSIGNMENT",
+            "GET",
+            "/api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}",
         ),
         ("LIST_WORKFLOWS", "GET", "/api/workbench/v1/workflows"),
         (
@@ -113,11 +124,14 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         owner_database_url=database_url,
         business_problems=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
+        digital_employees=SimpleNamespace(),
     )
 
     operations = captured["operations"]
-    assert len(operations) == 14
+    assert len(operations) == 16
     assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
+    assert any(item.name == "READ_EMPLOYEE_INSTANCE" for item in operations)
+    assert any(item.name == "READ_EMPLOYEE_ASSIGNMENT" for item in operations)
     assert not any(
         item.name in {"LIST_WORKFLOWS", "READ_WORKFLOW_REVISION"} for item in operations
     )
@@ -143,6 +157,7 @@ def test_configured_workflow_cannot_silently_degrade_when_service_is_unavailable
             workflow_database_url="postgresql://db.example/platform",
             business_problems=SimpleNamespace(),
             employee_definitions=SimpleNamespace(),
+            digital_employees=SimpleNamespace(),
         )
 
 
@@ -160,7 +175,7 @@ def test_app_does_not_require_optional_workflow_for_existing_composition(
     monkeypatch.setattr(
         console_app,
         "_digital_employee_assembly",
-        SimpleNamespace(employee_definitions=object()),
+        SimpleNamespace(employee_definitions=object(), repository=object()),
     )
     monkeypatch.setattr(console_app, "_workbench_composition", None)
     monkeypatch.setattr(console_app, "workbench_app", None)
@@ -183,6 +198,7 @@ def test_app_does_not_require_optional_workflow_for_existing_composition(
     assert built["workflow_database_url"] == ""
     assert built["workflows"] is None
     assert built["employee_definitions"] is not None
+    assert built["digital_employees"] is not None
 
 
 def test_app_fails_closed_when_configured_workflow_service_is_unavailable(
@@ -199,7 +215,7 @@ def test_app_fails_closed_when_configured_workflow_service_is_unavailable(
     monkeypatch.setattr(
         console_app,
         "_digital_employee_assembly",
-        SimpleNamespace(employee_definitions=object()),
+        SimpleNamespace(employee_definitions=object(), repository=object()),
     )
     monkeypatch.setattr(console_app, "_workbench_composition", None)
     monkeypatch.setattr(console_app, "workbench_app", None)
@@ -245,6 +261,7 @@ def test_composition_rejects_workflow_database_outside_authorization_transaction
             workflow_database_url="postgresql://workflow:secret@db.example/workflow",
             business_problems=SimpleNamespace(),
             employee_definitions=SimpleNamespace(),
+            digital_employees=SimpleNamespace(),
             workflows=SimpleNamespace(),
         )
 

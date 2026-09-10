@@ -8,7 +8,9 @@ from agent_console.digital_employee_application import (
     DigitalEmployeeApplicationService,
     DigitalEmployeeError,
     InstanceLifecycle,
+    InstanceRecord,
 )
+from agent_console.digital_employee_postgres import PostgresDigitalEmployeeRepository
 from agent_console.execution_postgres import (
     AppendDisposition,
     AssignmentId,
@@ -176,3 +178,149 @@ def test_assignment_conflict_and_disabled_instance_rejection():
                 "assign-3",
             )
         )
+
+
+class QueryResult:
+    def __init__(self, row):
+        self.row = row
+
+    def fetchone(self):
+        return self.row
+
+
+class CallerConnection:
+    def __init__(self, *rows):
+        self.rows = list(rows)
+        self.calls = []
+
+    def execute(self, statement, parameters):
+        self.calls.append((statement, parameters))
+        return QueryResult(self.rows.pop(0))
+
+
+def instance_record():
+    return InstanceRecord(
+        SCOPE,
+        DigitalEmployeeInstanceId("employee-instance:one"),
+        2,
+        DefinitionReference(
+            "employee-definition:one",
+            "employee-revision:v1",
+            "d" * 64,
+            True,
+            True,
+            "DIGITAL_EMPLOYEE_DEFINITION_V1",
+        ),
+        "human:owner",
+        "organization:one",
+        InstanceLifecycle.ENABLED,
+        None,
+        None,
+        (),
+        NOW,
+        NOW,
+    )
+
+
+def test_workbench_instance_read_uses_only_the_caller_connection() -> None:
+    value = instance_record()
+    row = {
+        "aggregate_version": value.version,
+        "record": PostgresDigitalEmployeeRepository._instance_record(
+            value, "command:private"
+        ),
+    }
+    connection = CallerConnection(row)
+    repository = PostgresDigitalEmployeeRepository(object())  # type: ignore[arg-type]
+
+    result = repository.read_instance_for_workbench(
+        connection, SCOPE, value.instance_id, authorized=True
+    )
+
+    assert result == value
+    assert len(connection.calls) == 1
+    statement, parameters = connection.calls[0]
+    assert "digital_employee_instances" in statement
+    assert "FOR SHARE" in statement
+    assert parameters == ("tenant-a", "domain-a", "employee-instance:one")
+
+
+def test_workbench_instance_read_denies_before_query() -> None:
+    connection = CallerConnection()
+    repository = PostgresDigitalEmployeeRepository(object())  # type: ignore[arg-type]
+
+    with pytest.raises(DigitalEmployeeError, match="INSTANCE_NOT_FOUND"):
+        repository.read_instance_for_workbench(
+            connection,
+            SCOPE,
+            DigitalEmployeeInstanceId("employee-instance:one"),
+            authorized=False,
+        )
+
+    assert connection.calls == []
+
+
+def test_workbench_assignment_read_uses_caller_connection_and_parent_chain() -> None:
+    value = AssignmentRecord(
+        SCOPE,
+        AssignmentId("employee-assignment:one"),
+        DigitalEmployeeInstanceId("employee-instance:one"),
+        "human:reviewer",
+        "reviewer",
+        AssignmentLifecycle.ACTIVE,
+        NOW,
+        None,
+        3,
+        "command:private",
+    )
+    row = {
+        "assignment_id": str(value.assignment_id),
+        "digital_employee_instance_id": str(value.instance_id),
+        "record": {
+            "assignee_id": value.assignee_id,
+            "business_role": value.business_role,
+            "lifecycle": value.lifecycle.value,
+            "effective_from": value.effective_from.isoformat(),
+            "effective_until": None,
+            "version": value.version,
+            "command_id": value.command_id,
+            "predecessor_assignment_id": None,
+        },
+    }
+    connection = CallerConnection(row)
+    repository = PostgresDigitalEmployeeRepository(object())  # type: ignore[arg-type]
+
+    result = repository.read_assignment_for_workbench(
+        connection,
+        SCOPE,
+        value.instance_id,
+        value.assignment_id,
+        authorized=True,
+    )
+
+    assert result == value
+    statement, parameters = connection.calls[0]
+    assert "JOIN execution_authority.digital_employee_instances" in statement
+    assert "FOR SHARE OF assignment,instance" in statement
+    assert parameters == (
+        "tenant-a",
+        "domain-a",
+        "employee-assignment:one",
+        "employee-instance:one",
+    )
+
+
+def test_workbench_assignment_read_denies_before_query() -> None:
+    connection = CallerConnection()
+    repository = PostgresDigitalEmployeeRepository(object())  # type: ignore[arg-type]
+
+    with pytest.raises(DigitalEmployeeError, match="ASSIGNMENT_NOT_FOUND"):
+        repository.read_assignment_for_workbench(
+            connection,
+            SCOPE,
+            DigitalEmployeeInstanceId("employee-instance:one"),
+            AssignmentId("employee-assignment:one"),
+            authorized=False,
+        )
+
+    assert connection.calls == []

@@ -32,6 +32,13 @@ from agent_console.authority_contracts import (
     VerifiedPrincipal,
 )
 from agent_console.authority_postgres import PostgresAuthorityRepository
+from agent_console.digital_employee_application import (
+    AssignmentLifecycle,
+    AssignmentRecord,
+    DefinitionReference,
+    InstanceLifecycle,
+    InstanceRecord,
+)
 from agent_console.digital_employee_definition import (
     CompositionMember,
     EmployeeRevision,
@@ -40,10 +47,18 @@ from agent_console.digital_employee_definition import (
 from agent_console.digital_employee_definition_postgres import (
     PostgresEmployeeDefinitionRepository,
 )
+from agent_console.digital_employee_postgres import PostgresDigitalEmployeeRepository
 from agent_console.execution_domain import ScopeIdentity
-from agent_console.execution_postgres import PostgresExecutionAuthorityRepository
+from agent_console.execution_postgres import (
+    AssignmentId,
+    DigitalEmployeeInstanceId,
+    PostgresExecutionAuthorityRepository,
+)
 from agent_console.grant_administration_application import GenerationAuthorizationReader
-from agent_console.workbench_employee import employee_operations
+from agent_console.workbench_employee import (
+    digital_employee_operations,
+    employee_operations,
+)
 from agent_console.workbench_owner_authorization import (
     WorkbenchOwnerAuthorization,
     WorkbenchOwnerError,
@@ -417,6 +432,76 @@ def seed_employee_grant(
         )
 
 
+def seed_digital_employee_read_grant(
+    repository: PostgresAuthorityRepository,
+    now: datetime,
+    grant: ExactGrant,
+    *,
+    key: str,
+) -> GrantId:
+    grant_id = GrantId(f"grant-{key}")
+    with repository.connection_scope() as connection:
+        connection.execute(
+            "INSERT INTO authorization_admin.grant_requests "
+            "(request_id,subject_principal_id,tenant_id,security_domain,"
+            "purpose,state,created_at,decided_at) "
+            "VALUES (%s,'human:alice','tenant-a','quality',%s,'APPROVED',%s,%s)",
+            (f"request-{key}", f"READ_{key.upper()}", now, now),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.grant_decisions "
+            "(decision_id,request_id,issuer_principal_id,issuer_meta_decision_id,"
+            "approved,reason_category,basis_type,basis_reference_digest,"
+            "policy_version,audit_source,created_at) "
+            "VALUES (%s,%s,'human:bob',%s,true,'ASSIGNED_DUTY','POLICY',%s,"
+            "'policy-1','test',%s)",
+            (
+                f"decision-{key}",
+                f"request-{key}",
+                f"meta-{key}",
+                "f" * 64,
+                now,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.grants "
+            "(grant_id,decision_id,request_id,subject_principal_id,tenant_id,"
+            "security_domain,owner,action,exact_resource,basis_type,"
+            "basis_reference_digest,issuer_principal_id,issuer_meta_decision_id,"
+            "policy_version,audit_source,not_before,expires_at,created_at,"
+            "recovery_epoch) VALUES (%s,%s,%s,'human:alice','tenant-a','quality',"
+            "%s,%s,%s,'POLICY',%s,'human:bob',%s,'policy-1','test',%s,%s,%s,1)",
+            (
+                str(grant_id),
+                f"decision-{key}",
+                f"request-{key}",
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                "f" * 64,
+                f"meta-{key}",
+                now - timedelta(minutes=1),
+                now + timedelta(hours=1),
+                now,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO authorization_admin.effective_grants "
+            "(grant_id,subject_principal_id,tenant_id,security_domain,owner,"
+            "action,exact_resource,not_before,expires_at,recovery_epoch) "
+            "VALUES (%s,'human:alice','tenant-a','quality',%s,%s,%s,%s,%s,1)",
+            (
+                str(grant_id),
+                grant.owner,
+                grant.action,
+                grant.exact_resource,
+                now - timedelta(minutes=1),
+                now + timedelta(hours=1),
+            ),
+        )
+    return grant_id
+
+
 def workflow_content(description: str) -> dict:
     return {
         "description": description,
@@ -429,6 +514,249 @@ def workflow_content(description: str) -> dict:
             "revisionId": "runtime-profile-revision:one",
         },
     }
+
+
+@pytest.mark.parametrize(
+    ("operation_name", "revocation"),
+    (
+        ("READ_EMPLOYEE_INSTANCE", "grant"),
+        ("READ_EMPLOYEE_ASSIGNMENT", "session"),
+    ),
+)
+def test_instance_assignment_exact_reads_share_authorization_transaction(
+    repository, monkeypatch, operation_name: str, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    execution_repository = PostgresExecutionAuthorityRepository(
+        repository.pool.conninfo,
+        migration_path=EXECUTION_MIGRATION,
+        timeout=30.0,
+    )
+    digital_repository = PostgresDigitalEmployeeRepository(execution_repository)
+    try:
+        execution_repository.migrate()
+        scope = ScopeIdentity("tenant-a", "quality")
+        instance = InstanceRecord(
+            scope,
+            DigitalEmployeeInstanceId("employee-instance:quality"),
+            1,
+            DefinitionReference(
+                "employee-definition:quality",
+                "employee-revision:v1",
+                "d" * 64,
+                True,
+                True,
+                "DIGITAL_EMPLOYEE_DEFINITION_V1",
+            ),
+            "human:owner",
+            "organization:quality",
+            InstanceLifecycle.ENABLED,
+            "workspace:private",
+            "model:private",
+            ("policy:private",),
+            now,
+            now,
+        )
+        assignment = AssignmentRecord(
+            scope,
+            AssignmentId("employee-assignment:review"),
+            instance.instance_id,
+            "human:reviewer",
+            "Quality reviewer",
+            AssignmentLifecycle.ACTIVE,
+            now,
+            None,
+            1,
+            "command:private",
+        )
+        with execution_repository.pool.connection() as connection:
+            connection.execute(
+                "INSERT INTO execution_authority.digital_employee_instances "
+                "(namespace,security_domain,digital_employee_instance_id,"
+                "definition_revision_id,aggregate_version,record) "
+                "VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(instance.instance_id),
+                    instance.definition.revision_id,
+                    instance.version,
+                    json.dumps(
+                        digital_repository._instance_record(
+                            instance, "instance-command:private"
+                        )
+                    ),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.assignments "
+                "(namespace,security_domain,assignment_id,"
+                "digital_employee_instance_id,approved_input_digest,record) "
+                "VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(assignment.assignment_id),
+                    str(assignment.instance_id),
+                    "a" * 64,
+                    json.dumps(
+                        {
+                            "assignee_id": assignment.assignee_id,
+                            "business_role": assignment.business_role,
+                            "lifecycle": assignment.lifecycle.value,
+                            "effective_from": assignment.effective_from.isoformat(),
+                            "effective_until": None,
+                            "version": assignment.version,
+                            "command_id": assignment.command_id,
+                            "predecessor_assignment_id": None,
+                        }
+                    ),
+                ),
+            )
+
+        operation = next(
+            item
+            for item in digital_employee_operations(digital_repository)
+            if item.name == operation_name
+        )
+        path = {
+            "instance_id": str(instance.instance_id),
+            "assignment_id": str(assignment.assignment_id),
+        }
+        grants = tuple(operation.grant_builder(context(), path, {}, {}))
+        grant_key = (
+            "instance" if operation_name == "READ_EMPLOYEE_INSTANCE" else "assignment"
+        )
+        grant_id = seed_digital_employee_read_grant(
+            repository, now, grants[0], key=grant_key
+        )
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        method_name = (
+            "read_instance_for_workbench"
+            if operation_name == "READ_EMPLOYEE_INSTANCE"
+            else "read_assignment_for_workbench"
+        )
+        original_read = getattr(digital_repository, method_name)
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_read(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(digital_repository, method_name, capture_owner)
+        result = adapter.execute(
+            context(),
+            grants,
+            operation=operation.name,
+            payload={},
+            path=path,
+            query={},
+            handler=operation.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert "command:private" not in repr(result)
+        assert "workspace:private" not in repr(result)
+        assert "policy:private" not in repr(result)
+        if operation_name == "READ_EMPLOYEE_INSTANCE":
+            assert result["instanceId"] == str(instance.instance_id)
+        else:
+            assert result["assignmentId"] == str(assignment.assignment_id)
+            assert result["instanceId"] == str(instance.instance_id)
+
+        def protected_owner_query(*args, **kwargs):
+            pytest.fail("protected Digital Employee owner query ran after denial")
+
+        monkeypatch.setattr(digital_repository, method_name, protected_owner_query)
+        wrong_path = dict(path)
+        wrong_key = (
+            "instance_id"
+            if operation_name == "READ_EMPLOYEE_INSTANCE"
+            else "assignment_id"
+        )
+        wrong_path[wrong_key] = f"{wrong_path[wrong_key]}:other"
+        wrong_grants = tuple(operation.grant_builder(context(), wrong_path, {}, {}))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                wrong_grants,
+                operation=operation.name,
+                payload={},
+                path=wrong_path,
+                query={},
+                handler=operation.handler,
+            )
+
+        wrong_scope = TrustedRequestContext(
+            "human:alice",
+            AuthorityScope("tenant-b", "quality"),
+            "session-one",
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                wrong_scope,
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
+        monkeypatch.setattr(digital_repository, method_name, capture_owner)
+
+        if operation_name == "READ_EMPLOYEE_ASSIGNMENT":
+            with pytest.raises(WorkbenchOwnerError) as mismatch:
+                adapter.execute(
+                    context(),
+                    grants,
+                    operation=operation.name,
+                    payload={},
+                    path={**path, "instance_id": "employee-instance:other"},
+                    query={},
+                    handler=operation.handler,
+                )
+            assert mismatch.value.reason_code == "ASSIGNMENT_NOT_FOUND"
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                grant_id,
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key=f"revoke-{operation_name.lower()}",
+                payload_digest="e" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+
+        monkeypatch.setattr(digital_repository, method_name, protected_owner_query)
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
+    finally:
+        execution_repository.pool.close()
 
 
 @pytest.mark.parametrize("revocation", ["grant", "session"])

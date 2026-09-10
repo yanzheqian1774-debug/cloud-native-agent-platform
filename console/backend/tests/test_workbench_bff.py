@@ -23,7 +23,10 @@ from agent_console.workbench_bff import (
     create_workbench_bff,
 )
 from agent_console.workbench_business_problem import business_problem_operations
-from agent_console.workbench_employee import employee_operations
+from agent_console.workbench_employee import (
+    digital_employee_operations,
+    employee_operations,
+)
 from agent_console.workbench_owner_authorization import AuthorizedOwnerCall
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
@@ -166,6 +169,43 @@ def build_client():
         sessions,
         authorizer,
     )
+
+
+def test_instance_and_assignment_registry_freezes_exact_read_grants() -> None:
+    operations = digital_employee_operations(SimpleNamespace())  # type: ignore[arg-type]
+
+    assert [(item.name, item.method, item.path) for item in operations] == [
+        (
+            "READ_EMPLOYEE_INSTANCE",
+            "GET",
+            f"{PREFIX}/instances/{{instance_id}}",
+        ),
+        (
+            "READ_EMPLOYEE_ASSIGNMENT",
+            "GET",
+            f"{PREFIX}/instances/{{instance_id}}/assignments/{{assignment_id}}",
+        ),
+    ]
+    instance, assignment = operations
+    assert tuple(
+        instance.grant_builder(
+            SessionStub().context,
+            {"instance_id": "employee-instance:quality"},
+            {},
+            {},
+        )
+    ) == (ExactGrant("INSTANCE", "READ", "instance:employee-instance:quality"),)
+    assert tuple(
+        assignment.grant_builder(
+            SessionStub().context,
+            {
+                "instance_id": "employee-instance:quality",
+                "assignment_id": "employee-assignment:review",
+            },
+            {},
+            {},
+        )
+    ) == (ExactGrant("ASSIGNMENT", "READ", "assignment:employee-assignment:review"),)
 
 
 def login(client: TestClient) -> None:

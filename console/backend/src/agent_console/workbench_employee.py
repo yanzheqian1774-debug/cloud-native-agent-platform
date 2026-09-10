@@ -7,11 +7,19 @@ from typing import Any
 from psycopg import Error as PostgresError
 
 from agent_console.authority_contracts import ExactGrant
+from agent_console.digital_employee_application import (
+    DigitalEmployeeError,
+    DigitalEmployeeRepository,
+)
 from agent_console.digital_employee_definition import (
     EmployeeDefinitionError,
     EmployeeDefinitionRepository,
 )
-from agent_console.execution_domain import ScopeIdentity
+from agent_console.execution_domain import ExecutionPersistenceError, ScopeIdentity
+from agent_console.execution_postgres import (
+    AssignmentId,
+    DigitalEmployeeInstanceId,
+)
 from agent_console.workbench_bff import PREFIX, WorkbenchOperation
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
@@ -74,6 +82,97 @@ class EmployeeDefinitionOwnerAdapter:
         }
 
 
+class DigitalEmployeeOwnerAdapter:
+    """Read Instance and Assignment facts on the authorization transaction."""
+
+    def __init__(self, repository: DigitalEmployeeRepository) -> None:
+        self.repository = repository
+
+    def __call__(self, call: AuthorizedOwnerCall) -> dict[str, Any]:
+        scope = ScopeIdentity(
+            call.context.scope.tenant_id,
+            call.context.scope.security_domain,
+        )
+        try:
+            if call.operation == "READ_EMPLOYEE_INSTANCE":
+                value = self.repository.read_instance_for_workbench(
+                    call.connection,
+                    scope,
+                    DigitalEmployeeInstanceId(call.path["instance_id"]),
+                    authorized=True,
+                )
+                if value is None:
+                    raise DigitalEmployeeError("INSTANCE_NOT_FOUND")
+                reference_name = (
+                    "employeeDefinition"
+                    if value.definition.authority_kind
+                    == "DIGITAL_EMPLOYEE_DEFINITION_V1"
+                    else "legacyDefinitionReference"
+                )
+                return {
+                    "instanceId": str(value.instance_id),
+                    reference_name: {
+                        "authorityKind": value.definition.authority_kind,
+                        "employeeDefinitionId": value.definition.definition_id,
+                        "employeeDefinitionRevisionId": value.definition.revision_id,
+                        "digest": value.definition.digest,
+                    },
+                    "ownerId": value.owner_id,
+                    "organizationId": value.organization_id,
+                    "lifecycle": value.lifecycle.value,
+                    "execution": {
+                        "state": "UNAVAILABLE",
+                        "reasonCode": "EXECUTION_NOT_ASSEMBLED",
+                    },
+                    "health": {
+                        "state": "UNAVAILABLE",
+                        "reasonCode": "HEALTH_NOT_ASSEMBLED",
+                    },
+                }
+            if call.operation == "READ_EMPLOYEE_ASSIGNMENT":
+                value = self.repository.read_assignment_for_workbench(
+                    call.connection,
+                    scope,
+                    DigitalEmployeeInstanceId(call.path["instance_id"]),
+                    AssignmentId(call.path["assignment_id"]),
+                    authorized=True,
+                )
+                if value is None:
+                    raise DigitalEmployeeError("ASSIGNMENT_NOT_FOUND")
+                return {
+                    "assignmentId": str(value.assignment_id),
+                    "instanceId": str(value.instance_id),
+                    "assigneeId": value.assignee_id,
+                    "businessRole": value.business_role,
+                    "lifecycle": value.lifecycle.value,
+                    "effectiveFrom": value.effective_from,
+                    "effectiveUntil": value.effective_until,
+                    "binding": {
+                        "state": "UNAVAILABLE",
+                        "reasonCode": "WORKFLOW_BINDING_NOT_ASSEMBLED",
+                    },
+                }
+            raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
+        except (DigitalEmployeeError, ExecutionPersistenceError) as exc:
+            reason = str(exc)
+            if reason in {
+                "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE",
+                "EXECUTION_STORAGE_UNAVAILABLE",
+            }:
+                status = 503
+            elif call.operation == "READ_EMPLOYEE_INSTANCE":
+                reason, status = "INSTANCE_NOT_FOUND", 404
+            elif call.operation == "READ_EMPLOYEE_ASSIGNMENT":
+                reason, status = "ASSIGNMENT_NOT_FOUND", 404
+            else:
+                reason, status = "WORKBENCH_OPERATION_INVALID", 500
+            raise WorkbenchOwnerError(reason, status) from exc
+        except PostgresError as exc:
+            raise WorkbenchOwnerError(
+                "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE", 503
+            ) from exc
+
+
 def _employee_revision_read(context, path, payload, query):
     return (
         ExactGrant(
@@ -82,6 +181,14 @@ def _employee_revision_read(context, path, payload, query):
             f"employee:{path['employee_definition_id']}:{path['revision_id']}",
         ),
     )
+
+
+def _instance_read(context, path, payload, query):
+    return (ExactGrant("INSTANCE", "READ", f"instance:{path['instance_id']}"),)
+
+
+def _assignment_read(context, path, payload, query):
+    return (ExactGrant("ASSIGNMENT", "READ", f"assignment:{path['assignment_id']}"),)
 
 
 def employee_operations(
@@ -96,5 +203,31 @@ def employee_operations(
             None,
             _employee_revision_read,
             EmployeeDefinitionOwnerAdapter(repository),
+        ),
+    )
+
+
+def digital_employee_operations(
+    repository: DigitalEmployeeRepository,
+) -> tuple[WorkbenchOperation, ...]:
+    adapter = DigitalEmployeeOwnerAdapter(repository)
+    return (
+        WorkbenchOperation(
+            "READ_EMPLOYEE_INSTANCE",
+            "GET",
+            f"{PREFIX}/instances/{{instance_id}}",
+            None,
+            None,
+            _instance_read,
+            adapter,
+        ),
+        WorkbenchOperation(
+            "READ_EMPLOYEE_ASSIGNMENT",
+            "GET",
+            f"{PREFIX}/instances/{{instance_id}}/assignments/{{assignment_id}}",
+            None,
+            None,
+            _assignment_read,
+            adapter,
         ),
     )

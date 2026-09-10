@@ -1925,6 +1925,7 @@ def _configure_workbench() -> None:
             owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
             business_problems=_business_problem_application,
             employee_definitions=_digital_employee_assembly.employee_definitions,
+            digital_employees=_digital_employee_assembly.repository,
             workflow_database_url=workflow_database_url,
             workflows=workflow_service,
         )

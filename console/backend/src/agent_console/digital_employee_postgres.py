@@ -139,7 +139,17 @@ class PostgresDigitalEmployeeRepository:
         )
         if value is None:
             return None
-        record = value.record
+        return self._instance_from_record(
+            scope, instance_id, value.aggregate_version, value.record
+        )
+
+    @staticmethod
+    def _instance_from_record(
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        aggregate_version: int,
+        record: dict,
+    ) -> InstanceRecord:
         definition = DefinitionReference(
             record["definition_id"],
             record["definition_revision_id"],
@@ -154,7 +164,7 @@ class PostgresDigitalEmployeeRepository:
         return InstanceRecord(
             scope,
             instance_id,
-            value.aggregate_version,
+            aggregate_version,
             definition,
             record["owner_id"],
             record["organization_id"],
@@ -165,6 +175,25 @@ class PostgresDigitalEmployeeRepository:
             datetime.fromisoformat(record["created_at"]),
             datetime.fromisoformat(record["updated_at"]),
             record.get("reobservation_id"),
+        )
+
+    def read_instance_for_workbench(
+        self, connection, scope, instance_id, *, authorized
+    ) -> InstanceRecord | None:
+        """Read one Instance on the caller-owned authorization transaction."""
+        if not authorized:
+            raise DigitalEmployeeError("INSTANCE_NOT_FOUND")
+        row = connection.execute(
+            "SELECT aggregate_version,record FROM "
+            "execution_authority.digital_employee_instances "
+            "WHERE namespace=%s AND security_domain=%s "
+            "AND digital_employee_instance_id=%s FOR SHARE",
+            (scope.namespace, scope.security_domain, str(instance_id)),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._instance_from_record(
+            scope, instance_id, row["aggregate_version"], row["record"]
         )
 
     def replace_instance(self, value: InstanceRecord, expected_version: int) -> None:
@@ -304,6 +333,43 @@ class PostgresDigitalEmployeeRepository:
                 (scope.namespace, scope.security_domain, str(instance_id)),
             ).fetchall()
         return tuple(self._assignment_from_row(scope, row) for row in rows)
+
+    def read_assignment_for_workbench(
+        self,
+        connection,
+        scope,
+        instance_id,
+        assignment_id,
+        *,
+        authorized,
+    ) -> AssignmentRecord | None:
+        """Read one Assignment only when it belongs to the supplied Instance."""
+        if not authorized:
+            raise DigitalEmployeeError("ASSIGNMENT_NOT_FOUND")
+        row = connection.execute(
+            "SELECT assignment.assignment_id,"
+            "assignment.digital_employee_instance_id,assignment.record FROM "
+            "execution_authority.assignments assignment JOIN "
+            "execution_authority.digital_employee_instances instance "
+            "ON instance.namespace=assignment.namespace "
+            "AND instance.security_domain=assignment.security_domain "
+            "AND instance.digital_employee_instance_id="
+            "assignment.digital_employee_instance_id "
+            "WHERE assignment.namespace=%s "
+            "AND assignment.security_domain=%s "
+            "AND assignment.assignment_id=%s "
+            "AND assignment.digital_employee_instance_id=%s "
+            "FOR SHARE OF assignment,instance",
+            (
+                scope.namespace,
+                scope.security_domain,
+                str(assignment_id),
+                str(instance_id),
+            ),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._assignment_from_row(scope, row)
 
     def decide_placement(
         self,

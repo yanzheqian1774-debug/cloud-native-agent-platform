@@ -106,6 +106,15 @@ class DigitalEmployeeRepository(Protocol):
         self, scope: ScopeIdentity, instance_id: DigitalEmployeeInstanceId
     ) -> InstanceRecord | None: ...
 
+    def read_instance_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        *,
+        authorized: bool,
+    ) -> InstanceRecord | None: ...
+
     def replace_instance(
         self, value: InstanceRecord, expected_version: int
     ) -> None: ...
@@ -115,6 +124,16 @@ class DigitalEmployeeRepository(Protocol):
     def assignments_for_instance(
         self, scope: ScopeIdentity, instance_id: DigitalEmployeeInstanceId
     ) -> tuple[AssignmentRecord, ...]: ...
+
+    def read_assignment_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        assignment_id: AssignmentId,
+        *,
+        authorized: bool,
+    ) -> AssignmentRecord | None: ...
 
     def decide_placement(
         self,
