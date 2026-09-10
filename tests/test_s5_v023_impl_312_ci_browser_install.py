@@ -117,16 +117,31 @@ echo "$1" >>"$INSTALL_SLEEPS"
     return InstallResult(completed, attempt_count, sleep_values, trace_values)
 
 
-def apt_hash_failure(*additional_lines: str) -> str:
+EXPECTED_DETAILS = (
+    "    - Filesize:1412 [weak]",
+    f"    - SHA256:{'01' * 32}",
+)
+RECEIVED_DETAILS = (
+    "    - Filesize:1401 [weak]",
+    f"    - SHA256:{'fe' * 32}",
+)
+
+
+def apt_hash_failure(
+    *additional_lines: str,
+    expected_details: tuple[str, ...] = EXPECTED_DETAILS,
+    received_details: tuple[str, ...] = RECEIVED_DETAILS,
+    section_order: tuple[str, ...] = ("expected", "received"),
+) -> str:
+    sections = {
+        "expected": ("   Hashes of expected file:", *expected_details),
+        "received": ("   Hashes of received file:", *received_details),
+    }
+    details = tuple(line for section in section_order for line in sections[section])
     return "\n".join(
         (
             f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch",
-            "   Hashes of expected file:",
-            "    - Filesize:1412 [weak]",
-            "    - SHA256:0123456789abcdef",
-            "   Hashes of received file:",
-            "    - Filesize:1401 [weak]",
-            "    - SHA256:fedcba9876543210",
+            *details,
             "   Last modification reported: Thu, 10 Sep 2026 01:00:00 +0000",
             "   Release file created at: Thu, 10 Sep 2026 00:59:00 +0000",
             "E: Some index files failed to download. They have been ignored, "
@@ -244,19 +259,61 @@ def test_non_allowed_install_failures_do_not_retry(
     )
 
 
-def test_incomplete_allowed_failure_structure_does_not_retry(tmp_path: Path) -> None:
-    output = (
-        f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch\n"
-        "E: Some index files failed to download. They have been ignored, "
-        "or old ones used instead.\n"
-        "Failed to install browsers\n"
-    )
+@pytest.mark.parametrize(
+    "output",
+    [
+        apt_hash_failure(section_order=()),
+        apt_hash_failure(section_order=("received",)),
+        apt_hash_failure(section_order=("expected",)),
+        apt_hash_failure(section_order=("received", "expected")),
+        apt_hash_failure(expected_details=(), received_details=()),
+        apt_hash_failure(
+            expected_details=(
+                EXPECTED_DETAILS[0],
+                f"    - SHA256:{'01' * 31}0",
+            )
+        ),
+        apt_hash_failure(
+            expected_details=(
+                EXPECTED_DETAILS[0],
+                f"    - SHA256:{'01' * 32} [weak]",
+            )
+        ),
+        apt_hash_failure(
+            received_details=(
+                RECEIVED_DETAILS[0],
+                "    - SHA1:0123456789abcdef0123456789abcdef01234567",
+            )
+        ),
+        apt_hash_failure(
+            received_details=(
+                EXPECTED_DETAILS[0],
+                EXPECTED_DETAILS[1],
+            )
+        ),
+    ],
+    ids=[
+        "all-details-missing",
+        "expected-section-missing",
+        "received-section-missing",
+        "detail-sections-reordered",
+        "empty-detail-sections",
+        "invalid-digest-format",
+        "strong-digest-marked-weak",
+        "different-field-sets",
+        "no-expected-received-mismatch",
+    ],
+)
+def test_incomplete_hash_detail_structure_does_not_retry(
+    tmp_path: Path, output: str
+) -> None:
     result = run_install_step(tmp_path, [(35, output)])
 
     assert result.completed.returncode == 35
     assert result.attempts == 1
     assert result.sleeps == []
-    assert "error_category=playwright_install_failure_unclassified" in (
+    assert "attempt=1/3 exit_code=35" in result.completed.stdout
+    assert "error_category=google_apt_index_hash_sum_mismatch" not in (
         result.completed.stdout
     )
 

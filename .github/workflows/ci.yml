@@ -195,16 +195,59 @@ jobs:
                 return suffix ~ /^[[:space:]]+Hash Sum mismatch[[:space:]]*$/
               }
 
-              function is_allowed_wrapper(line) {
-                return line == "E: Some index files failed to download. They have been ignored, or old ones used instead." ||
-                  line == "Failed to install browsers" ||
-                  line ~ /^Error: Installation process exited with code: 100[[:space:]]*$/
+              function record_hash_detail(line, section, cleaned, separator, name, value, weak) {
+                if (line !~ /^[[:space:]]+-[[:space:]]*(Filesize|MD5Sum|SHA1|SHA256|SHA512):/) {
+                  return 0
+                }
+                cleaned = line
+                sub(/^[[:space:]]+-[[:space:]]*/, "", cleaned)
+                separator = index(cleaned, ":")
+                name = substr(cleaned, 1, separator - 1)
+                value = substr(cleaned, separator + 1)
+                sub(/^[[:space:]]*/, "", value)
+                sub(/[[:space:]]*$/, "", value)
+                weak = value ~ /[[:space:]]+\[weak\]$/
+                sub(/[[:space:]]+\[weak\]$/, "", value)
+                if (value ~ /[[:space:]]/) return 0
+                if (weak && name != "Filesize" && name != "MD5Sum" && name != "SHA1") return 0
+                if (name == "Filesize") {
+                  if (value !~ /^[[:digit:]]+$/) return 0
+                } else {
+                  if (value !~ /^[[:xdigit:]]+$/) return 0
+                  if (name == "MD5Sum" && length(value) != 32) return 0
+                  if (name == "SHA1" && length(value) != 40) return 0
+                  if (name == "SHA256" && length(value) != 64) return 0
+                  if (name == "SHA512" && length(value) != 128) return 0
+                }
+                value = tolower(value)
+                if (section == "expected") {
+                  if (name in expected_values) return 0
+                  expected_values[name] = value
+                  expected_count += 1
+                } else {
+                  if (name in received_values) return 0
+                  received_values[name] = value
+                  received_count += 1
+                }
+                return 1
               }
 
-              function is_allowed_hash_detail(line) {
-                return line ~ /^[[:space:]]+(Hashes of expected file:|Hashes of received file:)[[:space:]]*$/ ||
-                  line ~ /^[[:space:]]+(Last modification reported:|Release file created at:)[[:space:]]+[^[:cntrl:]]+$/ ||
-                  line ~ /^[[:space:]]+- (Filesize|MD5Sum|SHA1|SHA256|SHA512):[[:xdigit:]]+([[:space:]]+\[weak\])?[[:space:]]*$/
+              function expected_complete() {
+                return expected_count >= 2 &&
+                  ("Filesize" in expected_values) &&
+                  ("SHA256" in expected_values)
+              }
+
+              function received_complete(name, differs) {
+                if (received_count != expected_count ||
+                    !("Filesize" in received_values) ||
+                    !("SHA256" in received_values)) return 0
+                differs = 0
+                for (name in expected_values) {
+                  if (!(name in received_values)) return 0
+                  if (expected_values[name] != received_values[name]) differs = 1
+                }
+                return differs
               }
 
               function has_failure_signal(line, lower) {
@@ -221,35 +264,46 @@ jobs:
                   failure_phase = 1
                   next
                 }
-                if ($0 ~ /^(E:|[Ee]rror:|npm ERR!|fatal:)/ && !is_allowed_wrapper($0)) {
+                if (!in_failure_tail && has_failure_signal($0)) {
                   found_unexpected_failure = 1
                   next
                 }
-                if (is_allowed_wrapper($0)) {
-                  if ($0 ~ /^E: Some index files failed/ && failure_phase == 1) {
-                    failure_phase = 2
-                  } else if ($0 == "Failed to install browsers" && failure_phase == 2) {
-                    failure_phase = 3
-                  } else if ($0 ~ /^Error: Installation process exited/ && failure_phase == 3) {
-                    failure_phase = 4
-                  } else {
-                    found_unexpected_failure = 1
-                  }
+                if (!in_failure_tail) next
+                if ($0 ~ /^[[:space:]]*$/) next
+                if ($0 ~ /^[[:space:]]+Hashes of expected file:[[:space:]]*$/ && failure_phase == 1) {
+                  failure_phase = 2
                   next
                 }
-                if (in_failure_tail && $0 ~ /^[[:space:]]*$/) {
+                if ($0 ~ /^[[:space:]]+Hashes of received file:[[:space:]]*$/ &&
+                    failure_phase == 2 && expected_complete()) {
+                  failure_phase = 3
                   next
                 }
-                if (failure_phase == 1 && is_allowed_hash_detail($0)) {
+                if (failure_phase == 2 && record_hash_detail($0, "expected")) next
+                if (failure_phase == 3 && record_hash_detail($0, "received")) next
+                if ($0 ~ /^[[:space:]]+Last modification reported:[[:space:]]+[^[:cntrl:]]+$/ &&
+                    failure_phase == 3 && received_complete()) {
+                  failure_phase = 4
                   next
                 }
-                if (has_failure_signal($0)) {
-                  found_unexpected_failure = 1
+                if ($0 ~ /^[[:space:]]+Release file created at:[[:space:]]+[^[:cntrl:]]+$/ && failure_phase == 4) {
+                  failure_phase = 5
                   next
                 }
-                if (in_failure_tail) {
-                  found_unknown_tail = 1
+                if ($0 == "E: Some index files failed to download. They have been ignored, or old ones used instead." && failure_phase == 5) {
+                  failure_phase = 6
+                  next
                 }
+                if ($0 == "Failed to install browsers" && failure_phase == 6) {
+                  failure_phase = 7
+                  next
+                }
+                if ($0 ~ /^Error: Installation process exited with code: 100[[:space:]]*$/ && failure_phase == 7) {
+                  failure_phase = 8
+                  next
+                }
+                if (has_failure_signal($0)) found_unexpected_failure = 1
+                else found_unknown_tail = 1
               }
 
               END {
@@ -259,7 +313,7 @@ jobs:
                 if (found_unexpected_failure || found_unknown_tail) {
                   exit 2
                 }
-                if (failure_phase != 4) {
+                if (failure_phase != 8) {
                   exit 1
                 }
                 exit 0
