@@ -186,3 +186,40 @@ the trusted owned-service browser result; a separate local attempt without the
 `docs/evidence/s5/v0.2/s5-v023-impl-311/` show actual branch UI rendered with
 the deterministic TEST_ADAPTER and are labelled as presentation/interaction
 evidence only.
+
+## Human acceptance record
+
+The Human accepted the bounded S5-V023-IMPL-311 implementation batch at the
+following immutable candidate identity:
+
+- source: `1ddb1935f7a7c4d46fd3a7188750a70bcd82d97c`;
+- tree: `1cc9f09bb478d31fbe746f13903c10a0c20aa776`.
+
+This acceptance covers the implemented Workflow visual designer behavior and
+the compatibility, service, evidence, and non-execution boundaries recorded in
+this implementation note. Any later documentation-only commit that records
+this decision is provenance for the Human gate; it does not replace or redefine
+the accepted source/tree identity above.
+
+The accepted candidate's automatic Draft PR evidence is:
+
+- CI run `34452424621`, attempt `1`: `SUCCESS` for Quality Gates, Frontend
+  Quality Gates, and Agent Workbench Browser Acceptance;
+- Employee Identity Chain run `34452424625`, attempt `1`: `SUCCESS` for
+  PostgreSQL Identity Chain, PostgreSQL Skill Invocation, and PostgreSQL
+  Business Problem and Plan Entry;
+- real browser acceptance: `41` selected, `41` executed, `41` passed, `0`
+  failed, `0` skipped, and `0` flaky.
+
+The regression scenario added in candidate `58d127a` was present when that
+candidate's six CI checks passed and was subsequently removed before the
+accepted `1ddb1935` candidate. That history is retained as evidence context;
+the removed scenario is not part of the accepted tree, and the test count is
+not a frozen target.
+
+The Human acceptance is limited to this implementation batch. It does not
+grant merge, deployment, release acceptance, production readiness,
+certification, public Contract or schema freeze, or closure of the complete
+task. The existing backend lifecycle, authorization, persistence, Workflow
+execution, Workflow Run, Task Run, Attempt, Placement, runtime-state, and
+outcome boundaries remain unchanged.
