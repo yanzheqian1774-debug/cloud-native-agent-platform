@@ -33,6 +33,16 @@ class AgentDefinitionRepository(Protocol):
 
     def list(self, scope: DefinitionScope) -> list[dict[str, Any]]: ...
 
+    def read_revision_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        definition_id: str,
+        revision_id: str,
+        *,
+        authorized: bool,
+    ) -> dict[str, Any]: ...
+
     def create(self, record: dict[str, Any]) -> dict[str, Any]: ...
 
     def replace(

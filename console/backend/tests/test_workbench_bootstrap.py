@@ -57,8 +57,10 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         allowed_host="console.example",
         allowed_origin="https://console.example",
         owner_database_url=database_url,
+        agent_database_url=database_url,
         workflow_database_url=database_url,
         business_problems=SimpleNamespace(),
+        agent_definitions=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
         digital_employees=SimpleNamespace(),
         workflows=SimpleNamespace(),
@@ -66,8 +68,13 @@ def test_composition_registers_business_and_read_only_workflow_operations(
 
     assert composition.foundation is foundation
     operations = captured["operations"]
-    assert len(operations) == 18
-    assert [(item.name, item.method, item.path) for item in operations[-5:]] == [
+    assert len(operations) == 19
+    assert [(item.name, item.method, item.path) for item in operations[-6:]] == [
+        (
+            "READ_AGENT_REVISION",
+            "GET",
+            "/api/workbench/v1/agents/{definition_id}/revisions/{revision_id}",
+        ),
         (
             "READ_EMPLOYEE_REVISION",
             "GET",
@@ -122,13 +129,16 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         allowed_host="console.example",
         allowed_origin="https://console.example",
         owner_database_url=database_url,
+        agent_database_url=database_url,
         business_problems=SimpleNamespace(),
+        agent_definitions=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
         digital_employees=SimpleNamespace(),
     )
 
     operations = captured["operations"]
-    assert len(operations) == 16
+    assert len(operations) == 17
+    assert any(item.name == "READ_AGENT_REVISION" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_INSTANCE" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_ASSIGNMENT" for item in operations)
@@ -154,8 +164,10 @@ def test_configured_workflow_cannot_silently_degrade_when_service_is_unavailable
             allowed_host="console.example",
             allowed_origin="https://console.example",
             owner_database_url="postgresql://db.example/platform",
+            agent_database_url="postgresql://db.example/platform",
             workflow_database_url="postgresql://db.example/platform",
             business_problems=SimpleNamespace(),
+            agent_definitions=SimpleNamespace(),
             employee_definitions=SimpleNamespace(),
             digital_employees=SimpleNamespace(),
         )
@@ -170,8 +182,16 @@ def test_app_does_not_require_optional_workflow_for_existing_composition(
     monkeypatch.setenv("WORKBENCH_ALLOWED_HOST", "console.example")
     monkeypatch.setenv("WORKBENCH_ALLOWED_ORIGIN", "https://console.example")
     monkeypatch.setenv("EXECUTION_DATABASE_URL", "postgresql://db.example/platform")
+    monkeypatch.setenv(
+        "AGENT_DEFINITION_DATABASE_URL", "postgresql://db.example/platform"
+    )
     monkeypatch.delenv("WORKFLOW_RUNTIME_DATABASE_URL", raising=False)
     monkeypatch.setattr(console_app, "_business_problem_application", object())
+    monkeypatch.setattr(
+        console_app,
+        "_agent_definition_service",
+        SimpleNamespace(repository=object()),
+    )
     monkeypatch.setattr(
         console_app,
         "_digital_employee_assembly",
@@ -197,6 +217,7 @@ def test_app_does_not_require_optional_workflow_for_existing_composition(
     assert console_app.workbench_app is application
     assert built["workflow_database_url"] == ""
     assert built["workflows"] is None
+    assert built["agent_definitions"] is not None
     assert built["employee_definitions"] is not None
     assert built["digital_employees"] is not None
 
@@ -209,9 +230,17 @@ def test_app_fails_closed_when_configured_workflow_service_is_unavailable(
     monkeypatch.setenv("WORKBENCH_ALLOWED_ORIGIN", "https://console.example")
     monkeypatch.setenv("EXECUTION_DATABASE_URL", "postgresql://db.example/platform")
     monkeypatch.setenv(
+        "AGENT_DEFINITION_DATABASE_URL", "postgresql://db.example/platform"
+    )
+    monkeypatch.setenv(
         "WORKFLOW_RUNTIME_DATABASE_URL", "postgresql://db.example/platform"
     )
     monkeypatch.setattr(console_app, "_business_problem_application", object())
+    monkeypatch.setattr(
+        console_app,
+        "_agent_definition_service",
+        SimpleNamespace(repository=object()),
+    )
     monkeypatch.setattr(
         console_app,
         "_digital_employee_assembly",
@@ -258,8 +287,10 @@ def test_composition_rejects_workflow_database_outside_authorization_transaction
             allowed_host="console.example",
             allowed_origin="https://console.example",
             owner_database_url="postgresql://owner:secret@db.example/platform",
+            agent_database_url="postgresql://agent:secret@db.example/platform",
             workflow_database_url="postgresql://workflow:secret@db.example/workflow",
             business_problems=SimpleNamespace(),
+            agent_definitions=SimpleNamespace(),
             employee_definitions=SimpleNamespace(),
             digital_employees=SimpleNamespace(),
             workflows=SimpleNamespace(),

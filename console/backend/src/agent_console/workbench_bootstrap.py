@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from agent_console.agent_definition_repository import AgentDefinitionRepository
 from agent_console.authority_configuration import AuthorityRuntimeConfiguration
 from agent_console.authority_contracts import AuthorityError
 from agent_console.authority_foundation import (
@@ -20,6 +21,7 @@ from agent_console.business_problem_application import BusinessProblemApplicatio
 from agent_console.digital_employee_application import DigitalEmployeeRepository
 from agent_console.digital_employee_definition import EmployeeDefinitionRepository
 from agent_console.governed_execution_ownership import execution_database_fingerprint
+from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
     create_workbench_bff,
@@ -49,7 +51,9 @@ def build_workbench_composition(
     allowed_host: str,
     allowed_origin: str,
     owner_database_url: str,
+    agent_database_url: str,
     business_problems: BusinessProblemApplication,
+    agent_definitions: AgentDefinitionRepository,
     employee_definitions: EmployeeDefinitionRepository,
     digital_employees: DigitalEmployeeRepository,
     workflow_database_url: str = "",
@@ -67,6 +71,8 @@ def build_workbench_composition(
     runtime = AuthorityRuntimeConfiguration.from_mapping(document)
     authority_database = execution_database_fingerprint(runtime.database_url)
     if authority_database != execution_database_fingerprint(owner_database_url):
+        raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    if authority_database != execution_database_fingerprint(agent_database_url):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
     workflow_enabled = bool(workflow_database_url or workflows)
     if workflow_enabled and not (workflow_database_url and workflows):
@@ -96,6 +102,7 @@ def build_workbench_composition(
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             operations=(
                 *business_problem_operations(business_problems),
+                *agent_operations(agent_definitions),
                 *employee_operations(employee_definitions),
                 *digital_employee_operations(digital_employees),
                 *(workflow_operations(workflows) if workflows is not None else ()),

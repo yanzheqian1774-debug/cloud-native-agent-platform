@@ -124,20 +124,35 @@ class Result:
     def fetchone(self):
         return self.row
 
+    def fetchall(self):
+        return self.row
+
 
 class Connection:
-    def __init__(self, row):
+    def __init__(self, row, facts=()):
         self.row = row
+        self.facts = facts
         self.calls = []
 
     def execute(self, statement, parameters):
         self.calls.append((statement, parameters))
-        return Result(self.row)
+        return Result(
+            self.facts if "digital_employee_definition.facts" in statement else self.row
+        )
 
 
 def test_workbench_repository_read_is_exact_minimal_and_digest_checked() -> None:
     value = revision()
-    connection = Connection({"record": value.record, "digest": value.digest})
+    connection = Connection(
+        {"record": value.record, "digest": value.digest},
+        (
+            {
+                "action": "CREATE",
+                "revision_digest": value.digest,
+                "ordinal": 1,
+            },
+        ),
+    )
 
     result = PostgresEmployeeDefinitionRepository.read_revision_for_workbench(
         connection,
@@ -147,8 +162,12 @@ def test_workbench_repository_read_is_exact_minimal_and_digest_checked() -> None
         authorized=True,
     )
 
-    assert result == {"revision": value.record, "digest": value.digest}
-    assert len(connection.calls) == 1
+    assert result == {
+        "revision": value.record,
+        "digest": value.digest,
+        "publicationState": "NOT_PUBLISHED",
+    }
+    assert len(connection.calls) == 2
     statement, parameters = connection.calls[0]
     assert "digital_employee_definition.revisions" in statement
     assert "digital_employee_definition.facts" not in statement
@@ -158,6 +177,7 @@ def test_workbench_repository_read_is_exact_minimal_and_digest_checked() -> None
         value.definition_id,
         value.revision_id,
     )
+    assert "digital_employee_definition.facts" in connection.calls[1][0]
 
     corrupt = Connection({"record": value.record, "digest": "b" * 64})
     with pytest.raises(EmployeeDefinitionError, match="EMPLOYEE_RECORD_CORRUPT"):

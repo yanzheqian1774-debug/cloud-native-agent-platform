@@ -40,3 +40,36 @@ class WorkbenchOperationResponse(StrictWorkbenchModel):
 
 class WorkbenchErrorResponse(StrictWorkbenchModel):
     reasonCode: str = Field(min_length=1, max_length=100)
+
+
+class WorkbenchAgentRole(StrictWorkbenchModel):
+    title: str
+    duties: tuple[str, ...]
+    businessPurpose: str
+    capabilities: tuple[str, ...]
+
+
+class WorkbenchAgentRevision(StrictWorkbenchModel):
+    definitionId: str
+    revisionId: str
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    name: str
+    role: WorkbenchAgentRole
+
+
+class WorkbenchEmployeeMember(StrictWorkbenchModel):
+    kind: str
+    resourceId: str
+    revisionId: str
+    digest: str
+
+
+class WorkbenchEmployeeRevision(StrictWorkbenchModel):
+    resourceKind: Literal["DIGITAL_EMPLOYEE_DEFINITION"]
+    employeeDefinitionId: str
+    employeeDefinitionRevisionId: str
+    employeeDefinitionDigest: str
+    role: str
+    responsibilities: tuple[str, ...]
+    members: tuple[WorkbenchEmployeeMember, ...]
+    publicationState: Literal["PUBLISHED", "NOT_PUBLISHED"]

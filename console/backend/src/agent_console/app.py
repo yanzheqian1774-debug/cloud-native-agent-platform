@@ -1909,6 +1909,9 @@ def _configure_workbench() -> None:
     if _digital_employee_assembly is None:
         _workbench_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
         return
+    if _agent_definition_service is None:
+        _workbench_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+        return
     workflow_database_url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
     workflow_service = None
     if workflow_database_url:
@@ -1923,7 +1926,9 @@ def _configure_workbench() -> None:
             allowed_host=allowed_host,
             allowed_origin=allowed_origin,
             owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+            agent_database_url=os.environ.get("AGENT_DEFINITION_DATABASE_URL", ""),
             business_problems=_business_problem_application,
+            agent_definitions=_agent_definition_service.repository,
             employee_definitions=_digital_employee_assembly.employee_definitions,
             digital_employees=_digital_employee_assembly.repository,
             workflow_database_url=workflow_database_url,

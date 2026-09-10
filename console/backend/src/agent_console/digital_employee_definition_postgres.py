@@ -30,6 +30,24 @@ _SHA256_DIGEST = re.compile(r"(?:(?P<algorithm>sha256):)?(?P<value>[a-f0-9]{64})
 _ADAPTER = "employee-definition-v1"
 _DEFINITION_KEY = ("namespace", "security_domain", "definition_id")
 _REVISION_KEY = (*_DEFINITION_KEY, "revision_id")
+_EMPLOYEE_FACT_ACTIONS = frozenset(
+    {
+        "CREATE",
+        "VALIDATE",
+        "APPROVE",
+        "REJECT",
+        "PUBLISH",
+        "UNPUBLISH",
+        "REVOKE_PUBLICATION",
+        "DEPRECATE",
+        "GRANT_MATCH",
+        "DENY_MATCH",
+        "REVOKE_MATCH",
+    }
+)
+_PUBLICATION_ACTIONS = frozenset(
+    {"PUBLISH", "UNPUBLISH", "REVOKE_PUBLICATION", "DEPRECATE"}
+)
 EMPLOYEE_DEFINITION_STRUCTURE = (
     Table(
         "digital_employee_definition.schema_migrations",
@@ -301,7 +319,35 @@ class PostgresEmployeeDefinitionRepository:
             raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT") from exc
         if revision.digest != row["digest"]:
             raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
-        return {"revision": row["record"], "digest": row["digest"]}
+        facts = connection.execute(
+            "SELECT action,revision_digest,ordinal FROM "
+            "digital_employee_definition.facts WHERE namespace=%s "
+            "AND security_domain=%s AND definition_id=%s AND revision_id=%s "
+            "ORDER BY ordinal",
+            key,
+        ).fetchall()
+        if not facts:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        for fact in facts:
+            if fact["action"] not in _EMPLOYEE_FACT_ACTIONS or not _same_sha256_digest(
+                fact["revision_digest"], row["digest"]
+            ):
+                raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        publication = next(
+            (
+                fact["action"]
+                for fact in reversed(facts)
+                if fact["action"] in _PUBLICATION_ACTIONS
+            ),
+            None,
+        )
+        return {
+            "revision": row["record"],
+            "digest": row["digest"],
+            "publicationState": (
+                "PUBLISHED" if publication == "PUBLISH" else "NOT_PUBLISHED"
+            ),
+        }
 
     def list(self, scope):
         with self.pool.connection() as conn:

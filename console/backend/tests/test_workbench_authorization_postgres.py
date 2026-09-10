@@ -14,6 +14,8 @@ from types import SimpleNamespace
 
 import psycopg
 import pytest
+from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepository
+from agent_console.agent_definition_service import AgentDefinitionService
 from agent_console.authority_configuration import (
     CredentialConfiguration,
     StaticAuthorityGeneration,
@@ -55,6 +57,7 @@ from agent_console.execution_postgres import (
     PostgresExecutionAuthorityRepository,
 )
 from agent_console.grant_administration_application import GenerationAuthorizationReader
+from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_employee import (
     digital_employee_operations,
     employee_operations,
@@ -83,6 +86,9 @@ EXECUTION_MIGRATION = (
 )
 EMPLOYEE_MIGRATION = (
     Path(__file__).parents[1] / "migrations" / "0014_digital_employee_identity.sql"
+)
+AGENT_MIGRATION = (
+    Path(__file__).parents[1] / "migrations" / "0001_agent_definition_lifecycle.sql"
 )
 
 
@@ -818,6 +824,28 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
                         json.dumps(revision.record),
                     ),
                 )
+            connection.execute(
+                "INSERT INTO digital_employee_definition.facts "
+                "(namespace,security_domain,definition_id,revision_id,action,"
+                "ordinal,revision_digest,decision_id,command_id,payload_digest) "
+                "VALUES (%s,%s,%s,%s,'CREATE',1,%s,'decision-create',"
+                "'command-create',%s),(%s,%s,%s,%s,'PUBLISH',2,%s,"
+                "'decision-publish','command-publish',%s)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    first.definition_id,
+                    first.revision_id,
+                    first.digest,
+                    "1" * 64,
+                    scope.namespace,
+                    scope.security_domain,
+                    first.definition_id,
+                    first.revision_id,
+                    first.digest,
+                    "2" * 64,
+                ),
+            )
 
         operation = employee_operations(employee_repository)[0]
         path = {
@@ -858,9 +886,48 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
         assert connections["owner"] is connections["authorization"]
         assert result["employeeDefinitionRevisionId"] == first.revision_id
         assert first.digest == result["employeeDefinitionDigest"]
+        assert result["publicationState"] == "PUBLISHED"
         assert second.revision_id not in repr(result)
         assert "predecessor" not in repr(result).lower()
         assert "facts" not in repr(result).lower()
+
+        def protected_owner_query(*args, **kwargs):
+            pytest.fail("protected Employee owner query ran after authorization denial")
+
+        monkeypatch.setattr(
+            employee_repository,
+            "read_revision_for_workbench",
+            protected_owner_query,
+        )
+        wrong_path = {**path, "revision_id": second.revision_id}
+        wrong_grants = tuple(operation.grant_builder(context(), wrong_path, {}, {}))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                wrong_grants,
+                operation=operation.name,
+                payload={},
+                path=wrong_path,
+                query={},
+                handler=operation.handler,
+            )
+        wrong_scope = TrustedRequestContext(
+            "human:alice",
+            AuthorityScope("tenant-b", "quality"),
+            "session-one",
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                wrong_scope,
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
 
         if revocation == "grant":
             repository.revoke_grant(
@@ -879,14 +946,6 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
                 now=now,
             )
 
-        def protected_owner_query(*args, **kwargs):
-            pytest.fail("protected Employee owner query ran after authorization denial")
-
-        monkeypatch.setattr(
-            employee_repository,
-            "read_revision_for_workbench",
-            protected_owner_query,
-        )
         with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
             adapter.execute(
                 context(),
@@ -899,6 +958,154 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
             )
     finally:
         execution_repository.pool.close()
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_agent_exact_read_uses_authorization_transaction_and_revocation(
+    repository, monkeypatch, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    agent_repository = PostgresAgentDefinitionRepository(
+        repository.pool.conninfo,
+        migration_path=AGENT_MIGRATION,
+        timeout=30.0,
+    )
+    try:
+        agent_repository.migrate()
+        service = AgentDefinitionService(agent_repository)
+        scope = service.scope("tenant-a", "quality")
+        created = service.create(
+            scope,
+            "human:alice",
+            "Quality agent",
+            {
+                "title": "Quality analyst",
+                "duties": ["Review quality"],
+                "capabilities": ["quality.review"],
+                "businessPurpose": "Prevent defects",
+            },
+        )
+        revision = created["revisions"][0]
+        operation = agent_operations(agent_repository)[0]
+        path = {
+            "definition_id": created["definitionId"],
+            "revision_id": revision["revisionId"],
+        }
+        grants = tuple(operation.grant_builder(context(), path, {}, {}))
+        grant_id = seed_digital_employee_read_grant(
+            repository, now, grants[0], key="agent"
+        )
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_read = agent_repository.read_revision_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_read(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(
+            agent_repository, "read_revision_for_workbench", capture_owner
+        )
+        result = adapter.execute(
+            context(),
+            grants,
+            operation=operation.name,
+            payload={},
+            path=path,
+            query={},
+            handler=operation.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert result == {
+            "definitionId": created["definitionId"],
+            "revisionId": revision["revisionId"],
+            "digest": revision["digest"],
+            "name": "Quality agent",
+            "role": {
+                "title": "Quality analyst",
+                "duties": ["Review quality"],
+                "businessPurpose": "Prevent defects",
+                "capabilities": ["quality.review"],
+            },
+        }
+        assert "facts" not in repr(result).lower()
+        assert "bindings" not in repr(result).lower()
+
+        def protected_owner_query(*args, **kwargs):
+            pytest.fail("protected Agent owner query ran after authorization denial")
+
+        monkeypatch.setattr(
+            agent_repository,
+            "read_revision_for_workbench",
+            protected_owner_query,
+        )
+        wrong_path = {**path, "revision_id": f"{revision['revisionId']}:other"}
+        wrong_grants = tuple(operation.grant_builder(context(), wrong_path, {}, {}))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                wrong_grants,
+                operation=operation.name,
+                payload={},
+                path=wrong_path,
+                query={},
+                handler=operation.handler,
+            )
+        wrong_scope = TrustedRequestContext(
+            "human:alice",
+            AuthorityScope("tenant-b", "quality"),
+            "session-one",
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                wrong_scope,
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                grant_id,
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-agent",
+                payload_digest="e" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query={},
+                handler=operation.handler,
+            )
+    finally:
+        agent_repository.pool.close()
 
 
 @pytest.mark.parametrize("revocation", ["grant", "session"])

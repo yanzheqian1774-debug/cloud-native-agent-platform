@@ -14,7 +14,15 @@ from agent_console.digital_employee_application import (
     InstanceLifecycle,
     InstanceRecord,
 )
-from agent_console.digital_employee_definition import EmployeeDefinitionError
+from agent_console.digital_employee_definition import (
+    CompositionMember,
+    EmployeeDefinitionError,
+    EmployeeRevision,
+    MemberKind,
+)
+from agent_console.digital_employee_definition_postgres import (
+    PostgresEmployeeDefinitionRepository,
+)
 from agent_console.execution_domain import ExecutionPersistenceError, ScopeIdentity
 from agent_console.execution_postgres import (
     AssignmentId,
@@ -88,6 +96,7 @@ def test_employee_owner_uses_caller_connection_and_discloses_one_revision() -> N
                     ],
                     "predecessorRevisionId": "employee-revision:older",
                 },
+                "publicationState": "PUBLISHED",
                 "facts": [{"action": "PUBLISH"}],
                 "otherRevision": {"revisionId": "employee-revision:v2"},
             }
@@ -109,10 +118,68 @@ def test_employee_owner_uses_caller_connection_and_discloses_one_revision() -> N
                 "digest": "a" * 64,
             }
         ],
+        "publicationState": "PUBLISHED",
     }
     assert "older" not in repr(result)
     assert "employee-revision:v2" not in repr(result)
-    assert "PUBLISH" not in repr(result)
+    assert "facts" not in repr(result).lower()
+
+
+@pytest.mark.parametrize(
+    "facts",
+    (
+        [],
+        [{"action": "CREATE", "revision_digest": "f" * 64, "ordinal": 1}],
+    ),
+)
+def test_employee_publication_source_missing_or_corrupt_fails_closed(facts) -> None:
+    scope = ScopeIdentity("tenant-a", "quality")
+    revision = EmployeeRevision(
+        scope,
+        "employee-definition:quality",
+        "employee-revision:v1",
+        "Quality owner",
+        ("Review quality",),
+        (
+            CompositionMember(
+                MemberKind.AGENT,
+                "agent-definition:quality",
+                "agent-revision:v1",
+                "a" * 64,
+            ),
+        ),
+    )
+
+    class Result:
+        def __init__(self, *, one=None, many=None):
+            self.one = one
+            self.many = many
+
+        def fetchone(self):
+            return self.one
+
+        def fetchall(self):
+            return self.many
+
+    class Connection:
+        calls = 0
+
+        def execute(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return Result(
+                    one={"record": revision.record, "digest": revision.digest}
+                )
+            return Result(many=facts)
+
+    with pytest.raises(EmployeeDefinitionError, match="EMPLOYEE_RECORD_CORRUPT"):
+        PostgresEmployeeDefinitionRepository.read_revision_for_workbench(
+            Connection(),
+            scope,
+            revision.definition_id,
+            revision.revision_id,
+            authorized=True,
+        )
 
 
 @pytest.mark.parametrize(

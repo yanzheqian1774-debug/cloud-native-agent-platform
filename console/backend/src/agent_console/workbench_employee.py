@@ -21,6 +21,7 @@ from agent_console.execution_postgres import (
     DigitalEmployeeInstanceId,
 )
 from agent_console.workbench_bff import PREFIX, WorkbenchOperation
+from agent_console.workbench_bff_schemas import WorkbenchEmployeeRevision
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
     WorkbenchOwnerError,
@@ -63,14 +64,14 @@ class EmployeeDefinitionOwnerAdapter:
             ) from exc
 
         revision = value["revision"]
-        return {
-            "resourceKind": "DIGITAL_EMPLOYEE_DEFINITION",
-            "employeeDefinitionId": revision["definitionId"],
-            "employeeDefinitionRevisionId": revision["revisionId"],
-            "employeeDefinitionDigest": value["digest"],
-            "role": revision["role"],
-            "responsibilities": list(revision["responsibilities"]),
-            "members": [
+        return WorkbenchEmployeeRevision(
+            resourceKind="DIGITAL_EMPLOYEE_DEFINITION",
+            employeeDefinitionId=revision["definitionId"],
+            employeeDefinitionRevisionId=revision["revisionId"],
+            employeeDefinitionDigest=value["digest"],
+            role=revision["role"],
+            responsibilities=list(revision["responsibilities"]),
+            members=[
                 {
                     "kind": member["kind"],
                     "resourceId": member["resource_id"],
@@ -79,7 +80,8 @@ class EmployeeDefinitionOwnerAdapter:
                 }
                 for member in revision["members"]
             ],
-        }
+            publicationState=value["publicationState"],
+        ).model_dump(mode="json")
 
 
 class DigitalEmployeeOwnerAdapter:
