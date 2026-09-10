@@ -250,12 +250,12 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   expect(successorRevision).toBeTruthy();
   expect(successorRevision!.content.source).toMatchObject({
     kind: "TEXT",
-    provenance: "human-edit:human:knowledge-owner",
+    provenance: "human-edit:human:workbench",
     sourceDescription: "人工编辑后继修订",
   });
   await expect(page.getByLabel("文档处理阶段"))
     .toContainText("非文件入口或未记录文件", { timeout: 1_000 });
-  await expect(page.getByRole("definition").filter({ hasText: "human-edit:human:knowledge-owner" }))
+  await expect(page.getByRole("definition").filter({ hasText: "human-edit:human:workbench" }))
     .toBeVisible({ timeout: 1_000 });
   await publish(page);
   await page.getByRole("button", { name: "导入并建立索引" }).click();
@@ -281,7 +281,7 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   expect(manualRevision.content.source).toMatchObject({
     sourceId: historicalUpload.content.source.sourceId,
     kind: "TEXT",
-    provenance: "human-edit:human:knowledge-owner",
+    provenance: "human-edit:human:workbench",
     sourceDescription: "人工编辑后继修订",
   });
   for (const key of ["externalReference", "fileName", "mediaType", "parserVersion"]) {
