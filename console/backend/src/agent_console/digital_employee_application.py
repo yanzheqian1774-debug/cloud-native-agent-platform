@@ -16,6 +16,7 @@ from .execution_postgres import (
     AttemptId,
     DigitalEmployeeInstanceId,
     PlacementDecision,
+    PlacementId,
     PlacementRequest,
     PlacementResult,
     RuntimeInstanceId,
@@ -157,7 +158,32 @@ class DigitalEmployeeRepository(Protocol):
         scope: ScopeIdentity,
         runtime_id: RuntimeInstanceId,
         agent_id: AgentInstanceId,
+        *,
+        connection: Any | None = None,
     ) -> tuple[AttemptId, ...]: ...
+
+    def placement_request_matches(
+        self,
+        scope: ScopeIdentity,
+        placement_id: PlacementId,
+        attempt_id: AttemptId,
+        agent_id: AgentInstanceId,
+        *,
+        connection: Any | None = None,
+    ) -> bool: ...
+
+    def read_placement_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        assignment_id: AssignmentId,
+        placement_id: PlacementId,
+        attempt_id: AttemptId,
+        agent_id: AgentInstanceId,
+        *,
+        authorized: bool,
+    ) -> PlacementDecision | None: ...
 
 
 class DefinitionAuthority(Protocol):

@@ -152,3 +152,16 @@ def test_agent_exact_read_and_list_are_registered_without_lifecycle_actions() ->
             validate_registered_grant(
                 ExactGrant("AGENT", action, "agent:collection"), allow_meta=False
             )
+
+
+def test_placement_exact_read_is_registered_without_other_actions() -> None:
+    validate_registered_grant(
+        ExactGrant("PLACEMENT", "READ", "placement:placement:quality"),
+        allow_meta=False,
+    )
+    for action in ("CREATE", "LIST"):
+        with pytest.raises(AuthorityError, match="UNKNOWN_AUTHORITY_OPERATION"):
+            validate_registered_grant(
+                ExactGrant("PLACEMENT", action, "placement:collection"),
+                allow_meta=False,
+            )

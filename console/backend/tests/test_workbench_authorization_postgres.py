@@ -52,9 +52,20 @@ from agent_console.digital_employee_definition_postgres import (
 from agent_console.digital_employee_postgres import PostgresDigitalEmployeeRepository
 from agent_console.execution_domain import ScopeIdentity
 from agent_console.execution_postgres import (
+    AgentInstanceId,
     AssignmentId,
+    AttemptId,
     DigitalEmployeeInstanceId,
+    PlacementDecision,
+    PlacementDecisionKind,
+    PlacementId,
+    PlacementRequest,
+    PlacementRequestId,
     PostgresExecutionAuthorityRepository,
+    RuntimeInstanceId,
+    TaskRunId,
+    WorkflowRunId,
+    canonical_bytes,
 )
 from agent_console.grant_administration_application import GenerationAuthorizationReader
 from agent_console.workbench_agent import agent_operations
@@ -760,6 +771,388 @@ def test_instance_assignment_exact_reads_share_authorization_transaction(
                 payload={},
                 path=path,
                 query={},
+                handler=operation.handler,
+            )
+    finally:
+        execution_repository.pool.close()
+
+
+@pytest.mark.parametrize("revocation", ["grant", "session"])
+def test_placement_exact_read_verifies_parent_chain_and_revocation(
+    repository, monkeypatch, revocation: str
+) -> None:
+    now, _, adapter = seed(repository)
+    execution_repository = PostgresExecutionAuthorityRepository(
+        repository.pool.conninfo,
+        migration_path=EXECUTION_MIGRATION,
+        timeout=30.0,
+    )
+    digital_repository = PostgresDigitalEmployeeRepository(execution_repository)
+    try:
+        execution_repository.migrate()
+        scope = ScopeIdentity("tenant-a", "quality")
+        instance_id = DigitalEmployeeInstanceId("employee-instance:quality")
+        assignment_id = AssignmentId("employee-assignment:review")
+        workflow_id = WorkflowRunId("workflow-run:quality")
+        task_id = TaskRunId("task-run:quality")
+        attempt_id = AttemptId("attempt:quality")
+        agent_id = AgentInstanceId("agent-instance:quality")
+        runtime_id = RuntimeInstanceId("runtime-instance:quality")
+        placement_id = PlacementId("placement:quality")
+        request = PlacementRequest(
+            PlacementRequestId("placement-request:quality"),
+            scope,
+            workflow_id,
+            task_id,
+            attempt_id,
+            agent_id,
+            "agent-revision:v1",
+            "runtime-profile:v1",
+            (),
+            (),
+            (),
+            (),
+            now,
+        )
+        decision = PlacementDecision.create(
+            placement_id=placement_id,
+            request_id=request.request_id,
+            decision=PlacementDecisionKind.PLACED,
+            runtime_instance_id=runtime_id,
+            policy_version="policy:v1",
+            compatibility_facts=("GPU_COMPATIBLE",),
+            limitation_codes=("CAPACITY_LIMIT",),
+            decided_at=now,
+        )
+        instance = InstanceRecord(
+            scope,
+            instance_id,
+            1,
+            DefinitionReference(
+                "employee-definition:quality",
+                "employee-revision:v1",
+                "d" * 64,
+                True,
+                True,
+                "DIGITAL_EMPLOYEE_DEFINITION_V1",
+                "agent-definition:quality",
+                "agent-revision:v1",
+                "a" * 64,
+            ),
+            "human:owner",
+            "organization:quality",
+            InstanceLifecycle.ENABLED,
+            None,
+            None,
+            (),
+            now,
+            now,
+        )
+        assignment = AssignmentRecord(
+            scope,
+            assignment_id,
+            instance_id,
+            "human:reviewer",
+            "Quality reviewer",
+            AssignmentLifecycle.ACTIVE,
+            now,
+            None,
+            1,
+            "assignment-command:private",
+        )
+        with execution_repository.pool.connection() as connection:
+            connection.execute(
+                "INSERT INTO execution_authority.digital_employee_instances "
+                "(namespace,security_domain,digital_employee_instance_id,"
+                "definition_revision_id,aggregate_version,record) "
+                "VALUES (%s,%s,%s,%s,1,%s::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(instance_id),
+                    instance.definition.revision_id,
+                    json.dumps(
+                        digital_repository._instance_record(
+                            instance, "instance-command:private"
+                        )
+                    ),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.assignments "
+                "(namespace,security_domain,assignment_id,"
+                "digital_employee_instance_id,approved_input_digest,record) "
+                "VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(assignment_id),
+                    str(instance_id),
+                    "b" * 64,
+                    json.dumps(
+                        {
+                            "assignee_id": assignment.assignee_id,
+                            "business_role": assignment.business_role,
+                            "lifecycle": assignment.lifecycle.value,
+                            "effective_from": assignment.effective_from.isoformat(),
+                            "effective_until": None,
+                            "version": 1,
+                            "command_id": assignment.command_id,
+                        }
+                    ),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.workflow_runs VALUES "
+                "(%s,%s,%s,%s,'plan-revision:v1',NULL,NULL,'{}'::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(workflow_id),
+                    str(assignment_id),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.task_runs VALUES "
+                "(%s,%s,%s,%s,'{}'::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(task_id),
+                    str(workflow_id),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.attempts VALUES "
+                "(%s,%s,%s,%s,NULL,%s,'{}'::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(attempt_id),
+                    str(task_id),
+                    "c" * 64,
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.runtime_instances "
+                "(namespace,security_domain,runtime_instance_id,current_generation,"
+                "aggregate_version,record) VALUES (%s,%s,%s,1,1,%s::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(runtime_id),
+                    json.dumps({"current_generation": 1}),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.agent_instances "
+                "(namespace,security_domain,agent_instance_id,agent_revision_id,"
+                "runtime_instance_id,aggregate_version,record) "
+                "VALUES (%s,%s,%s,%s,%s,1,%s::jsonb)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(agent_id),
+                    "agent-revision:v1",
+                    str(runtime_id),
+                    json.dumps(
+                        {
+                            "agent_definition_id": "agent-definition:quality",
+                            "agent_revision_id": "agent-revision:v1",
+                            "agent_digest": "a" * 64,
+                            "runtime_instance_id": str(runtime_id),
+                        }
+                    ),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.placement_requests "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(request.request_id),
+                    request.digest,
+                    request.canonical_bytes,
+                    str(attempt_id),
+                    str(agent_id),
+                    now,
+                ),
+            )
+            connection.execute(
+                "INSERT INTO execution_authority.placement_decisions "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(placement_id),
+                    str(request.request_id),
+                    decision.decision.value,
+                    str(runtime_id),
+                    decision.digest,
+                    json.dumps(json.loads(canonical_bytes(decision))["payload"]),
+                    now,
+                ),
+            )
+
+        operation = next(
+            item
+            for item in digital_employee_operations(digital_repository)
+            if item.name == "READ_EMPLOYEE_PLACEMENT"
+        )
+        path = {
+            "instance_id": str(instance_id),
+            "assignment_id": str(assignment_id),
+            "placement_id": str(placement_id),
+        }
+        query = {
+            "attemptId": str(attempt_id),
+            "agentInstanceId": str(agent_id),
+        }
+        grants = tuple(operation.grant_builder(context(), path, {}, query))
+        grant_id = seed_digital_employee_read_grant(
+            repository, now, grants[0], key=f"placement-{revocation}"
+        )
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_read = digital_repository.read_placement_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_owner(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_read(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(
+            digital_repository, "read_placement_for_workbench", capture_owner
+        )
+        result = adapter.execute(
+            context(),
+            grants,
+            operation=operation.name,
+            payload={},
+            path=path,
+            query=query,
+            handler=operation.handler,
+        )
+        assert connections["owner"] is connections["authorization"]
+        assert set(result) == {
+            "placementId",
+            "requestId",
+            "decision",
+            "runtimeInstanceId",
+            "policyVersion",
+            "compatibilityFacts",
+            "limitationCodes",
+            "decidedAt",
+            "digest",
+            "binding",
+        }
+        assert result["binding"] == {
+            "instanceId": str(instance_id),
+            "assignmentId": str(assignment_id),
+            "attemptId": str(attempt_id),
+            "agentInstanceId": str(agent_id),
+        }
+        assert result["digest"] == decision.digest
+
+        wrong_parent = {**path, "assignment_id": "employee-assignment:other"}
+        with pytest.raises(WorkbenchOwnerError, match="PLACEMENT_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=wrong_parent,
+                query=query,
+                handler=operation.handler,
+            )
+
+        original_active = digital_repository.active_attempts
+        monkeypatch.setattr(
+            digital_repository,
+            "active_attempts",
+            lambda *args, **kwargs: (),
+        )
+        with pytest.raises(WorkbenchOwnerError, match="PLACEMENT_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query=query,
+                handler=operation.handler,
+            )
+        monkeypatch.setattr(digital_repository, "active_attempts", original_active)
+
+        def protected_owner_query(*args, **kwargs):
+            pytest.fail("protected Placement owner query ran after denial")
+
+        monkeypatch.setattr(
+            digital_repository,
+            "read_placement_for_workbench",
+            protected_owner_query,
+        )
+        wrong_scope = TrustedRequestContext(
+            "human:alice",
+            AuthorityScope("tenant-b", "quality"),
+            "session-one",
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                wrong_scope,
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query=query,
+                handler=operation.handler,
+            )
+        wrong_path = {**path, "placement_id": "placement:other"}
+        wrong_grants = tuple(operation.grant_builder(context(), wrong_path, {}, query))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                wrong_grants,
+                operation=operation.name,
+                payload={},
+                path=wrong_path,
+                query=query,
+                handler=operation.handler,
+            )
+
+        if revocation == "grant":
+            repository.revoke_grant(
+                grant_id,
+                actor_id="human:bob",
+                reason="DUTY_ENDED",
+                idempotency_key="revoke-placement",
+                payload_digest="e" * 64,
+                now=now,
+            )
+        else:
+            repository.revoke_session(
+                SessionId("session-one"),
+                reason="LOGOUT",
+                actor_id="human:alice",
+                now=now,
+            )
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=operation.name,
+                payload={},
+                path=path,
+                query=query,
                 handler=operation.handler,
             )
     finally:

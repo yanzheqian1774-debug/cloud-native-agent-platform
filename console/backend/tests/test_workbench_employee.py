@@ -25,8 +25,15 @@ from agent_console.digital_employee_definition_postgres import (
 )
 from agent_console.execution_domain import ExecutionPersistenceError, ScopeIdentity
 from agent_console.execution_postgres import (
+    AgentInstanceId,
     AssignmentId,
+    AttemptId,
     DigitalEmployeeInstanceId,
+    PlacementDecision,
+    PlacementDecisionKind,
+    PlacementId,
+    PlacementRequestId,
+    RuntimeInstanceId,
 )
 from agent_console.workbench_employee import (
     DigitalEmployeeOwnerAdapter,
@@ -275,7 +282,7 @@ def test_employee_owner_preserves_bounded_error_semantics(reason, status) -> Non
     assert raised.value.status_code == status
 
 
-def digital_call(operation, path, connection=None):
+def digital_call(operation, path, connection=None, query=None):
     value = call(connection)
     return AuthorizedOwnerCall(
         operation=operation,
@@ -283,7 +290,7 @@ def digital_call(operation, path, connection=None):
         connection=value.connection,
         payload={},
         path=path,
-        query={},
+        query=query or {},
         decisions=(),
         authority=SimpleNamespace(),
     )
@@ -400,11 +407,84 @@ def test_assignment_owner_checks_parent_and_uses_minimal_projection() -> None:
     assert "version" not in repr(result).lower()
 
 
+def test_placement_owner_uses_caller_connection_and_exact_bounded_projection() -> None:
+    connection = object()
+    scope = ScopeIdentity("tenant-a", "quality")
+    decision = PlacementDecision.create(
+        placement_id=PlacementId("placement:quality"),
+        request_id=PlacementRequestId("request:quality"),
+        decision=PlacementDecisionKind.PLACED,
+        runtime_instance_id=RuntimeInstanceId("runtime:quality"),
+        policy_version="policy:v1",
+        compatibility_facts=("GPU_COMPATIBLE",),
+        limitation_codes=("CAPACITY_LIMIT",),
+        decided_at=datetime(2029, 1, 3, tzinfo=UTC),
+    )
+
+    class Repository:
+        def read_placement_for_workbench(
+            self,
+            actual_connection,
+            actual_scope,
+            instance_id,
+            assignment_id,
+            placement_id,
+            attempt_id,
+            agent_id,
+            *,
+            authorized,
+        ):
+            assert actual_connection is connection
+            assert actual_scope == scope
+            assert instance_id == DigitalEmployeeInstanceId("instance:quality")
+            assert assignment_id == AssignmentId("assignment:review")
+            assert placement_id == decision.placement_id
+            assert attempt_id == AttemptId("attempt:one")
+            assert agent_id == AgentInstanceId("agent-instance:one")
+            assert authorized is True
+            return decision
+
+    result = DigitalEmployeeOwnerAdapter(Repository())(
+        digital_call(
+            "READ_EMPLOYEE_PLACEMENT",
+            {
+                "instance_id": "instance:quality",
+                "assignment_id": "assignment:review",
+                "placement_id": "placement:quality",
+            },
+            connection,
+            {"attemptId": "attempt:one", "agentInstanceId": "agent-instance:one"},
+        )
+    )
+
+    assert result == {
+        "placementId": "placement:quality",
+        "requestId": "request:quality",
+        "decision": "PLACED",
+        "runtimeInstanceId": "runtime:quality",
+        "policyVersion": "policy:v1",
+        "compatibilityFacts": ["GPU_COMPATIBLE"],
+        "limitationCodes": ["CAPACITY_LIMIT"],
+        "decidedAt": "2029-01-03T00:00:00Z",
+        "digest": decision.digest,
+        "binding": {
+            "instanceId": "instance:quality",
+            "assignmentId": "assignment:review",
+            "attemptId": "attempt:one",
+            "agentInstanceId": "agent-instance:one",
+        },
+    }
+    assert "execution" not in result
+    assert "observation" not in result
+    assert "outcome" not in result
+
+
 @pytest.mark.parametrize(
     ("operation", "reason"),
     (
         ("READ_EMPLOYEE_INSTANCE", "INSTANCE_NOT_FOUND"),
         ("READ_EMPLOYEE_ASSIGNMENT", "ASSIGNMENT_NOT_FOUND"),
+        ("READ_EMPLOYEE_PLACEMENT", "PLACEMENT_NOT_FOUND"),
     ),
 )
 def test_digital_employee_missing_is_hidden(operation, reason) -> None:
@@ -415,12 +495,23 @@ def test_digital_employee_missing_is_hidden(operation, reason) -> None:
         def read_assignment_for_workbench(self, *args, **kwargs):
             return None
 
+        def read_placement_for_workbench(self, *args, **kwargs):
+            return None
+
     path = {
         "instance_id": "instance:quality",
         "assignment_id": "assignment:review",
+        "placement_id": "placement:quality",
     }
+    query = (
+        {"attemptId": "attempt:one", "agentInstanceId": "agent-instance:one"}
+        if operation == "READ_EMPLOYEE_PLACEMENT"
+        else None
+    )
     with pytest.raises(WorkbenchOwnerError) as raised:
-        DigitalEmployeeOwnerAdapter(Repository())(digital_call(operation, path))
+        DigitalEmployeeOwnerAdapter(Repository())(
+            digital_call(operation, path, query=query)
+        )
 
     assert raised.value.reason_code == reason
     assert raised.value.status_code == 404

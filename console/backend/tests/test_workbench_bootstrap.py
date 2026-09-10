@@ -69,8 +69,8 @@ def test_composition_registers_business_and_read_only_workflow_operations(
 
     assert composition.foundation is foundation
     operations = captured["operations"]
-    assert len(operations) == 21
-    assert [(item.name, item.method, item.path) for item in operations[-8:]] == [
+    assert len(operations) == 22
+    assert [(item.name, item.method, item.path) for item in operations[-9:]] == [
         ("LIST_AGENTS", "GET", "/api/workbench/v1/agents"),
         (
             "READ_AGENT_REVISION",
@@ -92,6 +92,12 @@ def test_composition_registers_business_and_read_only_workflow_operations(
             "READ_EMPLOYEE_ASSIGNMENT",
             "GET",
             "/api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}",
+        ),
+        (
+            "READ_EMPLOYEE_PLACEMENT",
+            "GET",
+            "/api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/"
+            "placements/{placement_id}",
         ),
         ("LIST_WORKFLOWS", "GET", "/api/workbench/v1/workflows"),
         (
@@ -141,13 +147,14 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
     )
 
     operations = captured["operations"]
-    assert len(operations) == 19
+    assert len(operations) == 20
     assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
     assert any(item.name == "LIST_EMPLOYEES" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_INSTANCE" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_ASSIGNMENT" for item in operations)
+    assert any(item.name == "READ_EMPLOYEE_PLACEMENT" for item in operations)
     assert not any(
         item.name in {"LIST_WORKFLOWS", "READ_WORKFLOW_REVISION"} for item in operations
     )

@@ -17,8 +17,11 @@ from agent_console.digital_employee_definition import (
 )
 from agent_console.execution_domain import ExecutionPersistenceError, ScopeIdentity
 from agent_console.execution_postgres import (
+    AgentInstanceId,
     AssignmentId,
+    AttemptId,
     DigitalEmployeeInstanceId,
+    PlacementId,
 )
 from agent_console.workbench_bff import PREFIX, WorkbenchOperation
 from agent_console.workbench_bff_schemas import (
@@ -26,6 +29,8 @@ from agent_console.workbench_bff_schemas import (
     WorkbenchEmployeeRevision,
     WorkbenchEmployeeSummary,
     WorkbenchPageQuery,
+    WorkbenchPlacement,
+    WorkbenchPlacementQuery,
 )
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
@@ -246,6 +251,36 @@ class DigitalEmployeeOwnerAdapter:
                         "reasonCode": "WORKFLOW_BINDING_NOT_ASSEMBLED",
                     },
                 }
+            if call.operation == "READ_EMPLOYEE_PLACEMENT":
+                decision = self.repository.read_placement_for_workbench(
+                    call.connection,
+                    scope,
+                    DigitalEmployeeInstanceId(call.path["instance_id"]),
+                    AssignmentId(call.path["assignment_id"]),
+                    PlacementId(call.path["placement_id"]),
+                    AttemptId(call.query["attemptId"]),
+                    AgentInstanceId(call.query["agentInstanceId"]),
+                    authorized=True,
+                )
+                if decision is None:
+                    raise DigitalEmployeeError("PLACEMENT_NOT_FOUND")
+                return WorkbenchPlacement(
+                    placementId=str(decision.placement_id),
+                    requestId=str(decision.request_id),
+                    decision=decision.decision.value,
+                    runtimeInstanceId=str(decision.runtime_instance_id),
+                    policyVersion=decision.policy_version,
+                    compatibilityFacts=decision.compatibility_facts,
+                    limitationCodes=decision.limitation_codes,
+                    decidedAt=decision.decided_at,
+                    digest=decision.digest,
+                    binding={
+                        "instanceId": call.path["instance_id"],
+                        "assignmentId": call.path["assignment_id"],
+                        "attemptId": call.query["attemptId"],
+                        "agentInstanceId": call.query["agentInstanceId"],
+                    },
+                ).model_dump(mode="json")
             raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
         except (DigitalEmployeeError, ExecutionPersistenceError) as exc:
             reason = str(exc)
@@ -258,6 +293,8 @@ class DigitalEmployeeOwnerAdapter:
                 reason, status = "INSTANCE_NOT_FOUND", 404
             elif call.operation == "READ_EMPLOYEE_ASSIGNMENT":
                 reason, status = "ASSIGNMENT_NOT_FOUND", 404
+            elif call.operation == "READ_EMPLOYEE_PLACEMENT":
+                reason, status = "PLACEMENT_NOT_FOUND", 404
             else:
                 reason, status = "WORKBENCH_OPERATION_INVALID", 500
             raise WorkbenchOwnerError(reason, status) from exc
@@ -287,6 +324,10 @@ def _instance_read(context, path, payload, query):
 
 def _assignment_read(context, path, payload, query):
     return (ExactGrant("ASSIGNMENT", "READ", f"assignment:{path['assignment_id']}"),)
+
+
+def _placement_read(context, path, payload, query):
+    return (ExactGrant("PLACEMENT", "READ", f"placement:{path['placement_id']}"),)
 
 
 def employee_operations(
@@ -336,6 +377,16 @@ def digital_employee_operations(
             None,
             None,
             _assignment_read,
+            adapter,
+        ),
+        WorkbenchOperation(
+            "READ_EMPLOYEE_PLACEMENT",
+            "GET",
+            f"{PREFIX}/instances/{{instance_id}}/assignments/{{assignment_id}}/"
+            "placements/{placement_id}",
+            None,
+            WorkbenchPlacementQuery,
+            _placement_read,
             adapter,
         ),
     )

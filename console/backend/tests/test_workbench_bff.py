@@ -173,7 +173,7 @@ def build_client():
     )
 
 
-def test_instance_and_assignment_registry_freezes_exact_read_grants() -> None:
+def test_instance_assignment_and_placement_registry_freezes_exact_read_grants() -> None:
     operations = digital_employee_operations(SimpleNamespace())  # type: ignore[arg-type]
 
     assert [(item.name, item.method, item.path) for item in operations] == [
@@ -187,8 +187,14 @@ def test_instance_and_assignment_registry_freezes_exact_read_grants() -> None:
             "GET",
             f"{PREFIX}/instances/{{instance_id}}/assignments/{{assignment_id}}",
         ),
+        (
+            "READ_EMPLOYEE_PLACEMENT",
+            "GET",
+            f"{PREFIX}/instances/{{instance_id}}/assignments/{{assignment_id}}/"
+            "placements/{placement_id}",
+        ),
     ]
-    instance, assignment = operations
+    instance, assignment, placement = operations
     assert tuple(
         instance.grant_builder(
             SessionStub().context,
@@ -208,6 +214,21 @@ def test_instance_and_assignment_registry_freezes_exact_read_grants() -> None:
             {},
         )
     ) == (ExactGrant("ASSIGNMENT", "READ", "assignment:employee-assignment:review"),)
+    assert tuple(
+        placement.grant_builder(
+            SessionStub().context,
+            {
+                "instance_id": "employee-instance:quality",
+                "assignment_id": "employee-assignment:review",
+                "placement_id": "placement:quality",
+            },
+            {},
+            {
+                "attemptId": "attempt:quality",
+                "agentInstanceId": "agent-instance:quality",
+            },
+        )
+    ) == (ExactGrant("PLACEMENT", "READ", "placement:placement:quality"),)
 
 
 def login(client: TestClient) -> None:

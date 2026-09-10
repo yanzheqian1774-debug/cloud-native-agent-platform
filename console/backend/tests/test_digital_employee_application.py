@@ -10,11 +10,19 @@ from agent_console.digital_employee_application import (
     InstanceLifecycle,
     InstanceRecord,
 )
+from agent_console.digital_employee_bootstrap import DigitalEmployeeProductAssembly
 from agent_console.digital_employee_postgres import PostgresDigitalEmployeeRepository
 from agent_console.execution_postgres import (
+    AgentInstanceId,
     AppendDisposition,
     AssignmentId,
+    AttemptId,
     DigitalEmployeeInstanceId,
+    PlacementDecision,
+    PlacementDecisionKind,
+    PlacementId,
+    PlacementRequestId,
+    RuntimeInstanceId,
     ScopeIdentity,
 )
 
@@ -324,3 +332,56 @@ def test_workbench_assignment_read_denies_before_query() -> None:
         )
 
     assert connection.calls == []
+
+
+def test_product_placement_read_reuses_request_match_port(monkeypatch) -> None:
+    placement_id = PlacementId("placement:one")
+    attempt_id = AttemptId("attempt:one")
+    agent_id = AgentInstanceId("agent-instance:one")
+    runtime_id = RuntimeInstanceId("runtime-instance:one")
+    decision = PlacementDecision.create(
+        placement_id=placement_id,
+        request_id=PlacementRequestId("request:one"),
+        decision=PlacementDecisionKind.PLACED,
+        runtime_instance_id=runtime_id,
+        policy_version="policy:v1",
+        compatibility_facts=(),
+        limitation_codes=(),
+        decided_at=NOW,
+    )
+    calls = []
+
+    class Authority:
+        def get(self, scope, actual_placement_id):
+            assert (scope, actual_placement_id) == (SCOPE, placement_id)
+            return decision
+
+    class Repository:
+        authority = Authority()
+
+        def placement_request_matches(
+            self, scope, actual_placement_id, actual_attempt_id, actual_agent_id
+        ):
+            calls.append(
+                (scope, actual_placement_id, actual_attempt_id, actual_agent_id)
+            )
+            return False
+
+        def active_attempts(self, *args, **kwargs):
+            pytest.fail("active-attempt lookup must follow request-match success")
+
+    assembly = object.__new__(DigitalEmployeeProductAssembly)
+    assembly.repository = Repository()
+    monkeypatch.setattr(assembly, "_verify_execution_chain", lambda *args: None)
+
+    with pytest.raises(DigitalEmployeeError, match="PLACEMENT_NOT_FOUND"):
+        assembly.get_placement(
+            SCOPE,
+            "employee-instance:one",
+            "employee-assignment:one",
+            str(placement_id),
+            str(attempt_id),
+            str(agent_id),
+        )
+
+    assert calls == [(SCOPE, placement_id, attempt_id, agent_id)]

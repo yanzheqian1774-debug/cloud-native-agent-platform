@@ -106,3 +106,28 @@ class WorkbenchEmployeeSummary(StrictWorkbenchModel):
 class WorkbenchEmployeePage(StrictWorkbenchModel):
     items: tuple[WorkbenchEmployeeSummary, ...]
     nextCursor: str | None = None
+
+
+class WorkbenchPlacementQuery(StrictWorkbenchModel):
+    attemptId: str = Field(min_length=1, max_length=200)
+    agentInstanceId: str = Field(min_length=1, max_length=200)
+
+
+class WorkbenchPlacementBinding(StrictWorkbenchModel):
+    instanceId: str
+    assignmentId: str
+    attemptId: str
+    agentInstanceId: str
+
+
+class WorkbenchPlacement(StrictWorkbenchModel):
+    placementId: str
+    requestId: str
+    decision: str
+    runtimeInstanceId: str
+    policyVersion: str
+    compatibilityFacts: tuple[str, ...]
+    limitationCodes: tuple[str, ...]
+    decidedAt: datetime
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    binding: WorkbenchPlacementBinding
