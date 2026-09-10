@@ -365,7 +365,7 @@ def test_real_postgres_exact_chain_restart_and_scope_isolation(monkeypatch):
         patch.setattr(
             assembly.repository,
             "placement_request_matches",
-            lambda *_args: False,
+            lambda *_args, **_kwargs: False,
         )
         with pytest.raises(DigitalEmployeeError, match="PLACEMENT_NOT_FOUND"):
             assembly.get_placement(

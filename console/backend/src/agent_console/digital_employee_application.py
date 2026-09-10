@@ -107,6 +107,15 @@ class DigitalEmployeeRepository(Protocol):
         self, scope: ScopeIdentity, instance_id: DigitalEmployeeInstanceId
     ) -> InstanceRecord | None: ...
 
+    def read_instance_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        *,
+        authorized: bool,
+    ) -> InstanceRecord | None: ...
+
     def replace_instance(
         self, value: InstanceRecord, expected_version: int
     ) -> None: ...
@@ -116,6 +125,16 @@ class DigitalEmployeeRepository(Protocol):
     def assignments_for_instance(
         self, scope: ScopeIdentity, instance_id: DigitalEmployeeInstanceId
     ) -> tuple[AssignmentRecord, ...]: ...
+
+    def read_assignment_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        assignment_id: AssignmentId,
+        *,
+        authorized: bool,
+    ) -> AssignmentRecord | None: ...
 
     def decide_placement(
         self,
@@ -139,6 +158,8 @@ class DigitalEmployeeRepository(Protocol):
         scope: ScopeIdentity,
         runtime_id: RuntimeInstanceId,
         agent_id: AgentInstanceId,
+        *,
+        connection: Any | None = None,
     ) -> tuple[AttemptId, ...]: ...
 
     def placement_request_matches(
@@ -147,7 +168,22 @@ class DigitalEmployeeRepository(Protocol):
         placement_id: PlacementId,
         attempt_id: AttemptId,
         agent_id: AgentInstanceId,
+        *,
+        connection: Any | None = None,
     ) -> bool: ...
+
+    def read_placement_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        assignment_id: AssignmentId,
+        placement_id: PlacementId,
+        attempt_id: AttemptId,
+        agent_id: AgentInstanceId,
+        *,
+        authorized: bool,
+    ) -> PlacementDecision | None: ...
 
 
 class DefinitionAuthority(Protocol):

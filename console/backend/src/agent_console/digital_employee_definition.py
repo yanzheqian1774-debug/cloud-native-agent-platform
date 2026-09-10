@@ -8,7 +8,7 @@ import re
 import unicodedata
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Protocol
+from typing import Any, Protocol
 
 from .execution_domain import ScopeIdentity
 
@@ -213,6 +213,24 @@ class EmployeeDefinitionRepository(Protocol):
     ): ...
     def list(self, scope: ScopeIdentity): ...
     def read(self, scope: ScopeIdentity, definition_id: str, revision_id: str): ...
+    def read_revision_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        definition_id: str,
+        revision_id: str,
+        *,
+        authorized: bool,
+    ): ...
+    def list_revisions_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        *,
+        after: tuple[str, str] | None,
+        limit: int,
+        authorized: bool,
+    ): ...
     def decide(
         self,
         scope: ScopeIdentity,

@@ -155,6 +155,7 @@ jobs:
     env:
       BUSINESS_PROBLEM_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/business_problem_entry
       EXECUTION_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/business_problem_entry
+      AUTHORITY_I2_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/business_problem_entry
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -179,6 +180,7 @@ jobs:
             console/backend/tests/test_business_problem_entry_foundation.py \
             console/backend/tests/test_business_problem_domain.py \
             console/backend/tests/test_business_problem_postgres.py \
+            console/backend/tests/test_workbench_authorization_postgres.py \
             | tee "$RUNNER_TEMP/business-problem-entry-pytest.txt"
           if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/business-problem-entry-pytest.txt"; then
             echo "Selected Product and Plan tests must not be skipped" >&2

@@ -10,8 +10,9 @@ import pytest
 from agent_console.authority_configuration import (
     AuthorityRuntimeConfiguration,
     StaticAuthorityLoader,
+    validate_registered_grant,
 )
-from agent_console.authority_contracts import AuthorityError, GrantSource
+from agent_console.authority_contracts import AuthorityError, ExactGrant, GrantSource
 from agent_console.authority_foundation import GovernedExecutionAuthenticatorAdapter
 
 
@@ -133,3 +134,34 @@ def test_existing_service_bearer_verifier_is_preserved_behind_typed_port() -> No
     )
     assert principal.principal_id == "service:runner"
     assert principal.policy_version == "existing-policy"
+
+
+def test_agent_exact_read_and_list_are_registered_without_lifecycle_actions() -> None:
+    for grant in (
+        ExactGrant(
+            "AGENT",
+            "READ",
+            "agent:agent-definition:quality:agent-revision:v1",
+        ),
+        ExactGrant("AGENT", "LIST", "agent:collection"),
+    ):
+        validate_registered_grant(grant, allow_meta=False)
+
+    for action in ("CREATE", "PUBLISH"):
+        with pytest.raises(AuthorityError, match="UNKNOWN_AUTHORITY_OPERATION"):
+            validate_registered_grant(
+                ExactGrant("AGENT", action, "agent:collection"), allow_meta=False
+            )
+
+
+def test_placement_exact_read_is_registered_without_other_actions() -> None:
+    validate_registered_grant(
+        ExactGrant("PLACEMENT", "READ", "placement:placement:quality"),
+        allow_meta=False,
+    )
+    for action in ("CREATE", "LIST"):
+        with pytest.raises(AuthorityError, match="UNKNOWN_AUTHORITY_OPERATION"):
+            validate_registered_grant(
+                ExactGrant("PLACEMENT", action, "placement:collection"),
+                allow_meta=False,
+            )

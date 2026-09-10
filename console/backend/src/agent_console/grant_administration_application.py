@@ -152,6 +152,113 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             recovery_epoch=recovery_epoch,
         )
 
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]:
+        reader = getattr(self.dynamic, "read_linearized_authorization_states", None)
+        if reader is None:
+            if connection is not None:
+                raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+            rows = tuple(
+                self.read_linearized_authorization_state(
+                    context,
+                    grant,
+                    now=now,
+                    generation=generation,
+                    recovery_epoch=recovery_epoch,
+                )
+                for grant in grants
+            )
+            credentials = {credential for credential, _ in rows}
+            if len(credentials) != 1:
+                return None, tuple(state for _, state in rows)
+            return rows[0][0], tuple(state for _, state in rows)
+        return reader(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+
+    def has_current_grants(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[bool, ...]:
+        if (
+            not grants
+            or generation != self.generation.generation
+            or recovery_epoch != self.recovery_epoch
+        ):
+            return tuple(False for _ in grants)
+        credential_id, states = self.read_linearized_authorization_states(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+        credential = (
+            self.generation.credential_by_id(credential_id)
+            if credential_id is not None
+            else None
+        )
+        expected_source = (
+            GrantSource.BROWSER_BOOTSTRAP
+            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
+            else GrantSource.SERVICE_ONLY
+        )
+        credential_current = (
+            credential is not None
+            and credential.scope == context.scope
+            and credential.authentication_source is expected_source
+            and credential.credential_id
+            not in self.generation.credential_revocation_tombstones
+            and now < credential.expires_at
+        )
+        if not credential_current:
+            return tuple(False for _ in grants)
+        return tuple(
+            state
+            not in {
+                DynamicAuthorizationState.REVOKED,
+                DynamicAuthorizationState.UNAVAILABLE,
+            }
+            and (credential.credential_id, grant)
+            not in self.generation.static_grant_revocation_tombstones
+            and (
+                any(
+                    item.grant == grant
+                    and (
+                        item.source is expected_source
+                        or item.source is GrantSource.STATIC_META
+                    )
+                    for item in credential.grants
+                )
+                or state is DynamicAuthorizationState.ALLOWED
+            )
+            for grant, state in zip(grants, states, strict=True)
+        )
+
     def has_current_grant(
         self,
         context: TrustedRequestContext,
@@ -161,56 +268,13 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         generation: int,
         recovery_epoch: int,
     ) -> bool:
-        if (
-            generation != self.generation.generation
-            or recovery_epoch != self.recovery_epoch
-        ):
-            return False
-        credential_id, dynamic_state = self.read_linearized_authorization_state(
+        return self.has_current_grants(
             context,
-            grant,
+            (grant,),
             now=now,
             generation=generation,
             recovery_epoch=recovery_epoch,
-        )
-        credential = (
-            self.generation.credential_by_id(credential_id)
-            if credential_id is not None
-            else None
-        )
-        if credential is None or credential.scope != context.scope:
-            return False
-        expected_source = (
-            GrantSource.BROWSER_BOOTSTRAP
-            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
-            else GrantSource.SERVICE_ONLY
-        )
-        if (
-            credential.authentication_source is not expected_source
-            or credential.credential_id
-            in self.generation.credential_revocation_tombstones
-            or now >= credential.expires_at
-        ):
-            return False
-        if dynamic_state in {
-            DynamicAuthorizationState.REVOKED,
-            DynamicAuthorizationState.UNAVAILABLE,
-        }:
-            return False
-        if (credential.credential_id, grant) in (
-            self.generation.static_grant_revocation_tombstones
-        ):
-            return False
-        static_allowed = any(
-            item.grant == grant
-            and (
-                item.source is expected_source or item.source is GrantSource.STATIC_META
-            )
-            for item in credential.grants
-        )
-        if static_allowed:
-            return True
-        return dynamic_state is DynamicAuthorizationState.ALLOWED
+        )[0]
 
 
 class GrantAdministrationService:

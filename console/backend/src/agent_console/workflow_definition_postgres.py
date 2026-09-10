@@ -213,6 +213,43 @@ class PostgresWorkflowDefinitionRepository:
                 ).fetchall()
             ]
 
+    @staticmethod
+    def _authorize_workbench_read(authorized: bool) -> None:
+        if not authorized:
+            raise WorkflowDefinitionNotFound("WORKFLOW_DEFINITION_NOT_FOUND")
+
+    def list_for_workbench(self, connection, scope, *, authorized):
+        self._authorize_workbench_read(authorized)
+        return [
+            row["definition"]
+            for row in connection.execute(
+                "SELECT record - 'facts' - 'reviews' - 'revisions' AS definition "
+                "FROM workflow_definition.definitions "
+                "WHERE namespace=%s AND security_domain=%s "
+                "ORDER BY workflow_definition_id LIMIT 200",
+                (scope.namespace, scope.security_domain),
+            ).fetchall()
+        ]
+
+    def read_revision_for_workbench(
+        self, connection, scope, resource_id, revision_id, *, authorized
+    ):
+        self._authorize_workbench_read(authorized)
+        row = connection.execute(
+            "SELECT record - 'facts' - 'reviews' - 'revisions' AS definition, "
+            "revision.value AS revision "
+            "FROM workflow_definition.definitions "
+            "CROSS JOIN LATERAL jsonb_array_elements(record -> 'revisions') "
+            "AS revision(value) "
+            "WHERE namespace=%s AND security_domain=%s "
+            "AND workflow_definition_id=%s "
+            "AND revision.value ->> 'revisionId'=%s",
+            (scope.namespace, scope.security_domain, resource_id, revision_id),
+        ).fetchone()
+        if row is None:
+            raise WorkflowDefinitionNotFound("WORKFLOW_REVISION_NOT_FOUND")
+        return {"definition": row["definition"], "revision": row["revision"]}
+
     def create(self, record):
         try:
             with self.pool.connection() as connection, connection.transaction():
