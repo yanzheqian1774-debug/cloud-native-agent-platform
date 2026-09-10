@@ -227,6 +227,57 @@ it was not treated as proof that the stage itself was the root cause. Automatic 
 after an ordinary push must prove both corrected stages and must show Wave 3B reach
 and complete stage 10 before the startup-readiness correction is considered covered.
 
+## Fixed-candidate review corrections (2026-09-10)
+
+The read-only review of source `25a8c26476324af4ce8f9437b1b7f181099f6864`,
+tree `a7edfb33706f1bd6ea01e455b394332d41c624f7`, found three bounded
+correctness gaps. The following ordinary checkpoints close them without rewriting
+the reviewed source or its historical evidence:
+
+- `18dc4ecb8a3968bc7a3bef1bfee3d48b4262e4cf`, tree
+  `60e06d4c2bc699093cf6dbf6cb0ed51fad31663c`: a manual-text successor
+  retains the stable Knowledge, source and document identities and exact predecessor
+  revision, but records `TEXT` and `human-edit:<actor>` as its direct source. It does
+  not copy the predecessor upload's filename, media type, parser version, external
+  reference or chunk locations. The immutable predecessor revision remains unchanged
+  and is the historical derivation link.
+- `86482dfb303507951c7aa725374e834771972f70`, tree
+  `a576d510abe4d786c579e41bfda114a1e9352300`: the selected revision's
+  displayed creation time comes only from that revision's `createdAt`. The aggregate's
+  latest fact time is separately labelled; missing, invalid or zone-less revision
+  timestamps remain explicitly unknown and never fall back to an unrelated fact.
+- `f8810477fc89c0b4bf0206141c1d612eabafe2a1`, tree
+  `02e76404a2299b432e609bcee2c3c85a07f35167`: Playwright installation
+  retries only the complete, closed Google Packages.gz hash-mismatch structure.
+  Incomplete structure, an unknown tail, npm error, process termination, another APT
+  source, mixed failure, or log-write failure exits immediately with the actual
+  installer or logging exit code. The five-minute step budget, three-attempt maximum,
+  30/60-second backoff, locked install command and browser acceptance threshold are
+  unchanged.
+- `eff44ed2492c592f4cfb61340361820273e07732`, tree
+  `04115af0c45f89098dfaf2aabb443ca5c5e94217`: the closed retry
+  signature additionally enforces the exact failure-detail and wrapper order. A
+  reordered or incomplete signature fails without retry rather than being accepted
+  merely because all expected strings occur somewhere in the log.
+
+Focused evidence before the final push: successor lifecycle tests `5 passed`; the
+revision-time route-fixture browser test `1 passed`; frontend ESLint and production
+build passed; install-classification synthetic tests `14 passed`; parser tests
+`7 passed`, including actual Type0/CIDFont PDF bytes with a ToUnicode CMap that
+extract the Chinese text `供应商缺陷报告。`. Each checkpoint completed the normal
+commit hooks. The first local Playwright attempt lacked installed frontend packages,
+and the next lacked the required backend URL; neither discovered or executed the
+target test. Their generated `test-results` metadata is retained and is not acceptance
+evidence.
+
+Run `34426094380` and its `37/37` artifact remain evidence for the older reviewed
+source only. Its log names temporary merge `0268c74`, but the complete historical
+checkout commit and tree remain unavailable and `UNKNOWN`; no current merge ref is
+used to backfill them. A new ordinary CI run must bind the final correction source,
+actual checkout identity and sanitized artifact. Status remains `PARTIAL_DRAFT /
+SESSION_OPEN`; original-file persistence, artificial QA or mixed indexing, and the
+trusted ordinary-browser BFF owned by S5-V023-IMPL-305 remain outside this correction.
+
 ## Risks and compatibility
 
 - Parser resource exhaustion is bounded by byte, archive, count, and time limits.
