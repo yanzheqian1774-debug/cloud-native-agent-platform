@@ -42,11 +42,17 @@ and durable Business Problem assembly are all available:
 | `POST /api/workbench/v1/problems/{id}/plans` | exact `PLAN PREPARE` and prepared `READ`, Problem/set/reference reads | Workflow Control preparation and Problem binding in one UoW |
 | `GET /api/workbench/v1/plans/{id}?version=N` | `PLAN READ plan:{id}:{N}` | owner plan/approval projection |
 | `POST /api/workbench/v1/plans/{id}/approvals` | independent exact `PLAN APPROVE` plus `READ`; owner-discovered Problem/set/reference reads | owner approval append with decision basis |
+| `GET /api/workbench/v1/agents` | `AGENT LIST agent:collection` | one bounded summary per Definition selected by its formal `publishedRevisionId` |
+| `GET /api/workbench/v1/agents/{definition_id}/revisions/{revision_id}` | exact `AGENT READ agent:{definition_id}:{revision_id}` | only the authorized immutable Agent revision and bounded role fields |
+| `GET /api/workbench/v1/employees` | `EMPLOYEE LIST employee:collection` | bounded Employee revision summaries with owner-derived `publicationState` |
 | `GET /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}` | exact `EMPLOYEE READ employee:{definition_id}:{revision_id}` | only the authorized immutable Employee Definition revision and digest |
+| `GET /api/workbench/v1/instances/{instance_id}` | exact `INSTANCE READ instance:{instance_id}` | bounded Instance projection |
+| `GET /api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}` | exact `ASSIGNMENT READ assignment:{assignment_id}` | bounded Assignment projection after parent check |
+| `GET /api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/placements/{placement_id}?attemptId=...&agentInstanceId=...` | exact `PLACEMENT READ placement:{placement_id}` | bounded Placement projection after complete owner parent and active-attempt checks |
 | `GET /api/workbench/v1/workflows` | `WORKFLOW LIST workflow:collection` | minimal Workflow Definition summaries, when the optional Workflow registry is enabled |
 | `GET /api/workbench/v1/workflows/{definition_id}/revisions/{revision_id}` | exact `WORKFLOW READ workflow:{definition_id}:{revision_id}` | only the authorized revision and bounded projections, when the optional Workflow registry is enabled |
 
-All request bodies and the Plan query are strict Pydantic contracts. Incoming
+All request bodies and registered query models are strict Pydantic contracts. Incoming
 authorization, proxy-authorization, principal, tenant, domain, product-read, and
 trusted-context headers are rejected. Host is exact on every request; Origin,
 `Sec-Fetch-Site` when present, and session-bound CSRF are required for unsafe
@@ -80,11 +86,11 @@ snapshot before their protected read. Replay follows the same current checks.
 routes. `workbench_app` remains `None` unless all production settings succeed:
 `WORKBENCH_AUTHORITY_RUNTIME_FILE`, `WORKBENCH_ALLOWED_HOST`, and
 `WORKBENCH_ALLOWED_ORIGIN`; the authority database fingerprint must equal
-`EXECUTION_DATABASE_URL`. Employee Definition exact READ is composed explicitly
-from the already-required Digital Employee assembly and uses that same execution
-database. Workflow Definition reads are an optional registry extension: when
-`WORKFLOW_RUNTIME_DATABASE_URL` is absent, the 13 Business Problem, Criteria, and
-Plan operations plus Employee exact READ remain enabled; when it is present, the
+`EXECUTION_DATABASE_URL`. Agent Definition and Digital Employee reads are composed
+explicitly from their already-required durable assemblies and use the same
+authorization database. Workflow Definition reads are an optional registry
+extension: when `WORKFLOW_RUNTIME_DATABASE_URL` is absent, the mandatory accepted
+registry remains enabled; when it is present, the
 Workflow service must be available and its database fingerprint must equal the
 authority and execution database or startup fails closed. Database credentials
 are never included in the failure reason.
@@ -108,10 +114,10 @@ evidence.
   registering a mock would allow requests without owner fact proof.
 - Workflow Definition LIST and exact-revision READ use the caller-owned connection
   and are registered when their optional same-database dependency is configured.
-  Employee Definition exact-revision READ is registered on the same boundary.
-  Workflow CREATE and all lifecycle mutations, Employee Definition lifecycle
-  mutations, Instance, and Assignment APIs remain unregistered. Existing
-  header-based routes stay private.
+  Agent/Employee Definition exact and list reads plus Instance, Assignment, and
+  Placement exact reads are registered on the same boundary. Workflow CREATE and
+  all lifecycle mutations and Employee Definition lifecycle mutations remain
+  unregistered. Existing header-based routes stay private.
 - Governed Execution START and Skill invocation require their durable
   preparation/dispatch authorization barrier. They are not wrapped as ordinary
   database handlers. Execution read, Resource Use, and Evidence-reference routes
@@ -131,9 +137,10 @@ The default-disabled public BFF does not unlock IMPL-299.
 | Grant requests, decisions, revocation and continuations | `COMPONENT_ONLY / NOT_REGISTERED` | I1 application components exist, but production composition has no formal cross-owner exact-target validator/continuation resolver. |
 | Workflow Definition read | `OPTIONAL / FORMALLY_REGISTERED` | LIST and exact-revision READ use the current authorization transaction when the optional same-database Workflow service is configured; no aggregate history or adjacent revisions are disclosed. |
 | Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, edit, validate, review, publish, and other lifecycle mutations are not in the public registry. |
-| Employee Definition exact revision read | `FORMALLY_REGISTERED` | Exact `EMPLOYEE READ employee:{definition_id}:{revision_id}` uses the current authorization transaction and discloses only the requested revision identity, digest, role, responsibilities, and exact composition members. |
+| Agent Definition read and discovery | `FORMALLY_REGISTERED` | Exact READ and collection LIST are independent; LIST follows only the formal `publishedRevisionId`, and both use bounded DTOs on the authorization transaction. |
+| Employee Definition read and discovery | `FORMALLY_REGISTERED` | Exact READ and collection LIST are independent; revision-scoped `publicationState` is derived from verified owner facts and missing/corrupt facts fail closed. |
 | Employee Definition lifecycle mutation | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, validation, approval, publication, and matching decisions remain private owner operations. |
-| Instance, Assignment and Placement | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | Exact owner facts exist, but their application methods do not accept the BFF caller transaction/trusted-context authority. |
+| Instance, Assignment and Placement | `FORMALLY_REGISTERED` | Each exact read has its own grant. Placement requires only its exact grant but verifies the complete 310 parent chain, request binding, primary Agent identity, Runtime, and active Attempt on the caller transaction. |
 | Governed Execution START and Skill dispatch | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | Dispatch must consume the existing durable preparation/dispatch authorization barrier; the ordinary database owner adapter is not that barrier. |
 | Execution and invocation readback | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | No BFF trusted-context owner port currently couples current authorization to the formal readback. |
 | Resource Use and Evidence reference | `PARTIAL_OWNER_PROJECTION / NOT_REGISTERED` | Some facts are reachable through governed Execution readback, but no accepted standalone BFF owner port exists. Evidence content/dereference remains outside the accepted contract. |
@@ -143,30 +150,30 @@ new public registry. Therefore the matrix is `PARTIAL_DRAFT`: absence from the
 public route set is fail-closed behavior, but it is not delivery of the missing I2
 capabilities.
 
-## PROPOSED Agent Definition authorization gap
+## Historical Agent Definition authorization gap
 
-The closed authority registry currently has no Agent Definition owner entry:
+At the earlier checkpoint the closed authority registry had no Agent Definition owner entry:
 `OWNER_ACTIONS` and `OWNER_RESOURCE_PREFIXES` in
 `console/backend/src/agent_console/authority_configuration.py` contain no `AGENT`
-mapping. Consequently 305 does not register an Agent route, borrow `EMPLOYEE` or
-another owner, or bypass current authorization.
+mapping. The later Human decision in this document accepted the bounded addition,
+and checkpoints `eb0512a` and `9b912f3` now register exact READ and LIST without
+borrowing `EMPLOYEE` or adding lifecycle authority.
 
-IMPL-310 needs a bounded exact-revision read to render the primary Agent member of
+The recorded gap was a bounded exact-revision read to render the primary Agent member of
 an Employee Definition without receiving Agent revision history, reviews, facts,
-or adjacent revision pointers. The minimum additive contract decision is
-**PROPOSED**, not accepted or implemented:
+or adjacent revision pointers. The implemented additive contract is:
 
 - owner/action/resource: `AGENT / READ / agent:{definition_id}:{revision_id}`;
 - owner port: caller-owned connection exact-revision read with digest validation;
 - response: requested Agent revision identity, digest, role content needed by 310,
   and no aggregate history or lifecycle decision collection.
 
-The proposed implementation would affect
+The implementation affects
 `console/backend/src/agent_console/authority_configuration.py`,
 `agent_definition_repository.py`, `agent_definition_postgres.py`,
 `agent_definition_service.py`, a new `workbench_agent.py`, explicit
 `workbench_bootstrap.py`/`app.py` composition, and corresponding focused unit and
-PostgreSQL authorization tests. This is an independent additive contract gap; it
+PostgreSQL authorization tests. This was an independent additive contract gap; it
 does not reopen accepted ARCH-300 and does not block Employee or other already
 registered owner contracts.
 
@@ -178,8 +185,23 @@ registered owner contracts.
 - composition, public/private route inventory, startup dependency, and fail-closed
   tests: 28 passed; targeted Ruff lint and format checks passed;
 - Employee exact READ focused unit/composition batch: 33 passed; targeted Ruff
-  lint and format checks passed. The response excludes scope, facts, publication
-  state, predecessor and adjacent Employee revisions;
+  lint and format checks passed. The response excludes scope, facts, predecessor
+  and adjacent Employee revisions;
+- accepted-decision checkpoint `8b0ac52` records all six Human dispositions and
+  constraints without reopening ARCH-300;
+- batch A checkpoint `eb0512a`: Agent exact READ plus Employee exact
+  `publicationState`; focused unit/composition 26 passed, related lifecycle 15
+  passed and 2 skipped, and dedicated PostgreSQL authorization cases 4 passed;
+- batch B checkpoint `9b912f3`: Agent/Employee LIST and signed keyset pagination;
+  focused unit/composition 40 passed and dedicated PostgreSQL authorization cases
+  4 passed. Agent selection uses the formal `publishedRevisionId`, so no residual
+  revision-selection semantic gap was found;
+- batch C checkpoint `3c3e51c`: Placement exact READ and the fixed 310
+  `placement_request_matches` port; focused unit/composition 45 passed and
+  dedicated PostgreSQL Placement authorization cases 2 passed. The historical
+  310 end-to-end test did not reach Placement because its unchanged Agent
+  migration exceeded the fixed 5-second statement timeout in both the existing
+  and fresh isolated database; no timeout or retry was added;
 - dedicated PostgreSQL 15 Employee increment: 2 passed, 8 deselected. Exact
   revision/digest read used the current authorization connection; grant and
   session revocation each denied the next request before the protected owner
@@ -483,10 +505,18 @@ The accepted first implementation boundary is limited to:
    one caller-owned connection, and grant/session revocation with zero owner query
    after revocation wins.
 
+All six accepted decision rows above are implemented in checkpoints `eb0512a`,
+`9b912f3`, and `3c3e51c`. The formal Agent owner rule was sufficient: LIST uses
+the aggregate's verified `publishedRevisionId` and never infers `latest` or chooses
+the first revision. Remaining 305 matrix items are the separately gated grant
+administration/continuation HTTP surface, governed Execution and Skill dispatch,
+Execution/invocation readback, standalone Resource Use/Evidence reference reads,
+frontend consumption, I3/deployment isolation, and complete 299 acceptance.
+
 That batch does not authorize lifecycle operations, migrations unless separately
 required and approved, frontend rewiring, I3/deployment proof, merge, or release.
 
-These bounded additions are now `HUMAN_CONFIRMED` but remain implementation work
-until their respective checkpoints pass. Delivery remains
+These bounded additions are `HUMAN_CONFIRMED` and their implementation checkpoints
+have passed the evidence stated above. Delivery remains
 `PARTIAL_DRAFT / SESSION_OPEN`; Draft PR #164 must not be made Ready, merged, or
 deployed by this addendum.
