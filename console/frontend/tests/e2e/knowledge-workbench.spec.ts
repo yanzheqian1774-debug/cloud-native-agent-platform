@@ -409,7 +409,7 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
 
 // Transport fixtures isolate frontend race/error behavior; the journey above proves real services.
 async function installUiFixtures(page: import("@playwright/test").Page) {
-  const resource=(id:string)=>({knowledgeId:id,name:`知识包 ${id}`,aggregateVersion:1,lifecycleState:"AVAILABLE",archived:false,currentDraftRevisionId:null,publishedRevisionId:`revision:${id}`,activeIndexSnapshotId:`snapshot:${id}`,revisions:[{revisionId:`revision:${id}`,state:"PUBLISHED",digest:`digest:${id}`,content:{name:id,source:{sourceId:`source:${id}`,kind:"TEXT",provenance:"human:278"},documents:[]}}],ingestionJobs:[],indexSnapshots:[],retrievals:[],purge:null,limitations:[]});
+  const resource=(id:string)=>({knowledgeId:id,name:`知识包 ${id}`,aggregateVersion:3,lifecycleState:"AVAILABLE",archived:false,currentDraftRevisionId:null,publishedRevisionId:`revision:${id}`,activeIndexSnapshotId:`snapshot:${id}`,revisions:[{revisionId:`revision:${id}:old`,state:"PUBLISHED",digest:`digest:${id}:old`,createdAt:"2026-09-08T01:02:03Z",content:{name:id,source:{sourceId:`source:${id}`,kind:"TEXT",provenance:"human:278"},documents:[]}},{revisionId:`revision:${id}:ambiguous`,state:"PUBLISHED",digest:`digest:${id}:ambiguous`,createdAt:"2026-09-09T01:02:03",content:{name:id,source:{sourceId:`source:${id}`,kind:"TEXT",provenance:"human:278"},documents:[]}},{revisionId:`revision:${id}`,state:"PUBLISHED",digest:`digest:${id}`,content:{name:id,source:{sourceId:`source:${id}`,kind:"TEXT",provenance:"human:278"},documents:[]}}],facts:[{factId:`fact:${id}`,event:"LATER_AGGREGATE_EVENT",recordedAt:"2026-09-10T04:05:06Z"}],ingestionJobs:[],indexSnapshots:[],retrievals:[],purge:null,limitations:[]});
   await page.route("**/api/internal/v0.2.2/knowledge**",async route=>{
     const path=new URL(route.request().url()).pathname;
     if(path.endsWith("/operations/dashboard"))return route.fulfill({json:{authorizedKnowledgeCount:2,activeSnapshotCount:2,authority:"UI_TEST_FIXTURE"}});
@@ -419,6 +419,18 @@ async function installUiFixtures(page: import("@playwright/test").Page) {
     return route.fulfill({json:{knowledge:resource(id),technicalProjection:{knowledgeId:id},productProjection:{knowledgeId:id}}});
   });
 }
+
+test("shows revision creation time independently from later aggregate activity",async({page})=>{
+  await installUiFixtures(page);
+  await page.goto("/knowledge?resourceId=b&revisionId=revision%3Ab%3Aold");
+  await page.getByText("原始时间与技术摘要",{exact:true}).click();
+  await expect(page.getByText("修订 createdAt：2026-09-08T01:02:03Z",{exact:true})).toBeVisible();
+  await expect(page.getByText("聚合最近活动：2026-09-10T04:05:06Z",{exact:true})).toBeVisible();
+  await page.getByLabel("查看修订").selectOption("revision:b:ambiguous");
+  await expect(page.getByText("时间含义不明确",{exact:true})).toBeVisible();
+  await page.getByLabel("查看修订").selectOption("revision:b");
+  await expect(page.getByText("未记录",{exact:true}).first()).toBeVisible();
+});
 
 test("isolates late retrieval responses and preserves filter and exact revision context",async({page})=>{
   await installUiFixtures(page);
