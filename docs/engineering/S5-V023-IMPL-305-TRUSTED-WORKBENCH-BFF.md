@@ -210,10 +210,11 @@ in force; this increment does not make the Draft PR ready, merge, or deploy it.
 
 ## Contract addendum for fixed IMPL-310 candidate
 
-This addendum is a bounded recommendation for the fixed IMPL-310 candidate
-`4ef9ee40b4fb099d93823e3aa98c801e90c2087c`. It records gaps only. Nothing here
-authorizes a production route, registry change, lifecycle change, merge, or
-deployment.
+This addendum records the bounded Human decision for the fixed IMPL-310 candidate
+`4ef9ee40b4fb099d93823e3aa98c801e90c2087c`. The six dispositions below are
+`HUMAN_CONFIRMED` for implementation in this Session. They do not authorize a
+lifecycle change, frontend change, Ready transition, merge, deployment, release,
+or acceptance of IMPL-299, IMPL-310, or IMPL-305 as a whole.
 
 ### ARCH-300 status calibration
 
@@ -236,9 +237,9 @@ status used here remains `PARTIAL_DRAFT / SESSION_OPEN`, not `Not Started` and n
 
 The accepted ARCH-300 candidate contains no `AGENT` or `PLACEMENT` authorization
 owner row and does not freeze the pagination or `publicationState` fields below.
-Every such addition is independently **PROPOSED / NOT_REGISTERED /
-NOT_IMPLEMENTED** and requires a new Human decision; accepting ARCH-300 does not
-accept these additions automatically.
+The later Human decision recorded by this addendum independently accepts those
+bounded additions with the constraints below; it does not reopen or rewrite
+ARCH-300.
 
 ### Placement exact READ
 
@@ -458,16 +459,16 @@ accept these additions automatically.
 
 ### Human decision and first implementation boundary
 
-| Human decision | Exact contract | Existing or new | If accepted | If not accepted |
-| --- | --- | --- | --- | --- |
-| Placement exact read | `PLACEMENT / READ / placement:{placement_id}`; typed route, verified four-ID binding, bounded DTO, uniform 404 | New owner/action/resource and response contract | Implement one trusted exact Placement projection; separate Instance/Assignment reads retain their own existing grants | Placement remains private/not browser-trusted; existing Instance/Assignment BFF reads are unchanged |
-| Optional multi-grant Placement policy | additionally require existing `INSTANCE / READ / instance:{instance_id}` and `ASSIGNMENT / READ / assignment:{assignment_id}` on the Placement operation | New policy requirement; not recommended by current evidence | Revoking any member hides Placement; 310 must obtain and retain all three grants | Recommended single Placement grant remains, while separately reading parents still requires their existing grants |
-| Agent exact read | `AGENT / READ / agent:{definition_id}:{revision_id}` and the bounded single-revision response above | New owner/action/resource and route | 310 can verify the exact primary Agent without aggregate/history disclosure | Agent detail remains unavailable through the trusted BFF |
-| Agent discovery list | `AGENT / LIST / agent:collection`; candidate page contract `50/200`, `definitionId` keyset, no total | New owner/action/resource, route, summary, and page parameters | 310 can discover bounded current published Agent candidates; object detail remains independently authorized | Primary Agent discovery remains private/unavailable even if a known exact Agent may later be readable |
-| Employee discovery list | existing `EMPLOYEE / LIST / employee:collection`; candidate Employee route, summary, and `50/200` composite-key page contract | Grant vocabulary exists; BFF owner port, route, summary, and page parameters are new | 310 gains a trusted revision directory without full object READ or counts | Exact known Employee READ remains available; trusted Employee enumeration does not |
-| Employee publication field | revision-scoped `publicationState: PUBLISHED \| NOT_PUBLISHED` derived from latest applicable owner fact | New bounded response field, using existing owner facts | 310 can label the specified revision's current publication state without fact history or adjacent IDs | Publication stays unavailable on the trusted surface and must not be inferred |
+| Human decision | Disposition | Exact contract | Mandatory constraint |
+| --- | --- | --- | --- |
+| Placement exact read | `ACCEPTED_WITH_CONSTRAINTS` | `PLACEMENT / READ / placement:{placement_id}`; typed route, verified four-ID binding, bounded DTO, uniform 404 | Use only the Placement grant for this operation; retain complete owner parent-chain, scope, Decision-to-Request-to-Attempt/Agent-Instance, and Runtime active-attempt checks. Separate related-object detail reads retain independent authorization. `compatibilityFacts` uses an explicit field allowlist and `digest` follows the formal owner definition. |
+| Optional multi-grant Placement policy | `NOT_ADOPTED_FOR_FIRST_BATCH` | Do not additionally require `INSTANCE / READ / instance:{instance_id}` or `ASSIGNMENT / READ / assignment:{assignment_id}` on Placement READ | This does not grant either parent detail read and does not weaken the mandatory owner relationship checks. |
+| Agent exact read | `ACCEPTED_WITH_CONSTRAINTS` | `AGENT / READ / agent:{definition_id}:{revision_id}` and the bounded single-revision response above | Return only the authorized immutable revision and the explicitly listed fields. |
+| Agent discovery list | `ACCEPTED_WITH_CONSTRAINTS` | `AGENT / LIST / agent:collection`; page contract `50/200`, `definitionId` keyset, no total | Select each Definition's revision by an explicit formal owner rule; never choose the first row or implicitly follow `latest`. If the current owner rule is insufficient, record that one semantic gap and continue the other implementable work. LIST does not imply object READ. |
+| Employee discovery list | `ACCEPTED_WITH_CONSTRAINTS` | existing `EMPLOYEE / LIST / employee:collection`; bounded summary and `50/200` composite-key page contract | Bind the opaque cursor to trusted scope and query conditions, enforce input validation, return only `items/nextCursor`, and disclose no total. LIST does not imply object READ. |
+| Employee publication field | `ACCEPTED_WITH_CONSTRAINTS` | revision-scoped `publicationState: PUBLISHED \| NOT_PUBLISHED` derived from formal owner facts | Missing or corrupt source is an error, not `NOT_PUBLISHED`; the field implies neither matchability, runtime state, nor authorization validity. |
 
-After those decisions are accepted, the first implementation batch is limited to:
+The accepted first implementation boundary is limited to:
 
 1. freeze only the accepted additions in `authority_configuration.py` and focused
    registry-validation tests;
@@ -485,8 +486,7 @@ After those decisions are accepted, the first implementation batch is limited to
 That batch does not authorize lifecycle operations, migrations unless separately
 required and approved, frontend rewiring, I3/deployment proof, merge, or release.
 
-These four gaps are intentionally additive. Until Human acceptance freezes the
-new `AGENT` and `PLACEMENT` vocabulary and the bounded publication/list fields,
-they remain `PROPOSED / NOT_REGISTERED / NOT_IMPLEMENTED`. Delivery remains
+These bounded additions are now `HUMAN_CONFIRMED` but remain implementation work
+until their respective checkpoints pass. Delivery remains
 `PARTIAL_DRAFT / SESSION_OPEN`; Draft PR #164 must not be made Ready, merged, or
 deployed by this addendum.
