@@ -100,16 +100,16 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   await page.setViewportSize({width:390,height:844});
   });
   await test.step("WORKFLOW_RUNTIME_07G_SEARCH_FOCUS",async()=>{
-  const catalogTab = page.getByRole("tab", {name:"工作流目录"});
+  const catalogTab = page.getByRole("tab", {name:"工作流目录", exact:true});
   await expect(catalogTab).toBeVisible();
   await catalogTab.focus();
   await expect(catalogTab).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(catalogTab).toHaveAttribute("aria-selected", "true");
-  const catalog = page.getByLabel("Workflow 列表");
+  const catalog = page.getByLabel("Workflow 列表", {exact:true});
   await expect(catalog).toBeVisible();
   await expect(catalog.locator(".workflow-catalog__item.selected")).toContainText("Supplier Quality Response");
-  const search = page.getByLabel("搜索 Workflow Definition");
+  const search = page.getByLabel("搜索 Workflow Definition", {exact:true});
   await expect(search).toBeVisible();
   await search.focus();
   await expect(search).toBeFocused();

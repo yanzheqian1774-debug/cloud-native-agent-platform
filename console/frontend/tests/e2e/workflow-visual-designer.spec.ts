@@ -101,6 +101,24 @@ test("requires an explicit decision before switching away from unsaved authoring
   await expect(page.getByRole("tab",{name:"流程设计"})).toHaveAttribute("aria-selected","true");
 });
 
+test("restores the selected Workflow before reaching mobile catalog search by keyboard",async({page})=>{
+  const workflowId="workflow:mobile-reload";
+  const projection={definition:{workflowDefinitionId:workflowId,name:"Reloaded Mobile Workflow",aggregateVersion:1,lifecycleState:"DRAFT",currentDraftRevisionId:"workflow-revision:mobile-reload",publishedRevisionId:null,revisions:[{revisionId:"workflow-revision:mobile-reload",predecessorRevisionId:null,state:"DRAFT",digest:digest("7"),content:{description:"Mobile reload selection",inputs:[],outputs:[],runtimeProfile:{kind:"RUNTIME_PROFILE",resourceId:"runtime:mobile",revisionId:"runtime-revision:mobile"},tasks:[{taskId:"one",name:"One",dependsOn:[],inputs:[],outputs:[],capabilityRequirements:[],references:[],retryLimit:0,timeoutSeconds:300,failurePolicy:"FAIL_WORKFLOW"}]},createdAt:"2026-09-10T00:00:00Z"}],reviews:[],relationships:[],consumers:[]},productProjection:{},technicalProjection:{}};
+  await page.route("**/api/internal/v0.2.2/resources/skill",route=>route.fulfill({contentType:"application/json",body:"[]"}));
+  await page.route("**/api/internal/v0.2.2/workflow-definitions**",route=>route.fulfill({contentType:"application/json",body:JSON.stringify(new URL(route.request().url()).pathname.endsWith("/workflow-definitions")?[projection]:projection)}));
+  await page.goto(`/workflow-definitions?resourceId=${encodeURIComponent(workflowId)}`);
+  await expect(page.getByRole("heading",{name:"Reloaded Mobile Workflow",exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading",{name:"Reloaded Mobile Workflow",exact:true})).toBeVisible();
+  await page.setViewportSize({width:390,height:844});
+  const catalogTab=page.getByRole("tab",{name:"工作流目录",exact:true});
+  await expect(catalogTab).toHaveCount(1);await expect(catalogTab).toBeVisible();await catalogTab.focus();await expect(catalogTab).toBeFocused();await page.keyboard.press("Enter");await expect(catalogTab).toHaveAttribute("aria-selected","true");
+  const catalog=page.getByLabel("Workflow 列表",{exact:true});
+  await expect(catalog).toBeVisible();
+  await expect(catalog.locator(".workflow-catalog__item.selected")).toContainText("Reloaded Mobile Workflow");
+  const search=page.getByLabel("搜索 Workflow Definition",{exact:true});await expect(search).toHaveCount(1);await expect(search).toBeVisible();await search.focus();await expect(search).toBeFocused();
+});
+
 test("shows local graph issues and keeps invalid legacy dependency editable",async({page})=>{
   const content={description:"Invalid legacy graph",inputs:[],outputs:[],runtimeProfile:{kind:"RUNTIME_PROFILE",resourceId:"runtime:1",revisionId:"runtime-revision:1"},tasks:[{taskId:"one",name:"One",dependsOn:["one","missing","missing"],inputs:[],outputs:[],capabilityRequirements:[],references:[],retryLimit:0,timeoutSeconds:300,failurePolicy:"FAIL_WORKFLOW"}]};
   const projection={definition:{workflowDefinitionId:"workflow-definition:invalid",name:"Invalid Workflow",aggregateVersion:1,lifecycleState:"DRAFT",currentDraftRevisionId:"workflow-revision:1",publishedRevisionId:null,revisions:[{revisionId:"workflow-revision:1",predecessorRevisionId:null,state:"DRAFT",digest:digest("f"),content,createdAt:"2026-09-09T00:00:00Z"}],reviews:[],relationships:[],consumers:[]},productProjection:{},technicalProjection:{}};
