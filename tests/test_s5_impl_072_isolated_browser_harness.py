@@ -725,6 +725,59 @@ def test_unified_source_uses_exact_static_top_level_steps_without_retry_controls
     assert "waitForTimeout(" not in source
 
 
+def workflow_runtime_publish_step_report(failed_index: int):
+    report = summary_report("timedOut")
+    report["suites"][0]["file"] = "workflow-runtime-workbench.spec.ts"
+    report["suites"][0]["specs"][0]["title"] = (
+        "publishes a Runtime Profile then a governed Workflow through real Workbenches"
+    )
+    steps = [
+        {"title": title, "duration": index + 1}
+        for index, title in enumerate(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    ]
+    steps[failed_index]["error"] = {"message": "PRIVATE_DYNAMIC_FAILURE"}
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result.update(duration=60_000, steps=steps[: failed_index + 1])
+    return report
+
+
+def test_workflow_runtime_publish_source_uses_exact_static_top_level_steps():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/workflow-runtime-workbench.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'await test\.step\("(WORKFLOW_RUNTIME_[A-Z0-9_]+)"', source)
+    assert titles == list(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    assert "test.setTimeout(" not in source[: source.index('test("shows controlled')]
+
+
+@pytest.mark.parametrize("failed_index", range(7))
+def test_workflow_runtime_publish_steps_reach_failure_summary(failed_index):
+    summary = make_summary(workflow_runtime_publish_step_report(failed_index))
+    diagnostic = summary["stepDiagnostic"]
+    expected = list(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    assert diagnostic["failedStep"]["stepId"] == expected[failed_index]
+    assert diagnostic["lastCompletedStep"] == (
+        None
+        if failed_index == 0
+        else {
+            "routeKey": harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS[
+                expected[failed_index - 1]
+            ][0],
+            "viewportKey": harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS[
+                expected[failed_index - 1]
+            ][1],
+            "stepId": expected[failed_index - 1],
+            "actionClass": harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS[
+                expected[failed_index - 1]
+            ][2],
+            "elapsedMs": failed_index,
+        }
+    )
+    assert diagnostic["completedStepCount"] == failed_index
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
 def append_failed_report(target, source):
     target["suites"].extend(source["suites"])
     target["stats"]["unexpected"] += source["stats"]["unexpected"]

@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import { restartOwnedBackend } from "../harness/ownedBackend";
 
 test("publishes a Runtime Profile then a governed Workflow through real Workbenches", async ({ page }) => {
+  let runtimeId="",runtimeRevisionId="";
+  let workflow:{definition:{workflowDefinitionId:string;aggregateVersion:number}};
+  await test.step("WORKFLOW_RUNTIME_01_RESOURCE_PREPARATION",async()=>{
   await page.setViewportSize({width:1440,height:900});
   await page.goto("/runtime-profiles");
   await expect(page.getByRole("heading", { name: "运行配置中心", exact: true })).toBeVisible();
@@ -24,14 +27,16 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
     return response.json();
   });
   const published = profiles.find((item: { profile: { lifecycleState: string } }) => item.profile.lifecycleState === "PUBLISHED");
-  const runtimeId = published.profile.runtimeProfileId;
-  const runtimeRevisionId = published.profile.publishedRevisionId;
+  runtimeId = published.profile.runtimeProfileId;
+  runtimeRevisionId = published.profile.publishedRevisionId;
   await page.getByRole("button", { name: "Create Runtime successor" }).click();
   await page.getByRole("button", { name: "编辑当前 Profile Draft" }).click();
   await page.getByLabel("CPU request").fill("350m");
   await page.getByRole("button", { name: "保存 Runtime Profile Draft" }).click();
   await expect(page.getByText("350m → 500m")).toBeVisible();
+  });
 
+  await test.step("WORKFLOW_RUNTIME_02_WORKFLOW_CREATE",async()=>{
   await page.goto("/workflow-definitions");
   await expect(page.getByRole("heading", { name: "工作流中心", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "新建 Workflow Definition" }).click();
@@ -42,18 +47,26 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   await page.getByLabel("步骤 ID", { exact: true }).fill("analyze");
   await page.getByLabel("名称", { exact: true }).fill("Analyze supplier quality");
   await expect(page.getByLabel("Workflow Builder")).toContainText("Workflow Definition 编写器");
+  });
+  await test.step("WORKFLOW_RUNTIME_03_WORKFLOW_SAVE",async()=>{
   await page.getByRole("button", { name: "Save governed Workflow draft" }).click();
   await expect(page.getByRole("heading", { name: "Canonical DAG" })).toBeVisible();
+  });
+  await test.step("WORKFLOW_RUNTIME_04_WORKFLOW_VALIDATE",async()=>{
   await page.getByRole("button", { name: "Validate DAG and references" }).click();
+  });
+  await test.step("WORKFLOW_RUNTIME_05_WORKFLOW_PUBLISH",async()=>{
   await page.getByRole("button", { name: "Review exact Workflow digest" }).click();
   await page.getByRole("button", { name: "Publish immutable Workflow" }).click();
   await expect(page.locator(".module-layout > section").getByText("PUBLISHED", { exact: true }).first()).toBeVisible();
   await expect(page.getByLabel("Workflow Technical projection")).toContainText("publishedRevisionId");
   await expect(page.getByText("0 relationships · 0 consumers")).toBeVisible();
-  const workflow = await page.evaluate(async () => {
+  workflow = await page.evaluate(async () => {
     const values = await (await fetch("/api/internal/v0.2.2/workflow-definitions")).json();
     return values.find((item: {definition:{name:string}}) => item.definition.name === "Supplier Quality Response");
   });
+  });
+  await test.step("WORKFLOW_RUNTIME_06_SUCCESSOR_EDIT_SAVE",async()=>{
   await page.evaluate(async ({id,version}:{id:string;version:number}) => {
     await fetch(`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(id)}/successors`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedVersion:version})});
   }, {id:workflow.definition.workflowDefinitionId,version:workflow.definition.aggregateVersion});
@@ -65,6 +78,8 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   await page.getByLabel("用途说明").fill("Edited Workflow Definition after explicit CAS recovery");
   await page.getByRole("button", { name: "Save governed Workflow draft" }).click();
   await expect(page.getByText("Edited Workflow Definition after explicit CAS recovery")).toBeVisible();
+  });
+  await test.step("WORKFLOW_RUNTIME_07_RESTART_READBACK",async()=>{
   await restartOwnedBackend();
   await page.reload();
   await expect(page.getByRole("heading", {name:"Supplier Quality Response", exact:true})).toBeVisible();
@@ -76,6 +91,7 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   await page.getByLabel("搜索 Workflow Definition").focus();
   await expect(page.getByLabel("搜索 Workflow Definition")).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  });
 });
 
 test("shows controlled empty and validation failure states", async ({ page }) => {

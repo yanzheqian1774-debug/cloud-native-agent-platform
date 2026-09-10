@@ -1365,6 +1365,31 @@ UNIFIED_PRODUCT_STEP_IDS = {
     "UNIFIED_07_EMPLOYEE_MANAGEMENT": ("EMPLOYEES", "DESKTOP", "IDENTITY_CHECK"),
     "UNIFIED_08_RESTART_READBACK": ("EMPLOYEES", "DESKTOP", "RESTART_READINESS"),
 }
+WORKFLOW_RUNTIME_PUBLISH_STEP_IDS = {
+    "WORKFLOW_RUNTIME_01_RESOURCE_PREPARATION": (
+        "RUNTIMES",
+        "DESKTOP",
+        "RESOURCE_PREPARATION",
+    ),
+    "WORKFLOW_RUNTIME_02_WORKFLOW_CREATE": ("WORKFLOWS", "DESKTOP", "CREATE"),
+    "WORKFLOW_RUNTIME_03_WORKFLOW_SAVE": ("WORKFLOWS", "DESKTOP", "SAVE"),
+    "WORKFLOW_RUNTIME_04_WORKFLOW_VALIDATE": (
+        "WORKFLOWS",
+        "DESKTOP",
+        "VALIDATE",
+    ),
+    "WORKFLOW_RUNTIME_05_WORKFLOW_PUBLISH": ("WORKFLOWS", "DESKTOP", "PUBLISH"),
+    "WORKFLOW_RUNTIME_06_SUCCESSOR_EDIT_SAVE": (
+        "WORKFLOWS",
+        "DESKTOP",
+        "SUCCESSOR_EDIT_SAVE",
+    ),
+    "WORKFLOW_RUNTIME_07_RESTART_READBACK": (
+        "WORKFLOWS",
+        "DESKTOP_TO_MOBILE",
+        "RESTART_READBACK",
+    ),
+}
 DIAGNOSTIC_STEP_IDS = {
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
@@ -1375,6 +1400,7 @@ DIAGNOSTIC_STEP_IDS = {
         for step_id, route, viewport, action in WAVE_3B_STEP_IDS.values()
     },
     **UNIFIED_PRODUCT_STEP_IDS,
+    **WORKFLOW_RUNTIME_PUBLISH_STEP_IDS,
 }
 ACTION_CLASSES = frozenset(
     {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
@@ -1395,6 +1421,9 @@ def _step_identity(scenario: str, title: object):
     if scenario == "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY":
         identity = UNIFIED_PRODUCT_STEP_IDS.get(title)
         return (title, *identity) if identity is not None else None
+    if scenario == "WORKFLOW_RUNTIME_PUBLISH_GOVERNED_WORKFLOW":
+        identity = WORKFLOW_RUNTIME_PUBLISH_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     return None
 
 
@@ -1411,6 +1440,7 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
+        "WORKFLOW_RUNTIME_PUBLISH_GOVERNED_WORKFLOW",
     }:
         return None
     steps = result.get("steps")
