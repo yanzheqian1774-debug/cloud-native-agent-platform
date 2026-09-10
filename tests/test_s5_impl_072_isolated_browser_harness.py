@@ -748,10 +748,22 @@ def test_workflow_runtime_publish_source_uses_exact_static_top_level_steps():
     ).read_text(encoding="utf-8")
     titles = re.findall(r'await test\.step\("(WORKFLOW_RUNTIME_[A-Z0-9_]+)"', source)
     assert titles == list(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    assert titles[6:] == [
+        "WORKFLOW_RUNTIME_07A_BACKEND_RESTART",
+        "WORKFLOW_RUNTIME_07B_PAGE_RELOAD",
+        "WORKFLOW_RUNTIME_07C_TITLE_RESTORE",
+        "WORKFLOW_RUNTIME_07D_WORKFLOW_READBACK",
+        "WORKFLOW_RUNTIME_07E_RUNTIME_PROFILE_READBACK",
+        "WORKFLOW_RUNTIME_07F_MOBILE_VIEWPORT",
+        "WORKFLOW_RUNTIME_07G_SEARCH_FOCUS",
+        "WORKFLOW_RUNTIME_07H_HORIZONTAL_OVERFLOW",
+    ]
     assert "test.setTimeout(" not in source[: source.index('test("shows controlled')]
 
 
-@pytest.mark.parametrize("failed_index", range(7))
+@pytest.mark.parametrize(
+    "failed_index", range(len(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS))
+)
 def test_workflow_runtime_publish_steps_reach_failure_summary(failed_index):
     summary = make_summary(workflow_runtime_publish_step_report(failed_index))
     diagnostic = summary["stepDiagnostic"]

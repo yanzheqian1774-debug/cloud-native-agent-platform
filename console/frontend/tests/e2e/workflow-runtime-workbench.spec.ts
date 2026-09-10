@@ -79,17 +79,31 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   await page.getByRole("button", { name: "Save governed Workflow draft" }).click();
   await expect(page.getByText("Edited Workflow Definition after explicit CAS recovery")).toBeVisible();
   });
-  await test.step("WORKFLOW_RUNTIME_07_RESTART_READBACK",async()=>{
+  await test.step("WORKFLOW_RUNTIME_07A_BACKEND_RESTART",async()=>{
   await restartOwnedBackend();
+  });
+  await test.step("WORKFLOW_RUNTIME_07B_PAGE_RELOAD",async()=>{
   await page.reload();
+  });
+  await test.step("WORKFLOW_RUNTIME_07C_TITLE_RESTORE",async()=>{
   await expect(page.getByRole("heading", {name:"Supplier Quality Response", exact:true})).toBeVisible();
+  });
+  await test.step("WORKFLOW_RUNTIME_07D_WORKFLOW_READBACK",async()=>{
   const recovered = await page.evaluate(async (id:string) => (await fetch(`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(id)}`)).json(), workflow.definition.workflowDefinitionId);
   expect(recovered.definition.revisions.at(-1).content.description).toBe("Edited Workflow Definition after explicit CAS recovery");
+  });
+  await test.step("WORKFLOW_RUNTIME_07E_RUNTIME_PROFILE_READBACK",async()=>{
   const recoveredProfile = await page.evaluate(async (id:string) => (await fetch(`/api/internal/v0.2.2/runtime-profiles/${encodeURIComponent(id)}`)).json(), runtimeId);
   expect(recoveredProfile.profile.revisions.at(-1).content.resources.cpuRequest).toBe("350m");
+  });
+  await test.step("WORKFLOW_RUNTIME_07F_MOBILE_VIEWPORT",async()=>{
   await page.setViewportSize({width:390,height:844});
+  });
+  await test.step("WORKFLOW_RUNTIME_07G_SEARCH_FOCUS",async()=>{
   await page.getByLabel("搜索 Workflow Definition").focus();
   await expect(page.getByLabel("搜索 Workflow Definition")).toBeFocused();
+  });
+  await test.step("WORKFLOW_RUNTIME_07H_HORIZONTAL_OVERFLOW",async()=>{
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   });
 });
