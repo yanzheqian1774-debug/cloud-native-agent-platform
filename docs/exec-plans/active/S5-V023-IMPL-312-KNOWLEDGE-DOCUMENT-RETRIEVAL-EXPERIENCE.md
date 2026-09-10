@@ -288,6 +288,37 @@ actual checkout identity and sanitized artifact. Status remains `PARTIAL_DRAFT /
 SESSION_OPEN`; original-file persistence, artificial QA or mixed indexing, and the
 trusted ordinary-browser BFF owned by S5-V023-IMPL-305 remain outside this correction.
 
+## Human acceptance record (2026-09-10)
+
+Human accepted the bounded batch at source
+`f667a6b02f54890368cb07a9e527df17b3f007d6`, tree
+`fe97b31f7c82e564c65d841d40ef25f7b29e6bfe`. The accepted scope is the Knowledge
+management experience in this batch together with the manual-successor provenance,
+historical-revision time and Playwright installation-classification corrections. The
+later documentation commit that records this decision is not a replacement candidate
+and does not change the accepted source or tree identity.
+
+Evidence remains tiered rather than collapsed into one claim:
+
+- Real candidate-bound CI run `34435027133` completed its quality, frontend and browser
+  jobs, and sanitized artifact `10135906618` reports 38 selected, executed and passed,
+  with zero failed, skipped or flaky tests. The suite contains both real-service and
+  mocked scenarios; the count does not make every scenario real-service evidence.
+- The real Knowledge lifecycle browser journey covers the upload, publish, manual
+  successor, new revision and new chunk path. The successful CI installation was the
+  normal first-attempt path, not a real APT retry.
+- Backend lifecycle and Chinese-PDF parser checks are unit evidence. The PDF fixture
+  contains valid Chinese PDF bytes; it is not ordinary-browser upload evidence.
+- Historical revision-time rendering is mock-backed browser-page evidence.
+- The 22 installation-classification cases are synthetic subprocess evidence for the
+  allowed retry grammar, failure closure, exit-code propagation, log-write failure,
+  attempt cap and backoff; they are not a claim that CI observed a real APT retry.
+
+Acceptance does not close S5-V023-IMPL-312. Original-file persistence, artificial
+question answering, mixed indexing, and trusted ordinary-browser wiring owned by
+S5-V023-IMPL-305 remain unfinished obligations. The task remains `PARTIAL_DRAFT /
+SESSION_OPEN`; the PR remains Draft and is not Ready, merged or deployed.
+
 ## Risks and compatibility
 
 - Parser resource exhaustion is bounded by byte, archive, count, and time limits.
