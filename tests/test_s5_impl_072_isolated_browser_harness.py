@@ -73,6 +73,27 @@ def summary_report(status="failed", *, known=True):
     }
 
 
+def failure_detail_report(count=4):
+    report = summary_report()
+    mappings = list(harness_module.FIRST_FAILURE_ASSERTION_IDS)
+    report["suites"] = []
+    report["stats"]["unexpected"] = count
+    for index in range(count):
+        name, title = mappings[index % len(mappings)]
+        item = summary_report()
+        suite = item["suites"][0]
+        suite["file"] = name
+        suite["specs"][0]["title"] = title
+        result = suite["specs"][0]["tests"][0]["results"][0]
+        result["errors"][0]["message"] = (
+            "PRIVATE_MESSAGE expect(locator) token=PRIVATE_CREDENTIAL"
+        )
+        result["errors"][0]["stack"] = "PRIVATE_STACK"
+        result["requestBody"] = "PRIVATE_REQUEST_BODY"
+        report["suites"].append(suite)
+    return report
+
+
 def make_summary(report, restart_count=0):
     raw = json.dumps(report).encode()
     failure = harness_module.sanitized_first_failure_record(
@@ -184,6 +205,159 @@ def test_summary_malformed_output_is_fixed_gap(monkeypatch, capsys):
     )
 
 
+def test_failure_details_preserve_four_failures_in_report_order():
+    report = failure_detail_report()
+    details = harness_module.build_failure_details(json.dumps(report).encode())
+    expected = list(harness_module.FIRST_FAILURE_ASSERTION_IDS.values())[:4]
+
+    assert details == {
+        "schemaVersion": 1,
+        "diagnosticState": "COMPLETE",
+        "orderSemantics": "REPORT_ORDER",
+        "failureCount": 4,
+        "emittedCount": 4,
+        "truncated": False,
+        "failures": details["failures"],
+    }
+    assert [item["reportIndex"] for item in details["failures"]] == [1, 2, 3, 4]
+    assert [item["scenarioId"] for item in details["failures"]] == expected
+    encoded = harness_module.encode_failure_details(details)
+    assert "PRIVATE" not in encoded
+    assert "locator" not in encoded
+
+
+def test_failure_details_are_bounded_and_marked_truncated():
+    details = harness_module.build_failure_details(
+        json.dumps(
+            failure_detail_report(harness_module.MAX_FAILURE_DETAILS + 2)
+        ).encode()
+    )
+
+    assert details["failureCount"] == harness_module.MAX_FAILURE_DETAILS + 2
+    assert details["emittedCount"] == harness_module.MAX_FAILURE_DETAILS
+    assert details["truncated"] is True
+    assert len(details["failures"]) == harness_module.MAX_FAILURE_DETAILS
+    assert (
+        len(
+            (
+                harness_module.FAILURE_DETAIL_PREFIX
+                + harness_module.encode_failure_details(details)
+            ).encode()
+        )
+        <= 16_384
+    )
+
+
+def test_failure_details_missing_fields_fail_closed():
+    report = {"suites": [{"specs": [{"tests": [{"status": "unexpected"}]}]}]}
+    details = harness_module.build_failure_details(json.dumps(report).encode())
+
+    assert details["diagnosticState"] == "PARTIAL"
+    assert details["failureCount"] == "UNKNOWN"
+    assert details["emittedCount"] == 1
+    assert details["failures"][0] == {
+        "reportIndex": 1,
+        "scenarioId": "UNKNOWN",
+        "spec": "UNKNOWN",
+        "sourceLine": "UNKNOWN",
+        "harnessPhase": "BROWSER_COMMAND",
+        "resultStatus": "UNKNOWN",
+        "failureCategory": "UNKNOWN",
+        "failureSubtype": "UNKNOWN",
+        "navigationAction": "UNKNOWN",
+        "navigationTarget": "UNKNOWN",
+        "browserError": "UNKNOWN",
+        "httpStatusCategory": "UNKNOWN",
+        "httpStatusSourceClass": "NO_STRUCTURED_HTTP_STATUS",
+    }
+
+
+def test_failure_details_allowlist_navigation_and_redact_dynamic_values():
+    report = failure_detail_report(2)
+    first = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    first["errors"][0]["message"] = (
+        "page.goto: net::ERR_CONNECTION_REFUSED at "
+        "https://console.test/knowledge?resourceId=PRIVATE_ID&token=PRIVATE_TOKEN"
+    )
+    second = report["suites"][1]["specs"][0]["tests"][0]["results"][0]
+    second["errors"][0]["message"] = (
+        "page.goBack: https://console.test/api/internal/v0.2.1/problems/"
+        "problem:PRIVATE_ID?credential=PRIVATE_CREDENTIAL"
+    )
+    second["structuredHttpStatus"] = 503
+
+    details = harness_module.build_failure_details(json.dumps(report).encode())
+    static, dynamic = details["failures"]
+    assert static["navigationAction"] == "PAGE_GOTO"
+    assert static["navigationTarget"] == "/knowledge"
+    assert static["browserError"] == "net::ERR_CONNECTION_REFUSED"
+    assert dynamic["navigationAction"] == "PAGE_GO_BACK"
+    assert dynamic["navigationTarget"] == ("/api/internal/v0.2.1/problems/{problemId}")
+    assert dynamic["httpStatusCategory"] == "HTTP_5XX"
+    assert dynamic["httpStatusSourceClass"] == "STRUCTURED_RESPONSE_STATUS"
+    encoded = harness_module.encode_failure_details(details)
+    assert "PRIVATE" not in encoded
+    assert "credential" not in encoded
+    assert "?" not in encoded
+
+
+def test_failure_details_invalid_json_emits_fixed_gap(capsys):
+    harness_module.emit_failure_details(b"not-json PRIVATE_CREDENTIAL")
+
+    output = capsys.readouterr().err
+    assert output.startswith(harness_module.FAILURE_DETAIL_PREFIX)
+    details = json.loads(output.removeprefix(harness_module.FAILURE_DETAIL_PREFIX))
+    assert details["diagnosticState"] == "DIAGNOSTIC_GAP"
+    assert details["failureCount"] == "UNKNOWN"
+    assert details["failures"] == []
+    assert "PRIVATE" not in output
+
+
+def test_failure_details_invalid_http_status_is_unknown_not_fatal():
+    report = failure_detail_report(1)
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["structuredHttpStatus"] = "PRIVATE_STATUS"
+
+    details = harness_module.build_failure_details(json.dumps(report).encode())
+    failure = details["failures"][0]
+    assert failure["failureCategory"] == "BROWSER_ASSERTION"
+    assert failure["httpStatusCategory"] == "UNKNOWN"
+    assert failure["httpStatusSourceClass"] == "NOT_RETAINED"
+    assert "PRIVATE" not in harness_module.encode_failure_details(details)
+
+
+def test_failure_details_recognize_static_workflow_specs_without_index_guessing():
+    mappings = {
+        key: value
+        for key, value in harness_module.FAILURE_DETAIL_ASSERTION_IDS.items()
+        if key not in harness_module.FIRST_FAILURE_ASSERTION_IDS
+    }
+    assert len(mappings) == 11
+    for (name, title), scenario in mappings.items():
+        report = summary_report()
+        suite = report["suites"][0]
+        suite["file"] = name
+        suite["specs"][0]["title"] = title
+        details = harness_module.build_failure_details(json.dumps(report).encode())
+        failure = details["failures"][0]
+        assert failure["scenarioId"] == scenario
+        assert failure["spec"] == f"console/frontend/tests/e2e/{name}"
+        assert failure["sourceLine"] == 42
+
+
+def test_goto_context_does_not_prove_navigation_failure():
+    report = failure_detail_report(1)
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["errors"][0]["message"] = "page.goto: expect(locator).toBeVisible()"
+
+    failure = harness_module.build_failure_details(json.dumps(report).encode())[
+        "failures"
+    ][0]
+    assert failure["navigationAction"] == "PAGE_GOTO"
+    assert failure["failureCategory"] == "BROWSER_ASSERTION"
+    assert failure["failureSubtype"] == "SELECTOR_STATE_MISMATCH"
+
+
 @pytest.mark.parametrize("returncode", [0, 1, 7])
 @pytest.mark.parametrize("broken_summary", [False, True])
 @pytest.mark.parametrize("gate_failure", [None, "scan", "immutable"])
@@ -268,6 +442,11 @@ def test_summary_main_preserves_exit_and_cleanup(
         return original(*a)
 
     monkeypatch.setattr(harness_module, "build_failure_summary", build)
+
+    def fail_details(_stdout):
+        raise ValueError("PRIVATE_DIAGNOSTIC_FAILURE")
+
+    monkeypatch.setattr(harness_module, "build_failure_details", fail_details)
     if gate_failure == "scan":
 
         def fail_scan(paths):
@@ -544,6 +723,71 @@ def test_unified_source_uses_exact_static_top_level_steps_without_retry_controls
     assert "test.slow(" not in source
     assert "test.fixme(" not in source
     assert "waitForTimeout(" not in source
+
+
+def workflow_runtime_publish_step_report(failed_index: int):
+    report = summary_report("timedOut")
+    report["suites"][0]["file"] = "workflow-runtime-workbench.spec.ts"
+    report["suites"][0]["specs"][0]["title"] = (
+        "publishes a Runtime Profile then a governed Workflow through real Workbenches"
+    )
+    steps = [
+        {"title": title, "duration": index + 1}
+        for index, title in enumerate(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    ]
+    steps[failed_index]["error"] = {"message": "PRIVATE_DYNAMIC_FAILURE"}
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result.update(duration=60_000, steps=steps[: failed_index + 1])
+    return report
+
+
+def test_workflow_runtime_publish_source_uses_exact_static_top_level_steps():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/workflow-runtime-workbench.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'await test\.step\("(WORKFLOW_RUNTIME_[A-Z0-9_]+)"', source)
+    assert titles == list(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    assert titles[6:] == [
+        "WORKFLOW_RUNTIME_07A_BACKEND_RESTART",
+        "WORKFLOW_RUNTIME_07B_PAGE_RELOAD",
+        "WORKFLOW_RUNTIME_07C_TITLE_RESTORE",
+        "WORKFLOW_RUNTIME_07D_WORKFLOW_READBACK",
+        "WORKFLOW_RUNTIME_07E_RUNTIME_PROFILE_READBACK",
+        "WORKFLOW_RUNTIME_07F_MOBILE_VIEWPORT",
+        "WORKFLOW_RUNTIME_07G_SEARCH_FOCUS",
+        "WORKFLOW_RUNTIME_07H_HORIZONTAL_OVERFLOW",
+    ]
+    assert "test.setTimeout(" not in source[: source.index('test("shows controlled')]
+
+
+@pytest.mark.parametrize(
+    "failed_index", range(len(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS))
+)
+def test_workflow_runtime_publish_steps_reach_failure_summary(failed_index):
+    summary = make_summary(workflow_runtime_publish_step_report(failed_index))
+    diagnostic = summary["stepDiagnostic"]
+    expected = list(harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS)
+    assert diagnostic["failedStep"]["stepId"] == expected[failed_index]
+    assert diagnostic["lastCompletedStep"] == (
+        None
+        if failed_index == 0
+        else {
+            "routeKey": harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS[
+                expected[failed_index - 1]
+            ][0],
+            "viewportKey": harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS[
+                expected[failed_index - 1]
+            ][1],
+            "stepId": expected[failed_index - 1],
+            "actionClass": harness_module.WORKFLOW_RUNTIME_PUBLISH_STEP_IDS[
+                expected[failed_index - 1]
+            ][2],
+            "elapsedMs": failed_index,
+        }
+    )
+    assert diagnostic["completedStepCount"] == failed_index
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
 
 
 def append_failed_report(target, source):
@@ -1134,9 +1378,9 @@ def test_first_failure_is_stable_and_deterministic_without_raw_message() -> None
         ),
         (
             "page.goto navigation failed",
-            "BROWSER_NAVIGATION_ERROR",
-            "NAVIGATION_ERROR",
-            "NONE",
+            "BROWSER_ASSERTION",
+            "APPLICATION_STATE_MISMATCH",
+            "UNKNOWN",
         ),
         (
             "unknown opaque exception",
