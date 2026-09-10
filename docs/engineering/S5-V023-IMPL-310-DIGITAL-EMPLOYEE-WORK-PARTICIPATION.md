@@ -166,3 +166,44 @@ and content authorization, complete work history, Business Outcome closure,
 Digital Employee lifecycle writes, I3/deployment isolation, Human acceptance,
 and release acceptance remain incomplete. Draft PR #165 remains Draft; this
 checkpoint does not authorize Ready, merge, deployment, or task closure.
+
+## Validation-integrity continuation — 2026-09-10
+
+The failed CI run at source `7ea2f719a4f911c92fc884394d8d175454f7fc50`
+proves only that `UNIFIED_07_EMPLOYEE_MANAGEMENT` ended in a browser timeout. It
+does not contain the HTTP response or failed locator needed to prove a root cause.
+The missing formal session is a source-supported inference: the legacy harness
+does not log in, while the current page uses only the session-authenticated
+Workbench BFF. This distinction remains explicit.
+
+The legacy unified journey now treats its private post-restart read as backend
+PostgreSQL persistence evidence only. Its no-session browser visit must fail
+closed, clear protected details, and emit no `/api/internal/` fallback request.
+The journey still executes the existing create, validate, approve, and publish
+commands; those private lifecycle commands are not reclassified as trusted
+browser writes.
+
+The dedicated real-service journey uses the formal HTTPS login and session
+cookie, current PostgreSQL grants, transactional Workbench owner handlers, and
+an exact task-scoped control listener. It verifies authorized Employee and Agent
+reads, `PUBLISHED` state, exact revision and digest, all six composition member
+tuples, Employee and Agent pagination, LIST-versus-READ separation, Instance /
+Assignment / Placement recovery, wrong Assignment / Attempt / Agent Instance
+parent hiding, grant revocation, logout, wrong scope, wrong exact grant, absence
+of browser identity headers, and absence of private API fallback. Fixture
+creation and publication seed real PostgreSQL state through domain services; it
+is test setup, not evidence that browser lifecycle writes exist.
+
+After explicit path coordination with IMPL-311, the task owns the independent
+`.github/workflows/s5-v023-impl-310-real-workbench.yml` gate. The gate checks out
+the exact PR head, provisions a job-exclusive PostgreSQL database, builds the
+frontend, starts only localhost HTTPS/control listeners, generates and masks
+one-run credentials, disables Playwright trace/screenshot/video output, requires
+exactly one executed test with zero skips, and uploads only a bounded JSON
+summary. Raw Playwright JSON, server logs, session material, credentials and
+control tokens are neither printed nor uploaded.
+
+This gate does not close Digital Employee lifecycle browser writes, generalized
+execution/Runtime/observation reads, Resource Use, Evidence, Business Outcome,
+complete work history, I3/deployment isolation, Human acceptance, or release
+acceptance. Ordinary CI success cannot substitute for this dedicated gate.

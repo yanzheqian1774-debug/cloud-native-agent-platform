@@ -112,7 +112,10 @@ def publish_agent(service: AgentDefinitionService, name: str) -> dict:
 
 
 def publish_employee(
-    store, member: dict, definition_id: str, role: str
+    store,
+    members: tuple[CompositionMember, ...],
+    definition_id: str,
+    role: str,
 ) -> EmployeeRevision:
     revision = EmployeeRevision(
         SCOPE,
@@ -120,14 +123,7 @@ def publish_employee(
         PRIMARY_EMPLOYEE_REVISION,
         role,
         ("Review supplier quality work",),
-        (
-            CompositionMember(
-                MemberKind.AGENT,
-                member["definitionId"],
-                member["revisionId"],
-                member["digest"],
-            ),
-        ),
+        members,
     )
     service = EmployeeDefinitionService(store, Authorized())
     current = service.create(
@@ -280,10 +276,12 @@ def seed_execution_chain(assembly, agent: dict, now: datetime) -> None:
         )
 
 
-def credential(name: str, raw: str, tenant: str = "tenant-a") -> dict:
+def credential(name: str, digest: str, tenant: str = "tenant-a") -> dict:
+    if len(digest) != 64 or any(value not in "0123456789abcdef" for value in digest):
+        raise ValueError("CREDENTIAL_DIGEST_INVALID")
     return {
         "credentialId": f"credential-{name}",
-        "credentialSha256": hashlib.sha256(raw.encode()).hexdigest(),
+        "credentialSha256": digest,
         "principalId": f"human:{name}",
         "tenantId": tenant,
         "securityDomain": "quality",
@@ -301,7 +299,7 @@ def credential(name: str, raw: str, tenant: str = "tenant-a") -> dict:
 
 
 def write_authority(
-    runtime_dir: Path, database_url: str
+    runtime_dir: Path, database_url: str, credential_digests: dict[str, str]
 ) -> AuthorityRuntimeConfiguration:
     document = {
         "schemaVersion": "static-authority-generation.v1",
@@ -309,10 +307,10 @@ def write_authority(
         "policyVersion": "policy-310",
         "auditSource": "s5-v023-impl-310-real-browser",
         "credentials": [
-            credential("alice", "310-full-browser-credential"),
-            credential("lister", "310-list-browser-credential"),
-            credential("wrongscope", "310-wrong-scope-credential", "tenant-b"),
-            credential("wronggrant", "310-wrong-grant-credential"),
+            credential("alice", credential_digests["full"]),
+            credential("lister", credential_digests["list"]),
+            credential("wrongscope", credential_digests["wrong_scope"], "tenant-b"),
+            credential("wronggrant", credential_digests["wrong_grant"]),
         ],
         "requestability": [],
         "credentialRevocationTombstones": [],
@@ -481,6 +479,44 @@ def build_fixture(args, runtime: AuthorityRuntimeConfiguration):
     agents = AgentDefinitionService(agent_repository)
     primary_agent = publish_agent(agents, "Quality analysis Agent")
     publish_agent(agents, "Second page Agent")
+    primary_members = (
+        CompositionMember(
+            MemberKind.AGENT,
+            primary_agent["definitionId"],
+            primary_agent["revisionId"],
+            primary_agent["digest"],
+        ),
+        CompositionMember(
+            MemberKind.SKILL,
+            "skill:quality-review",
+            "skill-revision:1",
+            f"sha256:{'1' * 64}",
+        ),
+        CompositionMember(
+            MemberKind.MCP,
+            "mcp:quality-evidence",
+            "mcp-revision:1",
+            f"sha256:{'2' * 64}",
+        ),
+        CompositionMember(
+            MemberKind.KNOWLEDGE,
+            "knowledge:quality-procedure",
+            "knowledge-revision:1",
+            f"sha256:{'3' * 64}",
+        ),
+        CompositionMember(
+            MemberKind.WORKFLOW,
+            "workflow:quality-review",
+            "workflow-revision:1",
+            f"sha256:{'4' * 64}",
+        ),
+        CompositionMember(
+            MemberKind.RUNTIME_PROFILE,
+            "runtime-profile:quality",
+            "runtime-profile-revision:1",
+            f"sha256:{'5' * 64}",
+        ),
+    )
     assembly = build_digital_employee_assembly(
         args.database_url,
         agents,
@@ -488,13 +524,13 @@ def build_fixture(args, runtime: AuthorityRuntimeConfiguration):
     )
     publish_employee(
         assembly.employee_definitions,
-        primary_agent,
+        primary_members,
         PRIMARY_EMPLOYEE,
         "Supplier quality owner",
     )
     publish_employee(
         assembly.employee_definitions,
-        primary_agent,
+        (primary_members[0],),
         "employee-definition:second",
         "Second page employee",
     )
@@ -532,10 +568,26 @@ def main() -> None:
     parser.add_argument("--control-port", required=True, type=int)
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
-    parser.add_argument("--control-token", required=True)
+    parser.add_argument("--control-token-file", required=True, type=Path)
+    parser.add_argument("--full-credential-sha256", required=True)
+    parser.add_argument("--list-credential-sha256", required=True)
+    parser.add_argument("--wrong-scope-credential-sha256", required=True)
+    parser.add_argument("--wrong-grant-credential-sha256", required=True)
     args = parser.parse_args()
     args.runtime_dir.mkdir(parents=True, exist_ok=True)
-    runtime = write_authority(args.runtime_dir, args.database_url)
+    control_token = args.control_token_file.read_text().strip()
+    if not control_token:
+        raise ValueError("CONTROL_TOKEN_INVALID")
+    runtime = write_authority(
+        args.runtime_dir,
+        args.database_url,
+        {
+            "full": args.full_credential_sha256,
+            "list": args.list_credential_sha256,
+            "wrong_scope": args.wrong_scope_credential_sha256,
+            "wrong_grant": args.wrong_grant_credential_sha256,
+        },
+    )
     (args.runtime_dir / "runtime.json").write_text(
         json.dumps(
             {
@@ -560,7 +612,7 @@ def main() -> None:
 
     @control.post("/revoke-placement")
     def revoke_placement(x_control_token: str = Header(default="")):
-        if x_control_token != args.control_token:
+        if x_control_token != control_token:
             raise HTTPException(status_code=404)
         composition.foundation.repository.revoke_grant(
             PLACEMENT_GRANT_ID,

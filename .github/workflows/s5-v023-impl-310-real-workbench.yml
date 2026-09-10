@@ -1,0 +1,238 @@
+name: S5 IMPL 310 Real Workbench
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/s5-v023-impl-310-real-workbench.yml"
+      - "console/backend/**"
+      - "console/frontend/**"
+      - "scripts/acceptance/s5_v023_impl_310_browser_summary.py"
+      - "scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s5-v023-impl-310-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-workbench:
+    name: PostgreSQL HTTPS Workbench Acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: s5_v023_impl_310
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d s5_v023_impl_310"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PYTHONPATH: conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync backend dependencies
+        run: uv sync --frozen
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+
+      - name: Install frontend and Chromium
+        working-directory: console/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        id: build
+        continue-on-error: true
+        working-directory: console/frontend
+        run: npm run build
+
+      - name: Lint frontend
+        id: eslint
+        continue-on-error: true
+        working-directory: console/frontend
+        run: npm run lint
+
+      - name: Discover the exact real scenario
+        id: discovery
+        continue-on-error: true
+        working-directory: console/frontend
+        env:
+          S5_310_WORKBENCH_URL: https://127.0.0.1:18443
+          S5_310_CONTROL_URL: http://127.0.0.1:18444
+          S5_310_CONTROL_TOKEN: discovery-only
+          S5_310_FULL_CREDENTIAL: discovery-only
+          S5_310_LIST_CREDENTIAL: discovery-only
+          S5_310_WRONG_SCOPE_CREDENTIAL: discovery-only
+          S5_310_WRONG_GRANT_CREDENTIAL: discovery-only
+        run: >-
+          npx playwright test
+          --config playwright.real-workbench.config.ts
+          tests/e2e/digital-employee-work-participation.real.spec.ts
+          --list --workers=1 --retries=0 --forbid-only
+
+      - name: Check fixture and bounded summary
+        id: python_check
+        continue-on-error: true
+        run: |
+          uv run ruff check \
+            console/backend/tests/s5_v023_impl_310_real_browser_server.py \
+            scripts/acceptance/s5_v023_impl_310_browser_summary.py \
+            scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py
+          uv run ruff format --check \
+            console/backend/tests/s5_v023_impl_310_real_browser_server.py \
+            scripts/acceptance/s5_v023_impl_310_browser_summary.py \
+            scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py
+          uv run pytest -q \
+            scripts/acceptance/tests/test_s5_v023_impl_310_browser_summary.py \
+            console/frontend/tests/test_s5_v023_impl_310_digital_employee_work.py
+
+      - name: Run PostgreSQL HTTPS Workbench scenario
+        id: real
+        if: steps.build.outcome == 'success' && steps.eslint.outcome == 'success' && steps.discovery.outcome == 'success' && steps.python_check.outcome == 'success'
+        continue-on-error: true
+        env:
+          S5_310_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_impl_310
+        run: |
+          set -euo pipefail
+          runtime_dir="$RUNNER_TEMP/s5-v023-impl-310-runtime"
+          cert_path="$RUNNER_TEMP/s5-v023-impl-310.crt"
+          key_path="$RUNNER_TEMP/s5-v023-impl-310.key"
+          token_path="$RUNNER_TEMP/s5-v023-impl-310-control-token"
+          server_log="$RUNNER_TEMP/s5-v023-impl-310-server.log"
+          stderr_log="$RUNNER_TEMP/s5-v023-impl-310-playwright.stderr"
+          raw_report="$RUNNER_TEMP/s5-v023-impl-310-playwright.json"
+          server_pid=""
+          cleanup() {
+            if [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; then
+              kill "$server_pid" 2>/dev/null || true
+              wait "$server_pid" 2>/dev/null || true
+            fi
+            rm -f "$token_path" "$server_log" "$stderr_log" "$cert_path" "$key_path"
+            rm -rf "$runtime_dir"
+          }
+          trap cleanup EXIT INT TERM
+
+          full_credential="$(openssl rand -hex 32)"
+          list_credential="$(openssl rand -hex 32)"
+          wrong_scope_credential="$(openssl rand -hex 32)"
+          wrong_grant_credential="$(openssl rand -hex 32)"
+          control_token="$(openssl rand -hex 32)"
+          for secret in "$full_credential" "$list_credential" "$wrong_scope_credential" "$wrong_grant_credential" "$control_token"; do
+            echo "::add-mask::$secret"
+          done
+          printf '%s' "$control_token" > "$token_path"
+          chmod 600 "$token_path"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$key_path" -out "$cert_path" -subj "/CN=127.0.0.1" \
+            -addext "subjectAltName=IP:127.0.0.1" >/dev/null 2>&1
+
+          digest() { printf '%s' "$1" | sha256sum | cut -d ' ' -f 1; }
+          uv run python console/backend/tests/s5_v023_impl_310_real_browser_server.py \
+            --database-url "$S5_310_DATABASE_URL" \
+            --runtime-dir "$runtime_dir" \
+            --dist console/frontend/dist \
+            --public-port 18443 \
+            --control-port 18444 \
+            --cert "$cert_path" \
+            --key "$key_path" \
+            --control-token-file "$token_path" \
+            --full-credential-sha256 "$(digest "$full_credential")" \
+            --list-credential-sha256 "$(digest "$list_credential")" \
+            --wrong-scope-credential-sha256 "$(digest "$wrong_scope_credential")" \
+            --wrong-grant-credential-sha256 "$(digest "$wrong_grant_credential")" \
+            >"$server_log" 2>&1 &
+          server_pid=$!
+
+          ready=false
+          for _ in $(seq 1 60); do
+            if curl --insecure --fail --silent https://127.0.0.1:18443/api/workbench/v1/login >/dev/null; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" = true
+
+          set +e
+          (
+            cd console/frontend
+            S5_310_WORKBENCH_URL=https://127.0.0.1:18443 \
+            S5_310_CONTROL_URL=http://127.0.0.1:18444 \
+            S5_310_CONTROL_TOKEN="$control_token" \
+            S5_310_FULL_CREDENTIAL="$full_credential" \
+            S5_310_LIST_CREDENTIAL="$list_credential" \
+            S5_310_WRONG_SCOPE_CREDENTIAL="$wrong_scope_credential" \
+            S5_310_WRONG_GRANT_CREDENTIAL="$wrong_grant_credential" \
+            npx playwright test \
+              --config playwright.real-workbench.config.ts \
+              tests/e2e/digital-employee-work-participation.real.spec.ts \
+              --workers=1 --retries=0 --forbid-only --reporter=json \
+              >"$raw_report" 2>"$stderr_log"
+          )
+          browser_status=$?
+          set -e
+          exit "$browser_status"
+
+      - name: Emit bounded acceptance evidence
+        id: summary
+        if: always()
+        continue-on-error: true
+        run: |
+          set +e
+          python3 scripts/acceptance/s5_v023_impl_310_browser_summary.py \
+            --report "$RUNNER_TEMP/s5-v023-impl-310-playwright.json" \
+            --commit-sha "$(git rev-parse HEAD)" \
+            --tree-sha "$(git rev-parse 'HEAD^{tree}')" \
+            --execution-outcome "${{ steps.real.outcome }}" \
+            --static-stage "build=${{ steps.build.outcome }}" \
+            --static-stage "eslint=${{ steps.eslint.outcome }}" \
+            --static-stage "discovery=${{ steps.discovery.outcome }}" \
+            --static-stage "python-check=${{ steps.python_check.outcome }}" \
+            --output "$RUNNER_TEMP/s5-v023-impl-310-browser-evidence.json"
+          summary_status=$?
+          rm -f "$RUNNER_TEMP/s5-v023-impl-310-playwright.json"
+          exit "$summary_status"
+
+      - name: Upload bounded acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5-v023-impl-310-browser-evidence
+          path: ${{ runner.temp }}/s5-v023-impl-310-browser-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce acceptance result
+        if: always()
+        run: test "${{ steps.summary.outcome }}" = success

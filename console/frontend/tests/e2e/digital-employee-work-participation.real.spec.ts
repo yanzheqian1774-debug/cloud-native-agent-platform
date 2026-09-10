@@ -1,11 +1,35 @@
 import { expect, request, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-const baseURL = process.env.S5_310_WORKBENCH_URL ?? "";
-const controlURL = process.env.S5_310_CONTROL_URL ?? "";
-const controlToken = process.env.S5_310_CONTROL_TOKEN ?? "";
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name}_REQUIRED`);
+  return value;
+}
 
-async function login(browser: Browser, credential: string): Promise<{ context: BrowserContext; page: Page }> {
+const baseURL = required("S5_310_WORKBENCH_URL");
+const controlURL = required("S5_310_CONTROL_URL");
+const controlToken = required("S5_310_CONTROL_TOKEN");
+const credentials = {
+  full: required("S5_310_FULL_CREDENTIAL"),
+  list: required("S5_310_LIST_CREDENTIAL"),
+  wrongScope: required("S5_310_WRONG_SCOPE_CREDENTIAL"),
+  wrongGrant: required("S5_310_WRONG_GRANT_CREDENTIAL"),
+};
+
+type BrowserObservations = { identityHeaders: string[]; privateRequests: string[] };
+
+async function login(
+  browser: Browser,
+  credential: string,
+  observations: BrowserObservations,
+): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  context.on("request", value => {
+    const headers = value.headers();
+    for (const name of ["x-principal-id", "x-tenant-id", "x-security-domain"])
+      if (headers[name]) observations.identityHeaders.push(name);
+    if (new URL(value.url()).pathname.startsWith("/api/internal/")) observations.privateRequests.push(value.url());
+  });
   const page = await context.newPage();
   await page.goto(`${baseURL}/api/workbench/v1/login`);
   await page.locator('input[name="bootstrapCredential"]').fill(credential);
@@ -24,19 +48,64 @@ async function browserFetch(page: Page, path: string) {
 }
 
 test("REAL_SERVICE trusted Digital Employee reads preserve authorization and identity", async ({ browser }) => {
-  test.skip(!baseURL || !controlURL || !controlToken, "310 real Workbench fixture is not configured");
-  const full = await login(browser, "310-full-browser-credential");
-  const identityHeaders: string[] = [];
-  full.page.on("request", value => {
-    const headers = value.headers();
-    for (const name of ["x-principal-id", "x-tenant-id", "x-security-domain"])
-      if (headers[name]) identityHeaders.push(name);
-  });
+  const observations: BrowserObservations = { identityHeaders: [], privateRequests: [] };
+  const full = await login(browser, credentials.full, observations);
 
   await full.page.goto(`${baseURL}/digital-employees`);
   await expect(full.page.getByRole("button", { name: /Supplier quality owner/ })).toBeVisible();
   await full.page.getByRole("button", { name: /Supplier quality owner/ }).click();
   await expect(full.page.getByText("Quality analysis Agent", { exact: true })).toBeVisible();
+  const employee = await browserFetch(
+    full.page,
+    "/api/workbench/v1/employees/employee-definition%3Aquality/revisions/employee-revision%3A1",
+  );
+  expect(employee.status).toBe(200);
+  expect(employee.body.result).toMatchObject({
+    employeeDefinitionId: "employee-definition:quality",
+    employeeDefinitionRevisionId: "employee-revision:1",
+    publicationState: "PUBLISHED",
+  });
+  expect(employee.body.result.employeeDefinitionDigest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
+  expect(employee.body.result.members.map((value: { kind: string }) => value.kind).sort()).toEqual([
+    "AGENT",
+    "KNOWLEDGE",
+    "MCP",
+    "RUNTIME_PROFILE",
+    "SKILL",
+    "WORKFLOW",
+  ]);
+  for (const member of employee.body.result.members) {
+    expect(member.resourceId).toBeTruthy();
+    expect(member.revisionId).toBeTruthy();
+    expect(member.digest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
+  }
+  const agentMember = employee.body.result.members.find((value: { kind: string }) => value.kind === "AGENT");
+  expect(agentMember).toMatchObject({ kind: "AGENT" });
+  expect(agentMember.revisionId).toBeTruthy();
+  expect(agentMember.digest).toMatch(/^(?:sha256:)?[a-f0-9]{64}$/);
+  const agent = await browserFetch(
+    full.page,
+    `/api/workbench/v1/agents/${encodeURIComponent(agentMember.resourceId)}/revisions/${encodeURIComponent(agentMember.revisionId)}`,
+  );
+  expect(agent).toMatchObject({
+    status: 200,
+    body: { result: {
+      definitionId: agentMember.resourceId,
+      revisionId: agentMember.revisionId,
+      digest: agentMember.digest,
+      name: "Quality analysis Agent",
+    } },
+  });
+  const employeeDetail = full.page.locator(".px-object-detail");
+  await expect(employeeDetail).toContainText("PUBLISHED");
+  await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionRevisionId);
+  await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionDigest);
+  for (const member of employee.body.result.members) {
+    const binding = employeeDetail.getByRole("listitem").filter({ hasText: member.resourceId });
+    await expect(binding).toContainText(member.kind);
+    await expect(binding).toContainText(member.revisionId);
+    await expect(binding).toContainText(member.digest);
+  }
 
   const firstEmployees = await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1");
   expect(firstEmployees.status).toBe(200);
@@ -78,6 +147,16 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
     "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aother/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aquality",
   );
   expect(wrongParent).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
+  const wrongAttempt = await browserFetch(
+    full.page,
+    "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aother&agentInstanceId=agent-instance%3Aquality",
+  );
+  expect(wrongAttempt).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
+  const wrongAgent = await browserFetch(
+    full.page,
+    "/api/workbench/v1/instances/employee-instance%3Aquality/assignments/employee-assignment%3Aquality/placements/placement%3Aquality?attemptId=attempt%3Aquality&agentInstanceId=agent-instance%3Aother",
+  );
+  expect(wrongAgent).toMatchObject({ status: 404, body: { reasonCode: "PLACEMENT_NOT_FOUND" } });
 
   const control = await request.newContext({ baseURL: controlURL });
   const revoked = await control.post("/revoke-placement", { headers: { "x-control-token": controlToken } });
@@ -96,10 +175,9 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
   });
   expect(logout.status()).toBe(204);
   expect((await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(401);
-  expect(identityHeaders).toEqual([]);
   await full.context.close();
 
-  const lister = await login(browser, "310-list-browser-credential");
+  const lister = await login(browser, credentials.list, observations);
   expect((await browserFetch(lister.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(200);
   expect(
     await browserFetch(
@@ -109,7 +187,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
   ).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
   await lister.context.close();
 
-  const wrongScope = await login(browser, "310-wrong-scope-credential");
+  const wrongScope = await login(browser, credentials.wrongScope, observations);
   expect(
     await browserFetch(
       wrongScope.page,
@@ -118,7 +196,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
   ).toMatchObject({ status: 404, body: { reasonCode: "EMPLOYEE_NOT_FOUND" } });
   await wrongScope.context.close();
 
-  const wrongGrant = await login(browser, "310-wrong-grant-credential");
+  const wrongGrant = await login(browser, credentials.wrongGrant, observations);
   expect(
     await browserFetch(
       wrongGrant.page,
@@ -126,4 +204,6 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
     ),
   ).toMatchObject({ status: 404, body: { reasonCode: "AUTHORIZATION_NOT_FOUND" } });
   await wrongGrant.context.close();
+  expect(observations.identityHeaders).toEqual([]);
+  expect(observations.privateRequests).toEqual([]);
 });
