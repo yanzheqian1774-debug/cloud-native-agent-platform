@@ -235,11 +235,28 @@ test("completes the real Knowledge lifecycle, retrieval, recovery and purge jour
   await expect(page.getByLabel("Guided conflict recovery")).toContainText("权威版本");
   await expect(page.getByLabel("后继正文",{exact:true})).toHaveValue("Updated supplier containment procedure.\n\nCorrective action evidence must cite the approved successor.");
   await page.getByRole("button",{name:"核对后保留输入"}).click();
+  const successorSubmission = page.waitForResponse((response) =>
+    response.url().includes(`/knowledge/${encodeURIComponent(identity)}/successors`)
+    && response.request().method() === "POST"
+  );
   await page.getByRole("button", { name: "创建后继草稿" }).click();
+  const successorResponse = await successorSubmission;
+  expect(successorResponse.ok()).toBe(true);
+  const successorProjection = await successorResponse.json();
+  const successorRevision = successorProjection.knowledge.revisions.find(
+    (revision: { revisionId: string }) =>
+      revision.revisionId === successorProjection.knowledge.currentDraftRevisionId,
+  );
+  expect(successorRevision).toBeTruthy();
+  expect(successorRevision!.content.source).toMatchObject({
+    kind: "TEXT",
+    provenance: "human-edit:human:knowledge-owner",
+    sourceDescription: "人工编辑后继修订",
+  });
   await expect(page.getByLabel("文档处理阶段"))
-    .toContainText("非文件入口或未记录文件");
+    .toContainText("非文件入口或未记录文件", { timeout: 1_000 });
   await expect(page.getByRole("definition").filter({ hasText: "human-edit:human:knowledge-owner" }))
-    .toBeVisible();
+    .toBeVisible({ timeout: 1_000 });
   await publish(page);
   await page.getByRole("button", { name: "导入并建立索引" }).click();
   await expect.poll(async () => {
