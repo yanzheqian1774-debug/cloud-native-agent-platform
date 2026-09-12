@@ -26,6 +26,9 @@ TEST_STEP_IDS = (
     "FULL_LOGIN_POST_LOCATION_ASSERTION",
     "FULL_SESSION_READY",
     "EMPLOYEE_LIST_NAVIGATION",
+    "EMPLOYEE_LIST_NAVIGATION_STATUS",
+    "EMPLOYEE_LIST_ROUTE_ASSERTION",
+    "EMPLOYEE_LIST_SHELL_VISIBLE",
     "EMPLOYEE_LIST_REQUEST_OBSERVED",
     "EMPLOYEE_LIST_RESPONSE_OBSERVED",
     "EMPLOYEE_LIST_STATUS_ASSERTION",
@@ -64,7 +67,7 @@ TEST_STEP_IDS = (
 )
 TEST_STEP_SET = frozenset(TEST_STEP_IDS)
 FULL_LOGIN_SUBMIT_STEP_SET = frozenset(TEST_STEP_IDS[1:6])
-EMPLOYEE_LIST_STEP_SET = frozenset(TEST_STEP_IDS[7:13])
+EMPLOYEE_LIST_STEP_SET = frozenset(TEST_STEP_IDS[7:16])
 LOGIN_DIAGNOSTIC_TYPES = {
     "S5_310_LOGIN_REQUEST_OBSERVED": "requestObserved",
     "S5_310_LOGIN_RESPONSE_OBSERVED": "responseObserved",
@@ -72,10 +75,13 @@ LOGIN_DIAGNOSTIC_TYPES = {
     "S5_310_LOGIN_LOCATION_CLASS": "locationClass",
 }
 EMPLOYEE_LIST_DIAGNOSTIC_TYPES = {
+    "S5_310_EMPLOYEE_LIST_NAVIGATION_STATUS": "navigationStatus",
+    "S5_310_EMPLOYEE_LIST_ROUTE_CLASS": "routeClass",
     "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED": "requestObserved",
     "S5_310_EMPLOYEE_LIST_RESPONSE_OBSERVED": "responseObserved",
     "S5_310_EMPLOYEE_LIST_HTTP_STATUS": "httpStatus",
 }
+EMPLOYEE_LIST_ROUTE_CLASSES = {"EXPECTED", "OTHER", "UNKNOWN"}
 LOCATION_CLASSES = {"EXPECTED_WORKBENCH", "OTHER", "MISSING", "UNKNOWN"}
 LOGIN_FAILURE_CATEGORIES = {
     "NONE",
@@ -378,6 +384,8 @@ def _employee_list_diagnostics(
 ) -> dict[str, Any]:
     values: dict[str, Any] = {
         "availability": "UNAVAILABLE",
+        "navigationStatus": "UNKNOWN",
+        "routeClass": "UNKNOWN",
         "requestObserved": "UNKNOWN",
         "responseObserved": "UNKNOWN",
         "httpStatus": "UNKNOWN",
@@ -415,6 +423,14 @@ def _employee_list_diagnostics(
         status = int(descriptions[0])
         if 100 <= status <= 599:
             values["httpStatus"] = status
+    descriptions = observed["navigationStatus"]
+    if len(descriptions) == 1 and descriptions[0].isdigit():
+        status = int(descriptions[0])
+        if 100 <= status <= 599:
+            values["navigationStatus"] = status
+    descriptions = observed["routeClass"]
+    if len(descriptions) == 1 and descriptions[0] in EMPLOYEE_LIST_ROUTE_CLASSES:
+        values["routeClass"] = descriptions[0]
     failed_step = step_diagnostics.get("firstFailedOrIncompleteStep")
     if failed_step in EMPLOYEE_LIST_STEP_SET:
         category = step_diagnostics.get("failureCategory")

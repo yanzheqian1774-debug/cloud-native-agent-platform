@@ -34,6 +34,9 @@ const fullLoginSubmitSteps = {
 } as const;
 const employeeListSteps = {
   navigation: "EMPLOYEE_LIST_NAVIGATION",
+  navigationStatus: "EMPLOYEE_LIST_NAVIGATION_STATUS",
+  route: "EMPLOYEE_LIST_ROUTE_ASSERTION",
+  shell: "EMPLOYEE_LIST_SHELL_VISIBLE",
   request: "EMPLOYEE_LIST_REQUEST_OBSERVED",
   response: "EMPLOYEE_LIST_RESPONSE_OBSERVED",
   status: "EMPLOYEE_LIST_STATUS_ASSERTION",
@@ -193,8 +196,23 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
         return null;
       },
     );
-    await test.step(employeeListSteps.navigation, async () => {
-      await full.page.goto(`${baseURL}/digital-employees`);
+    const navigation = await test.step(employeeListSteps.navigation, async () => {
+      return full.page.goto(`${baseURL}/digital-employees`);
+    });
+    test.info().annotations.push({
+      type: "S5_310_EMPLOYEE_LIST_NAVIGATION_STATUS",
+      description: navigation ? String(navigation.status()) : "UNKNOWN",
+    });
+    const routeClass = new URL(full.page.url()).pathname === "/digital-employees" ? "EXPECTED" : "OTHER";
+    test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_ROUTE_CLASS", description: routeClass });
+    await test.step(employeeListSteps.navigationStatus, async () => {
+      expect(navigation?.status()).toBe(200);
+    });
+    await test.step(employeeListSteps.route, async () => {
+      expect(routeClass).toBe("EXPECTED");
+    });
+    await test.step(employeeListSteps.shell, async () => {
+      await expect(full.page.getByRole("heading", { name: "数字员工定义与身份链管理" })).toBeVisible();
     });
     await test.step(employeeListSteps.request, async () => {
       expect(await requestPromise).not.toBeNull();

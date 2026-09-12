@@ -350,11 +350,19 @@ def test_summary_emits_only_whitelisted_employee_list_diagnostics(tmp_path) -> N
         step("FULL_LOGIN_POST_LOCATION_ASSERTION", 65),
         step("FULL_SESSION_READY", 70),
         step("EMPLOYEE_LIST_NAVIGATION", 75),
-        step("EMPLOYEE_LIST_REQUEST_OBSERVED", 80),
-        step("EMPLOYEE_LIST_RESPONSE_OBSERVED", 85),
-        step("EMPLOYEE_LIST_STATUS_ASSERTION", 90, failed=True),
+        step("EMPLOYEE_LIST_NAVIGATION_STATUS", 80),
+        step("EMPLOYEE_LIST_ROUTE_ASSERTION", 85),
+        step("EMPLOYEE_LIST_SHELL_VISIBLE", 90),
+        step("EMPLOYEE_LIST_REQUEST_OBSERVED", 95),
+        step("EMPLOYEE_LIST_RESPONSE_OBSERVED", 100),
+        step("EMPLOYEE_LIST_STATUS_ASSERTION", 105, failed=True),
     ]
     result["annotations"] = [
+        {
+            "type": "S5_310_EMPLOYEE_LIST_NAVIGATION_STATUS",
+            "description": "200",
+        },
+        {"type": "S5_310_EMPLOYEE_LIST_ROUTE_CLASS", "description": "EXPECTED"},
         {
             "type": "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED",
             "description": "true",
@@ -380,6 +388,8 @@ def test_summary_emits_only_whitelisted_employee_list_diagnostics(tmp_path) -> N
     assert not passed
     assert summary["employeeListDiagnostics"] == {
         "availability": "AVAILABLE",
+        "navigationStatus": 200,
+        "routeClass": "EXPECTED",
         "requestObserved": True,
         "responseObserved": True,
         "httpStatus": 401,
