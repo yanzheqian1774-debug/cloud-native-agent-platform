@@ -18,6 +18,12 @@ const credentials = {
 
 type BrowserObservations = { identityHeaders: string[]; privateRequests: string[] };
 type LoginKind = "FULL" | "LISTER" | "WRONG_SCOPE" | "WRONG_GRANT";
+const loginIdentities = {
+  FULL: { principalId: "human:alice", tenantId: "tenant-a", securityDomain: "quality" },
+  LISTER: { principalId: "human:lister", tenantId: "tenant-a", securityDomain: "quality" },
+  WRONG_SCOPE: { principalId: "human:wrongscope", tenantId: "tenant-b", securityDomain: "quality" },
+  WRONG_GRANT: { principalId: "human:wronggrant", tenantId: "tenant-a", securityDomain: "quality" },
+} as const;
 const loginSteps = {
   FULL: ["FULL_LOGIN_FORM", "FULL_LOGIN_SUBMIT_REDIRECT", "FULL_SESSION_READY"],
   LISTER: ["LISTER_LOGIN_FORM", "LISTER_LOGIN_SUBMIT_REDIRECT", "LISTER_SESSION_READY"],
@@ -48,10 +54,22 @@ async function login(
   await test.step(submitStep, async () => {
     const submit = page.getByRole("button", { name: "Sign in", exact: true });
     await expect(submit).toHaveCount(1);
-    await Promise.all([page.waitForURL(/\/workbench$/), submit.click()]);
+    const [response] = await Promise.all([
+      page.waitForResponse(value => {
+        const request = value.request();
+        return request.method() === "POST" && new URL(value.url()).pathname === "/api/workbench/v1/session";
+      }),
+      submit.click(),
+    ]);
+    expect(response.status()).toBe(303);
+    expect(response.headers().location).toBe("/workbench");
   });
   await test.step(readyStep, async () => {
-    expect((await browserFetch(page, "/api/workbench/v1/session")).status).toBe(200);
+    const response = await context.request.get(`${baseURL}/api/workbench/v1/session`);
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      principal: loginIdentities[kind],
+    });
   });
   return { context, page };
 }
