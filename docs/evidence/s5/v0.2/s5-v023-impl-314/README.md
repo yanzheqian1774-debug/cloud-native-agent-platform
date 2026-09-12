@@ -119,3 +119,43 @@ projection transported through Kubernetes. They do not implement lifecycle or
 Profile projection semantics. `execute` and `observe_execution` remain unsupported.
 No deployment, certification, Batch B dispatch/recovery/Evidence/Outcome, complete
 OpenClaw lifecycle or release claim is made.
+
+## Human G2 decision draft refinement
+
+The reviewed implementation candidate remained
+`cd99b0ea7b2ae749b56d7364310e024af62921a4`, tree
+`9fb01d05982ee2a26e037f8af87008d2b9690eda`, before this documentation-only
+refinement. Production source, tests, Gateway state, credentials and image packaging
+were not changed.
+
+The existing two `PROPOSED / NOT_ACCEPTED / NOT_IMPLEMENTED` sections were refined
+into a Human-decidable G2 draft without allocating a new identifier. The refinement
+records:
+
+- explicit file, durable-memory, credential and context inheritance across Platform
+  generations, while preserving Platform generation != OpenClaw session;
+- fixed-version capability classification: live authenticated proof only for
+  `health`, `status` and `agents.list`; agent/session/abort handlers are source-only
+  evidence; all lifecycle and execution calls remain unavailable through the current
+  production transport;
+- durable ownership proof, partial-success, timeout, restart and ambiguous-effect
+  handling without an external exactly-once claim;
+- transcript as mutable controlled raw material, not formal Evidence, with any future
+  normalized/redacted record remaining subordinate to the existing Evidence
+  authority;
+- operation-specific Profile eligibility for publication, supersession, existing
+  bindings and explicit revocation; not-latest is not automatically ineligible;
+- a recommended two-ConfigMap Kubernetes transport, explicit PostgreSQL authority,
+  RBAC/admission/publisher/field-manager separation, outbox sequence, CAS and
+  idempotent intermediate-state recovery without a cross-system transaction claim;
+- disconnection behavior that rejects new effect-producing work while preserving
+  already authorized observe/drain/cancel/stop needed for safe convergence; and
+- scoped credential binding/resolution/revocation boundaries with no implicit
+  authorization.
+
+All values not fixed by current contracts are concentrated in the Human acceptance
+list. The implementation path is conditional on a future Human G2 decision and new
+bounded implementation allocations. No lifecycle/Profile/credential/Evidence code,
+RPC, Docker access probe, image build, deployment, Batch B work or 309 operation was
+performed. The production image remains `NOT_PROVEN`; only its future environmental
+preconditions were documented.
