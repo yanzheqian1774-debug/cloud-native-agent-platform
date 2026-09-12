@@ -68,6 +68,8 @@ class OpenClawProductionConfig:
     gateway_secret_reference: str
     timeout_seconds: float = 10.0
     freshness_seconds: int = 30
+    workspace_host: str | None = None
+    workspace_storage_domain: str | None = None
 
 
 class CommandRunner(Protocol):
@@ -272,7 +274,13 @@ class OpenClawProductionTransport:
             {},
         )
 
-    def _rpc(self, method: str, params: dict[str, object]) -> dict[str, object]:
+    def _rpc(
+        self,
+        method: str,
+        params: dict[str, object],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, object]:
         allowed = {
             "health",
             "status",
@@ -283,6 +291,11 @@ class OpenClawProductionTransport:
             "sessions.get",
         }
         if method not in allowed:
+            raise OpenClawError(ReasonCode.GATEWAY_PROTOCOL_ERROR.value)
+        timeout = (
+            self._config.timeout_seconds if timeout_seconds is None else timeout_seconds
+        )
+        if timeout <= 0 or timeout > self._config.timeout_seconds:
             raise OpenClawError(ReasonCode.GATEWAY_PROTOCOL_ERROR.value)
         token = self._credentials.resolve(self._config.gateway_secret_reference)
         try:
@@ -297,13 +310,14 @@ class OpenClawProductionTransport:
                     json.dumps(params, sort_keys=True, separators=(",", ":")),
                     "--json",
                     "--timeout",
-                    str(max(1, int(self._config.timeout_seconds * 1000))),
+                    str(max(1, int(timeout * 1000))),
                 ),
                 {
                     "OPENCLAW_STATE_DIR": str(self._config.client_state_dir),
                     "OPENCLAW_CONFIG_PATH": str(self._config.client_config_path),
                     "OPENCLAW_GATEWAY_TOKEN": token,
                 },
+                timeout=timeout,
             )
         finally:
             token = ""
@@ -316,15 +330,44 @@ class OpenClawProductionTransport:
         return value
 
     def read_only_rpc(
-        self, method: str, params: dict[str, object]
+        self,
+        method: str,
+        params: dict[str, object],
+        *,
+        timeout_seconds: float | None = None,
     ) -> dict[str, object]:
         """Expose only the fixed read allowlist used by recovery observation."""
-        return self._rpc(method, params)
+        return self._rpc(method, params, timeout_seconds=timeout_seconds)
 
-    def _run_process(self, argv: tuple[str, ...], extra_env: Mapping[str, str]) -> str:
+    def binding_observation_domain(self) -> tuple[str, str, str]:
+        """Return configured external domains without treating them as attestation."""
+        self._validate_isolation_and_client_config()
+        if (
+            self._gateway_url is None
+            or not self._config.workspace_host
+            or not self._config.workspace_storage_domain
+        ):
+            raise OpenClawError(ReasonCode.CONFIGURATION_MISSING.value)
+        return (
+            sha256(self._gateway_url.encode()).hexdigest(),
+            self._config.workspace_host,
+            self._config.workspace_storage_domain,
+        )
+
+    def _run_process(
+        self,
+        argv: tuple[str, ...],
+        extra_env: Mapping[str, str],
+        *,
+        timeout: float | None = None,
+    ) -> str:
         env = {"LANG": "C.UTF-8", **extra_env}
         try:
-            result = self._runner(argv, env, self._config.timeout_seconds)
+            result = self._runner(
+                argv,
+                env,
+                self._config.timeout_seconds if timeout is None else timeout,
+            )
         except (OSError, subprocess.TimeoutExpired):
             raise OpenClawError(ReasonCode.GATEWAY_UNAVAILABLE.value) from None
         output = result.stdout or ""

@@ -52,6 +52,7 @@ def records(tmp_path):
 
 class ReadClient:
     def __init__(self, binding, generation):
+        self.binding = binding
         self.calls = []
         self.responses = {
             "health": {"eventLoop": {"degraded": False}},
@@ -77,16 +78,17 @@ class ReadClient:
                 "key": generation.session_key,
                 "sessionId": generation.session_id,
             },
-            "sessions.get": {
-                "session": {
-                    "key": generation.session_key,
-                    "sessionId": generation.session_id,
-                },
-                "messages": [],
-            },
+            "sessions.get": {"messages": []},
         }
 
-    def read_only_rpc(self, method, params):
+    def binding_observation_domain(self):
+        return (
+            self.binding.gateway_digest,
+            self.binding.workspace_host,
+            self.binding.workspace_storage_domain,
+        )
+
+    def read_only_rpc(self, method, params, *, timeout_seconds=None):
         self.calls.append((method, params))
         response = self.responses[method]
         if isinstance(response, Exception):
@@ -154,7 +156,7 @@ def test_workspace_or_session_mismatch_is_not_reported_as_match(tmp_path):
     assert workspace.association_status is AssociationStatus.MISMATCHED
 
     client = ReadClient(binding, generation)
-    client.responses["sessions.get"]["session"]["sessionId"] = "other-session"
+    client.responses["sessions.describe"]["sessionId"] = "other-session"
     session = OpenClawBindingObserver(client).observe(
         binding, generation, high_water=1, at=now
     )
@@ -188,3 +190,22 @@ def test_fixed_source_version_mismatch_is_rejected_before_session_reads(tmp_path
 
     assert result.association_status is AssociationStatus.MISMATCHED
     assert [method for method, _ in client.calls] == ["health", "status"]
+
+
+def test_total_reconciliation_budget_fails_closed_before_another_rpc(tmp_path):
+    binding, generation, now = records(tmp_path)
+    client = ReadClient(binding, generation)
+    ticks = iter((0.0, 1.0, 2.0, 3.0, 4.0, 31.0))
+
+    result = OpenClawBindingObserver(
+        client, monotonic_clock=lambda: next(ticks)
+    ).observe(binding, generation, high_water=1, at=now)
+
+    assert result.association_status is AssociationStatus.RECOVERY_REQUIRED
+    assert result.reason_code == ReasonCode.GATEWAY_UNAVAILABLE.value
+    assert [method for method, _ in client.calls] == [
+        "health",
+        "status",
+        "agents.list",
+        "agents.files.list",
+    ]

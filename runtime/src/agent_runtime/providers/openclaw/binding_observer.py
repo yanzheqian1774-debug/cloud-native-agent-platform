@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from time import monotonic
 from typing import Protocol
 
 from agent_core.openclaw_binding import (
@@ -19,8 +21,14 @@ EXACT_SOURCE_VERSION = "2026.7.1-2"
 
 
 class OpenClawReadOnlyClient(Protocol):
+    def binding_observation_domain(self) -> tuple[str, str, str]: ...
+
     def read_only_rpc(
-        self, method: str, params: dict[str, object]
+        self,
+        method: str,
+        params: dict[str, object],
+        *,
+        timeout_seconds: float | None = None,
     ) -> dict[str, object]: ...
 
 
@@ -32,11 +40,17 @@ class OpenClawBindingObserver:
         client: OpenClawReadOnlyClient,
         *,
         freshness: timedelta = timedelta(seconds=30),
+        total_budget: timedelta = timedelta(seconds=30),
+        monotonic_clock: Callable[[], float] = monotonic,
     ) -> None:
         if freshness != timedelta(seconds=30):
             raise ValueError("OPENCLAW_OBSERVATION_FRESHNESS_UNSUPPORTED")
+        if total_budget != timedelta(seconds=30):
+            raise ValueError("OPENCLAW_OBSERVATION_BUDGET_UNSUPPORTED")
         self._client = client
         self._freshness = freshness
+        self._total_budget = total_budget.total_seconds()
+        self._monotonic = monotonic_clock
 
     def observe(
         self,
@@ -53,9 +67,38 @@ class OpenClawBindingObserver:
             "workspace": False,
             "session": False,
         }
+        started = self._monotonic()
+
+        def read(method: str, params: dict[str, object]) -> dict[str, object]:
+            remaining = self._total_budget - (self._monotonic() - started)
+            if remaining <= 0:
+                raise OpenClawError(ReasonCode.GATEWAY_UNAVAILABLE.value)
+            return self._client.read_only_rpc(
+                method,
+                params,
+                timeout_seconds=min(10.0, remaining),
+            )
+
         try:
-            health = self._client.read_only_rpc("health", {})
-            status = self._client.read_only_rpc("status", {})
+            gateway_digest, workspace_host, storage_domain = (
+                self._client.binding_observation_domain()
+            )
+            if (
+                gateway_digest != binding.gateway_digest
+                or workspace_host != binding.workspace_host
+                or storage_domain != binding.workspace_storage_domain
+            ):
+                return self._result(
+                    binding,
+                    generation,
+                    high_water,
+                    now,
+                    AssociationStatus.MISMATCHED,
+                    "OPENCLAW_EXTERNAL_DOMAIN_MISMATCH",
+                    flags,
+                )
+            health = read("health", {})
+            status = read("status", {})
             flags["gateway"] = self._gateway_matches(health, status, binding)
             if not flags["gateway"]:
                 return self._result(
@@ -68,7 +111,7 @@ class OpenClawBindingObserver:
                     flags,
                 )
 
-            agents = self._client.read_only_rpc("agents.list", {}).get("agents")
+            agents = read("agents.list", {}).get("agents")
             if not isinstance(agents, list):
                 raise OpenClawError(ReasonCode.GATEWAY_PROTOCOL_ERROR.value)
             matches = [
@@ -102,14 +145,12 @@ class OpenClawBindingObserver:
                     "OPENCLAW_WORKSPACE_MISMATCH",
                     flags,
                 )
-            self._client.read_only_rpc(
-                "agents.files.list", {"agentId": binding.agent_id}
-            )
+            read("agents.files.list", {"agentId": binding.agent_id})
             flags["workspace"] = True
 
-            sessions = self._client.read_only_rpc(
-                "sessions.list", {"agentId": binding.agent_id}
-            ).get("sessions")
+            sessions = read("sessions.list", {"agentId": binding.agent_id}).get(
+                "sessions"
+            )
             if not isinstance(sessions, list):
                 raise OpenClawError(ReasonCode.GATEWAY_PROTOCOL_ERROR.value)
             matched_sessions = [
@@ -129,10 +170,8 @@ class OpenClawBindingObserver:
                     "OPENCLAW_SESSION_MISSING_OR_AMBIGUOUS",
                     flags,
                 )
-            described = self._client.read_only_rpc(
-                "sessions.describe", {"key": generation.session_key}
-            )
-            fetched = self._client.read_only_rpc(
+            described = read("sessions.describe", {"key": generation.session_key})
+            fetched = read(
                 "sessions.get",
                 {
                     "key": generation.session_key,
@@ -140,9 +179,9 @@ class OpenClawBindingObserver:
                     "limit": 1,
                 },
             )
-            if not self._session_matches(
-                described, generation
-            ) or not self._session_matches(fetched, generation):
+            if not self._session_matches(described, generation) or not isinstance(
+                fetched.get("messages"), list
+            ):
                 return self._result(
                     binding,
                     generation,
