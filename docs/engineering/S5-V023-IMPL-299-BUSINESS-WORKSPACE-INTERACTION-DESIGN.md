@@ -162,7 +162,7 @@ Criteria Set 是同一 Problem 下的版本化成功标准集合；Criteria 是�
 
 ## 10. 2026-09-12 恢复实施接点表
 
-来源时点：299 实际基线 `91928f285160f74927a7dbd3a905b5bdaa7bbf6f`；可信浏览器依赖核对到用户固定参考 305 `3abb901f30a57218928990adf4f2ae75ca38829b`，首批业务子集取自其祖先 `8ce7b39`；310 固定参考 `fb5edaf174783f0e997ed912c516644b977e3eb6` 只用于确认边界，未引入。
+来源时点：299 实际基线 `91928f285160f74927a7dbd3a905b5bdaa7bbf6f`；可信浏览器依赖最新核对到 305 `5948a499de16a59d785774b67823bd8bb4521983`，首批业务子集仍取自其祖先 `8ce7b39`；310 固定参考 `fb5edaf174783f0e997ed912c516644b977e3eb6` 只用于确认边界，未整体引入。
 
 | 能力 | 已有正式 owner 端口 | 浏览器接点 | 前端调用位置 | 缺口 | 定向验证 |
 | --- | --- | --- | --- | --- | --- |
@@ -189,6 +189,16 @@ Criteria Set 是同一 Problem 下的版本化成功标准集合；Criteria 是�
 - Plan prepare/read/approve 虽有 305 正式路由，前端尚未收集并验证所需 Workflow、Employee、Instance 与 Assignment 精确引用。
 - 执行、Resource Use、Evidence 和 Outcome 没有 305 公共 Workbench owner 端口，本批保持未接线。
 - 305 dual-listener/deployment isolation 尚未并入 299；源码测试不能替代真实服务和可信浏览器证据。
+
+### 10.3 两个相互独立的恢复边界
+
+#### Problem 创建后的授权 continuation
+
+正式闭环顺序必须保持为：Problem owner 先提交新 identity/revision → owner 基于已提交事实生成有时限的 exact continuation → 当前 subject 以 continuation 提交 grant request → 独立管理员作出 grant decision → 当前授权 reader 在线性化快照中返回完整 exact decision → 浏览器才可对新 `business-problem:{id}` 执行权威 read。305 最新参考 `5948a499de16a59d785774b67823bd8bb4521983` 已交付完整 current exact grant decision reader 及 caller-owned transaction 绑定，但没有为 299 注册 continuation inbox、grant request、request inspect 或 decision 的公共浏览器端口；299 的 `WorkbenchOperation` 还明确拒绝 `/api/workbench/v1/authorization/*`。因此 `continuationIds` 仍为空，创建后立即 exact read 在未预置 grant 的真实环境中按设计 fail closed。该缺口继续交接 305，不在 299 重复实现共享授权。
+
+#### Criteria 两步写入、幂等与恢复
+
+当前浏览器保存先提交 Criterion revision，再提交引用该 exact revision 的 Criteria Set revision；两步分别使用按各自 payload 保留的幂等键。只有第二步成功后才清除两个键并重新从 owner 读回 workspace。若第一步成功而第二步因 CAS、授权或存储失败，已提交 Criterion revision 保留，界面只显示“操作未完成”，不得显示整个 Criteria 已保存成功；使用未改变的 payload 重试时复用原幂等键，由 owner 返回同一 Criterion 结果后继续重试 Criteria Set。跨命令原子性、补偿删除、自动覆盖或把孤立 revision 隐藏成整体成功都不在当前已决语义内；这项边界与上述授权 continuation 缺口互不替代。
 
 ## 11. 本批分层验证记录
 

@@ -187,7 +187,14 @@ def create_workbench_bff(
                 response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        is_login_form = (
+            request.method == "GET"
+            and request.url.path == f"{PREFIX}/login"
+            and response.status_code == 200
+        )
+        response.headers["Referrer-Policy"] = (
+            "same-origin" if is_login_form else "no-referrer"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; frame-ancestors 'none'"
         )

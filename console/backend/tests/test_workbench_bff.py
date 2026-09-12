@@ -182,11 +182,15 @@ def login(client: TestClient) -> None:
     assert "Secure" in response.headers["set-cookie"]
     assert "HttpOnly" in response.headers["set-cookie"]
     assert "SameSite=strict" in response.headers["set-cookie"]
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_session_and_bound_operation_use_only_server_context() -> None:
     client, _, authorizer = build_client()
-    assert "login-nonce" in client.get(f"{PREFIX}/login").text
+    login_form = client.get(f"{PREFIX}/login")
+    assert "login-nonce" in login_form.text
+    assert login_form.headers["referrer-policy"] == "same-origin"
+    assert client.get("/healthz").headers["referrer-policy"] == "no-referrer"
     login(client)
 
     session = client.get(f"{PREFIX}/session")
