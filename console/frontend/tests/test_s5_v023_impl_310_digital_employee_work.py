@@ -1,10 +1,24 @@
 from pathlib import Path
 
-ROOT = Path(__file__).parents[3] / "console" / "frontend" / "src"
+REPOSITORY_ROOT = Path(__file__).parents[3]
+ROOT = REPOSITORY_ROOT / "console" / "frontend" / "src"
 
 
 def source(path: str) -> str:
     return (ROOT / path).read_text()
+
+
+def test_real_browser_workflow_builds_the_live_digital_employee_route() -> None:
+    workflow = (
+        REPOSITORY_ROOT
+        / ".github"
+        / "workflows"
+        / "s5-v023-impl-310-real-workbench.yml"
+    ).read_text()
+    build_step = workflow.split("      - name: Build frontend\n", maxsplit=1)[1].split(
+        "      - name: Lint frontend\n", maxsplit=1
+    )[0]
+    assert "VITE_SUPPLIER_QUALITY_DEMO_MODE: live" in build_step
 
 
 def test_employee_reads_use_only_the_trusted_workbench_bff() -> None:

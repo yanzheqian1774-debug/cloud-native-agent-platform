@@ -72,6 +72,8 @@ jobs:
         id: build
         continue-on-error: true
         working-directory: console/frontend
+        env:
+          VITE_SUPPLIER_QUALITY_DEMO_MODE: live
         run: npm run build
 
       - name: Lint frontend
