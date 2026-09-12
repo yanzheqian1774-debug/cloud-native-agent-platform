@@ -38,13 +38,19 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     foundation = SimpleNamespace(
         generation_controller=object(),
         repository=object(),
-        grants=SimpleNamespace(authorization=object()),
+        grants=SimpleNamespace(
+            authorization=object(),
+            clock=lambda: None,
+            identity_factory=lambda prefix: f"{prefix}-one",
+        ),
         sessions=object(),
         continuation_owner=SimpleNamespace(signing_key=b"k" * 32),
         close=lambda: None,
     )
     monkeypatch.setattr(
-        workbench_bootstrap, "build_authority_foundation", lambda *args: foundation
+        workbench_bootstrap,
+        "build_authority_foundation",
+        lambda *args, **kwargs: foundation,
     )
 
     def capture(_sessions, _authorizer, _policy, *, grant_administration, operations):
@@ -61,7 +67,7 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         owner_database_url=database_url,
         agent_database_url=database_url,
         workflow_database_url=database_url,
-        business_problems=SimpleNamespace(),
+        business_problems=SimpleNamespace(problems=object()),
         agent_definitions=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
         digital_employees=SimpleNamespace(),
@@ -121,13 +127,19 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
     foundation = SimpleNamespace(
         generation_controller=object(),
         repository=object(),
-        grants=SimpleNamespace(authorization=object()),
+        grants=SimpleNamespace(
+            authorization=object(),
+            clock=lambda: None,
+            identity_factory=lambda prefix: f"{prefix}-one",
+        ),
         sessions=object(),
         continuation_owner=SimpleNamespace(signing_key=b"k" * 32),
         close=lambda: None,
     )
     monkeypatch.setattr(
-        workbench_bootstrap, "build_authority_foundation", lambda *args: foundation
+        workbench_bootstrap,
+        "build_authority_foundation",
+        lambda *args, **kwargs: foundation,
     )
 
     def capture(_sessions, _authorizer, _policy, *, grant_administration, operations):
@@ -143,7 +155,7 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         allowed_origin="https://console.example",
         owner_database_url=database_url,
         agent_database_url=database_url,
-        business_problems=SimpleNamespace(),
+        business_problems=SimpleNamespace(problems=object()),
         agent_definitions=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
         digital_employees=SimpleNamespace(),

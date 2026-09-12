@@ -18,6 +18,10 @@ from agent_console.authority_foundation import (
 )
 from agent_console.browser_session_application import BrowserSessionPolicy
 from agent_console.business_problem_application import BusinessProblemApplication
+from agent_console.business_problem_continuation import (
+    BusinessProblemContinuationValidator,
+    BusinessProblemCreateCoordinator,
+)
 from agent_console.digital_employee_application import DigitalEmployeeRepository
 from agent_console.digital_employee_definition import EmployeeDefinitionRepository
 from agent_console.governed_execution_ownership import execution_database_fingerprint
@@ -82,6 +86,9 @@ def build_workbench_composition(
         workflow_database_url
     ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    problem_continuations = BusinessProblemContinuationValidator(
+        business_problems.problems
+    )
     foundation = build_authority_foundation(
         runtime,
         BrowserSessionPolicy(
@@ -90,6 +97,7 @@ def build_workbench_composition(
             absolute_lifetime=timedelta(hours=8),
             csrf_lifetime=timedelta(minutes=10),
         ),
+        target_validator=problem_continuations,
     )
     try:
         authorizer = WorkbenchOwnerAuthorization(
@@ -103,7 +111,14 @@ def build_workbench_composition(
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             grant_administration=foundation.grants,
             operations=(
-                *business_problem_operations(business_problems),
+                *business_problem_operations(
+                    business_problems,
+                    BusinessProblemCreateCoordinator(
+                        foundation.grants,
+                        clock=foundation.grants.clock,
+                        identity_factory=foundation.grants.identity_factory,
+                    ),
+                ),
                 *agent_operations(
                     agent_definitions,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),

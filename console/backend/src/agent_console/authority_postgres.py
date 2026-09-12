@@ -23,6 +23,7 @@ from agent_console.authority_contracts import (
     AuthorityScope,
     BrowserSession,
     ContinuationClaim,
+    ContinuationOfferRecovery,
     CredentialId,
     CurrentExactGrantDecision,
     DynamicAuthorizationState,
@@ -1057,6 +1058,52 @@ class PostgresAuthorityRepository:
                 if row is None:
                     raise AuthorityError("CONTINUATION_INVALID")
                 return self._continuation_claim(connection, row["offer_id"])
+        except AuthorityError:
+            raise
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def recover_continuation_offer(
+        self,
+        context: TrustedRequestContext,
+        *,
+        owner: str,
+        purpose: str,
+        mint_key: str,
+    ) -> ContinuationOfferRecovery | None:
+        """Read one exact owner-mint result, including expiry and consumption."""
+        try:
+            with self.connection_scope() as connection:
+                rows = connection.execute(
+                    "SELECT offer.*,consumed.request_id FROM "
+                    "authorization_admin.continuation_offers offer LEFT JOIN "
+                    "authorization_admin.continuation_consumptions consumed ON "
+                    "consumed.continuation_digest=offer.continuation_digest "
+                    "WHERE offer.subject_principal_id=%s AND offer.tenant_id=%s "
+                    "AND offer.security_domain=%s AND offer.owner=%s "
+                    "AND offer.purpose=%s AND offer.mint_key=%s",
+                    (
+                        context.principal_id,
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        owner,
+                        purpose,
+                        mint_key,
+                    ),
+                ).fetchall()
+                if not rows:
+                    return None
+                if len(rows) != 1:
+                    raise AuthorityError("CONTINUATION_INVALID")
+                row = rows[0]
+                return ContinuationOfferRecovery(
+                    claim=self._continuation_claim(connection, row["offer_id"]),
+                    continuation_digest=row["continuation_digest"],
+                    mint_payload_digest=row["mint_payload_digest"],
+                    recovery_epoch=row["recovery_epoch"],
+                    revoked_at=row["revoked_at"],
+                    request_id=row["request_id"],
+                )
         except AuthorityError:
             raise
         except PsycopgError as exc:

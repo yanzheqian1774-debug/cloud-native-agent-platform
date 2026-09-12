@@ -94,6 +94,13 @@ class AvailableContinuation:
     requestable_actions: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RecoveredOwnerContinuation:
+    continuation_id: str
+    expires_at: datetime
+    request_id: str | None
+
+
 class GenerationAuthorizationReader(CurrentAuthorizationReader):
     """Pin static generation and query current PostgreSQL projection per call."""
 
@@ -477,6 +484,38 @@ class GrantAdministrationService:
         if not value or len(value) > 200 or value.strip() != value:
             raise AuthorityError("IDEMPOTENCY_KEY_INVALID")
 
+    @staticmethod
+    def _owner_mint_payload(claim: ContinuationClaim) -> dict[str, object]:
+        return {
+            "subject": claim.subject_principal_id,
+            "scope": [claim.scope.tenant_id, claim.scope.security_domain],
+            "purpose": claim.purpose,
+            "members": [
+                [item.owner, item.action, item.exact_resource] for item in claim.members
+            ],
+            "canonicalResourceReference": claim.canonical_resource_reference,
+            "ownerRevision": claim.owner_revision,
+            "generation": claim.policy_generation,
+            "expiresAt": claim.expires_at.isoformat(),
+        }
+
+    @staticmethod
+    def _same_owner_claim(
+        expected: ContinuationClaim, persisted: ContinuationClaim
+    ) -> bool:
+        return (
+            expected.subject_principal_id == persisted.subject_principal_id
+            and expected.scope == persisted.scope
+            and expected.purpose == persisted.purpose
+            and expected.members == persisted.members
+            and expected.canonical_resource_reference
+            == persisted.canonical_resource_reference
+            and expected.owner_revision == persisted.owner_revision
+            and expected.policy_generation == persisted.policy_generation
+            and expected.issued_at == persisted.issued_at
+            and expected.expires_at == persisted.expires_at
+        )
+
     def inspect_request(
         self, context: TrustedRequestContext, request_id: str
     ) -> GrantRequest:
@@ -812,21 +851,7 @@ class GrantAdministrationService:
         ):
             raise AuthorityError("CONTINUATION_INVALID")
         self._validate_requestable(claim.purpose, claim.members)
-        payload_digest = canonical_digest(
-            {
-                "subject": claim.subject_principal_id,
-                "scope": [claim.scope.tenant_id, claim.scope.security_domain],
-                "purpose": claim.purpose,
-                "members": [
-                    [item.owner, item.action, item.exact_resource]
-                    for item in claim.members
-                ],
-                "canonicalResourceReference": claim.canonical_resource_reference,
-                "ownerRevision": claim.owner_revision,
-                "generation": claim.policy_generation,
-                "expiresAt": claim.expires_at.isoformat(),
-            }
-        )
+        payload_digest = canonical_digest(self._owner_mint_payload(claim))
         opaque = self.continuation_owner.mint(claim)
         persisted = self.repository.store_continuation_offer(
             claim,
@@ -837,6 +862,50 @@ class GrantAdministrationService:
             recovery_epoch=self.recovery_epoch,
         )
         return self.continuation_owner.mint(persisted)
+
+    def recover_owner_continuation(
+        self,
+        context: TrustedRequestContext,
+        claim: ContinuationClaim,
+        *,
+        originating_command_key: str,
+    ) -> RecoveredOwnerContinuation | None:
+        """Recover the exact persisted offer even after consumption or expiry."""
+        if self.continuation_owner is None or self.target_validator is None:
+            raise AuthorityError("CONTINUATION_INVALID")
+        self._validate_idempotency_key(originating_command_key)
+        if (
+            claim.subject_principal_id != context.principal_id
+            or claim.scope != context.scope
+            or claim.policy_generation != self.generation.generation
+            or claim.expires_at - claim.issued_at != timedelta(minutes=10)
+            or not self.target_validator.validate_continuation(claim)
+        ):
+            raise AuthorityError("CONTINUATION_INVALID")
+        self._validate_requestable(claim.purpose, claim.members)
+        recovered = self.repository.recover_continuation_offer(
+            context,
+            owner=claim.members[0].owner,
+            purpose=claim.purpose,
+            mint_key=originating_command_key,
+        )
+        if recovered is None:
+            return None
+        if (
+            recovered.revoked_at is not None
+            or recovered.recovery_epoch != self.recovery_epoch
+            or recovered.mint_payload_digest
+            != canonical_digest(self._owner_mint_payload(claim))
+            or not self._same_owner_claim(claim, recovered.claim)
+        ):
+            raise AuthorityError("CONTINUATION_INVALID")
+        return RecoveredOwnerContinuation(
+            continuation_id=(
+                self._CONTINUATION_REFERENCE_PREFIX + recovered.continuation_digest
+            ),
+            expires_at=recovered.claim.expires_at,
+            request_id=recovered.request_id,
+        )
 
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
         return tuple(

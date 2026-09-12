@@ -256,17 +256,25 @@ class PostgresBusinessProblemRepository:
                         revision.created_by,
                         idempotency_key,
                     )
+                    if receipt is None:
+                        raise BusinessProblemError(
+                            "BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING"
+                        )
                     if (
-                        receipt is None
-                        or receipt.originating_command_payload_digest != payload_digest
+                        receipt.originating_command_payload_digest != payload_digest
                         or receipt.business_problem_id != value.business_problem_id
                         or receipt.revision_id != value.revision_id
                         or receipt.revision_digest != value.digest
-                        or receipt.policy_generation != receipt_policy_generation
+                    ):
+                        raise BusinessProblemError(
+                            "BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALID"
+                        )
+                    if (
+                        receipt.policy_generation != receipt_policy_generation
                         or receipt.recovery_epoch != receipt_recovery_epoch
                     ):
                         raise BusinessProblemError(
-                            "BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING"
+                            "BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALIDATED"
                         )
                 return value
             connection.execute(
@@ -418,6 +426,31 @@ class PostgresBusinessProblemRepository:
             if value is None:
                 raise BusinessProblemError("BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING")
             return value
+
+    def get_creator_receipt_for_problem(
+        self,
+        scope: ScopeIdentity,
+        creator_principal_id: str,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> BusinessProblemCreatorReceipt:
+        self._authorize(authorized)
+        with self.connection_scope(connection) as connection:
+            row = connection.execute(
+                "SELECT * FROM business_problem_authority.creator_receipts "
+                "WHERE namespace=%s AND security_domain=%s "
+                "AND creator_principal_id=%s AND business_problem_id=%s",
+                (
+                    *self._scope(scope),
+                    creator_principal_id,
+                    business_problem_id,
+                ),
+            ).fetchone()
+            if row is None:
+                raise BusinessProblemError("BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING")
+            return self._creator_receipt(row)
 
     def _insert_problem_revision(
         self, connection: Any, revision: BusinessProblemRevision

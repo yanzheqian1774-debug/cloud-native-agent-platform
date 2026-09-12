@@ -36,6 +36,15 @@ class BusinessProblemRepository(Protocol):
         authorized: bool,
         connection=None,
     ) -> BusinessProblemCreatorReceipt: ...
+    def get_creator_receipt_for_problem(
+        self,
+        scope: ScopeIdentity,
+        creator_principal_id: str,
+        business_problem_id: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> BusinessProblemCreatorReceipt: ...
     def get_problem(
         self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
     ) -> tuple[BusinessProblemRevision, ...]: ...

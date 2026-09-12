@@ -115,6 +115,28 @@ class WorkbenchContinuationInbox(StrictWorkbenchModel):
     continuations: tuple[WorkbenchAvailableContinuation, ...]
 
 
+class WorkbenchProblemCreatorContinuation(StrictWorkbenchModel):
+    schemaVersion: Literal["problem-creator-continuation.v1"] = (
+        "problem-creator-continuation.v1"
+    )
+    relation: Literal["PROBLEM_CREATOR"] = "PROBLEM_CREATOR"
+    purpose: Literal["CONTINUE_PROBLEM_READ"] = "CONTINUE_PROBLEM_READ"
+    state: Literal["AVAILABLE", "CONSUMED", "EXPIRED"]
+    expiresAt: datetime
+    continuationId: str | None = Field(
+        default=None, pattern=r"^continuation-ref\.[a-f0-9]{64}$"
+    )
+    requestId: str | None = None
+
+    @model_validator(mode="after")
+    def require_state_correlation(self):
+        if self.state in {"AVAILABLE", "CONSUMED"} and self.continuationId is None:
+            raise ValueError("continuation reference required")
+        if (self.state == "CONSUMED") != (self.requestId is not None):
+            raise ValueError("consumed request correlation invalid")
+        return self
+
+
 class WorkbenchAgentRole(StrictWorkbenchModel):
     title: str
     duties: tuple[str, ...]

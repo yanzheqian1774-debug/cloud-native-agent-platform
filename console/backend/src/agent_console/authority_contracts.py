@@ -202,6 +202,18 @@ class ContinuationClaim:
     expires_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ContinuationOfferRecovery:
+    """Owner-only persisted offer state used for keyed response recovery."""
+
+    claim: ContinuationClaim
+    continuation_digest: str
+    mint_payload_digest: str
+    recovery_epoch: int
+    revoked_at: datetime | None
+    request_id: str | None
+
+
 class Authenticator(Protocol):
     def authenticate(self, credential: str, *, now: datetime) -> VerifiedPrincipal: ...
 
@@ -304,6 +316,15 @@ class GrantAdministrationRepository(Protocol):
         now: datetime,
         recovery_epoch: int,
     ) -> ContinuationClaim: ...
+
+    def recover_continuation_offer(
+        self,
+        context: TrustedRequestContext,
+        *,
+        owner: str,
+        purpose: str,
+        mint_key: str,
+    ) -> ContinuationOfferRecovery | None: ...
 
     def submit_request(
         self,

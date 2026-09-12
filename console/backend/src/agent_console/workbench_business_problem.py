@@ -18,6 +18,7 @@ from agent_console.business_problem_authorization import (
     problem_resource,
     reference_grants,
 )
+from agent_console.business_problem_continuation import BusinessProblemCreateCoordinator
 from agent_console.business_problem_domain import BusinessProblemError
 from agent_console.business_problem_schemas import (
     CreateBusinessProblem,
@@ -163,6 +164,10 @@ class BusinessProblemOwnerAdapter:
             reason = str(exc)
             if reason == "BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING":
                 raise WorkbenchOwnerError("CREATOR_RECEIPT_REQUIRED", 409) from exc
+            if reason == "BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALIDATED":
+                raise WorkbenchOwnerError(
+                    "CREATOR_CONTINUATION_INVALIDATED", 409
+                ) from exc
             if "UNAVAILABLE" in reason or "INCOMPATIBLE" in reason:
                 raise WorkbenchOwnerError(
                     "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE", 503
@@ -303,6 +308,7 @@ def _plan_approve(context, path, payload, query):
 
 def business_problem_operations(
     application: BusinessProblemApplication,
+    creator_coordinator: BusinessProblemCreateCoordinator | None = None,
 ) -> tuple[WorkbenchOperation, ...]:
     handler = BusinessProblemOwnerAdapter(application)
     return (
@@ -315,6 +321,7 @@ def business_problem_operations(
             _problem_collection,
             handler,
             201,
+            post_commit_handler=creator_coordinator,
         ),
         WorkbenchOperation(
             "LIST_PROBLEMS",

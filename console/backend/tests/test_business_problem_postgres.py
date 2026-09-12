@@ -221,7 +221,7 @@ def test_creator_receipt_scope_creator_and_generation_are_immutable() -> None:
             authorized=True,
         )
     with pytest.raises(
-        BusinessProblemError, match="BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING"
+        BusinessProblemError, match="BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALIDATED"
     ):
         store.create_problem(
             problem,
