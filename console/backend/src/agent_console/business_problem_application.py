@@ -76,12 +76,12 @@ class BusinessProblemApplication:
             }
         )
 
-    def read_problem(self, principal, problem_id):
+    def read_problem(self, principal, problem_id, *, connection=None):
         self.require(
             principal, "BUSINESS_PROBLEM", "READ", problem_resource(problem_id)
         )
         scope = self.scope(principal)
-        with self.uow.transaction() as connection:
+        with self.uow.transaction(connection) as connection:
             return {
                 "problem": asdict(
                     self.problems.get_aggregate(
@@ -102,18 +102,18 @@ class BusinessProblemApplication:
                 ],
             }
 
-    def list_problems(self, principal):
+    def list_problems(self, principal, *, connection=None):
         self.require(principal, "BUSINESS_PROBLEM", "LIST", problem_resource())
         return {
             "problems": [
                 asdict(r)
                 for r in self.problems.list_problems(
-                    self.scope(principal), authorized=True
+                    self.scope(principal), authorized=True, connection=connection
                 )
             ]
         }
 
-    def create_problem(self, principal, command):
+    def create_problem(self, principal, command, *, connection=None):
         self.require(principal, "BUSINESS_PROBLEM", "CREATE", problem_resource())
         self.require(principal, "BUSINESS_PROBLEM", "READ", problem_resource())
         identity = self.identity(principal, "CREATE_PROBLEM", command.idempotencyKey)
@@ -134,10 +134,11 @@ class BusinessProblemApplication:
             idempotency_key=command.idempotencyKey,
             payload_digest=self.payload(command),
             authorized=True,
+            connection=connection,
         )
         return {"revision": asdict(value)}
 
-    def revise_problem(self, principal, problem_id, command):
+    def revise_problem(self, principal, problem_id, command, *, connection=None):
         self.require(
             principal, "BUSINESS_PROBLEM", "REVISE", problem_resource(problem_id)
         )
@@ -148,7 +149,9 @@ class BusinessProblemApplication:
         previous = next(
             (
                 r
-                for r in self.problems.get_problem(scope, problem_id, authorized=True)
+                for r in self.problems.get_problem(
+                    scope, problem_id, authorized=True, connection=connection
+                )
                 if r.revision_id == command.predecessorRevisionId
             ),
             None,
@@ -177,11 +180,12 @@ class BusinessProblemApplication:
                     idempotency_key=command.idempotencyKey,
                     payload_digest=self.payload(command, problem_id),
                     authorized=True,
+                    connection=connection,
                 )
             )
         }
 
-    def transition(self, principal, problem_id, command):
+    def transition(self, principal, problem_id, command, *, connection=None):
         self.require(
             principal, "BUSINESS_PROBLEM", "TRANSITION", problem_resource(problem_id)
         )
@@ -200,10 +204,11 @@ class BusinessProblemApplication:
             idempotency_key=command.idempotencyKey,
             payload_digest=self.payload(command, problem_id),
             authorized=True,
+            connection=connection,
         )
         return {"businessProblemId": problem_id, "aggregateVersion": version}
 
-    def criterion(self, principal, command):
+    def criterion(self, principal, command, *, connection=None):
         revising = command.predecessorRevisionId is not None
         target = (
             criterion_resource(command.successCriterionId)
@@ -223,7 +228,10 @@ class BusinessProblemApplication:
                 criterion_revision_resource(command.predecessorRevisionId),
             )
             previous = self.problems.get_criterion_revision(
-                scope, command.predecessorRevisionId, authorized=True
+                scope,
+                command.predecessorRevisionId,
+                authorized=True,
+                connection=connection,
             )
             if (
                 previous.success_criterion_id != command.successCriterionId
@@ -264,11 +272,12 @@ class BusinessProblemApplication:
                     idempotency_key=command.idempotencyKey,
                     payload_digest=self.payload(command),
                     authorized=True,
+                    connection=connection,
                 )
             )
         }
 
-    def read_criterion(self, principal, revision_id):
+    def read_criterion(self, principal, revision_id, *, connection=None):
         self.require(
             principal,
             "SUCCESS_CRITERION",
@@ -278,12 +287,15 @@ class BusinessProblemApplication:
         return {
             "revision": asdict(
                 self.problems.get_criterion_revision(
-                    self.scope(principal), revision_id, authorized=True
+                    self.scope(principal),
+                    revision_id,
+                    authorized=True,
+                    connection=connection,
                 )
             )
         }
 
-    def criteria_set(self, principal, problem_id, command):
+    def criteria_set(self, principal, problem_id, command, *, connection=None):
         action = "REVISE" if command.predecessorSetRevisionId else "CREATE"
         self.require(
             principal, "SUCCESS_CRITERIA_SET", action, criteria_resource(problem_id)
@@ -302,7 +314,7 @@ class BusinessProblemApplication:
                 criterion_revision_resource(identity),
             )
         scope = self.scope(principal)
-        with self.uow.transaction() as connection:
+        with self.uow.transaction(connection) as connection:
             revisions = self.problems.get_problem(
                 scope, problem_id, authorized=True, connection=connection
             )
@@ -344,7 +356,7 @@ class BusinessProblemApplication:
             )
         return {"revision": asdict(value)}
 
-    def read_sets(self, principal, problem_id):
+    def read_sets(self, principal, problem_id, *, connection=None):
         self.require(
             principal, "SUCCESS_CRITERIA_SET", "READ", criteria_resource(problem_id)
         )
@@ -352,12 +364,15 @@ class BusinessProblemApplication:
             "revisions": [
                 asdict(r)
                 for r in self.problems.list_criteria_set_revisions(
-                    self.scope(principal), problem_id, authorized=True
+                    self.scope(principal),
+                    problem_id,
+                    authorized=True,
+                    connection=connection,
                 )
             ]
         }
 
-    def read_criteria(self, principal, problem_id):
+    def read_criteria(self, principal, problem_id, *, connection=None):
         self.require(
             principal, "SUCCESS_CRITERIA_SET", "READ", criteria_resource(problem_id)
         )
@@ -365,7 +380,7 @@ class BusinessProblemApplication:
             principal, "BUSINESS_PROBLEM", "READ", problem_resource(problem_id)
         )
         scope = self.scope(principal)
-        with self.uow.transaction() as connection:
+        with self.uow.transaction(connection) as connection:
             self.problems.get_aggregate(
                 scope, problem_id, authorized=True, connection=connection
             )
@@ -390,7 +405,7 @@ class BusinessProblemApplication:
                 ]
             }
 
-    def _authorize_plan(self, principal, problem_id, command):
+    def _authorize_plan(self, principal, problem_id, command, *, connection=None):
         self.require(
             principal, "BUSINESS_PROBLEM", "READ", problem_resource(problem_id)
         )
@@ -405,6 +420,7 @@ class BusinessProblemApplication:
             command.criteriaSetRevisionId,
             authorized=True,
             business_problem_id=problem_id,
+            connection=connection,
         )
         if criteria.business_problem_id != problem_id:
             raise BusinessProblemError("BUSINESS_PROBLEM_NOT_FOUND")
@@ -491,13 +507,20 @@ class BusinessProblemApplication:
             datetime.now(UTC),
         )
 
-    def prepare(self, principal, problem_id, command):
+    def prepare(self, principal, problem_id, command, *, connection=None):
         self.require(principal, "PLAN", "PREPARE", f"plan:prepare:{problem_id}")
         self.require(principal, "PLAN", "READ", f"plan:prepared:{problem_id}")
-        self._authorize_plan(principal, problem_id, command)
+        caller_owned = connection is not None
+        if not caller_owned:
+            # Preserve the private Bearer route's existing transaction order.
+            self._authorize_plan(principal, problem_id, command)
         scope = self.scope(principal)
         digest = self.payload(command, problem_id)
-        with self.uow.transaction() as connection:
+        with self.uow.transaction(connection) as connection:
+            if caller_owned:
+                self._authorize_plan(
+                    principal, problem_id, command, connection=connection
+                )
             replay = self.control.claim_plan_entry(
                 connection,
                 scope,
@@ -634,7 +657,7 @@ class BusinessProblemApplication:
             )
             return self._read_plan(connection, scope, plan_id, 1)
 
-    def approve(self, principal, plan_id, command):
+    def approve(self, principal, plan_id, command, *, connection=None):
         decision_basis = self.require(
             principal, "PLAN", "APPROVE", plan_resource(plan_id, command.planVersion)
         )
@@ -643,18 +666,35 @@ class BusinessProblemApplication:
         )
         scope = self.scope(principal)
         # Plan read permission precedes discovering the bound Problem identity.
-        plan = self.control.get_plan(scope, plan_id, command.planVersion)
-        if plan is None:
-            raise BusinessProblemError("PLAN_NOT_FOUND")
-        envelope = json.loads(plan.canonical_bytes)
-        problem_id = envelope.get("businessProblemId")
-        if not problem_id or envelope.get("preparation") != command.model_dump(
-            include=set(PreparePlan.model_fields) - {"idempotencyKey"}
-        ):
-            raise BusinessProblemConflict("PLAN_PREPARATION_MISMATCH")
-        self._authorize_plan(principal, problem_id, command)
+        caller_owned = connection is not None
+        if not caller_owned:
+            plan = self.control.get_plan(scope, plan_id, command.planVersion)
+            if plan is None:
+                raise BusinessProblemError("PLAN_NOT_FOUND")
+            envelope = json.loads(plan.canonical_bytes)
+            problem_id = envelope.get("businessProblemId")
+            if not problem_id or envelope.get("preparation") != command.model_dump(
+                include=set(PreparePlan.model_fields) - {"idempotencyKey"}
+            ):
+                raise BusinessProblemConflict("PLAN_PREPARATION_MISMATCH")
+            self._authorize_plan(principal, problem_id, command)
         digest = self.payload(command, plan_id)
-        with self.uow.transaction() as connection:
+        with self.uow.transaction(connection) as connection:
+            if caller_owned:
+                plan = self.control.get_plan(
+                    scope, plan_id, command.planVersion, connection=connection
+                )
+                if plan is None:
+                    raise BusinessProblemError("PLAN_NOT_FOUND")
+                envelope = json.loads(plan.canonical_bytes)
+                problem_id = envelope.get("businessProblemId")
+                if not problem_id or envelope.get("preparation") != command.model_dump(
+                    include=set(PreparePlan.model_fields) - {"idempotencyKey"}
+                ):
+                    raise BusinessProblemConflict("PLAN_PREPARATION_MISMATCH")
+                self._authorize_plan(
+                    principal, problem_id, command, connection=connection
+                )
             replay = self.control.claim_plan_entry(
                 connection,
                 scope,
@@ -723,9 +763,9 @@ class BusinessProblemApplication:
             )
             return self._read_plan(connection, scope, plan_id, command.planVersion)
 
-    def read_plan(self, principal, plan_id, version):
+    def read_plan(self, principal, plan_id, version, *, connection=None):
         self.require(principal, "PLAN", "READ", plan_resource(plan_id, version))
-        with self.uow.transaction() as connection:
+        with self.uow.transaction(connection) as connection:
             return self._read_plan(connection, self.scope(principal), plan_id, version)
 
     def _read_plan(self, connection, scope, plan_id, version, replayed=False):

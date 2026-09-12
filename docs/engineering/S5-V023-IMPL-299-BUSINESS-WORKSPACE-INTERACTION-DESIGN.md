@@ -159,3 +159,46 @@ Criteria Set 是同一 Problem 下的版本化成功标准集合；Criteria 是�
 首个闭环必须证明：从真实前端创建业务问题，经正式后端 owner 持久化后读回同一 identity；在同一 scope 内修订 Criteria Set，CAS 冲突失败关闭；刷新后仍读取同一 problem identity、revision 与 Criteria Set，而非重新创建或从 mock 恢复。
 
 后续仍需独立完成 Plan prepare/read/approve、资源绑定、执行、进度、Evidence-backed 结果、纠正、Outcome 和反馈。候选依赖未接线时必须保持显式缺口，不得以静态数据、私有 API 或身份 header 回退替代。
+
+## 10. 2026-09-12 恢复实施接点表
+
+来源时点：299 实际基线 `91928f285160f74927a7dbd3a905b5bdaa7bbf6f`；可信浏览器依赖核对到用户固定参考 305 `3abb901f30a57218928990adf4f2ae75ca38829b`，首批业务子集取自其祖先 `8ce7b39`；310 固定参考 `fb5edaf174783f0e997ed912c516644b977e3eb6` 只用于确认边界，未引入。
+
+| 能力 | 已有正式 owner 端口 | 浏览器接点 | 前端调用位置 | 缺口 | 定向验证 |
+| --- | --- | --- | --- | --- | --- |
+| Problem 创建 | `POST /api/internal/v0.2.3/business-problems`；`BUSINESS_PROBLEM CREATE + READ business-problem:collection` | 305 已接受 `POST /api/workbench/v1/problems`，可信 session + CSRF，同授权事务调用 owner | `businessWorkspace.ts:createBusinessProblem`；`ProblemWorkspacePage:create` | 新 identity 的后续精确 grant/continuation 尚无已注册浏览器管理端口，真实环境需预置精确 grant 或 owner 后续契约 | BFF route/边界单测；owner caller-owned connection 单测；前端 source/build |
+| Problem 权威读回 | `GET /api/internal/v0.2.3/business-problems/{id}`；返回 aggregate、revisions、lifecycle | `GET /api/workbench/v1/problems/{id}`；精确 `READ business-problem:{id}` | `readBusinessProblem`；URL `?problem=` 刷新恢复 | 无精确 READ grant 时 fail closed；不回退私有 header API | 读取同一 problem/revision/digest/aggregate version；刷新 source 断言 |
+| Problem 修订 | `POST .../{id}/revisions`；predecessor revision + aggregate CAS + idempotency | `POST /api/workbench/v1/problems/{id}/revisions`；精确 REVISE + READ | `reviseBusinessProblem`；`saveProblem` | ownerId 变更仍需独立产品授权语义；本批保持现 owner | CAS、重复键与迟到响应隔离单测/源检查 |
+| Criterion 创建/修订 | `POST /api/internal/v0.2.3/success-criteria`；criterion 自身 revision/CAS | `POST /api/workbench/v1/success-criteria`；collection CREATE 或 exact REVISE，并读 predecessor | `writeCriterion`；`saveCriterion` | 正式 schema 是类型化 measurement，不存在自由文本 displayName；首批使用 `HUMAN_EVALUATED/rubric` | strict schema、同事务 owner、幂等键复用 |
+| Criteria Set 创建/修订 | `POST .../business-problems/{id}/criteria-sets`；绑定 problem revision 和有序 criterion revisions，使用 problem aggregate CAS | `POST /api/workbench/v1/problems/{id}/criteria-sets`；set + Problem + member revision 精确授权 | `writeCriteriaSet`；`saveCriterion` 第二步 | Criterion 与 Criteria Set 没有单一原子浏览器命令；set 失败时 criterion revision 可能已存在，UI 不宣称完成并以原幂等键重试 | CAS 冲突、owner scope、刷新后 set/member 精确身份 |
+| Criteria 读回 | 私有 owner 有 set 列表和 problem criterion 列表 | `GET .../{id}/criteria-sets` 与 `GET .../{id}/criteria` | `loadWorkspace` 并行权威读 | member READ grant 由 owner 发现后检查；无权时不部分泄露 | BFF 最小披露与页面 identity 展示 |
+| Plan prepare/read/approve | 当前 owner 三个正式端口均已存在，要求精确 Problem/Criteria/Workflow/Employee/Instance/Assignment 引用 | 305 已注册对应 Workbench routes | 本批只显示“尚未接线” | 前端资源选择、精确引用采集、审批词汇和真实浏览器验收未完成 | 后续单独纵向切片，不由首批测试代替 |
+| Session、action、resource、scope | 305 的 `TrustedRequestContext` 由 HttpOnly cookie 构造；拒绝 Authorization、principal、tenant、domain 等身份 header | `/login`、`/session`、rotate/logout；Host/Origin/CSRF；精确 `owner/action/resource` | `readWorkbenchSession`；所有写请求仅带 CSRF | grant request/decision/revoke/continuation 浏览器端口尚未正式注册 | session、CSRF、untrusted-header、Host/Origin、错误最小披露单测 |
+| 错误语义 | owner 将 not-found 隐藏为统一 Problem not found；冲突 409；存储/兼容问题 503 | BFF 返回 `{reasonCode, requestId}`，无内部细节 | `WorkbenchRequestError` 与卡片内错误 | 字段级错误、冲突差异和本地合并契约缺失 | source、API 单测和真实服务响应分层记录 |
+
+### 10.1 首批实现边界
+
+本批前端只使用 `/api/workbench/v1`：读取可信 session、创建 Problem、按返回 identity 权威读回、修订 Problem、创建或修订一个 `HUMAN_EVALUATED` Criterion、创建或修订 Criteria Set，并从 URL 中的精确 problem identity 刷新恢复。请求不发送身份 header；所有写操作冻结 UI、携带 CSRF、CAS 和按 payload 保留的幂等键，切换问题通过请求 epoch 隔离迟到响应。
+
+后端复用现有 Problem/Criteria/PostgreSQL owner，仅加入 305 已接受的 browser session、精确 grant 与 caller-owned transaction 适配。没有建立新的 Problem/Criteria 权威，也没有引入 310、执行或结果能力。
+
+### 10.2 尚未关闭的正式义务
+
+- 新建对象后自动获得精确 Problem/Criteria Set/member grants 的正式 continuation 流程仍缺少已注册浏览器端口；未预置 grant 的环境会安全失败。
+- Criterion 与 Criteria Set 是两个正式命令，不保证跨 owner 命令原子化；首步成功、第二步失败会保留未绑定 Criterion revision。
+- Plan prepare/read/approve 虽有 305 正式路由，前端尚未收集并验证所需 Workflow、Employee、Instance 与 Assignment 精确引用。
+- 执行、Resource Use、Evidence 和 Outcome 没有 305 公共 Workbench owner 端口，本批保持未接线。
+- 305 dual-listener/deployment isolation 尚未并入 299；源码测试不能替代真实服务和可信浏览器证据。
+
+## 11. 本批分层验证记录
+
+验证时点：2026-09-12（Asia/Shanghai）。
+
+| 层级 | 已执行 | 结果 | 证明范围 |
+| --- | --- | --- | --- |
+| Source / mock | 定向 Ruff lint/format；authority、session、BFF、owner adapter、299 frontend source tests | Ruff 通过；首批 pytest 25 passed，追加 app/frontend 回归 8 passed；共有一个既有 Starlette/httpx 弃用警告 | strict schema、session/CSRF/Host/Origin/身份 header 拒绝、caller-owned connection、前端端口/CAS/刷新标记和现有 app 回归 |
+| Frontend 静态产物 | `npm run lint`、`npm run build`（先按 lockfile 执行 `npm ci`） | lint 通过；TypeScript 与 Vite production build 通过 | 新 API 类型、React 页面和生产构建可编译；不证明后端或浏览器交互 |
+| 真实服务 | 未执行 | `NOT_EVIDENCED` | 本批未启动 PostgreSQL、私有 owner、公有 BFF 或反向代理 |
+| 可信浏览器 | 未执行 | `NOT_EVIDENCED` | 未建立真实 HttpOnly session、预置精确 grants 或执行真实浏览器 create/read/revise/refresh |
+
+因此本批可声明“首批正式接线源码已实现并通过定向 source/build 验证”，不能声明真实服务闭环、可信浏览器接受、完整 299、I2/I3、部署或发布完成。
