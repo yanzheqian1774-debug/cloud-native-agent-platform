@@ -51,6 +51,9 @@ and durable Business Problem assembly are all available:
 | `GET /api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/placements/{placement_id}?attemptId=...&agentInstanceId=...` | exact `PLACEMENT READ placement:{placement_id}` | bounded Placement projection after complete owner parent and active-attempt checks |
 | `GET /api/workbench/v1/workflows` | `WORKFLOW LIST workflow:collection` | minimal Workflow Definition summaries, when the optional Workflow registry is enabled |
 | `GET /api/workbench/v1/workflows/{definition_id}/revisions/{revision_id}` | exact `WORKFLOW READ workflow:{definition_id}:{revision_id}` | only the authorized revision and bounded projections, when the optional Workflow registry is enabled |
+| `GET /api/workbench/v1/authorization/continuations?state=AVAILABLE` | current authenticated subject and scope | available, unconsumed continuation references without protected resource identities |
+| `POST /api/workbench/v1/authorization/grant-requests` | current authenticated subject; one continuation reference, or the existing direct exact-target mode | one persisted `PENDING` request projection after server-side requestability and target validation |
+| `GET /api/workbench/v1/authorization/grant-requests/{request_id}` | applicant, or exact scoped `GRANT_ADMIN / INSPECT` | minimum request state with the persisted aggregate version |
 
 All request bodies and registered query models are strict Pydantic contracts. Incoming
 authorization, proxy-authorization, principal, tenant, domain, product-read, and
@@ -138,10 +141,14 @@ evidence.
 
 ## Routes deliberately not registered
 
-- Capability discovery and grant request/decision/revocation/continuation HTTP
-  routes require a formal cross-owner exact-target validator. I1 exposes the
-  application service but the fixed baseline has no production validator port;
-  registering a mock would allow requests without owner fact proof.
+- Capability discovery, continuation assignment, grant decision, grant
+  revocation, and continuation revoke/surrender remain unregistered. The current
+  batch registers only the subject inbox, one grant-request submit, and request
+  inspect operations. A submit can succeed only when the injected I1 service has
+  a formal target validator: continuation mode resolves a persisted offer and
+  revalidates its owner claim; direct mode preserves the existing requestability
+  plus known-exact-target validation. The default composition does not invent a
+  validator or an owner continuation mint rule.
 - Workflow Definition LIST and exact-revision READ use the caller-owned connection
   and are registered when their optional same-database dependency is configured.
   Agent/Employee Definition exact and list reads plus Instance, Assignment, and
@@ -164,7 +171,8 @@ The default-disabled public BFF does not unlock IMPL-299.
 | --- | --- | --- |
 | Login, current session, rotation, logout, CSRF, Origin and Host | `FORMALLY_REGISTERED` | Five public operations use the I1 Browser Session Authority; unsafe operations require same-origin plus session-bound CSRF. |
 | Business Problem, Criteria and Plan | `FORMALLY_REGISTERED` | The 13 routes above call the durable Product/Workflow Control owner through the same authorization transaction. |
-| Grant requests, decisions, revocation and continuations | `COMPONENT_ONLY / NOT_REGISTERED` | I1 application components exist, but production composition has no formal cross-owner exact-target validator/continuation resolver. |
+| Continuation inbox, grant request submit, request inspect | `FORMALLY_REGISTERED / OWNER_VALIDATOR_REQUIRED_FOR_SUBMIT` | Session-authenticated strict routes expose only current-subject offers and minimum request state. Submit still fails closed unless the injected service can revalidate the owner target. |
+| Grant decisions, grant revocation, continuation assignment/revoke/surrender | `COMPONENT_ONLY / NOT_REGISTERED` | Decision CAS/basis mapping, immutable revocation readback, and independent continuation lifecycle semantics remain Human-owned gaps. |
 | Workflow Definition read | `OPTIONAL / FORMALLY_REGISTERED` | LIST and exact-revision READ use the current authorization transaction when the optional same-database Workflow service is configured; no aggregate history or adjacent revisions are disclosed. |
 | Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, edit, validate, review, publish, and other lifecycle mutations are not in the public registry. |
 | Agent Definition read and discovery | `FORMALLY_REGISTERED` | Exact READ and collection LIST are independent; LIST follows only the formal `publishedRevisionId`, and both use bounded DTOs on the authorization transaction. |
@@ -570,3 +578,102 @@ Validation executed for this batch:
 
 The batch remains part of the existing Draft PR #164 and does not authorize
 Ready, merge, deployment, or closure of the full 305 Session.
+
+## S5-V023-IMPL-305 recovery batch for IMPL-299 authorization ports
+
+Recovery source is commit `5948a499de16a59d785774b67823bd8bb4521983`,
+tree `967dcd0682a5c1ad0e6dc0144d82e43cb2b1f7c2`. The read-only IMPL-299
+handoff is fixed at commit `b7123ae0c1c70992f4fb5a65bec5ff24283ecaf9`, tree
+`dacd0da76ef3cc7821ab6636bfd94c42a5c29c50`. IMPL-299's PostgreSQL
+service evidence is inherited as service-level evidence only; it contains no
+trusted-browser acceptance.
+
+This batch adds three session-authenticated routes:
+
+| Route | Strict input | Minimum output | Authorization and validation |
+| --- | --- | --- | --- |
+| `GET /api/workbench/v1/authorization/continuations?state=AVAILABLE` | the query must be exactly one `state=AVAILABLE` | `continuations[]` with `continuationId`, `purpose`, `expiresAt`, `requestableActions` | current session subject/scope; only unexpired, issued, current-generation, current-recovery, unrevoked and unconsumed offers |
+| `POST /api/workbench/v1/authorization/grant-requests` | `exact-grant-request.v1`, bounded purpose, and exactly one source: one `continuationId` or one-or-more `requestedGrants`; `Idempotency-Key`; session CSRF | `requestId`, `PENDING`, persisted `aggregateVersion`, `submittedAt`, `purpose`, action labels | continuation reference is resolved from PostgreSQL under the current subject/scope and its fixed members are revalidated by the owner validator; direct mode retains requestability plus known-exact-target validation |
+| `GET /api/workbench/v1/authorization/grant-requests/{request_id}` | typed path only | the same request status shape, with current persisted version and no exact resource | applicant, or current exact `GRANT_ADMIN / INSPECT / grant-scope:{tenant}:{security_domain}`; unknown, hidden, foreign-scope and unauthorized requests share `404 AUTHORIZATION_REQUEST_NOT_FOUND` |
+
+The inbox never returns an encoded continuation payload. It returns
+`continuation-ref.<sha256>` derived from the already persisted signed envelope.
+The digest is a stable opaque offer reference; PostgreSQL resolves it only for
+the current bound subject/scope, issued/expiry interval and recovery epoch. The
+application then checks policy generation, purpose and the complete offer members
+and invokes the owner validator in the request transaction before unique
+consumption. The browser therefore neither receives nor constructs a hidden exact
+target in continuation mode. Direct mode is separate and can use only a target
+that the server's existing validator proves known and requestable.
+
+`BUSINESS_PROBLEM / READ / business-problem:collection` is added only to the
+closed `BROWSER_BOOTSTRAP` configuration allowlist because the existing Problem
+create owner operation requires collection CREATE and collection READ. The loader
+does not inject it into every credential: a deployment must explicitly place the
+tuple in that credential's immutable generation. The allowlist rejects
+`business-problem:{id}` as a bootstrap grant, and collection READ never implies
+exact READ for a newly created Problem.
+
+The login form's successful GET response alone uses
+`Referrer-Policy: same-origin`, so its same-origin form POST can carry Origin as
+required. Every other successful or error response retains `no-referrer`.
+
+### IMPL-299 wiring instruction
+
+After a future accepted Problem owner adapter commits the canonical Problem
+identity/revision and persists the creator offer, IMPL-299 should:
+
+1. refresh the current-subject continuation inbox and select the opaque offer by
+   purpose/action labels, without decoding it or manufacturing a target;
+2. submit exactly that one reference with a stable request idempotency key and no
+   `requestedGrants` member;
+3. persist only the returned `requestId` as navigation/recovery state and poll the
+   applicant request-status route;
+4. render `PENDING` or `REJECTED` as non-authorized states; after `APPROVED`, call
+   the already registered exact Problem READ route using the canonical Problem ID
+   from the formal create response; and
+5. let that exact READ reauthenticate the session and re-evaluate the current
+   grant/decision in its caller-owned transaction. The request status, an
+   `APPROVED` label, a cached boolean, and collection READ are never substitutes
+   for that current exact authorization.
+
+This wiring requires no public decision DTO in the ordinary 299 page. An
+independent administrator decision entry remains necessary somewhere outside the
+applicant page before status can become approved.
+
+### Validation for this recovery batch
+
+- source/mock: focused Ruff lint/format and BFF/bootstrap/config tests cover exact
+  route/schema composition, unauthenticated and foreign Origin/Host/header/CSRF
+  rejection, the narrow login header exception, continuation/direct-source
+  exclusivity, conflict mapping, foreign request hiding and minimum status
+  projection;
+- real PostgreSQL 15: the complete authority foundation file covers subject/scope,
+  expiry, future-issued and generation rejection, unique consumption, same-key
+  replay, changed-payload conflict, recovery invalidation, applicant/admin inspect,
+  and request aggregate version `1 -> 2`; a focused HTTP case uses the real
+  Browser Session Authority, PostgreSQL repository and public BFF routes;
+- real browser: a local browser used the real login form/session and PostgreSQL
+  fixture offer to call inbox, submit and inspect. The visible projection showed
+  an opaque reference, `202 PENDING`, and aggregate version 1 without the hidden
+  Problem target. It used a loopback HTTP-only harness because the browser
+  correctly rejected the temporary self-signed HTTPS certificate; therefore it
+  is not TLS, ingress/network isolation, production composition, I3, or complete
+  trusted-browser acceptance evidence.
+
+The fixture offer proves only the three public ports. It does not prove
+`Problem create -> owner mint -> request -> decision -> exact read`, and it does
+not change IMPL-299 from `NOT_EVIDENCED` at the trusted-browser product level.
+
+### Concentrated Human decision table
+
+| Topic | Existing contract | Concrete gap | Recommended Human decision | Alternative | Impact | Blocks complete IMPL-299 loop |
+| --- | --- | --- | --- | --- | --- | --- |
+| Problem creator continuation | Owner-minted, subject/scope-bound, at-most-ten-minute offer persisted after canonical owner commit; request members cannot be widened by the browser | Exact creator members, canonical Problem reference, owner revision encoding, and replayable post-commit mint hook are not frozen | Freeze one Problem-owned adapter over the committed create result, including the exact member bundle and deterministic origin-command mint key; return or recover the stable offer without repeating create | Keep new Problems fail-closed and require a separately assigned offer after another accepted workflow | Business Problem application/owner adapter, grant target validator, create response and tests | **Yes** for create-to-exact-read |
+| Administrator decision CAS and basis | Independent exact `GRANT_ADMIN / DECIDE`; service and repository prohibit self-approval and atomically move `PENDING` to a terminal state | Browser command has no accepted `expectedVersion`; `basisReference` has no authoritative mapping to the persisted closed `basis_type` | Add `expectedVersion` to the decision command and compare the locked aggregate version; freeze a closed external basis enum and one mapping to internal `basis_type`, retaining a digested reference | Keep decision on a private/internal administrator tool and expose only applicant status | BFF schema/route, application command, PostgreSQL CAS, errors and admin tests | **Yes** for an independently approved browser journey |
+| Grant revoke | Revocation fact and effective-grant removal are atomic; current reads fail after commit | Public CAS, immutable revocation identity/version/result and subject/admin readback are absent; current repository returns only boolean | Freeze expected grant version plus immutable `revocationId`, version and readback projection before adding the route | Keep revoke internal and rely on expiry for this preview | Authority contract/application/repository/BFF and revocation race tests | **No** for the minimal create-to-read step; **yes** for full grant lifecycle acceptance |
+| Continuation offer revoke/surrender | Expiry, consumption, generation and recovery invalidation already fail closed | Actor authorization, reason/idempotency command, immutable result and distinction between administrator revoke and subject surrender are undefined | Define one append-only offer-revocation contract with separate authorized actor cases and replay semantics | Retain expiry/recovery/consumption only and expose no route | Continuation contract, persistence, inbox filtering, BFF and audit tests | **No** for the minimal create-to-read step; **yes** for full continuation lifecycle acceptance |
+
+No row above authorizes implementation by appearing in this table. Draft PR #164
+remains Draft; this batch does not make it Ready, merge, deploy, close IMPL-305,
+or modify IMPL-299/IMPL-308 branches.
