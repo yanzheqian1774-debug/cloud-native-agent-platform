@@ -149,3 +149,24 @@ def test_write_fallbacks_are_disabled_and_identity_boundaries_are_explicit() -> 
         "createEmployeeAssignment(",
     ):
         assert removed_call not in page
+
+
+def test_real_browser_private_api_observation_is_scoped_to_employee_work() -> None:
+    scenario = (
+        REPOSITORY_ROOT
+        / "console"
+        / "frontend"
+        / "tests"
+        / "e2e"
+        / "digital-employee-work-participation.real.spec.ts"
+    ).read_text()
+    observation_start = scenario.index("observations.observePrivateRequests = true;")
+    employee_navigation = scenario.index(
+        "full.page.goto(`${baseURL}/digital-employees`)"
+    )
+    observation_end = scenario.index("observations.observePrivateRequests = false;")
+    lister_login = scenario.index(
+        'login(browser, credentials.list, observations, "LISTER")'
+    )
+    assert observation_start < employee_navigation < observation_end < lister_login
+    assert "if (headers[name]) observations.identityHeaders.push(name);" in scenario

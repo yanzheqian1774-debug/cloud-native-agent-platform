@@ -16,7 +16,11 @@ const credentials = {
   wrongGrant: required("S5_310_WRONG_GRANT_CREDENTIAL"),
 };
 
-type BrowserObservations = { identityHeaders: string[]; privateRequests: string[] };
+type BrowserObservations = {
+  identityHeaders: string[];
+  privateRequests: string[];
+  observePrivateRequests: boolean;
+};
 type LoginKind = "FULL" | "LISTER" | "WRONG_SCOPE" | "WRONG_GRANT";
 const sessionURL = new URL("/api/workbench/v1/session", baseURL);
 const loginIdentities = {
@@ -90,7 +94,8 @@ async function login(
     const headers = value.headers();
     for (const name of ["x-principal-id", "x-tenant-id", "x-security-domain"])
       if (headers[name]) observations.identityHeaders.push(name);
-    if (new URL(value.url()).pathname.startsWith("/api/internal/")) observations.privateRequests.push(value.url());
+    if (observations.observePrivateRequests && new URL(value.url()).pathname.startsWith("/api/internal/"))
+      observations.privateRequests.push(value.url());
   });
   const page = await context.newPage();
   const [formStep, submitStep, readyStep] = loginSteps[kind];
@@ -170,11 +175,16 @@ async function browserFetch(page: Page, path: string) {
 }
 
 test("REAL_SERVICE trusted Digital Employee reads preserve authorization and identity", async ({ browser }) => {
-  const observations: BrowserObservations = { identityHeaders: [], privateRequests: [] };
+  const observations: BrowserObservations = {
+    identityHeaders: [],
+    privateRequests: [],
+    observePrivateRequests: false,
+  };
   const full = await login(browser, credentials.full, observations, "FULL");
 
   const employeeButton = full.page.getByRole("button", { name: /Supplier quality owner/ });
   await test.step("EMPLOYEE_LIST_PAGE_READY", async () => {
+    observations.observePrivateRequests = true;
     const requestPromise = full.page.waitForRequest(isEmployeeListRequest).then(
       value => {
         test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED", description: "true" });
@@ -394,6 +404,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
     expect(logout.status()).toBe(204);
     expect((await browserFetch(full.page, "/api/workbench/v1/employees?pageSize=1")).status).toBe(401);
     await full.context.close();
+    observations.observePrivateRequests = false;
   });
 
   const lister = await login(browser, credentials.list, observations, "LISTER");
