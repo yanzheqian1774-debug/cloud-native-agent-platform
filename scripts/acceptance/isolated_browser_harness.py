@@ -84,6 +84,16 @@ FIRST_FAILURE_ASSERTION_IDS = {
         "publishes, binds and authorizes one bounded real capability test",
     ): "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE",
     (
+        "skill-mcp-workbench.spec.ts",
+        "skill reuse operations confirm exact source and complete "
+        "from authoritative readback",
+    ): "SKILL_MCP_SKILL_REUSE_OPERATIONS",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "mcp reuse operations confirm exact source and complete "
+        "from authoritative readback",
+    ): "SKILL_MCP_MCP_REUSE_OPERATIONS",
+    (
         "unified-product-assembly.spec.ts",
         "proves the complete durable unified-product browser journey",
     ): "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
@@ -1099,6 +1109,13 @@ SKILL_MCP_STEP_IDS = {
     ),
     "SKILL_MCP_FINAL_UI_INTERACTION": ("SKILLS", "MIXED", "FINAL_UI_INTERACTION"),
 }
+SKILL_MCP_REUSE_STEP_IDS = {
+    "SKILL_MCP_REUSE_PUBLISH": ("CAPABILITIES", "DESKTOP", "REUSE_PUBLISH"),
+    "SKILL_MCP_REUSE_EXPORT": ("CAPABILITIES", "DESKTOP", "REUSE_EXPORT"),
+    "SKILL_MCP_REUSE_CLONE": ("CAPABILITIES", "DESKTOP", "REUSE_CLONE"),
+    "SKILL_MCP_REUSE_IMPORT": ("CAPABILITIES", "DESKTOP", "REUSE_IMPORT"),
+    "SKILL_MCP_REUSE_SUCCESSOR": ("CAPABILITIES", "DESKTOP", "REUSE_SUCCESSOR"),
+}
 DIAGNOSTIC_STEP_IDS = {
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
@@ -1110,6 +1127,7 @@ DIAGNOSTIC_STEP_IDS = {
     },
     **UNIFIED_PRODUCT_STEP_IDS,
     **SKILL_MCP_STEP_IDS,
+    **SKILL_MCP_REUSE_STEP_IDS,
 }
 ACTION_CLASSES = frozenset(
     {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
@@ -1133,6 +1151,12 @@ def _step_identity(scenario: str, title: object):
     if scenario == "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE":
         identity = SKILL_MCP_STEP_IDS.get(title)
         return (title, *identity) if identity is not None else None
+    if scenario in {
+        "SKILL_MCP_SKILL_REUSE_OPERATIONS",
+        "SKILL_MCP_MCP_REUSE_OPERATIONS",
+    }:
+        identity = SKILL_MCP_REUSE_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     return None
 
 
@@ -1150,6 +1174,8 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
         "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE",
+        "SKILL_MCP_SKILL_REUSE_OPERATIONS",
+        "SKILL_MCP_MCP_REUSE_OPERATIONS",
     }:
         return None
     steps = result.get("steps")

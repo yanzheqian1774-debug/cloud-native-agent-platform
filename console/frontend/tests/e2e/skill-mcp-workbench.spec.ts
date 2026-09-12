@@ -147,11 +147,12 @@ test("capability directory switches views, searches Chinese content and paginate
 
 for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confirm exact source and complete from authoritative readback`,async({page})=>{
   const path=`/${kind}`,create=kind==="skill"?"Create governed SKILL":"Create governed MCP";
-  await publish(page,path,create);
+  await test.step("SKILL_MCP_REUSE_PUBLISH",()=>publish(page,path,create));
   const sourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
   const source=await page.evaluate(async({kind,id})=>(await(await fetch(`/api/internal/v0.2.2/resources/${kind}/${encodeURIComponent(id)}`)).json()),{kind,id:sourceId});
   const sourceRevision=source.resource.revisions.find((item:{revisionId:string})=>item.revisionId===source.resource.publishedRevisionId);
 
+  await test.step("SKILL_MCP_REUSE_EXPORT",async()=>{
   const manifestResponse=page.waitForResponse(response=>responsePath(response)===`/api/internal/v0.2.2/resources/${kind}/${sourceId}/manifest`&&response.request().method()==="GET");
   await page.getByRole("button",{name:"Export bounded manifest"}).click();
   expect((await manifestResponse).status()).toBe(200);
@@ -163,7 +164,9 @@ for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confir
   await exportConfirmation.getByRole("button",{name:"Confirm Export bounded manifest"}).click();
   await download;
   await expect(page.getByRole("status",{name:"Reuse operation completion"})).toContainText(sourceId);
+  });
 
+  await test.step("SKILL_MCP_REUSE_CLONE",async()=>{
   await page.getByRole("button",{name:"Clone exact revision"}).click();
   const cloneConfirmation=page.getByRole("region",{name:"Reuse operation confirmation"});
   await expect(cloneConfirmation.getByLabel("Exact source revision")).toHaveValue(sourceRevision.revisionId);
@@ -177,7 +180,9 @@ for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confir
   await expect(recordedSource).toContainText(sourceId);
   await expect(recordedSource).toContainText(sourceRevision.revisionId);
   await expect(recordedSource).toContainText(sourceRevision.digest);
+  });
 
+  await test.step("SKILL_MCP_REUSE_IMPORT",async()=>{
   await page.goto(`${path}?resourceId=${encodeURIComponent(sourceId)}`);
   await expect(page.locator(".agent-detail").getByRole("heading",{name:source.resource.name,exact:true})).toBeVisible();
   const importManifestResponse=page.waitForResponse(response=>responsePath(response)===`/api/internal/v0.2.2/resources/${kind}/${sourceId}/manifest`&&response.request().method()==="GET");
@@ -192,7 +197,9 @@ for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confir
   await expect(page.locator(".agent-detail").getByRole("heading",{name:importName,exact:true})).toBeVisible();
   await expect(page.getByRole("region",{name:"Recorded source relationships"})).toContainText("No source relationship is recorded by the backend");
   await expect(page.getByRole("status",{name:"Reuse operation completion"})).toContainText("NOT_RECORDED_BY_BACKEND");
+  });
 
+  await test.step("SKILL_MCP_REUSE_SUCCESSOR",async()=>{
   await page.goto(`${path}?resourceId=${encodeURIComponent(sourceId)}`);
   await expect(page.locator(".agent-detail").getByRole("heading",{name:source.resource.name,exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Create successor Draft"}).click();
@@ -204,6 +211,7 @@ for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confir
   await expect(receipt).toContainText(sourceRevision.revisionId);
   await expect(receipt).toContainText("NOT_RECORDED_BY_BACKEND");
   await expect(page.getByRole("button",{name:`编辑当前 ${kind.toUpperCase()} Draft`})).toBeEnabled();
+  });
 });
 
 test("publishes, binds and authorizes one bounded real capability test",async({page},testInfo)=>{

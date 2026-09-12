@@ -97,7 +97,7 @@ def test_summary_static_scenarios(mapping):
     report["suites"][0]["file"] = name
     report["suites"][0]["specs"][0]["title"] = title
     summary = make_summary(report)
-    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 19
+    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 21
     assert summary["scenarioId"] == scenario
     assert summary["spec"] == "console/frontend/tests/e2e/" + name
     assert summary["sourceLine"] == 42
@@ -565,8 +565,45 @@ def test_skill_mcp_source_uses_exact_static_top_level_steps():
         / "console/frontend/tests/e2e/skill-mcp-workbench.spec.ts"
     ).read_text(encoding="utf-8")
     titles = re.findall(r'await test\.step\("(SKILL_MCP_[A-Z_]+)"', source)
-    assert titles == list(harness_module.SKILL_MCP_STEP_IDS)
+    assert titles == [
+        *harness_module.SKILL_MCP_REUSE_STEP_IDS,
+        *harness_module.SKILL_MCP_STEP_IDS,
+    ]
     assert "waitForTimeout(" not in source
+
+
+def test_skill_mcp_reuse_steps_retain_first_failed_operation():
+    report = summary_report("failed")
+    report["suites"][0]["file"] = "skill-mcp-workbench.spec.ts"
+    report["suites"][0]["specs"][0]["title"] = (
+        "skill reuse operations confirm exact source and complete "
+        "from authoritative readback"
+    )
+    result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result.update(
+        duration=12_000,
+        steps=[
+            {"title": "SKILL_MCP_REUSE_PUBLISH", "duration": 3000},
+            {"title": "SKILL_MCP_REUSE_EXPORT", "duration": 1000},
+            {
+                "title": "SKILL_MCP_REUSE_CLONE",
+                "duration": 5000,
+                "error": {"message": "PRIVATE source identity"},
+            },
+        ],
+    )
+    summary = make_summary(report)
+    diagnostic = summary["stepDiagnostic"]
+    assert summary["scenarioId"] == "SKILL_MCP_SKILL_REUSE_OPERATIONS"
+    assert diagnostic["lastCompletedStep"]["stepId"] == "SKILL_MCP_REUSE_EXPORT"
+    assert diagnostic["failedStep"] == {
+        "routeKey": "CAPABILITIES",
+        "viewportKey": "DESKTOP",
+        "stepId": "SKILL_MCP_REUSE_CLONE",
+        "actionClass": "REUSE_CLONE",
+        "elapsedMs": 5000,
+    }
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
 
 
 def test_skill_mcp_steps_retain_last_completion_and_exact_failure():
