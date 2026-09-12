@@ -54,22 +54,68 @@ pytest reported `1597 passed, 134 skipped` with one existing Starlette/httpx
 deprecation warning. Skips were environment-gated PostgreSQL, Qdrant, frontend
 dependency and isolated-Linux checks, not converted into passes.
 
-Live bounded facts recovered without exposing credentials or raw logs:
+## Batch A continuation evidence
 
-- exact CLI: `OpenClaw 2026.7.1-2 (0790d9f)`;
-- host Node: `v22.23.1`, satisfying the pinned package engine range;
-- one task-owned Gateway PID `71906` listens on loopback port `19314` from the task
-  worktree and isolated temporary state directory;
-- `/healthz` returned HTTP `200`;
-- authenticated Gateway RPC is `UNKNOWN`: the prior token was not present in the
-  recoverable caller or process environment, and a bounded client call failed before
-  authentication because the configured Secret reference was unavailable;
-- no model task and no lifecycle write RPC was executed.
+Git recovery matched the fixed continuation point exactly before writing: HEAD
+`fe6689a108bb1517fffe21017612b72f86405057`, tree
+`c787d3cc4fb00d882de5317e480ea399898b0d21`, clean index/worktree, no Git lock and no
+other writer in the task worktree. The two interrupted read-only command groups had
+ended and no missing result was represented as a pass.
 
-The shipped operator image currently copies only `operator/` and exposes only
-`operator/src`; an image-equivalent import fails on the pre-existing `agent_core`
-dependency, and configured OpenClaw startup would additionally lack `agent_runtime`.
-The repository also has no authoritative operator-facing Runtime Profile projection
-path. Those limitations prevent a complete production-image assembly claim and
-remain Human decision items. No deployment, certification, complete OpenClaw
-lifecycle or real execution claim is made.
+Draft PR #169 automatic CI at that exact head completed on attempt 1:
+
+- run `34697436806` (`CI`): `SUCCESS`; Quality Gates, Frontend Quality Gates and
+  Agent Workbench Browser Acceptance all succeeded;
+- run `34697436797` (`Employee Identity Chain`): `SUCCESS`; PostgreSQL Identity
+  Chain, PostgreSQL Skill Invocation and PostgreSQL Business Problem and Plan Entry
+  all succeeded.
+
+No manual rerun was requested. CI does not replace authenticated RPC or image proof.
+
+The original Gateway PID `71906` was confirmed as owned by this task using its exact
+cwd, loopback listener and isolated state path. Its credential was not recoverable,
+so it was stopped gracefully without deleting transcript or business state. A first
+replacement exposed a safe configuration rejection for missing `gateway.mode`; the
+task-local configuration was corrected to explicit `local` mode rather than using
+`--allow-unconfigured`. The durable validation Gateway is PID `93744`, cwd
+`/Users/tristan/.codex/worktrees/3198/cloud-native-agent-platform`, listening only on
+`127.0.0.1:19314` and `[::1]:19314`, with state under
+`/private/tmp/s5-v023-impl-314-probe.b0zeMp`.
+
+Credential material is a new random task-local value stored only in a mode-0600
+temporary file outside the repository and projected into the existing
+`secret-ref:openclaw-gateway -> OPENCLAW_GATEWAY_TOKEN` environment slot. Its value
+was never printed or passed as a command-line argument. With that reference, real
+authenticated read-only RPC returned:
+
+- `health`: authenticated response, `eventLoop.degraded=false`;
+- `status`: `runtimeVersion=2026.7.1-2`;
+- `agents.list`: exact agent `s5-v023-impl-314-runtime-1-g1` with workspace
+  `/tmp/s5-v023-impl-314-probe.b0zeMp/workspaces/runtime-1/g1` (canonical equivalent
+  of the configured `/private/tmp` path).
+
+The production Transport -> Provider -> Adapter -> Factory bootstrap then passed
+against that real Gateway and returned provider kind `openclaw`. No model, session,
+agent or lifecycle write RPC was called.
+
+The production operator image packaging now includes the exact Python import closure
+`operator/core/gateway/runtime`, plus Node `22.23.1` and a production npm lock for
+exact `openclaw@2026.7.1-2` with the accepted integrity. Only source directories are
+copied into the final image. A clean image-equivalent formal entrypoint import passed,
+focused packaging/bootstrap/operator/OpenClaw tests reported `20 passed`, and the
+complete `make check` gate reported `1599 passed, 134 skipped` with the existing
+Starlette/httpx deprecation warning.
+
+One real Docker build was attempted. Docker daemon preflight responded, but both
+Python and Node base-image metadata requests to the configured registry proxy timed
+out. The build was cancelled after a bounded 90-second no-progress window and was
+not retried or followed by a Docker restart. Consequently, a runnable image and
+in-image configured preflight remain `NOT_PROVEN`; no build success is claimed.
+
+The G1 plan now contains two concentrated `PROPOSED / NOT_ACCEPTED / NOT_IMPLEMENTED`
+contracts: a recommended exclusive agent/workspace plus generation-scoped session
+native realization, and a PostgreSQL-owner immutable revision plus mutable status
+projection transported through Kubernetes. They do not implement lifecycle or
+Profile projection semantics. `execute` and `observe_execution` remain unsupported.
+No deployment, certification, Batch B dispatch/recovery/Evidence/Outcome, complete
+OpenClaw lifecycle or release claim is made.

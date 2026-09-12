@@ -207,24 +207,137 @@ observation; dispatch claims; persistent recovery; terminal Evidence/Outcome;
 trusted browser execution; public API/CRD/auth vocabulary; 299/305/308 business
 logic; and any 309 environment operation remain excluded.
 
-## Open Human decisions and packaging limitation
+## PROPOSED contract A — Runtime Instance native realization
 
-1. Select the native realization for one Platform Runtime Instance under the
-   external shared-Gateway profile: preconfigured agent, generation-scoped session,
-   another object, or lifecycle-unsupported.
-2. If Session is selected, define create/adopt ownership proof, durable correlation,
-   restart recovery, idempotency, graceful stop, transcript retention, replacement
-   and ambiguous-effect behavior. Archive/delete cannot be inferred as stop.
-3. Define the authoritative production projection path for a published Runtime
-   Profile. The current internal bootstrap can verify a serialized record's
-   self-consistency, but the repository has no operator-facing export/controller,
-   signature, API trust path or direct repository contract that proves the file was
-   emitted by the PostgreSQL Runtime Profile authority.
-4. Authorize the packaging path if configured OpenClaw startup must run in the
-   shipped operator image. `operator/Dockerfile` currently copies only `operator/`
-   and exposes only `operator/src`; it contains neither `core/src` nor `runtime/src`.
-   A clean image-equivalent import already fails on the baseline `agent_core`
-   dependency, and configured OpenClaw startup would additionally lack
-   `agent_runtime`. The source entrypoint uses a lazy import so this change does not
-   add the latter failure to the unconfigured path, but the production-image path is
-   not validated.
+Status: `PROPOSED / NOT_ACCEPTED / NOT_IMPLEMENTED`. This comparison does not alter
+the accepted lifecycle or authorize any OpenClaw write RPC.
+
+| Candidate | Benefit | Blocking defect |
+| --- | --- | --- |
+| OpenClaw agent only | Strong agent/workspace identity and simple observation | Agent is long-lived configuration, not generation-scoped execution context; it cannot represent restart/replace or transcript boundaries safely |
+| OpenClaw session only | Natural generation and transcript correlation | Session does not prove agent/workspace/file/credential isolation or ownership; archive/delete is not Runtime stop |
+| Agent/workspace plus session | Separates isolation host from generation context and retains both correlations | Requires explicit create/adopt proof, durable two-part correlation and verified drain semantics |
+
+Recommendation: use the combination. One Platform Runtime Instance binds exclusively
+to one OpenClaw agent and its attested workspace; each Runtime Instance generation
+binds to one OpenClaw session. The shared Gateway is only a dependency correlation.
+An OpenClaw agent serving multiple Runtime Instances remains a future candidate and
+is not accepted by this proposal; it requires independent proof that workspace,
+memory, files, credentials and context are partitioned as strongly as the exclusive
+mapping.
+
+The proposed invariant is:
+
+```text
+(namespace, security_domain, runtime_instance_id)
+  -> exclusive agent_id + workspace_attestation
+  -> generation
+  -> session_id/session_key + ownership_nonce
+```
+
+- Memory and files are scoped to the Runtime Instance workspace. A replacement uses
+  a successor workspace generation or a verified immutable base plus an isolated
+  writable overlay; no unqualified agent-global memory is shared.
+- Credentials remain opaque Platform Secret References, resolved only for the exact
+  scope and projected into the bounded provider process/invocation slot. They are
+  never stored in agent metadata, workspace, session, transcript or correlation.
+- Session context is generation-scoped. Cross-generation carry-over requires an
+  explicit State/Memory Reference and never occurs by reusing a transcript silently.
+- `CREATE` is permitted only when the provider supports a bounded idempotent agent or
+  session create operation. `ADOPT` requires a durable Platform ownership nonce and
+  exact scope/Runtime Instance/agent/workspace attestation match; matching name or
+  path alone is insufficient. Externally owned objects without that proof remain
+  connected dependencies and cannot be deleted by the Platform.
+- `START` persists the desired command and idempotency key, observes first, then
+  creates or adopts the exclusive agent/workspace and generation session. Success is
+  recorded only after both correlations are re-observed.
+- `OBSERVE` verifies agent identity, workspace attestation, session correlation,
+  generation and freshness separately from shared Gateway health/readiness.
+- `STOP` first blocks new dispatch, drains/cancels accepted work through a separately
+  accepted operation, and observes no in-flight work. Only then may Platform state be
+  `STOPPED`. Session archive is an optional post-stop retention action, not stop
+  evidence; transcript deletion is never part of Runtime lifecycle.
+- `REPLACE` creates a successor generation/session and correlation, observes it, then
+  retires the predecessor. It preserves the predecessor transcript and correlation;
+  agent/workspace replacement occurs only when the failed isolation host requires it.
+- Transcripts default to retained, immutable/read-only evidence material under a
+  separately governed retention policy. Archive changes discoverability only.
+  Deletion requires a distinct authorized retention/privacy command and Evidence.
+- On restart the reconciler loads the durable correlation and ownership proof,
+  observes before effect, and resumes only on an exact match. Timeout, conflicting
+  ownership, duplicate matches, missing ownership proof or an effect that may have
+  occurred returns `RECOVERY_REQUIRED`; it is never blindly retried or deleted.
+
+Until this proposal passes a Human G2 gate and OpenClaw proves the required bounded
+operations, production `start`, `observe_runtime`, `stop` and `replace` remain
+`RUNTIME_LIFECYCLE_UNSUPPORTED`.
+
+## PROPOSED contract B — authoritative Runtime Profile projection
+
+Status: `PROPOSED / NOT_ACCEPTED / NOT_IMPLEMENTED`. PostgreSQL remains the sole
+Runtime Profile lifecycle authority; a serialized file assembled by a person is not
+a production projection.
+
+Recommendation: add a PostgreSQL-owner projection publisher that transactionally
+reads the exact published Runtime Profile and publication fact, canonicalizes the
+existing `runtime-profile/v1` digest input, and writes two Kubernetes API transport
+artifacts under one dedicated service account and field manager:
+
+1. an immutable revision projection keyed by scope, profile ID, revision ID and
+   digest; and
+2. a mutable current-status index containing aggregate version, current published
+   revision/digest, publication status, revocation/supersession status, publication
+   fact ID, projection sequence and expiry.
+
+These objects are caches/transport, not a second Profile authority. Only the
+PostgreSQL-owner publisher may write them; operator and users are read-only. The
+proposal intentionally does not select a new public CRD: an implementation must
+choose an approved Kubernetes representation and RBAC/trust design at a Human G2
+gate.
+
+The desired Runtime command/Placement supplies the exact
+`(namespace, security_domain, runtime_profile_id, revision_id, digest)` binding. The
+operator reads both projection artifacts through the Kubernetes API and rejects
+unless all of the following hold:
+
+- scope, profile ID, revision ID and digest match the desired binding exactly;
+- the revision is `PUBLISHED`, its digest recomputes from canonical bytes, and the
+  publication fact and publisher identity are present;
+- the mutable index still names that exact revision/digest as active and has a
+  projection sequence no older than the immutable projection;
+- `projectedAt`, `notBefore` and `expiresAt` satisfy the accepted clock-skew and
+  maximum-staleness policy; and
+- no revocation, deprecation, supersession, scope denial or incompatible schema is
+  present.
+
+Profile changes publish a new immutable revision plus an atomic current-index
+advance. Revocation/deprecation first advances the index to a fail-closed status;
+old immutable projections remain auditable but are no longer eligible. Operator
+restart re-reads the index and exact projection rather than trusting a local file.
+Kubernetes/API unavailability, missing index, stale expiry, digest mismatch,
+publisher/RBAC ambiguity or unknown schema produces a stable rejection and no
+provider assembly or lifecycle effect.
+
+The Runtime Profile carries only opaque Secret References. The PostgreSQL publisher
+never resolves secret values and the projection never contains them. A separately
+authorized Platform credential binding maps the exact scoped reference to a
+Kubernetes `SecretKeyRef`; the operator service account resolves that reference and
+projects it only into the allowlisted `OPENCLAW_GATEWAY_TOKEN` process slot. Missing,
+cross-scope, multiply resolved, revoked or unauthorized references fail closed.
+Defining that credential binding/trust path is an authentication-architecture G2
+decision and is not implemented here.
+
+## Production image packaging status
+
+The operator image now packages the production import closure (`operator`, `core`,
+`gateway`, and `runtime` source packages) and a lockfile-backed exact
+`openclaw@2026.7.1-2` installation on Node `22.23.1`. It copies source directories,
+not test directories, and runs as `nobody`. The lock preserves the authoritative npm
+integrity and engine declaration. No credential is part of the build context,
+Dockerfile, image configuration or build argument.
+
+An image-equivalent clean import and the configured source preflight passed. The one
+Docker build attempt could not obtain the pinned Python and Node base-image metadata
+because the configured Docker registry proxy timed out; it was cancelled after the
+bounded wait and was not retried. Therefore a runnable built image and in-image
+configured preflight remain `NOT_PROVEN`, as do deployment and lifecycle acceptance.
