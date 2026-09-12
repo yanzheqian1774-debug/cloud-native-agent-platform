@@ -187,8 +187,12 @@ def test_summary_emits_only_whitelisted_step_position_and_counts(tmp_path) -> No
     value = report("timedOut")
     value["suites"][0]["specs"][0]["tests"][0]["results"][0]["steps"] = [
         step("FULL_LOGIN_FORM", 40),
-        step("FULL_LOGIN_SUBMIT_REDIRECT", 45),
-        step("FULL_SESSION_READY", 50, failed=True),
+        step("FULL_LOGIN_SUBMIT_CLICK", 45),
+        step("FULL_LOGIN_POST_REQUEST_OBSERVED", 50),
+        step("FULL_LOGIN_POST_RESPONSE_OBSERVED", 55),
+        step("FULL_LOGIN_POST_STATUS_ASSERTION", 60),
+        step("FULL_LOGIN_POST_LOCATION_ASSERTION", 65),
+        step("FULL_SESSION_READY", 70, failed=True),
         step("untrusted locator https://example.invalid/?token=secret", 999),
     ]
     raw.write_text(json.dumps(value))
@@ -206,15 +210,15 @@ def test_summary_emits_only_whitelisted_step_position_and_counts(tmp_path) -> No
     assert summary["failureCategory"] == "BROWSER_TIMEOUT"
     assert summary["stepDiagnostics"] == {
         "availability": "AVAILABLE",
-        "lastCompletedStep": "FULL_LOGIN_SUBMIT_REDIRECT",
-        "lastCompletedLine": 45,
+        "lastCompletedStep": "FULL_LOGIN_POST_LOCATION_ASSERTION",
+        "lastCompletedLine": 65,
         "firstFailedOrIncompleteStep": "FULL_SESSION_READY",
-        "firstFailedOrIncompleteLine": 50,
+        "firstFailedOrIncompleteLine": 70,
         "failureCategory": "TIMEOUT",
         "counts": {
             "expected": len(SUMMARY.TEST_STEP_IDS),
-            "started": 3,
-            "completed": 2,
+            "started": 7,
+            "completed": 6,
             "failedOrIncomplete": 1,
         },
     }
@@ -246,10 +250,91 @@ def test_summary_marks_missing_step_without_overriding_browser_result(tmp_path) 
     assert summary["stepDiagnostics"]["lastCompletedStep"] == "FULL_LOGIN_FORM"
     assert (
         summary["stepDiagnostics"]["firstFailedOrIncompleteStep"]
-        == "FULL_LOGIN_SUBMIT_REDIRECT"
+        == "FULL_LOGIN_SUBMIT_CLICK"
     )
     assert isinstance(summary["stepDiagnostics"]["firstFailedOrIncompleteLine"], int)
     assert summary["stepDiagnostics"]["failureCategory"] == "INCOMPLETE"
+
+
+def test_summary_emits_only_whitelisted_login_response_diagnostics(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    value = report("failed")
+    result = value["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["steps"] = [
+        step("FULL_LOGIN_FORM", 40),
+        step("FULL_LOGIN_SUBMIT_CLICK", 45),
+        step("FULL_LOGIN_POST_REQUEST_OBSERVED", 50),
+        step("FULL_LOGIN_POST_RESPONSE_OBSERVED", 55),
+        step("FULL_LOGIN_POST_STATUS_ASSERTION", 60, failed=True),
+    ]
+    result["annotations"] = [
+        {"type": "S5_310_LOGIN_REQUEST_OBSERVED", "description": "true"},
+        {"type": "S5_310_LOGIN_RESPONSE_OBSERVED", "description": "true"},
+        {"type": "S5_310_LOGIN_HTTP_STATUS", "description": "422"},
+        {"type": "S5_310_LOGIN_LOCATION_CLASS", "description": "MISSING"},
+        {
+            "type": "untrusted",
+            "description": "https://example.invalid/workbench?token=secret",
+        },
+    ]
+    raw.write_text(json.dumps(value))
+
+    summary, passed = SUMMARY.build_summary(
+        report_path=raw,
+        commit_sha="a" * 40,
+        tree_sha="b" * 40,
+        execution_outcome="failure",
+        static_stages={"build": "success"},
+        startup_status_path=ready_startup(tmp_path),
+    )
+
+    assert not passed
+    assert summary["loginSubmitDiagnostics"] == {
+        "availability": "AVAILABLE",
+        "requestObserved": True,
+        "responseObserved": True,
+        "httpStatus": 422,
+        "locationClass": "MISSING",
+        "failureCategory": "ASSERTION_OR_EXECUTION_FAILURE",
+    }
+    serialized = json.dumps(summary)
+    assert "example.invalid" not in serialized
+    assert "secret" not in serialized
+
+
+def test_summary_rejects_ambiguous_or_unapproved_login_diagnostics(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    value = report("failed")
+    result = value["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["steps"] = [step("FULL_LOGIN_FORM", 40)]
+    result["annotations"] = [
+        {"type": "S5_310_LOGIN_REQUEST_OBSERVED", "description": "true"},
+        {"type": "S5_310_LOGIN_REQUEST_OBSERVED", "description": "false"},
+        {"type": "S5_310_LOGIN_RESPONSE_OBSERVED", "description": "secret"},
+        {"type": "S5_310_LOGIN_HTTP_STATUS", "description": "999"},
+        {"type": "S5_310_LOGIN_LOCATION_CLASS", "description": "/workbench"},
+    ]
+    raw.write_text(json.dumps(value))
+
+    summary, passed = SUMMARY.build_summary(
+        report_path=raw,
+        commit_sha="a" * 40,
+        tree_sha="b" * 40,
+        execution_outcome="failure",
+        static_stages={"build": "success"},
+        startup_status_path=ready_startup(tmp_path),
+    )
+
+    assert not passed
+    assert summary["loginSubmitDiagnostics"] == {
+        "availability": "AVAILABLE",
+        "requestObserved": "UNKNOWN",
+        "responseObserved": "UNKNOWN",
+        "httpStatus": "UNKNOWN",
+        "locationClass": "UNKNOWN",
+        "failureCategory": "INCOMPLETE",
+    }
+    assert "secret" not in json.dumps(summary)
 
 
 def test_summary_step_allowlist_matches_the_real_spec() -> None:

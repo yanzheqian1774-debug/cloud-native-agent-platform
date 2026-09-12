@@ -18,11 +18,19 @@ const credentials = {
 
 type BrowserObservations = { identityHeaders: string[]; privateRequests: string[] };
 type LoginKind = "FULL" | "LISTER" | "WRONG_SCOPE" | "WRONG_GRANT";
+const sessionURL = new URL("/api/workbench/v1/session", baseURL);
 const loginIdentities = {
   FULL: { principalId: "human:alice", tenantId: "tenant-a", securityDomain: "quality" },
   LISTER: { principalId: "human:lister", tenantId: "tenant-a", securityDomain: "quality" },
   WRONG_SCOPE: { principalId: "human:wrongscope", tenantId: "tenant-b", securityDomain: "quality" },
   WRONG_GRANT: { principalId: "human:wronggrant", tenantId: "tenant-a", securityDomain: "quality" },
+} as const;
+const fullLoginSubmitSteps = {
+  click: "FULL_LOGIN_SUBMIT_CLICK",
+  request: "FULL_LOGIN_POST_REQUEST_OBSERVED",
+  response: "FULL_LOGIN_POST_RESPONSE_OBSERVED",
+  status: "FULL_LOGIN_POST_STATUS_ASSERTION",
+  location: "FULL_LOGIN_POST_LOCATION_ASSERTION",
 } as const;
 const loginSteps = {
   FULL: ["FULL_LOGIN_FORM", "FULL_LOGIN_SUBMIT_REDIRECT", "FULL_SESSION_READY"],
@@ -30,6 +38,25 @@ const loginSteps = {
   WRONG_SCOPE: ["WRONG_SCOPE_LOGIN_FORM", "WRONG_SCOPE_LOGIN_SUBMIT_REDIRECT", "WRONG_SCOPE_SESSION_READY"],
   WRONG_GRANT: ["WRONG_GRANT_LOGIN_FORM", "WRONG_GRANT_LOGIN_SUBMIT_REDIRECT", "WRONG_GRANT_SESSION_READY"],
 } as const;
+
+function isSessionPost(requestValue: { method(): string; url(): string }): boolean {
+  const url = new URL(requestValue.url());
+  return (
+    requestValue.method() === "POST" &&
+    url.origin === sessionURL.origin &&
+    url.pathname === sessionURL.pathname &&
+    url.search === ""
+  );
+}
+
+function recordFullLoginDiagnostic(type: string, description: string): void {
+  test.info().annotations.push({ type, description });
+}
+
+function classifyLocation(location: string | undefined): "EXPECTED_WORKBENCH" | "OTHER" | "MISSING" {
+  if (location === undefined) return "MISSING";
+  return location === "/workbench" ? "EXPECTED_WORKBENCH" : "OTHER";
+}
 
 async function login(
   browser: Browser,
@@ -54,11 +81,51 @@ async function login(
   await test.step(submitStep, async () => {
     const submit = page.getByRole("button", { name: "Sign in", exact: true });
     await expect(submit).toHaveCount(1);
+    if (kind === "FULL") {
+      const requestPromise = page.waitForRequest(isSessionPost).then(
+        value => {
+          recordFullLoginDiagnostic("S5_310_LOGIN_REQUEST_OBSERVED", "true");
+          return value;
+        },
+        () => {
+          recordFullLoginDiagnostic("S5_310_LOGIN_REQUEST_OBSERVED", "false");
+          return null;
+        },
+      );
+      const responsePromise = page.waitForResponse(value => isSessionPost(value.request())).then(
+        value => {
+          recordFullLoginDiagnostic("S5_310_LOGIN_RESPONSE_OBSERVED", "true");
+          recordFullLoginDiagnostic("S5_310_LOGIN_HTTP_STATUS", String(value.status()));
+          recordFullLoginDiagnostic("S5_310_LOGIN_LOCATION_CLASS", classifyLocation(value.headers().location));
+          return value;
+        },
+        () => {
+          recordFullLoginDiagnostic("S5_310_LOGIN_RESPONSE_OBSERVED", "false");
+          return null;
+        },
+      );
+      await test.step(fullLoginSubmitSteps.click, async () => {
+        await submit.click();
+      });
+      await test.step(fullLoginSubmitSteps.request, async () => {
+        expect(await requestPromise).not.toBeNull();
+      });
+      const response = await test.step(fullLoginSubmitSteps.response, async () => {
+        const value = await responsePromise;
+        expect(value).not.toBeNull();
+        if (!value) throw new Error("FULL_LOGIN_POST_RESPONSE_NOT_OBSERVED");
+        return value;
+      });
+      await test.step(fullLoginSubmitSteps.status, async () => {
+        expect(response.status()).toBe(303);
+      });
+      await test.step(fullLoginSubmitSteps.location, async () => {
+        expect(classifyLocation(response.headers().location)).toBe("EXPECTED_WORKBENCH");
+      });
+      return;
+    }
     const [response] = await Promise.all([
-      page.waitForResponse(value => {
-        const request = value.request();
-        return request.method() === "POST" && new URL(value.url()).pathname === "/api/workbench/v1/session";
-      }),
+      page.waitForResponse(value => isSessionPost(value.request())),
       submit.click(),
     ]);
     expect(response.status()).toBe(303);

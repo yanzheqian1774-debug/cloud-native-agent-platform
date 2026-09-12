@@ -19,7 +19,11 @@ SECURITY_REASON_CODES = (
 )
 TEST_STEP_IDS = (
     "FULL_LOGIN_FORM",
-    "FULL_LOGIN_SUBMIT_REDIRECT",
+    "FULL_LOGIN_SUBMIT_CLICK",
+    "FULL_LOGIN_POST_REQUEST_OBSERVED",
+    "FULL_LOGIN_POST_RESPONSE_OBSERVED",
+    "FULL_LOGIN_POST_STATUS_ASSERTION",
+    "FULL_LOGIN_POST_LOCATION_ASSERTION",
     "FULL_SESSION_READY",
     "EMPLOYEE_LIST_PAGE_READY",
     "EMPLOYEE_EXACT_UI_READ",
@@ -54,6 +58,22 @@ TEST_STEP_IDS = (
     "TRANSPORT_BOUNDARY_ASSERTIONS",
 )
 TEST_STEP_SET = frozenset(TEST_STEP_IDS)
+FULL_LOGIN_SUBMIT_STEP_SET = frozenset(TEST_STEP_IDS[1:6])
+LOGIN_DIAGNOSTIC_TYPES = {
+    "S5_310_LOGIN_REQUEST_OBSERVED": "requestObserved",
+    "S5_310_LOGIN_RESPONSE_OBSERVED": "responseObserved",
+    "S5_310_LOGIN_HTTP_STATUS": "httpStatus",
+    "S5_310_LOGIN_LOCATION_CLASS": "locationClass",
+}
+LOCATION_CLASSES = {"EXPECTED_WORKBENCH", "OTHER", "MISSING", "UNKNOWN"}
+LOGIN_FAILURE_CATEGORIES = {
+    "NONE",
+    "INCOMPLETE",
+    "TIMEOUT",
+    "INTERRUPTED",
+    "ASSERTION_OR_EXECUTION_FAILURE",
+    "UNKNOWN",
+}
 TEST_SPEC_SUFFIX = (
     "console/frontend/tests/e2e/digital-employee-work-participation.real.spec.ts"
 )
@@ -281,6 +301,67 @@ def _safe_step_diagnostics(test: dict[str, Any] | None) -> dict[str, Any]:
         return _empty_step_diagnostics("INVALID")
 
 
+def _login_submit_diagnostics(
+    test: dict[str, Any] | None, step_diagnostics: dict[str, Any]
+) -> dict[str, Any]:
+    values: dict[str, Any] = {
+        "availability": "UNAVAILABLE",
+        "requestObserved": "UNKNOWN",
+        "responseObserved": "UNKNOWN",
+        "httpStatus": "UNKNOWN",
+        "locationClass": "UNKNOWN",
+        "failureCategory": "UNKNOWN",
+    }
+    if test is None:
+        return values
+    results = test.get("results")
+    if (
+        not isinstance(results, list)
+        or not results
+        or not isinstance(results[-1], dict)
+    ):
+        return values
+    values["availability"] = "AVAILABLE"
+    annotations = results[-1].get("annotations")
+    if not isinstance(annotations, list):
+        annotations = []
+    observed: dict[str, list[str]] = {
+        output: [] for output in LOGIN_DIAGNOSTIC_TYPES.values()
+    }
+    for annotation in annotations:
+        if not isinstance(annotation, dict):
+            continue
+        output = LOGIN_DIAGNOSTIC_TYPES.get(annotation.get("type"))
+        description = annotation.get("description")
+        if output is not None and isinstance(description, str):
+            observed[output].append(description)
+    for output in ("requestObserved", "responseObserved"):
+        descriptions = observed[output]
+        if len(descriptions) == 1 and descriptions[0] in {"true", "false"}:
+            values[output] = descriptions[0] == "true"
+    descriptions = observed["httpStatus"]
+    if len(descriptions) == 1 and descriptions[0].isdigit():
+        status = int(descriptions[0])
+        if 100 <= status <= 599:
+            values["httpStatus"] = status
+    descriptions = observed["locationClass"]
+    if len(descriptions) == 1 and descriptions[0] in LOCATION_CLASSES:
+        values["locationClass"] = descriptions[0]
+    failed_step = step_diagnostics.get("firstFailedOrIncompleteStep")
+    if failed_step in FULL_LOGIN_SUBMIT_STEP_SET:
+        category = step_diagnostics.get("failureCategory")
+        if category in LOGIN_FAILURE_CATEGORIES:
+            values["failureCategory"] = category
+    elif all(
+        step_diagnostics.get("lastCompletedStep") in TEST_STEP_SET
+        and TEST_STEP_IDS.index(step_diagnostics["lastCompletedStep"])
+        >= TEST_STEP_IDS.index(step_id)
+        for step_id in FULL_LOGIN_SUBMIT_STEP_SET
+    ):
+        values["failureCategory"] = "NONE"
+    return values
+
+
 def build_summary(
     *,
     report_path: Path,
@@ -321,6 +402,9 @@ def build_summary(
         (test for test in tests if test.get("title") == EXPECTED_TITLE), None
     )
     step_diagnostics = _safe_step_diagnostics(expected_test)
+    login_submit_diagnostics = _login_submit_diagnostics(
+        expected_test, step_diagnostics
+    )
     static_ok = bool(static_stages) and all(
         outcome == "success" for outcome in static_stages.values()
     )
@@ -388,6 +472,7 @@ def build_summary(
             "skipped": skipped,
         },
         "stepDiagnostics": step_diagnostics,
+        "loginSubmitDiagnostics": login_submit_diagnostics,
         "expectedScenario": EXPECTED_TITLE,
         "securityEvidence": {
             "available": passed_gate,
