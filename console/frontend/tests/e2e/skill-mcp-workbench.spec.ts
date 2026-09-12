@@ -146,7 +146,7 @@ test("capability directory switches views, searches Chinese content and paginate
 });
 
 for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confirm exact source and complete from authoritative readback`,async({page})=>{
-  const path=`/${kind}`,create=kind==="skill"?"Create governed SKILL":"Create governed MCP";
+  const path=kind==="skill"?"/skills":"/mcp",create=kind==="skill"?"Create governed SKILL":"Create governed MCP";
   await test.step("SKILL_MCP_REUSE_PUBLISH",()=>publish(page,path,create));
   const sourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
   const source=await page.evaluate(async({kind,id})=>(await(await fetch(`/api/internal/v0.2.2/resources/${kind}/${encodeURIComponent(id)}`)).json()),{kind,id:sourceId});
