@@ -986,6 +986,119 @@ UNIFIED_PRODUCT_STEP_IDS = {
     "UNIFIED_07_EMPLOYEE_MANAGEMENT": ("EMPLOYEES", "DESKTOP", "IDENTITY_CHECK"),
     "UNIFIED_08_RESTART_READBACK": ("EMPLOYEES", "DESKTOP", "RESTART_READINESS"),
 }
+SKILL_MCP_STEP_IDS = {
+    "SKILL_MCP_BACKEND_READY": ("MCP", "DESKTOP", "SERVICE_AVAILABILITY"),
+    "SKILL_MCP_MCP_PUBLISHED": ("MCP", "DESKTOP", "PUBLISH"),
+    "SKILL_MCP_HEALTH_SUBMIT": ("MCP", "DESKTOP", "HEALTH_SUBMIT"),
+    "SKILL_MCP_HEALTH_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "HEALTH_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_HEALTH_UI_RENDERED": ("MCP", "DESKTOP", "HEALTH_UI_RENDERED"),
+    "SKILL_MCP_DISCOVERY_SUBMIT": ("MCP", "DESKTOP", "DISCOVERY_SUBMIT"),
+    "SKILL_MCP_DISCOVERY_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "DISCOVERY_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_DISCOVERY_SNAPSHOT_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "DISCOVERY_SNAPSHOT_READBACK",
+    ),
+    "SKILL_MCP_DISCOVERY_UI_RENDERED": (
+        "MCP",
+        "DESKTOP",
+        "DISCOVERY_UI_RENDERED",
+    ),
+    "SKILL_MCP_TOOL_SELECTION_SUBMIT": (
+        "MCP",
+        "DESKTOP",
+        "TOOL_SELECTION_SUBMIT",
+    ),
+    "SKILL_MCP_TOOL_SELECTION_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "TOOL_SELECTION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_TOOL_SELECTION_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "TOOL_SELECTION_READBACK",
+    ),
+    "SKILL_MCP_REDISCOVERY_SUBMIT": ("MCP", "DESKTOP", "REDISCOVERY_SUBMIT"),
+    "SKILL_MCP_REDISCOVERY_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "REDISCOVERY_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_REDISCOVERY_SNAPSHOT_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "REDISCOVERY_SNAPSHOT_READBACK",
+    ),
+    "SKILL_MCP_REDISCOVERY_UI_RENDERED": (
+        "MCP",
+        "DESKTOP",
+        "REDISCOVERY_UI_RENDERED",
+    ),
+    "SKILL_MCP_RESELECTION_SUBMIT": ("MCP", "DESKTOP", "RESELECTION_SUBMIT"),
+    "SKILL_MCP_RESELECTION_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "RESELECTION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_RESELECTION_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "RESELECTION_READBACK",
+    ),
+    "SKILL_MCP_MCP_INVOCATION_SUBMIT": (
+        "MCP",
+        "DESKTOP",
+        "INVOCATION_SUBMIT",
+    ),
+    "SKILL_MCP_MCP_INVOCATION_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "INVOCATION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_MCP_INVOCATION_UI_RENDERED": (
+        "MCP",
+        "DESKTOP",
+        "INVOCATION_UI_RENDERED",
+    ),
+    "SKILL_MCP_SKILL_PUBLISHED": ("SKILLS", "DESKTOP", "PUBLISH"),
+    "SKILL_MCP_SKILL_TEST_UI_RENDERED": (
+        "SKILLS",
+        "DESKTOP",
+        "TEST_UI_RENDERED",
+    ),
+    "SKILL_MCP_BIND_SUBMIT": ("SKILLS", "DESKTOP", "BIND_SUBMIT"),
+    "SKILL_MCP_BIND_HTTP_COMPLETION": (
+        "SKILLS",
+        "DESKTOP",
+        "BIND_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_BIND_READBACK": ("SKILLS", "DESKTOP", "BIND_READBACK"),
+    "SKILL_MCP_SKILL_INVOCATION_SUBMIT": (
+        "SKILLS",
+        "DESKTOP",
+        "INVOCATION_SUBMIT",
+    ),
+    "SKILL_MCP_SKILL_INVOCATION_HTTP_COMPLETION": (
+        "SKILLS",
+        "DESKTOP",
+        "INVOCATION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_SKILL_INVOCATION_UI_RENDERED": (
+        "SKILLS",
+        "DESKTOP",
+        "INVOCATION_UI_RENDERED",
+    ),
+    "SKILL_MCP_FINAL_UI_INTERACTION": ("SKILLS", "MIXED", "FINAL_UI_INTERACTION"),
+}
 DIAGNOSTIC_STEP_IDS = {
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
@@ -996,6 +1109,7 @@ DIAGNOSTIC_STEP_IDS = {
         for step_id, route, viewport, action in WAVE_3B_STEP_IDS.values()
     },
     **UNIFIED_PRODUCT_STEP_IDS,
+    **SKILL_MCP_STEP_IDS,
 }
 ACTION_CLASSES = frozenset(
     {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
@@ -1016,6 +1130,9 @@ def _step_identity(scenario: str, title: object):
     if scenario == "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY":
         identity = UNIFIED_PRODUCT_STEP_IDS.get(title)
         return (title, *identity) if identity is not None else None
+    if scenario == "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE":
+        identity = SKILL_MCP_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     return None
 
 
@@ -1032,6 +1149,7 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
+        "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE",
     }:
         return None
     steps = result.get("steps")
