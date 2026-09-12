@@ -464,6 +464,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   const publishedSkill = await page.evaluate(async (id:string) => (await fetch(`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(id)}`)).json(), skillId);
   const publishedDigest = publishedSkill.resource.revisions.find((item:{revisionId:string})=>item.revisionId===publishedSkill.resource.publishedRevisionId).digest;
   await page.getByRole("button", {name:"Create successor Draft"}).click();
+  await page.getByRole("region",{name:"Reuse operation confirmation"}).getByRole("button",{name:"Confirm Create successor Draft"}).click();
   const editDraft=page.getByRole("button", {name:"编辑当前 Skill Draft"});
   await expect(editDraft).toBeEnabled();
   await editDraft.click();
