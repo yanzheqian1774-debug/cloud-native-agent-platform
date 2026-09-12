@@ -73,6 +73,37 @@ def test_generation_loader_pins_digest_and_closed_sources(tmp_path: Path) -> Non
     assert generation.digest == digest
 
 
+def test_problem_collection_read_is_only_an_explicit_bootstrap_allowlist_entry(
+    tmp_path: Path,
+) -> None:
+    document = generation_document()
+    grants = document["credentials"][0]["grants"]  # type: ignore[index]
+    grants.append(  # type: ignore[union-attr]
+        {
+            "owner": "BUSINESS_PROBLEM",
+            "action": "READ",
+            "resource": "business-problem:collection",
+            "source": "BROWSER_BOOTSTRAP",
+        }
+    )
+    path = tmp_path / "generation-collection-read.json"
+    digest = write_generation(path, document)
+
+    generation = StaticAuthorityLoader.load(path, expected_digest=digest)
+
+    assert [
+        (item.grant.action, item.grant.exact_resource)
+        for item in generation.credentials[0].grants
+    ] == [
+        ("CREATE", "business-problem:collection"),
+        ("READ", "business-problem:collection"),
+    ]
+    grants[1]["resource"] = "business-problem:problem-hidden"  # type: ignore[index]
+    digest = write_generation(path, document)
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONFIGURATION_INVALID"):
+        StaticAuthorityLoader.load(path, expected_digest=digest)
+
+
 def test_generation_loader_rejects_digest_mismatch_and_wildcard(tmp_path: Path) -> None:
     path = tmp_path / "generation-1.json"
     document = generation_document()

@@ -163,6 +163,7 @@ class GrantRequest:
     purpose: str
     status: GrantRequestStatus
     created_at: datetime
+    aggregate_version: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,6 +291,15 @@ class GrantAdministrationRepository(Protocol):
         now: datetime,
         recovery_epoch: int,
     ) -> tuple[ContinuationClaim, ...]: ...
+
+    def resolve_continuation_offer(
+        self,
+        continuation_digest: str,
+        context: TrustedRequestContext,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+    ) -> ContinuationClaim: ...
 
     def submit_request(
         self,

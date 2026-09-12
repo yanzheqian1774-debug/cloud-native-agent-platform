@@ -101,6 +101,7 @@ def build_workbench_composition(
             foundation.sessions,
             authorizer,
             WorkbenchBffPolicy(allowed_host, allowed_origin),
+            grant_administration=foundation.grants,
             operations=(
                 *business_problem_operations(business_problems),
                 *agent_operations(

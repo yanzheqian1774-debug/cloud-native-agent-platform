@@ -63,6 +63,7 @@ META_ACTIONS = {
 BROWSER_BOOTSTRAP_GRANTS = frozenset(
     {
         ("BUSINESS_PROBLEM", "CREATE", "business-problem:collection"),
+        ("BUSINESS_PROBLEM", "READ", "business-problem:collection"),
         ("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
         ("SUCCESS_CRITERION", "CREATE", "success-criterion:collection"),
         ("WORKFLOW", "CREATE", "workflow:collection"),

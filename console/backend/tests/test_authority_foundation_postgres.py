@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -43,7 +44,11 @@ from agent_console.authority_foundation import (
     initialize_authority_generation,
 )
 from agent_console.authority_postgres import PostgresAuthorityRepository
-from agent_console.browser_session_application import BrowserSessionPolicy
+from agent_console.browser_session_application import (
+    BrowserSessionPolicy,
+    BrowserSessionService,
+    StaticGenerationAuthenticator,
+)
 from agent_console.grant_administration_application import (
     ContinuationOfferCommand,
     GenerationAuthorizationReader,
@@ -51,6 +56,8 @@ from agent_console.grant_administration_application import (
     GrantDecisionCommand,
     GrantRequestCommand,
 )
+from agent_console.workbench_bff import PREFIX, WorkbenchBffPolicy, create_workbench_bff
+from fastapi.testclient import TestClient
 
 DATABASE_URL = os.environ.get("AUTHORITY_I1_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -663,6 +670,7 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
         "CONTINUATION_ASSIGNMENT", "ASSIGN", "continuation-scope:tenant-a:quality"
     )
     decide_meta = ExactGrant("GRANT_ADMIN", "DECIDE", "grant-scope:tenant-a:quality")
+    inspect_meta = ExactGrant("GRANT_ADMIN", "INSPECT", "grant-scope:tenant-a:quality")
     generation = StaticAuthorityGeneration(
         1,
         "a" * 64,
@@ -679,6 +687,7 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
                 (
                     StaticGrant(admin_meta, GrantSource.STATIC_META),
                     StaticGrant(decide_meta, GrantSource.STATIC_META),
+                    StaticGrant(inspect_meta, GrantSource.STATIC_META),
                 ),
             ),
             CredentialConfiguration(
@@ -766,10 +775,127 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
         == hashlib.sha256(opaque.encode()).hexdigest()
     )
     assert opaque not in str(stored_offer)
-    assert service.continuation_inbox(alice) == (opaque,)
+    inbox_reference = f"continuation-ref.{stored_offer['continuation_digest']}"
+    for claim, digest, mint_key in (
+        (
+            ContinuationClaim(
+                "expired-offer",
+                "human:alice",
+                scope,
+                "CONTINUE_PROBLEM_PLAN",
+                (member,),
+                "problem-expired:revision-1",
+                "revision-1",
+                1,
+                now - timedelta(minutes=10),
+                now - timedelta(seconds=1),
+            ),
+            "a" * 64,
+            "expired-offer-key",
+        ),
+        (
+            ContinuationClaim(
+                "future-offer",
+                "human:alice",
+                scope,
+                "CONTINUE_PROBLEM_PLAN",
+                (member,),
+                "problem-future:revision-1",
+                "revision-1",
+                1,
+                now + timedelta(seconds=1),
+                now + timedelta(minutes=5),
+            ),
+            "b" * 64,
+            "future-offer-key",
+        ),
+        (
+            ContinuationClaim(
+                "old-generation-offer",
+                "human:alice",
+                scope,
+                "CONTINUE_PROBLEM_PLAN",
+                (member,),
+                "problem-old-generation:revision-1",
+                "revision-1",
+                2,
+                now,
+                now + timedelta(minutes=5),
+            ),
+            "c" * 64,
+            "old-generation-offer-key",
+        ),
+    ):
+        repository.store_continuation_offer(
+            claim,
+            continuation_digest=digest,
+            issuer_actor_id="human:admin",
+            mint_key=mint_key,
+            mint_payload_digest=digest,
+            recovery_epoch=1,
+        )
+    assert service.continuation_inbox(alice) == (inbox_reference,)
+    available = service.continuation_inbox_details(alice)
+    assert len(available) == 1
+    assert available[0].continuation_id == inbox_reference
+    assert available[0].purpose == "CONTINUE_PROBLEM_PLAN"
+    assert available[0].requestable_actions == ("READ",)
+    assert "problem-2" not in repr(available[0])
+    expired = codec.mint(
+        ContinuationClaim(
+            "expired-submit",
+            "human:alice",
+            scope,
+            "CONTINUE_PROBLEM_PLAN",
+            (member,),
+            "problem-expired:revision-1",
+            "revision-1",
+            1,
+            now - timedelta(minutes=5),
+            now - timedelta(seconds=1),
+        )
+    )
+    with pytest.raises(AuthorityError, match="CONTINUATION_INVALID"):
+        service.submit_request(
+            alice,
+            GrantRequestCommand(
+                "CONTINUE_PROBLEM_PLAN", (), "expired-request-command", expired
+            ),
+        )
+    old_generation = codec.mint(
+        ContinuationClaim(
+            "old-generation-submit",
+            "human:alice",
+            scope,
+            "CONTINUE_PROBLEM_PLAN",
+            (member,),
+            "problem-old-generation:revision-1",
+            "revision-1",
+            2,
+            now,
+            now + timedelta(minutes=5),
+        )
+    )
+    with pytest.raises(AuthorityError, match="CONTINUATION_INVALID"):
+        service.submit_request(
+            alice,
+            GrantRequestCommand(
+                "CONTINUE_PROBLEM_PLAN",
+                (),
+                "old-generation-request-command",
+                old_generation,
+            ),
+        )
     bob = TrustedRequestContext(
         "human:bob",
         scope,
+        "credential-alice",
+        AuthenticationSource.SERVICE_CREDENTIAL,
+        "policy-1",
+    )
+    foreign_scope = TrustedRequestContext(
+        "human:alice",
+        AuthorityScope("tenant-b", "quality"),
         "credential-alice",
         AuthenticationSource.SERVICE_CREDENTIAL,
         "policy-1",
@@ -781,10 +907,26 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
                 "CONTINUE_PROBLEM_PLAN", (), "request-command-bob", opaque
             ),
         )
+    with pytest.raises(AuthorityError, match="CONTINUATION_INVALID"):
+        service.submit_request(
+            foreign_scope,
+            GrantRequestCommand(
+                "CONTINUE_PROBLEM_PLAN", (), "request-command-foreign", opaque
+            ),
+        )
     request = service.submit_request(
         alice,
-        GrantRequestCommand("CONTINUE_PROBLEM_PLAN", (), "request-command-1", opaque),
+        GrantRequestCommand(
+            "CONTINUE_PROBLEM_PLAN", (), "request-command-1", inbox_reference
+        ),
     )
+    assert request.aggregate_version == 1
+    assert service.inspect_request(alice, request.request_id).aggregate_version == 1
+    assert (
+        service.inspect_request(admin, request.request_id).request_id
+        == request.request_id
+    )
+    assert service.continuation_inbox(alice) == ()
     assert (
         service.submit_request(
             alice,
@@ -799,6 +941,34 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
             alice,
             GrantRequestCommand(
                 "CONTINUE_PROBLEM_PLAN", (), "request-command-2", opaque
+            ),
+        )
+    direct = service.submit_request(
+        alice,
+        GrantRequestCommand(
+            "CONTINUE_PROBLEM_PLAN", (member,), "direct-request-command"
+        ),
+    )
+    assert (
+        service.submit_request(
+            alice,
+            GrantRequestCommand(
+                "CONTINUE_PROBLEM_PLAN", (member,), "direct-request-command"
+            ),
+        ).request_id
+        == direct.request_id
+    )
+    with pytest.raises(AuthorityError, match="IDEMPOTENCY_PAYLOAD_MISMATCH"):
+        service.submit_request(
+            alice,
+            GrantRequestCommand(
+                "CONTINUE_PROBLEM_PLAN",
+                (
+                    ExactGrant(
+                        "BUSINESS_PROBLEM", "READ", "business-problem:problem-else"
+                    ),
+                ),
+                "direct-request-command",
             ),
         )
     with pytest.raises(AuthorityError, match="GRANT_SELF_APPROVAL_PROHIBITED"):
@@ -829,6 +999,11 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
         ),
     )
     assert decision.grants
+    decided_request = service.inspect_request(alice, request.request_id)
+    assert decided_request.status is GrantRequestStatus.APPROVED
+    assert decided_request.aggregate_version == 2
+    with pytest.raises(AuthorityError, match="GRANT_REQUEST_NOT_FOUND"):
+        service.inspect_request(bob, request.request_id)
     assert reader.has_current_grant(
         alice, member, now=now, generation=1, recovery_epoch=1
     )
@@ -873,6 +1048,176 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
         generation=1,
         recovery_epoch=1,
     )
+
+
+def test_public_authorization_ports_use_real_session_and_postgres_state(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:hidden")
+    assign_meta = ExactGrant(
+        "CONTINUATION_ASSIGNMENT", "ASSIGN", "continuation-scope:tenant-a:quality"
+    )
+    decide_meta = ExactGrant("GRANT_ADMIN", "DECIDE", "grant-scope:tenant-a:quality")
+    generation = StaticAuthorityGeneration(
+        1,
+        "d" * 64,
+        "policy-1",
+        "test",
+        (
+            CredentialConfiguration(
+                CredentialId("credential-alice"),
+                hashlib.sha256(b"browser-secret").hexdigest(),
+                "human:alice",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.BROWSER_BOOTSTRAP,
+                (),
+            ),
+            CredentialConfiguration(
+                CredentialId("credential-admin"),
+                "e" * 64,
+                "human:admin",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.SERVICE_ONLY,
+                (
+                    StaticGrant(assign_meta, GrantSource.STATIC_META),
+                    StaticGrant(decide_meta, GrantSource.STATIC_META),
+                ),
+            ),
+        ),
+        (
+            RequestabilityRule(
+                "BUSINESS_PROBLEM",
+                "READ",
+                "business-problem:",
+                "CONTINUE_PROBLEM_PLAN",
+            ),
+        ),
+        frozenset(),
+    )
+    repository.activate_generation(
+        1,
+        generation.digest,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    reader = GenerationAuthorizationReader(
+        generation, repository, repository, recovery_epoch=1
+    )
+    codec = SignedContinuationOwner(b"q" * 32)
+    identities = (f"browser-port-{number}" for number in range(20))
+    grants = GrantAdministrationService(
+        repository,
+        reader,
+        generation,
+        continuation_owner=codec,
+        target_validator=KnownTestTargets(),
+        recovery_epoch=1,
+        clock=lambda: now,
+        identity_factory=lambda _: next(identities),
+    )
+    admin = TrustedRequestContext(
+        "human:admin",
+        scope,
+        "credential-admin",
+        AuthenticationSource.SERVICE_CREDENTIAL,
+        "policy-1",
+    )
+    grants.assign_offer(
+        admin,
+        ContinuationOfferCommand(
+            "human:alice",
+            "CONTINUE_PROBLEM_PLAN",
+            (member,),
+            "problem:hidden:revision-1",
+            "revision-1",
+            now + timedelta(minutes=10),
+            "browser-offer",
+        ),
+    )
+    sessions = BrowserSessionService(
+        repository,
+        StaticGenerationAuthenticator(generation, source=GrantSource.BROWSER_BOOTSTRAP),
+        BrowserSessionPolicy(
+            timedelta(minutes=5),
+            timedelta(minutes=30),
+            timedelta(hours=8),
+            timedelta(minutes=10),
+        ),
+        csrf_signing_key=b"s" * 32,
+        recovery_epoch=1,
+        clock=lambda: now,
+    )
+    app = create_workbench_bff(
+        sessions,
+        object(),  # type: ignore[arg-type]
+        WorkbenchBffPolicy("console.example", "https://console.example"),
+        grant_administration=grants,
+    )
+    client = TestClient(app, base_url="https://console.example")
+    login_form = client.get(f"{PREFIX}/login")
+    nonce = re.search(r'name="loginNonce" value="([^"]+)"', login_form.text)
+    assert nonce is not None
+    logged_in = client.post(
+        f"{PREFIX}/session",
+        headers={
+            "origin": "https://console.example",
+            "content-type": "application/x-www-form-urlencoded",
+        },
+        content=(f"loginNonce={nonce.group(1)}&bootstrapCredential=browser-secret"),
+        follow_redirects=False,
+    )
+    assert logged_in.status_code == 303
+    csrf = client.get(f"{PREFIX}/session").json()["csrfToken"]
+
+    inbox = client.get(f"{PREFIX}/authorization/continuations?state=AVAILABLE")
+    assert inbox.status_code == 200
+    reference = inbox.json()["continuations"][0]["continuationId"]
+    assert reference.startswith("continuation-ref.")
+    assert "hidden" not in reference
+    submitted = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": csrf,
+            "idempotency-key": "browser-request",
+        },
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "CONTINUE_PROBLEM_PLAN",
+            "continuationIds": [reference],
+        },
+    )
+    assert submitted.status_code == 202
+    request_id = submitted.json()["requestId"]
+    assert submitted.json()["aggregateVersion"] == 1
+    assert client.get(
+        f"{PREFIX}/authorization/continuations?state=AVAILABLE"
+    ).json() == {"continuations": []}
+
+    grants.decide_request(
+        admin,
+        GrantDecisionCommand(
+            request_id,
+            True,
+            "ASSIGNED_DUTY",
+            "TICKET",
+            "ticket-1",
+            now,
+            now + timedelta(hours=1),
+            "browser-decision",
+        ),
+    )
+    status = client.get(f"{PREFIX}/authorization/grant-requests/{request_id}")
+    assert status.status_code == 200
+    assert status.json()["state"] == "APPROVED"
+    assert status.json()["aggregateVersion"] == 2
+    assert "hidden" not in status.text
 
 
 def test_recovery_epoch_invalidates_sessions_continuations_and_effective_grants(

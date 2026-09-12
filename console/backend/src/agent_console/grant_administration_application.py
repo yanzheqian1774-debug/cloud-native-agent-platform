@@ -84,6 +84,14 @@ class GrantRevocationCommand:
     surrender: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class AvailableContinuation:
+    continuation_id: str
+    purpose: str
+    expires_at: datetime
+    requestable_actions: tuple[str, ...]
+
+
 class GenerationAuthorizationReader(CurrentAuthorizationReader):
     """Pin static generation and query current PostgreSQL projection per call."""
 
@@ -407,6 +415,8 @@ class CallerOwnedCurrentExactGrantDecisionReader(CurrentExactGrantDecisionReader
 
 
 class GrantAdministrationService:
+    _CONTINUATION_REFERENCE_PREFIX = "continuation-ref."
+
     def __init__(
         self,
         repository: GrantAdministrationRepository,
@@ -496,9 +506,27 @@ class GrantAdministrationService:
         if command.continuation is not None:
             if self.continuation_owner is None:
                 raise AuthorityError("CONTINUATION_INVALID")
-            claim = self.continuation_owner.resolve_continuation(
-                command.continuation, now=now
-            )
+            if command.continuation.startswith(self._CONTINUATION_REFERENCE_PREFIX):
+                continuation_digest = command.continuation.removeprefix(
+                    self._CONTINUATION_REFERENCE_PREFIX
+                )
+                if len(continuation_digest) != 64 or any(
+                    char not in "0123456789abcdef" for char in continuation_digest
+                ):
+                    raise AuthorityError("CONTINUATION_INVALID")
+                claim = self.repository.resolve_continuation_offer(
+                    continuation_digest,
+                    context,
+                    now=now,
+                    recovery_epoch=self.recovery_epoch,
+                )
+            else:
+                claim = self.continuation_owner.resolve_continuation(
+                    command.continuation, now=now
+                )
+                continuation_digest = hashlib.sha256(
+                    command.continuation.encode()
+                ).hexdigest()
             if (
                 claim.subject_principal_id != context.principal_id
                 or claim.scope != context.scope
@@ -511,9 +539,6 @@ class GrantAdministrationService:
             ):
                 raise AuthorityError("CONTINUATION_INVALID")
             members = claim.members
-            continuation_digest = hashlib.sha256(
-                command.continuation.encode()
-            ).hexdigest()
 
             def target_validation(connection: object) -> bool:
                 return self.target_validator is not None and (
@@ -777,12 +802,38 @@ class GrantAdministrationService:
         return self.continuation_owner.mint(persisted)
 
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
+        return tuple(
+            item.continuation_id for item in self.continuation_inbox_details(context)
+        )
+
+    def continuation_inbox_details(
+        self, context: TrustedRequestContext
+    ) -> tuple[AvailableContinuation, ...]:
+        """Return only subject-facing metadata accepted by the public inbox."""
         if self.continuation_owner is None:
             raise AuthorityError("CONTINUATION_INVALID")
+        now = self.clock()
         offers = self.repository.list_continuation_offers(
-            context, now=self.clock(), recovery_epoch=self.recovery_epoch
+            context, now=now, recovery_epoch=self.recovery_epoch
         )
-        return tuple(self.continuation_owner.mint(claim) for claim in offers)
+        return tuple(
+            AvailableContinuation(
+                continuation_id=(
+                    self._CONTINUATION_REFERENCE_PREFIX
+                    + hashlib.sha256(
+                        self.continuation_owner.mint(claim).encode()
+                    ).hexdigest()
+                ),
+                purpose=claim.purpose,
+                expires_at=claim.expires_at,
+                requestable_actions=tuple(
+                    dict.fromkeys(member.action for member in claim.members)
+                ),
+            )
+            for claim in offers
+            if claim.policy_generation == self.generation.generation
+            and claim.issued_at <= now < claim.expires_at
+        )
 
     def revoke_grant(
         self, context: TrustedRequestContext, command: GrantRevocationCommand

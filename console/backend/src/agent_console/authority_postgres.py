@@ -776,6 +776,7 @@ class PostgresAuthorityRepository:
             purpose=row["purpose"],
             status=GrantRequestStatus(row["state"]),
             created_at=row["created_at"],
+            aggregate_version=row["aggregate_version"],
         )
 
     def inspect_request(self, request_id: str) -> GrantRequest:
@@ -1006,6 +1007,10 @@ class PostgresAuthorityRepository:
                     "SELECT offer_id FROM authorization_admin.continuation_offers "
                     "WHERE subject_principal_id=%s AND tenant_id=%s AND security_domain=%s "
                     "AND revoked_at IS NULL AND expires_at>%s AND recovery_epoch=%s "
+                    "AND NOT EXISTS (SELECT 1 FROM "
+                    "authorization_admin.continuation_consumptions consumed "
+                    "WHERE consumed.continuation_digest="
+                    "authorization_admin.continuation_offers.continuation_digest) "
                     "ORDER BY issued_at,offer_id",
                     (
                         context.principal_id,
@@ -1019,6 +1024,39 @@ class PostgresAuthorityRepository:
                     self._continuation_claim(connection, row["offer_id"])
                     for row in rows
                 )
+        except AuthorityError:
+            raise
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def resolve_continuation_offer(
+        self,
+        continuation_digest: str,
+        context: TrustedRequestContext,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+    ) -> ContinuationClaim:
+        try:
+            with self.connection_scope() as connection:
+                row = connection.execute(
+                    "SELECT offer_id FROM authorization_admin.continuation_offers "
+                    "WHERE continuation_digest=%s AND subject_principal_id=%s "
+                    "AND tenant_id=%s AND security_domain=%s AND revoked_at IS NULL "
+                    "AND issued_at<=%s AND expires_at>%s AND recovery_epoch=%s",
+                    (
+                        continuation_digest,
+                        context.principal_id,
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        now,
+                        now,
+                        recovery_epoch,
+                    ),
+                ).fetchone()
+                if row is None:
+                    raise AuthorityError("CONTINUATION_INVALID")
+                return self._continuation_claim(connection, row["offer_id"])
         except AuthorityError:
             raise
         except PsycopgError as exc:

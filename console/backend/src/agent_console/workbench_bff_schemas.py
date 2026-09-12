@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictWorkbenchModel(BaseModel):
@@ -40,6 +40,45 @@ class WorkbenchOperationResponse(StrictWorkbenchModel):
 
 class WorkbenchErrorResponse(StrictWorkbenchModel):
     reasonCode: str = Field(min_length=1, max_length=100)
+
+
+class WorkbenchExactGrant(StrictWorkbenchModel):
+    owner: str = Field(min_length=1, max_length=64)
+    action: str = Field(min_length=1, max_length=64)
+    resource: str = Field(min_length=1, max_length=512)
+
+
+class WorkbenchGrantRequestCommand(StrictWorkbenchModel):
+    schemaVersion: Literal["exact-grant-request.v1"]
+    purpose: str = Field(min_length=1, max_length=64, pattern=r"^[A-Z0-9_]+$")
+    requestedGrants: tuple[WorkbenchExactGrant, ...] = Field(default=(), max_length=32)
+    continuationIds: tuple[str, ...] = Field(default=(), max_length=1)
+
+    @model_validator(mode="after")
+    def require_request_source(self):
+        if bool(self.requestedGrants) == bool(self.continuationIds):
+            raise ValueError("grant request source required")
+        return self
+
+
+class WorkbenchGrantRequestStatus(StrictWorkbenchModel):
+    requestId: str
+    state: Literal["PENDING", "APPROVED", "REJECTED"]
+    aggregateVersion: int = Field(ge=1)
+    submittedAt: datetime
+    purpose: str
+    requestedActions: tuple[str, ...]
+
+
+class WorkbenchAvailableContinuation(StrictWorkbenchModel):
+    continuationId: str = Field(min_length=1)
+    purpose: str
+    expiresAt: datetime
+    requestableActions: tuple[str, ...]
+
+
+class WorkbenchContinuationInbox(StrictWorkbenchModel):
+    continuations: tuple[WorkbenchAvailableContinuation, ...]
 
 
 class WorkbenchAgentRole(StrictWorkbenchModel):

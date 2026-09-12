@@ -11,11 +11,14 @@ from agent_console.authority_contracts import (
     BrowserSession,
     CredentialId,
     ExactGrant,
+    GrantRequest,
+    GrantRequestStatus,
     SessionId,
     SessionSecret,
     TrustedRequestContext,
     VerifiedPrincipal,
 )
+from agent_console.grant_administration_application import AvailableContinuation
 from agent_console.workbench_bff import (
     PREFIX,
     WorkbenchBffPolicy,
@@ -133,6 +136,65 @@ class AuthorizerStub:
         )
 
 
+class GrantAdministrationStub:
+    continuation_reference = f"continuation-ref.{'a' * 64}"
+
+    def __init__(self, sessions: SessionStub) -> None:
+        self.sessions = sessions
+        self.submissions = []
+
+    def continuation_inbox_details(self, context):
+        assert context == self.sessions.context
+        return (
+            AvailableContinuation(
+                self.continuation_reference,
+                "CONTINUE_PROBLEM_PLAN",
+                self.sessions.now + timedelta(minutes=10),
+                ("READ", "REVISE"),
+            ),
+        )
+
+    def submit_request(self, context, command):
+        assert context == self.sessions.context
+        self.submissions.append(command)
+        if command.idempotency_key == "mismatch":
+            raise AuthorityError("IDEMPOTENCY_PAYLOAD_MISMATCH")
+        if command.requested_grants and command.requested_grants[0].owner == "UNKNOWN":
+            raise AuthorityError("UNKNOWN_AUTHORITY_OPERATION")
+        members = command.requested_grants or (
+            ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:hidden-problem"),
+        )
+        return GrantRequest(
+            "grant-request-1",
+            context.principal_id,
+            context.scope,
+            members,
+            command.purpose,
+            GrantRequestStatus.PENDING,
+            self.sessions.now,
+            1,
+        )
+
+    def inspect_request(self, context, request_id):
+        assert context == self.sessions.context
+        if request_id != "grant-request-1":
+            raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+        return GrantRequest(
+            request_id,
+            context.principal_id,
+            context.scope,
+            (
+                ExactGrant(
+                    "BUSINESS_PROBLEM", "READ", "business-problem:hidden-problem"
+                ),
+            ),
+            "CONTINUE_PROBLEM_PLAN",
+            GrantRequestStatus.APPROVED,
+            self.sessions.now,
+            2,
+        )
+
+
 def build_client():
     sessions = SessionStub()
     authorizer = AuthorizerStub()
@@ -171,6 +233,18 @@ def build_client():
         sessions,
         authorizer,
     )
+
+
+def build_authorization_client():
+    sessions = SessionStub()
+    grants = GrantAdministrationStub(sessions)
+    app = create_workbench_bff(
+        sessions,  # type: ignore[arg-type]
+        AuthorizerStub(),  # type: ignore[arg-type]
+        WorkbenchBffPolicy("console.example", "https://console.example"),
+        grant_administration=grants,  # type: ignore[arg-type]
+    )
+    return TestClient(app, base_url="https://console.example"), grants
 
 
 def test_instance_assignment_and_placement_registry_freezes_exact_read_grants() -> None:
@@ -278,6 +352,165 @@ def test_session_and_bound_operation_use_only_server_context() -> None:
     assert grants == (
         ExactGrant("BUSINESS_PROBLEM", "REVISE", "business-problem:problem-1"),
     )
+
+
+def test_login_referrer_policy_exception_does_not_spread() -> None:
+    client, _, _ = build_client()
+
+    assert client.get(f"{PREFIX}/login").headers["referrer-policy"] == "same-origin"
+    assert client.get("/healthz").headers["referrer-policy"] == "no-referrer"
+    rejected = client.get(f"{PREFIX}/login", headers={"host": "foreign.example"})
+    assert rejected.status_code == 400
+    assert rejected.headers["referrer-policy"] == "no-referrer"
+
+
+def test_authorization_inbox_is_session_scoped_and_hides_targets() -> None:
+    client, _ = build_authorization_client()
+    unauthenticated = client.get(
+        f"{PREFIX}/authorization/continuations?state=AVAILABLE"
+    )
+    assert unauthenticated.status_code == 401
+    login(client)
+
+    response = client.get(f"{PREFIX}/authorization/continuations?state=AVAILABLE")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "continuations": [
+            {
+                "continuationId": GrantAdministrationStub.continuation_reference,
+                "purpose": "CONTINUE_PROBLEM_PLAN",
+                "expiresAt": "2029-01-01T00:10:00Z",
+                "requestableActions": ["READ", "REVISE"],
+            }
+        ]
+    }
+    assert "hidden-problem" not in response.text
+    assert (
+        client.get(f"{PREFIX}/authorization/continuations").json()["reasonCode"]
+        == "REQUEST_INVALID"
+    )
+
+
+def test_single_continuation_request_uses_no_browser_supplied_target() -> None:
+    client, grants = build_authorization_client()
+    login(client)
+    response = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "continuation-request",
+        },
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "CONTINUE_PROBLEM_PLAN",
+            "continuationIds": [GrantAdministrationStub.continuation_reference],
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "requestId": "grant-request-1",
+        "state": "PENDING",
+        "aggregateVersion": 1,
+        "submittedAt": "2029-01-01T00:00:00Z",
+        "purpose": "CONTINUE_PROBLEM_PLAN",
+        "requestedActions": ["READ"],
+    }
+    assert grants.submissions[-1].requested_grants == ()
+    assert (
+        grants.submissions[-1].continuation
+        == GrantAdministrationStub.continuation_reference
+    )
+
+    both_sources = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "invalid-request",
+        },
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "CONTINUE_PROBLEM_PLAN",
+            "requestedGrants": [
+                {
+                    "owner": "BUSINESS_PROBLEM",
+                    "action": "READ",
+                    "resource": "business-problem:browser-invented",
+                }
+            ],
+            "continuationIds": [GrantAdministrationStub.continuation_reference],
+        },
+    )
+    assert both_sources.status_code == 422
+    assert both_sources.json()["reasonCode"] == "REQUEST_INVALID"
+
+
+def test_direct_request_retains_exact_target_validation_and_conflict_mapping() -> None:
+    client, grants = build_authorization_client()
+    login(client)
+    body = {
+        "schemaVersion": "exact-grant-request.v1",
+        "purpose": "CONTINUE_PROBLEM_PLAN",
+        "requestedGrants": [
+            {
+                "owner": "BUSINESS_PROBLEM",
+                "action": "READ",
+                "resource": "business-problem:known",
+            }
+        ],
+    }
+    response = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "direct-request",
+        },
+        json=body,
+    )
+    assert response.status_code == 202
+    assert grants.submissions[-1].continuation is None
+    assert grants.submissions[-1].requested_grants == (
+        ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:known"),
+    )
+
+    conflict = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "mismatch",
+        },
+        json=body,
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["reasonCode"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
+
+
+def test_grant_request_status_uses_real_version_and_hides_foreign_requests() -> None:
+    client, _ = build_authorization_client()
+    login(client)
+
+    response = client.get(f"{PREFIX}/authorization/grant-requests/grant-request-1")
+    assert response.status_code == 200
+    assert response.json()["state"] == "APPROVED"
+    assert response.json()["aggregateVersion"] == 2
+    assert set(response.json()) == {
+        "requestId",
+        "state",
+        "aggregateVersion",
+        "submittedAt",
+        "purpose",
+        "requestedActions",
+    }
+    assert "hidden-problem" not in response.text
+
+    hidden = client.get(f"{PREFIX}/authorization/grant-requests/foreign")
+    assert hidden.status_code == 404
+    assert hidden.json()["reasonCode"] == "AUTHORIZATION_REQUEST_NOT_FOUND"
 
 
 @pytest.mark.parametrize(

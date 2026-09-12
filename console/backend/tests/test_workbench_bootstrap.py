@@ -47,7 +47,8 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         workbench_bootstrap, "build_authority_foundation", lambda *args: foundation
     )
 
-    def capture(_sessions, _authorizer, _policy, *, operations):
+    def capture(_sessions, _authorizer, _policy, *, grant_administration, operations):
+        captured["grant_administration"] = grant_administration
         captured["operations"] = operations
         return FastAPI()
 
@@ -68,6 +69,7 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     )
 
     assert composition.foundation is foundation
+    assert captured["grant_administration"] is foundation.grants
     operations = captured["operations"]
     assert len(operations) == 22
     assert [(item.name, item.method, item.path) for item in operations[-9:]] == [
@@ -128,7 +130,8 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         workbench_bootstrap, "build_authority_foundation", lambda *args: foundation
     )
 
-    def capture(_sessions, _authorizer, _policy, *, operations):
+    def capture(_sessions, _authorizer, _policy, *, grant_administration, operations):
+        captured["grant_administration"] = grant_administration
         captured["operations"] = operations
         return FastAPI()
 
@@ -147,6 +150,7 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
     )
 
     operations = captured["operations"]
+    assert captured["grant_administration"] is foundation.grants
     assert len(operations) == 20
     assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
