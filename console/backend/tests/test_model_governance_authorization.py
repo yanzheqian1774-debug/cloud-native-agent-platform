@@ -6,6 +6,7 @@ from agent_console.authority_configuration import validate_registered_grant
 from agent_console.authority_contracts import (
     AuthenticationSource,
     AuthorityScope,
+    CurrentExactGrantDecision,
     ExactGrant,
     TrustedRequestContext,
 )
@@ -27,7 +28,6 @@ from agent_console.model_governance import (
     ProviderRevisionIdentity,
 )
 from agent_console.model_governance_authorization import (
-    CurrentExactGrantDecision,
     ModelCreatorContinuationAdapter,
     ModelCreatorGrantTargetValidator,
     ModelGovernanceExactResolver,
@@ -187,6 +187,15 @@ def test_authorization_adapter_rejects_mismatched_or_expired_authority_result() 
     )
     assert (
         adapter.authorize_use(
+            CONSUMPTION_SCOPE, ModelUseSubject(CONTEXT.principal_id), use()
+        )
+        is None
+    )
+    unavailable = ModelUseAuthorizationAdapter(
+        CONTEXT, DecisionReader(False), clock=lambda: NOW
+    )
+    assert (
+        unavailable.authorize_use(
             CONSUMPTION_SCOPE, ModelUseSubject(CONTEXT.principal_id), use()
         )
         is None

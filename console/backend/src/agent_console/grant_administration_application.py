@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from agent_console.authority_configuration import (
+    CredentialConfiguration,
     StaticAuthorityGeneration,
     validate_registered_grant,
 )
@@ -21,6 +22,8 @@ from agent_console.authority_contracts import (
     ContinuationOwner,
     CredentialId,
     CurrentAuthorizationReader,
+    CurrentExactGrantDecision,
+    CurrentExactGrantDecisionReader,
     DynamicAuthorizationState,
     ExactGrant,
     GrantAdministrationRepository,
@@ -152,6 +155,208 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             recovery_epoch=recovery_epoch,
         )
 
+    def read_linearized_current_exact_grant_decision(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, CurrentExactGrantDecision | None]:
+        reader = getattr(
+            self.dynamic, "read_linearized_current_exact_grant_decision", None
+        )
+        if reader is None:
+            return None, None
+        return reader(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]:
+        reader = getattr(self.dynamic, "read_linearized_authorization_states", None)
+        if reader is None:
+            if connection is not None:
+                raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+            rows = tuple(
+                self.read_linearized_authorization_state(
+                    context,
+                    grant,
+                    now=now,
+                    generation=generation,
+                    recovery_epoch=recovery_epoch,
+                )
+                for grant in grants
+            )
+            credentials = {credential for credential, _ in rows}
+            if len(credentials) != 1:
+                return None, tuple(state for _, state in rows)
+            return rows[0][0], tuple(state for _, state in rows)
+        return reader(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+
+    def has_current_grants(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[bool, ...]:
+        if (
+            not grants
+            or generation != self.generation.generation
+            or recovery_epoch != self.recovery_epoch
+        ):
+            return tuple(False for _ in grants)
+        credential_id, states = self.read_linearized_authorization_states(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+        credential, expected_source = self._current_credential(
+            context, credential_id, now=now
+        )
+        credential_current = credential is not None
+        if not credential_current:
+            return tuple(False for _ in grants)
+        return tuple(
+            state
+            not in {
+                DynamicAuthorizationState.REVOKED,
+                DynamicAuthorizationState.UNAVAILABLE,
+            }
+            and (credential.credential_id, grant)
+            not in self.generation.static_grant_revocation_tombstones
+            and (
+                any(
+                    item.grant == grant
+                    and (
+                        item.source is expected_source
+                        or item.source is GrantSource.STATIC_META
+                    )
+                    for item in credential.grants
+                )
+                or state is DynamicAuthorizationState.ALLOWED
+            )
+            for grant, state in zip(grants, states, strict=True)
+        )
+
+    def _current_credential(
+        self,
+        context: TrustedRequestContext,
+        credential_id: CredentialId | None,
+        *,
+        now: datetime,
+    ) -> tuple[CredentialConfiguration | None, GrantSource]:
+        expected_source = (
+            GrantSource.BROWSER_BOOTSTRAP
+            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
+            else GrantSource.SERVICE_ONLY
+        )
+        credential = (
+            self.generation.credential_by_id(credential_id)
+            if credential_id is not None
+            else None
+        )
+        if (
+            credential is None
+            or credential.scope != context.scope
+            or credential.authentication_source is not expected_source
+            or credential.credential_id
+            in self.generation.credential_revocation_tombstones
+            or now >= credential.expires_at
+        ):
+            return None, expected_source
+        return credential, expected_source
+
+    def _authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        connection: object | None,
+        configure_transaction: bool,
+    ) -> CurrentExactGrantDecision | None:
+        if generation != self.generation.generation:
+            return None
+        credential_id, decision = self.read_linearized_current_exact_grant_decision(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=self.recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+        credential, _ = self._current_credential(context, credential_id, now=now)
+        if credential is None or decision is None:
+            return None
+        if (credential.credential_id, grant) in (
+            self.generation.static_grant_revocation_tombstones
+        ):
+            return None
+        return decision
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None:
+        """Read a complete decision in a repository-owned snapshot."""
+        return self._authorize_current(
+            context,
+            grant,
+            now=now,
+            generation=self.generation.generation,
+            connection=None,
+            configure_transaction=True,
+        )
+
+    def bind_current_exact_decisions(
+        self, connection: object, *, generation: int
+    ) -> CurrentExactGrantDecisionReader:
+        """Bind exact-decision reads to an already-open owner transaction."""
+        return CallerOwnedCurrentExactGrantDecisionReader(
+            self, connection=connection, generation=generation
+        )
+
     def has_current_grant(
         self,
         context: TrustedRequestContext,
@@ -161,56 +366,44 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         generation: int,
         recovery_epoch: int,
     ) -> bool:
-        if (
-            generation != self.generation.generation
-            or recovery_epoch != self.recovery_epoch
-        ):
-            return False
-        credential_id, dynamic_state = self.read_linearized_authorization_state(
+        return self.has_current_grants(
             context,
-            grant,
+            (grant,),
             now=now,
             generation=generation,
             recovery_epoch=recovery_epoch,
+        )[0]
+
+
+class CallerOwnedCurrentExactGrantDecisionReader(CurrentExactGrantDecisionReader):
+    """Current decision reader pinned to the BFF/owner transaction."""
+
+    def __init__(
+        self,
+        authorization: GenerationAuthorizationReader,
+        *,
+        connection: object,
+        generation: int,
+    ) -> None:
+        self.authorization = authorization
+        self.connection = connection
+        self.generation = generation
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None:
+        return self.authorization._authorize_current(
+            context,
+            grant,
+            now=now,
+            generation=self.generation,
+            connection=self.connection,
+            configure_transaction=False,
         )
-        credential = (
-            self.generation.credential_by_id(credential_id)
-            if credential_id is not None
-            else None
-        )
-        if credential is None or credential.scope != context.scope:
-            return False
-        expected_source = (
-            GrantSource.BROWSER_BOOTSTRAP
-            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
-            else GrantSource.SERVICE_ONLY
-        )
-        if (
-            credential.authentication_source is not expected_source
-            or credential.credential_id
-            in self.generation.credential_revocation_tombstones
-            or now >= credential.expires_at
-        ):
-            return False
-        if dynamic_state in {
-            DynamicAuthorizationState.REVOKED,
-            DynamicAuthorizationState.UNAVAILABLE,
-        }:
-            return False
-        if (credential.credential_id, grant) in (
-            self.generation.static_grant_revocation_tombstones
-        ):
-            return False
-        static_allowed = any(
-            item.grant == grant
-            and (
-                item.source is expected_source or item.source is GrantSource.STATIC_META
-            )
-            for item in credential.grants
-        )
-        if static_allowed:
-            return True
-        return dynamic_state is DynamicAuthorizationState.ALLOWED
 
 
 class GrantAdministrationService:
