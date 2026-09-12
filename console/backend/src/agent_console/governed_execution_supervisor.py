@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import secrets
+import select
 import signal
 import socket
 import stat
@@ -20,6 +21,7 @@ from .governed_execution_ownership import execution_database_fingerprint
 
 OVERLAP_EXIT = 75
 CONFIGURATION_EXIT = 78
+READINESS_TIMEOUT_SECONDS = 20.0
 
 
 def _host_scope() -> str:
@@ -88,6 +90,24 @@ def _open_and_lock(path: Path) -> int:
     return descriptor
 
 
+def _read_ready(descriptor: int, timeout: float) -> dict[str, object]:
+    ready, _, _ = select.select([descriptor], [], [], timeout)
+    if not ready:
+        raise ValueError("WORKBENCH_READINESS_TIMEOUT")
+    encoded = bytearray()
+    while len(encoded) <= 256_000:
+        chunk = os.read(descriptor, 1)
+        if not chunk:
+            raise ValueError("WORKBENCH_READINESS_INCOMPLETE")
+        if chunk == b"\n":
+            value = json.loads(encoded)
+            if not isinstance(value, dict):
+                raise ValueError("WORKBENCH_READINESS_INVALID")
+            return value
+        encoded.extend(chunk)
+    raise ValueError("WORKBENCH_READINESS_TOO_LARGE")
+
+
 def _status_base(
     *,
     database_fingerprint: str,
@@ -106,9 +126,23 @@ def _status_base(
 def run(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--port", type=int)
+    parser.add_argument("--public-host", default="127.0.0.1")
+    parser.add_argument("--public-port", type=int)
+    parser.add_argument("--private-host", default="127.0.0.1")
+    parser.add_argument("--private-port", type=int)
     parser.add_argument("--shutdown-timeout", type=float, default=30.0)
     arguments = parser.parse_args(argv)
+    dual_listener = (
+        arguments.public_port is not None or arguments.private_port is not None
+    )
+    if dual_listener:
+        if arguments.public_port is None or arguments.private_port is None:
+            print("WORKBENCH_LISTENER_CONFIGURATION_INVALID", file=sys.stderr)
+            return CONFIGURATION_EXIT
+    elif arguments.port is None:
+        print("GOVERNED_EXECUTION_PORT_REQUIRED", file=sys.stderr)
+        return CONFIGURATION_EXIT
     database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
     if not database_url:
         print("GOVERNED_EXECUTION_STORAGE_UNAVAILABLE", file=sys.stderr)
@@ -166,40 +200,99 @@ def run(argv: list[str] | None = None) -> int:
             "GOVERNED_EXECUTION_SUPERVISION_TOKEN": token,
         }
     )
-    command = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        "agent_console.app:app",
-        "--host",
-        arguments.host,
-        "--port",
-        str(arguments.port),
-        "--workers",
-        "1",
-    ]
+    ready_read_fd = ready_write_fd = -1
+    if dual_listener:
+        ready_read_fd, ready_write_fd = os.pipe()
+        environment["WORKBENCH_READINESS_FD"] = str(ready_write_fd)
+        command = [
+            sys.executable,
+            "-m",
+            "agent_console.workbench_dual_listener",
+            "--public-host",
+            arguments.public_host,
+            "--public-port",
+            str(arguments.public_port),
+            "--private-host",
+            arguments.private_host,
+            "--private-port",
+            str(arguments.private_port),
+        ]
+    else:
+        command = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "agent_console.app:app",
+            "--host",
+            arguments.host,
+            "--port",
+            str(arguments.port),
+            "--workers",
+            "1",
+        ]
     try:
         child = subprocess.Popen(
             command,
             env=environment,
-            pass_fds=(lock_fd, read_fd),
+            pass_fds=tuple(
+                value for value in (lock_fd, read_fd, ready_write_fd) if value >= 0
+            ),
         )
     except OSError as exc:
         os.close(read_fd)
         os.close(write_fd)
         os.close(lock_fd)
+        if ready_read_fd >= 0:
+            os.close(ready_read_fd)
+        if ready_write_fd >= 0:
+            os.close(ready_write_fd)
         print("SUPERVISED_CHILD_START_FAILED " + str(exc), file=sys.stderr)
         return CONFIGURATION_EXIT
     os.close(read_fd)
+    if ready_write_fd >= 0:
+        os.close(ready_write_fd)
     _write_status(
         status_path,
         {
             **base,
-            "state": "RUNNING",
+            "state": "STARTING" if dual_listener else "RUNNING",
             "supervisorPid": os.getpid(),
             "childPid": child.pid,
         },
     )
+    if dual_listener:
+        try:
+            ready = _read_ready(ready_read_fd, READINESS_TIMEOUT_SECONDS)
+            if (
+                ready.get("schemaVersion") != "workbench-dual-listener-ready.v1"
+                or ready.get("pid") != child.pid
+            ):
+                raise ValueError("WORKBENCH_READINESS_INVALID")
+            _write_status(
+                status_path,
+                {
+                    **base,
+                    "state": "RUNNING",
+                    "supervisorPid": os.getpid(),
+                    "childPid": child.pid,
+                    "publicPort": arguments.public_port,
+                    "privatePort": arguments.private_port,
+                },
+            )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            if child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=arguments.shutdown_timeout)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=arguments.shutdown_timeout)
+            print("SUPERVISED_CHILD_START_FAILED " + str(exc), file=sys.stderr)
+            os.close(write_fd)
+            os.close(lock_fd)
+            return CONFIGURATION_EXIT
+        finally:
+            os.close(ready_read_fd)
 
     stopping = False
 

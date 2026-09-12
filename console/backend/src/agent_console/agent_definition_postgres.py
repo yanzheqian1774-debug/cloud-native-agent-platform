@@ -284,6 +284,89 @@ class PostgresAgentDefinitionRepository:
                 "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
             ) from exc
 
+    @staticmethod
+    def read_revision_for_workbench(
+        connection: Connection[Any],
+        scope: DefinitionScope,
+        definition_id: str,
+        revision_id: str,
+        *,
+        authorized: bool,
+    ) -> dict[str, Any]:
+        """Read one authorized immutable revision on the caller transaction."""
+        if not authorized:
+            raise AgentDefinitionNotFound("AGENT_DEFINITION_NOT_FOUND")
+        try:
+            row = connection.execute(
+                "SELECT record FROM agent_definition.definitions "
+                "WHERE namespace=%s AND security_domain=%s AND definition_id=%s "
+                "FOR SHARE",
+                (scope.namespace, scope.security_domain, definition_id),
+            ).fetchone()
+        except PsycopgError as exc:
+            raise AgentDefinitionRepositoryError(
+                "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+            ) from exc
+        if row is None:
+            raise AgentDefinitionNotFound("AGENT_DEFINITION_NOT_FOUND")
+        record = row["record"]
+        try:
+            if (
+                record["definitionId"] != definition_id
+                or record["namespace"] != scope.namespace
+                or record["securityDomain"] != scope.security_domain
+            ):
+                raise KeyError
+            revisions = [
+                revision
+                for revision in record["revisions"]
+                if revision.get("revisionId") == revision_id
+            ]
+        except (AttributeError, KeyError, TypeError) as exc:
+            raise AgentDefinitionRepositoryError(
+                "AGENT_DEFINITION_RECORD_CORRUPT"
+            ) from exc
+        if not revisions:
+            raise AgentDefinitionNotFound("AGENT_DEFINITION_NOT_FOUND")
+        if len(revisions) != 1:
+            raise AgentDefinitionRepositoryError("AGENT_DEFINITION_RECORD_CORRUPT")
+        return {"record": record, "revision": revisions[0]}
+
+    @staticmethod
+    def list_published_for_workbench(
+        connection: Connection[Any],
+        scope: DefinitionScope,
+        *,
+        after_definition_id: str | None,
+        limit: int,
+        authorized: bool,
+    ) -> list[dict[str, Any]]:
+        """Select definitions by the formal published-revision pointer."""
+        if not authorized:
+            raise AgentDefinitionNotFound("AGENT_DEFINITION_NOT_FOUND")
+        if not 1 <= limit <= 201:
+            raise AgentDefinitionRepositoryError("AGENT_DEFINITION_QUERY_INVALID")
+        parameters: list[Any] = [scope.namespace, scope.security_domain]
+        after_clause = ""
+        if after_definition_id is not None:
+            after_clause = 'AND definition_id COLLATE "C" > %s '
+            parameters.append(after_definition_id)
+        parameters.append(limit)
+        try:
+            rows = connection.execute(
+                "SELECT record FROM agent_definition.definitions "
+                "WHERE namespace=%s AND security_domain=%s "
+                "AND record->>'publishedRevisionId' IS NOT NULL "
+                + after_clause
+                + 'ORDER BY definition_id COLLATE "C" LIMIT %s',
+                tuple(parameters),
+            ).fetchall()
+        except PsycopgError as exc:
+            raise AgentDefinitionRepositoryError(
+                "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+            ) from exc
+        return [row["record"] for row in rows]
+
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         params = (record["namespace"], record["securityDomain"], record["definitionId"])
         try:
