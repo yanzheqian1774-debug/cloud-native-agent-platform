@@ -473,6 +473,17 @@ def test_wave_3b_diagnostic_allowlist_covers_every_declared_step():
     assert declared_steps <= set(harness_module.WAVE_3B_STEP_IDS)
 
 
+def test_wave_3b_mcp_fixture_closes_established_connections_after_server_close():
+    scenario = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text()
+    teardown = scenario.split("test.afterAll", maxsplit=1)[1].split(
+        'test("canonical URL context', maxsplit=1
+    )[0]
+    assert teardown.index("mcp.close(") < teardown.index("mcp.closeAllConnections()")
+
+
 def test_wave_3b_conflict_recovery_uses_exact_static_top_level_steps():
     source = (
         MODULE_PATH.parents[2]
