@@ -390,22 +390,48 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   const publishedMcpId=await page.locator(".agent-detail > header code").textContent();
   await test.step("SKILL_MCP_SKILL_PUBLISHED",()=>publish(page,"/skills","Create governed SKILL"));
   const skillId=(await page.locator(".agent-detail > header code").textContent())!.trim();
-  await test.step("SKILL_MCP_SKILL_TEST_UI_RENDERED",async()=>{
-    const realDirectory=page.getByRole("complementary",{name:"SKILL 能力目录"});
+  const realDirectory=page.getByRole("complementary",{name:"SKILL 能力目录"});
+  await test.step("SKILL_MCP_SKILL_DIRECTORY_DEFAULT_VIEW",async()=>{
     await expect(realDirectory.getByRole("button",{name:"卡片"})).toHaveAttribute("aria-pressed","true");
+  });
+  await test.step("SKILL_MCP_SKILL_DIRECTORY_COMPACT_VIEW",async()=>{
     await realDirectory.getByRole("button",{name:"紧凑列表"}).click();
     await expect(realDirectory.getByRole("button",{name:"紧凑列表"})).toHaveAttribute("aria-pressed","true");
+  });
+  await test.step("SKILL_MCP_SKILL_DIRECTORY_QUERY",async()=>{
     await page.getByLabel("Search catalog").fill("Supplier Quality");
+  });
+  await test.step("SKILL_MCP_SKILL_DIRECTORY_LIFECYCLE",async()=>{
     await page.getByLabel("Lifecycle filter").selectOption("PUBLISHED");
+  });
+  await test.step("SKILL_MCP_SKILL_DIRECTORY_SELECTION",async()=>{
     await expect(page.locator(".agent-detail").getByRole("heading",{name:"Supplier Quality Skill"})).toBeVisible();
+  });
+  await test.step("SKILL_MCP_SKILL_QUERY_CONTEXT",async()=>{
     expect(new URL(page.url()).searchParams.get("query")).toBe("Supplier Quality");
+  });
+  await test.step("SKILL_MCP_SKILL_LIFECYCLE_CONTEXT",async()=>{
     expect(new URL(page.url()).searchParams.get("lifecycle")).toBe("PUBLISHED");
+  });
+  await test.step("SKILL_MCP_SKILL_RESOURCE_CONTEXT",async()=>{
     expect(new URL(page.url()).searchParams.get("resourceId")).toBeTruthy();
+  });
+  await test.step("SKILL_MCP_SKILL_TEST_NAME_INPUT",async()=>{
     await page.getByLabel("测试名称").fill("Supplier quality regression");
+  });
+  await test.step("SKILL_MCP_SKILL_TEST_REQUEST_INPUT",async()=>{
     await page.getByLabel("测试输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
+  });
+  await test.step("SKILL_MCP_SKILL_TEST_EXPECTED_INPUT",async()=>{
     await page.getByLabel("期望输出（JSON）").fill(JSON.stringify({status:"healthy"}));
+  });
+  await test.step("SKILL_MCP_SKILL_TEST_SAVE",async()=>{
     await page.getByRole("button",{name:"Save test case"}).click();
+  });
+  await test.step("SKILL_MCP_SKILL_TEST_RUN",async()=>{
     await page.getByRole("button",{name:"Run saved test"}).click();
+  });
+  await test.step("SKILL_MCP_SKILL_TEST_RESULT_RENDERED",async()=>{
     await expect(page.getByText(/expected equals actual/)).toBeVisible();
   });
   const bindingPath=`/api/internal/v0.2.2/resources/skill/${skillId}/bindings`;
