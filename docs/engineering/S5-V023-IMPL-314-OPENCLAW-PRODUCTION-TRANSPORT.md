@@ -584,3 +584,191 @@ Only after those conditions are explicitly proven may the original root-context
 `operator/Dockerfile` build run once, followed by actual-image checks for the formal
 entrypoint, non-root identity, Python/Node/OpenClaw dependency integrity and
 configured preflight. Image-equivalent imports do not satisfy that gate.
+
+## Human-accepted direction checkpoint — schema/conformance batch 1
+
+The Human accepted the direction below after the preceding proposal was recorded.
+This checkpoint does not rewrite the historical `PROPOSED / NOT_ACCEPTED /
+NOT_IMPLEMENTED` status of that proposal. It authorizes only an internal schema,
+conformance tests and bounded fixed-version RPC capability validation. Exact
+persistence fields, lifecycle RPC mappings and production write enablement remain
+unaccepted unless stated otherwise.
+
+### Accepted direction and internal conformance schema
+
+The machine-readable internal schema is
+`manifests/acceptance/openclaw/openclaw-lifecycle-conformance-v1.json`. Its status is
+`INTERNAL_CONFORMANCE_PROPOSED_NOT_FROZEN`: it specializes existing accepted
+execution values without creating a second Runtime or Profile authority.
+
+| Topic | Status | Exact rule in this checkpoint |
+| --- | --- | --- |
+| Runtime isolation | `HUMAN_ACCEPTED_DIRECTION` | one Runtime Instance exclusively binds one OpenClaw agent and one canonical workspace; neither may be shared across Runtime Instances |
+| Generation/session identity | `HUMAN_ACCEPTED_DIRECTION` | Platform generation remains a durable Platform integer; each generation has a distinct OpenClaw session ID; a session ID never replaces generation |
+| Workspace files | `HUMAN_ACCEPTED_DIRECTION` | generation replacement retains the same exclusive workspace and all existing files by default; this includes `MEMORY.md` or other memory files when present |
+| Session context | `HUMAN_ACCEPTED_DIRECTION` | a successor session uses no parent/fork/transcript import; session ID, entry overrides, active-run correlation and transcript are generation-local |
+| Recovery | `ACCEPTED_CONTRACT + HUMAN_ACCEPTED_DIRECTION` | persist correlation, observe before effect, never blindly reissue an ambiguous write |
+| Stop | `ACCEPTED_CONTRACT + HUMAN_ACCEPTED_DIRECTION` | require a dispatch barrier and positive no-active-work/termination observation; archive/delete is not stop evidence |
+| Profile/Secret direction | `HUMAN_ACCEPTED_DIRECTION_ONLY` | PostgreSQL remains Profile authority; ConfigMap is transport; Secret Reference is exact and scope-first; this batch implements none of those paths |
+
+The minimum lifecycle request reuses accepted `ScopeIdentity`,
+`RuntimeDesiredState`, `ScopedRuntimeCommand`, `CommandId`, `Generation`,
+authorization reference and Placement reference. The conformance specialization adds
+an explicit idempotency key because current `RuntimeDesiredState` has only command ID.
+The minimum observation reuses accepted `RuntimeObservation` fields and proposes an
+OpenClaw native-correlation record containing Gateway digest, agent ID, canonical
+workspace, workspace-attestation digest, session key/ID, exact provider version and
+optional ownership nonce digest. That expanded record is not yet persisted or wired.
+
+The accepted `CommandResult` values and recovery rules remain authoritative:
+
+| Condition | Result/action |
+| --- | --- |
+| exact command replay | return stored semantic result or observe; do not issue a second create |
+| same command/idempotency identity with different payload | conflict |
+| timeout or transport loss after write submission | observe only; unresolved effect becomes `RECOVERY_REQUIRED` |
+| agent created but session missing | `RECOVERY_REQUIRED`; no automatic adopt/delete |
+| successor session may exist but response was lost | observe exact correlations; no blind `sessions.create` retry |
+| stale, duplicate or conflicting native correlation | reject or `RECOVERY_REQUIRED`; never infer ownership from name/path/existence |
+
+### Fixed OpenClaw metadata and ownership boundary
+
+OpenClaw `2026.7.1-2` exposes these relevant schema surfaces:
+
+| Object | Writable fields | Normalization/read-back | Ownership conclusion |
+| --- | --- | --- | --- |
+| agent | create/update: `name`, `workspace`, `model`, `emoji`, `avatar`; arbitrary `metadata` is rejected | name is trimmed/sanitized, agent ID is normalized from name, workspace is resolved as a user path; `agents.list` returns ID/name/workspace/identity | `agents.create/update/delete` require `operator.admin`; an administrator can change these fields, so equality is correlation, not unforgeable attestation |
+| workspace | agent config owns an absolute workspace path; scoped list/get RPCs expose entries/files | `agents.update` can change the binding; fixed Gateway also maintains internal workspace-attestation files but exposes no RPC proof suitable as Platform ownership | path, file presence and the internal attestation file do not prove Platform ownership |
+| session | create accepts key, agent ID and bounded label; patch exposes bounded label/category and other session settings; arbitrary `metadata` is rejected | key is canonicalized to `agent:<agent-id>:<key>`; label/category are bounded to 512 characters; session ID is generated and read through list/describe | create and label/category patch require `operator.write` (or admin), so key/label/category/nonce equality is mutable correlation, not authentication proof |
+
+The fixed version therefore cannot host the proposed native ownership nonce in an
+unforgeable or Platform-exclusive metadata surface. The implementable boundary is:
+
+1. PostgreSQL can later own the exact Platform binding and store observed agent,
+   workspace and session correlations.
+2. Gateway RPC can read those correlations back and detect mismatch.
+3. The Platform cannot call the result native attestation. A caller with the required
+   Gateway admin/write scope can forge or alter the corresponding native fields.
+4. Without an independently protected binding/credential boundary, automatic adopt
+   and delete remain unsupported.
+
+Association validation must combine all of the following: exact agent returned by
+`agents.list`; canonical workspace equality; agent-scoped workspace read; canonical
+session key whose embedded agent matches; and the same session ID returned by
+`sessions.list` plus `sessions.describe`/`sessions.get`. `sessions.resolve` is only a
+locator: live validation showed that a full canonical key was resolved even when a
+different `agentId` parameter was supplied, while `sessions.get` rejected the same
+mismatch. `sessions.resolve` alone is therefore explicitly insufficient for scope or
+ownership validation.
+
+### Real fixed-version RPC conformance
+
+The test used the existing task-owned Gateway PID `93744`, loopback port `19314`,
+state root `/private/tmp/s5-v023-impl-314-probe.b0zeMp` and its existing mode-0600
+credential reference. The credential was injected only through
+`OPENCLAW_GATEWAY_TOKEN`; it was not printed, committed or passed as an argument.
+
+Created test assets:
+
+- agent `s5-v023-impl-314-conformance-a1`;
+- workspace
+  `/private/tmp/s5-v023-impl-314-probe.b0zeMp/workspaces/conformance-a1`;
+- generation-1 session
+  `agent:s5-v023-impl-314-conformance-a1:s5-v023-impl-314-runtime-c1-g1`, ID
+  `ff9a00c9-3036-4ff8-b064-bab44976e9d7`;
+- generation-2 session
+  `agent:s5-v023-impl-314-conformance-a1:s5-v023-impl-314-runtime-c1-g2`, ID
+  `b8eff756-7efe-431f-9982-6cfc393809d4`.
+
+| RPC | Real result | Bounded claim |
+| --- | --- | --- |
+| `agents.create` | returned exact ID/name/workspace; created bootstrap workspace and session directory | bounded create supported; duplicate/idempotent success not proven |
+| `agents.update` + `agents.list` | identity emoji update was saved and read back | supported mutable identity metadata; not ownership proof |
+| `agents.files.list`, `agents.workspace.list/get` | returned the exact agent workspace, bootstrap files and file metadata; `MEMORY.md` was absent in this new workspace | workspace files are agent/workspace state independent of session; an existing memory file would remain with the workspace |
+| `sessions.create` g1/g2 | each returned a distinct session ID, canonical agent-prefixed key and `runStarted=false` | empty session create supported; no model/tool/command hook and no transcript fork |
+| `sessions.list`/`describe` | returned both exact key/ID correlations and the patched g1 category | bounded correlation read-back supported |
+| `sessions.get` | returned zero messages and rejected mismatched `agentId` for the canonical key | transcript read is agent checked; empty result is not stop/drain proof |
+| `sessions.resolve` | resolved canonical key, including when a mismatched `agentId` was supplied | locator only; insufficient for isolation or ownership proof |
+| `sessions.patch` | label/category metadata saved and read back; arbitrary `metadata` rejected | bounded mutable metadata supported; no generic ownership metadata |
+| `sessions.abort`, `chat.abort` | not invoked | fixed source only; no in-flight drain/cancel/stop proof |
+| `agents.delete`, `sessions.delete` | not invoked | destructive lifecycle mapping remains unsupported |
+
+Both empty creates wrote only transcript header records; `sessions.get` returned zero
+messages. The two sessions were created with no parent and `fork=false`, so the g2
+session did not copy the g1 transcript. This does not prove reset, snapshot, overlay,
+transcript import, real in-flight cancel/drain or graceful stop.
+
+### State location and generation inheritance
+
+| State | Fixed-version location | Across Platform generation under accepted direction |
+| --- | --- | --- |
+| bootstrap/instruction/persona files | exclusive agent workspace (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`, `BOOTSTRAP.md`) | retained because the same exclusive workspace is retained |
+| workspace state and ordinary files | exclusive agent workspace, including `openclaw-workspace-state.json` and any existing `MEMORY.md`/memory files | retained; this is file retention, not a new formal Memory service or implicit cross-Instance sharing |
+| session ID/key, label/category and overrides | agent-scoped session store | not inherited; successor generation gets a new session |
+| transcript and messages | session-specific JSONL transcript | not copied or imported; predecessor transcript remains separately retained |
+| active run correlation | live/session state | not inherited; its absence in an idle session does not prove drain semantics |
+
+Cross-Instance protection requires the Platform binding store to enforce uniqueness on
+the exact `(scope, agent_id)` and canonical `(scope, workspace)` pairs and reject any
+session whose embedded agent, persisted session ID or Runtime generation differs.
+Those uniqueness fields are not yet implemented; the fixed Gateway by itself does not
+prevent an authorized administrator from rebinding an agent workspace.
+
+### Existing mechanism reuse and actual gaps
+
+| Existing mechanism | Reusable owner/port/fields | Actual gap for the next implementation batch |
+| --- | --- | --- |
+| `agent_core.execution_contract` | accepted Platform IDs, scope, generation, desired command, observation, correlation, freshness and `CommandResult`; `may_reissue_command` already rejects ambiguous reissue | no separate durable idempotency key; provider correlation is one opaque handle rather than queryable agent/workspace/session fields; observation lacks explicit source version |
+| `PostgresExecutionAuthorityRepository` | PostgreSQL tables and port methods already append/get desired commands, observations and command-result facts; exact digest replay succeeds and same identity/different digest conflicts | no OpenClaw binding/ownership record, exclusive agent/workspace uniqueness, native-correlation schema or provider effect recovery query |
+| `RuntimeControlRepository` / `RuntimeManager` | intent-before-effect, observe-first reconciliation and `RECOVERY_REQUIRED` logic | current manager adapter is in-memory/Native-shaped; no PostgreSQL-to-OpenClaw durable assembly and no positive active-work termination proof |
+| `ScopedRuntimeCommand` | scope, authorization reference and Placement reference are typed and checked for presence; manager checks authorized scope equality | reference presence is not authorization verification; lifecycle authorization binding is not implemented here |
+| Runtime Profile service/repository | PostgreSQL owns scoped profile/revision/digest, lifecycle facts and aggregate-version CAS | no projection outbox, projection sequence/current status, new-versus-existing eligibility, revocation or lease fields |
+| OpenClaw provider | existing provider validates Platform binding/observation identity and holds in-memory terminal/ambiguous sets | these sets and bindings are not durable and cannot recover after restart |
+| production transport | exact package/auth/version/agent/workspace preflight with read-only `health`, `status`, `agents.list` | agent/session lifecycle RPCs remain outside the allowlist and deliberately fail closed |
+
+No new Runtime/Profile authority, PostgreSQL table, outbox, publisher, credential
+resolver or production lifecycle behavior was created in this batch.
+
+### Parameters still requiring Human acceptance
+
+| Parameter | Recommendation and basis | Status |
+| --- | --- | --- |
+| observation freshness | 30 seconds, matching current Runtime Manager and OpenClaw bootstrap defaults | `PROPOSED_NOT_FROZEN` |
+| individual RPC timeout | 10 seconds, matching the bounded task preflight configuration | `PROPOSED_NOT_FROZEN` |
+| lifecycle command deadline | 30 seconds, allowing at most three bounded observations while granting no write retry | `PROPOSED_NOT_FROZEN` |
+| Profile eligibility lease/renewal | no value recommended: no accepted lease contract or operational SLO exists | `UNRESOLVED` |
+| distributed clock skew | no value recommended: no accepted time-authority/skew contract exists | `UNRESOLVED` |
+| ownership nonce | proposed 256-bit random value stored only as SHA-256 digest; native equality is still not attestation | `PROPOSED_NOT_FROZEN` |
+| workspace attestation | canonical real path plus Platform-owned content/identity digest; exact file set and rotation rules unresolved | `PROPOSED_NOT_FROZEN` |
+
+### Minimal second implementation batch and dependencies
+
+The smallest follow-up is not production lifecycle enablement. It is a separately
+approved persistence/observation slice:
+
+1. extend the existing PostgreSQL execution-authority owner/port with an internal
+   OpenClaw binding record keyed by scope + Runtime Instance + generation, exact
+   uniqueness for agent/workspace, command/idempotency correlation and observation
+   high-water;
+2. add repository conformance for exact replay, conflicting payload, partial
+   agent/session creation, restart, mismatch and ambiguous effect;
+3. add a read-only OpenClaw correlation observer that combines agent/workspace and
+   session list/get/describe checks and explicitly refuses `sessions.resolve`-only
+   proof;
+4. bind existing authorization and Placement references before any effect;
+5. only after those pass, request a separate Human approval for the minimum
+   production `sessions.create` start mapping.
+
+That batch depends on accepted exact database fields/constraints, idempotency-key
+semantics, nonce/workspace-attestation format, timeout/freshness values and ownership
+trust boundary. STOP/replace, Profile outbox/projection, credential binding, dispatch,
+Evidence/Outcome and model execution remain later, separately gated work.
+
+### Test asset disposition
+
+The test agent, workspace and two empty sessions are retained under the task-owned
+state root because each session has a provider-native transcript header and the live
+correlations are useful for review/recovery. They are idle (`runStarted=false`, zero
+messages, no observed active run). No delete/archive/abort was issued. Retention is
+not a production lifecycle claim; cleanup requires a later explicit check that these
+exact task-owned assets have no transcript/evidence value.

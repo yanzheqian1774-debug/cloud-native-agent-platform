@@ -159,3 +159,67 @@ bounded implementation allocations. No lifecycle/Profile/credential/Evidence cod
 RPC, Docker access probe, image build, deployment, Batch B work or 309 operation was
 performed. The production image remains `NOT_PROVEN`; only its future environmental
 preconditions were documented.
+
+## Human-accepted schema/conformance batch 1
+
+Entry checkpoint matched commit
+`bc5a3cb8315acb8560568d1029f2c827a82b9ed0`, tree
+`a6ef15995648942943d8cc02a23cb63a6e7254bc`, with a clean index/worktree, no Git
+lock and no competing worktree writer. The prior reviewed implementation and
+authenticated evidence checkpoint remains
+`cd99b0ea7b2ae749b56d7364310e024af62921a4`, tree
+`9fb01d05982ee2a26e037f8af87008d2b9690eda`.
+
+The Human accepted the exclusive Runtime Instance to agent/workspace direction,
+separate Platform generation and OpenClaw session identities, same-workspace file
+retention, no successor transcript copy, observe-first recovery, positive stop
+evidence, PostgreSQL Profile authority and exact scope-first Secret Reference
+direction. This acceptance authorized only schema/conformance and fixed-version RPC
+capability validation; it did not retroactively change the earlier proposal record
+or authorize production lifecycle/Profile/credential implementation.
+
+The internal, non-frozen conformance artifact is
+`manifests/acceptance/openclaw/openclaw-lifecycle-conformance-v1.json`, tested by
+`tests/acceptance/openclaw/test_openclaw_lifecycle_conformance.py`. It reuses the
+accepted execution contract and PostgreSQL owner, records missing OpenClaw mapping
+fields, makes ambiguous effects observe-only/`RECOVERY_REQUIRED`, and asserts that
+the production transport still contains no session lifecycle write allowlist.
+
+### Real RPC evidence
+
+The existing task-owned Gateway was revalidated as PID `93744`, cwd
+`/Users/tristan/.codex/worktrees/3198/cloud-native-agent-platform`, loopback port
+`19314`, state root `/private/tmp/s5-v023-impl-314-probe.b0zeMp`. The existing
+mode-0600 credential reference was injected only through the environment. No secret
+was printed, placed in arguments or committed.
+
+The bounded test created only:
+
+- agent `s5-v023-impl-314-conformance-a1`;
+- workspace
+  `/private/tmp/s5-v023-impl-314-probe.b0zeMp/workspaces/conformance-a1`;
+- g1 session `ff9a00c9-3036-4ff8-b064-bab44976e9d7` at canonical key
+  `agent:s5-v023-impl-314-conformance-a1:s5-v023-impl-314-runtime-c1-g1`;
+- g2 session `b8eff756-7efe-431f-9982-6cfc393809d4` at canonical key
+  `agent:s5-v023-impl-314-conformance-a1:s5-v023-impl-314-runtime-c1-g2`.
+
+`agents.create` returned the exact normalized ID and canonical workspace;
+`agents.update` identity data was saved and read through `agents.list`;
+agent-scoped file/workspace listing returned the created bootstrap files;
+`sessions.create` returned distinct g1/g2 IDs with `runStarted=false` and no parent,
+fork, task, message or command hook; list/describe/resolve/get and patch were exercised
+without model/tool work. Both transcripts contained only the provider header and
+`sessions.get` returned zero messages.
+
+Arbitrary `metadata` was rejected for both agent update and session patch. Supported
+agent identity/workspace and session label/category fields are mutable by callers
+holding the relevant Gateway admin/write scope, so they are correlation only and not
+unforgeable ownership proof. `sessions.resolve` returned a full canonical key even
+with a mismatched `agentId`, while `sessions.get` rejected that mismatch. Conformance
+therefore prohibits resolve-only ownership or isolation decisions.
+
+No abort, delete, archive, model, tool, arbitrary shell, dispatch, production
+lifecycle, Profile projection, credential binding, PostgreSQL migration, Docker
+probe/build, deploy, Batch B or 309 action occurred. The two empty sessions, agent
+and workspace are retained because provider-native transcript headers and exact live
+correlations now exist; cleanup was not forced.
