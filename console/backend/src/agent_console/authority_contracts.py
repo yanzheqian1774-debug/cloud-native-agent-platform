@@ -121,6 +121,19 @@ class ExactGrant:
 
 
 @dataclass(frozen=True, slots=True)
+class CurrentExactGrantDecision:
+    """One complete, currently effective dynamic exact-grant decision."""
+
+    decision_id: str
+    context: TrustedRequestContext
+    grant: ExactGrant
+    policy_generation: int
+    policy_version: str
+    issued_at: datetime
+    expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class BrowserSession:
     session_id: SessionId
     principal: VerifiedPrincipal
@@ -314,6 +327,42 @@ class GrantAdministrationRepository(Protocol):
 
 
 class CurrentAuthorizationReader(Protocol):
+    def read_linearized_current_exact_grant_decision(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, CurrentExactGrantDecision | None]: ...
+
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]: ...
+
+    def has_current_grants(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[bool, ...]: ...
+
     def read_linearized_authorization_state(
         self,
         context: TrustedRequestContext,
@@ -352,6 +401,18 @@ class CurrentAuthorizationReader(Protocol):
         generation: int,
         recovery_epoch: int,
     ) -> bool: ...
+
+
+class CurrentExactGrantDecisionReader(Protocol):
+    """Consumer port for a complete current decision, never a boolean grant."""
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None: ...
 
 
 class ContinuationOwner(Protocol):

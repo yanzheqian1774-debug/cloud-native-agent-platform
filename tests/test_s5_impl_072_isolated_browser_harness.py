@@ -97,7 +97,7 @@ def test_summary_static_scenarios(mapping):
     report["suites"][0]["file"] = name
     report["suites"][0]["specs"][0]["title"] = title
     summary = make_summary(report)
-    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 19
+    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 39
     assert summary["scenarioId"] == scenario
     assert summary["spec"] == "console/frontend/tests/e2e/" + name
     assert summary["sourceLine"] == 42
@@ -462,6 +462,26 @@ def test_wave_3b_steps_are_static_sanitized_and_distinguish_failure():
     encoded = harness_module.encode_failure_summary(summary)
     assert "PRIVATE" not in encoded
     assert "locator" not in encoded
+
+
+def test_wave_3b_diagnostic_allowlist_covers_every_declared_step():
+    scenario = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text()
+    declared_steps = set(re.findall(r'test\.step\("([^"]+)"', scenario))
+    assert declared_steps <= set(harness_module.WAVE_3B_STEP_IDS)
+
+
+def test_wave_3b_mcp_fixture_closes_established_connections_after_server_close():
+    scenario = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text()
+    teardown = scenario.split("test.afterAll", maxsplit=1)[1].split(
+        'test("canonical URL context', maxsplit=1
+    )[0]
+    assert teardown.index("mcp.close(") < teardown.index("mcp.closeAllConnections()")
 
 
 def test_wave_3b_conflict_recovery_uses_exact_static_top_level_steps():
