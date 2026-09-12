@@ -3,6 +3,7 @@ import {createServer,type Server} from "node:http";
 import {recordSkillMcpOperationResult} from "../harness/structuredSkillMcpReporter";
 
 let mcp:Server;
+const responsePath=(response:Response)=>decodeURIComponent(new URL(response.url()).pathname);
 test.beforeAll(async()=>{mcp=createServer((request,response)=>{let raw="";request.on("data",chunk=>{raw+=chunk});request.on("end",()=>{const message=JSON.parse(raw);const method=message.method;if(method==="notifications/initialized"){response.writeHead(202);response.end();return}const result=method==="initialize"?{protocolVersion:"2025-06-18",capabilities:{},serverInfo:{name:"browser-acceptance",version:"1"}}:method==="tools/list"?{tools:[{name:"quality.lookup",description:"Deterministic quality lookup",inputSchema:{type:"object"}}]}:method==="resources/list"?{resources:[{uri:"quality://guide",name:"Quality guide"}]}:method==="prompts/list"?{prompts:[{name:"quality-summary",description:"Quality summary"}]}:{content:[{type:"text",text:"healthy"}],structuredContent:{supplier:"ACME",token:"must-redact"}};const body=JSON.stringify({jsonrpc:"2.0",id:message.id,result});response.writeHead(200,{"Content-Type":"application/json","Mcp-Session-Id":"browser-session","Content-Length":Buffer.byteLength(body)});response.end(body)})});await new Promise<void>((resolve,reject)=>{mcp.once("error",reject);mcp.listen(8765,"127.0.0.1",resolve)})});
 test.afterAll(async()=>{await new Promise<void>((resolve,reject)=>mcp.close(error=>error?reject(error):resolve()))});
 
@@ -130,10 +131,10 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   });
   await test.step("SKILL_MCP_MCP_PUBLISHED",()=>publish(page,"/mcp","Create governed MCP"));
   const resourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
-  const healthPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/health`;
+  const healthPath=`/api/internal/v0.2.2/resources/mcp/${resourceId}/health`;
   let healthResponse!:Promise<Response>;
   await test.step("SKILL_MCP_HEALTH_SUBMIT",async()=>{
-    healthResponse=page.waitForResponse(response=>new URL(response.url()).pathname===healthPath&&response.request().method()==="POST");
+    healthResponse=page.waitForResponse(response=>responsePath(response)===healthPath&&response.request().method()==="POST");
     await page.getByRole("button",{name:"Test connection"}).click();
   });
   await test.step("SKILL_MCP_HEALTH_HTTP_COMPLETION",async()=>{
@@ -144,11 +145,11 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await test.step("SKILL_MCP_HEALTH_UI_RENDERED",async()=>{
     await expect(page.getByText(/HEALTHY/).first()).toBeVisible();
   });
-  const discoveryPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/discovery`;
+  const discoveryPath=`/api/internal/v0.2.2/resources/mcp/${resourceId}/discovery`;
   let discoveryResponse!:Promise<Response>,discoveryReadback!:Promise<Response>;
   let firstSnapshot="";
   await test.step("SKILL_MCP_DISCOVERY_SUBMIT",async()=>{
-    discoveryResponse=page.waitForResponse(response=>new URL(response.url()).pathname===discoveryPath&&response.request().method()==="POST");
+    discoveryResponse=page.waitForResponse(response=>responsePath(response)===discoveryPath&&response.request().method()==="POST");
     discoveryReadback=page.waitForResponse(async response=>{
       if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
       const discoveryHttp=await discoveryResponse;
@@ -177,11 +178,11 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
     await expect(mcpIdentity.getByRole("region",{name:"MCP capabilities"})).toContainText("quality.lookup");
     await expect(mcpIdentity.getByRole("region",{name:"MCP tools"})).toContainText("quality.lookup");
   });
-  const selectionPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/tool-selections`;
+  const selectionPath=`/api/internal/v0.2.2/resources/mcp/${resourceId}/tool-selections`;
   let selectionResponse!:Promise<Response>,selectionReadback!:Promise<Response>;
   let firstSelectionId="";
   await test.step("SKILL_MCP_TOOL_SELECTION_SUBMIT",async()=>{
-    selectionResponse=page.waitForResponse(response=>new URL(response.url()).pathname===selectionPath&&response.request().method()==="POST");
+    selectionResponse=page.waitForResponse(response=>responsePath(response)===selectionPath&&response.request().method()==="POST");
     selectionReadback=page.waitForResponse(async response=>{
       if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
       const selectionHttp=await selectionResponse;
@@ -210,7 +211,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   let rediscoveryResponse!:Promise<Response>,rediscoveryReadback!:Promise<Response>;
   let secondSnapshot="";
   await test.step("SKILL_MCP_REDISCOVERY_SUBMIT",async()=>{
-    rediscoveryResponse=page.waitForResponse(response=>new URL(response.url()).pathname===rediscoveryPath&&response.request().method()==="POST");
+    rediscoveryResponse=page.waitForResponse(response=>responsePath(response)===rediscoveryPath&&response.request().method()==="POST");
     rediscoveryReadback=page.waitForResponse(async response=>{
       if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
       const discoveryHttp=await rediscoveryResponse;
@@ -245,7 +246,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   let reselectionResponse!:Promise<Response>,reselectionReadback!:Promise<Response>;
   let secondSelectionId="";
   await test.step("SKILL_MCP_RESELECTION_SUBMIT",async()=>{
-    reselectionResponse=page.waitForResponse(response=>new URL(response.url()).pathname===selectionPath&&response.request().method()==="POST");
+    reselectionResponse=page.waitForResponse(response=>responsePath(response)===selectionPath&&response.request().method()==="POST");
     reselectionReadback=page.waitForResponse(async response=>{
       if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/mcp"||response.request().method()!=="GET")return false;
       const selectionHttp=await reselectionResponse;
@@ -275,7 +276,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   await test.step("SKILL_MCP_MCP_INVOCATION_SUBMIT",async()=>{
     await page.getByLabel("管理调用 Tool").selectOption("quality.lookup");
     await page.getByLabel("管理调用输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
-    invocationResponse=page.waitForResponse(response=>new URL(response.url()).pathname.endsWith("/tool-invocations")&&response.request().method()==="POST");
+    invocationResponse=page.waitForResponse(response=>responsePath(response)===`/api/internal/v0.2.2/resources/mcp/${resourceId}/tool-invocations`&&response.request().method()==="POST");
     await page.getByRole("button",{name:"Authorize bounded management invocation"}).click();
   });
   await test.step("SKILL_MCP_MCP_INVOCATION_HTTP_COMPLETION",async()=>{
@@ -315,11 +316,11 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
     await page.getByRole("button",{name:"Run saved test"}).click();
     await expect(page.getByText(/expected equals actual/)).toBeVisible();
   });
-  const bindingPath=`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId)}/bindings`;
+  const bindingPath=`/api/internal/v0.2.2/resources/skill/${skillId}/bindings`;
   let bindingResponse!:Promise<Response>,bindingReadback!:Promise<Response>;
   let bindingId="";
   await test.step("SKILL_MCP_BIND_SUBMIT",async()=>{
-    bindingResponse=page.waitForResponse(response=>new URL(response.url()).pathname===bindingPath&&response.request().method()==="POST");
+    bindingResponse=page.waitForResponse(response=>responsePath(response)===bindingPath&&response.request().method()==="POST");
     bindingReadback=page.waitForResponse(async response=>{
       if(new URL(response.url()).pathname!=="/api/internal/v0.2.2/resources/skill"||response.request().method()!=="GET")return false;
       const bindingHttp=await bindingResponse;
@@ -347,7 +348,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
   });
   let skillInvocationResponse!:Promise<Response>;
   await test.step("SKILL_MCP_SKILL_INVOCATION_SUBMIT",async()=>{
-    skillInvocationResponse=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/internal/v0.2.2/resources/skill/${encodeURIComponent(skillId)}/invocations`&&response.request().method()==="POST");
+    skillInvocationResponse=page.waitForResponse(response=>responsePath(response)===`/api/internal/v0.2.2/resources/skill/${skillId}/invocations`&&response.request().method()==="POST");
     await page.getByLabel("管理测试输入（JSON）").fill(JSON.stringify({supplier:"ACME"}));
     await page.getByRole("button",{name:"Authorize bounded capability test"}).click();
   });
