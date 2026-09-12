@@ -249,10 +249,10 @@ Agent, Digital Employee, Runtime, consumer, or placement file is modified.
 
 Remaining production composition is explicit:
 
-- 305 must supply the transactional `CurrentExactGrantDecisionReader` carrying
-  decision identity, policy generation/version, and issue/expiry bounds; a
-  boolean grant result is insufficient and this batch does not fabricate those
-  fields;
+- at checkpoint `72fd5a7`, 305 still needed to supply the transactional
+  `CurrentExactGrantDecisionReader` carrying decision identity, policy
+  generation/version, and issue/expiry bounds. The fixed dependency integrated
+  below closes that interface gap without converting a boolean into a decision;
 - 305 retains production Grant Administration/BFF composition and explicit
   continuation revocation exposure;
 - the current Model Definition repository has no durable create-command
@@ -265,3 +265,45 @@ Remaining production composition is explicit:
 These handoffs do not block the delivered exact Model target, owner resolver, or
 creator-continuation adapters, but they do block a claim of complete production
 wiring. H308-03B/03C/04A/04B remain untouched.
+
+## Fixed 305 current-decision integration
+
+This bounded integration is based only on fixed 305 source
+`5948a499de16a59d785774b67823bd8bb4521983`, tree
+`967dcd0682a5c1ad0e6dc0144d82e43cb2b1f7c2`. Its bound candidate CI runs
+`34686634179` and `34686634176` completed successfully for Quality Gates,
+Frontend Quality Gates, Agent Workbench Browser Acceptance, PostgreSQL Business
+Problem and Plan Entry, PostgreSQL Identity Chain, and PostgreSQL Skill
+Invocation.
+
+The imported dependency closure is restricted to:
+
+- `authority_contracts.py`: authoritative `CurrentExactGrantDecision`,
+  `CurrentExactGrantDecisionReader`, and connection-aware reader methods;
+- `authority_postgres.py`: caller-transaction session and dynamic-grant
+  `FOR SHARE` locking plus exact dynamic decision readback;
+- `grant_administration_application.py`: current credential/source validation,
+  dynamic-only complete decisions, and
+  `bind_current_exact_decisions(connection, generation)`.
+
+No 305 BFF, route, Workbench owner, schema, migration, test, or documentation
+asset was mechanically merged. The Model adapter now imports the formal 305
+types instead of maintaining a lookalike protocol.
+
+`bind_caller_owned_model_use` binds the formal decision reader and a Model
+Governance PostgreSQL reader to the same externally opened connection. The
+caller owns transaction isolation, commit, and rollback. Authorization locks
+remain held through exact Definition, Revision, lifecycle, and
+Provider/Endpoint/Profile reads. Static-only grants and a missing, expired,
+revoked, wrong-target, or unavailable complete decision fail closed before the
+Model owner read; no boolean authorization is converted into decision metadata.
+
+The new isolated PostgreSQL 15 composition test covers dynamic allow, exact
+target denial, static-only denial, expiry, revocation, the revocation lock
+waiting for the owner transaction, and exact Model owner resolution on the same
+connection, with both session and grant revocation blocked behind the owner
+transaction. It does not repeat the earlier Model domain or persistence batches.
+
+Independent revoke/surrender API delivery, consumer/Attempt target validation,
+durable create-command replay, zero-lifecycle-fact behavior, and
+H308-03B/03C/04A/04B remain unchanged and outside this integration.

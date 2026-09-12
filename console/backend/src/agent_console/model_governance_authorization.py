@@ -14,6 +14,7 @@ from agent_console.authority_configuration import validate_registered_grant
 from agent_console.authority_contracts import (
     AuthorityScope,
     ContinuationClaim,
+    CurrentExactGrantDecisionReader,
     ExactGrant,
     TrustedRequestContext,
     require_bounded_label,
@@ -28,9 +29,13 @@ from agent_console.model_binding_resolution import (
     ResolvedModelBinding,
 )
 from agent_console.model_governance import (
+    ExactProviderConfiguration,
     ModelDefinition,
     ModelDefinitionRepository,
+    ModelEligibility,
+    ModelGovernanceError,
     ModelGovernanceNotFound,
+    ModelLifecycleHighWater,
     ModelProviderConfigurationRepository,
     ModelRevisionRepository,
     ModelScope,
@@ -131,29 +136,6 @@ def authority_scope(scope: ModelConsumptionScope) -> AuthorityScope:
 
 def model_scope(scope: AuthorityScope) -> ModelScope:
     return ModelScope(scope.tenant_id, scope.security_domain)
-
-
-@dataclass(frozen=True, slots=True)
-class CurrentExactGrantDecision:
-    """Current authority result supplied by the shared authority owner."""
-
-    decision_id: str
-    context: TrustedRequestContext
-    grant: ExactGrant
-    policy_generation: int
-    policy_version: str
-    issued_at: datetime
-    expires_at: datetime
-
-
-class CurrentExactGrantDecisionReader(Protocol):
-    def authorize_current(
-        self,
-        context: TrustedRequestContext,
-        grant: ExactGrant,
-        *,
-        now: datetime,
-    ) -> CurrentExactGrantDecision | None: ...
 
 
 class ModelUseAuthorizationAdapter:
@@ -366,6 +348,176 @@ class ModelGrantTargetLookup(Protocol):
         owner_revision: str,
         connection: object | None = None,
     ) -> bool: ...
+
+
+class CallerOwnedPostgresModelGovernanceReader:
+    """Model owner reads pinned to the authority caller's PostgreSQL transaction."""
+
+    def __init__(self, repository: Any, connection: Any) -> None:
+        self.repository = repository
+        self.connection = connection
+
+    def get(self, scope: ModelScope, model_id: str) -> ModelDefinition:
+        row = self.connection.execute(
+            "SELECT * FROM model_governance.definitions WHERE namespace=%s "
+            "AND security_domain=%s AND model_id=%s",
+            (scope.namespace, scope.security_domain, model_id),
+        ).fetchone()
+        if row is None:
+            raise ModelGovernanceNotFound("MODEL_DEFINITION_NOT_FOUND")
+        return self.repository._definition(row)
+
+    def get_revision(self, scope: ModelScope, model_id: str, revision_id: str):
+        row = self.connection.execute(
+            "SELECT * FROM model_governance.model_revisions WHERE namespace=%s "
+            "AND security_domain=%s AND model_id=%s AND revision_id=%s",
+            (scope.namespace, scope.security_domain, model_id, revision_id),
+        ).fetchone()
+        if row is None:
+            raise ModelGovernanceNotFound("MODEL_REVISION_NOT_FOUND")
+        return self.repository._revision(row)
+
+    def resolve_exact(
+        self,
+        scope,
+        provider,
+        endpoint,
+        connection_profile,
+    ) -> ExactProviderConfiguration:
+        provider_row = self.connection.execute(
+            "SELECT * FROM model_governance.provider_revisions WHERE namespace=%s "
+            "AND security_domain=%s AND provider_id=%s AND revision_id=%s "
+            "AND digest=%s",
+            (
+                scope.namespace,
+                scope.security_domain,
+                provider.provider_id,
+                provider.revision_id,
+                provider.digest,
+            ),
+        ).fetchone()
+        endpoint_row = self.connection.execute(
+            "SELECT * FROM model_governance.endpoint_revisions WHERE namespace=%s "
+            "AND security_domain=%s AND endpoint_id=%s AND revision_id=%s "
+            "AND digest=%s",
+            (
+                scope.namespace,
+                scope.security_domain,
+                endpoint.endpoint_id,
+                endpoint.revision_id,
+                endpoint.digest,
+            ),
+        ).fetchone()
+        profile_row = self.connection.execute(
+            "SELECT * FROM model_governance.connection_profile_revisions "
+            "WHERE namespace=%s AND security_domain=%s AND profile_id=%s "
+            "AND revision_id=%s AND digest=%s",
+            (
+                scope.namespace,
+                scope.security_domain,
+                connection_profile.profile_id,
+                connection_profile.revision_id,
+                connection_profile.digest,
+            ),
+        ).fetchone()
+        if provider_row is None or endpoint_row is None or profile_row is None:
+            raise ModelGovernanceNotFound("MODEL_CONFIGURATION_NOT_FOUND")
+        return ExactProviderConfiguration(
+            scope,
+            self.repository._provider(provider_row),
+            self.repository._endpoint(endpoint_row),
+            self.repository._profile(profile_row),
+        )
+
+    def read_lifecycle(
+        self,
+        scope: ModelScope,
+        model_id: str,
+        revision_id: str,
+        *,
+        through_ordinal: int | None = None,
+    ) -> ModelEligibility:
+        if through_ordinal is not None and (
+            isinstance(through_ordinal, bool)
+            or not isinstance(through_ordinal, int)
+            or through_ordinal < 1
+        ):
+            raise ModelGovernanceError("MODEL_LIFECYCLE_ORDINAL_INVALID")
+        revision_row = self.connection.execute(
+            "SELECT * FROM model_governance.model_revisions WHERE namespace=%s "
+            "AND security_domain=%s AND model_id=%s AND revision_id=%s",
+            (scope.namespace, scope.security_domain, model_id, revision_id),
+        ).fetchone()
+        if revision_row is None:
+            raise ModelGovernanceNotFound("MODEL_REVISION_NOT_FOUND")
+        parameters: tuple[Any, ...] = (
+            scope.namespace,
+            scope.security_domain,
+            model_id,
+            revision_id,
+        )
+        ordinal_filter = ""
+        if through_ordinal is not None:
+            ordinal_filter = " AND ordinal<=%s"
+            parameters = (*parameters, through_ordinal)
+        rows = self.connection.execute(
+            "SELECT * FROM model_governance.lifecycle_facts WHERE namespace=%s "
+            "AND security_domain=%s AND model_id=%s AND revision_id=%s"
+            + ordinal_filter
+            + " ORDER BY ordinal",
+            parameters,
+        ).fetchall()
+        if not rows:
+            raise ModelGovernanceNotFound("MODEL_LIFECYCLE_NOT_FOUND")
+        revision = self.repository._revision(revision_row)
+        facts = tuple(self.repository._fact(row) for row in rows)
+        if any(
+            fact.ordinal != expected
+            or fact.scope != scope
+            or fact.model != revision.identity
+            for expected, fact in enumerate(facts, 1)
+        ):
+            raise ModelGovernanceError("MODEL_GOVERNANCE_STORAGE_CORRUPT")
+        state = self.repository._reduce_lifecycle(facts, corrupt=True)
+        latest = facts[-1]
+        return ModelEligibility(
+            scope,
+            revision.identity,
+            state,
+            ModelLifecycleHighWater(latest.ordinal, latest.fact_id, latest.digest),
+        )
+
+
+class CurrentExactGrantDecisionBinder(Protocol):
+    def bind_current_exact_decisions(
+        self, connection: object, *, generation: int
+    ) -> CurrentExactGrantDecisionReader: ...
+
+
+@dataclass(frozen=True, slots=True)
+class CallerOwnedModelUseAdapters:
+    authorizer: ModelUseAuthorizationAdapter
+    resolver: ModelGovernanceExactResolver
+
+
+def bind_caller_owned_model_use(
+    context: TrustedRequestContext,
+    authorization: CurrentExactGrantDecisionBinder,
+    repository: Any,
+    connection: Any,
+    *,
+    generation: int,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> CallerOwnedModelUseAdapters:
+    """Bind authorization and every Model owner read to one existing transaction."""
+    decisions = authorization.bind_current_exact_decisions(
+        connection, generation=generation
+    )
+    owner = CallerOwnedPostgresModelGovernanceReader(repository, connection)
+    return CallerOwnedModelUseAdapters(
+        ModelUseAuthorizationAdapter(context, decisions, clock=clock),
+        ModelGovernanceExactResolver(owner, owner, owner),
+    )
 
 
 class ModelCreatorGrantTargetValidator:
