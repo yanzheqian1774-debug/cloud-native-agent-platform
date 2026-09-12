@@ -113,7 +113,15 @@ class BusinessProblemApplication:
             ]
         }
 
-    def create_problem(self, principal, command, *, connection=None):
+    def create_problem(
+        self,
+        principal,
+        command,
+        *,
+        connection=None,
+        receipt_policy_generation: int | None = None,
+        receipt_recovery_epoch: int | None = None,
+    ):
         self.require(principal, "BUSINESS_PROBLEM", "CREATE", problem_resource())
         self.require(principal, "BUSINESS_PROBLEM", "READ", problem_resource())
         identity = self.identity(principal, "CREATE_PROBLEM", command.idempotencyKey)
@@ -135,8 +143,19 @@ class BusinessProblemApplication:
             payload_digest=self.payload(command),
             authorized=True,
             connection=connection,
+            receipt_policy_generation=receipt_policy_generation,
+            receipt_recovery_epoch=receipt_recovery_epoch,
         )
-        return {"revision": asdict(value)}
+        result = {"revision": asdict(value)}
+        if receipt_policy_generation is not None:
+            result["_creatorReceipt"] = self.problems.get_creator_receipt(
+                self.scope(principal),
+                principal.principal_id,
+                command.idempotencyKey,
+                authorized=True,
+                connection=connection,
+            )
+        return result
 
     def revise_problem(self, principal, problem_id, command, *, connection=None):
         self.require(

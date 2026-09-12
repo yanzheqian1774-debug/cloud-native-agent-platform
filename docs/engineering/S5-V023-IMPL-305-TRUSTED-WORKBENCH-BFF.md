@@ -1050,3 +1050,57 @@ proposal neither defines nor implements those operations.
 No row above authorizes implementation by appearing in this table. Draft PR #164
 remains Draft; this batch does not make it Ready, merge, deploy, close IMPL-305,
 or modify IMPL-299/IMPL-308 branches.
+
+## Human-accepted creator receipt and mint implementation batch
+
+Status: `HUMAN_ACCEPTED_FOR_IMPLEMENTATION / SESSION_OPEN`.
+
+The historical proposal and its original status above are retained as provenance.
+The Human has now accepted the creator-origin receipt time anchor and authorized
+this bounded implementation batch. The accepted time is the database clock value
+persisted with the receipt in the same owner transaction as Problem creation. It
+is named the **receipt start time**, not an exact commit timestamp. Rollback makes
+both the Problem creation result and receipt nonexistent. The fixed expiry is the
+original receipt start time plus ten minutes. Mint occurs only after the owner
+transaction commits; owner-commit delay or mint delay may shorten the usable
+window but can never extend it. A mint attempt at or after expiry returns
+`EXPIRED` and never restarts the window.
+
+The receipt is immutable and binds trusted scope, creator principal, original
+create-command identity, the immutable Problem revision-1 identity/version/digest,
+canonical Problem reference, committed owner revision, receipt start time and
+fixed expiry. Its uniqueness is trusted scope plus creator plus original command
+identity. Equal replay loads the original receipt and corresponding offer state;
+different payload under the same command identity retains the formal Business
+Problem idempotency conflict. Later Problem revisions never alter the receipt,
+mint key, expiry, offer identity or recovery correlation. A historical Problem
+without a receipt fails closed; this batch does not infer or backfill one.
+
+Owner commit and Grant Administration mint are two PostgreSQL authority
+transactions. Mint is keyed by the original command plus receipt and can produce
+at most one offer. A definite or uncertain mint failure never deletes the
+committed Problem; equal create replay queries or resumes the same mint key rather
+than issuing another identity. The first batch mints only purpose
+`CONTINUE_PROBLEM_READ` with the one fixed member `BUSINESS_PROBLEM / READ /
+business-problem:{businessProblemId}`. It adds no Plan `PREPARE`, Problem mutation,
+collection, wildcard, meta-grant or browser-selected subject/scope/target.
+
+Create and equal replay return the typed `creatorContinuation` contract recorded
+above. `AVAILABLE`, `CONSUMED` with its original `requestId`, and `EXPIRED` are
+recovered from the original receipt and offer/consumption facts. An offer,
+`PENDING` request or `APPROVED` status is not authorization: exact Problem READ
+continues to reauthenticate and revalidate current grant, generation, recovery,
+revocation, subject and scope. The independent public Decision operation remains
+the already implemented administrator path; applicant self-approval and
+`INSPECT`-as-`DECIDE` remain prohibited.
+
+Migration coordination was checked against the active 308 and 314 task branches
+and worktrees before editing. 308 owns `0019_model_governance.sql`; active 314 has
+not allocated a later migration and explicitly waits for this receipt batch.
+This batch therefore allocates exactly
+`console/backend/migrations/0020_business_problem_creator_receipt.sql` and does
+not modify migrations `0001` through `0019`.
+
+Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. This acceptance does not
+authorize continuation revoke/surrender, grant revoke, Plan/Execution expansion,
+IMPL-299 product-page acceptance, Ready, merge, deployment or closure of all 305.

@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from contextlib import contextmanager
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from agent_console.business_problem_domain import (
     TRANSITIONS,
     BusinessProblemAggregate,
     BusinessProblemConflict,
+    BusinessProblemCreatorReceipt,
     BusinessProblemError,
     BusinessProblemLifecycleEvent,
     BusinessProblemNotAuthorized,
@@ -27,10 +29,12 @@ from agent_console.business_problem_domain import (
     SuccessCriterionRevision,
     canonical_bytes,
     canonical_digest,
+    committed_problem_owner_revision,
 )
 from agent_console.execution_domain import ScopeIdentity
 
 ADAPTER = "business-problem-postgresql-v1"
+CREATOR_RECEIPT_ADAPTER = "business-problem-creator-receipt-postgresql-v20"
 
 
 class PostgresBusinessProblemRepository:
@@ -44,11 +48,17 @@ class PostgresBusinessProblemRepository:
                 yield owned
 
     def __init__(
-        self, database_url: str, *, migration_path: Path, timeout: float = 5.0
+        self,
+        database_url: str,
+        *,
+        migration_path: Path,
+        creator_receipt_migration_path: Path | None = None,
+        timeout: float = 5.0,
     ):
         if not database_url:
             raise BusinessProblemError("RECOVERY_REQUIRED")
         self.migration_path = migration_path
+        self.creator_receipt_migration_path = creator_receipt_migration_path
         try:
             self.pool = ConnectionPool(
                 database_url,
@@ -89,6 +99,28 @@ class PostgresBusinessProblemRepository:
                     or row["adapter"] != ADAPTER
                 ):
                     raise BusinessProblemError("RECOVERY_REQUIRED")
+            if self.creator_receipt_migration_path is not None:
+                self._migrate_creator_receipts(connection)
+
+    def _migrate_creator_receipts(self, connection: Any) -> None:
+        path = self.creator_receipt_migration_path
+        if path is None or path.name != "0020_business_problem_creator_receipt.sql":
+            raise BusinessProblemError("RECOVERY_REQUIRED")
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        row = connection.execute(
+            "SELECT checksum,adapter FROM business_problem_authority.schema_migrations "
+            "WHERE version=20"
+        ).fetchone()
+        expected = {"checksum": checksum, "adapter": CREATOR_RECEIPT_ADAPTER}
+        if row is None:
+            connection.execute(path.read_text())
+            connection.execute(
+                "INSERT INTO business_problem_authority.schema_migrations"
+                "(version,checksum,adapter) VALUES (20,%s,%s)",
+                (checksum, CREATOR_RECEIPT_ADAPTER),
+            )
+        elif row != expected:
+            raise BusinessProblemError("RECOVERY_REQUIRED")
 
     @staticmethod
     def _authorize(authorized: bool) -> None:
@@ -162,6 +194,31 @@ class PostgresBusinessProblemRepository:
             row["digest"],
         )
 
+    @staticmethod
+    def _creator_receipt(row: dict[str, Any]) -> BusinessProblemCreatorReceipt:
+        return BusinessProblemCreatorReceipt(
+            scope=ScopeIdentity(row["namespace"], row["security_domain"]),
+            creator_principal_id=row["creator_principal_id"],
+            originating_command_type=row["originating_command_type"],
+            originating_command_idempotency_key=row[
+                "originating_command_idempotency_key"
+            ],
+            originating_command_payload_digest=row[
+                "originating_command_payload_digest"
+            ],
+            business_problem_id=row["business_problem_id"],
+            revision_id=row["revision_id"],
+            revision=row["revision"],
+            aggregate_version=row["aggregate_version"],
+            revision_digest=row["revision_digest"],
+            canonical_resource_reference=row["canonical_resource_reference"],
+            committed_owner_revision=row["committed_owner_revision"],
+            policy_generation=row["policy_generation"],
+            recovery_epoch=row["recovery_epoch"],
+            receipt_started_at=row["receipt_started_at"],
+            expires_at=row["expires_at"],
+        )
+
     def create_problem(
         self,
         revision: BusinessProblemRevision,
@@ -170,10 +227,15 @@ class PostgresBusinessProblemRepository:
         payload_digest: str,
         authorized: bool,
         connection=None,
+        receipt_policy_generation: int | None = None,
+        receipt_recovery_epoch: int | None = None,
     ) -> BusinessProblemRevision:
         self._authorize(authorized)
         if revision.revision != 1 or revision.predecessor_revision_id is not None:
             raise BusinessProblemError("BUSINESS_PROBLEM_REVISION_STALE")
+        receipt_requested = receipt_policy_generation is not None
+        if receipt_requested != (receipt_recovery_epoch is not None):
+            raise BusinessProblemError("BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALID")
         with self.connection_scope(connection) as connection:
             replay = self._claim(
                 connection,
@@ -184,9 +246,29 @@ class PostgresBusinessProblemRepository:
                 payload_digest,
             )
             if replay:
-                return self._read_revision(
+                value = self._read_revision(
                     connection, revision.scope, replay["revision_id"]
                 )
+                if receipt_requested:
+                    receipt = self._read_creator_receipt(
+                        connection,
+                        revision.scope,
+                        revision.created_by,
+                        idempotency_key,
+                    )
+                    if (
+                        receipt is None
+                        or receipt.originating_command_payload_digest != payload_digest
+                        or receipt.business_problem_id != value.business_problem_id
+                        or receipt.revision_id != value.revision_id
+                        or receipt.revision_digest != value.digest
+                        or receipt.policy_generation != receipt_policy_generation
+                        or receipt.recovery_epoch != receipt_recovery_epoch
+                    ):
+                        raise BusinessProblemError(
+                            "BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING"
+                        )
+                return value
             connection.execute(
                 "INSERT INTO business_problem_authority.problems VALUES (%s,%s,%s,%s,'DRAFT',1,%s,%s,%s,%s)",
                 (
@@ -213,6 +295,31 @@ class PostgresBusinessProblemRepository:
                     revision.created_at,
                 ),
             )
+            if receipt_requested:
+                receipt_started_at = connection.execute(
+                    "SELECT clock_timestamp() AS receipt_started_at"
+                ).fetchone()["receipt_started_at"]
+                provisional = BusinessProblemCreatorReceipt(
+                    scope=revision.scope,
+                    creator_principal_id=revision.created_by,
+                    originating_command_type="CREATE_BUSINESS_PROBLEM",
+                    originating_command_idempotency_key=idempotency_key,
+                    originating_command_payload_digest=payload_digest,
+                    business_problem_id=revision.business_problem_id,
+                    revision_id=revision.revision_id,
+                    revision=revision.revision,
+                    aggregate_version=1,
+                    revision_digest=revision.digest,
+                    canonical_resource_reference=(
+                        f"business-problem:{revision.business_problem_id}"
+                    ),
+                    committed_owner_revision=committed_problem_owner_revision(revision),
+                    policy_generation=receipt_policy_generation or 0,
+                    recovery_epoch=receipt_recovery_epoch or 0,
+                    receipt_started_at=receipt_started_at,
+                    expires_at=receipt_started_at + timedelta(minutes=10),
+                )
+                self._insert_creator_receipt(connection, provisional)
             self._complete(
                 connection,
                 revision.scope,
@@ -222,9 +329,95 @@ class PostgresBusinessProblemRepository:
                 payload_digest,
                 "PROBLEM_REVISION",
                 revision.revision_id,
-                {"revision_id": revision.revision_id},
+                {
+                    "revision_id": revision.revision_id,
+                    **(
+                        {
+                            "creator_receipt": {
+                                "creator_principal_id": revision.created_by,
+                                "originating_command_idempotency_key": idempotency_key,
+                            }
+                        }
+                        if receipt_requested
+                        else {}
+                    ),
+                },
             )
         return revision
+
+    def _insert_creator_receipt(
+        self, connection: Any, receipt: BusinessProblemCreatorReceipt
+    ) -> None:
+        connection.execute(
+            "INSERT INTO business_problem_authority.creator_receipts"
+            "(namespace,security_domain,creator_principal_id,"
+            "originating_command_type,originating_command_idempotency_key,"
+            "originating_command_payload_digest,business_problem_id,revision_id,"
+            "revision,aggregate_version,revision_digest,"
+            "canonical_resource_reference,committed_owner_revision,"
+            "policy_generation,recovery_epoch,receipt_started_at,expires_at) "
+            "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (
+                *self._scope(receipt.scope),
+                receipt.creator_principal_id,
+                receipt.originating_command_type,
+                receipt.originating_command_idempotency_key,
+                receipt.originating_command_payload_digest,
+                receipt.business_problem_id,
+                receipt.revision_id,
+                receipt.revision,
+                receipt.aggregate_version,
+                receipt.revision_digest,
+                receipt.canonical_resource_reference,
+                receipt.committed_owner_revision,
+                receipt.policy_generation,
+                receipt.recovery_epoch,
+                receipt.receipt_started_at,
+                receipt.expires_at,
+            ),
+        )
+
+    def _read_creator_receipt(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        creator_principal_id: str,
+        originating_command_idempotency_key: str,
+    ) -> BusinessProblemCreatorReceipt | None:
+        row = connection.execute(
+            "SELECT * FROM business_problem_authority.creator_receipts "
+            "WHERE namespace=%s AND security_domain=%s "
+            "AND creator_principal_id=%s "
+            "AND originating_command_type='CREATE_BUSINESS_PROBLEM' "
+            "AND originating_command_idempotency_key=%s",
+            (
+                *self._scope(scope),
+                creator_principal_id,
+                originating_command_idempotency_key,
+            ),
+        ).fetchone()
+        return None if row is None else self._creator_receipt(row)
+
+    def get_creator_receipt(
+        self,
+        scope: ScopeIdentity,
+        creator_principal_id: str,
+        originating_command_idempotency_key: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> BusinessProblemCreatorReceipt:
+        self._authorize(authorized)
+        with self.connection_scope(connection) as connection:
+            value = self._read_creator_receipt(
+                connection,
+                scope,
+                creator_principal_id,
+                originating_command_idempotency_key,
+            )
+            if value is None:
+                raise BusinessProblemError("BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING")
+            return value
 
     def _insert_problem_revision(
         self, connection: Any, revision: BusinessProblemRevision

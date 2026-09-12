@@ -23,8 +23,18 @@ class Problems:
 
     def create_problem(self, revision, **values):
         assert values["authorized"]
+        assert values["receipt_policy_generation"] == 7
+        assert values["receipt_recovery_epoch"] == 11
         self.connection = values["connection"]
         return revision
+
+    def get_creator_receipt(self, scope, creator, key, **values):
+        assert (scope.namespace, scope.security_domain) == ("tenant-a", "quality")
+        assert creator == "human:alice"
+        assert key == "create-problem-7"
+        assert values["authorized"]
+        assert values["connection"] is self.connection
+        return SimpleNamespace(receipt_started_at="database-time")
 
 
 class Authority:
@@ -62,6 +72,8 @@ def call(operation, payload):
             query={},
             decisions=(),
             authority=authority,  # type: ignore[arg-type]
+            policy_generation=7,
+            recovery_epoch=11,
         )
     )
     return result, problems, authority, connection

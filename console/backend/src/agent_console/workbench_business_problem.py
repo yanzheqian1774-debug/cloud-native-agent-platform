@@ -75,10 +75,14 @@ class BusinessProblemOwnerAdapter:
         )
         try:
             if call.operation == "CREATE_PROBLEM":
+                if call.policy_generation is None or call.recovery_epoch is None:
+                    raise WorkbenchOwnerError("CREATOR_RECEIPT_REQUIRED", 409)
                 return service.create_problem(
                     principal,
                     CreateBusinessProblem.model_validate(call.payload),
                     connection=call.connection,
+                    receipt_policy_generation=call.policy_generation,
+                    receipt_recovery_epoch=call.recovery_epoch,
                 )
             if call.operation == "LIST_PROBLEMS":
                 return service.list_problems(principal, connection=call.connection)
@@ -157,6 +161,8 @@ class BusinessProblemOwnerAdapter:
             WorkflowDefinitionRepositoryError,
         ) as exc:
             reason = str(exc)
+            if reason == "BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING":
+                raise WorkbenchOwnerError("CREATOR_RECEIPT_REQUIRED", 409) from exc
             if "UNAVAILABLE" in reason or "INCOMPATIBLE" in reason:
                 raise WorkbenchOwnerError(
                     "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE", 503

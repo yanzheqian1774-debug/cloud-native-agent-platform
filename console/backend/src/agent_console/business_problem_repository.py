@@ -4,6 +4,7 @@ from typing import Protocol
 
 from agent_console.business_problem_domain import (
     BusinessProblemAggregate,
+    BusinessProblemCreatorReceipt,
     BusinessProblemLifecycleEvent,
     BusinessProblemRevision,
     BusinessProblemState,
@@ -22,7 +23,19 @@ class BusinessProblemRepository(Protocol):
         idempotency_key: str,
         payload_digest: str,
         authorized: bool,
+        connection=None,
+        receipt_policy_generation: int | None = None,
+        receipt_recovery_epoch: int | None = None,
     ) -> BusinessProblemRevision: ...
+    def get_creator_receipt(
+        self,
+        scope: ScopeIdentity,
+        creator_principal_id: str,
+        originating_command_idempotency_key: str,
+        *,
+        authorized: bool,
+        connection=None,
+    ) -> BusinessProblemCreatorReceipt: ...
     def get_problem(
         self, scope: ScopeIdentity, business_problem_id: str, *, authorized: bool
     ) -> tuple[BusinessProblemRevision, ...]: ...
