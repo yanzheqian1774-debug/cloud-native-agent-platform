@@ -289,3 +289,57 @@ whitelisted safe category. It never copies step titles outside the allowlist,
 errors, locators, dynamic identities, URL parameters, credentials, sessions, or
 tokens. Malformed or missing step data becomes `UNKNOWN`/`UNAVAILABLE`, and the
 diagnostic result is not part of the browser pass/fail calculation.
+
+## Trusted-read batch acceptance and handoff — 2026-09-12
+
+Status remains `OPEN / G1 / PARTIAL_DRAFT / SESSION_OPEN`. Human accepts only
+the trusted-read batch proven by source
+`fb5edaf174783f0e997ed912c516644b977e3eb6`, tree
+`ce5936fb73cd19b39fe8408ec3a7fed4b3d207df`. This documentation record is made
+after that candidate and does not replace, broaden, or rebind the accepted
+source/tree.
+
+The accepted batch covers the formal login and session, Employee and Agent
+exact reads, Employee and Agent pagination, Instance / Assignment / Placement
+parent-chain hiding, dynamic Placement grant revocation, logout, absence of
+browser identity headers, and absence of private API fallback. It is not an
+acceptance of all permissions or of IMPL-310 as a whole.
+
+Candidate-bound evidence:
+
+- Dedicated run `34684433569` selected and executed exactly one real HTTPS /
+  PostgreSQL scenario, passed `1/1`, and completed all `46/46` closed static
+  steps with no skipped or incomplete step.
+- Default run `34684433556` passed Quality Gates, Frontend Quality Gates, and
+  Agent Workbench Browser Acceptance. Its successful log did not emit a total
+  browser test count, so this record does not state or infer `45/45`.
+
+Dependency and repair handoff:
+
+- The fixed IMPL-305 dependency remains
+  `3abb901f30a57218928990adf4f2ae75ca38829b`, tree
+  `eb8480069ccbb3946aa54b33855aadbd8a6ba83a`. IMPL-310 consumes its formal
+  Workbench BFF, session, grant, owner authorization, and parent-chain behavior;
+  it must not duplicate or silently replace that authority.
+- IMPL-310 adds the login response-policy repair at
+  `716281c1b1a1dd00ee943c62bd5a4b88eca9e7f7`: only the successful login-form
+  `GET` uses `Referrer-Policy: same-origin`, while other responses retain the
+  existing policy. Exact Origin, nonce, credential, cookie, session, and
+  authorization checks remain unchanged.
+- IMPL-310's dedicated workflow builds the existing live Digital Employee route
+  and keeps private-API observation scoped to the Digital Employee journey. The
+  accepted candidate retains the full-session identity and transport-boundary
+  assertions.
+- The default Wave 3B cleanup repair at the accepted source closes the test-owned
+  MCP HTTP server and then closes its established connections. This removes a
+  teardown race without changing product behavior, assertions, timeout, retry,
+  scenario selection, or the success gate. The bounded failure reporter also
+  retains the three static user-focus-transfer stages for future failures.
+
+Digital Employee lifecycle writes, generalized execution and Runtime /
+observation reads, Resource Use, Evidence reference and content authorization,
+complete work history, Business Outcome closure, I3/deployment isolation,
+release acceptance, and IMPL-310 completion remain open. Draft PR #165 stays
+Draft; this acceptance does not authorize Ready, merge, deployment, or Session
+closure. Scheduling pauses after this record while the logical Session remains
+open.
