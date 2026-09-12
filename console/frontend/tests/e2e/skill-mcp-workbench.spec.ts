@@ -537,8 +537,9 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
     }
     await route.continue();
   });
-  const firstButton=page.locator(".agent-list button").filter({hasText:"Supplier Quality Skill"}).last();
-  const alternateButton=page.locator(".agent-list button").filter({hasText:"Alternate Supplier Skill"}).last();
+  const firstButton=realDirectory.locator(".capability-directory-list button[aria-current='true']");
+  await expect(firstButton).toContainText("Supplier Quality Skill");
+  const alternateButton=realDirectory.locator(".capability-directory-list button").filter({hasText:"Alternate Supplier Skill"});
   await firstButton.click();
   await firstStarted;
   await alternateButton.click();
