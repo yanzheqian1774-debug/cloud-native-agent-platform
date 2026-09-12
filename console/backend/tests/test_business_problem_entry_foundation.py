@@ -30,7 +30,7 @@ from pydantic import ValidationError
 MIGRATIONS = Path(__file__).parents[1] / "migrations"
 
 
-@pytest.mark.parametrize("failed_migration", ("0011", "0013"))
+@pytest.mark.parametrize("failed_migration", ("0011", "0013", "0020"))
 def test_configured_business_problem_initialization_failure_stops_startup_and_closes(
     monkeypatch, failed_migration
 ):
@@ -45,13 +45,24 @@ def test_configured_business_problem_initialization_failure_stops_startup_and_cl
             self.closed = True
 
     class Repository:
-        def __init__(self, _database_url, *, migration_path):
+        def __init__(
+            self,
+            _database_url,
+            *,
+            migration_path,
+            creator_receipt_migration_path=None,
+        ):
             self.migration_path = migration_path
+            self.creator_receipt_migration_path = creator_receipt_migration_path
             self.pool = Pool()
             opened.append(self)
 
         def migrate(self):
-            if self.migration_path.name.startswith(failed_migration):
+            paths = (self.migration_path, self.creator_receipt_migration_path)
+            if any(
+                path is not None and path.name.startswith(failed_migration)
+                for path in paths
+            ):
                 raise RuntimeError(f"{failed_migration}_INITIALIZATION_FAILED")
 
         def compatibility(self):

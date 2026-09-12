@@ -287,3 +287,54 @@ def test_explicit_binding_round_trip_and_historical_omission_compatibility():
         not in historical_edited["revisions"][0]["content"]["tasks"][0]
     )
     assert historical_edited["revisions"][0]["digest"] == original_digest
+
+
+def test_workbench_list_and_exact_revision_projection_do_not_expand_disclosure():
+    repository = InMemoryWorkflowDefinitionRepository()
+    service = WorkflowDefinitionService(repository)
+    scope = service.scope("tenant-a", "domain-a")
+    created = service.create(scope, "human:a", "Flow", content())
+    successor_content = copy.deepcopy(created["revisions"][0]["content"])
+    successor_content["description"] = "second revision"
+    edited = service.edit(
+        scope,
+        created["workflowDefinitionId"],
+        "human:a",
+        1,
+        successor_content,
+    )
+    first_revision = created["revisions"][0]
+
+    listed = service.list_for_workbench(object(), scope, authorized=True)
+    assert listed["count"] == 1
+    assert "revisions" not in listed["items"][0]
+
+    exact = service.read_revision_for_workbench(
+        object(),
+        scope,
+        created["workflowDefinitionId"],
+        first_revision["revisionId"],
+        authorized=True,
+    )
+    assert exact["revision"] == first_revision
+    assert exact["technicalProjection"]["revisionId"] == first_revision["revisionId"]
+    assert edited["revisions"][1]["revisionId"] not in repr(exact)
+
+
+def test_workbench_exact_revision_missing_is_a_scoped_not_found():
+    repository = InMemoryWorkflowDefinitionRepository()
+    service = WorkflowDefinitionService(repository)
+    scope = service.scope("tenant-a", "domain-a")
+    created = service.create(scope, "human:a", "Flow", content())
+
+    with pytest.raises(
+        WorkflowDefinitionFailure, match="WORKFLOW_REVISION_NOT_FOUND"
+    ) as raised:
+        service.read_revision_for_workbench(
+            object(),
+            scope,
+            created["workflowDefinitionId"],
+            "workflow-revision:not-authorized-or-missing",
+            authorized=True,
+        )
+    assert raised.value.status == 404

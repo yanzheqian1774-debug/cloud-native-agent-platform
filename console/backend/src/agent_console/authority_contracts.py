@@ -121,6 +121,19 @@ class ExactGrant:
 
 
 @dataclass(frozen=True, slots=True)
+class CurrentExactGrantDecision:
+    """One complete, currently effective dynamic exact-grant decision."""
+
+    decision_id: str
+    context: TrustedRequestContext
+    grant: ExactGrant
+    policy_generation: int
+    policy_version: str
+    issued_at: datetime
+    expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class BrowserSession:
     session_id: SessionId
     principal: VerifiedPrincipal
@@ -150,6 +163,7 @@ class GrantRequest:
     purpose: str
     status: GrantRequestStatus
     created_at: datetime
+    aggregate_version: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +180,10 @@ class GrantDecision:
     audit_source: str
     created_at: datetime
     grants: tuple[GrantId, ...] = ()
+    request_aggregate_version: int | None = None
+    not_before: datetime | None = None
+    expires_at: datetime | None = None
+    replayed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +200,18 @@ class ContinuationClaim:
     policy_generation: int
     issued_at: datetime
     expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ContinuationOfferRecovery:
+    """Owner-only persisted offer state used for keyed response recovery."""
+
+    claim: ContinuationClaim
+    continuation_digest: str
+    mint_payload_digest: str
+    recovery_epoch: int
+    revoked_at: datetime | None
+    request_id: str | None
 
 
 class Authenticator(Protocol):
@@ -278,6 +308,24 @@ class GrantAdministrationRepository(Protocol):
         recovery_epoch: int,
     ) -> tuple[ContinuationClaim, ...]: ...
 
+    def resolve_continuation_offer(
+        self,
+        continuation_digest: str,
+        context: TrustedRequestContext,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+    ) -> ContinuationClaim: ...
+
+    def recover_continuation_offer(
+        self,
+        context: TrustedRequestContext,
+        *,
+        owner: str,
+        purpose: str,
+        mint_key: str,
+    ) -> ContinuationOfferRecovery | None: ...
+
     def submit_request(
         self,
         request: GrantRequest,
@@ -294,7 +342,9 @@ class GrantAdministrationRepository(Protocol):
         self,
         decision: GrantDecision,
         *,
-        grants: Sequence[tuple[GrantId, ExactGrant, datetime, datetime]],
+        grants: Sequence[tuple[GrantId, ExactGrant, datetime | None, datetime]],
+        issuer_scope: AuthorityScope,
+        expected_version: int,
         expected_status: GrantRequestStatus,
         idempotency_key: str,
         payload_digest: str,
@@ -314,6 +364,42 @@ class GrantAdministrationRepository(Protocol):
 
 
 class CurrentAuthorizationReader(Protocol):
+    def read_linearized_current_exact_grant_decision(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, CurrentExactGrantDecision | None]: ...
+
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]: ...
+
+    def has_current_grants(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[bool, ...]: ...
+
     def read_linearized_authorization_state(
         self,
         context: TrustedRequestContext,
@@ -352,6 +438,18 @@ class CurrentAuthorizationReader(Protocol):
         generation: int,
         recovery_epoch: int,
     ) -> bool: ...
+
+
+class CurrentExactGrantDecisionReader(Protocol):
+    """Consumer port for a complete current decision, never a boolean grant."""
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None: ...
 
 
 class ContinuationOwner(Protocol):

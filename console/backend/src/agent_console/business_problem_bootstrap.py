@@ -23,6 +23,9 @@ def build_business_problem_application(database_url, employees):
         problems = PostgresBusinessProblemRepository(
             database_url,
             migration_path=migrations / "0013_business_problem_authority.sql",
+            creator_receipt_migration_path=(
+                migrations / "0020_business_problem_creator_receipt.sql"
+            ),
         )
         opened.append(problems)
         problems.migrate()

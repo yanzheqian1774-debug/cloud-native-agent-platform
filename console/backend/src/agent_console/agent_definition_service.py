@@ -68,7 +68,7 @@ def _content(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _revision_digest(record: dict[str, Any], revision: dict[str, Any]) -> str:
+def agent_revision_digest(record: dict[str, Any], revision: dict[str, Any]) -> str:
     return canonical_digest(
         {
             "definitionId": record["definitionId"],
@@ -131,7 +131,7 @@ class AgentDefinitionService:
             "content": _content(content),
             "createdAt": now,
         }
-        revision["digest"] = _revision_digest(record, revision)
+        revision["digest"] = agent_revision_digest(record, revision)
         record["revisions"].append(revision)
         record["facts"].append(self._fact("DRAFT_CREATED", actor, revision))
         try:
@@ -168,7 +168,7 @@ class AgentDefinitionService:
             "content": _content(content),
             "createdAt": _now(),
         }
-        revision["digest"] = _revision_digest(record, revision)
+        revision["digest"] = agent_revision_digest(record, revision)
         record["revisions"].append(revision)
         record["currentDraftRevisionId"] = revision["revisionId"]
         record["lifecycleState"] = "DRAFT"
@@ -281,7 +281,7 @@ class AgentDefinitionService:
             "content": copy.deepcopy(published["content"]),
             "createdAt": _now(),
         }
-        revision["digest"] = _revision_digest(record, revision)
+        revision["digest"] = agent_revision_digest(record, revision)
         record["revisions"].append(revision)
         record["currentDraftRevisionId"] = revision["revisionId"]
         record["lifecycleState"] = "DRAFT"

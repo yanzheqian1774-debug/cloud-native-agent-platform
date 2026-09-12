@@ -30,6 +30,24 @@ _SHA256_DIGEST = re.compile(r"(?:(?P<algorithm>sha256):)?(?P<value>[a-f0-9]{64})
 _ADAPTER = "employee-definition-v1"
 _DEFINITION_KEY = ("namespace", "security_domain", "definition_id")
 _REVISION_KEY = (*_DEFINITION_KEY, "revision_id")
+_EMPLOYEE_FACT_ACTIONS = frozenset(
+    {
+        "CREATE",
+        "VALIDATE",
+        "APPROVE",
+        "REJECT",
+        "PUBLISH",
+        "UNPUBLISH",
+        "REVOKE_PUBLICATION",
+        "DEPRECATE",
+        "GRANT_MATCH",
+        "DENY_MATCH",
+        "REVOKE_MATCH",
+    }
+)
+_PUBLICATION_ACTIONS = frozenset(
+    {"PUBLISH", "UNPUBLISH", "REVOKE_PUBLICATION", "DEPRECATE"}
+)
 EMPLOYEE_DEFINITION_STRUCTURE = (
     Table(
         "digital_employee_definition.schema_migrations",
@@ -266,6 +284,114 @@ class PostgresEmployeeDefinitionRepository:
             return self._read(
                 conn, scope, identifier(definition_id), identifier(revision_id)
             )
+
+    @staticmethod
+    def read_revision_for_workbench(
+        connection,
+        scope,
+        definition_id,
+        revision_id,
+        *,
+        authorized,
+    ):
+        """Read one authorized immutable revision on the caller transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        key = (
+            scope.namespace,
+            scope.security_domain,
+            identifier(definition_id),
+            identifier(revision_id),
+        )
+        row = connection.execute(
+            "SELECT r.record,r.digest FROM digital_employee_definition.revisions r "
+            "JOIN digital_employee_definition.definitions d "
+            "USING(namespace,security_domain,definition_id) "
+            "WHERE r.namespace=%s AND r.security_domain=%s "
+            "AND r.definition_id=%s AND r.revision_id=%s FOR SHARE OF d",
+            key,
+        ).fetchone()
+        if row is None:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        try:
+            revision = EmployeeRevision.from_record(row["record"])
+        except (EmployeeDefinitionError, KeyError, TypeError) as exc:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT") from exc
+        if revision.digest != row["digest"]:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        facts = connection.execute(
+            "SELECT action,revision_digest,ordinal FROM "
+            "digital_employee_definition.facts WHERE namespace=%s "
+            "AND security_domain=%s AND definition_id=%s AND revision_id=%s "
+            "ORDER BY ordinal",
+            key,
+        ).fetchall()
+        if not facts:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        for fact in facts:
+            if fact["action"] not in _EMPLOYEE_FACT_ACTIONS or not _same_sha256_digest(
+                fact["revision_digest"], row["digest"]
+            ):
+                raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        publication = next(
+            (
+                fact["action"]
+                for fact in reversed(facts)
+                if fact["action"] in _PUBLICATION_ACTIONS
+            ),
+            None,
+        )
+        return {
+            "revision": row["record"],
+            "digest": row["digest"],
+            "publicationState": (
+                "PUBLISHED" if publication == "PUBLISH" else "NOT_PUBLISHED"
+            ),
+        }
+
+    def list_revisions_for_workbench(
+        self,
+        connection,
+        scope,
+        *,
+        after,
+        limit,
+        authorized,
+    ):
+        """Read one bounded keyset page on the caller transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        if not isinstance(limit, int) or not 1 <= limit <= 201:
+            raise EmployeeDefinitionError("INVALID_PAGE_SIZE")
+        parameters = [scope.namespace, scope.security_domain]
+        after_clause = ""
+        if after is not None:
+            if not isinstance(after, tuple) or len(after) != 2:
+                raise EmployeeDefinitionError("INVALID_CURSOR")
+            after_clause = (
+                'AND (definition_id COLLATE "C", revision_id COLLATE "C") > (%s, %s) '
+            )
+            parameters.extend((identifier(after[0]), identifier(after[1])))
+        parameters.append(limit)
+        rows = connection.execute(
+            "SELECT definition_id,revision_id FROM "
+            "digital_employee_definition.revisions WHERE namespace=%s "
+            "AND security_domain=%s "
+            + after_clause
+            + 'ORDER BY definition_id COLLATE "C", revision_id COLLATE "C" '
+            "LIMIT %s",
+            tuple(parameters),
+        ).fetchall()
+        return [
+            self.read_revision_for_workbench(
+                connection,
+                scope,
+                row["definition_id"],
+                row["revision_id"],
+                authorized=True,
+            )
+            for row in rows
+        ]
 
     def list(self, scope):
         with self.pool.connection() as conn:

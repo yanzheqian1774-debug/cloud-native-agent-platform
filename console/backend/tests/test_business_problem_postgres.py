@@ -2,13 +2,14 @@
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import psycopg
 import pytest
 from agent_console.business_problem_domain import (
     BusinessProblemConflict,
+    BusinessProblemError,
     BusinessProblemNotAuthorized,
     BusinessProblemRevision,
     BusinessProblemState,
@@ -20,6 +21,7 @@ from agent_console.business_problem_domain import (
 )
 from agent_console.business_problem_postgres import PostgresBusinessProblemRepository
 from agent_console.execution_domain import ScopeIdentity
+from psycopg.rows import dict_row
 
 DATABASE_URL = os.environ.get("EXECUTION_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="real PostgreSQL 15 required")
@@ -58,6 +60,177 @@ def repository() -> PostgresBusinessProblemRepository:
     )
     value.migrate()
     return value
+
+
+def receipt_repository() -> PostgresBusinessProblemRepository:
+    with psycopg.connect(DATABASE_URL or "") as connection:
+        for version in range(1, 13):
+            connection.execute(
+                next(MIGRATIONS.glob(f"{version:04d}_*.sql")).read_text()
+            )
+    value = PostgresBusinessProblemRepository(
+        DATABASE_URL or "",
+        migration_path=MIGRATIONS / "0013_business_problem_authority.sql",
+        creator_receipt_migration_path=(
+            MIGRATIONS / "0020_business_problem_creator_receipt.sql"
+        ),
+    )
+    value.migrate()
+    return value
+
+
+def creator_problem(suffix: str, *, created_at: datetime) -> BusinessProblemRevision:
+    scope = ScopeIdentity(f"tenant-{suffix}", "domain")
+    return BusinessProblemRevision(
+        scope,
+        f"problem-{suffix}",
+        f"problem-{suffix}:1",
+        1,
+        None,
+        "Supplier quality",
+        "Reduce escaped defects",
+        "business-owner",
+        "human:creator",
+        created_at,
+    )
+
+
+def test_creator_receipt_is_atomic_uses_database_time_and_replays_fixed_window() -> (
+    None
+):
+    store = receipt_repository()
+    suffix = uuid.uuid4().hex
+    problem = creator_problem(suffix, created_at=datetime(2020, 1, 1, tzinfo=UTC))
+    payload_digest = canonical_digest(problem.digest_contract())
+
+    stored = store.create_problem(
+        problem,
+        idempotency_key="create-one",
+        payload_digest=payload_digest,
+        authorized=True,
+        receipt_policy_generation=7,
+        receipt_recovery_epoch=11,
+    )
+    receipt = store.get_creator_receipt(
+        problem.scope,
+        problem.created_by,
+        "create-one",
+        authorized=True,
+    )
+    with store.pool.connection() as connection:
+        database_now = connection.execute(
+            "SELECT clock_timestamp() AS value"
+        ).fetchone()["value"]
+    assert stored == problem
+    assert receipt.receipt_started_at > problem.created_at
+    assert receipt.receipt_started_at <= database_now
+    assert receipt.expires_at - receipt.receipt_started_at == timedelta(minutes=10)
+    assert receipt.aggregate_version == 1
+    assert receipt.revision_digest == problem.digest
+    assert receipt.policy_generation == 7
+    assert receipt.recovery_epoch == 11
+
+    replay = store.create_problem(
+        creator_problem(suffix, created_at=datetime.now(UTC)),
+        idempotency_key="create-one",
+        payload_digest=payload_digest,
+        authorized=True,
+        receipt_policy_generation=7,
+        receipt_recovery_epoch=11,
+    )
+    recovered = store.get_creator_receipt(
+        problem.scope,
+        problem.created_by,
+        "create-one",
+        authorized=True,
+    )
+    assert replay == problem
+    assert recovered == receipt
+
+
+def test_creator_receipt_rolls_back_with_problem() -> None:
+    store = receipt_repository()
+    suffix = uuid.uuid4().hex
+    problem = creator_problem(suffix, created_at=datetime.now(UTC))
+    with psycopg.connect(DATABASE_URL or "", row_factory=dict_row) as connection:
+        with (
+            pytest.raises(RuntimeError, match="force rollback"),
+            connection.transaction(),
+        ):
+            store.create_problem(
+                problem,
+                idempotency_key="create-rollback",
+                payload_digest=problem.digest,
+                authorized=True,
+                connection=connection,
+                receipt_policy_generation=7,
+                receipt_recovery_epoch=11,
+            )
+            raise RuntimeError("force rollback")
+        counts = connection.execute(
+            "SELECT "
+            "(SELECT count(*) FROM business_problem_authority.problems) AS problems,"
+            "(SELECT count(*) FROM business_problem_authority.creator_receipts) AS receipts,"
+            "(SELECT count(*) FROM business_problem_authority.idempotency_claims) AS claims"
+        ).fetchone()
+    assert counts == {"problems": 0, "receipts": 0, "claims": 0}
+
+
+def test_legacy_problem_without_creator_receipt_fails_closed() -> None:
+    store = receipt_repository()
+    suffix = uuid.uuid4().hex
+    problem = creator_problem(suffix, created_at=datetime.now(UTC))
+    store.create_problem(
+        problem,
+        idempotency_key="legacy-create",
+        payload_digest=problem.digest,
+        authorized=True,
+    )
+    with pytest.raises(
+        BusinessProblemError, match="BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING"
+    ):
+        store.create_problem(
+            problem,
+            idempotency_key="legacy-create",
+            payload_digest=problem.digest,
+            authorized=True,
+            receipt_policy_generation=7,
+            receipt_recovery_epoch=11,
+        )
+
+
+def test_creator_receipt_scope_creator_and_generation_are_immutable() -> None:
+    store = receipt_repository()
+    suffix = uuid.uuid4().hex
+    problem = creator_problem(suffix, created_at=datetime.now(UTC))
+    store.create_problem(
+        problem,
+        idempotency_key="create-fixed",
+        payload_digest=problem.digest,
+        authorized=True,
+        receipt_policy_generation=7,
+        receipt_recovery_epoch=11,
+    )
+    with pytest.raises(
+        BusinessProblemError, match="BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING"
+    ):
+        store.get_creator_receipt(
+            ScopeIdentity("foreign", problem.scope.security_domain),
+            problem.created_by,
+            "create-fixed",
+            authorized=True,
+        )
+    with pytest.raises(
+        BusinessProblemError, match="BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALIDATED"
+    ):
+        store.create_problem(
+            problem,
+            idempotency_key="create-fixed",
+            payload_digest=problem.digest,
+            authorized=True,
+            receipt_policy_generation=8,
+            receipt_recovery_epoch=11,
+        )
 
 
 def test_durable_history_scope_cas_idempotency_and_exact_plan_binding() -> None:
