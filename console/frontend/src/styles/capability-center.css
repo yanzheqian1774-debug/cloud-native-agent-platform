@@ -21,4 +21,11 @@
 .capability-center .capability-taxonomy>section{min-width:0;border-radius:10px;background:#f1f4f6;padding:.85rem}
 .capability-center .capability-taxonomy ul{display:grid;gap:.45rem;margin:.65rem 0 0;padding-left:1.1rem}
 .capability-center .capability-taxonomy li small{display:block;color:#5d6872;margin-top:.15rem;overflow-wrap:anywhere}
+.capability-center .capability-source-relationships{border-top:1px solid #dce3e8;padding-top:.85rem}
+.capability-center .capability-source-relationships>ul{display:grid;gap:.65rem;margin:.65rem 0 0;padding:0;list-style:none}
+.capability-center .capability-source-relationships li{border-radius:10px;background:#f1f4f6;padding:.75rem}
+.capability-center .capability-source-relationships dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.3rem .65rem;margin:.5rem 0 0}
+.capability-center .capability-source-relationships dd{margin:0;overflow-wrap:anywhere}
+.capability-center .reuse-confirmation{border-color:#8da9bf;background:#f8fbfd}
+.capability-center .reuse-receipt{border-color:#75a48b;background:#f4faf6}
 @media (max-width:760px){.capability-center .capability-directory-controls,.capability-center .capability-identity-grid,.capability-center .capability-taxonomy{grid-template-columns:1fr}.capability-center .capability-resource-identity>header{align-items:stretch;flex-direction:column}.capability-center .capability-pagination{position:sticky;bottom:0;background:#fff;padding:.75rem 0}.capability-center .capability-directory-list.view-compact button{grid-template-columns:1fr}.capability-center .capability-directory-list.view-compact small{grid-column:auto}}

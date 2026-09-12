@@ -48,11 +48,20 @@ authorization. This is pre-existing shared ingress/authorization debt, not a new
 
 | Area | Current implementation | Remaining first follow-up path |
 | --- | --- | --- |
-| Copy, clone, import, export, successor | Formal clone, bounded manifest import/export, and immutable successor APIs are already connected to the Workbench. They retain exact revision selection and existing CAS behavior. They are actions, not a governed template catalog. | Improve action-specific confirmation, source identity display, and browser coverage without redefining manifest or revision contracts. |
+| Copy, clone, import, export, successor | Formal clone, bounded manifest import/export, and immutable successor APIs are connected to both Skill and MCP Workbenches. Each action now requires an operation-specific confirmation that shows its effect and the exact source facts available from the resource or manifest. Clone accepts an exact existing revision; successor remains CAS-bound and available only for a published resource without a Draft. Mutations retain their formal response, then require directory and exact-detail readback before selecting the result. | Add only further negative-state coverage against these existing actions; they are not a governed template catalog. |
 | Skill operation input and validation/test | The backend has a formal governed operation wire record and validates schemas, executor revision/configuration digest, side-effect policy, and I/O limits. Normal UI editing preserves the complete operation object. The Workbench displays real operations and saved management tests. | Add an operation authoring/editor surface only against the existing operation contract, including field-level validation and exact operation test input. Do not synthesize operations from `capabilities`. |
 | MCP Tool detail, input, and management test | Health, immutable discovery snapshot, discovered Tool schema, explicit selection, bounded management input, invocation result, and redacted evidence are connected. These facts do not grant Attempt-level invocation authority. | Improve Tool-focused detail/schema presentation and negative-state coverage while retaining snapshot and selection identity. |
 | Formal template directory and provenance | No formal template directory, template identity, provenance, publisher, or source-revision contract exists. Clone/import/export cannot be presented as that authority. | Contract candidate: immutable `templateId`, source kind/resource/revision/digest, publisher/owner scope, provenance type, manifest version/digest, lifecycle, visibility, and authorized retrieval rules. Architecture/Product review is required before implementation if this becomes a new managed resource or cross-scope authority. |
 | Ranking and statistics | Existing dashboard numbers are raw counts from the already scoped list response. There is no ranking authority, time window, deduplication key, usage aggregation, or authorization-filtered statistics contract. | Contract candidate: explicit metric name, event authority, subject identity, fixed time window/timezone, deduplication key, aggregation method, scope/authorization filter, minimum sample disclosure, and `NOT_MEASURABLE` semantics. Do not derive ranking from frontend counts. |
+
+### Reuse operation support
+
+| Operation | Skill | MCP | Effect and authoritative completion |
+| --- | --- | --- | --- |
+| Clone | Existing generic clone endpoint | Existing generic clone endpoint | Creates a separate Draft from the confirmed exact revision. The source is unchanged. Completion requires the 201 response, directory readback containing the new resource, and exact target detail readback. The detail renders only the backend-recorded `CLONED_FROM_TEMPLATE` relationship fields. |
+| Export | Existing bounded manifest endpoint | Existing bounded manifest endpoint | Downloads the exact manifest returned by the backend and changes no resource. The confirmation exposes `manifestVersion`, `sourceRevisionId`, `sourceDigest`, and `credentialMaterial` exactly as returned. |
+| Import | Existing bounded manifest import endpoint | Existing bounded manifest import endpoint | Creates a separate Draft after confirming the exported manifest and target name. Completion requires the 201 response plus directory and exact target detail readback. The current endpoint does not persist source relationship fields, so the UI explicitly reports `NOT_RECORDED_BY_BACKEND` instead of inferring provenance. |
+| Successor | Existing generic successor endpoint | Existing generic successor endpoint | Available only for a published resource without a current Draft. It preserves the published revision, applies the current aggregate version CAS, and completes only after the response plus directory and exact same-resource detail readback expose the new Draft. |
 
 ## Validation evidence classification
 
@@ -68,7 +77,7 @@ must remain separately reported:
   search deterministically. It is interaction evidence, not backend or
   authorization evidence.
 
-Of the seven tests in the spec, six use the real backend. The four late-response
+Of the nine tests in the spec, eight use the real backend. The four late-response
 tests use `page.route` only to hold or forward real requests and responses; they
 do not fabricate successful backend payloads. The directory interaction test is
 the only fully mocked transport path.

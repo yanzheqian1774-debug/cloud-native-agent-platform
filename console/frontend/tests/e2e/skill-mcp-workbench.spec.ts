@@ -49,6 +49,29 @@ async function publish(page: import("@playwright/test").Page, path: string, crea
   await expect(page.getByText("Enabled", {exact:true})).toBeVisible();
 }
 
+async function completeReuseMutation(page:import("@playwright/test").Page,kind:"skill"|"mcp",mutationPath:string,confirmName:string,expectedStatus:number){
+  const mutation=page.waitForResponse(response=>responsePath(response)===mutationPath&&response.request().method()==="POST");
+  const directory=page.waitForResponse(async response=>{
+    if(responsePath(response)!==`/api/internal/v0.2.2/resources/${kind}`||response.request().method()!=="GET")return false;
+    const write=await mutation;if(write.status()!==expectedStatus||response.status()!==200)return false;
+    const target=(await write.json() as {resource:{resourceId:string}}).resource.resourceId;
+    return (await response.json() as Array<{resourceId:string}>).some(item=>item.resourceId===target);
+  });
+  const detail=page.waitForResponse(async response=>{
+    if(response.request().method()!=="GET")return false;
+    const write=await mutation;if(write.status()!==expectedStatus||response.status()!==200)return false;
+    const target=(await write.json() as {resource:{resourceId:string}}).resource.resourceId;
+    if(responsePath(response)!==`/api/internal/v0.2.2/resources/${kind}/${target}`)return false;
+    return (await response.json() as {resource:{resourceId:string}}).resource.resourceId===target;
+  });
+  await page.getByRole("button",{name:confirmName}).click();
+  const response=await mutation;expect(response.status()).toBe(expectedStatus);
+  const target=(await response.json() as {resource:{resourceId:string}}).resource.resourceId;
+  expect((await directory).status()).toBe(200);
+  expect((await detail).status()).toBe(200);
+  return target;
+}
+
 test("editing an operation-backed Skill through the UI preserves exact operations",async({page})=>{
   await page.goto("/skills");
   const operation={
@@ -120,6 +143,67 @@ test("capability directory switches views, searches Chinese content and paginate
   await expect(directory.getByText(`分页能力 ${suffix}-6`,{exact:true})).toBeVisible();
   await expect(directory.getByText("筛选后 1 项",{exact:false})).toBeVisible();
   await expect(directory.getByRole("navigation",{name:"能力目录分页"})).toHaveCount(0);
+});
+
+for(const kind of ["skill","mcp"] as const)test(`${kind} reuse operations confirm exact source and complete from authoritative readback`,async({page})=>{
+  const path=`/${kind}`,create=kind==="skill"?"Create governed SKILL":"Create governed MCP";
+  await publish(page,path,create);
+  const sourceId=(await page.locator(".agent-detail > header code").textContent())!.trim();
+  const source=await page.evaluate(async({kind,id})=>(await(await fetch(`/api/internal/v0.2.2/resources/${kind}/${encodeURIComponent(id)}`)).json()),{kind,id:sourceId});
+  const sourceRevision=source.resource.revisions.find((item:{revisionId:string})=>item.revisionId===source.resource.publishedRevisionId);
+
+  const manifestResponse=page.waitForResponse(response=>responsePath(response)===`/api/internal/v0.2.2/resources/${kind}/${sourceId}/manifest`&&response.request().method()==="GET");
+  await page.getByRole("button",{name:"Export bounded manifest"}).click();
+  expect((await manifestResponse).status()).toBe(200);
+  const exportConfirmation=page.getByRole("region",{name:"Reuse operation confirmation"});
+  await expect(exportConfirmation).toContainText(sourceRevision.revisionId);
+  await expect(exportConfirmation).toContainText(sourceRevision.digest);
+  await expect(exportConfirmation).toContainText("NOT_INCLUDED");
+  const download=page.waitForEvent("download");
+  await exportConfirmation.getByRole("button",{name:"Confirm Export bounded manifest"}).click();
+  await download;
+  await expect(page.getByRole("status",{name:"Reuse operation completion"})).toContainText(sourceId);
+
+  await page.getByRole("button",{name:"Clone exact revision"}).click();
+  const cloneConfirmation=page.getByRole("region",{name:"Reuse operation confirmation"});
+  await expect(cloneConfirmation.getByLabel("Exact source revision")).toHaveValue(sourceRevision.revisionId);
+  const cloneName=`${kind} exact clone ${Date.now()}`;
+  await cloneConfirmation.getByLabel("New resource name").fill(cloneName);
+  const cloneId=await completeReuseMutation(page,kind,`/api/internal/v0.2.2/resources/${kind}/${sourceId}/clones`,"Confirm Clone exact revision",201);
+  expect(cloneId).not.toBe(sourceId);
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:cloneName,exact:true})).toBeVisible();
+  const recordedSource=page.getByRole("region",{name:"Recorded source relationships"});
+  await expect(recordedSource).toContainText("CLONED_FROM_TEMPLATE");
+  await expect(recordedSource).toContainText(sourceId);
+  await expect(recordedSource).toContainText(sourceRevision.revisionId);
+  await expect(recordedSource).toContainText(sourceRevision.digest);
+
+  await page.goto(`${path}?resourceId=${encodeURIComponent(sourceId)}`);
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:source.resource.name,exact:true})).toBeVisible();
+  const importManifestResponse=page.waitForResponse(response=>responsePath(response)===`/api/internal/v0.2.2/resources/${kind}/${sourceId}/manifest`&&response.request().method()==="GET");
+  await page.getByRole("button",{name:"Import bounded manifest copy"}).click();
+  expect((await importManifestResponse).status()).toBe(200);
+  const importConfirmation=page.getByRole("region",{name:"Reuse operation confirmation"});
+  await expect(importConfirmation).toContainText("does not persist a source relationship");
+  const importName=`${kind} bounded import ${Date.now()}`;
+  await importConfirmation.getByLabel("New resource name").fill(importName);
+  const importId=await completeReuseMutation(page,kind,`/api/internal/v0.2.2/resources/${kind}/manifest-import`,"Confirm Import bounded manifest copy",201);
+  expect(importId).not.toBe(sourceId);
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:importName,exact:true})).toBeVisible();
+  await expect(page.getByRole("region",{name:"Recorded source relationships"})).toContainText("No source relationship is recorded by the backend");
+  await expect(page.getByRole("status",{name:"Reuse operation completion"})).toContainText("NOT_RECORDED_BY_BACKEND");
+
+  await page.goto(`${path}?resourceId=${encodeURIComponent(sourceId)}`);
+  await expect(page.locator(".agent-detail").getByRole("heading",{name:source.resource.name,exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Create successor Draft"}).click();
+  const successorConfirmation=page.getByRole("region",{name:"Reuse operation confirmation"});
+  await expect(successorConfirmation).toContainText("published revision immutable");
+  const successorId=await completeReuseMutation(page,kind,`/api/internal/v0.2.2/resources/${kind}/${sourceId}/successors`,"Confirm Create successor Draft",200);
+  expect(successorId).toBe(sourceId);
+  const receipt=page.getByRole("status",{name:"Reuse operation completion"});
+  await expect(receipt).toContainText(sourceRevision.revisionId);
+  await expect(receipt).toContainText("NOT_RECORDED_BY_BACKEND");
+  await expect(page.getByRole("button",{name:`编辑当前 ${kind.toUpperCase()} Draft`})).toBeEnabled();
 });
 
 test("publishes, binds and authorizes one bounded real capability test",async({page},testInfo)=>{
