@@ -9,7 +9,7 @@
 - Fixed tree: `a8a9251d5d2e47605d18bb63e362164ec4c920d2`
 - Branch: `codex/s5-v023-impl-314-openclaw-production-transport`
 - Worktree: `/Users/tristan/.codex/worktrees/3198/cloud-native-agent-platform`
-- Pull request: `PENDING / DRAFT_REQUIRED`
+- Pull request: `#169 / DRAFT`
 
 The fixed source and tree equal the prior read-only preparation baseline and the
 freshly fetched `origin/main` at allocation time. No changed implementation

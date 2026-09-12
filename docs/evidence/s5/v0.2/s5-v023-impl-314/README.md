@@ -41,6 +41,8 @@ decision items are recorded in the G1 plan.
 Checkpoint 2 is commit `7ef558f50254925f68c3be4fb28deab096b8e53f`. It
 contains the bounded preflight, source-level explicit assembly, fail-closed
 unsupported operations, focused tests, lifecycle audit and recovery evidence.
+Draft PR #169 carries the branch for review; it is not Ready and grants no merge
+or completion claim.
 
 Focused fixture validation after recovery: `36 passed`. This covers existing
 provider/adapter/factory behavior, exact target compatibility, production preflight,
