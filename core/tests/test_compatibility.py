@@ -48,6 +48,7 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "console/backend/src/agent_console/execution_repository.py",
         "console/backend/src/agent_console/execution_snapshot.py",
         "console/backend/src/agent_console/knowledge_attempt_retrieval.py",
+        "console/backend/src/agent_console/openclaw_binding_application.py",
         "console/backend/src/agent_console/preview_service.py",
         "console/backend/src/agent_console/resource_use_application.py",
         "console/backend/src/agent_console/resource_use_domain.py",
@@ -59,6 +60,8 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "console/backend/tests/test_execution_snapshot.py",
         "console/backend/tests/test_knowledge_attempt_retrieval.py",
         "console/backend/tests/test_knowledge_resource_use_integration.py",
+        "console/backend/tests/test_openclaw_binding_application.py",
+        "console/backend/tests/test_openclaw_binding_postgres.py",
         "console/backend/tests/test_preview_api.py",
         "console/backend/tests/test_resource_use_postgres.py",
         "console/backend/tests/test_shared_views.py",
@@ -79,6 +82,8 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "operator/tests/test_execution_coordinator.py",
         "operator/tests/test_identity_adapter.py",
         "operator/tests/test_openclaw_runtime_driver.py",
+        "runtime/src/agent_runtime/providers/openclaw/binding_observer.py",
+        "runtime/tests/openclaw/test_binding_observer.py",
     }
     assert {
         path for path in discovered_imports if path.startswith("gateway/")

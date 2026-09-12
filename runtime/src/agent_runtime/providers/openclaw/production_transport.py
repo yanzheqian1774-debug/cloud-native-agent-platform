@@ -277,6 +277,10 @@ class OpenClawProductionTransport:
             "health",
             "status",
             "agents.list",
+            "agents.files.list",
+            "sessions.list",
+            "sessions.describe",
+            "sessions.get",
         }
         if method not in allowed:
             raise OpenClawError(ReasonCode.GATEWAY_PROTOCOL_ERROR.value)
@@ -310,6 +314,12 @@ class OpenClawProductionTransport:
         if not isinstance(value, dict):
             raise OpenClawError(ReasonCode.GATEWAY_PROTOCOL_ERROR.value)
         return value
+
+    def read_only_rpc(
+        self, method: str, params: dict[str, object]
+    ) -> dict[str, object]:
+        """Expose only the fixed read allowlist used by recovery observation."""
+        return self._rpc(method, params)
 
     def _run_process(self, argv: tuple[str, ...], extra_env: Mapping[str, str]) -> str:
         env = {"LANG": "C.UTF-8", **extra_env}

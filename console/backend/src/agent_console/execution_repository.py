@@ -2,7 +2,17 @@
 
 from typing import Protocol
 
-from agent_core.execution_contract import CommandId, ScopeIdentity
+from agent_core.execution_contract import (
+    CommandId,
+    Generation,
+    RuntimeInstanceId,
+    ScopeIdentity,
+)
+from agent_core.openclaw_binding import (
+    OpenClawBindingObservation,
+    OpenClawGenerationBinding,
+    OpenClawRuntimeBinding,
+)
 
 from .execution_domain import CommandResultFact, ImportCheckpoint, VersionedAggregate
 
@@ -33,3 +43,29 @@ class CommandResultFactRepository(Protocol):
     def read_command_results(
         self, scope: ScopeIdentity, command_id: CommandId
     ) -> tuple[CommandResultFact, ...]: ...
+
+
+class OpenClawBindingRepository(Protocol):
+    def save_openclaw_binding(
+        self,
+        binding: OpenClawRuntimeBinding,
+        generation: OpenClawGenerationBinding,
+    ) -> object: ...
+
+    def get_openclaw_binding(
+        self,
+        scope: ScopeIdentity,
+        runtime_instance_id: RuntimeInstanceId,
+        generation: Generation,
+    ) -> tuple[OpenClawRuntimeBinding, OpenClawGenerationBinding] | None: ...
+
+    def append_openclaw_observation(
+        self, observation: OpenClawBindingObservation
+    ) -> object: ...
+
+    def read_openclaw_observations(
+        self,
+        scope: ScopeIdentity,
+        runtime_instance_id: RuntimeInstanceId,
+        generation: Generation,
+    ) -> tuple[OpenClawBindingObservation, ...]: ...

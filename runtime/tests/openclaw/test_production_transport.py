@@ -268,3 +268,25 @@ def test_lifecycle_and_execution_are_explicitly_unsupported_without_mapping(
         with pytest.raises(OpenClawError, match=ReasonCode.EXECUTION_UNSUPPORTED.value):
             call()
     assert runner.calls == []
+
+
+def test_recovery_read_seam_rejects_every_write_rpc_before_process_call(
+    tmp_path: Path,
+) -> None:
+    _, runner, transport = _transport(tmp_path)
+
+    for method in (
+        "agents.create",
+        "agents.update",
+        "agents.delete",
+        "sessions.create",
+        "sessions.patch",
+        "sessions.delete",
+        "sessions.abort",
+        "chat.abort",
+    ):
+        with pytest.raises(
+            OpenClawError, match=ReasonCode.GATEWAY_PROTOCOL_ERROR.value
+        ):
+            transport.read_only_rpc(method, {})
+    assert runner.calls == []
