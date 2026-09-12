@@ -623,8 +623,10 @@ required. Every other successful or error response retains `no-referrer`.
 After a future accepted Problem owner adapter commits the canonical Problem
 identity/revision and persists the creator offer, IMPL-299 should:
 
-1. refresh the current-subject continuation inbox and select the opaque offer by
-   purpose/action labels, without decoding it or manufacturing a target;
+1. retain the exact opaque continuation reference correlated by the accepted
+   Problem-create response, or replay that create with the same domain
+   idempotency key to recover the same correlation; do not select among inbox
+   offers by purpose/action labels alone;
 2. submit exactly that one reference with a stable request idempotency key and no
    `requestedGrants` member;
 3. persist only the returned `requestId` as navigation/recovery state and poll the
@@ -665,7 +667,7 @@ The fixture offer proves only the three public ports. It does not prove
 `Problem create -> owner mint -> request -> decision -> exact read`, and it does
 not change IMPL-299 from `NOT_EVIDENCED` at the trusted-browser product level.
 
-### Concentrated Human decision table
+### Concentrated open-decision overview
 
 | Topic | Existing contract | Concrete gap | Recommended Human decision | Alternative | Impact | Blocks complete IMPL-299 loop |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -673,6 +675,205 @@ not change IMPL-299 from `NOT_EVIDENCED` at the trusted-browser product level.
 | Administrator decision CAS and basis | Independent exact `GRANT_ADMIN / DECIDE`; service and repository prohibit self-approval and atomically move `PENDING` to a terminal state | Browser command has no accepted `expectedVersion`; `basisReference` has no authoritative mapping to the persisted closed `basis_type` | Add `expectedVersion` to the decision command and compare the locked aggregate version; freeze a closed external basis enum and one mapping to internal `basis_type`, retaining a digested reference | Keep decision on a private/internal administrator tool and expose only applicant status | BFF schema/route, application command, PostgreSQL CAS, errors and admin tests | **Yes** for an independently approved browser journey |
 | Grant revoke | Revocation fact and effective-grant removal are atomic; current reads fail after commit | Public CAS, immutable revocation identity/version/result and subject/admin readback are absent; current repository returns only boolean | Freeze expected grant version plus immutable `revocationId`, version and readback projection before adding the route | Keep revoke internal and rely on expiry for this preview | Authority contract/application/repository/BFF and revocation race tests | **No** for the minimal create-to-read step; **yes** for full grant lifecycle acceptance |
 | Continuation offer revoke/surrender | Expiry, consumption, generation and recovery invalidation already fail closed | Actor authorization, reason/idempotency command, immutable result and distinction between administrator revoke and subject surrender are undefined | Define one append-only offer-revocation contract with separate authorized actor cases and replay semantics | Retain expiry/recovery/consumption only and expose no route | Continuation contract, persistence, inbox filtering, BFF and audit tests | **No** for the minimal create-to-read step; **yes** for full continuation lifecycle acceptance |
+
+### Expected-version source calibration
+
+The earlier statements "accepted input already has `expectedVersion`" and "there
+is no accepted `expectedVersion`" each collapse distinct evidence. The precise
+source classification is:
+
+| Question | Exact source | Finding |
+| --- | --- | --- |
+| What status does the architecture document itself display? | `architecture/s5/v0.2/S5-V023-ARCH-300-TRUSTED-BROWSER-IDENTITY-EXACT-RESOURCE-AUTHORIZATION-V1.md`, decision record lines 3-18 | The retained candidate snapshot says `Decision status: Proposed`, `Implementation status: Not Started`, and explicitly says it is not Human-accepted. This literal snapshot is historical metadata, not the later acceptance record. |
+| Does the decision example contain the field? | the same architecture artifact, section 8.5, lines 732-755 | Yes. The illustrative `exact-grant-decision.v1` body contains `"expectedVersion": 1`; sections 6.2 and 7 also require a CAS-protected current projection/CAS generally. The example does not say which persisted aggregate the integer denotes or define replay-versus-CAS ordering. |
+| Is there an explicit Human acceptance record for this exact field contract? | this implementation record, `ARCH-300 status calibration`, plus accepted source `4b8672cda51325322d4ec7dc0ac3d78df471d08b` and PR #161 merge `270d193b936a61c65d4fa20d9a62709a5c2b56ad` | The later record establishes `HUMAN_ARCHITECTURE_ACCEPTED_WITH_CONSTRAINTS` for the fixed architecture candidate. No inspected record separately freezes the decision example's `expectedVersion` aggregate, lock/CAS semantics, or replay ordering. Field-level Human acceptance is therefore **`UNKNOWN`**, not disproved and not inferred from example presence. |
+| Does the current command/repository carry it? | `grant_administration_application.py`, `GrantDecisionCommand` lines 56-65 and `decide_request` lines 595-680; `authority_contracts.py`, `GrantAdministrationRepository.decide_request` lines 316-325; `authority_postgres.py`, `decide_request` lines 1233-1333 | No numeric expected version crosses the application or repository port. The application passes only `expected_status=PENDING`; the repository claims idempotency, locks the request, compares only its state, then increments `grant_requests.aggregate_version`. This is terminal-state serialization, not the example's explicit numeric CAS. |
+| Is there a public browser port? | `workbench_bff_schemas.py` lines 45-81 and `workbench_bff.py` lines 357-439 | No. The public surface has continuation inbox, request submit, and request inspect contracts only. There is no decision request/response schema and no `/decisions` route. |
+
+Accordingly, the accepted architecture supplies the general CAS, independent
+administrator and self-approval constraints. The example supplies evidence that
+an `expectedVersion` field was contemplated. The complete field semantics below
+remain **`PROPOSED / HUMAN_ACCEPTANCE_REQUIRED`**. The current implementation gap
+must not be rewritten as an absence of architecture intent.
+
+### Contract proposal 1 — Problem creator continuation
+
+#### Existing accepted contract and current gap
+
+The **existing accepted architecture contract** requires the resource owner to
+mint a subject/scope-bound opaque offer only after durable canonical owner commit,
+with at most a ten-minute lifetime, fixed members, keyed replay, atomic
+consumption, and no browser-controlled identity or member widening (ARCH-300
+sections 6.2-6.3). It explicitly describes a recoverable cross-authority protocol,
+not one transaction spanning owner and Grant Administration.
+
+The **current implementation gap** is bounded but material. Problem create returns
+the committed `BusinessProblemRevision`; revision 1 is encoded today as
+`revision_id = f"{business_problem_id}:1"`, numeric `revision = 1`, and aggregate
+version 1 (`business_problem_application.py`, lines 116-139). The public operation
+envelope has only an unstructured `continuationIds` tuple, and the generic owner
+transaction commits only when `WorkbenchOwnerAuthorization.execute` returns.
+`GrantAdministrationService.mint_owner_continuation` and durable offer storage
+exist, but no Problem-specific post-commit coordinator constructs the claim,
+freezes its members, or correlates its stable reference with the create result.
+
+#### Recommended exact contract — PROPOSED
+
+| Element | Recommended exact value or rule — `PROPOSED` |
+| --- | --- |
+| Purpose and multiplicity | Mint exactly one creator offer with purpose `CONTINUE_PROBLEM_PLAN` for each successfully committed Problem-create command identity. Do not mint one offer per member. |
+| Canonical Problem reference | `canonical_resource_reference = "business-problem:" + businessProblemId`, exactly the existing exact Problem resource name. It is built from the committed owner result, never from a follow-up browser field. |
+| Owner revision encoding | Build canonical UTF-8 JSON with sorted keys and no insignificant whitespace from `{schemaVersion:"problem-owner-revision.v1", tenantId, securityDomain, businessProblemId, revisionId, revision, aggregateVersion, digest}` using only the committed revision/aggregate facts. Store `owner_revision = "problem-owner-revision.v1.sha256." + lowercase_hex(sha256(json_bytes))`. The Problem validator must reload that exact revision in the claim's trusted scope and reproduce the value; `revisionId`, numeric revision, aggregate version, and digest are all bound and none is parsed from the hash. |
+| Exact member bundle | In ordinal order: (1) `BUSINESS_PROBLEM / READ / business-problem:{businessProblemId}`; (2) `PLAN / PREPARE / plan:prepare:{businessProblemId}`. The bundle is all-or-nothing. It contains no Problem `REVISE`/`TRANSITION`, Plan `READ`/`APPROVE`, Criterion/Criteria Set permission, meta-grant, wildcard, or collection grant. This freezes the two-member `CONTINUE_PROBLEM_PLAN` example in ARCH-300 section 8.4; a smaller READ-only offer is the alternative below. |
+| Subject and scope | `subject_principal_id`, tenant and security domain come only from the `TrustedRequestContext` that authorized the create. `ownerId`, request JSON, headers and browser-returned values cannot supply or override them. |
+| Mint call point and transaction boundary | First finish `WorkbenchOwnerAuthorization.execute(CREATE_PROBLEM, ...)` and exit its connection scope so the Business Problem transaction has committed. Then a BFF-level Problem-create coordinator builds the descriptor from that returned committed revision and calls `mint_owner_continuation` on Grant Administration. Offer persistence is a second PostgreSQL authority transaction. No code or document may call this one cross-authority transaction. |
+| Origin-command mint key | `mint_key = "problem-create-continuation.v1.sha256." + lowercase_hex(sha256(canonical_json))`, where `canonical_json` is `{owner:"BUSINESS_PROBLEM", tenantId, securityDomain, subjectPrincipalId, purpose:"CONTINUE_PROBLEM_PLAN", canonicalResourceReference, ownerRevision, originatingCommandIdempotencyKey}`. The raw browser idempotency key is never returned. Same key plus the same canonical mint payload returns the stored offer/reference; same key with any different semantic payload returns `409 IDEMPOTENCY_PAYLOAD_MISMATCH`. |
+| Issuance and expiry | `issuedAt` is the committed revision's `created_at`; `expiresAt = issuedAt + 10 minutes`. Those values are deterministic across create replay. A first post-commit mint attempted at or after expiry creates no offer and reports the expired recovery state below. |
+| Create response correlation | Replace label-based selection with a typed `creatorContinuation` member in the Problem-create `result`: `{relation:"PROBLEM_CREATOR", purpose:"CONTINUE_PROBLEM_PLAN", continuationId:"continuation-ref.<sha256>", state:"AVAILABLE", expiresAt:"..."}`. It appears in the same response as the committed `businessProblemId`, `revisionId`, `aggregateVersion` and digest, so that exact opaque reference is the association. The ordinary inbox may continue to hide resource identity. |
+| Multiple equal-label offers | `purpose` and action labels are display metadata and are never a selector. Each offer has its own stable `continuationId`; the client stores the one from the corresponding create response. If response recovery is needed, it replays that exact create command and recovers the same reference. Two Problems with identical purpose/actions remain distinct because their canonical reference, owner revision, mint key and opaque reference differ. |
+| Member immutability | Continuation-mode request submission must carry exactly one `continuationId` and zero `requestedGrants`. Resolution replaces no members: it loads the persisted ordered two-member bundle and revalidates the owner revision. The same reference can never request a subset, superset, different action, different target, different subject or different scope. |
+| Commit/mint failure state | If owner commit succeeds and mint is definitely or possibly uncommitted, return `503 CONTINUATION_MINT_UNAVAILABLE`; do not delete or compensate the Problem. A retry must use the same Problem-create idempotency key: owner replay returns the same revision, then the coordinator resumes the same mint key. If offer persistence committed but the response was lost, replay returns the already stored opaque reference and does not repeat create. |
+| Expired/consumed/repeated create | Expiry never rolls back the Problem and never auto-mints a replacement. A replay after expiry returns the same owner result with `creatorContinuation.state = EXPIRED` and no usable new authority; a separately accepted administrator-assignment flow is required for another offer. After consumption, replay returns `state = CONSUMED` and the same reference, never another offer; grant-request status remains the authority for the resulting request. Same create key/same payload replays; same key/different create payload remains the existing owner idempotency conflict; a different create key is a different create command and may create a different Problem. |
+
+The recommended response addition is deliberately creator-specific. It does not
+turn the generic inbox into a protected-resource directory, and it does not make
+an offer, a `PENDING` request, or an `APPROVED` status into authorization.
+
+**Alternative:** mint a one-member creator offer containing only exact Problem
+`READ`, and require a separately assigned offer for `PLAN / PREPARE`. This is
+narrower but diverges from the two-member ARCH-300 `CONTINUE_PROBLEM_PLAN` example
+and adds an extra administrative wait before the Problem-to-Plan journey. The
+recommendation is the two-member bundle because both targets are deterministic
+owner-derived names for the same committed Problem and approval still remains
+independent.
+
+**Impact and gate:** affected future paths are the Problem-create BFF coordinator
+and response schema, the Business Problem continuation validator, Grant
+Administration owner-mint integration, and focused commit/mint/replay tests. It
+**blocks IMPL-299's create -> request -> exact Problem read path**. It does not
+authorize implementation in this batch.
+
+**Exact Human acceptance requested:** accept or reject, as one contract, the
+purpose, two ordered members, canonical reference, hashed owner-revision encoding,
+post-commit call point, deterministic mint key/times, typed response correlation,
+same-reference immutability, and failure/expiry/consumption replay rules in the
+table above. Until an explicit Human record accepts them, every row remains
+`PROPOSED` and no Problem creator mint route or hook may be implemented.
+
+### Contract proposal 2 — Grant decision CAS and basis
+
+#### Existing accepted contract and current gap
+
+The **existing accepted architecture contract** requires independent exact
+`GRANT_ADMIN / DECIDE / grant-scope:{tenant}:{security_domain}`, issuer/subject
+inequality without exception, append-only decision/grant facts, atomic bundle
+activation, validity bounds, CAS, and idempotent replay. Its section 8.5 example
+contains `expectedVersion`, but, as calibrated above, the exact field semantics
+have no separately proven Human freeze and are **`UNKNOWN`**.
+
+The **current implementation gap** is exact: `GrantDecisionCommand` has no
+`expected_version`; the repository receives only `expected_status=PENDING`, claims
+the idempotency key before locking the request, locks and checks only the state,
+then increments `authorization_admin.grant_requests.aggregate_version`. Both
+`basis_type` columns are unconstrained `text`; the application accepts any bounded
+label. Tests use `TICKET`, but a fixture literal is not a public enum or Human
+acceptance. No browser decision schema/route exists.
+
+#### Minimal wire contract — PROPOSED
+
+Approval request:
+
+```http
+POST /api/workbench/v1/authorization/grant-requests/grant-request-123/decisions
+Idempotency-Key: decision-command-123
+Content-Type: application/json
+
+{
+  "schemaVersion": "exact-grant-decision.v1",
+  "expectedVersion": 1,
+  "decision": "APPROVE",
+  "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+  "basisType": "TICKET",
+  "basisReference": "SEC-1234",
+  "notBefore": "2026-09-12T14:00:00Z",
+  "expiresAt": "2026-09-12T22:00:00Z"
+}
+```
+
+Approval response (`201` first commit, `200` same-key/same-payload replay):
+
+```json
+{
+  "schemaVersion": "exact-grant-decision-result.v1",
+  "requestId": "grant-request-123",
+  "decisionId": "grant-decision-456",
+  "state": "APPROVED",
+  "aggregateVersion": 2,
+  "decidedAt": "2026-09-12T13:59:58Z"
+}
+```
+
+Rejection uses the same route and headers with this complete body; both validity
+fields are absent:
+
+```json
+{
+  "schemaVersion": "exact-grant-decision.v1",
+  "expectedVersion": 1,
+  "decision": "REJECT",
+  "reasonCategory": "BUSINESS_DUTY_NOT_ESTABLISHED",
+  "basisType": "TICKET",
+  "basisReference": "SEC-1234"
+}
+```
+
+Its first/replay response has the same six result fields with `state:
+"REJECTED"` and no grant list. The browser does not receive
+`issuerMetaDecisionId`, policy version, audit source, basis digest, request
+members, or the complete `CurrentExactGrantDecision` internal record through this
+mutation response.
+
+#### Recommended exact contract — PROPOSED
+
+| Element | Recommended exact value or rule — `PROPOSED` |
+| --- | --- |
+| CAS aggregate | `expectedVersion` is the positive current `aggregate_version` of the persisted `authorization_admin.grant_requests` row identified by path `requestId`; it is the same version exposed by the existing minimum request-status response. It is not a grant version, decision version, policy generation, recovery epoch, or owner aggregate version. |
+| Locked CAS | In the decision transaction, lock that request row `FOR UPDATE`, then require both `aggregate_version == expectedVersion` and `state == PENDING`. The winning approve/reject appends one decision, atomically appends all grants or none, changes the request to `APPROVED`/`REJECTED`, and increments the request version exactly once. |
+| Replay before CAS | Reauthenticate and reauthorize current exact `GRANT_ADMIN/DECIDE` on every call. Inside the same recovery-epoch transaction, resolve/lock the scoped `(issuer, DECIDE_GRANT_REQUEST, Idempotency-Key)` claim and compare the canonical payload digest **before** applying the request CAS. Same key/same payload returns the already committed result even though the request is now terminal/version 2; same key/different payload returns `409 IDEMPOTENCY_PAYLOAD_MISMATCH` and never falls through to CAS. A new key always proceeds to the locked CAS. `expectedVersion` is included in the canonical payload digest. |
+| Competing and terminal decisions | Different-key concurrent `APPROVE`/`REJECT` commands may both validate initially, but only one wins the request lock/CAS. The loser returns `409 AUTHORIZATION_STATE_STALE` with no decision/grant write. Any new-key command against `APPROVED` or `REJECTED`, including a semantically equal decision, returns the same stale error; terminal state is not converted or appended again. |
+| Basis enum and source | Public `basisType` is the closed enum `TICKET | POLICY`. `TICKET` is evidenced by existing authority tests; `POLICY` and the two-category boundary are evidenced only by ARCH-300 section 8.5's `ticket-or-policy-reference` placeholder. Neither evidence alone is Human acceptance, so both enum values and closure are part of this proposal. No `OTHER`, free-form type, URL type, or browser-defined type is accepted. |
+| Authoritative basis mapping | The BFF maps public `TICKET` -> internal `basis_type = "TICKET"` and public `POLICY` -> internal `basis_type = "POLICY"`; there is no inference from the text of `basisReference`. It validates `basisReference` as trimmed UTF-8, 1-512 characters, with no control characters, then the application persists only `sha256(canonical_json({type:basis_type, reference:basisReference}))` as the existing `basis_reference_digest`. `basisReference` itself is not returned to the applicant or stored in the current authority tables. |
+| Independent administrator | Before request disclosure or mutation, require current exact `GRANT_ADMIN / DECIDE / grant-scope:{trusted tenant}:{trusted security domain}` from the authenticated administrator's trusted context. Neither `INSPECT`, `REVOKE`, continuation assignment, creator status, request ownership, nor a dynamic grant implies `DECIDE`; dynamic meta-grants remain prohibited. |
+| No self-approval | Compare the authenticated issuer principal with the immutable request subject inside the locked decision transaction. Equality returns `409 GRANT_SELF_APPROVAL_PROHIBITED`; there is no static-policy, meta-grant, role, same-key, or replay exception and zero decision/grant writes occur. |
+| Validity window | For `APPROVE`, both UTC timestamps are required; at transaction time require `server_now <= notBefore < expiresAt <= notBefore + 8 hours`. `REJECT` forbids both fields. The eight-hour cap is a bounded first-journey recommendation aligned with the accepted maximum browser-session duration, not an already accepted dynamic-grant lifetime; it is explicitly part of the requested Human decision. Grant currentness remains `not_before <= read_now < expires_at`. |
+| Error semantics | Missing/hidden/foreign-scope request or missing current DECIDE authority: `404 AUTHORIZATION_REQUEST_NOT_FOUND`; stale version or already terminal under a new key: `409 AUTHORIZATION_STATE_STALE`; same key/different payload: `409 IDEMPOTENCY_PAYLOAD_MISMATCH`; issuer equals subject: `409 GRANT_SELF_APPROVAL_PROHIBITED`; invalid enum, reference, decision union, version or time window: `422 INVALID_GRANT_DECISION`; unavailable/recovery-closed authority: `503 GRANT_AUTHORITY_UNAVAILABLE`. All failures write no partial decision or grant bundle. |
+| `APPROVED` versus a current grant | `APPROVED` is the immutable terminal state of the request and proves only that its decision and full grant bundle committed. It does not prove that any grant is currently effective: `notBefore`, expiry, grant/session/credential revocation, active generation, recovery epoch, subject/scope and exact tuple must still pass. Every exact Problem READ reauthenticates and calls the current exact-grant reader in its owner transaction; the status response, decision response, cached boolean or possession of a `decisionId` is never authorization. |
+
+**Alternative:** keep decision entry exclusively on a private/internal
+administrator tool. That tool must still adopt the same request-aggregate CAS,
+replay order, closed basis mapping, independent DECIDE and no-self-approval rules;
+the public applicant surface remains request status only. This avoids a browser
+administrator route but does not supply a complete independently approved browser
+journey.
+
+**Impact and gate:** future implementation would affect the Workbench decision
+schema/route and error mapping, `GrantDecisionCommand`, the repository port and
+locked SQL CAS, plus administrator/idempotency/concurrency tests. A public or
+otherwise independently operated decision entry **blocks the complete IMPL-299
+authorization loop**, while the applicant page itself still needs only minimum
+request status and current exact READ. No mint or decision implementation is
+authorized by this proposal.
+
+**Exact Human acceptance requested:** accept or reject, as one contract, the
+request-aggregate meaning of `expectedVersion`, replay-before-CAS ordering,
+concurrent/terminal behavior, `TICKET | POLICY` enum and one-to-one internal
+mapping, independent exact DECIDE and self-approval prohibition, eight-hour
+approval window, minimum result/error shapes, and the distinction between
+`APPROVED` and currently effective authorization. Until an explicit Human record
+does so, these details remain `PROPOSED`.
+
+Grant revoke and continuation-offer revoke/surrender remain **`OPEN`**. This
+proposal neither defines nor implements those operations.
 
 No row above authorizes implementation by appearing in this table. Draft PR #164
 remains Draft; this batch does not make it Ready, merge, deploy, close IMPL-305,
