@@ -200,6 +200,17 @@ Criteria Set 是同一 Problem 下的版本化成功标准集合；Criteria 是�
 
 当前浏览器保存先提交 Criterion revision，再提交引用该 exact revision 的 Criteria Set revision；两步分别使用按各自 payload 保留的幂等键。只有第二步成功后才清除两个键并重新从 owner 读回 workspace。若第一步成功而第二步因 CAS、授权或存储失败，已提交 Criterion revision 保留，界面只显示“操作未完成”，不得显示整个 Criteria 已保存成功；使用未改变的 payload 重试时复用原幂等键，由 owner 返回同一 Criterion 结果后继续重试 Criteria Set。跨命令原子性、补偿删除、自动覆盖或把孤立 revision 隐藏成整体成功都不在当前已决语义内；这项边界与上述授权 continuation 缺口互不替代。
 
+### 10.4 交接 305 的精确公共接点需求
+
+| 用户动作 | 已有内部 service | 必需输入与输出 | 授权前提 | continuation 状态及错误/恢复 | 公共端口缺口 |
+| --- | --- | --- | --- | --- | --- |
+| 创建 Problem 后继续申请 exact read/revise | `GrantAdministrationService.mint_owner_continuation` 可在 owner fact 已提交后校验并持久化 offer；`continuation_inbox` 可按当前 subject/scope 恢复 offer | 输入必须来自 owner 提交结果：subject、scope、purpose、exact grants、canonical Problem reference、owner revision、policy generation、十分钟内 expiry、原创建命令键；输出为不落明文的 opaque continuation/稳定 offer reference | owner-side 生成，不接受浏览器提供 identity/scope/任意 target；claim 必须匹配当前可信 session subject/scope/generation，且 exact target 仍存在 | 过期、跨 subject/scope、generation/recovery epoch 改变、target 不匹配均 `CONTINUATION_INVALID`；刷新后只可从 subject inbox 恢复仍有效 offer | Problem create 的公共响应尚未携带可消费 continuation；无可信 session 的 inbox/read 公共路由；`continuationIds` 当前恒空 |
+| 提交并查看 grant request | `submit_request(TrustedRequestContext, GrantRequestCommand)`、`inspect_request(context, request_id)` | 输入为可信 session、purpose、opaque continuation、幂等键；members 由 continuation 固定，不由浏览器扩权；输出为 request id、PENDING/终态及 exact members 的最小披露 | subject 只能为自己提交；requestability 与 exact target 重新校验；inspect 仅 subject 或具有 exact `GRANT_ADMIN/INSPECT/grant-scope:{tenant}:{domain}` 的管理员 | 同键同 payload 重放返回同 request；同 continuation 不得被另一请求消费；过期/已消费/未知请求 fail closed；刷新后按 request id inspect | 缺少 session-authenticated request submit/inspect 公共路由与严格 schema；不得使用 identity header 或内部 API 代替 |
+| 管理员批准或拒绝 | `decide_request(context, GrantDecisionCommand)` | 输入为 request id、approve/reject、reason category、basis type/reference、有效期和幂等键；输出为 immutable decision id/decision 与 request 终态 | 独立管理员需 exact `GRANT_ADMIN/DECIDE/grant-scope:{tenant}:{domain}`；禁止 subject 自批；批准时 `not_before < expires_at` 且不早于当前时间 | 同键同 payload 幂等；并发/重复终态冲突；无权、跨 scope、非法时间窗或自批最小披露失败；恢复后 inspect 原 request/decision | 缺少管理员可信入口、decision 公共路由及状态读回投影 |
+| 决策后读取新 Problem | 305 `GenerationAuthorizationReader.authorize_current` 与 `bind_current_exact_decisions` 已能返回完整 current exact decision 并绑定 caller-owned transaction；299 owner read 已要求 `READ business-problem:{id}` | 输入为可信 session context 与 exact grant；输出至少需足以解释当前 allow/deny 的完整 decision reference，随后在同一当前授权语义下调用现有 exact Problem read | credential/source/scope/generation/recovery epoch 必须当前有效，未被动态或静态 tombstone 撤销；不能只缓存 boolean allow | 决策未生效、过期、撤销、恢复 epoch/generation 变化或存储不可用时 fail closed；重试 exact read 不得退回 collection grant | current-decision reader 尚无公共浏览器投影；缺少从 request 决定完成到既有 exact Problem read 的正式 BFF continuation；reader 存在不等于该端口已交付 |
+
+上述四步属于 305 的共享授权边界。299 只消费经批准的公共接点，不新增平行授权 service，不扩大到 Plan 或 Execution。
+
 ## 11. 本批分层验证记录
 
 验证时点：2026-09-12（Asia/Shanghai）。
@@ -212,3 +223,11 @@ Criteria Set 是同一 Problem 下的版本化成功标准集合；Criteria 是�
 | 可信浏览器 | 未执行 | `NOT_EVIDENCED` | 未建立真实 HttpOnly session、预置精确 grants 或执行真实浏览器 create/read/revise/refresh |
 
 因此本批可声明“首批正式接线源码已实现并通过定向 source/build 验证”，不能声明真实服务闭环、可信浏览器接受、完整 299、I2/I3、部署或发布完成。
+
+## 12. 2026-09-12 PostgreSQL 服务级续验
+
+本续验使用独占容器 `s5-v023-impl-299-postgres`、PostgreSQL 15、数据库 `s5_v023_impl_299` 和仅本机监听端口 `65299`。没有挂载宿主目录或命名 volume；每次测试只创建并强制删除 `impl299_*` 临时数据库，清理只停止该精确容器名。
+
+新增定向测试直接调用正式 `BusinessProblemApplication` 和 `PostgresBusinessProblemRepository`，不启动 HTTP，不发送身份 header，不调用私有 API，也不构造或预置浏览器 grant。它证明 Problem 创建与 exact 持久化读回、Problem/Criterion/Criteria Set 修订和 CAS、六类写命令的同键同 payload 重放、Criterion 已提交而 Criteria Set CAS 失败时的不可见 membership 与后续恢复，以及 repository 重建后的权威历史读回。测试中的 authority 仅记录 application 所要求的 exact owner/action/resource 调用，因此结果是 application/repository **服务级证据**，不是授权 service、真实 BFF 或可信浏览器证据。
+
+可信浏览器验证仍为 `NOT_EVIDENCED`：在 305 交付 10.4 所列公共 continuation/grant/current-decision 接点前，不以预置授权、身份 header、内部 API 或私有回退冒充新对象 `continuation → request → decision → exact read` 闭环。
