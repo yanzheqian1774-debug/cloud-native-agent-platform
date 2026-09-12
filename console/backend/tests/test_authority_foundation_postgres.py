@@ -26,6 +26,7 @@ from agent_console.authority_contracts import (
     BrowserSession,
     ContinuationClaim,
     CredentialId,
+    CurrentExactGrantDecision,
     ExactGrant,
     GrantDecision,
     GrantId,
@@ -519,6 +520,139 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
     )
 
 
+def test_complete_exact_decision_uses_caller_transaction_and_tracks_revocation(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:exact")
+    static_member = ExactGrant(
+        "BUSINESS_PROBLEM", "READ", "business-problem:static-only"
+    )
+    generation = StaticAuthorityGeneration(
+        1,
+        "a" * 64,
+        "policy-current",
+        "test",
+        (
+            CredentialConfiguration(
+                CredentialId("credential-alice"),
+                "7" * 64,
+                "human:alice",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.SERVICE_ONLY,
+                (StaticGrant(static_member, GrantSource.SERVICE_ONLY),),
+            ),
+        ),
+        (),
+        frozenset(),
+    )
+    repository.activate_generation(
+        1,
+        generation.digest,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    request = GrantRequest(
+        "exact-request",
+        "human:alice",
+        scope,
+        (member,),
+        "CONTINUE_PROBLEM_PLAN",
+        GrantRequestStatus.PENDING,
+        now,
+    )
+    repository.submit_request(
+        request,
+        actor_id="human:alice",
+        idempotency_key="exact-request",
+        payload_digest="1" * 64,
+        target_validation=lambda _: True,
+        recovery_epoch=1,
+    )
+    issued_at = now + timedelta(seconds=1)
+    expires_at = now + timedelta(hours=1)
+    repository.decide_request(
+        GrantDecision(
+            "exact-decision",
+            request.request_id,
+            "human:admin",
+            "meta-admin",
+            True,
+            "ASSIGNED_DUTY",
+            "TICKET",
+            "2" * 64,
+            "policy-issued",
+            "test",
+            issued_at,
+        ),
+        grants=((GrantId("exact-grant"), member, issued_at, expires_at),),
+        expected_status=GrantRequestStatus.PENDING,
+        idempotency_key="exact-decision",
+        payload_digest="3" * 64,
+        recovery_epoch=1,
+    )
+    context = TrustedRequestContext(
+        "human:alice",
+        scope,
+        "credential-alice",
+        AuthenticationSource.SERVICE_CREDENTIAL,
+        "policy-current",
+    )
+    reader = GenerationAuthorizationReader(
+        generation, repository, repository, recovery_epoch=1
+    )
+    effective_at = issued_at + timedelta(seconds=1)
+    assert reader.has_current_grant(
+        context,
+        static_member,
+        now=effective_at,
+        generation=1,
+        recovery_epoch=1,
+    )
+    assert reader.authorize_current(context, static_member, now=effective_at) is None
+    assert reader.authorize_current(context, member, now=expires_at) is None
+    revoke_started = Event()
+    revoke_finished = Event()
+
+    def revoke() -> bool:
+        revoke_started.set()
+        result = repository.revoke_grant(
+            GrantId("exact-grant"),
+            actor_id="human:admin",
+            reason="DUTY_ENDED",
+            idempotency_key="exact-revoke",
+            payload_digest="4" * 64,
+            now=effective_at + timedelta(seconds=1),
+        )
+        revoke_finished.set()
+        return result
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with repository.connection_scope() as connection:
+            connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            bound = reader.bind_current_exact_decisions(connection, generation=1)
+            current = bound.authorize_current(context, member, now=effective_at)
+            assert current == CurrentExactGrantDecision(
+                "exact-decision",
+                context,
+                member,
+                1,
+                "policy-issued",
+                issued_at,
+                expires_at,
+            )
+            future = executor.submit(revoke)
+            assert revoke_started.wait(timeout=10)
+            assert not revoke_finished.wait(timeout=0.2)
+        assert future.result(timeout=10)
+
+    assert reader.authorize_current(context, member, now=effective_at) is None
+
+
 def test_application_continuation_scope_self_decision_and_dynamic_read(
     repository: PostgresAuthorityRepository,
 ) -> None:
@@ -862,6 +996,20 @@ def test_recovery_epoch_invalidates_sessions_continuations_and_effective_grants(
         operator_id="operator:test",
         now=now + timedelta(minutes=2),
     )
+    with pytest.raises(AuthorityError, match="CONTINUATION_INVALID"):
+        repository.submit_request(
+            replace(
+                request,
+                request_id="post-recovery-continuation",
+                created_at=now + timedelta(minutes=3),
+            ),
+            actor_id="human:alice",
+            idempotency_key="post-recovery-continuation",
+            payload_digest="7" * 64,
+            target_validation=lambda _: True,
+            continuation_digest="4" * 64,
+            recovery_epoch=2,
+        )
 
 
 def test_linearized_browser_authorization_orders_session_and_grant_changes(

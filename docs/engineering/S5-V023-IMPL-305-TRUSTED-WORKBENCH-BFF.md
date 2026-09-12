@@ -80,6 +80,36 @@ owner UoW accepts the caller connection and does not commit or open another
 connection. Owner-discovered criterion/reference grants are checked on the same
 snapshot before their protected read. Replay follows the same current checks.
 
+### Complete current exact-grant decision reader
+
+The shared authority now exposes `CurrentExactGrantDecisionReader` with the
+consumer-facing `authorize_current(context, grant, now=...)` shape required by
+the verified Model foundation. A successful result is a complete dynamic grant
+decision containing the persisted `decision_id`, exact trusted context and
+`owner/action/exact_resource`, active policy generation, persisted decision
+policy version, persisted decision/grant creation time as `issued_at`, and the
+persisted grant expiry. Static entitlement or an existing boolean grant result
+is deliberately insufficient and returns no complete dynamic decision.
+
+`GenerationAuthorizationReader.bind_current_exact_decisions(connection,
+generation=...)` is the caller-owned transaction contact. It reuses the BFF's
+already-open connection without changing isolation or committing, verifies the
+current credential/session, generation and recovery epoch, locks the matching
+session and dynamic grant rows, and reads the exact decision from
+`authorization_admin.grants`/`effective_grants`. The lower/upper validity bounds
+remain `not_before <= now < expires_at`; a matching current revocation, expiry,
+credential invalidation, generation mismatch or recovery invalidation returns
+no decision. A protected owner transaction that reads first retains its share
+locks through owner commit, while a grant/session revoke that commits first
+makes the new read fail closed.
+
+Controlled recovery continues to mark every unconsumed continuation offer
+revoked and old-epoch continuation consumption remains invalid after activation.
+An independently callable continuation-offer revoke/surrender command and HTTP
+surface are still `OPEN`: the accepted contracts do not currently define its
+actor authorization, reason/idempotency command, or audit response. This batch
+does not invent those semantics.
+
 ## Startup and route separation
 
 `app.py` retains the private service application and never registers Workbench
@@ -520,3 +550,23 @@ These bounded additions are `HUMAN_CONFIRMED` and their implementation checkpoin
 have passed the evidence stated above. Delivery remains
 `PARTIAL_DRAFT / SESSION_OPEN`; Draft PR #164 must not be made Ready, merged, or
 deployed by this addendum.
+
+## S5-V023-IMPL-305 recovery batch for 308
+
+The exact-decision dependency batch changed only the shared authority contracts,
+application adapter, PostgreSQL adapter, focused authority PostgreSQL tests, and
+this implementation record. It did not change the 308 Model registry entries or
+the 308 branch, and it had no path overlap with the current 299 branch diff.
+
+Validation executed for this batch:
+
+- focused non-database authority tests: `14 passed`;
+- exclusive real PostgreSQL 15 exact-decision and recovery-continuation tests:
+  `2 passed, 12 deselected`;
+- complete exclusive real PostgreSQL 15 authority contract file: `14 passed`;
+- repository `make check`: Ruff lint and format checks passed, followed by
+  `1649 passed, 154 skipped` (environment-gated suites remain explicitly
+  skipped by the repository baseline).
+
+The batch remains part of the existing Draft PR #164 and does not authorize
+Ready, merge, deployment, or closure of the full 305 Session.

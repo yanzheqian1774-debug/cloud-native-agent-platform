@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from agent_console.authority_configuration import (
+    CredentialConfiguration,
     StaticAuthorityGeneration,
     validate_registered_grant,
 )
@@ -21,6 +22,8 @@ from agent_console.authority_contracts import (
     ContinuationOwner,
     CredentialId,
     CurrentAuthorizationReader,
+    CurrentExactGrantDecision,
+    CurrentExactGrantDecisionReader,
     DynamicAuthorizationState,
     ExactGrant,
     GrantAdministrationRepository,
@@ -152,6 +155,32 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             recovery_epoch=recovery_epoch,
         )
 
+    def read_linearized_current_exact_grant_decision(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, CurrentExactGrantDecision | None]:
+        reader = getattr(
+            self.dynamic, "read_linearized_current_exact_grant_decision", None
+        )
+        if reader is None:
+            return None, None
+        return reader(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+
     def read_linearized_authorization_states(
         self,
         context: TrustedRequestContext,
@@ -217,24 +246,10 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             connection=connection,
             configure_transaction=configure_transaction,
         )
-        credential = (
-            self.generation.credential_by_id(credential_id)
-            if credential_id is not None
-            else None
+        credential, expected_source = self._current_credential(
+            context, credential_id, now=now
         )
-        expected_source = (
-            GrantSource.BROWSER_BOOTSTRAP
-            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
-            else GrantSource.SERVICE_ONLY
-        )
-        credential_current = (
-            credential is not None
-            and credential.scope == context.scope
-            and credential.authentication_source is expected_source
-            and credential.credential_id
-            not in self.generation.credential_revocation_tombstones
-            and now < credential.expires_at
-        )
+        credential_current = credential is not None
         if not credential_current:
             return tuple(False for _ in grants)
         return tuple(
@@ -259,6 +274,89 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             for grant, state in zip(grants, states, strict=True)
         )
 
+    def _current_credential(
+        self,
+        context: TrustedRequestContext,
+        credential_id: CredentialId | None,
+        *,
+        now: datetime,
+    ) -> tuple[CredentialConfiguration | None, GrantSource]:
+        expected_source = (
+            GrantSource.BROWSER_BOOTSTRAP
+            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
+            else GrantSource.SERVICE_ONLY
+        )
+        credential = (
+            self.generation.credential_by_id(credential_id)
+            if credential_id is not None
+            else None
+        )
+        if (
+            credential is None
+            or credential.scope != context.scope
+            or credential.authentication_source is not expected_source
+            or credential.credential_id
+            in self.generation.credential_revocation_tombstones
+            or now >= credential.expires_at
+        ):
+            return None, expected_source
+        return credential, expected_source
+
+    def _authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        connection: object | None,
+        configure_transaction: bool,
+    ) -> CurrentExactGrantDecision | None:
+        if generation != self.generation.generation:
+            return None
+        credential_id, decision = self.read_linearized_current_exact_grant_decision(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=self.recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+        credential, _ = self._current_credential(context, credential_id, now=now)
+        if credential is None or decision is None:
+            return None
+        if (credential.credential_id, grant) in (
+            self.generation.static_grant_revocation_tombstones
+        ):
+            return None
+        return decision
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None:
+        """Read a complete decision in a repository-owned snapshot."""
+        return self._authorize_current(
+            context,
+            grant,
+            now=now,
+            generation=self.generation.generation,
+            connection=None,
+            configure_transaction=True,
+        )
+
+    def bind_current_exact_decisions(
+        self, connection: object, *, generation: int
+    ) -> CurrentExactGrantDecisionReader:
+        """Bind exact-decision reads to an already-open owner transaction."""
+        return CallerOwnedCurrentExactGrantDecisionReader(
+            self, connection=connection, generation=generation
+        )
+
     def has_current_grant(
         self,
         context: TrustedRequestContext,
@@ -275,6 +373,37 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             generation=generation,
             recovery_epoch=recovery_epoch,
         )[0]
+
+
+class CallerOwnedCurrentExactGrantDecisionReader(CurrentExactGrantDecisionReader):
+    """Current decision reader pinned to the BFF/owner transaction."""
+
+    def __init__(
+        self,
+        authorization: GenerationAuthorizationReader,
+        *,
+        connection: object,
+        generation: int,
+    ) -> None:
+        self.authorization = authorization
+        self.connection = connection
+        self.generation = generation
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None:
+        return self.authorization._authorize_current(
+            context,
+            grant,
+            now=now,
+            generation=self.generation,
+            connection=self.connection,
+            configure_transaction=False,
+        )
 
 
 class GrantAdministrationService:
