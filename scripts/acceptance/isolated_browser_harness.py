@@ -84,6 +84,16 @@ FIRST_FAILURE_ASSERTION_IDS = {
         "publishes, binds and authorizes one bounded real capability test",
     ): "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE",
     (
+        "skill-mcp-workbench.spec.ts",
+        "skill reuse operations confirm exact source and complete "
+        "from authoritative readback",
+    ): "SKILL_MCP_SKILL_REUSE_OPERATIONS",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "mcp reuse operations confirm exact source and complete "
+        "from authoritative readback",
+    ): "SKILL_MCP_MCP_REUSE_OPERATIONS",
+    (
         "unified-product-assembly.spec.ts",
         "proves the complete durable unified-product browser journey",
     ): "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
@@ -986,6 +996,183 @@ UNIFIED_PRODUCT_STEP_IDS = {
     "UNIFIED_07_EMPLOYEE_MANAGEMENT": ("EMPLOYEES", "DESKTOP", "IDENTITY_CHECK"),
     "UNIFIED_08_RESTART_READBACK": ("EMPLOYEES", "DESKTOP", "RESTART_READINESS"),
 }
+SKILL_MCP_STEP_IDS = {
+    "SKILL_MCP_BACKEND_READY": ("MCP", "DESKTOP", "SERVICE_AVAILABILITY"),
+    "SKILL_MCP_MCP_PUBLISHED": ("MCP", "DESKTOP", "PUBLISH"),
+    "SKILL_MCP_HEALTH_SUBMIT": ("MCP", "DESKTOP", "HEALTH_SUBMIT"),
+    "SKILL_MCP_HEALTH_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "HEALTH_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_HEALTH_UI_RENDERED": ("MCP", "DESKTOP", "HEALTH_UI_RENDERED"),
+    "SKILL_MCP_DISCOVERY_SUBMIT": ("MCP", "DESKTOP", "DISCOVERY_SUBMIT"),
+    "SKILL_MCP_DISCOVERY_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "DISCOVERY_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_DISCOVERY_SNAPSHOT_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "DISCOVERY_SNAPSHOT_READBACK",
+    ),
+    "SKILL_MCP_DISCOVERY_UI_RENDERED": (
+        "MCP",
+        "DESKTOP",
+        "DISCOVERY_UI_RENDERED",
+    ),
+    "SKILL_MCP_TOOL_SELECTION_SUBMIT": (
+        "MCP",
+        "DESKTOP",
+        "TOOL_SELECTION_SUBMIT",
+    ),
+    "SKILL_MCP_TOOL_SELECTION_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "TOOL_SELECTION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_TOOL_SELECTION_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "TOOL_SELECTION_READBACK",
+    ),
+    "SKILL_MCP_REDISCOVERY_SUBMIT": ("MCP", "DESKTOP", "REDISCOVERY_SUBMIT"),
+    "SKILL_MCP_REDISCOVERY_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "REDISCOVERY_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_REDISCOVERY_SNAPSHOT_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "REDISCOVERY_SNAPSHOT_READBACK",
+    ),
+    "SKILL_MCP_REDISCOVERY_UI_RENDERED": (
+        "MCP",
+        "DESKTOP",
+        "REDISCOVERY_UI_RENDERED",
+    ),
+    "SKILL_MCP_RESELECTION_SUBMIT": ("MCP", "DESKTOP", "RESELECTION_SUBMIT"),
+    "SKILL_MCP_RESELECTION_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "RESELECTION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_RESELECTION_READBACK": (
+        "MCP",
+        "DESKTOP",
+        "RESELECTION_READBACK",
+    ),
+    "SKILL_MCP_MCP_INVOCATION_SUBMIT": (
+        "MCP",
+        "DESKTOP",
+        "INVOCATION_SUBMIT",
+    ),
+    "SKILL_MCP_MCP_INVOCATION_HTTP_COMPLETION": (
+        "MCP",
+        "DESKTOP",
+        "INVOCATION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_MCP_INVOCATION_UI_RENDERED": (
+        "MCP",
+        "DESKTOP",
+        "INVOCATION_UI_RENDERED",
+    ),
+    "SKILL_MCP_SKILL_PUBLISHED": ("SKILLS", "DESKTOP", "PUBLISH"),
+    "SKILL_MCP_SKILL_DIRECTORY_DEFAULT_VIEW": (
+        "SKILLS",
+        "DESKTOP",
+        "DIRECTORY_DEFAULT_VIEW",
+    ),
+    "SKILL_MCP_SKILL_DIRECTORY_COMPACT_VIEW": (
+        "SKILLS",
+        "DESKTOP",
+        "DIRECTORY_COMPACT_VIEW",
+    ),
+    "SKILL_MCP_SKILL_DIRECTORY_QUERY": (
+        "SKILLS",
+        "DESKTOP",
+        "DIRECTORY_QUERY",
+    ),
+    "SKILL_MCP_SKILL_DIRECTORY_LIFECYCLE": (
+        "SKILLS",
+        "DESKTOP",
+        "DIRECTORY_LIFECYCLE",
+    ),
+    "SKILL_MCP_SKILL_DIRECTORY_SELECTION": (
+        "SKILLS",
+        "DESKTOP",
+        "DIRECTORY_SELECTION",
+    ),
+    "SKILL_MCP_SKILL_QUERY_CONTEXT": (
+        "SKILLS",
+        "DESKTOP",
+        "QUERY_CONTEXT",
+    ),
+    "SKILL_MCP_SKILL_LIFECYCLE_CONTEXT": (
+        "SKILLS",
+        "DESKTOP",
+        "LIFECYCLE_CONTEXT",
+    ),
+    "SKILL_MCP_SKILL_RESOURCE_CONTEXT": (
+        "SKILLS",
+        "DESKTOP",
+        "RESOURCE_CONTEXT",
+    ),
+    "SKILL_MCP_SKILL_TEST_NAME_INPUT": (
+        "SKILLS",
+        "DESKTOP",
+        "TEST_NAME_INPUT",
+    ),
+    "SKILL_MCP_SKILL_TEST_REQUEST_INPUT": (
+        "SKILLS",
+        "DESKTOP",
+        "TEST_REQUEST_INPUT",
+    ),
+    "SKILL_MCP_SKILL_TEST_EXPECTED_INPUT": (
+        "SKILLS",
+        "DESKTOP",
+        "TEST_EXPECTED_INPUT",
+    ),
+    "SKILL_MCP_SKILL_TEST_SAVE": ("SKILLS", "DESKTOP", "TEST_SAVE"),
+    "SKILL_MCP_SKILL_TEST_RUN": ("SKILLS", "DESKTOP", "TEST_RUN"),
+    "SKILL_MCP_SKILL_TEST_RESULT_RENDERED": (
+        "SKILLS",
+        "DESKTOP",
+        "TEST_RESULT_RENDERED",
+    ),
+    "SKILL_MCP_BIND_SUBMIT": ("SKILLS", "DESKTOP", "BIND_SUBMIT"),
+    "SKILL_MCP_BIND_HTTP_COMPLETION": (
+        "SKILLS",
+        "DESKTOP",
+        "BIND_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_BIND_READBACK": ("SKILLS", "DESKTOP", "BIND_READBACK"),
+    "SKILL_MCP_SKILL_INVOCATION_SUBMIT": (
+        "SKILLS",
+        "DESKTOP",
+        "INVOCATION_SUBMIT",
+    ),
+    "SKILL_MCP_SKILL_INVOCATION_HTTP_COMPLETION": (
+        "SKILLS",
+        "DESKTOP",
+        "INVOCATION_HTTP_COMPLETION",
+    ),
+    "SKILL_MCP_SKILL_INVOCATION_UI_RENDERED": (
+        "SKILLS",
+        "DESKTOP",
+        "INVOCATION_UI_RENDERED",
+    ),
+    "SKILL_MCP_FINAL_UI_INTERACTION": ("SKILLS", "MIXED", "FINAL_UI_INTERACTION"),
+}
+SKILL_MCP_REUSE_STEP_IDS = {
+    "SKILL_MCP_REUSE_PUBLISH": ("CAPABILITIES", "DESKTOP", "REUSE_PUBLISH"),
+    "SKILL_MCP_REUSE_EXPORT": ("CAPABILITIES", "DESKTOP", "REUSE_EXPORT"),
+    "SKILL_MCP_REUSE_CLONE": ("CAPABILITIES", "DESKTOP", "REUSE_CLONE"),
+    "SKILL_MCP_REUSE_IMPORT": ("CAPABILITIES", "DESKTOP", "REUSE_IMPORT"),
+    "SKILL_MCP_REUSE_SUCCESSOR": ("CAPABILITIES", "DESKTOP", "REUSE_SUCCESSOR"),
+}
 DIAGNOSTIC_STEP_IDS = {
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
@@ -996,6 +1183,8 @@ DIAGNOSTIC_STEP_IDS = {
         for step_id, route, viewport, action in WAVE_3B_STEP_IDS.values()
     },
     **UNIFIED_PRODUCT_STEP_IDS,
+    **SKILL_MCP_STEP_IDS,
+    **SKILL_MCP_REUSE_STEP_IDS,
 }
 ACTION_CLASSES = frozenset(
     {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
@@ -1016,6 +1205,15 @@ def _step_identity(scenario: str, title: object):
     if scenario == "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY":
         identity = UNIFIED_PRODUCT_STEP_IDS.get(title)
         return (title, *identity) if identity is not None else None
+    if scenario == "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE":
+        identity = SKILL_MCP_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
+    if scenario in {
+        "SKILL_MCP_SKILL_REUSE_OPERATIONS",
+        "SKILL_MCP_MCP_REUSE_OPERATIONS",
+    }:
+        identity = SKILL_MCP_REUSE_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     return None
 
 
@@ -1032,6 +1230,9 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
+        "SKILL_MCP_WORKBENCH_PUBLISH_BIND_AUTHORIZE",
+        "SKILL_MCP_SKILL_REUSE_OPERATIONS",
+        "SKILL_MCP_MCP_REUSE_OPERATIONS",
     }:
         return None
     steps = result.get("steps")
