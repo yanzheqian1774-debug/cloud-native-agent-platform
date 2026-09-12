@@ -205,3 +205,63 @@ Its minimum H308-01/02/03A selection contract is
 authorizes only this bounded implementation. H308-03B/03C/04A/04B remain
 `PROPOSED`; no production acceptance, Evidence/Resource Use extension, shared
 browser wiring, Ready, merge, or deployment is authorized.
+
+## Exact authorization and creator-continuation restoration
+
+Recovery checkpoint `bb8bf718433c2f8a98421b9495beeba5ad614152`, tree
+`6853ec69002deef6c3fbcd6a4de092f0ba0072c5`, was clean and matched the remote
+task branch before this batch. No Git operation or repository-file writer was
+active in the task worktree.
+
+This batch registers only the H308-02 `MODEL_GOVERNANCE` owner and its accepted
+closed action set: `CREATE_MODEL`, `READ_MODEL`,
+`MANAGE_MODEL_REVISION`, `BIND_MODEL`, and `INVOKE_MODEL`. It adds trusted
+builders for the accepted exact target templates and deliberately adds no
+`SELECT_MODEL`.
+
+The Model adapter now:
+
+- translates `TrustedRequestContext` and one complete current exact-grant
+  decision into the typed Model-use authorization port;
+- resolves the exact Model Revision, typed Provider/Endpoint/Profile identities,
+  and typed lifecycle high-water from the existing Model Governance ports only
+  after authorization;
+- creates a creator-bound continuation request opportunity only after the
+  owner-generated Model Definition has committed, limited to exact
+  `MANAGE_MODEL_REVISION/REVISE/.../new`, the current creator/scope, the
+  current definition aggregate revision, the authority policy generation, and a
+  maximum ten-minute lifetime; and
+- supplies a Model owner target validator that can run on Grant
+  Administration's caller-owned PostgreSQL transaction. Continuation
+  consumption therefore rechecks the current creator Definition on the same
+  transaction that writes the unique consumption and grant request. Model
+  creation and offer persistence remain the accepted recoverable
+  cross-authority protocol, not one transaction.
+
+The zero-lifecycle-fact case intentionally continues to raise
+`MODEL_LIFECYCLE_NOT_FOUND`. No lifecycle fact is synthesized and eligibility
+is not relaxed.
+
+Path overlap with 305 is limited to the additive
+`authority_configuration.py` registry entries. The new adapter and tests are
+308-owned. No 305 BFF/session/grant application or PostgreSQL file and no 310
+Agent, Digital Employee, Runtime, consumer, or placement file is modified.
+
+Remaining production composition is explicit:
+
+- 305 must supply the transactional `CurrentExactGrantDecisionReader` carrying
+  decision identity, policy generation/version, and issue/expiry bounds; a
+  boolean grant result is insufficient and this batch does not fabricate those
+  fields;
+- 305 retains production Grant Administration/BFF composition and explicit
+  continuation revocation exposure;
+- the current Model Definition repository has no durable create-command
+  idempotency identity. Therefore this batch begins only after a confirmed owner
+  create commit; it does not claim response-loss replay of the create itself;
+- BIND and INVOKE target validation additionally requires the exact consumer
+  revision or Attempt/binding-snapshot owner. The Model-only target validator
+  fails closed for those targets until the 310/shared owner supplies that proof.
+
+These handoffs do not block the delivered exact Model target, owner resolver, or
+creator-continuation adapters, but they do block a claim of complete production
+wiring. H308-03B/03C/04A/04B remain untouched.

@@ -1,15 +1,24 @@
-"""Internal, fail-closed preparation for exact Model consumption.
+"""Internal, fail-closed resolution of one exact authorized Model use.
 
-This module does not own Models or define the external authorization vocabulary.
-Callers must supply both an authorization result and a domain-owned exact resolver.
-Provider connection and invocation evidence are deliberately outside this boundary.
+The Model owner supplies exact, secret-free records. Authorization remains an
+injected port and must complete before any owner lookup. Provider calls,
+connection observations, Resource Use, and Evidence are outside this boundary.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
 from typing import Protocol
+
+from agent_console.model_governance import (
+    ConnectionProfileRevisionIdentity,
+    EndpointRevisionIdentity,
+    ModelEligibility,
+    ProviderRevisionIdentity,
+)
 
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 
@@ -24,6 +33,11 @@ class ModelBindingResolutionFailure(RuntimeError):
 
 def _required(value: object, reason: str) -> None:
     if not isinstance(value, str) or not value.strip():
+        raise ModelBindingResolutionFailure(reason)
+
+
+def _timestamp(value: object, reason: str) -> None:
+    if not isinstance(value, datetime) or value.tzinfo is None:
         raise ModelBindingResolutionFailure(reason)
 
 
@@ -58,45 +72,88 @@ class ExactModelBinding:
             raise ModelBindingResolutionFailure("MODEL_DIGEST_REQUIRED")
 
 
+class ModelUseAction(StrEnum):
+    BIND_MODEL = "BIND_MODEL"
+    INVOKE_MODEL = "INVOKE_MODEL"
+
+
+@dataclass(frozen=True, slots=True)
+class ExactModelUse:
+    binding: ExactModelBinding
+    action: ModelUseAction
+    exact_resource: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.binding, ExactModelBinding):
+            raise ModelBindingResolutionFailure("MODEL_BINDING_REQUIRED")
+        if not isinstance(self.action, ModelUseAction):
+            raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_INVALID")
+        _required(self.exact_resource, "MODEL_AUTHORIZATION_INVALID")
+        prefix = (
+            "model:binding:"
+            if self.action is ModelUseAction.BIND_MODEL
+            else "model:invocation:"
+        )
+        suffix = (
+            f":{self.binding.resource_id}:{self.binding.revision_id}:"
+            f"{self.binding.digest}"
+        )
+        if (
+            not self.exact_resource.startswith(prefix)
+            or not self.exact_resource.endswith(suffix)
+            or len(self.exact_resource) <= len(prefix) + len(suffix)
+        ):
+            raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_INVALID")
+
+
 @dataclass(frozen=True, slots=True)
 class AuthorizedModelUse:
-    """Opaque authorization proof bound to one subject, scope, and exact binding.
-
-    The external authority remains responsible for its owner/action/resource
-    vocabulary. This value only prevents a consumer from applying a decision to a
-    different subject, scope, revision, or digest.
-    """
+    """One current decision bound to a complete subject/scope/use tuple."""
 
     decision_id: str
     subject: ModelUseSubject
     scope: ModelConsumptionScope
-    binding: ExactModelBinding
+    use: ExactModelUse
+    policy_generation: int
+    policy_version: str
+    issued_at: datetime
+    expires_at: datetime
 
     def __post_init__(self) -> None:
         _required(self.decision_id, "MODEL_AUTHORIZATION_INVALID")
+        _required(self.policy_version, "MODEL_AUTHORIZATION_INVALID")
+        if (
+            isinstance(self.policy_generation, bool)
+            or not isinstance(self.policy_generation, int)
+            or self.policy_generation < 1
+        ):
+            raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_INVALID")
+        _timestamp(self.issued_at, "MODEL_AUTHORIZATION_INVALID")
+        _timestamp(self.expires_at, "MODEL_AUTHORIZATION_INVALID")
+        if self.issued_at >= self.expires_at:
+            raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_INVALID")
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedModelBinding:
-    """Exact, secret-free readback supplied by a future domain-owned resolver."""
+    """Exact, secret-free owner snapshot with typed lifecycle high-water."""
 
     scope: ModelConsumptionScope
     binding: ExactModelBinding
-    provider_reference: str
-    connection_profile_reference: str
-    published: bool
-    enabled: bool
-    configuration_available: bool
+    provider: ProviderRevisionIdentity
+    endpoint: EndpointRevisionIdentity
+    connection_profile: ConnectionProfileRevisionIdentity
+    eligibility: ModelEligibility
 
     def __post_init__(self) -> None:
-        _required(self.provider_reference, "MODEL_PROVIDER_REFERENCE_REQUIRED")
-        _required(
-            self.connection_profile_reference,
-            "MODEL_CONNECTION_PROFILE_REFERENCE_REQUIRED",
-        )
         if not all(
-            isinstance(value, bool)
-            for value in (self.published, self.enabled, self.configuration_available)
+            isinstance(value, expected)
+            for value, expected in (
+                (self.provider, ProviderRevisionIdentity),
+                (self.endpoint, EndpointRevisionIdentity),
+                (self.connection_profile, ConnectionProfileRevisionIdentity),
+                (self.eligibility, ModelEligibility),
+            )
         ):
             raise ModelBindingResolutionFailure("MODEL_RESOLUTION_INVALID")
 
@@ -106,7 +163,7 @@ class ModelUseAuthorizer(Protocol):
         self,
         scope: ModelConsumptionScope,
         subject: ModelUseSubject,
-        binding: ExactModelBinding,
+        use: ExactModelUse,
     ) -> AuthorizedModelUse | None: ...
 
 
@@ -119,30 +176,30 @@ class ExactModelResolver(Protocol):
 def resolve_authorized_model_binding(
     scope: ModelConsumptionScope,
     subject: ModelUseSubject,
-    binding: ExactModelBinding,
+    use: ExactModelUse,
     *,
     authorizer: ModelUseAuthorizer | None,
     resolver: ExactModelResolver | None,
+    evaluation_time: datetime,
 ) -> ResolvedModelBinding:
-    """Authorize first, then resolve and validate one exact Model binding.
-
-    No default, display-name, latest-revision, provider call, or Evidence lookup is
-    permitted by this function.
-    """
+    """Authorize first, then resolve and validate one exact Model binding."""
+    _timestamp(evaluation_time, "MODEL_AUTHORIZATION_INVALID")
     if authorizer is None:
         raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_UNAVAILABLE")
-    authorization = authorizer.authorize_use(scope, subject, binding)
+    authorization = authorizer.authorize_use(scope, subject, use)
     if authorization is None:
         raise ModelBindingResolutionFailure("MODEL_BINDING_NOT_FOUND")
     if (
         authorization.scope != scope
         or authorization.subject != subject
-        or authorization.binding != binding
+        or authorization.use != use
+        or not (authorization.issued_at <= evaluation_time < authorization.expires_at)
     ):
         raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_INVALID")
 
     if resolver is None:
         raise ModelBindingResolutionFailure("MODEL_RESOLVER_UNAVAILABLE")
+    binding = use.binding
     resolved = resolver.resolve_exact(scope, binding)
     if resolved is None:
         raise ModelBindingResolutionFailure("MODEL_BINDING_NOT_FOUND")
@@ -154,10 +211,16 @@ def resolve_authorized_model_binding(
         raise ModelBindingResolutionFailure("MODEL_REVISION_MISMATCH")
     if resolved.binding.digest != binding.digest:
         raise ModelBindingResolutionFailure("MODEL_DIGEST_MISMATCH")
-    if not resolved.published:
-        raise ModelBindingResolutionFailure("MODEL_UNPUBLISHED")
-    if not resolved.enabled:
-        raise ModelBindingResolutionFailure("MODEL_DISABLED")
-    if not resolved.configuration_available:
-        raise ModelBindingResolutionFailure("MODEL_CONFIGURATION_UNAVAILABLE")
+    if resolved.eligibility.scope.namespace != scope.namespace or (
+        resolved.eligibility.scope.security_domain != scope.security_domain
+    ):
+        raise ModelBindingResolutionFailure("MODEL_SCOPE_MISMATCH")
+    if (
+        resolved.eligibility.model.model_id != binding.resource_id
+        or resolved.eligibility.model.revision_id != binding.revision_id
+        or resolved.eligibility.model.digest != binding.digest
+    ):
+        raise ModelBindingResolutionFailure("MODEL_ELIGIBILITY_MISMATCH")
+    if not resolved.eligibility.allows_new_use:
+        raise ModelBindingResolutionFailure("MODEL_INELIGIBLE")
     return resolved
