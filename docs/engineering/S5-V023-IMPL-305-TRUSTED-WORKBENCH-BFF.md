@@ -1095,11 +1095,33 @@ the already implemented administrator path; applicant self-approval and
 `INSPECT`-as-`DECIDE` remain prohibited.
 
 Migration coordination was checked against the active 308 and 314 task branches
-and worktrees before editing. 308 owns `0019_model_governance.sql`; active 314 has
-not allocated a later migration and explicitly waits for this receipt batch.
-This batch therefore allocates exactly
+and worktrees before editing. 308 owns `0019_model_governance.sql`; 305 owns
+`0020_business_problem_creator_receipt.sql`; active 314 subsequently allocated
+`0021_openclaw_runtime_binding.sql`. This batch therefore allocates exactly
 `console/backend/migrations/0020_business_problem_creator_receipt.sql` and does
-not modify migrations `0001` through `0019`.
+not modify 314's migration or migrations `0001` through `0019`.
+
+Receipt checkpoint `241f715fa8b3160beb7cd0f6b3bc48ed9725309c`, tree
+`6a5217230d6b0d3f16093377b9743c93a2a05f59`, persists the receipt with the
+Problem create transaction. Mint/combination checkpoint
+`185aee0b0655b70e8f707eb05dd2aee7c7f05ca0`, tree
+`86ead4c89e3f6a707fe0aef56a30ac04400a4c15`, adds post-commit mint/recovery,
+the typed create response and receipt-backed exact Problem READ validation.
+The production composition previously supplied no target validator. The new
+validator returns true only for this receipt-backed creator continuation; direct
+exact-target validation and administrator-assigned offers remain fail closed in
+the default composition, while the generic service's injected validator paths
+and their existing tests remain unchanged.
+
+The dedicated PostgreSQL 15 receipt/mint/public-BFF batch passed 22 tests,
+including database-time receipt and rollback, delayed expiry, first-mint
+concurrency, definite mint failure, committed-offer response loss, equal replay,
+later Problem revision, consumption correlation, offer revocation/mismatch,
+legacy missing receipt, independent public Decision and exact Problem READ. The
+broader focused Authority/Workbench/Business Problem regression passed 69 tests;
+normal commit hooks passed Ruff lint, Ruff format and pytest. These are real
+PostgreSQL and public ASGI/HTTP contract results. No real-browser run or IMPL-299
+product-page acceptance is claimed by this backend batch.
 
 Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. This acceptance does not
 authorize continuation revoke/surrender, grant revoke, Plan/Execution expansion,
