@@ -246,11 +246,15 @@ def login(client: TestClient) -> None:
     assert "Secure" in response.headers["set-cookie"]
     assert "HttpOnly" in response.headers["set-cookie"]
     assert "SameSite=strict" in response.headers["set-cookie"]
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_session_and_bound_operation_use_only_server_context() -> None:
     client, _, authorizer = build_client()
-    assert "login-nonce" in client.get(f"{PREFIX}/login").text
+    login_form = client.get(f"{PREFIX}/login")
+    assert "login-nonce" in login_form.text
+    assert login_form.headers["referrer-policy"] == "same-origin"
+    assert client.get("/healthz").headers["referrer-policy"] == "no-referrer"
     login(client)
 
     session = client.get(f"{PREFIX}/session")
@@ -278,6 +282,53 @@ def test_session_and_bound_operation_use_only_server_context() -> None:
     assert grants == (
         ExactGrant("BUSINESS_PROBLEM", "REVISE", "business-problem:problem-1"),
     )
+
+
+@pytest.mark.parametrize("origin", ["https://foreign.example", "null", None])
+def test_login_rejects_cross_origin_null_or_missing_origin(origin) -> None:
+    client, _, _ = build_client()
+    headers = {"content-type": "application/x-www-form-urlencoded"}
+    if origin is not None:
+        headers["origin"] = origin
+
+    response = client.post(
+        f"{PREFIX}/session",
+        headers=headers,
+        content="loginNonce=login-nonce&bootstrapCredential=bootstrap-secret",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["reasonCode"] == "CSRF_VALIDATION_FAILED"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    login(client)
+
+
+@pytest.mark.parametrize(
+    ("nonce", "credential"),
+    [
+        ("invalid-nonce", "bootstrap-secret"),
+        ("login-nonce", "invalid-credential"),
+    ],
+)
+def test_login_preserves_invalid_nonce_and_credential_semantics(
+    nonce: str, credential: str
+) -> None:
+    client, _, _ = build_client()
+
+    response = client.post(
+        f"{PREFIX}/session",
+        headers={
+            "origin": "https://console.example",
+            "content-type": "application/x-www-form-urlencoded",
+        },
+        content=f"loginNonce={nonce}&bootstrapCredential={credential}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["reasonCode"] == "AUTHENTICATION_REQUIRED"
+    assert "set-cookie" not in response.headers
 
 
 @pytest.mark.parametrize(
