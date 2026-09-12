@@ -115,6 +115,90 @@ FIRST_FAILURE_ASSERTION_IDS = {
         "workflow-runtime-workbench.spec.ts",
         "renders a disclosure-safe denied state",
     ): "WORKFLOW_RUNTIME_DISCLOSURE_DENIAL",
+    (
+        "agent-workbench.spec.ts",
+        "真实输入创建、编辑并发布精确 Agent revision",
+    ): "AGENT_WORKBENCH_PUBLISH_EXACT_REVISION",
+    (
+        "agent-workbench.spec.ts",
+        "目录上下文、迟到详情与同步重复提交隔离",
+    ): "AGENT_WORKBENCH_DIRECTORY_RACE_ISOLATION",
+    (
+        "agent-workbench.spec.ts",
+        "Agent stale CAS 保留输入且不自动重放",
+    ): "AGENT_WORKBENCH_STALE_CAS_INPUT_PRESERVED",
+    (
+        "agent-workbench.spec.ts",
+        "agent write directory readback cannot own later selection or write: edit",
+    ): "AGENT_WORKBENCH_WRITE_DIRECTORY_EDIT_ISOLATION",
+    (
+        "agent-workbench.spec.ts",
+        "agent write directory readback cannot own later selection or write: lifecycle",
+    ): "AGENT_WORKBENCH_WRITE_DIRECTORY_LIFECYCLE_ISOLATION",
+    (
+        "agent-workbench.spec.ts",
+        "Builder explicitly selects every governed binding and exposes "
+        "authoritative identities before review",
+    ): "AGENT_WORKBENCH_EXPLICIT_BINDINGS",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "editing an operation-backed Skill through the UI preserves exact operations",
+    ): "SKILL_WORKBENCH_EDIT_PRESERVES_OPERATIONS",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "skill write directory readback cannot own later selection or write: edit",
+    ): "SKILL_WORKBENCH_WRITE_DIRECTORY_EDIT_ISOLATION",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "skill write directory readback cannot own later selection or write: lifecycle",
+    ): "SKILL_WORKBENCH_WRITE_DIRECTORY_LIFECYCLE_ISOLATION",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "mcp write directory readback cannot own later selection or write: edit",
+    ): "MCP_WORKBENCH_WRITE_DIRECTORY_EDIT_ISOLATION",
+    (
+        "skill-mcp-workbench.spec.ts",
+        "mcp write directory readback cannot own later selection or write: lifecycle",
+    ): "MCP_WORKBENCH_WRITE_DIRECTORY_LIFECYCLE_ISOLATION",
+    (
+        "knowledge-workbench.spec.ts",
+        "isolates late retrieval responses and preserves filter and exact "
+        "revision context",
+    ): "KNOWLEDGE_WORKBENCH_LATE_RETRIEVAL_ISOLATION",
+    (
+        "knowledge-workbench.spec.ts",
+        "validates real form inputs and keeps denied and service failures distinct "
+        "at mobile width",
+    ): "KNOWLEDGE_WORKBENCH_MOBILE_FAILURE_STATES",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "binds a formally published Skill operation through the real Workflow UI",
+    ): "WORKFLOW_RUNTIME_SKILL_BINDING",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "explicitly selects and round-trips an exact Skill operation binding",
+    ): "WORKFLOW_RUNTIME_EXACT_SKILL_BINDING",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "keeps complete binding input after edit CAS conflict and reads authority "
+        "without replay",
+    ): "WORKFLOW_RUNTIME_BINDING_CAS_RECOVERY",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "ignores a late Workflow detail response after the user switches resources",
+    ): "WORKFLOW_RUNTIME_LATE_DETAIL_ISOLATION",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "does not offer an ineligible or operation-less Skill as a valid binding",
+    ): "WORKFLOW_RUNTIME_INELIGIBLE_SKILL_BLOCKED",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "blocks validation when the Skill reference digest differs from the binding",
+    ): "WORKFLOW_RUNTIME_DIGEST_MISMATCH_BLOCKED",
+    (
+        "workflow-runtime-workbench.spec.ts",
+        "handles FastAPI detail arrays without losing controlled error states",
+    ): "WORKFLOW_RUNTIME_FASTAPI_DETAIL_ARRAYS",
 }
 FIRST_FAILURE_ASSERTION_IDS.update(
     {
