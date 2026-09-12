@@ -9,7 +9,7 @@ import secrets
 from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -1205,13 +1205,16 @@ class PostgresAuthorityRepository:
     @staticmethod
     def _decision(connection, decision_id: str) -> GrantDecision:
         row = connection.execute(
-            "SELECT * FROM authorization_admin.grant_decisions WHERE decision_id=%s",
+            "SELECT d.*,r.aggregate_version FROM authorization_admin.grant_decisions d "
+            "JOIN authorization_admin.grant_requests r ON r.request_id=d.request_id "
+            "WHERE d.decision_id=%s",
             (decision_id,),
         ).fetchone()
         if row is None:
             raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
         grant_rows = connection.execute(
-            "SELECT grant_id FROM authorization_admin.grants WHERE decision_id=%s "
+            "SELECT grant_id,not_before,expires_at FROM authorization_admin.grants "
+            "WHERE decision_id=%s "
             "ORDER BY grant_id",
             (decision_id,),
         ).fetchall()
@@ -1228,13 +1231,18 @@ class PostgresAuthorityRepository:
             audit_source=row["audit_source"],
             created_at=row["created_at"],
             grants=tuple(GrantId(item["grant_id"]) for item in grant_rows),
+            request_aggregate_version=row["aggregate_version"],
+            not_before=grant_rows[0]["not_before"] if grant_rows else None,
+            expires_at=grant_rows[0]["expires_at"] if grant_rows else None,
         )
 
     def decide_request(
         self,
         decision: GrantDecision,
         *,
-        grants: Sequence[tuple[GrantId, ExactGrant, datetime, datetime]],
+        grants: Sequence[tuple[GrantId, ExactGrant, datetime | None, datetime]],
+        issuer_scope: AuthorityScope,
+        expected_version: int,
         expected_status: GrantRequestStatus,
         idempotency_key: str,
         payload_digest: str,
@@ -1250,27 +1258,55 @@ class PostgresAuthorityRepository:
         try:
             with self.connection_scope() as connection:
                 self._require_current_recovery_epoch(connection, recovery_epoch)
-                request = self._request(connection, decision.request_id)
+                visible = connection.execute(
+                    "SELECT subject_principal_id,tenant_id,security_domain FROM "
+                    "authorization_admin.grant_requests WHERE request_id=%s",
+                    (decision.request_id,),
+                ).fetchone()
+                if visible is None:
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+                if (visible["tenant_id"], visible["security_domain"]) != (
+                    issuer_scope.tenant_id,
+                    issuer_scope.security_domain,
+                ):
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+                if visible["subject_principal_id"] == decision.issuer_principal_id:
+                    raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
                 replay = self._claim(
                     connection,
-                    request.scope,
+                    issuer_scope,
                     decision.issuer_principal_id,
                     command_type,
                     idempotency_key,
                     payload_digest,
                 )
                 if replay is not None:
-                    return self._decision(connection, replay["id"])
+                    return replace(
+                        self._decision(connection, replay["id"]), replayed=True
+                    )
                 row = connection.execute(
-                    "SELECT subject_principal_id,state FROM "
+                    "SELECT subject_principal_id,tenant_id,security_domain,state,"
+                    "aggregate_version FROM "
                     "authorization_admin.grant_requests WHERE request_id=%s FOR UPDATE",
                     (decision.request_id,),
                 ).fetchone()
                 self._decision_request_locked_checkpoint()
+                if row is None or (row["tenant_id"], row["security_domain"]) != (
+                    issuer_scope.tenant_id,
+                    issuer_scope.security_domain,
+                ):
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
                 if row["subject_principal_id"] == decision.issuer_principal_id:
                     raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
-                if row["state"] != expected_status.value:
+                if (
+                    row["aggregate_version"] != expected_version
+                    or row["state"] != expected_status.value
+                ):
                     raise AuthorityError("AUTHORIZATION_STATE_STALE")
+                request = self._request(connection, decision.request_id)
+                server_now = connection.execute(
+                    "SELECT clock_timestamp() AS server_now"
+                ).fetchone()["server_now"]
                 if decision.approved != bool(grants) or (
                     not decision.approved and grants
                 ):
@@ -1280,6 +1316,28 @@ class PostgresAuthorityRepository:
                     or {item[1] for item in grants} != set(request.members)
                 ):
                     raise AuthorityError("INVALID_GRANT_DECISION")
+                normalized_grants: tuple[
+                    tuple[GrantId, ExactGrant, datetime, datetime], ...
+                ] = ()
+                if decision.approved:
+                    requested_windows = {(item[2], item[3]) for item in grants}
+                    if len(requested_windows) != 1:
+                        raise AuthorityError("INVALID_GRANT_DECISION")
+                    requested_not_before, expires_at = next(iter(requested_windows))
+                    effective_not_before = requested_not_before or server_now
+                    if (
+                        effective_not_before.utcoffset() != timedelta(0)
+                        or expires_at.utcoffset() != timedelta(0)
+                        or effective_not_before < server_now
+                        or effective_not_before >= expires_at
+                        or expires_at - effective_not_before > timedelta(hours=8)
+                    ):
+                        raise AuthorityError("INVALID_GRANT_DECISION")
+                    normalized_grants = tuple(
+                        (grant_id, member, effective_not_before, expires_at)
+                        for grant_id, member, _, _ in grants
+                    )
+                decision = replace(decision, created_at=server_now)
                 connection.execute(
                     "INSERT INTO authorization_admin.grant_decisions"
                     "(decision_id,request_id,issuer_principal_id,issuer_meta_decision_id,"
@@ -1301,7 +1359,7 @@ class PostgresAuthorityRepository:
                     ),
                 )
                 member_set = set(request.members)
-                for grant_id, member, not_before, expires_at in grants:
+                for grant_id, member, not_before, expires_at in normalized_grants:
                     if member not in member_set:
                         raise AuthorityError("INVALID_GRANT_DECISION")
                     self._insert_grant(
@@ -1342,7 +1400,13 @@ class PostgresAuthorityRepository:
                     subject_id=request.subject_principal_id,
                     recovery_epoch=recovery_epoch,
                 )
-                return replace(decision, grants=tuple(item[0] for item in grants))
+                return replace(
+                    decision,
+                    grants=tuple(item[0] for item in normalized_grants),
+                    request_aggregate_version=expected_version + 1,
+                    not_before=normalized_grants[0][2] if normalized_grants else None,
+                    expires_at=normalized_grants[0][3] if normalized_grants else None,
+                )
         except AuthorityError:
             raise
         except PsycopgError as exc:

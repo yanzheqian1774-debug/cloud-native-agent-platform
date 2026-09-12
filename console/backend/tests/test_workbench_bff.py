@@ -11,6 +11,7 @@ from agent_console.authority_contracts import (
     BrowserSession,
     CredentialId,
     ExactGrant,
+    GrantDecision,
     GrantRequest,
     GrantRequestStatus,
     SessionId,
@@ -44,11 +45,11 @@ class CreateProblem(BaseModel):
 
 
 class SessionStub:
-    def __init__(self) -> None:
+    def __init__(self, principal_id: str = "human:alice") -> None:
         self.now = datetime(2029, 1, 1, tzinfo=UTC)
         self.secret = "opaque-session-secret"
         principal = VerifiedPrincipal(
-            "human:alice",
+            principal_id,
             AuthorityScope("tenant-a", "quality"),
             CredentialId("credential-alice"),
             self.now + timedelta(hours=8),
@@ -65,7 +66,7 @@ class SessionStub:
             1,
         )
         self.context = TrustedRequestContext(
-            "human:alice",
+            principal_id,
             principal.scope,
             "session-one",
             AuthenticationSource.BROWSER_SESSION,
@@ -142,6 +143,8 @@ class GrantAdministrationStub:
     def __init__(self, sessions: SessionStub) -> None:
         self.sessions = sessions
         self.submissions = []
+        self.decisions = []
+        self.decision_authorized = True
 
     def continuation_inbox_details(self, context):
         assert context == self.sessions.context
@@ -194,6 +197,45 @@ class GrantAdministrationStub:
             2,
         )
 
+    def decide_request(self, context, command):
+        assert context == self.sessions.context
+        self.decisions.append(command)
+        if not self.decision_authorized:
+            raise AuthorityError("AUTHORIZATION_REQUEST_NOT_FOUND")
+        if command.idempotency_key == "changed-payload":
+            raise AuthorityError("IDEMPOTENCY_PAYLOAD_MISMATCH")
+        if command.idempotency_key == "stale":
+            raise AuthorityError("AUTHORIZATION_STATE_STALE")
+        if command.idempotency_key == "self":
+            raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
+        if command.request_id != "grant-request-1":
+            raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+        not_before = (
+            command.not_before
+            if command.approve and command.not_before is not None
+            else self.sessions.now
+            if command.approve
+            else None
+        )
+        return GrantDecision(
+            "grant-decision-1",
+            command.request_id,
+            context.principal_id,
+            "hidden-meta-decision",
+            command.approve,
+            command.reason_category,
+            command.basis_type,
+            "b" * 64,
+            "hidden-policy",
+            "hidden-audit",
+            self.sessions.now,
+            ("hidden-grant",) if command.approve else (),
+            2,
+            not_before,
+            command.expires_at,
+            command.idempotency_key == "replay",
+        )
+
 
 def build_client():
     sessions = SessionStub()
@@ -235,8 +277,8 @@ def build_client():
     )
 
 
-def build_authorization_client():
-    sessions = SessionStub()
+def build_authorization_client(principal_id: str = "human:alice"):
+    sessions = SessionStub(principal_id)
     grants = GrantAdministrationStub(sessions)
     app = create_workbench_bff(
         sessions,  # type: ignore[arg-type]
@@ -511,6 +553,102 @@ def test_grant_request_status_uses_real_version_and_hides_foreign_requests() -> 
     hidden = client.get(f"{PREFIX}/authorization/grant-requests/foreign")
     assert hidden.status_code == 404
     assert hidden.json()["reasonCode"] == "AUTHORIZATION_REQUEST_NOT_FOUND"
+
+
+def test_exact_administrator_decision_is_strict_minimal_and_replayable() -> None:
+    client, grants = build_authorization_client("human:admin")
+    login(client)
+    body = {
+        "schemaVersion": "exact-grant-decision.v1",
+        "expectedVersion": 1,
+        "decision": "APPROVE",
+        "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+        "basisType": "TICKET",
+        "basisReference": "SEC-1234",
+        "expiresAt": "2029-01-01T08:00:00Z",
+    }
+    response = client.post(
+        f"{PREFIX}/authorization/grant-requests/grant-request-1/decisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "first",
+        },
+        json=body,
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "schemaVersion": "exact-grant-decision-result.v1",
+        "requestId": "grant-request-1",
+        "decisionId": "grant-decision-1",
+        "state": "APPROVED",
+        "aggregateVersion": 2,
+        "decidedAt": "2029-01-01T00:00:00Z",
+        "notBefore": "2029-01-01T00:00:00Z",
+        "expiresAt": "2029-01-01T08:00:00Z",
+    }
+    command = grants.decisions[-1]
+    assert command.expected_version == 1
+    assert command.basis_type == "TICKET"
+    assert command.not_before is None
+    assert "hidden" not in response.text
+
+    replay = client.post(
+        f"{PREFIX}/authorization/grant-requests/grant-request-1/decisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "replay",
+        },
+        json=body,
+    )
+    assert replay.status_code == 200
+    assert replay.json() == response.json()
+
+
+@pytest.mark.parametrize(
+    ("body_update", "idempotency_key", "reason", "status"),
+    [
+        ({"basisType": "OTHER"}, "invalid", "INVALID_GRANT_DECISION", 422),
+        ({"expectedVersion": 0}, "invalid", "INVALID_GRANT_DECISION", 422),
+        (
+            {"decision": "REJECT", "expiresAt": "2029-01-01T01:00:00Z"},
+            "invalid",
+            "INVALID_GRANT_DECISION",
+            422,
+        ),
+        ({}, "changed-payload", "IDEMPOTENCY_PAYLOAD_MISMATCH", 409),
+        ({}, "stale", "AUTHORIZATION_STATE_STALE", 409),
+        ({}, "self", "GRANT_SELF_APPROVAL_PROHIBITED", 409),
+    ],
+)
+def test_decision_rejects_invalid_conflicting_and_self_approval(
+    body_update, idempotency_key, reason, status
+) -> None:
+    client, _ = build_authorization_client("human:admin")
+    login(client)
+    body = {
+        "schemaVersion": "exact-grant-decision.v1",
+        "expectedVersion": 1,
+        "decision": "APPROVE",
+        "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+        "basisType": "POLICY",
+        "basisReference": "policy:quality-read",
+        "expiresAt": "2029-01-01T01:00:00Z",
+        **body_update,
+    }
+    response = client.post(
+        f"{PREFIX}/authorization/grant-requests/grant-request-1/decisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": idempotency_key,
+        },
+        json=body,
+    )
+    assert response.status_code == status
+    assert response.json()["reasonCode"] == reason
 
 
 @pytest.mark.parametrize(

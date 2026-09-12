@@ -70,6 +70,40 @@ class WorkbenchGrantRequestStatus(StrictWorkbenchModel):
     requestedActions: tuple[str, ...]
 
 
+class WorkbenchGrantDecisionCommand(StrictWorkbenchModel):
+    schemaVersion: Literal["exact-grant-decision.v1"]
+    expectedVersion: int = Field(ge=1)
+    decision: Literal["APPROVE", "REJECT"]
+    reasonCategory: str = Field(min_length=1, max_length=64)
+    basisType: Literal["TICKET", "POLICY"]
+    basisReference: str = Field(min_length=1, max_length=512)
+    notBefore: datetime | None = None
+    expiresAt: datetime | None = None
+
+    @model_validator(mode="after")
+    def require_decision_window(self):
+        if self.decision == "APPROVE" and self.expiresAt is None:
+            raise ValueError("approval expiry required")
+        if self.decision == "REJECT" and (
+            self.notBefore is not None or self.expiresAt is not None
+        ):
+            raise ValueError("rejection window prohibited")
+        return self
+
+
+class WorkbenchGrantDecisionResult(StrictWorkbenchModel):
+    schemaVersion: Literal["exact-grant-decision-result.v1"] = (
+        "exact-grant-decision-result.v1"
+    )
+    requestId: str
+    decisionId: str
+    state: Literal["APPROVED", "REJECTED"]
+    aggregateVersion: int = Field(ge=2)
+    decidedAt: datetime
+    notBefore: datetime | None = None
+    expiresAt: datetime | None = None
+
+
 class WorkbenchAvailableContinuation(StrictWorkbenchModel):
     continuationId: str = Field(min_length=1)
     purpose: str

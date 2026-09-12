@@ -180,6 +180,10 @@ class GrantDecision:
     audit_source: str
     created_at: datetime
     grants: tuple[GrantId, ...] = ()
+    request_aggregate_version: int | None = None
+    not_before: datetime | None = None
+    expires_at: datetime | None = None
+    replayed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,7 +321,9 @@ class GrantAdministrationRepository(Protocol):
         self,
         decision: GrantDecision,
         *,
-        grants: Sequence[tuple[GrantId, ExactGrant, datetime, datetime]],
+        grants: Sequence[tuple[GrantId, ExactGrant, datetime | None, datetime]],
+        issuer_scope: AuthorityScope,
+        expected_version: int,
         expected_status: GrantRequestStatus,
         idempotency_key: str,
         payload_digest: str,

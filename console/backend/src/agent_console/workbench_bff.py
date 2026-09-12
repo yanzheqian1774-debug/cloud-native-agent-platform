@@ -27,11 +27,14 @@ from agent_console.authority_contracts import (
 from agent_console.browser_session_application import BrowserSessionService
 from agent_console.grant_administration_application import (
     GrantAdministrationService,
+    GrantDecisionCommand,
     GrantRequestCommand,
 )
 from agent_console.workbench_bff_schemas import (
     WorkbenchAvailableContinuation,
     WorkbenchContinuationInbox,
+    WorkbenchGrantDecisionCommand,
+    WorkbenchGrantDecisionResult,
     WorkbenchGrantRequestCommand,
     WorkbenchGrantRequestStatus,
     WorkbenchOperationResponse,
@@ -137,9 +140,18 @@ def _status_for_authority_error(reason: str) -> int:
         "OWNER_TRANSACTION_UNAVAILABLE",
     }:
         return 503
-    if reason in {"INVALID_GRANT_TARGET", "WORKBENCH_OPERATION_INVALID"}:
+    if reason in {
+        "INVALID_GRANT_TARGET",
+        "INVALID_GRANT_DECISION",
+        "IDEMPOTENCY_KEY_INVALID",
+        "WORKBENCH_OPERATION_INVALID",
+    }:
         return 422
-    if reason in {"AUTHORIZATION_STATE_STALE", "IDEMPOTENCY_PAYLOAD_MISMATCH"}:
+    if reason in {
+        "AUTHORIZATION_STATE_STALE",
+        "GRANT_SELF_APPROVAL_PROHIBITED",
+        "IDEMPOTENCY_PAYLOAD_MISMATCH",
+    }:
         return 409
     return 404
 
@@ -437,6 +449,61 @@ def create_workbench_bff(
                     ) from exc
                 raise
             return grant_request_status(inspected)
+
+        @app.post(
+            f"{PREFIX}/authorization/grant-requests/{{request_id}}/decisions",
+            response_model=WorkbenchGrantDecisionResult,
+            response_model_exclude_none=True,
+            status_code=201,
+        )
+        async def decide_grant_request(
+            request_id: str, request: Request, response: Response
+        ) -> WorkbenchGrantDecisionResult:
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            idempotency_key = request.headers.get("idempotency-key", "")
+            if not idempotency_key:
+                raise WorkbenchBoundaryError("INVALID_GRANT_DECISION", 422)
+            raw_body = await request.body()
+            if len(raw_body) > policy.maximum_body_bytes:
+                raise WorkbenchBoundaryError("REQUEST_TOO_LARGE", 413)
+            try:
+                body = WorkbenchGrantDecisionCommand.model_validate_json(raw_body)
+            except ValidationError as exc:
+                raise WorkbenchBoundaryError("INVALID_GRANT_DECISION", 422) from exc
+            try:
+                decided = grant_administration.decide_request(
+                    context,
+                    GrantDecisionCommand(
+                        request_id=request_id,
+                        expected_version=body.expectedVersion,
+                        approve=body.decision == "APPROVE",
+                        reason_category=body.reasonCategory,
+                        basis_type=body.basisType,
+                        basis_reference=body.basisReference,
+                        not_before=body.notBefore,
+                        expires_at=body.expiresAt,
+                        idempotency_key=idempotency_key,
+                    ),
+                )
+            except AuthorityError as exc:
+                if exc.reason_code == "GRANT_REQUEST_NOT_FOUND":
+                    raise WorkbenchBoundaryError(
+                        "AUTHORIZATION_REQUEST_NOT_FOUND", 404
+                    ) from exc
+                raise
+            if decided.request_aggregate_version is None:
+                raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE")
+            response.status_code = 200 if decided.replayed else 201
+            return WorkbenchGrantDecisionResult(
+                requestId=decided.request_id,
+                decisionId=decided.decision_id,
+                state="APPROVED" if decided.approved else "REJECTED",
+                aggregateVersion=decided.request_aggregate_version,
+                decidedAt=decided.created_at,
+                notBefore=decided.not_before,
+                expiresAt=decided.expires_at,
+            )
 
     def operation_endpoint(operation: WorkbenchOperation):
         async def endpoint(request: Request):

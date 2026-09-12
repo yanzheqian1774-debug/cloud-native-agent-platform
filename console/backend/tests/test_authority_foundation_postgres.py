@@ -445,6 +445,8 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
         repository.decide_request(
             self_decision,
             grants=((GrantId("grant-self"), member, now, now + timedelta(hours=1)),),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="self-key",
             payload_digest="4" * 64,
@@ -477,13 +479,60 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
     )
     result = repository.decide_request(
         decision,
-        grants=((GrantId("grant-1"), member, now, now + timedelta(hours=1)),),
+        grants=((GrantId("grant-1"), member, None, now + timedelta(hours=1)),),
+        issuer_scope=scope,
+        expected_version=1,
         expected_status=GrantRequestStatus.PENDING,
         idempotency_key="decision-key",
         payload_digest="5" * 64,
         recovery_epoch=1,
     )
     assert result.grants == (GrantId("grant-1"),)
+    replayed = repository.decide_request(
+        replace(decision, decision_id="decision-lost-response"),
+        grants=(
+            (GrantId("grant-lost-response"), member, None, now + timedelta(hours=1)),
+        ),
+        issuer_scope=scope,
+        expected_version=1,
+        expected_status=GrantRequestStatus.PENDING,
+        idempotency_key="decision-key",
+        payload_digest="5" * 64,
+        recovery_epoch=1,
+    )
+    assert replayed.decision_id == result.decision_id
+    assert replayed.request_aggregate_version == 2
+    assert replayed.replayed is True
+    assert (replayed.not_before, replayed.expires_at) == (
+        result.not_before,
+        result.expires_at,
+    )
+    with pytest.raises(AuthorityError, match="IDEMPOTENCY_PAYLOAD_MISMATCH"):
+        repository.decide_request(
+            replace(decision, decision_id="decision-changed-payload"),
+            grants=(
+                (GrantId("grant-changed"), member, None, now + timedelta(hours=1)),
+            ),
+            issuer_scope=scope,
+            expected_version=1,
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="decision-key",
+            payload_digest="6" * 64,
+            recovery_epoch=1,
+        )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_STATE_STALE"):
+        repository.decide_request(
+            replace(decision, decision_id="decision-terminal-conflict"),
+            grants=(
+                (GrantId("grant-terminal"), member, None, now + timedelta(hours=1)),
+            ),
+            issuer_scope=scope,
+            expected_version=1,
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="new-decision-key",
+            payload_digest="7" * 64,
+            recovery_epoch=1,
+        )
     context = TrustedRequestContext(
         "human:alice",
         scope,
@@ -492,7 +541,11 @@ def test_grant_bundle_self_approval_idempotency_and_revocation(
         "policy-1",
     )
     assert repository.has_current_grant(
-        context, member, now=now, generation=1, recovery_epoch=1
+        context,
+        member,
+        now=result.not_before,
+        generation=1,
+        recovery_epoch=1,
     )
     foreign_scope = TrustedRequestContext(
         "human:alice",
@@ -582,7 +635,7 @@ def test_complete_exact_decision_uses_caller_transaction_and_tracks_revocation(
     )
     issued_at = now + timedelta(seconds=1)
     expires_at = now + timedelta(hours=1)
-    repository.decide_request(
+    stored_decision = repository.decide_request(
         GrantDecision(
             "exact-decision",
             request.request_id,
@@ -597,6 +650,8 @@ def test_complete_exact_decision_uses_caller_transaction_and_tracks_revocation(
             issued_at,
         ),
         grants=((GrantId("exact-grant"), member, issued_at, expires_at),),
+        issuer_scope=scope,
+        expected_version=1,
         expected_status=GrantRequestStatus.PENDING,
         idempotency_key="exact-decision",
         payload_digest="3" * 64,
@@ -649,7 +704,7 @@ def test_complete_exact_decision_uses_caller_transaction_and_tracks_revocation(
                 member,
                 1,
                 "policy-issued",
-                issued_at,
+                stored_decision.created_at,
                 expires_at,
             )
             future = executor.submit(revoke)
@@ -658,6 +713,111 @@ def test_complete_exact_decision_uses_caller_transaction_and_tracks_revocation(
         assert future.result(timeout=10)
 
     assert reader.authorize_current(context, member, now=effective_at) is None
+
+
+def test_request_version_cas_and_competing_terminal_decisions(
+    repository: PostgresAuthorityRepository,
+) -> None:
+    now = datetime.now(UTC)
+    scope = AuthorityScope("tenant-a", "quality")
+    member = ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:cas")
+    repository.activate_generation(
+        1,
+        "a" * 64,
+        1,
+        operator_id="operator:test",
+        revoked_credentials=(),
+        now=now,
+    )
+    request = repository.submit_request(
+        GrantRequest(
+            "cas-request",
+            "human:alice",
+            scope,
+            (member,),
+            "CONTINUE_PROBLEM_READ",
+            GrantRequestStatus.PENDING,
+            now,
+        ),
+        actor_id="human:alice",
+        idempotency_key="cas-submit",
+        payload_digest="1" * 64,
+        target_validation=lambda _: True,
+        recovery_epoch=1,
+    )
+    base = GrantDecision(
+        "cas-wrong-version",
+        request.request_id,
+        "human:admin",
+        "meta-admin",
+        True,
+        "ASSIGNED_DUTY",
+        "POLICY",
+        "2" * 64,
+        "policy-1",
+        "test",
+        now,
+    )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_STATE_STALE"):
+        repository.decide_request(
+            base,
+            grants=(
+                (GrantId("cas-wrong-grant"), member, None, now + timedelta(hours=1)),
+            ),
+            issuer_scope=scope,
+            expected_version=2,
+            expected_status=GrantRequestStatus.PENDING,
+            idempotency_key="cas-wrong-version",
+            payload_digest="3" * 64,
+            recovery_epoch=1,
+        )
+
+    start = Barrier(2)
+
+    def compete(approve: bool) -> str:
+        suffix = "approve" if approve else "reject"
+        start.wait(timeout=10)
+        try:
+            result = repository.decide_request(
+                replace(
+                    base,
+                    decision_id=f"cas-{suffix}",
+                    approved=approve,
+                ),
+                grants=(
+                    (
+                        GrantId("cas-grant"),
+                        member,
+                        None,
+                        now + timedelta(hours=1),
+                    ),
+                )
+                if approve
+                else (),
+                issuer_scope=scope,
+                expected_version=1,
+                expected_status=GrantRequestStatus.PENDING,
+                idempotency_key=f"cas-{suffix}",
+                payload_digest=("4" if approve else "5") * 64,
+                recovery_epoch=1,
+            )
+            return result.decision_id
+        except AuthorityError as exc:
+            return exc.reason_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = tuple(executor.map(compete, (True, False)))
+    assert outcomes.count("AUTHORIZATION_STATE_STALE") == 1
+    assert sum(value in {"cas-approve", "cas-reject"} for value in outcomes) == 1
+    with repository.pool.connection() as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) AS count FROM authorization_admin.grant_decisions "
+                "WHERE request_id=%s",
+                (request.request_id,),
+            ).fetchone()["count"]
+            == 1
+        )
 
 
 def test_application_continuation_scope_self_decision_and_dynamic_read(
@@ -698,6 +858,15 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
                 now + timedelta(days=1),
                 GrantSource.SERVICE_ONLY,
                 (StaticGrant(decide_meta, GrantSource.STATIC_META),),
+            ),
+            CredentialConfiguration(
+                CredentialId("credential-inspector"),
+                "9" * 64,
+                "human:inspector",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.SERVICE_ONLY,
+                (StaticGrant(inspect_meta, GrantSource.STATIC_META),),
             ),
         ),
         (
@@ -744,6 +913,13 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
         "human:alice",
         scope,
         "credential-alice",
+        AuthenticationSource.SERVICE_CREDENTIAL,
+        "policy-1",
+    )
+    inspector = TrustedRequestContext(
+        "human:inspector",
+        scope,
+        "credential-inspector",
         AuthenticationSource.SERVICE_CREDENTIAL,
         "policy-1",
     )
@@ -971,6 +1147,69 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
                 "direct-request-command",
             ),
         )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_REQUEST_NOT_FOUND"):
+        service.decide_request(
+            inspector,
+            GrantDecisionCommand(
+                request.request_id,
+                True,
+                "ASSIGNED_DUTY",
+                "TICKET",
+                "ticket-1",
+                None,
+                now + timedelta(hours=1),
+                "inspect-is-not-decide",
+                1,
+            ),
+        )
+    for invalid in (
+        GrantDecisionCommand(
+            request.request_id,
+            True,
+            "ASSIGNED_DUTY",
+            "OTHER",
+            "reference",
+            None,
+            now + timedelta(hours=1),
+            "invalid-basis",
+            1,
+        ),
+        GrantDecisionCommand(
+            request.request_id,
+            True,
+            "ASSIGNED_DUTY",
+            "POLICY",
+            " policy-with-whitespace",
+            None,
+            now + timedelta(hours=1),
+            "invalid-reference",
+            1,
+        ),
+        GrantDecisionCommand(
+            request.request_id,
+            True,
+            "ASSIGNED_DUTY",
+            "POLICY",
+            "policy-1",
+            None,
+            now + timedelta(hours=8, minutes=1),
+            "invalid-window",
+            1,
+        ),
+        GrantDecisionCommand(
+            request.request_id,
+            False,
+            "DUTY_NOT_ESTABLISHED",
+            "TICKET",
+            "ticket-1",
+            None,
+            now + timedelta(hours=1),
+            "invalid-reject-window",
+            1,
+        ),
+    ):
+        with pytest.raises(AuthorityError, match="INVALID_GRANT_DECISION"):
+            service.decide_request(admin, invalid)
     with pytest.raises(AuthorityError, match="GRANT_SELF_APPROVAL_PROHIBITED"):
         service.decide_request(
             alice,
@@ -983,6 +1222,7 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
                 now,
                 now + timedelta(hours=1),
                 "self-decision",
+                1,
             ),
         )
     decision = service.decide_request(
@@ -993,9 +1233,10 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
             "ASSIGNED_DUTY",
             "TICKET",
             "ticket-1",
-            now,
+            None,
             now + timedelta(hours=1),
             "admin-decision",
+            1,
         ),
     )
     assert decision.grants
@@ -1005,7 +1246,11 @@ def test_application_continuation_scope_self_decision_and_dynamic_read(
     with pytest.raises(AuthorityError, match="GRANT_REQUEST_NOT_FOUND"):
         service.inspect_request(bob, request.request_id)
     assert reader.has_current_grant(
-        alice, member, now=now, generation=1, recovery_epoch=1
+        alice,
+        member,
+        now=decision.not_before,
+        generation=1,
+        recovery_epoch=1,
     )
     static_and_dynamic_generation = replace(
         generation,
@@ -1086,6 +1331,15 @@ def test_public_authorization_ports_use_real_session_and_postgres_state(
                     StaticGrant(assign_meta, GrantSource.STATIC_META),
                     StaticGrant(decide_meta, GrantSource.STATIC_META),
                 ),
+            ),
+            CredentialConfiguration(
+                CredentialId("credential-browser-admin"),
+                hashlib.sha256(b"browser-admin-secret").hexdigest(),
+                "human:browser-admin",
+                scope,
+                now + timedelta(days=1),
+                GrantSource.BROWSER_BOOTSTRAP,
+                (StaticGrant(decide_meta, GrantSource.STATIC_META),),
             ),
         ),
         (
@@ -1200,19 +1454,80 @@ def test_public_authorization_ports_use_real_session_and_postgres_state(
         f"{PREFIX}/authorization/continuations?state=AVAILABLE"
     ).json() == {"continuations": []}
 
-    grants.decide_request(
-        admin,
-        GrantDecisionCommand(
-            request_id,
-            True,
-            "ASSIGNED_DUTY",
-            "TICKET",
-            "ticket-1",
-            now,
-            now + timedelta(hours=1),
-            "browser-decision",
-        ),
+    admin_client = TestClient(app, base_url="https://console.example")
+    admin_login_form = admin_client.get(f"{PREFIX}/login")
+    admin_nonce = re.search(r'name="loginNonce" value="([^"]+)"', admin_login_form.text)
+    assert admin_nonce is not None
+    assert (
+        admin_client.post(
+            f"{PREFIX}/session",
+            headers={
+                "origin": "https://console.example",
+                "content-type": "application/x-www-form-urlencoded",
+            },
+            content=(
+                f"loginNonce={admin_nonce.group(1)}&"
+                "bootstrapCredential=browser-admin-secret"
+            ),
+            follow_redirects=False,
+        ).status_code
+        == 303
     )
+    admin_csrf = admin_client.get(f"{PREFIX}/session").json()["csrfToken"]
+    hidden_without_inspect = admin_client.get(
+        f"{PREFIX}/authorization/grant-requests/{request_id}"
+    )
+    assert hidden_without_inspect.status_code == 404
+    decided = admin_client.post(
+        f"{PREFIX}/authorization/grant-requests/{request_id}/decisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": admin_csrf,
+            "idempotency-key": "browser-decision",
+        },
+        json={
+            "schemaVersion": "exact-grant-decision.v1",
+            "expectedVersion": 1,
+            "decision": "APPROVE",
+            "reasonCategory": "ASSIGNED_DUTY",
+            "basisType": "TICKET",
+            "basisReference": "ticket-1",
+            "expiresAt": (now + timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert decided.status_code == 201
+    assert decided.json()["state"] == "APPROVED"
+    assert decided.json()["aggregateVersion"] == 2
+    assert set(decided.json()) == {
+        "schemaVersion",
+        "requestId",
+        "decisionId",
+        "state",
+        "aggregateVersion",
+        "decidedAt",
+        "notBefore",
+        "expiresAt",
+    }
+    assert "ticket-1" not in decided.text
+    replayed = admin_client.post(
+        f"{PREFIX}/authorization/grant-requests/{request_id}/decisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": admin_csrf,
+            "idempotency-key": "browser-decision",
+        },
+        json={
+            "schemaVersion": "exact-grant-decision.v1",
+            "expectedVersion": 1,
+            "decision": "APPROVE",
+            "reasonCategory": "ASSIGNED_DUTY",
+            "basisType": "TICKET",
+            "basisReference": "ticket-1",
+            "expiresAt": (now + timedelta(hours=1)).isoformat(),
+        },
+    )
+    assert replayed.status_code == 200
+    assert replayed.json() == decided.json()
     status = client.get(f"{PREFIX}/authorization/grant-requests/{request_id}")
     assert status.status_code == 200
     assert status.json()["state"] == "APPROVED"
@@ -1268,7 +1583,9 @@ def test_recovery_epoch_invalidates_sessions_continuations_and_effective_grants(
     )
     repository.decide_request(
         decision,
-        grants=((GrantId("recovery-grant"), member, now, now + timedelta(hours=1)),),
+        grants=((GrantId("recovery-grant"), member, None, now + timedelta(hours=1)),),
+        issuer_scope=scope,
+        expected_version=1,
         expected_status=GrantRequestStatus.PENDING,
         idempotency_key="recovery-decision",
         payload_digest="3" * 64,
@@ -1461,10 +1778,12 @@ def test_linearized_browser_authorization_orders_session_and_grant_changes(
                 (
                     GrantId("linearized-grant"),
                     member,
-                    now,
+                    None,
                     now + timedelta(hours=1),
                 ),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="linearized-decision",
             payload_digest="3" * 64,
@@ -1734,8 +2053,10 @@ def test_recovery_terminates_old_requests_and_namespaces_commands(
     repository.decide_request(
         old_decision,
         grants=(
-            (GrantId("pre-recovery-grant"), member, now, now + timedelta(hours=1)),
+            (GrantId("pre-recovery-grant"), member, None, now + timedelta(hours=1)),
         ),
+        issuer_scope=scope,
+        expected_version=1,
         expected_status=GrantRequestStatus.PENDING,
         idempotency_key="old-decision-command",
         payload_digest="4" * 64,
@@ -1799,10 +2120,12 @@ def test_recovery_terminates_old_requests_and_namespaces_commands(
                 (
                     GrantId("stale-epoch-grant"),
                     member,
-                    now,
+                    None,
                     now + timedelta(hours=1),
                 ),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="stale-epoch-decision",
             payload_digest="6" * 64,
@@ -1819,10 +2142,12 @@ def test_recovery_terminates_old_requests_and_namespaces_commands(
                 (
                     GrantId("terminated-request-grant"),
                     member,
-                    now,
+                    None,
                     now + timedelta(hours=1),
                 ),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="terminated-request-decision",
             payload_digest="6" * 64,
@@ -1832,8 +2157,10 @@ def test_recovery_terminates_old_requests_and_namespaces_commands(
         repository.decide_request(
             old_decision,
             grants=(
-                (GrantId("replayed-grant"), member, now, now + timedelta(hours=1)),
+                (GrantId("replayed-grant"), member, None, now + timedelta(hours=1)),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="old-decision-command",
             payload_digest="4" * 64,
@@ -1873,6 +2200,8 @@ def test_recovery_terminates_old_requests_and_namespaces_commands(
                     now + timedelta(hours=1),
                 ),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="post-recovery-decision",
             payload_digest="7" * 64,
@@ -1954,10 +2283,12 @@ def test_recovery_and_decision_follow_active_epoch_lock_order(
                 (
                     GrantId("decision-first-grant"),
                     member,
-                    now,
+                    None,
                     now + timedelta(hours=1),
                 ),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="decision-first",
             payload_digest="2" * 64,
@@ -2024,10 +2355,12 @@ def test_recovery_and_decision_follow_active_epoch_lock_order(
                 (
                     GrantId("recovery-first-grant"),
                     member,
-                    now,
+                    None,
                     now + timedelta(hours=1),
                 ),
             ),
+            issuer_scope=scope,
+            expected_version=1,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key="recovery-first-decision",
             payload_digest="3" * 64,
