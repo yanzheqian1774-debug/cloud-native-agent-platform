@@ -223,3 +223,47 @@ lifecycle, Profile projection, credential binding, PostgreSQL migration, Docker
 probe/build, deploy, Batch B or 309 action occurred. The two empty sessions, agent
 and workspace are retained because provider-native transcript headers and exact live
 correlations now exist; cleanup was not forced.
+
+## Persistence and read-only recovery batch 2
+
+Fixed implementation candidate:
+
+- source `f1c5423b3257e5d0203b1d0f255b4050ae537c01`;
+- tree `710faa2b6fe965062ed5ae0c76e2845a3cc611bb`;
+- persistence checkpoint `79184215560155d6720c62fafa75f3bcc9a73163`.
+
+The existing PostgreSQL execution authority now persists exact scoped Runtime,
+Placement, agent/workspace and generation/session correlations with replay,
+uniqueness, transaction and observation high-water protections. The read-only
+observer accepts only `health`, `status`, `agents.list`, `agents.files.list`,
+`sessions.list`, `sessions.describe` and `sessions.get`. The fixed Gateway returns
+exact key/session ID from `sessions.describe`; `sessions.get` returns `messages` and
+validates the exact key plus agent ID without a second identity echo. Resolve-only
+proof and every external write RPC remain rejected.
+
+The retained live database facts show `MATCHED` at high-water 1 and 2. A new Python
+process subsequently reopened the same PostgreSQL repository, loaded the same
+binding, passed the formal application authorization and Placement validation
+points, reconnected to the existing real Gateway, and persisted `MATCHED` at
+high-water 3. The high-water transition was `2 -> 3`, elapsed time was 26.532
+seconds, and process exit code was `0`. Repository loading and Gateway reconnection
+were asserted separately. The total reconciliation budget was 30 seconds and every
+RPC timeout was at most 10 seconds; no automatic retry was issued.
+
+Placement and binding were real task-owned PostgreSQL records. Authorization used
+the production validator with an ephemeral fixture credential and exact fixture
+grant, so this is not persistent authoritative authorization combination acceptance.
+Historical timeout, `MISMATCHED`, `RECOVERY_REQUIRED` and unknown exit results remain
+unchanged and are not replaced by the successful observations.
+
+Automatic pull-request CI for the fixed source completed successfully on attempt 1:
+CI run `34705060633` and Employee Identity Chain run `34705060636`. All six checks
+were successful. Actions executed PR merge SHA
+`9a73b4e1f3e5b256e3c104f160abb3e607b072b1` with tree
+`710faa2b6fe965062ed5ae0c76e2845a3cc611bb`; the reported source remained the fixed
+candidate. Counts absent from automatic logs remain `UNKNOWN`.
+
+The image remains `NOT_PROVEN`. No lifecycle, dispatch, execution, model, Profile
+publisher, Evidence/Outcome, deployment, Ready, merge or acceptance claim is added.
+The second-batch bounded implementation and validation are closed pending Human
+acceptance; `SESSION_OPEN` remains unchanged.

@@ -772,3 +772,78 @@ correlations are useful for review/recovery. They are idle (`runStarted=false`, 
 messages, no observed active run). No delete/archive/abort was issued. Retention is
 not a production lifecycle claim; cleanup requires a later explicit check that these
 exact task-owned assets have no transcript/evidence value.
+
+## Persistence and read-only recovery batch 2 handoff
+
+The bounded implementation candidate is commit
+`f1c5423b3257e5d0203b1d0f255b4050ae537c01`, tree
+`710faa2b6fe965062ed5ae0c76e2845a3cc611bb`. Its persistence checkpoint is
+`79184215560155d6720c62fafa75f3bcc9a73163`. This batch extends the existing
+PostgreSQL execution-authority repository with internal OpenClaw Runtime and
+generation bindings, exclusive external agent/workspace constraints, exact
+command/idempotency and session correlation, transactional observation high-water,
+and restart loading. It adds an authorization-first application service and a
+read-only composite observer; it does not enable production lifecycle effects.
+
+Fixed OpenClaw `2026.7.1-2` observation uses only `health`, `status`,
+`agents.list`, `agents.files.list`, `sessions.list`, `sessions.describe` and
+`sessions.get`. Live behavior confirmed that `sessions.describe` returns the exact
+key and session ID while `sessions.get` returns `messages` and performs an
+agent-checked read for the exact key; no second identity echo is required from
+`sessions.get`. `sessions.resolve` remains excluded because it is only a locator.
+Missing fields, ambiguous records, identity mismatch and transport/protocol failure
+remain fail-closed. Each RPC is capped at 10 seconds within one 30-second total
+reconciliation budget; timeout produces an uncertain recovery state and is not
+automatically retried.
+
+### Layered recovery evidence
+
+The task-owned PostgreSQL database retained the same live binding across repository
+closure and process boundaries. The first application reconciliation persisted
+`MATCHED` at high-water 1. A retained second observation persisted `MATCHED` at
+high-water 2. Because the interrupted command's process result was not recoverable,
+that database fact alone was not used as proof of a distinct Python process.
+
+A separately executed Python recovery process then loaded the same binding from the
+same PostgreSQL database, passed the production application authorization and
+Placement validation points, constructed a new production transport connection to
+the existing real Gateway, and persisted `MATCHED` at high-water 3. The transition
+was therefore high-water `2 -> 3`; the process exit code was `0` and the read-only
+reconciliation completed in 26.532 seconds. Loading the durable record and opening a
+new Gateway connection are separate assertions, both proven in that process.
+
+Placement and binding state were real records in the task-owned PostgreSQL 15
+database. Authorization used the production `GovernedExecutionAuthority` validator
+with an ephemeral fixture credential and exact fixture grant. This proves the formal
+validator/application boundary but is not a persistent authoritative authorization
+combination acceptance.
+
+Historical 30-second timeout, `MISMATCHED`, `RECOVERY_REQUIRED` and unrecoverable
+process-exit results remain historical failures or unknowns. Later `MATCHED`
+observations do not overwrite or reclassify them. No transcript, messages, raw RPC
+response or credential was retained in this record.
+
+### Fixed-candidate automatic CI
+
+The push for source `f1c5423b3257e5d0203b1d0f255b4050ae537c01` produced two
+automatic pull-request workflow runs, both attempt 1 and both successful:
+
+- CI run `34705060633` (`.github/workflows/ci.yml`);
+- Employee Identity Chain run `34705060636`
+  (`.github/workflows/employee-identity.yml`).
+
+All six checks completed successfully: Quality Gates, Frontend Quality Gates,
+Agent Workbench Browser Acceptance, PostgreSQL Identity Chain, PostgreSQL Skill
+Invocation, and PostgreSQL Business Problem and Plan Entry. The workflows reported
+the source SHA above and actually checked out PR merge SHA
+`9a73b4e1f3e5b256e3c104f160abb3e607b072b1`, whose parents were base
+`f189212232fc194859a695f0307e83b0c7b73c0f` and the fixed candidate. The executed
+merge tree was the same fixed tree,
+`710faa2b6fe965062ed5ae0c76e2845a3cc611bb`. Test counts not emitted by the
+relevant automatic logs remain `UNKNOWN`.
+
+The bounded second-batch implementation and validation are closed for Human review.
+The Draft PR remains open, `SESSION_OPEN` remains unchanged, and Human acceptance is
+not implied. The image remains `NOT_PROVEN`. START/STOP/replace, Profile publishing,
+dispatch, execute/observe-execution, Evidence/Outcome production paths, model work,
+deployment and later batches remain outside this handoff.
