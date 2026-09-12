@@ -207,7 +207,7 @@ test("publishes, binds and authorizes one bounded real capability test",async({p
     expect(response.status()).toBe(200);
     await expect(page.getByLabel("管理调用 Tool")).toBeVisible();
   });
-  const rediscoveryPath=`/api/internal/v0.2.2/resources/mcp/${encodeURIComponent(resourceId)}/discovery`;
+  const rediscoveryPath=`/api/internal/v0.2.2/resources/mcp/${resourceId}/discovery`;
   let rediscoveryResponse!:Promise<Response>,rediscoveryReadback!:Promise<Response>;
   let secondSnapshot="";
   await test.step("SKILL_MCP_REDISCOVERY_SUBMIT",async()=>{
