@@ -66,9 +66,47 @@ published Runtime Profile projection
 ```
 
 The external Gateway remains externally owned. Provider lifecycle operations map
-to an isolated, preconfigured OpenClaw agent workspace and a generation-scoped
-session: create/adopt, observe, archive-delete, and bounded replace. They do not
-start, stop, restart, or claim ownership of the Gateway process.
+to no OpenClaw object in this checkpoint. The accepted architecture permits an
+OpenClaw Agent or Session to be an opaque native realization, but it does not make
+either mapping automatic. In particular, `sessions.patch(archived=true)` plus
+`sessions.delete(deleteTranscript=true)` is not accepted as Platform `STOP`.
+Production `start`, `observe_runtime`, `stop`, and `replace` therefore return
+`RUNTIME_LIFECYCLE_UNSUPPORTED` until the Human decisions below are resolved. They
+do not start, stop, restart, or claim ownership of the Gateway process.
+
+## Recovered checkpoint and implementation state
+
+- Checkpoint 1 exists at commit
+  `8a058d293ab0db196402e3b6ece1c9d0c22a13f0` with tree
+  `3d7f75f929ad9a5ec84f8c0c804b83dece2d07fa`.
+- The original worktree and branch are intact at the paths recorded above. The
+  implementation diff was recovered there; the interrupted hook exit code is
+  `UNKNOWN` and is not represented as success.
+- Recovery copies contain only the tracked patch and the two then-untracked Python
+  sources. Credential-bearing client configuration and raw Gateway logs were
+  excluded.
+- No corresponding remote branch or Draft PR existed at recovery time.
+
+## Lifecycle mapping audit
+
+| Object / operation | Exact mapping and authority | Identity, ownership, idempotency and recovery | Deletion / irreversible impact |
+| --- | --- | --- | --- |
+| Platform Runtime Instance | Stable Platform lifecycle identity from the accepted Placement/desired command; never minted by OpenClaw | Platform identity remains authoritative; provider handles are correlations only | None in Batch A |
+| OpenClaw agent | One externally preconfigured agent selected by `agentId` and verified through `agents.list` | External owner provisions it; one agent may serve multiple Runtime Instances; Batch A neither creates nor adopts ownership | No agent mutation or deletion |
+| Workspace | Exact filesystem path reported for that external agent | Externally provisioned and compared to the configured absolute path; it is not a Runtime Instance | No workspace mutation or deletion |
+| Session | Candidate opaque native realization or execution context only; no accepted Runtime lifecycle mapping yet | A deterministic key could correlate scope/Runtime/Placement/generation, but key shape alone does not prove ownership or safe restart recovery | Archive and transcript deletion are not authorized |
+| External Gateway | One shared external process and RPC endpoint | Gateway URL is reduced to an opaque digest; readiness is a shared dependency fact, not per-Runtime liveness | Operator never starts, stops, replaces or deletes it |
+| `START` | `UNSUPPORTED_PENDING_HUMAN_DECISION` | `sessions.create` is a possible mapping, but create/adopt ownership and replay semantics are not accepted | No effect issued |
+| `OBSERVE` | Shared Gateway, version, authentication, agent and workspace checks are supported; per-Runtime observation is unsupported | Gateway readiness cannot be normalized as one Runtime Instance `RUNNING` | Read-only checks only |
+| `STOP` | `UNSUPPORTED_PENDING_HUMAN_DECISION` | Session archive/delete is not automatically graceful Runtime stop; adopted-session ownership cannot be proven from current durable facts | Transcript deletion would be irreversible and is prohibited |
+| `REPLACE` | `UNSUPPORTED_PENDING_HUMAN_DECISION` | Delete/recreate session is not an accepted realization replacement or durable recovery protocol | No effect issued |
+
+Contract basis: accepted S5-ARCH-002 permits a Provider to translate only declared
+lifecycle capabilities and to remove only Provider-owned realizations; accepted
+S5-ARCH-019 permits adapters to support a subset and requires destructive ambiguity
+to fail as recovery-required. S5-IMPL-080 and S5-V023-IMPL-230 implement typed
+provider/adapter seams, but do not accept a concrete OpenClaw RPC-to-Platform
+lifecycle equivalence.
 
 ## Exact write scope
 
@@ -131,18 +169,18 @@ work stops at a G2 proposal.
    authenticated health, method response shape, configured agent identity and
    workspace before lifecycle effects. Use fixed RPC method allowlists, bounded
    JSON, timeouts, a minimal subprocess environment, and sanitized errors.
-2. Implement observe-first session lifecycle behavior and explicit distinctions
-   for missing configuration, authentication failure, Gateway unavailability,
-   protocol failure, and possible-effect ambiguity. Never fallback to Native or
-   blindly repeat an ambiguous effect.
+2. Keep lifecycle and execution operations explicitly unsupported while the
+   concrete native-realization mapping is unaccepted. Distinguish missing
+   configuration, authentication failure, Gateway unavailability and protocol
+   failure. Never fallback to Native.
 3. Add production bootstrap parsing for one published Runtime Profile revision,
    resolve the one allowed Secret Reference using the existing Kubernetes Secret
    projection, assemble Transport -> Provider -> Adapter -> Factory, and call it
    from the operator startup entry.
-4. Add focused unit/integration tests, then run a live exact-version Gateway in
-   task-owned directories and port without a model task. Verify authenticated
-   readiness, formal bootstrap selection, observation, and controlled session
-   shutdown.
+4. Add focused unit/integration tests, then reuse the already-running exact-version
+   task-owned Gateway without a model task or duplicate process. Verify the bounded
+   live facts that can be recovered; report missing authentication material and
+   unrecoverable prior command results as `UNKNOWN`.
 5. Run repository quality gates, inspect diff/status, commit normal checkpoints,
    non-force push, and publish a Draft PR.
 
@@ -157,8 +195,8 @@ work stops at a G2 proposal.
 - missing/ambiguous/unknown providers never fallback to Native;
 - secrets and raw Gateway payloads are absent from errors, logs and public
   observations;
-- start/observe/stop/replace preserve Platform Runtime Instance, Placement,
-  generation and session correlation rules;
+- start/observe/stop/replace fail explicitly without issuing effects until the
+  lifecycle mapping is Human-approved;
 - live validation proves exact package, authenticated Gateway readiness and
   controlled lifecycle only, with zero model tasks.
 
@@ -169,3 +207,24 @@ observation; dispatch claims; persistent recovery; terminal Evidence/Outcome;
 trusted browser execution; public API/CRD/auth vocabulary; 299/305/308 business
 logic; and any 309 environment operation remain excluded.
 
+## Open Human decisions and packaging limitation
+
+1. Select the native realization for one Platform Runtime Instance under the
+   external shared-Gateway profile: preconfigured agent, generation-scoped session,
+   another object, or lifecycle-unsupported.
+2. If Session is selected, define create/adopt ownership proof, durable correlation,
+   restart recovery, idempotency, graceful stop, transcript retention, replacement
+   and ambiguous-effect behavior. Archive/delete cannot be inferred as stop.
+3. Define the authoritative production projection path for a published Runtime
+   Profile. The current internal bootstrap can verify a serialized record's
+   self-consistency, but the repository has no operator-facing export/controller,
+   signature, API trust path or direct repository contract that proves the file was
+   emitted by the PostgreSQL Runtime Profile authority.
+4. Authorize the packaging path if configured OpenClaw startup must run in the
+   shipped operator image. `operator/Dockerfile` currently copies only `operator/`
+   and exposes only `operator/src`; it contains neither `core/src` nor `runtime/src`.
+   A clean image-equivalent import already fails on the baseline `agent_core`
+   dependency, and configured OpenClaw startup would additionally lack
+   `agent_runtime`. The source entrypoint uses a lazy import so this change does not
+   add the latter failure to the unconfigured path, but the production-image path is
+   not validated.
