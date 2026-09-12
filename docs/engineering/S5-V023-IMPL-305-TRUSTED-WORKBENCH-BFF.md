@@ -54,6 +54,7 @@ and durable Business Problem assembly are all available:
 | `GET /api/workbench/v1/authorization/continuations?state=AVAILABLE` | current authenticated subject and scope | available, unconsumed continuation references without protected resource identities |
 | `POST /api/workbench/v1/authorization/grant-requests` | current authenticated subject; one continuation reference, or the existing direct exact-target mode | one persisted `PENDING` request projection after server-side requestability and target validation |
 | `GET /api/workbench/v1/authorization/grant-requests/{request_id}` | applicant, or exact scoped `GRANT_ADMIN / INSPECT` | minimum request state with the persisted aggregate version |
+| `POST /api/workbench/v1/authorization/grant-requests/{request_id}/decisions` | independent exact scoped `GRANT_ADMIN / DECIDE` | request-version CAS to one terminal decision and, for approval, one atomic exact-grant bundle |
 
 All request bodies and registered query models are strict Pydantic contracts. Incoming
 authorization, proxy-authorization, principal, tenant, domain, product-read, and
@@ -141,10 +142,11 @@ evidence.
 
 ## Routes deliberately not registered
 
-- Capability discovery, continuation assignment, grant decision, grant
-  revocation, and continuation revoke/surrender remain unregistered. The current
-  batch registers only the subject inbox, one grant-request submit, and request
-  inspect operations. A submit can succeed only when the injected I1 service has
+- Capability discovery, continuation assignment, grant revocation, and
+  continuation revoke/surrender remain unregistered. The current batch also
+  registers the independently authorized exact-request Decision operation; it
+  adds no administrator queue, list, search, count, or enumeration. A submit can
+  succeed only when the injected I1 service has
   a formal target validator: continuation mode resolves a persisted offer and
   revalidates its owner claim; direct mode preserves the existing requestability
   plus known-exact-target validation. The default composition does not invent a
@@ -172,7 +174,8 @@ The default-disabled public BFF does not unlock IMPL-299.
 | Login, current session, rotation, logout, CSRF, Origin and Host | `FORMALLY_REGISTERED` | Five public operations use the I1 Browser Session Authority; unsafe operations require same-origin plus session-bound CSRF. |
 | Business Problem, Criteria and Plan | `FORMALLY_REGISTERED` | The 13 routes above call the durable Product/Workflow Control owner through the same authorization transaction. |
 | Continuation inbox, grant request submit, request inspect | `FORMALLY_REGISTERED / OWNER_VALIDATOR_REQUIRED_FOR_SUBMIT` | Session-authenticated strict routes expose only current-subject offers and minimum request state. Submit still fails closed unless the injected service can revalidate the owner target. |
-| Grant decisions, grant revocation, continuation assignment/revoke/surrender | `COMPONENT_ONLY / NOT_REGISTERED` | Decision CAS/basis mapping, immutable revocation readback, and independent continuation lifecycle semantics remain Human-owned gaps. |
+| Grant decision | `FORMALLY_REGISTERED` | Independent exact `GRANT_ADMIN / DECIDE`, replay-before-CAS, request aggregate version, self-approval prohibition, closed basis mapping, bounded window and minimum result are implemented. |
+| Grant revocation, continuation assignment/revoke/surrender | `COMPONENT_ONLY / NOT_REGISTERED` | Immutable revocation readback and independent continuation lifecycle semantics remain outside this accepted batch. |
 | Workflow Definition read | `OPTIONAL / FORMALLY_REGISTERED` | LIST and exact-revision READ use the current authorization transaction when the optional same-database Workflow service is configured; no aggregate history or adjacent revisions are disclosed. |
 | Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, edit, validate, review, publish, and other lifecycle mutations are not in the public registry. |
 | Agent Definition read and discovery | `FORMALLY_REGISTERED` | Exact READ and collection LIST are independent; LIST follows only the formal `publishedRevisionId`, and both use bounded DTOs on the authorization transaction. |
@@ -762,6 +765,72 @@ The independent administrator Decision contract is accepted exactly as follows:
    boundary rejection, real PostgreSQL, public HTTP, and real browser evidence.
 5. Leave creator mint unimplemented until the receipt time-anchor choice is
    accepted; independently document its fail-closed migration and recovery facts.
+
+### Decision implementation checkpoint
+
+Checkpoint `a0f0d64` completes the independent Decision portion without a
+migration. `GrantDecisionCommand` and `GrantAdministrationRepository` require the
+request aggregate version and trusted issuer scope. The PostgreSQL adapter first
+checks current recovery, verifies immutable subject/scope, locks the scoped
+idempotency claim, returns an equal replay before CAS, then locks the request
+`FOR UPDATE` and compares both `aggregate_version` and `PENDING`. A winning
+approval captures `clock_timestamp()` inside that transaction after the lock,
+normalizes omitted `notBefore`, validates the eight-hour maximum, persists the
+decision and complete grant bundle atomically, and increments the request to
+version 2. Replay reconstructs the original persisted decision time and grant
+window. Rejection persists no grant or validity window.
+
+The public route uses the existing browser authentication, exact Host/Origin,
+session CSRF, untrusted-header rejection and no-store boundary. Its first success
+is `201`, equal replay is `200`, and the typed result contains only schema,
+request/decision IDs, terminal state, request aggregate version, decision time,
+and approval window when applicable. It exposes no request member, basis value or
+digest, grant ID, meta-decision, policy version, or audit source.
+
+Validation at this checkpoint:
+
+- focused source/BFF/bootstrap/app: Ruff passed and `34 passed`;
+- repository `make check`: Ruff lint, Ruff format check over 409 files, and
+  `1662 passed, 156 skipped`;
+- complete backend without external-service variables: `674 passed, 151
+  skipped`; the skips remain the repository's explicit external PostgreSQL,
+  Qdrant and dedicated fixture gates;
+- real PostgreSQL 15, one isolated database per case: `16 passed`, including
+  numeric CAS, same-key replay and mismatch, different-key terminal concurrency,
+  self-approval zero-write, closed basis/time validation, DECIDE versus INSPECT,
+  public session/CSRF routes, and applicant status readback;
+- public loopback HTTPS HTTP client against Uvicorn and real PostgreSQL: session
+  create `303`, first Decision `201 APPROVED`, request version 2, and only the
+  accepted minimum response fields; and
+- real browser against a temporary loopback HTTP-only Uvicorn harness and real
+  PostgreSQL: authenticated session `200` as `human:browser-admin`, first Decision
+  `201 APPROVED`, request version 2, and persisted `decidedAt == notBefore` when
+  the browser omitted `notBefore`. The browser rejected the temporary self-signed
+  HTTPS certificate and no safety bypass was attempted. Therefore this last item
+  is browser behavior evidence, not TLS, ingress, network isolation, production
+  composition, I3, or complete 299 product acceptance.
+
+### Exact IMPL-299 handoff boundary after this checkpoint
+
+IMPL-299 owns only applicant experience wiring after a creator receipt time anchor
+is accepted and the owner mint portion is implemented in 305. It must retain the
+typed `creatorContinuation` returned by the corresponding Problem create/replay,
+submit exactly that reference with no `requestedGrants`, persist only its returned
+request ID for recovery/navigation, and poll the existing minimum applicant
+status. It must not choose an offer from inbox labels, add Plan `PREPARE`, embed an
+administrator Decision form in the applicant flow, or treat `APPROVED` as current
+authorization. The independent administrator may use the exact request-ID
+Decision route implemented here through a separately authorized entry. After
+approval, 299 must call the existing exact Problem READ route, which reauthenticates
+and reevaluates the current owner/grant facts. Until the one receipt time-anchor
+decision is accepted and creator mint exists, 299 must keep create-to-read
+continuation fail closed and must not synthesize or backfill a reference.
+
+The detailed pre-acceptance proposal text below is retained as provenance. Where
+it labels the now-accepted Decision or READ-only creator shape `PROPOSED`, the
+Human-accepted batch above supersedes that old status. Its `created_at` issuance
+anchor is explicitly **not accepted** and is superseded only by the separate
+receipt proposal above, which remains pending.
 
 ### Concentrated open-decision overview
 
