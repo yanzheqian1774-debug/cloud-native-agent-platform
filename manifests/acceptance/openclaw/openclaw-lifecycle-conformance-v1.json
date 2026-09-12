@@ -1,0 +1,465 @@
+{
+  "schemaVersion": "s5-v023-openclaw-lifecycle-conformance/v1",
+  "status": "INTERNAL_CONFORMANCE_PROPOSED_NOT_FROZEN",
+  "target": {
+    "package": "openclaw@2026.7.1-2",
+    "tagCommit": "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
+    "profile": "external-single-gateway-isolated-agent-workspace"
+  },
+  "authority": {
+    "acceptedContracts": [
+      "S5-ARCH-018",
+      "S5-ARCH-019",
+      "agent_core.execution_contract.v0.2.3-a0"
+    ],
+    "humanAcceptedDirections": [
+      "ONE_RUNTIME_INSTANCE_ONE_EXCLUSIVE_AGENT_WORKSPACE",
+      "PLATFORM_GENERATION_DISTINCT_FROM_OPENCLAW_SESSION",
+      "SAME_WORKSPACE_FILES_RETAINED_ACROSS_GENERATIONS",
+      "NEW_SESSION_DOES_NOT_COPY_PREDECESSOR_TRANSCRIPT",
+      "OBSERVE_BEFORE_RECOVERY_NO_BLIND_REISSUE",
+      "STOP_REQUIRES_TERMINATION_EVIDENCE_NOT_ARCHIVE_OR_DELETE",
+      "POSTGRESQL_REMAINS_RUNTIME_PROFILE_AUTHORITY",
+      "SECRET_REFERENCE_EXACT_SCOPE_FIRST_BINDING"
+    ],
+    "notAuthorized": [
+      "PRODUCTION_LIFECYCLE_WRITES",
+      "PRODUCTION_DISPATCH",
+      "NEW_PERSISTENCE_OR_OUTBOX",
+      "PROFILE_PUBLISHER_OR_CREDENTIAL_RESOLVER",
+      "MODEL_OR_TOOL_EXECUTION"
+    ]
+  },
+  "platformSchemaReuse": {
+    "desiredCommandOwner": "PostgresExecutionAuthorityRepository",
+    "desiredCommandFields": [
+      "scope.namespace",
+      "scope.security_domain",
+      "runtime_instance_id",
+      "desired_generation",
+      "desired_state",
+      "command_id",
+      "requested_by",
+      "requested_at",
+      "deadline",
+      "reason_classification",
+      "authorization_reference",
+      "placement_reference"
+    ],
+    "observationOwner": "PostgresExecutionAuthorityRepository",
+    "observationFields": [
+      "observation_id",
+      "runtime_instance_id",
+      "observed_generation",
+      "observed_state",
+      "health",
+      "readiness",
+      "observed_at",
+      "freshness_deadline",
+      "provider_correlation",
+      "kubernetes_correlation",
+      "limitation_codes"
+    ],
+    "commandResults": [
+      "REQUESTED",
+      "APPLIED",
+      "OBSERVED",
+      "REJECTED",
+      "UNKNOWN",
+      "STALE",
+      "RECOVERY_REQUIRED"
+    ],
+    "missingForOpenClawMapping": [
+      "DURABLE_EXPLICIT_IDEMPOTENCY_KEY_SEPARATE_FROM_COMMAND_ID",
+      "QUERYABLE_AGENT_WORKSPACE_SESSION_CORRELATION_FIELDS",
+      "OWNERSHIP_PROOF_STATUS_AND_NONCE_DIGEST",
+      "SOURCE_VERSION_FIELD_ON_RUNTIME_OBSERVATION",
+      "ACTIVE_WORK_DRAIN_OR_TERMINATION_PROOF"
+    ]
+  },
+  "identityCorrelationSchema": {
+    "status": "PROPOSED_INTERNAL_MAPPING_NOT_PERSISTED",
+    "platformIdentity": {
+      "required": [
+        "namespace",
+        "securityDomain",
+        "runtimeInstanceId",
+        "placementId",
+        "generation",
+        "commandId"
+      ],
+      "properties": {
+        "namespace": {"type": "string", "minLength": 1, "maxBytes": 128},
+        "securityDomain": {"type": "string", "minLength": 1, "maxBytes": 128},
+        "runtimeInstanceId": {"type": "string", "minLength": 1, "maxBytes": 200},
+        "placementId": {"type": "string", "minLength": 1, "maxBytes": 200},
+        "generation": {"type": "integer", "minimum": 1},
+        "commandId": {"type": "string", "minLength": 1, "maxBytes": 200}
+      },
+      "additionalProperties": false,
+      "generationMinimum": 1,
+      "identityRule": "SESSION_ID_NEVER_SUBSTITUTES_FOR_PLATFORM_GENERATION"
+    },
+    "nativeCorrelation": {
+      "required": [
+        "gatewayDigest",
+        "agentId",
+        "canonicalWorkspace",
+        "workspaceAttestationDigest",
+        "sessionKey",
+        "sessionId",
+        "providerVersion",
+        "providerTagCommit"
+      ],
+      "optional": [
+        "ownershipNonceDigest"
+      ],
+      "properties": {
+        "gatewayDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "agentId": {"type": "string", "minLength": 1, "maxBytes": 200},
+        "canonicalWorkspace": {"type": "string", "minLength": 1, "absolutePath": true},
+        "workspaceAttestationDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sessionKey": {"type": "string", "minLength": 1, "maxBytes": 512},
+        "sessionId": {"type": "string", "minLength": 1, "maxBytes": 200},
+        "providerVersion": {"type": "string", "const": "2026.7.1-2"},
+        "providerTagCommit": {"type": "string", "const": "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c"},
+        "ownershipNonceDigest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "additionalProperties": false,
+      "ownershipProofStatus": "UNSUPPORTED_BY_FIXED_VERSION_NATIVE_METADATA",
+      "associationRules": [
+        "AGENT_ID_AND_CANONICAL_WORKSPACE_MUST_MATCH_AGENTS_LIST",
+        "SESSION_KEY_MUST_ENCODE_THE_EXACT_AGENT_ID",
+        "SESSION_GET_OR_DESCRIBE_AND_LIST_MUST_CONFIRM_THE_SAME_SESSION_ID",
+        "SESSIONS_RESOLVE_ALONE_IS_INSUFFICIENT",
+        "DIFFERENT_GENERATIONS_REQUIRE_DIFFERENT_SESSION_IDS",
+        "AGENT_AND_WORKSPACE_MUST_NOT_APPEAR_IN_ANOTHER_RUNTIME_INSTANCE_BINDING"
+      ]
+    }
+  },
+  "lifecycleSchema": {
+    "status": "MINIMUM_PROPOSED_MAPPING_PRODUCTION_UNSUPPORTED",
+    "request": {
+      "required": [
+        "platformIdentity",
+        "operation",
+        "authorizationReference",
+        "placementReference",
+        "idempotencyKey",
+        "requestedAt",
+        "deadline"
+      ],
+      "properties": {
+        "platformIdentity": {"schema": "identityCorrelationSchema.platformIdentity"},
+        "operation": {"enum": ["START", "OBSERVE", "STOP", "REPLACE"]},
+        "authorizationReference": {"type": "string", "minLength": 1, "maxBytes": 512},
+        "placementReference": {"type": "string", "minLength": 1, "maxBytes": 512},
+        "idempotencyKey": {"type": "string", "minLength": 1, "maxBytes": 512},
+        "requestedAt": {"type": "string", "format": "date-time"},
+        "deadline": {"type": "string", "format": "date-time", "mustFollow": "requestedAt"}
+      },
+      "additionalProperties": false,
+      "operations": [
+        "START",
+        "OBSERVE",
+        "STOP",
+        "REPLACE"
+      ]
+    },
+    "observation": {
+      "required": [
+        "platformIdentity",
+        "nativeCorrelation",
+        "observedState",
+        "health",
+        "readiness",
+        "observedAt",
+        "freshnessDeadline",
+        "effectState",
+        "activeWorkState",
+        "reasonCode"
+      ],
+      "properties": {
+        "platformIdentity": {"schema": "identityCorrelationSchema.platformIdentity"},
+        "nativeCorrelation": {"schema": "identityCorrelationSchema.nativeCorrelation"},
+        "observedState": {"enum": ["PENDING", "RUNNING", "STOPPED", "TERMINATED", "FAILED", "UNKNOWN", "STALE"]},
+        "health": {"enum": ["HEALTHY", "DEGRADED", "UNHEALTHY", "UNKNOWN"]},
+        "readiness": {"enum": ["READY", "NOT_READY", "UNKNOWN"]},
+        "observedAt": {"type": "string", "format": "date-time"},
+        "freshnessDeadline": {"type": "string", "format": "date-time", "mustFollow": "observedAt"},
+        "effectState": {"enum": ["NOT_ISSUED", "CONFIRMED", "AMBIGUOUS", "CONFLICTING"]},
+        "activeWorkState": {"enum": ["NONE_PROVEN", "ACTIVE", "UNKNOWN"]},
+        "reasonCode": {"type": "string", "minLength": 1, "maxBytes": 512}
+      },
+      "additionalProperties": false,
+      "effectStates": [
+        "NOT_ISSUED",
+        "CONFIRMED",
+        "AMBIGUOUS",
+        "CONFLICTING"
+      ],
+      "activeWorkStates": [
+        "NONE_PROVEN",
+        "ACTIVE",
+        "UNKNOWN"
+      ]
+    },
+    "recoveryRules": {
+      "exactCommandReplay": "RETURN_STORED_RESULT_OR_OBSERVE",
+      "sameIdDifferentPayload": "CONFLICT",
+      "timeoutOrTransportFailureAfterWrite": "OBSERVE_ONLY_THEN_RECOVERY_REQUIRED_IF_UNRESOLVED",
+      "partialAgentWithoutSession": "RECOVERY_REQUIRED_NO_AUTOMATIC_ADOPT_OR_DELETE",
+      "partialSuccessorSession": "OBSERVE_CORRELATIONS_NO_BLIND_CREATE_RETRY",
+      "stop": "REQUIRES_DISPATCH_BARRIER_AND_NONE_PROVEN_ACTIVE_WORK",
+      "archiveOrDelete": "NEVER_STOP_EVIDENCE"
+    }
+  },
+  "fixedVersionCapabilities": [
+    {
+      "method": "agents.create",
+      "requiredScope": "operator.admin",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_BOUNDED_TEST_ASSET",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "CREATES_CONFIG_AGENT_WORKSPACE_BOOTSTRAP_AND_SESSION_DIRECTORY",
+      "idempotency": "NOT_PROVEN_DUPLICATE_AGENT_ID_IS_REJECTED"
+    },
+    {
+      "method": "agents.update",
+      "requiredScope": "operator.admin",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_IDENTITY_UPDATE_AND_READBACK",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "MUTATES_AGENT_CONFIG_AND_IDENTITY_FILE",
+      "idempotency": "NOT_PROVEN"
+    },
+    {
+      "method": "agents.list",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN",
+      "productionTransport": "READ_ONLY_SUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "agents.files.list",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "agents.workspace.list",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "agents.workspace.get",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_METADATA_ONLY",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "sessions.create",
+      "requiredScope": "operator.write",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_EMPTY_NO_RUN_NO_FORK",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "CREATES_SESSION_ENTRY_AND_TRANSCRIPT_HEADER",
+      "idempotency": "NO_IDEMPOTENCY_KEY_UNKNOWN_DO_NOT_BLINDLY_REPEAT"
+    },
+    {
+      "method": "sessions.list",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "sessions.get",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_EMPTY_TRANSCRIPT_AND_AGENT_MISMATCH_REJECTION",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY_TRANSCRIPT_ACCESS",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "sessions.describe",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "sessions.resolve",
+      "requiredScope": "operator.read",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_NOT_SCOPE_SUFFICIENT",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "READ_ONLY",
+      "idempotency": "READ_ONLY"
+    },
+    {
+      "method": "sessions.patch",
+      "requiredScope": "operator.write_for_label_category_other_fields_may_require_admin",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "PROVEN_LABEL_CATEGORY_READBACK",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "MUTATES_SESSION_ENTRY",
+      "idempotency": "NOT_PROVEN"
+    },
+    {
+      "method": "sessions.abort",
+      "requiredScope": "operator.write",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "NOT_RUN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "MAY_ABORT_ACTIVE_RUN",
+      "idempotency": "NOT_PROVEN"
+    },
+    {
+      "method": "agents.delete",
+      "requiredScope": "operator.admin",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "NOT_RUN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "REMOVES_CONFIG_AND_OPTIONALLY_TRASHES_FILES",
+      "idempotency": "NOT_PROVEN"
+    },
+    {
+      "method": "sessions.delete",
+      "requiredScope": "operator.admin_except_bounded_archived_only_operator.write",
+      "fixedSource": "SUPPORTED",
+      "liveConformance": "NOT_RUN",
+      "productionTransport": "UNSUPPORTED",
+      "effect": "DESTRUCTIVE_SESSION_AND_OPTIONAL_TRANSCRIPT_OPERATION",
+      "idempotency": "CONDITIONAL_EXPECTED_FIELDS_EXIST_BUT_LIFECYCLE_MAPPING_UNPROVEN"
+    }
+  ],
+  "fixedVersionMetadataSurfaces": {
+    "agent": {
+      "createOrUpdateFields": [
+        "name",
+        "workspace",
+        "model",
+        "emoji",
+        "avatar"
+      ],
+      "arbitraryMetadata": "REJECTED_ADDITIONAL_PROPERTIES_FALSE",
+      "normalization": "NAME_TRIMMED_AND_AGENT_ID_NORMALIZED_WORKSPACE_USER_PATH_RESOLVED",
+      "mutability": "ANY_CALLER_WITH_GATEWAY_OPERATOR_ADMIN_CAN_UPDATE_SUPPORTED_FIELDS",
+      "ownershipClaim": "CORRELATION_ONLY_NOT_ATTESTATION"
+    },
+    "session": {
+      "createCorrelationFields": [
+        "key",
+        "agentId",
+        "label"
+      ],
+      "mutableCorrelationFields": [
+        "label",
+        "category"
+      ],
+      "arbitraryMetadata": "REJECTED_ADDITIONAL_PROPERTIES_FALSE",
+      "normalization": "KEY_CANONICALIZED_TO_AGENT_PREFIX_LABEL_AND_CATEGORY_BOUNDED_TO_512",
+      "mutability": "LABEL_AND_CATEGORY_ARE_MUTABLE_BY_GATEWAY_OPERATOR_WRITE_OR_ADMIN",
+      "ownershipClaim": "CORRELATION_ONLY_NOT_ATTESTATION"
+    },
+    "workspace": {
+      "association": "AGENT_CONFIG_ABSOLUTE_PATH_PLUS_AGENT_SCOPED_READ",
+      "mutability": "AGENT_WORKSPACE_BINDING_CAN_BE_UPDATED_BY_GATEWAY_OPERATOR_ADMIN",
+      "attestation": "NO_RPC_EXPOSED_UNFORGEABLE_WORKSPACE_ATTESTATION",
+      "ownershipClaim": "CORRELATION_ONLY_NOT_ATTESTATION"
+    }
+  },
+  "stateInheritance": {
+    "workspaceRetained": [
+      "AGENTS.md",
+      "SOUL.md",
+      "TOOLS.md",
+      "IDENTITY.md",
+      "USER.md",
+      "HEARTBEAT.md",
+      "BOOTSTRAP.md",
+      "openclaw-workspace-state.json",
+      "MEMORY.md_WHEN_PRESENT",
+      "OTHER_EXISTING_WORKSPACE_FILES"
+    ],
+    "sessionOnly": [
+      "SESSION_ID",
+      "SESSION_ENTRY_OVERRIDES",
+      "LABEL_AND_CATEGORY",
+      "ACTIVE_RUN_CORRELATION",
+      "TRANSCRIPT_FILE_AND_MESSAGES"
+    ],
+    "generationReplacement": {
+      "retains": "SAME_EXCLUSIVE_AGENT_AND_WORKSPACE_FILES",
+      "doesNotRetain": "SESSION_ID_SESSION_ENTRY_ACTIVE_RUN_OR_TRANSCRIPT",
+      "forbids": "FORK_PARENT_TRANSCRIPT_OR_CROSS_INSTANCE_WORKSPACE_SESSION_BINDING"
+    }
+  },
+  "proposedParameters": {
+    "observationFreshnessSeconds": {
+      "recommended": 30,
+      "basis": "EXISTING_RUNTIME_MANAGER_AND_OPENCLAW_BOOTSTRAP_DEFAULT",
+      "status": "PROPOSED_NOT_FROZEN"
+    },
+    "rpcTimeoutSeconds": {
+      "recommended": 10,
+      "basis": "EXISTING_OPENCLAW_BOOTSTRAP_TEST_CONFIGURATION",
+      "status": "PROPOSED_NOT_FROZEN"
+    },
+    "commandDeadlineSeconds": {
+      "recommended": 30,
+      "basis": "THREE_BOUNDED_RPC_TIMEOUT_WINDOWS_WITHOUT_RETRY_PERMISSION",
+      "status": "PROPOSED_NOT_FROZEN"
+    },
+    "profileEligibilityLeaseSeconds": {
+      "recommended": null,
+      "basis": "NO_EXISTING_ACCEPTED_ELIGIBILITY_LEASE_CONTRACT",
+      "status": "UNRESOLVED"
+    },
+    "clockSkewSeconds": {
+      "recommended": null,
+      "basis": "NO_EXISTING_ACCEPTED_DISTRIBUTED_CLOCK_POLICY",
+      "status": "UNRESOLVED"
+    }
+  },
+  "liveEvidence": {
+    "gateway": "127.0.0.1:19314",
+    "agentId": "s5-v023-impl-314-conformance-a1",
+    "workspace": "/private/tmp/s5-v023-impl-314-probe.b0zeMp/workspaces/conformance-a1",
+    "generationSessions": [
+      {
+        "generation": 1,
+        "key": "agent:s5-v023-impl-314-conformance-a1:s5-v023-impl-314-runtime-c1-g1",
+        "sessionId": "ff9a00c9-3036-4ff8-b064-bab44976e9d7",
+        "runStarted": false,
+        "messageCount": 0
+      },
+      {
+        "generation": 2,
+        "key": "agent:s5-v023-impl-314-conformance-a1:s5-v023-impl-314-runtime-c1-g2",
+        "sessionId": "b8eff756-7efe-431f-9982-6cfc393809d4",
+        "runStarted": false,
+        "messageCount": 0
+      }
+    ],
+    "retention": "RETAINED_TASK_OWNED_NO_MODEL_OR_TOOL_EXECUTION"
+  }
+}
