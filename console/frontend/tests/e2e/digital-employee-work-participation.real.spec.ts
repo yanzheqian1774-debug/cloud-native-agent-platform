@@ -32,6 +32,14 @@ const fullLoginSubmitSteps = {
   status: "FULL_LOGIN_POST_STATUS_ASSERTION",
   location: "FULL_LOGIN_POST_LOCATION_ASSERTION",
 } as const;
+const employeeListSteps = {
+  navigation: "EMPLOYEE_LIST_NAVIGATION",
+  request: "EMPLOYEE_LIST_REQUEST_OBSERVED",
+  response: "EMPLOYEE_LIST_RESPONSE_OBSERVED",
+  status: "EMPLOYEE_LIST_STATUS_ASSERTION",
+  count: "EMPLOYEE_LIST_BUTTON_COUNT",
+  visible: "EMPLOYEE_LIST_BUTTON_VISIBLE",
+} as const;
 const loginSteps = {
   FULL: ["FULL_LOGIN_FORM", "FULL_LOGIN_SUBMIT_REDIRECT", "FULL_SESSION_READY"],
   LISTER: ["LISTER_LOGIN_FORM", "LISTER_LOGIN_SUBMIT_REDIRECT", "LISTER_SESSION_READY"],
@@ -46,6 +54,16 @@ function isSessionPost(requestValue: { method(): string; url(): string }): boole
     url.origin === sessionURL.origin &&
     url.pathname === sessionURL.pathname &&
     url.search === ""
+  );
+}
+
+function isEmployeeListRequest(requestValue: { method(): string; url(): string }): boolean {
+  const url = new URL(requestValue.url());
+  return (
+    requestValue.method() === "GET" &&
+    url.origin === sessionURL.origin &&
+    url.pathname === "/api/workbench/v1/employees" &&
+    url.searchParams.get("pageSize") === "50"
   );
 }
 
@@ -154,9 +172,48 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
 
   const employeeButton = full.page.getByRole("button", { name: /Supplier quality owner/ });
   await test.step("EMPLOYEE_LIST_PAGE_READY", async () => {
-    await full.page.goto(`${baseURL}/digital-employees`);
-    await expect(employeeButton).toHaveCount(1);
-    await expect(employeeButton).toBeVisible();
+    const requestPromise = full.page.waitForRequest(isEmployeeListRequest).then(
+      value => {
+        test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED", description: "true" });
+        return value;
+      },
+      () => {
+        test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED", description: "false" });
+        return null;
+      },
+    );
+    const responsePromise = full.page.waitForResponse(value => isEmployeeListRequest(value.request())).then(
+      value => {
+        test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_RESPONSE_OBSERVED", description: "true" });
+        test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_HTTP_STATUS", description: String(value.status()) });
+        return value;
+      },
+      () => {
+        test.info().annotations.push({ type: "S5_310_EMPLOYEE_LIST_RESPONSE_OBSERVED", description: "false" });
+        return null;
+      },
+    );
+    await test.step(employeeListSteps.navigation, async () => {
+      await full.page.goto(`${baseURL}/digital-employees`);
+    });
+    await test.step(employeeListSteps.request, async () => {
+      expect(await requestPromise).not.toBeNull();
+    });
+    const response = await test.step(employeeListSteps.response, async () => {
+      const value = await responsePromise;
+      expect(value).not.toBeNull();
+      if (!value) throw new Error("EMPLOYEE_LIST_RESPONSE_NOT_OBSERVED");
+      return value;
+    });
+    await test.step(employeeListSteps.status, async () => {
+      expect(response.status()).toBe(200);
+    });
+    await test.step(employeeListSteps.count, async () => {
+      await expect(employeeButton).toHaveCount(1);
+    });
+    await test.step(employeeListSteps.visible, async () => {
+      await expect(employeeButton).toBeVisible();
+    });
   });
   await test.step("EMPLOYEE_EXACT_UI_READ", async () => {
     await employeeButton.click();

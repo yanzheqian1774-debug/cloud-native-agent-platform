@@ -25,7 +25,12 @@ TEST_STEP_IDS = (
     "FULL_LOGIN_POST_STATUS_ASSERTION",
     "FULL_LOGIN_POST_LOCATION_ASSERTION",
     "FULL_SESSION_READY",
-    "EMPLOYEE_LIST_PAGE_READY",
+    "EMPLOYEE_LIST_NAVIGATION",
+    "EMPLOYEE_LIST_REQUEST_OBSERVED",
+    "EMPLOYEE_LIST_RESPONSE_OBSERVED",
+    "EMPLOYEE_LIST_STATUS_ASSERTION",
+    "EMPLOYEE_LIST_BUTTON_COUNT",
+    "EMPLOYEE_LIST_BUTTON_VISIBLE",
     "EMPLOYEE_EXACT_UI_READ",
     "EMPLOYEE_EXACT_API_READ",
     "AGENT_EXACT_API_READ",
@@ -59,11 +64,17 @@ TEST_STEP_IDS = (
 )
 TEST_STEP_SET = frozenset(TEST_STEP_IDS)
 FULL_LOGIN_SUBMIT_STEP_SET = frozenset(TEST_STEP_IDS[1:6])
+EMPLOYEE_LIST_STEP_SET = frozenset(TEST_STEP_IDS[7:13])
 LOGIN_DIAGNOSTIC_TYPES = {
     "S5_310_LOGIN_REQUEST_OBSERVED": "requestObserved",
     "S5_310_LOGIN_RESPONSE_OBSERVED": "responseObserved",
     "S5_310_LOGIN_HTTP_STATUS": "httpStatus",
     "S5_310_LOGIN_LOCATION_CLASS": "locationClass",
+}
+EMPLOYEE_LIST_DIAGNOSTIC_TYPES = {
+    "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED": "requestObserved",
+    "S5_310_EMPLOYEE_LIST_RESPONSE_OBSERVED": "responseObserved",
+    "S5_310_EMPLOYEE_LIST_HTTP_STATUS": "httpStatus",
 }
 LOCATION_CLASSES = {"EXPECTED_WORKBENCH", "OTHER", "MISSING", "UNKNOWN"}
 LOGIN_FAILURE_CATEGORIES = {
@@ -362,6 +373,63 @@ def _login_submit_diagnostics(
     return values
 
 
+def _employee_list_diagnostics(
+    test: dict[str, Any] | None, step_diagnostics: dict[str, Any]
+) -> dict[str, Any]:
+    values: dict[str, Any] = {
+        "availability": "UNAVAILABLE",
+        "requestObserved": "UNKNOWN",
+        "responseObserved": "UNKNOWN",
+        "httpStatus": "UNKNOWN",
+        "failureCategory": "UNKNOWN",
+    }
+    if test is None:
+        return values
+    results = test.get("results")
+    if (
+        not isinstance(results, list)
+        or not results
+        or not isinstance(results[-1], dict)
+    ):
+        return values
+    values["availability"] = "AVAILABLE"
+    annotations = results[-1].get("annotations")
+    if not isinstance(annotations, list):
+        annotations = []
+    observed: dict[str, list[str]] = {
+        output: [] for output in EMPLOYEE_LIST_DIAGNOSTIC_TYPES.values()
+    }
+    for annotation in annotations:
+        if not isinstance(annotation, dict):
+            continue
+        output = EMPLOYEE_LIST_DIAGNOSTIC_TYPES.get(annotation.get("type"))
+        description = annotation.get("description")
+        if output is not None and isinstance(description, str):
+            observed[output].append(description)
+    for output in ("requestObserved", "responseObserved"):
+        descriptions = observed[output]
+        if len(descriptions) == 1 and descriptions[0] in {"true", "false"}:
+            values[output] = descriptions[0] == "true"
+    descriptions = observed["httpStatus"]
+    if len(descriptions) == 1 and descriptions[0].isdigit():
+        status = int(descriptions[0])
+        if 100 <= status <= 599:
+            values["httpStatus"] = status
+    failed_step = step_diagnostics.get("firstFailedOrIncompleteStep")
+    if failed_step in EMPLOYEE_LIST_STEP_SET:
+        category = step_diagnostics.get("failureCategory")
+        if category in LOGIN_FAILURE_CATEGORIES:
+            values["failureCategory"] = category
+    elif all(
+        step_diagnostics.get("lastCompletedStep") in TEST_STEP_SET
+        and TEST_STEP_IDS.index(step_diagnostics["lastCompletedStep"])
+        >= TEST_STEP_IDS.index(step_id)
+        for step_id in EMPLOYEE_LIST_STEP_SET
+    ):
+        values["failureCategory"] = "NONE"
+    return values
+
+
 def build_summary(
     *,
     report_path: Path,
@@ -403,6 +471,9 @@ def build_summary(
     )
     step_diagnostics = _safe_step_diagnostics(expected_test)
     login_submit_diagnostics = _login_submit_diagnostics(
+        expected_test, step_diagnostics
+    )
+    employee_list_diagnostics = _employee_list_diagnostics(
         expected_test, step_diagnostics
     )
     static_ok = bool(static_stages) and all(
@@ -473,6 +544,7 @@ def build_summary(
         },
         "stepDiagnostics": step_diagnostics,
         "loginSubmitDiagnostics": login_submit_diagnostics,
+        "employeeListDiagnostics": employee_list_diagnostics,
         "expectedScenario": EXPECTED_TITLE,
         "securityEvidence": {
             "available": passed_gate,

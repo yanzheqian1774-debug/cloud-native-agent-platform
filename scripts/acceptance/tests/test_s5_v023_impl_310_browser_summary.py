@@ -337,6 +337,57 @@ def test_summary_rejects_ambiguous_or_unapproved_login_diagnostics(tmp_path) -> 
     assert "secret" not in json.dumps(summary)
 
 
+def test_summary_emits_only_whitelisted_employee_list_diagnostics(tmp_path) -> None:
+    raw = tmp_path / "raw.json"
+    value = report("failed")
+    result = value["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["steps"] = [
+        step("FULL_LOGIN_FORM", 40),
+        step("FULL_LOGIN_SUBMIT_CLICK", 45),
+        step("FULL_LOGIN_POST_REQUEST_OBSERVED", 50),
+        step("FULL_LOGIN_POST_RESPONSE_OBSERVED", 55),
+        step("FULL_LOGIN_POST_STATUS_ASSERTION", 60),
+        step("FULL_LOGIN_POST_LOCATION_ASSERTION", 65),
+        step("FULL_SESSION_READY", 70),
+        step("EMPLOYEE_LIST_NAVIGATION", 75),
+        step("EMPLOYEE_LIST_REQUEST_OBSERVED", 80),
+        step("EMPLOYEE_LIST_RESPONSE_OBSERVED", 85),
+        step("EMPLOYEE_LIST_STATUS_ASSERTION", 90, failed=True),
+    ]
+    result["annotations"] = [
+        {
+            "type": "S5_310_EMPLOYEE_LIST_REQUEST_OBSERVED",
+            "description": "true",
+        },
+        {
+            "type": "S5_310_EMPLOYEE_LIST_RESPONSE_OBSERVED",
+            "description": "true",
+        },
+        {"type": "S5_310_EMPLOYEE_LIST_HTTP_STATUS", "description": "401"},
+        {"type": "untrusted", "description": "credential=session-secret"},
+    ]
+    raw.write_text(json.dumps(value))
+
+    summary, passed = SUMMARY.build_summary(
+        report_path=raw,
+        commit_sha="a" * 40,
+        tree_sha="b" * 40,
+        execution_outcome="failure",
+        static_stages={"build": "success"},
+        startup_status_path=ready_startup(tmp_path),
+    )
+
+    assert not passed
+    assert summary["employeeListDiagnostics"] == {
+        "availability": "AVAILABLE",
+        "requestObserved": True,
+        "responseObserved": True,
+        "httpStatus": 401,
+        "failureCategory": "ASSERTION_OR_EXECUTION_FAILURE",
+    }
+    assert "session-secret" not in json.dumps(summary)
+
+
 def test_summary_step_allowlist_matches_the_real_spec() -> None:
     source = (
         Path(__file__).parents[3]
