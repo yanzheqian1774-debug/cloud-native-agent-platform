@@ -144,3 +144,12 @@ def test_shared_styles_cover_desktop_narrow_and_keyboard_states() -> None:
     assert "@media(max-width:700px)" in styles
     assert ":focus-visible" in styles
     assert "overflow-x:auto" in styles
+    for selector in (
+        ".px-workspace .px-form-fields",
+        ".px-workspace .px-form-actions",
+        ".px-workspace .px-workbench-error",
+        ".px-admin-page .px-admin-status",
+        ".px-admin-page .px-field",
+    ):
+        assert selector in styles
+    assert "env(safe-area-inset-bottom)" in styles

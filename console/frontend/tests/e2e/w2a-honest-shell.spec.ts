@@ -113,3 +113,50 @@ test("shows honest controls with keyboard access and no overflow at 390px", asyn
   expect(writes).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("w2a-honest-controls-390.png"), fullPage: true });
 });
+
+test("business workbench keeps one form submit, preserved input, and a reachable mobile action", async ({ page }, testInfo) => {
+  const identity = { value: "human:applicant" as string | null };
+  await installRoutes(page, identity);
+  let createAttempts = 0;
+  await page.route("**/api/workbench/v1/problems", async route => {
+    if (route.request().method() === "POST") {
+      createAttempts += 1;
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ reasonCode: "WORKBENCH_UNAVAILABLE", requestId: "diagnostic:fixture" }) });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [] }, continuationIds: [] }) });
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/work");
+  await expect(page.getByRole("heading", { name: "创建一个业务问题" })).toBeVisible();
+  await expect(page.getByText("正在新建业务问题", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "创建业务问题", exact: true })).toHaveCount(1);
+  const title = page.getByLabel("标题");
+  const description = page.getByLabel("问题描述");
+  expect((await title.boundingBox())!.width).toBeGreaterThan(500);
+  expect((await description.boundingBox())!.width).toBeGreaterThan(500);
+  await title.fill("供应商交付延期");
+  await description.fill("关键零部件连续延期，影响本季度客户交付。需要识别原因和可执行的恢复方案。");
+  await page.getByRole("button", { name: "创建业务问题", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("创建业务问题的结果暂时无法确认");
+  await expect(page.getByText("diagnostic:fixture", { exact: true })).not.toBeVisible();
+  await page.getByRole("alert").getByText("技术详情", { exact: true }).click();
+  await expect(page.getByText("诊断 ID", { exact: true })).toBeVisible();
+  await expect(page.getByText("diagnostic:fixture", { exact: true })).toBeVisible();
+  await expect(title).toHaveValue("供应商交付延期");
+  await expect(description).toContainText("关键零部件连续延期");
+  expect(createAttempts).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath("w2b-create-error-preserves-input-1440.png"), fullPage: true });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await title.fill("移动端问题");
+  await description.fill("验证长页面滚动后，主提交操作仍然能够通过键盘聚焦并进入视口。");
+  const submit = page.getByRole("button", { name: "创建业务问题", exact: true });
+  await submit.focus();
+  await expect(submit).toBeFocused();
+  await expect(submit).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("w2b-create-form-390.png"), fullPage: true });
+});
