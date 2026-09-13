@@ -39,6 +39,8 @@ def test_w2a_shell_uses_session_facts_and_marks_unavailable_controls() -> None:
     assert (
         'document.addEventListener("visibilitychange",refreshVisibleSession)' in shell
     )
+    assert 'window.addEventListener("focus",refreshFocusedSession)' in shell
+    assert 'window.removeEventListener("focus",refreshFocusedSession)' in shell
     assert "request===controller" in shell
     assert "当前可信身份" in shell
     assert "未显示可信身份" in shell

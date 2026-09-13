@@ -88,6 +88,12 @@ test("uses only current session identity and keeps legacy planning out of truste
   ]);
   await expect(page.getByText("未显示可信身份", { exact: true })).toBeVisible();
   await expect(page.getByText("human:applicant", { exact: true })).toHaveCount(0);
+  identity.value = "human:applicant-refocused";
+  await Promise.all([
+    page.waitForResponse(response => response.url().endsWith("/api/workbench/v1/session") && response.status() === 200),
+    page.evaluate(() => window.dispatchEvent(new Event("focus"))),
+  ]);
+  await expect(page.getByLabel("当前可信身份 human:applicant-refocused")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2a-session-failure-desktop.png"), fullPage: true });
 });
 

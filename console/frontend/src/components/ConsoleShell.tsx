@@ -19,8 +19,9 @@ export function ConsoleShell({children}:ConsoleShellProps){const location=useLoc
   let active=true,request:AbortController|null=null;
   const refreshSession=()=>{request?.abort();const controller=new AbortController();request=controller;readWorkbenchSession(controller.signal).then(session=>{if(active&&request===controller)setSessionState({path:location.pathname,identity:session.principal.principalId})}).catch(error=>{if(active&&request===controller&&error?.name!=="AbortError")setSessionState({path:location.pathname,identity:null})})};
   const refreshVisibleSession=()=>{if(document.visibilityState==="visible")refreshSession()};
-  refreshSession();document.addEventListener("visibilitychange",refreshVisibleSession);
-  return()=>{active=false;request?.abort();document.removeEventListener("visibilitychange",refreshVisibleSession)};
+  const refreshFocusedSession=()=>refreshSession();
+  refreshSession();document.addEventListener("visibilitychange",refreshVisibleSession);window.addEventListener("focus",refreshFocusedSession);
+  return()=>{active=false;request?.abort();document.removeEventListener("visibilitychange",refreshVisibleSession);window.removeEventListener("focus",refreshFocusedSession)};
 },[location.pathname]);useEffect(()=>{
   let ownedHeading:HTMLElement|null=null;
   let focusTransferred=false;
