@@ -847,3 +847,42 @@ The Draft PR remains open, `SESSION_OPEN` remains unchanged, and Human acceptanc
 not implied. The image remains `NOT_PROVEN`. START/STOP/replace, Profile publishing,
 dispatch, execute/observe-execution, Evidence/Outcome production paths, model work,
 deployment and later batches remain outside this handoff.
+
+## Human acceptance — persistence and read-only recovery batch 2
+
+The Human accepts the bounded implementation at source
+`f1c5423b3257e5d0203b1d0f255b4050ae537c01`, tree
+`710faa2b6fe965062ed5ae0c76e2845a3cc611bb`, for exactly these capabilities:
+
+- OpenClaw binding persistence;
+- loading the same PostgreSQL binding in a new process;
+- reconnecting to the real Gateway through the formal application and Placement
+  validation points; and
+- persisting a read-only `MATCHED` observation and advancing its high-water.
+
+This acceptance includes the proven high-water `2 -> 3` recovery result with process
+exit code `0`. Authorization used the formal validator with an ephemeral fixture
+credential and exact fixture grant. It therefore does not constitute acceptance of a
+persistent authoritative authorization combination.
+
+The accepted implementation candidate's automatic evidence remains CI run
+`34705060633` and Employee Identity Chain run `34705060636`: both completed on
+attempt 1 with conclusion `success`, and all six checks were successful. The
+documentation handoff at source
+`564ce65ae5fd957ee8b9360f7f85d91506736cc2`, tree
+`99d7d752431d1abfb3a2669a93fb52b5e449396f`, was separately validated by CI run
+`34706216835` and Employee Identity Chain run `34706216841`; both completed on
+attempt 1 with conclusion `success`, and all six checks were successful. Counts not
+explicitly emitted by those automatic runs remain `UNKNOWN`.
+
+This record does not replace or expand the accepted implementation source/tree. It
+does not alter historical timeout, `MISMATCHED`, `RECOVERY_REQUIRED`, unknown exit
+results or earlier proposal statuses. Native ownership, persistent authoritative
+authorization, production image proof, lifecycle writes, START/STOP/replace,
+dispatch, model execution, Profile publishing and Evidence/Outcome production paths
+remain incomplete and unaccepted.
+
+Persistence and read-only recovery batch 2 is Human-accepted within the boundary
+above. The overall S5-V023-IMPL-314 task remains `SESSION_OPEN`; scheduling is paused.
+No Ready, merge, deployment, later batch or whole-task closure is authorized by this
+record.
