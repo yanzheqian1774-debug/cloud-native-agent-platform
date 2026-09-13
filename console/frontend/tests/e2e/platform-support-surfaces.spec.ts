@@ -14,7 +14,6 @@ const pages = [
 const primaryRoutes = ["/dashboard", "/work", "/digital-employees", "/agent-center", "/skills", "/mcp", "/knowledge", "/workflow-definitions", "/runtime-profiles", "/evidence", "/outcomes", ...pages.filter(([route]) => route !== "/agent-center").map(([route]) => route)] as const;
 const routeKeys = ["HOME", "WORK", "EMPLOYEES", "AGENTS", "SKILLS", "MCP", "KNOWLEDGE", "WORKFLOWS", "RUNTIMES", "EVIDENCE", "OUTCOMES", "APPLICATIONS", "PERMISSIONS", "SECURITY", "OPERATIONS", "MODELS", "USAGE", "SETTINGS", "HELP"] as const;
 const journeys = [
-  { launch: "业务闭环", name: "业务闭环总览演示路径", steps: ["业务问题", "成功标准", "已批准 Plan", "数字员工", "Skill", "MCP", "Knowledge", "Workflow", "Runtime / Attempt", "Evidence", "Outcome"] },
   { launch: "数字员工装配", name: "数字员工装配演示路径", steps: ["数字员工", "Agent Definition", "Skill 绑定", "MCP 端点边界", "Knowledge 绑定", "Workflow 定义", "Runtime 配置", "Evidence 入口"] },
   { launch: "平台治理", name: "平台治理与运营演示路径", steps: ["首页", "权限中心", "安全中心", "运维监控", "模型中心", "费用与使用量", "系统设置", "帮助中心"] },
 ] as const;
