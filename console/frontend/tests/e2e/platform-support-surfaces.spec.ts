@@ -19,6 +19,7 @@ const journeys = [
 ] as const;
 
 test("exposes nine truthful Chinese-first platform support surfaces", async ({ page }) => {
+  await page.route("**/api/workbench/v1/session", route => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ reasonCode: "WORKBENCH_LOGIN_REQUIRED" }) }));
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     for (const [route, heading] of pages) {
