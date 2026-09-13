@@ -31,8 +31,6 @@ def test_first_slice_preserves_identity_cas_and_refresh() -> None:
     for marker in (
         "createBusinessProblem",
         "readBusinessProblem",
-        "writeCriterion",
-        "writeCriteriaSet",
         "predecessorRevisionId",
         "expectedVersion",
         'params.get("problem")',
@@ -51,23 +49,26 @@ def test_first_slice_preserves_identity_cas_and_refresh() -> None:
         "persistAuthorization(selectedId,pending)",
     ):
         assert marker in page
+    assert "writeCriterion" not in page
+    assert "writeCriteriaSet" not in page
     assert "problemPlanning" not in page
     assert "listDigitalEmployeeTemplates" not in page
 
 
 def test_plan_execution_and_resource_gaps_are_not_fabricated() -> None:
     page = text("problems/ProblemWorkspacePage.tsx")
-    assert "尚未接线" in page
     assert (
         "本批不伪造 Workflow / Plan、执行、Human Intervention、Evidence 或 Outcome"
         in page
     )
-    for boundary in ("数字员工", "Workflow / Plan", "Human Intervention"):
+    for boundary in (
+        "数字员工",
+        "Workflow / Plan",
+        "Human Intervention",
+        "当前不接入模型分析或任务执行",
+    ):
         assert boundary in page
-    assert "尚无该页面可调用的 HTTP 投影" in page
-    assert "不是执行成功证据" in page
-    assert "本批不调用 <code>getKnowledge</code>" in page
-    assert "也不据此新增功能" in page
+    assert "成功标准不会自动开始" in page
 
 
 def test_grant_administration_is_a_separate_exact_request_page() -> None:
@@ -99,14 +100,22 @@ def test_workbench_errors_keep_business_and_diagnostic_ids_distinct() -> None:
     assert "requestId" not in notice.replace("error.requestId", "")
 
 
-def test_problem_form_has_one_submit_action_and_accessible_fields() -> None:
+def test_conversation_has_one_composer_and_confirmation_gate() -> None:
     page = text("problems/ProblemWorkspacePage.tsx")
-    assert page.count("onClick={create}") == 1
-    assert 'htmlFor="problem-title"' in page
-    assert 'id="problem-title"' in page
-    assert 'htmlFor="problem-description"' in page
-    assert 'id="problem-description"' in page
-    assert "maxLength={200}" in page
-    assert "maxLength={2_000}" in page
-    assert "当前输入尚未保存" in page
+    conversation = text("problems/ProblemConversation.tsx")
+    model = text("problems/problemConversationModel.ts")
+    assert page.count("<ConversationComposer") == 1
+    assert page.count("<DraftCard") == 1
+    assert "onConfirm={()=>void create()}" in page
+    assert 'htmlFor="problem-composer"' in conversation
+    assert 'id="problem-composer"' in conversation
+    assert "event.nativeEvent.isComposing" in conversation
+    assert "event.keyCode===229" in conversation
+    confirmation_boundary = (
+        "发送只生成待确认草稿" + "\uff0c" + "不会直接创建、授权或执行"
+    )
+    assert confirmation_boundary in conversation
+    assert "未提交草稿只保存在当前页面" in conversation
+    assert "suggestProblemTitle" in model
+    assert "无模型模式" in conversation
     assert 'operation:"创建业务问题",mutation:true' in page

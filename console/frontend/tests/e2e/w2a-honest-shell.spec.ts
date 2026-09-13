@@ -120,7 +120,7 @@ test("shows honest controls with keyboard access and no overflow at 390px", asyn
   await page.screenshot({ path: testInfo.outputPath("w2a-honest-controls-390.png"), fullPage: true });
 });
 
-test("business workbench keeps one form submit, preserved input, and a reachable mobile action", async ({ page }, testInfo) => {
+test("business workbench creates a message draft before any write and supports complete replacement", async ({ page }, testInfo) => {
   const identity = { value: "human:applicant" as string | null };
   await installRoutes(page, identity);
   let createAttempts = 0;
@@ -135,34 +135,50 @@ test("business workbench keeps one form submit, preserved input, and a reachable
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/work");
-  await expect(page.getByRole("heading", { name: "创建一个业务问题" })).toBeVisible();
-  await expect(page.getByText("正在新建业务问题", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "创建业务问题", exact: true })).toHaveCount(1);
-  const title = page.getByLabel("标题");
-  const description = page.getByLabel("问题描述");
-  expect((await title.boundingBox())!.width).toBeGreaterThan(500);
-  expect((await description.boundingBox())!.width).toBeGreaterThan(500);
-  await title.fill("供应商交付延期");
-  await description.fill("关键零部件连续延期，影响本季度客户交付。需要识别原因和可执行的恢复方案。");
-  await page.getByRole("button", { name: "创建业务问题", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "你希望解决什么问题？" })).toBeVisible();
+  const composer = page.getByLabel("你希望解决什么问题？");
+  await composer.fill("组合输入不应发送");
+  await composer.dispatchEvent("keydown", { key: "Enter", code: "Enter", isComposing: true, keyCode: 229 });
+  await expect(page.getByLabel("问题草稿卡片")).toHaveCount(0);
+  expect(createAttempts).toBe(0);
+
+  const original = "供应商交付延期。关键零部件连续延期，影响本季度客户交付。";
+  await composer.fill(original);
+  await composer.press("Enter");
+  const draft = page.getByLabel("问题草稿卡片");
+  await expect(draft).toBeVisible();
+  await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付延期");
+  await expect(draft.getByLabel("完整描述")).toHaveValue(original);
+  expect(createAttempts).toBe(0);
+
+  await draft.getByRole("button", { name: "修改", exact: true }).click();
+  const replacement = page.getByLabel("完整替换草稿描述");
+  await replacement.fill("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
+  await page.getByRole("button", { name: "更新草稿", exact: true }).click();
+  await expect(draft.getByLabel("完整描述")).toHaveValue("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
+  await draft.getByRole("button", { name: "修改", exact: true }).click();
+  await draft.getByLabel("建议名称").fill("供应商交付恢复");
+  await draft.getByRole("button", { name: "确认创建", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("创建业务问题的结果暂时无法确认");
   await expect(page.getByText("diagnostic:fixture", { exact: true })).not.toBeVisible();
   await page.getByRole("alert").getByText("技术详情", { exact: true }).click();
   await expect(page.getByText("诊断 ID", { exact: true })).toBeVisible();
   await expect(page.getByText("diagnostic:fixture", { exact: true })).toBeVisible();
-  await expect(title).toHaveValue("供应商交付延期");
-  await expect(description).toContainText("关键零部件连续延期");
+  await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付恢复");
+  await expect(draft.getByLabel("完整描述")).toContainText("需要明确恢复责任和时间");
   expect(createAttempts).toBe(1);
   await page.screenshot({ path: testInfo.outputPath("w2b-create-error-preserves-input-1440.png"), fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await title.fill("移动端问题");
-  await description.fill("验证长页面滚动后，主提交操作仍然能够通过键盘聚焦并进入视口。");
-  const submit = page.getByRole("button", { name: "创建业务问题", exact: true });
+  const mobileComposer = page.getByLabel("你希望解决什么问题？");
+  await mobileComposer.fill("移动端问题需要确认底部输入、确认与取消均可达。");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  const submit = page.getByRole("button", { name: "确认创建", exact: true });
   await submit.focus();
   await expect(submit).toBeFocused();
   await expect(submit).toBeInViewport();
+  await expect(page.getByRole("button", { name: "取消", exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("w2b-create-form-390.png"), fullPage: true });
 });
