@@ -107,6 +107,48 @@ def test_summary_static_scenarios(mapping):
     assert "\n" not in encoded
 
 
+def test_support_surface_timeout_reports_closed_page_viewport_and_action() -> None:
+    report = summary_report(status="timedOut")
+    suite = report["suites"][0]
+    spec = suite["specs"][0]
+    suite["file"] = "platform-support-surfaces.spec.ts"
+    spec["title"] = "exposes nine truthful Chinese-first platform support surfaces"
+    result = spec["tests"][0]["results"][0]
+    result["duration"] = 60_000
+    result["steps"] = [
+        {"title": "SUPPORT_APPLICATIONS_DESKTOP_NAVIGATE", "duration": 100},
+        {
+            "title": "SUPPORT_APPLICATIONS_DESKTOP_HEADING_VISIBLE",
+            "duration": 59_900,
+            "error": {"message": "PRIVATE"},
+        },
+    ]
+
+    summary = make_summary(report)
+
+    assert summary["actionClass"] == "HEADING_VISIBLE"
+    assert summary["stepDiagnostic"] == {
+        "failedStep": {
+            "routeKey": "APPLICATIONS",
+            "viewportKey": "DESKTOP",
+            "stepId": "SUPPORT_APPLICATIONS_DESKTOP_HEADING_VISIBLE",
+            "actionClass": "HEADING_VISIBLE",
+            "elapsedMs": 59_900,
+        },
+        "lastCompletedStep": {
+            "routeKey": "APPLICATIONS",
+            "viewportKey": "DESKTOP",
+            "stepId": "SUPPORT_APPLICATIONS_DESKTOP_NAVIGATE",
+            "actionClass": "NAVIGATE",
+            "elapsedMs": 100,
+        },
+        "completedStepCount": 1,
+        "elapsedMs": 60_000,
+        "timeoutKind": "SCENARIO",
+    }
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
 @pytest.mark.parametrize("status", ["failed", "timedOut", "interrupted"])
 def test_summary_counts_and_unknown_scenario(status):
     summary = make_summary(summary_report(status, known=False))

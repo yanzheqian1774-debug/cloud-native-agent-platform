@@ -11,6 +11,7 @@ const pages = [
   ["/settings", "系统设置"],
   ["/help", "帮助中心"],
 ] as const;
+const supportRouteKeys = ["APPLICATIONS", "AGENTS", "PERMISSIONS", "SECURITY", "OPERATIONS", "MODELS", "USAGE", "SETTINGS", "HELP"] as const;
 const primaryRoutes = ["/dashboard", "/work", "/digital-employees", "/agent-center", "/skills", "/mcp", "/knowledge", "/workflow-definitions", "/runtime-profiles", "/evidence", "/outcomes", ...pages.filter(([route]) => route !== "/agent-center").map(([route]) => route)] as const;
 const routeKeys = ["HOME", "WORK", "EMPLOYEES", "AGENTS", "SKILLS", "MCP", "KNOWLEDGE", "WORKFLOWS", "RUNTIMES", "EVIDENCE", "OUTCOMES", "APPLICATIONS", "PERMISSIONS", "SECURITY", "OPERATIONS", "MODELS", "USAGE", "SETTINGS", "HELP"] as const;
 const journeys = [
@@ -22,33 +23,37 @@ test("exposes nine truthful Chinese-first platform support surfaces", async ({ p
   await page.route("**/api/workbench/v1/session", route => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ reasonCode: "WORKBENCH_LOGIN_REQUIRED" }) }));
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    for (const [route, heading] of pages) {
-      await page.goto(route);
-      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
-      await expect(page.getByRole("tab", { name: "产品视图" })).toBeVisible();
-      await expect(page.getByRole("tab", { name: "技术视图" })).toBeVisible();
-      await expect(page.getByRole("status").first()).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const viewportKey = viewport.width === 1440 ? "DESKTOP" : "MOBILE";
+    for (const [index, [route, heading]] of pages.entries()) {
+      const key = `SUPPORT_${supportRouteKeys[index]}_${viewportKey}`;
+      await test.step(`${key}_NAVIGATE`, async () => { await page.goto(route); });
+      await test.step(`${key}_HEADING_VISIBLE`, async () => { await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible(); });
+      await test.step(`${key}_PRODUCT_TAB_VISIBLE`, async () => { await expect(page.getByRole("tab", { name: "产品视图" })).toBeVisible(); });
+      await test.step(`${key}_TECHNICAL_TAB_VISIBLE`, async () => { await expect(page.getByRole("tab", { name: "技术视图" })).toBeVisible(); });
+      await test.step(`${key}_STATUS_VISIBLE`, async () => { await expect(page.getByRole("status").first()).toBeVisible(); });
+      await test.step(`${key}_NO_OVERFLOW`, async () => { expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); });
     }
   }
-  await page.goto("/outcomes");
-  const search = page.getByLabel("搜索业务问题");
-  await search.fill("供应商");
-  await expect(search).toBeFocused();
+  await test.step("SUPPORT_OUTCOMES_MOBILE_SEARCH_NAVIGATE", async () => { await page.goto("/outcomes"); });
+  const search = page.getByLabel("搜索旧规划业务问题");
+  await test.step("SUPPORT_OUTCOMES_MOBILE_SEARCH_FILL", async () => { await search.fill("供应商"); });
+  await test.step("SUPPORT_OUTCOMES_MOBILE_SEARCH_FOCUSED", async () => { await expect(search).toBeFocused(); });
   // Deterministic replacement mirrors an asynchronous loading heading becoming
   // the page heading. Once the user transfers focus, replacement must not steal it.
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto("/outcomes");
+    const viewportKey = width === 1440 ? "DESKTOP" : "MOBILE";
+    const key = `SUPPORT_OUTCOMES_${viewportKey}`;
+    await test.step(`${key}_FOCUS_NAVIGATE`, async () => { await page.goto("/outcomes"); });
     const heading = page.locator("main h1").first();
-    await expect(heading).toBeFocused();
-    await heading.evaluate(element => element.replaceWith(element.cloneNode(true)));
-    await expect(heading).toBeFocused();
-    const input = page.getByLabel("搜索业务问题");
-    await input.fill("供应商");
-    await heading.evaluate(element => element.replaceWith(element.cloneNode(true)));
-    await expect(input).toBeFocused();
-    await page.evaluate(() => {
+    await test.step(`${key}_HEADING_FOCUSED`, async () => { await expect(heading).toBeFocused(); });
+    await test.step(`${key}_HEADING_REPLACED`, async () => { await heading.evaluate(element => element.replaceWith(element.cloneNode(true))); });
+    await test.step(`${key}_REPLACED_HEADING_FOCUSED`, async () => { await expect(heading).toBeFocused(); });
+    const input = page.getByLabel("搜索旧规划业务问题");
+    await test.step(`${key}_INPUT_FILL`, async () => { await input.fill("供应商"); });
+    await test.step(`${key}_HEADING_REPLACED_AFTER_INPUT`, async () => { await heading.evaluate(element => element.replaceWith(element.cloneNode(true))); });
+    await test.step(`${key}_INPUT_FOCUSED`, async () => { await expect(input).toBeFocused(); });
+    await test.step(`${key}_DIALOG_FOCUSED`, async () => { await page.evaluate(() => {
       const panel = document.createElement("section");
       panel.setAttribute("role", "dialog");
       panel.setAttribute("aria-label", "合成焦点面板");
@@ -59,9 +64,9 @@ test("exposes nine truthful Chinese-first platform support surfaces", async ({ p
       close.focus();
       const current = document.querySelector("main h1")!;
       current.replaceWith(current.cloneNode(true));
-    });
-    await expect(page.getByRole("button", { name: "合成关闭按钮" })).toBeFocused();
-    await page.getByRole("dialog", { name: "合成焦点面板" }).evaluate(element => element.remove());
+    }); });
+    await test.step(`${key}_DIALOG_FOCUS_RETAINED`, async () => { await expect(page.getByRole("button", { name: "合成关闭按钮" })).toBeFocused(); });
+    await test.step(`${key}_DIALOG_REMOVED`, async () => { await page.getByRole("dialog", { name: "合成焦点面板" }).evaluate(element => element.remove()); });
   }
 });
 

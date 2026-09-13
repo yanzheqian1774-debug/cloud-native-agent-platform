@@ -804,6 +804,60 @@ PRIMARY_ACTION_CLASSES = (
     "NO_OVERFLOW",
 )
 
+SUPPORT_ROUTE_KEYS = (
+    "APPLICATIONS",
+    "AGENTS",
+    "PERMISSIONS",
+    "SECURITY",
+    "OPERATIONS",
+    "MODELS",
+    "USAGE",
+    "SETTINGS",
+    "HELP",
+)
+SUPPORT_STEP_IDS = {
+    f"SUPPORT_{route}_{viewport}_{action}": (route, viewport, action)
+    for route in SUPPORT_ROUTE_KEYS
+    for viewport in ("DESKTOP", "MOBILE")
+    for action in (
+        "NAVIGATE",
+        "HEADING_VISIBLE",
+        "PRODUCT_TAB_VISIBLE",
+        "TECHNICAL_TAB_VISIBLE",
+        "STATUS_VISIBLE",
+        "NO_OVERFLOW",
+    )
+}
+SUPPORT_OUTCOME_STEP_IDS = {
+    "SUPPORT_OUTCOMES_MOBILE_SEARCH_NAVIGATE": (
+        "OUTCOMES",
+        "MOBILE",
+        "NAVIGATE",
+    ),
+    "SUPPORT_OUTCOMES_MOBILE_SEARCH_FILL": ("OUTCOMES", "MOBILE", "INPUT_FILL"),
+    "SUPPORT_OUTCOMES_MOBILE_SEARCH_FOCUSED": (
+        "OUTCOMES",
+        "MOBILE",
+        "FOCUS_CHECK",
+    ),
+    **{
+        f"SUPPORT_OUTCOMES_{viewport}_{suffix}": ("OUTCOMES", viewport, action)
+        for viewport in ("DESKTOP", "MOBILE")
+        for suffix, action in (
+            ("FOCUS_NAVIGATE", "NAVIGATE"),
+            ("HEADING_FOCUSED", "FOCUS_CHECK"),
+            ("HEADING_REPLACED", "DOM_REPLACEMENT"),
+            ("REPLACED_HEADING_FOCUSED", "FOCUS_CHECK"),
+            ("INPUT_FILL", "INPUT_FILL"),
+            ("HEADING_REPLACED_AFTER_INPUT", "DOM_REPLACEMENT"),
+            ("INPUT_FOCUSED", "FOCUS_CHECK"),
+            ("DIALOG_FOCUSED", "DOM_REPLACEMENT"),
+            ("DIALOG_FOCUS_RETAINED", "FOCUS_CHECK"),
+            ("DIALOG_REMOVED", "DOM_REPLACEMENT"),
+        )
+    },
+}
+
 
 def _primary_action_class(step_id: str) -> str:
     return next(
@@ -996,6 +1050,8 @@ DIAGNOSTIC_STEP_IDS = {
         for step_id, route, viewport, action in WAVE_3B_STEP_IDS.values()
     },
     **UNIFIED_PRODUCT_STEP_IDS,
+    **SUPPORT_STEP_IDS,
+    **SUPPORT_OUTCOME_STEP_IDS,
 }
 ACTION_CLASSES = frozenset(
     {"UNKNOWN", *(identity[2] for identity in DIAGNOSTIC_STEP_IDS.values())}
@@ -1011,6 +1067,9 @@ def _step_identity(scenario: str, title: object):
             return None
         route, viewport = identity
         return title, route, viewport, _primary_action_class(title)
+    if scenario == "PLATFORM_SUPPORT_TRUTHFUL_SURFACES":
+        identity = SUPPORT_STEP_IDS.get(title) or SUPPORT_OUTCOME_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     if scenario == "WAVE_3B_REAL_SERVICE_JOURNEYS":
         return WAVE_3B_STEP_IDS.get(title)
     if scenario == "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY":
@@ -1029,6 +1088,7 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         (Path(str(suite.get("file", ""))).name, spec.get("title"))
     )
     if mapped != scenario or scenario not in {
+        "PLATFORM_SUPPORT_TRUTHFUL_SURFACES",
         "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
@@ -2124,6 +2184,7 @@ def main() -> int:
         raise
     finally:
         cleanup_error: BaseException | None = None
+        print("harness phase: TEARDOWN_START", file=sys.stderr)
         try:
             harness.stop()
         except BaseException as exc:
@@ -2150,6 +2211,7 @@ def main() -> int:
                 cleanup_error = exc
         if primary_error is None and cleanup_error is not None:
             raise cleanup_error
+        print("harness phase: TEARDOWN_COMPLETE", file=sys.stderr)
     return command_result
 
 
