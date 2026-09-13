@@ -1070,6 +1070,12 @@ WAVE_3B_STEP_IDS = {
         "MOBILE",
         "OPEN_EVIDENCE",
     ),
+    "WAVE3B_12_USER_FOCUS_CLOSE": (
+        "WAVE3B_12_USER_FOCUS_CLOSE",
+        "EVIDENCE",
+        "MOBILE",
+        "CLOSE_ACTION",
+    ),
     "WAVE3B_12_USER_FOCUS_TRANSFER": (
         "WAVE3B_12_USER_FOCUS_TRANSFER",
         "EVIDENCE",

@@ -58,6 +58,7 @@ test("proves all twelve Wave 3B real-service browser journeys",async({page,reque
  await test.step("WAVE3B_12_CLAIM_FOCUS_RESTORED",async()=>{await expect(page.locator('[id="claim-resource.lifecycle"]')).toBeFocused()});
  let releaseProductTraceability=()=>{};const delayedProductTraceability=new Promise<void>(resolve=>{releaseProductTraceability=resolve}),traceabilityRoute="**/api/internal/v0.2.2/product/traceability/AGENT/**";
  await test.step("WAVE3B_12_USER_FOCUS_TRANSFER_SETUP",async()=>{await claimLink.focus();await page.keyboard.press("Enter");await expect(page.getByRole("dialog")).toContainText(evidence.evidenceId);await page.route(traceabilityRoute,async route=>{await delayedProductTraceability;await route.continue()},{times:1})});
- await test.step("WAVE3B_12_USER_FOCUS_TRANSFER",async()=>{await page.keyboard.press("Enter");await page.keyboard.press("Tab");await expect(page.locator(":focus")).not.toHaveAttribute("id","claim-resource.lifecycle")});
+ await test.step("WAVE3B_12_USER_FOCUS_CLOSE",async()=>{await page.keyboard.press("Enter");await expect(page.getByRole("dialog")).toHaveCount(0)});
+ await test.step("WAVE3B_12_USER_FOCUS_TRANSFER",async()=>{await page.keyboard.press("Tab");expect(await page.evaluate(()=>document.activeElement?.id!=="claim-resource.lifecycle")).toBe(true)});
  await test.step("WAVE3B_12_USER_FOCUS_PRESERVED",async()=>{releaseProductTraceability();await expect(page.locator('[id="claim-resource.lifecycle"]')).toBeVisible();await expect(page.locator('[id="claim-resource.lifecycle"]')).not.toBeFocused();await page.unroute(traceabilityRoute)});
 });
