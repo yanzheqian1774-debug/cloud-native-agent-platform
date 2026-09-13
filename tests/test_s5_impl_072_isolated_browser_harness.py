@@ -545,6 +545,16 @@ def test_wave_3b_setup_uses_exact_static_top_level_steps():
     assert "waitForTimeout(" not in source
 
 
+def test_every_wave_3b_step_has_a_closed_diagnostic_identity():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'test\.step\("([^"]+)"', source)
+    assert titles
+    assert set(titles) == set(harness_module.WAVE_3B_STEP_IDS)
+
+
 def test_wave_3b_conflict_write_failure_is_bounded_and_distinct():
     report = wave_3b_step_report()
     result = report["suites"][0]["specs"][0]["tests"][0]["results"][0]
