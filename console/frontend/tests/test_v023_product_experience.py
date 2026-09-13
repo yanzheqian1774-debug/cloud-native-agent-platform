@@ -33,9 +33,13 @@ def test_w2a_shell_uses_session_facts_and_marks_unavailable_controls() -> None:
     shell = source("components/ConsoleShell.tsx")
     assert "readWorkbenchSession" in shell
     assert "new AbortController()" in shell
-    assert "controller.abort()" in shell
+    assert "request?.abort()" in shell
     assert "readWorkbenchSession(controller.signal)" in shell
     assert "session.principal.principalId" in shell
+    assert (
+        'document.addEventListener("visibilitychange",refreshVisibleSession)' in shell
+    )
+    assert "request===controller" in shell
     assert "当前可信身份" in shell
     assert "未显示可信身份" in shell
     assert "审核人员" not in shell

@@ -79,8 +79,13 @@ test("uses only current session identity and keeps legacy planning out of truste
   await expect(page).toHaveURL(/\/problems$/);
   expect(exactProblemReads).toEqual([]);
 
+  await page.goto("/dashboard");
+  await expect(page.getByLabel("当前可信身份 human:applicant")).toBeVisible();
   identity.value = null;
-  await page.goto("/help");
+  await Promise.all([
+    page.waitForResponse(response => response.url().endsWith("/api/workbench/v1/session") && response.status() === 401),
+    page.evaluate(() => document.dispatchEvent(new Event("visibilitychange"))),
+  ]);
   await expect(page.getByText("未显示可信身份", { exact: true })).toBeVisible();
   await expect(page.getByText("human:applicant", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("w2a-session-failure-desktop.png"), fullPage: true });
