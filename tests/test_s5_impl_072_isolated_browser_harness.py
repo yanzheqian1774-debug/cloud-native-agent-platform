@@ -527,6 +527,20 @@ def test_wave_3b_conflict_recovery_uses_exact_static_top_level_steps():
         "WAVE3B_08_EXPLICIT_RECOVERY",
         "WAVE3B_08_FINAL_ASSERTION",
     ]
+
+
+def test_wave_3b_setup_uses_exact_static_top_level_steps():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'test\.step\("(WAVE3B_00_[A-Z_]+)"', source)
+    expected = [
+        title
+        for title in harness_module.WAVE_3B_STEP_IDS
+        if title.startswith("WAVE3B_00_")
+    ]
+    assert titles == expected
     assert "test.setTimeout(240_000)" in source
     assert "waitForTimeout(" not in source
 

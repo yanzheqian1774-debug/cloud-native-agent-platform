@@ -866,6 +866,54 @@ def _primary_action_class(step_id: str) -> str:
 
 
 WAVE_3B_STEP_IDS = {
+    "WAVE3B_00_BACKEND_RESTART": (
+        "WAVE3B_00_BACKEND_RESTART",
+        "BACKEND",
+        "DESKTOP",
+        "RESTART_READINESS",
+    ),
+    "WAVE3B_00_SKILL_SEED": (
+        "WAVE3B_00_SKILL_SEED",
+        "SKILLS",
+        "DESKTOP",
+        "RESOURCE_SEED",
+    ),
+    "WAVE3B_00_MCP_SEED": (
+        "WAVE3B_00_MCP_SEED",
+        "MCP",
+        "DESKTOP",
+        "RESOURCE_SEED",
+    ),
+    "WAVE3B_00_KNOWLEDGE_SEED": (
+        "WAVE3B_00_KNOWLEDGE_SEED",
+        "KNOWLEDGE",
+        "DESKTOP",
+        "RESOURCE_SEED",
+    ),
+    "WAVE3B_00_RUNTIME_SEED": (
+        "WAVE3B_00_RUNTIME_SEED",
+        "RUNTIMES",
+        "DESKTOP",
+        "RESOURCE_SEED",
+    ),
+    "WAVE3B_00_WORKFLOW_SEED": (
+        "WAVE3B_00_WORKFLOW_SEED",
+        "WORKFLOWS",
+        "DESKTOP",
+        "RESOURCE_SEED",
+    ),
+    "WAVE3B_00_AGENT_SEED": (
+        "WAVE3B_00_AGENT_SEED",
+        "AGENTS",
+        "DESKTOP",
+        "RESOURCE_SEED",
+    ),
+    "WAVE3B_00_TRACEABILITY_READ": (
+        "WAVE3B_00_TRACEABILITY_READ",
+        "EVIDENCE",
+        "DESKTOP",
+        "TRACEABILITY_READ",
+    ),
     "1 context-preserving catalog round trip": (
         "WAVE3B_01_CATALOG_ROUND_TRIP",
         "CATALOG",
