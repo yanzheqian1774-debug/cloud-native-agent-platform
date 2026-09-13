@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 from typing import Any
@@ -45,6 +46,13 @@ from agent_core.execution_contract import (
     canonical_digest,
 )
 from agent_core.execution_repositories import AppendDisposition, PlacementResult
+from agent_core.openclaw_binding import (
+    AssociationStatus,
+    OpenClawBindingObservation,
+    OpenClawGenerationBinding,
+    OpenClawRuntimeBinding,
+    canonical_payload_digest,
+)
 from psycopg.errors import DeadlockDetected, SerializationFailure
 from psycopg.errors import Error as PsycopgError
 from psycopg.rows import dict_row
@@ -65,6 +73,8 @@ from .execution_domain import (
 ADAPTER = "execution-authority-postgresql-v1"
 SCHEMA_VERSION = 8
 GOVERNED_EXECUTION_ADAPTER = "governed-execution-claim-postgresql-v17"
+OPENCLAW_BINDING_ADAPTER = "execution-openclaw-binding-postgresql-v21"
+OPENCLAW_BINDING_SCHEMA_VERSION = 21
 __all__ = [
     "Generation",
     "PlacementDecisionKind",
@@ -73,6 +83,152 @@ __all__ = [
     "RuntimeObservedStateKind",
     "RuntimeReadiness",
 ]
+
+
+def _openclaw_runtime_record(value: OpenClawRuntimeBinding) -> dict[str, object]:
+    return {
+        "namespace": value.scope.namespace,
+        "security_domain": value.scope.security_domain,
+        "runtime_instance_id": str(value.runtime_instance_id),
+        "placement_id": str(value.placement_id),
+        "gateway_digest": value.gateway_digest,
+        "agent_id": value.agent_id,
+        "canonical_workspace": value.canonical_workspace,
+        "workspace_host": value.workspace_host,
+        "workspace_storage_domain": value.workspace_storage_domain,
+        "source_version": value.source_version,
+        "authorization_decision_id": value.authorization_decision_id,
+        "recorded_at": value.recorded_at.isoformat(),
+    }
+
+
+def _openclaw_generation_record(
+    value: OpenClawGenerationBinding,
+) -> dict[str, object]:
+    return {
+        "namespace": value.scope.namespace,
+        "security_domain": value.scope.security_domain,
+        "runtime_instance_id": str(value.runtime_instance_id),
+        "generation": value.generation.value,
+        "session_key": value.session_key,
+        "session_id": value.session_id,
+        "command_id": str(value.command_id),
+        "idempotency_key": value.idempotency_key,
+        "command_payload_digest": value.command_payload_digest,
+        "association_status": value.association_status.value,
+        "observation_high_water": value.observation_high_water,
+        "recorded_at": value.recorded_at.isoformat(),
+    }
+
+
+def _openclaw_observation_record(
+    value: OpenClawBindingObservation,
+) -> dict[str, object]:
+    return {
+        "namespace": value.scope.namespace,
+        "security_domain": value.scope.security_domain,
+        "runtime_instance_id": str(value.runtime_instance_id),
+        "generation": value.generation.value,
+        "high_water": value.high_water,
+        "association_status": value.association_status.value,
+        "observed_at": value.observed_at.isoformat(),
+        "freshness_deadline": value.freshness_deadline.isoformat(),
+        "source_version": value.source_version,
+        "reason_code": value.reason_code,
+        "gateway_matched": value.gateway_matched,
+        "agent_matched": value.agent_matched,
+        "workspace_matched": value.workspace_matched,
+        "session_matched": value.session_matched,
+    }
+
+
+def _openclaw_runtime_from_record(record: dict[str, object]) -> OpenClawRuntimeBinding:
+    return OpenClawRuntimeBinding(
+        ScopeIdentity(str(record["namespace"]), str(record["security_domain"])),
+        RuntimeInstanceId(str(record["runtime_instance_id"])),
+        PlacementId(str(record["placement_id"])),
+        str(record["gateway_digest"]),
+        str(record["agent_id"]),
+        str(record["canonical_workspace"]),
+        str(record["workspace_host"]),
+        str(record["workspace_storage_domain"]),
+        str(record["source_version"]),
+        str(record["authorization_decision_id"]),
+        datetime.fromisoformat(str(record["recorded_at"])),
+    )
+
+
+def _openclaw_generation_from_record(
+    record: dict[str, object],
+    *,
+    association_status: str | None = None,
+    observation_high_water: int | None = None,
+) -> OpenClawGenerationBinding:
+    return OpenClawGenerationBinding(
+        ScopeIdentity(str(record["namespace"]), str(record["security_domain"])),
+        RuntimeInstanceId(str(record["runtime_instance_id"])),
+        Generation(int(record["generation"])),
+        str(record["session_key"]),
+        str(record["session_id"]),
+        CommandId(str(record["command_id"])),
+        str(record["idempotency_key"]),
+        str(record["command_payload_digest"]),
+        AssociationStatus(association_status or str(record["association_status"])),
+        observation_high_water
+        if observation_high_water is not None
+        else int(record["observation_high_water"]),
+        datetime.fromisoformat(str(record["recorded_at"])),
+    )
+
+
+def _openclaw_observation_from_record(
+    record: dict[str, object],
+) -> OpenClawBindingObservation:
+    return OpenClawBindingObservation(
+        ScopeIdentity(str(record["namespace"]), str(record["security_domain"])),
+        RuntimeInstanceId(str(record["runtime_instance_id"])),
+        Generation(int(record["generation"])),
+        int(record["high_water"]),
+        AssociationStatus(str(record["association_status"])),
+        datetime.fromisoformat(str(record["observed_at"])),
+        datetime.fromisoformat(str(record["freshness_deadline"])),
+        str(record["source_version"]),
+        str(record["reason_code"]),
+        bool(record["gateway_matched"]),
+        bool(record["agent_matched"]),
+        bool(record["workspace_matched"]),
+        bool(record["session_matched"]),
+    )
+
+
+def _append_openclaw_command_result(
+    connection,
+    scope: ScopeIdentity,
+    command_id: CommandId,
+    result: CommandResult,
+    record: dict[str, object],
+) -> None:
+    connection.execute(
+        "SELECT command_id FROM execution_authority.desired_commands WHERE namespace=%s AND security_domain=%s AND command_id=%s FOR UPDATE",
+        (scope.namespace, scope.security_domain, str(command_id)),
+    ).fetchone()
+    row = connection.execute(
+        "SELECT ordinal FROM execution_authority.command_results WHERE namespace=%s AND security_domain=%s AND command_id=%s ORDER BY ordinal DESC LIMIT 1",
+        (scope.namespace, scope.security_domain, str(command_id)),
+    ).fetchone()
+    ordinal = 1 if row is None else row["ordinal"] + 1
+    connection.execute(
+        "INSERT INTO execution_authority.command_results(namespace,security_domain,command_id,ordinal,result,fact_digest,fact) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)",
+        (
+            scope.namespace,
+            scope.security_domain,
+            str(command_id),
+            ordinal,
+            result.value,
+            canonical_digest(record),
+            json.dumps(record),
+        ),
+    )
 
 
 class PostgresExecutionAuthorityRepository:
@@ -169,6 +325,41 @@ class PostgresExecutionAuthorityRepository:
         except PsycopgError as exc:
             raise ExecutionStorageUnavailable(
                 "GOVERNED_EXECUTION_MIGRATION_UNAVAILABLE"
+            ) from exc
+
+    def migrate_openclaw_bindings(self, migration_path: Path) -> None:
+        checksum = hashlib.sha256(migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET LOCAL statement_timeout='10s'")
+                connection.execute("SET LOCAL lock_timeout='3s'")
+                connection.execute(migration_path.read_text())
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM execution_authority.openclaw_binding_migrations WHERE version=%s",
+                    (OPENCLAW_BINDING_SCHEMA_VERSION,),
+                ).fetchone()
+                expected = {
+                    "checksum": checksum,
+                    "adapter": OPENCLAW_BINDING_ADAPTER,
+                }
+                if row is None:
+                    connection.execute(
+                        "INSERT INTO execution_authority.openclaw_binding_migrations(version,checksum,adapter) VALUES (%s,%s,%s)",
+                        (
+                            OPENCLAW_BINDING_SCHEMA_VERSION,
+                            checksum,
+                            OPENCLAW_BINDING_ADAPTER,
+                        ),
+                    )
+                elif row != expected:
+                    raise ExecutionSchemaIncompatible(
+                        "OPENCLAW_BINDING_SCHEMA_INCOMPATIBLE"
+                    )
+        except ExecutionSchemaIncompatible:
+            raise
+        except (OSError, PsycopgError) as exc:
+            raise ExecutionStorageUnavailable(
+                "OPENCLAW_BINDING_MIGRATION_UNAVAILABLE"
             ) from exc
 
     def compatibility(self) -> None:
@@ -825,6 +1016,286 @@ class PostgresExecutionAuthorityRepository:
             )
             for row in rows
         )
+
+    def save_openclaw_binding(
+        self,
+        binding: OpenClawRuntimeBinding,
+        generation: OpenClawGenerationBinding,
+    ) -> AppendDisposition:
+        if (
+            binding.scope != generation.scope
+            or binding.runtime_instance_id != generation.runtime_instance_id
+        ):
+            raise ExecutionConflict("OPENCLAW_BINDING_SCOPE_OR_RUNTIME_MISMATCH")
+        binding_record = _openclaw_runtime_record(binding)
+        generation_record = _openclaw_generation_record(generation)
+        binding_digest = canonical_payload_digest(binding)
+        generation_digest = canonical_payload_digest(generation)
+
+        def operation(connection):
+            placement = connection.execute(
+                "SELECT decision,runtime_instance_id FROM execution_authority.placement_decisions WHERE namespace=%s AND security_domain=%s AND placement_id=%s FOR SHARE",
+                (
+                    binding.scope.namespace,
+                    binding.scope.security_domain,
+                    str(binding.placement_id),
+                ),
+            ).fetchone()
+            if placement != {
+                "decision": PlacementDecisionKind.PLACED.value,
+                "runtime_instance_id": str(binding.runtime_instance_id),
+            }:
+                raise ExecutionConflict("OPENCLAW_PLACEMENT_NOT_VALID")
+            desired = connection.execute(
+                "SELECT runtime_instance_id,generation,command_digest FROM execution_authority.desired_commands WHERE namespace=%s AND security_domain=%s AND command_id=%s FOR SHARE",
+                (
+                    binding.scope.namespace,
+                    binding.scope.security_domain,
+                    str(generation.command_id),
+                ),
+            ).fetchone()
+            if desired != {
+                "runtime_instance_id": str(binding.runtime_instance_id),
+                "generation": generation.generation.value,
+                "command_digest": generation.command_payload_digest,
+            }:
+                raise ExecutionConflict("OPENCLAW_COMMAND_NOT_VALID")
+            existing_binding = connection.execute(
+                "SELECT binding_digest FROM execution_authority.openclaw_runtime_bindings WHERE namespace=%s AND security_domain=%s AND runtime_instance_id=%s FOR UPDATE",
+                (
+                    binding.scope.namespace,
+                    binding.scope.security_domain,
+                    str(binding.runtime_instance_id),
+                ),
+            ).fetchone()
+            if (
+                existing_binding
+                and existing_binding["binding_digest"] != binding_digest
+            ):
+                raise ExecutionConflict("OPENCLAW_RUNTIME_BINDING_CONFLICT")
+            if existing_binding is None:
+                connection.execute(
+                    "INSERT INTO execution_authority.openclaw_runtime_bindings(namespace,security_domain,runtime_instance_id,placement_id,gateway_digest,agent_id,canonical_workspace,workspace_host,workspace_storage_domain,source_version,authorization_decision_id,binding_digest,record,recorded_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)",
+                    (
+                        binding.scope.namespace,
+                        binding.scope.security_domain,
+                        str(binding.runtime_instance_id),
+                        str(binding.placement_id),
+                        binding.gateway_digest,
+                        binding.agent_id,
+                        binding.canonical_workspace,
+                        binding.workspace_host,
+                        binding.workspace_storage_domain,
+                        binding.source_version,
+                        binding.authorization_decision_id,
+                        binding_digest,
+                        json.dumps(binding_record),
+                        binding.recorded_at,
+                    ),
+                )
+            replay = connection.execute(
+                "SELECT generation_digest,command_payload_digest FROM execution_authority.openclaw_generation_bindings WHERE namespace=%s AND security_domain=%s AND runtime_instance_id=%s AND generation=%s FOR UPDATE",
+                (
+                    generation.scope.namespace,
+                    generation.scope.security_domain,
+                    str(generation.runtime_instance_id),
+                    generation.generation.value,
+                ),
+            ).fetchone()
+            by_key = connection.execute(
+                "SELECT command_payload_digest,generation_digest FROM execution_authority.openclaw_generation_bindings WHERE namespace=%s AND security_domain=%s AND idempotency_key=%s FOR UPDATE",
+                (
+                    generation.scope.namespace,
+                    generation.scope.security_domain,
+                    generation.idempotency_key,
+                ),
+            ).fetchone()
+            if (
+                by_key
+                and by_key["command_payload_digest"]
+                != generation.command_payload_digest
+            ):
+                raise ExecutionConflict("OPENCLAW_IDEMPOTENCY_KEY_CONFLICT")
+            if replay:
+                if replay != {
+                    "generation_digest": generation_digest,
+                    "command_payload_digest": generation.command_payload_digest,
+                }:
+                    raise ExecutionConflict("OPENCLAW_GENERATION_BINDING_CONFLICT")
+                return AppendDisposition.REPLAYED
+            if by_key:
+                raise ExecutionConflict("OPENCLAW_IDEMPOTENCY_KEY_BINDING_CONFLICT")
+            connection.execute(
+                "INSERT INTO execution_authority.openclaw_generation_bindings(namespace,security_domain,runtime_instance_id,generation,gateway_digest,session_key,session_id,command_id,idempotency_key,command_payload_digest,association_status,observation_high_water,generation_digest,record,recorded_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)",
+                (
+                    generation.scope.namespace,
+                    generation.scope.security_domain,
+                    str(generation.runtime_instance_id),
+                    generation.generation.value,
+                    binding.gateway_digest,
+                    generation.session_key,
+                    generation.session_id,
+                    str(generation.command_id),
+                    generation.idempotency_key,
+                    generation.command_payload_digest,
+                    generation.association_status.value,
+                    generation.observation_high_water,
+                    generation_digest,
+                    json.dumps(generation_record),
+                    generation.recorded_at,
+                ),
+            )
+            _append_openclaw_command_result(
+                connection,
+                generation.scope,
+                generation.command_id,
+                CommandResult.REQUESTED,
+                {
+                    "kind": "OPENCLAW_BINDING_RECORDED",
+                    "runtime_instance_id": str(generation.runtime_instance_id),
+                    "generation": generation.generation.value,
+                    "command_payload_digest": generation.command_payload_digest,
+                    "idempotency_key_digest": hashlib.sha256(
+                        generation.idempotency_key.encode()
+                    ).hexdigest(),
+                },
+            )
+            return AppendDisposition.APPENDED
+
+        return self._transaction(operation)
+
+    def get_openclaw_binding(
+        self,
+        scope: ScopeIdentity,
+        runtime_instance_id: RuntimeInstanceId,
+        generation: Generation,
+    ) -> tuple[OpenClawRuntimeBinding, OpenClawGenerationBinding] | None:
+        with self.pool.connection() as connection:
+            row = connection.execute(
+                "SELECT runtime.record AS runtime_record,generation.record AS generation_record,generation.association_status,generation.observation_high_water FROM execution_authority.openclaw_runtime_bindings runtime JOIN execution_authority.openclaw_generation_bindings generation USING(namespace,security_domain,runtime_instance_id) WHERE runtime.namespace=%s AND runtime.security_domain=%s AND runtime.runtime_instance_id=%s AND generation.generation=%s",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(runtime_instance_id),
+                    generation.value,
+                ),
+            ).fetchone()
+        if row is None:
+            return None
+        return (
+            _openclaw_runtime_from_record(row["runtime_record"]),
+            _openclaw_generation_from_record(
+                row["generation_record"],
+                association_status=row["association_status"],
+                observation_high_water=row["observation_high_water"],
+            ),
+        )
+
+    def append_openclaw_observation(
+        self, observation: OpenClawBindingObservation
+    ) -> AppendDisposition:
+        record = _openclaw_observation_record(observation)
+        digest = canonical_payload_digest(observation)
+
+        def operation(connection):
+            current = connection.execute(
+                "SELECT observation_high_water,command_id FROM execution_authority.openclaw_generation_bindings WHERE namespace=%s AND security_domain=%s AND runtime_instance_id=%s AND generation=%s FOR UPDATE",
+                (
+                    observation.scope.namespace,
+                    observation.scope.security_domain,
+                    str(observation.runtime_instance_id),
+                    observation.generation.value,
+                ),
+            ).fetchone()
+            if current is None:
+                raise ExecutionConflict("OPENCLAW_BINDING_NOT_FOUND")
+            high_water = current["observation_high_water"]
+            if observation.high_water <= high_water:
+                existing = connection.execute(
+                    "SELECT observation_digest FROM execution_authority.openclaw_binding_observations WHERE namespace=%s AND security_domain=%s AND runtime_instance_id=%s AND generation=%s AND high_water=%s",
+                    (
+                        observation.scope.namespace,
+                        observation.scope.security_domain,
+                        str(observation.runtime_instance_id),
+                        observation.generation.value,
+                        observation.high_water,
+                    ),
+                ).fetchone()
+                if observation.high_water == high_water and existing == {
+                    "observation_digest": digest
+                }:
+                    return AppendDisposition.REPLAYED
+                raise ExecutionConflict("OPENCLAW_OBSERVATION_HIGH_WATER_REGRESSION")
+            if observation.high_water != high_water + 1:
+                raise ExecutionConflict("OPENCLAW_OBSERVATION_HIGH_WATER_GAP")
+            connection.execute(
+                "INSERT INTO execution_authority.openclaw_binding_observations(namespace,security_domain,runtime_instance_id,generation,high_water,association_status,source_version,observation_digest,record,observed_at,freshness_deadline) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)",
+                (
+                    observation.scope.namespace,
+                    observation.scope.security_domain,
+                    str(observation.runtime_instance_id),
+                    observation.generation.value,
+                    observation.high_water,
+                    observation.association_status.value,
+                    observation.source_version,
+                    digest,
+                    json.dumps(record),
+                    observation.observed_at,
+                    observation.freshness_deadline,
+                ),
+            )
+            connection.execute(
+                "UPDATE execution_authority.openclaw_generation_bindings SET observation_high_water=%s,association_status=%s WHERE namespace=%s AND security_domain=%s AND runtime_instance_id=%s AND generation=%s",
+                (
+                    observation.high_water,
+                    observation.association_status.value,
+                    observation.scope.namespace,
+                    observation.scope.security_domain,
+                    str(observation.runtime_instance_id),
+                    observation.generation.value,
+                ),
+            )
+            command_result = {
+                AssociationStatus.MATCHED: CommandResult.OBSERVED,
+                AssociationStatus.MISMATCHED: CommandResult.REJECTED,
+                AssociationStatus.RECOVERY_REQUIRED: CommandResult.RECOVERY_REQUIRED,
+                AssociationStatus.UNVERIFIED: CommandResult.UNKNOWN,
+            }[observation.association_status]
+            _append_openclaw_command_result(
+                connection,
+                observation.scope,
+                CommandId(current["command_id"]),
+                command_result,
+                {
+                    "kind": "OPENCLAW_BINDING_OBSERVATION",
+                    "runtime_instance_id": str(observation.runtime_instance_id),
+                    "generation": observation.generation.value,
+                    "observation_high_water": observation.high_water,
+                    "association_status": observation.association_status.value,
+                    "reason_code": observation.reason_code,
+                },
+            )
+            return AppendDisposition.APPENDED
+
+        return self._transaction(operation)
+
+    def read_openclaw_observations(
+        self,
+        scope: ScopeIdentity,
+        runtime_instance_id: RuntimeInstanceId,
+        generation: Generation,
+    ) -> tuple[OpenClawBindingObservation, ...]:
+        with self.pool.connection() as connection:
+            rows = connection.execute(
+                "SELECT record FROM execution_authority.openclaw_binding_observations WHERE namespace=%s AND security_domain=%s AND runtime_instance_id=%s AND generation=%s ORDER BY high_water",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    str(runtime_instance_id),
+                    generation.value,
+                ),
+            ).fetchall()
+        return tuple(_openclaw_observation_from_record(row["record"]) for row in rows)
 
     def load_checkpoint(self) -> ImportCheckpoint:
         with self.pool.connection() as connection:

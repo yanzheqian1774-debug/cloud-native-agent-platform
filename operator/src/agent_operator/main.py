@@ -1,5 +1,7 @@
 """Enterprise Agent OS Kubernetes operator."""
 
+import os
+from pathlib import Path
 from typing import Any
 
 import kopf
@@ -11,16 +13,39 @@ from agent_operator.resources import (
     build_agent_deployment,
     build_agent_service,
 )
+from agent_operator.runtime_provider_factory import RuntimeApplicationAdapter
 
 API_GROUP = "agentos.io"
 API_VERSION = "v1alpha1"
 RESOURCE = "agents"
+BOOTSTRAP_ENVIRONMENT = "AGENT_RUNTIME_PROVIDER_BOOTSTRAP_FILE"
+PRODUCTION_RUNTIME_ADAPTER: RuntimeApplicationAdapter | None = None
+
+
+def assemble_production_runtime_provider(
+    bootstrap_path: Path,
+) -> RuntimeApplicationAdapter:
+    """Load the optional external provider only when explicitly configured."""
+    from agent_operator.runtime_provider_bootstrap import (
+        assemble_production_runtime_provider as assemble,
+    )
+
+    return assemble(bootstrap_path)
 
 
 @kopf.on.startup()
 def startup(logger: Any, **_: Any) -> None:
-    """Log operator startup."""
-    logger.info("Enterprise Agent OS operator starting")
+    """Assemble an explicitly configured Runtime Provider before serving."""
+    global PRODUCTION_RUNTIME_ADAPTER
+    bootstrap_path = os.environ.get(BOOTSTRAP_ENVIRONMENT)
+    if bootstrap_path:
+        PRODUCTION_RUNTIME_ADAPTER = assemble_production_runtime_provider(
+            Path(bootstrap_path)
+        )
+        logger.info("Enterprise Agent OS operator starting; runtime provider=openclaw")
+        return
+    PRODUCTION_RUNTIME_ADAPTER = None
+    logger.info("Enterprise Agent OS operator starting; runtime provider=unconfigured")
 
 
 @kopf.on.create("agentos.io", "v1alpha1", "agents")

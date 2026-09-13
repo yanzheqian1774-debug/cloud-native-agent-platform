@@ -1,10 +1,11 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import kopf
 from agent_operator.main import (
     create_agent,
     reconcile_agent_deployment,
     reconcile_agent_status,
+    startup,
     update_agent,
 )
 
@@ -198,3 +199,19 @@ def test_reconcile_agent_deployment_patches_mutable_desired_state(
 
     # Immutable Deployment fields must not be part of the update patch.
     assert "selector" not in body["spec"]
+
+
+def test_startup_without_explicit_runtime_provider_does_not_fallback(
+    monkeypatch,
+) -> None:
+    logger = Mock()
+    monkeypatch.delenv("AGENT_RUNTIME_PROVIDER_BOOTSTRAP_FILE", raising=False)
+
+    startup(logger)
+
+    from agent_operator import main
+
+    assert main.PRODUCTION_RUNTIME_ADAPTER is None
+    logger.info.assert_called_once_with(
+        "Enterprise Agent OS operator starting; runtime provider=unconfigured"
+    )
