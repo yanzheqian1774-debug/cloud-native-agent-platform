@@ -17,6 +17,10 @@ from agent_console.authority_foundation import (
 )
 from agent_console.browser_session_application import BrowserSessionPolicy
 from agent_console.business_problem_application import BusinessProblemApplication
+from agent_console.business_problem_continuation import (
+    BusinessProblemContinuationValidator,
+    BusinessProblemCreateCoordinator,
+)
 from agent_console.governed_execution_ownership import execution_database_fingerprint
 from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
@@ -57,6 +61,9 @@ def build_workbench_composition(
         runtime.database_url
     ) != execution_database_fingerprint(owner_database_url):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    problem_continuations = BusinessProblemContinuationValidator(
+        business_problems.problems
+    )
     foundation = build_authority_foundation(
         runtime,
         BrowserSessionPolicy(
@@ -65,6 +72,7 @@ def build_workbench_composition(
             absolute_lifetime=timedelta(hours=8),
             csrf_lifetime=timedelta(minutes=10),
         ),
+        target_validator=problem_continuations,
     )
     try:
         authorizer = WorkbenchOwnerAuthorization(
@@ -76,7 +84,15 @@ def build_workbench_composition(
             foundation.sessions,
             authorizer,
             WorkbenchBffPolicy(allowed_host, allowed_origin),
-            operations=business_problem_operations(business_problems),
+            grant_administration=foundation.grants,
+            operations=business_problem_operations(
+                business_problems,
+                BusinessProblemCreateCoordinator(
+                    foundation.grants,
+                    clock=foundation.grants.clock,
+                    identity_factory=foundation.grants.identity_factory,
+                ),
+            ),
         )
         return WorkbenchComposition(application, foundation)
     except Exception:

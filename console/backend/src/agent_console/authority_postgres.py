@@ -9,7 +9,7 @@ import secrets
 from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,9 @@ from agent_console.authority_contracts import (
     AuthorityScope,
     BrowserSession,
     ContinuationClaim,
+    ContinuationOfferRecovery,
     CredentialId,
+    CurrentExactGrantDecision,
     DynamicAuthorizationState,
     ExactGrant,
     GrantDecision,
@@ -510,6 +512,87 @@ class PostgresAuthorityRepository:
         )
         return credential_id, states[0]
 
+    def read_linearized_current_exact_grant_decision(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection=None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, CurrentExactGrantDecision | None]:
+        """Read the authoritative dynamic decision in the caller transaction."""
+
+        def read(current, *, lock_for_owner: bool):
+            if configure_transaction:
+                current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            credential_id = self._current_credential_id(
+                current,
+                context,
+                now=now,
+                recovery_epoch=recovery_epoch,
+                lock_session=lock_for_owner,
+            )
+            self._authorization_read_checkpoint()
+            if lock_for_owner:
+                self._lock_dynamic_grants(current, context, (grant,))
+            state = self._read_dynamic_authorization_state(
+                current,
+                context,
+                grant,
+                now=now,
+                generation=generation,
+                recovery_epoch=recovery_epoch,
+            )
+            if state is not DynamicAuthorizationState.ALLOWED:
+                return credential_id, None
+            row = current.execute(
+                "SELECT g.decision_id,g.policy_version,g.created_at,g.expires_at,"
+                "a.generation FROM authorization_admin.active_generation a JOIN "
+                "authorization_admin.grants g ON a.singleton=true JOIN "
+                "authorization_admin.effective_grants e ON e.grant_id=g.grant_id "
+                "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
+                "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
+                "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
+                "AND g.recovery_epoch=%s AND a.generation=%s "
+                "AND a.recovery_epoch=%s ORDER BY g.created_at DESC,g.grant_id DESC "
+                "LIMIT 1",
+                (
+                    context.principal_id,
+                    context.scope.tenant_id,
+                    context.scope.security_domain,
+                    grant.owner,
+                    grant.action,
+                    grant.exact_resource,
+                    now,
+                    now,
+                    recovery_epoch,
+                    generation,
+                    recovery_epoch,
+                ),
+            ).fetchone()
+            if row is None:
+                return credential_id, None
+            return credential_id, CurrentExactGrantDecision(
+                decision_id=row["decision_id"],
+                context=context,
+                grant=grant,
+                policy_generation=row["generation"],
+                policy_version=row["policy_version"],
+                issued_at=row["created_at"],
+                expires_at=row["expires_at"],
+            )
+
+        try:
+            if connection is not None:
+                return read(connection, lock_for_owner=True)
+            with self.pool.connection() as owned, owned.transaction():
+                return read(owned, lock_for_owner=False)
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
     def read_linearized_authorization_states(
         self,
         context: TrustedRequestContext,
@@ -694,6 +777,7 @@ class PostgresAuthorityRepository:
             purpose=row["purpose"],
             status=GrantRequestStatus(row["state"]),
             created_at=row["created_at"],
+            aggregate_version=row["aggregate_version"],
         )
 
     def inspect_request(self, request_id: str) -> GrantRequest:
@@ -924,6 +1008,10 @@ class PostgresAuthorityRepository:
                     "SELECT offer_id FROM authorization_admin.continuation_offers "
                     "WHERE subject_principal_id=%s AND tenant_id=%s AND security_domain=%s "
                     "AND revoked_at IS NULL AND expires_at>%s AND recovery_epoch=%s "
+                    "AND NOT EXISTS (SELECT 1 FROM "
+                    "authorization_admin.continuation_consumptions consumed "
+                    "WHERE consumed.continuation_digest="
+                    "authorization_admin.continuation_offers.continuation_digest) "
                     "ORDER BY issued_at,offer_id",
                     (
                         context.principal_id,
@@ -936,6 +1024,85 @@ class PostgresAuthorityRepository:
                 return tuple(
                     self._continuation_claim(connection, row["offer_id"])
                     for row in rows
+                )
+        except AuthorityError:
+            raise
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def resolve_continuation_offer(
+        self,
+        continuation_digest: str,
+        context: TrustedRequestContext,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+    ) -> ContinuationClaim:
+        try:
+            with self.connection_scope() as connection:
+                row = connection.execute(
+                    "SELECT offer_id FROM authorization_admin.continuation_offers "
+                    "WHERE continuation_digest=%s AND subject_principal_id=%s "
+                    "AND tenant_id=%s AND security_domain=%s AND revoked_at IS NULL "
+                    "AND issued_at<=%s AND expires_at>%s AND recovery_epoch=%s",
+                    (
+                        continuation_digest,
+                        context.principal_id,
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        now,
+                        now,
+                        recovery_epoch,
+                    ),
+                ).fetchone()
+                if row is None:
+                    raise AuthorityError("CONTINUATION_INVALID")
+                return self._continuation_claim(connection, row["offer_id"])
+        except AuthorityError:
+            raise
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def recover_continuation_offer(
+        self,
+        context: TrustedRequestContext,
+        *,
+        owner: str,
+        purpose: str,
+        mint_key: str,
+    ) -> ContinuationOfferRecovery | None:
+        """Read one exact owner-mint result, including expiry and consumption."""
+        try:
+            with self.connection_scope() as connection:
+                rows = connection.execute(
+                    "SELECT offer.*,consumed.request_id FROM "
+                    "authorization_admin.continuation_offers offer LEFT JOIN "
+                    "authorization_admin.continuation_consumptions consumed ON "
+                    "consumed.continuation_digest=offer.continuation_digest "
+                    "WHERE offer.subject_principal_id=%s AND offer.tenant_id=%s "
+                    "AND offer.security_domain=%s AND offer.owner=%s "
+                    "AND offer.purpose=%s AND offer.mint_key=%s",
+                    (
+                        context.principal_id,
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        owner,
+                        purpose,
+                        mint_key,
+                    ),
+                ).fetchall()
+                if not rows:
+                    return None
+                if len(rows) != 1:
+                    raise AuthorityError("CONTINUATION_INVALID")
+                row = rows[0]
+                return ContinuationOfferRecovery(
+                    claim=self._continuation_claim(connection, row["offer_id"]),
+                    continuation_digest=row["continuation_digest"],
+                    mint_payload_digest=row["mint_payload_digest"],
+                    recovery_epoch=row["recovery_epoch"],
+                    revoked_at=row["revoked_at"],
+                    request_id=row["request_id"],
                 )
         except AuthorityError:
             raise
@@ -1085,13 +1252,16 @@ class PostgresAuthorityRepository:
     @staticmethod
     def _decision(connection, decision_id: str) -> GrantDecision:
         row = connection.execute(
-            "SELECT * FROM authorization_admin.grant_decisions WHERE decision_id=%s",
+            "SELECT d.*,r.aggregate_version FROM authorization_admin.grant_decisions d "
+            "JOIN authorization_admin.grant_requests r ON r.request_id=d.request_id "
+            "WHERE d.decision_id=%s",
             (decision_id,),
         ).fetchone()
         if row is None:
             raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
         grant_rows = connection.execute(
-            "SELECT grant_id FROM authorization_admin.grants WHERE decision_id=%s "
+            "SELECT grant_id,not_before,expires_at FROM authorization_admin.grants "
+            "WHERE decision_id=%s "
             "ORDER BY grant_id",
             (decision_id,),
         ).fetchall()
@@ -1108,13 +1278,18 @@ class PostgresAuthorityRepository:
             audit_source=row["audit_source"],
             created_at=row["created_at"],
             grants=tuple(GrantId(item["grant_id"]) for item in grant_rows),
+            request_aggregate_version=row["aggregate_version"],
+            not_before=grant_rows[0]["not_before"] if grant_rows else None,
+            expires_at=grant_rows[0]["expires_at"] if grant_rows else None,
         )
 
     def decide_request(
         self,
         decision: GrantDecision,
         *,
-        grants: Sequence[tuple[GrantId, ExactGrant, datetime, datetime]],
+        grants: Sequence[tuple[GrantId, ExactGrant, datetime | None, datetime]],
+        issuer_scope: AuthorityScope,
+        expected_version: int,
         expected_status: GrantRequestStatus,
         idempotency_key: str,
         payload_digest: str,
@@ -1130,27 +1305,55 @@ class PostgresAuthorityRepository:
         try:
             with self.connection_scope() as connection:
                 self._require_current_recovery_epoch(connection, recovery_epoch)
-                request = self._request(connection, decision.request_id)
+                visible = connection.execute(
+                    "SELECT subject_principal_id,tenant_id,security_domain FROM "
+                    "authorization_admin.grant_requests WHERE request_id=%s",
+                    (decision.request_id,),
+                ).fetchone()
+                if visible is None:
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+                if (visible["tenant_id"], visible["security_domain"]) != (
+                    issuer_scope.tenant_id,
+                    issuer_scope.security_domain,
+                ):
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+                if visible["subject_principal_id"] == decision.issuer_principal_id:
+                    raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
                 replay = self._claim(
                     connection,
-                    request.scope,
+                    issuer_scope,
                     decision.issuer_principal_id,
                     command_type,
                     idempotency_key,
                     payload_digest,
                 )
                 if replay is not None:
-                    return self._decision(connection, replay["id"])
+                    return replace(
+                        self._decision(connection, replay["id"]), replayed=True
+                    )
                 row = connection.execute(
-                    "SELECT subject_principal_id,state FROM "
+                    "SELECT subject_principal_id,tenant_id,security_domain,state,"
+                    "aggregate_version FROM "
                     "authorization_admin.grant_requests WHERE request_id=%s FOR UPDATE",
                     (decision.request_id,),
                 ).fetchone()
                 self._decision_request_locked_checkpoint()
+                if row is None or (row["tenant_id"], row["security_domain"]) != (
+                    issuer_scope.tenant_id,
+                    issuer_scope.security_domain,
+                ):
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
                 if row["subject_principal_id"] == decision.issuer_principal_id:
                     raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
-                if row["state"] != expected_status.value:
+                if (
+                    row["aggregate_version"] != expected_version
+                    or row["state"] != expected_status.value
+                ):
                     raise AuthorityError("AUTHORIZATION_STATE_STALE")
+                request = self._request(connection, decision.request_id)
+                server_now = connection.execute(
+                    "SELECT clock_timestamp() AS server_now"
+                ).fetchone()["server_now"]
                 if decision.approved != bool(grants) or (
                     not decision.approved and grants
                 ):
@@ -1160,6 +1363,28 @@ class PostgresAuthorityRepository:
                     or {item[1] for item in grants} != set(request.members)
                 ):
                     raise AuthorityError("INVALID_GRANT_DECISION")
+                normalized_grants: tuple[
+                    tuple[GrantId, ExactGrant, datetime, datetime], ...
+                ] = ()
+                if decision.approved:
+                    requested_windows = {(item[2], item[3]) for item in grants}
+                    if len(requested_windows) != 1:
+                        raise AuthorityError("INVALID_GRANT_DECISION")
+                    requested_not_before, expires_at = next(iter(requested_windows))
+                    effective_not_before = requested_not_before or server_now
+                    if (
+                        effective_not_before.utcoffset() != timedelta(0)
+                        or expires_at.utcoffset() != timedelta(0)
+                        or effective_not_before < server_now
+                        or effective_not_before >= expires_at
+                        or expires_at - effective_not_before > timedelta(hours=8)
+                    ):
+                        raise AuthorityError("INVALID_GRANT_DECISION")
+                    normalized_grants = tuple(
+                        (grant_id, member, effective_not_before, expires_at)
+                        for grant_id, member, _, _ in grants
+                    )
+                decision = replace(decision, created_at=server_now)
                 connection.execute(
                     "INSERT INTO authorization_admin.grant_decisions"
                     "(decision_id,request_id,issuer_principal_id,issuer_meta_decision_id,"
@@ -1181,7 +1406,7 @@ class PostgresAuthorityRepository:
                     ),
                 )
                 member_set = set(request.members)
-                for grant_id, member, not_before, expires_at in grants:
+                for grant_id, member, not_before, expires_at in normalized_grants:
                     if member not in member_set:
                         raise AuthorityError("INVALID_GRANT_DECISION")
                     self._insert_grant(
@@ -1222,7 +1447,13 @@ class PostgresAuthorityRepository:
                     subject_id=request.subject_principal_id,
                     recovery_epoch=recovery_epoch,
                 )
-                return replace(decision, grants=tuple(item[0] for item in grants))
+                return replace(
+                    decision,
+                    grants=tuple(item[0] for item in normalized_grants),
+                    request_aggregate_version=expected_version + 1,
+                    not_before=normalized_grants[0][2] if normalized_grants else None,
+                    expires_at=normalized_grants[0][3] if normalized_grants else None,
+                )
         except AuthorityError:
             raise
         except PsycopgError as exc:
