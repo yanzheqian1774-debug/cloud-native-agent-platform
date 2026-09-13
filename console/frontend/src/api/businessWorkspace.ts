@@ -39,7 +39,7 @@ async function authorizationWrite<T>(path:string,csrfToken:string,idempotencyKey
 }
 
 export const newIdempotencyKey=(operation:string)=>`${operation}:${crypto.randomUUID()}`;
-export const readWorkbenchSession=async()=>decode<WorkbenchSession>(await fetch(`${PREFIX}/session`,{credentials:"same-origin",headers:{Accept:"application/json"}}));
+export const readWorkbenchSession=async(signal?:AbortSignal)=>decode<WorkbenchSession>(await fetch(`${PREFIX}/session`,{credentials:"same-origin",headers:{Accept:"application/json"},signal}));
 export const listBusinessProblems=()=>read<{problems:BusinessProblemRevision[]}>("/problems");
 export const readBusinessProblem=(problemId:string)=>read<BusinessProblemDetail>(`/problems/${encodeURIComponent(problemId)}`);
 export const readCriteriaSets=(problemId:string)=>read<{revisions:CriteriaSetRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`);

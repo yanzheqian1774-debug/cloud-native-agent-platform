@@ -32,6 +32,9 @@ def test_chinese_first_product_shell_and_routes_are_wired() -> None:
 def test_w2a_shell_uses_session_facts_and_marks_unavailable_controls() -> None:
     shell = source("components/ConsoleShell.tsx")
     assert "readWorkbenchSession" in shell
+    assert "new AbortController()" in shell
+    assert "controller.abort()" in shell
+    assert "readWorkbenchSession(controller.signal)" in shell
     assert "session.principal.principalId" in shell
     assert "当前可信身份" in shell
     assert "未显示可信身份" in shell

@@ -16,9 +16,9 @@ const journeys:Record<string,{title:string;steps:JourneyStep[]}>= {
 };
 function JourneyRail(){const location=useLocation(),params=new URLSearchParams(location.search),id=params.get("journey")??"",journey=journeys[id];if(!journey)return null;const current=`${location.pathname}${location.search}`,exact=journey.steps.findIndex(step=>step.to===current),index=Math.max(0,exact>=0?exact:journey.steps.findIndex(step=>new URL(step.to,"http://local").pathname===location.pathname));return <nav className="px-journey-rail" aria-label={`${journey.title}演示路径`}><div><strong>{journey.title}</strong><span>第 {index+1} / {journey.steps.length} 步 · {journey.steps[index].label}</span></div><ol>{journey.steps.map((step,stepIndex)=><li key={step.to}><Link aria-current={stepIndex===index?"step":undefined} to={step.to}>{step.label}</Link></li>)}</ol><div className="px-journey-actions">{index>0&&<Link to={journey.steps[index-1].to}>上一步</Link>}{index<journey.steps.length-1&&<Link to={journey.steps[index+1].to}>下一步</Link>}<Link to={location.pathname}>退出演示</Link></div></nav>}
 export function ConsoleShell({children}:ConsoleShellProps){const location=useLocation(),focusParams=new URLSearchParams(location.search),focusKey=`${location.pathname}:${focusParams.get("journey")??""}:${focusParams.get("stage")??""}`;const[sessionState,setSessionState]=useState<{path:string;identity:string|null}>({path:"",identity:null});const sessionIdentity=sessionState.path===location.pathname?sessionState.identity:null;useEffect(()=>{
-  let active=true;
-  readWorkbenchSession().then(session=>{if(active)setSessionState({path:location.pathname,identity:session.principal.principalId})}).catch(()=>{if(active)setSessionState({path:location.pathname,identity:null})});
-  return()=>{active=false};
+  let active=true;const controller=new AbortController();
+  readWorkbenchSession(controller.signal).then(session=>{if(active)setSessionState({path:location.pathname,identity:session.principal.principalId})}).catch(()=>{if(active)setSessionState({path:location.pathname,identity:null})});
+  return()=>{active=false;controller.abort()};
 },[location.pathname]);useEffect(()=>{
   let ownedHeading:HTMLElement|null=null;
   let focusTransferred=false;
