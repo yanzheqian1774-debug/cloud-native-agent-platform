@@ -46,7 +46,7 @@ def test_first_slice_preserves_identity_cas_and_refresh() -> None:
         'continuation?.state==="CONSUMED"',
         'continuation?.state==="EXPIRED"',
         "requestKey",
-        "persistAuthorization(selectedId,pending)",
+        "persistAuthorization(problemId,pending)",
     ):
         assert marker in page
     assert "writeCriterion" not in page
@@ -119,3 +119,23 @@ def test_conversation_has_one_composer_and_confirmation_gate() -> None:
     assert "suggestProblemTitle" in model
     assert "无模型模式" in conversation
     assert 'operation:"创建业务问题",mutation:true' in page
+
+
+def test_conversation_isolates_context_and_freezes_unknown_create() -> None:
+    page = text("problems/ProblemWorkspacePage.tsx")
+    conversation = text("problems/ProblemConversation.tsx")
+    for marker in (
+        "mutationFlight.current",
+        "pendingCreate",
+        "command.payload",
+        "command.key",
+        "command.epoch",
+        "sessionKey",
+        "epoch.current+=1",
+        "可信身份或安全范围已经变化",
+        "恢复原创建结果",
+    ):
+        assert marker in page or marker in conversation
+    assert "localStorage" not in page
+    assert "localStorage" not in conversation
+    assert "sessionStorage" in page

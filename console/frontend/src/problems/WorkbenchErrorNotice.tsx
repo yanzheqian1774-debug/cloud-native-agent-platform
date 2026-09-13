@@ -13,7 +13,7 @@ export type WorkbenchOperation=
   |"检查授权申请"
   |"提交授权决定";
 
-type Props={error:unknown;operation:WorkbenchOperation;mutation?:boolean};
+type Props={error:unknown;operation:WorkbenchOperation;mutation?:boolean;onRetry?:()=>void;retryLabel?:string};
 
 function message(error:unknown,operation:WorkbenchOperation,mutation:boolean){
   const status=error instanceof WorkbenchRequestError?error.status:0;
@@ -28,12 +28,13 @@ function message(error:unknown,operation:WorkbenchOperation,mutation:boolean){
   return{title:`${operation}未完成`,detail:"你的当前输入没有被清除。请展开技术详情记录诊断信息，确认服务恢复后再重试。"};
 }
 
-export function WorkbenchErrorNotice({error,operation,mutation=false}:Props){
+export function WorkbenchErrorNotice({error,operation,mutation=false,onRetry,retryLabel="重试当前操作"}:Props){
   const known=error instanceof WorkbenchRequestError;
   const copy=message(error,operation,mutation);
   return <section className="px-workbench-error" role="alert" aria-live="assertive">
     <strong>{copy.title}</strong>
     <p>{copy.detail}</p>
+    {onRetry&&<button type="button" onClick={onRetry}>{retryLabel}</button>}
     <details><summary>技术详情</summary><dl>
       <dt>操作</dt><dd>{operation}</dd>
       <dt>状态</dt><dd>{known&&error.status>0?error.status:"网络或响应不可用"}</dd>

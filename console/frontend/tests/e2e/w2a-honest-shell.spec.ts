@@ -45,6 +45,20 @@ const legacyProblem = {
   timings: { problemAcceptanceMs: 1, retrievalMs: 1, controlledModelPlanningMs: 1, schemaAndRuleValidationMs: 1, comparisonAssemblyMs: 1, totalMs: 5 },
 };
 
+const createdProblem = {
+  scope: { namespace: "tenant-a", security_domain: "quality" },
+  business_problem_id: "problem:conversation-1",
+  revision_id: "problem-revision:conversation-1:1",
+  revision: 1,
+  predecessor_revision_id: null,
+  title: "供应商交付恢复",
+  description: "关键零部件延期影响客户交付，需要明确恢复责任和时间。",
+  owner_id: "human:applicant",
+  created_by: "human:applicant",
+  created_at: "2026-09-14T00:20:00Z",
+  digest: "sha256:" + "c".repeat(64),
+};
+
 async function installRoutes(page: import("@playwright/test").Page, identity: { value: string | null }) {
   await page.route("**/api/workbench/v1/session", route => identity.value
     ? route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-session.v1", principal: { principalId: identity.value, tenantId: "tenant-a", securityDomain: "quality" }, session: { expiresAt: "2026-09-14T00:00:00Z", idleExpiresAt: "2026-09-14T00:00:00Z" }, csrfToken: "redacted-test-value" }) })
@@ -136,6 +150,7 @@ test("business workbench creates a message draft before any write and supports c
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/work");
   await expect(page.getByRole("heading", { name: "你希望解决什么问题？" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("w2c-new-conversation-1440.png"), fullPage: true });
   const composer = page.getByLabel("你希望解决什么问题？");
   await composer.fill("组合输入不应发送");
   await composer.dispatchEvent("keydown", { key: "Enter", code: "Enter", isComposing: true, keyCode: 229 });
@@ -150,6 +165,7 @@ test("business workbench creates a message draft before any write and supports c
   await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付延期");
   await expect(draft.getByLabel("完整描述")).toHaveValue(original);
   expect(createAttempts).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("w2c-draft-confirm-1440.png"), fullPage: true });
 
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   const replacement = page.getByLabel("完整替换草稿描述");
@@ -158,6 +174,7 @@ test("business workbench creates a message draft before any write and supports c
   await expect(draft.getByLabel("完整描述")).toHaveValue("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   await draft.getByLabel("建议名称").fill("供应商交付恢复");
+  await page.screenshot({ path: testInfo.outputPath("w2c-draft-modified-1440.png"), fullPage: true });
   await draft.getByRole("button", { name: "确认创建", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("创建业务问题的结果暂时无法确认");
   await expect(page.getByText("diagnostic:fixture", { exact: true })).not.toBeVisible();
@@ -181,4 +198,172 @@ test("business workbench creates a message draft before any write and supports c
   await expect(page.getByRole("button", { name: "取消", exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("w2b-create-form-390.png"), fullPage: true });
+});
+
+test("unknown create replays the exact payload and key while double activation stays single", async ({ page }, testInfo) => {
+  const identity = { value: "human:applicant" as string | null };
+  await installRoutes(page, identity);
+  const attempts: Array<Record<string, unknown>> = [];
+  await page.route("**/api/workbench/v1/problems", async route => {
+    if (route.request().method() !== "POST") {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [] }, continuationIds: [] }) });
+      return;
+    }
+    attempts.push(route.request().postDataJSON());
+    if (attempts.length === 1) {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ reasonCode: "WORKBENCH_UNAVAILABLE", requestId: "diagnostic:unknown" }) });
+      return;
+    }
+    await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revision: createdProblem, creatorContinuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "AVAILABLE", expiresAt: "2026-09-14T01:20:00Z", continuationId: "continuation-ref." + "a".repeat(64) } }, continuationIds: [] }) });
+  });
+
+  await page.goto("/work");
+  await page.getByLabel("你希望解决什么问题？").fill(createdProblem.description);
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  const draft = page.getByLabel("问题草稿卡片");
+  await draft.getByRole("button", { name: "修改", exact: true }).click();
+  await draft.getByLabel("建议名称").fill(createdProblem.title);
+  const confirm = draft.getByRole("button", { name: "确认创建", exact: true });
+  await confirm.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect(draft.getByText("结果不确定", { exact: true })).toBeVisible();
+  expect(attempts).toHaveLength(1);
+  await draft.getByRole("button", { name: "恢复原创建结果", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toBeVisible();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  await page.screenshot({ path: testInfo.outputPath("w2c-created-after-recovery-1440.png"), fullPage: true });
+});
+
+test("cancel remains local and an upward reader receives a new-message affordance", async ({ page }) => {
+  const identity = { value: "human:applicant" as string | null };
+  let writes = 0;
+  await installRoutes(page, identity);
+  page.on("request", request => { if (request.method() !== "GET") writes += 1; });
+  await page.goto("/work");
+  const composer = page.getByLabel("你希望解决什么问题？");
+  await composer.fill("取消的草稿不应写入正式 Problem。");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.getByLabel("问题草稿卡片").getByRole("button", { name: "取消", exact: true }).click();
+  await expect(page.getByText("已取消本地草稿，没有提交 Problem，也没有撤销任何服务器事实。", { exact: true })).toBeVisible();
+  expect(writes).toBe(0);
+
+  await composer.fill("长内容：" + "用于验证用户上滚阅读时不被卡片更新强制拉到底。".repeat(75));
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  const stream = page.locator(".px-message-stream");
+  await stream.evaluate(element => { (element as HTMLElement).style.maxHeight = "200px"; element.scrollTop = 0; element.dispatchEvent(new Event("scroll")); });
+  expect(await stream.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+  await page.getByLabel("问题草稿卡片").getByRole("button", { name: "修改", exact: true }).evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.getByRole("button", { name: "有新消息，回到最新", exact: true })).toBeVisible();
+  expect(await stream.evaluate(element => element.scrollTop)).toBe(0);
+  expect(writes).toBe(0);
+});
+
+test("a changed trusted subject isolates the draft and ignores the old create response", async ({ page }) => {
+  const identity = { value: "human:applicant-a" as string | null };
+  let releaseCreate!: () => void;
+  const createGate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  await installRoutes(page, identity);
+  await page.route("**/api/workbench/v1/problems", async route => {
+    if (route.request().method() !== "POST") {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [] }, continuationIds: [] }) });
+      return;
+    }
+    await createGate;
+    await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revision: { ...createdProblem, owner_id: "human:applicant-a", created_by: "human:applicant-a" }, creatorContinuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "AVAILABLE", expiresAt: "2026-09-14T01:20:00Z", continuationId: "continuation-ref." + "b".repeat(64) } }, continuationIds: [] }) });
+  });
+
+  await page.goto("/work");
+  await page.getByLabel("你希望解决什么问题？").fill("旧主体的在途创建不得写入新主体对话。");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.getByRole("button", { name: "确认创建", exact: true }).click();
+  await expect(page.getByText("正在创建", { exact: true })).toBeVisible();
+  identity.value = "human:applicant-b";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("heading", { name: "请在当前可信会话重新开始", exact: true })).toBeVisible();
+  releaseCreate();
+  await page.waitForTimeout(100);
+  await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toHaveCount(0);
+  await expect(page.getByText("problem:conversation-1", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("你希望解决什么问题？")).toBeEnabled();
+});
+
+test("created problem continues through pending approval to a fresh exact read", async ({ page }, testInfo) => {
+  const identity = { value: "human:applicant" as string | null };
+  let grantState: "PENDING" | "APPROVED" = "PENDING";
+  let exactReads = 0;
+  await installRoutes(page, identity);
+  await page.route("**/api/workbench/v1/problems", async route => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revision: createdProblem, creatorContinuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "AVAILABLE", expiresAt: "2026-09-14T01:20:00Z", continuationId: "continuation-ref." + "d".repeat(64) } }, continuationIds: [] }) });
+      return;
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) });
+  });
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", async route => {
+    exactReads += 1;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problem: { scope: createdProblem.scope, business_problem_id: createdProblem.business_problem_id, owner_id: createdProblem.owner_id, current_state: "OPEN", aggregate_version: 1, current_revision_id: createdProblem.revision_id, created_by: createdProblem.created_by, created_at: createdProblem.created_at, updated_at: createdProblem.created_at }, revisions: [createdProblem], lifecycle: [] }, continuationIds: [] }) });
+  });
+  await page.route("**/api/workbench/v1/authorization/grant-requests", async route => {
+    await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:conversation-1", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) });
+  });
+  await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Aconversation-1", async route => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:conversation-1", state: grantState, aggregateVersion: grantState === "PENDING" ? 1 : 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) });
+  });
+
+  await page.goto("/work");
+  await page.getByLabel("你希望解决什么问题？").fill(createdProblem.description);
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.getByRole("button", { name: "确认创建", exact: true }).click();
+  await page.getByRole("button", { name: "申请查看权限", exact: true }).click();
+  await expect(page.getByText("等待管理员处理", { exact: true })).toBeVisible();
+  expect(exactReads).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath("w2c-waiting-authorization-1440.png"), fullPage: true });
+  grantState = "APPROVED";
+  await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "已授权的精确读取", exact: true })).toBeVisible();
+  expect(exactReads).toBe(1);
+  await expect(page.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("w2c-approved-exact-read-1440.png"), fullPage: true });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "已恢复正式业务记录", exact: true })).toBeVisible();
+  await expect(page.getByText("不是恢复的聊天历史", { exact: false })).toBeVisible();
+  expect(exactReads).toBe(2);
+});
+
+test("a rejected authorization card does not perform an exact read", async ({ page }) => {
+  const identity = { value: "human:applicant" as string | null };
+  let exactReads = 0;
+  await installRoutes(page, identity);
+  await page.addInitScript(problemId => {
+    sessionStorage.setItem(`impl299.authorization.${problemId}`, JSON.stringify({ request: { requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] } }));
+  }, createdProblem.business_problem_id);
+  await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) }));
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => { exactReads += 1; return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }); });
+  await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Arejected", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) }));
+  await page.goto("/work?problem=problem%3Aconversation-1&request=grant-request%3Arejected");
+  await expect(page.getByText("已拒绝", { exact: true })).toBeVisible();
+  await expect(page.getByText("页面不会读取 Problem 正文", { exact: false })).toBeVisible();
+  expect(exactReads).toBe(0);
+});
+
+test("an expired creator continuation is explicit and does not read protected content", async ({ page }) => {
+  const identity = { value: "human:applicant" as string | null };
+  let exactReads = 0;
+  await installRoutes(page, identity);
+  await page.addInitScript(problemId => { sessionStorage.setItem(`impl299.authorization.${problemId}`, JSON.stringify({ continuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "EXPIRED", expiresAt: "2026-09-13T23:00:00Z" } })); }, createdProblem.business_problem_id);
+  await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) }));
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => { exactReads += 1; return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }); });
+  await page.goto("/work?problem=problem%3Aconversation-1");
+  await expect(page.getByText("申请窗口已过期", { exact: true })).toBeVisible();
+  await expect(page.getByText("不会自动延长窗口、撤销创建或换新标识重建", { exact: false })).toBeVisible();
+  expect(exactReads).toBe(0);
+});
+
+test("a hidden Problem 404 preserves the non-disclosure boundary", async ({ page }) => {
+  const identity = { value: "human:applicant" as string | null };
+  await installRoutes(page, identity);
+  await page.route("**/api/workbench/v1/problems/problem%3Ahidden**", route => route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ reasonCode: "RESOURCE_NOT_FOUND", requestId: "diagnostic:hidden" }) }));
+  await page.goto("/work?problem=problem%3Ahidden");
+  await expect(page.getByRole("alert")).toContainText("该内容可能不存在，也可能对当前会话不可见");
+  await expect(page.getByText("diagnostic:hidden", { exact: true })).not.toBeVisible();
 });

@@ -18,6 +18,8 @@ export function ConversationFrame({children,composer,newMessageKey}:{children:Re
 }
 
 export function ConversationComposer({value,onChange,onSend,disabled,mode="NEW"}:{value:string;onChange:(value:string)=>void;onSend:()=>void;disabled:boolean;mode?:"NEW"|"REPLACE"|"LOCKED"}){
+  const input=useRef<HTMLTextAreaElement>(null);
+  useEffect(()=>{if(mode==="REPLACE")input.current?.focus()},[mode]);
   function submit(event:FormEvent){event.preventDefault();if(value.trim()&&!disabled&&mode!=="LOCKED")onSend()}
   function keyDown(event:KeyboardEvent<HTMLTextAreaElement>){
     if(event.key!=="Enter"||event.shiftKey||event.nativeEvent.isComposing||event.keyCode===229)return;
@@ -26,7 +28,7 @@ export function ConversationComposer({value,onChange,onSend,disabled,mode="NEW"}
   const replacing=mode==="REPLACE";
   return <form className="px-composer" aria-label={replacing?"完整修改问题草稿":"描述业务问题"} onSubmit={submit}>
     <label htmlFor="problem-composer">{replacing?"完整替换草稿描述":"你希望解决什么问题？"}</label>
-    <textarea id="problem-composer" value={value} disabled={disabled||mode==="LOCKED"} maxLength={2_000} rows={3} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={replacing?"请提交完整的新描述；本次输入会替换草稿中的全部描述。":"描述现状、影响和希望解决的问题。Enter 发送，Shift+Enter 换行。"}/>
+    <textarea ref={input} id="problem-composer" value={value} disabled={disabled||mode==="LOCKED"} maxLength={2_000} rows={3} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={replacing?"请提交完整的新描述；本次输入会替换草稿中的全部描述。":"描述现状、影响和希望解决的问题。Enter 发送，Shift+Enter 换行。"}/>
     <div className="px-composer-footer"><span>{replacing?"无模型模式：请提供完整替换内容。":"发送只生成待确认草稿，不会直接创建、授权或执行。"}</span><button className="px-primary-button" type="submit" disabled={disabled||mode==="LOCKED"||!value.trim()}>{replacing?"更新草稿":"发送"}</button></div>
   </form>;
 }
@@ -35,7 +37,7 @@ export function UserMessage({children}:{children:ReactNode}){return <article cla
 
 export function SystemMessage({children,label="系统"}:{children:ReactNode;label?:string}){return <article className="px-message px-system-message"><div className="px-avatar" aria-hidden="true">A</div><div className="px-message-body"><span className="px-message-author">{label}</span>{children}</div></article>}
 
-export function DraftCard({turn,busy,onConfirm,onEditWithComposer,onCancel,onChange}:{turn:DraftTurn;busy:boolean;onConfirm:()=>void;onEditWithComposer:()=>void;onCancel:()=>void;onChange:(draft:ProblemDraft)=>void}){
+export function DraftCard({turn,busy,onConfirm,onRecover,onEditWithComposer,onCancel,onChange}:{turn:DraftTurn;busy:boolean;onConfirm:()=>void;onRecover:()=>void;onEditWithComposer:()=>void;onCancel:()=>void;onChange:(draft:ProblemDraft)=>void}){
   const active=turn.phase==="DRAFT"||turn.phase==="EDITING",editable=turn.phase==="EDITING";
   const status={DRAFT:"待确认",EDITING:"正在修改",SUBMITTING:"正在创建",UNKNOWN:"结果不确定",CANCELLED:"已取消",CREATED:"已创建"}[turn.phase];
   return <section className={`px-inline-card px-draft-card is-${turn.phase.toLowerCase()}`} aria-label="问题草稿卡片">
@@ -50,6 +52,6 @@ export function DraftCard({turn,busy,onConfirm,onEditWithComposer,onCancel,onCha
       <button type="button" className="px-primary-button" disabled={busy||!turn.draft.title.trim()||!turn.draft.description.trim()} onClick={onConfirm}>确认创建</button>
     </div>}
     {turn.phase==="CANCELLED"&&<p>已取消本地草稿，没有提交 Problem，也没有撤销任何服务器事实。</p>}
-    {turn.phase==="UNKNOWN"&&<p>在确认原命令结果前不能修改内容、换新标识或自动重建。</p>}
+    {turn.phase==="UNKNOWN"&&<><p>在确认原命令结果前不能修改内容、换新标识或自动重建。</p><button type="button" className="px-primary-button" disabled={busy} onClick={onRecover}>{busy?"正在恢复原结果…":"恢复原创建结果"}</button></>}
   </section>;
 }
