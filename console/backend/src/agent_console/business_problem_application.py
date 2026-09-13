@@ -123,7 +123,6 @@ class BusinessProblemApplication:
         receipt_recovery_epoch: int | None = None,
     ):
         self.require(principal, "BUSINESS_PROBLEM", "CREATE", problem_resource())
-        self.require(principal, "BUSINESS_PROBLEM", "READ", problem_resource())
         identity = self.identity(principal, "CREATE_PROBLEM", command.idempotencyKey)
         revision = BusinessProblemRevision(
             self.scope(principal),

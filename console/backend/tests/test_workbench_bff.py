@@ -469,6 +469,14 @@ def test_business_problem_registry_freezes_routes_and_exact_resource_builders() 
     assert len({(item.method, item.path) for item in operations}) == 13
     assert all(item.path.startswith(f"{PREFIX}/") for item in operations)
 
+    create = next(item for item in operations if item.name == "CREATE_PROBLEM")
+    assert tuple(create.grant_builder(SessionStub().context, {}, {}, {})) == (
+        ExactGrant("BUSINESS_PROBLEM", "CREATE", "business-problem:collection"),
+    )
+    listed = next(item for item in operations if item.name == "LIST_PROBLEMS")
+    assert tuple(listed.grant_builder(SessionStub().context, {}, {}, {})) == (
+        ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
+    )
     read = next(item for item in operations if item.name == "READ_PROBLEM")
     assert tuple(
         read.grant_builder(SessionStub().context, {"problem_id": "problem-7"}, {}, {})

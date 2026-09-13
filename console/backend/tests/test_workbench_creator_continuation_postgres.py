@@ -78,9 +78,6 @@ def static_generation(now: datetime) -> StaticAuthorityGeneration:
     collection_create = ExactGrant(
         "BUSINESS_PROBLEM", "CREATE", "business-problem:collection"
     )
-    collection_read = ExactGrant(
-        "BUSINESS_PROBLEM", "READ", "business-problem:collection"
-    )
     decide = ExactGrant("GRANT_ADMIN", "DECIDE", "grant-scope:tenant-a:quality")
     return StaticAuthorityGeneration(
         generation=1,
@@ -95,10 +92,7 @@ def static_generation(now: datetime) -> StaticAuthorityGeneration:
                 scope,
                 now + timedelta(hours=8),
                 GrantSource.BROWSER_BOOTSTRAP,
-                (
-                    StaticGrant(collection_create, GrantSource.BROWSER_BOOTSTRAP),
-                    StaticGrant(collection_read, GrantSource.BROWSER_BOOTSTRAP),
-                ),
+                (StaticGrant(collection_create, GrantSource.BROWSER_BOOTSTRAP),),
             ),
             CredentialConfiguration(
                 CredentialId("credential-bob"),
@@ -288,6 +282,7 @@ def test_public_create_replay_request_decision_and_exact_read(
     assert continuation["state"] == "AVAILABLE"
     continuation_id = continuation["continuationId"]
     problem_id = created_result["revision"]["business_problem_id"]
+    assert alice.get(f"{PREFIX}/problems/{problem_id}").status_code == 404
 
     cookie = alice.cookies.get(SESSION_COOKIE)
     assert cookie is not None
@@ -403,6 +398,28 @@ def test_public_create_replay_request_decision_and_exact_read(
             "(SELECT count(*) FROM authorization_admin.grant_requests) AS requests"
         ).fetchone()
     assert counts == {"offers": 1, "consumptions": 1, "requests": 1}
+
+
+def test_public_create_without_collection_create_has_zero_writes(
+    integrated_authority,
+) -> None:
+    application = integrated_authority.build_application()
+    bob = TestClient(application, base_url="https://console.example")
+    bob_csrf = login(bob, "bob-secret")
+
+    denied = create_problem(bob, bob_csrf, key="create-denied")
+    assert denied.status_code == 404
+    assert denied.json()["reasonCode"] == "AUTHORIZATION_NOT_FOUND"
+
+    with integrated_authority.authority.pool.connection() as connection:
+        counts = connection.execute(
+            "SELECT "
+            "(SELECT count(*) FROM business_problem_authority.problems) AS problems,"
+            "(SELECT count(*) FROM business_problem_authority.creator_receipts) "
+            "AS receipts,"
+            "(SELECT count(*) FROM authorization_admin.continuation_offers) AS offers"
+        ).fetchone()
+    assert counts == {"problems": 0, "receipts": 0, "offers": 0}
 
 
 def test_concurrent_first_create_mints_one_durable_offer(

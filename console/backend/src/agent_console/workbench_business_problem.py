@@ -190,10 +190,7 @@ def _grant(owner: str, action: str, resource: str) -> ExactGrant:
 
 
 def _problem_collection(context, path, payload, query):
-    return (
-        _grant("BUSINESS_PROBLEM", "CREATE", problem_resource()),
-        _grant("BUSINESS_PROBLEM", "READ", problem_resource()),
-    )
+    return (_grant("BUSINESS_PROBLEM", "CREATE", problem_resource()),)
 
 
 def _problem_list(context, path, payload, query):
