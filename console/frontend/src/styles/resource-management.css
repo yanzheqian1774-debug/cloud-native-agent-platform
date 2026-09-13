@@ -7,6 +7,8 @@
   margin: .5rem 0;
 }
 
+.px-authorization-card dl,.px-admin-card dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.5rem 1rem}.px-authorization-card dd,.px-admin-card dd{margin:0;overflow-wrap:anywhere}.px-admin-page{max-width:64rem;margin:0 auto}.px-admin-card{margin-top:1rem;padding:1.25rem;border:1px solid var(--border-color,#d9dee8);border-radius:.75rem;background:var(--panel-bg,#fff)}.px-admin-card label{display:grid;gap:.4rem;margin:1rem 0}.px-admin-card input{min-height:2.5rem;padding:.5rem .75rem}.px-admin-actions{display:flex;justify-content:flex-end;gap:.75rem;margin-top:1rem}
+
 .resource-form input,
 .resource-form select,
 .resource-form textarea,

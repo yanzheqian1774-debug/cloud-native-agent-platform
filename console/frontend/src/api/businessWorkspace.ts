@@ -7,6 +7,9 @@ export type BusinessProblemAggregate={scope:Scope;business_problem_id:string;own
 export type BusinessProblemDetail={problem:BusinessProblemAggregate;revisions:BusinessProblemRevision[];lifecycle:unknown[]};
 export type CriterionRevision={scope:Scope;success_criterion_id:string;revision_id:string;revision:number;predecessor_revision_id:string|null;criterion_type:string;measurement:Record<string,unknown>;required_evidence_kinds:string[];evaluator_type:string;evaluator_version:string;applicability:Record<string,unknown>;created_by:string;created_at:string;digest:string};
 export type CriteriaSetRevision={scope:Scope;set_revision_id:string;business_problem_id:string;problem_revision_id:string;revision:number;predecessor_set_revision_id:string|null;ordered_criterion_revision_ids:string[];created_by:string;created_at:string;digest:string};
+export type ProblemCreatorContinuation={schemaVersion:"problem-creator-continuation.v1";relation:"PROBLEM_CREATOR";purpose:"CONTINUE_PROBLEM_READ";state:"AVAILABLE"|"CONSUMED"|"EXPIRED";expiresAt:string;continuationId?:string;requestId?:string};
+export type GrantRequestStatus={requestId:string;state:"PENDING"|"APPROVED"|"REJECTED";aggregateVersion:number;submittedAt:string;purpose:string;requestedActions:string[]};
+export type GrantDecisionResult={schemaVersion:"exact-grant-decision-result.v1";requestId:string;decisionId:string;state:"APPROVED"|"REJECTED";aggregateVersion:number;decidedAt:string;notBefore?:string;expiresAt?:string};
 type Envelope<T>={schemaVersion:"workbench-operation.v1";result:T;continuationIds:string[]};
 type ErrorBody={reasonCode?:string;requestId?:string};
 
@@ -31,6 +34,10 @@ async function write<T>(path:string,csrfToken:string,payload:Record<string,unkno
   return envelope.result;
 }
 
+async function authorizationWrite<T>(path:string,csrfToken:string,idempotencyKey:string,payload:Record<string,unknown>):Promise<T>{
+  return decode<T>(await fetch(`${PREFIX}${path}`,{method:"POST",credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":csrfToken,"Idempotency-Key":idempotencyKey},body:JSON.stringify(payload)}));
+}
+
 export const newIdempotencyKey=(operation:string)=>`${operation}:${crypto.randomUUID()}`;
 export const readWorkbenchSession=async()=>decode<WorkbenchSession>(await fetch(`${PREFIX}/session`,{credentials:"same-origin",headers:{Accept:"application/json"}}));
 export const listBusinessProblems=()=>read<{problems:BusinessProblemRevision[]}>("/problems");
@@ -39,7 +46,18 @@ export const readCriteriaSets=(problemId:string)=>read<{revisions:CriteriaSetRev
 export const readProblemCriteria=(problemId:string)=>read<{revisions:CriterionRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria`);
 
 export function createBusinessProblem(csrfToken:string,input:{title:string;description:string;ownerId:string;idempotencyKey:string}){
-  return write<{revision:BusinessProblemRevision}>("/problems",csrfToken,input);
+  return write<{revision:BusinessProblemRevision;creatorContinuation:ProblemCreatorContinuation}>("/problems",csrfToken,input);
+}
+
+export function submitProblemReadGrantRequest(csrfToken:string,continuationId:string,idempotencyKey:string){
+  return authorizationWrite<GrantRequestStatus>("/authorization/grant-requests",csrfToken,idempotencyKey,{schemaVersion:"exact-grant-request.v1",purpose:"CONTINUE_PROBLEM_READ",requestedGrants:[],continuationIds:[continuationId]});
+}
+
+export const inspectGrantRequest=async(requestId:string)=>decode<GrantRequestStatus>(await fetch(`${PREFIX}/authorization/grant-requests/${encodeURIComponent(requestId)}`,{credentials:"same-origin",headers:{Accept:"application/json"}}));
+
+export function decideGrantRequest(csrfToken:string,requestId:string,input:{expectedVersion:number;decision:"APPROVE"|"REJECT";reasonCategory:string;basisType:"TICKET"|"POLICY";basisReference:string;expiresAt?:string;idempotencyKey:string}){
+  const {idempotencyKey,...payload}=input;
+  return authorizationWrite<GrantDecisionResult>(`/authorization/grant-requests/${encodeURIComponent(requestId)}/decisions`,csrfToken,idempotencyKey,{schemaVersion:"exact-grant-decision.v1",...payload});
 }
 
 export function reviseBusinessProblem(csrfToken:string,problemId:string,input:{predecessorRevisionId:string;expectedVersion:number;title:string;description:string;ownerId:string;idempotencyKey:string}){
