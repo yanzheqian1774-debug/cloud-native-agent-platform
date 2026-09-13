@@ -12,6 +12,15 @@ from psycopg.errors import Error as PsycopgError
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from agent_console.postgres_schema_compatibility import (
+    LEDGER_COLUMNS,
+    Table,
+    columns,
+    foreign,
+    primary,
+    schema_is_compatible,
+    unique,
+)
 from agent_console.skill_mcp_repository import (
     ResourceScope,
     SkillMcpConflict,
@@ -23,6 +32,71 @@ ADAPTER = "skill-mcp-resource-postgresql-v1"
 SCHEMA_VERSION = 1
 PROFESSIONAL_ADAPTER = "skill-mcp-professional-postgresql-v1"
 PROFESSIONAL_SCHEMA_VERSION = 2
+
+_RESOURCE_KEY = ("namespace", "security_domain", "kind", "resource_id")
+SKILL_MCP_STRUCTURE = (
+    Table(
+        "skill_mcp_resource.schema_migrations", LEDGER_COLUMNS, (primary("version"),)
+    ),
+    Table(
+        "skill_mcp_resource.resources",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("kind", "text"),
+            ("resource_id", "text"),
+            ("aggregate_version", "integer"),
+            ("record", "jsonb"),
+        ),
+        (primary(*_RESOURCE_KEY),),
+    ),
+    Table(
+        "skill_mcp_resource.lifecycle_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("kind", "text"),
+            ("resource_id", "text"),
+            ("ordinal", "integer"),
+            ("fact_id", "text"),
+            ("fact", "jsonb"),
+        ),
+        (
+            primary(*_RESOURCE_KEY, "ordinal"),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(_RESOURCE_KEY, "skill_mcp_resource.resources", _RESOURCE_KEY),
+        ),
+    ),
+    Table(
+        "skill_mcp_resource.tombstones",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("kind", "text"),
+            ("resource_id", "text"),
+            ("tombstone", "jsonb"),
+        ),
+        (primary(*_RESOURCE_KEY),),
+    ),
+    Table(
+        "skill_mcp_resource.professional_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("kind", "text"),
+            ("resource_id", "text"),
+            ("ordinal", "integer"),
+            ("fact_id", "text"),
+            ("fact_type", "text"),
+            ("safe_fact", "jsonb"),
+        ),
+        (
+            primary(*_RESOURCE_KEY, "ordinal"),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(_RESOURCE_KEY, "skill_mcp_resource.resources", _RESOURCE_KEY),
+        ),
+    ),
+)
 
 
 class PostgresSkillMcpRepository:
@@ -127,6 +201,7 @@ class PostgresSkillMcpRepository:
                     professional is None
                     or professional["checksum"] != self.professional_migration_checksum
                     or professional["adapter"] != PROFESSIONAL_ADAPTER
+                    or not schema_is_compatible(connection, SKILL_MCP_STRUCTURE)
                 ):
                     raise SkillMcpRepositoryError("SKILL_MCP_SCHEMA_INCOMPATIBLE")
         except SkillMcpRepositoryError:

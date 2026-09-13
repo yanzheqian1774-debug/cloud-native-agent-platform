@@ -64,7 +64,7 @@ class GrantDecisionCommand:
     not_before: datetime | None
     expires_at: datetime | None
     idempotency_key: str
-    expected_version: int
+    expected_version: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -650,7 +650,7 @@ class GrantAdministrationService:
         ):
             raise AuthorityError("AUTHORIZATION_REQUEST_NOT_FOUND")
         self._validate_idempotency_key(command.idempotency_key)
-        if command.expected_version < 1:
+        if command.expected_version is not None and command.expected_version < 1:
             raise AuthorityError("INVALID_GRANT_DECISION")
         require_bounded_label(
             command.reason_category, reason_code="INVALID_GRANT_DECISION"
@@ -908,9 +908,12 @@ class GrantAdministrationService:
         )
 
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
-        return tuple(
-            item.continuation_id for item in self.continuation_inbox_details(context)
+        if self.continuation_owner is None:
+            raise AuthorityError("CONTINUATION_INVALID")
+        offers = self.repository.list_continuation_offers(
+            context, now=self.clock(), recovery_epoch=self.recovery_epoch
         )
+        return tuple(self.continuation_owner.mint(claim) for claim in offers)
 
     def continuation_inbox_details(
         self, context: TrustedRequestContext

@@ -11,6 +11,15 @@ from psycopg.errors import Error as PsycopgError
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from agent_console.postgres_schema_compatibility import (
+    LEDGER_COLUMNS,
+    Table,
+    columns,
+    foreign,
+    primary,
+    schema_is_compatible,
+    unique,
+)
 from agent_console.runtime_profile_repository import (
     RuntimeProfileConflict,
     RuntimeProfileNotFound,
@@ -20,6 +29,41 @@ from agent_console.runtime_profile_repository import (
 
 ADAPTER = "runtime-profile-postgresql-v1"
 SCHEMA_VERSION = 1
+
+RUNTIME_PROFILE_STRUCTURE = (
+    Table("runtime_profile.schema_migrations", LEDGER_COLUMNS, (primary("version"),)),
+    Table(
+        "runtime_profile.profiles",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("runtime_profile_id", "text"),
+            ("aggregate_version", "bigint"),
+            ("record", "jsonb"),
+        ),
+        (primary("namespace", "security_domain", "runtime_profile_id"),),
+    ),
+    Table(
+        "runtime_profile.lifecycle_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("runtime_profile_id", "text"),
+            ("ordinal", "bigint"),
+            ("fact_id", "text"),
+            ("fact", "jsonb"),
+        ),
+        (
+            primary("namespace", "security_domain", "runtime_profile_id", "ordinal"),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(
+                ("namespace", "security_domain", "runtime_profile_id"),
+                "runtime_profile.profiles",
+                ("namespace", "security_domain", "runtime_profile_id"),
+            ),
+        ),
+    ),
+)
 
 
 class PostgresRuntimeProfileRepository:
@@ -93,6 +137,7 @@ class PostgresRuntimeProfileRepository:
                 row is None
                 or row["checksum"] != self.migration_checksum
                 or row["adapter"] != ADAPTER
+                or not schema_is_compatible(c, RUNTIME_PROFILE_STRUCTURE)
             ):
                 raise RuntimeProfileRepositoryError(
                     "RUNTIME_PROFILE_SCHEMA_INCOMPATIBLE"

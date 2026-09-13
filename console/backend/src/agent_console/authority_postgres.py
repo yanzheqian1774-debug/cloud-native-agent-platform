@@ -1288,8 +1288,8 @@ class PostgresAuthorityRepository:
         decision: GrantDecision,
         *,
         grants: Sequence[tuple[GrantId, ExactGrant, datetime | None, datetime]],
-        issuer_scope: AuthorityScope,
-        expected_version: int,
+        issuer_scope: AuthorityScope | None = None,
+        expected_version: int | None = None,
         expected_status: GrantRequestStatus,
         idempotency_key: str,
         payload_digest: str,
@@ -1306,22 +1306,31 @@ class PostgresAuthorityRepository:
             with self.connection_scope() as connection:
                 self._require_current_recovery_epoch(connection, recovery_epoch)
                 visible = connection.execute(
-                    "SELECT subject_principal_id,tenant_id,security_domain FROM "
+                    "SELECT subject_principal_id,tenant_id,security_domain,"
+                    "aggregate_version FROM "
                     "authorization_admin.grant_requests WHERE request_id=%s",
                     (decision.request_id,),
                 ).fetchone()
                 if visible is None:
                     raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
-                if (visible["tenant_id"], visible["security_domain"]) != (
-                    issuer_scope.tenant_id,
-                    issuer_scope.security_domain,
-                ):
+                request_scope = AuthorityScope(
+                    visible["tenant_id"], visible["security_domain"]
+                )
+                effective_issuer_scope = issuer_scope or request_scope
+                if request_scope != effective_issuer_scope:
                     raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+                effective_expected_version = (
+                    visible["aggregate_version"]
+                    if expected_version is None
+                    else expected_version
+                )
+                if effective_expected_version < 1:
+                    raise AuthorityError("AUTHORIZATION_STATE_STALE")
                 if visible["subject_principal_id"] == decision.issuer_principal_id:
                     raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
                 replay = self._claim(
                     connection,
-                    issuer_scope,
+                    effective_issuer_scope,
                     decision.issuer_principal_id,
                     command_type,
                     idempotency_key,
@@ -1339,14 +1348,14 @@ class PostgresAuthorityRepository:
                 ).fetchone()
                 self._decision_request_locked_checkpoint()
                 if row is None or (row["tenant_id"], row["security_domain"]) != (
-                    issuer_scope.tenant_id,
-                    issuer_scope.security_domain,
+                    effective_issuer_scope.tenant_id,
+                    effective_issuer_scope.security_domain,
                 ):
                     raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
                 if row["subject_principal_id"] == decision.issuer_principal_id:
                     raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
                 if (
-                    row["aggregate_version"] != expected_version
+                    row["aggregate_version"] != effective_expected_version
                     or row["state"] != expected_status.value
                 ):
                     raise AuthorityError("AUTHORIZATION_STATE_STALE")
@@ -1371,12 +1380,24 @@ class PostgresAuthorityRepository:
                     if len(requested_windows) != 1:
                         raise AuthorityError("INVALID_GRANT_DECISION")
                     requested_not_before, expires_at = next(iter(requested_windows))
-                    effective_not_before = requested_not_before or server_now
                     if (
-                        effective_not_before.utcoffset() != timedelta(0)
-                        or expires_at.utcoffset() != timedelta(0)
-                        or effective_not_before < server_now
-                        or effective_not_before >= expires_at
+                        requested_not_before is not None
+                        and requested_not_before.utcoffset() != timedelta(0)
+                    ) or expires_at.utcoffset() != timedelta(0):
+                        raise AuthorityError("INVALID_GRANT_DECISION")
+                    if expected_version is None:
+                        effective_not_before = requested_not_before or server_now
+                    else:
+                        if (
+                            requested_not_before is not None
+                            and requested_not_before < decision.created_at
+                        ):
+                            raise AuthorityError("INVALID_GRANT_DECISION")
+                        effective_not_before = max(
+                            requested_not_before or server_now, server_now
+                        )
+                    if (
+                        effective_not_before >= expires_at
                         or expires_at - effective_not_before > timedelta(hours=8)
                     ):
                         raise AuthorityError("INVALID_GRANT_DECISION")
@@ -1450,7 +1471,7 @@ class PostgresAuthorityRepository:
                 return replace(
                     decision,
                     grants=tuple(item[0] for item in normalized_grants),
-                    request_aggregate_version=expected_version + 1,
+                    request_aggregate_version=effective_expected_version + 1,
                     not_before=normalized_grants[0][2] if normalized_grants else None,
                     expires_at=normalized_grants[0][3] if normalized_grants else None,
                 )

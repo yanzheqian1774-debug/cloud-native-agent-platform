@@ -19,10 +19,97 @@ from agent_console.agent_definition_repository import (
     AgentDefinitionRepositoryError,
     DefinitionScope,
 )
+from agent_console.postgres_schema_compatibility import (
+    LEDGER_COLUMNS,
+    Table,
+    columns,
+    foreign,
+    primary,
+    schema_is_compatible,
+    unique,
+)
 
 ADAPTER = "agent-definition-postgresql-v1"
 SCHEMA_VERSION = 1
 GOVERNED_BINDINGS_VERSION = 6
+
+_DEFINITION_KEY = ("namespace", "security_domain", "definition_id")
+AGENT_DEFINITION_STRUCTURE = (
+    Table("agent_definition.schema_migrations", LEDGER_COLUMNS, (primary("version"),)),
+    Table(
+        "agent_definition.definitions",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("aggregate_version", "bigint"),
+            ("record", "jsonb"),
+        ),
+        (primary(*_DEFINITION_KEY),),
+    ),
+    Table(
+        "agent_definition.lifecycle_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("ordinal", "bigint"),
+            ("fact_id", "text"),
+            ("fact", "jsonb"),
+        ),
+        (
+            primary(*_DEFINITION_KEY, "ordinal"),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(_DEFINITION_KEY, "agent_definition.definitions", _DEFINITION_KEY),
+        ),
+    ),
+    Table(
+        "agent_definition.tombstones",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("tombstone", "jsonb"),
+        ),
+        (primary(*_DEFINITION_KEY),),
+    ),
+    Table(
+        "agent_definition.revision_bindings",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("revision_id", "text"),
+            ("binding_kind", "text"),
+            ("binding_ordinal", "integer"),
+            ("resource_id", "text"),
+            ("binding", "jsonb"),
+        ),
+        (
+            primary(*_DEFINITION_KEY, "revision_id", "binding_kind", "binding_ordinal"),
+            foreign(_DEFINITION_KEY, "agent_definition.definitions", _DEFINITION_KEY),
+        ),
+    ),
+    Table(
+        "agent_definition.binding_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("definition_id", "text"),
+            ("ordinal", "bigint"),
+            ("fact_id", "text"),
+            ("fact_type", "text"),
+            ("revision_id", "text"),
+            ("revision_digest", "text"),
+            ("fact", "jsonb"),
+        ),
+        (
+            primary(*_DEFINITION_KEY, "ordinal"),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(_DEFINITION_KEY, "agent_definition.definitions", _DEFINITION_KEY),
+        ),
+    ),
+)
 
 
 class PostgresAgentDefinitionRepository:
@@ -145,6 +232,9 @@ class PostgresAgentDefinitionRepository:
                         governed is None
                         or governed["checksum"] != self.governed_bindings_checksum
                         or governed["adapter"] != ADAPTER
+                        or not schema_is_compatible(
+                            connection, AGENT_DEFINITION_STRUCTURE
+                        )
                     ):
                         raise AgentDefinitionRepositoryError(
                             "AGENT_DEFINITION_SCHEMA_INCOMPATIBLE"

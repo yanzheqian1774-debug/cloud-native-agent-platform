@@ -30,6 +30,60 @@ from pydantic import ValidationError
 MIGRATIONS = Path(__file__).parents[1] / "migrations"
 
 
+@pytest.mark.parametrize("failed_migration", ("0011", "0013"))
+def test_configured_business_problem_initialization_failure_stops_startup_and_closes(
+    monkeypatch, failed_migration
+):
+    from agent_console import app, business_problem_bootstrap
+
+    opened = []
+
+    class Pool:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    class Repository:
+        def __init__(self, _database_url, *, migration_path):
+            self.migration_path = migration_path
+            self.pool = Pool()
+            opened.append(self)
+
+        def migrate(self):
+            if self.migration_path.name.startswith(failed_migration):
+                raise RuntimeError(f"{failed_migration}_INITIALIZATION_FAILED")
+
+        def compatibility(self):
+            return None
+
+    monkeypatch.setattr(
+        business_problem_bootstrap,
+        "PostgresWorkflowControlRepository",
+        Repository,
+    )
+    monkeypatch.setattr(
+        business_problem_bootstrap,
+        "PostgresBusinessProblemRepository",
+        Repository,
+    )
+    monkeypatch.setattr(
+        business_problem_bootstrap,
+        "PostgresWorkflowDefinitionRepository",
+        Repository,
+    )
+    monkeypatch.setenv("EXECUTION_DATABASE_URL", "postgresql://configured")
+    monkeypatch.setattr(app, "_digital_employee_assembly", object())
+    monkeypatch.setattr(app, "_business_problem_application", object())
+
+    with pytest.raises(RuntimeError, match=f"{failed_migration}_INITIALIZATION_FAILED"):
+        app._configure_business_problems()
+
+    assert app._business_problem_application is None
+    assert opened
+    assert all(repository.pool.closed for repository in opened)
+
+
 @pytest.mark.parametrize(
     "method",
     ["get_aggregate", "list_criterion_revisions", "list_criteria_set_revisions"],

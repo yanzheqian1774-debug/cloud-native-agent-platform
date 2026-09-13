@@ -527,6 +527,55 @@ class DigitalEmployeeProductAssembly:
         return result
 
 
+def migrate_execution_authority(
+    authority: PostgresExecutionAuthorityRepository,
+    *,
+    already_recorded: bool = False,
+) -> None:
+    if already_recorded:
+        _validate_execution_v8(authority)
+        return
+    try:
+        authority.migrate()
+    except ExecutionSchemaIncompatible:
+        _validate_execution_v8(authority)
+
+
+def migrate_workflow_controls(
+    controls: tuple[PostgresWorkflowControlRepository, ...],
+    *,
+    recorded_versions: frozenset[int] | None = None,
+) -> None:
+    recorded_versions = recorded_versions or frozenset()
+    for control in controls:
+        try:
+            version = int(control.migration_path.name[:4])
+            if version in recorded_versions:
+                control.compatibility(version=version)
+            else:
+                control.migrate()
+        finally:
+            control.pool.close()
+
+
+def complete_digital_employee_assembly(
+    definitions: AgentDefinitionService,
+    authority: PostgresExecutionAuthorityRepository,
+    migration_path: Path,
+    *,
+    already_recorded: bool = False,
+) -> DigitalEmployeeProductAssembly:
+    employee_definitions = PostgresEmployeeDefinitionRepository(authority)
+    identity_migration = migration_path.with_name("0014_digital_employee_identity.sql")
+    if already_recorded:
+        employee_definitions.compatibility(identity_migration)
+    else:
+        employee_definitions.migrate(identity_migration)
+    return DigitalEmployeeProductAssembly(
+        definitions, PostgresDigitalEmployeeRepository(authority)
+    )
+
+
 def build_digital_employee_assembly(
     database_url: str,
     definitions: AgentDefinitionService,
@@ -535,39 +584,34 @@ def build_digital_employee_assembly(
     min_pool_size: int = 1,
     max_pool_size: int = 4,
     timeout: float = 5,
+    authority: PostgresExecutionAuthorityRepository | None = None,
+    workflow_controls: tuple[PostgresWorkflowControlRepository, ...] | None = None,
 ) -> DigitalEmployeeProductAssembly:
-    authority = PostgresExecutionAuthorityRepository(
+    authority = authority or PostgresExecutionAuthorityRepository(
         database_url,
         migration_path=migration_path,
         min_pool_size=min_pool_size,
         max_pool_size=max_pool_size,
         timeout=timeout,
     )
-    try:
-        authority.migrate()
-    except ExecutionSchemaIncompatible:
-        _validate_execution_v8(authority)
-    for version, suffix in (
-        (9, "workflow_control_persistence"),
-        (10, "workflow_control_uow_extension"),
-    ):
-        control = PostgresWorkflowControlRepository(
-            database_url,
-            migration_path=migration_path.with_name(f"{version:04d}_{suffix}.sql"),
-            min_pool_size=min_pool_size,
-            max_pool_size=max_pool_size,
-            timeout=timeout,
+    controls = workflow_controls
+    if controls is None:
+        controls = tuple(
+            PostgresWorkflowControlRepository(
+                database_url,
+                migration_path=migration_path.with_name(f"{version:04d}_{suffix}.sql"),
+                min_pool_size=min_pool_size,
+                max_pool_size=max_pool_size,
+                timeout=timeout,
+            )
+            for version, suffix in (
+                (9, "workflow_control_persistence"),
+                (10, "workflow_control_uow_extension"),
+            )
         )
-        try:
-            control.migrate()
-        finally:
-            control.pool.close()
-    PostgresEmployeeDefinitionRepository(authority).migrate(
-        migration_path.with_name("0014_digital_employee_identity.sql")
-    )
-    return DigitalEmployeeProductAssembly(
-        definitions, PostgresDigitalEmployeeRepository(authority)
-    )
+    migrate_execution_authority(authority)
+    migrate_workflow_controls(controls)
+    return complete_digital_employee_assembly(definitions, authority, migration_path)
 
 
 def _validate_execution_v8(authority: PostgresExecutionAuthorityRepository) -> None:

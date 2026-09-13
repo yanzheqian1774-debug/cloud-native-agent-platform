@@ -18,11 +18,83 @@ from agent_console.knowledge_repository import (
     KnowledgeRepositoryError,
     KnowledgeScope,
 )
+from agent_console.postgres_schema_compatibility import (
+    LEDGER_COLUMNS,
+    Table,
+    columns,
+    foreign,
+    primary,
+    schema_is_compatible,
+    unique,
+)
 
 ADAPTER = "knowledge-postgresql-v1"
 SCHEMA_VERSION = 1
 QUALITY_ADAPTER = "knowledge-quality-postgresql-v1"
 QUALITY_SCHEMA_VERSION = 5
+
+KNOWLEDGE_STRUCTURE = (
+    Table(
+        "knowledge_operation.schema_migrations", LEDGER_COLUMNS, (primary("version"),)
+    ),
+    Table(
+        "knowledge_operation.knowledge",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("knowledge_id", "text"),
+            ("aggregate_version", "bigint"),
+            ("record", "jsonb"),
+        ),
+        (primary("namespace", "security_domain", "knowledge_id"),),
+    ),
+    Table(
+        "knowledge_operation.lifecycle_facts",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("knowledge_id", "text"),
+            ("ordinal", "bigint"),
+            ("fact_id", "text"),
+            ("fact", "jsonb"),
+        ),
+        (
+            primary("namespace", "security_domain", "knowledge_id", "ordinal"),
+            unique("namespace", "security_domain", "fact_id"),
+            foreign(
+                ("namespace", "security_domain", "knowledge_id"),
+                "knowledge_operation.knowledge",
+                ("namespace", "security_domain", "knowledge_id"),
+            ),
+        ),
+    ),
+    Table(
+        "knowledge_operation.purge_tombstones",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("knowledge_id", "text"),
+            ("tombstone", "jsonb"),
+        ),
+        (primary("namespace", "security_domain", "knowledge_id"),),
+    ),
+)
+
+KNOWLEDGE_QUALITY_STRUCTURE = (
+    Table("knowledge_quality.schema_migrations", LEDGER_COLUMNS, (primary("version"),)),
+    Table(
+        "knowledge_quality.entities",
+        columns(
+            ("namespace", "text"),
+            ("security_domain", "text"),
+            ("entity_type", "text"),
+            ("entity_id", "text"),
+            ("entity_digest", "text"),
+            ("record", "jsonb"),
+        ),
+        (primary("namespace", "security_domain", "entity_type", "entity_id"),),
+    ),
+)
 
 
 class PostgresKnowledgeRepository:
@@ -163,8 +235,33 @@ class PostgresKnowledgeRepository:
                     row is None
                     or row["checksum"] != self.migration_checksum
                     or row["adapter"] != ADAPTER
+                    or not schema_is_compatible(connection, KNOWLEDGE_STRUCTURE)
                 ):
                     raise KnowledgeRepositoryError("KNOWLEDGE_SCHEMA_INCOMPATIBLE")
+        except KnowledgeRepositoryError:
+            raise
+        except PsycopgError as exc:
+            raise KnowledgeRepositoryError("KNOWLEDGE_STORAGE_UNAVAILABLE") from exc
+
+    def quality_compatibility(self) -> None:
+        if self.quality_migration_path is None:
+            raise KnowledgeRepositoryError("KNOWLEDGE_QUALITY_SCHEMA_UNAVAILABLE")
+        checksum = hashlib.sha256(self.quality_migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection:
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM knowledge_quality.schema_migrations WHERE version=%s",
+                    (QUALITY_SCHEMA_VERSION,),
+                ).fetchone()
+                if (
+                    row is None
+                    or row["checksum"] != checksum
+                    or row["adapter"] != QUALITY_ADAPTER
+                    or not schema_is_compatible(connection, KNOWLEDGE_QUALITY_STRUCTURE)
+                ):
+                    raise KnowledgeRepositoryError(
+                        "KNOWLEDGE_QUALITY_SCHEMA_INCOMPATIBLE"
+                    )
         except KnowledgeRepositoryError:
             raise
         except PsycopgError as exc:
