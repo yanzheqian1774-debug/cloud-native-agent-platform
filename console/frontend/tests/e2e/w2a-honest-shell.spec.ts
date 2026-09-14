@@ -61,9 +61,11 @@ const createdProblem = {
 
 const applicantContextKey = "human:applicant\u0000tenant-a\u0000quality";
 
-async function installRoutes(page: import("@playwright/test").Page, identity: { value: string | null }) {
+type TestIdentity = { value: string | null; tenantId?: string; securityDomain?: string };
+
+async function installRoutes(page: import("@playwright/test").Page, identity: TestIdentity) {
   await page.route("**/api/workbench/v1/session", route => identity.value
-    ? route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-session.v1", principal: { principalId: identity.value, tenantId: "tenant-a", securityDomain: "quality" }, session: { expiresAt: "2026-09-14T00:00:00Z", idleExpiresAt: "2026-09-14T00:00:00Z" }, csrfToken: "redacted-test-value" }) })
+    ? route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-session.v1", principal: { principalId: identity.value, tenantId: identity.tenantId ?? "tenant-a", securityDomain: identity.securityDomain ?? "quality" }, session: { expiresAt: "2026-09-14T00:00:00Z", idleExpiresAt: "2026-09-14T00:00:00Z" }, csrfToken: "redacted-test-value" }) })
     : route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ reasonCode: "WORKBENCH_LOGIN_REQUIRED" }) }));
   await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [] }, continuationIds: [] }) }));
   await page.route("**/api/internal/v0.2.1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify([legacyProblem]) }));
@@ -327,8 +329,8 @@ test("cancel remains local and an upward reader receives a new-message affordanc
   expect(writes).toBe(0);
 });
 
-test("a changed trusted subject isolates the draft and ignores the old create response", async ({ page }) => {
-  const identity = { value: "human:applicant-a" as string | null };
+test("a changed principal, tenant, or security domain isolates local input and ignores an old create response", async ({ page }) => {
+  const identity: TestIdentity = { value: "human:applicant-a", tenantId: "tenant-a", securityDomain: "quality" };
   let releaseCreate!: () => void;
   const createGate = new Promise<void>(resolve => { releaseCreate = resolve; });
   await installRoutes(page, identity);
@@ -346,7 +348,7 @@ test("a changed trusted subject isolates the draft and ignores the old create re
   await page.getByRole("button", { name: "发送", exact: true }).click();
   await page.getByRole("button", { name: "确认创建", exact: true }).click();
   await expect(page.getByText("正在创建", { exact: true })).toBeVisible();
-  identity.value = "human:applicant-b";
+  identity.securityDomain = "restricted";
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("heading", { name: "请在当前可信会话重新开始", exact: true })).toBeVisible();
   await expect(page.locator(".px-task-summary-panel").getByText(createdProblem.title, { exact: true })).toHaveCount(0);
@@ -355,6 +357,44 @@ test("a changed trusted subject isolates the draft and ignores the old create re
   await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toHaveCount(0);
   await expect(page.getByText("problem:conversation-1", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("你希望解决什么问题？")).toBeEnabled();
+  await page.getByLabel("你希望解决什么问题？").fill("新安全域中的本地草稿。");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  identity.tenantId = "tenant-b";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByText("新安全域中的本地草稿。", { exact: true })).toHaveCount(0);
+  await page.getByLabel("你希望解决什么问题？").fill("新租户中的本地草稿。");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  identity.value = "human:applicant-b";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByText("新租户中的本地草稿。", { exact: true })).toHaveCount(0);
+});
+
+test("switching Problems requires confirmation and does not carry page-only supplements", async ({ page }) => {
+  const identity = { value: "human:applicant" as string | null };
+  const secondProblem = { ...createdProblem, business_problem_id: "problem:conversation-2", revision_id: "problem-revision:conversation-2:1", title: "第二个正式问题", description: "第二个问题的权威描述。", digest: "sha256:" + "d".repeat(64) };
+  await installRoutes(page, identity);
+  await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem, secondProblem] }, continuationIds: [] }) }));
+  await page.route(/\/api\/workbench\/v1\/problems\/problem%3Aconversation-(1|2)$/, route => {
+    const revision = route.request().url().includes("conversation-2") ? secondProblem : createdProblem;
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problem: { scope: revision.scope, business_problem_id: revision.business_problem_id, owner_id: revision.owner_id, current_state: "OPEN", aggregate_version: 1, current_revision_id: revision.revision_id, created_by: revision.created_by, created_at: revision.created_at, updated_at: revision.created_at }, revisions: [revision], lifecycle: [] }, continuationIds: [] }) });
+  });
+  await page.route("**/api/workbench/v1/problems/*/criteria-sets", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revisions: [] }, continuationIds: [] }) }));
+  await page.route("**/api/workbench/v1/problems/*/criteria", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revisions: [] }, continuationIds: [] }) }));
+
+  await page.goto("/work?problem=problem%3Aconversation-1");
+  const composer = page.getByLabel("待处理补充（仅本页）");
+  await composer.fill("只属于第一个问题的页内补充。");
+  await page.getByText("业务问题与新建入口", { exact: true }).click();
+  page.once("dialog", async dialog => {
+    expect(dialog.message()).toContain("未保存修改或页内补充");
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: /第二个正式问题/ }).click();
+  await expect(page).toHaveURL(/problem%3Aconversation-2/);
+  await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
+  await expect(page.locator("#formal-problem-message").getByText(secondProblem.description, { exact: true })).toBeVisible();
+  await expect(composer).toHaveValue("");
+  await expect(page.getByText("只属于第一个问题的页内补充。", { exact: true })).toHaveCount(0);
 });
 
 test("created problem continues through pending approval to a fresh exact read", async ({ page }, testInfo) => {
