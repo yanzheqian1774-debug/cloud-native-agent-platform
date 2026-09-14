@@ -402,6 +402,11 @@ test("created problem continues through pending approval to a fresh exact read",
   let grantState: "PENDING" | "APPROVED" = "PENDING";
   let exactReadFails = false;
   let exactReads = 0;
+  let delayGrantInspect = false;
+  let releaseGrantInspect!: () => void;
+  let grantInspectStarted!: () => void;
+  const grantInspectGate = new Promise<void>(resolve => { releaseGrantInspect = resolve; });
+  const grantInspectInFlight = new Promise<void>(resolve => { grantInspectStarted = resolve; });
   await installRoutes(page, identity);
   await page.route("**/api/workbench/v1/problems", async route => {
     if (route.request().method() === "POST") {
@@ -422,6 +427,7 @@ test("created problem continues through pending approval to a fresh exact read",
     await route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:conversation-1", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) });
   });
   await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Aconversation-1", async route => {
+    if(delayGrantInspect){grantInspectStarted();await grantInspectGate}
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:conversation-1", state: grantState, aggregateVersion: grantState === "PENDING" ? 1 : 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) });
   });
 
@@ -450,13 +456,19 @@ test("created problem continues through pending approval to a fresh exact read",
   await stream.evaluate(element => { (element as HTMLElement).style.maxHeight = "180px"; element.scrollTop = 0; element.dispatchEvent(new Event("scroll")); });
   await waitingComposer.focus();
   grantState = "APPROVED";
+  delayGrantInspect = true;
   const refreshButton = page.getByRole("button", { name: "刷新授权状态", exact: true });
-  await refreshButton.evaluate((button: HTMLButtonElement) => button.click());
+  await refreshButton.click();
+  await grantInspectInFlight;
+  const userFocusTarget = page.locator(".px-problem-switcher > summary");
+  await userFocusTarget.click();
+  await expect(userFocusTarget).toBeFocused();
   const scrollAfterDispatch = await stream.evaluate(element => element.scrollTop);
+  releaseGrantInspect();
   await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
   await expect(page.locator("#authorization-message").getByText("问题详情已读取成功", { exact: false })).toBeVisible();
   await expect(waitingComposer).toHaveValue(pendingText);
-  await expect(refreshButton).toBeFocused();
+  await expect(userFocusTarget).toBeFocused();
   expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
   await expect(desktopSummary.getByText(pendingText, { exact: true })).toHaveCount(0);
   expect(exactReads).toBe(1);
