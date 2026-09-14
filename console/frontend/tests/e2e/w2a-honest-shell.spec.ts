@@ -362,6 +362,7 @@ test("created problem continues through pending approval to a fresh exact read",
   grantState = "APPROVED";
   await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
   await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
+  await expect(page.locator("#authorization-message").getByText("问题详情已读取成功", { exact: false })).toBeVisible();
   expect(exactReads).toBe(1);
   const formalProblem = page.locator("#formal-problem-message");
   await expect(formalProblem.getByText("修改此问题需要另行授权", { exact: false })).toBeVisible();
