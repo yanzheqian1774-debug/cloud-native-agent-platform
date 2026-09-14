@@ -358,7 +358,7 @@ export function DigitalEmployeesPage() {
       <article><span className="employee-overview-icon amber" aria-hidden="true">写</span><div><small>生命周期装配</small><strong>部分实现</strong><span>正式权限取得待 305</span></div></article>
       <article><span className="employee-overview-icon red" aria-hidden="true">!</span><div><small>运行与结果</small><strong>未实现</strong><span>不将发布表达为可运行</span></div></article>
     </section>
-    <section className="px-truth-banner employee-trust-banner" role="status"><span className="px-status neutral">可信会话与当前授权</span><strong>读取已接通；写命令按已接受契约装配</strong><p>LIST 仅用于发现，每次详情仍独立执行 exact READ。CREATE、VALIDATE、APPROVE、PUBLISH 会在提交时重新读取 session 与 CSRF；权限取得路径仍由 305 闭合。</p><p>发布不等于可匹配、已实例化、已分配、已放置或已运行。</p></section>
+    <section className="px-truth-banner employee-trust-banner" role="status"><span className="px-status neutral">可信会话与当前授权</span><strong>读取已接通；写命令按已接受契约装配</strong><p>LIST 仅用于发现，每次详情仍独立执行 exact READ。CREATE、VALIDATE、APPROVE、PUBLISH 会在提交时重新读取 session 与 CSRF；权限取得路径仍由 305 闭合。</p><p>浏览器不发送身份 header，也不回退私有 API 或私有 actor。发布不等于可匹配、已实例化、已分配、已放置或已运行。</p></section>
     <nav className="px-view-tabs" aria-label="数字员工管理">{([[
       "definitions", "员工档案",
     ], ["create", "Agent 候选"], ["instance", "实例"], ["assignment", "工作分配"], ["work", "工作关联"]] as const).map(([key, label]) => <button key={key} className={panel === key ? "active" : ""} onClick={() => { setPanel(key); updateUrl({ panel: key }); }}>{label}</button>)}</nav>
