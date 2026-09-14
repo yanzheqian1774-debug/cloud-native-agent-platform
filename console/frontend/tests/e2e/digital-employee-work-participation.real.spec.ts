@@ -222,7 +222,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
       expect(routeClass).toBe("EXPECTED");
     });
     await test.step(employeeListSteps.shell, async () => {
-      await expect(full.page.getByRole("heading", { name: "数字员工管理" })).toBeVisible();
+      await expect(full.page.getByRole("heading", { name: "数字员工", exact: true })).toBeVisible();
     });
     await test.step(employeeListSteps.request, async () => {
       expect(await requestPromise).not.toBeNull();
@@ -245,6 +245,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
   });
   await test.step("EMPLOYEE_EXACT_UI_READ", async () => {
     await employeeButton.click();
+    await full.page.getByRole("button", { name: "职责与能力", exact: true }).click();
     const agentName = full.page.getByText("Quality analysis Agent", { exact: true });
     await expect(agentName).toHaveCount(1);
     await expect(agentName).toBeVisible();
