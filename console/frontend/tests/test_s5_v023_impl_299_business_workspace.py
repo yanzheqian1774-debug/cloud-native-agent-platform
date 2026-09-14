@@ -50,7 +50,8 @@ def test_first_slice_preserves_identity_cas_and_refresh() -> None:
         "stored.contextKey===contextKey",
     ):
         assert marker in page
-    assert "SuccessCriterionCard" in page
+    assert "writeCriterion" in page
+    assert "writeCriteriaSet" in page
     assert "problemPlanning" not in page
     assert "listDigitalEmployeeTemplates" not in page
 
@@ -198,9 +199,25 @@ def test_success_criterion_draft_uses_the_single_composer_and_explicit_type() ->
     assert "createSuccessCriterionTurn" in model
     assert "originalText:text" in model
     assert "没有用关键词推断标准类型" in card
-    assert "kind:null" in model
+    assert 'source?"HUMAN_EVALUATED":null' in model
     assert 'kind:"HUMAN_EVALUATED"' in card
     assert "确认前只保存在当前页面" in card
-    assert "已确认" + "\uff0c" + "尚未保存" in card
+    assert "确认并保存" in card
+    assert "已保存并完成正式关联" in card
     assert "没有调用正式保存接口" in card
     assert "当前针对" + "\uff1a" in conversation
+    for marker in (
+        "criterionPayload",
+        "criterionKey",
+        "setPayload",
+        "setKey",
+        "expectedProblemVersion",
+        "UNKNOWN_CRITERION",
+        "UNKNOWN_SET",
+        "原命令、payload 和幂等键已冻结",
+        "predecessorSetRevisionId",
+        "predecessorRevisionId",
+    ):
+        assert marker in page or marker in card or marker in model
+    assert "SavedCriteriaHistory" in page
+    assert "列表按 revision 倒序显示不等于自动选择 latest" in card
