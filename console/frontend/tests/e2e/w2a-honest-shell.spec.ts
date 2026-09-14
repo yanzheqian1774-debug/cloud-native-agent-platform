@@ -172,6 +172,9 @@ test("business workbench creates a message draft before any write and supports c
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付延期");
   await expect(draft.getByLabel("完整描述")).toHaveValue(original);
+  const independentSupplement = page.getByLabel("待处理补充（仅本页）");
+  await expect(independentSupplement).toBeEnabled();
+  await independentSupplement.fill("字段编辑期间准备的独立补充不得被描述替换覆盖。");
   await draft.getByLabel("建议名称").fill("字段编辑先保留");
   await draft.getByRole("button", { name: "使用输入框完整修改", exact: true }).click();
   await expect(draft.getByLabel("完整描述")).toHaveCount(0);
@@ -180,12 +183,14 @@ test("business workbench creates a message draft before any write and supports c
   await expect(replacement).toHaveValue(original);
   await replacement.fill("这次替换应当取消，不得覆盖卡片字段。");
   await page.getByRole("button", { name: "取消修改", exact: true }).click();
+  await expect(independentSupplement).toHaveValue("字段编辑期间准备的独立补充不得被描述替换覆盖。");
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   await expect(draft.getByLabel("建议名称")).toHaveValue("字段编辑先保留");
   await expect(draft.getByLabel("完整描述")).toHaveValue(original);
   await draft.getByRole("button", { name: "使用输入框完整修改", exact: true }).click();
   await replacement.fill("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
   await page.getByRole("button", { name: "采用草稿描述", exact: true }).click();
+  await expect(independentSupplement).toHaveValue("字段编辑期间准备的独立补充不得被描述替换覆盖。");
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   await expect(draft.getByLabel("建议名称")).toHaveValue("字段编辑先保留");
   await expect(draft.getByLabel("完整描述")).toHaveValue("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
@@ -200,6 +205,8 @@ test("business workbench creates a message draft before any write and supports c
   await expect(page.getByText("diagnostic:fixture", { exact: true })).toBeVisible();
   await expect(draft.getByText("供应商交付恢复", { exact: true })).toBeVisible();
   await expect(draft.getByText("关键零部件延期影响客户交付，需要明确恢复责任和时间。", { exact: true })).toBeVisible();
+  await expect(independentSupplement).toBeEnabled();
+  await expect(independentSupplement).toHaveValue("字段编辑期间准备的独立补充不得被描述替换覆盖。");
   expect(createAttempts).toBe(1);
   await page.screenshot({ path: testInfo.outputPath("w2b-create-error-preserves-input-1440.png"), fullPage: true });
 
@@ -248,12 +255,52 @@ test("unknown create replays the exact payload and key while double activation s
   await confirm.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
   await expect(draft.getByText("结果不确定", { exact: true })).toBeVisible();
   expect(attempts).toHaveLength(1);
+  const unknownSupplement = page.getByLabel("待处理补充（仅本页）");
+  await expect(unknownSupplement).toBeEnabled();
+  await unknownSupplement.fill("结果未知期间新增的约束，只能页内保留。");
+  await page.getByRole("button", { name: "保留补充", exact: true }).click();
+  await expect(page.getByText("结果未知期间新增的约束，只能页内保留。", { exact: true })).toBeVisible();
+  await expect(page.getByText("已保留，尚未采用", { exact: true })).toBeVisible();
   await draft.getByRole("button", { name: "恢复原创建结果", exact: true }).click();
   await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toBeVisible();
   await expect(draft.getByRole("button", { name: "确认创建", exact: true })).toHaveCount(0);
   expect(attempts).toHaveLength(2);
   expect(attempts[1]).toEqual(attempts[0]);
+  await expect(page.getByText("结果未知期间新增的约束，只能页内保留。", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-created-after-recovery-1440.png"), fullPage: true });
+});
+
+test("an in-flight create keeps the independent composer and late success does not steal focus", async ({ page }, testInfo) => {
+  const identity = { value: "human:applicant" as string | null };
+  let releaseCreate!: () => void;
+  const createGate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  const attempts: Array<Record<string, unknown>> = [];
+  await installRoutes(page, identity);
+  await page.route("**/api/workbench/v1/problems", async route => {
+    if (route.request().method() !== "POST") {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [] }, continuationIds: [] }) });
+      return;
+    }
+    attempts.push(route.request().postDataJSON());
+    await createGate;
+    await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revision: createdProblem, creatorContinuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "AVAILABLE", expiresAt: "2026-09-14T01:20:00Z", continuationId: "continuation-ref." + "e".repeat(64) } }, continuationIds: [] }) });
+  });
+
+  await page.goto("/work");
+  await page.getByLabel("你希望解决什么问题？").fill(createdProblem.description);
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.getByRole("button", { name: "确认创建", exact: true }).click();
+  await expect(page.getByText("正在创建", { exact: true })).toBeVisible();
+  const composer = page.getByLabel("待处理补充（仅本页）");
+  await expect(composer).toBeEnabled();
+  await composer.fill("创建响应到达前输入的新约束必须保留。");
+  await composer.focus();
+  releaseCreate();
+  await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toBeVisible();
+  await expect(composer).toHaveValue("创建响应到达前输入的新约束必须保留。");
+  await expect(composer).toBeFocused();
+  expect(attempts).toHaveLength(1);
+  await page.screenshot({ path: testInfo.outputPath("w2e-create-late-response-preserves-supplement-1440.png"), fullPage: true });
 });
 
 test("cancel remains local and an upward reader receives a new-message affordance", async ({ page }) => {
@@ -344,11 +391,11 @@ test("created problem continues through pending approval to a fresh exact read",
   await page.getByRole("button", { name: "确认创建", exact: true }).click();
   await page.getByRole("button", { name: "申请查看权限", exact: true }).click();
   await expect(page.getByText("等待管理员处理", { exact: true })).toBeVisible();
-  const waitingComposer = page.locator(".px-composer-locked");
-  await expect(waitingComposer.getByText("等待授权", { exact: true })).toBeVisible();
-  await expect(waitingComposer.getByText("正在等待独立管理员处理", { exact: false })).toBeVisible();
-  await expect(waitingComposer.locator("textarea")).toHaveCount(0);
-  await expect(waitingComposer.getByRole("button")).toHaveCount(0);
+  const waitingComposer = page.getByLabel("待处理补充（仅本页）");
+  await expect(waitingComposer).toBeEnabled();
+  await expect(page.getByText("尚未修改正式问题，管理员不会自动收到", { exact: false })).toBeVisible();
+  const pendingText = "等待审批期间补充：同时核对恢复责任与日期。";
+  await waitingComposer.fill(pendingText);
   expect(exactReads).toBe(0);
   const desktopSummary = page.locator(".px-task-summary-panel");
   await expect(desktopSummary.getByRole("heading", { name: createdProblem.title, exact: true })).toBeVisible();
@@ -359,10 +406,19 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(desktopSummary.getByRole("heading", { name: "等待审批", exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-waiting-authorization-1440.png"), fullPage: true });
+  const stream = page.locator(".px-message-stream");
+  await stream.evaluate(element => { (element as HTMLElement).style.maxHeight = "180px"; element.scrollTop = 0; element.dispatchEvent(new Event("scroll")); });
+  await waitingComposer.focus();
   grantState = "APPROVED";
-  await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
+  const refreshButton = page.getByRole("button", { name: "刷新授权状态", exact: true });
+  await refreshButton.evaluate((button: HTMLButtonElement) => button.click());
+  const scrollAfterDispatch = await stream.evaluate(element => element.scrollTop);
   await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
   await expect(page.locator("#authorization-message").getByText("问题详情已读取成功", { exact: false })).toBeVisible();
+  await expect(waitingComposer).toHaveValue(pendingText);
+  await expect(refreshButton).toBeFocused();
+  expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
+  await expect(desktopSummary.getByText(pendingText, { exact: true })).toHaveCount(0);
   expect(exactReads).toBe(1);
   const formalProblem = page.locator("#formal-problem-message");
   await expect(formalProblem.getByText("修改此问题需要另行授权", { exact: false })).toBeVisible();
@@ -371,6 +427,8 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
   await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("读取成功", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "保留补充", exact: true }).click();
+  await expect(page.getByText(pendingText, { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-approved-exact-read-1440.png"), fullPage: true });
   await page.reload();
   await expect(page.getByRole("heading", { name: "已恢复正式业务记录", exact: true })).toBeVisible();

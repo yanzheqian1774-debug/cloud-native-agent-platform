@@ -113,6 +113,9 @@ def test_conversation_has_one_composer_and_confirmation_gate() -> None:
     assert "event.nativeEvent.isComposing" in conversation
     assert "event.keyCode===229" in conversation
     assert "发送后仍需确认" in conversation
+    assert "待处理补充" + "\uff08" + "仅本页" + "\uff09" in conversation
+    assert "尚未修改正式问题" + "\uff0c" + "管理员不会自动收到" in conversation
+    assert "保留补充" in conversation
     assert "未提交草稿只保存在当前页面" in conversation
     assert "suggestProblemTitle" in model
     assert "无模型模式" in conversation
@@ -124,12 +127,13 @@ def test_editors_are_exclusive_and_task_summary_is_read_only() -> None:
     conversation = text("problems/ProblemConversation.tsx")
     summary = text("problems/ProblemTaskSummary.tsx")
     for marker in (
-        'composerTarget==="LOCKED"',
+        'composerTarget==="SUPPLEMENT"',
         'composerTarget==="DRAFT"',
         'composerTarget==="FORMAL"',
         "采用字段修改",
         "正在底部输入框完整替换描述",
         "旧确认和更新操作已经失效",
+        "问题名称" + "\uff08" + "可选修改" + "\uff09",
     ):
         assert marker in page or marker in conversation
     for marker in (
@@ -149,10 +153,9 @@ def test_editors_are_exclusive_and_task_summary_is_read_only() -> None:
         "decideGrantRequest",
     ):
         assert forbidden not in summary
-    assert (
-        'if(locked)return <section className="px-composer px-composer-locked"'
-        in conversation
-    )
+    assert 'mode?:"NEW"|"SUPPLEMENT"|"DRAFT_REPLACE"|"FORMAL_REPLACE"' in conversation
+    assert "px-composer-locked" not in conversation
+    assert "supplements" not in summary
     assert "px-task-summary-trigger>span:first-child" in text(
         "styles/product-experience.css"
     )
@@ -170,7 +173,9 @@ def test_conversation_isolates_context_and_freezes_unknown_create() -> None:
         "sessionKey",
         "epoch.current+=1",
         "可信身份或安全范围已经变化",
+        "页内补充和在途响应已隔离",
         "恢复原创建结果",
+        "setSupplements([])",
     ):
         assert marker in page or marker in conversation
     assert "localStorage" not in page
