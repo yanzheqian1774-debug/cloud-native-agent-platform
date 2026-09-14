@@ -29,6 +29,52 @@ def test_chinese_first_product_shell_and_routes_are_wired() -> None:
     assert 'aria-label={to==="/attention"?"Attention":undefined}' in shell
 
 
+def test_w2a_shell_uses_session_facts_and_marks_unavailable_controls() -> None:
+    shell = source("components/ConsoleShell.tsx")
+    assert "readWorkbenchSession" in shell
+    assert "new AbortController()" in shell
+    assert "request?.abort()" in shell
+    assert "readWorkbenchSession(controller.signal)" in shell
+    assert "session.principal.principalId" in shell
+    assert (
+        'document.addEventListener("visibilitychange",refreshVisibleSession)' in shell
+    )
+    assert 'window.addEventListener("focus",refreshFocusedSession)' in shell
+    assert 'window.removeEventListener("focus",refreshFocusedSession)' in shell
+    assert "request===controller" in shell
+    assert "当前可信身份" in shell
+    assert "未显示可信身份" in shell
+    assert "审核人员" not in shell
+    assert "px-notification" not in shell
+    assert "⌘ K" not in shell
+    assert 'aria-label="全局搜索\uff08暂未接线\uff09"' in shell
+    assert "全局搜索暂未接线" in shell
+    assert '<Link to="/work">可信问题工作台</Link>' in shell
+
+
+def test_w2a_keeps_legacy_planning_ids_out_of_the_trusted_problem_route() -> None:
+    home = source("dashboard/ProductDashboardPage.tsx")
+    evidence = source("evidence/EvidenceCenterPage.tsx")
+    outcomes = source("outcomes/OutcomeCenterPage.tsx")
+    directory = source("problems/PlanningDirectoryPage.tsx")
+    assert 'className="px-primary-button" to="/work">提出业务问题' in home
+    assert "/work?problem=" not in home
+    assert "/work?problem=" not in evidence
+    assert "/work?problem=" not in outcomes
+    for marker in ("旧规划来源", "v0.2.1", "不属于当前 /work 权威"):
+        assert marker in home
+    assert "这些记录不会作为 ID 进入当前 /work Problem 权威" in evidence
+    assert "旧规划 ID 不会进入当前 /work Problem 权威" in outcomes
+    for marker in (
+        "搜索计划\uff08暂未接线\uff09",
+        "状态筛选\uff08暂未接线\uff09",
+        "业务问题筛选\uff08暂未接线\uff09",
+        "排序\uff08暂未接线\uff09",
+    ):
+        assert marker in directory
+    assert directory.count(" disabled") >= 4
+
+
 def test_home_uses_authorized_projections_and_truthful_unavailable_states() -> None:
     home = source("dashboard/ProductDashboardPage.tsx")
     for projection in (
@@ -100,3 +146,12 @@ def test_shared_styles_cover_desktop_narrow_and_keyboard_states() -> None:
     assert "@media(max-width:700px)" in styles
     assert ":focus-visible" in styles
     assert "overflow-x:auto" in styles
+    for selector in (
+        ".px-workspace .px-form-fields",
+        ".px-workspace .px-form-actions",
+        ".px-workspace .px-workbench-error",
+        ".px-admin-page .px-admin-status",
+        ".px-admin-page .px-field",
+    ):
+        assert selector in styles
+    assert "env(safe-area-inset-bottom)" in styles

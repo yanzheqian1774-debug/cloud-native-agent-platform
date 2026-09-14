@@ -107,6 +107,48 @@ def test_summary_static_scenarios(mapping):
     assert "\n" not in encoded
 
 
+def test_support_surface_timeout_reports_closed_page_viewport_and_action() -> None:
+    report = summary_report(status="timedOut")
+    suite = report["suites"][0]
+    spec = suite["specs"][0]
+    suite["file"] = "platform-support-surfaces.spec.ts"
+    spec["title"] = "exposes nine truthful Chinese-first platform support surfaces"
+    result = spec["tests"][0]["results"][0]
+    result["duration"] = 60_000
+    result["steps"] = [
+        {"title": "SUPPORT_APPLICATIONS_DESKTOP_NAVIGATE", "duration": 100},
+        {
+            "title": "SUPPORT_APPLICATIONS_DESKTOP_HEADING_VISIBLE",
+            "duration": 59_900,
+            "error": {"message": "PRIVATE"},
+        },
+    ]
+
+    summary = make_summary(report)
+
+    assert summary["actionClass"] == "HEADING_VISIBLE"
+    assert summary["stepDiagnostic"] == {
+        "failedStep": {
+            "routeKey": "APPLICATIONS",
+            "viewportKey": "DESKTOP",
+            "stepId": "SUPPORT_APPLICATIONS_DESKTOP_HEADING_VISIBLE",
+            "actionClass": "HEADING_VISIBLE",
+            "elapsedMs": 59_900,
+        },
+        "lastCompletedStep": {
+            "routeKey": "APPLICATIONS",
+            "viewportKey": "DESKTOP",
+            "stepId": "SUPPORT_APPLICATIONS_DESKTOP_NAVIGATE",
+            "actionClass": "NAVIGATE",
+            "elapsedMs": 100,
+        },
+        "completedStepCount": 1,
+        "elapsedMs": 60_000,
+        "timeoutKind": "SCENARIO",
+    }
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
 @pytest.mark.parametrize("status", ["failed", "timedOut", "interrupted"])
 def test_summary_counts_and_unknown_scenario(status):
     summary = make_summary(summary_report(status, known=False))
@@ -485,8 +527,32 @@ def test_wave_3b_conflict_recovery_uses_exact_static_top_level_steps():
         "WAVE3B_08_EXPLICIT_RECOVERY",
         "WAVE3B_08_FINAL_ASSERTION",
     ]
+
+
+def test_wave_3b_setup_uses_exact_static_top_level_steps():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'test\.step\("(WAVE3B_00_[A-Z_]+)"', source)
+    expected = [
+        title
+        for title in harness_module.WAVE_3B_STEP_IDS
+        if title.startswith("WAVE3B_00_")
+    ]
+    assert titles == expected
     assert "test.setTimeout(240_000)" in source
     assert "waitForTimeout(" not in source
+
+
+def test_every_wave_3b_step_has_a_closed_diagnostic_identity():
+    source = (
+        MODULE_PATH.parents[2]
+        / "console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts"
+    ).read_text(encoding="utf-8")
+    titles = re.findall(r'test\.step\("([^"]+)"', source)
+    assert titles
+    assert set(titles) == set(harness_module.WAVE_3B_STEP_IDS)
 
 
 def test_wave_3b_conflict_write_failure_is_bounded_and_distinct():
