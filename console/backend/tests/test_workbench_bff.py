@@ -426,6 +426,51 @@ def test_unsafe_boundary_and_strict_schema_fail_before_owner() -> None:
     assert authorizer.calls == []
 
 
+def test_unsafe_boundary_distinguishes_csrf_and_fetch_metadata() -> None:
+    client, _, authorizer = build_client()
+    login(client)
+    missing_csrf = client.post(
+        f"{PREFIX}/problems/problem-1/revisions",
+        headers={
+            "origin": "https://console.example",
+            "sec-fetch-site": "same-origin",
+        },
+        json={"title": "hidden"},
+    )
+    assert missing_csrf.status_code == 403
+    assert missing_csrf.json()["reasonCode"] == "CSRF_VALIDATION_FAILED"
+
+    missing_origin_and_csrf = client.post(
+        f"{PREFIX}/problems/problem-1/revisions",
+        json={"title": "hidden"},
+    )
+    assert missing_origin_and_csrf.status_code == 403
+    assert missing_origin_and_csrf.json()["reasonCode"] == "CSRF_VALIDATION_FAILED"
+
+    unexpected_fetch_site = client.post(
+        f"{PREFIX}/problems/problem-1/revisions",
+        headers={
+            "origin": "https://console.example",
+            "sec-fetch-site": "cross-site",
+            "x-csrf-token": "csrf-token",
+        },
+        json={"title": "hidden"},
+    )
+    assert unexpected_fetch_site.status_code == 403
+    assert unexpected_fetch_site.json()["reasonCode"] == "CSRF_VALIDATION_FAILED"
+
+    missing_fetch_site = client.post(
+        f"{PREFIX}/problems/problem-1/revisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+        },
+        json={"title": "accepted by the current missing-header policy"},
+    )
+    assert missing_fetch_site.status_code == 201
+    assert len(authorizer.calls) == 1
+
+
 def test_route_set_is_closed_and_rotation_invalidates_predecessor_cookie() -> None:
     client, sessions, _ = build_client()
     login(client)

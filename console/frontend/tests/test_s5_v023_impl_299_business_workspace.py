@@ -3,10 +3,32 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1] / "src"
+REPOSITORY = Path(__file__).parents[3]
 
 
 def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_native_https_harness_is_explicit_and_default_paths_remain_plain() -> None:
+    config = (REPOSITORY / "console/frontend/playwright.config.ts").read_text()
+    proxy = (REPOSITORY / "scripts/acceptance/static_proxy_server.py").read_text()
+    server = (
+        REPOSITORY / "scripts/acceptance/s5_v023_impl_299_w3_server.py"
+    ).read_text()
+    assert "process.env.CONSOLE_FRONTEND_ORIGIN ?? `http://" in config
+    assert "PLAYWRIGHT_HTTPS_CERTIFICATE_SPKI" in config
+    assert '["**/*-live.spec.ts"]' in config
+    assert 'parser.add_argument("--tls-cert"' in proxy
+    assert 'parser.add_argument("--tls-key"' in proxy
+    assert 'parser.add_argument("--preserve-host"' in proxy
+    assert "if not self.preserve_host:" in proxy
+    assert "if args.forward_origin:" in proxy
+    assert "forwarded_origin: str | None = None" in proxy
+    assert 'self.command in {"POST", "PUT", "PATCH", "DELETE"}' in proxy
+    assert 'parser.add_argument("--allowed-host"' in server
+    assert 'parser.add_argument("--allowed-origin"' in server
+    assert 'database.add_argument("--database-url-env"' in server
 
 
 def test_business_workspace_uses_only_trusted_browser_routes() -> None:

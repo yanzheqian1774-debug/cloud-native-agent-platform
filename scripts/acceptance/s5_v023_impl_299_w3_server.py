@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import stat
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -143,7 +144,14 @@ def generation(alice_secret: str, bob_secret: str) -> StaticAuthorityGeneration:
     )
 
 
-def build(database_url: str, alice_secret: str, bob_secret: str):
+def build(
+    database_url: str,
+    alice_secret: str,
+    bob_secret: str,
+    *,
+    allowed_host: str = "127.0.0.1:18299",
+    allowed_origin: str = "https://console.example",
+):
     migrations = Path(__file__).parents[2] / "console" / "backend" / "migrations"
     with psycopg.connect(database_url) as connection:
         for version in range(1, 13):
@@ -206,7 +214,7 @@ def build(database_url: str, alice_secret: str, bob_secret: str):
     application = create_workbench_bff(
         sessions,
         WorkbenchOwnerAuthorization(Controller(fixed), authority, reader),  # type: ignore[arg-type]
-        WorkbenchBffPolicy("127.0.0.1:18299", "https://console.example"),
+        WorkbenchBffPolicy(allowed_host, allowed_origin),
         operations=business_problem_operations(
             owner,
             BusinessProblemCreateCoordinator(
@@ -222,13 +230,32 @@ def build(database_url: str, alice_secret: str, bob_secret: str):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--database-url", required=True)
+    database = parser.add_mutually_exclusive_group(required=True)
+    database.add_argument("--database-url")
+    database.add_argument("--database-url-file", type=Path)
+    database.add_argument("--database-url-env", action="store_true")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default=18299, type=int)
+    parser.add_argument("--allowed-host", default="127.0.0.1:18299")
+    parser.add_argument("--allowed-origin", default="https://console.example")
     args = parser.parse_args()
+    if args.database_url_file is not None:
+        if stat.S_IMODE(args.database_url_file.stat().st_mode) != 0o600:
+            parser.error("database URL file mode must be 0600")
+        args.database_url = args.database_url_file.read_text(encoding="utf-8").strip()
+    elif args.database_url_env:
+        args.database_url = os.environ["IMPL299_DATABASE_URL"]
     alice = os.environ["IMPL299_ALICE_CREDENTIAL"]
     bob = os.environ["IMPL299_BOB_CREDENTIAL"]
-    application, authority, problems = build(args.database_url, alice, bob)
+    application, authority, problems = build(
+        args.database_url,
+        alice,
+        bob,
+        allowed_host=args.allowed_host,
+        allowed_origin=args.allowed_origin,
+    )
     try:
-        uvicorn.run(application, host="127.0.0.1", port=18299, log_level="warning")
+        uvicorn.run(application, host=args.host, port=args.port, log_level="warning")
     finally:
         authority.close()
         problems.pool.close()
