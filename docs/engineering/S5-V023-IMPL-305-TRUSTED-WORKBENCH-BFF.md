@@ -1220,3 +1220,121 @@ Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. Publication is not matchability
 instantiation, assignment, placement, execution, readiness or proof of actual
 model use. This batch does not make the Draft PR Ready and does not merge, deploy,
 close 305, start 310, or modify 299/310/314 branches.
+
+## Human-authorized formal permission-acquisition closure
+
+Status: `BOUNDED_IMPLEMENTATION / SESSION_OPEN`.
+
+The formal direct request mode now uses a composed
+`WorkbenchGrantTargetValidator`. Grant Administration still owns only request,
+decision, effective-grant and revocation facts. The Business Problem, Employee,
+and Agent repositories validate their own canonical identities on the same
+caller-owned PostgreSQL transaction used to submit the request. No request body,
+frontend assertion, target-shaped string, or grant table establishes existence.
+
+The closed target rules added by this batch are:
+
+| Owner | Allowed target | Canonical proof |
+| --- | --- | --- |
+| `SUCCESS_CRITERION` | collection `CREATE/READ`; existing aggregate `READ/REVISE`; existing exact revision `READ` | fixed collection rule or scoped `criterion_revisions` row |
+| `SUCCESS_CRITERIA_SET` | `CREATE/READ/REVISE success-criteria-set:{problemId}` | scoped canonical Problem row; this is also the identity rule before the first set revision exists |
+| `EMPLOYEE` | collection `CREATE`; existing aggregate `VALIDATE/APPROVE/PUBLISH`; existing exact revision `READ` | fixed collection rule or scoped Employee definition/revision row |
+| `AGENT` | existing exact revision `READ` | scoped canonical Agent definition revision |
+
+All other owners, actions, malformed shapes, unknown identities, and foreign
+tenant/security-domain identities fail closed. The public direct-request response
+remains the existing minimum request state and action labels; it does not reveal
+which protected identifier was unknown. Owner storage failure becomes the existing
+503 authority-unavailable boundary rather than a false not-found success.
+
+Requestability remains server policy in the immutable external authority
+generation. The fixed integration purposes are `WORKBENCH_SUCCESS_CRITERIA` and
+`WORKBENCH_EMPLOYEE_LIFECYCLE`; their rules allow only the owner/action prefixes
+needed above. Requestability is not a grant. Approval still requires current exact
+`GRANT_ADMIN / DECIDE / grant-scope:{tenant}:{securityDomain}`, request aggregate
+CAS and idempotency, and the issuer must differ from the immutable request subject.
+The administrator obtains the opaque request ID through the existing business or
+ticket handoff; this batch adds no pending-request enumeration.
+
+Resource coordinates require no new discovery endpoint. The criterion collection
+name is fixed; the Criteria Set target derives from the already selected Problem;
+criterion and Employee create results return their new definition/revision
+coordinates; bounded Agent list results return the selected member coordinates.
+CREATE never auto-grants object READ. When an outcome is unknown, the client first
+replays the original owner command with the same key and payload, then requests
+the exact returned revision. A committed criterion revision is retained while set
+authorization is pending, and the frozen set command is resumed without creating
+another criterion. A stale owner CAS is never replaced automatically.
+
+The real PostgreSQL/public ASGI tests exercise the complete request and independent
+decision path for criterion collection CREATE/READ, new and revised criterion
+exact READ, first and revised Criteria Set access, Employee collection CREATE,
+Employee lifecycle access, and Agent member READ. They also cover request replay,
+self-approval rejection, unknown and cross-tenant target hiding, fresh exact read,
+and the effect of an existing atomic grant revocation on the next public read.
+
+The existing component-level grant revocation remains effective and audited, but
+this batch does not add a public revoke route. Its public expected-version,
+immutable revocation result and authorized readback DTO are still an open contract
+in this document. Expiry and component revocation can be validated; a complete
+public revocation journey remains blocked on that exact Human-owned decision.
+
+The detailed G1 plan, consumer mapping, and recovery table are recorded in
+`docs/engineering/S5-V023-IMPL-305-FORMAL-AUTHORIZATION-CHECKPOINT-A.md`.
+
+### Fixed-consumer minimum dependency closure
+
+The inspected fixed consumers are 299 source
+`33a4bbb7aefe58bc1d61a6c29281a87c7cbc8c3a` and 310 source
+`e4f96d8ff89d2bd134331ded372f139331b1a32e`. Neither is a descendant of the
+305 starting source, and both carry independent edits to shared backend files.
+Consequently, consuming this batch means reconciling the symbols below against
+the consumer's own current files; it never means copying a complete shared blob,
+merging the whole 305 branch, or modifying either consumer worktree from 305.
+
+- 299 needs `BusinessProblemRepository.is_known_grant_target_for_workbench`,
+  its PostgreSQL implementation for `SUCCESS_CRITERION` and
+  `SUCCESS_CRITERIA_SET`, the Problem portion of
+  `WorkbenchGrantTargetValidator`, and production composition of that validator
+  without removing the existing creator-continuation delegate. Its external
+  generation needs only the `WORKBENCH_SUCCESS_CRITERIA` requestability rules for
+  the closed actions above. It does not need Employee or Agent owner logic.
+- 310 needs `EmployeeDefinitionRepository.is_known_grant_target_for_workbench`,
+  `AgentDefinitionRepository.is_known_grant_target_for_workbench`, both
+  PostgreSQL implementations, the Employee/Agent portions of
+  `WorkbenchGrantTargetValidator`, and production composition of that validator.
+  Its external generation needs only the `WORKBENCH_EMPLOYEE_LIFECYCLE`
+  requestability rules for Employee collection CREATE, aggregate lifecycle,
+  exact revision READ, and exact Agent revision READ. It does not need the
+  Success Criterion or Criteria Set owner logic.
+- Both consumers reuse the existing `exact-grant-request.v1` submit route,
+  `exact-grant-decision.v1` independent decision route, request aggregate CAS,
+  idempotency, current-grant read, session/CSRF boundary, and nondisclosing error
+  mapping already in the 305 candidate. No new public DTO or route is part of the
+  dependency closure.
+
+### Recovery validation checkpoint
+
+Recovery began from source
+`1fe09dde452a7aa83f77230832878a39bdb4322b`, tree
+`440fcd3f38cfd9c3d33b3aa2a4ce7c0376844948`, with an unstaged twelve-file
+implementation set and no Git lock or active test, hook, commit, push, or CI-watch
+process. The preserved PostgreSQL container
+`s5-v023-impl-305-employee-workbench-pg` remained bound only to
+`127.0.0.1:55405`; validation used fixture-owned random databases and did not
+rebuild or clear the container, its base database, or its volume.
+
+After the formal CREATE evidence was tightened so the tested Criterion and
+Employee CREATE grants also use request and independent decision rather than a
+test bootstrap grant, the two real PostgreSQL/public HTTP files passed 14 tests.
+The affected pure authority, BFF, bootstrap, continuation, Agent repository, and
+Employee definition batch passed 59 tests. The earlier interrupted executor's
+reported 54-test and 14-test results remain historical recovery evidence; these
+new runs are the verification attached to the recovered working tree.
+
+Repository `make check` then passed Ruff lint, Ruff format check, and the full
+default pytest selection: 1,673 passed and 175 skipped. The skips are the
+repository's environment-gated PostgreSQL, Qdrant, frontend-dependency, root-only
+Linux, and other dedicated-service cases; they do not include the two task-owned
+PostgreSQL/public HTTP files because those were run separately above with the
+preserved 305 server.

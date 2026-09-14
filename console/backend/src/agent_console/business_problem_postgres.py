@@ -10,6 +10,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
@@ -70,6 +71,55 @@ class PostgresBusinessProblemRepository:
             )
             self.pool.wait(timeout=timeout)
         except Exception as exc:
+            raise BusinessProblemError("RECOVERY_REQUIRED") from exc
+
+    @staticmethod
+    def is_known_grant_target_for_workbench(
+        connection,
+        scope: ScopeIdentity,
+        owner: str,
+        action: str,
+        exact_resource: str,
+    ) -> bool:
+        """Validate grantability from canonical owner facts on the caller transaction."""
+        try:
+            if owner == "SUCCESS_CRITERION":
+                if exact_resource == "success-criterion:collection":
+                    return action in {"CREATE", "READ"}
+                if action not in {"READ", "REVISE"}:
+                    return False
+                if exact_resource.startswith("success-criterion:revision:"):
+                    if action != "READ":
+                        return False
+                    row = connection.execute(
+                        "SELECT 1 FROM business_problem_authority.criterion_revisions "
+                        "WHERE namespace=%s AND security_domain=%s "
+                        "AND 'success-criterion:revision:' || revision_id=%s FOR SHARE",
+                        (scope.namespace, scope.security_domain, exact_resource),
+                    ).fetchone()
+                else:
+                    row = connection.execute(
+                        "SELECT 1 FROM business_problem_authority.criterion_revisions "
+                        "WHERE namespace=%s AND security_domain=%s "
+                        "AND 'success-criterion:' || success_criterion_id=%s "
+                        "LIMIT 1 FOR SHARE",
+                        (scope.namespace, scope.security_domain, exact_resource),
+                    ).fetchone()
+                return row is not None
+            if owner == "SUCCESS_CRITERIA_SET" and action in {
+                "CREATE",
+                "READ",
+                "REVISE",
+            }:
+                row = connection.execute(
+                    "SELECT 1 FROM business_problem_authority.problems "
+                    "WHERE namespace=%s AND security_domain=%s "
+                    "AND 'success-criteria-set:' || business_problem_id=%s FOR SHARE",
+                    (scope.namespace, scope.security_domain, exact_resource),
+                ).fetchone()
+                return row is not None
+            return False
+        except PsycopgError as exc:
             raise BusinessProblemError("RECOVERY_REQUIRED") from exc
 
     @property

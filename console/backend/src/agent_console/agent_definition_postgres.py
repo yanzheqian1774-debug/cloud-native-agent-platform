@@ -333,6 +333,31 @@ class PostgresAgentDefinitionRepository:
         return {"record": record, "revision": revisions[0]}
 
     @staticmethod
+    def is_known_grant_target_for_workbench(
+        connection: Connection[Any],
+        scope: DefinitionScope,
+        action: str,
+        exact_resource: str,
+    ) -> bool:
+        """Validate one exact Agent revision without disclosing its record."""
+        if action != "READ":
+            return False
+        try:
+            row = connection.execute(
+                "SELECT 1 FROM agent_definition.definitions d "
+                "CROSS JOIN LATERAL jsonb_array_elements(d.record->'revisions') r "
+                "WHERE d.namespace=%s AND d.security_domain=%s "
+                "AND 'agent:' || d.definition_id || ':' || (r->>'revisionId')=%s "
+                "LIMIT 1 FOR SHARE OF d",
+                (scope.namespace, scope.security_domain, exact_resource),
+            ).fetchone()
+        except PsycopgError as exc:
+            raise AgentDefinitionRepositoryError(
+                "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+            ) from exc
+        return row is not None
+
+    @staticmethod
     def list_published_for_workbench(
         connection: Connection[Any],
         scope: DefinitionScope,

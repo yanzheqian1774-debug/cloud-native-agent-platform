@@ -16,14 +16,18 @@ from agent_console.agent_definition_postgres import PostgresAgentDefinitionRepos
 from agent_console.agent_definition_service import AgentDefinitionService
 from agent_console.authority_configuration import (
     CredentialConfiguration,
+    RequestabilityRule,
     StaticAuthorityGeneration,
     StaticGrant,
 )
 from agent_console.authority_contracts import (
+    AuthenticationSource,
     AuthorityScope,
     CredentialId,
     ExactGrant,
+    GrantId,
     GrantSource,
+    TrustedRequestContext,
 )
 from agent_console.authority_postgres import PostgresAuthorityRepository
 from agent_console.browser_session_application import (
@@ -34,7 +38,11 @@ from agent_console.browser_session_application import (
 from agent_console.digital_employee_definition_postgres import (
     PostgresEmployeeDefinitionRepository,
 )
-from agent_console.grant_administration_application import GenerationAuthorizationReader
+from agent_console.grant_administration_application import (
+    GenerationAuthorizationReader,
+    GrantAdministrationService,
+    GrantRevocationCommand,
+)
 from agent_console.workbench_bff import (
     PREFIX,
     SESSION_COOKIE,
@@ -42,6 +50,7 @@ from agent_console.workbench_bff import (
     create_workbench_bff,
 )
 from agent_console.workbench_employee import employee_operations
+from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from agent_console.workbench_pagination import WorkbenchCursorCodec
 from fastapi.testclient import TestClient
@@ -66,19 +75,35 @@ class Controller:
 
 def generation(now: datetime) -> StaticAuthorityGeneration:
     create = ExactGrant("EMPLOYEE", "CREATE", "employee:collection")
+    decide = ExactGrant("GRANT_ADMIN", "DECIDE", "grant-scope:tenant-a:quality")
+    revoke = ExactGrant("GRANT_ADMIN", "REVOKE", "grant-scope:tenant-a:quality")
 
-    def credential(name: str, *, can_create: bool = False):
+    def credential(
+        name: str,
+        *,
+        can_create: bool = False,
+        meta_grants: tuple[ExactGrant, ...] = (),
+        scope: AuthorityScope = SCOPE,
+    ):
         return CredentialConfiguration(
             CredentialId(f"credential-{name}"),
             hashlib.sha256(f"{name}-secret".encode()).hexdigest(),
             f"human:{name}",
-            SCOPE,
+            scope,
             now + timedelta(hours=8),
             GrantSource.BROWSER_BOOTSTRAP,
-            (
-                (StaticGrant(create, GrantSource.BROWSER_BOOTSTRAP),)
-                if can_create
-                else ()
+            tuple(
+                [
+                    *(
+                        [StaticGrant(create, GrantSource.BROWSER_BOOTSTRAP)]
+                        if can_create
+                        else []
+                    ),
+                    *(
+                        StaticGrant(grant, GrantSource.STATIC_META)
+                        for grant in meta_grants
+                    ),
+                ]
             ),
         )
 
@@ -92,8 +117,22 @@ def generation(now: datetime) -> StaticAuthorityGeneration:
             credential("bob"),
             credential("memberless"),
             credential("creator", can_create=True),
+            credential("formal"),
+            credential("admin", meta_grants=(decide, revoke)),
+            credential("self-admin", meta_grants=(decide,)),
+            credential("foreign", scope=AuthorityScope("tenant-b", "quality")),
         ),
-        requestability=(),
+        requestability=tuple(
+            RequestabilityRule(owner, action, prefix, "WORKBENCH_EMPLOYEE_LIFECYCLE")
+            for owner, action, prefix in (
+                ("EMPLOYEE", "CREATE", "employee:"),
+                ("EMPLOYEE", "READ", "employee:"),
+                ("EMPLOYEE", "VALIDATE", "employee:"),
+                ("EMPLOYEE", "APPROVE", "employee:"),
+                ("EMPLOYEE", "PUBLISH", "employee:"),
+                ("AGENT", "READ", "agent:"),
+            )
+        ),
         credential_revocation_tombstones=frozenset(),
     )
 
@@ -274,17 +313,29 @@ def employee_workbench():
         )
         employees = PostgresEmployeeDefinitionRepository(authority)
         employees.migrate(MIGRATIONS / "0014_digital_employee_identity.sql")
+        grants = GrantAdministrationService(
+            authority,
+            authorization,
+            static,
+            continuation_owner=None,
+            target_validator=WorkbenchGrantTargetValidator(
+                SimpleNamespace(), agents, employees
+            ),
+            recovery_epoch=1,
+        )
         application = create_workbench_bff(
             sessions,
             authorizer,
             WorkbenchBffPolicy("console.example", "https://console.example"),
             operations=employee_operations(employees, WorkbenchCursorCodec(b"k" * 32)),
+            grant_administration=grants,
         )
         yield SimpleNamespace(
             application=application,
             authority=authority,
             database_url=database_url,
             now=now,
+            grants=grants,
             agent_id=created_agent["definitionId"],
             agent_revision_id=agent_revision["revisionId"],
             agent_digest=agent_revision["digest"],
@@ -318,6 +369,53 @@ def login(client: TestClient, credential: str) -> str:
 
 def unsafe_headers(csrf: str) -> dict[str, str]:
     return {"origin": "https://console.example", "x-csrf-token": csrf}
+
+
+def request_grants(
+    client: TestClient,
+    csrf: str,
+    grants: tuple[ExactGrant, ...],
+    *,
+    key: str,
+):
+    return client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "WORKBENCH_EMPLOYEE_LIFECYCLE",
+            "requestedGrants": [
+                {
+                    "owner": grant.owner,
+                    "action": grant.action,
+                    "resource": grant.exact_resource,
+                }
+                for grant in grants
+            ],
+        },
+        headers={**unsafe_headers(csrf), "idempotency-key": key},
+    )
+
+
+def approve_request(
+    administrator: TestClient,
+    csrf: str,
+    request_id: str,
+    *,
+    key: str,
+):
+    return administrator.post(
+        f"{PREFIX}/authorization/grant-requests/{request_id}/decisions",
+        json={
+            "schemaVersion": "exact-grant-decision.v1",
+            "expectedVersion": 1,
+            "decision": "APPROVE",
+            "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+            "basisType": "TICKET",
+            "basisReference": "SEC-305-FORMAL",
+            "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+        headers={**unsafe_headers(csrf), "idempotency-key": key},
+    )
 
 
 def create_body(employee_workbench, *, command_id: str, definition_id: str):
@@ -601,6 +699,192 @@ def test_public_create_confirmation_does_not_imply_read(employee_workbench) -> N
     )
     assert denied.status_code == 404
     assert denied.json()["reasonCode"] == "AUTHORIZATION_NOT_FOUND"
+
+
+def test_public_formal_request_independent_decision_lifecycle_and_revoke_effect(
+    employee_workbench,
+) -> None:
+    alice = TestClient(
+        employee_workbench.application, base_url="https://console.example"
+    )
+    bob = TestClient(employee_workbench.application, base_url="https://console.example")
+    admin = TestClient(
+        employee_workbench.application, base_url="https://console.example"
+    )
+    self_admin = TestClient(
+        employee_workbench.application, base_url="https://console.example"
+    )
+    foreign = TestClient(
+        employee_workbench.application, base_url="https://console.example"
+    )
+    alice_csrf = login(alice, "formal-secret")
+    bob_csrf = login(bob, "bob-secret")
+    admin_csrf = login(admin, "admin-secret")
+    self_admin_csrf = login(self_admin, "self-admin-secret")
+    foreign_csrf = login(foreign, "foreign-secret")
+
+    employee_id = "employee-definition:formal-path"
+    revision_id = "employee-revision:v1"
+    create_request = request_grants(
+        alice,
+        alice_csrf,
+        (ExactGrant("EMPLOYEE", "CREATE", "employee:collection"),),
+        key="formal-employee-create-request",
+    )
+    assert create_request.status_code == 202
+    assert (
+        approve_request(
+            admin,
+            admin_csrf,
+            create_request.json()["requestId"],
+            key="formal-employee-create-decision",
+        ).status_code
+        == 201
+    )
+    created = alice.post(
+        f"{PREFIX}/employees",
+        json=create_body(
+            employee_workbench,
+            command_id="employee-command:formal-create",
+            definition_id=employee_id,
+        ),
+        headers=unsafe_headers(alice_csrf),
+    )
+    assert created.status_code == 201
+    created_result = created.json()["result"]
+    employee_exact = ExactGrant(
+        "EMPLOYEE", "READ", f"employee:{employee_id}:{revision_id}"
+    )
+    employee_aggregate = f"employee:{employee_id}:aggregate"
+    agent_exact = ExactGrant(
+        "AGENT",
+        "READ",
+        f"agent:{employee_workbench.agent_id}:{employee_workbench.agent_revision_id}",
+    )
+    path = f"{PREFIX}/employees/{employee_id}/revisions/{revision_id}"
+    assert alice.get(path).status_code == 404
+
+    alice_members = (
+        employee_exact,
+        ExactGrant("EMPLOYEE", "VALIDATE", employee_aggregate),
+        ExactGrant("EMPLOYEE", "PUBLISH", employee_aggregate),
+        agent_exact,
+    )
+    requested = request_grants(
+        alice, alice_csrf, alice_members, key="formal-alice-request"
+    )
+    assert requested.status_code == 202
+    replayed = request_grants(
+        alice, alice_csrf, alice_members, key="formal-alice-request"
+    )
+    assert replayed.json() == requested.json()
+    alice_request_id = requested.json()["requestId"]
+    decided = approve_request(
+        admin, admin_csrf, alice_request_id, key="formal-alice-decision"
+    )
+    assert decided.status_code == 201
+    assert decided.json()["state"] == "APPROVED"
+
+    bob_members = (
+        ExactGrant("EMPLOYEE", "APPROVE", employee_aggregate),
+        agent_exact,
+    )
+    bob_requested = request_grants(bob, bob_csrf, bob_members, key="formal-bob-request")
+    assert bob_requested.status_code == 202
+    assert (
+        approve_request(
+            admin,
+            admin_csrf,
+            bob_requested.json()["requestId"],
+            key="formal-bob-decision",
+        ).status_code
+        == 201
+    )
+
+    own_request = request_grants(
+        self_admin,
+        self_admin_csrf,
+        (employee_exact,),
+        key="formal-self-request",
+    )
+    assert own_request.status_code == 202
+    self_decision = approve_request(
+        self_admin,
+        self_admin_csrf,
+        own_request.json()["requestId"],
+        key="formal-self-decision",
+    )
+    assert self_decision.status_code == 409
+    assert self_decision.json()["reasonCode"] == "GRANT_SELF_APPROVAL_PROHIBITED"
+
+    unknown = request_grants(
+        alice,
+        alice_csrf,
+        (ExactGrant("EMPLOYEE", "READ", "employee:unknown:revision"),),
+        key="formal-unknown-target",
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["reasonCode"] == "GRANT_REQUEST_NOT_FOUND"
+    foreign_target = request_grants(
+        foreign,
+        foreign_csrf,
+        (employee_exact,),
+        key="formal-foreign-target",
+    )
+    assert foreign_target.status_code == 404
+    assert foreign_target.json()["reasonCode"] == "GRANT_REQUEST_NOT_FOUND"
+
+    command = {
+        "employeeDefinitionDigest": created_result["employeeDefinitionDigest"],
+        "expectedVersion": 1,
+        "commandId": "employee-command:formal-validate",
+    }
+    assert alice.get(path).status_code == 200
+    validated = alice.post(
+        f"{path}/validation", json=command, headers=unsafe_headers(alice_csrf)
+    )
+    assert validated.status_code == 200
+    approved = bob.post(
+        f"{path}/approvals",
+        json={**command, "expectedVersion": 2, "commandId": "formal-approve"},
+        headers=unsafe_headers(bob_csrf),
+    )
+    assert approved.status_code == 200
+    published = alice.post(
+        f"{path}/publication",
+        json={**command, "expectedVersion": 3, "commandId": "formal-publish"},
+        headers=unsafe_headers(alice_csrf),
+    )
+    assert published.status_code == 200
+    assert alice.get(path).json()["result"]["lifecycleState"] == "PUBLISHED"
+
+    with employee_workbench.authority.pool.connection() as connection:
+        row = connection.execute(
+            "SELECT g.grant_id,s.session_id FROM authorization_admin.grants g "
+            "CROSS JOIN browser_identity.sessions s "
+            "WHERE g.subject_principal_id='human:formal' AND g.owner='EMPLOYEE' "
+            "AND g.action='READ' AND g.exact_resource=%s "
+            "AND s.principal_id='human:admin'",
+            (employee_exact.exact_resource,),
+        ).fetchone()
+    assert row is not None
+    employee_workbench.grants.revoke_grant(
+        TrustedRequestContext(
+            "human:admin",
+            SCOPE,
+            row["session_id"],
+            AuthenticationSource.BROWSER_SESSION,
+            "policy-1",
+        ),
+        GrantRevocationCommand(
+            GrantId(row["grant_id"]),
+            "DUTY_REMOVED",
+            "formal-revoke",
+        ),
+    )
+    revoked_read = alice.get(path)
+    assert revoked_read.status_code == 404
+    assert revoked_read.json()["reasonCode"] == "AUTHORIZATION_NOT_FOUND"
 
 
 def test_concurrent_public_create_replays_one_employee_revision(

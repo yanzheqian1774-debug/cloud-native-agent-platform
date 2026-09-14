@@ -35,7 +35,6 @@ from agent_console.browser_session_application import (
 from agent_console.business_plan_postgres import PostgresProblemPlanUnitOfWork
 from agent_console.business_problem_application import BusinessProblemApplication
 from agent_console.business_problem_continuation import (
-    BusinessProblemContinuationValidator,
     BusinessProblemCreateCoordinator,
 )
 from agent_console.business_problem_domain import BusinessProblemRevision
@@ -53,6 +52,7 @@ from agent_console.workbench_bff import (
     create_workbench_bff,
 )
 from agent_console.workbench_business_problem import business_problem_operations
+from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from fastapi.testclient import TestClient
 
@@ -116,6 +116,42 @@ def static_generation(now: datetime) -> StaticAuthorityGeneration:
                 "READ",
                 "business-problem:",
                 "CONTINUE_PROBLEM_READ",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERION",
+                "CREATE",
+                "success-criterion:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERION",
+                "READ",
+                "success-criterion:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERION",
+                "REVISE",
+                "success-criterion:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERIA_SET",
+                "CREATE",
+                "success-criteria-set:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERIA_SET",
+                "READ",
+                "success-criteria-set:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERIA_SET",
+                "REVISE",
+                "success-criteria-set:",
+                "WORKBENCH_SUCCESS_CRITERIA",
             ),
         ),
         credential_revocation_tombstones=frozenset(),
@@ -183,7 +219,9 @@ def integrated_authority():
             authority,
             recovery_epoch=1,
         )
-        validator = BusinessProblemContinuationValidator(problems)
+        validator = WorkbenchGrantTargetValidator(
+            problems, SimpleNamespace(), SimpleNamespace()
+        )
         grants = GrantAdministrationService(
             authority,
             authorization,
@@ -403,6 +441,270 @@ def test_public_create_replay_request_decision_and_exact_read(
             "(SELECT count(*) FROM authorization_admin.grant_requests) AS requests"
         ).fetchone()
     assert counts == {"offers": 1, "consumptions": 1, "requests": 1}
+
+
+def test_public_success_criteria_permissions_use_formal_requests_and_owner_targets(
+    integrated_authority,
+) -> None:
+    application = integrated_authority.build_application()
+    alice = TestClient(application, base_url="https://console.example")
+    bob = TestClient(application, base_url="https://console.example")
+    alice_csrf = login(alice, "alice-secret")
+    bob_csrf = login(bob, "bob-secret")
+
+    created_problem = create_problem(
+        alice, alice_csrf, key="criteria-formal-problem"
+    ).json()["result"]
+    problem = created_problem["revision"]
+    continuation_id = created_problem["creatorContinuation"]["continuationId"]
+
+    problem_request = alice.post(
+        f"{PREFIX}/authorization/grant-requests",
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "CONTINUE_PROBLEM_READ",
+            "continuationIds": [continuation_id],
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": alice_csrf,
+            "idempotency-key": "criteria-problem-read",
+        },
+    )
+    assert problem_request.status_code == 202
+
+    def decide(request_id: str, key: str):
+        return bob.post(
+            f"{PREFIX}/authorization/grant-requests/{request_id}/decisions",
+            json={
+                "schemaVersion": "exact-grant-decision.v1",
+                "expectedVersion": 1,
+                "decision": "APPROVE",
+                "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+                "basisType": "TICKET",
+                "basisReference": "SEC-305-CRITERIA",
+                "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            },
+            headers={
+                "origin": "https://console.example",
+                "x-csrf-token": bob_csrf,
+                "idempotency-key": key,
+            },
+        )
+
+    assert (
+        decide(
+            problem_request.json()["requestId"], "criteria-problem-decision"
+        ).status_code
+        == 201
+    )
+
+    def direct_request(members: list[dict[str, str]], key: str):
+        return alice.post(
+            f"{PREFIX}/authorization/grant-requests",
+            json={
+                "schemaVersion": "exact-grant-request.v1",
+                "purpose": "WORKBENCH_SUCCESS_CRITERIA",
+                "requestedGrants": members,
+            },
+            headers={
+                "origin": "https://console.example",
+                "x-csrf-token": alice_csrf,
+                "idempotency-key": key,
+            },
+        )
+
+    collection_request = direct_request(
+        [
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "CREATE",
+                "resource": "success-criterion:collection",
+            },
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "READ",
+                "resource": "success-criterion:collection",
+            },
+        ],
+        "criterion-collection-read",
+    )
+    assert collection_request.status_code == 202
+    assert (
+        decide(
+            collection_request.json()["requestId"], "criterion-collection-decision"
+        ).status_code
+        == 201
+    )
+
+    criterion = alice.post(
+        f"{PREFIX}/success-criteria",
+        json={
+            "criterionType": "DETERMINISTIC_BOOLEAN",
+            "measurement": {"expected": True},
+            "requiredEvidenceKinds": ["TEST_RESULT"],
+            "evaluatorType": "RULE",
+            "evaluatorVersion": "v1",
+            "applicability": {},
+            "idempotencyKey": "formal-criterion-create",
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": alice_csrf,
+        },
+    )
+    assert criterion.status_code == 201
+    criterion_revision = criterion.json()["result"]["revision"]
+
+    criteria_target = f"success-criteria-set:{problem['business_problem_id']}"
+    member_request = direct_request(
+        [
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "READ",
+                "resource": (
+                    f"success-criterion:revision:{criterion_revision['revision_id']}"
+                ),
+            },
+            {
+                "owner": "SUCCESS_CRITERIA_SET",
+                "action": "CREATE",
+                "resource": criteria_target,
+            },
+            {
+                "owner": "SUCCESS_CRITERIA_SET",
+                "action": "READ",
+                "resource": criteria_target,
+            },
+        ],
+        "criteria-set-access",
+    )
+    assert member_request.status_code == 202
+    assert (
+        decide(member_request.json()["requestId"], "criteria-set-decision").status_code
+        == 201
+    )
+
+    created_set = alice.post(
+        f"{PREFIX}/problems/{problem['business_problem_id']}/criteria-sets",
+        json={
+            "problemRevisionId": problem["revision_id"],
+            "orderedCriterionRevisionIds": [criterion_revision["revision_id"]],
+            "expectedVersion": 1,
+            "idempotencyKey": "formal-criteria-set-create",
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": alice_csrf,
+        },
+    )
+    assert created_set.status_code == 201
+    assert (
+        created_set.json()["result"]["revision"]["business_problem_id"]
+        == problem["business_problem_id"]
+    )
+
+    criterion_aggregate = (
+        f"success-criterion:{criterion_revision['success_criterion_id']}"
+    )
+    revise_request = direct_request(
+        [
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "REVISE",
+                "resource": criterion_aggregate,
+            },
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "READ",
+                "resource": criterion_aggregate,
+            },
+        ],
+        "criterion-revise-access",
+    )
+    assert revise_request.status_code == 202
+    assert (
+        decide(
+            revise_request.json()["requestId"], "criterion-revise-decision"
+        ).status_code
+        == 201
+    )
+    revised_criterion_response = alice.post(
+        f"{PREFIX}/success-criteria",
+        json={
+            "successCriterionId": criterion_revision["success_criterion_id"],
+            "predecessorRevisionId": criterion_revision["revision_id"],
+            "expectedVersion": 1,
+            "criterionType": "DETERMINISTIC_BOOLEAN",
+            "measurement": {"expected": False},
+            "requiredEvidenceKinds": ["TEST_RESULT"],
+            "evaluatorType": "RULE",
+            "evaluatorVersion": "v2",
+            "applicability": {},
+            "idempotencyKey": "formal-criterion-revise",
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": alice_csrf,
+        },
+    )
+    assert revised_criterion_response.status_code == 201
+    revised_criterion = revised_criterion_response.json()["result"]["revision"]
+
+    set_revision = created_set.json()["result"]["revision"]
+    set_revise_request = direct_request(
+        [
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "READ",
+                "resource": (
+                    f"success-criterion:revision:{revised_criterion['revision_id']}"
+                ),
+            },
+            {
+                "owner": "SUCCESS_CRITERIA_SET",
+                "action": "REVISE",
+                "resource": criteria_target,
+            },
+        ],
+        "criteria-set-revise-access",
+    )
+    assert set_revise_request.status_code == 202
+    assert (
+        decide(
+            set_revise_request.json()["requestId"], "criteria-set-revise-decision"
+        ).status_code
+        == 201
+    )
+    revised_set = alice.post(
+        f"{PREFIX}/problems/{problem['business_problem_id']}/criteria-sets",
+        json={
+            "problemRevisionId": problem["revision_id"],
+            "predecessorSetRevisionId": set_revision["set_revision_id"],
+            "orderedCriterionRevisionIds": [revised_criterion["revision_id"]],
+            "expectedVersion": 2,
+            "idempotencyKey": "formal-criteria-set-revise",
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": alice_csrf,
+        },
+    )
+    assert revised_set.status_code == 201
+    assert revised_set.json()["result"]["revision"]["revision"] == 2
+
+    foreign_target = direct_request(
+        [
+            {
+                "owner": "SUCCESS_CRITERIA_SET",
+                "action": "READ",
+                "resource": "success-criteria-set:unknown-problem",
+            }
+        ],
+        "unknown-criteria-target",
+    )
+    assert foreign_target.status_code == 404
+    assert foreign_target.json()["reasonCode"] == "GRANT_REQUEST_NOT_FOUND"
 
 
 def test_concurrent_first_create_mints_one_durable_offer(

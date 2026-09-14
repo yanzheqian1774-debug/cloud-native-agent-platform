@@ -9,6 +9,8 @@ import json
 import re
 from pathlib import Path
 
+from psycopg import Error as PsycopgError
+
 from .digital_employee_definition import (
     EmployeeDefinitionError,
     EmployeeRevision,
@@ -254,6 +256,38 @@ class PostgresEmployeeDefinitionRepository:
             or not compatible
         ):
             raise EmployeeDefinitionError("EMPLOYEE_SCHEMA_INCOMPATIBLE")
+
+    @staticmethod
+    def is_known_grant_target_for_workbench(
+        connection,
+        scope,
+        action: str,
+        exact_resource: str,
+    ) -> bool:
+        """Validate Employee collection, aggregate, or revision identity only."""
+        if exact_resource == "employee:collection":
+            return action == "CREATE"
+        try:
+            if action in {"VALIDATE", "APPROVE", "PUBLISH"}:
+                row = connection.execute(
+                    "SELECT 1 FROM digital_employee_definition.definitions "
+                    "WHERE namespace=%s AND security_domain=%s "
+                    "AND 'employee:' || definition_id || ':aggregate'=%s FOR SHARE",
+                    (scope.namespace, scope.security_domain, exact_resource),
+                ).fetchone()
+                return row is not None
+            if action == "READ":
+                row = connection.execute(
+                    "SELECT 1 FROM digital_employee_definition.revisions "
+                    "WHERE namespace=%s AND security_domain=%s "
+                    "AND 'employee:' || definition_id || ':' || revision_id=%s "
+                    "FOR SHARE",
+                    (scope.namespace, scope.security_domain, exact_resource),
+                ).fetchone()
+                return row is not None
+            return False
+        except PsycopgError as exc:
+            raise EmployeeDefinitionError("EMPLOYEE_STORAGE_UNAVAILABLE") from exc
 
     @staticmethod
     def _key(scope, definition_id):

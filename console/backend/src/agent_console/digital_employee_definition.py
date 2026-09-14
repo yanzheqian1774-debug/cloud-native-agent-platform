@@ -203,6 +203,14 @@ class PublishedEmployeeDefinitionAuthority:
 
 
 class EmployeeDefinitionRepository(Protocol):
+    def is_known_grant_target_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        action: str,
+        exact_resource: str,
+    ) -> bool: ...
+
     def create(
         self,
         revision: EmployeeRevision,

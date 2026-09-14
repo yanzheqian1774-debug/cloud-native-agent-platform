@@ -19,7 +19,6 @@ from agent_console.authority_foundation import (
 from agent_console.browser_session_application import BrowserSessionPolicy
 from agent_console.business_problem_application import BusinessProblemApplication
 from agent_console.business_problem_continuation import (
-    BusinessProblemContinuationValidator,
     BusinessProblemCreateCoordinator,
 )
 from agent_console.digital_employee_application import DigitalEmployeeRepository
@@ -35,6 +34,7 @@ from agent_console.workbench_employee import (
     digital_employee_operations,
     employee_operations,
 )
+from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from agent_console.workbench_pagination import WorkbenchCursorCodec
 from agent_console.workbench_workflow import workflow_operations
@@ -86,8 +86,10 @@ def build_workbench_composition(
         workflow_database_url
     ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
-    problem_continuations = BusinessProblemContinuationValidator(
-        business_problems.problems
+    grant_targets = WorkbenchGrantTargetValidator(
+        business_problems.problems,
+        agent_definitions,
+        employee_definitions,
     )
     foundation = build_authority_foundation(
         runtime,
@@ -97,7 +99,7 @@ def build_workbench_composition(
             absolute_lifetime=timedelta(hours=8),
             csrf_lifetime=timedelta(minutes=10),
         ),
-        target_validator=problem_continuations,
+        target_validator=grant_targets,
     )
     try:
         authorizer = WorkbenchOwnerAuthorization(
