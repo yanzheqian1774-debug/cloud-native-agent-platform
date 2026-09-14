@@ -177,6 +177,7 @@ test("TEST_ADAPTER uses trusted BFF reads and restores the exact work chain at 3
   await page.setViewportSize({ width: 390, height: 844 });
   const query = new URLSearchParams({
     panel: "work",
+    detail: "open",
     instanceId: "instance:quality",
     assignmentId: "assignment:quality",
     placementId: "placement:quality",
@@ -201,11 +202,14 @@ test("TEST_ADAPTER late Instance response cannot overwrite the new exact object"
       await route.fulfill({ json: envelope(instance(id)) });
     },
   });
-  await page.goto("/digital-employees?panel=instance");
+  await page.goto("/digital-employees");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
+  await page.getByRole("button", { name: "实例", exact: true }).click();
+  await page.getByText("技术详情：按精确 ID 核对关联实例").click();
   await page.getByLabel("Instance ID").fill("instance:old");
-  await page.getByRole("button", { name: "按精确 ID 读取" }).click();
+  await page.getByRole("button", { name: "读取并验证归属" }).click();
   await page.getByLabel("Instance ID").fill("instance:new");
-  await page.getByRole("button", { name: "按精确 ID 读取" }).click();
+  await page.getByRole("button", { name: "读取并验证归属" }).click();
   await expect(page.locator(".employee-facts")).toContainText("instance:new");
   await page.waitForTimeout(300);
   await expect(page.locator(".employee-facts")).not.toContainText("instance:old");
@@ -261,6 +265,7 @@ test("TEST_ADAPTER rejects the same Definition ID with a different revision dige
     onDefinition: async route => route.fulfill({ json: envelope(wrong) }),
   });
   await page.goto("/digital-employees");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
   await expect(page.getByRole("alert").filter({ hasText: "详情读取未完成" })).toContainText("EMPLOYEE_DEFINITION_IDENTITY_MISMATCH");
   await expect(page.locator(".employee-profile")).toHaveCount(0);
 });
@@ -289,10 +294,55 @@ test("TEST_ADAPTER consumes Employee and Agent nextCursor without treating a pag
   await page.getByRole("button", { name: "加载下一页" }).click();
   await expect(page.getByRole("button", { name: /第二页员工/ })).toBeVisible();
   expect(employeeCursor).toBe("employee-page-2");
-  await page.getByRole("button", { name: "Agent 候选", exact: true }).click();
+  await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
   await page.getByRole("button", { name: "加载更多 Agent" }).click();
   await expect(page.getByText("第二页 Agent")).toBeVisible();
   expect(agentCursor).toBe("agent-page-2");
+});
+
+test("TEST_ADAPTER groups 50 records by employee, selects revisions explicitly, and clears hidden detail", async ({ page }) => {
+  const summaries = Array.from({ length: 50 }, (_, index) => ({
+    ...employeeSummary,
+    employeeDefinitionId: index < 2 ? "employee:multi-version" : `employee:record:${String(index).padStart(2, "0")}`,
+    employeeDefinitionRevisionId: index < 2 ? `employee-revision:multi:${index + 1}` : `employee-revision:${index}`,
+    employeeDefinitionDigest: digest(index % 10 === 0 ? "a" : index % 10 === 1 ? "b" : "e"),
+    role: index === 2 ? "负责超长中文供应链质量异常复核与跨部门协同跟进的数字员工角色" : index < 2 ? "同一员工的多版本角色" : index < 4 ? "同名员工角色" : `数字员工角色 ${index}`,
+    publicationState: index % 2 === 0 ? "PUBLISHED" : "NOT_PUBLISHED",
+  }));
+  await installAdapter(page, {
+    onDefinition: async (route, id, revision) => {
+      const summary = summaries.find(item => item.employeeDefinitionId === id && item.employeeDefinitionRevisionId === revision) ?? employeeSummary;
+      await route.fulfill({ json: envelope({ ...employee, ...summary, responsibilities: ["保持长中文职责摘要清晰可读"] }) });
+    },
+  });
+  await page.route("**/api/workbench/v1/employees?*", route => {
+    const next = new URL(route.request().url()).searchParams.has("cursor");
+    return route.fulfill({ json: envelope(next
+      ? { items: summaries.map((item, index) => ({ ...item, employeeDefinitionId: `employee:page-two:${index}` })) }
+      : { items: summaries, nextCursor: "employee-page-2" }) });
+  });
+  await page.goto("/digital-employees");
+  await expect(page.getByLabel("当前加载范围")).toContainText("49 个员工");
+  await expect(page.getByLabel("当前加载范围")).toContainText("50 个修订");
+  await expect(page.getByLabel("同一员工的多版本角色 选择版本")).toHaveCount(1);
+  await page.getByLabel("同一员工的多版本角色 选择版本").selectOption("employee-revision:multi:2");
+  await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("employee-revision:multi:2");
+  await page.getByLabel("发布状态").selectOption("PUBLISHED");
+  await expect(page.getByText("选择一个数字员工")).toBeVisible();
+  await page.getByRole("button", { name: "加载下一页 →" }).click();
+  await expect(page.getByText("已加载 cursor 第 2 页")).toBeVisible();
+  await expect(page.getByRole("button", { name: "← 上一页" })).toBeEnabled();
+});
+
+test("TEST_ADAPTER mobile detail returns to the retained filtered list", async ({ page }) => {
+  await installAdapter(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/digital-employees?q=供应商");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
+  await expect(page.getByRole("region", { name: "选中员工详情" })).toBeVisible();
+  await page.getByRole("button", { name: "← 返回员工集合" }).click();
+  await expect(page.getByLabel("员工集合")).toBeVisible();
+  await expect(page.getByPlaceholder("职责角色或技术 ID")).toHaveValue("供应商");
 });
 
 test("TEST_ADAPTER preserves a valid historical Instance revision", async ({ page }) => {
@@ -311,11 +361,12 @@ test("TEST_ADAPTER preserves a valid historical Instance revision", async ({ pag
   });
   await page.goto("/digital-employees?panel=instance&instanceId=instance%3Aquality");
   await expect(page.locator(".employee-facts")).toContainText("employee-revision:history");
-  await expect(page.locator(".employee-facts")).toContainText("允许合法历史发布版本");
+  await expect(page.locator(".employee-facts")).toContainText("exact identity verified");
 });
 
 async function fillCreateForm(page: Page) {
-  await page.getByRole("button", { name: "Agent 候选", exact: true }).click();
+  const createButton = page.getByRole("button", { name: "＋ 创建数字员工" });
+  if (await createButton.isVisible()) await createButton.click();
   await page.getByLabel(/质量分析 Agent/).check();
   await page.getByLabel("职责角色").fill("供应商质量负责人");
   await page.getByLabel(/职责清单/).fill("审查供应商质量异常\n协调整改与复核");
@@ -376,7 +427,7 @@ test("TEST_ADAPTER UNKNOWN replays the byte-equivalent frozen CREATE command", a
   await page.getByRole("button", { name: "确认并提交正式命令" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "结果未知" })).toBeVisible();
   await page.getByRole("button", { name: "重放原命令" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "创建命令已确认" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("供应商质量负责人");
   expect(attempts).toHaveLength(2);
   expect(attempts[1]).toBe(attempts[0]);
 });
@@ -459,7 +510,7 @@ test("TEST_ADAPTER double click emits only one CREATE command", async ({ page })
   await page.goto("/digital-employees");
   await fillCreateForm(page);
   await page.getByRole("button", { name: "确认并提交正式命令" }).dblclick();
-  await expect(page.getByRole("status").filter({ hasText: "创建命令已确认" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("供应商质量负责人");
   expect(creates).toBe(1);
 });
 
@@ -480,10 +531,10 @@ test("TEST_ADAPTER late CREATE response cannot update an abandoned panel", async
   await page.goto("/digital-employees");
   await fillCreateForm(page);
   await page.getByRole("button", { name: "确认并提交正式命令" }).click();
-  await page.getByRole("button", { name: "员工档案" }).click();
+  await page.getByRole("button", { name: "← 返回员工集合" }).click();
   await page.waitForTimeout(350);
   await expect(page.getByText("创建命令已确认", { exact: false })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "供应商质量负责人" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /供应商质量负责人/ })).toBeVisible();
 });
 
 test("TEST_ADAPTER lifecycle command requires explicit version and confirmation", async ({ page }) => {
@@ -503,6 +554,7 @@ test("TEST_ADAPTER lifecycle command requires explicit version and confirmation"
     },
   });
   await page.goto("/digital-employees");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
   await expect(page.getByRole("heading", { name: "生命周期操作" })).toBeVisible();
   await expect(page.getByRole("button", { name: /校验修订/ })).toBeDisabled();
   await page.getByLabel("期望聚合版本").fill("1");
@@ -514,36 +566,77 @@ test("TEST_ADAPTER lifecycle command requires explicit version and confirmation"
 });
 
 test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async ({ page }, testInfo) => {
-  await installAdapter(page);
+  const visualSummaries = Array.from({ length: 50 }, (_, index) => ({
+    ...employeeSummary,
+    employeeDefinitionId: `employee:visual:${String(index + 1).padStart(2, "0")}`,
+    employeeDefinitionRevisionId: `employee-revision:visual:${index + 1}:1`,
+    role: index === 0 ? "负责供应商质量异常复核与跨部门协同跟进的数字员工" : ["客户问题协调员", "合同风险复核员", "采购交付跟进员", "知识质量管理员"][index % 4],
+    publicationState: index % 4 === 3 ? "NOT_PUBLISHED" : "PUBLISHED",
+  }));
+  await installAdapter(page, {
+    onDefinition: async (route, id, revision) => {
+      const summary = visualSummaries.find(item => item.employeeDefinitionId === id && item.employeeDefinitionRevisionId === revision) ?? employeeSummary;
+      await route.fulfill({ json: envelope({ ...employee, ...summary, responsibilities: ["核对业务异常并形成可追溯结论", "协调相关团队完成复核与跟进"] }) });
+    },
+  });
+  await page.route("**/api/workbench/v1/employees?*", route => route.fulfill({ json: envelope({ items: visualSummaries }) }));
+
+  const placeBadge = async (target: ".employee-management" | ".employee-assembly" | ".employee-selected-detail") => page.evaluate(selector => {
+    let label = document.querySelector<HTMLElement>("[data-test-evidence]");
+    if (!label) {
+      label = document.createElement("div");
+      label.dataset.testEvidence = "true";
+      label.textContent = "TEST_ADAPTER 模拟数据 · 非真实业务记录";
+      Object.assign(label.style, { margin: "0 0 8px auto", width: "fit-content", padding: "8px 12px", borderRadius: "8px", color: "#7c2d12", background: "#ffedd5", border: "1px solid #fdba74", font: "600 12px system-ui" });
+    }
+    document.querySelector(selector)?.prepend(label);
+    label.scrollIntoView({ block: "start" });
+    (document.activeElement as HTMLElement | null)?.blur();
+  }, target);
+
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/digital-employees");
-  await expect(page.getByRole("heading", { name: "数字员工管理" })).toBeVisible();
-  await page.evaluate(() => {
-    const label = document.createElement("div");
-    label.dataset.testEvidence = "true";
-    label.textContent = "TEST_ADAPTER 模拟数据 · 非真实业务记录";
-    Object.assign(label.style, {
-      position: "fixed", top: "68px", right: "18px", zIndex: "9999",
-      padding: "8px 12px", borderRadius: "8px", color: "#7c2d12",
-      background: "#ffedd5", border: "1px solid #fdba74", font: "600 12px system-ui",
-    });
-    document.body.append(label);
-    (document.activeElement as HTMLElement | null)?.blur();
-  });
-  await page.screenshot({ path: testInfo.outputPath("digital-employees-desktop-test-adapter.png") });
-
-  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("heading", { name: "数字员工", exact: true })).toBeVisible();
+  await placeBadge(".employee-management");
+  await page.screenshot({ path: testInfo.outputPath("desktop-list-test-adapter.png") });
+  await page.getByRole("button", { name: /负责供应商质量异常复核/ }).click();
+  await placeBadge(".employee-management");
+  await page.screenshot({ path: testInfo.outputPath("desktop-detail-test-adapter.png") });
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
-  await page.evaluate(() => {
-    const section = document.querySelector(".employee-assembly");
-    const label = document.querySelector<HTMLElement>("[data-test-evidence]");
-    if (section) window.scrollTo(0, section.getBoundingClientRect().top + window.scrollY - 68);
-    if (label) { label.style.top = "auto"; label.style.right = "12px"; label.style.bottom = "64px"; }
-    (document.activeElement as HTMLElement | null)?.blur();
-  });
-  await expect(page.getByText("部分实现 · 权限取得待 305")).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("digital-employees-390x844-test-adapter.png") });
+  await placeBadge(".employee-assembly");
+  await page.screenshot({ path: testInfo.outputPath("desktop-create-test-adapter.png") });
+
+  await page.getByRole("button", { name: "← 返回员工集合" }).click();
+  await page.route("**/api/workbench/v1/employees/*/revisions/*", route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }));
+  await page.getByRole("button", { name: /客户问题协调员/ }).first().click();
+  await expect(page.getByRole("alert").filter({ hasText: "详情读取未完成" })).toBeVisible();
+  await placeBadge(".employee-management");
+  await page.screenshot({ path: testInfo.outputPath("desktop-exception-test-adapter.png") });
+
+  await page.unroute("**/api/workbench/v1/employees/*/revisions/*");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/digital-employees");
+  await placeBadge(".employee-management");
+  await page.screenshot({ path: testInfo.outputPath("mobile-list-test-adapter.png") });
+  await page.getByRole("button", { name: /负责供应商质量异常复核/ }).click();
+  await placeBadge(".employee-selected-detail");
+  await page.screenshot({ path: testInfo.outputPath("mobile-detail-test-adapter.png") });
+  await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
+  await placeBadge(".employee-assembly");
+  await expect(page.getByText("部分实现 · 正式权限路径待接通")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("mobile-create-test-adapter.png") });
+
+  await page.getByRole("button", { name: "← 返回员工集合" }).click();
+  await page.route("**/api/workbench/v1/employees/*/revisions/*", route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }));
+  await page.getByRole("button", { name: /客户问题协调员/ }).first().click();
+  await expect(page.getByRole("alert").filter({ hasText: "详情读取未完成" })).toBeVisible();
+  await placeBadge(".employee-selected-detail");
+  await page.screenshot({ path: testInfo.outputPath("mobile-exception-test-adapter.png") });
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.unroute("**/api/workbench/v1/employees/*/revisions/*");
+  await page.getByRole("button", { name: "← 返回员工集合" }).click();
+  await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
   const roleInput = page.getByLabel("职责角色");
   await roleInput.focus();
   await expect(roleInput).toBeFocused();

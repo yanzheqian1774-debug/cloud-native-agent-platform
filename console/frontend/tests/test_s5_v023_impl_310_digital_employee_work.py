@@ -55,14 +55,14 @@ def test_lists_preserve_cursor_and_do_not_substitute_for_exact_reads() -> None:
     assert "listAgentDefinitions(agentNextCursor)" in page
     assert "listEmployeeDefinitions(cursor)" in page
     assert "getEmployeeDefinition(exact.id, exact.revision" in page
-    assert "LIST 仅用于发现" in page
-    assert "每次选择都独立执行 exact READ" in page
-    assert "单页结果冒充完整集合" in page
+    assert "每次选择都会独立读取精确修订" in page
+    assert "不是全局统计" in page
+    assert "不能代表完整历史" in page
+    assert "未声明 latest" in page
 
 
 def test_employee_profile_preserves_field_ownership_and_exact_agent_identity() -> None:
     profile = source("digital-employees/EmployeeProfile.tsx")
-    assert "当前正式契约没有 display name 字段" in profile
     assert "来源：Digital Employee Definition" in profile  # noqa: RUF001
     assert "来源：Agent Definition exact revision" in profile  # noqa: RUF001
     for field in ("businessPurpose", "duties", "capabilities"):
@@ -73,7 +73,7 @@ def test_employee_profile_preserves_field_ownership_and_exact_agent_identity() -
     assert "value.revisionId === primary.revisionId" in profile
     assert 'value.digest === primary.digest.replace(/^sha256:/, "")' in profile
     assert "Employee LIST 权限不授予 Agent exact READ" in profile
-    assert "publicationState 不等于 matchability" in profile
+    assert "不成为员工名称或职责权威" in profile
 
 
 def test_work_participation_preserves_exact_coordinates_and_parent_binding() -> None:
@@ -96,9 +96,9 @@ def test_work_participation_preserves_exact_coordinates_and_parent_binding() -> 
 
 
 def test_unknown_runtime_execution_evidence_and_outcome_are_not_promoted() -> None:
-    page = source("digital-employees/DigitalEmployeesPage.tsx")
+    profile = source("digital-employees/EmployeeProfile.tsx")
     work = source("digital-employees/EmployeeWorkParticipation.tsx")
-    assert "发布不等于可匹配、已实例化、已分配、已放置或已运行" in page
+    assert "发布不等于已运行" in profile
     assert "不推导在线状态" in work
     assert 'state="unknown"' in work
     assert "正式 Execution READ 尚未接通" in work
@@ -116,7 +116,7 @@ def test_refresh_race_scope_and_narrow_layout_guards_exist() -> None:
     styles = source("styles/resource-management.css")
     assert 'params.get("instanceId")' in page
     assert 'params.get("assignmentId")' in page
-    assert "URL identities are read once as coordinates" in page
+    assert "Initial route coordinates are consumed once" in page
     assert "workGeneration.current" in page
     assert "detailGeneration.current" in page
     assert "AbortController" in page
@@ -127,7 +127,7 @@ def test_refresh_race_scope_and_narrow_layout_guards_exist() -> None:
     assert "employeeControlledState" in work
     assert "authentication required" in page
     assert "authentication required" in work
-    assert "@media (max-width: 700px)" in styles
+    assert "@media (max-width: 800px)" in styles
     assert ".employee-work-fields" in styles
 
 
@@ -165,15 +165,17 @@ def test_fixed_commands_use_csrf_frozen_identity_and_no_private_fallback() -> No
 
 def test_employee_management_visual_status_and_narrow_layout_are_page_scoped() -> None:
     page = source("digital-employees/DigitalEmployeesPage.tsx")
+    assembly = source("digital-employees/EmployeeDefinitionAssembly.tsx")
     styles = source("styles/resource-management.css")
-    assert "仅当前授权与已加载页" in page
-    assert "搜索和筛选仅作用于已加载页" in page
-    assert "正式名称未提供" in page
-    assert "部分实现" in page
-    assert "未实现" in page
-    assert ".employee-management .employee-overview" in styles
+    assert "仅当前授权与当前 cursor 页" in page
+    assert "搜索当前页" in page
+    assert "个员工" in page
+    assert "个修订" in page
+    assert "部分实现" in assembly
+    assert "关联列表暂未接通" in page
+    assert ".employee-management .employee-object-center" in styles
     assert ".employee-management .employee-capability-state.missing" in styles
-    assert "@media (max-width: 430px)" in styles
+    assert "@media (max-width: 800px)" in styles
 
 
 def test_real_browser_private_api_observation_is_scoped_to_employee_work() -> None:

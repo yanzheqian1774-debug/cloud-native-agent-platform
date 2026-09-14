@@ -41,7 +41,7 @@ export function EmployeeDefinitionAssembly({
   const [responsibilities, setResponsibilities] = useState("");
   const [predecessor, setPredecessor] = useState("");
   const [expectedVersion, setExpectedVersion] = useState("0");
-  const [agentId, setAgentId] = useState("");
+  const [agentIdentity, setAgentIdentity] = useState("");
   const [frozen, setFrozen] = useState<FrozenCreate | null>(null);
   const [busy, setBusy] = useState(false);
   const [unknown, setUnknown] = useState(false);
@@ -57,7 +57,7 @@ export function EmployeeDefinitionAssembly({
     activeRequest.current?.abort();
   }, []);
 
-  const selectedAgent = agents.find(agent => agent.definitionId === agentId);
+  const selectedAgent = agents.find(agent => `${agent.definitionId}\u0000${agent.revisionId}` === agentIdentity);
   const responsibilityList = responsibilities.split("\n").map(value => value.trim()).filter(Boolean);
   const version = Number(expectedVersion);
   const valid = Boolean(
@@ -162,8 +162,8 @@ export function EmployeeDefinitionAssembly({
 
   return <section className="employee-assembly" aria-labelledby="employee-create-title">
     <header className="employee-section-heading">
-      <div><p className="eyebrow">正式 Employee CREATE · 首批单 Agent</p><h2 id="employee-create-title">创建数字员工定义</h2><p>名称并非当前正式字段；这里创建角色、职责和不可变修订，不用 Agent 名称冒充员工名称。</p></div>
-      <span className="employee-capability-state partial"><i />部分实现 · 权限取得待 305</span>
+      <div><p className="eyebrow">创建数字员工 · 首批单 Agent</p><h2 id="employee-create-title">创建数字员工定义</h2><p>先定义员工角色与职责，再选择一个正式 Agent 候选完成装配。</p></div>
+      <span className="employee-capability-state partial"><i />部分实现 · 正式权限路径待接通</span>
     </header>
 
     <div className="employee-assembly-grid">
@@ -181,13 +181,13 @@ export function EmployeeDefinitionAssembly({
 
       <div className="employee-form-card">
         <h3>2. 选择一个正式 Agent 候选</h3>
-        <p>候选来自正式 LIST；选择不会授予 Agent exact READ。不可用候选不能装配。</p>
+        <p>这里显示可用于创建的候选；它们不同于员工详情中的已绑定成员。选择候选不会授予详情读取权限。</p>
         {agentError && <p role="alert" className="employee-inline-error">{agentError}</p>}
-        <div className="employee-agent-options">{agents.map(agent => <label key={`${agent.definitionId}:${agent.revisionId}`} className={agentId === agent.definitionId ? "selected" : ""}>
-          <input type="radio" name="employee-agent" checked={agentId === agent.definitionId} disabled={!agent.enabled || agent.archived || Boolean(frozen)} onChange={() => setAgentId(agent.definitionId)} />
+        <div className="employee-agent-options">{agents.map(agent => { const identity = `${agent.definitionId}\u0000${agent.revisionId}`; return <label key={identity} className={agentIdentity === identity ? "selected" : ""}>
+          <input type="radio" name="employee-agent" checked={agentIdentity === identity} disabled={!agent.enabled || agent.archived || Boolean(frozen)} onChange={() => setAgentIdentity(identity)} />
           <span className="employee-avatar" aria-hidden="true">A</span>
-          <span><strong>{agent.name}</strong><small>{agent.title || "未提供角色标题"}</small><small>{agent.enabled && !agent.archived ? "正式发布候选" : "当前不可用于创建"}</small></span>
-        </label>)}</div>
+          <span><strong>{agent.name}</strong><small>{agent.title || "未提供角色标题"}</small><small>{agent.revisionId}</small><small>{agent.enabled && !agent.archived ? "可用于创建" : "当前不可用于创建"}</small></span>
+        </label>; })}</div>
         {hasMoreAgents && <button type="button" className="employee-secondary-button" onClick={onLoadMoreAgents}>加载更多 Agent</button>}
       </div>
     </div>
