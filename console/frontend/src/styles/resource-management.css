@@ -155,7 +155,158 @@
 .employee-management .employee-work-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
 .employee-management .employee-work-links { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; }
 
+.employee-management {
+  --employee-blue: #1769e0;
+  --employee-blue-soft: #edf5ff;
+  --employee-green: #078a61;
+  --employee-amber: #c76a08;
+  --employee-red: #c8333b;
+  color: #17233d;
+}
+
+.employee-management .employee-page-title { align-items: center; }
+.employee-management .employee-page-title h1 { letter-spacing: -.025em; }
+
+.employee-management .employee-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .75rem;
+  margin: 1rem 0;
+}
+
+.employee-management .employee-overview article {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  min-width: 0;
+  padding: .9rem;
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgb(31 63 104 / 5%);
+}
+
+.employee-management .employee-overview article > div { display: grid; gap: .16rem; min-width: 0; }
+.employee-management .employee-overview small { color: #65728a; font-weight: 650; }
+.employee-management .employee-overview strong { font-size: 1.15rem; }
+.employee-management .employee-overview article > div > span { color: #7a879a; font-size: .72rem; }
+.employee-management .employee-overview-icon { display: grid; flex: 0 0 2.65rem; height: 2.65rem; place-items: center; border-radius: 50%; font-weight: 800; }
+.employee-management .employee-overview-icon.blue { color: var(--employee-blue); background: #eaf2ff; }
+.employee-management .employee-overview-icon.green { color: var(--employee-green); background: #e7f8f1; }
+.employee-management .employee-overview-icon.amber { color: var(--employee-amber); background: #fff3e4; }
+.employee-management .employee-overview-icon.red { color: var(--employee-red); background: #fff0f0; }
+
+.employee-management .employee-trust-banner { padding-block: .8rem; }
+.employee-management .employee-trust-banner p { margin-block: .3rem 0; }
+.employee-management .employee-master-detail { grid-template-columns: minmax(17rem, .82fr) minmax(0, 1.65fr); }
+.employee-management .employee-master-detail > aside { border: 1px solid #dce5f2; border-radius: 12px; background: #fff; }
+.employee-management .employee-list-heading { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+.employee-management .employee-list-heading span,
+.employee-management .employee-page-scope { color: #65728a; font-size: .75rem; }
+
+.employee-management .employee-definition-list { display: grid; gap: .45rem; margin-block: .75rem; }
+.employee-management .employee-definition-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .65rem;
+  width: 100%;
+  padding: .7rem;
+  border: 1px solid #dce5f2;
+  border-radius: 10px;
+  text-align: left;
+  background: #fff;
+}
+.employee-management .employee-definition-list button:hover { border-color: #9fbee9; background: #f8fbff; }
+.employee-management .employee-definition-list button.selected { border-color: var(--employee-blue); background: var(--employee-blue-soft); box-shadow: inset 3px 0 var(--employee-blue); }
+.employee-management .employee-definition-list button > span:nth-child(2) { display: grid; gap: .1rem; min-width: 0; }
+.employee-management .employee-definition-list small { color: #6d788a; overflow-wrap: anywhere; }
+.employee-management .employee-avatar { display: grid; flex: 0 0 2.1rem; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: 10px; color: var(--employee-blue); background: #e9f2ff; font-weight: 800; }
+.employee-management .employee-avatar.large { width: 3.1rem; height: 3.1rem; flex-basis: 3.1rem; border-radius: 14px; font-size: 1.15rem; }
+.employee-management .employee-profile-heading { display: flex; align-items: center; gap: .75rem; }
+
+.employee-management .employee-state-chip,
+.employee-management .employee-capability-state {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  width: fit-content;
+  padding: .25rem .55rem;
+  border-radius: 999px;
+  font-size: .74rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.employee-management .employee-state-chip.published,
+.employee-management .employee-capability-state.available { color: #087554; background: #e9f8f1; }
+.employee-management .employee-state-chip.draft,
+.employee-management .employee-capability-state.warning,
+.employee-management .employee-capability-state.partial { color: #9b5308; background: #fff2df; }
+.employee-management .employee-capability-state.missing { color: #ad2831; background: #fff0f0; }
+.employee-management .employee-capability-state i { width: .48rem; height: .48rem; border-radius: 50%; background: currentColor; }
+
+.employee-management .employee-assembly,
+.employee-management .employee-lifecycle,
+.employee-management .employee-version-boundary {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+  background: #fff;
+}
+.employee-management .employee-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.employee-management .employee-section-heading :is(h2,h3,p) { margin-top: 0; }
+.employee-management .employee-assembly-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; margin-block: 1rem; }
+.employee-management .employee-form-card { min-width: 0; padding: 1rem; border: 1px solid #e0e7f1; border-radius: 10px; background: #f9fbfe; }
+.employee-management .employee-form-card h3 { margin-top: 0; }
+.employee-management .employee-form-card details { margin-top: .8rem; padding: .75rem; border: 1px solid #dce5f2; border-radius: 8px; background: #fff; }
+.employee-management .employee-form-card summary,
+.employee-management .employee-command-confirmation summary { cursor: pointer; color: #315a96; font-weight: 700; }
+.employee-management .employee-agent-options { display: grid; gap: .5rem; max-height: 23rem; overflow-y: auto; }
+.employee-management .employee-agent-options > label { display: flex; flex-direction: row; align-items: center; gap: .65rem; margin: 0; padding: .65rem; border: 1px solid #dce5f2; border-radius: 9px; background: #fff; }
+.employee-management .employee-agent-options > label.selected { border-color: var(--employee-blue); background: var(--employee-blue-soft); }
+.employee-management .employee-agent-options input { width: auto; }
+.employee-management .employee-agent-options label > span:last-child { display: grid; min-width: 0; }
+.employee-management .employee-agent-options small { color: #65728a; overflow-wrap: anywhere; }
+.employee-management .employee-form-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .65rem; }
+.employee-management .employee-form-actions > span { margin-right: auto; color: #65728a; font-size: .78rem; }
+.employee-management .employee-secondary-button { border: 1px solid #aebbd0; color: #25456f; background: #fff; }
+.employee-management .employee-inline-error { padding: .6rem; color: #a2252d; background: #fff0f0; }
+
+.employee-management .employee-command-confirmation { margin-top: 1rem; padding: 1rem; border: 1px solid #f0c17e; border-radius: 10px; background: #fffbf4; }
+.employee-management .employee-command-confirmation code { display: block; margin-top: .35rem; overflow-wrap: anywhere; }
+.employee-management .employee-command-state { display: grid; gap: .25rem; margin-top: .75rem; padding: .8rem 1rem; border-left: 4px solid; border-radius: 6px; }
+.employee-management .employee-command-state.success { color: #096449; border-color: var(--employee-green); background: #eefaf5; }
+.employee-management .employee-command-state.unknown { color: #7b4a08; border-color: var(--employee-amber); background: #fff8eb; }
+.employee-management .employee-command-state.failed { color: #9e2730; border-color: var(--employee-red); background: #fff2f2; }
+.employee-management .employee-lifecycle-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; margin-block: .8rem; }
+.employee-management .employee-lifecycle-flow button { display: grid; gap: .25rem; min-height: 4.2rem; padding: .75rem; border: 1px solid #b7c7dd; border-radius: 9px; text-align: left; background: #f8fbff; }
+.employee-management .employee-lifecycle-flow button:not(:disabled):hover { border-color: var(--employee-blue); background: var(--employee-blue-soft); }
+.employee-management .employee-lifecycle-flow small { color: #65728a; }
+.employee-management .employee-version-input { max-width: 22rem; }
+.employee-management .employee-version-input small { color: #65728a; }
+.employee-management .employee-honesty-note { padding: .65rem .8rem; color: #6b5319; background: #fff8e9; border-left: 3px solid var(--employee-amber); }
+.employee-management .employee-unavailable-actions { display: flex; align-items: center; gap: .65rem; margin-top: 1rem; padding-top: .8rem; border-top: 1px solid #e3e9f2; }
+.employee-management .employee-unavailable-actions p { margin: 0; }
+.employee-management .employee-version-boundary h3 { margin-bottom: .25rem; }
+
 @media (max-width: 700px) {
+  .employee-management .employee-overview,
+  .employee-management .employee-assembly-grid,
+  .employee-management .employee-lifecycle-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-management .employee-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .employee-management .employee-master-detail { grid-template-columns: 1fr; }
+  .employee-management .employee-section-heading,
+  .employee-management .employee-page-title,
+  .employee-management .employee-unavailable-actions { align-items: stretch; flex-direction: column; }
+  .employee-management .employee-definition-list button { grid-template-columns: auto minmax(0, 1fr); }
+  .employee-management .employee-definition-list .employee-state-chip { grid-column: 2; }
+  .employee-management .employee-form-actions { align-items: stretch; flex-direction: column; }
+  .employee-management .employee-form-actions > * { width: 100%; }
+  .employee-management .employee-capability-state { white-space: normal; }
   .employee-management .employee-profile-grid,
   .employee-management .employee-work-stages,
   .employee-management .employee-work-fields {
@@ -164,6 +315,11 @@
 
   .employee-management .employee-profile-grid .wide { grid-column: auto; }
   .employee-management :is(.employee-profile, .employee-agent-profile, .employee-work-participation) > header { flex-direction: column; }
+}
+
+@media (max-width: 430px) {
+  .employee-management .employee-overview { grid-template-columns: 1fr; }
+  .employee-management { padding-inline: .75rem; }
 }
 
 .agent-management .agent-authoring,

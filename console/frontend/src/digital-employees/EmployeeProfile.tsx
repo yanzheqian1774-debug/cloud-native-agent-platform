@@ -85,7 +85,7 @@ export function EmployeeProfile({
     && agent.digest === primary.digest.replace(/^sha256:/, ""));
   return <>
     <section className="employee-profile" aria-labelledby="employee-profile-title">
-      <header><div><p className="eyebrow">数字员工档案 · Definition</p><h2 id="employee-profile-title">{item.role}</h2><p>这是 Digital Employee Definition 自身的角色描述，不代表企业 HR 岗位身份。</p></div><span className="px-status info">{item.publicationState === "PUBLISHED" ? "PUBLISHED · 已发布" : "NOT_PUBLISHED · 未发布"}</span></header>
+      <header><div className="employee-profile-heading"><span className="employee-avatar large" aria-hidden="true">员</span><div><p className="eyebrow">数字员工档案 · Definition</p><h2 id="employee-profile-title">{item.role}</h2><p>正式名称未提供；当前标题是 Definition 自身的职责角色，不代表企业 HR 岗位身份。</p></div></div><span className={`employee-state-chip ${item.publicationState === "PUBLISHED" ? "published" : "draft"}`}>{item.publicationState === "PUBLISHED" ? "已发布" : "未发布"}</span></header>
       <dl className="employee-profile-grid">
         <div><dt>档案名称</dt><dd>未提供 <small>当前正式契约没有 display name 字段</small></dd></div>
         <div><dt>职责角色</dt><dd>{item.role} <small>来源：Digital Employee Definition</small></dd></div>
@@ -93,6 +93,7 @@ export function EmployeeProfile({
         <div><dt>精确修订</dt><dd><code>{item.employeeDefinitionRevisionId}</code></dd></div>
         <div className="wide"><dt>精确摘要</dt><dd><code>{item.employeeDefinitionDigest}</code></dd></div>
         <div><dt>Definition 发布状态</dt><dd>{item.publicationState === "PUBLISHED" ? "已发布" : "未发布"}</dd></div>
+        <div><dt>生命周期状态</dt><dd>{item.lifecycleState ?? "未披露"} <small>不从发布状态反向推导</small></dd></div>
         <div><dt>独立匹配授权</dt><dd>尚未接通 <small>publicationState 不等于 matchability</small></dd></div>
       </dl>
       <h3>Definition 自身职责</h3>

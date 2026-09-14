@@ -6,6 +6,13 @@ export type EmployeeMember = {
 };
 
 export type PublicationState = "PUBLISHED" | "NOT_PUBLISHED";
+export type EmployeeLifecycleState =
+  | "DRAFT"
+  | "VALIDATED"
+  | "APPROVED"
+  | "PUBLISHED"
+  | "REJECTED"
+  | "DEPRECATED";
 
 export type EmployeeDefinitionSummary = {
   employeeDefinitionId: string;
@@ -19,6 +26,40 @@ export type EmployeeDefinition = EmployeeDefinitionSummary & {
   resourceKind: "DIGITAL_EMPLOYEE_DEFINITION";
   responsibilities: string[];
   members: EmployeeMember[];
+  lifecycleState?: EmployeeLifecycleState;
+};
+
+export type WorkbenchSession = {
+  schemaVersion: "workbench-session.v1";
+  principal: { principalId: string; tenantId: string; securityDomain: string };
+  session: { expiresAt: string; idleExpiresAt: string };
+  csrfToken: string;
+};
+
+export type EmployeeCreateCommand = {
+  employeeDefinitionId: string;
+  employeeDefinitionRevisionId: string;
+  role: string;
+  responsibilities: string[];
+  members: [{ kind: "AGENT"; resourceId: string; revisionId: string; digest: string }];
+  predecessorEmployeeRevisionId?: string;
+  expectedVersion: number;
+  commandId: string;
+};
+
+export type EmployeeLifecycleCommand = {
+  employeeDefinitionDigest: string;
+  expectedVersion: number;
+  commandId: string;
+};
+
+export type EmployeeCommandResult = {
+  resourceKind: "DIGITAL_EMPLOYEE_DEFINITION";
+  employeeDefinitionId: string;
+  employeeDefinitionRevisionId: string;
+  employeeDefinitionDigest: string;
+  aggregateVersion: number;
+  lifecycleState: EmployeeLifecycleState;
 };
 
 export type AgentDefinitionSummary = {
@@ -104,11 +145,13 @@ export type EmployeePlacementReadContext = {
 export class DigitalEmployeeRequestError extends Error {
   reasonCode: string;
   status: number;
+  unknownResult: boolean;
 
-  constructor(reasonCode: string, status: number) {
+  constructor(reasonCode: string, status: number, unknownResult = false) {
     super(reasonCode);
     this.reasonCode = reasonCode;
     this.status = status;
+    this.unknownResult = unknownResult;
   }
 }
 
@@ -163,6 +206,74 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (body as WorkbenchEnvelope<T>).result;
 }
 
+export function workbenchPrincipalKey(session: WorkbenchSession): string {
+  const { principalId, tenantId, securityDomain } = session.principal;
+  return `${tenantId}\u0000${securityDomain}\u0000${principalId}`;
+}
+
+export async function getWorkbenchSession(signal?: AbortSignal): Promise<WorkbenchSession> {
+  let response: Response;
+  try {
+    response = await fetch(`${root}/session`, {
+      signal,
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new DigitalEmployeeRequestError("WORKBENCH_NETWORK_UNAVAILABLE", 503);
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new DigitalEmployeeRequestError(body?.reasonCode ?? "AUTHENTICATION_REQUIRED", response.status);
+  }
+  if (body?.schemaVersion !== "workbench-session.v1" || !body?.principal || !body?.csrfToken) {
+    throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_INVALID", 503);
+  }
+  return body as WorkbenchSession;
+}
+
+async function command<T>(
+  path: string,
+  payload: object,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const session = await getWorkbenchSession(signal);
+  if (workbenchPrincipalKey(session) !== expectedPrincipalKey) {
+    throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED", 409);
+  }
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      signal,
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-csrf-token": session.csrfToken,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new DigitalEmployeeRequestError("EMPLOYEE_COMMAND_RESULT_UNKNOWN", 503, true);
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new DigitalEmployeeRequestError(
+      body?.reasonCode ?? "EMPLOYEE_COMMAND_REJECTED",
+      response.status,
+      response.status >= 500,
+    );
+  }
+  if (body?.schemaVersion !== "workbench-operation.v1" || !("result" in body)) {
+    throw new DigitalEmployeeRequestError("EMPLOYEE_COMMAND_RESULT_UNKNOWN", 503, true);
+  }
+  return (body as WorkbenchEnvelope<T>).result;
+}
+
 const root = "/api/workbench/v1";
 
 function pageQuery(cursor?: string, pageSize = 50): string {
@@ -197,6 +308,50 @@ export const getEmployeeDefinition = (
     `${root}/employees/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}`,
     signal,
   );
+
+export const createEmployeeDefinition = (
+  payload: EmployeeCreateCommand,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) => command<EmployeeCommandResult>(`${root}/employees`, payload, expectedPrincipalKey, signal);
+
+function lifecycleCommand(
+  suffix: "validation" | "approvals" | "publication",
+  id: string,
+  revisionId: string,
+  payload: EmployeeLifecycleCommand,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) {
+  return command<EmployeeCommandResult>(
+    `${root}/employees/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/${suffix}`,
+    payload,
+    expectedPrincipalKey,
+    signal,
+  );
+}
+
+export const validateEmployeeDefinition = (
+  id: string,
+  revisionId: string,
+  payload: EmployeeLifecycleCommand,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) => lifecycleCommand("validation", id, revisionId, payload, expectedPrincipalKey, signal);
+export const approveEmployeeDefinition = (
+  id: string,
+  revisionId: string,
+  payload: EmployeeLifecycleCommand,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) => lifecycleCommand("approvals", id, revisionId, payload, expectedPrincipalKey, signal);
+export const publishEmployeeDefinition = (
+  id: string,
+  revisionId: string,
+  payload: EmployeeLifecycleCommand,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) => lifecycleCommand("publication", id, revisionId, payload, expectedPrincipalKey, signal);
 
 export const getEmployeeInstance = (id: string, signal?: AbortSignal) =>
   request<EmployeeInstance>(`${root}/instances/${encodeURIComponent(id)}`, signal);

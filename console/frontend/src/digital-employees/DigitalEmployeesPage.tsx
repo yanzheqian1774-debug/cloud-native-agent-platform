@@ -11,10 +11,13 @@ import {
   type AgentDefinitionSummary,
   type EmployeeAssignment,
   type EmployeeDefinition,
+  type EmployeeCommandResult,
   type EmployeeDefinitionSummary,
   type EmployeeInstance,
 } from "../api/digitalEmployees";
 import { EmployeeProfileLoader } from "./EmployeeProfile";
+import { EmployeeDefinitionAssembly } from "./EmployeeDefinitionAssembly";
+import { EmployeeLifecycleActions } from "./EmployeeLifecycleActions";
 import { EmployeeWorkParticipation } from "./EmployeeWorkParticipation";
 
 type Panel = "definitions" | "create" | "instance" | "assignment" | "work";
@@ -89,6 +92,7 @@ export function DigitalEmployeesPage() {
   const [error, setError] = useState<ReadError | null>(null);
   const [workError, setWorkError] = useState<ReadError | null>(null);
   const [agentError, setAgentError] = useState<ReadError | null>(null);
+  const [latestCommand, setLatestCommand] = useState<EmployeeCommandResult | null>(null);
   const listGeneration = useRef(0);
   const detailGeneration = useRef(0);
   const workGeneration = useRef(0);
@@ -269,6 +273,25 @@ export function DigitalEmployeesPage() {
     void readDefinitionExact(exact);
   }
 
+  function applyCommandReadback(definition: EmployeeDefinition, result: EmployeeCommandResult) {
+    const summary: EmployeeDefinitionSummary = {
+      employeeDefinitionId: definition.employeeDefinitionId,
+      employeeDefinitionRevisionId: definition.employeeDefinitionRevisionId,
+      employeeDefinitionDigest: definition.employeeDefinitionDigest,
+      role: definition.role,
+      publicationState: definition.publicationState,
+    };
+    setLatestCommand(result);
+    setSelected(definition);
+    setSelectedIdentity(exactFromSummary(summary));
+    setItems(current => {
+      const withoutExact = current.filter(item =>
+        item.employeeDefinitionId !== summary.employeeDefinitionId
+        || item.employeeDefinitionRevisionId !== summary.employeeDefinitionRevisionId);
+      return [summary, ...withoutExact];
+    });
+  }
+
   async function readInstanceExact(id = instanceId.trim()) {
     if (!id) return;
     const turn = ++workGeneration.current;
@@ -328,19 +351,25 @@ export function DigitalEmployeesPage() {
   const workBusy = workState === "LOADING";
 
   return <main className="px-page px-center-page employee-management">
-    <header className="px-page-title"><div><p>数字员工 <small>Digital Employee</small></p><h1>数字员工定义与身份链管理</h1><span>Employee Definition、Agent exact revision 与 Instance 保持独立身份。</span></div><button className="px-primary-button" onClick={() => { setPanel("create"); updateUrl({ panel: "create" }); }}>查看可信 Agent 候选</button></header>
-    <section className="px-truth-banner" role="status"><span className="px-status neutral">TRUSTED READ BFF</span><strong>数字员工只读页面已切换到可信 session 与当前 grant</strong><p>Agent/Employee LIST 与 exact revision、Instance、Assignment、Placement 读取均使用正式 Workbench BFF；LIST 仅用于发现，不授予详情 READ。</p><p>Definition publicationState 不等于 matchability；Runtime Profile 绑定不代表 Runtime 已启动；Assignment 存在不代表员工正在工作。</p><p>创建、生命周期、通用 Execution、Runtime 观测、Evidence 与 Outcome 仍未接通，本页面不会退回客户端身份 header 或私有 actor。</p></section>
+    <header className="px-page-title employee-page-title"><div><p>数字员工 <small>Digital Employee</small></p><h1>数字员工管理</h1><span>定义企业业务角色与职责，并以精确 Agent 修订完成受治理装配。</span></div><button className="px-primary-button" onClick={() => { setPanel("create"); updateUrl({ panel: "create" }); }}>＋ 创建数字员工</button></header>
+    <section className="employee-overview" aria-label="当前页面能力概况">
+      <article><span className="employee-overview-icon blue" aria-hidden="true">员</span><div><small>当前已加载定义</small><strong>{items.length}</strong><span>仅当前授权与已加载页</span></div></article>
+      <article><span className="employee-overview-icon green" aria-hidden="true">A</span><div><small>可用 Agent 候选</small><strong>{agents.filter(agent => agent.enabled && !agent.archived).length}</strong><span>仅当前已加载候选</span></div></article>
+      <article><span className="employee-overview-icon amber" aria-hidden="true">写</span><div><small>生命周期装配</small><strong>部分实现</strong><span>正式权限取得待 305</span></div></article>
+      <article><span className="employee-overview-icon red" aria-hidden="true">!</span><div><small>运行与结果</small><strong>未实现</strong><span>不将发布表达为可运行</span></div></article>
+    </section>
+    <section className="px-truth-banner employee-trust-banner" role="status"><span className="px-status neutral">可信会话与当前授权</span><strong>读取已接通；写命令按已接受契约装配</strong><p>LIST 仅用于发现，每次详情仍独立执行 exact READ。CREATE、VALIDATE、APPROVE、PUBLISH 会在提交时重新读取 session 与 CSRF；权限取得路径仍由 305 闭合。</p><p>发布不等于可匹配、已实例化、已分配、已放置或已运行。</p></section>
     <nav className="px-view-tabs" aria-label="数字员工管理">{([[
       "definitions", "员工档案",
     ], ["create", "Agent 候选"], ["instance", "实例"], ["assignment", "工作分配"], ["work", "工作关联"]] as const).map(([key, label]) => <button key={key} className={panel === key ? "active" : ""} onClick={() => { setPanel(key); updateUrl({ panel: key }); }}>{label}</button>)}</nav>
     {detailBusy && <p role="status" className="agent-state">正在通过可信 session 读取 exact Definition……</p>}
     {workBusy && <p role="status" className="agent-state">正在按精确身份读取实例或工作分配……</p>}
-    {error && <div role="alert" className="qto-alert"><strong>{error.kind}</strong><span>{controlledMessage(error)}</span>{selectedIdentity && <button onClick={() => void readDefinitionExact(selectedIdentity)}>重新读取 exact revision</button>}</div>}
-    {workError && <div role="alert" className="qto-alert"><strong>{workError.kind}</strong><span>{controlledMessage(workError)}</span></div>}
+    {error && <div role="alert" className="qto-alert"><strong>详情读取未完成</strong><span>{controlledMessage(error)}</span>{selectedIdentity && <button onClick={() => void readDefinitionExact(selectedIdentity)}>重新读取精确修订</button>}</div>}
+    {workError && <div role="alert" className="qto-alert"><strong>工作关联读取未完成</strong><span>{controlledMessage(workError)}</span></div>}
 
-    {panel === "definitions" && <div className="px-master-detail"><aside><label className="px-center-search">当前已加载页搜索<input value={query} onChange={event => updateUrl({ q: event.target.value })} /></label><label className="px-center-search">发布状态筛选<select value={status} onChange={event => updateUrl({ status: event.target.value })}><option value="ALL">ALL</option><option value="PUBLISHED">PUBLISHED</option><option value="NOT_PUBLISHED">NOT_PUBLISHED</option></select></label>{listError && <div role="alert" className="qto-alert"><strong>{listError.kind}</strong><span>{controlledMessage(listError)}</span></div>}<nav aria-label="Employee Definition 列表">{visible.map(item => <button key={`${item.employeeDefinitionId}:${item.employeeDefinitionRevisionId}`} className={selectedIdentity?.id === item.employeeDefinitionId && selectedIdentity.revision === item.employeeDefinitionRevisionId ? "selected" : ""} onClick={() => select(item)}><strong>{item.role}</strong><small>{item.publicationState} · {item.employeeDefinitionRevisionId}</small></button>)}</nav>{!visible.length && listState === "READY" && !listError && <div className="px-empty"><strong>当前已加载页没有匹配定义</strong><p>不会将单页结果冒充完整集合，也不会用 Agent 身份填充。</p></div>}{nextCursor && <button type="button" disabled={listState === "LOADING"} onClick={() => void loadMoreEmployees(nextCursor)}>{listState === "LOADING" ? "正在读取下一页……" : "加载下一页"}</button>}<small>LIST 仅返回发现摘要；每次选择都独立执行 exact READ。</small></aside><section>{selected ? <DefinitionDetail item={selected} /> : !detailBusy && !error ? <div className="px-empty large">尚未读取 Employee Definition 详情</div> : null}</section></div>}
+    {panel === "definitions" && <div className="px-master-detail employee-master-detail"><aside><div className="employee-list-heading"><strong>数字员工定义</strong><span>{visible.length} 条当前页结果</span></div><label className="px-center-search">搜索当前已加载页<input value={query} onChange={event => updateUrl({ q: event.target.value })} placeholder="搜索职责角色或技术 ID" /></label><label className="px-center-search">发布状态<select value={status} onChange={event => updateUrl({ status: event.target.value })}><option value="ALL">全部状态</option><option value="PUBLISHED">已发布</option><option value="NOT_PUBLISHED">未发布</option></select></label><p className="employee-page-scope">搜索和筛选仅作用于已加载页，不代表全局结果。</p>{listError && <div role="alert" className="qto-alert"><strong>列表读取失败</strong><span>{controlledMessage(listError)}</span></div>}<nav aria-label="Employee Definition 列表" className="employee-definition-list">{visible.map(item => <button key={`${item.employeeDefinitionId}:${item.employeeDefinitionRevisionId}`} className={selectedIdentity?.id === item.employeeDefinitionId && selectedIdentity.revision === item.employeeDefinitionRevisionId ? "selected" : ""} aria-current={selectedIdentity?.id === item.employeeDefinitionId && selectedIdentity.revision === item.employeeDefinitionRevisionId ? "true" : undefined} onClick={() => select(item)}><span className="employee-avatar" aria-hidden="true">员</span><span><strong>{item.role}</strong><small>正式名称未提供</small><small>{item.employeeDefinitionRevisionId}</small></span><span className={`employee-state-chip ${item.publicationState === "PUBLISHED" ? "published" : "draft"}`}>{item.publicationState === "PUBLISHED" ? "已发布" : "未发布"}</span></button>)}</nav>{!visible.length && listState === "READY" && !listError && <div className="px-empty"><strong>当前已加载页没有匹配定义</strong><p>不会将单页结果冒充完整集合，也不会用 Agent 身份填充。</p></div>}{nextCursor && <button type="button" className="employee-secondary-button" disabled={listState === "LOADING"} onClick={() => void loadMoreEmployees(nextCursor)}>{listState === "LOADING" ? "正在读取下一页……" : "加载下一页"}</button>}<small>LIST 仅返回发现摘要；每次选择都独立执行 exact READ。</small></aside><section>{selected ? <DefinitionDetail item={selected} latestCommand={latestCommand} onReadback={applyCommandReadback} /> : !detailBusy && !error ? <div className="px-empty large">尚未读取 Employee Definition 详情</div> : null}</section></div>}
 
-    {panel === "create" && <section className="px-center-card employee-form"><h2>可信 Agent 候选 · 只读</h2><p>该 LIST 只包含正式 owner 选定的发布 revision；不会选择第一条或推断 latest。Agent LIST 不授予 exact READ，Digital Employee 创建写端口尚未接通。</p>{agentError && <div role="alert" className="qto-alert"><strong>{agentError.kind}</strong><span>{controlledMessage(agentError)}</span></div>}<ul className="px-binding-list">{agents.map(agent => <li key={agent.definitionId}><span>{agent.name}</span><strong>{agent.title}</strong><small>{agent.definitionId} · {agent.revisionId}</small><small>{agent.enabled && !agent.archived ? "正式发布候选" : "发布 revision；当前不可用于创建"}</small></li>)}</ul>{agentNextCursor && <button type="button" onClick={() => void loadMoreAgents()}>加载更多 Agent</button>}<button className="px-primary-button" disabled title="可信创建端口尚未注册">创建数字员工定义尚未接通</button></section>}
+    {panel === "create" && <EmployeeDefinitionAssembly agents={agents} hasMoreAgents={Boolean(agentNextCursor)} agentError={agentError ? controlledMessage(agentError) : undefined} onLoadMoreAgents={() => void loadMoreAgents()} onReadback={applyCommandReadback} />}
 
     {panel === "instance" && <section className="px-center-card employee-form"><h2>实例 · Digital Employee Instance</h2><p>当前正式端口不支持列表；仅以可信 session 和 exact Instance READ 读取已知 ID。读取到的 Definition ID/revision/digest 会再次 exact READ 核对。</p><Field label="Instance ID" value={instanceId} set={value => { workGeneration.current += 1; activeWorkRead.current?.abort(); setWorkState("READY"); setInstanceId(value); setInstance(null); setInstanceDefinition(null); setAssignment(null); }} /><div className="agent-actions"><button disabled title="可信 Instance 创建端口尚未注册">创建 Instance 尚未接通</button><button disabled={workBusy || !instanceId.trim()} onClick={() => void readInstanceExact()}>按精确 ID 读取</button></div>{instance && <InstanceDetail value={instance} boundDefinition={instanceDefinition} />}</section>}
 
@@ -354,8 +383,9 @@ function Field({ label, value, set }: { label: string; value: string; set: (valu
   return <label>{label}<input value={value} onChange={event => set(event.target.value)} /></label>;
 }
 
-function DefinitionDetail({ item }: { item: EmployeeDefinition }) {
-  return <article className="px-object-detail"><EmployeeProfileLoader item={item} /><section><h3>独立生命周期操作</h3><div className="agent-actions"><button disabled>验证 exact revision</button><button disabled>人工审核 exact digest</button><button disabled>发布 immutable revision</button></div><p>可信写端口未在固定 305 候选中注册；不退回私有 header API。</p></section><section><h3>版本与变更</h3><p>当前最小 exact READ 不披露 history、aggregate facts 或相邻 revision；保持未接通。</p></section></article>;
+function DefinitionDetail({ item, latestCommand, onReadback }: { item: EmployeeDefinition; latestCommand: EmployeeCommandResult | null; onReadback: (definition: EmployeeDefinition, result: EmployeeCommandResult) => void }) {
+  const command = latestCommand?.employeeDefinitionId === item.employeeDefinitionId && latestCommand.employeeDefinitionRevisionId === item.employeeDefinitionRevisionId ? latestCommand : undefined;
+  return <article className="px-object-detail"><EmployeeProfileLoader item={item} /><EmployeeLifecycleActions key={`${item.employeeDefinitionId}:${item.employeeDefinitionRevisionId}`} item={item} initialResult={command} onReadback={onReadback} /><section className="employee-version-boundary"><span className="employee-capability-state missing"><i />未实现</span><h3>版本历史与变更</h3><p>当前最小 exact READ 不披露历史、相邻修订、变更时间或 actor；不以浏览器 diff 冒充审计记录。</p></section></article>;
 }
 
 function InstanceDetail({ value, boundDefinition }: { value: EmployeeInstance; boundDefinition: EmployeeDefinition | null }) {

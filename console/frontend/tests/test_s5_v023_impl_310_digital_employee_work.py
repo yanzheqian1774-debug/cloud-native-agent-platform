@@ -55,7 +55,7 @@ def test_lists_preserve_cursor_and_do_not_substitute_for_exact_reads() -> None:
     assert "listAgentDefinitions(agentNextCursor)" in page
     assert "listEmployeeDefinitions(cursor)" in page
     assert "getEmployeeDefinition(exact.id, exact.revision" in page
-    assert "LIST 仅用于发现，不授予详情 READ" in page  # noqa: RUF001
+    assert "LIST 仅用于发现" in page
     assert "每次选择都独立执行 exact READ" in page
     assert "单页结果冒充完整集合" in page
 
@@ -98,8 +98,7 @@ def test_work_participation_preserves_exact_coordinates_and_parent_binding() -> 
 def test_unknown_runtime_execution_evidence_and_outcome_are_not_promoted() -> None:
     page = source("digital-employees/DigitalEmployeesPage.tsx")
     work = source("digital-employees/EmployeeWorkParticipation.tsx")
-    assert "Runtime Profile 绑定不代表 Runtime 已启动" in page
-    assert "Assignment 存在不代表员工正在工作" in page
+    assert "发布不等于可匹配、已实例化、已分配、已放置或已运行" in page
     assert "不推导在线状态" in work
     assert 'state="unknown"' in work
     assert "正式 Execution READ 尚未接通" in work
@@ -132,23 +131,49 @@ def test_refresh_race_scope_and_narrow_layout_guards_exist() -> None:
     assert ".employee-work-fields" in styles
 
 
-def test_write_fallbacks_are_disabled_and_identity_boundaries_are_explicit() -> None:
+def test_fixed_commands_use_csrf_frozen_identity_and_no_private_fallback() -> None:
+    api = source("api/digitalEmployees.ts")
     page = source("digital-employees/DigitalEmployeesPage.tsx")
+    assembly = source("digital-employees/EmployeeDefinitionAssembly.tsx")
+    lifecycle = source("digital-employees/EmployeeLifecycleActions.tsx")
     assert "INSTANCE_DEFINITION_IDENTITY_MISMATCH" in page
     assert "ASSIGNMENT_INSTANCE_IDENTITY_MISMATCH" in page
     assert "ASSIGNMENT_IDENTITY_MISMATCH" in page
     assert "EMPLOYEE_DEFINITION_IDENTITY_MISMATCH" in page
     assert "readInstanceDefinition" in page
     assert "boundDefinition={instanceDefinition}" in page
-    assert "可信写端口未在固定 305 候选中注册" in page
-    assert "不退回私有 header API" in page
-    for removed_call in (
-        "createEmployeeDefinition(",
-        "decideEmployeeDefinition(",
-        "createEmployeeInstance(",
-        "createEmployeeAssignment(",
+    for required in (
+        '"x-csrf-token": session.csrfToken',
+        "createEmployeeDefinition",
+        'lifecycleCommand("validation"',
+        'lifecycleCommand("approvals"',
+        'lifecycleCommand("publication"',
     ):
-        assert removed_call not in page
+        assert required in api
+    assert "Object.freeze(command)" in assembly
+    assert "重放原命令" in assembly
+    assert "当前无权读取详情" in assembly
+    assert "这不表示创建失败" in assembly
+    assert "Object.freeze" in lifecycle
+    assert "WORKBENCH_SESSION_CONTEXT_CHANGED" in api
+    assert "PUBLISH" in lifecycle
+    assert "已实例化" not in lifecycle
+    for source_text in (api, page, assembly, lifecycle):
+        assert "/api/internal/" not in source_text
+        assert "X-Principal-ID" not in source_text
+
+
+def test_employee_management_visual_status_and_narrow_layout_are_page_scoped() -> None:
+    page = source("digital-employees/DigitalEmployeesPage.tsx")
+    styles = source("styles/resource-management.css")
+    assert "仅当前授权与已加载页" in page
+    assert "搜索和筛选仅作用于已加载页" in page
+    assert "正式名称未提供" in page
+    assert "部分实现" in page
+    assert "未实现" in page
+    assert ".employee-management .employee-overview" in styles
+    assert ".employee-management .employee-capability-state.missing" in styles
+    assert "@media (max-width: 430px)" in styles
 
 
 def test_real_browser_private_api_observation_is_scoped_to_employee_work() -> None:

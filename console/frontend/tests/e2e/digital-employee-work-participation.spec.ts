@@ -11,6 +11,7 @@ const employeeSummary = {
 const employee = {
   ...employeeSummary,
   resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+  lifecycleState: "DRAFT",
   responsibilities: ["审查供应商质量工作"],
   members: [
     { kind: "AGENT", resourceId: "agent:quality", revisionId: "agent-revision:1", digest: digest("a") },
@@ -87,16 +88,53 @@ const envelope = (result: unknown) => ({
 });
 
 type AdapterOptions = {
+  onSession?: (route: Route) => Promise<void>;
   onInstance?: (route: Route, id: string) => Promise<void>;
   onDefinition?: (route: Route, id: string, revision: string) => Promise<void>;
   onPlacement?: (route: Route) => Promise<void>;
+  onCreate?: (route: Route) => Promise<void>;
+  onLifecycle?: (route: Route, action: "VALIDATE" | "APPROVE" | "PUBLISH") => Promise<void>;
 };
 
 async function installAdapter(page: Page, options: AdapterOptions = {}) {
   await page.route("**/api/workbench/v1/**", async route => {
     const url = new URL(route.request().url());
     const path = url.pathname;
-    if (path.endsWith("/employees")) {
+    if (path.endsWith("/session")) {
+      if (options.onSession) return options.onSession(route);
+      return route.fulfill({ json: {
+        schemaVersion: "workbench-session.v1",
+        principal: { principalId: "human:quality", tenantId: "tenant-a", securityDomain: "quality" },
+        session: { expiresAt: "2026-09-15T00:00:00Z", idleExpiresAt: "2026-09-14T23:00:00Z" },
+        csrfToken: "csrf-test-token",
+      } });
+    }
+    if (path.endsWith("/employees") && route.request().method() === "POST") {
+      if (options.onCreate) return options.onCreate(route);
+      const body = route.request().postDataJSON();
+      return route.fulfill({ status: 201, json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: body.employeeDefinitionId,
+        employeeDefinitionRevisionId: body.employeeDefinitionRevisionId,
+        employeeDefinitionDigest: digest("e"),
+        aggregateVersion: 1,
+        lifecycleState: "DRAFT",
+      }) });
+    }
+    if (route.request().method() === "POST" && /\/(validation|approvals|publication)$/.test(path)) {
+      const action = path.endsWith("/validation") ? "VALIDATE" : path.endsWith("/approvals") ? "APPROVE" : "PUBLISH";
+      if (options.onLifecycle) return options.onLifecycle(route, action);
+      const state = action === "VALIDATE" ? "VALIDATED" : action === "APPROVE" ? "APPROVED" : "PUBLISHED";
+      return route.fulfill({ json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: employee.employeeDefinitionId,
+        employeeDefinitionRevisionId: employee.employeeDefinitionRevisionId,
+        employeeDefinitionDigest: employee.employeeDefinitionDigest,
+        aggregateVersion: action === "VALIDATE" ? 2 : action === "APPROVE" ? 3 : 4,
+        lifecycleState: state,
+      }) });
+    }
+    if (path.endsWith("/employees") && route.request().method() === "GET") {
       return route.fulfill({ json: envelope({ items: [employeeSummary], nextCursor: "employee-page-2" }) });
     }
     if (path.includes("/employees/") && path.includes("/revisions/")) {
@@ -182,7 +220,7 @@ test("TEST_ADAPTER LIST discovery does not bypass denied exact READ", async ({ p
   await page.goto("/digital-employees");
   await expect(page.getByRole("button", { name: /供应商质量负责人/ })).toBeVisible();
   await page.getByRole("button", { name: /供应商质量负责人/ }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "not found" })).toContainText("资源不可用或当前访问未获授权");
+  await expect(page.getByRole("alert").filter({ hasText: "详情读取未完成" })).toContainText("资源不可用或当前访问未获授权");
   await expect(page.locator(".employee-profile")).toHaveCount(0);
 });
 
@@ -223,7 +261,7 @@ test("TEST_ADAPTER rejects the same Definition ID with a different revision dige
     onDefinition: async route => route.fulfill({ json: envelope(wrong) }),
   });
   await page.goto("/digital-employees");
-  await expect(page.getByRole("alert").filter({ hasText: "conflict" })).toContainText("EMPLOYEE_DEFINITION_IDENTITY_MISMATCH");
+  await expect(page.getByRole("alert").filter({ hasText: "详情读取未完成" })).toContainText("EMPLOYEE_DEFINITION_IDENTITY_MISMATCH");
   await expect(page.locator(".employee-profile")).toHaveCount(0);
 });
 
@@ -274,4 +312,242 @@ test("TEST_ADAPTER preserves a valid historical Instance revision", async ({ pag
   await page.goto("/digital-employees?panel=instance&instanceId=instance%3Aquality");
   await expect(page.locator(".employee-facts")).toContainText("employee-revision:history");
   await expect(page.locator(".employee-facts")).toContainText("允许合法历史发布版本");
+});
+
+async function fillCreateForm(page: Page) {
+  await page.getByRole("button", { name: "Agent 候选", exact: true }).click();
+  await page.getByLabel(/质量分析 Agent/).check();
+  await page.getByLabel("职责角色").fill("供应商质量负责人");
+  await page.getByLabel(/职责清单/).fill("审查供应商质量异常\n协调整改与复核");
+  await page.getByText("技术身份与版本").click();
+  await page.getByLabel("Employee Definition ID").fill("employee:new-quality");
+  await page.getByLabel("Revision ID", { exact: true }).fill("employee-revision:new-quality:1");
+  await page.getByRole("button", { name: "检查并进入确认" }).click();
+  await expect(page.getByLabel("创建命令确认")).toBeVisible();
+}
+
+test("TEST_ADAPTER submits one exact Agent CREATE and preserves confirmed-but-hidden success", async ({ page }) => {
+  let submitted: Record<string, unknown> | null = null;
+  await installAdapter(page, {
+    onCreate: async route => {
+      submitted = route.request().postDataJSON();
+      await route.fulfill({ status: 201, json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: "employee:new-quality",
+        employeeDefinitionRevisionId: "employee-revision:new-quality:1",
+        employeeDefinitionDigest: digest("n"),
+        aggregateVersion: 1,
+        lifecycleState: "DRAFT",
+      }) });
+    },
+    onDefinition: async route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }),
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "创建命令已确认" })).toContainText("当前无权读取详情");
+  expect(submitted).toMatchObject({
+    employeeDefinitionId: "employee:new-quality",
+    employeeDefinitionRevisionId: "employee-revision:new-quality:1",
+    expectedVersion: 0,
+    members: [{ kind: "AGENT", resourceId: "agent:quality", revisionId: "agent-revision:1" }],
+  });
+  expect((submitted as { responsibilities: string[] }).responsibilities).toHaveLength(2);
+});
+
+test("TEST_ADAPTER UNKNOWN replays the byte-equivalent frozen CREATE command", async ({ page }) => {
+  const attempts: string[] = [];
+  await installAdapter(page, {
+    onCreate: async route => {
+      attempts.push(route.request().postData() ?? "");
+      if (attempts.length === 1) return route.abort("connectionreset");
+      return route.fulfill({ status: 201, json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: "employee:new-quality",
+        employeeDefinitionRevisionId: "employee-revision:new-quality:1",
+        employeeDefinitionDigest: digest("n"),
+        aggregateVersion: 1,
+        lifecycleState: "DRAFT",
+      }) });
+    },
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "结果未知" })).toBeVisible();
+  await page.getByRole("button", { name: "重放原命令" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "创建命令已确认" })).toBeVisible();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toBe(attempts[0]);
+});
+
+test("TEST_ADAPTER 503 keeps the frozen CREATE command in UNKNOWN", async ({ page }) => {
+  await installAdapter(page, {
+    onCreate: async route => route.fulfill({ status: 503, json: { reasonCode: "EMPLOYEE_STORE_UNAVAILABLE" } }),
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "结果未知" })).toContainText("原 commandId 与语义 payload 已冻结");
+  await expect(page.getByRole("button", { name: "重放原命令" })).toBeEnabled();
+});
+
+test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async ({ page }) => {
+  let sessionReads = 0;
+  let creates = 0;
+  await installAdapter(page, {
+    onSession: async route => {
+      sessionReads += 1;
+      if (sessionReads === 1) return route.fulfill({ json: {
+        schemaVersion: "workbench-session.v1",
+        principal: { principalId: "human:quality", tenantId: "tenant-a", securityDomain: "quality" },
+        session: { expiresAt: "2026-09-15T00:00:00Z", idleExpiresAt: "2026-09-14T23:00:00Z" },
+        csrfToken: "csrf-first",
+      } });
+      return route.fulfill({ json: {
+        schemaVersion: "workbench-session.v1",
+        principal: { principalId: "human:other", tenantId: "tenant-a", securityDomain: "quality" },
+        session: { expiresAt: "2026-09-15T00:00:00Z", idleExpiresAt: "2026-09-14T23:00:00Z" },
+        csrfToken: "csrf-second",
+      } });
+    },
+    onCreate: async route => { creates += 1; return route.fulfill({ status: 500 }); },
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await expect(page.getByRole("alert")).toContainText("可信会话已切换；原命令未发送");
+  expect(creates).toBe(0);
+
+  sessionReads = 0;
+  await page.reload();
+  await fillCreateForm(page);
+  sessionReads = 1;
+  await page.route("**/api/workbench/v1/session", route => route.fulfill({ status: 401, json: { reasonCode: "AUTHENTICATION_REQUIRED" } }));
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await expect(page.getByRole("alert")).toContainText("可信会话已失效");
+  expect(creates).toBe(0);
+});
+
+test("TEST_ADAPTER revoked CREATE is a controlled rejection", async ({ page }) => {
+  await installAdapter(page, {
+    onCreate: async route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }),
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await expect(page.getByRole("alert")).toContainText("当前身份没有创建权限，或依赖资源不可用");
+  await expect(page.getByRole("button", { name: "确认并提交正式命令" })).toBeEnabled();
+});
+
+test("TEST_ADAPTER double click emits only one CREATE command", async ({ page }) => {
+  let creates = 0;
+  await installAdapter(page, {
+    onCreate: async route => {
+      creates += 1;
+      await new Promise(resolve => setTimeout(resolve, 150));
+      await route.fulfill({ status: 201, json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: "employee:new-quality",
+        employeeDefinitionRevisionId: "employee-revision:new-quality:1",
+        employeeDefinitionDigest: digest("n"),
+        aggregateVersion: 1,
+        lifecycleState: "DRAFT",
+      }) });
+    },
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).dblclick();
+  await expect(page.getByRole("status").filter({ hasText: "创建命令已确认" })).toBeVisible();
+  expect(creates).toBe(1);
+});
+
+test("TEST_ADAPTER late CREATE response cannot update an abandoned panel", async ({ page }) => {
+  await installAdapter(page, {
+    onCreate: async route => {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      await route.fulfill({ status: 201, json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: "employee:new-quality",
+        employeeDefinitionRevisionId: "employee-revision:new-quality:1",
+        employeeDefinitionDigest: digest("n"),
+        aggregateVersion: 1,
+        lifecycleState: "DRAFT",
+      }) });
+    },
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "员工档案" }).click();
+  await page.waitForTimeout(350);
+  await expect(page.getByText("创建命令已确认", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "供应商质量负责人" })).toBeVisible();
+});
+
+test("TEST_ADAPTER lifecycle command requires explicit version and confirmation", async ({ page }) => {
+  const actions: string[] = [];
+  await installAdapter(page, {
+    onLifecycle: async (route, action) => {
+      actions.push(action);
+      const body = route.request().postDataJSON();
+      return route.fulfill({ json: envelope({
+        resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
+        employeeDefinitionId: employee.employeeDefinitionId,
+        employeeDefinitionRevisionId: employee.employeeDefinitionRevisionId,
+        employeeDefinitionDigest: employee.employeeDefinitionDigest,
+        aggregateVersion: body.expectedVersion + 1,
+        lifecycleState: "VALIDATED",
+      }) });
+    },
+  });
+  await page.goto("/digital-employees");
+  await expect(page.getByRole("heading", { name: "生命周期操作" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /校验修订/ })).toBeDisabled();
+  await page.getByLabel("期望聚合版本").fill("1");
+  await page.getByRole("button", { name: /校验修订/ }).click();
+  await expect(page.getByText("等待用户明确确认")).toBeVisible();
+  await page.getByRole("button", { name: "确认提交" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "校验修订已确认" })).toBeVisible();
+  expect(actions).toEqual(["VALIDATE"]);
+});
+
+test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async ({ page }, testInfo) => {
+  await installAdapter(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/digital-employees");
+  await expect(page.getByRole("heading", { name: "数字员工管理" })).toBeVisible();
+  await page.evaluate(() => {
+    const label = document.createElement("div");
+    label.dataset.testEvidence = "true";
+    label.textContent = "TEST_ADAPTER 模拟数据 · 非真实业务记录";
+    Object.assign(label.style, {
+      position: "fixed", top: "68px", right: "18px", zIndex: "9999",
+      padding: "8px 12px", borderRadius: "8px", color: "#7c2d12",
+      background: "#ffedd5", border: "1px solid #fdba74", font: "600 12px system-ui",
+    });
+    document.body.append(label);
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
+  await page.screenshot({ path: testInfo.outputPath("digital-employees-desktop-test-adapter.png") });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
+  await page.evaluate(() => {
+    const section = document.querySelector(".employee-assembly");
+    const label = document.querySelector<HTMLElement>("[data-test-evidence]");
+    if (section) window.scrollTo(0, section.getBoundingClientRect().top + window.scrollY - 68);
+    if (label) { label.style.top = "auto"; label.style.right = "12px"; label.style.bottom = "64px"; }
+    (document.activeElement as HTMLElement | null)?.blur();
+  });
+  await expect(page.getByText("部分实现 · 权限取得待 305")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("digital-employees-390x844-test-adapter.png") });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const roleInput = page.getByLabel("职责角色");
+  await roleInput.focus();
+  await expect(roleInput).toBeFocused();
+  expect(await roleInput.evaluate(element => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel(/职责清单/)).toBeFocused();
 });
