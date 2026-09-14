@@ -222,7 +222,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
       expect(routeClass).toBe("EXPECTED");
     });
     await test.step(employeeListSteps.shell, async () => {
-      await expect(full.page.getByRole("heading", { name: "数字员工定义与身份链管理" })).toBeVisible();
+      await expect(full.page.getByRole("heading", { name: "数字员工管理" })).toBeVisible();
     });
     await test.step(employeeListSteps.request, async () => {
       expect(await requestPromise).not.toBeNull();
