@@ -166,7 +166,7 @@ export function EmployeeDefinitionAssembly({
 
   return <section className="employee-assembly" aria-labelledby="employee-create-title">
     <header className="employee-section-heading">
-      <div><p className="eyebrow">创建数字员工 · 首批单 Agent</p><h2 id="employee-create-title">创建数字员工定义</h2><p>先定义员工角色与职责，再选择一个正式 Agent 候选完成装配。</p></div>
+      <div><p className="eyebrow">首批单 Agent 装配</p><h2 id="employee-create-title">创建数字员工定义</h2><p>先定义员工角色与职责，再选择一个正式 Agent 候选完成装配。</p></div>
       <span className="employee-capability-state partial"><i />部分实现 · 正式权限路径待接通</span>
     </header>
 
@@ -175,7 +175,7 @@ export function EmployeeDefinitionAssembly({
         <h3>1. 业务定义</h3>
         <label>职责角色<input value={role} maxLength={200} onChange={event => setRole(event.target.value)} placeholder="例如：供应商质量负责人" /></label>
         <label>职责清单（每行一项，1–32 项）<textarea value={responsibilities} onChange={event => setResponsibilities(event.target.value)} placeholder="审查供应商质量异常&#10;协调整改与复核" /></label>
-        <details><summary>高级设置 · 技术身份需配置</summary>
+        <details><summary>高级设置 · 技术身份需配置（2 项必填）</summary>
           <p className="employee-identity-requirement">正式 CREATE 契约要求两个技术 ID，当前没有已批准的自动生成规则。首次创建不需要前驱修订，聚合版本固定从 0 开始。</p>
           <label>Employee Definition ID<input value={definitionId} onChange={event => setDefinitionId(event.target.value)} placeholder="employee:quality-lead" /></label>
           <label>Revision ID<input value={revisionId} onChange={event => setRevisionId(event.target.value)} placeholder="employee-revision:quality-lead:1" /></label>

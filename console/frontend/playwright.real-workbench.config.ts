@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "digital-employee-work-participation.real.spec.ts",
+  outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,
   timeout: 90_000,
   workers: 1,
   retries: 0,

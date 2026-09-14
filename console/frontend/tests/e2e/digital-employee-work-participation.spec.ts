@@ -321,8 +321,8 @@ test("TEST_ADAPTER groups 50 records by employee, selects revisions explicitly, 
       : { items: summaries, nextCursor: "employee-page-2" }) });
   });
   await page.goto("/digital-employees");
-  await expect(page.getByLabel("当前加载范围")).toContainText("49 个员工");
-  await expect(page.getByLabel("当前加载范围")).toContainText("50 个修订");
+  await expect(page.getByLabel("当前加载范围")).toContainText("49 个已加载员工");
+  await expect(page.getByLabel("当前加载范围")).toContainText("50 个已加载修订");
   await expect(page.getByLabel("同一员工的多版本角色 选择版本")).toHaveCount(1);
   await expect(page.locator(".employee-collection-row").filter({ hasText: "负责超长中文供应链" }).getByRole("combobox")).toHaveCount(0);
   await page.getByLabel("同一员工的多版本角色 选择版本").selectOption("employee-revision:multi:2");
@@ -579,6 +579,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
       const summary = visualSummaries.find(item => item.employeeDefinitionId === id && item.employeeDefinitionRevisionId === revision) ?? employeeSummary;
       await route.fulfill({ json: envelope({ ...employee, ...summary, responsibilities: ["核对业务异常并形成可追溯结论", "协调相关团队完成复核与跟进"] }) });
     },
+    onInstance: async (route, id) => route.fulfill({ json: envelope(instance(id, { ...employee, ...visualSummaries[0] })) }),
   });
   await page.route("**/api/workbench/v1/employees?*", route => route.fulfill({ json: envelope({ items: visualSummaries }) }));
 
@@ -611,7 +612,40 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.getByRole("button", { name: /负责供应商质量异常复核/ }).click();
   await placeBadge(".employee-management");
   await page.screenshot({ path: testInfo.outputPath("desktop-detail-test-adapter.png") });
+  await page.getByRole("button", { name: "职责与能力", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "职责与能力装配" })).toBeVisible();
+  await expect(page.getByText("质量分析 Agent", { exact: true })).toBeVisible();
+  await expect(page.locator(".employee-member-list")).toContainText("runtime-profile:native");
+  await placeBadge(".employee-selected-detail");
+  await page.screenshot({ path: testInfo.outputPath("desktop-capabilities-test-adapter.png") });
+
+  await page.getByRole("button", { name: "实例", exact: true }).click();
+  await expect(page.getByText("当前没有按员工列出 Instance 的正式接口")).toBeVisible();
+  await page.getByText("技术详情：按精确 ID 核对关联实例").click();
+  await page.getByLabel("Instance ID").fill("instance:quality");
+  await page.getByRole("button", { name: "读取并验证归属" }).click();
+  await expect(page.locator(".employee-facts")).toContainText("exact identity verified");
+  await placeBadge(".employee-selected-detail");
+  await page.screenshot({ path: testInfo.outputPath("desktop-instance-test-adapter.png") });
+
+  await page.getByRole("button", { name: "工作分配", exact: true }).click();
+  await expect(page.getByText("当前没有按员工或实例列出 Assignment / Placement 的正式接口")).toBeVisible();
+  await page.getByText("技术详情：按精确 ID 核对工作分配").click();
+  await page.getByLabel("Assignment ID").fill("assignment:quality");
+  await page.getByRole("button", { name: "读取并验证父链" }).click();
+  await expect(page.locator(".employee-facts")).toContainText("assignment:quality / instance:quality");
+  await page.getByLabel("Placement ID").fill("placement:quality");
+  await page.getByLabel("Attempt ID").fill("attempt:quality");
+  await page.getByLabel("Agent Instance ID").fill("agent-instance:quality");
+  await page.getByRole("button", { name: "读取精确工作关联" }).click();
+  await expect(page.getByLabel("Placement 权威详情")).toContainText("runtime-instance:quality");
+  await placeBadge(".employee-selected-detail");
+  await page.screenshot({ path: testInfo.outputPath("desktop-assignments-test-adapter.png") });
+
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
+  await expect(page.getByLabel("当前加载范围")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "＋ 创建数字员工" })).toHaveCount(0);
+  await expect(page.getByText("高级设置 · 技术身份需配置（2 项必填）")).toBeVisible();
   await placeBadge(".employee-assembly");
   await page.screenshot({ path: testInfo.outputPath("desktop-create-test-adapter.png") });
   await fillCreateForm(page);

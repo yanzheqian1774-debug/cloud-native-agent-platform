@@ -58,7 +58,8 @@ def test_lists_preserve_cursor_and_do_not_substitute_for_exact_reads() -> None:
     assert "每次选择都会读取所选修订" in page
     assert "不是全局统计" in page
     assert "不能代表完整历史" in page
-    assert "不会自动指定权威版本" in page
+    assert "明确选择要查看的修订" in page
+    assert "不会自动指定权威版本" not in page
 
 
 def test_employee_profile_preserves_field_ownership_and_exact_agent_identity() -> None:
