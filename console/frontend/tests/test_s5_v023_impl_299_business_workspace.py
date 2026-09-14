@@ -111,14 +111,40 @@ def test_conversation_has_one_composer_and_confirmation_gate() -> None:
     assert 'id="problem-composer"' in conversation
     assert "event.nativeEvent.isComposing" in conversation
     assert "event.keyCode===229" in conversation
-    confirmation_boundary = (
-        "发送只生成待确认草稿" + "\uff0c" + "不会直接创建、授权或执行"
-    )
-    assert confirmation_boundary in conversation
+    assert "发送后仍需确认" in conversation
     assert "未提交草稿只保存在当前页面" in conversation
     assert "suggestProblemTitle" in model
     assert "无模型模式" in conversation
     assert 'operation:"创建业务问题",mutation:true' in page
+
+
+def test_editors_are_exclusive_and_task_summary_is_read_only() -> None:
+    page = text("problems/ProblemWorkspacePage.tsx")
+    conversation = text("problems/ProblemConversation.tsx")
+    summary = text("problems/ProblemTaskSummary.tsx")
+    for marker in (
+        'composerTarget==="LOCKED"',
+        'composerTarget==="DRAFT"',
+        'composerTarget==="FORMAL"',
+        "采用字段修改",
+        "正在底部输入框完整替换描述",
+        "旧确认和更新操作已经失效",
+    ):
+        assert marker in page or marker in conversation
+    for marker in (
+        "只读汇总当前正式响应",
+        "受保护正文尚未通过 exact GET 读取",
+        "定位问题消息",
+        "定位授权消息",
+        "showModal",
+    ):
+        assert marker in summary
+    for forbidden in (
+        "createBusinessProblem",
+        "submitProblemReadGrantRequest",
+        "decideGrantRequest",
+    ):
+        assert forbidden not in summary
 
 
 def test_conversation_isolates_context_and_freezes_unknown_create() -> None:

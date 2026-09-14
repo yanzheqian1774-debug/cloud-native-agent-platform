@@ -162,27 +162,42 @@ test("business workbench creates a message draft before any write and supports c
   await composer.press("Enter");
   const draft = page.getByLabel("问题草稿卡片");
   await expect(draft).toBeVisible();
-  await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付延期");
-  await expect(draft.getByLabel("完整描述")).toHaveValue(original);
+  await expect(draft.getByText("供应商交付延期", { exact: true })).toBeVisible();
+  await expect(draft.getByLabel("建议名称")).toHaveCount(0);
   expect(createAttempts).toBe(0);
   await page.screenshot({ path: testInfo.outputPath("w2c-draft-confirm-1440.png"), fullPage: true });
 
   await draft.getByRole("button", { name: "修改", exact: true }).click();
+  await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付延期");
+  await expect(draft.getByLabel("完整描述")).toHaveValue(original);
+  await draft.getByLabel("建议名称").fill("字段编辑先保留");
+  await draft.getByRole("button", { name: "使用输入框完整修改", exact: true }).click();
+  await expect(draft.getByLabel("完整描述")).toHaveCount(0);
+  await expect(draft.getByRole("button", { name: "确认创建", exact: true })).toHaveCount(0);
   const replacement = page.getByLabel("完整替换草稿描述");
-  await replacement.fill("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
-  await page.getByRole("button", { name: "更新草稿", exact: true }).click();
-  await expect(draft.getByLabel("完整描述")).toHaveValue("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
+  await expect(replacement).toHaveValue(original);
+  await replacement.fill("这次替换应当取消，不得覆盖卡片字段。");
+  await page.getByRole("button", { name: "取消修改", exact: true }).click();
   await draft.getByRole("button", { name: "修改", exact: true }).click();
+  await expect(draft.getByLabel("建议名称")).toHaveValue("字段编辑先保留");
+  await expect(draft.getByLabel("完整描述")).toHaveValue(original);
+  await draft.getByRole("button", { name: "使用输入框完整修改", exact: true }).click();
+  await replacement.fill("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
+  await page.getByRole("button", { name: "采用草稿描述", exact: true }).click();
+  await draft.getByRole("button", { name: "修改", exact: true }).click();
+  await expect(draft.getByLabel("建议名称")).toHaveValue("字段编辑先保留");
+  await expect(draft.getByLabel("完整描述")).toHaveValue("关键零部件延期影响客户交付，需要明确恢复责任和时间。");
   await draft.getByLabel("建议名称").fill("供应商交付恢复");
   await page.screenshot({ path: testInfo.outputPath("w2c-draft-modified-1440.png"), fullPage: true });
+  await draft.getByRole("button", { name: "采用字段修改", exact: true }).click();
   await draft.getByRole("button", { name: "确认创建", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("创建业务问题的结果暂时无法确认");
   await expect(page.getByText("diagnostic:fixture", { exact: true })).not.toBeVisible();
   await page.getByRole("alert").getByText("技术详情", { exact: true }).click();
   await expect(page.getByText("诊断 ID", { exact: true })).toBeVisible();
   await expect(page.getByText("diagnostic:fixture", { exact: true })).toBeVisible();
-  await expect(draft.getByLabel("建议名称")).toHaveValue("供应商交付恢复");
-  await expect(draft.getByLabel("完整描述")).toContainText("需要明确恢复责任和时间");
+  await expect(draft.getByText("供应商交付恢复", { exact: true })).toBeVisible();
+  await expect(draft.getByText("关键零部件延期影响客户交付，需要明确恢复责任和时间。", { exact: true })).toBeVisible();
   expect(createAttempts).toBe(1);
   await page.screenshot({ path: testInfo.outputPath("w2b-create-error-preserves-input-1440.png"), fullPage: true });
 
@@ -195,9 +210,12 @@ test("business workbench creates a message draft before any write and supports c
   await submit.focus();
   await expect(submit).toBeFocused();
   await expect(submit).toBeInViewport();
-  await expect(page.getByRole("button", { name: "取消", exact: true })).toBeInViewport();
+  const cancelDraft = page.getByRole("button", { name: "取消草稿", exact: true });
+  await expect(cancelDraft).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath("w2b-create-form-390.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("w2b-create-form-390.png") });
+  await cancelDraft.click();
+  await expect(page.getByText("已取消本地草稿", { exact: false })).toBeVisible();
 });
 
 test("unknown create replays the exact payload and key while double activation stays single", async ({ page }, testInfo) => {
@@ -223,12 +241,14 @@ test("unknown create replays the exact payload and key while double activation s
   const draft = page.getByLabel("问题草稿卡片");
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   await draft.getByLabel("建议名称").fill(createdProblem.title);
+  await draft.getByRole("button", { name: "采用字段修改", exact: true }).click();
   const confirm = draft.getByRole("button", { name: "确认创建", exact: true });
   await confirm.evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
   await expect(draft.getByText("结果不确定", { exact: true })).toBeVisible();
   expect(attempts).toHaveLength(1);
   await draft.getByRole("button", { name: "恢复原创建结果", exact: true }).click();
   await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toBeVisible();
+  await expect(draft.getByRole("button", { name: "确认创建", exact: true })).toHaveCount(0);
   expect(attempts).toHaveLength(2);
   expect(attempts[1]).toEqual(attempts[0]);
   await page.screenshot({ path: testInfo.outputPath("w2c-created-after-recovery-1440.png"), fullPage: true });
@@ -243,7 +263,7 @@ test("cancel remains local and an upward reader receives a new-message affordanc
   const composer = page.getByLabel("你希望解决什么问题？");
   await composer.fill("取消的草稿不应写入正式 Problem。");
   await page.getByRole("button", { name: "发送", exact: true }).click();
-  await page.getByLabel("问题草稿卡片").getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByLabel("问题草稿卡片").getByRole("button", { name: "取消草稿", exact: true }).click();
   await expect(page.getByText("已取消本地草稿，没有提交 Problem，也没有撤销任何服务器事实。", { exact: true })).toBeVisible();
   expect(writes).toBe(0);
 
@@ -280,6 +300,7 @@ test("a changed trusted subject isolates the draft and ignores the old create re
   identity.value = "human:applicant-b";
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("heading", { name: "请在当前可信会话重新开始", exact: true })).toBeVisible();
+  await expect(page.locator(".px-task-summary-panel").getByText(createdProblem.title, { exact: true })).toHaveCount(0);
   releaseCreate();
   await page.waitForTimeout(100);
   await expect(page.getByRole("heading", { name: "业务问题已创建", exact: true })).toHaveCount(0);
@@ -317,17 +338,36 @@ test("created problem continues through pending approval to a fresh exact read",
   await page.getByRole("button", { name: "申请查看权限", exact: true }).click();
   await expect(page.getByText("等待管理员处理", { exact: true })).toBeVisible();
   expect(exactReads).toBe(0);
+  const desktopSummary = page.locator(".px-task-summary-panel");
+  await expect(desktopSummary.getByRole("heading", { name: createdProblem.title, exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("受保护正文尚未通过 exact GET 读取", { exact: false })).toBeVisible();
+  await expect(desktopSummary.getByRole("heading", { name: "等待审批", exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-waiting-authorization-1440.png"), fullPage: true });
   grantState = "APPROVED";
   await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "已授权的精确读取", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
   expect(exactReads).toBe(1);
   await expect(page.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
+  await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("读取成功", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-approved-exact-read-1440.png"), fullPage: true });
   await page.reload();
   await expect(page.getByRole("heading", { name: "已恢复正式业务记录", exact: true })).toBeVisible();
+  await page.getByText("查看创建事实", { exact: true }).click();
   await expect(page.getByText("不是恢复的聊天历史", { exact: false })).toBeVisible();
   expect(exactReads).toBe(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const summaryTrigger = page.getByRole("button", { name: "本任务", exact: true });
+  await summaryTrigger.click();
+  const drawer = page.getByRole("dialog", { name: "本任务" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText(createdProblem.description, { exact: true })).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "关闭本任务", exact: true })).toBeFocused();
+  expect(await drawer.evaluate(node => node.matches(":modal"))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("w2d-task-summary-drawer-390x844.png") });
+  await drawer.getByRole("button", { name: "关闭本任务", exact: true }).click();
+  await expect(summaryTrigger).toBeFocused();
 });
 
 test("a rejected authorization card does not perform an exact read", async ({ page }) => {
@@ -341,8 +381,8 @@ test("a rejected authorization card does not perform an exact read", async ({ pa
   await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => { exactReads += 1; return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }); });
   await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Arejected", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) }));
   await page.goto("/work?problem=problem%3Aconversation-1&request=grant-request%3Arejected");
-  await expect(page.getByText("已拒绝", { exact: true })).toBeVisible();
-  await expect(page.getByText("页面不会读取 Problem 正文", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("业务问题对话").getByText("已拒绝", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("业务问题对话").getByText("页面不会读取问题正文", { exact: false })).toBeVisible();
   expect(exactReads).toBe(0);
 });
 
@@ -354,7 +394,7 @@ test("an expired creator continuation is explicit and does not read protected co
   await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) }));
   await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => { exactReads += 1; return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }); });
   await page.goto("/work?problem=problem%3Aconversation-1");
-  await expect(page.getByText("申请窗口已过期", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("业务问题对话").getByText("申请窗口已过期", { exact: true })).toBeVisible();
   await expect(page.getByText("不会自动延长窗口、撤销创建或换新标识重建", { exact: false })).toBeVisible();
   expect(exactReads).toBe(0);
 });
