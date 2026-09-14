@@ -9,9 +9,19 @@ import {
   type EmployeeCommandResult,
   type EmployeeCreateCommand,
   type EmployeeDefinition,
+  type EmployeeLifecycleState,
 } from "../api/digitalEmployees";
 
 type FrozenCreate = { command: EmployeeCreateCommand; principalKey: string };
+
+const lifecycleLabel: Record<EmployeeLifecycleState, string> = {
+  DRAFT: "草稿",
+  VALIDATED: "已校验",
+  APPROVED: "已批准",
+  PUBLISHED: "已发布",
+  REJECTED: "已拒绝",
+  DEPRECATED: "已弃用",
+};
 
 function commandMessage(error: DigitalEmployeeRequestError) {
   if (error.reasonCode === "WORKBENCH_SESSION_CONTEXT_CHANGED") return "可信会话已切换；原命令未发送，请重新确认。";
@@ -204,6 +214,6 @@ export function EmployeeDefinitionAssembly({
     </section>}
 
     {error && <div role="alert" className={`employee-command-state ${unknown ? "unknown" : "failed"}`}><strong>{unknown ? "结果未知" : "命令未确认成功"}</strong><span>{error}</span></div>}
-    {result && <div role="status" className="employee-command-state success"><strong>创建命令已确认 · {result.lifecycleState}</strong><span>聚合版本 {result.aggregateVersion} · {result.employeeDefinitionRevisionId}</span>{readback === "HIDDEN" && <span>当前无权读取详情；这不表示创建失败。</span>}{readback === "UNAVAILABLE" && <span>命令已确认，但详情读回暂不可用。</span>}{readback === "READABLE" && <span>已通过 exact READ 核对详情。</span>}</div>}
+    {result && <div role="status" className="employee-command-state success"><strong>创建命令已确认 · {lifecycleLabel[result.lifecycleState]}</strong><span>聚合版本 {result.aggregateVersion} · {result.employeeDefinitionRevisionId}</span>{readback === "HIDDEN" && <span>当前无权读取详情；这不表示创建失败。</span>}{readback === "UNAVAILABLE" && <span>命令已确认，但详情读回暂不可用。</span>}{readback === "READABLE" && <span>已核对所选修订详情。</span>}</div>}
   </section>;
 }

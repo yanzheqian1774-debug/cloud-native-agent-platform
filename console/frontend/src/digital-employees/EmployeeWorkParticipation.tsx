@@ -118,7 +118,7 @@ export function EmployeeWorkParticipation({
 
   const hiddenError = error?.kind === "denied" || error?.kind === "not found";
   return <section className="employee-work-participation" aria-labelledby="employee-work-title">
-    <header><div><p className="eyebrow">可信只读工作关联 · exact read only</p><h2 id="employee-work-title">从配置到实际工作的事实链</h2></div><span className="binding-status">不推导在线状态</span></header>
+    <header><div><p className="eyebrow">可信只读工作关联</p><h2 id="employee-work-title">从配置到实际工作的事实链</h2></div><span className="binding-status">不推导在线状态</span></header>
     <p>当前没有 Instance、Assignment 或 Placement 列表端口。这里只读取输入并由正式 owner 在当前授权事务内核对的精确身份，不声称“全部实例”或“完整历史”。</p>
 
     <div className="employee-work-stages" aria-label="员工工作参与阶段">

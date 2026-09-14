@@ -18,11 +18,19 @@ type FrozenLifecycle = { action: Action; command: EmployeeLifecycleCommand; prin
 
 const actionLabel: Record<Action, string> = { VALIDATE: "校验修订", APPROVE: "批准修订", PUBLISH: "发布修订" };
 const requiredState: Record<Action, EmployeeLifecycleState> = { VALIDATE: "DRAFT", APPROVE: "VALIDATED", PUBLISH: "APPROVED" };
+const lifecycleLabel: Record<EmployeeLifecycleState, string> = {
+  DRAFT: "草稿",
+  VALIDATED: "已校验",
+  APPROVED: "已批准",
+  PUBLISHED: "已发布",
+  REJECTED: "已拒绝",
+  DEPRECATED: "已弃用",
+};
 
 function errorMessage(error: DigitalEmployeeRequestError) {
   if (error.reasonCode === "WORKBENCH_SESSION_CONTEXT_CHANGED") return "可信会话已切换；原命令未发送。";
   if (error.status === 401) return "可信会话已失效。";
-  if (error.status === 403 || error.status === 404) return "动作权限或成员 exact READ 不足；资源存在性不披露。";
+  if (error.status === 403 || error.status === 404) return "动作权限或成员详情读取权限不足；资源存在性不披露。";
   if (error.status === 409) return `CAS、摘要、转换或成员当前资格冲突：${error.reasonCode}`;
   if (error.status === 422) return `命令不符合正式契约：${error.reasonCode}`;
   return `服务暂不可用：${error.reasonCode}`;
@@ -111,7 +119,7 @@ export function EmployeeLifecycleActions({
       try {
         const definition = await getEmployeeDefinition(result.employeeDefinitionId, result.employeeDefinitionRevisionId, controller.signal);
         if (turn !== generation.current) return;
-        setMessage(`${actionLabel[frozen.action]}已确认，并完成 exact READ。`);
+        setMessage(`${actionLabel[frozen.action]}已确认，并完成所选修订核对。`);
         onReadback(definition, result);
       } catch (readReason) {
         if (turn !== generation.current || (readReason instanceof DOMException && readReason.name === "AbortError")) return;
@@ -136,11 +144,11 @@ export function EmployeeLifecycleActions({
   }
 
   return <section className="employee-lifecycle" aria-labelledby="employee-lifecycle-title">
-    <header className="employee-section-heading"><div><h3 id="employee-lifecycle-title">生命周期操作</h3><p>校验、批准和发布是独立操作；每次提交都会重新核对当前访问权限。</p></div><span className={`employee-capability-state ${lifecycle ? "available" : "warning"}`}><i />{lifecycle ? `当前状态 · ${lifecycle}` : "部分实现 · 状态未披露"}</span></header>
-    <label className="employee-version-input">期望聚合版本<input type="number" min="1" step="1" value={expectedVersion} onChange={event => { setExpectedVersion(event.target.value); setFrozen(null); }} /><small>{latest ? "来源：最近一次正式命令结果" : "当前 exact READ 不披露聚合版本，请使用权威命令结果。"}</small></label>
+    <header className="employee-section-heading"><div><h3 id="employee-lifecycle-title">生命周期操作</h3><p>校验、批准和发布是独立操作；每次提交都会重新核对当前访问权限。</p></div><span className={`employee-capability-state ${lifecycle ? "available" : "warning"}`}><i />{lifecycle ? `当前状态 · ${lifecycleLabel[lifecycle]}` : "部分实现 · 状态未披露"}</span></header>
+    <label className="employee-version-input">期望聚合版本<input type="number" min="1" step="1" value={expectedVersion} onChange={event => { setExpectedVersion(event.target.value); setFrozen(null); }} /><small>{latest ? "来源：最近一次正式命令结果" : "当前详情不披露聚合版本，请使用权威命令结果。"}</small></label>
     <div className="employee-lifecycle-flow">{(["VALIDATE", "APPROVE", "PUBLISH"] as const).map(action => <button type="button" key={action} disabled={busy || Boolean(frozen) || lifecycle !== requiredState[action] || !Number.isInteger(Number(expectedVersion)) || Number(expectedVersion) < 1} onClick={() => void prepare(action)}><span>{actionLabel[action]}</span><small>需要当前操作权限与成员读取权限</small></button>)}</div>
-    {!lifecycle && <p className="employee-honesty-note">无法从“未发布”推导 DRAFT。取得含 lifecycleState 的 305 exact READ 后才能启用动作。</p>}
-    {frozen && <div className="employee-command-confirmation"><span className="employee-capability-state warning"><i />等待用户明确确认</span><h4>{actionLabel[frozen.action]} · {item.role}</h4><p>将对 exact revision <code>{item.employeeDefinitionRevisionId}</code> 使用版本 {frozen.command.expectedVersion}。</p><details><summary>查看冻结 commandId 与摘要</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionDigest}</code></details><div className="employee-form-actions"><button type="button" disabled={busy || unknown} onClick={() => setFrozen(null)}>取消</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认提交"}</button></div></div>}
+    {!lifecycle && <p className="employee-honesty-note">无法仅凭“未发布”判断生命周期阶段。获得正式生命周期状态后才能启用操作。</p>}
+    {frozen && <div className="employee-command-confirmation"><span className="employee-capability-state warning"><i />等待用户明确确认</span><h4>{actionLabel[frozen.action]} · {item.role}</h4><p>将对所选修订 <code>{item.employeeDefinitionRevisionId}</code> 使用版本 {frozen.command.expectedVersion}。</p><details><summary>查看冻结 commandId 与摘要</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionDigest}</code></details><div className="employee-form-actions"><button type="button" disabled={busy || unknown} onClick={() => setFrozen(null)}>取消</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认提交"}</button></div></div>}
     {message && <div role={unknown ? "alert" : "status"} className={`employee-command-state ${unknown ? "unknown" : latest ? "success" : "failed"}`}><strong>{unknown ? "结果未知" : latest ? "命令状态" : "命令未执行"}</strong><span>{message}</span></div>}
     <div className="employee-unavailable-actions"><span className="employee-capability-state missing"><i />未实现</span><p>编辑、删除、停用、实例化没有本轮已接受正式契约，继续保留为欠项。</p></div>
   </section>;

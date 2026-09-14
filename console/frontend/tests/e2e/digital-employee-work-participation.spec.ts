@@ -11,7 +11,6 @@ const employeeSummary = {
 const employee = {
   ...employeeSummary,
   resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
-  lifecycleState: "DRAFT",
   responsibilities: ["审查供应商质量工作"],
   members: [
     { kind: "AGENT", resourceId: "agent:quality", revisionId: "agent-revision:1", digest: digest("a") },
@@ -330,7 +329,7 @@ test("TEST_ADAPTER groups 50 records by employee, selects revisions explicitly, 
   await page.getByLabel("发布状态").selectOption("PUBLISHED");
   await expect(page.getByText("选择一个数字员工")).toBeVisible();
   await page.getByRole("button", { name: "加载下一页 →" }).click();
-  await expect(page.getByText("已加载 cursor 第 2 页")).toBeVisible();
+  await expect(page.getByText("第 2 批", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "← 上一页" })).toBeEnabled();
 });
 
@@ -540,6 +539,7 @@ test("TEST_ADAPTER late CREATE response cannot update an abandoned panel", async
 test("TEST_ADAPTER lifecycle command requires explicit version and confirmation", async ({ page }) => {
   const actions: string[] = [];
   await installAdapter(page, {
+    onDefinition: async route => route.fulfill({ json: envelope({ ...employee, publicationState: "NOT_PUBLISHED", lifecycleState: "DRAFT" }) }),
     onLifecycle: async (route, action) => {
       actions.push(action);
       const body = route.request().postDataJSON();
@@ -581,7 +581,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   });
   await page.route("**/api/workbench/v1/employees?*", route => route.fulfill({ json: envelope({ items: visualSummaries }) }));
 
-  const placeBadge = async (target: ".employee-management" | ".employee-assembly" | ".employee-selected-detail") => page.evaluate(selector => {
+  const placeBadge = async (target: ".employee-management" | ".employee-assembly" | ".employee-selected-detail" | ".employee-command-confirmation") => page.evaluate(selector => {
     let label = document.querySelector<HTMLElement>("[data-test-evidence]");
     if (!label) {
       label = document.createElement("div");
@@ -591,6 +591,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
     }
     document.querySelector(selector)?.prepend(label);
     label.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -64);
     (document.activeElement as HTMLElement | null)?.blur();
   }, target);
 
@@ -603,8 +604,11 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await placeBadge(".employee-management");
   await page.screenshot({ path: testInfo.outputPath("desktop-detail-test-adapter.png") });
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
+  await fillCreateForm(page);
   await placeBadge(".employee-assembly");
   await page.screenshot({ path: testInfo.outputPath("desktop-create-test-adapter.png") });
+  await placeBadge(".employee-command-confirmation");
+  await page.screenshot({ path: testInfo.outputPath("desktop-create-actions-test-adapter.png") });
 
   await page.getByRole("button", { name: "← 返回员工集合" }).click();
   await page.route("**/api/workbench/v1/employees/*/revisions/*", route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }));
@@ -622,9 +626,12 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await placeBadge(".employee-selected-detail");
   await page.screenshot({ path: testInfo.outputPath("mobile-detail-test-adapter.png") });
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
+  await fillCreateForm(page);
   await placeBadge(".employee-assembly");
   await expect(page.getByText("部分实现 · 正式权限路径待接通")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("mobile-create-test-adapter.png") });
+  await placeBadge(".employee-command-confirmation");
+  await page.screenshot({ path: testInfo.outputPath("mobile-create-actions-test-adapter.png") });
 
   await page.getByRole("button", { name: "← 返回员工集合" }).click();
   await page.route("**/api/workbench/v1/employees/*/revisions/*", route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }));

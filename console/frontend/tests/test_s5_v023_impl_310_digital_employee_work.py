@@ -55,16 +55,16 @@ def test_lists_preserve_cursor_and_do_not_substitute_for_exact_reads() -> None:
     assert "listAgentDefinitions(agentNextCursor)" in page
     assert "listEmployeeDefinitions(cursor)" in page
     assert "getEmployeeDefinition(exact.id, exact.revision" in page
-    assert "每次选择都会独立读取精确修订" in page
+    assert "每次选择都会读取所选修订" in page
     assert "不是全局统计" in page
     assert "不能代表完整历史" in page
-    assert "未声明 latest" in page
+    assert "不会自动指定权威版本" in page
 
 
 def test_employee_profile_preserves_field_ownership_and_exact_agent_identity() -> None:
     profile = source("digital-employees/EmployeeProfile.tsx")
     assert "来源：Digital Employee Definition" in profile  # noqa: RUF001
-    assert "来源：Agent Definition exact revision" in profile  # noqa: RUF001
+    assert "来源：Agent Definition 所选修订" in profile  # noqa: RUF001
     for field in ("businessPurpose", "duties", "capabilities"):
         assert field in profile
     assert (
@@ -72,7 +72,7 @@ def test_employee_profile_preserves_field_ownership_and_exact_agent_identity() -
     )
     assert "value.revisionId === primary.revisionId" in profile
     assert 'value.digest === primary.digest.replace(/^sha256:/, "")' in profile
-    assert "Employee LIST 权限不授予 Agent exact READ" in profile
+    assert "查看员工列表的权限不包含已绑定 Agent 的详情权限" in profile
     assert "不成为员工名称或职责权威" in profile
 
 
@@ -90,7 +90,7 @@ def test_work_participation_preserves_exact_coordinates_and_parent_binding() -> 
         assert identity in work
     assert "verifyPlacementBinding" in work
     assert "PLACEMENT_BINDING_IDENTITY_MISMATCH" in work
-    assert "exact read only" in work
+    assert "可信只读工作关联" in work
     assert "当前没有 Instance、Assignment 或 Placement 列表端口" in work
     assert "正式 owner 在当前授权事务内核对" in work
 
@@ -167,14 +167,15 @@ def test_employee_management_visual_status_and_narrow_layout_are_page_scoped() -
     page = source("digital-employees/DigitalEmployeesPage.tsx")
     assembly = source("digital-employees/EmployeeDefinitionAssembly.tsx")
     styles = source("styles/resource-management.css")
-    assert "仅当前授权与当前 cursor 页" in page
-    assert "搜索当前页" in page
+    assert "仅展示当前授权范围内的本批结果" in page
+    assert "搜索当前结果" in page
     assert "个员工" in page
     assert "个修订" in page
     assert "部分实现" in assembly
     assert "关联列表暂未接通" in page
     assert ".employee-management .employee-object-center" in styles
     assert ".employee-management .employee-capability-state.missing" in styles
+    assert "@media (max-width: 1500px)" in styles
     assert "@media (max-width: 800px)" in styles
 
 

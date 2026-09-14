@@ -21,7 +21,7 @@ def test_employee_management_uses_bounded_trusted_browser_reads() -> None:
     assert "listDigitalEmployeeTemplates" not in page
     assert "listEmployeeDefinitions" in page
     assert "getEmployeeDefinition" in page
-    assert "每次选择都会独立读取精确修订" in page
+    assert "每次选择都会读取所选修订" in page
     assert "发布不等于已运行" in profile
 
 
@@ -34,7 +34,7 @@ def test_exact_composition_and_independent_lifecycle_are_visible() -> None:
     assert "EmployeeLifecycleActions" in page
     assert "完整版本历史" in page
     assert "不能代表完整历史" in page
-    assert "不推断 latest" in page
+    assert "不会自动指定权威版本" in page
 
 
 def test_search_context_race_guard_and_responsive_focus_styles_exist() -> None:
