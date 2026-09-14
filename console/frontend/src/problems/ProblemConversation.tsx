@@ -17,20 +17,21 @@ export function ConversationFrame({children,composer,newMessageKey}:{children:Re
   </section>;
 }
 
-export function ConversationComposer({value,onChange,onSend,onCancelEdit,disabled,mode="NEW"}:{value:string;onChange:(value:string)=>void;onSend:()=>void;onCancelEdit:()=>void;disabled:boolean;mode?:"NEW"|"SUPPLEMENT"|"DRAFT_REPLACE"|"FORMAL_REPLACE"}){
+export function ConversationComposer({value,onChange,onSend,onCancelEdit,disabled,mode="NEW",contextLabel}:{value:string;onChange:(value:string)=>void;onSend:()=>void;onCancelEdit:()=>void;disabled:boolean;mode?:"NEW"|"SUPPLEMENT"|"DRAFT_REPLACE"|"FORMAL_REPLACE"|"CRITERION"|"CRITERION_REPLACE";contextLabel?:string}){
   const input=useRef<HTMLTextAreaElement>(null);
   useEffect(()=>{const node=input.current;if(!node)return;node.style.height="auto";node.style.height=`${Math.min(node.scrollHeight,144)}px`},[value,mode]);
-  useEffect(()=>{if(mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE")input.current?.focus()},[mode]);
+  useEffect(()=>{if(mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE"||mode==="CRITERION"||mode==="CRITERION_REPLACE")input.current?.focus()},[mode]);
   function submit(event:FormEvent){event.preventDefault();if(value.trim()&&!disabled)onSend()}
   function keyDown(event:KeyboardEvent<HTMLTextAreaElement>){
     if(event.key!=="Enter"||event.shiftKey||event.nativeEvent.isComposing||event.keyCode===229)return;
     event.preventDefault();if(value.trim()&&!disabled)onSend();
   }
-  const replacing=mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE",formal=mode==="FORMAL_REPLACE",supplement=mode==="SUPPLEMENT";
-  return <form className={`px-composer${supplement?" is-supplement":""}`} aria-label={replacing?"完整修改问题草稿":supplement?"准备待处理补充":"描述业务问题"} onSubmit={submit}>
-    <label htmlFor="problem-composer">{formal?"完整替换正式问题描述":replacing?"完整替换草稿描述":supplement?"待处理补充（仅本页）":"你希望解决什么问题？"}</label>
-    <textarea ref={input} id="problem-composer" value={value} disabled={disabled} maxLength={2_000} rows={1} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={replacing?"请输入完整描述；采用后会替换当前描述。":supplement?"继续补充背景、约束或后续想法。":"描述现状、影响和希望解决的问题。"}/>
-    <div className="px-composer-footer"><span>{replacing?"无模型模式：本次输入会完整替换描述。":supplement?"仅保留在当前页面，尚未修改正式问题，管理员不会自动收到。":"Enter 发送，Shift+Enter 换行；发送后仍需确认。"}</span><div>{replacing&&<button type="button" onClick={onCancelEdit}>取消修改</button>}<button className="px-primary-button" type="submit" disabled={disabled||!value.trim()}>{formal?"采用正式描述":replacing?"采用草稿描述":supplement?"保留补充":"发送"}</button></div></div>
+  const criterion=mode==="CRITERION"||mode==="CRITERION_REPLACE",criterionReplace=mode==="CRITERION_REPLACE",replacing=mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE"||criterionReplace,formal=mode==="FORMAL_REPLACE",supplement=mode==="SUPPLEMENT";
+  return <form className={`px-composer${supplement?" is-supplement":""}${criterion?" is-criterion":""}`} aria-label={criterion?"定义成功标准":replacing?"完整修改问题草稿":supplement?"准备待处理补充":"描述业务问题"} onSubmit={submit}>
+    <label htmlFor="problem-composer">{criterionReplace?"修改成功标准原文":criterion?"怎样才算解决？":formal?"完整替换正式问题描述":replacing?"完整替换草稿描述":supplement?"待处理补充（仅本页）":"你希望解决什么问题？"}</label>
+    {criterion&&contextLabel&&<span className="px-composer-context">当前针对：{contextLabel} · 成功标准</span>}
+    <textarea ref={input} id="problem-composer" value={value} disabled={disabled} maxLength={2_000} rows={1} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={criterion?"用自己的话描述达到什么结果才算解决。":replacing?"请输入完整描述；采用后会替换当前描述。":supplement?"继续补充背景、约束或后续想法。":"描述现状、影响和希望解决的问题。"}/>
+    <div className="px-composer-footer"><span>{criterion?"保留原文；发送后选择类型并确认，确认前不会保存。":replacing?"无模型模式：本次输入会完整替换描述。":supplement?"仅保留在当前页面，尚未修改正式问题，管理员不会自动收到。":"Enter 发送，Shift+Enter 换行；发送后仍需确认。"}</span><div>{(replacing||mode==="CRITERION")&&<button type="button" onClick={onCancelEdit}>取消修改</button>}<button className="px-primary-button" type="submit" disabled={disabled||!value.trim()}>{criterionReplace?"采用标准原文":criterion?"生成待确认卡片":formal?"采用正式描述":replacing?"采用草稿描述":supplement?"保留补充":"发送"}</button></div></div>
   </form>;
 }
 

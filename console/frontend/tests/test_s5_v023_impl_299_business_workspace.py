@@ -50,8 +50,7 @@ def test_first_slice_preserves_identity_cas_and_refresh() -> None:
         "stored.contextKey===contextKey",
     ):
         assert marker in page
-    assert "writeCriterion" not in page
-    assert "writeCriteriaSet" not in page
+    assert "SuccessCriterionCard" in page
     assert "problemPlanning" not in page
     assert "listDigitalEmployeeTemplates" not in page
 
@@ -69,7 +68,7 @@ def test_plan_execution_and_resource_gaps_are_not_fabricated() -> None:
         "当前不接入模型分析或任务执行",
     ):
         assert boundary in page
-    assert "成功标准不会自动开始" in page
+    assert "成功标准不等于已经达成" in page
 
 
 def test_grant_administration_is_a_separate_exact_request_page() -> None:
@@ -153,7 +152,10 @@ def test_editors_are_exclusive_and_task_summary_is_read_only() -> None:
         "decideGrantRequest",
     ):
         assert forbidden not in summary
-    assert 'mode?:"NEW"|"SUPPLEMENT"|"DRAFT_REPLACE"|"FORMAL_REPLACE"' in conversation
+    assert (
+        'mode?:"NEW"|"SUPPLEMENT"|"DRAFT_REPLACE"|"FORMAL_REPLACE"|"CRITERION"|"CRITERION_REPLACE"'
+        in conversation
+    )
     assert "px-composer-locked" not in conversation
     assert "supplements" not in summary
     assert "px-task-summary-trigger>span:first-child" in text(
@@ -181,3 +183,24 @@ def test_conversation_isolates_context_and_freezes_unknown_create() -> None:
     assert "localStorage" not in page
     assert "localStorage" not in conversation
     assert "sessionStorage" in page
+
+
+def test_success_criterion_draft_uses_the_single_composer_and_explicit_type() -> None:
+    page = text("problems/ProblemWorkspacePage.tsx")
+    conversation = text("problems/ProblemConversation.tsx")
+    card = text("problems/SuccessCriterionCard.tsx")
+    model = text("problems/successCriteriaModel.ts")
+    assert page.count("<ConversationComposer") == 1
+    assert "定义成功标准" in page
+    assert 'composerTarget==="CRITERION"' in page
+    assert 'composerTarget==="CRITERION_EDIT"' in page
+    assert "明确采用为成功标准" in page
+    assert "createSuccessCriterionTurn" in model
+    assert "originalText:text" in model
+    assert "没有用关键词推断标准类型" in card
+    assert "kind:null" in model
+    assert 'kind:"HUMAN_EVALUATED"' in card
+    assert "确认前只保存在当前页面" in card
+    assert "已确认" + "\uff0c" + "尚未保存" in card
+    assert "没有调用正式保存接口" in card
+    assert "当前针对" + "\uff1a" in conversation
