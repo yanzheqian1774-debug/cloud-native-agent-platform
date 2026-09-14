@@ -45,7 +45,11 @@ and durable Business Problem assembly are all available:
 | `GET /api/workbench/v1/agents` | `AGENT LIST agent:collection` | one bounded summary per Definition selected by its formal `publishedRevisionId` |
 | `GET /api/workbench/v1/agents/{definition_id}/revisions/{revision_id}` | exact `AGENT READ agent:{definition_id}:{revision_id}` | only the authorized immutable Agent revision and bounded role fields |
 | `GET /api/workbench/v1/employees` | `EMPLOYEE LIST employee:collection` | bounded Employee revision summaries with owner-derived `publicationState` |
+| `POST /api/workbench/v1/employees` | `EMPLOYEE CREATE employee:collection` | create or replay one immutable Employee Definition revision; no implied READ |
 | `GET /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}` | exact `EMPLOYEE READ employee:{definition_id}:{revision_id}` | only the authorized immutable Employee Definition revision and digest |
+| `POST /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}/validation` | `EMPLOYEE VALIDATE employee:{definition_id}:aggregate`; exact member READ | append the existing validation fact after current member qualification checks |
+| `POST /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}/approvals` | independent `EMPLOYEE APPROVE employee:{definition_id}:aggregate`; exact member READ | append the existing approval fact; no new two-person rule or creator implication |
+| `POST /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}/publication` | `EMPLOYEE PUBLISH employee:{definition_id}:aggregate`; exact member READ | append the existing publication fact; does not make the revision matchable or runnable |
 | `GET /api/workbench/v1/instances/{instance_id}` | exact `INSTANCE READ instance:{instance_id}` | bounded Instance projection |
 | `GET /api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}` | exact `ASSIGNMENT READ assignment:{assignment_id}` | bounded Assignment projection after parent check |
 | `GET /api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/placements/{placement_id}?attemptId=...&agentInstanceId=...` | exact `PLACEMENT READ placement:{placement_id}` | bounded Placement projection after complete owner parent and active-attempt checks |
@@ -153,10 +157,10 @@ evidence.
   validator or an owner continuation mint rule.
 - Workflow Definition LIST and exact-revision READ use the caller-owned connection
   and are registered when their optional same-database dependency is configured.
-  Agent/Employee Definition exact and list reads plus Instance, Assignment, and
-  Placement exact reads are registered on the same boundary. Workflow CREATE and
-  all lifecycle mutations and Employee Definition lifecycle mutations remain
-  unregistered. Existing header-based routes stay private.
+  Agent/Employee Definition exact and list reads plus the bounded Employee
+  CREATE/VALIDATE/APPROVE/PUBLISH commands and Instance, Assignment, and Placement
+  exact reads are registered on the same boundary. Workflow CREATE and lifecycle
+  mutations remain unregistered. Existing header-based routes stay private.
 - Governed Execution START and Skill invocation require their durable
   preparation/dispatch authorization barrier. They are not wrapped as ordinary
   database handlers. Execution read, Resource Use, and Evidence-reference routes
@@ -180,7 +184,7 @@ The default-disabled public BFF does not unlock IMPL-299.
 | Workflow Definition lifecycle | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, edit, validate, review, publish, and other lifecycle mutations are not in the public registry. |
 | Agent Definition read and discovery | `FORMALLY_REGISTERED` | Exact READ and collection LIST are independent; LIST follows only the formal `publishedRevisionId`, and both use bounded DTOs on the authorization transaction. |
 | Employee Definition read and discovery | `FORMALLY_REGISTERED` | Exact READ and collection LIST are independent; revision-scoped `publicationState` is derived from verified owner facts and missing/corrupt facts fail closed. |
-| Employee Definition lifecycle mutation | `PRIVATE_OWNER_ROUTE_ONLY / NOT_REGISTERED` | CREATE, validation, approval, publication, and matching decisions remain private owner operations. |
+| Employee Definition lifecycle mutation | `BOUNDED / FORMALLY_REGISTERED` | CREATE plus exact-revision VALIDATE/APPROVE/PUBLISH reuse the owner state machine and caller-owned transaction. Match grants, unpublish, rejection, deprecation, Instance creation and broader composition catalogs remain private or unregistered. |
 | Instance, Assignment and Placement | `FORMALLY_REGISTERED` | Each exact read has its own grant. Placement requires only its exact grant but verifies the complete 310 parent chain, request binding, primary Agent identity, Runtime, and active Attempt on the caller transaction. |
 | Governed Execution START and Skill dispatch | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | Dispatch must consume the existing durable preparation/dispatch authorization barrier; the ordinary database owner adapter is not that barrier. |
 | Execution and invocation readback | `PRIVATE_FORMAL_ROUTE_ONLY / NOT_REGISTERED` | No BFF trusted-context owner port currently couples current authorization to the formal readback. |
@@ -1126,3 +1130,93 @@ product-page acceptance is claimed by this backend batch.
 Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. This acceptance does not
 authorize continuation revoke/surrender, grant revoke, Plan/Execution expansion,
 IMPL-299 product-page acceptance, Ready, merge, deployment or closure of all 305.
+
+## Human-authorized Employee Definition Workbench command batch
+
+Status: `HUMAN_AUTHORIZED_FOR_BOUNDED_ASSEMBLY / SESSION_OPEN`.
+
+This batch supersedes only the earlier Employee lifecycle route omission. It does
+not change the Employee owner, lifecycle transitions, PostgreSQL schema, member
+qualification rules, Instance/Assignment/Placement, matching, execution, Plan, or
+the Problem receipt/mint/continuation behavior. The 310 handoff's route, DTO,
+grant, and error suggestions were treated as candidates; current source plus the
+accepted exact-resource architecture determine the implemented contract.
+
+The formal public command set is:
+
+| Operation | Route | Current grant(s) | Minimum result |
+| --- | --- | --- | --- |
+| `CREATE_EMPLOYEE_REVISION` | `POST /api/workbench/v1/employees` | `EMPLOYEE / CREATE / employee:collection` | resource kind, definition/revision coordinates, digest, aggregate version, lifecycle state |
+| `VALIDATE_EMPLOYEE_REVISION` | `POST /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}/validation` | `EMPLOYEE / VALIDATE / employee:{definition_id}:aggregate` plus every exact member-owner READ | the same minimum command result |
+| `APPROVE_EMPLOYEE_REVISION` | `POST /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}/approvals` | independent `EMPLOYEE / APPROVE / employee:{definition_id}:aggregate` plus every exact member-owner READ | the same minimum command result |
+| `PUBLISH_EMPLOYEE_REVISION` | `POST /api/workbench/v1/employees/{definition_id}/revisions/{revision_id}/publication` | `EMPLOYEE / PUBLISH / employee:{definition_id}:aggregate` plus every exact member-owner READ | the same minimum command result |
+| `READ_EMPLOYEE_REVISION` | existing exact GET | `EMPLOYEE / READ / employee:{definition_id}:{revision_id}` | authorized content/member projection plus `lifecycleState` and `publicationState`; no fact history or decision IDs |
+
+CREATE uses the existing scoped collection target because the exact object does not
+exist yet. It does not request or grant READ. The create response therefore omits
+role, responsibilities, members, predecessor and lifecycle facts; it confirms the
+committed command result only. A subsequent exact READ denial does not negate that
+confirmation. The client must retain the committed coordinates and display the
+details as unavailable rather than report create failure.
+
+The first public create schema accepts the domain's minimum legal composition:
+exactly one `AGENT` member. Lifecycle commands can authorize existing `AGENT` and
+`WORKFLOW` members through their already registered exact READ owner contracts.
+Skill, MCP, Knowledge, and Runtime Profile Workbench definition-READ authorities
+remain unavailable; the adapter fails closed instead of borrowing invocation,
+resource-use, Employee, or private-route authority. No all-resource catalog is
+introduced.
+
+Every unsafe operation derives principal, tenant and security domain from the
+browser session and requires the existing Origin/CSRF checks. Lifecycle actions
+use separate current grants on the aggregate target. The current Employee owner
+has no additional two-person approval rule, so this batch does not invent one;
+APPROVE remains independently grantable and is never implied by CREATE or
+VALIDATE. Each VALIDATE, APPROVE and PUBLISH rereads exact members and rechecks
+their current publication/enabled/archive/digest status before appending its fact.
+An earlier successful fact remains after a later member becomes ineligible.
+
+The request body owns `commandId`; the path owns definition/revision identity for
+lifecycle commands. CREATE and lifecycle writes reuse the existing immutable fact
+claim and aggregate CAS. Same command ID and semantic payload replays the original
+result; a changed payload returns `409 IDEMPOTENCY_PAYLOAD_MISMATCH`. A caller that
+loses the create response must freeze and replay the original command. Exact GET
+`404` does not establish non-creation because READ is independent and hidden.
+Clients must represent insufficient recovery evidence as `UNKNOWN` and must not
+mint a new command ID automatically.
+
+Public error mapping remains bounded: session/current-grant/member-READ absence is
+nondisclosing `404`; malformed schema or invalid identifiers/composition are
+`422`; idempotency mismatch, stale aggregate version, digest mismatch, invalid
+transition, and current member mismatch/ineligibility are `409`; corrupt or
+unavailable persistence is `503`. Failures append no partial Employee fact.
+
+Checkpoint A is commit `5e6568e526481e1e9690a3674de31d4571bc665b`,
+tree `62384c9b261414b4d8c65102ecb8fd80d23dd017`. It introduced the
+caller-owned-connection command ports, bounded schemas/routes, collection CREATE,
+minimal exact-read lifecycle projection and focused recovery tests. Normal hooks
+passed after one stale exact-read assertion was corrected; the failed first hook
+attempt created no commit. The task-owned PostgreSQL 15 A test passed without a
+skip and proved create replay, changed-payload conflict, independent READ denial,
+same-connection owner execution and exact readback.
+
+Checkpoint B is commit `aded45ba7b756e4d2d4a1a1aba9bd111ea7019bb`,
+tree `1efe10e725792bc4504c529e60b31bc001ac1109`. It uses the same task-owned
+PostgreSQL 15 server with a fresh database per test. The public ASGI/HTTP chain
+logs in through the Workbench session, uses CSRF for every POST, creates and
+replays, validates with exact member READ, requires independent approval
+authority, publishes, and refreshes through exact READ. It also proves missing
+member READ, stale CAS, revision and member digest mismatch, member invalidation
+with historical `VALIDATED` retention, create-without-READ, and 12-way concurrent
+first-create replay producing one revision and one fact. The public suite passed
+4 tests, the affected real authorization-transaction Employee suite passed 7
+tests with 14 unrelated cases deselected, and the existing Employee identity
+PostgreSQL selection passed 20 tests. The pure contract/shared regression passed
+67 tests. Normal B hooks passed Ruff lint, Ruff format and the repository pytest
+hook. These are real PostgreSQL and public Workbench HTTP contract results, not a
+real browser or 310/299 product-page acceptance.
+
+Delivery remains `PARTIAL_DRAFT / SESSION_OPEN`. Publication is not matchability,
+instantiation, assignment, placement, execution, readiness or proof of actual
+model use. This batch does not make the Draft PR Ready and does not merge, deploy,
+close 305, start 310, or modify 299/310/314 branches.
