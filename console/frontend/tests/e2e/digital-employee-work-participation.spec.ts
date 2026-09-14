@@ -633,6 +633,13 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   expect(detailHierarchy).toEqual({ sectionTitle: "18px", body: "14px", fieldLabel: "12px", fieldValue: "14px", capability: "13px" });
   await placeBadge(".employee-selected-detail");
   await page.screenshot({ path: testInfo.outputPath("desktop-capabilities-test-adapter.png") });
+  await page.getByText("当前员工修订身份", { exact: true }).click();
+  await expect(page.locator(".employee-technical-details").filter({ hasText: "当前员工修订身份" })).toContainText(employee.employeeDefinitionDigest);
+  await page.getByText("成员技术身份与摘要", { exact: true }).click();
+  const agentBinding = page.getByRole("listitem").filter({ hasText: "agent:quality" });
+  await agentBinding.getByText("摘要与目录", { exact: true }).click();
+  await expect(agentBinding).toContainText("agent-revision:1");
+  await expect(agentBinding).toContainText(digest("a"));
 
   const detailBody = page.locator(".employee-detail-body");
   await detailBody.evaluate(element => { element.scrollTop = 400; });

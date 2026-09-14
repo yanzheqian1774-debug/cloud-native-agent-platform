@@ -299,10 +299,13 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
   await test.step("EMPLOYEE_DETAIL_RENDER", async () => {
     const employeeDetail = full.page.locator(".px-object-detail");
     await expect(full.page.locator(".employee-detail-context")).toContainText("已发布");
+    await employeeDetail.getByText("当前员工修订身份", { exact: true }).click();
     await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionRevisionId);
     await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionDigest);
+    await employeeDetail.getByText("成员技术身份与摘要", { exact: true }).click();
     for (const member of employee.body.result.members) {
       const binding = employeeDetail.getByRole("listitem").filter({ hasText: member.resourceId });
+      await binding.getByText("摘要与目录", { exact: true }).click();
       await expect(binding).toContainText(member.kind);
       await expect(binding).toContainText(member.revisionId);
       await expect(binding).toContainText(member.digest);
