@@ -49,8 +49,6 @@ export function EmployeeDefinitionAssembly({
   const [revisionId, setRevisionId] = useState("");
   const [role, setRole] = useState("");
   const [responsibilities, setResponsibilities] = useState("");
-  const [predecessor, setPredecessor] = useState("");
-  const [expectedVersion, setExpectedVersion] = useState("0");
   const [agentIdentity, setAgentIdentity] = useState("");
   const [frozen, setFrozen] = useState<FrozenCreate | null>(null);
   const [busy, setBusy] = useState(false);
@@ -69,7 +67,6 @@ export function EmployeeDefinitionAssembly({
 
   const selectedAgent = agents.find(agent => `${agent.definitionId}\u0000${agent.revisionId}` === agentIdentity);
   const responsibilityList = responsibilities.split("\n").map(value => value.trim()).filter(Boolean);
-  const version = Number(expectedVersion);
   const valid = Boolean(
     definitionId.trim()
     && revisionId.trim()
@@ -77,9 +74,7 @@ export function EmployeeDefinitionAssembly({
     && responsibilityList.length >= 1
     && responsibilityList.length <= 32
     && selectedAgent?.enabled
-    && !selectedAgent?.archived
-    && Number.isInteger(version)
-    && version >= 0,
+    && !selectedAgent?.archived,
   );
 
   async function prepare() {
@@ -105,8 +100,7 @@ export function EmployeeDefinitionAssembly({
           revisionId: selectedAgent.revisionId,
           digest: selectedAgent.digest,
         }],
-        ...(predecessor.trim() ? { predecessorEmployeeRevisionId: predecessor.trim() } : {}),
-        expectedVersion: version,
+        expectedVersion: 0,
         commandId: `employee-command:${crypto.randomUUID()}`,
       };
       Object.freeze(command.responsibilities);
@@ -181,11 +175,10 @@ export function EmployeeDefinitionAssembly({
         <h3>1. 业务定义</h3>
         <label>职责角色<input value={role} maxLength={200} onChange={event => setRole(event.target.value)} placeholder="例如：供应商质量负责人" /></label>
         <label>职责清单（每行一项，1–32 项）<textarea value={responsibilities} onChange={event => setResponsibilities(event.target.value)} placeholder="审查供应商质量异常&#10;协调整改与复核" /></label>
-        <details><summary>技术身份与版本</summary>
+        <details><summary>高级设置 · 技术身份需配置</summary>
+          <p className="employee-identity-requirement">正式 CREATE 契约要求两个技术 ID，当前没有已批准的自动生成规则。首次创建不需要前驱修订，聚合版本固定从 0 开始。</p>
           <label>Employee Definition ID<input value={definitionId} onChange={event => setDefinitionId(event.target.value)} placeholder="employee:quality-lead" /></label>
           <label>Revision ID<input value={revisionId} onChange={event => setRevisionId(event.target.value)} placeholder="employee-revision:quality-lead:1" /></label>
-          <label>前驱 Revision ID（首次创建留空）<input value={predecessor} onChange={event => setPredecessor(event.target.value)} /></label>
-          <label>期望聚合版本<input type="number" min="0" step="1" value={expectedVersion} onChange={event => setExpectedVersion(event.target.value)} /></label>
         </details>
       </div>
 
@@ -193,24 +186,24 @@ export function EmployeeDefinitionAssembly({
         <h3>2. 选择一个正式 Agent 候选</h3>
         <p>这里显示可用于创建的候选；它们不同于员工详情中的已绑定成员。选择候选不会授予详情读取权限。</p>
         {agentError && <p role="alert" className="employee-inline-error">{agentError}</p>}
-        <div className="employee-agent-options">{agents.map(agent => { const identity = `${agent.definitionId}\u0000${agent.revisionId}`; return <label key={identity} className={agentIdentity === identity ? "selected" : ""}>
+        <div className="employee-agent-options">{agents.map(agent => { const identity = `${agent.definitionId}\u0000${agent.revisionId}`; const selectable = agent.enabled && !agent.archived; const chosen = agentIdentity === identity; return <label key={identity} className={chosen ? "selected" : ""}>
           <input type="radio" name="employee-agent" checked={agentIdentity === identity} disabled={!agent.enabled || agent.archived || Boolean(frozen)} onChange={() => setAgentIdentity(identity)} />
           <span className="employee-avatar" aria-hidden="true">A</span>
-          <span><strong>{agent.name}</strong><small>{agent.title || "未提供角色标题"}</small><small>{agent.revisionId}</small><small>{agent.enabled && !agent.archived ? "可用于创建" : "当前不可用于创建"}</small></span>
+          <span><strong>{agent.name}</strong><span className="employee-agent-role">{agent.title || "未提供角色标题"}</span><small>{agent.revisionId}</small><span className={`employee-agent-choice-state ${chosen ? "chosen" : ""}`}>{chosen ? "已选择" : selectable ? "选择此候选" : "当前不可用于创建"}</span></span>
         </label>; })}</div>
         {hasMoreAgents && <button type="button" className="employee-secondary-button" onClick={onLoadMoreAgents}>加载更多 Agent</button>}
       </div>
     </div>
 
-    {!frozen && <div className="employee-form-actions"><span>{valid ? "输入已满足前端校验；正式 owner 仍会再次校验。" : "请填写业务定义并选择恰好一个可用 Agent。"}</span><button type="button" className="px-primary-button" disabled={!valid || busy} onClick={() => void prepare()}>检查并进入确认</button></div>}
+    {!frozen && <div className="employee-form-actions"><span>{valid ? "输入已满足前端校验；正式 owner 仍会再次校验。" : "请填写业务定义、选择一个可用 Agent，并在高级设置中配置契约要求的技术 ID。"}</span><button type="button" className="px-primary-button" disabled={!valid || busy} onClick={() => void prepare()}>检查并进入确认</button></div>}
 
     {frozen && <section className="employee-command-confirmation" aria-label="创建命令确认">
-      <span className="employee-capability-state warning"><i />等待用户明确确认</span>
+      <span className="employee-confirmation-state">等待用户明确确认</span>
       <h3>{frozen.command.role}</h3>
       <p>{frozen.command.responsibilities.join("；")}</p>
       <p>成员：{frozen.command.members[0].resourceId} / {frozen.command.members[0].revisionId}</p>
       <details><summary>查看冻结命令身份</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionId}</code><code>{frozen.command.employeeDefinitionRevisionId}</code></details>
-      <div className="employee-form-actions"><button type="button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认并提交正式命令"}</button></div>
+      <div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认创建"}</button></div>
     </section>}
 
     {error && <div role="alert" className={`employee-command-state ${unknown ? "unknown" : "failed"}`}><strong>{unknown ? "结果未知" : "命令未确认成功"}</strong><span>{error}</span></div>}

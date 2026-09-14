@@ -324,6 +324,7 @@ test("TEST_ADAPTER groups 50 records by employee, selects revisions explicitly, 
   await expect(page.getByLabel("当前加载范围")).toContainText("49 个员工");
   await expect(page.getByLabel("当前加载范围")).toContainText("50 个修订");
   await expect(page.getByLabel("同一员工的多版本角色 选择版本")).toHaveCount(1);
+  await expect(page.locator(".employee-collection-row").filter({ hasText: "负责超长中文供应链" }).getByRole("combobox")).toHaveCount(0);
   await page.getByLabel("同一员工的多版本角色 选择版本").selectOption("employee-revision:multi:2");
   await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("employee-revision:multi:2");
   await page.getByLabel("发布状态").selectOption("PUBLISHED");
@@ -369,7 +370,7 @@ async function fillCreateForm(page: Page) {
   await page.getByLabel(/质量分析 Agent/).check();
   await page.getByLabel("职责角色").fill("供应商质量负责人");
   await page.getByLabel(/职责清单/).fill("审查供应商质量异常\n协调整改与复核");
-  await page.getByText("技术身份与版本").click();
+  await page.getByText("高级设置 · 技术身份需配置").click();
   await page.getByLabel("Employee Definition ID").fill("employee:new-quality");
   await page.getByLabel("Revision ID", { exact: true }).fill("employee-revision:new-quality:1");
   await page.getByRole("button", { name: "检查并进入确认" }).click();
@@ -394,7 +395,7 @@ test("TEST_ADAPTER submits one exact Agent CREATE and preserves confirmed-but-hi
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("status").filter({ hasText: "创建命令已确认" })).toContainText("当前无权读取详情");
   expect(submitted).toMatchObject({
     employeeDefinitionId: "employee:new-quality",
@@ -423,7 +424,7 @@ test("TEST_ADAPTER UNKNOWN replays the byte-equivalent frozen CREATE command", a
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "结果未知" })).toBeVisible();
   await page.getByRole("button", { name: "重放原命令" }).click();
   await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("供应商质量负责人");
@@ -437,7 +438,7 @@ test("TEST_ADAPTER 503 keeps the frozen CREATE command in UNKNOWN", async ({ pag
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "结果未知" })).toContainText("原 commandId 与语义 payload 已冻结");
   await expect(page.getByRole("button", { name: "重放原命令" })).toBeEnabled();
 });
@@ -465,7 +466,7 @@ test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async (
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert")).toContainText("可信会话已切换；原命令未发送");
   expect(creates).toBe(0);
 
@@ -474,7 +475,7 @@ test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async (
   await fillCreateForm(page);
   sessionReads = 1;
   await page.route("**/api/workbench/v1/session", route => route.fulfill({ status: 401, json: { reasonCode: "AUTHENTICATION_REQUIRED" } }));
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert")).toContainText("可信会话已失效");
   expect(creates).toBe(0);
 });
@@ -485,9 +486,9 @@ test("TEST_ADAPTER revoked CREATE is a controlled rejection", async ({ page }) =
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert")).toContainText("当前身份没有创建权限，或依赖资源不可用");
-  await expect(page.getByRole("button", { name: "确认并提交正式命令" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "确认创建" })).toBeEnabled();
 });
 
 test("TEST_ADAPTER double click emits only one CREATE command", async ({ page }) => {
@@ -508,7 +509,7 @@ test("TEST_ADAPTER double click emits only one CREATE command", async ({ page })
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).dblclick();
+  await page.getByRole("button", { name: "确认创建" }).dblclick();
   await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("供应商质量负责人");
   expect(creates).toBe(1);
 });
@@ -529,7 +530,7 @@ test("TEST_ADAPTER late CREATE response cannot update an abandoned panel", async
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
-  await page.getByRole("button", { name: "确认并提交正式命令" }).click();
+  await page.getByRole("button", { name: "确认创建" }).click();
   await page.getByRole("button", { name: "← 返回员工集合" }).click();
   await page.waitForTimeout(350);
   await expect(page.getByText("创建命令已确认", { exact: false })).toHaveCount(0);
@@ -598,15 +599,22 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/digital-employees");
   await expect(page.getByRole("heading", { name: "数字员工", exact: true })).toBeVisible();
+  const hierarchy = await page.evaluate(() => ({
+    pageTitle: getComputedStyle(document.querySelector<HTMLElement>(".employee-page-title h1")!).fontSize,
+    sectionTitle: getComputedStyle(document.querySelector<HTMLElement>(".employee-collection-toolbar h2")!).fontSize,
+    rowRole: getComputedStyle(document.querySelector<HTMLElement>(".employee-row-copy strong")!).fontSize,
+    rowId: getComputedStyle(document.querySelector<HTMLElement>(".employee-row-copy small")!).fontSize,
+  }));
+  expect(hierarchy).toEqual({ pageTitle: "28px", sectionTitle: "18px", rowRole: "15px", rowId: "12px" });
   await placeBadge(".employee-management");
   await page.screenshot({ path: testInfo.outputPath("desktop-list-test-adapter.png") });
   await page.getByRole("button", { name: /负责供应商质量异常复核/ }).click();
   await placeBadge(".employee-management");
   await page.screenshot({ path: testInfo.outputPath("desktop-detail-test-adapter.png") });
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
-  await fillCreateForm(page);
   await placeBadge(".employee-assembly");
   await page.screenshot({ path: testInfo.outputPath("desktop-create-test-adapter.png") });
+  await fillCreateForm(page);
   await placeBadge(".employee-command-confirmation");
   await page.screenshot({ path: testInfo.outputPath("desktop-create-actions-test-adapter.png") });
 
@@ -614,6 +622,8 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.route("**/api/workbench/v1/employees/*/revisions/*", route => route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } }));
   await page.getByRole("button", { name: /客户问题协调员/ }).first().click();
   await expect(page.getByRole("alert").filter({ hasText: "详情读取未完成" })).toBeVisible();
+  await expect(page.getByLabel("所选员工列表摘要")).toContainText("客户问题协调员");
+  await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
   await placeBadge(".employee-management");
   await page.screenshot({ path: testInfo.outputPath("desktop-exception-test-adapter.png") });
 
