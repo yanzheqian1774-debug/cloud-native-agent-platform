@@ -231,6 +231,30 @@ class EmployeeDefinitionRepository(Protocol):
         limit: int,
         authorized: bool,
     ): ...
+    def create_for_workbench(
+        self,
+        connection: Any,
+        revision: EmployeeRevision,
+        *,
+        expected_version: int,
+        decision_id: str,
+        command_id: str,
+        authorized: bool,
+    ): ...
+    def decide_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        definition_id: str,
+        revision_id: str,
+        revision_digest: str,
+        action: str,
+        *,
+        expected_version: int,
+        decision_id: str,
+        command_id: str,
+        authorized: bool,
+    ): ...
     def decide(
         self,
         scope: ScopeIdentity,

@@ -179,6 +179,43 @@ class WorkbenchEmployeeMember(StrictWorkbenchModel):
     digest: str
 
 
+class WorkbenchEmployeeCreateMember(StrictWorkbenchModel):
+    kind: Literal["AGENT"]
+    resourceId: str = Field(min_length=1, max_length=200)
+    revisionId: str = Field(min_length=1, max_length=200)
+    digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
+
+
+class WorkbenchCreateEmployeeDefinition(StrictWorkbenchModel):
+    employeeDefinitionId: str = Field(min_length=1, max_length=200)
+    employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
+    role: str = Field(min_length=1, max_length=200)
+    responsibilities: tuple[str, ...] = Field(min_length=1, max_length=32)
+    members: tuple[WorkbenchEmployeeCreateMember, ...] = Field(
+        min_length=1, max_length=1
+    )
+    predecessorEmployeeRevisionId: str | None = Field(default=None, max_length=200)
+    expectedVersion: int = Field(ge=0)
+    commandId: str = Field(min_length=1, max_length=200)
+
+
+class WorkbenchDecideEmployeeDefinition(StrictWorkbenchModel):
+    employeeDefinitionDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expectedVersion: int = Field(ge=1)
+    commandId: str = Field(min_length=1, max_length=200)
+
+
+class WorkbenchEmployeeCommandResult(StrictWorkbenchModel):
+    resourceKind: Literal["DIGITAL_EMPLOYEE_DEFINITION"] = "DIGITAL_EMPLOYEE_DEFINITION"
+    employeeDefinitionId: str
+    employeeDefinitionRevisionId: str
+    employeeDefinitionDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    aggregateVersion: int = Field(ge=1)
+    lifecycleState: Literal[
+        "DRAFT", "VALIDATED", "APPROVED", "PUBLISHED", "REJECTED", "DEPRECATED"
+    ]
+
+
 class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     resourceKind: Literal["DIGITAL_EMPLOYEE_DEFINITION"]
     employeeDefinitionId: str
@@ -187,6 +224,9 @@ class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     role: str
     responsibilities: tuple[str, ...]
     members: tuple[WorkbenchEmployeeMember, ...]
+    lifecycleState: Literal[
+        "DRAFT", "VALIDATED", "APPROVED", "PUBLISHED", "REJECTED", "DEPRECATED"
+    ]
     publicationState: Literal["PUBLISHED", "NOT_PUBLISHED"]
 
 

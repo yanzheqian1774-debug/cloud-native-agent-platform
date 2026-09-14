@@ -1360,6 +1360,137 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
         execution_repository.pool.close()
 
 
+def test_employee_create_replay_and_exact_read_are_authorized_independently(
+    repository, monkeypatch
+) -> None:
+    now, _, adapter = seed(repository)
+    execution_repository = PostgresExecutionAuthorityRepository(
+        repository.pool.conninfo,
+        migration_path=EXECUTION_MIGRATION,
+        timeout=30.0,
+    )
+    employee_repository = PostgresEmployeeDefinitionRepository(execution_repository)
+    try:
+        execution_repository.migrate()
+        employee_repository.migrate(EMPLOYEE_MIGRATION)
+        operations = employee_operations(
+            employee_repository, WorkbenchCursorCodec(b"k" * 32)
+        )
+        create = next(
+            item for item in operations if item.name == "CREATE_EMPLOYEE_REVISION"
+        )
+        exact = next(
+            item for item in operations if item.name == "READ_EMPLOYEE_REVISION"
+        )
+        payload = {
+            "employeeDefinitionId": "employee-definition:workbench-create",
+            "employeeDefinitionRevisionId": "employee-revision:v1",
+            "role": "Quality owner",
+            "responsibilities": ["Review quality"],
+            "members": [
+                {
+                    "kind": "AGENT",
+                    "resourceId": "agent-definition:quality",
+                    "revisionId": "agent-revision:v1",
+                    "digest": "a" * 64,
+                }
+            ],
+            "expectedVersion": 0,
+            "commandId": "employee-command:create",
+        }
+        grants = tuple(create.grant_builder(context(), {}, payload, {}))
+        seed_digital_employee_read_grant(
+            repository, now, grants[0], key="employee-create"
+        )
+
+        connections = {}
+        original_authorize = adapter.authorization.has_current_grants
+        original_create = employee_repository.create_for_workbench
+
+        def capture_authorization(*args, **kwargs):
+            connections["authorization"] = kwargs["connection"]
+            return original_authorize(*args, **kwargs)
+
+        def capture_create(connection, *args, **kwargs):
+            connections["owner"] = connection
+            return original_create(connection, *args, **kwargs)
+
+        monkeypatch.setattr(
+            adapter.authorization, "has_current_grants", capture_authorization
+        )
+        monkeypatch.setattr(employee_repository, "create_for_workbench", capture_create)
+        created = adapter.execute(
+            context(),
+            grants,
+            operation=create.name,
+            payload=payload,
+            path={},
+            query={},
+            handler=create.handler,
+        )
+        replayed = adapter.execute(
+            context(),
+            grants,
+            operation=create.name,
+            payload=payload,
+            path={},
+            query={},
+            handler=create.handler,
+        )
+
+        assert connections["owner"] is connections["authorization"]
+        assert replayed == created
+        assert created["lifecycleState"] == "DRAFT"
+        assert created["aggregateVersion"] == 1
+        assert "role" not in created
+        assert "members" not in created
+        with pytest.raises(WorkbenchOwnerError, match="IDEMPOTENCY_PAYLOAD_MISMATCH"):
+            adapter.execute(
+                context(),
+                grants,
+                operation=create.name,
+                payload={**payload, "role": "Changed role"},
+                path={},
+                query={},
+                handler=create.handler,
+            )
+
+        exact_path = {
+            "employee_definition_id": payload["employeeDefinitionId"],
+            "revision_id": payload["employeeDefinitionRevisionId"],
+        }
+        read_grants = tuple(exact.grant_builder(context(), exact_path, {}, {}))
+        with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+            adapter.execute(
+                context(),
+                read_grants,
+                operation=exact.name,
+                payload={},
+                path=exact_path,
+                query={},
+                handler=exact.handler,
+            )
+        seed_digital_employee_read_grant(
+            repository, now, read_grants[0], key="employee-created-read"
+        )
+        readback = adapter.execute(
+            context(),
+            read_grants,
+            operation=exact.name,
+            payload={},
+            path=exact_path,
+            query={},
+            handler=exact.handler,
+        )
+        assert (
+            readback["employeeDefinitionDigest"] == created["employeeDefinitionDigest"]
+        )
+        assert readback["lifecycleState"] == "DRAFT"
+        assert readback["role"] == "Quality owner"
+    finally:
+        execution_repository.pool.close()
+
+
 @pytest.mark.parametrize("revocation", ["grant", "session"])
 def test_agent_exact_read_uses_authorization_transaction_and_revocation(
     repository, monkeypatch, revocation: str
