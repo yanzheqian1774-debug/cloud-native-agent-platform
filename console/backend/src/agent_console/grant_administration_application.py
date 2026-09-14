@@ -5,11 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from agent_console.authority_configuration import (
+    CredentialConfiguration,
     StaticAuthorityGeneration,
     validate_registered_grant,
 )
@@ -21,6 +23,8 @@ from agent_console.authority_contracts import (
     ContinuationOwner,
     CredentialId,
     CurrentAuthorizationReader,
+    CurrentExactGrantDecision,
+    CurrentExactGrantDecisionReader,
     DynamicAuthorizationState,
     ExactGrant,
     GrantAdministrationRepository,
@@ -60,6 +64,7 @@ class GrantDecisionCommand:
     not_before: datetime | None
     expires_at: datetime | None
     idempotency_key: str
+    expected_version: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +84,21 @@ class GrantRevocationCommand:
     reason_category: str
     idempotency_key: str
     surrender: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AvailableContinuation:
+    continuation_id: str
+    purpose: str
+    expires_at: datetime
+    requestable_actions: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveredOwnerContinuation:
+    continuation_id: str
+    expires_at: datetime
+    request_id: str | None
 
 
 class GenerationAuthorizationReader(CurrentAuthorizationReader):
@@ -152,6 +172,208 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             recovery_epoch=recovery_epoch,
         )
 
+    def read_linearized_current_exact_grant_decision(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, CurrentExactGrantDecision | None]:
+        reader = getattr(
+            self.dynamic, "read_linearized_current_exact_grant_decision", None
+        )
+        if reader is None:
+            return None, None
+        return reader(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]:
+        reader = getattr(self.dynamic, "read_linearized_authorization_states", None)
+        if reader is None:
+            if connection is not None:
+                raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+            rows = tuple(
+                self.read_linearized_authorization_state(
+                    context,
+                    grant,
+                    now=now,
+                    generation=generation,
+                    recovery_epoch=recovery_epoch,
+                )
+                for grant in grants
+            )
+            credentials = {credential for credential, _ in rows}
+            if len(credentials) != 1:
+                return None, tuple(state for _, state in rows)
+            return rows[0][0], tuple(state for _, state in rows)
+        return reader(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+
+    def has_current_grants(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection: object | None = None,
+        configure_transaction: bool = True,
+    ) -> tuple[bool, ...]:
+        if (
+            not grants
+            or generation != self.generation.generation
+            or recovery_epoch != self.recovery_epoch
+        ):
+            return tuple(False for _ in grants)
+        credential_id, states = self.read_linearized_authorization_states(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+        credential, expected_source = self._current_credential(
+            context, credential_id, now=now
+        )
+        credential_current = credential is not None
+        if not credential_current:
+            return tuple(False for _ in grants)
+        return tuple(
+            state
+            not in {
+                DynamicAuthorizationState.REVOKED,
+                DynamicAuthorizationState.UNAVAILABLE,
+            }
+            and (credential.credential_id, grant)
+            not in self.generation.static_grant_revocation_tombstones
+            and (
+                any(
+                    item.grant == grant
+                    and (
+                        item.source is expected_source
+                        or item.source is GrantSource.STATIC_META
+                    )
+                    for item in credential.grants
+                )
+                or state is DynamicAuthorizationState.ALLOWED
+            )
+            for grant, state in zip(grants, states, strict=True)
+        )
+
+    def _current_credential(
+        self,
+        context: TrustedRequestContext,
+        credential_id: CredentialId | None,
+        *,
+        now: datetime,
+    ) -> tuple[CredentialConfiguration | None, GrantSource]:
+        expected_source = (
+            GrantSource.BROWSER_BOOTSTRAP
+            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
+            else GrantSource.SERVICE_ONLY
+        )
+        credential = (
+            self.generation.credential_by_id(credential_id)
+            if credential_id is not None
+            else None
+        )
+        if (
+            credential is None
+            or credential.scope != context.scope
+            or credential.authentication_source is not expected_source
+            or credential.credential_id
+            in self.generation.credential_revocation_tombstones
+            or now >= credential.expires_at
+        ):
+            return None, expected_source
+        return credential, expected_source
+
+    def _authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        generation: int,
+        connection: object | None,
+        configure_transaction: bool,
+    ) -> CurrentExactGrantDecision | None:
+        if generation != self.generation.generation:
+            return None
+        credential_id, decision = self.read_linearized_current_exact_grant_decision(
+            context,
+            grant,
+            now=now,
+            generation=generation,
+            recovery_epoch=self.recovery_epoch,
+            connection=connection,
+            configure_transaction=configure_transaction,
+        )
+        credential, _ = self._current_credential(context, credential_id, now=now)
+        if credential is None or decision is None:
+            return None
+        if (credential.credential_id, grant) in (
+            self.generation.static_grant_revocation_tombstones
+        ):
+            return None
+        return decision
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None:
+        """Read a complete decision in a repository-owned snapshot."""
+        return self._authorize_current(
+            context,
+            grant,
+            now=now,
+            generation=self.generation.generation,
+            connection=None,
+            configure_transaction=True,
+        )
+
+    def bind_current_exact_decisions(
+        self, connection: object, *, generation: int
+    ) -> CurrentExactGrantDecisionReader:
+        """Bind exact-decision reads to an already-open owner transaction."""
+        return CallerOwnedCurrentExactGrantDecisionReader(
+            self, connection=connection, generation=generation
+        )
+
     def has_current_grant(
         self,
         context: TrustedRequestContext,
@@ -161,59 +383,49 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         generation: int,
         recovery_epoch: int,
     ) -> bool:
-        if (
-            generation != self.generation.generation
-            or recovery_epoch != self.recovery_epoch
-        ):
-            return False
-        credential_id, dynamic_state = self.read_linearized_authorization_state(
+        return self.has_current_grants(
             context,
-            grant,
+            (grant,),
             now=now,
             generation=generation,
             recovery_epoch=recovery_epoch,
+        )[0]
+
+
+class CallerOwnedCurrentExactGrantDecisionReader(CurrentExactGrantDecisionReader):
+    """Current decision reader pinned to the BFF/owner transaction."""
+
+    def __init__(
+        self,
+        authorization: GenerationAuthorizationReader,
+        *,
+        connection: object,
+        generation: int,
+    ) -> None:
+        self.authorization = authorization
+        self.connection = connection
+        self.generation = generation
+
+    def authorize_current(
+        self,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+    ) -> CurrentExactGrantDecision | None:
+        return self.authorization._authorize_current(
+            context,
+            grant,
+            now=now,
+            generation=self.generation,
+            connection=self.connection,
+            configure_transaction=False,
         )
-        credential = (
-            self.generation.credential_by_id(credential_id)
-            if credential_id is not None
-            else None
-        )
-        if credential is None or credential.scope != context.scope:
-            return False
-        expected_source = (
-            GrantSource.BROWSER_BOOTSTRAP
-            if context.authentication_source is AuthenticationSource.BROWSER_SESSION
-            else GrantSource.SERVICE_ONLY
-        )
-        if (
-            credential.authentication_source is not expected_source
-            or credential.credential_id
-            in self.generation.credential_revocation_tombstones
-            or now >= credential.expires_at
-        ):
-            return False
-        if dynamic_state in {
-            DynamicAuthorizationState.REVOKED,
-            DynamicAuthorizationState.UNAVAILABLE,
-        }:
-            return False
-        if (credential.credential_id, grant) in (
-            self.generation.static_grant_revocation_tombstones
-        ):
-            return False
-        static_allowed = any(
-            item.grant == grant
-            and (
-                item.source is expected_source or item.source is GrantSource.STATIC_META
-            )
-            for item in credential.grants
-        )
-        if static_allowed:
-            return True
-        return dynamic_state is DynamicAuthorizationState.ALLOWED
 
 
 class GrantAdministrationService:
+    _CONTINUATION_REFERENCE_PREFIX = "continuation-ref."
+
     def __init__(
         self,
         repository: GrantAdministrationRepository,
@@ -272,6 +484,38 @@ class GrantAdministrationService:
         if not value or len(value) > 200 or value.strip() != value:
             raise AuthorityError("IDEMPOTENCY_KEY_INVALID")
 
+    @staticmethod
+    def _owner_mint_payload(claim: ContinuationClaim) -> dict[str, object]:
+        return {
+            "subject": claim.subject_principal_id,
+            "scope": [claim.scope.tenant_id, claim.scope.security_domain],
+            "purpose": claim.purpose,
+            "members": [
+                [item.owner, item.action, item.exact_resource] for item in claim.members
+            ],
+            "canonicalResourceReference": claim.canonical_resource_reference,
+            "ownerRevision": claim.owner_revision,
+            "generation": claim.policy_generation,
+            "expiresAt": claim.expires_at.isoformat(),
+        }
+
+    @staticmethod
+    def _same_owner_claim(
+        expected: ContinuationClaim, persisted: ContinuationClaim
+    ) -> bool:
+        return (
+            expected.subject_principal_id == persisted.subject_principal_id
+            and expected.scope == persisted.scope
+            and expected.purpose == persisted.purpose
+            and expected.members == persisted.members
+            and expected.canonical_resource_reference
+            == persisted.canonical_resource_reference
+            and expected.owner_revision == persisted.owner_revision
+            and expected.policy_generation == persisted.policy_generation
+            and expected.issued_at == persisted.issued_at
+            and expected.expires_at == persisted.expires_at
+        )
+
     def inspect_request(
         self, context: TrustedRequestContext, request_id: str
     ) -> GrantRequest:
@@ -303,9 +547,27 @@ class GrantAdministrationService:
         if command.continuation is not None:
             if self.continuation_owner is None:
                 raise AuthorityError("CONTINUATION_INVALID")
-            claim = self.continuation_owner.resolve_continuation(
-                command.continuation, now=now
-            )
+            if command.continuation.startswith(self._CONTINUATION_REFERENCE_PREFIX):
+                continuation_digest = command.continuation.removeprefix(
+                    self._CONTINUATION_REFERENCE_PREFIX
+                )
+                if len(continuation_digest) != 64 or any(
+                    char not in "0123456789abcdef" for char in continuation_digest
+                ):
+                    raise AuthorityError("CONTINUATION_INVALID")
+                claim = self.repository.resolve_continuation_offer(
+                    continuation_digest,
+                    context,
+                    now=now,
+                    recovery_epoch=self.recovery_epoch,
+                )
+            else:
+                claim = self.continuation_owner.resolve_continuation(
+                    command.continuation, now=now
+                )
+                continuation_digest = hashlib.sha256(
+                    command.continuation.encode()
+                ).hexdigest()
             if (
                 claim.subject_principal_id != context.principal_id
                 or claim.scope != context.scope
@@ -318,9 +580,6 @@ class GrantAdministrationService:
             ):
                 raise AuthorityError("CONTINUATION_INVALID")
             members = claim.members
-            continuation_digest = hashlib.sha256(
-                command.continuation.encode()
-            ).hexdigest()
 
             def target_validation(connection: object) -> bool:
                 return self.target_validator is not None and (
@@ -382,40 +641,68 @@ class GrantAdministrationService:
             "DECIDE",
             f"grant-scope:{context.scope.tenant_id}:{context.scope.security_domain}",
         )
-        self._require(context, meta)
+        if not self.authorization.has_current_grant(
+            context,
+            meta,
+            now=self.clock(),
+            generation=self.generation.generation,
+            recovery_epoch=self.recovery_epoch,
+        ):
+            raise AuthorityError("AUTHORIZATION_REQUEST_NOT_FOUND")
         self._validate_idempotency_key(command.idempotency_key)
+        if command.expected_version < 1:
+            raise AuthorityError("INVALID_GRANT_DECISION")
         require_bounded_label(
             command.reason_category, reason_code="INVALID_GRANT_DECISION"
         )
-        require_bounded_label(command.basis_type, reason_code="INVALID_GRANT_DECISION")
-        if not command.basis_reference or len(command.basis_reference) > 512:
+        basis_types = {"TICKET": "TICKET", "POLICY": "POLICY"}
+        try:
+            basis_type = basis_types[command.basis_type]
+        except KeyError as exc:
+            raise AuthorityError("INVALID_GRANT_DECISION") from exc
+        if (
+            not command.basis_reference
+            or len(command.basis_reference) > 512
+            or command.basis_reference.strip() != command.basis_reference
+            or any(
+                unicodedata.category(character).startswith("C")
+                for character in command.basis_reference
+            )
+        ):
             raise AuthorityError("INVALID_GRANT_DECISION")
-        request = self.repository.inspect_request(command.request_id)
-        if request.scope != context.scope:
-            raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
-        if request.subject_principal_id == context.principal_id:
-            raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
         now = self.clock()
         if command.approve:
             if (
-                command.not_before is None
-                or command.expires_at is None
-                or command.not_before < now
-                or command.not_before >= command.expires_at
+                command.expires_at is None
+                or (
+                    command.not_before is not None
+                    and command.not_before.utcoffset() != timedelta(0)
+                )
+                or command.expires_at.utcoffset() != timedelta(0)
+                or (
+                    command.not_before is not None
+                    and (
+                        command.not_before < now
+                        or command.not_before >= command.expires_at
+                        or command.expires_at - command.not_before > timedelta(hours=8)
+                    )
+                )
             ):
                 raise AuthorityError("INVALID_GRANT_DECISION")
         elif command.not_before is not None or command.expires_at is not None:
             raise AuthorityError("INVALID_GRANT_DECISION")
         decision_id = self.identity_factory("grant-decision")
         basis_digest = canonical_digest(
-            {"type": command.basis_type, "reference": command.basis_reference}
+            {"type": basis_type, "reference": command.basis_reference}
         )
         payload_digest = canonical_digest(
             {
                 "requestId": command.request_id,
-                "approve": command.approve,
-                "reason": command.reason_category,
-                "basisDigest": basis_digest,
+                "expectedVersion": command.expected_version,
+                "decision": "APPROVE" if command.approve else "REJECT",
+                "reasonCategory": command.reason_category,
+                "basisType": basis_type,
+                "basisReference": command.basis_reference,
                 "notBefore": (
                     command.not_before.isoformat() if command.not_before else None
                 ),
@@ -424,16 +711,21 @@ class GrantAdministrationService:
                 ),
             }
         )
+        request = self.repository.inspect_request_for(
+            command.request_id,
+            context,
+            administrator_authorized=True,
+        )
         decision = GrantDecision(
             decision_id=decision_id,
-            request_id=request.request_id,
+            request_id=command.request_id,
             issuer_principal_id=context.principal_id,
             issuer_meta_decision_id=(
                 f"static-meta:{self.generation.generation}:{context.principal_id}"
             ),
             approved=command.approve,
             reason_category=command.reason_category,
-            basis_type=command.basis_type,
+            basis_type=basis_type,
             basis_reference_digest=basis_digest,
             policy_version=self.generation.policy_version,
             audit_source=self.generation.audit_source,
@@ -455,6 +747,8 @@ class GrantAdministrationService:
         return self.repository.decide_request(
             decision,
             grants=grant_rows,
+            issuer_scope=context.scope,
+            expected_version=command.expected_version,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key=command.idempotency_key,
             payload_digest=payload_digest,
@@ -557,21 +851,7 @@ class GrantAdministrationService:
         ):
             raise AuthorityError("CONTINUATION_INVALID")
         self._validate_requestable(claim.purpose, claim.members)
-        payload_digest = canonical_digest(
-            {
-                "subject": claim.subject_principal_id,
-                "scope": [claim.scope.tenant_id, claim.scope.security_domain],
-                "purpose": claim.purpose,
-                "members": [
-                    [item.owner, item.action, item.exact_resource]
-                    for item in claim.members
-                ],
-                "canonicalResourceReference": claim.canonical_resource_reference,
-                "ownerRevision": claim.owner_revision,
-                "generation": claim.policy_generation,
-                "expiresAt": claim.expires_at.isoformat(),
-            }
-        )
+        payload_digest = canonical_digest(self._owner_mint_payload(claim))
         opaque = self.continuation_owner.mint(claim)
         persisted = self.repository.store_continuation_offer(
             claim,
@@ -583,13 +863,83 @@ class GrantAdministrationService:
         )
         return self.continuation_owner.mint(persisted)
 
+    def recover_owner_continuation(
+        self,
+        context: TrustedRequestContext,
+        claim: ContinuationClaim,
+        *,
+        originating_command_key: str,
+    ) -> RecoveredOwnerContinuation | None:
+        """Recover the exact persisted offer even after consumption or expiry."""
+        if self.continuation_owner is None or self.target_validator is None:
+            raise AuthorityError("CONTINUATION_INVALID")
+        self._validate_idempotency_key(originating_command_key)
+        if (
+            claim.subject_principal_id != context.principal_id
+            or claim.scope != context.scope
+            or claim.policy_generation != self.generation.generation
+            or claim.expires_at - claim.issued_at != timedelta(minutes=10)
+            or not self.target_validator.validate_continuation(claim)
+        ):
+            raise AuthorityError("CONTINUATION_INVALID")
+        self._validate_requestable(claim.purpose, claim.members)
+        recovered = self.repository.recover_continuation_offer(
+            context,
+            owner=claim.members[0].owner,
+            purpose=claim.purpose,
+            mint_key=originating_command_key,
+        )
+        if recovered is None:
+            return None
+        if (
+            recovered.revoked_at is not None
+            or recovered.recovery_epoch != self.recovery_epoch
+            or recovered.mint_payload_digest
+            != canonical_digest(self._owner_mint_payload(claim))
+            or not self._same_owner_claim(claim, recovered.claim)
+        ):
+            raise AuthorityError("CONTINUATION_INVALID")
+        return RecoveredOwnerContinuation(
+            continuation_id=(
+                self._CONTINUATION_REFERENCE_PREFIX + recovered.continuation_digest
+            ),
+            expires_at=recovered.claim.expires_at,
+            request_id=recovered.request_id,
+        )
+
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
+        return tuple(
+            item.continuation_id for item in self.continuation_inbox_details(context)
+        )
+
+    def continuation_inbox_details(
+        self, context: TrustedRequestContext
+    ) -> tuple[AvailableContinuation, ...]:
+        """Return only subject-facing metadata accepted by the public inbox."""
         if self.continuation_owner is None:
             raise AuthorityError("CONTINUATION_INVALID")
+        now = self.clock()
         offers = self.repository.list_continuation_offers(
-            context, now=self.clock(), recovery_epoch=self.recovery_epoch
+            context, now=now, recovery_epoch=self.recovery_epoch
         )
-        return tuple(self.continuation_owner.mint(claim) for claim in offers)
+        return tuple(
+            AvailableContinuation(
+                continuation_id=(
+                    self._CONTINUATION_REFERENCE_PREFIX
+                    + hashlib.sha256(
+                        self.continuation_owner.mint(claim).encode()
+                    ).hexdigest()
+                ),
+                purpose=claim.purpose,
+                expires_at=claim.expires_at,
+                requestable_actions=tuple(
+                    dict.fromkeys(member.action for member in claim.members)
+                ),
+            )
+            for claim in offers
+            if claim.policy_generation == self.generation.generation
+            and claim.issued_at <= now < claim.expires_at
+        )
 
     def revoke_grant(
         self, context: TrustedRequestContext, command: GrantRevocationCommand

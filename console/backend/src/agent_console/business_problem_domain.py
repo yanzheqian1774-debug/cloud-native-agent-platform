@@ -145,6 +145,93 @@ class BusinessProblemRevision:
 
 
 @dataclass(frozen=True, slots=True)
+class BusinessProblemCreatorReceipt:
+    """Immutable creator-origin fact persisted with revision one."""
+
+    scope: ScopeIdentity
+    creator_principal_id: str
+    originating_command_type: str
+    originating_command_idempotency_key: str
+    originating_command_payload_digest: str
+    business_problem_id: str
+    revision_id: str
+    revision: int
+    aggregate_version: int
+    revision_digest: str
+    canonical_resource_reference: str
+    committed_owner_revision: str
+    policy_generation: int
+    recovery_epoch: int
+    receipt_started_at: datetime
+    expires_at: datetime
+
+    def __post_init__(self) -> None:
+        if (
+            self.originating_command_type != "CREATE_BUSINESS_PROBLEM"
+            or not self.creator_principal_id
+            or not self.originating_command_idempotency_key
+            or len(self.originating_command_payload_digest) != 64
+            or self.revision != 1
+            or self.aggregate_version != 1
+            or len(self.revision_digest) != 64
+            or self.canonical_resource_reference
+            != f"business-problem:{self.business_problem_id}"
+            or self.committed_owner_revision != committed_problem_owner_revision(self)
+            or self.policy_generation < 1
+            or self.recovery_epoch < 1
+            or self.receipt_started_at.tzinfo is None
+            or self.expires_at.tzinfo is None
+            or (self.expires_at - self.receipt_started_at).total_seconds() != 600
+        ):
+            raise BusinessProblemError("BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALID")
+
+
+def committed_problem_owner_revision(
+    value: BusinessProblemCreatorReceipt | BusinessProblemRevision,
+    *,
+    aggregate_version: int = 1,
+) -> str:
+    """Bind mint recovery to the immutable committed revision-one result."""
+
+    scope = value.scope
+    business_problem_id = value.business_problem_id
+    revision_id = value.revision_id
+    revision = value.revision
+    digest = (
+        value.revision_digest
+        if isinstance(value, BusinessProblemCreatorReceipt)
+        else value.digest
+    )
+    semantic = {
+        "schemaVersion": "problem-owner-revision.v1",
+        "tenantId": scope.namespace,
+        "securityDomain": scope.security_domain,
+        "businessProblemId": business_problem_id,
+        "revisionId": revision_id,
+        "revision": revision,
+        "aggregateVersion": aggregate_version,
+        "digest": digest,
+    }
+    return f"problem-owner-revision.v1.sha256.{canonical_digest(semantic)}"
+
+
+def problem_creator_mint_key(receipt: BusinessProblemCreatorReceipt) -> str:
+    semantic = {
+        "owner": "BUSINESS_PROBLEM",
+        "tenantId": receipt.scope.namespace,
+        "securityDomain": receipt.scope.security_domain,
+        "subjectPrincipalId": receipt.creator_principal_id,
+        "purpose": "CONTINUE_PROBLEM_READ",
+        "canonicalResourceReference": receipt.canonical_resource_reference,
+        "committedOwnerRevision": receipt.committed_owner_revision,
+        "originatingCommandIdempotencyKey": (
+            receipt.originating_command_idempotency_key
+        ),
+    }
+    return f"problem-create-continuation.v1.sha256.{canonical_digest(semantic)}"
+
+
+@dataclass(frozen=True, slots=True)
 class SuccessCriterionRevision:
     scope: ScopeIdentity
     success_criterion_id: str

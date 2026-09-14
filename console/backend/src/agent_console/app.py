@@ -1882,3 +1882,68 @@ def _configure_business_problems():
 
 
 _configure_business_problems()
+
+
+# Public Workbench remains disabled unless every accepted I2 authority boundary is
+# configured.  The private ``app`` above never gains browser-session dependencies.
+_workbench_composition = None
+workbench_app = None
+_workbench_startup_error = "WORKBENCH_DISABLED"
+
+
+def _configure_workbench() -> None:
+    global _workbench_composition, workbench_app, _workbench_startup_error
+    from agent_console.workbench_bootstrap import build_workbench_composition
+
+    runtime_path = os.environ.get("WORKBENCH_AUTHORITY_RUNTIME_FILE", "")
+    allowed_host = os.environ.get("WORKBENCH_ALLOWED_HOST", "")
+    allowed_origin = os.environ.get("WORKBENCH_ALLOWED_ORIGIN", "")
+    _workbench_composition = None
+    workbench_app = None
+    if not runtime_path or not allowed_host or not allowed_origin:
+        _workbench_startup_error = "WORKBENCH_DISABLED"
+        return
+    if _business_problem_application is None:
+        _workbench_startup_error = "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE"
+        return
+    if _digital_employee_assembly is None:
+        _workbench_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+        return
+    if _agent_definition_service is None:
+        _workbench_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+        return
+    workflow_database_url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
+    workflow_service = None
+    if workflow_database_url:
+        try:
+            workflow_service = workflow_definition_api.get_service()
+        except HTTPException:
+            _workbench_startup_error = "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
+            return
+    try:
+        _workbench_composition = build_workbench_composition(
+            runtime_configuration_path=Path(runtime_path),
+            allowed_host=allowed_host,
+            allowed_origin=allowed_origin,
+            owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+            agent_database_url=os.environ.get("AGENT_DEFINITION_DATABASE_URL", ""),
+            business_problems=_business_problem_application,
+            agent_definitions=_agent_definition_service.repository,
+            employee_definitions=_digital_employee_assembly.employee_definitions,
+            digital_employees=_digital_employee_assembly.repository,
+            workflow_database_url=workflow_database_url,
+            workflows=workflow_service,
+        )
+        workbench_app = _workbench_composition.application
+        _workbench_startup_error = ""
+    except (OSError, ValueError):
+        _workbench_startup_error = "WORKBENCH_AUTHORITY_UNAVAILABLE"
+
+
+def get_workbench_app() -> FastAPI:
+    if workbench_app is None:
+        raise RuntimeError(_workbench_startup_error)
+    return workbench_app
+
+
+_configure_workbench()
