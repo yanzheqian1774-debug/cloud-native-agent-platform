@@ -297,7 +297,7 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
   });
   await test.step("EMPLOYEE_DETAIL_RENDER", async () => {
     const employeeDetail = full.page.locator(".px-object-detail");
-    await expect(employeeDetail).toContainText("PUBLISHED");
+    await expect(employeeDetail).toContainText("已发布");
     await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionRevisionId);
     await expect(employeeDetail).toContainText(employee.body.result.employeeDefinitionDigest);
     for (const member of employee.body.result.members) {
