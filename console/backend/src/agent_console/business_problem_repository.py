@@ -16,6 +16,15 @@ from agent_console.execution_domain import ScopeIdentity
 
 
 class BusinessProblemRepository(Protocol):
+    def is_known_grant_target_for_workbench(
+        self,
+        connection,
+        scope: ScopeIdentity,
+        owner: str,
+        action: str,
+        exact_resource: str,
+    ) -> bool: ...
+
     def create_problem(
         self,
         revision: BusinessProblemRevision,

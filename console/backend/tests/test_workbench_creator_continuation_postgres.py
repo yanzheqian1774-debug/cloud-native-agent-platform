@@ -35,7 +35,6 @@ from agent_console.browser_session_application import (
 from agent_console.business_plan_postgres import PostgresProblemPlanUnitOfWork
 from agent_console.business_problem_application import BusinessProblemApplication
 from agent_console.business_problem_continuation import (
-    BusinessProblemContinuationValidator,
     BusinessProblemCreateCoordinator,
 )
 from agent_console.business_problem_domain import BusinessProblemRevision
@@ -53,6 +52,7 @@ from agent_console.workbench_bff import (
     create_workbench_bff,
 )
 from agent_console.workbench_business_problem import business_problem_operations
+from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from fastapi.testclient import TestClient
 
@@ -110,6 +110,42 @@ def static_generation(now: datetime) -> StaticAuthorityGeneration:
                 "READ",
                 "business-problem:",
                 "CONTINUE_PROBLEM_READ",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERION",
+                "CREATE",
+                "success-criterion:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERION",
+                "READ",
+                "success-criterion:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERION",
+                "REVISE",
+                "success-criterion:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERIA_SET",
+                "CREATE",
+                "success-criteria-set:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERIA_SET",
+                "READ",
+                "success-criteria-set:",
+                "WORKBENCH_SUCCESS_CRITERIA",
+            ),
+            RequestabilityRule(
+                "SUCCESS_CRITERIA_SET",
+                "REVISE",
+                "success-criteria-set:",
+                "WORKBENCH_SUCCESS_CRITERIA",
             ),
         ),
         credential_revocation_tombstones=frozenset(),
@@ -177,7 +213,7 @@ def integrated_authority():
             authority,
             recovery_epoch=1,
         )
-        validator = BusinessProblemContinuationValidator(problems)
+        validator = WorkbenchGrantTargetValidator(problems)
         grants = GrantAdministrationService(
             authority,
             authorization,
@@ -420,6 +456,110 @@ def test_public_create_without_collection_create_has_zero_writes(
             "(SELECT count(*) FROM authorization_admin.continuation_offers) AS offers"
         ).fetchone()
     assert counts == {"problems": 0, "receipts": 0, "offers": 0}
+
+
+def test_direct_success_criteria_request_uses_owner_validated_targets(
+    integrated_authority,
+) -> None:
+    application = integrated_authority.build_application()
+    alice = TestClient(application, base_url="https://console.example")
+    bob = TestClient(application, base_url="https://console.example")
+    alice_csrf = login(alice, "alice-secret")
+    bob_csrf = login(bob, "bob-secret")
+    problem_id = create_problem(
+        alice, alice_csrf, key="criteria-target-problem"
+    ).json()["result"]["revision"]["business_problem_id"]
+
+    def request(members, key):
+        return alice.post(
+            f"{PREFIX}/authorization/grant-requests",
+            json={
+                "schemaVersion": "exact-grant-request.v1",
+                "purpose": "WORKBENCH_SUCCESS_CRITERIA",
+                "requestedGrants": members,
+            },
+            headers={
+                "origin": "https://console.example",
+                "x-csrf-token": alice_csrf,
+                "idempotency-key": key,
+            },
+        )
+
+    requested = request(
+        [
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "CREATE",
+                "resource": "success-criterion:collection",
+            },
+            {
+                "owner": "SUCCESS_CRITERION",
+                "action": "READ",
+                "resource": "success-criterion:collection",
+            },
+            {
+                "owner": "SUCCESS_CRITERIA_SET",
+                "action": "CREATE",
+                "resource": f"success-criteria-set:{problem_id}",
+            },
+        ],
+        "criteria-direct-request",
+    )
+    assert requested.status_code == 202
+    request_id = requested.json()["requestId"]
+    assert requested.json()["requestedActions"] == ["CREATE", "READ"]
+
+    self_decision = alice.post(
+        f"{PREFIX}/authorization/grant-requests/{request_id}/decisions",
+        json={
+            "schemaVersion": "exact-grant-decision.v1",
+            "expectedVersion": 1,
+            "decision": "APPROVE",
+            "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+            "basisType": "TICKET",
+            "basisReference": "S5-V023-IMPL-299",
+            "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": alice_csrf,
+            "idempotency-key": "criteria-self-decision",
+        },
+    )
+    assert self_decision.status_code == 404
+
+    independent = bob.post(
+        f"{PREFIX}/authorization/grant-requests/{request_id}/decisions",
+        json={
+            "schemaVersion": "exact-grant-decision.v1",
+            "expectedVersion": 1,
+            "decision": "APPROVE",
+            "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+            "basisType": "TICKET",
+            "basisReference": "S5-V023-IMPL-299",
+            "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": bob_csrf,
+            "idempotency-key": "criteria-independent-decision",
+        },
+    )
+    assert independent.status_code == 201
+    assert independent.json()["state"] == "APPROVED"
+
+    unknown = request(
+        [
+            {
+                "owner": "SUCCESS_CRITERIA_SET",
+                "action": "READ",
+                "resource": "success-criteria-set:unknown-problem",
+            }
+        ],
+        "criteria-unknown-target",
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["reasonCode"] == "GRANT_REQUEST_NOT_FOUND"
 
 
 def test_concurrent_first_create_mints_one_durable_offer(
