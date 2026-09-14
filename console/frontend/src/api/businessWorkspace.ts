@@ -10,6 +10,7 @@ export type CriteriaSetRevision={scope:Scope;set_revision_id:string;business_pro
 export type ProblemCreatorContinuation={schemaVersion:"problem-creator-continuation.v1";relation:"PROBLEM_CREATOR";purpose:"CONTINUE_PROBLEM_READ";state:"AVAILABLE"|"CONSUMED"|"EXPIRED";expiresAt:string;continuationId?:string;requestId?:string};
 export type GrantRequestStatus={requestId:string;state:"PENDING"|"APPROVED"|"REJECTED";aggregateVersion:number;submittedAt:string;purpose:string;requestedActions:string[]};
 export type GrantDecisionResult={schemaVersion:"exact-grant-decision-result.v1";requestId:string;decisionId:string;state:"APPROVED"|"REJECTED";aggregateVersion:number;decidedAt:string;notBefore?:string;expiresAt?:string};
+export type ExactGrantRequest={owner:"SUCCESS_CRITERION"|"SUCCESS_CRITERIA_SET";action:"CREATE"|"READ"|"REVISE";resource:string};
 type Envelope<T>={schemaVersion:"workbench-operation.v1";result:T;continuationIds:string[]};
 type ErrorBody={reasonCode?:string;requestId?:string};
 
@@ -51,6 +52,10 @@ export function createBusinessProblem(csrfToken:string,input:{title:string;descr
 
 export function submitProblemReadGrantRequest(csrfToken:string,continuationId:string,idempotencyKey:string){
   return authorizationWrite<GrantRequestStatus>("/authorization/grant-requests",csrfToken,idempotencyKey,{schemaVersion:"exact-grant-request.v1",purpose:"CONTINUE_PROBLEM_READ",requestedGrants:[],continuationIds:[continuationId]});
+}
+
+export function submitSuccessCriteriaGrantRequest(csrfToken:string,requestedGrants:ExactGrantRequest[],idempotencyKey:string){
+  return authorizationWrite<GrantRequestStatus>("/authorization/grant-requests",csrfToken,idempotencyKey,{schemaVersion:"exact-grant-request.v1",purpose:"WORKBENCH_SUCCESS_CRITERIA",requestedGrants,continuationIds:[]});
 }
 
 export const inspectGrantRequest=async(requestId:string)=>decode<GrantRequestStatus>(await fetch(`${PREFIX}/authorization/grant-requests/${encodeURIComponent(requestId)}`,{credentials:"same-origin",headers:{Accept:"application/json"}}));

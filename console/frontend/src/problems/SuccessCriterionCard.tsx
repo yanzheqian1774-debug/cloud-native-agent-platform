@@ -1,9 +1,10 @@
-import type {CriteriaSetRevision,CriterionRevision} from "../api/businessWorkspace";
+import type {CriteriaSetRevision,CriterionRevision,ExactGrantRequest,GrantRequestStatus} from "../api/businessWorkspace";
 import type {CriteriaSetBase,SuccessCriterionDraft,SuccessCriterionTurn} from "./successCriteriaModel";
 
-type Props={turn:SuccessCriterionTurn;busy:boolean;composerEditing:boolean;onConfirm:()=>void;onRecover:()=>void;onRestartAfterConflict:()=>void;onEdit:()=>void;onCancel:()=>void;onChange:(draft:SuccessCriterionDraft)=>void};
+type CriteriaAuthorization={stage:"WORKSPACE"|"CRITERION"|"SET";requestKey:string;grants:ExactGrantRequest[];request?:GrantRequestStatus}|null;
+type Props={turn:SuccessCriterionTurn;busy:boolean;composerEditing:boolean;authorization:CriteriaAuthorization;onConfirm:()=>void;onRecover:()=>void;onRequestAuthorization:()=>void;onRefreshAuthorization:()=>void;onRestartAfterConflict:()=>void;onEdit:()=>void;onCancel:()=>void;onChange:(draft:SuccessCriterionDraft)=>void};
 
-export function SuccessCriterionCard({turn,busy,composerEditing,onConfirm,onRecover,onRestartAfterConflict,onEdit,onCancel,onChange}:Props){
+export function SuccessCriterionCard({turn,busy,composerEditing,authorization,onConfirm,onRecover,onRequestAuthorization,onRefreshAuthorization,onRestartAfterConflict,onEdit,onCancel,onChange}:Props){
   const active=turn.phase==="DRAFT"||turn.phase==="EDITING",saving=turn.phase==="SAVING_CRITERION"||turn.phase==="SAVING_SET",unknown=turn.phase==="UNKNOWN_CRITERION"||turn.phase==="UNKNOWN_SET",saved=turn.phase==="SAVED";
   const status=active?"待确认":saving?"正在保存":unknown?"结果未知":turn.phase==="CRITERION_FAILED"?"标准未保存":turn.phase==="SET_FAILED"?"关联未完成":turn.phase==="CONFLICT"?"版本冲突":saved?"已保存":"已取消";
   return <section id="draft-success-criterion-message" tabIndex={-1} className={`px-inline-card px-criterion-card is-${turn.phase.toLowerCase()}`} aria-label="成功标准待确认卡片">
@@ -24,9 +25,11 @@ export function SuccessCriterionCard({turn,busy,composerEditing,onConfirm,onReco
       {turn.phase==="CRITERION_FAILED"&&<p className="px-mode-note">正式标准写入被拒绝或未完成，没有把草稿标成已保存。重试会沿用原标准命令。</p>}
       {turn.phase==="SET_FAILED"&&<p className="px-mode-note">标准 revision 已由正式接口返回，但 Criteria Set 关联未完成；它不会显示为 Problem 已保存标准。恢复会沿用原关联命令。</p>}
       {turn.phase==="CONFLICT"&&<p className="px-mode-note">服务器版本已经变化，原命令没有覆盖新版。请读取最新正式状态后重新确认关联基础。</p>}
+      {authorization&&<section className="px-criterion-authorization" aria-label="成功标准权限申请"><h3>{authorization.stage==="CRITERION"?"标准写入权限":"标准关联权限"}</h3>{authorization.request?<><span className={`px-status ${authorization.request.state==="APPROVED"?"success":authorization.request.state==="REJECTED"?"danger":"warning"}`}>{authorization.request.state==="PENDING"?"等待独立审批":authorization.request.state==="APPROVED"?"已批准":"已拒绝"}</span><p>{authorization.request.state==="PENDING"?"把精确申请编号交给独立管理员；批准前不会把失败的 owner 命令标成成功。":authorization.request.state==="REJECTED"?"管理员已拒绝，本页保留原命令和输入，不会绕过授权。":"权限已批准，页面将恢复原命令。"}</p><dl><dt>申请编号</dt><dd><code>{authorization.request.requestId}</code></dd><dt>请求操作</dt><dd>{authorization.request.requestedActions.join(", ")}</dd></dl><div className="px-card-actions">{authorization.request.state==="PENDING"&&<a href={`/authorization-admin?request=${encodeURIComponent(authorization.request.requestId)}`} target="_blank" rel="noreferrer">在独立管理员窗口打开</a>}{authorization.request.state==="REJECTED"?<button type="button" disabled={busy} onClick={onRequestAuthorization}>重新提交新申请</button>:<button type="button" disabled={busy} onClick={onRefreshAuthorization}>{busy?"正在检查…":"刷新权限状态并继续"}</button>}</div></>:<p>正在提交正式精确权限申请；申请不是授权，仍需另一位有权管理员决定。</p>}<details><summary>申请的精确权限</summary><ul>{authorization.grants.map(item=><li key={`${item.owner}:${item.action}:${item.resource}`}><code>{item.owner} {item.action} {item.resource}</code></li>)}</ul></details></section>}
     </>}
     {active&&!composerEditing&&<div className="px-card-actions"><button type="button" disabled={busy} onClick={onCancel}>取消</button><button type="button" disabled={busy} onClick={onEdit}>修改原文</button><button type="button" className="px-primary-button" disabled={busy||!turn.draft.text.trim()||turn.draft.kind!=="HUMAN_EVALUATED"} onClick={onConfirm}>确认并保存</button></div>}
-    {(unknown||turn.phase==="CRITERION_FAILED"||turn.phase==="SET_FAILED")&&<button type="button" className="px-primary-button" disabled={busy} onClick={onRecover}>{busy?"正在恢复原命令…":"恢复原保存结果"}</button>}
+    {unknown&&<button type="button" className="px-primary-button" disabled={busy} onClick={onRecover}>{busy?"正在恢复原命令…":"恢复原保存结果"}</button>}
+    {(turn.phase==="CRITERION_FAILED"||turn.phase==="SET_FAILED")&&!authorization?.request&&<button type="button" className="px-primary-button" disabled={busy} onClick={onRequestAuthorization}>{busy?"正在申请…":"申请所需精确权限"}</button>}
     {turn.phase==="CONFLICT"&&<button type="button" className="px-primary-button" disabled={busy} onClick={onRestartAfterConflict}>读取最新状态并选择精确集合</button>}
   </section>;
 }

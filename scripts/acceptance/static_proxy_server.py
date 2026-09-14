@@ -15,6 +15,7 @@ class Handler(BaseHTTPRequestHandler):
     root: Path
     backend_host: str
     backend_port: int
+    forwarded_origin: str | None = None
 
     def proxy(self) -> None:
         length = int(self.headers.get("content-length", "0"))
@@ -24,6 +25,9 @@ class Handler(BaseHTTPRequestHandler):
             for key, value in self.headers.items()
             if key.lower() not in {"host", "content-length", "connection"}
         }
+        if self.forwarded_origin and self.command in {"POST", "PUT", "PATCH", "DELETE"}:
+            headers["Origin"] = self.forwarded_origin
+            headers["Sec-Fetch-Site"] = "same-origin"
         connection = http.client.HTTPConnection(self.backend_host, self.backend_port)
         connection.request(self.command, self.path, body=body, headers=headers)
         response = connection.getresponse()
@@ -77,10 +81,23 @@ def main() -> None:
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--backend-url", required=True)
+    parser.add_argument("--forward-origin")
     args = parser.parse_args()
     backend = urlparse(args.backend_url)
     if backend.scheme != "http" or not backend.hostname or not backend.port:
         parser.error("backend URL must include explicit http host and port")
+    if args.forward_origin:
+        origin = urlparse(args.forward_origin)
+        if (
+            origin.scheme != "https"
+            or not origin.hostname
+            or origin.path not in {"", "/"}
+            or origin.params
+            or origin.query
+            or origin.fragment
+        ):
+            parser.error("forward origin must be an HTTPS origin without a path")
+        Handler.forwarded_origin = args.forward_origin.rstrip("/")
     Handler.root = args.root.resolve()
     Handler.backend_host = backend.hostname
     Handler.backend_port = backend.port

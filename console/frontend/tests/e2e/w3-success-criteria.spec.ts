@@ -5,7 +5,8 @@ const problem={scope:{namespace:"tenant-a",security_domain:"quality"},business_p
 const envelope=(result:unknown)=>({schemaVersion:"workbench-operation.v1",result,continuationIds:[]});
 type CriterionPayload={successCriterionId?:string;predecessorRevisionId?:string;expectedVersion?:number;criterionType:string;measurement:Record<string,unknown>;requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:Record<string,unknown>;idempotencyKey:string};
 type SetPayload={problemRevisionId:string;predecessorSetRevisionId?:string;orderedCriterionRevisionIds:string[];expectedVersion:number;idempotencyKey:string};
-type State={aggregateVersion:number;criteria:CriterionRevision[];sets:CriteriaSetRevision[];criterionWrites:CriterionPayload[];setWrites:SetPayload[];principalId?:string;denyCriterion?:boolean;staleSet?:boolean;unknownCriterionOnce?:boolean;unknownSetOnce?:boolean;holdCriterion?:boolean;continueCriterion?:()=>void;holdSet?:boolean;continueSet?:()=>void};
+type GrantPayload={purpose:string;requestedGrants:{owner:string;action:string;resource:string}[]};
+type State={aggregateVersion:number;criteria:CriterionRevision[];sets:CriteriaSetRevision[];criterionWrites:CriterionPayload[];setWrites:SetPayload[];grantWrites?:GrantPayload[];grantState?:"PENDING"|"APPROVED"|"REJECTED";principalId?:string;denyCriterion?:boolean;denySet?:boolean;staleSet?:boolean;unknownCriterionOnce?:boolean;unknownSetOnce?:boolean;holdCriterion?:boolean;continueCriterion?:()=>void;holdSet?:boolean;continueSet?:()=>void};
 
 async function installRoutes(page:import("@playwright/test").Page,state:State){
   await page.route("**/api/workbench/v1/session",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({schemaVersion:"workbench-session.v1",principal:{principalId:state.principalId??"human:owner",tenantId:"tenant-a",securityDomain:"quality"},session:{expiresAt:"2026-09-15T00:00:00Z",idleExpiresAt:"2026-09-14T01:00:00Z"},csrfToken:"csrf-test"})}));
@@ -15,6 +16,7 @@ async function installRoutes(page:import("@playwright/test").Page,state:State){
   await page.route("**/api/workbench/v1/problems/problem%3Aw3-1/criteria-sets",async route=>{
     if(route.request().method()==="GET"){await route.fulfill({contentType:"application/json",body:JSON.stringify(envelope({revisions:state.sets}))});return}
     const payload=route.request().postDataJSON() as SetPayload;state.setWrites.push(payload);
+    if(state.denySet){await route.fulfill({status:403,contentType:"application/json",body:JSON.stringify({reasonCode:"AUTHORIZATION_DENIED"})});return}
     if(state.staleSet){await route.fulfill({status:409,contentType:"application/json",body:JSON.stringify({reasonCode:"BUSINESS_PROBLEM_CONFLICT"})});return}
     if(state.unknownSetOnce){state.unknownSetOnce=false;await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({reasonCode:"BUSINESS_PROBLEM_STORAGE_UNAVAILABLE"})});return}
     if(state.holdSet){state.holdSet=false;await new Promise<void>(resolve=>{state.continueSet=resolve})}
@@ -27,6 +29,13 @@ async function installRoutes(page:import("@playwright/test").Page,state:State){
     if(state.holdCriterion){state.holdCriterion=false;await new Promise<void>(resolve=>{state.continueCriterion=resolve})}
     const prior=payload.predecessorRevisionId?state.criteria.find(item=>item.revision_id===payload.predecessorRevisionId):undefined;
     const revision={scope:problem.scope,success_criterion_id:payload.successCriterionId??"criterion:w3-1",revision_id:`criterion-revision:w3:${state.criteria.length+1}`,revision:prior?prior.revision+1:1,predecessor_revision_id:payload.predecessorRevisionId??null,criterion_type:payload.criterionType,measurement:payload.measurement,required_evidence_kinds:payload.requiredEvidenceKinds,evaluator_type:payload.evaluatorType,evaluator_version:payload.evaluatorVersion,applicability:payload.applicability,created_by:"human:owner",created_at:"2026-09-14T00:29:00Z",digest:"e".repeat(64)};state.criteria.push(revision);await route.fulfill({status:201,contentType:"application/json",body:JSON.stringify(envelope({revision}))});
+  });
+  await page.route("**/api/workbench/v1/authorization/grant-requests**",async route=>{
+    if(route.request().method()==="POST"){
+      const payload=route.request().postDataJSON() as GrantPayload;(state.grantWrites??=[]).push(payload);state.grantState="PENDING";
+      await route.fulfill({status:202,contentType:"application/json",body:JSON.stringify({requestId:`grant-request-${state.grantWrites.length}`,state:"PENDING",aggregateVersion:1,submittedAt:"2026-09-14T00:31:00Z",purpose:payload.purpose,requestedActions:[...new Set(payload.requestedGrants.map(item=>item.action))]})});return;
+    }
+    const id=route.request().url().split("/").at(-1);await route.fulfill({contentType:"application/json",body:JSON.stringify({requestId:id,state:state.grantState??"PENDING",aggregateVersion:state.grantState==="PENDING"?1:2,submittedAt:"2026-09-14T00:31:00Z",purpose:"WORKBENCH_SUCCESS_CRITERIA",requestedActions:state.grantWrites?.at(-1)?.requestedGrants.map(item=>item.action)??[]})});
   });
 }
 
@@ -55,6 +64,14 @@ test("unknown commands preserve payload and new input while access denial and st
 
 test("Problem read does not grant success criterion writes",async({page})=>{
   const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[],denyCriterion:true};await installRoutes(page,state);await page.goto("/work?problem=problem%3Aw3-1");const card=await draftCriterion(page,"人工确认业务恢复。");await card.getByRole("button",{name:"确认并保存"}).click();await expect(page.getByRole("alert")).toContainText("当前会话不能执行这项操作");await expect(card).toContainText("标准未保存");expect(state.setWrites).toHaveLength(0);
+});
+
+test("formal requests and independent decisions resume the frozen criterion and set commands",async({page},testInfo)=>{
+  const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[],grantWrites:[],denyCriterion:true,denySet:true};await installRoutes(page,state);await page.setViewportSize({width:1440,height:900});await page.goto("/work?problem=problem%3Aw3-1");const card=await draftCriterion(page,"业务负责人确认三批交付恢复。");await card.getByRole("button",{name:"确认并保存"}).click();await expect(card).toContainText("标准未保存");
+  await card.getByRole("button",{name:"申请所需精确权限"}).click();await expect(card.getByLabel("成功标准权限申请")).toContainText("等待独立审批");expect(state.grantWrites).toHaveLength(1);expect(state.grantWrites?.[0]).toMatchObject({purpose:"WORKBENCH_SUCCESS_CRITERIA",requestedGrants:[{owner:"SUCCESS_CRITERION",action:"CREATE",resource:"success-criterion:collection"},{owner:"SUCCESS_CRITERION",action:"READ",resource:"success-criterion:collection"}]});
+  state.grantState="APPROVED";state.denyCriterion=false;await card.getByRole("button",{name:"刷新权限状态并继续"}).click();await expect(card).toContainText("关联未完成");expect(state.criterionWrites).toHaveLength(2);expect(state.criterionWrites[1]).toEqual(state.criterionWrites[0]);
+  await card.getByRole("button",{name:"申请所需精确权限"}).click();expect(state.grantWrites).toHaveLength(2);expect(state.grantWrites?.[1].requestedGrants).toEqual([{owner:"SUCCESS_CRITERION",action:"READ",resource:"success-criterion:revision:criterion-revision:w3:1"},{owner:"SUCCESS_CRITERIA_SET",action:"CREATE",resource:"success-criteria-set:problem:w3-1"},{owner:"SUCCESS_CRITERIA_SET",action:"READ",resource:"success-criteria-set:problem:w3-1"}]);
+  state.grantState="APPROVED";state.denySet=false;await card.getByRole("button",{name:"刷新权限状态并继续"}).click();await expect(card).toContainText("已保存并完成正式关联");expect(state.setWrites).toHaveLength(2);expect(state.setWrites[1]).toEqual(state.setWrites[0]);await page.screenshot({path:testInfo.outputPath("w3-formal-authorization-1440x900.png"),fullPage:true});
 });
 
 test("a changed trusted session isolates an in-flight criterion command",async({page})=>{

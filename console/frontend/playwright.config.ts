@@ -23,7 +23,7 @@ export default defineConfig({
         ? `${process.env.S5_HARNESS_PYTHON} ../../scripts/acceptance/static_proxy_server.py --root dist --host 127.0.0.1 --port ${frontendPort} --backend-url ${process.env.CONSOLE_BACKEND_URL}`
         : `VITE_SUPPLIER_QUALITY_DEMO_MODE=live npm run build && npm run preview -- --host 127.0.0.1 --port ${frontendPort}`,
       url: `http://127.0.0.1:${frontendPort}`,
-      reuseExistingServer: false,
+      reuseExistingServer: process.env.S5_REUSE_FRONTEND_SERVER === "1",
     },
   ],
 });

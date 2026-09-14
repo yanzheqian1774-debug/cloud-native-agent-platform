@@ -221,3 +221,15 @@ def test_success_criterion_draft_uses_the_single_composer_and_explicit_type() ->
         assert marker in page or marker in card or marker in model
     assert "SavedCriteriaHistory" in page
     assert "列表按 revision 倒序显示不等于自动选择 latest" in card
+    api = text("api/businessWorkspace.ts")
+    for marker in (
+        "submitSuccessCriteriaGrantRequest",
+        "WORKBENCH_SUCCESS_CRITERIA",
+        "criteriaGrantBundle",
+        "申请所需精确权限",
+        "等待独立审批",
+        "刷新权限状态并继续",
+        "success-criterion:collection",
+        "success-criteria-set:",
+    ):
+        assert marker in page or marker in card or marker in api

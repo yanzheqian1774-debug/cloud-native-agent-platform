@@ -231,3 +231,32 @@ Criteria Set 是同一 Problem 下的版本化成功标准集合；Criteria 是�
 新增定向测试直接调用正式 `BusinessProblemApplication` 和 `PostgresBusinessProblemRepository`，不启动 HTTP，不发送身份 header，不调用私有 API，也不构造或预置浏览器 grant。它证明 Problem 创建与 exact 持久化读回、Problem/Criterion/Criteria Set 修订和 CAS、六类写命令的同键同 payload 重放、Criterion 已提交而 Criteria Set CAS 失败时的不可见 membership 与后续恢复，以及 repository 重建后的权威历史读回。测试中的 authority 仅记录 application 所要求的 exact owner/action/resource 调用，因此结果是 application/repository **服务级证据**，不是授权 service、真实 BFF 或可信浏览器证据。
 
 可信浏览器验证仍为 `NOT_EVIDENCED`：在 305 交付 10.4 所列公共 continuation/grant/current-decision 接点前，不以预置授权、身份 header、内部 API 或私有回退冒充新对象 `continuation → request → decision → exact read` 闭环。
+
+## 13. 2026-09-14 W3 正式权限组合计划
+
+Gate：`G1 / BOUNDED_CONSUMER_INTEGRATION`。输入固定为 299
+`33a4bbb7aefe58bc1d61a6c29281a87c7cbc8c3a`（tree
+`372024da8d59e380644ef143899b9563036c9786`）与 Human 接受的 305
+`5a32fbb918a3c30ad50141e8bfbe7613673dc412`（tree
+`36ae844488fe94c2b0c2e10760a063e7e5a14616`）。本计划只组合 299 所需符号，
+不整体合并或 cherry-pick 305，不修改 305/310，不新增端点、DTO、数据库、
+授权 owner 或公共 Contract。
+
+| 用户动作 | 精确申请目标 | 批准后的恢复点 |
+| --- | --- | --- |
+| 首次创建 Criterion | `SUCCESS_CRITERION CREATE/READ success-criterion:collection` | 重放冻结的 Criterion command；得到 exact revision 后再进入下一授权阶段 |
+| 修订 Criterion | aggregate `REVISE/READ` 与 predecessor revision `READ` | 重放原 revision command；stale CAS 保持冲突，不自动换 predecessor |
+| 创建或修订 Criteria Set | `SUCCESS_CRITERIA_SET CREATE/READ` 或 `REVISE/READ success-criteria-set:{problemId}`，以及新 member revision `READ` | 保留已提交 Criterion 与冻结 set command；批准后只恢复 set command |
+
+后端范围限于 `BusinessProblemRepository` 的 canonical target-validation port、
+PostgreSQL 同事务实现、组合 validator 对既有 Problem continuation 的委托、
+`workbench_bootstrap.py` 注入，以及外部 immutable generation 中
+`WORKBENCH_SUCCESS_CRITERIA` 的闭集 requestability。前端复用
+`exact-grant-request.v1`、request inspect 与独立管理员 decision 页面；申请状态、
+原 owner command 和幂等键按当前 Problem/session 隔离。申请本身不授予权限，
+CREATE 不派生 object READ，批准人与申请人必须不同。
+
+验证包括定向 Python/TypeScript/Playwright、真实 PostgreSQL 与公共 ASGI HTTP、
+`1440x900` 真实浏览器、frontend lint/build、`make check`、提交 hooks、普通 push
+和同一 Draft PR CI。390x844、触屏、移动导航和移动截图补证改列后续欠项；
+保留既有移动代码与证据，不为本次优先级调整回滚。
