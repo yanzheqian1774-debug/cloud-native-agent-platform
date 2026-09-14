@@ -200,7 +200,7 @@ def _same_sha256_digest(left: object, right: object) -> bool:
 
 def _lifecycle_state(actions: list[str]) -> str:
     """Project current authoring state without disclosing the underlying facts."""
-    if not actions or actions[0] != "CREATE":
+    if not actions:
         raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
     publication = next(
         (action for action in reversed(actions) if action in _PUBLICATION_ACTIONS),

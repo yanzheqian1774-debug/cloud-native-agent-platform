@@ -260,7 +260,7 @@ class EmployeeDefinitionCommandOwnerAdapter:
             else:
                 status = 409
             raise WorkbenchOwnerError(reason, status) from exc
-        except (PostgresError, KeyError, TypeError, ValueError) as exc:
+        except (PostgresError, KeyError, TypeError) as exc:
             raise WorkbenchOwnerError(
                 "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE", 503
             ) from exc

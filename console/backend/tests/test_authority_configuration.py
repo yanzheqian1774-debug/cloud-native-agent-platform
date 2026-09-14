@@ -185,6 +185,34 @@ def test_agent_exact_read_and_list_are_registered_without_lifecycle_actions() ->
             )
 
 
+def test_employee_lifecycle_actions_are_registered_but_not_bootstrap_grants(
+    tmp_path: Path,
+) -> None:
+    for action in ("VALIDATE", "APPROVE", "PUBLISH"):
+        validate_registered_grant(
+            ExactGrant(
+                "EMPLOYEE",
+                action,
+                "employee:employee-definition:quality:aggregate",
+            ),
+            allow_meta=False,
+        )
+
+    document = generation_document()
+    document["credentials"][0]["grants"] = [  # type: ignore[index]
+        {
+            "owner": "EMPLOYEE",
+            "action": "PUBLISH",
+            "resource": "employee:employee-definition:quality:aggregate",
+            "source": "BROWSER_BOOTSTRAP",
+        }
+    ]
+    path = tmp_path / "employee-bootstrap.json"
+    digest = write_generation(path, document)
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONFIGURATION_INVALID"):
+        StaticAuthorityLoader.load(path, expected_digest=digest)
+
+
 def test_placement_exact_read_is_registered_without_other_actions() -> None:
     validate_registered_grant(
         ExactGrant("PLACEMENT", "READ", "placement:placement:quality"),
