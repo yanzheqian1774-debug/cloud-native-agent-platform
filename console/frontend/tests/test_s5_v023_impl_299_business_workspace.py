@@ -46,7 +46,8 @@ def test_first_slice_preserves_identity_cas_and_refresh() -> None:
         'continuation?.state==="CONSUMED"',
         'continuation?.state==="EXPIRED"',
         "requestKey",
-        "persistAuthorization(problemId,pending)",
+        "persistAuthorization(problemId,currentSession,pending)",
+        "stored.contextKey===contextKey",
     ):
         assert marker in page
     assert "writeCriterion" not in page

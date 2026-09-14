@@ -7,14 +7,14 @@ type Props={revision?:BusinessProblemRevision;detail?:BusinessProblemDetail;auth
 const latest=<T extends {revision:number}>(values:T[])=>[...values].sort((a,b)=>b.revision-a.revision)[0];
 
 export function ProblemTaskSummary({revision,detail,authorization,busy,readFailed,contextKey,onLocateProblem,onLocateAuthorization}:Props){
-  const trigger=useRef<HTMLButtonElement>(null),dialog=useRef<HTMLDialogElement>(null),[copied,setCopied]=useState(false);
+  const trigger=useRef<HTMLButtonElement>(null),dialog=useRef<HTMLDialogElement>(null),activeContext=useRef(contextKey),[copiedContext,setCopiedContext]=useState("");
   const exact=detail?.revisions.find(item=>item.revision_id===detail.problem.current_revision_id)??(detail?latest(detail.revisions):undefined),formal=exact??revision;
-  useEffect(()=>{if(dialog.current?.open)dialog.current.close()},[contextKey]);
+  useEffect(()=>{activeContext.current=contextKey;if(dialog.current?.open)dialog.current.close()},[contextKey]);
   function open(){dialog.current?.showModal()}
   function close(){dialog.current?.close();trigger.current?.focus()}
-  async function copyRequest(){const requestId=authorization.request?.requestId;if(!requestId)return;try{await navigator.clipboard.writeText(requestId);setCopied(true)}catch{setCopied(false)}}
+  async function copyRequest(){const requestId=authorization.request?.requestId,expectedContext=activeContext.current;if(!requestId)return;try{await navigator.clipboard.writeText(requestId);if(activeContext.current===expectedContext)setCopiedContext(expectedContext)}catch{if(activeContext.current===expectedContext)setCopiedContext("")}}
   function locate(target:()=>void){if(dialog.current?.open)dialog.current.close();requestAnimationFrame(target)}
-  const content=<SummaryContent revision={formal} exact={exact} authorization={authorization} busy={busy} readFailed={readFailed} copied={copied} onCopy={()=>void copyRequest()} onLocateProblem={()=>locate(onLocateProblem)} onLocateAuthorization={()=>locate(onLocateAuthorization)}/>;
+  const content=<SummaryContent revision={formal} exact={exact} authorization={authorization} busy={busy} readFailed={readFailed} copied={copiedContext===contextKey} onCopy={()=>void copyRequest()} onLocateProblem={()=>locate(onLocateProblem)} onLocateAuthorization={()=>locate(onLocateAuthorization)}/>;
   return <div className="px-task-summary">
     <button ref={trigger} type="button" className="px-task-summary-trigger" aria-label="本任务" aria-haspopup="dialog" onClick={open}>本任务</button>
     <aside className="px-task-summary-panel" aria-labelledby="task-summary-title"><h2 id="task-summary-title">本任务</h2><p>只读汇总当前正式响应，不是第二份业务记录。</p>{content}</aside>

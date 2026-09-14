@@ -59,6 +59,8 @@ const createdProblem = {
   digest: "sha256:" + "c".repeat(64),
 };
 
+const applicantContextKey = "human:applicant\u0000tenant-a\u0000quality";
+
 async function installRoutes(page: import("@playwright/test").Page, identity: { value: string | null }) {
   await page.route("**/api/workbench/v1/session", route => identity.value
     ? route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-session.v1", principal: { principalId: identity.value, tenantId: "tenant-a", securityDomain: "quality" }, session: { expiresAt: "2026-09-14T00:00:00Z", idleExpiresAt: "2026-09-14T00:00:00Z" }, csrfToken: "redacted-test-value" }) })
@@ -311,6 +313,7 @@ test("a changed trusted subject isolates the draft and ignores the old create re
 test("created problem continues through pending approval to a fresh exact read", async ({ page }, testInfo) => {
   const identity = { value: "human:applicant" as string | null };
   let grantState: "PENDING" | "APPROVED" = "PENDING";
+  let exactReadFails = false;
   let exactReads = 0;
   await installRoutes(page, identity);
   await page.route("**/api/workbench/v1/problems", async route => {
@@ -322,6 +325,10 @@ test("created problem continues through pending approval to a fresh exact read",
   });
   await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", async route => {
     exactReads += 1;
+    if (exactReadFails) {
+      await route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) });
+      return;
+    }
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problem: { scope: createdProblem.scope, business_problem_id: createdProblem.business_problem_id, owner_id: createdProblem.owner_id, current_state: "OPEN", aggregate_version: 1, current_revision_id: createdProblem.revision_id, created_by: createdProblem.created_by, created_at: createdProblem.created_at, updated_at: createdProblem.created_at }, revisions: [createdProblem], lifecycle: [] }, continuationIds: [] }) });
   });
   await page.route("**/api/workbench/v1/authorization/grant-requests", async route => {
@@ -365,18 +372,28 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(drawer.getByText(createdProblem.description, { exact: true })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "关闭本任务", exact: true })).toBeFocused();
   expect(await drawer.evaluate(node => node.matches(":modal"))).toBe(true);
+  await page.getByRole("button", { name: "刷新授权状态", exact: true }).evaluate(button => (button as HTMLButtonElement).focus());
+  await expect(drawer.getByRole("button", { name: "关闭本任务", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  expect(await drawer.evaluate(node => node.contains(document.activeElement))).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("w2d-task-summary-drawer-390x844.png") });
   await drawer.getByRole("button", { name: "关闭本任务", exact: true }).click();
   await expect(summaryTrigger).toBeFocused();
+  exactReadFails = true;
+  await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
+  await summaryTrigger.click();
+  await expect(drawer.getByText("读取失败", { exact: true })).toBeVisible();
+  await expect(drawer.getByText(createdProblem.description, { exact: true })).toHaveCount(0);
+  expect(exactReads).toBe(3);
 });
 
 test("a rejected authorization card does not perform an exact read", async ({ page }) => {
   const identity = { value: "human:applicant" as string | null };
   let exactReads = 0;
   await installRoutes(page, identity);
-  await page.addInitScript(problemId => {
-    sessionStorage.setItem(`impl299.authorization.${problemId}`, JSON.stringify({ request: { requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] } }));
-  }, createdProblem.business_problem_id);
+  await page.addInitScript(({ problemId, contextKey }) => {
+    sessionStorage.setItem(`impl299.authorization.${problemId}`, JSON.stringify({ contextKey, state: { request: { requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] } } }));
+  }, { problemId: createdProblem.business_problem_id, contextKey: applicantContextKey });
   await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) }));
   await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => { exactReads += 1; return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }); });
   await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Arejected", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) }));
@@ -390,7 +407,7 @@ test("an expired creator continuation is explicit and does not read protected co
   const identity = { value: "human:applicant" as string | null };
   let exactReads = 0;
   await installRoutes(page, identity);
-  await page.addInitScript(problemId => { sessionStorage.setItem(`impl299.authorization.${problemId}`, JSON.stringify({ continuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "EXPIRED", expiresAt: "2026-09-13T23:00:00Z" } })); }, createdProblem.business_problem_id);
+  await page.addInitScript(({ problemId, contextKey }) => { sessionStorage.setItem(`impl299.authorization.${problemId}`, JSON.stringify({ contextKey, state: { continuation: { schemaVersion: "problem-creator-continuation.v1", relation: "PROBLEM_CREATOR", purpose: "CONTINUE_PROBLEM_READ", state: "EXPIRED", expiresAt: "2026-09-13T23:00:00Z" } } })); }, { problemId: createdProblem.business_problem_id, contextKey: applicantContextKey });
   await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) }));
   await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => { exactReads += 1; return route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }); });
   await page.goto("/work?problem=problem%3Aconversation-1");
@@ -406,4 +423,19 @@ test("a hidden Problem 404 preserves the non-disclosure boundary", async ({ page
   await page.goto("/work?problem=problem%3Ahidden");
   await expect(page.getByRole("alert")).toContainText("该内容可能不存在，也可能对当前会话不可见");
   await expect(page.getByText("diagnostic:hidden", { exact: true })).not.toBeVisible();
+});
+
+test("an unbound request id is ignored for the current session and Problem", async ({ page }) => {
+  const identity = { value: "human:applicant" as string | null };
+  let requestInspections = 0;
+  await installRoutes(page, identity);
+  await page.route("**/api/workbench/v1/problems", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { problems: [createdProblem] }, continuationIds: [] }) }));
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1", route => route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ reasonCode: "AUTHORIZATION_DENIED" }) }));
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1/criteria-sets", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revisions: [] }, continuationIds: [] }) }));
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1/criteria", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revisions: [] }, continuationIds: [] }) }));
+  await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Aforeign", route => { requestInspections += 1; return route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:foreign", state: "APPROVED", aggregateVersion: 9, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) }); });
+  await page.goto("/work?problem=problem%3Aconversation-1&request=grant-request%3Aforeign");
+  await expect(page.getByText("链接中的申请编号不属于当前会话与问题", { exact: false })).toBeVisible();
+  expect(requestInspections).toBe(0);
+  await expect(page.getByText("grant-request:foreign", { exact: true })).toHaveCount(0);
 });
