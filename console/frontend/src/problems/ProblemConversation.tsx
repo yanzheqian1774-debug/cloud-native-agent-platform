@@ -17,7 +17,7 @@ export function ConversationFrame({children,composer,newMessageKey}:{children:Re
   </section>;
 }
 
-export function ConversationComposer({value,onChange,onSend,onCancelEdit,disabled,mode="NEW",lockedReason="当前操作请使用消息中的卡片。"}:{value:string;onChange:(value:string)=>void;onSend:()=>void;onCancelEdit:()=>void;disabled:boolean;mode?:"NEW"|"DRAFT_REPLACE"|"FORMAL_REPLACE"|"LOCKED";lockedReason?:string}){
+export function ConversationComposer({value,onChange,onSend,onCancelEdit,disabled,mode="NEW",lockedReason="当前操作请使用消息中的卡片。",lockedLabel="当前步骤"}:{value:string;onChange:(value:string)=>void;onSend:()=>void;onCancelEdit:()=>void;disabled:boolean;mode?:"NEW"|"DRAFT_REPLACE"|"FORMAL_REPLACE"|"LOCKED";lockedReason?:string;lockedLabel?:string}){
   const input=useRef<HTMLTextAreaElement>(null);
   useEffect(()=>{const node=input.current;if(!node)return;node.style.height="auto";node.style.height=`${Math.min(node.scrollHeight,144)}px`},[value,mode]);
   useEffect(()=>{if(mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE")input.current?.focus()},[mode]);
@@ -27,10 +27,11 @@ export function ConversationComposer({value,onChange,onSend,onCancelEdit,disable
     event.preventDefault();if(value.trim()&&!disabled&&mode!=="LOCKED")onSend();
   }
   const replacing=mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE",formal=mode==="FORMAL_REPLACE",locked=mode==="LOCKED";
+  if(locked)return <section className="px-composer px-composer-locked" role="status" aria-live="polite"><span>{lockedLabel}</span><p>{lockedReason}</p></section>;
   return <form className="px-composer" aria-label={replacing?"完整修改问题草稿":"描述业务问题"} onSubmit={submit}>
-    <label htmlFor="problem-composer">{formal?"完整替换正式问题描述":replacing?"完整替换草稿描述":locked?"当前输入不可用":"你希望解决什么问题？"}</label>
-    <textarea ref={input} id="problem-composer" value={value} disabled={disabled||locked} maxLength={2_000} rows={1} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={replacing?"请输入完整描述；采用后会替换当前描述。":locked?lockedReason:"描述现状、影响和希望解决的问题。"}/>
-    <div className="px-composer-footer"><span>{replacing?"无模型模式：本次输入会完整替换描述。":locked?lockedReason:"Enter 发送，Shift+Enter 换行；发送后仍需确认。"}</span><div>{replacing&&<button type="button" onClick={onCancelEdit}>取消修改</button>}<button className="px-primary-button" type="submit" disabled={disabled||locked||!value.trim()}>{formal?"采用正式描述":replacing?"采用草稿描述":"发送"}</button></div></div>
+    <label htmlFor="problem-composer">{formal?"完整替换正式问题描述":replacing?"完整替换草稿描述":"你希望解决什么问题？"}</label>
+    <textarea ref={input} id="problem-composer" value={value} disabled={disabled} maxLength={2_000} rows={1} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={replacing?"请输入完整描述；采用后会替换当前描述。":"描述现状、影响和希望解决的问题。"}/>
+    <div className="px-composer-footer"><span>{replacing?"无模型模式：本次输入会完整替换描述。":"Enter 发送，Shift+Enter 换行；发送后仍需确认。"}</span><div>{replacing&&<button type="button" onClick={onCancelEdit}>取消修改</button>}<button className="px-primary-button" type="submit" disabled={disabled||!value.trim()}>{formal?"采用正式描述":replacing?"采用草稿描述":"发送"}</button></div></div>
   </form>;
 }
 

@@ -344,10 +344,18 @@ test("created problem continues through pending approval to a fresh exact read",
   await page.getByRole("button", { name: "确认创建", exact: true }).click();
   await page.getByRole("button", { name: "申请查看权限", exact: true }).click();
   await expect(page.getByText("等待管理员处理", { exact: true })).toBeVisible();
+  const waitingComposer = page.locator(".px-composer-locked");
+  await expect(waitingComposer.getByText("等待授权", { exact: true })).toBeVisible();
+  await expect(waitingComposer.getByText("正在等待独立管理员处理", { exact: false })).toBeVisible();
+  await expect(waitingComposer.locator("textarea")).toHaveCount(0);
+  await expect(waitingComposer.getByRole("button")).toHaveCount(0);
   expect(exactReads).toBe(0);
   const desktopSummary = page.locator(".px-task-summary-panel");
   await expect(desktopSummary.getByRole("heading", { name: createdProblem.title, exact: true })).toBeVisible();
-  await expect(desktopSummary.getByText("受保护正文尚未通过 exact GET 读取", { exact: false })).toBeVisible();
+  await expect(desktopSummary.getByText("获得查看权限后显示问题详情。", { exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("授权状态", { exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("内容读取", { exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("尚未读取", { exact: true })).toBeVisible();
   await expect(desktopSummary.getByRole("heading", { name: "等待审批", exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-waiting-authorization-1440.png"), fullPage: true });
@@ -355,7 +363,11 @@ test("created problem continues through pending approval to a fresh exact read",
   await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
   await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
   expect(exactReads).toBe(1);
-  await expect(page.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
+  const formalProblem = page.locator("#formal-problem-message");
+  await expect(formalProblem.getByText("修改此问题需要另行授权", { exact: false })).toBeVisible();
+  await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeHidden();
+  await formalProblem.getByText("技术详情", { exact: true }).click();
+  await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
   await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("读取成功", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-approved-exact-read-1440.png"), fullPage: true });
@@ -366,6 +378,9 @@ test("created problem continues through pending approval to a fresh exact read",
   expect(exactReads).toBe(2);
   await page.setViewportSize({ width: 390, height: 844 });
   const summaryTrigger = page.getByRole("button", { name: "本任务", exact: true });
+  const triggerBox = await summaryTrigger.boundingBox();
+  expect(triggerBox?.width).toBeGreaterThanOrEqual(350);
+  expect(triggerBox?.height).toBeGreaterThanOrEqual(48);
   await summaryTrigger.click();
   const drawer = page.getByRole("dialog", { name: "本任务" });
   await expect(drawer).toBeVisible();
@@ -382,7 +397,7 @@ test("created problem continues through pending approval to a fresh exact read",
   exactReadFails = true;
   await page.getByRole("button", { name: "刷新授权状态", exact: true }).click();
   await summaryTrigger.click();
-  await expect(drawer.getByText("读取失败", { exact: true })).toBeVisible();
+  await expect(drawer.getByText("暂时无法读取", { exact: true })).toBeVisible();
   await expect(drawer.getByText(createdProblem.description, { exact: true })).toHaveCount(0);
   expect(exactReads).toBe(3);
 });
@@ -399,7 +414,7 @@ test("a rejected authorization card does not perform an exact read", async ({ pa
   await page.route("**/api/workbench/v1/authorization/grant-requests/grant-request%3Arejected", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ requestId: "grant-request:rejected", state: "REJECTED", aggregateVersion: 2, submittedAt: "2026-09-14T00:22:00Z", purpose: "CONTINUE_PROBLEM_READ", requestedActions: ["READ"] }) }));
   await page.goto("/work?problem=problem%3Aconversation-1&request=grant-request%3Arejected");
   await expect(page.getByLabel("业务问题对话").getByText("已拒绝", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("业务问题对话").getByText("页面不会读取问题正文", { exact: false })).toBeVisible();
+  await expect(page.getByLabel("业务问题对话").getByText("页面不会读取问题详情", { exact: false })).toBeVisible();
   expect(exactReads).toBe(0);
 });
 

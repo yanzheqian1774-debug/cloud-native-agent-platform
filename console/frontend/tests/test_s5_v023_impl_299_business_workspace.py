@@ -133,8 +133,11 @@ def test_editors_are_exclusive_and_task_summary_is_read_only() -> None:
     ):
         assert marker in page or marker in conversation
     for marker in (
-        "只读汇总当前正式响应",
-        "受保护正文尚未通过 exact GET 读取",
+        "根据当前问题与授权状态汇总",
+        "获得查看权限后显示问题详情",
+        "授权状态",
+        "内容读取",
+        "暂时无法读取",
         "定位问题消息",
         "定位授权消息",
         "showModal",
@@ -146,6 +149,13 @@ def test_editors_are_exclusive_and_task_summary_is_read_only() -> None:
         "decideGrantRequest",
     ):
         assert forbidden not in summary
+    assert (
+        'if(locked)return <section className="px-composer px-composer-locked"'
+        in conversation
+    )
+    assert "px-task-summary-trigger>span:first-child" in text(
+        "styles/product-experience.css"
+    )
 
 
 def test_conversation_isolates_context_and_freezes_unknown_create() -> None:
