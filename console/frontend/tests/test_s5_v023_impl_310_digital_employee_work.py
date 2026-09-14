@@ -91,9 +91,9 @@ def test_work_participation_preserves_exact_coordinates_and_parent_binding() -> 
         assert identity in work
     assert "verifyPlacementBinding" in work
     assert "PLACEMENT_BINDING_IDENTITY_MISMATCH" in work
-    assert "可信只读工作关联" in work
-    assert "当前没有 Instance、Assignment 或 Placement 列表端口" in work
-    assert "正式 owner 在当前授权事务内核对" in work
+    assert "可信只读关联" in work
+    assert "不表示配置、放置、执行和结果已形成完整成功流程" in work
+    assert "继续核对当前 Instance 与 Assignment 父链" in work
 
 
 def test_unknown_runtime_execution_evidence_and_outcome_are_not_promoted() -> None:
@@ -101,10 +101,10 @@ def test_unknown_runtime_execution_evidence_and_outcome_are_not_promoted() -> No
     work = source("digital-employees/EmployeeWorkParticipation.tsx")
     assert "发布不等于已运行" in profile
     assert "不推导在线状态" in work
-    assert 'state="unknown"' in work
-    assert "正式 Execution READ 尚未接通" in work
-    assert "Outcome READ 尚未接通" in work
-    assert "当前 Placement 最小投影没有 Evidence reference" in work
+    assert "Execution、Evidence 与 Outcome 没有本页可用的正式读取端口" in work
+    assert "不代表已经执行或已有业务结果" in work
+    assert "Runtime Profile exact 详情未接通" in work
+    assert "PLACED 不等于执行成功" in work
     assert "Business Outcome 完成" in work
     assert "在线" not in work.replace("不推导在线状态", "")
     assert "空闲" not in work

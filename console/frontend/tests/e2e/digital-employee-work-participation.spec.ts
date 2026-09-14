@@ -185,7 +185,8 @@ test("TEST_ADAPTER uses trusted BFF reads and restores the exact work chain at 3
   });
   await page.goto(`/digital-employees?${query}`);
   await expect(page.getByLabel("Placement 权威详情")).toContainText("runtime-instance:quality");
-  await expect(page.getByLabel("员工工作参与阶段")).toContainText("正式 Execution READ 尚未接通");
+  await expect(page.getByLabel("分别核实的工作对象")).toContainText("placement:quality");
+  await expect(page.getByText("执行、证据与结果尚未接通")).toBeVisible();
   await expect(page.getByText("不推导在线状态")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.reload();
@@ -204,14 +205,14 @@ test("TEST_ADAPTER late Instance response cannot overwrite the new exact object"
   await page.goto("/digital-employees");
   await page.getByRole("button", { name: /供应商质量负责人/ }).click();
   await page.getByRole("button", { name: "实例", exact: true }).click();
-  await page.getByText("技术详情：按精确 ID 核对关联实例").click();
-  await page.getByLabel("Instance ID").fill("instance:old");
+  await page.getByText("使用已知实例 ID 查询", { exact: true }).click();
+  await page.getByLabel("实例 ID").fill("instance:old");
   await page.getByRole("button", { name: "读取并验证归属" }).click();
-  await page.getByLabel("Instance ID").fill("instance:new");
+  await page.getByLabel("实例 ID").fill("instance:new");
   await page.getByRole("button", { name: "读取并验证归属" }).click();
-  await expect(page.locator(".employee-facts")).toContainText("instance:new");
+  await expect(page.locator(".employee-read-result")).toContainText("instance:new");
   await page.waitForTimeout(300);
-  await expect(page.locator(".employee-facts")).not.toContainText("instance:old");
+  await expect(page.locator(".employee-read-result")).not.toContainText("instance:old");
 });
 
 test("TEST_ADAPTER LIST discovery does not bypass denied exact READ", async ({ page }) => {
@@ -360,8 +361,9 @@ test("TEST_ADAPTER preserves a valid historical Instance revision", async ({ pag
     onDefinition: async route => route.fulfill({ json: envelope(historical) }),
   });
   await page.goto("/digital-employees?panel=instance&instanceId=instance%3Aquality");
-  await expect(page.locator(".employee-facts")).toContainText("employee-revision:history");
-  await expect(page.locator(".employee-facts")).toContainText("exact identity verified");
+  await page.getByText("实例技术身份与原始状态").click();
+  await expect(page.locator(".employee-read-result")).toContainText("employee-revision:history");
+  await expect(page.locator(".employee-read-result")).toContainText("与所选精确修订一致");
 });
 
 async function fillCreateForm(page: Page) {
@@ -592,6 +594,8 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
       Object.assign(label.style, { margin: "0 0 8px auto", width: "fit-content", padding: "8px 12px", borderRadius: "8px", color: "#7c2d12", background: "#ffedd5", border: "1px solid #fdba74", font: "600 12px system-ui" });
     }
     document.querySelector(selector)?.prepend(label);
+    const detailBody = document.querySelector<HTMLElement>(".employee-detail-body");
+    if (detailBody) detailBody.scrollTop = 0;
     label.scrollIntoView({ block: "start" });
     window.scrollBy(0, -64);
     (document.activeElement as HTMLElement | null)?.blur();
@@ -613,34 +617,60 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await placeBadge(".employee-management");
   await page.screenshot({ path: testInfo.outputPath("desktop-detail-test-adapter.png") });
   await page.getByRole("button", { name: "职责与能力", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "职责与能力装配" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "职责与能力", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "当前员工职责" })).toBeVisible();
+  await expect(page.getByText("核对业务异常并形成可追溯结论")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "已绑定 Agent 的职责与能力" })).toBeVisible();
   await expect(page.getByText("质量分析 Agent", { exact: true })).toBeVisible();
-  await expect(page.locator(".employee-member-list")).toContainText("runtime-profile:native");
+  await expect(page.getByText("Runtime Profile exact 详情尚未接通")).toBeVisible();
+  const detailHierarchy = await page.evaluate(() => ({
+    sectionTitle: getComputedStyle(document.querySelector<HTMLElement>(".employee-capability-profile > header h3")!).fontSize,
+    body: getComputedStyle(document.querySelector<HTMLElement>(".employee-current-responsibilities li")!).fontSize,
+    fieldLabel: getComputedStyle(document.querySelector<HTMLElement>(".employee-profile-grid dt")!).fontSize,
+    fieldValue: getComputedStyle(document.querySelector<HTMLElement>(".employee-profile-grid dd")!).fontSize,
+    capability: getComputedStyle(document.querySelector<HTMLElement>(".employee-capabilities li")!).fontSize,
+  }));
+  expect(detailHierarchy).toEqual({ sectionTitle: "18px", body: "14px", fieldLabel: "12px", fieldValue: "14px", capability: "13px" });
   await placeBadge(".employee-selected-detail");
   await page.screenshot({ path: testInfo.outputPath("desktop-capabilities-test-adapter.png") });
 
+  const detailBody = page.locator(".employee-detail-body");
+  await detailBody.evaluate(element => { element.scrollTop = 400; });
+  expect(await detailBody.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: "实例", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "实例", exact: true }).click();
-  await expect(page.getByText("当前没有按员工列出 Instance 的正式接口")).toBeVisible();
-  await page.getByText("技术详情：按精确 ID 核对关联实例").click();
-  await page.getByLabel("Instance ID").fill("instance:quality");
+  await expect.poll(() => detailBody.evaluate(element => element.scrollTop)).toBe(0);
+  await expect(page.getByText("暂不支持按员工浏览实例列表；可使用已知实例 ID 查询。")).toBeVisible();
+  await page.getByText("使用已知实例 ID 查询", { exact: true }).click();
+  await page.getByLabel("实例 ID").fill("instance:quality");
   await page.getByRole("button", { name: "读取并验证归属" }).click();
-  await expect(page.locator(".employee-facts")).toContainText("exact identity verified");
+  await expect(page.getByRole("heading", { name: "已读取实例摘要" })).toBeVisible();
+  await expect(page.locator(".employee-read-result")).toContainText("已启用");
+  await expect(page.locator(".employee-read-result")).toContainText("执行信息未接通");
+  await expect(page.locator(".employee-read-result")).toContainText("健康信息未接通");
+  await expect(page.locator(".employee-read-result")).not.toContainText("运行中");
   await placeBadge(".employee-selected-detail");
   await page.screenshot({ path: testInfo.outputPath("desktop-instance-test-adapter.png") });
 
   await page.getByRole("button", { name: "工作分配", exact: true }).click();
-  await expect(page.getByText("当前没有按员工或实例列出 Assignment / Placement 的正式接口")).toBeVisible();
-  await page.getByText("技术详情：按精确 ID 核对工作分配").click();
+  await expect(page.getByText("暂不支持按员工或实例浏览工作分配列表")).toBeVisible();
+  await page.getByText("使用已知 Assignment ID 查询", { exact: true }).click();
   await page.getByLabel("Assignment ID").fill("assignment:quality");
   await page.getByRole("button", { name: "读取并验证父链" }).click();
-  await expect(page.locator(".employee-facts")).toContainText("assignment:quality / instance:quality");
+  await expect(page.getByRole("heading", { name: "当前查询的实例与工作分配" })).toBeVisible();
+  await expect(page.locator(".employee-read-result")).toContainText("assignment:quality");
+  await expect(page.locator(".employee-read-result")).toContainText("instance:quality");
+  await page.getByText("技术操作：按精确坐标读取 Placement").click();
   await page.getByLabel("Placement ID").fill("placement:quality");
   await page.getByLabel("Attempt ID").fill("attempt:quality");
   await page.getByLabel("Agent Instance ID").fill("agent-instance:quality");
   await page.getByRole("button", { name: "读取精确工作关联" }).click();
   await expect(page.getByLabel("Placement 权威详情")).toContainText("runtime-instance:quality");
+  await expect(page.getByLabel("Placement 权威详情")).toContainText("已放置（不代表执行成功）");
   await placeBadge(".employee-selected-detail");
   await page.screenshot({ path: testInfo.outputPath("desktop-assignments-test-adapter.png") });
+  await page.getByLabel("Placement 权威详情").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("desktop-assignments-placement-test-adapter.png") });
 
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
   await expect(page.getByLabel("当前加载范围")).toHaveCount(0);

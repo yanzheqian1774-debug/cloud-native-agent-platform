@@ -28,13 +28,16 @@ def test_employee_management_uses_bounded_trusted_browser_reads() -> None:
 def test_exact_composition_and_independent_lifecycle_are_visible() -> None:
     page = source("digital-employees/DigitalEmployeesPage.tsx")
     profile = source("digital-employees/EmployeeProfile.tsx")
-    assert "职责与能力装配" in profile
+    assert "当前员工职责" in profile
+    assert "已绑定 Agent 的职责与能力" in profile
+    assert "Runtime Profile exact 详情尚未接通" in profile
     assert "member.revisionId" in profile
     assert "member.digest" in profile
     assert "EmployeeLifecycleActions" in page
     assert "完整版本历史" in page
     assert "不能代表完整历史" in page
-    assert "不会自动指定权威版本" in page
+    assert "明确选择要查看的修订" in page
+    assert "不会自动指定权威版本" not in page
 
 
 def test_search_context_race_guard_and_responsive_focus_styles_exist() -> None:

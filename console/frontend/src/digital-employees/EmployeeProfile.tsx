@@ -82,6 +82,7 @@ function CopyValue({ label, value }: { label: string; value: string }) {
 
 export function EmployeeProfile({ item, agent, agentState, section }: { item: EmployeeDefinition; agent: AgentDefinitionRevision | null; agentState: AgentReadState; section: ProfileSection }) {
   const primary = item.members.find(member => member.kind === "AGENT");
+  const runtimeProfile = item.members.find(member => member.kind === "RUNTIME_PROFILE");
   const agentExact = Boolean(primary && agent
     && agent.definitionId === primary.resourceId
     && agent.revisionId === primary.revisionId
@@ -97,15 +98,19 @@ export function EmployeeProfile({ item, agent, agentState, section }: { item: Em
   </section>;
 
   return <section className="employee-capability-profile" aria-labelledby="employee-capability-title">
-    <header><div><p className="eyebrow">已绑定成员 · 不是候选发现</p><h3 id="employee-capability-title">职责与能力装配</h3></div>{agentExact && <span className="binding-status">Agent 精确修订已核对</span>}</header>
-    <p>成员来自当前所选修订；Agent 候选只在创建流程中出现。绑定表示已装配，不表示已分配、已放置或已运行。</p>
+    <header><div><p className="eyebrow">当前 Employee · 精确修订已读取</p><h3 id="employee-capability-title">职责与能力</h3></div></header>
+    <section className="employee-current-responsibilities" aria-labelledby="employee-current-responsibilities-title"><h4 id="employee-current-responsibilities-title">当前员工职责</h4><p>来源：当前 Employee exact revision。</p><ul>{item.responsibilities.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul></section>
+    <section className="employee-bound-agent-section" aria-labelledby="employee-bound-agent-title"><header><div><p className="eyebrow">已绑定成员 · 不是候选发现</p><h4 id="employee-bound-agent-title">已绑定 Agent 的职责与能力</h4></div>{agentExact && <span className="binding-status verified">Agent 精确修订已核对</span>}</header>
+    <p>Agent 候选只在创建流程中出现。这里展示 Agent 自身正式披露的信息，不作为员工职责的替代；绑定也不表示已分配、已放置或已运行。</p>
     {agentState === "LOADING" && <p role="status">正在独立读取已绑定 Agent 修订……</p>}
     {agentState === "AUTHENTICATION_REQUIRED" && <p role="status">尚无可信 Workbench session，Agent 详情不可用。</p>}
     {agentState === "DENIED" && <p role="status">已绑定 Agent 修订不存在或当前访问未获授权。</p>}
     {agentState === "UNAVAILABLE" && <p role="status">已绑定 Agent 身份无法核对或读取暂不可用；不会用员工字段补写。</p>}
-    {agentExact && agent && <section className="employee-bound-agent"><div className="employee-bound-agent-title"><span className="employee-avatar" aria-hidden="true">A</span><div><strong>{agent.name}</strong><small>来源：Agent Definition 所选修订</small></div></div><dl className="employee-profile-grid"><div><dt>Agent 角色标题</dt><dd>{agent.role.title || "未提供"}</dd></div><div className="wide"><dt>业务目的</dt><dd>{agent.role.businessPurpose || "未提供"}</dd></div><div className="wide"><dt>Agent 职责</dt><dd><ul>{agent.role.duties.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul></dd></div><div className="wide"><dt>能力</dt><dd><ul className="employee-capabilities">{agent.role.capabilities.map(value => <li key={value}>{value}</li>)}</ul></dd></div></dl></section>}
+    {agentExact && agent && <section className="employee-bound-agent"><div className="employee-bound-agent-title"><span className="employee-avatar" aria-hidden="true">A</span><div><strong>{agent.name}</strong><small>来源：Agent Definition 所选修订</small></div></div><dl className="employee-profile-grid"><div><dt>Agent 角色标题</dt><dd>{agent.role.title || "未提供"}</dd></div><div className="wide"><dt>业务目的</dt><dd>{agent.role.businessPurpose || "未提供"}</dd></div><div className="wide"><dt>Agent 职责</dt><dd><ul>{agent.role.duties.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul></dd></div><div className="wide"><dt>能力标识</dt><dd><ul className="employee-capabilities">{agent.role.capabilities.map(value => <li key={value}>{value}</li>)}</ul></dd></div></dl></section>}
+    </section>
+    <section className="employee-runtime-reference" aria-labelledby="employee-runtime-reference-title"><div><p className="eyebrow">成员绑定中的配置引用</p><h4 id="employee-runtime-reference-title">Runtime Profile</h4></div>{runtimeProfile ? <><strong>{runtimeProfile.resourceId}</strong><span>{runtimeProfile.revisionId}</span></> : <span>当前 Employee 修订未提供 Runtime Profile 成员绑定。</span>}<p>这里只核对当前 Employee 修订披露的绑定引用；Runtime Profile exact 详情尚未接通，未核实其配置内容。</p></section>
     <details className="employee-technical-details"><summary>当前员工修订身份</summary><p>以下身份限定本页职责与成员的来源，不授予运行资格。</p><dl><dt>Employee Definition ID</dt><dd><CopyValue label="Employee Definition ID" value={item.employeeDefinitionId} /></dd><dt>Revision ID</dt><dd><CopyValue label="Revision ID" value={item.employeeDefinitionRevisionId} /></dd><dt>Digest</dt><dd><CopyValue label="Digest" value={item.employeeDefinitionDigest} /></dd></dl></details>
-    <ul className="px-binding-list employee-member-list">{item.members.map(member => <li key={`${member.kind}:${member.resourceId}:${member.revisionId}`}><span><code>{member.kind}</code> · {kindLabel[member.kind]}</span><strong>{member.resourceId}</strong><small>{member.revisionId}</small><details><summary>摘要与目录</summary><CopyValue label={`${kindLabel[member.kind]}摘要`} value={member.digest} /><Link to={exactCatalogLink(member)}>在资源目录核对</Link></details></li>)}</ul>
+    <details className="employee-technical-details"><summary>成员技术身份与摘要</summary><ul className="px-binding-list employee-member-list">{item.members.map(member => <li key={`${member.kind}:${member.resourceId}:${member.revisionId}`}><span><code>{member.kind}</code> · {kindLabel[member.kind]}</span><strong>{member.resourceId}</strong><small>{member.revisionId}</small><details><summary>摘要与目录</summary><CopyValue label={`${kindLabel[member.kind]}摘要`} value={member.digest} /><Link to={exactCatalogLink(member)}>在资源目录核对</Link></details></li>)}</ul></details>
     <p className="employee-disclosure">查看员工列表的权限不包含已绑定 Agent 的详情权限。Agent 名称与目的仍归 Agent Definition 所有，不成为员工名称或职责权威。</p>
   </section>;
 }
