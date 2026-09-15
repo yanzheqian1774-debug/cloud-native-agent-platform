@@ -142,8 +142,10 @@
 316	tests/test_s5_impl_072_isolated_browser_harness.py
 REL-317	.github/workflows/s5-v023-rel-317-trusted-native.yml
 REL-317	console/frontend/playwright.rel-317.config.ts
+REL-317	console/frontend/tests/e2e/trusted-native-combination.real.spec.ts
 REL-317	docs/engineering/S5-V023-REL-317-HANDOFF.md
 REL-317	docs/evidence/s5/v0.2/s5-v023-rel-317/**
 REL-317	docs/exec-plans/active/S5-V023-REL-317-TRUSTED-NATIVE-COMBINATION.md
 REL-317	scripts/acceptance/s5_v023_rel_317_native_l3.sh
+REL-317	scripts/acceptance/s5_v023_rel_317_native_l3.py
 REL-317	scripts/acceptance/s5_v023_rel_317_run.sh

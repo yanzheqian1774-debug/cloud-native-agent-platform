@@ -560,13 +560,14 @@ def write_authority(
     credential_digests: dict[str, str],
     *,
     trusted_preparation: bool = False,
+    trusted_preparation_source: str = "s5-v023-rel-316-trusted-preparation",
 ) -> AuthorityRuntimeConfiguration:
     document = {
         "schemaVersion": "static-authority-generation.v1",
         "generation": 1,
         "policyVersion": "policy-310",
         "auditSource": (
-            "s5-v023-rel-316-trusted-preparation"
+            trusted_preparation_source
             if trusted_preparation
             else "s5-v023-impl-310-real-browser"
         ),
@@ -887,7 +888,12 @@ def build_fixture(args, startup: BoundedStartupStatus):
             "wrong_scope": args.wrong_scope_credential_sha256,
             "wrong_grant": args.wrong_grant_credential_sha256,
         },
-        trusted_preparation=args.rel_316,
+        trusted_preparation=args.rel_316 or args.rel_317,
+        trusted_preparation_source=(
+            "s5-v023-rel-317-trusted-native-combination"
+            if args.rel_317
+            else "s5-v023-rel-316-trusted-preparation"
+        ),
     )
     (args.runtime_dir / "runtime.json").write_text(
         json.dumps(
@@ -967,6 +973,11 @@ def main() -> None:
         "--rel-316",
         action="store_true",
         help="enable the bounded Problem/Criteria combination fixture",
+    )
+    parser.add_argument(
+        "--rel-317",
+        action="store_true",
+        help="enable the REL-317 isolated bounded-combination fixture",
     )
     args = parser.parse_args()
     startup = BoundedStartupStatus(args.startup_status)

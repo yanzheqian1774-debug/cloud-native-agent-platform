@@ -34,6 +34,7 @@ plus these REL-317-owned paths:
 - `docs/governance/REGISTRY.md`;
 - `scripts/acceptance/s5_v023_rel_317_run.sh`;
 - `scripts/acceptance/s5_v023_rel_317_native_l3.sh`.
+- `scripts/acceptance/s5_v023_rel_317_native_l3.py`.
 
 An additional implementation or test path may enter the closure only when a
 concrete combination failure proves it necessary and this plan records the
