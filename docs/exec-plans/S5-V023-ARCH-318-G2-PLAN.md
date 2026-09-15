@@ -10,6 +10,7 @@
 | Candidate decision | `PROPOSED / AWAITING_HUMAN_ARCHITECTURE_DECISION` |
 | Implementation | `NOT_STARTED / NOT_AUTHORIZED` |
 | Fixed main baseline | source `f189212232fc194859a695f0307e83b0c7b73c0f`; tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2` |
+| Fixed reviewed candidate for this revision | source `af9a3b4d528745a87c2027ca9d2d414b884f51df`; tree `c611f9eac8a2cefeb795c40cc8ecebc592611202`; Draft PR `#174` |
 | Architecture candidate | [S5-V023-ARCH-318](../../architecture/s5/v0.2/S5-V023-ARCH-318-PRE-PROBLEM-DRAFT-ASSISTANCE-INVOCATION-MODEL-USE-EVIDENCE-V1.md) |
 | Evidence | [startup and document evidence](../evidence/s5/v0.2/s5-v023-arch-318/README.md) |
 
@@ -69,14 +70,37 @@ any attachment/candidate prose.
 7. **Delivery** — normal commit, non-force push, create exactly one Draft PR, then
    report candidate source/tree and stop at `G2_DRAFT_COMPLETE / AWAITING_HUMAN`.
 
+The bounded revision authorized after the initial delivery reuses the same Session,
+branch, worktree and Draft PR. It must edit only the ADR, this plan and necessary
+ARCH-318 Evidence; it must not repeat allocation, create another PR, or alter the
+already registered owner/direction. Its sequence is:
+
+```text
+verify fixed reviewed candidate and Draft PR identity
+-> specify first-request identity/auth/snapshot bootstrap
+-> specify scoped idempotency lookup/concurrency/pepper rules
+-> complete state transitions and terminal conflict reduction
+-> specify sole-writer Resource Use/Evidence commit and repair protocol
+-> add focused positive/negative acceptance cases
+-> validate, normal commit, non-force push, follow existing CI to terminal
+-> export the revised originals outside the repository
+```
+
 ## 4. Required G2 outputs
 
 - bounded ADR candidate and an owner/identity relationship model;
 - exact authorization targets and server-owned binding snapshot;
+- non-circular first context/turn/invocation/snapshot registration followed by two
+  exact, recoverable authorization requests and post-allow protected readback;
 - persist-before-dispatch, unknown, cancellation, late-result and successor retry;
-- implementable no-raw-content idempotency with explicit limitations;
+- complete sync/async/unknown/cancel/terminal-conflict state reduction without
+  automatic redispatch or exactly-once claims;
+- implementable no-raw-content idempotency with lookup-before-mint, atomic concurrent
+  first writer, payload conflict, denial, pepper rotation/window and resolver separation;
 - non-Attempt Resource Use compatibility without nullable Attempt fields;
 - independently authorized, reader-first Model Evidence;
+- fixed invocation -> Execution-owned Resource Use -> Evidence commit/reference order,
+  deterministic repair IDs and no-provider-redispatch partial-failure recovery;
 - synthetic-only first-slice data boundary, platform/provider retention distinction,
   and no default 30-day deletion;
 - independent recommendations for H308-03C, H308-04A and H308-04B;
@@ -115,9 +139,9 @@ After Human G2 decisions, a separate Human-authorized G1 may implement, in order
 
 ```text
 typed contracts and reader compatibility
--> additive PostgreSQL metadata and exact authorization
+-> additive PostgreSQL metadata, scoped idempotency claim and exact authorization requests
 -> trusted secret resolver and bounded synthetic adapter
--> conditional Resource Use / Evidence writers
+-> conditional sole-writer Resource Use / Evidence ports and repair obligations
 -> Workbench clarification/draft/confirm UI
 -> real PostgreSQL, restart, security and browser acceptance
 -> optional real provider only under a complete H308-03C authorization record

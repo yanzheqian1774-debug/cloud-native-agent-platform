@@ -81,13 +81,56 @@ Validation results are filled with exact commands/results before delivery. A pas
 documentation check establishes only document consistency, not Human G2 acceptance
 or implementation correctness.
 
-| Check | Result |
+The initial candidate validation is historical and is not counted as validation of
+the bounded revision:
+
+| Initial check | Historical result |
 | --- | --- |
 | focused diff and scope inspection | `PASS`; exactly architecture, plan, Evidence index/set and Registry documentation paths; no product code, SQL, public API/CRD or runtime configuration |
 | `git diff --check` | `PASS` |
 | relative artifact links | `PASS`; all three ARCH-318 repository targets exist at their referenced paths |
 | repository baseline | `make check` `PASS`; Ruff, format check and pytest; `1583 passed, 134 skipped`, one dependency deprecation warning |
 | dedicated Markdown/link target | `NOT_AVAILABLE`; inspected Makefile and repository scripts contain no `check-docs` or Markdown link-check command |
+
+### 6.1 Bounded revision provenance and scope
+
+The Human-authorized revision started from the already reviewed Draft PR candidate:
+
+| Input | Source | Tree | PR state |
+| --- | --- | --- | --- |
+| ARCH-318 reviewed candidate | `af9a3b4d528745a87c2027ca9d2d414b884f51df` | `c611f9eac8a2cefeb795c40cc8ecebc592611202` | `#174 OPEN / Draft` |
+
+Only these three existing task artifacts are revised:
+
+- the bounded ADR candidate;
+- the bounded G2 plan;
+- this Evidence README.
+
+The revision adds exact rules and focused acceptance cases for:
+
+1. first identity registration, two-stage exact authorization and snapshot recovery;
+2. lookup-before-mint idempotency, concurrent first requests, conflict/denial,
+   pepper versions/windows and distinct resolver preconditions;
+3. synchronous/asynchronous/unknown/cancel/duplicate/conflicting/late state reduction;
+4. invocation, Execution-owned Resource Use and Evidence sole-writer commit/repair order.
+
+It preserves the existing owners, non-Attempt direction and independent `PROPOSED`
+status of H308-03C, H308-04A and H308-04B. It contains no product code, SQL, runtime
+configuration, provider call, credential read, 317 operation or Human decision.
+
+### 6.2 Bounded revision validation
+
+| Revision check | Result |
+| --- | --- |
+| focused path/scope gate | `PASS`; exactly the ADR, G2 plan and this Evidence README changed |
+| `git diff --check` | `PASS` |
+| referenced task artifact paths | `PASS`; ADR, plan and Evidence README exist |
+| repository baseline | `make check` `PASS`; Ruff check passed, 390 files format-clean, pytest `1583 passed, 134 skipped`, one dependency deprecation warning |
+| prohibited scope inspection | `PASS`; no product code, SQL, runtime configuration, Registry, original evidence outside this set, or 317 asset changed |
+
+These are documentation/repository checks only. No model/provider call, service,
+credential read, deployment or runtime validation was performed, and the result does
+not accept any G2 or H308 decision.
 
 ## 7. Terminal boundary
 
