@@ -1762,8 +1762,13 @@ def test_employee_list_keyset_scope_independence_and_revocation(
             for index, revision in enumerate(revisions, start=1):
                 connection.execute(
                     "INSERT INTO digital_employee_definition.definitions "
-                    "VALUES (%s,%s,%s,1)",
-                    (scope.namespace, scope.security_domain, revision.definition_id),
+                    "VALUES (%s,%s,%s,%s)",
+                    (
+                        scope.namespace,
+                        scope.security_domain,
+                        revision.definition_id,
+                        2 if index == 1 else 1,
+                    ),
                 )
                 connection.execute(
                     "INSERT INTO digital_employee_definition.revisions "
@@ -1788,13 +1793,31 @@ def test_employee_list_keyset_scope_independence_and_revocation(
                         scope.security_domain,
                         revision.definition_id,
                         revision.revision_id,
-                        "PUBLISH" if index == 1 else "CREATE",
+                        "CREATE",
                         revision.digest,
                         f"decision-list-{index}",
                         f"command-list-{index}",
                         str(index) * 64,
                     ),
                 )
+                if index == 1:
+                    connection.execute(
+                        "INSERT INTO digital_employee_definition.facts "
+                        "(namespace,security_domain,definition_id,revision_id,action,"
+                        "ordinal,revision_digest,decision_id,command_id,"
+                        "payload_digest) "
+                        "VALUES (%s,%s,%s,%s,'PUBLISH',2,%s,%s,%s,%s)",
+                        (
+                            scope.namespace,
+                            scope.security_domain,
+                            revision.definition_id,
+                            revision.revision_id,
+                            revision.digest,
+                            "decision-list-publish",
+                            "command-list-publish",
+                            "f" * 64,
+                        ),
+                    )
 
         codec = WorkbenchCursorCodec(b"k" * 32)
         operations = employee_operations(employee_repository, codec)
