@@ -54,8 +54,11 @@ def test_versioned_chinese_lexical_semantic_and_hybrid_are_stable():
     semantic = service.search(scope, query="containment", mode="SEMANTIC")
     hybrid = service.search(scope, query="供应商缺陷", mode="HYBRID")
     assert lexical["tokenizerVersion"] == TOKENIZER_VERSION
+    assert lexical["scoreMeaning"] == "QUERY_TOKEN_COVERAGE"
     assert semantic["results"][0]["semanticRank"] == 1
+    assert semantic["scoreMeaning"] == "QDRANT_VECTOR_SCORE"
     assert hybrid["fusion"]["k"] == FUSION_K
+    assert hybrid["scoreMeaning"] == "RECIPROCAL_RANK_FUSION_SCORE"
     assert (
         hybrid["results"][0]["citation"]["revisionId"] == created["publishedRevisionId"]
     )

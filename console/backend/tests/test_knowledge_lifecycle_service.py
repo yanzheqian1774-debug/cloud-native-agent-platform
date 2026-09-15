@@ -1,3 +1,5 @@
+import copy
+
 import httpx
 import pytest
 from agent_console.knowledge_lifecycle_service import (
@@ -100,6 +102,69 @@ def test_successor_preserves_published_revision_and_authorized_retrieval_cites_s
     assert successor["revisions"][-1]["predecessorRevisionId"] == published_id
 
 
+def test_uploaded_revision_successor_records_manual_text_as_its_direct_source():
+    service = KnowledgeLifecycleService(InMemoryKnowledgeRepository(), qdrant())
+    scope = service.scope("tenant-a", "quality")
+    uploaded_source = {
+        "sourceId": "source:uploaded",
+        "documentId": "document:uploaded",
+        "kind": "DOCX",
+        "provenance": "document-upload:original-digest",
+        "sourceDescription": "质量部门正式制度",
+        "externalReference": "SQ-2026-09",
+        "fileName": "供应商质量管理制度.docx",
+        "mediaType": (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        "parserVersion": "KNOWLEDGE_DOCUMENT_PARSER_V1",
+        "content": "原始文件正文。",
+        "contentDigest": (
+            "d99e52dd6da7c7493e1da1d0147025c7d71d585829e0ce8b946229232a70ad4d"
+        ),
+        "segments": [
+            {
+                "content": "原始文件正文。",
+                "location": {"paragraphNumber": 1},
+            }
+        ],
+    }
+    created = service.create(scope, "human:owner", "上传制度", uploaded_source)[
+        "knowledge"
+    ]
+    validated = service.validate(scope, created["knowledgeId"], "human:owner", 1)[
+        "knowledge"
+    ]
+    original_digest = validated["revisions"][0]["digest"]
+    service.review(scope, created["knowledgeId"], "human:reviewer", 2, original_digest)
+    published = service.publish(
+        scope, created["knowledgeId"], "human:publisher", 3, original_digest
+    )["knowledge"]
+    original_revision = copy.deepcopy(published["revisions"][0])
+
+    successor = service.successor(
+        scope,
+        created["knowledgeId"],
+        "human:editor",
+        4,
+        "人工修订后的正文。",
+    )["knowledge"]
+
+    assert successor["revisions"][0] == original_revision
+    revised = successor["revisions"][-1]
+    assert revised["predecessorRevisionId"] == original_revision["revisionId"]
+    assert revised["content"]["source"] == {
+        "sourceId": "source:uploaded",
+        "collectionId": "collection:source:uploaded",
+        "kind": "TEXT",
+        "provenance": "human-edit:human:editor",
+        "sourceDescription": "人工编辑后继修订",
+    }
+    revised_document = revised["content"]["documents"][0]
+    assert revised_document["documentId"] == "document:uploaded"
+    assert revised_document["chunks"][0]["content"] == "人工修订后的正文。"
+    assert "location" not in revised_document["chunks"][0]
+
+
 def test_denied_retrieval_does_not_read_repository():
     service, scope, _ = published_service()
     with pytest.raises(KnowledgeLifecycleFailure, match="KNOWLEDGE_ACCESS_DENIED"):
@@ -112,3 +177,29 @@ def test_denied_retrieval_does_not_read_repository():
             "authorization:denied",
             "query",
         )
+
+
+def test_missing_source_and_document_ids_are_generated_without_changing_legacy_ids():
+    service = KnowledgeLifecycleService(InMemoryKnowledgeRepository())
+    scope = service.scope("tenant-a", "quality")
+    generated = service.create(
+        scope,
+        "human:owner",
+        "中文知识",
+        {"sourceDescription": "人工录入", "content": "正文依据。"},
+    )["knowledge"]
+    revision = generated["revisions"][0]
+    assert revision["content"]["source"]["sourceId"].startswith("knowledge-source:")
+    assert revision["content"]["documents"][0]["documentId"].startswith(
+        "knowledge-document:"
+    )
+
+    legacy = service.create(
+        scope,
+        "human:owner",
+        "Legacy",
+        source(),
+    )["knowledge"]
+    legacy_revision = legacy["revisions"][0]
+    assert legacy_revision["content"]["source"]["sourceId"] == "source:one"
+    assert legacy_revision["content"]["documents"][0]["documentId"] == ("document:one")

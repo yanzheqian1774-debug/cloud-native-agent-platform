@@ -6,11 +6,20 @@ export type KnowledgeRevision = {
   createdAt?: string;
   content: {
     name: string;
-    source: { sourceId: string; kind: string; provenance: string };
+    source: {
+      sourceId: string;
+      kind: string;
+      provenance: string;
+      sourceDescription?: string;
+      externalReference?: string;
+      fileName?: string;
+      mediaType?: string;
+      parserVersion?: string;
+    };
     documents: Array<{
       documentId: string;
       contentDigest: string;
-      chunks: Array<{ chunkId: string; contentDigest: string; content: string }>;
+      chunks: Array<{ chunkId: string; contentDigest: string; content: string; location?: { pageNumber?: number; paragraphNumber?: number } }>;
     }>;
   };
 };
@@ -24,8 +33,9 @@ export type KnowledgeResource = {
   publishedRevisionId: string | null;
   activeIndexSnapshotId: string | null;
   revisions: KnowledgeRevision[];
-  ingestionJobs: Array<{ jobId: string; status: string; highWaterMark: number }>;
-  indexSnapshots: Array<{ snapshotId: string; indexDigest: string; status: string }>;
+  ingestionJobs: Array<{ jobId: string; status: string; highWaterMark: number; startedAt?: string; completedAt?: string | null }>;
+  indexSnapshots: Array<{ snapshotId: string; indexDigest: string; status: string; createdAt?: string }>;
+  facts?: Array<{ factId: string; event: string; recordedAt?: string }>;
   retrievals: Array<{
     retrievalId: string;
     authorizationDecisionId: string;
@@ -44,6 +54,7 @@ export type KnowledgeResource = {
       documentId: string;
       chunkId: string;
       content: string;
+      location?: { pageNumber?: number; paragraphNumber?: number };
     }>;
   }>;
   purge: { status: string; remainingSnapshotIds: string[] } | null;
@@ -67,6 +78,23 @@ export const knowledgeControlledState = (error: KnowledgeRequestError): Knowledg
   error.status === 409 ? (error.reasonCode.includes("STALE") ? "stale" : "conflict") :
   error.status === 501 ? "unsupported" : error.status >= 500 ? "backend unavailable" : "retryable";
 export const knowledgeErrorMessage = (error: KnowledgeRequestError): string => {
+  const reasons: Record<string,string> = {
+    DOCUMENT_UPLOAD_LIMIT_EXCEEDED: "文件超过 8 MiB 上限，未进入解析。",
+    DOCUMENT_PARSE_TIMEOUT: "文档解析超过 10 秒上限，已终止处理。",
+    DOCUMENT_TYPE_MISMATCH: "文件内容、扩展名或声明类型不一致。",
+    UNSUPPORTED_DOCUMENT_TYPE: "仅支持含文字层的 PDF 和 .docx 文件。",
+    CORRUPT_OR_UNSUPPORTED_PDF: "PDF 已损坏或使用当前解析器不支持的结构。",
+    CORRUPT_OR_UNSUPPORTED_DOCX: "DOCX 已损坏或不是有效的 OOXML 文档。",
+    PASSWORD_PROTECTED_DOCUMENT_UNSUPPORTED: "不支持密码保护的 PDF。",
+    MACRO_ENABLED_DOCUMENT_UNSUPPORTED: "不接收启用宏的 Word 文档。",
+    EMBEDDED_PROGRAM_UNSUPPORTED: "文档包含嵌入程序，已拒绝解析。",
+    EMPTY_EXTRACTED_TEXT: "没有提取到文字；扫描 PDF 需要 OCR，当前不支持。",
+    EXTRACTED_TEXT_LIMIT_EXCEEDED: "提取文字超过 512 KiB 上限。",
+    PDF_PAGE_LIMIT_EXCEEDED: "PDF 超过 200 页上限。",
+    DOCX_EXPANDED_SIZE_LIMIT_EXCEEDED: "DOCX 解压内容超过 16 MiB 上限。",
+    DOCX_EXPANSION_RATIO_EXCEEDED: "DOCX 压缩比异常，已停止解析。",
+  };
+  if (reasons[error.reasonCode]) return reasons[error.reasonCode];
   const messages: Record<KnowledgeControlledState, string> = {
     "validation error": "字段格式或内容不符合要求，请检查输入后重新提交。",
     denied: "资源不可用或当前访问未获授权。", "not found": "资源不可用或当前访问未获授权。",
@@ -82,8 +110,39 @@ async function request<T>(path:string,init?:RequestInit):Promise<T>{let response
 const root="/api/internal/v0.2.2/knowledge";
 export const listKnowledge=()=>request<KnowledgeResource[]>(root);
 export const getKnowledge=(id:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}`);
-export type KnowledgeInput = { name: string; source: {sourceId: string; documentId: string; kind: string; provenance: string; content: string} };
+export type ParsedLocation = { pageNumber?: number; paragraphNumber?: number };
+export type ParsedDocumentPreview = {
+  fileName: string;
+  declaredMediaType: string;
+  detectedFormat: "PDF" | "DOCX";
+  detectedMediaType: string;
+  sizeBytes: number;
+  content: string;
+  contentDigest: string;
+  segments: Array<{ content: string; location: ParsedLocation }>;
+  parserVersion: string;
+  originalFilePersisted: false;
+  parseDurationMs: number;
+  parseTimeLimitSeconds: number;
+  limitations: string[];
+};
+export type KnowledgeInput = { name: string; source: {sourceId?: string; documentId?: string; kind?: string; provenance?: string; sourceDescription?: string; externalReference?: string; fileName?: string; mediaType?: string; parserVersion?: string; contentDigest?: string; segments?: ParsedDocumentPreview["segments"]; content: string} };
 export const createKnowledge=(input: KnowledgeInput)=>request<KnowledgeProjection>(root,{method:"POST",body:JSON.stringify(input)});
+export async function parseKnowledgeDocument(file: File): Promise<ParsedDocumentPreview> {
+  let response: Response;
+  try {
+    response = await fetch(`${root}/operations/documents/parse?fileName=${encodeURIComponent(file.name)}`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+  } catch {
+    throw new KnowledgeRequestError("KNOWLEDGE_NETWORK_UNAVAILABLE",503);
+  }
+  const body = await response.json().catch(()=>null);
+  if (!response.ok) throw new KnowledgeRequestError(body?.detail?.reasonCode??"DOCUMENT_PARSE_FAILED",response.status);
+  return body as ParsedDocumentPreview;
+}
 export const knowledgeAction=(id:string,action:string,expectedVersion:number,digest?:string)=>request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/${action}`,{method:"POST",body:JSON.stringify({expectedVersion,...(digest?{digest}:{})})});
 export const createKnowledgeSuccessor = (id: string, expectedVersion: number, content: string) =>
   request<KnowledgeProjection>(`${root}/${encodeURIComponent(id)}/successors`, { method: "POST", body: JSON.stringify({ expectedVersion, content }) });
@@ -94,7 +153,7 @@ export const purgeKnowledge = (id: string, expectedVersion: number, authorizatio
     method: "POST",
     body: JSON.stringify({ expectedVersion, authorizationId, reasonClassification }),
   });
-export type KnowledgeSearchResult = { classification:string;topK:number;tokenizerVersion:string;retrievalPolicyVersion:string;fusion:{algorithm:string;k:number};results:Array<{rank:number;score:number;classification:string;lexicalRank:number|null;semanticRank:number|null;citation:{knowledgeId:string;revisionId:string;documentId:string;chunkId:string;content:string;sourceId:string;provenance:string}}> };
+export type KnowledgeSearchResult = { classification:string;scoreMeaning:string;topK:number;tokenizerVersion:string;retrievalPolicyVersion:string;fusion:{algorithm:string;k:number};results:Array<{rank:number;score:number;classification:string;lexicalRank:number|null;semanticRank:number|null;citation:{knowledgeId:string;revisionId:string;documentId:string;chunkId:string;content:string;sourceId:string;sourceDescription?:string;externalReference?:string;fileName?:string;provenance:string;location?:ParsedLocation}}> };
 export type KnowledgeDashboard = { authorizedKnowledgeCount:number;authorizedChunkCount:number;activeSnapshotCount:number;evaluationRunCount:number;duplicateCandidateCount:number;summaryCount:number;authority:string;semanticIndex:string };
 export type QualityEntity = { namespace:string;securityDomain:string;entityType:string;entityId:string;digest:string;body:Record<string,unknown>;decision?:QualityEntity|null };
 export type KnowledgeMetadata = Record<"knowledgeId"|"sourceId"|"documentId"|"contentType"|"revisionId"|"snapshotId",string[]>;
