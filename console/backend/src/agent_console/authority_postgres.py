@@ -490,6 +490,9 @@ class PostgresAuthorityRepository:
     def _decision_request_locked_checkpoint(self) -> None:
         """Test seam after a grant decision locks its request aggregate."""
 
+    def _authorization_grants_locked_checkpoint(self) -> None:
+        """Test seam after exact grants are locked by an owner transaction."""
+
     def _recovery_requests_locked_checkpoint(self) -> None:
         """Test seam after recovery locks every pre-recovery pending request."""
 
@@ -538,6 +541,7 @@ class PostgresAuthorityRepository:
             self._authorization_read_checkpoint()
             if lock_for_owner:
                 self._lock_dynamic_grants(current, context, (grant,))
+                self._authorization_grants_locked_checkpoint()
             state = self._read_dynamic_authorization_state(
                 current,
                 context,
@@ -621,6 +625,7 @@ class PostgresAuthorityRepository:
             self._authorization_read_checkpoint()
             if lock_for_owner:
                 self._lock_dynamic_grants(current, context, grants)
+                self._authorization_grants_locked_checkpoint()
             states = tuple(
                 self._read_dynamic_authorization_state(
                     current,
