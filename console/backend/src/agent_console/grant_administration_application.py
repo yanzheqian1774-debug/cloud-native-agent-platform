@@ -61,7 +61,7 @@ class GrantDecisionCommand:
     not_before: datetime | None
     expires_at: datetime | None
     idempotency_key: str
-    expected_version: int
+    expected_version: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -710,9 +710,12 @@ class GrantAdministrationService:
         return self.continuation_owner.mint(persisted)
 
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
-        return tuple(
-            item.continuation_id for item in self.continuation_inbox_details(context)
+        if self.continuation_owner is None:
+            raise AuthorityError("CONTINUATION_INVALID")
+        offers = self.repository.list_continuation_offers(
+            context, now=self.clock(), recovery_epoch=self.recovery_epoch
         )
+        return tuple(self.continuation_owner.mint(claim) for claim in offers)
 
     def continuation_inbox_details(
         self, context: TrustedRequestContext
