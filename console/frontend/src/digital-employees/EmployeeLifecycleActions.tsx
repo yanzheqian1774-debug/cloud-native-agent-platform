@@ -52,6 +52,7 @@ export function EmployeeLifecycleActions({
   const [busy, setBusy] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [commandFailed, setCommandFailed] = useState(false);
   const [needsAuthorization, setNeedsAuthorization] = useState(false);
   const generation = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
@@ -73,6 +74,7 @@ export function EmployeeLifecycleActions({
     activeRequest.current = controller;
     setBusy(true);
     setMessage(null);
+    setCommandFailed(false);
     try {
       const session = await getWorkbenchSession(controller.signal);
       if (turn !== generation.current) return;
@@ -84,6 +86,7 @@ export function EmployeeLifecycleActions({
       setFrozen({ action, command, principalKey: workbenchPrincipalKey(session) });
       setUnknown(false);
       setNeedsAuthorization(false);
+      setCommandFailed(false);
     } catch (reason) {
       if (turn !== generation.current || (reason instanceof DOMException && reason.name === "AbortError")) return;
       const value = reason instanceof DigitalEmployeeRequestError ? reason : new DigitalEmployeeRequestError("WORKBENCH_SESSION_UNAVAILABLE", 503);
@@ -120,6 +123,7 @@ export function EmployeeLifecycleActions({
       setFrozen(null);
       setUnknown(false);
       setNeedsAuthorization(false);
+      setCommandFailed(false);
       try {
         const definition = await getEmployeeDefinition(result.employeeDefinitionId, result.employeeDefinitionRevisionId, controller.signal);
         if (turn !== generation.current) return;
@@ -138,6 +142,7 @@ export function EmployeeLifecycleActions({
       const value = reason instanceof DigitalEmployeeRequestError ? reason : new DigitalEmployeeRequestError("EMPLOYEE_COMMAND_RESULT_UNKNOWN", 503, true);
       setUnknown(value.unknownResult);
       setNeedsAuthorization(!value.unknownResult && (value.status === 403 || value.status === 404));
+      setCommandFailed(true);
       setMessage(value.unknownResult
         ? "结果未知；原 commandId、摘要和 expectedVersion 已冻结，只能重放原命令。"
         : errorMessage(value));
@@ -168,7 +173,7 @@ export function EmployeeLifecycleActions({
       principalKey={frozen.principalKey}
       onApproved={submit}
     />}
-    {message && <div role={unknown ? "alert" : "status"} className={`employee-command-state ${unknown ? "unknown" : latest ? "success" : "failed"}`}><strong>{unknown ? "结果未知" : latest ? "命令状态" : "命令未执行"}</strong><span>{message}</span></div>}
+    {message && <div role={unknown || commandFailed ? "alert" : "status"} className={`employee-command-state ${unknown ? "unknown" : commandFailed ? "failed" : "success"}`}><strong>{unknown ? "结果未知" : commandFailed ? "命令未执行" : "命令状态"}</strong><span>{message}</span></div>}
     <div className="employee-unavailable-actions"><span className="employee-capability-state missing"><i />未实现</span><p>编辑、删除、停用、实例化没有本轮已接受正式契约，继续保留为欠项。</p></div>
   </section>;
 }

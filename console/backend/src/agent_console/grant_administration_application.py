@@ -908,8 +908,20 @@ class GrantAdministrationService:
         )
 
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
+        """Preserve the existing service contract that returns opaque claims.
+
+        The public Workbench route intentionally uses ``continuation_inbox_details``
+        so browser clients receive only digest-backed references.
+        """
+        if self.continuation_owner is None:
+            raise AuthorityError("CONTINUATION_INVALID")
+        offers = self.repository.list_continuation_offers(
+            context, now=self.clock(), recovery_epoch=self.recovery_epoch
+        )
         return tuple(
-            item.continuation_id for item in self.continuation_inbox_details(context)
+            self.continuation_owner.mint(claim)
+            for claim in offers
+            if claim.policy_generation == self.generation.generation
         )
 
     def continuation_inbox_details(

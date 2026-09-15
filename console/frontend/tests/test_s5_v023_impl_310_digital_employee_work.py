@@ -156,6 +156,8 @@ def test_fixed_commands_use_csrf_frozen_identity_and_no_private_fallback() -> No
     assert "当前无权读取详情" in assembly
     assert "这不表示创建失败" in assembly
     assert "Object.freeze" in lifecycle
+    assert 'commandFailed ? "alert" : "status"' in lifecycle
+    assert 'commandFailed ? "failed" : "success"' in lifecycle
     assert "WORKBENCH_SESSION_CONTEXT_CHANGED" in api
     assert "PUBLISH" in lifecycle
     assert "已实例化" not in lifecycle

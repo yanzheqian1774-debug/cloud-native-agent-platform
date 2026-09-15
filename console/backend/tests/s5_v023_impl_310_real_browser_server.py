@@ -499,6 +499,7 @@ def credential(
     *,
     employee_list: bool = True,
     grant_decider: bool = False,
+    trusted_preparation: bool = False,
 ) -> dict:
     if len(digest) != 64 or any(value not in "0123456789abcdef" for value in digest):
         raise ValueError("CREDENTIAL_DIGEST_INVALID")
@@ -526,6 +527,19 @@ def credential(
             *(
                 [
                     {
+                        "owner": "BUSINESS_PROBLEM",
+                        "action": action,
+                        "resource": "business-problem:collection",
+                        "source": "BROWSER_BOOTSTRAP",
+                    }
+                    for action in ("CREATE", "LIST")
+                ]
+                if trusted_preparation
+                else []
+            ),
+            *(
+                [
+                    {
                         "owner": "GRANT_ADMIN",
                         "action": action,
                         "resource": "grant-scope:tenant-a:quality",
@@ -541,15 +555,27 @@ def credential(
 
 
 def write_authority(
-    runtime_dir: Path, database_url: str, credential_digests: dict[str, str]
+    runtime_dir: Path,
+    database_url: str,
+    credential_digests: dict[str, str],
+    *,
+    trusted_preparation: bool = False,
 ) -> AuthorityRuntimeConfiguration:
     document = {
         "schemaVersion": "static-authority-generation.v1",
         "generation": 1,
         "policyVersion": "policy-310",
-        "auditSource": "s5-v023-impl-310-real-browser",
+        "auditSource": (
+            "s5-v023-rel-316-trusted-preparation"
+            if trusted_preparation
+            else "s5-v023-impl-310-real-browser"
+        ),
         "credentials": [
-            credential("alice", credential_digests["full"]),
+            credential(
+                "alice",
+                credential_digests["full"],
+                trusted_preparation=trusted_preparation,
+            ),
             credential(
                 "admin",
                 credential_digests["admin"],
@@ -575,7 +601,40 @@ def write_authority(
                 ("EMPLOYEE", "PUBLISH", "employee:"),
                 ("AGENT", "READ", "agent:"),
             )
-        ],
+        ]
+        + (
+            [
+                {
+                    "owner": "BUSINESS_PROBLEM",
+                    "action": "READ",
+                    "resourcePrefix": "business-problem:",
+                    "purpose": "CONTINUE_PROBLEM_READ",
+                },
+                *[
+                    {
+                        "owner": owner,
+                        "action": action,
+                        "resourcePrefix": prefix,
+                        "purpose": "WORKBENCH_SUCCESS_CRITERIA",
+                    }
+                    for owner, prefix, actions in (
+                        (
+                            "SUCCESS_CRITERION",
+                            "success-criterion:",
+                            ("CREATE", "READ", "REVISE"),
+                        ),
+                        (
+                            "SUCCESS_CRITERIA_SET",
+                            "success-criteria-set:",
+                            ("CREATE", "READ", "REVISE"),
+                        ),
+                    )
+                    for action in actions
+                ],
+            ]
+            if trusted_preparation
+            else []
+        ),
         "credentialRevocationTombstones": [],
         "staticGrantRevocationTombstones": [],
     }
@@ -828,6 +887,7 @@ def build_fixture(args, startup: BoundedStartupStatus):
             "wrong_scope": args.wrong_scope_credential_sha256,
             "wrong_grant": args.wrong_grant_credential_sha256,
         },
+        trusted_preparation=args.rel_316,
     )
     (args.runtime_dir / "runtime.json").write_text(
         json.dumps(
@@ -903,6 +963,11 @@ def main() -> None:
     parser.add_argument("--list-credential-sha256", required=True)
     parser.add_argument("--wrong-scope-credential-sha256", required=True)
     parser.add_argument("--wrong-grant-credential-sha256", required=True)
+    parser.add_argument(
+        "--rel-316",
+        action="store_true",
+        help="enable the bounded Problem/Criteria combination fixture",
+    )
     args = parser.parse_args()
     startup = BoundedStartupStatus(args.startup_status)
     composition = None

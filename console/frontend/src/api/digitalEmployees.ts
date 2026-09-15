@@ -73,7 +73,10 @@ export type GrantRequestStatus = {
   state: "PENDING" | "APPROVED" | "REJECTED";
   aggregateVersion: number;
   submittedAt: string;
-  purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE";
+  purpose:
+    | "WORKBENCH_EMPLOYEE_LIFECYCLE"
+    | "CONTINUE_PROBLEM_READ"
+    | "WORKBENCH_SUCCESS_CRITERIA";
   requestedActions: string[];
 };
 
