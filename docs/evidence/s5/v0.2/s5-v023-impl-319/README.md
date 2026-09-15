@@ -58,7 +58,7 @@ The post-recovery candidate checks establish:
 | PostgreSQL migration/restart/immutability/reader compatibility | `PASS`; 2 tests on task-owned PostgreSQL 16 |
 | 308 current-grant, revocation, exact lock and caller-owned transaction integration | `PASS`; 1 PostgreSQL test |
 | Raw-content scan of Draft, contextual Resource Use and Evidence records | `PASS`; zero matches for the browser input strings in a 70,119-byte data-only dump |
-| Native HTTPS Chromium product journey | `PASS`; 1 test in 6.0s, using the live product build, two-stage authorization, clarification, supplement/new turn, structured draft, Human edit, formal create and authorized readback |
+| Native HTTPS Chromium product journey | `PASS`; 1 test in 6.0s, using the live product build with `VITE_PROBLEM_DRAFT_ASSISTANCE=enabled`, two-stage authorization, clarification, supplement/new turn, structured draft, Human edit, formal create and authorized readback |
 | Provider type used | `SYNTHETIC`; real provider calls `0` |
 
 The passing browser run used the product's buttons and forms, not direct business
