@@ -24,8 +24,9 @@ targeted PostgreSQL tests, frontend lint/live build, default and dedicated
 Playwright collection, the native-HTTPS click journey, `make check`, and normal
 commit hooks have passed. The [handoff](../../engineering/S5-V023-REL-316-HANDOFF.md)
 and [evidence index](../../evidence/s5/v0.2/s5-v023-rel-316/README.md) record the
-results and boundaries. Draft PR creation is complete. Automatic CI tracking is
-the remaining Codex-owned delivery step; all Human gates remain pending.
+results and boundaries. Draft PR creation is complete. PR-head CI passed after
+one bounded rerun of the fixed-310 real-browser job; all Human gates remain
+pending.
 
 ## Directional startup result
 
@@ -140,8 +141,9 @@ Run and record:
 
 Evidence records candidate source/tree, fixed-input provenance, actual commands
 and results, environment/ports, spec/step names, screenshots and artifact
-SHA-256, limitations, and rollback. Local runs have no CI run/job identifiers.
-Network interruption is distinct from test failure.
+SHA-256, limitations, rollback, and the PR-head CI run/job identifiers. The
+local click run itself has no CI identifiers. Network interruption is distinct
+from test failure.
 
 ## Compatibility, risk, stop, and rollback
 

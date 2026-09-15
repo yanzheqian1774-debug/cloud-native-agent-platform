@@ -49,8 +49,19 @@ follows that candidate.
 - Dedicated REL collection: `1 test in 1 file`.
 - Native HTTPS/PostgreSQL/Chromium click journey: `1 passed`, no retries, no
   skipped/unexpected tests. See the [evidence index](../evidence/s5/v0.2/s5-v023-rel-316/README.md).
-- Normal commit hooks passed. CI run/job identifiers are unavailable until the
-  Draft PR is pushed and created.
+- Normal commit hooks passed.
+- Draft PR-head CI passed: CI run `34937417907` (quality job
+  `104278262726`, frontend job `104278262874`, browser job `104278262868`);
+  Employee Identity Chain run `34937417939` (Problem/Plan job
+  `104278262794`, identity job `104278262923`, Skill job `104278262937`);
+  REL-316 run `34937417961` / job `104278263190`; and fixed-310 real-browser
+  run `34937417918`, successful rerun job `104279509699`.
+
+The first fixed-310 job attempt (`104278263002`) stopped at its final transport
+boundary assertion. The same exact scenario passed locally on an exclusive
+PostgreSQL database without a code change, and the bounded CI rerun passed all
+steps. This is recorded as an isolated transient test failure, not a network
+interruption and not evidence of exact-main validation.
 
 The initial broad PostgreSQL command produced two failures before correction:
 one database was not blank for the execution migration test, and the combined
@@ -73,6 +84,10 @@ or Session closure, and final Human acceptance remain unperformed and
 Human-owned. If target `main` later contains IMPL-315, compare the fixed shared
 symbols before integration and do not import or modify Native behavior without
 new authorization.
+
+At delivery, remote `main` and Draft PR base both remained the audited
+`f189212232fc194859a695f0307e83b0c7b73c0f`. A stale local `main` branch name was
+ignored; it was not used as routing or candidate authority.
 
 ## Rollback
 

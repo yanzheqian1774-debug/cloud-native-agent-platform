@@ -7,7 +7,7 @@
 - Fixed consumer IMPL-310: `62ed0fee0ccf322a4276a7f20c65151395d726e8` / tree `57813acbe9bd7a07c671145e12385a98f0a66977`.
 - Fixed IMPL-305 input: `5a32fbb918a3c30ad50141e8bfbe7613673dc412` / tree `36ae844488fe94c2b0c2e10760a063e7e5a14616`.
 - Fixed IMPL-299 input: `020c1d6eae35c47a418d210b5e982e8d54b03889` / tree `9ecf47874411e6656371b0eef973d36b4dde070e`.
-- Audited and final local-run target `main`: `f189212232fc194859a695f0307e83b0c7b73c0f` / tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2`.
+- Audited target and delivery-time remote `main`: `f189212232fc194859a695f0307e83b0c7b73c0f` / tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2`.
 - The later evidence-only commit is not part of the executed product tree.
 
 ## Real click result
@@ -62,8 +62,24 @@ not included here.
 - `SHA256SUMS`: SHA-256 index for the files above. The README is intentionally
   excluded so its own edit cannot invalidate the index.
 
-This was a local run, so CI run and job identifiers are `N/A`. Earlier retained
-local diagnostics are separate from the passing evidence: missing local
+The archived click report above is a local run, so that report's CI run/job
+identifiers are `N/A`. Draft PR-head checks passed with these external records:
+
+- CI `34937417907`: quality `104278262726`, frontend `104278262874`, browser
+  `104278262868`;
+- Employee Identity Chain `34937417939`: Problem/Plan `104278262794`, identity
+  `104278262923`, Skill `104278262937`;
+- REL-316 `34937417961`: native-HTTPS Chromium job `104278263190`;
+- fixed-310 real Workbench `34937417918`: successful rerun job `104279509699`.
+
+The fixed-310 initial job `104278263002` failed at its final transport-boundary
+assertion. An exact local reproduction on a new exclusive PostgreSQL database
+passed without code changes, followed by a fully passing CI rerun. It is
+classified as an isolated transient test failure, not a network interruption.
+These are PR-head checks, not exact-main CI.
+
+Earlier retained local diagnostics are separate from the passing evidence:
+missing local
 `PYTHONPATH`, a non-live frontend build, the lifecycle failure-color seam found
 and fixed, and a final navigation assertion that was corrected to use visible
 Problem selection. No network interruption occurred.
