@@ -12,6 +12,7 @@
 | 分配权威 | Human 正式分配；仅授权形成 G2 草案、文档验证、Draft PR，不等于接受本方案 |
 | 固定仓库基线 | `origin/main` source `f189212232fc194859a695f0307e83b0c7b73c0f`; tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2` |
 | 本轮固定审阅起点 | source `af9a3b4d528745a87c2027ca9d2d414b884f51df`; tree `c611f9eac8a2cefeb795c40cc8ecebc592611202`; Draft PR `#174` |
+| 最终澄清固定起点 | source `9e36e0faba1ddf1298766f25f8ec9b0f17f568d1`; tree `61ab25701215283470108c6e054bfe3dbb625993`; Draft PR `#174` |
 | 固定 308 输入 | source `141a17ecd34ec3b721e1c8a8ae33277c4b454e42`; tree `b195b4612a4ab9f295e3c6f9a82199b05db7ac0e` |
 | 固定 316 输入 | source `3cc98cde9452e5036ad9bd44981f5fff9499b011`; tree `bb614158fded36277bced028baed88240f29f8d0` |
 | 后续实现授权 | `NO`; migration、endpoint、provider、frontend、真实调用、部署与运行验收均需单独 Human G1 分配 |
@@ -192,6 +193,48 @@ resolution 或 dispatch。这样首次调用无需循环授权，也不需要 wi
 若未来需要 service-workload identity 的第二授权，必须单独扩展；本候选不假定完整 workload
 IAM 已存在。
 
+### 5.4 异步授权、无正文恢复与当前权限 admission
+
+raw request content 不持久化，因此 authorization callback 晚于原 HTTP 连接或服务重启时，
+durable allow decision/snapshot 不能自行恢复正文，也不能自行 dispatch。若原受控内存中的正文
+仍存在，可继续同一 invocation；否则 projection 为 `REQUESTED_AWAITING_CONTENT`，向已通过
+读取/披露授权的调用方返回 `CONTENT_RESUBMISSION_REQUIRED`，不返回原正文。
+
+浏览器恢复首次 dispatch 必须重新提交原 scoped idempotency key 和完整正文。trusted server：
+
+1. authenticate 并用 scoped key 找到原 claim；在披露 invocation ID/state 前，对 exact
+   `READ_DRAFT_ASSISTANCE_INVOCATION` target 做**当前**授权检查；HMAC match 或同一 initiating
+   principal 都不蕴含 READ grant，deny 使用 non-enumerating 响应；
+2. 用 claim 记录的 pepper/canonicalization version 对重交正文重算 commitment；必须 constant-time
+   等于原 commitment。mismatch、pepper unavailable/window expired 均零 state change/dispatch；
+3. 验证原 context 未 expired/abandoned、原 turn/version 仍是 current writable generation，且
+   request 的 expected version 与 claim 完全相同；已产生 successor、用户已编辑到新 generation
+   或 context 不活跃时追加/返回 `STALE_DRAFT_VERSION`，不得把旧正文 dispatch；
+4. 重新读 exact snapshot refs 和 Model Governance 当前 eligibility/high-water。然后调用 Authority
+   对原 `REQUEST_DRAFT_ASSISTANCE` 与 `INVOKE_MODEL` request/decision refs 执行
+   `validate-current-and-admit`：在同一 Authority serialization 中检查两者的 exact subject/scope/
+   action/target、grant identity、expiry、revocation 和 decision version，并返回 bound、短期、
+   single-use `dispatch_admission_id/fence`；这不是新的 authorization request，也不能换 target；
+5. 只有步骤 1-4 成功，且 required Resource Use/budget gates 已 durable，才可解析 provider
+   credential。Draft Assistance 随后以 invocation 唯一约束和 expected state/version 对 admission
+   做 CAS；winning writer 提交 `DISPATCH_RECORDED` 后才调用 sealed transport；
+6. 并发重交只有一个 CAS winner。loser 读取 winner state：若仍未记录 dispatch 且 admission lease
+   已安全过期，可从步骤 4 获取同一原决定下的新 admission；若已存在 `DISPATCH_RECORDED`，只能
+   返回原 identity/state 或 observe 原 correlation，永不因 replay 再调用 provider。
+
+唯一 dispatch admission 的 key 是 exact `invocation_id`，并绑定 snapshot digest、turn/version、
+两个 authorization decision versions、eligibility high-water、Resource Use admission reference、
+budget snapshot 和 expiry。admission 超时且 `DISPATCH_RECORDED` 不存在时可安全重新 admission；一旦
+dispatch fact 存在，即使尚不确定 socket write，也进入第 6 节 unknown/observation 语义。
+
+“不重新授权申请”只禁止创建替代 request ID 或把旧 key 变成新 invocation；它不跳过 current
+authorization。撤销与 dispatch admission 的线性化点是 Authority 的
+`validate-current-and-admit` transaction：revocation/expiry 先线性化则 admission deny、零 credential
+resolution/provider call；admission 先线性化则该单次短期 admission 可以继续，之后的 revocation
+阻止新 admission/successor，但不能撤回已批准或已发生的外部效果。binding eligibility 也固定在
+该 admission 引用的 current high-water；其后变化不改写原 fact，只阻止后续 admission。平台不据此
+宣称 provider effect 可撤销或 exactly-once。
+
 ## 6. Invocation state、dispatch、取消和恢复
 
 state 由 append-only facts 的 versioned reducer 得出；调用方不能直接设置 state。完整允许
@@ -201,9 +244,11 @@ state 由 append-only facts 的 versioned reducer 得出；调用方不能直接
 | --- | --- | --- | --- |
 | none | winning scoped idempotency claim | `AUTHORIZATION_PENDING` | 同 transaction 登记 context/turn/invocation shell；无 protected lookup/dispatch |
 | `AUTHORIZATION_PENDING` | exact request/model decision deny、expired 或 revoked-before-use | `REJECTED` | disclosure-safe terminal；零 provider credential resolver/dispatch |
-| `AUTHORIZATION_PENDING` | 两个 exact allow decisions + exact Model readback/snapshot commit | `REQUESTED` | snapshot、decision refs、claim 与 request durable 后才成立 |
+| `AUTHORIZATION_PENDING` | 两个 exact allow decisions + exact Model readback/snapshot commit，且原正文仍在受控内存 | `REQUESTED` | snapshot、decision refs、claim 与 request durable 后才成立 |
+| `AUTHORIZATION_PENDING` / recovered `REQUESTED` | allow/snapshot 已 durable，但服务无原正文 | `REQUESTED_AWAITING_CONTENT` | 返回 `CONTENT_RESUBMISSION_REQUIRED` 前必须有 current READ grant；不自动 dispatch |
+| `REQUESTED_AWAITING_CONTENT` | same-key正文重交、原 commitment/current turn/current admission checks 均通过 | `REQUESTED` | 只恢复原 invocation；不同正文或 stale generation 不改变原 dispatch state |
 | `AUTHORIZATION_PENDING` | binding/store/pepper/decision recovery 无法安全完成 | 保持原状态或 `FAILED_PRE_DISPATCH` | 可查询原 request；不得换 request ID 或 dispatch |
-| `REQUESTED` | required Resource Use root（若 04A）和 credential resolution 成功，dispatch fact commit | `DISPATCH_RECORDED` | commit 在 transport 前；只表示进入不可安全重派边界 |
+| `REQUESTED` | current grant/binding、required Resource Use/budget、unique admission 和 credential resolution 成功，dispatch fact CAS commit | `DISPATCH_RECORDED` | commit 在 transport 前；只表示进入不可安全重派边界 |
 | `REQUESTED` | pre-dispatch authority/binding/budget/Resource Use/credential failure | `FAILED_PRE_DISPATCH` | terminal no-effect；修复后只能显式 successor |
 | `DISPATCH_RECORDED` | 同步 authoritative success/failure response | `SUCCEEDED` / `FAILED` | 可跳过 `ACCEPTED/RUNNING`；response 必须通过 schema/identity validation |
 | `DISPATCH_RECORDED` | authoritative acceptance/progress | `ACCEPTED` / `RUNNING` | observation 不能证明业务成功 |
@@ -242,6 +287,8 @@ at-least-once observation ingestion，不能提升为 exactly-once effect。
 | `IDEMPOTENCY_PAYLOAD_MISMATCH` | `NO` | fail closed；不能换 payload 复用 key |
 | `IDEMPOTENCY_REPLAY_UNVERIFIABLE` | `NO` | 不 dispatch；Human 可显式创建 successor |
 | `IDEMPOTENCY_REPLAY_WINDOW_EXPIRED` | `NO` | key tombstone 禁止复用；新动作必须使用新 key/successor |
+| `CONTENT_RESUBMISSION_REQUIRED` | `NO` | 通过 current READ grant 后重交 same key/body；平台不能恢复正文 |
+| `DISPATCH_ADMISSION_DENIED` / `DISPATCH_ADMISSION_EXPIRED` | `NO` | 原 identity 保留；不得解析 provider credential；显式 successor 仍需独立授权 |
 | `SECRET_REFERENCE_UNAVAILABLE` / `CREDENTIAL_RESOLUTION_FAILED` | `NO` | 原 invocation 终止于 pre-dispatch failure；修复后 successor |
 | `PROVIDER_RATE_LIMITED` / `PROVIDER_UNAVAILABLE` | 只有 provider 权威响应可证明 `YES` | 记录 failed 与 retry-after（若 allowlisted）；不自动 retry |
 | `PROVIDER_TIMEOUT` / `TRANSPORT_AMBIGUOUS` | `UNKNOWN` | `OUTCOME_UNKNOWN`；re-observe，否则显式 successor |
@@ -283,8 +330,10 @@ canonicalization 必须是版本化、无歧义的 typed encoding（含字段标
 1. scoped key 唯一域是 `(namespace, security_domain, authenticated_principal_id, action,
    scoped_idempotency_key)`；authenticate、scope 与 bounded request validation 后，先查 claim，
    不先生成 Platform identity；
-2. 命中 claim 时解析记录的 exact pepper version、重算 commitment：相同则返回原 identity/state，
-   不重新授权或 dispatch；不同则 `IDEMPOTENCY_PAYLOAD_MISMATCH`；
+2. 命中 claim 时解析记录的 exact pepper version、重算 commitment：相同仅证明请求 payload 与原
+   claim 一致；返回 identity/state 前仍需 exact current READ/disclosure authorization。通过后返回
+   原 identity/state，不创建新 authorization request 或 dispatch；不同则
+   `IDEMPOTENCY_PAYLOAD_MISMATCH`；
 3. 未命中时解析当前 active pepper version、计算 commitment，再生成 candidate IDs，并以唯一域
    做单 transaction compare-and-insert。并发只有一名 writer 获胜；loser 丢弃 candidate IDs、
    读取 winner，并按步骤 2 比较；不得留下 orphan identity；
@@ -295,7 +344,9 @@ canonicalization 必须是版本化、无歧义的 typed encoding（含字段标
 6. 到达 `replay_not_after` 后，key tombstone 仍禁止复用并返回 `IDEMPOTENCY_REPLAY_WINDOW_EXPIRED`；
    无需为过期 replay 解析 pepper，也不能把相同 key 当新请求。pepper 只有在引用它的所有窗口
    关闭且 secret governance/hold 允许后才可销毁；rotation 只影响新 claim；
-7. replay 时正文已丢弃，只返回 metadata 和 `RESULT_CONTENT_NOT_RETAINED`，不能重建响应。
+7. replay 时正文已丢弃，只有 current READ grant 才返回 allowlisted metadata 和
+   `RESULT_CONTENT_NOT_RETAINED`/`CONTENT_RESUBMISSION_REQUIRED`；不能重建响应。若尚未越过
+   `DISPATCH_RECORDED`，可按第 5.4 节重交原正文争取唯一 admission；越过后 replay 永不 dispatch。
 
 idempotency pepper resolver 与 provider credential resolver 是两个 purpose-scoped port。pepper
 resolver 可在 authenticated trusted service、validated scope/request 后且在 invocation grant 前
@@ -406,7 +457,7 @@ conflict。固定顺序为：
 | --- | --- | --- |
 | A | Draft Assistance：context/turn/invocation shell、claims、decision refs、snapshot、`REQUESTED` 和条件性 `resource_use_required` / `evidence_required` obligations | commit 前无下游写入；恢复只读原 invocation 并继续缺失 obligation |
 | B | Execution（仅 04A 已接受/启用）：创建 exact invocation context 的 Resource Use root 和 pre-dispatch admission fact | required write 失败则 Draft 追加 `FAILED_PRE_DISPATCH`，零 credential/provider call；重试同 operation ID 不生成第二 use |
-| C | provider credential resolver，然后 Draft Assistance 提交 `DISPATCH_RECORDED` | resolver 失败为 pre-dispatch terminal；dispatch fact 失败不得调用 provider |
+| C | Model Governance current eligibility readback；Authority 对原 decision 执行 current grant/revocation/expiry 的 linearized single-use admission；provider credential resolver；Draft Assistance CAS 提交 `DISPATCH_RECORDED` | 任一检查/resolver/CAS 失败均不得调用 provider；只有 dispatch fact winner 可进入 D |
 | D | provider transport；Draft Assistance 追加 authoritative/unknown observation 和 reduced invocation state | crash/timeout 按第 6 节 observe 原 correlation；不得重新执行 B/C/D 的 provider dispatch |
 | E | Execution（若启用）按 exact observation operation ID 追加 use outcome/measurement fact | 失败只产生 `RESOURCE_USE_COMPLETION_PENDING` obligation；重放 Execution write，不改变 invocation、不调用 provider |
 | F | Evidence owner（仅 04B 已接受/启用）按 `(schema_version, invocation_id, observation_id)` 追加一份 allowlisted Evidence | 失败只产生 `EVIDENCE_APPEND_PENDING` obligation；相同 payload 返回原 Evidence ID，不生成重复 Evidence |
@@ -528,10 +579,12 @@ Human 可以对每行分别 `ACCEPT`、`ACCEPT_WITH_AMENDMENT`、`DEFER` 或 `RE
 | --- | --- | --- |
 | First bootstrap | 首次请求 durable 登记 roots/shell，两个 exact request ID 的 allow 决定恢复后才固化 snapshot/`REQUESTED` | 无循环授权、wildcard/prefix/fixture final grant；deny/crash 不读取 protected Model facts 或 provider credential |
 | Identity/owner | restart 后 exact context/turn/invocation/snapshot metadata readback | 无 Attempt/Plan/Run/Problem 伪造；frontend/provider 不能 mint Platform identity；first-request loser 无 orphan IDs |
-| Scope/auth | persisted typed values 构造 exact targets、current decision、same-scope read | wrong subject/scope/action/target/format/expiry/revocation 零 protected lookup/provider resolver/provider call |
+| Scope/auth | persisted typed values 构造 exact targets；same-key replay经 current READ grant 后披露；原 decision 经 current validate-and-admit | HMAC/same principal 不授予 READ；wrong subject/scope/action/target/format/expiry/revocation 零 credential/provider call |
 | Binding | exact Model/Provider/Endpoint/Profile/adapter refs 与 high-water 一致 | latest/name/env/default/fallback 与 digest mismatch fail closed |
 | Content | live response形成 clarification 或 editable draft；Human confirm 后才创建 Problem | DB/log/Evidence/trace 无 raw prompt/response/普通 digest；模型不能创建正式对象 |
 | Idempotency | 先查 claim；same key/commitment 返回原 identity；并发首次请求只有一个 winner；rotation 后按 stored pepper version 重放 | different payload、pepper unavailable、window expired 均零 dispatch；deny 后同 key 不因新 grant 复活；provider resolver 不能用于 HMAC |
+| Content resubmission | async allow/restart 后浏览器重交 same key/body，原 commitment、current turn/version 和 exact snapshot 均通过，仅一个 CAS winner dispatch | 无正文不 dispatch；mismatch/stale/successor/context expired fail closed；`DISPATCH_RECORDED` 后 replay 只 read/observe |
+| Current permission | revocation前 linearized admission可完成单次 dispatch；admission ref绑定decision/high-water/expiry | revocation/expiry先发生则零 credential/provider call；不创建替代 authorization request；不宣称撤回已发生 effect |
 | Dispatch/recovery | 同步 terminal、UNKNOWN 后 observation、重复 observation均按表收敛 | dispatch≠success；UNKNOWN 不自动重发；相同 observation key 冲突进入 review；late result 不污染 successor |
 | Cancel/retry | success/cancel 竞争按 provider causal order；explicit successor 独立授权/identity | 无 causal order 不覆盖 terminal；fetch abort/page close≠confirmed；不复用 key/invocation/snapshot |
 | Resource Use | 若 04A 接受，B/E/G 顺序与同 operation ID 补记通过；v1 Attempt 与 v2 context union 正确 | 不 nullable Attempt；旧 reader不推断；sole writer；补记失败不触发 provider |

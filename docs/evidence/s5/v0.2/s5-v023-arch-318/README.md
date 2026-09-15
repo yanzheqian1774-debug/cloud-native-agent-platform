@@ -132,6 +132,48 @@ These are documentation/repository checks only. No model/provider call, service,
 credential read, deployment or runtime validation was performed, and the result does
 not accept any G2 or H308 decision.
 
+### 6.3 Prior candidate CI and single rerun evidence
+
+This evidence remains bound to source
+`9e36e0faba1ddf1298766f25f8ec9b0f17f568d1`, tree
+`61ab25701215283470108c6e054bfe3dbb625993`, and PR merge-test commit
+`6f32dfb26e2f8e3e7b0fd6ec61e437c8477ddb3a` with the same tree.
+
+| Run / attempt | Job | Result | Evidence boundary |
+| --- | --- | --- | --- |
+| `34956715756` attempt 1 | `104340419028` Agent Workbench Browser Acceptance | `FAILURE`; 36/37 passed, one `BROWSER_TIMEOUT` at `wave-3b-product-technical-evidence.spec.ts:21` | exact deeper action/locator/root cause unavailable; `UNKNOWN`; no failure artifact |
+| `34956715756` attempt 2 | `104344741586` Agent Workbench Browser Acceptance | `SUCCESS` | one Human-authorized `rerun-failed`; no timeout/assertion/code change |
+| `34956715775` attempt 1 | three PostgreSQL jobs | `SUCCESS` | not rerun |
+
+The first failure is not erased or reclassified by the passing rerun. No second rerun
+was requested, and no successful workflow was manually rerun.
+
+### 6.4 Final clarification scope
+
+The final clarification starts from the exact source/tree above and changes only the
+same ADR, G2 plan and this Evidence README. It adds:
+
+1. browser resubmission of non-persisted content after async authorization/restart,
+   original commitment/current turn validation and unique CAS dispatch admission;
+2. current READ authorization before replay disclosure and current grant,
+   expiry/revocation/binding admission before provider credential resolution.
+
+It preserves all owners, the non-Attempt direction, and the independent `PROPOSED`
+status of H308-03C, H308-04A and H308-04B.
+
+### 6.5 Final clarification validation
+
+| Check | Result |
+| --- | --- |
+| focused path/scope gate | `PASS`; exactly the ADR, G2 plan and this Evidence README changed |
+| `git diff --check` | `PASS` |
+| repository baseline | `make check` `PASS`; Ruff passed, 390 files format-clean, pytest `1583 passed, 134 skipped`, one dependency deprecation warning |
+| prohibited scope | `PASS`; no product code, SQL, runtime configuration, Registry or 317 asset changed |
+
+The CI rerun above is historical evidence for the prior candidate. This local
+validation covers the final clarification working diff; the new committed candidate
+will receive its own automatic CI and must be reported separately.
+
 ## 7. Terminal boundary
 
 The only permitted terminal claim for this task is:

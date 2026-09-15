@@ -11,6 +11,7 @@
 | Implementation | `NOT_STARTED / NOT_AUTHORIZED` |
 | Fixed main baseline | source `f189212232fc194859a695f0307e83b0c7b73c0f`; tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2` |
 | Fixed reviewed candidate for this revision | source `af9a3b4d528745a87c2027ca9d2d414b884f51df`; tree `c611f9eac8a2cefeb795c40cc8ecebc592611202`; Draft PR `#174` |
+| Fixed final-clarification candidate | source `9e36e0faba1ddf1298766f25f8ec9b0f17f568d1`; tree `61ab25701215283470108c6e054bfe3dbb625993`; Draft PR `#174` |
 | Architecture candidate | [S5-V023-ARCH-318](../../architecture/s5/v0.2/S5-V023-ARCH-318-PRE-PROBLEM-DRAFT-ASSISTANCE-INVOCATION-MODEL-USE-EVIDENCE-V1.md) |
 | Evidence | [startup and document evidence](../evidence/s5/v0.2/s5-v023-arch-318/README.md) |
 
@@ -86,6 +87,12 @@ verify fixed reviewed candidate and Draft PR identity
 -> export the revised originals outside the repository
 ```
 
+The final clarification additionally records the prior candidate CI independently:
+one authorized `rerun-failed` of run `34956715756`, no rerun of successful workflows,
+and no timeout/assertion/code change. It then specifies content resubmission before a
+first dispatch and current authorization at disclosure/dispatch admission. The first
+failure and unknown deeper cause remain evidence even if the one rerun passes.
+
 ## 4. Required G2 outputs
 
 - bounded ADR candidate and an owner/identity relationship model;
@@ -101,6 +108,11 @@ verify fixed reviewed candidate and Draft PR identity
 - independently authorized, reader-first Model Evidence;
 - fixed invocation -> Execution-owned Resource Use -> Evidence commit/reference order,
   deterministic repair IDs and no-provider-redispatch partial-failure recovery;
+- no-content async/restart recovery through same-key body resubmission, original
+  commitment/current turn checks and one CAS/unique dispatch admission;
+- current READ authorization for replay disclosure and a linearized current
+  grant/expiry/revocation/binding admission before credential resolution, without
+  implying that a completed external effect can be revoked;
 - synthetic-only first-slice data boundary, platform/provider retention distinction,
   and no default 30-day deletion;
 - independent recommendations for H308-03C, H308-04A and H308-04B;
