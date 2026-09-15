@@ -1,3 +1,5 @@
+import type {DraftAssistanceResult} from "./draftAssistanceTypes";
+
 const PREFIX="/api/workbench/v1";
 
 export type WorkbenchSession={schemaVersion:"workbench-session.v1";principal:{principalId:string;tenantId:string;securityDomain:string};session:{expiresAt:string;idleExpiresAt:string};csrfToken:string};
@@ -11,7 +13,7 @@ export type ProblemCreatorContinuation={schemaVersion:"problem-creator-continuat
 export type GrantRequestStatus={requestId:string;state:"PENDING"|"APPROVED"|"REJECTED";aggregateVersion:number;submittedAt:string;purpose:string;requestedActions:string[]};
 export type GrantDecisionResult={schemaVersion:"exact-grant-decision-result.v1";requestId:string;decisionId:string;state:"APPROVED"|"REJECTED";aggregateVersion:number;decidedAt:string;notBefore?:string;expiresAt?:string};
 export type ExactGrantRequest={owner:"SUCCESS_CRITERION"|"SUCCESS_CRITERIA_SET";action:"CREATE"|"READ"|"REVISE";resource:string};
-export type DraftAssistanceResult={contextId:string;turnId:string;turnVersion:number;invocationId:string;state:string;aggregateVersion:number;resultKind:"NEEDS_CLARIFICATION"|"DRAFT_READY"|null;reasonCode:string|null;contentDisposition:"CONTENT_NOT_RETAINED";clarificationQuestion:string|null;draft:{title:string;description:string}|null;resourceUseId:null;evidenceId:null;resourceUseRecorded:boolean;evidenceRecorded:boolean;problemId:string|null;problemRevisionId:string|null;problemDigest:string|null;transport:"SYNTHETIC"|"REAL_PROVIDER";requestAuthorizationRequestId:string|null;modelAuthorizationRequestId:string|null};
+export type {DraftAssistanceResult} from "./draftAssistanceTypes";
 type Envelope<T>={schemaVersion:"workbench-operation.v1";result:T;continuationIds:string[]};
 type ErrorBody={reasonCode?:string;requestId?:string};
 
