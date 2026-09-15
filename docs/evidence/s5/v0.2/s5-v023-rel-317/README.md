@@ -10,8 +10,9 @@
   `6d48a75d2688ffe172a93e95718c7c95698114f6`.
 - Receiving merges: REL-316 `1d92ce353693f5f91ccb27051d17cdbb2bee4c2d`;
   IMPL-315 `2849e5bb819471764df742090924eca180c5b0a4`.
-- Both fixed inputs are candidate ancestors. The final PR head/tree is recorded
-  after it exists.
+- Both fixed inputs are candidate ancestors.
+- Passing implementation PR head: `97d5ba1739fc8956cf31d5e6b1523b83c2bd99a8`,
+  tree `d79a2aef853d45d6908a62e3f1b75ef4bcb48414`.
 - Validated pre-PR-record candidate: `ba09000a3395e5c9b8138e0217f9cd18e5c4421f`,
   tree `1438baa37a83c28be8856e2429132e853477af10`.
 - Draft PR: [#173](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/173).
@@ -67,6 +68,12 @@ fencing, Task/Workflow/Runtime lifecycle or technical-terminal ownership changed
 - `make check`: PASS; Ruff passed, 427 Python files were formatted, and pytest
   reported `1686 passed, 181 skipped`. These external-environment skips are
   separate from the no-skip dedicated PostgreSQL suites.
+- PR-head CI for `97d5ba1...`: PASS, 9/9 checks. Runs/jobs:
+  CI `34950656701` (`104320561727` Quality, `104320561429` Frontend,
+  `104320561945` Workbench browser); Employee `34950656664`
+  (`104320561305` Identity, `104320561534` Skill, `104320561690` Business
+  Problem); Workbench `34950656722` / `104320562035`; REL-316
+  `34950656650` / `104320562345`; REL-317 `34950656646` / `104320561485`.
 
 ## Fresh combined Native L3 hard gate
 
@@ -120,6 +127,12 @@ or a product-interface-to-Native execution chain.
    `a78cf00d-08d7-4c05-9068-2f711b21605b`. No redispatch occurred.
 3. The corrected source was rebuilt and rerun with a separate database and kind
    cluster; the complete hard gate passed.
+4. Initial PR-head CI `0f76ceb...` exposed two acceptance-isolation defects:
+   the REL-317 browser fixture reused the contract-test database and the
+   dedicated REL-317 spec remained visible to the default Playwright config.
+   No product or Native semantic failure occurred. Commit `97d5ba1...` gave the
+   browser fixture its own database and excluded the dedicated spec from the
+   default suite; the complete 9-check PR-head matrix then passed.
 
 Raw evidence is preserved under
 `/Users/tristan/.codex/evidence/s5-v023-rel-317-trusted-native/`. Both REL-317

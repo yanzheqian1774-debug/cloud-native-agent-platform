@@ -127,6 +127,8 @@ build, isolated HTTPS/Chromium product journey, `make check`, normal hooks, and
 fresh combined-source Native L3 have passed. The L3 source is `eff1b583...`, tree
 `4943839...`; later Evidence-only commits are outside its recorded build
 context. Draft PR [#173](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/173)
-is open and remains Draft; PR-head CI is running. See the
+is open and remains Draft. The implementation head `97d5ba1...`, tree
+`d79a2ae...`, passed all 9 PR-head checks after two bounded acceptance-isolation
+fixes. See the
 [handoff](../../engineering/S5-V023-REL-317-HANDOFF.md) and
 [Evidence index](../../evidence/s5/v0.2/s5-v023-rel-317/README.md).

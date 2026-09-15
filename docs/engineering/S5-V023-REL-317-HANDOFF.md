@@ -3,7 +3,9 @@
 REL-317 combined fixed REL-316 then fixed IMPL-315 in the authorized order and
 reconciled all five shared paths by symbol. Dedicated PostgreSQL suites,
 frontend lint/live build, isolated HTTPS/Chromium journey, `make check`, normal
-hooks, and a fresh source/build/image-bound Native L3 passed. Detailed
+hooks, a fresh source/build/image-bound Native L3, and the 9-check PR-head CI
+matrix passed. The CI-found acceptance-isolation defects and their bounded fix
+are recorded in the failure history. Detailed
 identities, hashes, skips, failure history and asset inventory are in the
 [Evidence index](../evidence/s5/v0.2/s5-v023-rel-317/README.md).
 
