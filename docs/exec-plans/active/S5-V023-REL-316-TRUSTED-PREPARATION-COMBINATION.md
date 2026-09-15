@@ -15,6 +15,18 @@
 - Pull request: `PENDING`; exactly one Draft PR will be created.
 - Human gates: Ready, merge, deployment, release, durable-integration acceptance, and Session close remain `PENDING / HUMAN_ONLY`.
 
+## Candidate validation status
+
+The executable candidate is
+`674a1d13f54bc41b82e967b0c6d7309dc074cbee`, tree
+`cca1f448efb8de40fde6a45fd9208f2fa9c879bf`. Symbol-level combination,
+targeted PostgreSQL tests, frontend lint/live build, default and dedicated
+Playwright collection, the native-HTTPS click journey, `make check`, and normal
+commit hooks have passed. The [handoff](../../engineering/S5-V023-REL-316-HANDOFF.md)
+and [evidence index](../../evidence/s5/v0.2/s5-v023-rel-316/README.md) record the
+results and boundaries. Draft PR creation and automatic CI tracking are the
+remaining Codex-owned delivery steps; all Human gates remain pending.
+
 ## Directional startup result
 
 At REL start on 2026-09-15, all three fixed commit objects resolved locally and
