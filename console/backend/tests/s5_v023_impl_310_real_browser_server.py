@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import ssl
 import threading
 import time
@@ -561,6 +562,7 @@ def write_authority(
     *,
     trusted_preparation: bool = False,
     trusted_preparation_source: str = "s5-v023-rel-316-trusted-preparation",
+    draft_assistance: bool = False,
 ) -> AuthorityRuntimeConfiguration:
     document = {
         "schemaVersion": "static-authority-generation.v1",
@@ -634,6 +636,44 @@ def write_authority(
                 ],
             ]
             if trusted_preparation
+            else []
+        )
+        + (
+            [
+                {
+                    "owner": owner,
+                    "action": action,
+                    "resourcePrefix": prefix,
+                    "purpose": purpose,
+                }
+                for owner, action, prefix, purpose in (
+                    (
+                        "DRAFT_ASSISTANCE",
+                        "REQUEST_DRAFT_ASSISTANCE",
+                        "draft-assistance:",
+                        "PROBLEM_DRAFT_ASSISTANCE",
+                    ),
+                    (
+                        "DRAFT_ASSISTANCE",
+                        "READ_DRAFT_ASSISTANCE_INVOCATION",
+                        "draft-assistance:",
+                        "PROBLEM_DRAFT_ASSISTANCE",
+                    ),
+                    (
+                        "DRAFT_ASSISTANCE",
+                        "CANCEL_DRAFT_ASSISTANCE_INVOCATION",
+                        "draft-assistance:",
+                        "PROBLEM_DRAFT_ASSISTANCE",
+                    ),
+                    (
+                        "MODEL_GOVERNANCE",
+                        "INVOKE_MODEL",
+                        "model:",
+                        "PROBLEM_DRAFT_MODEL_INVOKE",
+                    ),
+                )
+            ]
+            if draft_assistance
             else []
         ),
         "credentialRevocationTombstones": [],
@@ -894,6 +934,7 @@ def build_fixture(args, startup: BoundedStartupStatus):
             if args.rel_317
             else "s5-v023-rel-316-trusted-preparation"
         ),
+        draft_assistance=os.environ.get("S5_319_DRAFT_ASSISTANCE") == "1",
     )
     (args.runtime_dir / "runtime.json").write_text(
         json.dumps(
@@ -916,6 +957,11 @@ def build_fixture(args, startup: BoundedStartupStatus):
     )
     initialize_authority_generation(runtime, control_epoch=1, recovery_epoch=1, now=now)
     problems = build_business_problem_application(args.database_url, assembly)
+    draft_composition = None
+    if os.environ.get("S5_319_DRAFT_ASSISTANCE") == "1":
+        from s5_v023_impl_319_draft_fixture import build_fixture
+
+        draft_composition = build_fixture(args.database_url, args.runtime_dir)
     composition = build_workbench_composition(
         runtime_configuration_path=args.runtime_dir / "runtime.json",
         allowed_host=f"127.0.0.1:{args.public_port}",
@@ -926,6 +972,12 @@ def build_fixture(args, startup: BoundedStartupStatus):
         agent_definitions=agent_repository,
         employee_definitions=assembly.employee_definitions,
         digital_employees=assembly.repository,
+        draft_assistance=(
+            draft_composition.service if draft_composition is not None else None
+        ),
+        managed_closeables=(
+            (draft_composition,) if draft_composition is not None else ()
+        ),
     )
     seed_dynamic_grants(composition.foundation.repository, primary_agent, now)
     public = composition.application

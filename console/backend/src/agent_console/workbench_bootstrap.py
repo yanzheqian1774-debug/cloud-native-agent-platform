@@ -23,6 +23,12 @@ from agent_console.business_problem_continuation import (
 )
 from agent_console.digital_employee_application import DigitalEmployeeRepository
 from agent_console.digital_employee_definition import EmployeeDefinitionRepository
+from agent_console.draft_assistance import DraftAssistanceService
+from agent_console.draft_assistance_api import install_draft_assistance_routes
+from agent_console.draft_assistance_authorization import (
+    DraftAssistanceGrantTargetValidator,
+    GrantAdministrationDraftAuthorization,
+)
 from agent_console.governed_execution_ownership import execution_database_fingerprint
 from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_bff import (
@@ -45,9 +51,12 @@ from agent_console.workflow_definition_service import WorkflowDefinitionService
 class WorkbenchComposition:
     application: FastAPI
     foundation: AuthorityFoundation
+    managed_closeables: tuple[object, ...] = ()
 
     def close(self) -> None:
         self.foundation.close()
+        for value in reversed(self.managed_closeables):
+            value.close()
 
 
 def build_workbench_composition(
@@ -63,6 +72,9 @@ def build_workbench_composition(
     digital_employees: DigitalEmployeeRepository,
     workflow_database_url: str = "",
     workflows: WorkflowDefinitionService | None = None,
+    draft_assistance: DraftAssistanceService | None = None,
+    model_grant_target_validator=None,
+    managed_closeables: tuple[object, ...] = (),
 ) -> WorkbenchComposition:
     """Build only after every external authority and owner dependency is present."""
     if not runtime_configuration_path.is_absolute():
@@ -90,6 +102,16 @@ def build_workbench_composition(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
+        additional=(
+            (
+                DraftAssistanceGrantTargetValidator(
+                    draft_assistance.repository,
+                    model_target_validator=model_grant_target_validator,
+                ),
+            )
+            if draft_assistance is not None
+            else ()
+        ),
     )
     foundation = build_authority_foundation(
         runtime,
@@ -107,6 +129,12 @@ def build_workbench_composition(
             foundation.repository,
             foundation.grants.authorization,
         )
+        if draft_assistance is not None:
+            draft_assistance.authorization = GrantAdministrationDraftAuthorization(
+                foundation.grants,
+                authorizer,
+                clock=foundation.grants.clock,
+            )
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -132,8 +160,19 @@ def build_workbench_composition(
                 *digital_employee_operations(digital_employees),
                 *(workflow_operations(workflows) if workflows is not None else ()),
             ),
+            **(
+                {
+                    "route_installers": (
+                        install_draft_assistance_routes(draft_assistance),
+                    )
+                }
+                if draft_assistance is not None
+                else {}
+            ),
         )
-        return WorkbenchComposition(application, foundation)
+        return WorkbenchComposition(application, foundation, managed_closeables)
     except Exception:
         foundation.close()
+        for value in reversed(managed_closeables):
+            value.close()
         raise

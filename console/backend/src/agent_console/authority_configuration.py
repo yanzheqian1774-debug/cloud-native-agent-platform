@@ -44,6 +44,13 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
             "INVOKE_MODEL",
         }
     ),
+    "DRAFT_ASSISTANCE": frozenset(
+        {
+            "REQUEST_DRAFT_ASSISTANCE",
+            "READ_DRAFT_ASSISTANCE_INVOCATION",
+            "CANCEL_DRAFT_ASSISTANCE_INVOCATION",
+        }
+    ),
 }
 
 OWNER_RESOURCE_PREFIXES = {
@@ -62,6 +69,7 @@ OWNER_RESOURCE_PREFIXES = {
     "RESOURCE_USE": "resource-use:",
     "EVIDENCE": "evidence-reference:",
     "MODEL_GOVERNANCE": "model:",
+    "DRAFT_ASSISTANCE": "draft-assistance:",
 }
 
 META_OWNERS = frozenset({"GRANT_ADMIN", "CONTINUATION_ASSIGNMENT"})

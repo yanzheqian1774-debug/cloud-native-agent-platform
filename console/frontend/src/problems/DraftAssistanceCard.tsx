@@ -1,0 +1,33 @@
+import type { DraftAssistanceResult } from "../api/businessWorkspace";
+
+type Props = {
+  result: DraftAssistanceResult;
+  busy: boolean;
+  onRefresh: () => void;
+  onObserve: () => void;
+  onCancel: () => void;
+  onReject: () => void;
+  onManualFallback: () => void;
+};
+
+export function DraftAssistanceCard({result,busy,onRefresh,onObserve,onCancel,onReject,onManualFallback}:Props){
+  const pending=result.state==="AUTHORIZATION_PENDING"||result.state==="REQUESTED_AWAITING_CONTENT";
+  const unknown=result.state==="OUTCOME_UNKNOWN"||result.state==="CANCELLATION_REQUESTED";
+  const finished=result.state==="SUCCEEDED";
+  return <section id="draft-assistance-message" tabIndex={-1} className="px-inline-card px-assistance-card" aria-label="AI 问题理解与草稿辅助">
+    <header><div><span className="px-eyebrow">AI 问题理解</span><h2>{pending?"等待精确授权":unknown?"调用结果尚不确定":result.resultKind==="NEEDS_CLARIFICATION"?"需要补充信息":result.resultKind==="DRAFT_READY"?"结构化草稿已返回":"辅助状态已更新"}</h2></div><span className={`px-status ${finished?"success":result.state.includes("REJECT")||result.state.includes("FAIL")?"danger":"warning"}`}>{result.state}</span></header>
+    <p className="px-truth-note">{result.transport==="SYNTHETIC"?"当前为明确标识的合成 transport 验收，不是真实 provider 调用。":"当前结果来自已授权的真实 provider transport。"}</p>
+    {result.clarificationQuestion&&<div className="px-assistance-question"><strong>补问</strong><p>{result.clarificationQuestion}</p></div>}
+    {result.reasonCode&&<p className="px-mode-note">状态说明：<code>{result.reasonCode}</code>{result.reasonCode==="RESULT_CONTENT_NOT_RETAINED"?"。服务端可恢复调用事实，但不会恢复原草稿正文；请明确选择手工草稿或新 successor。":""}</p>}
+    {pending&&<p>服务端只保留非正文元数据。授权完成或连接恢复后，请用当前页面重交同一正文；页面不会自动重派。</p>}
+    {unknown&&<p>系统只会观察原 provider correlation；不会把 UNKNOWN 显示为成功，也不会自动创建 successor。</p>}
+    <div className="px-card-actions">
+      {pending&&<button type="button" className="px-primary-button" disabled={busy} onClick={onRefresh}>重交正文并刷新授权</button>}
+      {unknown&&<button type="button" className="px-primary-button" disabled={busy} onClick={onObserve}>观察原调用</button>}
+      {!finished&&<button type="button" disabled={busy} onClick={onCancel}>请求取消</button>}
+      {finished&&<button type="button" disabled={busy} onClick={onReject}>拒绝 AI 草稿</button>}
+      <button type="button" disabled={busy} onClick={onManualFallback}>切换为手工草稿</button>
+    </div>
+    <details><summary>技术事实</summary><dl><dt>Invocation</dt><dd><code>{result.invocationId}</code></dd><dt>Turn</dt><dd><code>{result.turnId}</code> / v{result.turnVersion}</dd><dt>辅助授权申请</dt><dd><code>{result.requestAuthorizationRequestId??"尚未提交"}</code></dd><dt>模型授权申请</dt><dd><code>{result.modelAuthorizationRequestId??"尚未提交"}</code></dd><dt>正文处置</dt><dd>{result.contentDisposition}</dd><dt>Resource Use</dt><dd>{result.resourceUseRecorded?"已建立；标识需独立 READ 授权":"尚未建立"}</dd><dt>Evidence</dt><dd>{result.evidenceRecorded?"已补记；引用与内容需独立授权":"尚未建立"}</dd></dl><p>Draft Assistance 不是 Attempt；技术调用成功不表示业务问题已经解决。</p></details>
+  </section>;
+}
