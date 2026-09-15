@@ -365,7 +365,7 @@ def readback(database_url: str, artifact_dir: Path) -> None:
             (seed_record["command_id"],),
         ).fetchone()
         facts = connection.execute(
-            "SELECT fact_type,ordinal FROM execution_authority.native_dispatch_facts "
+            "SELECT kind,ordinal FROM execution_authority.native_dispatch_facts "
             "WHERE command_id=%s ORDER BY ordinal",
             (seed_record["command_id"],),
         ).fetchall()
@@ -381,8 +381,9 @@ def readback(database_url: str, artifact_dir: Path) -> None:
         ).fetchone()["count"]
         outcome_count = connection.execute(
             "SELECT count(*) AS count FROM execution_authority.outcomes "
-            "WHERE attempt_id=%s AND technical=true "
-            "AND business_problem_resolved=false",
+            "WHERE record->>'attempt_id'=%s "
+            "AND record->>'technical'='true' "
+            "AND record->>'business_problem_resolved'='false'",
             (seed_record["attempt_id"],),
         ).fetchone()["count"]
         ledgers = {
