@@ -6,6 +6,11 @@ API, schema, or frontend implementation.
 
 ## Evidence sets
 
+- [S5-V023-ARCH-318 G2 draft evidence](v0.2/s5-v023-arch-318/README.md)
+  records the collision-free Human allocation, exact main/308/316 inputs, attached
+  design-input hashes, accepted-contract blob identities and document validation for
+  the proposed Pre-Problem Draft Assistance Invocation boundary. It grants no Human
+  architecture acceptance, implementation, provider call, deployment or closure.
 - [S5-V023-ARCH-208 Checkpoint A evidence](v0.2/s5-v023-arch-208/README.md)
   records the collision-free Human allocation, exact baseline, confirmed IMPL-240
   blocker and proposed additive PostgreSQL persistence decision. It changes no
