@@ -45,7 +45,7 @@ def test_evidence_center_uses_real_problem_projection_without_claiming_execution
     None
 ):
     evidence = source("evidence/EvidenceCenterPage.tsx")
-    for marker in ("REAL", "NOT_CONNECTED", "UNAVAILABLE"):
+    for marker in ("旧规划真实记录", "NOT_CONNECTED", "UNAVAILABLE"):
         assert marker in evidence
     for fact in (
         "knowledge.citations",

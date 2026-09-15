@@ -103,6 +103,77 @@ class WorkflowDefinitionService:
                 "WORKFLOW_DEFINITION_NOT_FOUND", 404
             ) from exc
 
+    def list_for_workbench(self, connection, scope, *, authorized):
+        definitions = self.repository.list_for_workbench(
+            connection, scope, authorized=authorized
+        )
+        return {
+            "items": [self._workbench_summary(item) for item in definitions],
+            "count": len(definitions),
+        }
+
+    def read_revision_for_workbench(
+        self, connection, scope, resource_id, revision_id, *, authorized
+    ):
+        try:
+            value = self.repository.read_revision_for_workbench(
+                connection,
+                scope,
+                resource_id,
+                revision_id,
+                authorized=authorized,
+            )
+        except WorkflowDefinitionNotFound as exc:
+            raise WorkflowDefinitionFailure("WORKFLOW_REVISION_NOT_FOUND", 404) from exc
+        definition = value["definition"]
+        revision = value["revision"]
+        ordered = self._stable_order(revision["content"]["tasks"])
+        return {
+            "definition": {
+                key: copy.deepcopy(definition.get(key))
+                for key in (
+                    "workflowDefinitionId",
+                    "name",
+                    "aggregateVersion",
+                    "lifecycleState",
+                    "createdAt",
+                    "updatedAt",
+                )
+            },
+            "revision": copy.deepcopy(revision),
+            "productProjection": {
+                "workflowDefinitionId": definition["workflowDefinitionId"],
+                "name": definition["name"],
+                "state": revision["state"],
+                "taskCount": len(ordered),
+                "orderedTaskIds": ordered,
+            },
+            "technicalProjection": {
+                "workflowDefinitionId": definition["workflowDefinitionId"],
+                "aggregateVersion": definition["aggregateVersion"],
+                "revisionId": revision["revisionId"],
+                "predecessorRevisionId": revision.get("predecessorRevisionId"),
+                "digest": revision["digest"],
+                "state": revision["state"],
+            },
+        }
+
+    @staticmethod
+    def _workbench_summary(record):
+        return {
+            key: copy.deepcopy(record.get(key))
+            for key in (
+                "workflowDefinitionId",
+                "name",
+                "aggregateVersion",
+                "lifecycleState",
+                "currentDraftRevisionId",
+                "publishedRevisionId",
+                "createdAt",
+                "updatedAt",
+            )
+        }
+
     def edit(self, scope, resource_id, actor, expected, content):
         record = self._load(scope, resource_id)
         self._expected(record, expected)

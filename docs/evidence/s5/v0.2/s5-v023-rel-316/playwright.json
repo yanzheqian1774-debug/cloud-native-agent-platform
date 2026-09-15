@@ -1,0 +1,140 @@
+{
+  "config": {
+    "argv": [
+      "/Users/tristan/.hermes/node/bin/node",
+      "/Users/tristan/.codex/worktrees/0c12/cloud-native-agent-platform/console/frontend/node_modules/.bin/playwright",
+      "test",
+      "--config",
+      "playwright.rel-316.config.ts",
+      "--workers=1",
+      "--retries=0",
+      "--forbid-only",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/tristan/.codex/worktrees/0c12/cloud-native-agent-platform/console/frontend/playwright.rel-316.config.ts",
+    "rootDir": "/Users/tristan/.codex/worktrees/0c12/cloud-native-agent-platform/console/frontend/tests/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/tmp/s5-v023-rel-316.lQcaal/playwright-output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "/Users/tristan/.codex/worktrees/0c12/cloud-native-agent-platform/console/frontend/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "trusted-preparation-combination.real.spec.ts"
+        ],
+        "timeout": 180000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "trusted-preparation-combination.real.spec.ts",
+      "file": "trusted-preparation-combination.real.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "REL-316 combines trusted Problem, Criteria, and Employee configuration through visible controls",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 180000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6151,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "steps": [
+                    {
+                      "title": "Problem create, authorization, and exact readback",
+                      "duration": 474
+                    },
+                    {
+                      "title": "Criterion and Criteria Set create, authorize, and exact readback",
+                      "duration": 1051
+                    },
+                    {
+                      "title": "Employee CREATE is frozen, independently authorized, and does not imply READ",
+                      "duration": 668
+                    },
+                    {
+                      "title": "Exact Employee and Agent READ plus lifecycle grants close the lifecycle",
+                      "duration": 1805
+                    },
+                    {
+                      "title": "Fresh reload reads formal Problem, Criteria Set, and published Employee state",
+                      "duration": 562
+                    }
+                  ],
+                  "startTime": "2026-09-15T06:30:51.546Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e54f5d028808cd74ac8d-abaed1e8fc4d15c3dce1",
+          "file": "trusted-preparation-combination.real.spec.ts",
+          "line": 82,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-15T06:30:51.197Z",
+    "duration": 6875.541,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

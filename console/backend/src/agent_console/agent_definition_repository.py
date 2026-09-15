@@ -33,6 +33,34 @@ class AgentDefinitionRepository(Protocol):
 
     def list(self, scope: DefinitionScope) -> list[dict[str, Any]]: ...
 
+    def read_revision_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        definition_id: str,
+        revision_id: str,
+        *,
+        authorized: bool,
+    ) -> dict[str, Any]: ...
+
+    def is_known_grant_target_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        action: str,
+        exact_resource: str,
+    ) -> bool: ...
+
+    def list_published_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        *,
+        after_definition_id: str | None,
+        limit: int,
+        authorized: bool,
+    ) -> list[dict[str, Any]]: ...
+
     def create(self, record: dict[str, Any]) -> dict[str, Any]: ...
 
     def replace(
@@ -78,6 +106,25 @@ class InMemoryAgentDefinitionRepository:
                 for key, item in sorted(self._records.items())
                 if key[:2] == (scope.namespace, scope.security_domain)
             ]
+
+    def is_known_grant_target_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        action: str,
+        exact_resource: str,
+    ) -> bool:
+        del connection
+        if action != "READ":
+            return False
+        with self._lock:
+            return any(
+                exact_resource
+                == f"agent:{record['definitionId']}:{revision['revisionId']}"
+                for key, record in self._records.items()
+                if key[:2] == (scope.namespace, scope.security_domain)
+                for revision in record.get("revisions", ())
+            )
 
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         scope = DefinitionScope(record["namespace"], record["securityDomain"])

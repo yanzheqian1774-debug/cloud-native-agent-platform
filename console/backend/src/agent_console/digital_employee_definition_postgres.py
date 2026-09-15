@@ -9,6 +9,8 @@ import json
 import re
 from pathlib import Path
 
+from psycopg import Error as PsycopgError
+
 from .digital_employee_definition import (
     EmployeeDefinitionError,
     EmployeeRevision,
@@ -30,6 +32,24 @@ _SHA256_DIGEST = re.compile(r"(?:(?P<algorithm>sha256):)?(?P<value>[a-f0-9]{64})
 _ADAPTER = "employee-definition-v1"
 _DEFINITION_KEY = ("namespace", "security_domain", "definition_id")
 _REVISION_KEY = (*_DEFINITION_KEY, "revision_id")
+_EMPLOYEE_FACT_ACTIONS = frozenset(
+    {
+        "CREATE",
+        "VALIDATE",
+        "APPROVE",
+        "REJECT",
+        "PUBLISH",
+        "UNPUBLISH",
+        "REVOKE_PUBLICATION",
+        "DEPRECATE",
+        "GRANT_MATCH",
+        "DENY_MATCH",
+        "REVOKE_MATCH",
+    }
+)
+_PUBLICATION_ACTIONS = frozenset(
+    {"PUBLISH", "UNPUBLISH", "REVOKE_PUBLICATION", "DEPRECATE"}
+)
 EMPLOYEE_DEFINITION_STRUCTURE = (
     Table(
         "digital_employee_definition.schema_migrations",
@@ -180,6 +200,28 @@ def _same_sha256_digest(left: object, right: object) -> bool:
     )
 
 
+def _lifecycle_state(actions: list[str]) -> str:
+    """Project current authoring state without disclosing the underlying facts."""
+    if not actions or actions[0] != "CREATE":
+        raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+    publication = next(
+        (action for action in reversed(actions) if action in _PUBLICATION_ACTIONS),
+        None,
+    )
+    if publication == "DEPRECATE":
+        return "DEPRECATED"
+    if publication == "PUBLISH":
+        return "PUBLISHED"
+    if publication in {"UNPUBLISH", "REVOKE_PUBLICATION"}:
+        return "APPROVED"
+    return {
+        "CREATE": "DRAFT",
+        "VALIDATE": "VALIDATED",
+        "APPROVE": "APPROVED",
+        "REJECT": "REJECTED",
+    }.get(actions[-1], "DRAFT")
+
+
 class PostgresEmployeeDefinitionRepository:
     def __init__(self, authority):
         self.authority = authority
@@ -214,6 +256,38 @@ class PostgresEmployeeDefinitionRepository:
             or not compatible
         ):
             raise EmployeeDefinitionError("EMPLOYEE_SCHEMA_INCOMPATIBLE")
+
+    @staticmethod
+    def is_known_grant_target_for_workbench(
+        connection,
+        scope,
+        action: str,
+        exact_resource: str,
+    ) -> bool:
+        """Validate Employee collection, aggregate, or revision identity only."""
+        if exact_resource == "employee:collection":
+            return action == "CREATE"
+        try:
+            if action in {"VALIDATE", "APPROVE", "PUBLISH"}:
+                row = connection.execute(
+                    "SELECT 1 FROM digital_employee_definition.definitions "
+                    "WHERE namespace=%s AND security_domain=%s "
+                    "AND 'employee:' || definition_id || ':aggregate'=%s FOR SHARE",
+                    (scope.namespace, scope.security_domain, exact_resource),
+                ).fetchone()
+                return row is not None
+            if action == "READ":
+                row = connection.execute(
+                    "SELECT 1 FROM digital_employee_definition.revisions "
+                    "WHERE namespace=%s AND security_domain=%s "
+                    "AND 'employee:' || definition_id || ':' || revision_id=%s "
+                    "FOR SHARE",
+                    (scope.namespace, scope.security_domain, exact_resource),
+                ).fetchone()
+                return row is not None
+            return False
+        except PsycopgError as exc:
+            raise EmployeeDefinitionError("EMPLOYEE_STORAGE_UNAVAILABLE") from exc
 
     @staticmethod
     def _key(scope, definition_id):
@@ -257,6 +331,7 @@ class PostgresEmployeeDefinitionRepository:
             "digest": row["digest"],
             "aggregateVersion": row["aggregate_version"],
             "facts": facts,
+            "lifecycleState": _lifecycle_state(actions),
             "published": publication == "PUBLISH",
             "matchable": publication == "PUBLISH" and match == "GRANT_MATCH",
         }
@@ -266,6 +341,115 @@ class PostgresEmployeeDefinitionRepository:
             return self._read(
                 conn, scope, identifier(definition_id), identifier(revision_id)
             )
+
+    @staticmethod
+    def read_revision_for_workbench(
+        connection,
+        scope,
+        definition_id,
+        revision_id,
+        *,
+        authorized,
+    ):
+        """Read one authorized immutable revision on the caller transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        key = (
+            scope.namespace,
+            scope.security_domain,
+            identifier(definition_id),
+            identifier(revision_id),
+        )
+        row = connection.execute(
+            "SELECT r.record,r.digest FROM digital_employee_definition.revisions r "
+            "JOIN digital_employee_definition.definitions d "
+            "USING(namespace,security_domain,definition_id) "
+            "WHERE r.namespace=%s AND r.security_domain=%s "
+            "AND r.definition_id=%s AND r.revision_id=%s FOR SHARE OF d",
+            key,
+        ).fetchone()
+        if row is None:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        try:
+            revision = EmployeeRevision.from_record(row["record"])
+        except (EmployeeDefinitionError, KeyError, TypeError) as exc:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT") from exc
+        if revision.digest != row["digest"]:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        facts = connection.execute(
+            "SELECT action,revision_digest,ordinal FROM "
+            "digital_employee_definition.facts WHERE namespace=%s "
+            "AND security_domain=%s AND definition_id=%s AND revision_id=%s "
+            "ORDER BY ordinal",
+            key,
+        ).fetchall()
+        if not facts:
+            raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        for fact in facts:
+            if fact["action"] not in _EMPLOYEE_FACT_ACTIONS or not _same_sha256_digest(
+                fact["revision_digest"], row["digest"]
+            ):
+                raise EmployeeDefinitionError("EMPLOYEE_RECORD_CORRUPT")
+        publication = next(
+            (
+                fact["action"]
+                for fact in reversed(facts)
+                if fact["action"] in _PUBLICATION_ACTIONS
+            ),
+            None,
+        )
+        return {
+            "revision": row["record"],
+            "digest": row["digest"],
+            "lifecycleState": _lifecycle_state([str(fact["action"]) for fact in facts]),
+            "publicationState": (
+                "PUBLISHED" if publication == "PUBLISH" else "NOT_PUBLISHED"
+            ),
+        }
+
+    def list_revisions_for_workbench(
+        self,
+        connection,
+        scope,
+        *,
+        after,
+        limit,
+        authorized,
+    ):
+        """Read one bounded keyset page on the caller transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        if not isinstance(limit, int) or not 1 <= limit <= 201:
+            raise EmployeeDefinitionError("INVALID_PAGE_SIZE")
+        parameters = [scope.namespace, scope.security_domain]
+        after_clause = ""
+        if after is not None:
+            if not isinstance(after, tuple) or len(after) != 2:
+                raise EmployeeDefinitionError("INVALID_CURSOR")
+            after_clause = (
+                'AND (definition_id COLLATE "C", revision_id COLLATE "C") > (%s, %s) '
+            )
+            parameters.extend((identifier(after[0]), identifier(after[1])))
+        parameters.append(limit)
+        rows = connection.execute(
+            "SELECT definition_id,revision_id FROM "
+            "digital_employee_definition.revisions WHERE namespace=%s "
+            "AND security_domain=%s "
+            + after_clause
+            + 'ORDER BY definition_id COLLATE "C", revision_id COLLATE "C" '
+            "LIMIT %s",
+            tuple(parameters),
+        ).fetchall()
+        return [
+            self.read_revision_for_workbench(
+                connection,
+                scope,
+                row["definition_id"],
+                row["revision_id"],
+                authorized=True,
+            )
+            for row in rows
+        ]
 
     def list(self, scope):
         with self.pool.connection() as conn:
@@ -377,6 +561,82 @@ class PostgresEmployeeDefinitionRepository:
             ),
         )
 
+    def create_for_workbench(
+        self,
+        connection,
+        revision,
+        *,
+        expected_version,
+        decision_id,
+        command_id,
+        authorized,
+    ):
+        """Create on the authorization transaction's caller-owned connection."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        key = self._key(revision.scope, revision.definition_id)
+        payload = digest([revision.record, expected_version, decision_id, "CREATE"])
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+            (json.dumps(key),),
+        )
+        replay = self._replay(connection, revision.scope, command_id, payload)
+        if replay:
+            return self._read(
+                connection,
+                revision.scope,
+                revision.definition_id,
+                revision.revision_id,
+            )
+        head = connection.execute(
+            "SELECT aggregate_version FROM digital_employee_definition.definitions WHERE namespace=%s AND security_domain=%s AND definition_id=%s FOR UPDATE",
+            key,
+        ).fetchone()
+        if (0 if head is None else head["aggregate_version"]) != expected_version:
+            raise EmployeeDefinitionError("STALE_AGGREGATE_VERSION")
+        if (head is None) != (revision.predecessor_revision_id is None):
+            raise EmployeeDefinitionError("EXACT_PREDECESSOR_REQUIRED")
+        if head is None:
+            connection.execute(
+                "INSERT INTO digital_employee_definition.definitions VALUES (%s,%s,%s,1)",
+                key,
+            )
+        else:
+            self._read(
+                connection,
+                revision.scope,
+                revision.definition_id,
+                revision.predecessor_revision_id,
+            )
+            connection.execute(
+                "UPDATE digital_employee_definition.definitions SET aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND definition_id=%s",
+                key,
+            )
+        connection.execute(
+            "INSERT INTO digital_employee_definition.revisions VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb)",
+            (
+                *key,
+                revision.revision_id,
+                revision.predecessor_revision_id,
+                revision.digest,
+                json.dumps(revision.record),
+            ),
+        )
+        self._fact(
+            connection,
+            key,
+            revision.revision_id,
+            "CREATE",
+            expected_version + 1,
+            revision.digest,
+            decision_id,
+            command_id,
+            payload,
+        )
+        return self._read(
+            connection, revision.scope, revision.definition_id, revision.revision_id
+        )
+
     def create(self, revision, *, expected_version, decision_id, command_id):
         key = self._key(revision.scope, revision.definition_id)
         payload = digest([revision.record, expected_version, decision_id, "CREATE"])
@@ -438,6 +698,82 @@ class PostgresEmployeeDefinitionRepository:
             return self._read(
                 conn, revision.scope, revision.definition_id, revision.revision_id
             )
+
+    def decide_for_workbench(
+        self,
+        connection,
+        scope,
+        definition_id,
+        revision_id,
+        revision_digest,
+        action,
+        *,
+        expected_version,
+        decision_id,
+        command_id,
+        authorized,
+    ):
+        """Append one lifecycle fact on the caller-owned authorization transaction."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        key = self._key(scope, definition_id)
+        payload = digest(
+            [
+                definition_id,
+                revision_id,
+                revision_digest,
+                action,
+                expected_version,
+                decision_id,
+            ]
+        )
+        connection.execute(
+            "SELECT aggregate_version FROM digital_employee_definition.definitions WHERE namespace=%s AND security_domain=%s AND definition_id=%s FOR UPDATE",
+            key,
+        )
+        replay = self._replay(connection, scope, command_id, payload)
+        current = self._read(connection, scope, definition_id, revision_id)
+        if replay:
+            return current
+        if current["digest"] != revision_digest:
+            raise EmployeeDefinitionError("EMPLOYEE_REVISION_MISMATCH")
+        if current["aggregateVersion"] != expected_version:
+            raise EmployeeDefinitionError("STALE_AGGREGATE_VERSION")
+        actions = [f["action"] for f in current["facts"]]
+        allowed = {
+            "VALIDATE": actions == ["CREATE"],
+            "APPROVE": actions[-1] == "VALIDATE",
+            "REJECT": actions[-1] == "VALIDATE",
+            "PUBLISH": actions[-1] == "APPROVE",
+            "UNPUBLISH": current["published"],
+            "REVOKE_PUBLICATION": current["published"],
+            "DEPRECATE": current["published"],
+            "GRANT_MATCH": current["published"],
+            "DENY_MATCH": current["published"],
+            "REVOKE_MATCH": current["published"],
+        }
+        if not allowed.get(action, False):
+            raise EmployeeDefinitionError("INVALID_EMPLOYEE_TRANSITION")
+        if action in {"VALIDATE", "APPROVE", "PUBLISH", "GRANT_MATCH"}:
+            self.validate_members(
+                connection, EmployeeRevision.from_record(current["revision"])
+            )
+        connection.execute(
+            "UPDATE digital_employee_definition.definitions SET aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND definition_id=%s AND aggregate_version=%s",
+            (*key, expected_version),
+        )
+        self._fact(
+            connection,
+            key,
+            revision_id,
+            action,
+            expected_version + 1,
+            revision_digest,
+            decision_id,
+            command_id,
+            payload,
+        )
+        return self._read(connection, scope, definition_id, revision_id)
 
     def decide(
         self,

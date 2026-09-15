@@ -1,0 +1,345 @@
+# S5-V023-IMPL-310 — Digital Employee work participation
+
+Status: `OPEN / G1 / PARTIAL_DRAFT`
+
+## Fixed object and parallel ownership
+
+- Base/source: `f189212232fc194859a695f0307e83b0c7b73c0f`.
+- Base tree: `a8a9251d5d2e47605d18bb63e362164ec4c920d2`.
+- Branch: `codex/s5-v023-impl-310-digital-employee-work-participation`.
+- Worktree: `/Users/tristan/.codex/worktrees/23a9/cloud-native-agent-platform`.
+- Remote `main` matched the fixed source when the Session was opened.
+- IMPL-305 owns Workbench BFF, browser session/grant, owner authorization and
+  shared startup wiring. IMPL-308 owns the verified Model foundation. This task
+  does not edit either path set, migrations 0001-0018, `app.py`, bootstrap,
+  supervisor, or owner PostgreSQL wiring.
+
+## Bounded fact map
+
+| User question | Product location | Formal owner/port | Current fact | Gap kept open |
+|---|---|---|---|---|
+| Who is this employee and what is it responsible for? | Definition profile | Digital Employee Definition exact/list reads; Agent Definition exact read | Employee `role` and `responsibilities`; exact Agent `name`, `title`, `businessPurpose`, `duties`, `capabilities` | Employee Definition has no display-name field; Agent text is not HR job authority |
+| Which capabilities and resources are configured? | Definition profile and exact-member list | Digital Employee Definition composition | One exact Agent and exact Workflow/Skill/MCP/Knowledge/Runtime Profile members | A configured or bound resource does not prove actual use |
+| Which persistent employee is selected? | Instance panel | Digital Employee Instance exact read | Exact published Definition revision/digest, owner, organization and lifecycle | No Instance list port or complete lifecycle UI |
+| What work was assigned? | Assignment panel | Assignment exact read under an Instance | Exact Assignment/Instance relation, assignee, business role, lifecycle and effective interval | No Assignment list and no Plan binding in this projection |
+| Where is the work placed? | Work participation panel | Placement exact read with Assignment, Attempt and Agent Instance read context | Placement decision, Runtime Instance, policy, compatibility, freshness when projected | No complete work history; exact read only |
+| Did work actually run and finish? | Work participation panel | Governed execution / Resource Use owners | Current Placement projection explicitly reports execution and Outcome unavailable when absent | Safe browser BFF and general execution projection remain with IMPL-305/follow-up |
+| What Evidence may be inspected? | Work participation details/navigation | Independently authorized execution/Evidence owner | Only exact references may be carried across views | A reference is not permission to read content; Placement exposes no Evidence references |
+
+Agent `name`, `content.title`, `businessPurpose`, `duties`, and `capabilities`
+remain Agent Definition facts. They are rendered with explicit source labels and
+are never copied into the Digital Employee Definition authority. Digital Employee
+Definition owns only its exact identity, `role`, `responsibilities`, predecessor,
+exact composition, lifecycle decision facts, publication and matching state.
+
+## G1 implementation plan
+
+1. Extend the existing Digital Employee frontend client only for already-present
+   exact-read ports and abortable reads. Do not add a new HTTP endpoint or browser
+   identity mechanism.
+2. Add a profile component that resolves the exact primary Agent revision and
+   distinguishes Employee-owned fields from Agent-sourced descriptive fields.
+3. Add an exact-read work participation component for Instance, Assignment and
+   Placement. Persist only known identities in the URL; always read authoritative
+   state again after refresh. Guard object switches and late responses.
+4. Present configured, bound, assigned, placed/observed, executed and terminal
+   states separately. Unknown or unavailable facts remain unknown/unavailable.
+5. Provide navigation carrying exact identifiers to existing technical/Evidence
+   surfaces, while disclosing that protected contents still require independent
+   authorization and IMPL-305 BFF wiring.
+6. Add source-level and component/browser-focused tests for provenance, exact-read
+   coverage, scope/error handling, late-response protection, refresh recovery,
+   keyboard semantics and narrow-screen layout.
+
+## Compatibility and risk
+
+This is a bounded Product projection over current private HTTP DTOs. It changes
+no CRD, database schema, frozen Contract, execution state machine, Runtime
+lifecycle, authorization semantics or source of truth. The main risk is accidental
+inference from configuration to operation; labels and tests therefore preserve
+each state boundary. A second risk is treating URL or browser state as authority;
+URL values are used only as exact read coordinates and never as work-state facts.
+
+## Delivery boundary
+
+Formal browser authorization and shared route registration remain outside this
+branch until IMPL-305 releases those paths. Component tests or intercepted browser
+responses are adapter evidence, not a real-service product journey. This Session
+must remain `PARTIAL_DRAFT` until the formal BFF path is integrated and verified.
+
+## Recoverable checkpoint
+
+Implemented paths:
+
+- `console/frontend/src/api/digitalEmployees.ts`: abortable Instance and
+  Assignment exact reads plus the existing Placement exact-read route contract.
+- `console/frontend/src/digital-employees/EmployeeProfile.tsx`: Employee-owned
+  profile fields, exact Agent revision resolution, Agent-sourced duties and
+  capabilities, and exact resource links.
+- `console/frontend/src/digital-employees/EmployeeWorkParticipation.tsx`:
+  read-only configured/bound/assigned/placed/execution/terminal projection,
+  Runtime identity/freshness, and execution/Evidence navigation.
+- `console/frontend/src/digital-employees/DigitalEmployeesPage.tsx`: clear
+  Definition/Instance/Assignment navigation, exact identity refresh recovery,
+  authoritative readback and late-response protection.
+- `console/frontend/src/styles/resource-management.css`: page-scoped layout and
+  narrow-screen behavior; no shared global design authority was changed.
+- `console/frontend/tests/test_s5_v023_impl_310_digital_employee_work.py` and
+  `console/frontend/tests/e2e/digital-employee-work-participation.spec.ts`:
+  provenance/boundary source checks and explicitly mocked `TEST_ADAPTER` browser
+  coverage.
+
+Validation at this checkpoint:
+
+- Frontend lint: passed.
+- Frontend production build: passed.
+- Targeted frontend/backend tests: `15 passed` with one existing Starlette
+  deprecation warning.
+- Mocked Playwright component journey: `3 passed`, including reload readback,
+  delayed-response isolation, denied-read redaction and 390 px overflow coverage.
+- `git diff --check`: passed.
+- Real PostgreSQL adapter validation was attempted with a task-owned
+  `s5-310-postgres` container on `127.0.0.1:57310`. The first connection arrived
+  before initialization completed; the retry stalled with the local Docker
+  control path. The task-owned test process was stopped and the container was
+  removed. This is not recorded as a real-service pass.
+
+Read-only parallel path inventory:
+
+- IMPL-305 currently owns
+  `console/backend/src/agent_console/authority_contracts.py`,
+  `authority_postgres.py`, `grant_administration_application.py`,
+  `workbench_bff.py`, `workbench_bff_schemas.py`,
+  `workbench_owner_authorization.py`, its two Workbench authorization/BFF tests,
+  and `docs/engineering/S5-V023-IMPL-305-TRUSTED-WORKBENCH-BFF.md`.
+- IMPL-308 currently contributes
+  `docs/engineering/S5-V023-IMPL-308-P1-VERIFIED-MODEL-FOUNDATION.md`; its planned
+  resolver/tests remain separately owned.
+- The implementation path intersection with both inventories is empty.
+
+Unique next step: after IMPL-305 releases the shared BFF surface, register an
+independently authorized read projection for governed execution/Runtime and
+Evidence references, then replace the browser `TEST_ADAPTER` with a real-service
+journey. Do not add a second state store or infer Evidence permission from a
+Placement reference.
+
+## Trusted-read integration checkpoint — 2026-09-10
+
+Status remains `OPEN / G1 / PARTIAL_DRAFT`; the trusted read dependency is now
+integrated, while real-browser completion and the original lifecycle obligations
+remain open.
+
+- The fixed IMPL-305 dependency is
+  `3abb901f30a57218928990adf4f2ae75ca38829b`, tree
+  `eb8480069ccbb3946aa54b33855aadbd8a6ba83a`. It is the second parent of merge
+  checkpoint `b44a7cdb7bc486cb20d0e23d45d84fb55a7348e2`; it was not re-merged.
+- The interaction-design chain is present through
+  `400404ac104801040aadbbc68dd561c5adbc690b`, following product candidate
+  `4ef9ee40b4fb099d93823e3aa98c801e90c2087c` and its recorded tree
+  `ac9f34bedfb3b2d64364126ed2a52cb2127f1d33`.
+- Frontend checkpoint `e605c914139a860da881af0f0969c105c04f2294`, tree
+  `d85d12abc1d6beef33055095a3d0aaf68c7936af`, consumes only the formal
+  Workbench BFF. It sends no browser identity headers, preserves LIST/READ
+  separation, verifies exact Employee/Agent/Instance/Assignment/Placement
+  identities, clears protected state on failure, and keeps all write operations
+  disabled rather than falling back to private APIs.
+- The recovered final pagination artifact reports `passed` with no failed tests.
+  The original process was no longer present, so its shell exit code is
+  `UNKNOWN`; the test was not rerun.
+- The checkpoint hooks completed with Ruff lint, Ruff format, and the repository
+  pytest suite passing. Earlier successful frontend lint, production build, and
+  ten targeted source tests were not repeated.
+- A dedicated real HTTPS Workbench acceptance fixture and Playwright journey now
+  encode legal reads, Employee/Agent pagination, LIST-versus-READ independence,
+  wrong-scope and wrong-exact-grant hiding, session logout, dynamic Placement
+  grant revocation, parent mismatch, refresh recovery, and absence of browser
+  identity headers. Static import, Ruff, TypeScript, ESLint, and Playwright test
+  discovery pass.
+- Real execution is not yet evidence: the exclusive
+  `s5-v023-impl-310-postgres` start could not reach the Docker Desktop socket;
+  both the Docker client and a direct socket `_ping` timed out. The start was
+  interrupted with exit `125`, no 305/309/311 asset was reused, and Docker was
+  not restarted because that would disturb other tasks.
+
+Formal Execution/Runtime and observation reads, Resource Use, Evidence reference
+and content authorization, complete work history, Business Outcome closure,
+Digital Employee lifecycle writes, I3/deployment isolation, Human acceptance,
+and release acceptance remain incomplete. Draft PR #165 remains Draft; this
+checkpoint does not authorize Ready, merge, deployment, or task closure.
+
+## Validation-integrity continuation — 2026-09-10
+
+The failed CI run at source `7ea2f719a4f911c92fc884394d8d175454f7fc50`
+proves only that `UNIFIED_07_EMPLOYEE_MANAGEMENT` ended in a browser timeout. It
+does not contain the HTTP response or failed locator needed to prove a root cause.
+The missing formal session is a source-supported inference: the legacy harness
+does not log in, while the current page uses only the session-authenticated
+Workbench BFF. This distinction remains explicit.
+
+The legacy unified journey now treats its private post-restart read as backend
+PostgreSQL persistence evidence only. Its no-session browser visit must fail
+closed, clear protected details, and emit no `/api/internal/` fallback request.
+The journey still executes the existing create, validate, approve, and publish
+commands; those private lifecycle commands are not reclassified as trusted
+browser writes.
+
+The dedicated real-service journey uses the formal HTTPS login and session
+cookie, current PostgreSQL grants, transactional Workbench owner handlers, and
+an exact task-scoped control listener. It verifies authorized Employee and Agent
+reads, `PUBLISHED` state, exact revision and digest, all six composition member
+tuples, Employee and Agent pagination, LIST-versus-READ separation, Instance /
+Assignment / Placement recovery, wrong Assignment / Attempt / Agent Instance
+parent hiding, grant revocation, logout, wrong scope, wrong exact grant, absence
+of browser identity headers, and absence of private API fallback. Fixture
+creation and publication seed real PostgreSQL state through domain services; it
+is test setup, not evidence that browser lifecycle writes exist.
+
+After explicit path coordination with IMPL-311, the task owns the independent
+`.github/workflows/s5-v023-impl-310-real-workbench.yml` gate. The gate checks out
+the exact PR head, provisions a job-exclusive PostgreSQL database, builds the
+frontend, starts only localhost HTTPS/control listeners, generates and masks
+one-run credentials, disables Playwright trace/screenshot/video output, requires
+exactly one executed test with zero skips, and uploads only a bounded JSON
+summary. Raw Playwright JSON, server logs, session material, credentials and
+control tokens are neither printed nor uploaded.
+
+This gate does not close Digital Employee lifecycle browser writes, generalized
+execution/Runtime/observation reads, Resource Use, Evidence, Business Outcome,
+complete work history, I3/deployment isolation, Human acceptance, or release
+acceptance. Ordinary CI success cannot substitute for this dedicated gate.
+
+## Collection isolation and startup diagnostics — 2026-09-10
+
+Run `34450664251` did not execute the dedicated browser scenario. Its uploaded
+bounded summary is `FAILED / REPORT_UNAVAILABLE` with zero selected and zero
+executed tests. It provides no scenario-success or security-assertion Evidence,
+and does not support changing the success gate.
+
+The default Playwright configuration now excludes only
+`digital-employee-work-participation.real.spec.ts`; the dedicated configuration
+owns that exact spec through `testMatch`. Local collection with the ordinary
+suite's required read-only endpoint variables selects 45 tests in eight files
+and no real-service spec. Dedicated collection selects exactly one test in one
+file, while missing dedicated variables fails during collection.
+
+The fixture writes a bounded status before its first database connection. It
+records only the last started and completed phase, a whitelisted exception
+category, and a whitelisted reason code across database connection, migration,
+sample preparation, authorization preparation, TLS configuration, and both
+listener readiness. Unknown exceptions remain `UNKNOWN`; exception text, SQL,
+connection strings, credentials, sessions, tokens, and tracebacks are never
+copied. The status file remains outside the cleaned runtime directory until the
+summary has incorporated its sanitized fields. Raw server and Playwright logs
+remain non-artifacts, and a missing, invalid, failed, or incomplete startup
+status fails closed without promoting browser Evidence.
+
+The first diagnostic candidate then proved `DATABASE_CONNECTION` complete and
+`DATABASE_MIGRATION_FAILED / DATABASE_ERROR`. Source comparison identified a
+fixture-only prerequisite defect: migration 0006 explicitly requires the
+0001–0005 schemas, but the fixture invoked the Agent repository's 0001+0006
+path without first applying 0002–0005; migration 0009 also requires the
+workflow definition schema created by 0007. Existing successful PostgreSQL
+tests apply 0001–0005 in one psycopg transaction, run the Agent repository
+migration, commit 0007 separately, and only then construct the Digital Employee
+assembly. The fixture now reuses that ordering. No production migration,
+database role, extension, timeout, gate, or failure-close behavior changed.
+
+The next automatic candidates completed `DATABASE_MIGRATION` and failed during
+`SAMPLE_PREPARATION` with the bounded category `VALIDATION_ERROR`, before any
+browser test executed. The initial Docker-free constructor pass found a separate
+latent Placement request defect: the fixture supplied bare strings where the
+formal execution contract requires `WorkflowRunId`, `TaskRunId`, and
+`AttemptId`. That check did not exercise PostgreSQL parent-resource resolution,
+so it did not establish the CI failure's cause; candidate
+`bc2d4cbade8b506434fafac11199f218509cfc64` correctly disproved sufficiency by
+failing at the same stage with zero browser executions.
+
+Complete source comparison then identified the proven validation root cause.
+The PostgreSQL Employee repository resolves every composition member during
+`VALIDATE`, `APPROVE`, and `PUBLISH`, requiring an exact existing, published,
+eligible revision and matching digest. The fixture had published only its Agent;
+the Skill, MCP, Knowledge, Workflow, and Runtime Profile members were static
+references with no parent records, so the first Employee validation must fail
+closed with `BOUND_RESOURCE_NOT_FOUND` before reaching Placement construction.
+The fixture now uses the same lifecycle services as successful PostgreSQL tests
+to create, validate, review, and publish all five supporting resources before it
+constructs and publishes the Employee. A single in-memory domain pass exercises
+all five lifecycle chains and the six-member Employee construction. The separate
+opaque-ID correction remains because it would otherwise fail later in sample
+preparation. No product validation, database data contract, deadline, or gate
+criterion changed.
+
+Automatic candidate `2f0288409e6117d78b5db9d7e5ffa7c22eda17ea`
+then reached `LISTENER_READINESS`, selected and executed the one dedicated
+scenario, and ended `BROWSER_TIMEOUT`. Its bounded artifact contains no test
+step or repository line, while the retained local `.last-run.json` belongs to a
+different passing run and is not candidate evidence. Source inspection confirms
+that the HTTPS SPA and `/api/workbench/v1` share the public origin, login follows
+the formal 303 `/workbench` session contract, frontend reads use the formal BFF,
+and the current Employee and Placement accessible names are unique. Those are
+source findings, not proof of the CI timeout location.
+
+The real-service spec now wraps each login form, redirect, session readiness,
+list, exact read, pagination, work-chain read, parent denial, revocation, logout,
+scope/grant denial, and transport-boundary assertion in a closed static
+`test.step` identifier. The existing summary accepts only those identifiers and
+an in-repository location for that exact spec, emitting the last completed step,
+the first failed or incomplete step, repository line, bounded counts, and a
+whitelisted safe category. It never copies step titles outside the allowlist,
+errors, locators, dynamic identities, URL parameters, credentials, sessions, or
+tokens. Malformed or missing step data becomes `UNKNOWN`/`UNAVAILABLE`, and the
+diagnostic result is not part of the browser pass/fail calculation.
+
+## Trusted-read batch acceptance and handoff — 2026-09-12
+
+Status remains `OPEN / G1 / PARTIAL_DRAFT / SESSION_OPEN`. Human accepts only
+the trusted-read batch proven by source
+`fb5edaf174783f0e997ed912c516644b977e3eb6`, tree
+`ce5936fb73cd19b39fe8408ec3a7fed4b3d207df`. This documentation record is made
+after that candidate and does not replace, broaden, or rebind the accepted
+source/tree.
+
+The accepted batch covers the formal login and session, Employee and Agent
+exact reads, Employee and Agent pagination, Instance / Assignment / Placement
+parent-chain hiding, dynamic Placement grant revocation, logout, absence of
+browser identity headers, and absence of private API fallback. It is not an
+acceptance of all permissions or of IMPL-310 as a whole.
+
+Candidate-bound evidence:
+
+- Dedicated run `34684433569` selected and executed exactly one real HTTPS /
+  PostgreSQL scenario, passed `1/1`, and completed all `46/46` closed static
+  steps with no skipped or incomplete step.
+- Default run `34684433556` passed Quality Gates, Frontend Quality Gates, and
+  Agent Workbench Browser Acceptance. Its successful log did not emit a total
+  browser test count, so this record does not state or infer `45/45`.
+
+Dependency and repair handoff:
+
+- The fixed IMPL-305 dependency remains
+  `3abb901f30a57218928990adf4f2ae75ca38829b`, tree
+  `eb8480069ccbb3946aa54b33855aadbd8a6ba83a`. IMPL-310 consumes its formal
+  Workbench BFF, session, grant, owner authorization, and parent-chain behavior;
+  it must not duplicate or silently replace that authority.
+- IMPL-310 adds the login response-policy repair at
+  `716281c1b1a1dd00ee943c62bd5a4b88eca9e7f7`: only the successful login-form
+  `GET` uses `Referrer-Policy: same-origin`, while other responses retain the
+  existing policy. Exact Origin, nonce, credential, cookie, session, and
+  authorization checks remain unchanged.
+- IMPL-310's dedicated workflow builds the existing live Digital Employee route
+  and keeps private-API observation scoped to the Digital Employee journey. The
+  accepted candidate retains the full-session identity and transport-boundary
+  assertions.
+- The default Wave 3B cleanup repair at the accepted source closes the test-owned
+  MCP HTTP server and then closes its established connections. This removes a
+  teardown race without changing product behavior, assertions, timeout, retry,
+  scenario selection, or the success gate. The bounded failure reporter also
+  retains the three static user-focus-transfer stages for future failures.
+
+Digital Employee lifecycle writes, generalized execution and Runtime /
+observation reads, Resource Use, Evidence reference and content authorization,
+complete work history, Business Outcome closure, I3/deployment isolation,
+release acceptance, and IMPL-310 completion remain open. Draft PR #165 stays
+Draft; this acceptance does not authorize Ready, merge, deployment, or Session
+closure. Scheduling pauses after this record while the logical Session remains
+open.

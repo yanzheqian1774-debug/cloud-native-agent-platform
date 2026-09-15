@@ -1,0 +1,120 @@
+name: S5 REL 316 Trusted Preparation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/s5-v023-rel-316-trusted-preparation.yml"
+      - "console/backend/**"
+      - "console/frontend/**"
+      - "scripts/acceptance/s5_v023_rel_316_run.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s5-v023-rel-316-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trusted-preparation:
+    name: PostgreSQL HTTPS Chromium Acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: s5_v023_rel_316
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d s5_v023_rel_316"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PYTHONPATH: conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync backend dependencies
+        run: uv sync --frozen
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+
+      - name: Install frontend and Chromium
+        working-directory: console/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run targeted contracts
+        env:
+          AUTHORITY_I1_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_316
+        run: >-
+          uv run pytest -q
+          console/backend/tests/test_authority_foundation_postgres.py
+          console/backend/tests/test_workbench_bff.py
+          console/frontend/tests/test_s5_v023_impl_299_business_workspace.py
+          console/frontend/tests/test_s5_v023_impl_310_digital_employee_work.py
+
+      - name: Lint and build live frontend
+        working-directory: console/frontend
+        env:
+          VITE_SUPPLIER_QUALITY_DEMO_MODE: live
+        run: |
+          npm run lint
+          npm run build
+
+      - name: Verify the dedicated allowlist
+        working-directory: console/frontend
+        env:
+          REL_316_WORKBENCH_URL: https://127.0.0.1:18416
+          REL_316_APPLICANT_CREDENTIAL: discovery-only
+          REL_316_ADMIN_CREDENTIAL: discovery-only
+        run: >-
+          npx playwright test --config playwright.rel-316.config.ts
+          --list --workers=1 --retries=0 --forbid-only
+
+      - name: Run trusted preparation journey
+        env:
+          REL_316_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_316
+        run: >-
+          scripts/acceptance/s5_v023_rel_316_run.sh
+          "$RUNNER_TEMP/s5-v023-rel-316-evidence"
+
+      - name: Record artifact digests
+        if: always()
+        run: >-
+          find "$RUNNER_TEMP/s5-v023-rel-316-evidence" -type f
+          ! -name 'checksums.sha256' -print0 | sort -z |
+          xargs -0 sha256sum >
+          "$RUNNER_TEMP/s5-v023-rel-316-evidence/checksums.sha256"
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5-v023-rel-316-trusted-preparation
+          path: ${{ runner.temp }}/s5-v023-rel-316-evidence
+          if-no-files-found: error
+          retention-days: 14

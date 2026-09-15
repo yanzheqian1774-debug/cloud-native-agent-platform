@@ -10,8 +10,9 @@ import pytest
 from agent_console.authority_configuration import (
     AuthorityRuntimeConfiguration,
     StaticAuthorityLoader,
+    validate_registered_grant,
 )
-from agent_console.authority_contracts import AuthorityError, GrantSource
+from agent_console.authority_contracts import AuthorityError, ExactGrant, GrantSource
 from agent_console.authority_foundation import GovernedExecutionAuthenticatorAdapter
 
 
@@ -70,6 +71,37 @@ def test_generation_loader_pins_digest_and_closed_sources(tmp_path: Path) -> Non
         generation.credentials[0].authentication_source is GrantSource.BROWSER_BOOTSTRAP
     )
     assert generation.digest == digest
+
+
+def test_problem_collection_read_is_only_an_explicit_bootstrap_allowlist_entry(
+    tmp_path: Path,
+) -> None:
+    document = generation_document()
+    grants = document["credentials"][0]["grants"]  # type: ignore[index]
+    grants.append(  # type: ignore[union-attr]
+        {
+            "owner": "BUSINESS_PROBLEM",
+            "action": "READ",
+            "resource": "business-problem:collection",
+            "source": "BROWSER_BOOTSTRAP",
+        }
+    )
+    path = tmp_path / "generation-collection-read.json"
+    digest = write_generation(path, document)
+
+    generation = StaticAuthorityLoader.load(path, expected_digest=digest)
+
+    assert [
+        (item.grant.action, item.grant.exact_resource)
+        for item in generation.credentials[0].grants
+    ] == [
+        ("CREATE", "business-problem:collection"),
+        ("READ", "business-problem:collection"),
+    ]
+    grants[1]["resource"] = "business-problem:problem-hidden"  # type: ignore[index]
+    digest = write_generation(path, document)
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONFIGURATION_INVALID"):
+        StaticAuthorityLoader.load(path, expected_digest=digest)
 
 
 def test_generation_loader_rejects_digest_mismatch_and_wildcard(tmp_path: Path) -> None:
@@ -133,3 +165,34 @@ def test_existing_service_bearer_verifier_is_preserved_behind_typed_port() -> No
     )
     assert principal.principal_id == "service:runner"
     assert principal.policy_version == "existing-policy"
+
+
+def test_agent_exact_read_and_list_are_registered_without_lifecycle_actions() -> None:
+    for grant in (
+        ExactGrant(
+            "AGENT",
+            "READ",
+            "agent:agent-definition:quality:agent-revision:v1",
+        ),
+        ExactGrant("AGENT", "LIST", "agent:collection"),
+    ):
+        validate_registered_grant(grant, allow_meta=False)
+
+    for action in ("CREATE", "PUBLISH"):
+        with pytest.raises(AuthorityError, match="UNKNOWN_AUTHORITY_OPERATION"):
+            validate_registered_grant(
+                ExactGrant("AGENT", action, "agent:collection"), allow_meta=False
+            )
+
+
+def test_placement_exact_read_is_registered_without_other_actions() -> None:
+    validate_registered_grant(
+        ExactGrant("PLACEMENT", "READ", "placement:placement:quality"),
+        allow_meta=False,
+    )
+    for action in ("CREATE", "LIST"):
+        with pytest.raises(AuthorityError, match="UNKNOWN_AUTHORITY_OPERATION"):
+            validate_registered_grant(
+                ExactGrant("PLACEMENT", action, "placement:collection"),
+                allow_meta=False,
+            )
