@@ -33,6 +33,8 @@ have stopped the task; no substitute identifier was selected.
 | latest accessible `origin/main` and Registry baseline | `f189212232fc194859a695f0307e83b0c7b73c0f` | `a8a9251d5d2e47605d18bb63e362164ec4c920d2` |
 | fixed 308 | `141a17ecd34ec3b721e1c8a8ae33277c4b454e42` | `b195b4612a4ab9f295e3c6f9a82199b05db7ac0e` |
 | fixed 316 | `3cc98cde9452e5036ad9bd44981f5fff9499b011` | `bb614158fded36277bced028baed88240f29f8d0` |
+| fixed 318 pre-synchronization candidate | `9e201380d77678b90df7fe7d2647506b67ebef89` | `a3f40894450e79af4ed50d6c97f30aa89faaf66d` |
+| Human-authorized fixed main synchronization input | `6f3e174087c5132b2fc5c5d1e20492fdc2b68ddc` | `103fc0dc2a03e3e5f4bc89469d40f95a0c6b3564` |
 
 The fixed Git objects were resolved locally with `^{commit}` and `^{tree}`; the
 reported full values were not expanded from abbreviations. No trial merge was run.
@@ -173,6 +175,31 @@ status of H308-03C, H308-04A and H308-04B.
 The CI rerun above is historical evidence for the prior candidate. This local
 validation covers the final clarification working diff; the new committed candidate
 will receive its own automatic CI and must be reported separately.
+
+### 6.6 Fixed-main synchronization provenance
+
+The Human authorized an ordinary merge, without rebase or force push, from fixed main
+source `6f3e174087c5132b2fc5c5d1e20492fdc2b68ddc`, tree
+`103fc0dc2a03e3e5f4bc89469d40f95a0c6b3564`, into the fixed 318 candidate
+`9e201380d77678b90df7fe7d2647506b67ebef89`, tree
+`a3f40894450e79af4ed50d6c97f30aa89faaf66d`.
+
+Pre-merge identity, clean-worktree, branch/upstream and sole-writer checks passed.
+The only merge conflict was `docs/governance/REGISTRY.md`: the 318 `PROPOSED`
+registration and main's already registered 315, 316 and 317 rows occupied the same
+insertion point. The resolution preserves all four rows without changing their
+Human gates, lifecycle or Session status. There was no product-code, SQL, runtime
+configuration, frozen-contract or architecture-body conflict. Relative to the fixed
+main, the resolved candidate remains limited to the ADR, G2 plan, Evidence index,
+this Evidence README and Registry registration for 318.
+
+| Synchronization check | Result |
+| --- | --- |
+| conflict inventory | `PASS`; only `docs/governance/REGISTRY.md` |
+| Registry preservation | `PASS`; removing the added 318 row makes the resolved file byte-identical to fixed main |
+| fixed-main relative scope | `PASS`; exactly five 318 documentation paths, with no product code, test, SQL or runtime configuration delta |
+| `git diff --cached --check` | `PASS` |
+| repository baseline | `make check` `PASS`; Ruff passed, 427 files format-clean, pytest `1685 passed, 182 skipped`, one dependency deprecation warning |
 
 ## 7. Terminal boundary
 

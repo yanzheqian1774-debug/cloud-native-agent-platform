@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import sleep
 from typing import Any
@@ -22,6 +24,11 @@ from agent_core.execution_contract import (
     ExecutionIdentityAggregate,
     Generation,
     InterventionId,
+    NativeDispatchClaim,
+    NativeDispatchCommand,
+    NativeDispatchState,
+    NativeTerminalKind,
+    NativeTerminalObservation,
     ObservationId,
     OutcomeId,
     PlacementDecision,
@@ -65,13 +72,28 @@ from .execution_domain import (
 ADAPTER = "execution-authority-postgresql-v1"
 SCHEMA_VERSION = 8
 GOVERNED_EXECUTION_ADAPTER = "governed-execution-claim-postgresql-v17"
+NATIVE_DISPATCH_ADAPTER = "native-execution-dispatch-postgresql-v22"
 __all__ = [
+    "AgentInstanceId",
+    "AppendDisposition",
+    "AssignmentId",
+    "AttemptId",
+    "CommandId",
     "Generation",
+    "NativeDispatchClaim",
+    "NativeDispatchCommand",
+    "NativeDispatchState",
+    "NativeTerminalKind",
+    "NativeTerminalObservation",
     "PlacementDecisionKind",
+    "PlacementId",
     "RuntimeDesiredStateKind",
     "RuntimeHealth",
+    "RuntimeInstanceId",
     "RuntimeObservedStateKind",
     "RuntimeReadiness",
+    "ScopeIdentity",
+    "canonical_bytes",
 ]
 
 
@@ -170,6 +192,536 @@ class PostgresExecutionAuthorityRepository:
             raise ExecutionStorageUnavailable(
                 "GOVERNED_EXECUTION_MIGRATION_UNAVAILABLE"
             ) from exc
+
+    def migrate_native_dispatch(self, migration_path: Path) -> None:
+        """Apply the additive 0022 dispatch schema without mutating migration 0008."""
+        if not migration_path.name.startswith("0022_"):
+            raise ExecutionSchemaIncompatible("NATIVE_DISPATCH_SCHEMA_INCOMPATIBLE")
+        checksum = hashlib.sha256(migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET LOCAL statement_timeout='30s'")
+                connection.execute("SET LOCAL lock_timeout='3s'")
+                connection.execute(migration_path.read_text())
+                newer = connection.execute(
+                    "SELECT version FROM native_execution_dispatch.schema_migrations "
+                    "WHERE version>22 ORDER BY version LIMIT 1"
+                ).fetchone()
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM "
+                    "native_execution_dispatch.schema_migrations WHERE version=22"
+                ).fetchone()
+                expected = {"checksum": checksum, "adapter": NATIVE_DISPATCH_ADAPTER}
+                if newer is not None or (row is not None and row != expected):
+                    raise ExecutionSchemaIncompatible(
+                        "NATIVE_DISPATCH_SCHEMA_INCOMPATIBLE"
+                    )
+                if row is None:
+                    connection.execute(
+                        "INSERT INTO native_execution_dispatch.schema_migrations"
+                        "(version,checksum,adapter) VALUES(22,%s,%s)",
+                        (checksum, NATIVE_DISPATCH_ADAPTER),
+                    )
+        except ExecutionSchemaIncompatible:
+            raise
+        except (OSError, PsycopgError) as exc:
+            raise ExecutionStorageUnavailable(
+                "NATIVE_DISPATCH_MIGRATION_UNAVAILABLE"
+            ) from exc
+
+    def native_dispatch_compatibility(self, migration_path: Path) -> None:
+        """Fail closed when the worker does not see the exact applied 0022 schema."""
+        checksum = hashlib.sha256(migration_path.read_bytes()).hexdigest()
+        try:
+            with self.pool.connection() as connection:
+                row = connection.execute(
+                    "SELECT checksum,adapter FROM "
+                    "native_execution_dispatch.schema_migrations WHERE version=22"
+                ).fetchone()
+                newer = connection.execute(
+                    "SELECT 1 FROM native_execution_dispatch.schema_migrations "
+                    "WHERE version>22 LIMIT 1"
+                ).fetchone()
+                tables = connection.execute(
+                    "SELECT to_regclass('execution_authority.native_dispatch_commands') "
+                    "AS commands,to_regclass('execution_authority.native_dispatch_facts') "
+                    "AS facts"
+                ).fetchone()
+            if (
+                row != {"checksum": checksum, "adapter": NATIVE_DISPATCH_ADAPTER}
+                or newer is not None
+                or tables["commands"] is None
+                or tables["facts"] is None
+            ):
+                raise ExecutionSchemaIncompatible("NATIVE_DISPATCH_SCHEMA_INCOMPATIBLE")
+        except ExecutionSchemaIncompatible:
+            raise
+        except (OSError, PsycopgError) as exc:
+            raise ExecutionSchemaIncompatible(
+                "NATIVE_DISPATCH_SCHEMA_INCOMPATIBLE"
+            ) from exc
+
+    @staticmethod
+    def _dispatch_command(payload: dict[str, Any]) -> NativeDispatchCommand:
+        return NativeDispatchCommand.from_mapping(payload)
+
+    @staticmethod
+    def _dispatch_fact(connection, command: NativeDispatchCommand, kind: str, record):
+        fact_digest = hashlib.sha256(
+            json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        connection.execute(
+            "INSERT INTO execution_authority.native_dispatch_facts"
+            "(namespace,security_domain,command_id,ordinal,kind,fact_digest,record) "
+            "SELECT %s,%s,%s,COALESCE(MAX(ordinal),0)+1,%s,%s,%s::jsonb FROM "
+            "execution_authority.native_dispatch_facts WHERE namespace=%s "
+            "AND security_domain=%s AND command_id=%s",
+            (
+                command.scope.namespace,
+                command.scope.security_domain,
+                str(command.command_id),
+                kind,
+                fact_digest,
+                json.dumps(record),
+                command.scope.namespace,
+                command.scope.security_domain,
+                str(command.command_id),
+            ),
+        )
+
+    def enqueue(self, command: NativeDispatchCommand) -> AppendDisposition:
+        payload = json.loads(canonical_bytes(command))["payload"]
+
+        def operation(connection):
+            exact = connection.execute(
+                "SELECT d.decision,d.digest AS placement_digest,d.runtime_instance_id,"
+                "r.current_generation,q.attempt_id,q.agent_instance_id,"
+                "w.assignment_id,w.approved_plan_revision_id,p.plan_digest,p.status,"
+                "a.control_state FROM execution_authority.placement_decisions d "
+                "JOIN execution_authority.placement_requests q USING "
+                "(namespace,security_domain,request_id) "
+                "JOIN execution_authority.runtime_instances r ON "
+                "r.namespace=d.namespace AND r.security_domain=d.security_domain "
+                "AND r.runtime_instance_id=d.runtime_instance_id "
+                "JOIN execution_authority.attempts a ON a.namespace=q.namespace "
+                "AND a.security_domain=q.security_domain AND a.attempt_id=q.attempt_id "
+                "JOIN execution_authority.task_runs t ON t.namespace=a.namespace "
+                "AND t.security_domain=a.security_domain AND t.task_run_id=a.task_run_id "
+                "JOIN execution_authority.workflow_runs w ON w.namespace=t.namespace "
+                "AND w.security_domain=t.security_domain "
+                "AND w.workflow_run_id=t.workflow_run_id "
+                "JOIN execution_authority.plans p ON p.namespace=w.namespace "
+                "AND p.security_domain=w.security_domain AND p.plan_id=w.plan_id "
+                "AND p.plan_version=w.plan_version WHERE d.namespace=%s "
+                "AND d.security_domain=%s AND d.placement_id=%s FOR SHARE",
+                (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.placement_id),
+                ),
+            ).fetchone()
+            expected = {
+                "decision": "PLACED",
+                "placement_digest": command.placement_digest,
+                "runtime_instance_id": str(command.runtime_instance_id),
+                "current_generation": command.runtime_generation.value,
+                "attempt_id": str(command.attempt_id),
+                "agent_instance_id": str(command.agent_instance_id),
+                "assignment_id": str(command.assignment_id),
+                "approved_plan_revision_id": command.approved_plan_revision_id,
+                "plan_digest": command.approved_plan_digest,
+                "status": "APPROVED",
+                "control_state": "PENDING",
+            }
+            if exact != expected:
+                raise ExecutionConflict("NATIVE_DISPATCH_BINDING_MISMATCH")
+            existing = connection.execute(
+                "SELECT command_digest FROM "
+                "execution_authority.native_dispatch_commands WHERE namespace=%s "
+                "AND security_domain=%s AND command_id=%s FOR UPDATE",
+                (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.command_id),
+                ),
+            ).fetchone()
+            if existing is not None:
+                if existing["command_digest"] != command.digest:
+                    raise ExecutionConflict("NATIVE_DISPATCH_COMMAND_CONFLICT")
+                return AppendDisposition.REPLAYED
+            connection.execute(
+                "INSERT INTO execution_authority.native_dispatch_commands"
+                "(namespace,security_domain,command_id,command_digest,canonical_bytes,"
+                "payload,attempt_id,assignment_id,approved_plan_revision_id,"
+                "approved_plan_digest,placement_id,placement_digest,"
+                "runtime_instance_id,runtime_generation,agent_instance_id,principal_id,"
+                "credential_id,authority_generation,recovery_epoch,authorization_owner,"
+                "authorization_action,authorization_resource,agent_name,input_text,"
+                "timeout_seconds,state,queued_at) VALUES "
+                "(%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                "%s,%s,%s,%s,%s,%s,%s,'QUEUED',%s)",
+                (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.command_id),
+                    command.digest,
+                    canonical_bytes(command),
+                    json.dumps(payload),
+                    str(command.attempt_id),
+                    str(command.assignment_id),
+                    command.approved_plan_revision_id,
+                    command.approved_plan_digest,
+                    str(command.placement_id),
+                    command.placement_digest,
+                    str(command.runtime_instance_id),
+                    command.runtime_generation.value,
+                    str(command.agent_instance_id),
+                    command.principal_id,
+                    command.credential_id,
+                    command.authority_generation.value,
+                    command.recovery_epoch.value,
+                    command.authorization_owner,
+                    command.authorization_action,
+                    command.authorization_resource,
+                    command.agent_name,
+                    command.input_text,
+                    command.timeout_seconds,
+                    command.queued_at,
+                ),
+            )
+            self._dispatch_fact(
+                connection,
+                command,
+                "QUEUED",
+                {"state": "QUEUED", "commandDigest": command.digest},
+            )
+            return AppendDisposition.APPENDED
+
+        return self._transaction(operation)
+
+    def get_dispatch(
+        self, scope: ScopeIdentity, command_id: CommandId
+    ) -> NativeDispatchCommand | None:
+        with self.pool.connection() as connection:
+            row = connection.execute(
+                "SELECT payload FROM execution_authority.native_dispatch_commands "
+                "WHERE namespace=%s AND security_domain=%s AND command_id=%s",
+                (scope.namespace, scope.security_domain, str(command_id)),
+            ).fetchone()
+        return None if row is None else self._dispatch_command(row["payload"])
+
+    def claim_next(
+        self,
+        worker_id: str,
+        *,
+        now: datetime | None = None,
+        lease_seconds: int = 30,
+    ) -> NativeDispatchClaim | None:
+        now = (now or datetime.now(UTC)).astimezone(UTC)
+        if not worker_id or not 1 <= lease_seconds <= 300:
+            raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_INVALID")
+        token = secrets.token_hex(32)
+        lease = now + timedelta(seconds=lease_seconds)
+
+        def operation(connection):
+            row = connection.execute(
+                "WITH candidate AS (SELECT namespace,security_domain,command_id FROM "
+                "execution_authority.native_dispatch_commands WHERE state='QUEUED' "
+                "OR (state='CLAIMED' AND lease_expires_at<=%s) ORDER BY queued_at,command_id "
+                "FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE "
+                "execution_authority.native_dispatch_commands c SET state='CLAIMED',"
+                "claim_generation=c.claim_generation+1,fencing_token=%s,worker_id=%s,"
+                "lease_expires_at=%s,updated_at=%s FROM candidate x WHERE "
+                "c.namespace=x.namespace AND c.security_domain=x.security_domain "
+                "AND c.command_id=x.command_id RETURNING c.payload,c.claim_generation",
+                (now, token, worker_id, lease, now),
+            ).fetchone()
+            if row is None:
+                return None
+            command = self._dispatch_command(row["payload"])
+            claim = NativeDispatchClaim(
+                command, Generation(row["claim_generation"]), token, worker_id, lease
+            )
+            self._dispatch_fact(
+                connection,
+                command,
+                "CLAIMED",
+                {
+                    "state": "CLAIMED",
+                    "claimGeneration": claim.claim_generation.value,
+                    "workerId": worker_id,
+                    "leaseExpiresAt": lease.isoformat(),
+                },
+            )
+            return claim
+
+        return self._transaction(operation)
+
+    def resume_effect_started(self, worker_id: str) -> NativeDispatchClaim | None:
+        """Recover observe-only ownership without minting a new effect claim."""
+        if not worker_id:
+            raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_INVALID")
+        with self.pool.connection() as connection, connection.transaction():
+            row = connection.execute(
+                "SELECT payload,claim_generation,fencing_token,worker_id,"
+                "effect_started_at FROM execution_authority.native_dispatch_commands "
+                "WHERE state='EFFECT_STARTED' AND worker_id=%s "
+                "ORDER BY effect_started_at,command_id FOR UPDATE SKIP LOCKED LIMIT 1",
+                (worker_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return NativeDispatchClaim(
+            self._dispatch_command(row["payload"]),
+            Generation(row["claim_generation"]),
+            row["fencing_token"],
+            row["worker_id"],
+            row["effect_started_at"],
+        )
+
+    @staticmethod
+    def _locked_claim(connection, claim: NativeDispatchClaim) -> dict[str, Any]:
+        row = connection.execute(
+            "SELECT state,claim_generation,fencing_token,worker_id,lease_expires_at,"
+            "kubernetes_task_name,kubernetes_task_uid,terminal_observation_digest "
+            "FROM execution_authority.native_dispatch_commands WHERE namespace=%s "
+            "AND security_domain=%s AND command_id=%s FOR UPDATE",
+            (
+                claim.command.scope.namespace,
+                claim.command.scope.security_domain,
+                str(claim.command.command_id),
+            ),
+        ).fetchone()
+        if row is None:
+            raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_STALE")
+        if (
+            row["claim_generation"] != claim.claim_generation.value
+            or row["fencing_token"] != claim.fencing_token
+            or row["worker_id"] != claim.worker_id
+        ):
+            raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_STALE")
+        return row
+
+    def permit_effect(
+        self,
+        claim: NativeDispatchClaim,
+        task_name: str,
+        authorization_check: Callable[[Any, NativeDispatchCommand], bool],
+        *,
+        now: datetime | None = None,
+    ) -> AppendDisposition:
+        """Linearization point: current grant and active fencing commit together."""
+        now = (now or datetime.now(UTC)).astimezone(UTC)
+        command = claim.command
+
+        def operation(connection):
+            row = self._locked_claim(connection, claim)
+            if row["state"] == NativeDispatchState.EFFECT_STARTED:
+                if row["kubernetes_task_name"] != task_name:
+                    raise ExecutionConflict("NATIVE_DISPATCH_EFFECT_CONFLICT")
+                return AppendDisposition.REPLAYED
+            if (
+                row["state"] != NativeDispatchState.CLAIMED
+                or row["lease_expires_at"] <= now
+            ):
+                raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_STALE")
+            exact = connection.execute(
+                "SELECT d.decision,d.digest AS placement_digest,d.runtime_instance_id,"
+                "r.current_generation,q.attempt_id,q.agent_instance_id,w.assignment_id,"
+                "w.approved_plan_revision_id,p.plan_digest,p.status,a.control_state "
+                "FROM execution_authority.native_dispatch_commands c "
+                "JOIN execution_authority.placement_decisions d ON "
+                "d.namespace=c.namespace AND d.security_domain=c.security_domain "
+                "AND d.placement_id=c.placement_id "
+                "JOIN execution_authority.placement_requests q ON "
+                "q.namespace=d.namespace AND q.security_domain=d.security_domain "
+                "AND q.request_id=d.request_id "
+                "JOIN execution_authority.runtime_instances r ON "
+                "r.namespace=c.namespace AND r.security_domain=c.security_domain "
+                "AND r.runtime_instance_id=c.runtime_instance_id "
+                "JOIN execution_authority.attempts a ON a.namespace=c.namespace "
+                "AND a.security_domain=c.security_domain "
+                "AND a.attempt_id=c.attempt_id "
+                "JOIN execution_authority.task_runs t ON t.namespace=a.namespace "
+                "AND t.security_domain=a.security_domain AND t.task_run_id=a.task_run_id "
+                "JOIN execution_authority.workflow_runs w ON w.namespace=t.namespace "
+                "AND w.security_domain=t.security_domain AND w.workflow_run_id=t.workflow_run_id "
+                "JOIN execution_authority.plans p ON p.namespace=w.namespace "
+                "AND p.security_domain=w.security_domain AND p.plan_id=w.plan_id "
+                "AND p.plan_version=w.plan_version WHERE c.namespace=%s "
+                "AND c.security_domain=%s AND c.command_id=%s FOR SHARE",
+                (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.command_id),
+                ),
+            ).fetchone()
+            expected = {
+                "decision": "PLACED",
+                "placement_digest": command.placement_digest,
+                "runtime_instance_id": str(command.runtime_instance_id),
+                "current_generation": command.runtime_generation.value,
+                "attempt_id": str(command.attempt_id),
+                "agent_instance_id": str(command.agent_instance_id),
+                "assignment_id": str(command.assignment_id),
+                "approved_plan_revision_id": command.approved_plan_revision_id,
+                "plan_digest": command.approved_plan_digest,
+                "status": "APPROVED",
+                "control_state": "PENDING",
+            }
+            if exact != expected or not authorization_check(connection, command):
+                raise ExecutionConflict("NATIVE_DISPATCH_EFFECT_NOT_AUTHORIZED")
+            connection.execute(
+                "UPDATE execution_authority.native_dispatch_commands SET "
+                "state='EFFECT_STARTED',lease_expires_at=NULL,kubernetes_task_name=%s,"
+                "effect_started_at=%s,updated_at=%s WHERE namespace=%s "
+                "AND security_domain=%s AND command_id=%s",
+                (
+                    task_name,
+                    now,
+                    now,
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.command_id),
+                ),
+            )
+            connection.execute(
+                "UPDATE execution_authority.attempts SET control_state='RUNNING',"
+                "aggregate_version=aggregate_version+1 WHERE namespace=%s "
+                "AND security_domain=%s AND attempt_id=%s",
+                (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.attempt_id),
+                ),
+            )
+            self._dispatch_fact(
+                connection,
+                command,
+                "EFFECT_STARTED",
+                {
+                    "state": "EFFECT_STARTED",
+                    "claimGeneration": claim.claim_generation.value,
+                    "taskName": task_name,
+                },
+            )
+            return AppendDisposition.APPENDED
+
+        return self._transaction(operation)
+
+    def record_kubernetes_correlation(
+        self, claim: NativeDispatchClaim, task_name: str, task_uid: str
+    ) -> AppendDisposition:
+        if not task_name or not task_uid:
+            raise ExecutionConflict("NATIVE_DISPATCH_CORRELATION_CONFLICT")
+        command = claim.command
+
+        def operation(connection):
+            row = self._locked_claim(connection, claim)
+            if row["state"] != NativeDispatchState.EFFECT_STARTED:
+                raise ExecutionConflict("NATIVE_DISPATCH_EFFECT_NOT_STARTED")
+            if row["kubernetes_task_name"] != task_name:
+                raise ExecutionConflict("NATIVE_DISPATCH_CORRELATION_CONFLICT")
+            if row["kubernetes_task_uid"] is not None:
+                if row["kubernetes_task_uid"] != task_uid:
+                    raise ExecutionConflict("NATIVE_DISPATCH_CORRELATION_CONFLICT")
+                return AppendDisposition.REPLAYED
+            connection.execute(
+                "UPDATE execution_authority.native_dispatch_commands SET "
+                "kubernetes_task_uid=%s,updated_at=now() WHERE namespace=%s "
+                "AND security_domain=%s AND command_id=%s",
+                (
+                    task_uid,
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.command_id),
+                ),
+            )
+            self._dispatch_fact(
+                connection,
+                command,
+                "CORRELATED",
+                {"taskName": task_name, "taskUid": task_uid},
+            )
+            return AppendDisposition.APPENDED
+
+        return self._transaction(operation)
+
+    def record_uncertain(
+        self, claim: NativeDispatchClaim, observation: NativeTerminalObservation
+    ) -> AppendDisposition:
+        if observation.kind not in {
+            NativeTerminalKind.UNKNOWN,
+            NativeTerminalKind.RECOVERY_REQUIRED,
+        }:
+            raise ExecutionConflict("NATIVE_DISPATCH_UNCERTAIN_STATE_REQUIRED")
+        command = claim.command
+        if observation.command_id != command.command_id:
+            raise ExecutionConflict("NATIVE_DISPATCH_CORRELATION_CONFLICT")
+
+        def operation(connection):
+            row = self._locked_claim(connection, claim)
+            if row["kubernetes_task_name"] != observation.kubernetes_task_name:
+                raise ExecutionConflict("NATIVE_DISPATCH_CORRELATION_CONFLICT")
+            if row["terminal_observation_digest"] is not None:
+                if row["terminal_observation_digest"] != observation.digest:
+                    raise ExecutionConflict("NATIVE_DISPATCH_TERMINAL_CONFLICT")
+                return AppendDisposition.REPLAYED
+            if row["state"] != NativeDispatchState.EFFECT_STARTED:
+                raise ExecutionConflict("NATIVE_DISPATCH_EFFECT_NOT_STARTED")
+            if (
+                row["kubernetes_task_uid"] is not None
+                and observation.kubernetes_task_uid != row["kubernetes_task_uid"]
+            ):
+                raise ExecutionConflict("NATIVE_DISPATCH_CORRELATION_CONFLICT")
+            payload = json.loads(canonical_bytes(observation))["payload"]
+            connection.execute(
+                "UPDATE execution_authority.native_dispatch_commands SET state=%s,"
+                "terminal_observation_digest=%s,terminal_record=%s::jsonb,terminal_at=%s,"
+                "updated_at=%s WHERE namespace=%s AND security_domain=%s AND command_id=%s",
+                (
+                    observation.kind.value,
+                    observation.digest,
+                    json.dumps(payload),
+                    observation.observed_at,
+                    observation.observed_at,
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.command_id),
+                ),
+            )
+            connection.execute(
+                "UPDATE execution_authority.attempts SET control_state=%s,"
+                "aggregate_version=aggregate_version+1 WHERE namespace=%s "
+                "AND security_domain=%s AND attempt_id=%s",
+                (
+                    observation.kind.value,
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.attempt_id),
+                ),
+            )
+            self._dispatch_fact(
+                connection,
+                command,
+                observation.kind.value,
+                payload,
+            )
+            return AppendDisposition.APPENDED
+
+        return self._transaction(operation)
+
+    def dispatch_status(
+        self, scope: ScopeIdentity, command_id: CommandId
+    ) -> dict[str, Any] | None:
+        with self.pool.connection() as connection:
+            return connection.execute(
+                "SELECT state,claim_generation,fencing_token,worker_id,"
+                "kubernetes_task_name,kubernetes_task_uid,terminal_observation_digest,"
+                "terminal_record FROM execution_authority.native_dispatch_commands "
+                "WHERE namespace=%s AND security_domain=%s AND command_id=%s",
+                (scope.namespace, scope.security_domain, str(command_id)),
+            ).fetchone()
 
     def compatibility(self) -> None:
         try:

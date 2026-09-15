@@ -16,6 +16,10 @@ from agent_core.execution_contract import (
     ExecutionIdentityAggregate,
     ExternalCorrelation,
     Generation,
+    NativeDispatchClaim,
+    NativeDispatchCommand,
+    NativeTerminalKind,
+    NativeTerminalObservation,
     ObservationId,
     PlacementDecision,
     PlacementDecisionKind,
@@ -371,3 +375,71 @@ def test_decision_digest_is_immutable_and_verified_on_round_trip() -> None:
     payload["policy_version"] = "changed-policy"
     with pytest.raises(ExecutionContractError, match="DIGEST_MISMATCH"):
         PlacementDecision.from_mapping(payload)
+
+
+def native_command(**overrides) -> NativeDispatchCommand:
+    values = {
+        "command_id": CommandId("native-command-001"),
+        "scope": ScopeIdentity("agent-workloads", "business-unit-a"),
+        "attempt_id": AttemptId("attempt-001"),
+        "assignment_id": AssignmentId("assignment-001"),
+        "approved_plan_revision_id": "approved-plan-revision-001",
+        "approved_plan_digest": "a" * 64,
+        "placement_id": PlacementId("placement-001"),
+        "placement_digest": "b" * 64,
+        "runtime_instance_id": RuntimeInstanceId("runtime-instance-001"),
+        "runtime_generation": Generation(1),
+        "agent_instance_id": AgentInstanceId("agent-instance-001"),
+        "principal_id": "human:owner",
+        "credential_id": "credential-001",
+        "authentication_source": "SERVICE_CREDENTIAL",
+        "authority_generation": Generation(1),
+        "recovery_epoch": Generation(1),
+        "authorization_owner": "EXECUTION",
+        "authorization_action": "START",
+        "authorization_resource": "governed-execution:attempt-001",
+        "agent_name": "researcher-agent",
+        "input_text": "analyze",
+        "timeout_seconds": 30,
+        "queued_at": NOW,
+    }
+    values.update(overrides)
+    return NativeDispatchCommand(**values)
+
+
+def test_native_dispatch_contract_round_trip_and_fencing() -> None:
+    command = native_command()
+    payload = json.loads(canonical_bytes(command))["payload"]
+    assert NativeDispatchCommand.from_mapping(payload) == command
+    claim = NativeDispatchClaim(
+        command,
+        Generation(2),
+        "fencing-token",
+        "worker-1",
+        NOW + timedelta(seconds=30),
+    )
+    assert (
+        NativeDispatchClaim.from_mapping(json.loads(canonical_bytes(claim))["payload"])
+        == claim
+    )
+    assert command.digest == canonical_digest(command)
+
+
+def test_native_terminal_unknown_never_requires_fabricated_output() -> None:
+    unknown = NativeTerminalObservation(
+        CommandId("native-command-001"),
+        NativeTerminalKind.UNKNOWN,
+        "task-001",
+        None,
+        None,
+        "TRANSPORT_AMBIGUOUS",
+        NOW,
+    )
+    assert (
+        NativeTerminalObservation.from_mapping(
+            json.loads(canonical_bytes(unknown))["payload"]
+        )
+        == unknown
+    )
+    with pytest.raises(ExecutionContractError, match="SUCCESS_OBSERVATION_INCOMPLETE"):
+        replace(unknown, kind=NativeTerminalKind.SUCCEEDED, reason=None)

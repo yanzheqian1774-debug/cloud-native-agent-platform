@@ -13,6 +13,7 @@
 | 固定仓库基线 | `origin/main` source `f189212232fc194859a695f0307e83b0c7b73c0f`; tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2` |
 | 本轮固定审阅起点 | source `af9a3b4d528745a87c2027ca9d2d414b884f51df`; tree `c611f9eac8a2cefeb795c40cc8ecebc592611202`; Draft PR `#174` |
 | 最终澄清固定起点 | source `9e36e0faba1ddf1298766f25f8ec9b0f17f568d1`; tree `61ab25701215283470108c6e054bfe3dbb625993`; Draft PR `#174` |
+| 固定 main 同步起点 | 318 source `9e201380d77678b90df7fe7d2647506b67ebef89`; tree `a3f40894450e79af4ed50d6c97f30aa89faaf66d`; Human 授权普通 merge 的 main source `6f3e174087c5132b2fc5c5d1e20492fdc2b68ddc`; tree `103fc0dc2a03e3e5f4bc89469d40f95a0c6b3564` |
 | 固定 308 输入 | source `141a17ecd34ec3b721e1c8a8ae33277c4b454e42`; tree `b195b4612a4ab9f295e3c6f9a82199b05db7ac0e` |
 | 固定 316 输入 | source `3cc98cde9452e5036ad9bd44981f5fff9499b011`; tree `bb614158fded36277bced028baed88240f29f8d0` |
 | 后续实现授权 | `NO`; migration、endpoint、provider、frontend、真实调用、部署与运行验收均需单独 Human G1 分配 |
