@@ -12,7 +12,7 @@
 - Fixed IMPL-305 source/tree: `5a32fbb918a3c30ad50141e8bfbe7613673dc412` / `36ae844488fe94c2b0c2e10760a063e7e5a14616`.
 - Fixed IMPL-299 source/tree: `020c1d6eae35c47a418d210b5e982e8d54b03889` / `9ecf47874411e6656371b0eef973d36b4dde070e`.
 - Audited target main source/tree: `f189212232fc194859a695f0307e83b0c7b73c0f` / `a8a9251d5d2e47605d18bb63e362164ec4c920d2`.
-- Pull request: `PENDING`; exactly one Draft PR will be created.
+- Pull request: Draft [#172](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/172); it remains not Ready.
 - Human gates: Ready, merge, deployment, release, durable-integration acceptance, and Session close remain `PENDING / HUMAN_ONLY`.
 
 ## Candidate validation status
@@ -24,8 +24,8 @@ targeted PostgreSQL tests, frontend lint/live build, default and dedicated
 Playwright collection, the native-HTTPS click journey, `make check`, and normal
 commit hooks have passed. The [handoff](../../engineering/S5-V023-REL-316-HANDOFF.md)
 and [evidence index](../../evidence/s5/v0.2/s5-v023-rel-316/README.md) record the
-results and boundaries. Draft PR creation and automatic CI tracking are the
-remaining Codex-owned delivery steps; all Human gates remain pending.
+results and boundaries. Draft PR creation is complete. Automatic CI tracking is
+the remaining Codex-owned delivery step; all Human gates remain pending.
 
 ## Directional startup result
 
