@@ -12,10 +12,12 @@ export default defineConfig({
       ? [
           "**/digital-employee-work-participation.real.spec.ts",
           "**/trusted-preparation-combination.real.spec.ts",
+          "**/trusted-native-combination.real.spec.ts",
         ]
       : [
           "**/digital-employee-work-participation.real.spec.ts",
           "**/trusted-preparation-combination.real.spec.ts",
+          "**/trusted-native-combination.real.spec.ts",
           "**/*-live.spec.ts",
         ],
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,

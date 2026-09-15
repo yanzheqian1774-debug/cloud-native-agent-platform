@@ -109,7 +109,12 @@ jobs:
           npx playwright test --config playwright.rel-317.config.ts
           --list --workers=1 --retries=0 --forbid-only
 
+      - name: Create isolated browser database
+        run: createdb --host 127.0.0.1 --username postgres s5_v023_rel_317_browser
+
       - name: Run trusted preparation journey
+        env:
+          REL_317_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_317_browser
         run: >-
           scripts/acceptance/s5_v023_rel_317_run.sh
           "$RUNNER_TEMP/s5-v023-rel-317-evidence"
