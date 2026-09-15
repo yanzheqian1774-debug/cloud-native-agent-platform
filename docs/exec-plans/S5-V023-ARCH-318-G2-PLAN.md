@@ -7,7 +7,8 @@
 | Session | `S5-V023-ARCH-318` |
 | Type | `ARCH / BOUNDED G2` |
 | Task status | `ACTIVE / HUMAN_AUTHORIZED` |
-| Candidate decision | `PROPOSED / AWAITING_HUMAN_ARCHITECTURE_DECISION` |
+| Candidate decision | `ACCEPTED / HUMAN_GATE_PASS_WITH_CONSTRAINTS` |
+| Human itemized decision | bound to source `676b746d7fef87cf99856bf9ba894392d3d509fc`, tree `5370e94d596c08442dde089ad557fd12263a3008`; external record SHA-256 `c868d5d2f44a585ce749df9d89de9ada64e8ce074602014f0a4634eccd6711d1` |
 | Implementation | `NOT_STARTED / NOT_AUTHORIZED` |
 | Fixed main baseline | source `f189212232fc194859a695f0307e83b0c7b73c0f`; tree `a8a9251d5d2e47605d18bb63e362164ec4c920d2` |
 | Fixed reviewed candidate for this revision | source `af9a3b4d528745a87c2027ca9d2d414b884f51df`; tree `c611f9eac8a2cefeb795c40cc8ecebc592611202`; Draft PR `#174` |
@@ -16,9 +17,12 @@
 | Architecture candidate | [S5-V023-ARCH-318](../../architecture/s5/v0.2/S5-V023-ARCH-318-PRE-PROBLEM-DRAFT-ASSISTANCE-INVOCATION-MODEL-USE-EVIDENCE-V1.md) |
 | Evidence | [startup and document evidence](../evidence/s5/v0.2/s5-v023-arch-318/README.md) |
 
-This plan governs preparation of one architecture Draft PR. It does not authorize
-code, SQL, public API/CRD, configuration, provider calls, services, credentials,
-deployment, Ready, merge, Human acceptance, or Session closure.
+This plan governed preparation of one architecture Draft PR and now records the
+itemized Human G2 decision without changing the accepted protocol. It does not
+authorize code, SQL, public API/CRD, configuration, provider calls, services,
+credentials, deployment, Ready, merge, G1 allocation, or Session closure. The Human
+decision remains bound to the fixed source/tree above; this persistence change is not
+a new acceptance of its resulting commit.
 
 ## 1. Goal
 
@@ -161,3 +165,18 @@ typed contracts and reader compatibility
 ```
 
 No arrow allocates a Session or grants implementation/deployment authority.
+
+## 8. Human G2 decision registration
+
+The Human Gate is `PASS_WITH_CONSTRAINTS`. H318-01 through H318-04, H318-06 and
+H308-04B are `ACCEPT`; H318-05 and H308-03C are
+`ACCEPT_WITH_CONSTRAINTS`; H308-04A is `ACCEPT_WITH_AMENDMENT`. For H318-07,
+only no default automatic deletion is accepted; the exact retention duration and
+production data governance remain `DEFERRED` and must not be interpreted as approval
+for indefinite retention. Real-provider execution still requires the complete,
+separately Human-approved authorization record defined by the ADR.
+
+These decisions are independent. Implementation remains
+`NOT_STARTED / NOT_AUTHORIZED`, the Session remains `OPEN`, and the next possible
+repository action is a separate Human Ready/merge gate after this registration
+candidate and its own CI are verified.

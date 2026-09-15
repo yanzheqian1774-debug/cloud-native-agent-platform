@@ -6,7 +6,8 @@
 | --- | --- |
 | Session / 标题 | `S5-V023-ARCH-318` / Pre-Problem Draft Assistance Invocation 与 Model Use/Evidence |
 | 类型 / Gate | `ARCH / BOUNDED G2` |
-| 决策状态 | `PROPOSED / AWAITING_HUMAN_ARCHITECTURE_DECISION` |
+| 决策状态 | `ACCEPTED / HUMAN_GATE_PASS_WITH_CONSTRAINTS` |
+| Human Gate | `PASS_WITH_CONSTRAINTS`; 分项决定见第 13 节；H318-07 的具体保留期限与生产治理保持 `DEFERRED` |
 | 实现状态 | `NOT_STARTED / NOT_AUTHORIZED` |
 | Contract 状态 | internal v0.2.3 candidate；`NOT_FROZEN` |
 | 分配权威 | Human 正式分配；仅授权形成 G2 草案、文档验证、Draft PR，不等于接受本方案 |
@@ -14,6 +15,7 @@
 | 本轮固定审阅起点 | source `af9a3b4d528745a87c2027ca9d2d414b884f51df`; tree `c611f9eac8a2cefeb795c40cc8ecebc592611202`; Draft PR `#174` |
 | 最终澄清固定起点 | source `9e36e0faba1ddf1298766f25f8ec9b0f17f568d1`; tree `61ab25701215283470108c6e054bfe3dbb625993`; Draft PR `#174` |
 | 固定 main 同步起点 | 318 source `9e201380d77678b90df7fe7d2647506b67ebef89`; tree `a3f40894450e79af4ed50d6c97f30aa89faaf66d`; Human 授权普通 merge 的 main source `6f3e174087c5132b2fc5c5d1e20492fdc2b68ddc`; tree `103fc0dc2a03e3e5f4bc89469d40f95a0c6b3564` |
+| Human 接受固定对象 | source `676b746d7fef87cf99856bf9ba894392d3d509fc`; tree `5370e94d596c08442dde089ad557fd12263a3008`; 决定记录 `S5-V023-ARCH-318-HUMAN-G2-PARTIAL-DECISIONS-676b746-20260915.md`; SHA-256 `c868d5d2f44a585ce749df9d89de9ada64e8ce074602014f0a4634eccd6711d1` |
 | 固定 308 输入 | source `141a17ecd34ec3b721e1c8a8ae33277c4b454e42`; tree `b195b4612a4ab9f295e3c6f9a82199b05db7ac0e` |
 | 固定 316 输入 | source `3cc98cde9452e5036ad9bd44981f5fff9499b011`; tree `bb614158fded36277bced028baed88240f29f8d0` |
 | 后续实现授权 | `NO`; migration、endpoint、provider、frontend、真实调用、部署与运行验收均需单独 Human G1 分配 |
@@ -537,25 +539,29 @@ ambiguity 不自动消耗额外 dispatch；重新尝试需要新的 Human-visibl
 
 ## 13. Human 可分项裁决表
 
-| ID | 推荐选择 | Human 可接受/修改/拒绝的边界 | 未解决影响 |
-| --- | --- | --- | --- |
-| `H318-01` | 接受独立 Draft Assistance owner 和 metadata roots | owner、scope、identity、非内容持久化 | 未决则无合法 invocation identity，G1 writer blocked |
-| `H318-02` | 接受非 Attempt Invocation | 保持 Attempt/Plan/Run 语义不变 | 拒绝需另一个 G2 扩展 Attempt；不得伪造执行链 |
-| `H318-03` | 接受 server-owned exact binding snapshot 与第 5 节 targets | profile/snapshot/target versioning | 未决则 Model resolution/authorization/dispatch blocked |
-| `H318-04` | 接受第 6 节 recovery state machine | persist-before-dispatch、UNKNOWN、cancel、late result、successor retry | 未决则外部调用 blocked |
-| `H318-05` | 接受 keyed commitment | HMAC algorithm、canonicalization、pepper lifecycle、不可恢复限制 | 未决则 crash-safe payload consistency 与 no-content persistence 不能同时满足 |
-| `H318-06` | 接受 synthetic-only、raw content zero-persistence | platform data handling 与 confirmed Problem boundary | 未决则任何 provider/production-like acceptance blocked |
-| `H318-07` | 决定 metadata retention/tombstone policy；本候选推荐暂不自动删除 | exact duration/legal hold/erasure/backup policy 可后续收敛 | 不阻塞纯合成内部开发，但阻塞合规/production claim；不得默认 30 天 |
-| `H308-03C` | 见第 11/12 节，单独裁决 | 真实 provider acceptance 及其授权包 | 未接受则不得真实调用或声称闭环 |
-| `H308-04A` | 见第 8/11 节，单独裁决 | `MODEL` Resource Use + non-Attempt compatibility | 未接受则无 canonical Model use history |
-| `H308-04B` | 见第 9/11 节，单独裁决 | versioned Model Evidence | 未接受则无 canonical Model Evidence |
+| ID | 推荐选择 | Human 可接受/修改/拒绝的边界 | 未解决影响 | Human 决定（固定接受对象） |
+| --- | --- | --- | --- | --- |
+| `H318-01` | 接受独立 Draft Assistance owner 和 metadata roots | owner、scope、identity、非内容持久化 | 未决则无合法 invocation identity，G1 writer blocked | `ACCEPT` |
+| `H318-02` | 接受非 Attempt Invocation | 保持 Attempt/Plan/Run 语义不变 | 拒绝需另一个 G2 扩展 Attempt；不得伪造执行链 | `ACCEPT` |
+| `H318-03` | 接受 server-owned exact binding snapshot 与第 5 节 targets | profile/snapshot/target versioning | 未决则 Model resolution/authorization/dispatch blocked | `ACCEPT` |
+| `H318-04` | 接受第 6 节 recovery state machine | persist-before-dispatch、UNKNOWN、cancel、late result、successor retry | 未决则外部调用 blocked | `ACCEPT` |
+| `H318-05` | 接受 keyed commitment | HMAC algorithm、canonicalization、pepper lifecycle、不可恢复限制 | 未决则 crash-safe payload consistency 与 no-content persistence 不能同时满足 | `ACCEPT_WITH_CONSTRAINTS`; 保留 pepper 管理、重放窗口、正文不持久化及服务端无法自行恢复正文的限制 |
+| `H318-06` | 接受 synthetic-only、raw content zero-persistence | platform data handling 与 confirmed Problem boundary | 未决则任何 provider/production-like acceptance blocked | `ACCEPT`; 首批仅合成数据，用户确认后的最终字段仍走既有正式 Problem 写入路径 |
+| `H318-07` | 决定 metadata retention/tombstone policy；本候选推荐暂不自动删除 | exact duration/legal hold/erasure/backup policy 可后续收敛 | 不阻塞纯合成内部开发，但阻塞合规/production claim；不得默认 30 天 | `ACCEPT` 仅限“不默认自动删除”；具体保留期限与生产治理 `DEFERRED`，不构成无限期保留批准 |
+| `H308-03C` | 见第 11/12 节，单独裁决 | 真实 provider acceptance 及其授权包 | 未接受则不得真实调用或声称闭环 | `ACCEPT_WITH_CONSTRAINTS`; 真实调用仍需第 12 节独立完整授权包 |
+| `H308-04A` | 见第 8/11 节，单独裁决 | `MODEL` Resource Use + non-Attempt compatibility | 未接受则无 canonical Model use history | `ACCEPT_WITH_AMENDMENT`; Execution-owned 非 Attempt typed sibling，不 nullable 化或伪造 Attempt |
+| `H308-04B` | 见第 9/11 节，单独裁决 | versioned Model Evidence | 未接受则无 canonical Model Evidence | `ACCEPT`; versioned allowlist、Evidence 独立 owner、独立读取授权和 reader-first 边界 |
 
-Human 可以对每行分别 `ACCEPT`、`ACCEPT_WITH_AMENDMENT`、`DEFER` 或 `REJECT`。本文件、
-任务分配、commit、Draft PR 或 CI 结果均不构成任何行的接受。
+历史 `PROPOSED` 阶段允许 Human 对每行分别接受、修改、延后或拒绝；本文件、任务分配、
+commit、Draft PR 或 CI 本身均不构成接受。Human 随后对固定 source
+`676b746d7fef87cf99856bf9ba894392d3d509fc`、tree
+`5370e94d596c08442dde089ad557fd12263a3008` 作出上表分项决定。承载本段登记的新提交只是
+决定持久化，不表示 Human 重新接受新的 source/tree；各项仍相互独立。
 
 ## 14. 后继 G1 最小实施包
 
-只有 H318-01..06 获得足够明确的 Human 决定且 Human 另行分配 G1 后，才建议按以下顺序：
+H318-01..06 已获得上表所示的明确 Human 决定，但 Human 尚未另行分配 G1，因此以下顺序
+仍只是未授权的后继实施建议：
 
 1. **Contract/readers first**：增加 internal domain values、ports、versioned DTO/reducers、
    exact target builders 和 unknown-version readers；不接 provider writer。
@@ -606,11 +612,12 @@ frontend model selection；implicit latest/display-name/env fallback；raw conte
 本任务不含产品代码、SQL、公开 API/CRD、运行配置、服务、凭据、真实模型调用、317 资产、
 部署、Ready、merge、G2 代签或 Session 关闭。
 
-## 17. 草案终态
+## 17. 当前决定登记状态
 
 ```text
 G2_DRAFT_COMPLETE
-AWAITING_HUMAN_ARCHITECTURE_DECISION
+HUMAN_G2_DECISION_ACCEPTED_WITH_CONSTRAINTS
+H318_07_RETENTION_DURATION_AND_PRODUCTION_GOVERNANCE_DEFERRED
 IMPLEMENTATION_NOT_AUTHORIZED
 SESSION_OPEN
 ```

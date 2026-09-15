@@ -201,13 +201,76 @@ this Evidence README and Registry registration for 318.
 | `git diff --cached --check` | `PASS` |
 | repository baseline | `make check` `PASS`; Ruff passed, 427 files format-clean, pytest `1685 passed, 182 skipped`, one dependency deprecation warning |
 
-## 7. Terminal boundary
+### 6.7 Human G2 itemized decision and persistence chain
+
+The Human decision is permanently bound to the previously validated candidate, not
+to the later commit that persists this registration:
+
+```text
+accepted source 676b746d7fef87cf99856bf9ba894392d3d509fc
+accepted tree   5370e94d596c08442dde089ad557fd12263a3008
+  -> S5-V023-ARCH-318-HUMAN-G2-PARTIAL-DECISIONS-676b746-20260915.md
+     SHA-256 c868d5d2f44a585ce749df9d89de9ada64e8ce074602014f0a4634eccd6711d1
+  -> bounded four-file repository decision registration
+```
+
+The accepted candidate materials have SHA-256 values
+`0fe49dc538e14900479c283b1ad95b792c128d83f6506673b4f2044833c05f3a`
+(ADR), `3b438930fe7c910506f5f181e7c9140631371a9c4c6ade23844118ad56743edd`
+(G2 plan), and
+`c034e5664e7ea7517ed3b7ff244dacc58a4d7726a5d2de547214f51e19d0ff66`
+(this Evidence README at the accepted source). The external Human record was
+re-hashed before editing and matched the fixed value above.
+
+The Human decisions retain the ADR IDs exactly:
+
+| ID | Recorded decision |
+| --- | --- |
+| `H318-01` | `ACCEPT` |
+| `H318-02` | `ACCEPT` |
+| `H318-03` | `ACCEPT` |
+| `H318-04` | `ACCEPT` |
+| `H318-05` | `ACCEPT_WITH_CONSTRAINTS`; pepper lifecycle, replay window, zero raw-content persistence and server non-recoverability remain constraints |
+| `H318-06` | `ACCEPT`; synthetic-only first slice, zero raw prompt/response persistence and existing confirmed-Problem write path |
+| `H318-07` | `ACCEPT` only for no default automatic deletion; exact retention duration and production governance remain `DEFERRED`, without an indefinite-retention approval |
+| `H308-03C` | `ACCEPT_WITH_CONSTRAINTS`; real provider requires a separate complete authorization package |
+| `H308-04A` | `ACCEPT_WITH_AMENDMENT`; Execution-owned non-Attempt typed sibling, no nullable or fabricated Attempt |
+| `H308-04B` | `ACCEPT`; versioned allowlist, independent Evidence owner/read authorization and reader-first boundary |
+
+The decision relied on six attempt-1 successes for source `676b746d...` in CI run
+`34960416007` (jobs `104352385480`, `104352385738`, `104352385739`) and Employee
+Identity Chain run `34960416126` (jobs `104352386961`, `104352387144`,
+`104352387173`). Those jobs executed PR merge-test
+`4946dd3cce533941dbd8f9a8f4f547b2547b4988`, tree
+`5370e94d596c08442dde089ad557fd12263a3008`. They remain evidence for the accepted
+source and must not be reported as validation of the later registration commit.
+
+Historical run `34956715756` attempt 1 retains its browser timeout failure and deeper
+cause `UNKNOWN`; the single authorized failed-job rerun succeeded at attempt 2. This
+history remains distinct from the accepted candidate's six green checks.
+
+The registration changes only the ADR, G2 plan, this Evidence README and the 318 row
+in `docs/governance/REGISTRY.md`. It does not alter protocol semantics, implementation,
+other Session records or the Evidence index. Its new commit obtains independent
+automatic CI evidence before any separate Human Ready/merge decision.
+
+| Decision-registration validation | Result |
+| --- | --- |
+| fixed accepted source/tree, main, PR head, clean worktree and sole writer | `PASS` |
+| four-path scope gate | `PASS`; only ADR, G2 plan, this Evidence README and the 318 Registry row |
+| itemized decision consistency | `PASS`; original IDs retained, H318-07 deferred portion preserved, no unconditional whole-record acceptance |
+| links and external Human record | `PASS`; repository targets exist and external SHA-256 matches `c868d5d2f44a585ce749df9d89de9ada64e8ce074602014f0a4634eccd6711d1` |
+| `git diff --check` | `PASS` |
+| repository baseline | `make check` `PASS`; Ruff passed, 427 files format-clean, pytest `1685 passed, 182 skipped`, one dependency deprecation warning |
+
+## 7. Current decision-registration boundary
 
 The only permitted terminal claim for this task is:
 
 ```text
 G2_DRAFT_COMPLETE
-AWAITING_HUMAN_ARCHITECTURE_DECISION
+HUMAN_G2_DECISION_ACCEPTED_WITH_CONSTRAINTS
+H318_07_RETENTION_DURATION_AND_PRODUCTION_GOVERNANCE_DEFERRED
 IMPLEMENTATION_NOT_AUTHORIZED
 SESSION_OPEN
 ```
