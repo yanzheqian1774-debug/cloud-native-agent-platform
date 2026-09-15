@@ -32,7 +32,7 @@ test("exposes nine truthful Chinese-first platform support surfaces", async ({ p
     }
   }
   await page.goto("/outcomes");
-  const search = page.getByLabel("搜索业务问题");
+  const search = page.getByLabel("搜索旧规划业务问题");
   await search.fill("供应商");
   await expect(search).toBeFocused();
   // Deterministic replacement mirrors an asynchronous loading heading becoming
@@ -44,7 +44,7 @@ test("exposes nine truthful Chinese-first platform support surfaces", async ({ p
     await expect(heading).toBeFocused();
     await heading.evaluate(element => element.replaceWith(element.cloneNode(true)));
     await expect(heading).toBeFocused();
-    const input = page.getByLabel("搜索业务问题");
+    const input = page.getByLabel("搜索旧规划业务问题");
     await input.fill("供应商");
     await heading.evaluate(element => element.replaceWith(element.cloneNode(true)));
     await expect(input).toBeFocused();

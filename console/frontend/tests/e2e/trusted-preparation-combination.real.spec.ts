@@ -47,7 +47,7 @@ async function approve(
   await administrator.getByRole("button", { name: "检查授权申请", exact: true }).click();
   await expect(administrator.getByRole("heading", { name: new RegExp(`^${domain}`) })).toBeVisible();
   await expect(administrator.getByText("等待决定", { exact: true })).toBeVisible();
-  await administrator.getByRole("button", { name: "批准授权申请", exact: true }).click();
+  await administrator.getByRole("button", { name: "批准精确权限", exact: true }).click();
   await expect(administrator.getByText("已批准", { exact: true })).toBeVisible();
   await expect(administrator.getByText(/不是数字员工生命周期的业务 APPROVE/)).toBeVisible();
 }

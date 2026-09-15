@@ -468,7 +468,9 @@ test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async (
   await installAdapter(page, {
     onSession: async route => {
       sessionReads += 1;
-      if (sessionReads === 1) return route.fulfill({ json: {
+      // ConsoleShell performs one trusted-session read for its identity display
+      // before the create flow freezes its own principal key.
+      if (sessionReads <= 2) return route.fulfill({ json: {
         schemaVersion: "workbench-session.v1",
         principal: { principalId: "human:quality", tenantId: "tenant-a", securityDomain: "quality" },
         session: { expiresAt: "2026-09-15T00:00:00Z", idleExpiresAt: "2026-09-14T23:00:00Z" },
