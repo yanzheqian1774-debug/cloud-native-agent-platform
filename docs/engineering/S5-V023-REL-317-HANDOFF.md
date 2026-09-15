@@ -17,6 +17,8 @@ Original Draft PRs #171/#172 and their Sessions remain unchanged. Retain them
 as immutable provenance until the Human decides their Ready/merge/supersede
 order after REL-317 review; do not close either automatically.
 
-The task stops at one validated Draft PR. Human combination acceptance, Ready,
+The task stops at validated Draft PR
+[#173](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/173).
+Human combination acceptance, Ready,
 merge, exact-main validation, deployment, release, original PR/Session
 disposition and REL-317 close remain pending and ungranted.

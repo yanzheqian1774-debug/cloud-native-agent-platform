@@ -12,6 +12,10 @@
   IMPL-315 `2849e5bb819471764df742090924eca180c5b0a4`.
 - Both fixed inputs are candidate ancestors. The final PR head/tree is recorded
   after it exists.
+- Validated pre-PR-record candidate: `ba09000a3395e5c9b8138e0217f9cd18e5c4421f`,
+  tree `1438baa37a83c28be8856e2429132e853477af10`.
+- Draft PR: [#173](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/173).
+  Ready and merge remain Human-only.
 
 The [path closure](path-closure.txt) is the exact input-diff union plus
 REL-317-only plan, verification, Evidence and CI assets.
