@@ -18,8 +18,8 @@
 ## Candidate validation status
 
 The executable candidate is
-`674a1d13f54bc41b82e967b0c6d7309dc074cbee`, tree
-`cca1f448efb8de40fde6a45fd9208f2fa9c879bf`. Symbol-level combination,
+`3885232624fc9d24fabb73682c4148e0d8bb313d`, tree
+`f66906c35216c01449dc0a8fd738280119c298d0`. Symbol-level combination,
 targeted PostgreSQL tests, frontend lint/live build, default and dedicated
 Playwright collection, the native-HTTPS click journey, `make check`, and normal
 commit hooks have passed. The [handoff](../../engineering/S5-V023-REL-316-HANDOFF.md)

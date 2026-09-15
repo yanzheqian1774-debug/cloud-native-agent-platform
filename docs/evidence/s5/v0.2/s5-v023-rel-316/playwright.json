@@ -28,7 +28,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "/tmp/s5-v023-rel-316.CSNXKo/playwright-output",
+        "outputDir": "/tmp/s5-v023-rel-316.lQcaal/playwright-output",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -85,7 +85,7 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 8724,
+                  "duration": 6151,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
@@ -93,26 +93,26 @@
                   "steps": [
                     {
                       "title": "Problem create, authorization, and exact readback",
-                      "duration": 1502
+                      "duration": 474
                     },
                     {
                       "title": "Criterion and Criteria Set create, authorize, and exact readback",
-                      "duration": 1233
+                      "duration": 1051
                     },
                     {
                       "title": "Employee CREATE is frozen, independently authorized, and does not imply READ",
-                      "duration": 736
+                      "duration": 668
                     },
                     {
                       "title": "Exact Employee and Agent READ plus lifecycle grants close the lifecycle",
-                      "duration": 1899
+                      "duration": 1805
                     },
                     {
                       "title": "Fresh reload reads formal Problem, Criteria Set, and published Employee state",
-                      "duration": 683
+                      "duration": 562
                     }
                   ],
-                  "startTime": "2026-09-15T06:05:33.714Z",
+                  "startTime": "2026-09-15T06:30:51.546Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -130,8 +130,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-15T06:05:33.419Z",
-    "duration": 9575.898,
+    "startTime": "2026-09-15T06:30:51.197Z",
+    "duration": 6875.541,
     "expected": 1,
     "skipped": 0,
     "unexpected": 0,

@@ -2,8 +2,8 @@
 
 ## Candidate and provenance
 
-- Executed product candidate source: `674a1d13f54bc41b82e967b0c6d7309dc074cbee`.
-- Executed product candidate tree: `cca1f448efb8de40fde6a45fd9208f2fa9c879bf`.
+- Executed product candidate source: `3885232624fc9d24fabb73682c4148e0d8bb313d`.
+- Executed product candidate tree: `f66906c35216c01449dc0a8fd738280119c298d0`.
 - Fixed consumer IMPL-310: `62ed0fee0ccf322a4276a7f20c65151395d726e8` / tree `57813acbe9bd7a07c671145e12385a98f0a66977`.
 - Fixed IMPL-305 input: `5a32fbb918a3c30ad50141e8bfbe7613673dc412` / tree `36ae844488fe94c2b0c2e10760a063e7e5a14616`.
 - Fixed IMPL-299 input: `020c1d6eae35c47a418d210b5e982e8d54b03889` / tree `9ecf47874411e6656371b0eef973d36b4dde070e`.
@@ -13,7 +13,7 @@
 ## Real click result
 
 The dedicated allowlist collected exactly one test. It passed with `expected=1`,
-`unexpected=0`, `skipped=0`, and a Playwright report duration of 9575.898 ms.
+`unexpected=0`, `skipped=0`, and a Playwright report duration of 6875.541 ms.
 The fixture reached `READY` with `LISTENER_READINESS` as its final completed
 stage.
 

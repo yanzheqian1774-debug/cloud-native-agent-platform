@@ -29,10 +29,12 @@ state were not read or changed.
   administration, REL harness/spec/workflow, and lifecycle failure truthfulness.
 - `674a1d1` — isolate the dedicated REL spec from both default and IMPL-299 live
   Playwright collection.
+- `3885232` — preserve fixed-310 admin control names and update the affected
+  combined shell/legacy-label regression expectations.
 
 The passing executable candidate is
-`674a1d13f54bc41b82e967b0c6d7309dc074cbee`, tree
-`cca1f448efb8de40fde6a45fd9208f2fa9c879bf`. The evidence-only delivery commit
+`3885232624fc9d24fabb73682c4148e0d8bb313d`, tree
+`f66906c35216c01449dc0a8fd738280119c298d0`. The evidence-only delivery commit
 follows that candidate.
 
 ## Validation
