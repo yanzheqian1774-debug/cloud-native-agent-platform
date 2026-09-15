@@ -4,7 +4,14 @@ from dataclasses import dataclass
 
 from agent_core.execution_contract import (
     AgentInstanceId,
+    AssignmentId,
     AttemptId,
+    CommandId,
+    Generation,
+    NativeDispatchClaim,
+    NativeDispatchCommand,
+    NativeTerminalKind,
+    NativeTerminalObservation,
     PlacementDecision,
     PlacementDecisionKind,
     PlacementId,
@@ -15,10 +22,19 @@ from agent_core.execution_contract import (
     TaskRunId,
     WorkflowRunId,
 )
+from agent_core.execution_repositories import AppendDisposition
 
 __all__ = [
     "AgentInstanceId",
+    "AppendDisposition",
+    "AssignmentId",
     "AttemptId",
+    "CommandId",
+    "Generation",
+    "NativeDispatchClaim",
+    "NativeDispatchCommand",
+    "NativeTerminalKind",
+    "NativeTerminalObservation",
     "PlacementDecision",
     "PlacementDecisionKind",
     "PlacementId",

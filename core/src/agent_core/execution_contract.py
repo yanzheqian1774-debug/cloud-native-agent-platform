@@ -123,6 +123,217 @@ class ObservationId(_OpaqueId):
     pass
 
 
+class NativeDispatchState(StrEnum):
+    """Durable dispatch state owned only by PostgreSQL Execution Authority."""
+
+    QUEUED = "QUEUED"
+    CLAIMED = "CLAIMED"
+    EFFECT_STARTED = "EFFECT_STARTED"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+
+
+class NativeTerminalKind(StrEnum):
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+
+
+@dataclass(frozen=True, slots=True)
+class NativeDispatchCommand:
+    """Canonical, secret-free intent. Persisting it grants no external effect."""
+
+    command_id: CommandId
+    scope: ScopeIdentity
+    attempt_id: AttemptId
+    assignment_id: AssignmentId
+    approved_plan_revision_id: str
+    approved_plan_digest: str
+    placement_id: PlacementId
+    placement_digest: str
+    runtime_instance_id: RuntimeInstanceId
+    runtime_generation: Generation
+    agent_instance_id: AgentInstanceId
+    principal_id: str
+    credential_id: str
+    authentication_source: str
+    authority_generation: Generation
+    recovery_epoch: Generation
+    authorization_owner: str
+    authorization_action: str
+    authorization_resource: str
+    agent_name: str
+    input_text: str
+    timeout_seconds: int
+    queued_at: datetime
+
+    def __post_init__(self) -> None:
+        typed = (
+            (self.command_id, CommandId, "INVALID_COMMAND_ID"),
+            (self.scope, ScopeIdentity, "INVALID_SCOPE_IDENTITY"),
+            (self.attempt_id, AttemptId, "INVALID_ATTEMPT_ID"),
+            (self.assignment_id, AssignmentId, "INVALID_ASSIGNMENT_ID"),
+            (self.placement_id, PlacementId, "INVALID_PLACEMENT_ID"),
+            (
+                self.runtime_instance_id,
+                RuntimeInstanceId,
+                "INVALID_RUNTIME_INSTANCE_ID",
+            ),
+            (self.runtime_generation, Generation, "INVALID_RUNTIME_GENERATION"),
+            (self.agent_instance_id, AgentInstanceId, "INVALID_AGENT_INSTANCE_ID"),
+            (
+                self.authority_generation,
+                Generation,
+                "INVALID_AUTHORITY_GENERATION",
+            ),
+            (self.recovery_epoch, Generation, "INVALID_RECOVERY_EPOCH"),
+        )
+        for value, expected, code in typed:
+            _require_type(value, expected, code)
+        for field_name in (
+            "principal_id",
+            "credential_id",
+            "authentication_source",
+            "approved_plan_revision_id",
+            "authorization_owner",
+            "authorization_action",
+            "authorization_resource",
+            "agent_name",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                _reference(getattr(self, field_name), "INVALID_DISPATCH_IDENTITY"),
+            )
+        if self.authentication_source not in {
+            "BROWSER_SESSION",
+            "SERVICE_CREDENTIAL",
+        }:
+            raise ExecutionContractError("INVALID_DISPATCH_AUTHENTICATION_SOURCE")
+        for field_name in ("approved_plan_digest", "placement_digest"):
+            value = getattr(self, field_name)
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(char not in "0123456789abcdef" for char in value)
+            ):
+                raise ExecutionContractError("INVALID_DISPATCH_DIGEST")
+        object.__setattr__(
+            self,
+            "input_text",
+            _normalized_text(
+                self.input_text,
+                code="INVALID_DISPATCH_INPUT",
+                maximum=32 * 1024,
+            ),
+        )
+        if (
+            not isinstance(self.timeout_seconds, int)
+            or isinstance(self.timeout_seconds, bool)
+            or not 1 <= self.timeout_seconds <= 3600
+        ):
+            raise ExecutionContractError("INVALID_DISPATCH_TIMEOUT")
+        object.__setattr__(
+            self, "queued_at", _timestamp(self.queued_at, "INVALID_QUEUED_AT")
+        )
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+    @classmethod
+    def from_mapping(cls, source: Mapping[str, object]) -> Self:
+        return _from_mapping(cls, source)
+
+
+@dataclass(frozen=True, slots=True)
+class NativeDispatchClaim:
+    command: NativeDispatchCommand
+    claim_generation: Generation
+    fencing_token: str
+    worker_id: str
+    lease_expires_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_type(self.command, NativeDispatchCommand, "INVALID_DISPATCH_COMMAND")
+        _require_type(self.claim_generation, Generation, "INVALID_CLAIM_GENERATION")
+        for field_name in ("fencing_token", "worker_id"):
+            object.__setattr__(
+                self,
+                field_name,
+                _reference(getattr(self, field_name), "INVALID_DISPATCH_CLAIM"),
+            )
+        object.__setattr__(
+            self,
+            "lease_expires_at",
+            _timestamp(self.lease_expires_at, "INVALID_CLAIM_LEASE"),
+        )
+
+    @classmethod
+    def from_mapping(cls, source: Mapping[str, object]) -> Self:
+        return _from_mapping(cls, source)
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTerminalObservation:
+    command_id: CommandId
+    kind: NativeTerminalKind
+    kubernetes_task_name: str
+    kubernetes_task_uid: str | None
+    output: str | None
+    reason: str | None
+    observed_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_type(self.command_id, CommandId, "INVALID_COMMAND_ID")
+        _require_type(self.kind, NativeTerminalKind, "INVALID_TERMINAL_KIND")
+        object.__setattr__(
+            self,
+            "kubernetes_task_name",
+            _reference(self.kubernetes_task_name, "INVALID_TASK_CORRELATION"),
+        )
+        if self.kubernetes_task_uid is not None:
+            object.__setattr__(
+                self,
+                "kubernetes_task_uid",
+                _reference(self.kubernetes_task_uid, "INVALID_TASK_CORRELATION"),
+            )
+        for field_name in ("output", "reason"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(
+                    self,
+                    field_name,
+                    _normalized_text(
+                        value,
+                        code="INVALID_TERMINAL_OBSERVATION",
+                        maximum=32 * 1024,
+                    ),
+                )
+        if self.kind is NativeTerminalKind.SUCCEEDED and (
+            self.output is None or self.kubernetes_task_uid is None
+        ):
+            raise ExecutionContractError("SUCCESS_OBSERVATION_INCOMPLETE")
+        if self.kind is not NativeTerminalKind.SUCCEEDED and self.reason is None:
+            raise ExecutionContractError("TERMINAL_REASON_REQUIRED")
+        object.__setattr__(
+            self,
+            "observed_at",
+            _timestamp(self.observed_at, "INVALID_OBSERVED_AT"),
+        )
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self)
+
+    @classmethod
+    def from_mapping(cls, source: Mapping[str, object]) -> Self:
+        return _from_mapping(cls, source)
+
+
 @dataclass(frozen=True, slots=True, order=True)
 class Generation:
     value: int
@@ -723,12 +934,17 @@ def _from_mapping(cls: type[Self], source: Mapping[str, object]) -> Self:
         "workflow_run_id": WorkflowRunId,
         "task_run_id": TaskRunId,
         "attempt_id": AttemptId,
+        "assignment_id": AssignmentId,
         "agent_instance_id": AgentInstanceId,
         "runtime_instance_id": lambda value: (
             None if value is None else RuntimeInstanceId(value)
         ),
         "desired_generation": Generation,
         "observed_generation": Generation,
+        "runtime_generation": Generation,
+        "authority_generation": Generation,
+        "recovery_epoch": Generation,
+        "claim_generation": Generation,
         "command_id": CommandId,
         "observation_id": ObservationId,
         "decision": PlacementDecisionKind,
@@ -736,6 +952,8 @@ def _from_mapping(cls: type[Self], source: Mapping[str, object]) -> Self:
         "observed_state": RuntimeObservedStateKind,
         "health": RuntimeHealth,
         "readiness": RuntimeReadiness,
+        "kind": NativeTerminalKind,
+        "command": lambda value: NativeDispatchCommand.from_mapping(value),
         "provider_correlation": lambda value: (
             None if value is None else ExternalCorrelation(**value)
         ),
@@ -757,6 +975,8 @@ def _from_mapping(cls: type[Self], source: Mapping[str, object]) -> Self:
         "deadline",
         "observed_at",
         "freshness_deadline",
+        "queued_at",
+        "lease_expires_at",
     }
     try:
         for name, converter in converters.items():

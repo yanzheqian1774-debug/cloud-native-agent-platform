@@ -434,9 +434,11 @@ class PostgresAuthorityRepository:
         *,
         now: datetime,
         recovery_epoch: int,
+        lock_session: bool = False,
     ) -> CredentialId | None:
         if context.authentication_source.value == "SERVICE_CREDENTIAL":
             return CredentialId(context.session_id_or_service_credential_id)
+        lock_clause = " FOR SHARE OF s" if lock_session else ""
         row = connection.execute(
             "SELECT s.credential_id FROM browser_identity.sessions s "
             "LEFT JOIN browser_identity.session_revocation_facts r "
@@ -444,7 +446,7 @@ class PostgresAuthorityRepository:
             "AND s.principal_id=%s AND s.tenant_id=%s AND s.security_domain=%s "
             "AND r.session_id IS NULL AND s.rotated_to_session_id IS NULL "
             "AND s.idle_expires_at>%s AND s.absolute_expires_at>%s "
-            "AND s.credential_expires_at>%s AND s.recovery_epoch=%s",
+            "AND s.credential_expires_at>%s AND s.recovery_epoch=%s" + lock_clause,
             (
                 context.session_id_or_service_credential_id,
                 context.principal_id,
@@ -479,6 +481,9 @@ class PostgresAuthorityRepository:
     def _decision_request_locked_checkpoint(self) -> None:
         """Test seam after a grant decision locks its request aggregate."""
 
+    def _authorization_grants_locked_checkpoint(self) -> None:
+        """Test seam after exact grants are locked by an owner transaction."""
+
     def _recovery_requests_locked_checkpoint(self) -> None:
         """Test seam after recovery locks every pre-recovery pending request."""
 
@@ -491,25 +496,86 @@ class PostgresAuthorityRepository:
         generation: int,
         recovery_epoch: int,
     ) -> tuple[CredentialId | None, DynamicAuthorizationState]:
-        """Read session and grant state from one PostgreSQL repeatable-read snapshot."""
-        try:
-            with self.pool.connection() as connection, connection.transaction():
-                connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                credential_id = self._current_credential_id(
-                    connection, context, now=now, recovery_epoch=recovery_epoch
-                )
-                self._authorization_read_checkpoint()
-                dynamic_state = self._read_dynamic_authorization_state(
-                    connection,
+        """Read one exact grant from the same linearized bundle seam."""
+        credential_id, states = self.read_linearized_authorization_states(
+            context,
+            (grant,),
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+        )
+        return credential_id, states[0]
+
+    def read_linearized_authorization_states(
+        self,
+        context: TrustedRequestContext,
+        grants: Sequence[ExactGrant],
+        *,
+        now: datetime,
+        generation: int,
+        recovery_epoch: int,
+        connection=None,
+        configure_transaction: bool = True,
+    ) -> tuple[CredentialId | None, tuple[DynamicAuthorizationState, ...]]:
+        """Read an exact grant bundle inside an optional owner transaction."""
+        if not grants:
+            raise AuthorityError("INVALID_GRANT_TARGET")
+
+        def read(current, *, lock_for_owner: bool):
+            if configure_transaction:
+                current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            credential_id = self._current_credential_id(
+                current,
+                context,
+                now=now,
+                recovery_epoch=recovery_epoch,
+                lock_session=lock_for_owner,
+            )
+            self._authorization_read_checkpoint()
+            if lock_for_owner:
+                self._lock_dynamic_grants(current, context, grants)
+                self._authorization_grants_locked_checkpoint()
+            states = tuple(
+                self._read_dynamic_authorization_state(
+                    current,
                     context,
                     grant,
                     now=now,
                     generation=generation,
                     recovery_epoch=recovery_epoch,
                 )
-                return credential_id, dynamic_state
+                for grant in grants
+            )
+            return credential_id, states
+
+        try:
+            if connection is not None:
+                return read(connection, lock_for_owner=True)
+            with self.pool.connection() as owned, owned.transaction():
+                return read(owned, lock_for_owner=False)
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    @staticmethod
+    def _lock_dynamic_grants(
+        connection, context: TrustedRequestContext, grants: Sequence[ExactGrant]
+    ) -> None:
+        """Serialize matching revocations behind the owner transaction commit."""
+        for grant in grants:
+            connection.execute(
+                "SELECT g.grant_id FROM authorization_admin.grants g "
+                "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
+                "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
+                "AND g.exact_resource=%s ORDER BY g.grant_id FOR SHARE",
+                (
+                    context.principal_id,
+                    context.scope.tenant_id,
+                    context.scope.security_domain,
+                    grant.owner,
+                    grant.action,
+                    grant.exact_resource,
+                ),
+            ).fetchall()
 
     @staticmethod
     def _claim(

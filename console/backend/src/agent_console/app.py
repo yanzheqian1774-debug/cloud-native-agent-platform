@@ -124,6 +124,7 @@ from agent_console.live_journey_stream_schemas import (
     JourneyEventEnvelope,
     JourneyEventPayload,
 )
+from agent_console.native_dispatch_application import NativeDispatchApplication
 from agent_console.persistence_bootstrap import (
     BootstrapStep,
     activate_in_order,
@@ -294,6 +295,9 @@ def _activate_execution_base(prepared) -> None:
         migrate_execution_authority(
             authority,
             already_recorded=migration_recorded(authority, "execution_authority", 8),
+        )
+        authority.migrate_native_dispatch(
+            _MIGRATIONS / "0022_native_execution_dispatch.sql"
         )
 
 
@@ -574,6 +578,7 @@ _agent_definition_service: AgentDefinitionService | None = None
 _agent_definition_startup_error: str | None = None
 _digital_employee_assembly: DigitalEmployeeProductAssembly | None = None
 _digital_employee_startup_error: str | None = None
+_native_dispatch_application: NativeDispatchApplication | None = None
 _governed_execution_application: GovernedExecutionApplication | None = None
 _governed_execution_startup_error: str | None = None
 _governed_execution_authority: GovernedExecutionAuthority | None = None
@@ -695,8 +700,10 @@ def _configure_agent_definitions() -> None:
 
 def _activate_digital_employees(prepared) -> None:
     global _digital_employee_assembly, _digital_employee_startup_error
+    global _native_dispatch_application
     if prepared is None or _agent_definition_service is None:
         _digital_employee_assembly = None
+        _native_dispatch_application = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
         return
     authority, _controls = prepared
@@ -708,6 +715,7 @@ def _activate_digital_employees(prepared) -> None:
             authority, "digital_employee_definition", 14
         ),
     )
+    _native_dispatch_application = NativeDispatchApplication(authority)
     _digital_employee_startup_error = None
 
 
@@ -749,9 +757,11 @@ activate_in_order(
 
 def _configure_digital_employees() -> None:
     global _digital_employee_assembly, _digital_employee_startup_error
+    global _native_dispatch_application
     database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
     if not database_url or _agent_definition_service is None:
         _digital_employee_assembly = None
+        _native_dispatch_application = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
         return
     try:
@@ -761,6 +771,7 @@ def _configure_digital_employees() -> None:
         _activate_digital_employees(prepared)
     except (ExecutionPersistenceError, WorkflowControlError, ValueError):
         _digital_employee_assembly = None
+        _native_dispatch_application = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
 
 

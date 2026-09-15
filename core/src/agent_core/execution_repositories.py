@@ -12,6 +12,9 @@ from .execution_contract import (
     EvidenceId,
     ExecutionIdentityAggregate,
     InterventionId,
+    NativeDispatchClaim,
+    NativeDispatchCommand,
+    NativeTerminalObservation,
     ObservationId,
     OutcomeId,
     PlacementDecision,
@@ -121,3 +124,21 @@ class ExecutionRelationshipQueryPort(Protocol):
         runtime_instance_id: RuntimeInstanceId,
         agent_instance_id: AgentInstanceId,
     ) -> tuple[AttemptId, ...]: ...
+
+
+class NativeDispatchRepository(Protocol):
+    """Durable command/claim/fact owner; external effects stay outside calls."""
+
+    def enqueue(self, command: NativeDispatchCommand) -> AppendDisposition: ...
+
+    def get_dispatch(
+        self, scope: ScopeIdentity, command_id: CommandId
+    ) -> NativeDispatchCommand | None: ...
+
+    def claim_next(self, worker_id: str) -> NativeDispatchClaim | None: ...
+
+    def resume_effect_started(self, worker_id: str) -> NativeDispatchClaim | None: ...
+
+    def record_uncertain(
+        self, claim: NativeDispatchClaim, observation: NativeTerminalObservation
+    ) -> AppendDisposition: ...
