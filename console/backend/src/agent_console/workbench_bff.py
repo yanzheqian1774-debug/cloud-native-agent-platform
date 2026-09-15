@@ -80,6 +80,7 @@ GrantBuilder = Callable[
     ],
     Sequence[ExactGrant],
 ]
+PostCommitHandler = Callable[[TrustedRequestContext, Any], Mapping[str, Any]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,7 @@ class WorkbenchOperation:
     grant_builder: GrantBuilder
     handler: TransactionalOwnerHandler[Mapping[str, Any]]
     success_status: int = 200
+    post_commit_handler: PostCommitHandler | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -547,6 +549,8 @@ def create_workbench_bff(
                 query=query,
                 handler=operation.handler,
             )
+            if operation.post_commit_handler is not None:
+                result = operation.post_commit_handler(context, result)
             return JSONResponse(
                 status_code=operation.success_status,
                 content=WorkbenchOperationResponse(result=dict(result)).model_dump(

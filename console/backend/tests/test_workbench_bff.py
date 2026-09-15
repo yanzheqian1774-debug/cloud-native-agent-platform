@@ -11,11 +11,15 @@ from agent_console.authority_contracts import (
     BrowserSession,
     CredentialId,
     ExactGrant,
+    GrantDecision,
+    GrantRequest,
+    GrantRequestStatus,
     SessionId,
     SessionSecret,
     TrustedRequestContext,
     VerifiedPrincipal,
 )
+from agent_console.grant_administration_application import AvailableContinuation
 from agent_console.workbench_bff import (
     PREFIX,
     WorkbenchBffPolicy,
@@ -41,11 +45,11 @@ class CreateProblem(BaseModel):
 
 
 class SessionStub:
-    def __init__(self) -> None:
+    def __init__(self, principal_id: str = "human:alice") -> None:
         self.now = datetime(2029, 1, 1, tzinfo=UTC)
         self.secret = "opaque-session-secret"
         principal = VerifiedPrincipal(
-            "human:alice",
+            principal_id,
             AuthorityScope("tenant-a", "quality"),
             CredentialId("credential-alice"),
             self.now + timedelta(hours=8),
@@ -62,7 +66,7 @@ class SessionStub:
             1,
         )
         self.context = TrustedRequestContext(
-            "human:alice",
+            principal_id,
             principal.scope,
             "session-one",
             AuthenticationSource.BROWSER_SESSION,
@@ -108,7 +112,7 @@ class SessionStub:
 
     def logout(self, value: str, *, actor_id: str) -> None:
         self.authenticate_session(value)
-        assert actor_id == "human:alice"
+        assert actor_id == self.context.principal_id
         self.logged_out = True
 
 
@@ -130,6 +134,75 @@ class AuthorizerStub:
                 decisions=(),
                 authority=SimpleNamespace(),
             )
+        )
+
+
+class GrantAdministrationStub:
+    continuation_reference = f"continuation-ref.{'a' * 64}"
+
+    def __init__(self, sessions: SessionStub) -> None:
+        self.sessions = sessions
+        self.submissions = []
+        self.decisions = []
+
+    def continuation_inbox_details(self, context):
+        assert context == self.sessions.context
+        return (
+            AvailableContinuation(
+                self.continuation_reference,
+                "CONTINUE_PROBLEM_READ",
+                self.sessions.now + timedelta(minutes=10),
+                ("READ",),
+            ),
+        )
+
+    def submit_request(self, context, command):
+        assert context == self.sessions.context
+        self.submissions.append(command)
+        return GrantRequest(
+            "grant-request-1",
+            context.principal_id,
+            context.scope,
+            (ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:problem-1"),),
+            command.purpose,
+            GrantRequestStatus.PENDING,
+            self.sessions.now,
+            1,
+        )
+
+    def inspect_request(self, context, request_id):
+        assert context == self.sessions.context
+        if request_id != "grant-request-1":
+            raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+        return GrantRequest(
+            request_id,
+            context.principal_id,
+            context.scope,
+            (ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:problem-1"),),
+            "CONTINUE_PROBLEM_READ",
+            GrantRequestStatus.APPROVED,
+            self.sessions.now,
+            2,
+        )
+
+    def decide_request(self, context, command):
+        self.decisions.append((context, command))
+        return GrantDecision(
+            "grant-decision-1",
+            command.request_id,
+            context.principal_id,
+            "meta-decision",
+            command.approve,
+            command.reason_category,
+            command.basis_type,
+            "b" * 64,
+            "policy-1",
+            "audit-1",
+            self.sessions.now,
+            ("grant-1",) if command.approve else (),
+            2,
+            self.sessions.now if command.approve else None,
+            command.expires_at,
         )
 
 
@@ -231,6 +304,18 @@ def test_instance_assignment_and_placement_registry_freezes_exact_read_grants() 
     ) == (ExactGrant("PLACEMENT", "READ", "placement:placement:quality"),)
 
 
+def build_authorization_client(principal_id: str = "human:alice"):
+    sessions = SessionStub(principal_id)
+    grants = GrantAdministrationStub(sessions)
+    app = create_workbench_bff(
+        sessions,  # type: ignore[arg-type]
+        AuthorizerStub(),  # type: ignore[arg-type]
+        WorkbenchBffPolicy("console.example", "https://console.example"),
+        grant_administration=grants,  # type: ignore[arg-type]
+    )
+    return TestClient(app, base_url="https://console.example"), grants
+
+
 def login(client: TestClient) -> None:
     response = client.post(
         f"{PREFIX}/session",
@@ -329,6 +414,87 @@ def test_login_preserves_invalid_nonce_and_credential_semantics(
     assert response.status_code == 401
     assert response.json()["reasonCode"] == "AUTHENTICATION_REQUIRED"
     assert "set-cookie" not in response.headers
+
+
+def test_continuation_request_uses_one_reference_and_no_requested_grants() -> None:
+    client, grants = build_authorization_client()
+    login(client)
+    response = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "request-one",
+        },
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "CONTINUE_PROBLEM_READ",
+            "requestedGrants": [],
+            "continuationIds": [GrantAdministrationStub.continuation_reference],
+        },
+    )
+    assert response.status_code == 202
+    assert response.json()["requestId"] == "grant-request-1"
+    assert response.json()["state"] == "PENDING"
+    assert grants.submissions[-1].requested_grants == ()
+    assert (
+        grants.submissions[-1].continuation
+        == GrantAdministrationStub.continuation_reference
+    )
+
+    invalid = client.post(
+        f"{PREFIX}/authorization/grant-requests",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "request-invalid",
+        },
+        json={
+            "schemaVersion": "exact-grant-request.v1",
+            "purpose": "CONTINUE_PROBLEM_READ",
+            "requestedGrants": [],
+            "continuationIds": [],
+        },
+    )
+    assert invalid.status_code == 422
+
+
+def test_exact_request_inspect_and_administrator_decision_are_minimal() -> None:
+    applicant, _ = build_authorization_client()
+    login(applicant)
+    inspected = applicant.get(f"{PREFIX}/authorization/grant-requests/grant-request-1")
+    assert inspected.status_code == 200
+    assert set(inspected.json()) == {
+        "requestId",
+        "state",
+        "aggregateVersion",
+        "submittedAt",
+        "purpose",
+        "requestedActions",
+    }
+
+    admin, grants = build_authorization_client("human:admin")
+    login(admin)
+    decided = admin.post(
+        f"{PREFIX}/authorization/grant-requests/grant-request-1/decisions",
+        headers={
+            "origin": "https://console.example",
+            "x-csrf-token": "csrf-token",
+            "idempotency-key": "decision-one",
+        },
+        json={
+            "schemaVersion": "exact-grant-decision.v1",
+            "expectedVersion": 1,
+            "decision": "APPROVE",
+            "reasonCategory": "ASSIGNED_BUSINESS_DUTY",
+            "basisType": "TICKET",
+            "basisReference": "SEC-299",
+            "expiresAt": "2029-01-01T08:00:00Z",
+        },
+    )
+    assert decided.status_code == 201
+    assert decided.json()["state"] == "APPROVED"
+    assert grants.decisions[-1][1].request_id == "grant-request-1"
 
 
 @pytest.mark.parametrize(
@@ -446,6 +612,14 @@ def test_business_problem_registry_freezes_routes_and_exact_resource_builders() 
     assert len({(item.method, item.path) for item in operations}) == 13
     assert all(item.path.startswith(f"{PREFIX}/") for item in operations)
 
+    create = next(item for item in operations if item.name == "CREATE_PROBLEM")
+    assert tuple(create.grant_builder(SessionStub().context, {}, {}, {})) == (
+        ExactGrant("BUSINESS_PROBLEM", "CREATE", "business-problem:collection"),
+    )
+    listed = next(item for item in operations if item.name == "LIST_PROBLEMS")
+    assert tuple(listed.grant_builder(SessionStub().context, {}, {}, {})) == (
+        ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
+    )
     read = next(item for item in operations if item.name == "READ_PROBLEM")
     assert tuple(
         read.grant_builder(SessionStub().context, {"problem_id": "problem-7"}, {}, {})

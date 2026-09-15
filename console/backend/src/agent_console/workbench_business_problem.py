@@ -18,6 +18,7 @@ from agent_console.business_problem_authorization import (
     problem_resource,
     reference_grants,
 )
+from agent_console.business_problem_continuation import BusinessProblemCreateCoordinator
 from agent_console.business_problem_domain import BusinessProblemError
 from agent_console.business_problem_schemas import (
     CreateBusinessProblem,
@@ -75,10 +76,14 @@ class BusinessProblemOwnerAdapter:
         )
         try:
             if call.operation == "CREATE_PROBLEM":
+                if call.policy_generation is None or call.recovery_epoch is None:
+                    raise WorkbenchOwnerError("CREATOR_RECEIPT_REQUIRED", 409)
                 return service.create_problem(
                     principal,
                     CreateBusinessProblem.model_validate(call.payload),
                     connection=call.connection,
+                    receipt_policy_generation=call.policy_generation,
+                    receipt_recovery_epoch=call.recovery_epoch,
                 )
             if call.operation == "LIST_PROBLEMS":
                 return service.list_problems(principal, connection=call.connection)
@@ -157,6 +162,12 @@ class BusinessProblemOwnerAdapter:
             WorkflowDefinitionRepositoryError,
         ) as exc:
             reason = str(exc)
+            if reason == "BUSINESS_PROBLEM_CREATOR_RECEIPT_MISSING":
+                raise WorkbenchOwnerError("CREATOR_RECEIPT_REQUIRED", 409) from exc
+            if reason == "BUSINESS_PROBLEM_CREATOR_RECEIPT_INVALIDATED":
+                raise WorkbenchOwnerError(
+                    "CREATOR_CONTINUATION_INVALIDATED", 409
+                ) from exc
             if "UNAVAILABLE" in reason or "INCOMPATIBLE" in reason:
                 raise WorkbenchOwnerError(
                     "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE", 503
@@ -179,10 +190,7 @@ def _grant(owner: str, action: str, resource: str) -> ExactGrant:
 
 
 def _problem_collection(context, path, payload, query):
-    return (
-        _grant("BUSINESS_PROBLEM", "CREATE", problem_resource()),
-        _grant("BUSINESS_PROBLEM", "READ", problem_resource()),
-    )
+    return (_grant("BUSINESS_PROBLEM", "CREATE", problem_resource()),)
 
 
 def _problem_list(context, path, payload, query):
@@ -297,6 +305,7 @@ def _plan_approve(context, path, payload, query):
 
 def business_problem_operations(
     application: BusinessProblemApplication,
+    creator_coordinator: BusinessProblemCreateCoordinator | None = None,
 ) -> tuple[WorkbenchOperation, ...]:
     handler = BusinessProblemOwnerAdapter(application)
     return (
@@ -309,6 +318,7 @@ def business_problem_operations(
             _problem_collection,
             handler,
             201,
+            post_commit_handler=creator_coordinator,
         ),
         WorkbenchOperation(
             "LIST_PROBLEMS",

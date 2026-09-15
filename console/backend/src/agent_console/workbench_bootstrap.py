@@ -18,6 +18,9 @@ from agent_console.authority_foundation import (
 )
 from agent_console.browser_session_application import BrowserSessionPolicy
 from agent_console.business_problem_application import BusinessProblemApplication
+from agent_console.business_problem_continuation import (
+    BusinessProblemCreateCoordinator,
+)
 from agent_console.digital_employee_application import DigitalEmployeeRepository
 from agent_console.digital_employee_definition import EmployeeDefinitionRepository
 from agent_console.governed_execution_ownership import execution_database_fingerprint
@@ -84,7 +87,7 @@ def build_workbench_composition(
     ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
     grant_targets = WorkbenchGrantTargetValidator(
-        None,
+        business_problems.problems,
         agent_definitions,
         employee_definitions,
     )
@@ -110,7 +113,14 @@ def build_workbench_composition(
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             grant_administration=foundation.grants,
             operations=(
-                *business_problem_operations(business_problems),
+                *business_problem_operations(
+                    business_problems,
+                    BusinessProblemCreateCoordinator(
+                        foundation.grants,
+                        clock=foundation.grants.clock,
+                        identity_factory=foundation.grants.identity_factory,
+                    ),
+                ),
                 *agent_operations(
                     agent_definitions,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),

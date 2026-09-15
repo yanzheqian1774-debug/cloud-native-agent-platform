@@ -98,6 +98,8 @@ class AuthorizedOwnerCall:
     query: Mapping[str, Any]
     decisions: tuple[WorkbenchAuthorizationDecision, ...]
     authority: AuthorizedOwnerAuthority
+    policy_generation: int | None = None
+    recovery_epoch: int | None = None
 
 
 class TransactionalOwnerHandler(Protocol[T]):
@@ -196,5 +198,7 @@ class WorkbenchOwnerAuthorization:
                     query=query,
                     decisions=decisions,
                     authority=owner_authority,
+                    policy_generation=generation.generation,
+                    recovery_epoch=self.controller.readiness.recovery_epoch,
                 )
             )

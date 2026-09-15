@@ -1,4 +1,4 @@
-"""Domain-owned exact targets used by the Employee Workbench grant journey."""
+"""Owner-dispatched exact-target composition for the combined Workbench."""
 
 from __future__ import annotations
 
@@ -16,6 +16,11 @@ from agent_console.authority_contracts import (
     ExactGrant,
     TrustedRequestContext,
 )
+from agent_console.business_problem_continuation import (
+    BusinessProblemContinuationValidator,
+)
+from agent_console.business_problem_domain import BusinessProblemError
+from agent_console.business_problem_repository import BusinessProblemRepository
 from agent_console.digital_employee_definition import (
     EmployeeDefinitionError,
     EmployeeDefinitionRepository,
@@ -24,17 +29,26 @@ from agent_console.execution_domain import ScopeIdentity
 
 
 class WorkbenchGrantTargetValidator:
-    """Compose only the Employee and Agent target owners required by IMPL-310."""
+    """Dispatch validation to the canonical owner and fail closed otherwise."""
 
     def __init__(
         self,
-        unused_problem_owner: object,
-        agents: AgentDefinitionRepository,
-        employees: EmployeeDefinitionRepository,
+        problems: BusinessProblemRepository | None,
+        agents: AgentDefinitionRepository | None = None,
+        employees: EmployeeDefinitionRepository | None = None,
     ) -> None:
-        del unused_problem_owner
+        self.problems = problems
+        self.problem_continuations = (
+            BusinessProblemContinuationValidator(problems)
+            if problems is not None
+            else None
+        )
         self.agents = agents
         self.employees = employees
+
+    @staticmethod
+    def _scope(context: TrustedRequestContext) -> ScopeIdentity:
+        return ScopeIdentity(context.scope.tenant_id, context.scope.security_domain)
 
     def is_known_exact_target(
         self,
@@ -46,16 +60,28 @@ class WorkbenchGrantTargetValidator:
         if connection is None:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE")
         try:
+            if grant.owner in {"SUCCESS_CRITERION", "SUCCESS_CRITERIA_SET"}:
+                if self.problems is None:
+                    return False
+                return self.problems.is_known_grant_target_for_workbench(
+                    connection,
+                    self._scope(context),
+                    grant.owner,
+                    grant.action,
+                    grant.exact_resource,
+                )
             if grant.owner == "EMPLOYEE":
+                if self.employees is None:
+                    return False
                 return self.employees.is_known_grant_target_for_workbench(
                     connection,
-                    ScopeIdentity(
-                        context.scope.tenant_id, context.scope.security_domain
-                    ),
+                    self._scope(context),
                     grant.action,
                     grant.exact_resource,
                 )
             if grant.owner == "AGENT":
+                if self.agents is None:
+                    return False
                 return self.agents.is_known_grant_target_for_workbench(
                     connection,
                     DefinitionScope(
@@ -65,14 +91,21 @@ class WorkbenchGrantTargetValidator:
                     grant.exact_resource,
                 )
             return False
-        except (AgentDefinitionRepositoryError, EmployeeDefinitionError) as exc:
+        except (
+            AgentDefinitionRepositoryError,
+            BusinessProblemError,
+            EmployeeDefinitionError,
+        ) as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
     def validate_continuation(
         self, claim: ContinuationClaim, *, connection: object | None = None
     ) -> bool:
-        del claim, connection
-        return False
+        if self.problem_continuations is None:
+            return False
+        return self.problem_continuations.validate_continuation(
+            claim, connection=connection
+        )
 
     def validate_offer(
         self,
@@ -81,5 +114,11 @@ class WorkbenchGrantTargetValidator:
         canonical_resource_reference: str,
         owner_revision: str,
     ) -> bool:
-        del scope, members, canonical_resource_reference, owner_revision
-        return False
+        if self.problem_continuations is None:
+            return False
+        return self.problem_continuations.validate_offer(
+            scope,
+            members,
+            canonical_resource_reference,
+            owner_revision,
+        )
