@@ -119,3 +119,13 @@ Rollback is branch abandonment or normal commit revert. REL-317-owned runtime
 assets may be retained for evidence or explicitly deleted only after ownership is
 proven. Original input branches, worktrees, PRs, Sessions, databases, clusters,
 credentials and evidence remain untouched.
+
+## Candidate validation status
+
+The symbol-level combination, dedicated PostgreSQL suites, frontend lint/live
+build, isolated HTTPS/Chromium product journey, `make check`, normal hooks, and
+fresh combined-source Native L3 have passed. The L3 source is `eff1b583...`, tree
+`4943839...`; later Evidence-only commits are outside its recorded build
+context. Draft PR creation and PR-head CI remain pending. See the
+[handoff](../../engineering/S5-V023-REL-317-HANDOFF.md) and
+[Evidence index](../../evidence/s5/v0.2/s5-v023-rel-317/README.md).
