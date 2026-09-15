@@ -203,6 +203,14 @@ class PublishedEmployeeDefinitionAuthority:
 
 
 class EmployeeDefinitionRepository(Protocol):
+    def is_known_grant_target_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        action: str,
+        exact_resource: str,
+    ) -> bool: ...
+
     def create(
         self,
         revision: EmployeeRevision,
@@ -229,6 +237,30 @@ class EmployeeDefinitionRepository(Protocol):
         *,
         after: tuple[str, str] | None,
         limit: int,
+        authorized: bool,
+    ): ...
+    def create_for_workbench(
+        self,
+        connection: Any,
+        revision: EmployeeRevision,
+        *,
+        expected_version: int,
+        decision_id: str,
+        command_id: str,
+        authorized: bool,
+    ): ...
+    def decide_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        definition_id: str,
+        revision_id: str,
+        revision_digest: str,
+        action: str,
+        *,
+        expected_version: int,
+        decision_id: str,
+        command_id: str,
         authorized: bool,
     ): ...
     def decide(

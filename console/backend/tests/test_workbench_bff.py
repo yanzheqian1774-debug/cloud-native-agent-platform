@@ -461,23 +461,45 @@ def test_business_problem_registry_freezes_routes_and_exact_resource_builders() 
     ) == (ExactGrant("PLAN", "READ", "plan:plan-9:3"),)
 
 
-def test_employee_registry_exposes_list_and_exact_revision_read() -> None:
+def test_employee_registry_exposes_bounded_commands_and_exact_read() -> None:
     operations = employee_operations(  # type: ignore[arg-type]
         SimpleNamespace(), WorkbenchCursorCodec(b"k" * 32)
     )
 
     assert [(item.name, item.method, item.path) for item in operations] == [
         ("LIST_EMPLOYEES", "GET", f"{PREFIX}/employees"),
+        ("CREATE_EMPLOYEE_REVISION", "POST", f"{PREFIX}/employees"),
         (
             "READ_EMPLOYEE_REVISION",
             "GET",
             f"{PREFIX}/employees/{{employee_definition_id}}/revisions/{{revision_id}}",
         ),
+        (
+            "VALIDATE_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/"
+            "{revision_id}/validation",
+        ),
+        (
+            "APPROVE_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/"
+            "{revision_id}/approvals",
+        ),
+        (
+            "PUBLISH_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/"
+            "{revision_id}/publication",
+        ),
     ]
-    listing, operation = operations
+    listing, create, operation, validate, approve, publish = operations
     assert tuple(
         listing.grant_builder(SessionStub().context, {}, {}, {"pageSize": 50})
     ) == (ExactGrant("EMPLOYEE", "LIST", "employee:collection"),)
+    assert tuple(create.grant_builder(SessionStub().context, {}, {}, {})) == (
+        ExactGrant("EMPLOYEE", "CREATE", "employee:collection"),
+    )
     assert tuple(
         operation.grant_builder(
             SessionStub().context,
@@ -495,3 +517,19 @@ def test_employee_registry_exposes_list_and_exact_revision_read() -> None:
             "employee:employee-definition:quality:employee-revision:v1",
         ),
     )
+    path = {
+        "employee_definition_id": "employee-definition:quality",
+        "revision_id": "employee-revision:v1",
+    }
+    for lifecycle, action in (
+        (validate, "VALIDATE"),
+        (approve, "APPROVE"),
+        (publish, "PUBLISH"),
+    ):
+        assert tuple(lifecycle.grant_builder(SessionStub().context, path, {}, {})) == (
+            ExactGrant(
+                "EMPLOYEE",
+                action,
+                "employee:employee-definition:quality:aggregate",
+            ),
+        )

@@ -614,6 +614,30 @@
 .employee-management .employee-placement-operation fieldset { margin-top: .65rem; }
 .employee-management .employee-back-button { margin-bottom: .65rem; }
 
+.employee-authorization-request {
+  display: grid;
+  gap: .65rem;
+  margin-top: .85rem;
+  padding: 1rem;
+  border: 1px solid #d8e2ef;
+  border-left: 4px solid #2f6fdd;
+  border-radius: 9px;
+  background: #f8fbff;
+}
+.employee-authorization-request :is(h2, h4, p, dl) { margin: 0; }
+.employee-authorization-request h4 { font-size: 16px; }
+.employee-authorization-request dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .35rem .75rem; }
+.employee-authorization-request dt { color: #66748a; font-size: 12px; }
+.employee-authorization-request dd { margin: 0; overflow-wrap: anywhere; font-size: 14px; }
+.employee-authorization-request details summary { cursor: pointer; color: #315a96; font-size: 13px; }
+.employee-authorization-request details ul { margin-bottom: 0; padding-left: 1.25rem; }
+.employee-authorization-request code { overflow-wrap: anywhere; }
+.employee-grant-admin { max-width: 70rem; margin: 0 auto; padding: 1.5rem; }
+.employee-grant-admin .px-page-title { display: flex; justify-content: space-between; gap: 1rem; }
+.employee-grant-admin .employee-authorization-request label { display: grid; gap: .35rem; font-weight: 700; }
+.employee-grant-admin .employee-authorization-request input { min-height: 2.7rem; padding: .65rem .75rem; border: 1px solid #cbd7e7; border-radius: 7px; font: inherit; }
+.employee-grant-admin .employee-inline-error { margin-top: .85rem; padding: .75rem; color: #a2252d; background: #fff0f0; }
+
 @media (max-width: 1500px) {
   .employee-management .employee-object-center { grid-template-columns: minmax(20rem, .82fr) minmax(27rem, 1.18fr); }
   .employee-management .employee-collection-row { grid-template-columns: 1fr; }

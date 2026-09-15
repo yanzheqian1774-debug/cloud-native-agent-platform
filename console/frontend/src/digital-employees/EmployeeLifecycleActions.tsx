@@ -12,6 +12,7 @@ import {
   type EmployeeLifecycleCommand,
   type EmployeeLifecycleState,
 } from "../api/digitalEmployees";
+import { EmployeeAuthorizationRequest } from "./EmployeeAuthorizationRequest";
 
 type Action = "VALIDATE" | "APPROVE" | "PUBLISH";
 type FrozenLifecycle = { action: Action; command: EmployeeLifecycleCommand; principalKey: string };
@@ -51,6 +52,7 @@ export function EmployeeLifecycleActions({
   const [busy, setBusy] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [needsAuthorization, setNeedsAuthorization] = useState(false);
   const generation = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
   const inFlight = useRef(false);
@@ -81,6 +83,7 @@ export function EmployeeLifecycleActions({
       });
       setFrozen({ action, command, principalKey: workbenchPrincipalKey(session) });
       setUnknown(false);
+      setNeedsAuthorization(false);
     } catch (reason) {
       if (turn !== generation.current || (reason instanceof DOMException && reason.name === "AbortError")) return;
       const value = reason instanceof DigitalEmployeeRequestError ? reason : new DigitalEmployeeRequestError("WORKBENCH_SESSION_UNAVAILABLE", 503);
@@ -116,6 +119,7 @@ export function EmployeeLifecycleActions({
       setExpectedVersion(String(result.aggregateVersion));
       setFrozen(null);
       setUnknown(false);
+      setNeedsAuthorization(false);
       try {
         const definition = await getEmployeeDefinition(result.employeeDefinitionId, result.employeeDefinitionRevisionId, controller.signal);
         if (turn !== generation.current) return;
@@ -133,6 +137,7 @@ export function EmployeeLifecycleActions({
       if (turn !== generation.current) return;
       const value = reason instanceof DigitalEmployeeRequestError ? reason : new DigitalEmployeeRequestError("EMPLOYEE_COMMAND_RESULT_UNKNOWN", 503, true);
       setUnknown(value.unknownResult);
+      setNeedsAuthorization(!value.unknownResult && (value.status === 403 || value.status === 404));
       setMessage(value.unknownResult
         ? "结果未知；原 commandId、摘要和 expectedVersion 已冻结，只能重放原命令。"
         : errorMessage(value));
@@ -149,6 +154,20 @@ export function EmployeeLifecycleActions({
     <div className="employee-lifecycle-flow">{(["VALIDATE", "APPROVE", "PUBLISH"] as const).map(action => <button type="button" key={action} disabled={busy || Boolean(frozen) || lifecycle !== requiredState[action] || !Number.isInteger(Number(expectedVersion)) || Number(expectedVersion) < 1} onClick={() => void prepare(action)}><span>{actionLabel[action]}</span><small>需要当前操作权限与成员读取权限</small></button>)}</div>
     {!lifecycle && <p className="employee-honesty-note">当前 exact 详情响应没有生命周期字段，无法仅凭“未发布”判断阶段。获得正式状态后才能启用操作。</p>}
     {frozen && <div className="employee-command-confirmation"><span className="employee-confirmation-state">等待用户明确确认</span><h4>{actionLabel[frozen.action]} · {item.role}</h4><p>将对所选修订 <code>{item.employeeDefinitionRevisionId}</code> 使用版本 {frozen.command.expectedVersion}。</p><details><summary>查看冻结 commandId 与摘要</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionDigest}</code></details><div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>取消</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认提交"}</button></div></div>}
+    {needsAuthorization && frozen && <EmployeeAuthorizationRequest
+      title={`申请${actionLabel[frozen.action]}所需权限`}
+      grants={[
+        { owner: "EMPLOYEE", action: frozen.action, resource: `employee:${item.employeeDefinitionId}:aggregate` },
+        { owner: "EMPLOYEE", action: "READ", resource: `employee:${item.employeeDefinitionId}:${item.employeeDefinitionRevisionId}` },
+        ...item.members.filter(member => member.kind === "AGENT").map(member => ({
+          owner: "AGENT" as const,
+          action: "READ" as const,
+          resource: `agent:${member.resourceId}:${member.revisionId}`,
+        })),
+      ]}
+      principalKey={frozen.principalKey}
+      onApproved={submit}
+    />}
     {message && <div role={unknown ? "alert" : "status"} className={`employee-command-state ${unknown ? "unknown" : latest ? "success" : "failed"}`}><strong>{unknown ? "结果未知" : latest ? "命令状态" : "命令未执行"}</strong><span>{message}</span></div>}
     <div className="employee-unavailable-actions"><span className="employee-capability-state missing"><i />未实现</span><p>编辑、删除、停用、实例化没有本轮已接受正式契约，继续保留为欠项。</p></div>
   </section>;

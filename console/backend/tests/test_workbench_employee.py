@@ -4,7 +4,9 @@ from types import SimpleNamespace
 import pytest
 from agent_console.authority_contracts import (
     AuthenticationSource,
+    AuthorityError,
     AuthorityScope,
+    ExactGrant,
     TrustedRequestContext,
 )
 from agent_console.digital_employee_application import (
@@ -37,11 +39,13 @@ from agent_console.execution_postgres import (
 )
 from agent_console.workbench_employee import (
     DigitalEmployeeOwnerAdapter,
+    EmployeeDefinitionCommandOwnerAdapter,
     EmployeeDefinitionListOwnerAdapter,
     EmployeeDefinitionOwnerAdapter,
 )
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
+    WorkbenchAuthorizationDecision,
     WorkbenchOwnerError,
 )
 from agent_console.workbench_pagination import WorkbenchCursorCodec
@@ -105,6 +109,7 @@ def test_employee_owner_uses_caller_connection_and_discloses_one_revision() -> N
                     ],
                     "predecessorRevisionId": "employee-revision:older",
                 },
+                "lifecycleState": "PUBLISHED",
                 "publicationState": "PUBLISHED",
                 "facts": [{"action": "PUBLISH"}],
                 "otherRevision": {"revisionId": "employee-revision:v2"},
@@ -127,11 +132,227 @@ def test_employee_owner_uses_caller_connection_and_discloses_one_revision() -> N
                 "digest": "a" * 64,
             }
         ],
+        "lifecycleState": "PUBLISHED",
         "publicationState": "PUBLISHED",
     }
     assert "older" not in repr(result)
     assert "employee-revision:v2" not in repr(result)
     assert "facts" not in repr(result).lower()
+
+
+def command_call(operation, payload, *, action, path=None, repository_authority=None):
+    context = call().context
+    resource = (
+        "employee:collection"
+        if action == "CREATE"
+        else f"employee:{path['employee_definition_id']}:aggregate"
+    )
+    return AuthorizedOwnerCall(
+        operation=operation,
+        context=context,
+        connection=object(),
+        payload=payload,
+        path=path or {},
+        query={},
+        decisions=(
+            WorkbenchAuthorizationDecision(
+                "workbench-authorization:" + "d" * 64,
+                context.principal_id,
+                "EMPLOYEE",
+                action,
+                resource,
+            ),
+        ),
+        authority=repository_authority or SimpleNamespace(),
+    )
+
+
+def test_employee_create_uses_collection_grant_and_minimal_result() -> None:
+    captured = {}
+
+    class Repository:
+        def create_for_workbench(
+            self,
+            connection,
+            revision,
+            *,
+            expected_version,
+            decision_id,
+            command_id,
+            authorized,
+        ):
+            captured.update(
+                connection=connection,
+                revision=revision,
+                expected_version=expected_version,
+                decision_id=decision_id,
+                command_id=command_id,
+                authorized=authorized,
+            )
+            return {
+                "revision": revision.record,
+                "digest": revision.digest,
+                "aggregateVersion": 1,
+                "lifecycleState": "DRAFT",
+                "facts": [{"action": "CREATE", "decision_id": "private"}],
+            }
+
+    value = command_call(
+        "CREATE_EMPLOYEE_REVISION",
+        {
+            "employeeDefinitionId": "employee-definition:quality",
+            "employeeDefinitionRevisionId": "employee-revision:v1",
+            "role": "Quality owner",
+            "responsibilities": ["Review quality"],
+            "members": [
+                {
+                    "kind": "AGENT",
+                    "resourceId": "agent-definition:quality",
+                    "revisionId": "agent-revision:v1",
+                    "digest": "a" * 64,
+                }
+            ],
+            "expectedVersion": 0,
+            "commandId": "employee-command:create",
+        },
+        action="CREATE",
+    )
+    result = EmployeeDefinitionCommandOwnerAdapter(Repository())(value)
+
+    assert captured["connection"] is value.connection
+    assert captured["expected_version"] == 0
+    assert captured["command_id"] == "employee-command:create"
+    assert captured["authorized"] is True
+    assert result == {
+        "resourceKind": "DIGITAL_EMPLOYEE_DEFINITION",
+        "employeeDefinitionId": "employee-definition:quality",
+        "employeeDefinitionRevisionId": "employee-revision:v1",
+        "employeeDefinitionDigest": captured["revision"].digest,
+        "aggregateVersion": 1,
+        "lifecycleState": "DRAFT",
+    }
+    assert "role" not in result
+    assert "members" not in result
+    assert "facts" not in result
+
+
+def test_employee_lifecycle_requires_exact_member_read_on_same_authority() -> None:
+    revision = EmployeeRevision(
+        ScopeIdentity("tenant-a", "quality"),
+        "employee-definition:quality",
+        "employee-revision:v1",
+        "Quality owner",
+        ("Review quality",),
+        (
+            CompositionMember(
+                MemberKind.AGENT,
+                "agent-definition:quality",
+                "agent-revision:v1",
+                "a" * 64,
+            ),
+        ),
+    )
+    required = []
+
+    class Authority:
+        def require(self, principal, owner, action, resource):
+            required.append(
+                ExactGrant(owner=owner, action=action, exact_resource=resource)
+            )
+            return SimpleNamespace()
+
+    class Repository:
+        def read_revision_for_workbench(self, *args, **kwargs):
+            return {
+                "revision": revision.record,
+                "digest": revision.digest,
+                "lifecycleState": "DRAFT",
+                "publicationState": "NOT_PUBLISHED",
+            }
+
+        def decide_for_workbench(self, connection, *args, **kwargs):
+            assert kwargs["authorized"] is True
+            return {
+                "revision": revision.record,
+                "digest": revision.digest,
+                "aggregateVersion": 2,
+                "lifecycleState": "VALIDATED",
+            }
+
+    result = EmployeeDefinitionCommandOwnerAdapter(Repository())(
+        command_call(
+            "VALIDATE_EMPLOYEE_REVISION",
+            {
+                "employeeDefinitionDigest": revision.digest,
+                "expectedVersion": 1,
+                "commandId": "employee-command:validate",
+            },
+            action="VALIDATE",
+            path={
+                "employee_definition_id": revision.definition_id,
+                "revision_id": revision.revision_id,
+            },
+            repository_authority=Authority(),
+        )
+    )
+
+    assert required == [
+        ExactGrant(
+            "AGENT",
+            "READ",
+            "agent:agent-definition:quality:agent-revision:v1",
+        )
+    ]
+    assert result["lifecycleState"] == "VALIDATED"
+    assert result["aggregateVersion"] == 2
+
+
+def test_employee_lifecycle_preserves_member_authorization_denial() -> None:
+    revision = EmployeeRevision(
+        ScopeIdentity("tenant-a", "quality"),
+        "employee-definition:quality",
+        "employee-revision:v1",
+        "Quality owner",
+        ("Review quality",),
+        (
+            CompositionMember(
+                MemberKind.AGENT,
+                "agent-definition:quality",
+                "agent-revision:v1",
+                "a" * 64,
+            ),
+        ),
+    )
+
+    class Repository:
+        def read_revision_for_workbench(self, *args, **kwargs):
+            return {
+                "revision": revision.record,
+                "digest": revision.digest,
+                "lifecycleState": "DRAFT",
+                "publicationState": "NOT_PUBLISHED",
+            }
+
+    class DeniedAuthority:
+        def require(self, *args):
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+
+    call_value = command_call(
+        "VALIDATE_EMPLOYEE_REVISION",
+        {
+            "employeeDefinitionDigest": revision.digest,
+            "expectedVersion": 1,
+            "commandId": "employee-command:validate-denied",
+        },
+        action="VALIDATE",
+        path={
+            "employee_definition_id": revision.definition_id,
+            "revision_id": revision.revision_id,
+        },
+        repository_authority=DeniedAuthority(),
+    )
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+        EmployeeDefinitionCommandOwnerAdapter(Repository())(call_value)
 
 
 @pytest.mark.parametrize(

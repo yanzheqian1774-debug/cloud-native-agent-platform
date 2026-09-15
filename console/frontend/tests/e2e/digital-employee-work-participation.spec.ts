@@ -93,12 +93,29 @@ type AdapterOptions = {
   onPlacement?: (route: Route) => Promise<void>;
   onCreate?: (route: Route) => Promise<void>;
   onLifecycle?: (route: Route, action: "VALIDATE" | "APPROVE" | "PUBLISH") => Promise<void>;
+  onGrantRequest?: (route: Route) => Promise<void>;
+  onGrantInspect?: (route: Route, requestId: string) => Promise<void>;
+  onGrantDecision?: (route: Route, requestId: string) => Promise<void>;
 };
 
 async function installAdapter(page: Page, options: AdapterOptions = {}) {
   await page.route("**/api/workbench/v1/**", async route => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    const grantDecision = path.match(/\/authorization\/grant-requests\/([^/]+)\/decisions$/);
+    if (grantDecision && route.request().method() === "POST") {
+      if (options.onGrantDecision) return options.onGrantDecision(route, decodeURIComponent(grantDecision[1]));
+      return route.fulfill({ status: 201, json: { schemaVersion: "exact-grant-decision-result.v1", requestId: decodeURIComponent(grantDecision[1]), decisionId: "grant-decision:test", state: "APPROVED", aggregateVersion: 2, decidedAt: "2026-09-14T22:00:00Z", expiresAt: "2026-09-14T23:00:00Z" } });
+    }
+    const grantInspect = path.match(/\/authorization\/grant-requests\/([^/]+)$/);
+    if (grantInspect && route.request().method() === "GET") {
+      if (options.onGrantInspect) return options.onGrantInspect(route, decodeURIComponent(grantInspect[1]));
+      return route.fulfill({ json: { requestId: decodeURIComponent(grantInspect[1]), state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["CREATE"] } });
+    }
+    if (path.endsWith("/authorization/grant-requests") && route.request().method() === "POST") {
+      if (options.onGrantRequest) return options.onGrantRequest(route);
+      return route.fulfill({ status: 202, json: { requestId: "grant-request:test", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["CREATE"] } });
+    }
     if (path.endsWith("/session")) {
       if (options.onSession) return options.onSession(route);
       return route.fulfill({ json: {
@@ -493,6 +510,80 @@ test("TEST_ADAPTER revoked CREATE is a controlled rejection", async ({ page }) =
   await expect(page.getByRole("button", { name: "确认创建" })).toBeEnabled();
 });
 
+test("TEST_ADAPTER requests formal CREATE authority and resumes the frozen command", async ({ page }) => {
+  const commands: string[] = [];
+  let grantBody: Record<string, unknown> | null = null;
+  await installAdapter(page, {
+    onCreate: async route => {
+      commands.push(route.request().postData() ?? "");
+      if (commands.length === 1) return route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } });
+      const body = route.request().postDataJSON();
+      return route.fulfill({ status: 201, json: envelope({ resourceKind: "DIGITAL_EMPLOYEE_DEFINITION", employeeDefinitionId: body.employeeDefinitionId, employeeDefinitionRevisionId: body.employeeDefinitionRevisionId, employeeDefinitionDigest: digest("n"), aggregateVersion: 1, lifecycleState: "DRAFT" }) });
+    },
+    onGrantRequest: async route => {
+      grantBody = route.request().postDataJSON();
+      await route.fulfill({ status: 202, json: { requestId: "grant-request:create", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["CREATE"] } });
+    },
+    onGrantInspect: async route => route.fulfill({ json: { requestId: "grant-request:create", state: "APPROVED", aggregateVersion: 2, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["CREATE"] } }),
+  });
+  await page.goto("/digital-employees");
+  await fillCreateForm(page);
+  await page.getByRole("button", { name: "确认创建" }).click();
+  await expect(page.getByLabel("数字员工权限申请")).toContainText("申请数字员工创建权限");
+  await page.getByRole("button", { name: "提交正式权限申请" }).click();
+  await expect(page.getByLabel("数字员工权限申请")).toContainText("等待独立管理员决定");
+  await page.getByRole("button", { name: "刷新权限状态并继续" }).click();
+  await expect(page.getByRole("region", { name: "选中员工详情" })).toContainText("供应商质量负责人");
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).toBe(commands[0]);
+  expect(grantBody).toMatchObject({ schemaVersion: "exact-grant-request.v1", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedGrants: [{ owner: "EMPLOYEE", action: "CREATE", resource: "employee:collection" }], continuationIds: [] });
+});
+
+test("TEST_ADAPTER lifecycle authority includes exact Employee and Agent reads", async ({ page }) => {
+  const commands: string[] = [];
+  let requested: { requestedGrants?: unknown[] } = {};
+  await installAdapter(page, {
+    onDefinition: async route => route.fulfill({ json: envelope({ ...employee, publicationState: "NOT_PUBLISHED", lifecycleState: "DRAFT" }) }),
+    onLifecycle: async (route, action) => {
+      commands.push(route.request().postData() ?? "");
+      if (commands.length === 1) return route.fulfill({ status: 404, json: { reasonCode: "EMPLOYEE_NOT_FOUND" } });
+      const body = route.request().postDataJSON();
+      return route.fulfill({ json: envelope({ resourceKind: "DIGITAL_EMPLOYEE_DEFINITION", employeeDefinitionId: employee.employeeDefinitionId, employeeDefinitionRevisionId: employee.employeeDefinitionRevisionId, employeeDefinitionDigest: employee.employeeDefinitionDigest, aggregateVersion: body.expectedVersion + 1, lifecycleState: action === "VALIDATE" ? "VALIDATED" : "APPROVED" }) });
+    },
+    onGrantRequest: async route => {
+      requested = route.request().postDataJSON();
+      await route.fulfill({ status: 202, json: { requestId: "grant-request:validate", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["VALIDATE", "READ"] } });
+    },
+    onGrantInspect: async route => route.fulfill({ json: { requestId: "grant-request:validate", state: "APPROVED", aggregateVersion: 2, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["VALIDATE", "READ"] } }),
+  });
+  await page.goto("/digital-employees");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
+  await page.getByLabel("期望聚合版本").fill("1");
+  await page.getByRole("button", { name: /校验修订/ }).click();
+  await page.getByRole("button", { name: "确认提交" }).click();
+  await page.getByRole("button", { name: "提交正式权限申请" }).click();
+  await page.getByRole("button", { name: "刷新权限状态并继续" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "校验修订已确认" })).toBeVisible();
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).toBe(commands[0]);
+  expect(requested.requestedGrants).toEqual([
+    { owner: "EMPLOYEE", action: "VALIDATE", resource: "employee:employee:quality:aggregate" },
+    { owner: "EMPLOYEE", action: "READ", resource: "employee:employee:quality:employee-revision:1" },
+    { owner: "AGENT", action: "READ", resource: "agent:agent:quality:agent-revision:1" },
+  ]);
+});
+
+test("TEST_ADAPTER independent administrator cannot hide self-decision denial", async ({ page }) => {
+  await installAdapter(page, {
+    onGrantInspect: async route => route.fulfill({ json: { requestId: "grant-request:self", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["CREATE"] } }),
+    onGrantDecision: async route => route.fulfill({ status: 409, json: { reasonCode: "GRANT_SELF_APPROVAL_PROHIBITED" } }),
+  });
+  await page.goto("/authorization-admin?request=grant-request%3Aself");
+  await page.getByRole("button", { name: "检查授权申请" }).click();
+  await page.getByRole("button", { name: "批准精确权限" }).click();
+  await expect(page.getByRole("alert")).toContainText("不能作出独立决定");
+});
+
 test("TEST_ADAPTER double click emits only one CREATE command", async ({ page }) => {
   let creates = 0;
   await installAdapter(page, {
@@ -709,7 +800,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
   await fillCreateForm(page);
   await placeBadge(".employee-assembly");
-  await expect(page.getByText("部分实现 · 正式权限路径待接通")).toBeVisible();
+  await expect(page.getByText("正式权限申请与恢复已接通")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("mobile-create-test-adapter.png") });
   await placeBadge(".employee-command-confirmation");
   await page.screenshot({ path: testInfo.outputPath("mobile-create-actions-test-adapter.png") });

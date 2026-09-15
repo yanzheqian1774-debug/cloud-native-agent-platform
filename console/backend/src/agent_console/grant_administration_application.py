@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -60,6 +61,7 @@ class GrantDecisionCommand:
     not_before: datetime | None
     expires_at: datetime | None
     idempotency_key: str
+    expected_version: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,14 @@ class GrantRevocationCommand:
     reason_category: str
     idempotency_key: str
     surrender: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AvailableContinuation:
+    continuation_id: str
+    purpose: str
+    expires_at: datetime
+    requestable_actions: tuple[str, ...]
 
 
 class GenerationAuthorizationReader(CurrentAuthorizationReader):
@@ -278,6 +288,8 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
 
 
 class GrantAdministrationService:
+    _CONTINUATION_REFERENCE_PREFIX = "continuation-ref."
+
     def __init__(
         self,
         repository: GrantAdministrationRepository,
@@ -367,9 +379,27 @@ class GrantAdministrationService:
         if command.continuation is not None:
             if self.continuation_owner is None:
                 raise AuthorityError("CONTINUATION_INVALID")
-            claim = self.continuation_owner.resolve_continuation(
-                command.continuation, now=now
-            )
+            if command.continuation.startswith(self._CONTINUATION_REFERENCE_PREFIX):
+                continuation_digest = command.continuation.removeprefix(
+                    self._CONTINUATION_REFERENCE_PREFIX
+                )
+                if len(continuation_digest) != 64 or any(
+                    char not in "0123456789abcdef" for char in continuation_digest
+                ):
+                    raise AuthorityError("CONTINUATION_INVALID")
+                claim = self.repository.resolve_continuation_offer(
+                    continuation_digest,
+                    context,
+                    now=now,
+                    recovery_epoch=self.recovery_epoch,
+                )
+            else:
+                claim = self.continuation_owner.resolve_continuation(
+                    command.continuation, now=now
+                )
+                continuation_digest = hashlib.sha256(
+                    command.continuation.encode()
+                ).hexdigest()
             if (
                 claim.subject_principal_id != context.principal_id
                 or claim.scope != context.scope
@@ -382,9 +412,6 @@ class GrantAdministrationService:
             ):
                 raise AuthorityError("CONTINUATION_INVALID")
             members = claim.members
-            continuation_digest = hashlib.sha256(
-                command.continuation.encode()
-            ).hexdigest()
 
             def target_validation(connection: object) -> bool:
                 return self.target_validator is not None and (
@@ -446,40 +473,68 @@ class GrantAdministrationService:
             "DECIDE",
             f"grant-scope:{context.scope.tenant_id}:{context.scope.security_domain}",
         )
-        self._require(context, meta)
+        if not self.authorization.has_current_grant(
+            context,
+            meta,
+            now=self.clock(),
+            generation=self.generation.generation,
+            recovery_epoch=self.recovery_epoch,
+        ):
+            raise AuthorityError("AUTHORIZATION_REQUEST_NOT_FOUND")
         self._validate_idempotency_key(command.idempotency_key)
+        if command.expected_version < 1:
+            raise AuthorityError("INVALID_GRANT_DECISION")
         require_bounded_label(
             command.reason_category, reason_code="INVALID_GRANT_DECISION"
         )
-        require_bounded_label(command.basis_type, reason_code="INVALID_GRANT_DECISION")
-        if not command.basis_reference or len(command.basis_reference) > 512:
+        basis_types = {"TICKET": "TICKET", "POLICY": "POLICY"}
+        try:
+            basis_type = basis_types[command.basis_type]
+        except KeyError as exc:
+            raise AuthorityError("INVALID_GRANT_DECISION") from exc
+        if (
+            not command.basis_reference
+            or len(command.basis_reference) > 512
+            or command.basis_reference.strip() != command.basis_reference
+            or any(
+                unicodedata.category(character).startswith("C")
+                for character in command.basis_reference
+            )
+        ):
             raise AuthorityError("INVALID_GRANT_DECISION")
-        request = self.repository.inspect_request(command.request_id)
-        if request.scope != context.scope:
-            raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
-        if request.subject_principal_id == context.principal_id:
-            raise AuthorityError("GRANT_SELF_APPROVAL_PROHIBITED")
         now = self.clock()
         if command.approve:
             if (
-                command.not_before is None
-                or command.expires_at is None
-                or command.not_before < now
-                or command.not_before >= command.expires_at
+                command.expires_at is None
+                or (
+                    command.not_before is not None
+                    and command.not_before.utcoffset() != timedelta(0)
+                )
+                or command.expires_at.utcoffset() != timedelta(0)
+                or (
+                    command.not_before is not None
+                    and (
+                        command.not_before < now
+                        or command.not_before >= command.expires_at
+                        or command.expires_at - command.not_before > timedelta(hours=8)
+                    )
+                )
             ):
                 raise AuthorityError("INVALID_GRANT_DECISION")
         elif command.not_before is not None or command.expires_at is not None:
             raise AuthorityError("INVALID_GRANT_DECISION")
         decision_id = self.identity_factory("grant-decision")
         basis_digest = canonical_digest(
-            {"type": command.basis_type, "reference": command.basis_reference}
+            {"type": basis_type, "reference": command.basis_reference}
         )
         payload_digest = canonical_digest(
             {
                 "requestId": command.request_id,
-                "approve": command.approve,
-                "reason": command.reason_category,
-                "basisDigest": basis_digest,
+                "expectedVersion": command.expected_version,
+                "decision": "APPROVE" if command.approve else "REJECT",
+                "reasonCategory": command.reason_category,
+                "basisType": basis_type,
+                "basisReference": command.basis_reference,
                 "notBefore": (
                     command.not_before.isoformat() if command.not_before else None
                 ),
@@ -488,16 +543,21 @@ class GrantAdministrationService:
                 ),
             }
         )
+        request = self.repository.inspect_request_for(
+            command.request_id,
+            context,
+            administrator_authorized=True,
+        )
         decision = GrantDecision(
             decision_id=decision_id,
-            request_id=request.request_id,
+            request_id=command.request_id,
             issuer_principal_id=context.principal_id,
             issuer_meta_decision_id=(
                 f"static-meta:{self.generation.generation}:{context.principal_id}"
             ),
             approved=command.approve,
             reason_category=command.reason_category,
-            basis_type=command.basis_type,
+            basis_type=basis_type,
             basis_reference_digest=basis_digest,
             policy_version=self.generation.policy_version,
             audit_source=self.generation.audit_source,
@@ -519,6 +579,8 @@ class GrantAdministrationService:
         return self.repository.decide_request(
             decision,
             grants=grant_rows,
+            issuer_scope=context.scope,
+            expected_version=command.expected_version,
             expected_status=GrantRequestStatus.PENDING,
             idempotency_key=command.idempotency_key,
             payload_digest=payload_digest,
@@ -648,12 +710,38 @@ class GrantAdministrationService:
         return self.continuation_owner.mint(persisted)
 
     def continuation_inbox(self, context: TrustedRequestContext) -> tuple[str, ...]:
+        return tuple(
+            item.continuation_id for item in self.continuation_inbox_details(context)
+        )
+
+    def continuation_inbox_details(
+        self, context: TrustedRequestContext
+    ) -> tuple[AvailableContinuation, ...]:
+        """Return only subject-facing metadata accepted by the public inbox."""
         if self.continuation_owner is None:
             raise AuthorityError("CONTINUATION_INVALID")
+        now = self.clock()
         offers = self.repository.list_continuation_offers(
-            context, now=self.clock(), recovery_epoch=self.recovery_epoch
+            context, now=now, recovery_epoch=self.recovery_epoch
         )
-        return tuple(self.continuation_owner.mint(claim) for claim in offers)
+        return tuple(
+            AvailableContinuation(
+                continuation_id=(
+                    self._CONTINUATION_REFERENCE_PREFIX
+                    + hashlib.sha256(
+                        self.continuation_owner.mint(claim).encode()
+                    ).hexdigest()
+                ),
+                purpose=claim.purpose,
+                expires_at=claim.expires_at,
+                requestable_actions=tuple(
+                    dict.fromkeys(member.action for member in claim.members)
+                ),
+            )
+            for claim in offers
+            if claim.policy_generation == self.generation.generation
+            and claim.issued_at <= now < claim.expires_at
+        )
 
     def revoke_grant(
         self, context: TrustedRequestContext, command: GrantRevocationCommand

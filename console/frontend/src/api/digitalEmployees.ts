@@ -62,6 +62,32 @@ export type EmployeeCommandResult = {
   lifecycleState: EmployeeLifecycleState;
 };
 
+export type ExactGrantRequest = {
+  owner: "EMPLOYEE" | "AGENT";
+  action: "CREATE" | "READ" | "VALIDATE" | "APPROVE" | "PUBLISH";
+  resource: string;
+};
+
+export type GrantRequestStatus = {
+  requestId: string;
+  state: "PENDING" | "APPROVED" | "REJECTED";
+  aggregateVersion: number;
+  submittedAt: string;
+  purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE";
+  requestedActions: string[];
+};
+
+export type GrantDecisionResult = {
+  schemaVersion: "exact-grant-decision-result.v1";
+  requestId: string;
+  decisionId: string;
+  state: "APPROVED" | "REJECTED";
+  aggregateVersion: number;
+  decidedAt: string;
+  notBefore?: string;
+  expiresAt?: string;
+};
+
 export type AgentDefinitionSummary = {
   definitionId: string;
   name: string;
@@ -274,6 +300,46 @@ async function command<T>(
   return (body as WorkbenchEnvelope<T>).result;
 }
 
+async function authorizationCommand<T>(
+  path: string,
+  payload: object,
+  idempotencyKey: string,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  const session = await getWorkbenchSession(signal);
+  if (workbenchPrincipalKey(session) !== expectedPrincipalKey) {
+    throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED", 409);
+  }
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      signal,
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-csrf-token": session.csrfToken,
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new DigitalEmployeeRequestError("AUTHORIZATION_RESULT_UNKNOWN", 503, true);
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new DigitalEmployeeRequestError(
+      body?.reasonCode ?? "AUTHORIZATION_REQUEST_REJECTED",
+      response.status,
+      response.status >= 500,
+    );
+  }
+  return body as T;
+}
+
 const root = "/api/workbench/v1";
 
 function pageQuery(cursor?: string, pageSize = 50): string {
@@ -352,6 +418,72 @@ export const publishEmployeeDefinition = (
   expectedPrincipalKey: string,
   signal?: AbortSignal,
 ) => lifecycleCommand("publication", id, revisionId, payload, expectedPrincipalKey, signal);
+
+export const submitEmployeeGrantRequest = (
+  grants: ExactGrantRequest[],
+  idempotencyKey: string,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) => authorizationCommand<GrantRequestStatus>(
+  `${root}/authorization/grant-requests`,
+  {
+    schemaVersion: "exact-grant-request.v1",
+    purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE",
+    requestedGrants: grants,
+    continuationIds: [],
+  },
+  idempotencyKey,
+  expectedPrincipalKey,
+  signal,
+);
+
+export async function inspectEmployeeGrantRequest(
+  requestId: string,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+): Promise<GrantRequestStatus> {
+  const session = await getWorkbenchSession(signal);
+  if (workbenchPrincipalKey(session) !== expectedPrincipalKey) {
+    throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED", 409);
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${root}/authorization/grant-requests/${encodeURIComponent(requestId)}`, {
+      signal,
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new DigitalEmployeeRequestError("WORKBENCH_NETWORK_UNAVAILABLE", 503);
+  }
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new DigitalEmployeeRequestError(body?.reasonCode ?? "AUTHORIZATION_REQUEST_NOT_FOUND", response.status);
+  }
+  return body as GrantRequestStatus;
+}
+
+export const decideEmployeeGrantRequest = (
+  requestId: string,
+  payload: {
+    expectedVersion: number;
+    decision: "APPROVE" | "REJECT";
+    reasonCategory: string;
+    basisType: "TICKET" | "POLICY";
+    basisReference: string;
+    expiresAt?: string;
+  },
+  idempotencyKey: string,
+  expectedPrincipalKey: string,
+  signal?: AbortSignal,
+) => authorizationCommand<GrantDecisionResult>(
+  `${root}/authorization/grant-requests/${encodeURIComponent(requestId)}/decisions`,
+  { schemaVersion: "exact-grant-decision.v1", ...payload },
+  idempotencyKey,
+  expectedPrincipalKey,
+  signal,
+);
 
 export const getEmployeeInstance = (id: string, signal?: AbortSignal) =>
   request<EmployeeInstance>(`${root}/instances/${encodeURIComponent(id)}`, signal);

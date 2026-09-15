@@ -165,6 +165,7 @@ def test_workbench_repository_read_is_exact_minimal_and_digest_checked() -> None
     assert result == {
         "revision": value.record,
         "digest": value.digest,
+        "lifecycleState": "DRAFT",
         "publicationState": "NOT_PUBLISHED",
     }
     assert len(connection.calls) == 2

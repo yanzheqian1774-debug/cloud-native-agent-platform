@@ -43,6 +43,14 @@ class AgentDefinitionRepository(Protocol):
         authorized: bool,
     ) -> dict[str, Any]: ...
 
+    def is_known_grant_target_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        action: str,
+        exact_resource: str,
+    ) -> bool: ...
+
     def list_published_for_workbench(
         self,
         connection: Any,
@@ -98,6 +106,25 @@ class InMemoryAgentDefinitionRepository:
                 for key, item in sorted(self._records.items())
                 if key[:2] == (scope.namespace, scope.security_domain)
             ]
+
+    def is_known_grant_target_for_workbench(
+        self,
+        connection: Any,
+        scope: DefinitionScope,
+        action: str,
+        exact_resource: str,
+    ) -> bool:
+        del connection
+        if action != "READ":
+            return False
+        with self._lock:
+            return any(
+                exact_resource
+                == f"agent:{record['definitionId']}:{revision['revisionId']}"
+                for key, record in self._records.items()
+                if key[:2] == (scope.namespace, scope.security_domain)
+                for revision in record.get("revisions", ())
+            )
 
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         scope = DefinitionScope(record["namespace"], record["securityDomain"])

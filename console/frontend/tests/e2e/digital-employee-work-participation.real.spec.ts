@@ -11,6 +11,7 @@ const controlURL = required("S5_310_CONTROL_URL");
 const controlToken = required("S5_310_CONTROL_TOKEN");
 const credentials = {
   full: required("S5_310_FULL_CREDENTIAL"),
+  admin: required("S5_310_ADMIN_CREDENTIAL"),
   list: required("S5_310_LIST_CREDENTIAL"),
   wrongScope: required("S5_310_WRONG_SCOPE_CREDENTIAL"),
   wrongGrant: required("S5_310_WRONG_GRANT_CREDENTIAL"),
@@ -21,10 +22,11 @@ type BrowserObservations = {
   privateRequests: string[];
   observePrivateRequests: boolean;
 };
-type LoginKind = "FULL" | "LISTER" | "WRONG_SCOPE" | "WRONG_GRANT";
+type LoginKind = "FULL" | "ADMIN" | "LISTER" | "WRONG_SCOPE" | "WRONG_GRANT";
 const sessionURL = new URL("/api/workbench/v1/session", baseURL);
 const loginIdentities = {
   FULL: { principalId: "human:alice", tenantId: "tenant-a", securityDomain: "quality" },
+  ADMIN: { principalId: "human:admin", tenantId: "tenant-a", securityDomain: "quality" },
   LISTER: { principalId: "human:lister", tenantId: "tenant-a", securityDomain: "quality" },
   WRONG_SCOPE: { principalId: "human:wrongscope", tenantId: "tenant-b", securityDomain: "quality" },
   WRONG_GRANT: { principalId: "human:wronggrant", tenantId: "tenant-a", securityDomain: "quality" },
@@ -49,6 +51,7 @@ const employeeListSteps = {
 } as const;
 const loginSteps = {
   FULL: ["FULL_LOGIN_FORM", "FULL_LOGIN_SUBMIT_REDIRECT", "FULL_SESSION_READY"],
+  ADMIN: ["ADMIN_LOGIN_FORM", "ADMIN_LOGIN_SUBMIT_REDIRECT", "ADMIN_SESSION_READY"],
   LISTER: ["LISTER_LOGIN_FORM", "LISTER_LOGIN_SUBMIT_REDIRECT", "LISTER_SESSION_READY"],
   WRONG_SCOPE: ["WRONG_SCOPE_LOGIN_FORM", "WRONG_SCOPE_LOGIN_SUBMIT_REDIRECT", "WRONG_SCOPE_SESSION_READY"],
   WRONG_GRANT: ["WRONG_GRANT_LOGIN_FORM", "WRONG_GRANT_LOGIN_SUBMIT_REDIRECT", "WRONG_GRANT_SESSION_READY"],
@@ -174,6 +177,29 @@ async function browserFetch(page: Page, path: string) {
   }, path);
 }
 
+async function browserCommand(
+  page: Page,
+  path: string,
+  csrfToken: string,
+  body: unknown,
+  idempotencyKey?: string,
+) {
+  return page.evaluate(async ({ valuePath, token, valueBody, key }) => {
+    const response = await fetch(valuePath, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-csrf-token": token,
+        ...(key ? { "idempotency-key": key } : {}),
+      },
+      body: JSON.stringify(valueBody),
+    });
+    return { status: response.status, body: await response.json() };
+  }, { valuePath: path, token: csrfToken, valueBody: body, key: idempotencyKey });
+}
+
 test("REAL_SERVICE trusted Digital Employee reads preserve authorization and identity", async ({ browser }) => {
   const observations: BrowserObservations = {
     identityHeaders: [],
@@ -296,7 +322,173 @@ test("REAL_SERVICE trusted Digital Employee reads preserve authorization and ide
       } },
     });
   });
+
+  await test.step("FORMAL_EMPLOYEE_PERMISSION_WRITE_JOURNEY", async () => {
+    const employeeId = "employee-definition:browser-formal-quality";
+    const revisionId = "employee-revision:browser-formal-quality:1";
+    const employeePath = `/api/workbench/v1/employees/${encodeURIComponent(employeeId)}`
+      + `/revisions/${encodeURIComponent(revisionId)}`;
+    const applicantSession = await browserFetch(full.page, "/api/workbench/v1/session");
+    expect(applicantSession.status).toBe(200);
+    const createCommand = {
+      employeeDefinitionId: employeeId,
+      employeeDefinitionRevisionId: revisionId,
+      role: "Browser formal quality owner",
+      responsibilities: ["Verify the native HTTPS permission write journey"],
+      members: [{
+        kind: "AGENT",
+        resourceId: agentMember.resourceId,
+        revisionId: agentMember.revisionId,
+        digest: agentMember.digest.replace(/^sha256:/, ""),
+      }],
+      expectedVersion: 0,
+      commandId: "employee-command:browser-formal-create",
+    };
+    const deniedCreate = await browserCommand(
+      full.page,
+      "/api/workbench/v1/employees",
+      applicantSession.body.csrfToken,
+      createCommand,
+    );
+    expect(deniedCreate).toMatchObject({
+      status: 404,
+      body: { reasonCode: "AUTHORIZATION_NOT_FOUND" },
+    });
+
+    async function requestAndApprove(grants: Array<{ owner: string; action: string; resource: string }>, key: string) {
+      const requested = await browserCommand(
+        full.page,
+        "/api/workbench/v1/authorization/grant-requests",
+        applicantSession.body.csrfToken,
+        {
+          schemaVersion: "exact-grant-request.v1",
+          purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE",
+          requestedGrants: grants,
+          continuationIds: [],
+        },
+        `browser-request:${key}`,
+      );
+      expect(requested.status).toBe(202);
+      expect(requested.body).toMatchObject({ state: "PENDING", aggregateVersion: 1 });
+
+      const wasObservingPrivateRequests = observations.observePrivateRequests;
+      observations.observePrivateRequests = false;
+      let admin: Awaited<ReturnType<typeof login>>;
+      try {
+        admin = await login(browser, credentials.admin, observations, "ADMIN");
+        await admin.page.waitForLoadState("networkidle");
+      } finally {
+        observations.observePrivateRequests = wasObservingPrivateRequests;
+      }
+      try {
+        const adminSession = await browserFetch(admin.page, "/api/workbench/v1/session");
+        expect(adminSession.status).toBe(200);
+        const inspected = await browserFetch(
+          admin.page,
+          `/api/workbench/v1/authorization/grant-requests/${encodeURIComponent(requested.body.requestId)}`,
+        );
+        expect(inspected).toMatchObject({ status: 200, body: { state: "PENDING", aggregateVersion: 1 } });
+        const decided = await browserCommand(
+          admin.page,
+          `/api/workbench/v1/authorization/grant-requests/${encodeURIComponent(requested.body.requestId)}/decisions`,
+          adminSession.body.csrfToken,
+          {
+            schemaVersion: "exact-grant-decision.v1",
+            expectedVersion: 1,
+            decision: "APPROVE",
+            reasonCategory: "ASSIGNED_BUSINESS_DUTY",
+            basisType: "TICKET",
+            basisReference: `S5-V023-IMPL-310:${key}`,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          },
+          `browser-decision:${key}`,
+        );
+        expect(decided).toMatchObject({ status: 201, body: { state: "APPROVED", aggregateVersion: 2 } });
+      } finally {
+        await admin.context.close();
+      }
+      const recovered = await browserFetch(
+        full.page,
+        `/api/workbench/v1/authorization/grant-requests/${encodeURIComponent(requested.body.requestId)}`,
+      );
+      expect(recovered).toMatchObject({ status: 200, body: { state: "APPROVED", aggregateVersion: 2 } });
+    }
+
+    await requestAndApprove(
+      [{ owner: "EMPLOYEE", action: "CREATE", resource: "employee:collection" }],
+      "create",
+    );
+    const created = await browserCommand(
+      full.page,
+      "/api/workbench/v1/employees",
+      applicantSession.body.csrfToken,
+      createCommand,
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.result).toMatchObject({
+      employeeDefinitionId: employeeId,
+      employeeDefinitionRevisionId: revisionId,
+      lifecycleState: "DRAFT",
+      aggregateVersion: 1,
+    });
+    expect(await browserFetch(full.page, employeePath)).toMatchObject({
+      status: 404,
+      body: { reasonCode: "AUTHORIZATION_NOT_FOUND" },
+    });
+
+    const aggregate = `employee:${employeeId}:aggregate`;
+    const employeeRead = `employee:${employeeId}:${revisionId}`;
+    const agentRead = `agent:${agentMember.resourceId}:${agentMember.revisionId}`;
+    await requestAndApprove([
+      { owner: "EMPLOYEE", action: "READ", resource: employeeRead },
+      { owner: "AGENT", action: "READ", resource: agentRead },
+      { owner: "EMPLOYEE", action: "VALIDATE", resource: aggregate },
+      { owner: "EMPLOYEE", action: "APPROVE", resource: aggregate },
+      { owner: "EMPLOYEE", action: "PUBLISH", resource: aggregate },
+    ], "lifecycle");
+    const readable = await browserFetch(full.page, employeePath);
+    expect(readable).toMatchObject({ status: 200, body: { result: { lifecycleState: "DRAFT" } } });
+    const commandBase = {
+      employeeDefinitionDigest: created.body.result.employeeDefinitionDigest,
+    };
+    const validated = await browserCommand(
+      full.page,
+      `${employeePath}/validation`,
+      applicantSession.body.csrfToken,
+      { ...commandBase, expectedVersion: 1, commandId: "employee-command:browser-formal-validate" },
+    );
+    expect(validated).toMatchObject({ status: 200, body: { result: { lifecycleState: "VALIDATED", aggregateVersion: 2 } } });
+    const approved = await browserCommand(
+      full.page,
+      `${employeePath}/approvals`,
+      applicantSession.body.csrfToken,
+      { ...commandBase, expectedVersion: 2, commandId: "employee-command:browser-formal-approve" },
+    );
+    expect(approved).toMatchObject({ status: 200, body: { result: { lifecycleState: "APPROVED", aggregateVersion: 3 } } });
+    const published = await browserCommand(
+      full.page,
+      `${employeePath}/publication`,
+      applicantSession.body.csrfToken,
+      { ...commandBase, expectedVersion: 3, commandId: "employee-command:browser-formal-publish" },
+    );
+    expect(published).toMatchObject({ status: 200, body: { result: { lifecycleState: "PUBLISHED", aggregateVersion: 4 } } });
+
+    await full.page.goto(`${baseURL}/digital-employees`);
+    await full.page.reload();
+    const formalEmployee = full.page.getByRole("button", { name: /Browser formal quality owner/ });
+    await expect(formalEmployee).toBeVisible();
+    await formalEmployee.click();
+    await expect(full.page.locator(".employee-detail-context")).toContainText("已发布");
+    await full.page.screenshot({ path: test.info().outputPath("pc-formal-published-reload.png") });
+    expect(await browserFetch(full.page, employeePath)).toMatchObject({
+      status: 200,
+      body: { result: { lifecycleState: "PUBLISHED", publicationState: "PUBLISHED" } },
+    });
+  });
   await test.step("EMPLOYEE_DETAIL_RENDER", async () => {
+    await employeeButton.click();
+    await expect(full.page.locator(".employee-detail-context")).toContainText("Supplier quality owner");
+    await full.page.getByRole("button", { name: "职责与能力", exact: true }).click();
     const employeeDetail = full.page.locator(".px-object-detail");
     await expect(full.page.locator(".employee-detail-context")).toContainText("已发布");
     await employeeDetail.getByText("当前员工修订身份", { exact: true }).click();

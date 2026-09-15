@@ -150,6 +150,7 @@ class GrantRequest:
     purpose: str
     status: GrantRequestStatus
     created_at: datetime
+    aggregate_version: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +167,10 @@ class GrantDecision:
     audit_source: str
     created_at: datetime
     grants: tuple[GrantId, ...] = ()
+    request_aggregate_version: int | None = None
+    not_before: datetime | None = None
+    expires_at: datetime | None = None
+    replayed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +283,15 @@ class GrantAdministrationRepository(Protocol):
         recovery_epoch: int,
     ) -> tuple[ContinuationClaim, ...]: ...
 
+    def resolve_continuation_offer(
+        self,
+        continuation_digest: str,
+        context: TrustedRequestContext,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+    ) -> ContinuationClaim: ...
+
     def submit_request(
         self,
         request: GrantRequest,
@@ -294,7 +308,9 @@ class GrantAdministrationRepository(Protocol):
         self,
         decision: GrantDecision,
         *,
-        grants: Sequence[tuple[GrantId, ExactGrant, datetime, datetime]],
+        grants: Sequence[tuple[GrantId, ExactGrant, datetime | None, datetime]],
+        issuer_scope: AuthorityScope,
+        expected_version: int,
         expected_status: GrantRequestStatus,
         idempotency_key: str,
         payload_digest: str,

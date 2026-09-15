@@ -91,6 +91,7 @@ jobs:
           S5_310_CONTROL_URL: http://127.0.0.1:18444
           S5_310_CONTROL_TOKEN: discovery-only
           S5_310_FULL_CREDENTIAL: discovery-only
+          S5_310_ADMIN_CREDENTIAL: discovery-only
           S5_310_LIST_CREDENTIAL: discovery-only
           S5_310_WRONG_SCOPE_CREDENTIAL: discovery-only
           S5_310_WRONG_GRANT_CREDENTIAL: discovery-only
@@ -148,11 +149,12 @@ jobs:
           trap cleanup EXIT INT TERM
 
           full_credential="$(openssl rand -hex 32)"
+          admin_credential="$(openssl rand -hex 32)"
           list_credential="$(openssl rand -hex 32)"
           wrong_scope_credential="$(openssl rand -hex 32)"
           wrong_grant_credential="$(openssl rand -hex 32)"
           control_token="$(openssl rand -hex 32)"
-          for secret in "$full_credential" "$list_credential" "$wrong_scope_credential" "$wrong_grant_credential" "$control_token"; do
+          for secret in "$full_credential" "$admin_credential" "$list_credential" "$wrong_scope_credential" "$wrong_grant_credential" "$control_token"; do
             echo "::add-mask::$secret"
           done
           printf '%s' "$control_token" > "$token_path"
@@ -173,6 +175,7 @@ jobs:
             --control-token-file "$token_path" \
             --startup-status "$startup_status" \
             --full-credential-sha256 "$(digest "$full_credential")" \
+            --admin-credential-sha256 "$(digest "$admin_credential")" \
             --list-credential-sha256 "$(digest "$list_credential")" \
             --wrong-scope-credential-sha256 "$(digest "$wrong_scope_credential")" \
             --wrong-grant-credential-sha256 "$(digest "$wrong_grant_credential")" \
@@ -212,6 +215,7 @@ jobs:
             S5_310_CONTROL_URL=http://127.0.0.1:18444 \
             S5_310_CONTROL_TOKEN="$control_token" \
             S5_310_FULL_CREDENTIAL="$full_credential" \
+            S5_310_ADMIN_CREDENTIAL="$admin_credential" \
             S5_310_LIST_CREDENTIAL="$list_credential" \
             S5_310_WRONG_SCOPE_CREDENTIAL="$wrong_scope_credential" \
             S5_310_WRONG_GRANT_CREDENTIAL="$wrong_grant_credential" \

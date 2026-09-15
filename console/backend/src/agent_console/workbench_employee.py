@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 from psycopg import Error as PostgresError
 
@@ -12,8 +13,11 @@ from agent_console.digital_employee_application import (
     DigitalEmployeeRepository,
 )
 from agent_console.digital_employee_definition import (
+    CompositionMember,
     EmployeeDefinitionError,
     EmployeeDefinitionRepository,
+    EmployeeRevision,
+    MemberKind,
 )
 from agent_console.execution_domain import ExecutionPersistenceError, ScopeIdentity
 from agent_console.execution_postgres import (
@@ -25,6 +29,9 @@ from agent_console.execution_postgres import (
 )
 from agent_console.workbench_bff import PREFIX, WorkbenchOperation
 from agent_console.workbench_bff_schemas import (
+    WorkbenchCreateEmployeeDefinition,
+    WorkbenchDecideEmployeeDefinition,
+    WorkbenchEmployeeCommandResult,
     WorkbenchEmployeePage,
     WorkbenchEmployeeRevision,
     WorkbenchEmployeeSummary,
@@ -37,6 +44,13 @@ from agent_console.workbench_owner_authorization import (
     WorkbenchOwnerError,
 )
 from agent_console.workbench_pagination import WorkbenchCursorCodec
+
+
+@dataclass(frozen=True, slots=True)
+class _OwnerPrincipal:
+    principal_id: str
+    tenant_id: str
+    security_domain: str
 
 
 class EmployeeDefinitionOwnerAdapter:
@@ -91,8 +105,165 @@ class EmployeeDefinitionOwnerAdapter:
                 }
                 for member in revision["members"]
             ],
+            lifecycleState=value["lifecycleState"],
             publicationState=value["publicationState"],
         ).model_dump(mode="json")
+
+
+class EmployeeDefinitionCommandOwnerAdapter:
+    """Run bounded Employee commands on the authorization transaction."""
+
+    _ACTIONS: ClassVar[dict[str, str]] = {
+        "VALIDATE_EMPLOYEE_REVISION": "VALIDATE",
+        "APPROVE_EMPLOYEE_REVISION": "APPROVE",
+        "PUBLISH_EMPLOYEE_REVISION": "PUBLISH",
+    }
+    _MEMBER_READ_OWNERS: ClassVar[dict[MemberKind, str]] = {
+        MemberKind.AGENT: "AGENT",
+        MemberKind.WORKFLOW: "WORKFLOW",
+    }
+
+    def __init__(self, repository: EmployeeDefinitionRepository) -> None:
+        self.repository = repository
+
+    @staticmethod
+    def _scope(call: AuthorizedOwnerCall) -> ScopeIdentity:
+        return ScopeIdentity(
+            call.context.scope.tenant_id,
+            call.context.scope.security_domain,
+        )
+
+    @staticmethod
+    def _decision_id(call: AuthorizedOwnerCall, action: str, resource: str) -> str:
+        decision = next(
+            (
+                item
+                for item in call.decisions
+                if item.owner == "EMPLOYEE"
+                and item.action == action
+                and item.exact_resource == resource
+            ),
+            None,
+        )
+        if decision is None:
+            raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
+        return decision.decision_id
+
+    @staticmethod
+    def _result(value: dict[str, Any]) -> dict[str, Any]:
+        revision = value["revision"]
+        return WorkbenchEmployeeCommandResult(
+            employeeDefinitionId=revision["definitionId"],
+            employeeDefinitionRevisionId=revision["revisionId"],
+            employeeDefinitionDigest=value["digest"],
+            aggregateVersion=value["aggregateVersion"],
+            lifecycleState=value["lifecycleState"],
+        ).model_dump(mode="json")
+
+    def _require_member_reads(
+        self,
+        call: AuthorizedOwnerCall,
+        revision: EmployeeRevision,
+    ) -> None:
+        principal = _OwnerPrincipal(
+            call.context.principal_id,
+            call.context.scope.tenant_id,
+            call.context.scope.security_domain,
+        )
+        for member in revision.members:
+            owner = self._MEMBER_READ_OWNERS.get(member.kind)
+            if owner is None:
+                raise WorkbenchOwnerError("EMPLOYEE_MEMBER_AUTHORITY_UNAVAILABLE", 409)
+            call.authority.require(
+                principal,
+                owner,
+                "READ",
+                f"{owner.lower()}:{member.resource_id}:{member.revision_id}",
+            )
+
+    def __call__(self, call: AuthorizedOwnerCall) -> dict[str, Any]:
+        scope = self._scope(call)
+        try:
+            if call.operation == "CREATE_EMPLOYEE_REVISION":
+                revision = EmployeeRevision(
+                    scope,
+                    str(call.payload["employeeDefinitionId"]),
+                    str(call.payload["employeeDefinitionRevisionId"]),
+                    str(call.payload["role"]),
+                    tuple(call.payload["responsibilities"]),
+                    tuple(
+                        CompositionMember(
+                            MemberKind(member["kind"]),
+                            member["resourceId"],
+                            member["revisionId"],
+                            member["digest"],
+                        )
+                        for member in call.payload["members"]
+                    ),
+                    call.payload.get("predecessorEmployeeRevisionId"),
+                )
+                value = self.repository.create_for_workbench(
+                    call.connection,
+                    revision,
+                    expected_version=int(call.payload["expectedVersion"]),
+                    decision_id=self._decision_id(
+                        call, "CREATE", "employee:collection"
+                    ),
+                    command_id=str(call.payload["commandId"]),
+                    authorized=True,
+                )
+                return self._result(value)
+
+            action = self._ACTIONS.get(call.operation)
+            if action is None:
+                raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
+            definition_id = call.path["employee_definition_id"]
+            revision_id = call.path["revision_id"]
+            current = self.repository.read_revision_for_workbench(
+                call.connection,
+                scope,
+                definition_id,
+                revision_id,
+                authorized=True,
+            )
+            self._require_member_reads(
+                call, EmployeeRevision.from_record(current["revision"])
+            )
+            resource = f"employee:{definition_id}:aggregate"
+            value = self.repository.decide_for_workbench(
+                call.connection,
+                scope,
+                definition_id,
+                revision_id,
+                str(call.payload["employeeDefinitionDigest"]),
+                action,
+                expected_version=int(call.payload["expectedVersion"]),
+                decision_id=self._decision_id(call, action, resource),
+                command_id=str(call.payload["commandId"]),
+                authorized=True,
+            )
+            return self._result(value)
+        except WorkbenchOwnerError:
+            raise
+        except EmployeeDefinitionError as exc:
+            reason = str(exc)
+            if reason == "EMPLOYEE_RECORD_CORRUPT":
+                reason, status = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE", 503
+            elif reason in {"EMPLOYEE_NOT_FOUND", "BOUND_RESOURCE_NOT_FOUND"}:
+                status = 404
+            elif reason.startswith("INVALID_") or reason in {
+                "PRIMARY_AGENT_CARDINALITY",
+                "DEFAULT_RUNTIME_CARDINALITY",
+                "DUPLICATE_COMPOSITION_MEMBER",
+            }:
+                status = 422
+            else:
+                status = 409
+            raise WorkbenchOwnerError(reason, status) from exc
+        except (PostgresError, KeyError, TypeError) as exc:
+            raise WorkbenchOwnerError(
+                "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE", 503
+            ) from exc
 
 
 class EmployeeDefinitionListOwnerAdapter:
@@ -318,6 +489,23 @@ def _employee_list(context, path, payload, query):
     return (ExactGrant("EMPLOYEE", "LIST", "employee:collection"),)
 
 
+def _employee_create(context, path, payload, query):
+    return (ExactGrant("EMPLOYEE", "CREATE", "employee:collection"),)
+
+
+def _employee_lifecycle(action: str):
+    def build(context, path, payload, query):
+        return (
+            ExactGrant(
+                "EMPLOYEE",
+                action,
+                f"employee:{path['employee_definition_id']}:aggregate",
+            ),
+        )
+
+    return build
+
+
 def _instance_read(context, path, payload, query):
     return (ExactGrant("INSTANCE", "READ", f"instance:{path['instance_id']}"),)
 
@@ -334,6 +522,7 @@ def employee_operations(
     repository: EmployeeDefinitionRepository,
     cursors: WorkbenchCursorCodec,
 ) -> tuple[WorkbenchOperation, ...]:
+    command_handler = EmployeeDefinitionCommandOwnerAdapter(repository)
     return (
         WorkbenchOperation(
             "LIST_EMPLOYEES",
@@ -345,6 +534,16 @@ def employee_operations(
             EmployeeDefinitionListOwnerAdapter(repository, cursors),
         ),
         WorkbenchOperation(
+            "CREATE_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees",
+            WorkbenchCreateEmployeeDefinition,
+            None,
+            _employee_create,
+            command_handler,
+            201,
+        ),
+        WorkbenchOperation(
             "READ_EMPLOYEE_REVISION",
             "GET",
             f"{PREFIX}/employees/{{employee_definition_id}}/revisions/{{revision_id}}",
@@ -352,6 +551,36 @@ def employee_operations(
             None,
             _employee_revision_read,
             EmployeeDefinitionOwnerAdapter(repository),
+        ),
+        WorkbenchOperation(
+            "VALIDATE_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/"
+            "{revision_id}/validation",
+            WorkbenchDecideEmployeeDefinition,
+            None,
+            _employee_lifecycle("VALIDATE"),
+            command_handler,
+        ),
+        WorkbenchOperation(
+            "APPROVE_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/"
+            "{revision_id}/approvals",
+            WorkbenchDecideEmployeeDefinition,
+            None,
+            _employee_lifecycle("APPROVE"),
+            command_handler,
+        ),
+        WorkbenchOperation(
+            "PUBLISH_EMPLOYEE_REVISION",
+            "POST",
+            f"{PREFIX}/employees/{{employee_definition_id}}/revisions/"
+            "{revision_id}/publication",
+            WorkbenchDecideEmployeeDefinition,
+            None,
+            _employee_lifecycle("PUBLISH"),
+            command_handler,
         ),
     )
 

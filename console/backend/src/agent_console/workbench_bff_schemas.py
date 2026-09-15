@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictWorkbenchModel(BaseModel):
@@ -40,6 +40,79 @@ class WorkbenchOperationResponse(StrictWorkbenchModel):
 
 class WorkbenchErrorResponse(StrictWorkbenchModel):
     reasonCode: str = Field(min_length=1, max_length=100)
+
+
+class WorkbenchExactGrant(StrictWorkbenchModel):
+    owner: str = Field(min_length=1, max_length=64)
+    action: str = Field(min_length=1, max_length=64)
+    resource: str = Field(min_length=1, max_length=512)
+
+
+class WorkbenchGrantRequestCommand(StrictWorkbenchModel):
+    schemaVersion: Literal["exact-grant-request.v1"]
+    purpose: str = Field(min_length=1, max_length=64, pattern=r"^[A-Z0-9_]+$")
+    requestedGrants: tuple[WorkbenchExactGrant, ...] = Field(default=(), max_length=32)
+    continuationIds: tuple[str, ...] = Field(default=(), max_length=1)
+
+    @model_validator(mode="after")
+    def require_request_source(self):
+        if bool(self.requestedGrants) == bool(self.continuationIds):
+            raise ValueError("grant request source required")
+        return self
+
+
+class WorkbenchGrantRequestStatus(StrictWorkbenchModel):
+    requestId: str
+    state: Literal["PENDING", "APPROVED", "REJECTED"]
+    aggregateVersion: int = Field(ge=1)
+    submittedAt: datetime
+    purpose: str
+    requestedActions: tuple[str, ...]
+
+
+class WorkbenchGrantDecisionCommand(StrictWorkbenchModel):
+    schemaVersion: Literal["exact-grant-decision.v1"]
+    expectedVersion: int = Field(ge=1)
+    decision: Literal["APPROVE", "REJECT"]
+    reasonCategory: str = Field(min_length=1, max_length=64)
+    basisType: Literal["TICKET", "POLICY"]
+    basisReference: str = Field(min_length=1, max_length=512)
+    notBefore: datetime | None = None
+    expiresAt: datetime | None = None
+
+    @model_validator(mode="after")
+    def require_decision_window(self):
+        if self.decision == "APPROVE" and self.expiresAt is None:
+            raise ValueError("approval expiry required")
+        if self.decision == "REJECT" and (
+            self.notBefore is not None or self.expiresAt is not None
+        ):
+            raise ValueError("rejection window prohibited")
+        return self
+
+
+class WorkbenchGrantDecisionResult(StrictWorkbenchModel):
+    schemaVersion: Literal["exact-grant-decision-result.v1"] = (
+        "exact-grant-decision-result.v1"
+    )
+    requestId: str
+    decisionId: str
+    state: Literal["APPROVED", "REJECTED"]
+    aggregateVersion: int = Field(ge=2)
+    decidedAt: datetime
+    notBefore: datetime | None = None
+    expiresAt: datetime | None = None
+
+
+class WorkbenchAvailableContinuation(StrictWorkbenchModel):
+    continuationId: str = Field(min_length=1)
+    purpose: str
+    expiresAt: datetime
+    requestableActions: tuple[str, ...]
+
+
+class WorkbenchContinuationInbox(StrictWorkbenchModel):
+    continuations: tuple[WorkbenchAvailableContinuation, ...]
 
 
 class WorkbenchAgentRole(StrictWorkbenchModel):
@@ -84,6 +157,43 @@ class WorkbenchEmployeeMember(StrictWorkbenchModel):
     digest: str
 
 
+class WorkbenchEmployeeCreateMember(StrictWorkbenchModel):
+    kind: Literal["AGENT"]
+    resourceId: str = Field(min_length=1, max_length=200)
+    revisionId: str = Field(min_length=1, max_length=200)
+    digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
+
+
+class WorkbenchCreateEmployeeDefinition(StrictWorkbenchModel):
+    employeeDefinitionId: str = Field(min_length=1, max_length=200)
+    employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
+    role: str = Field(min_length=1, max_length=200)
+    responsibilities: tuple[str, ...] = Field(min_length=1, max_length=32)
+    members: tuple[WorkbenchEmployeeCreateMember, ...] = Field(
+        min_length=1, max_length=1
+    )
+    predecessorEmployeeRevisionId: str | None = Field(default=None, max_length=200)
+    expectedVersion: int = Field(ge=0)
+    commandId: str = Field(min_length=1, max_length=200)
+
+
+class WorkbenchDecideEmployeeDefinition(StrictWorkbenchModel):
+    employeeDefinitionDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expectedVersion: int = Field(ge=1)
+    commandId: str = Field(min_length=1, max_length=200)
+
+
+class WorkbenchEmployeeCommandResult(StrictWorkbenchModel):
+    resourceKind: Literal["DIGITAL_EMPLOYEE_DEFINITION"] = "DIGITAL_EMPLOYEE_DEFINITION"
+    employeeDefinitionId: str
+    employeeDefinitionRevisionId: str
+    employeeDefinitionDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    aggregateVersion: int = Field(ge=1)
+    lifecycleState: Literal[
+        "DRAFT", "VALIDATED", "APPROVED", "PUBLISHED", "REJECTED", "DEPRECATED"
+    ]
+
+
 class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     resourceKind: Literal["DIGITAL_EMPLOYEE_DEFINITION"]
     employeeDefinitionId: str
@@ -92,6 +202,9 @@ class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     role: str
     responsibilities: tuple[str, ...]
     members: tuple[WorkbenchEmployeeMember, ...]
+    lifecycleState: Literal[
+        "DRAFT", "VALIDATED", "APPROVED", "PUBLISHED", "REJECTED", "DEPRECATED"
+    ]
     publicationState: Literal["PUBLISHED", "NOT_PUBLISHED"]
 
 

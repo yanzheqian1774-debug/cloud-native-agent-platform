@@ -44,10 +44,13 @@ def test_composition_registers_business_and_read_only_workflow_operations(
         close=lambda: None,
     )
     monkeypatch.setattr(
-        workbench_bootstrap, "build_authority_foundation", lambda *args: foundation
+        workbench_bootstrap,
+        "build_authority_foundation",
+        lambda *args, **kwargs: foundation,
     )
 
-    def capture(_sessions, _authorizer, _policy, *, operations):
+    def capture(_sessions, _authorizer, _policy, *, grant_administration, operations):
+        captured["grant_administration"] = grant_administration
         captured["operations"] = operations
         return FastAPI()
 
@@ -68,9 +71,10 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     )
 
     assert composition.foundation is foundation
+    assert captured["grant_administration"] is foundation.grants
     operations = captured["operations"]
-    assert len(operations) == 22
-    assert [(item.name, item.method, item.path) for item in operations[-9:]] == [
+    assert len(operations) == 26
+    assert [(item.name, item.method, item.path) for item in operations[-13:]] == [
         ("LIST_AGENTS", "GET", "/api/workbench/v1/agents"),
         (
             "READ_AGENT_REVISION",
@@ -78,10 +82,29 @@ def test_composition_registers_business_and_read_only_workflow_operations(
             "/api/workbench/v1/agents/{definition_id}/revisions/{revision_id}",
         ),
         ("LIST_EMPLOYEES", "GET", "/api/workbench/v1/employees"),
+        ("CREATE_EMPLOYEE_REVISION", "POST", "/api/workbench/v1/employees"),
         (
             "READ_EMPLOYEE_REVISION",
             "GET",
             "/api/workbench/v1/employees/{employee_definition_id}/revisions/{revision_id}",
+        ),
+        (
+            "VALIDATE_EMPLOYEE_REVISION",
+            "POST",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/"
+            "{revision_id}/validation",
+        ),
+        (
+            "APPROVE_EMPLOYEE_REVISION",
+            "POST",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/"
+            "{revision_id}/approvals",
+        ),
+        (
+            "PUBLISH_EMPLOYEE_REVISION",
+            "POST",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/"
+            "{revision_id}/publication",
         ),
         (
             "READ_EMPLOYEE_INSTANCE",
@@ -125,10 +148,13 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         close=lambda: None,
     )
     monkeypatch.setattr(
-        workbench_bootstrap, "build_authority_foundation", lambda *args: foundation
+        workbench_bootstrap,
+        "build_authority_foundation",
+        lambda *args, **kwargs: foundation,
     )
 
-    def capture(_sessions, _authorizer, _policy, *, operations):
+    def capture(_sessions, _authorizer, _policy, *, grant_administration, operations):
+        captured["grant_administration"] = grant_administration
         captured["operations"] = operations
         return FastAPI()
 
@@ -147,11 +173,16 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
     )
 
     operations = captured["operations"]
-    assert len(operations) == 20
+    assert captured["grant_administration"] is foundation.grants
+    assert len(operations) == 24
     assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
     assert any(item.name == "LIST_EMPLOYEES" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
+    assert any(item.name == "CREATE_EMPLOYEE_REVISION" for item in operations)
+    assert any(item.name == "VALIDATE_EMPLOYEE_REVISION" for item in operations)
+    assert any(item.name == "APPROVE_EMPLOYEE_REVISION" for item in operations)
+    assert any(item.name == "PUBLISH_EMPLOYEE_REVISION" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_INSTANCE" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_ASSIGNMENT" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_PLACEMENT" for item in operations)

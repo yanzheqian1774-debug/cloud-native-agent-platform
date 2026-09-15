@@ -492,7 +492,14 @@ def seed_execution_chain(assembly, agent: dict, now: datetime) -> None:
         )
 
 
-def credential(name: str, digest: str, tenant: str = "tenant-a") -> dict:
+def credential(
+    name: str,
+    digest: str,
+    tenant: str = "tenant-a",
+    *,
+    employee_list: bool = True,
+    grant_decider: bool = False,
+) -> dict:
     if len(digest) != 64 or any(value not in "0123456789abcdef" for value in digest):
         raise ValueError("CREDENTIAL_DIGEST_INVALID")
     return {
@@ -504,12 +511,31 @@ def credential(name: str, digest: str, tenant: str = "tenant-a") -> dict:
         "expiresAt": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
         "authenticationSource": "BROWSER_BOOTSTRAP",
         "grants": [
-            {
-                "owner": "EMPLOYEE",
-                "action": "LIST",
-                "resource": "employee:collection",
-                "source": "BROWSER_BOOTSTRAP",
-            }
+            *(
+                [
+                    {
+                        "owner": "EMPLOYEE",
+                        "action": "LIST",
+                        "resource": "employee:collection",
+                        "source": "BROWSER_BOOTSTRAP",
+                    }
+                ]
+                if employee_list
+                else []
+            ),
+            *(
+                [
+                    {
+                        "owner": "GRANT_ADMIN",
+                        "action": action,
+                        "resource": "grant-scope:tenant-a:quality",
+                        "source": "STATIC_META",
+                    }
+                    for action in ("INSPECT", "DECIDE")
+                ]
+                if grant_decider
+                else []
+            ),
         ],
     }
 
@@ -524,11 +550,32 @@ def write_authority(
         "auditSource": "s5-v023-impl-310-real-browser",
         "credentials": [
             credential("alice", credential_digests["full"]),
+            credential(
+                "admin",
+                credential_digests["admin"],
+                employee_list=False,
+                grant_decider=True,
+            ),
             credential("lister", credential_digests["list"]),
             credential("wrongscope", credential_digests["wrong_scope"], "tenant-b"),
             credential("wronggrant", credential_digests["wrong_grant"]),
         ],
-        "requestability": [],
+        "requestability": [
+            {
+                "owner": owner,
+                "action": action,
+                "resourcePrefix": prefix,
+                "purpose": "WORKBENCH_EMPLOYEE_LIFECYCLE",
+            }
+            for owner, action, prefix in (
+                ("EMPLOYEE", "CREATE", "employee:"),
+                ("EMPLOYEE", "READ", "employee:"),
+                ("EMPLOYEE", "VALIDATE", "employee:"),
+                ("EMPLOYEE", "APPROVE", "employee:"),
+                ("EMPLOYEE", "PUBLISH", "employee:"),
+                ("AGENT", "READ", "agent:"),
+            )
+        ],
         "credentialRevocationTombstones": [],
         "staticGrantRevocationTombstones": [],
     }
@@ -776,6 +823,7 @@ def build_fixture(args, startup: BoundedStartupStatus):
         args.database_url,
         {
             "full": args.full_credential_sha256,
+            "admin": args.admin_credential_sha256,
             "list": args.list_credential_sha256,
             "wrong_scope": args.wrong_scope_credential_sha256,
             "wrong_grant": args.wrong_grant_credential_sha256,
@@ -851,6 +899,7 @@ def main() -> None:
     parser.add_argument("--control-token-file", required=True, type=Path)
     parser.add_argument("--startup-status", required=True, type=Path)
     parser.add_argument("--full-credential-sha256", required=True)
+    parser.add_argument("--admin-credential-sha256", required=True)
     parser.add_argument("--list-credential-sha256", required=True)
     parser.add_argument("--wrong-scope-credential-sha256", required=True)
     parser.add_argument("--wrong-grant-credential-sha256", required=True)

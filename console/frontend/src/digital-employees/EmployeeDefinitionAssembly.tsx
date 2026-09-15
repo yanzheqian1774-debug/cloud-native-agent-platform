@@ -11,6 +11,7 @@ import {
   type EmployeeDefinition,
   type EmployeeLifecycleState,
 } from "../api/digitalEmployees";
+import { EmployeeAuthorizationRequest } from "./EmployeeAuthorizationRequest";
 
 type FrozenCreate = { command: EmployeeCreateCommand; principalKey: string };
 
@@ -56,6 +57,8 @@ export function EmployeeDefinitionAssembly({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EmployeeCommandResult | null>(null);
   const [readback, setReadback] = useState<"NONE" | "READABLE" | "HIDDEN" | "UNAVAILABLE">("NONE");
+  const [needsCreateAuthorization, setNeedsCreateAuthorization] = useState(false);
+  const [resultPrincipalKey, setResultPrincipalKey] = useState<string | null>(null);
   const generation = useRef(0);
   const activeRequest = useRef<AbortController | null>(null);
   const inFlight = useRef(false);
@@ -108,6 +111,7 @@ export function EmployeeDefinitionAssembly({
       Object.freeze(command.members);
       Object.freeze(command);
       setFrozen({ command, principalKey: workbenchPrincipalKey(session) });
+      setNeedsCreateAuthorization(false);
       setUnknown(false);
       setResult(null);
       setReadback("NONE");
@@ -136,8 +140,10 @@ export function EmployeeDefinitionAssembly({
       const value = await createEmployeeDefinition(frozen.command, frozen.principalKey, controller.signal);
       if (turn !== generation.current) return;
       setResult(value);
+      setResultPrincipalKey(frozen.principalKey);
       setUnknown(false);
       setFrozen(null);
+      setNeedsCreateAuthorization(false);
       try {
         const definition = await getEmployeeDefinition(value.employeeDefinitionId, value.employeeDefinitionRevisionId, controller.signal);
         if (turn !== generation.current) return;
@@ -154,6 +160,7 @@ export function EmployeeDefinitionAssembly({
         ? reason
         : new DigitalEmployeeRequestError("EMPLOYEE_COMMAND_RESULT_UNKNOWN", 503, true);
       setUnknown(value.unknownResult);
+      setNeedsCreateAuthorization(!value.unknownResult && (value.status === 403 || value.status === 404));
       setError(value.unknownResult
         ? "创建结果未知。原 commandId 与语义 payload 已冻结；只能重放下面的原命令。"
         : commandMessage(value));
@@ -164,10 +171,20 @@ export function EmployeeDefinitionAssembly({
     }
   }
 
+  async function readCreatedDefinition() {
+    if (!result || !resultPrincipalKey) return;
+    const definition = await getEmployeeDefinition(
+      result.employeeDefinitionId,
+      result.employeeDefinitionRevisionId,
+    );
+    setReadback("READABLE");
+    onReadback(definition, result);
+  }
+
   return <section className="employee-assembly" aria-labelledby="employee-create-title">
     <header className="employee-section-heading">
       <div><p className="eyebrow">首批单 Agent 装配</p><h2 id="employee-create-title">创建数字员工定义</h2><p>先定义员工角色与职责，再选择一个正式 Agent 候选完成装配。</p></div>
-      <span className="employee-capability-state partial"><i />部分实现 · 正式权限路径待接通</span>
+      <span className="employee-capability-state available"><i />正式权限申请与恢复已接通</span>
     </header>
 
     <div className="employee-assembly-grid">
@@ -207,6 +224,18 @@ export function EmployeeDefinitionAssembly({
     </section>}
 
     {error && <div role="alert" className={`employee-command-state ${unknown ? "unknown" : "failed"}`}><strong>{unknown ? "结果未知" : "命令未确认成功"}</strong><span>{error}</span></div>}
+    {needsCreateAuthorization && frozen && <EmployeeAuthorizationRequest
+      title="申请数字员工创建权限"
+      grants={[{ owner: "EMPLOYEE", action: "CREATE", resource: "employee:collection" }]}
+      principalKey={frozen.principalKey}
+      onApproved={submit}
+    />}
     {result && <div role="status" className="employee-command-state success"><strong>创建命令已确认 · {lifecycleLabel[result.lifecycleState]}</strong><span>聚合版本 {result.aggregateVersion} · {result.employeeDefinitionRevisionId}</span>{readback === "HIDDEN" && <span>当前无权读取详情；这不表示创建失败。</span>}{readback === "UNAVAILABLE" && <span>命令已确认，但详情读回暂不可用。</span>}{readback === "READABLE" && <span>已核对所选修订详情。</span>}</div>}
+    {result && readback === "HIDDEN" && resultPrincipalKey && <EmployeeAuthorizationRequest
+      title="申请读取新建员工精确修订"
+      grants={[{ owner: "EMPLOYEE", action: "READ", resource: `employee:${result.employeeDefinitionId}:${result.employeeDefinitionRevisionId}` }]}
+      principalKey={resultPrincipalKey}
+      onApproved={readCreatedDefinition}
+    />}
   </section>;
 }

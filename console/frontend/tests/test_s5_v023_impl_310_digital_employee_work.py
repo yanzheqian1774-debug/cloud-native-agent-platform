@@ -172,7 +172,7 @@ def test_employee_management_visual_status_and_narrow_layout_are_page_scoped() -
     assert "搜索当前结果" in page
     assert "个员工" in page
     assert "个修订" in page
-    assert "部分实现" in assembly
+    assert "正式权限申请与恢复已接通" in assembly
     assert "关联列表暂未接通" in page
     assert ".employee-management .employee-object-center" in styles
     assert ".employee-management .employee-capability-state.missing" in styles

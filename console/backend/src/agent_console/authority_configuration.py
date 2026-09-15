@@ -27,7 +27,7 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "PLAN": frozenset({"PREPARE", "READ", "APPROVE"}),
     "WORKFLOW": frozenset({"CREATE", "LIST", "READ"}),
     "AGENT": frozenset({"LIST", "READ"}),
-    "EMPLOYEE": frozenset({"CREATE", "LIST", "READ"}),
+    "EMPLOYEE": frozenset({"CREATE", "LIST", "READ", "VALIDATE", "APPROVE", "PUBLISH"}),
     "INSTANCE": frozenset({"CREATE", "READ"}),
     "ASSIGNMENT": frozenset({"CREATE", "READ"}),
     "PLACEMENT": frozenset({"READ"}),
@@ -63,6 +63,7 @@ META_ACTIONS = {
 BROWSER_BOOTSTRAP_GRANTS = frozenset(
     {
         ("BUSINESS_PROBLEM", "CREATE", "business-problem:collection"),
+        ("BUSINESS_PROBLEM", "READ", "business-problem:collection"),
         ("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
         ("SUCCESS_CRITERION", "CREATE", "success-criterion:collection"),
         ("WORKFLOW", "CREATE", "workflow:collection"),
