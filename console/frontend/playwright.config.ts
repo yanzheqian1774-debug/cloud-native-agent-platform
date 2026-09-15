@@ -9,9 +9,13 @@ export default defineConfig({
   testDir: "./tests/e2e",
   testIgnore:
     process.env.S5_V023_IMPL_299_LIVE === "1"
-      ? ["**/digital-employee-work-participation.real.spec.ts"]
+      ? [
+          "**/digital-employee-work-participation.real.spec.ts",
+          "**/trusted-preparation-combination.real.spec.ts",
+        ]
       : [
           "**/digital-employee-work-participation.real.spec.ts",
+          "**/trusted-preparation-combination.real.spec.ts",
           "**/*-live.spec.ts",
         ],
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,
