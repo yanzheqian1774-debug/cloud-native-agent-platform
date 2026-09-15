@@ -9,7 +9,36 @@ the credential reference, enabling the real adapter, sending either payload, ret
 an ambiguous call, accepting provider terms, or spending funds. The shipped product
 composition enables only the visibly labelled deterministic synthetic transport.
 
-## Proposed exact call boundary
+## Implementation split
+
+### Implemented now
+
+- provider-neutral dispatch, observe and cancel ports are wired into the Draft
+  Assistance service;
+- exact Model/Provider/Endpoint/Profile/adapter resolution uses the accepted Model
+  Governance records, and dispatch admission revalidates the current authorization
+  and high-water snapshot;
+- PostgreSQL invocation, contextual Resource Use and allowlisted Evidence recording,
+  including owner-only repair without redispatch, are implemented;
+- the API and UI distinguish `SYNTHETIC` from `REAL_PROVIDER` results.
+
+### Not implemented or enabled
+
+- there is no OpenAI Responses adapter in the production composition;
+- there is no production credential resolver for this Draft Assistance path;
+- the runtime profile parser deliberately accepts only `transportKind: SYNTHETIC`;
+- no provider-side budget meter, provider correlation observer/canceller, or
+  provider-specific response/schema adapter has been reviewed and installed.
+
+### Human-owned inputs still required
+
+The Human gate must supply or approve the exact provider organization/project,
+provider and model revision, endpoint and data-retention posture, credential
+reference and resolver ownership, per-call and total budget, timeouts, allowed input,
+and the persons authorized to grant both calls. None of the values recommended below
+is filled, approved or executable merely because it appears in this document.
+
+## Proposed exact call boundary awaiting Human completion
 
 | Field | Proposed bounded value |
 | --- | --- |

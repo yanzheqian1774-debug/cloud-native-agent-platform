@@ -98,7 +98,7 @@ test("REL-316 combines trusted Problem, Criteria, and Employee configuration thr
     await applicant.getByRole("button", { name: "申请查看权限", exact: true }).click();
     const authorization = applicant.locator("#authorization-message");
     await authorizeProblemRequest(administrator, authorization);
-    await expect(applicant.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
+    await expect(applicant.getByRole("heading", { name: "问题详情已读取", exact: true })).toBeVisible();
   });
 
   await test.step("Criterion and Criteria Set create, authorize, and exact readback", async () => {

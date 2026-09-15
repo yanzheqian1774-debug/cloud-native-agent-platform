@@ -121,6 +121,9 @@ def test_workbench_errors_keep_business_and_diagnostic_ids_distinct() -> None:
         assert f"status==={status}" in notice
     hidden_boundary = "该内容可能不存在" + "\uff0c" + "也可能对当前会话不可见"
     assert hidden_boundary in notice
+    assert 'operation==="读取成功标准"' in notice
+    assert 'operation:"读取成功标准"' in applicant
+    assert "无法打开成功标准内容" in notice
     assert "结果暂时无法确认" in notice
     assert "系统会沿用本次操作标识" in notice
     assert "诊断 ID" in notice

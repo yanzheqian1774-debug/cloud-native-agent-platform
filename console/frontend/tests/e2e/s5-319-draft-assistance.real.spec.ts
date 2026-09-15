@@ -60,12 +60,16 @@ test("S5-319 completes governed clarification, editable draft, confirmation, and
   await applicant.getByLabel("你希望解决什么问题？").press("Enter");
   let assistance = await authorizeDraft(applicant, administrator);
   await expect(assistance).toContainText("需要补充信息");
-  await expect(assistance).toContainText("合成 transport 验收");
+  await expect(assistance).toContainText("没有调用真实 AI 服务");
 
   await applicant.getByLabel("待处理补充（仅本页）").fill("目标是在季度末前把来料缺陷率降到百分之一以内，并由质量负责人确认。");
   await applicant.getByLabel("待处理补充（仅本页）").press("Enter");
   assistance = await authorizeDraft(applicant, administrator);
-  await expect(assistance).toContainText("结构化草稿已返回");
+  await expect(assistance).toContainText("可修改草稿已生成");
+  await assistance.evaluate((element) => element.scrollIntoView({block: "center"}));
+  await applicant.screenshot({
+    path: testInfo.outputPath("s5-319-assistance-viewport-1440x1000.png"),
+  });
   const draft = applicant.getByLabel("问题草稿卡片");
   await draft.getByRole("button", { name: "修改", exact: true }).click();
   await draft.getByLabel("建议名称（可选修改）").fill("季度末供应商来料质量改善");
@@ -80,13 +84,22 @@ test("S5-319 completes governed clarification, editable draft, confirmation, and
   await approve(administrator, problemRequest!.trim());
   await applicant.bringToFront();
   await problemAuthorization.getByRole("button", { name: "刷新授权状态", exact: true }).click();
-  await expect(applicant.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
-  await expect(applicant.getByLabel("AI 问题理解与草稿辅助")).toContainText("合成 transport 验收");
+  await expect(applicant.getByRole("heading", { name: "问题详情已读取", exact: true })).toBeVisible();
+  await expect(applicant.getByLabel("AI 问题理解与草稿辅助")).toContainText("没有调用真实 AI 服务");
 
-  await applicant.screenshot({
-    path: testInfo.outputPath("s5-319-formal-problem-readback-1440x1000.png"),
-    fullPage: true,
-  });
+  const sidebar = await applicant.locator(".px-sidebar").boundingBox();
+  const topbar = await applicant.locator(".px-topbar").boundingBox();
+  const content = await applicant.locator(".px-content").boundingBox();
+  const formalProblem = await applicant.locator("#formal-problem-message").boundingBox();
+  expect(sidebar).not.toBeNull();
+  expect(topbar).not.toBeNull();
+  expect(content).not.toBeNull();
+  expect(formalProblem).not.toBeNull();
+  expect(content!.x).toBeGreaterThanOrEqual(sidebar!.x + sidebar!.width);
+  expect(formalProblem!.x).toBeGreaterThanOrEqual(sidebar!.x + sidebar!.width);
+  expect(formalProblem!.y).toBeGreaterThanOrEqual(topbar!.y + topbar!.height);
+  await applicant.locator("#formal-problem-message").scrollIntoViewIfNeeded();
+  await applicant.screenshot({path: testInfo.outputPath("s5-319-formal-and-criteria-viewport-1440x1000.png")});
   await administratorContext.close();
   await applicantContext.close();
 });
