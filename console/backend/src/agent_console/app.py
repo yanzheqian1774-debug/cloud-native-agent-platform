@@ -124,6 +124,7 @@ from agent_console.live_journey_stream_schemas import (
     JourneyEventEnvelope,
     JourneyEventPayload,
 )
+from agent_console.native_dispatch_application import NativeDispatchApplication
 from agent_console.persistence_bootstrap import (
     BootstrapStep,
     activate_in_order,
@@ -294,6 +295,9 @@ def _activate_execution_base(prepared) -> None:
         migrate_execution_authority(
             authority,
             already_recorded=migration_recorded(authority, "execution_authority", 8),
+        )
+        authority.migrate_native_dispatch(
+            _MIGRATIONS / "0022_native_execution_dispatch.sql"
         )
 
 
@@ -574,6 +578,7 @@ _agent_definition_service: AgentDefinitionService | None = None
 _agent_definition_startup_error: str | None = None
 _digital_employee_assembly: DigitalEmployeeProductAssembly | None = None
 _digital_employee_startup_error: str | None = None
+_native_dispatch_application: NativeDispatchApplication | None = None
 _governed_execution_application: GovernedExecutionApplication | None = None
 _governed_execution_startup_error: str | None = None
 _governed_execution_authority: GovernedExecutionAuthority | None = None
@@ -695,8 +700,10 @@ def _configure_agent_definitions() -> None:
 
 def _activate_digital_employees(prepared) -> None:
     global _digital_employee_assembly, _digital_employee_startup_error
+    global _native_dispatch_application
     if prepared is None or _agent_definition_service is None:
         _digital_employee_assembly = None
+        _native_dispatch_application = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
         return
     authority, _controls = prepared
@@ -708,6 +715,7 @@ def _activate_digital_employees(prepared) -> None:
             authority, "digital_employee_definition", 14
         ),
     )
+    _native_dispatch_application = NativeDispatchApplication(authority)
     _digital_employee_startup_error = None
 
 
@@ -749,9 +757,11 @@ activate_in_order(
 
 def _configure_digital_employees() -> None:
     global _digital_employee_assembly, _digital_employee_startup_error
+    global _native_dispatch_application
     database_url = os.environ.get("EXECUTION_DATABASE_URL", "")
     if not database_url or _agent_definition_service is None:
         _digital_employee_assembly = None
+        _native_dispatch_application = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
         return
     try:
@@ -761,6 +771,7 @@ def _configure_digital_employees() -> None:
         _activate_digital_employees(prepared)
     except (ExecutionPersistenceError, WorkflowControlError, ValueError):
         _digital_employee_assembly = None
+        _native_dispatch_application = None
         _digital_employee_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
 
 
@@ -1882,3 +1893,68 @@ def _configure_business_problems():
 
 
 _configure_business_problems()
+
+
+# Public Workbench remains disabled unless every accepted I2 authority boundary is
+# configured.  The private ``app`` above never gains browser-session dependencies.
+_workbench_composition = None
+workbench_app = None
+_workbench_startup_error = "WORKBENCH_DISABLED"
+
+
+def _configure_workbench() -> None:
+    global _workbench_composition, workbench_app, _workbench_startup_error
+    from agent_console.workbench_bootstrap import build_workbench_composition
+
+    runtime_path = os.environ.get("WORKBENCH_AUTHORITY_RUNTIME_FILE", "")
+    allowed_host = os.environ.get("WORKBENCH_ALLOWED_HOST", "")
+    allowed_origin = os.environ.get("WORKBENCH_ALLOWED_ORIGIN", "")
+    _workbench_composition = None
+    workbench_app = None
+    if not runtime_path or not allowed_host or not allowed_origin:
+        _workbench_startup_error = "WORKBENCH_DISABLED"
+        return
+    if _business_problem_application is None:
+        _workbench_startup_error = "BUSINESS_PROBLEM_STORAGE_UNAVAILABLE"
+        return
+    if _digital_employee_assembly is None:
+        _workbench_startup_error = "DIGITAL_EMPLOYEE_STORAGE_UNAVAILABLE"
+        return
+    if _agent_definition_service is None:
+        _workbench_startup_error = "AGENT_DEFINITION_STORAGE_UNAVAILABLE"
+        return
+    workflow_database_url = os.environ.get("WORKFLOW_RUNTIME_DATABASE_URL", "")
+    workflow_service = None
+    if workflow_database_url:
+        try:
+            workflow_service = workflow_definition_api.get_service()
+        except HTTPException:
+            _workbench_startup_error = "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
+            return
+    try:
+        _workbench_composition = build_workbench_composition(
+            runtime_configuration_path=Path(runtime_path),
+            allowed_host=allowed_host,
+            allowed_origin=allowed_origin,
+            owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+            agent_database_url=os.environ.get("AGENT_DEFINITION_DATABASE_URL", ""),
+            business_problems=_business_problem_application,
+            agent_definitions=_agent_definition_service.repository,
+            employee_definitions=_digital_employee_assembly.employee_definitions,
+            digital_employees=_digital_employee_assembly.repository,
+            workflow_database_url=workflow_database_url,
+            workflows=workflow_service,
+        )
+        workbench_app = _workbench_composition.application
+        _workbench_startup_error = ""
+    except (OSError, ValueError):
+        _workbench_startup_error = "WORKBENCH_AUTHORITY_UNAVAILABLE"
+
+
+def get_workbench_app() -> FastAPI:
+    if workbench_app is None:
+        raise RuntimeError(_workbench_startup_error)
+    return workbench_app
+
+
+_configure_workbench()

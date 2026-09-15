@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from agent_runtime.providers.factory import create_model_provider
@@ -27,6 +27,7 @@ class InvokeResponse(BaseModel):
     output: str
     agent: str
     model: str
+    platform_execution_identity: str | None = None
 
 
 def runtime_info() -> dict[str, Any]:
@@ -65,7 +66,12 @@ def info() -> dict[str, Any]:
 
 
 @app.post("/v1/invoke")
-def invoke(request: InvokeRequest) -> InvokeResponse:
+def invoke(
+    request: InvokeRequest,
+    platform_execution_identity: str | None = Header(
+        default=None, alias="X-AgentOS-Execution-Identity"
+    ),
+) -> InvokeResponse:
     """Execute an Agent invocation."""
 
     runtime = runtime_info()
@@ -86,4 +92,5 @@ def invoke(request: InvokeRequest) -> InvokeResponse:
         output=output,
         agent=runtime["agent"],
         model=runtime["model"],
+        platform_execution_identity=platform_execution_identity,
     )

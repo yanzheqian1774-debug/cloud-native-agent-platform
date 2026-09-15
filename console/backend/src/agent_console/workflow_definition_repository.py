@@ -35,6 +35,20 @@ class WorkflowDefinitionRepository(Protocol):
         self, record: dict[str, Any], *, expected_version: int, fact: dict[str, Any]
     ) -> dict[str, Any]: ...
 
+    def list_for_workbench(
+        self, connection: Any, scope: WorkflowScope, *, authorized: bool
+    ) -> list[dict[str, Any]]: ...
+
+    def read_revision_for_workbench(
+        self,
+        connection: Any,
+        scope: WorkflowScope,
+        resource_id: str,
+        revision_id: str,
+        *,
+        authorized: bool,
+    ) -> dict[str, Any]: ...
+
 
 class InMemoryWorkflowDefinitionRepository:
     """Focused test adapter; never a deployment fallback."""
@@ -93,3 +107,45 @@ class InMemoryWorkflowDefinitionRepository:
             stored["facts"] = [*current["facts"], copy.deepcopy(fact)]
             self._records[key] = stored
             return copy.deepcopy(stored)
+
+    @staticmethod
+    def _workbench_definition(record: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: copy.deepcopy(value)
+            for key, value in record.items()
+            if key not in {"facts", "reviews", "revisions"}
+        }
+
+    def list_for_workbench(self, connection, scope, *, authorized):
+        if not authorized:
+            raise WorkflowDefinitionNotFound("WORKFLOW_DEFINITION_NOT_FOUND")
+        with self._lock:
+            return [
+                self._workbench_definition(value)
+                for key, value in sorted(self._records.items())
+                if key[:2] == (scope.namespace, scope.security_domain)
+            ]
+
+    def read_revision_for_workbench(
+        self, connection, scope, resource_id, revision_id, *, authorized
+    ):
+        if not authorized:
+            raise WorkflowDefinitionNotFound("WORKFLOW_DEFINITION_NOT_FOUND")
+        with self._lock:
+            record = self._records.get(self._key(scope, resource_id))
+            revision = None
+            if record is not None:
+                revision = next(
+                    (
+                        item
+                        for item in record.get("revisions", ())
+                        if item["revisionId"] == revision_id
+                    ),
+                    None,
+                )
+            if revision is None:
+                raise WorkflowDefinitionNotFound("WORKFLOW_REVISION_NOT_FOUND")
+            return {
+                "definition": self._workbench_definition(record),
+                "revision": copy.deepcopy(revision),
+            }

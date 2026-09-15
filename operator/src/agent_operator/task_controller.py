@@ -70,19 +70,25 @@ def invoke_agent(
     namespace: str,
     prompt: str,
     timeout_seconds: float,
+    platform_execution_identity: str | None = None,
 ) -> str:
     """Invoke an Agent Runtime through its Kubernetes Service."""
 
     try:
+        request = {
+            "json": {"input": prompt},
+            "timeout": float(timeout_seconds),
+        }
+        if platform_execution_identity is not None:
+            request["headers"] = {
+                "X-AgentOS-Execution-Identity": platform_execution_identity
+            }
         response = httpx.post(
             build_agent_service_url(
                 agent_name=agent_name,
                 namespace=namespace,
             ),
-            json={
-                "input": prompt,
-            },
-            timeout=float(timeout_seconds),
+            **request,
         )
 
         response.raise_for_status()
@@ -107,6 +113,14 @@ def invoke_agent(
 
     try:
         payload = response.json()
+        if platform_execution_identity is not None and (
+            payload.get("platform_execution_identity") != platform_execution_identity
+        ):
+            raise TaskExecutionError(
+                reason="InvalidResponse",
+                message="Runtime response execution identity mismatch",
+                retryable=False,
+            )
         return payload["output"]
 
     except (KeyError, ValueError, TypeError) as exc:
@@ -205,6 +219,7 @@ def invoke_compatible_agent(
         namespace=context.definition_ref.namespace,
         prompt=prompt,
         timeout_seconds=timeout_seconds,
+        platform_execution_identity=str(context.execution_identity),
     )
 
 
@@ -219,6 +234,13 @@ def create_task(
     **_: Any,
 ) -> None:
     """Execute a newly created Task."""
+
+    labels = meta.get("labels", {})
+    if (
+        isinstance(labels, dict)
+        and labels.get("agentos.io/native-dispatch-managed") == "true"
+    ):
+        return
 
     prompt = spec["input"]["prompt"]
     timeout_seconds = spec.get("timeoutSeconds", 300)

@@ -1,5 +1,7 @@
 """Enterprise Agent OS Kubernetes operator."""
 
+import os
+from threading import Event, Thread
 from typing import Any
 
 import kopf
@@ -7,6 +9,10 @@ from kubernetes import client, config
 
 import agent_operator.task_controller
 import agent_operator.workflow_controller  # noqa: F401
+from agent_operator.native_dispatch_reconciler import (
+    NativeDispatchAssembly,
+    build_native_dispatch_from_environment,
+)
 from agent_operator.resources import (
     build_agent_deployment,
     build_agent_service,
@@ -15,12 +21,60 @@ from agent_operator.resources import (
 API_GROUP = "agentos.io"
 API_VERSION = "v1alpha1"
 RESOURCE = "agents"
+_native_dispatch_assembly: NativeDispatchAssembly | None = None
+_native_dispatch_stop = Event()
+_native_dispatch_thread: Thread | None = None
+
+
+def _run_native_dispatch(logger: Any, interval: float) -> None:
+    if _native_dispatch_assembly is None:
+        return
+    while not _native_dispatch_stop.is_set():
+        try:
+            result = _native_dispatch_assembly.worker.run_once()
+            if result.state != "IDLE":
+                logger.info(
+                    "Native dispatch reconciliation: state=%s command=%s",
+                    result.state,
+                    result.command_id,
+                )
+        except Exception:
+            logger.exception("Native dispatch reconciliation failed")
+        _native_dispatch_stop.wait(interval)
 
 
 @kopf.on.startup()
 def startup(logger: Any, **_: Any) -> None:
     """Log operator startup."""
+    global _native_dispatch_assembly, _native_dispatch_thread
     logger.info("Enterprise Agent OS operator starting")
+    _native_dispatch_assembly = build_native_dispatch_from_environment()
+    if _native_dispatch_assembly is None:
+        return
+    interval = float(os.environ.get("NATIVE_DISPATCH_POLL_SECONDS", "1"))
+    if not 0.1 <= interval <= 60:
+        raise ValueError("NATIVE_DISPATCH_POLL_SECONDS_INVALID")
+    _native_dispatch_stop.clear()
+    _native_dispatch_thread = Thread(
+        target=_run_native_dispatch,
+        args=(logger, interval),
+        name="native-dispatch-worker",
+        daemon=True,
+    )
+    _native_dispatch_thread.start()
+
+
+@kopf.on.cleanup()
+def cleanup(**_: Any) -> None:
+    """Stop the Native dispatch loop and release PostgreSQL pools."""
+    global _native_dispatch_assembly, _native_dispatch_thread
+    _native_dispatch_stop.set()
+    if _native_dispatch_thread is not None:
+        _native_dispatch_thread.join(timeout=5)
+        _native_dispatch_thread = None
+    if _native_dispatch_assembly is not None:
+        _native_dispatch_assembly.close()
+        _native_dispatch_assembly = None
 
 
 @kopf.on.create("agentos.io", "v1alpha1", "agents")

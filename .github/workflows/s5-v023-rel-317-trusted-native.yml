@@ -1,0 +1,137 @@
+name: S5 REL 317 Trusted Native Combination
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/s5-v023-rel-317-trusted-native.yml"
+      - "console/backend/**"
+      - "console/frontend/**"
+      - "core/**"
+      - "operator/**"
+      - "runtime/**"
+      - "scripts/acceptance/s5_v023_rel_317_run.sh"
+      - "scripts/acceptance/s5_v023_rel_317_native_l3.py"
+      - "scripts/acceptance/s5_v023_rel_317_native_l3.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s5-v023-rel-317-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trusted-native-combination:
+    name: PostgreSQL Native and HTTPS Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: s5_v023_rel_317
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d s5_v023_rel_317"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PYTHONPATH: conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures
+      REL_317_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_317
+      EXECUTION_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_317
+      AUTHORITY_I1_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_317
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Report source and executed revisions
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          echo "source_sha=${SOURCE_SHA}"
+          echo "executed_sha=$(git rev-parse HEAD)"
+          echo "executed_tree=$(git rev-parse HEAD^{tree})"
+          echo "executed_parents=$(git show -s --format=%P HEAD)"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+      - name: Install frontend and Chromium
+        working-directory: console/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run combined authority and Native contracts
+        run: |
+          set -o pipefail
+          uv run pytest -q \
+            console/backend/tests/test_authority_foundation_postgres.py \
+            console/backend/tests/test_native_dispatch_application.py \
+            core/tests/test_execution_contract.py \
+            operator/tests/test_native_dispatch_reconciler.py \
+            | tee "$RUNNER_TEMP/rel-317-pytest.txt"
+          if grep -Eq '[0-9]+ skipped' "$RUNNER_TEMP/rel-317-pytest.txt"; then
+            echo "Selected REL-317 tests must not be skipped" >&2
+            exit 1
+          fi
+
+      - name: Lint and build live frontend
+        working-directory: console/frontend
+        env:
+          VITE_SUPPLIER_QUALITY_DEMO_MODE: live
+        run: |
+          npm run lint
+          npm run build
+
+      - name: Verify dedicated allowlist
+        working-directory: console/frontend
+        env:
+          REL_317_WORKBENCH_URL: https://127.0.0.1:18427
+          REL_317_APPLICANT_CREDENTIAL: discovery-only
+          REL_317_ADMIN_CREDENTIAL: discovery-only
+        run: >-
+          npx playwright test --config playwright.rel-317.config.ts
+          --list --workers=1 --retries=0 --forbid-only
+
+      - name: Create isolated browser database
+        run: createdb --host 127.0.0.1 --username postgres s5_v023_rel_317_browser
+
+      - name: Run trusted preparation journey
+        env:
+          REL_317_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_rel_317_browser
+        run: >-
+          scripts/acceptance/s5_v023_rel_317_run.sh
+          "$RUNNER_TEMP/s5-v023-rel-317-evidence"
+
+      - name: Record artifact digests
+        if: always()
+        run: >-
+          find "$RUNNER_TEMP/s5-v023-rel-317-evidence" -type f
+          ! -name 'checksums.sha256' -print0 | sort -z |
+          xargs -0 sha256sum >
+          "$RUNNER_TEMP/s5-v023-rel-317-evidence/checksums.sha256"
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5-v023-rel-317-trusted-native
+          path: ${{ runner.temp }}/s5-v023-rel-317-evidence
+          if-no-files-found: error
+          retention-days: 14
