@@ -43,9 +43,9 @@ export function DraftCard({turn,busy,composerEditing,onConfirm,onRecover,onEditF
   const active=turn.phase==="DRAFT"||turn.phase==="EDITING",editable=turn.phase==="EDITING"&&!composerEditing;
   const status={DRAFT:"待确认",EDITING:"正在修改",SUBMITTING:"正在创建",UNKNOWN:"结果不确定",CANCELLED:"已取消",CREATED:"已创建"}[turn.phase];
   return <section id="draft-problem-message" tabIndex={-1} className={`px-inline-card px-draft-card is-${turn.phase.toLowerCase()}`} aria-label="问题草稿卡片">
-    <header><div><span className="px-eyebrow">{turn.phase==="CREATED"?"已确认问题":"问题草稿"}</span><h2>{turn.phase==="CREATED"?turn.draft.title:"确认后才会正式创建"}</h2></div><span className={`px-status ${turn.phase==="CREATED"?"success":turn.phase==="UNKNOWN"?"danger":"warning"}`}>{status}</span></header>
+    <header><div><span className="px-eyebrow">{turn.phase==="CREATED"?"已提交草稿（历史）":"问题草稿（尚未创建）"}</span><h2>{turn.phase==="CREATED"?turn.draft.title:"确认后才会正式创建"}</h2></div><span className={`px-status ${turn.phase==="CREATED"?"success":turn.phase==="UNKNOWN"?"danger":"warning"}`}>{turn.phase==="CREATED"?"已用于创建":status}</span></header>
     {turn.phase==="CREATED"?<details><summary>展开已确认内容</summary><p>{turn.draft.description}</p><small>草稿版本 {turn.version} 已提交；旧确认和更新操作已经失效。</small></details>:<>
-      <p className="px-truth-note">无模型模式：描述保留原文；名称只是从首个非空句截取的建议，可修改。</p>
+      <p className="px-truth-note">{turn.source==="AI_PROVIDER"?"草稿来自已授权的真实 AI 服务；仍需人工编辑或确认。":turn.source==="AI_SYNTHETIC"?"草稿来自明确标识的模拟辅助生成；没有调用真实 AI 服务。":"手工草稿模式：描述保留原文，名称可修改。"}</p>
       {editable?<><label className="px-field" htmlFor={`draft-title-${turn.id}`}><span>建议名称（可选修改）</span><input id={`draft-title-${turn.id}`} maxLength={200} value={turn.draft.title} disabled={busy} onChange={event=>onChange({...turn.draft,title:event.target.value})}/></label><label className="px-field" htmlFor={`draft-description-${turn.id}`}><span>完整描述</span><textarea id={`draft-description-${turn.id}`} maxLength={2_000} value={turn.draft.description} disabled={busy} onChange={event=>onChange({...turn.draft,description:event.target.value})}/></label></>:<details open><summary>查看当前草稿</summary><h3>{turn.draft.title}</h3><p>{turn.draft.description}</p></details>}
       <small>草稿版本 {turn.version}。未提交草稿只保存在当前页面，刷新或离开可能丢失。</small>
       {composerEditing&&<p className="px-mode-note">正在底部输入框完整替换描述；采用或取消前，卡片确认操作不可用。</p>}

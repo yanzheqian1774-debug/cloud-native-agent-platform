@@ -1,3 +1,5 @@
+import type {DraftAssistanceResult} from "./draftAssistanceTypes";
+
 const PREFIX="/api/workbench/v1";
 
 export type WorkbenchSession={schemaVersion:"workbench-session.v1";principal:{principalId:string;tenantId:string;securityDomain:string};session:{expiresAt:string;idleExpiresAt:string};csrfToken:string};
@@ -11,6 +13,7 @@ export type ProblemCreatorContinuation={schemaVersion:"problem-creator-continuat
 export type GrantRequestStatus={requestId:string;state:"PENDING"|"APPROVED"|"REJECTED";aggregateVersion:number;submittedAt:string;purpose:string;requestedActions:string[]};
 export type GrantDecisionResult={schemaVersion:"exact-grant-decision-result.v1";requestId:string;decisionId:string;state:"APPROVED"|"REJECTED";aggregateVersion:number;decidedAt:string;notBefore?:string;expiresAt?:string};
 export type ExactGrantRequest={owner:"SUCCESS_CRITERION"|"SUCCESS_CRITERIA_SET";action:"CREATE"|"READ"|"REVISE";resource:string};
+export type {DraftAssistanceResult} from "./draftAssistanceTypes";
 type Envelope<T>={schemaVersion:"workbench-operation.v1";result:T;continuationIds:string[]};
 type ErrorBody={reasonCode?:string;requestId?:string};
 
@@ -49,6 +52,20 @@ export const readProblemCriteria=(problemId:string)=>read<{revisions:CriterionRe
 export function createBusinessProblem(csrfToken:string,input:{title:string;description:string;ownerId:string;idempotencyKey:string}){
   return write<{revision:BusinessProblemRevision;creatorContinuation:ProblemCreatorContinuation}>("/problems",csrfToken,input);
 }
+
+export function beginDraftAssistance(csrfToken:string,input:{idempotencyKey:string;content:string;parentContextId?:string;parentTurnId?:string;expectedParentVersion?:number;predecessorInvocationId?:string}){
+  return write<DraftAssistanceResult>("/draft-assistance/invocations",csrfToken,input);
+}
+
+export function resubmitDraftAssistance(csrfToken:string,invocationId:string,input:{idempotencyKey:string;content:string}){
+  return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/resubmit`,csrfToken,input);
+}
+
+export function readDraftAssistance(invocationId:string){return read<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}`)}
+export function observeDraftAssistance(csrfToken:string,invocationId:string){return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/observe`,csrfToken,{})}
+export function cancelDraftAssistance(csrfToken:string,invocationId:string){return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/cancel`,csrfToken,{})}
+export function rejectDraftAssistance(csrfToken:string,invocationId:string){return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/reject`,csrfToken,{})}
+export function linkDraftAssistanceProblem(csrfToken:string,invocationId:string,input:{problemId:string;problemRevisionId:string;problemDigest:string}){return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/problem-link`,csrfToken,input)}
 
 export function submitProblemReadGrantRequest(csrfToken:string,continuationId:string,idempotencyKey:string){
   return authorizationWrite<GrantRequestStatus>("/authorization/grant-requests",csrfToken,idempotencyKey,{schemaVersion:"exact-grant-request.v1",purpose:"CONTINUE_PROBLEM_READ",requestedGrants:[],continuationIds:[continuationId]});

@@ -391,7 +391,7 @@ test("switching Problems requires confirmation and does not carry page-only supp
   });
   await page.getByRole("button", { name: /第二个正式问题/ }).click();
   await expect(page).toHaveURL(/problem%3Aconversation-2/);
-  await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "问题详情已读取", exact: true })).toBeVisible();
   await expect(page.locator("#formal-problem-message").getByText(secondProblem.description, { exact: true })).toBeVisible();
   await expect(composer).toHaveValue("");
   await expect(page.getByText("只属于第一个问题的页内补充。", { exact: true })).toHaveCount(0);
@@ -465,7 +465,7 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(userFocusTarget).toBeFocused();
   const scrollAfterDispatch = await stream.evaluate(element => element.scrollTop);
   releaseGrantInspect();
-  await expect(page.getByRole("heading", { name: "读取成功", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "问题详情已读取", exact: true })).toBeVisible();
   await expect(page.locator("#authorization-message").getByText("问题详情已读取成功", { exact: false })).toBeVisible();
   await expect(waitingComposer).toHaveValue(pendingText);
   await expect(userFocusTarget).toBeFocused();

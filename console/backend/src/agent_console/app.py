@@ -1898,18 +1898,24 @@ _configure_business_problems()
 # Public Workbench remains disabled unless every accepted I2 authority boundary is
 # configured.  The private ``app`` above never gains browser-session dependencies.
 _workbench_composition = None
+_draft_assistance_composition = None
 workbench_app = None
 _workbench_startup_error = "WORKBENCH_DISABLED"
 
 
 def _configure_workbench() -> None:
-    global _workbench_composition, workbench_app, _workbench_startup_error
+    global _draft_assistance_composition, _workbench_composition
+    global workbench_app, _workbench_startup_error
+    from agent_console.draft_assistance_bootstrap import (
+        build_draft_assistance_composition,
+    )
     from agent_console.workbench_bootstrap import build_workbench_composition
 
     runtime_path = os.environ.get("WORKBENCH_AUTHORITY_RUNTIME_FILE", "")
     allowed_host = os.environ.get("WORKBENCH_ALLOWED_HOST", "")
     allowed_origin = os.environ.get("WORKBENCH_ALLOWED_ORIGIN", "")
     _workbench_composition = None
+    _draft_assistance_composition = None
     workbench_app = None
     if not runtime_path or not allowed_host or not allowed_origin:
         _workbench_startup_error = "WORKBENCH_DISABLED"
@@ -1932,6 +1938,13 @@ def _configure_workbench() -> None:
             _workbench_startup_error = "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
             return
     try:
+        draft_profile_path = os.environ.get("DRAFT_ASSISTANCE_RUNTIME_FILE", "")
+        if draft_profile_path:
+            _draft_assistance_composition = build_draft_assistance_composition(
+                database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+                runtime_configuration_path=Path(draft_profile_path),
+                migrations_path=_MIGRATIONS,
+            )
         _workbench_composition = build_workbench_composition(
             runtime_configuration_path=Path(runtime_path),
             allowed_host=allowed_host,
@@ -1944,10 +1957,23 @@ def _configure_workbench() -> None:
             digital_employees=_digital_employee_assembly.repository,
             workflow_database_url=workflow_database_url,
             workflows=workflow_service,
+            draft_assistance=(
+                _draft_assistance_composition.service
+                if _draft_assistance_composition is not None
+                else None
+            ),
+            managed_closeables=(
+                (_draft_assistance_composition,)
+                if _draft_assistance_composition is not None
+                else ()
+            ),
         )
         workbench_app = _workbench_composition.application
         _workbench_startup_error = ""
     except (OSError, ValueError):
+        if _draft_assistance_composition is not None:
+            _draft_assistance_composition.close()
+            _draft_assistance_composition = None
         _workbench_startup_error = "WORKBENCH_AUTHORITY_UNAVAILABLE"
 
 

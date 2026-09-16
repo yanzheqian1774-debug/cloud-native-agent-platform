@@ -14,6 +14,7 @@ from agent_console.authority_contracts import (
     AuthorityScope,
     ContinuationClaim,
     ExactGrant,
+    GrantTargetValidator,
     TrustedRequestContext,
 )
 from agent_console.business_problem_continuation import (
@@ -25,6 +26,7 @@ from agent_console.digital_employee_definition import (
     EmployeeDefinitionError,
     EmployeeDefinitionRepository,
 )
+from agent_console.draft_assistance import DraftAssistanceError
 from agent_console.execution_domain import ScopeIdentity
 
 
@@ -36,6 +38,7 @@ class WorkbenchGrantTargetValidator:
         problems: BusinessProblemRepository | None,
         agents: AgentDefinitionRepository | None = None,
         employees: EmployeeDefinitionRepository | None = None,
+        additional: Sequence[GrantTargetValidator] = (),
     ) -> None:
         self.problems = problems
         self.problem_continuations = (
@@ -45,6 +48,7 @@ class WorkbenchGrantTargetValidator:
         )
         self.agents = agents
         self.employees = employees
+        self.additional = tuple(additional)
 
     @staticmethod
     def _scope(context: TrustedRequestContext) -> ScopeIdentity:
@@ -90,10 +94,14 @@ class WorkbenchGrantTargetValidator:
                     grant.action,
                     grant.exact_resource,
                 )
-            return False
+            return any(
+                validator.is_known_exact_target(context, grant, connection=connection)
+                for validator in self.additional
+            )
         except (
             AgentDefinitionRepositoryError,
             BusinessProblemError,
+            DraftAssistanceError,
             EmployeeDefinitionError,
         ) as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
