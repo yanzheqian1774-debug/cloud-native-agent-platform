@@ -29,6 +29,8 @@ credential read, or model request was performed.
 
 ## Implementation result
 
+- Normal implementation commit: `d738798bfea5041fa4e8c7cd5f1e4ecea55f725d`.
+- Implementation tree: `d378e40635187dc07f7564cf75bee1c22539b554`.
 - Added the independent `kimi-responses-draft / v1 / KIMI_RESPONSES_V1`
   request projection, strict response parser, one-shot HTTPS transport and exact
   private-file resolver. OpenAI adapter source was not modified.
@@ -66,6 +68,19 @@ credential read, or model request was performed.
 | PostgreSQL + local HTTPS + Chromium acceptance, second clean asset | `3/3 expected`, `0` unexpected, duration `8784.197ms` |
 | `make check` | `PASS`; Ruff, format, `1793 passed / 194 skipped`, one upstream deprecation warning |
 | `git diff --check` | `PASS` |
+
+The exact committed implementation was then revalidated against a third clean,
+320-owned database. The focused Kimi/OpenAI, authorization, model-binding,
+budget/restart and workflow suite passed `77` tests. The HTTPS/Chromium
+acceptance passed `3/3 expected` with `0 unexpected` in `8540.538ms`; its
+machine-readable record is retained at
+`/tmp/s5-v023-impl-320-acceptance-r3.mpUExU` and binds source
+`d738798bfea5041fa4e8c7cd5f1e4ecea55f725d`, tree
+`d378e40635187dc07f7564cf75bee1c22539b554`, and frontend build digest
+`44706dbbaa7c5fe87b7009a7db5137b0219437e95dff03bc7df502222432182a`.
+Its screenshots are SHA-256
+`def94259a2f3713dd5bc6735ff6a08f565da347174c940272e9f5d6ca10a5cf8`
+and `b3d8a3fd28ffdc5c791dbada2b2a90e74ed536f3a42c0c67062744116172bd64`.
 
 The pre-commit browser evidence is retained at
 `/tmp/s5-v023-impl-320-acceptance-r2.pwJWfp`. Its screenshots are SHA-256
@@ -118,9 +133,10 @@ at the cap check.
 ## Preserved assets and limitations
 
 - PostgreSQL container: `s5-v023-impl-320-postgres`, host port `55432`.
-- 320-owned databases: `s5_v023_impl_320_acceptance` and clean validation
-  successor `s5_v023_impl_320_acceptance_r2`. No 319 or other Session database
-  was reset, cleaned, or migrated.
+- 320-owned databases: `s5_v023_impl_320_acceptance`,
+  `s5_v023_impl_320_acceptance_r2`, and exact-commit validation successor
+  `s5_v023_impl_320_acceptance_r3`. No 319 or other Session database was reset,
+  cleaned, or migrated.
 - Single-call timeouts: connect `2s`, read `3s`, total `5s`. Cross-call
   cumulative machine wait remains `NOT_IMPLEMENTED / HUMAN DECISION PENDING`.
 - `4096/low` and all USD quote numbers are mock-only. Real region/account,
