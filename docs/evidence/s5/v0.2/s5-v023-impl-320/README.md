@@ -1,5 +1,35 @@
 # S5-V023-IMPL-320 implementation evidence
 
+## Human bounded acceptance of the absolute-deadline repair
+
+On 2026-09-16, Human explicitly accepted PR #178's fixed candidate:
+
+- Source: `da6b88c2662ebe0545d280443ea6bfdec59be9f8`.
+- Tree: `0996940cb6c179a8388595482dee00042348038e`.
+- Parent: `d22aa01ce50c9de7b6ad3b142007d62dc68c2b5d`.
+- Decision: `BOUNDED_ACCEPTED`, limited to the A05 proof and disclosed
+  limitations in the absolute-deadline evidence below. This is not real-model,
+  remote-cancellation, hard-realtime or production certification.
+
+The accepted candidate's seven automatic CI runs (35080496048, 35080495979,
+35080496025, 35080495961, 35080496063, 35080495902, 35080495804) all completed
+successfully on attempt 1, covering eleven jobs. Five dedicated jobs checked out
+the accepted source; six general CI/Identity jobs checked out PR merge
+`1f6b7a1f83ec3670c39e93e729817b858863e57f`, whose tree equals the accepted tree
+and whose parents are the fixed base and accepted source. Actual checkout was
+verified from each job's log. Local 91-test, subsequent 7-test phase refinement,
+make-check and timing evidence is reused, not rerun or upgraded by this record.
+
+This registration records acceptance of the source above; it does not claim
+Human reaccepted the registration commit or its new tree. Human authorizes
+registration-only changes, applicable automatic CI, Ready after successful
+checks and unchanged base/rules/discussion, ordinary merge commit, and automatic
+exact-main CI. Product differences, new failures or baseline drift require a
+stop and report. No rerun/dispatch, rule bypass, branch/asset deletion,
+deployment, release or Session closure is authorized. Real acceptance execution
+is not performed by this delivery task. Historical candidate records below
+remain unchanged; their pending statuses describe those earlier checkpoints.
+
 ## Absolute-deadline repair from integrated main (new candidate)
 
 Human authorizes a separate bounded repair from main
