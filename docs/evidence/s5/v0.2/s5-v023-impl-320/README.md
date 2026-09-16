@@ -1,5 +1,139 @@
 # S5-V023-IMPL-320 implementation evidence
 
+## Human bounded acceptance of the absolute-deadline repair
+
+On 2026-09-16, Human explicitly accepted PR #178's fixed candidate:
+
+- Source: `da6b88c2662ebe0545d280443ea6bfdec59be9f8`.
+- Tree: `0996940cb6c179a8388595482dee00042348038e`.
+- Parent: `d22aa01ce50c9de7b6ad3b142007d62dc68c2b5d`.
+- Decision: `BOUNDED_ACCEPTED`, limited to the A05 proof and disclosed
+  limitations in the absolute-deadline evidence below. This is not real-model,
+  remote-cancellation, hard-realtime or production certification.
+
+The accepted candidate's seven automatic CI runs (35080496048, 35080495979,
+35080496025, 35080495961, 35080496063, 35080495902, 35080495804) all completed
+successfully on attempt 1, covering eleven jobs. Five dedicated jobs checked out
+the accepted source; six general CI/Identity jobs checked out PR merge
+`1f6b7a1f83ec3670c39e93e729817b858863e57f`, whose tree equals the accepted tree
+and whose parents are the fixed base and accepted source. Actual checkout was
+verified from each job's log. Local 91-test, subsequent 7-test phase refinement,
+make-check and timing evidence is reused, not rerun or upgraded by this record.
+
+This registration records acceptance of the source above; it does not claim
+Human reaccepted the registration commit or its new tree. Human authorizes
+registration-only changes, applicable automatic CI, Ready after successful
+checks and unchanged base/rules/discussion, ordinary merge commit, and automatic
+exact-main CI. Product differences, new failures or baseline drift require a
+stop and report. No rerun/dispatch, rule bypass, branch/asset deletion,
+deployment, release or Session closure is authorized. Real acceptance execution
+is not performed by this delivery task. Historical candidate records below
+remain unchanged; their pending statuses describe those earlier checkpoints.
+
+## Absolute-deadline repair from integrated main (new candidate)
+
+Human authorizes a separate bounded repair from main
+`d22aa01ce50c9de7b6ad3b142007d62dc68c2b5d`, tree
+`011e63f7cbfaf3ffe3ebc726ce84a3600ed5cede`, on
+`codex/s5-v023-impl-320-kimi-absolute-deadline` in worktree `d3d2`.
+PR #177 is merged and its Human acceptance remains bound only to its recorded
+source/tree. This repair requires a new Draft PR and separate review; it does not
+rewrite the historical A05 NOT_PROVEN evidence below.
+
+### Deadline mechanism and environment boundary
+
+Kimi alone now supervises one spawned request worker. The parent starts one
+monotonic total deadline before launch. DNS/TCP/TLS, send, headers/body, IPC and
+result validation cannot reset it. A separate connection cutoff conservatively
+includes spawn/startup and ends only when TLS completion is received by the parent.
+A readable result loses at equality or after the cutoff; validation must also
+finish before total expiry. A successful decision precedes cleanup; cleanup is
+not represented as work completed within the request deadline.
+
+The parent uses nonblocking anonymous socket IPC, including request transfer;
+partial result frames and blocked request delivery cannot block its deadline
+wait. No request or credential value is in process arguments or added environment
+variables. The child never invokes the credential resolver or owner/database
+ports. Its stdout/stderr go to the null device, core dumps are disabled, and
+parent-channel loss terminates it. No secret temporary file is created. Python
+may create ordinary multiprocessing control sockets/source bytecode caches;
+neither stores application request or credential content.
+
+At decision, the parent closes its endpoints, kills its exact worker if alive,
+and joins it with at most one second of cleanup wait. Decision and cleanup seconds,
+reason, PID and reaped status are measured separately in private transport
+metrics. Failed/overrun cleanup cannot return success; an unreaped worker prevents
+another dispatch through that transport instance. There is no retry, restart,
+background reaper, process pool or remote cancellation claim.
+
+This is validated on Python 3.12/macOS with POSIX spawn/socketpair and backend
+thread execution; Linux GitHub CI validation is pending for this commit. The
+current guarded script/ASGI hosting permits child processes. Windows, daemon
+multiprocessing hosts, restricted process creation, interactive unguarded main
+modules, and uninterruptible kernel/process creation failure are not certified.
+It is not a hard-realtime scheduler guarantee: parent scheduling can delay
+observing a cutoff, and an unkillable OS task is exposed as cleanup failure rather
+than claimed reclaimed within one second. No new service or persistent dependency,
+OpenAI modification, business state, authorization or budget contract change.
+
+### Validation before commit
+
+Focused Kimi/OpenAI/Draft/PostgreSQL/workflow suite: **91 passed**. Final
+phase-wiring refinement (actual DNS/TCP/TLS/send/getresponse/read entry-point fault
+injection) then passed **7 tests**; only those affected tests changed afterward.
+Final repository `make check` after that refinement: **1818 passed / 201 skipped**;
+Ruff lint/format passed. Normal hooks and new-head CI follow the commit.
+The isolated database is `s5_v023_impl_320_deadline_r1` in the retained 320-owned
+PostgreSQL container; existing migration 0024 is reused, not modified. No other
+Session database or previous browser ledger is reset.
+
+| Evidence | Result and exact limit |
+| --- | --- |
+| Injected socket.getaddrinfo / socket.connect / SSLContext.wrap_socket stalls | Parent connect cutoff kills/reaps worker; these are actual function-entry fault injections, not real stalled DNS/TCP/TLS networks |
+| Injected send/headers/body stall | Parent total cutoff, one worker, no restart, exact PID no longer exists |
+| Real local HTTPS delayed headers / slow body / cumulative phases | All reject otherwise-valid JSON at total cutoff; body chunks do not refresh it; HTTP count remains one |
+| Equality and result race | Deterministic cutoff ordering; equality loses; parent validation finishing after deadline rejects a valid result |
+| Partial result / blocked large request IPC | Nonblocking supervision reaches total expiry and reaps worker |
+| Parent channel loss | EOF injection during actual local HTTPS causes child exit; not a remote cancellation assertion |
+| Secret diagnostics / cleanup fault | Injected stdout/stderr and exception text absent from capture, core disabled, no new secret files; fake unreapable process cannot yield success or restart |
+| Real deadline + PostgreSQL + same-key recovery | OUTCOME_UNKNOWN; same key yields no new HTTP call; one unchanged worst-case reservation, zero settlements, new operation denied at cap |
+| Existing A04 / OpenAI / owner regression | Preserved; no source edits to OpenAI or owner/state/budget implementations |
+
+Local measured cutoffs (seconds; configured connection=1, total=2):
+
+| Case | Decision elapsed | Separate cleanup | Reaped |
+| --- | --- | --- | --- |
+| Injected DNS | 1.005651 | 0.005457 | true |
+| Injected TCP | 1.003305 | 0.009560 | true |
+| Injected TLS | 1.002445 | 0.002379 | true |
+| Injected send | 2.004186 | 0.002825 | true |
+| Injected headers | 2.002422 | 0.006204 | true |
+| Injected body | 2.003729 | 0.008485 | true |
+| HTTPS late headers | 2.002341 | 0.003268 | true |
+| HTTPS slow body | 2.001863 | 0.003772 | true |
+| HTTPS cumulative phases | 2.001931 | 0.001885 | true |
+
+The small scheduling/observation excess shown above is disclosed as decision
+elapsed, not hidden in cleanup. Cleanup remained below one second in all asserted
+real-process tests. A synthetic delayed-parent-validation test deliberately delays
+validation to prove late success rejection; it is not network timing evidence.
+
+Incremental local logs/JUnit (with deadline metrics) are retained under the existing
+recovery directory `/Users/tristan/Documents/S5-V023-IMPL-320-recovery-20260916T154202/`,
+with `DEADLINE-LOCAL-SHA256SUMS`. Earlier lint line-length failures are retained;
+r1/r2/r3/r4 intermediate suites are not relabeled final-source evidence. Mock server
+connection-close diagnostics during parent-loss/late-header teardown are expected
+fixture consequences, not extra provider attempts. Historical reports and hashes
+remain intact. Repository gates and new-head automated CI are recorded after they
+actually complete, not assumed from the prior candidate.
+
+A05 repair is locally validated, with final Linux CI/Human review pending; it is
+not automatically accepted or production-certified. Separate real-call authority
+has been supplied by Human, but configuration/start prerequisites remain pending;
+this task makes **zero real provider calls**. Ready, merge, deployment, release and
+Session closure are not authorized for this new candidate.
+
+
 ## Human bounded acceptance registration
 
 Human explicitly confirmed `PASS_WITH_CONSTRAINTS / BOUNDED_ACCEPTED` in the
