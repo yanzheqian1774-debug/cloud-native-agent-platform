@@ -18,6 +18,9 @@ def test_320_workflow_builds_required_modes_and_runs_exact_assets() -> None:
 
 
 def test_320_playwright_cleanup_and_evidence_are_fail_closed() -> None:
+    default_config = (
+        REPOSITORY_ROOT / "console" / "frontend" / "playwright.config.ts"
+    ).read_text()
     config = (
         REPOSITORY_ROOT / "console" / "frontend" / "playwright.s5-320.config.ts"
     ).read_text()
@@ -30,6 +33,7 @@ def test_320_playwright_cleanup_and_evidence_are_fail_closed() -> None:
     cleanup = (
         REPOSITORY_ROOT / "scripts" / "acceptance" / "s5_v023_impl_320_owned_cleanup.sh"
     ).read_text()
+    assert '"**/s5-320-kimi-draft-assistance.real.spec.ts"' in default_config
     assert 'testMatch: "s5-320-kimi-draft-assistance.real.spec.ts"' in config
     assert 'for marker in ("新建对话", "AI 问题理解与草稿辅助")' in runner
     assert "dispatch_count <= reservation_count <= 10" in runner
