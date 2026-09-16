@@ -123,6 +123,16 @@ work stops for G2 escalation.
 | A15 | Focused tests, frontend lint/build, dedicated acceptance, and `make check` pass with focused diff. |
 | A16 | The one Draft PR exact head reaches terminal success for dedicated and regular automated checks. |
 
+## Execution result
+
+A01-A16 passed for the bounded local/mock scope. The sole Draft PR is `#177`.
+The corrected implementation head
+`c0687efcb252b7c7c7e138fa5d7286f6a1e8d245` reached `11/11` successful checks;
+the dedicated Kimi workflow is run `35063749325`, and general CI run
+`35063749388` succeeded on attempt `2` while retaining the prior mobile
+focus-transfer timeout attempt. Real provider execution remains
+`PENDING / NOT_AUTHORIZED / NOT_EXECUTED`.
+
 ## 6. Pending Human decisions and limits
 
 China/other region, account/project availability, credential owner, Kimi data

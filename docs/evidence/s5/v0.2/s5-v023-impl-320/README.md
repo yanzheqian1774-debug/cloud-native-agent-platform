@@ -54,6 +54,15 @@ credential read, or model request was performed.
    database name before reset or mutation (`78 passed, 2 setup errors`). The
    command was not weakened or retried against the 319 database. The legal
    320-owned targeted suite subsequently passed.
+3. The first PR head exposed that the 320-only Playwright spec was not excluded
+   from the default browser collection. The default job failed before test
+   execution because its intentionally absent 320 credentials were required.
+   Commit `c0687efcb252b7c7c7e138fa5d7286f6a1e8d245` added the exact exclusion
+   and a regression assertion without changing the dedicated 320 collection.
+4. On that corrected head, the first general-browser CI attempt executed 77
+   existing scenarios and recorded one unrelated mobile focus-transfer timeout
+   (`76 passed / 1 failed`). The retained attempt-2 rerun of only the failed CI
+   job passed `77/77`; no provider request or application retry was performed.
 
 ### Successful commands before the normal commit
 
@@ -128,7 +137,7 @@ at the cap check.
 | A13 negative product journeys | `PASS` |
 | A14 bounded synthetic-only run | `PASS`; real provider calls `0` |
 | A15 repository/local validation | `PASS` |
-| A16 sole Draft PR exact-head automated CI | `PENDING NORMAL COMMIT / PUSH / DRAFT PR` |
+| A16 sole Draft PR exact-head automated CI | `PASS`; Draft PR `#177`, corrected implementation head `c0687efcb252b7c7c7e138fa5d7286f6a1e8d245`, all `11/11` checks successful; CI run `35063749388` attempt `2` retains the preceding timeout attempt |
 
 ## Preserved assets and limitations
 
@@ -144,3 +153,16 @@ at the cap check.
   authorization remain Human decisions.
 - Real provider: `PENDING / NOT_AUTHORIZED / NOT_EXECUTED`; calls `0`.
 - Ready/merge/deploy/release/Session close: `NOT_AUTHORIZED`.
+
+## Draft PR and CI identity
+
+- Sole Draft PR: `#177`, base `main`, branch
+  `codex/s5-v023-impl-320-kimi-responses-adapter`.
+- Corrected implementation head/tree:
+  `c0687efcb252b7c7c7e138fa5d7286f6a1e8d245` /
+  `6310d5616bebb23867368c4674a7b34485ab0c29`.
+- Dedicated Kimi run/job: `35063749325 / 104689420586 / SUCCESS`.
+- General CI run: `35063749388 / attempt 2 / SUCCESS`; failed-job rerun
+  `104690245490 / SUCCESS`.
+- Other exact-head workflow runs: `35063749199`, `35063749270`,
+  `35063749275`, `35063749369`, and `35063749439`, all successful.
