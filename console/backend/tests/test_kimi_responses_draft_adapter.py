@@ -5,6 +5,7 @@ import ssl
 import subprocess
 import threading
 import time
+from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import ClassVar
@@ -453,6 +454,8 @@ def test_missing_or_invalid_usage_is_not_fabricated(kimi_mock, usage):
     )
     assert observation.state is ObservationState.SUCCEEDED
     assert observation.input_tokens is observation.output_tokens is None
+    assert observation.result_kind is DraftResultKind.NEEDS_CLARIFICATION
+    assert observation.clarification_question == "请补充完成标准。"
 
 
 def test_redirect_disconnect_observe_and_cancel_do_not_retry(kimi_mock):
@@ -488,7 +491,7 @@ def test_redirect_disconnect_observe_and_cancel_do_not_retry(kimi_mock):
     assert transport.dispatch_count == calls
 
 
-def test_read_total_timeout_is_ambiguous_and_dispatched_once(kimi_mock):
+def test_read_timeout_is_ambiguous_and_dispatched_once(kimi_mock):
     server, cert, tmp_path = kimi_mock
     credential_file = _credential_file(tmp_path)
     configuration = KimiResponsesConfiguration(
@@ -529,7 +532,7 @@ def test_read_total_timeout_is_ambiguous_and_dispatched_once(kimi_mock):
     assert len(_KimiHandler.requests) == transport.dispatch_count == 1
 
 
-def test_invalid_tls_configuration_fails_before_dispatch(kimi_mock):
+def test_missing_ca_is_configuration_failure_before_dispatch(kimi_mock):
     server, cert, tmp_path = kimi_mock
     configuration = _configuration(server, cert, _credential_file(tmp_path))
     invalid = KimiResponsesConfiguration(
@@ -590,6 +593,70 @@ def test_kimi_profile_selection_is_exact_and_mixed_adapter_fails_closed(kimi_moc
         mutate(mixed)
         with pytest.raises(DraftAssistanceError, match="DRAFT_PROFILE_INVALID"):
             parse_runtime_profile(mixed, allow_local_https_mock=True)
+
+
+def test_untrusted_certificate_fails_during_tls_before_http_dispatch(kimi_mock):
+    server, cert, tmp_path = kimi_mock
+    configuration = replace(
+        _configuration(server, cert, _credential_file(tmp_path)), ca_file=None
+    )
+    transport = KimiResponsesDraftTransport(configuration)
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS") as failure:
+        transport.dispatch(
+            invocation_id="untrusted-cert",
+            request=transport.prepare(
+                invocation_id="untrusted-cert", content="test", profile=_profile()
+            ),
+            credential=_resolver(configuration).resolve(_profile(), "untrusted-cert"),
+            profile=_profile(),
+        )
+    assert isinstance(failure.value.__cause__, ssl.SSLCertVerificationError)
+    assert transport.dispatch_count == 1
+    assert _KimiHandler.requests == []
+
+
+@pytest.mark.parametrize("branch", ["connect-timeout", "post-connect-deadline"])
+def test_connect_timeout_and_independent_deadline_are_separate(
+    kimi_mock, monkeypatch, branch
+):
+    from agent_console import kimi_responses_draft_adapter as adapter
+
+    server, cert, tmp_path = kimi_mock
+    configuration = _configuration(server, cert, _credential_file(tmp_path))
+    transport = KimiResponsesDraftTransport(configuration)
+    events = []
+    clock = [0.0]
+
+    class Connection:
+        sock = None
+
+        def __init__(self, *args, timeout, **kwargs):
+            assert timeout == configuration.connect_timeout_seconds
+
+        def connect(self):
+            events.append("connect")
+            if branch == "connect-timeout":
+                raise TimeoutError("deterministic connect timeout")
+            clock[0] = configuration.total_timeout_seconds + 0.1
+
+        def close(self):
+            events.append("close")
+
+    monkeypatch.setattr(adapter.http.client, "HTTPSConnection", Connection)
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: clock[0])
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS") as failure:
+        transport.dispatch(
+            invocation_id=branch,
+            request=transport.prepare(
+                invocation_id=branch, content="test", profile=_profile()
+            ),
+            credential=_resolver(configuration).resolve(_profile(), branch),
+            profile=_profile(),
+        )
+    assert isinstance(failure.value.__cause__, TimeoutError)
+    assert events == ["connect", "close"]
+    assert transport.dispatch_count == 1
+    assert _KimiHandler.requests == []
 
 
 def test_kimi_credential_resolver_has_no_environment_fallback(kimi_mock, monkeypatch):

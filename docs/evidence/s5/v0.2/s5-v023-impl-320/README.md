@@ -2,6 +2,11 @@
 
 ## Boundary
 
+The authorized follow-up from fixed candidate `aaa2b77` supersedes the previous
+blanket A04/A05/A13 claims. See [precise follow-up evidence](FOLLOWUP-A04-A05-A13.md)
+and [updated acceptance index](A01-A16-INDEX.md). Historical r3/CI identities below
+remain unchanged and do not prove the new budget browser journey.
+
 This record belongs only to `S5-V023-IMPL-320` and its isolated branch/worktree.
 It does not modify or claim 319 assets. Real Kimi calls remain
 `PENDING / NOT_AUTHORIZED / NOT_EXECUTED`; credentials and provider calls are
@@ -125,8 +130,8 @@ at the cap check.
 | A01 exact identity/config | `PASS` |
 | A02 OpenAI compatibility | `PASS` |
 | A03 Kimi request contract | `PASS` |
-| A04 Kimi response contract | `PASS` |
-| A05 one-shot transport/TLS/timeout/redirect/disconnect | `PASS` |
+| A04 Kimi response contract | `PASS`; strict valid output success is separate from incomplete measurement and conservative budget retention |
+| A05 one-shot transport/TLS/timeout/redirect/disconnect | `PARTIAL`; distinct tested branches pass, strict whole-lifecycle hard deadline `NOT_PROVEN`; see follow-up matrix |
 | A06 fake exact-file credential and data boundary | `PASS` |
 | A07 inherited dispatch ordering | `PASS` |
 | A08 exact authorization rejection/current admission | `PASS` |
@@ -134,7 +139,7 @@ at the cap check.
 | A10 call/cost cap and restart | `PASS` |
 | A11 aggregate usage and worst-case retention | `PASS` |
 | A12 positive product journey | `PASS` |
-| A13 negative product journeys | `PASS` |
+| A13 negative product journeys | `PASS` on modified local r7 source; new formal budget-denial journey included, 10/10/10 dispatch counts; final-head CI recorded externally after push |
 | A14 bounded synthetic-only run | `PASS`; real provider calls `0` |
 | A15 repository/local validation | `PASS` |
 | A16 sole Draft PR exact-head automated CI | `PASS`; Draft PR `#177`, corrected implementation head `c0687efcb252b7c7c7e138fa5d7286f6a1e8d245`, all `11/11` checks successful; CI run `35063749388` attempt `2` retains the preceding timeout attempt |

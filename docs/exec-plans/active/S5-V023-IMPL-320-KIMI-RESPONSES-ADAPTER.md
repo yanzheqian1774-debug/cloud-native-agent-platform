@@ -109,7 +109,7 @@ work stops for G2 escalation.
 | A01 | Separate Kimi/OpenAI identities and exact Kimi governance tuple; every mixed tuple fails closed. |
 | A02 | Existing OpenAI adapter tests and projection behavior pass unchanged. |
 | A03 | Exact Kimi path/model, typed input, strict schema, `reasoning.effort=low`, 4096 ceiling, and absence of all tool/truncation/state-continuation fields. |
-| A04 | Completed valid JSON succeeds; schema invalid, refusal, incomplete, failed, nonterminal, missing/invalid usage never become a successful draft. |
+| A04 | Completed strict valid output succeeds; schema invalid/refusal/incomplete/failed/nonterminal cannot produce a successful draft. Missing/invalid usage is independent incomplete measurement, never fabricated zero, and cannot release the worst-case reservation. |
 | A05 | HTTP rejection/redirect/TLS/disconnect/connect-read-total timeout have zero retry and at most one dispatch. |
 | A06 | Fake exact private file only; no env/default fallback; no credential/raw prompt/raw response in logs or evidence. |
 | A07 | Resource Use -> reservation -> current admission -> dispatch CAS -> credential -> transport ordering remains unchanged. |
@@ -125,7 +125,32 @@ work stops for G2 escalation.
 
 ## Execution result
 
-A01-A16 passed for the bounded local/mock scope. The sole Draft PR is `#177`.
+### Authorized follow-up from fixed candidate aaa2b77
+
+The follow-up starts at head `aaa2b773c28a02d4fa16455704e8fe4034a5c585`
+and tree `b349c6cc78e26d404d9993dc1d8ca6dd06e5f58a` in the same clean,
+single-writer worktree/branch/PR. Scope is limited to:
+
+1. Add the missing A13 budget-refusal product journey on the same immutable ledger,
+   consuming its cap through explicit authorized UI operations before refusal.
+2. Align A04 wording with ARCH-318 sections 4.2, 6.1 and 9.1/9.2 and assert that
+   valid output with incomplete/out-of-bound usage produces no settlement.
+3. Separate A05 configuration, TLS certificate verification, deterministic connect
+   timeout, real local read timeout, and post-connect total-deadline exhaustion tests.
+   The latter proves only the post-connect guard; a strict end-to-end hard deadline
+   across headers/body is NOT_PROVEN and must not be relabeled PASS.
+4. Use a new 320-owned database/evidence directory, preserve old r1/r2/r3 identities,
+   run targeted tests/frontend gates/320 acceptance/make check, normally commit and
+   non-force push the same Draft PR, and inspect new-head CI checkout identities.
+
+No product behavior or accepted contract changes are needed for A04. No migration,
+real-call configuration, owner, authorization or UNKNOWN behavior is changed.
+
+The original record claimed A01-A16 passed for the bounded local/mock scope.
+The follow-up corrects A04 semantics, adds the formerly missing A13 budget journey,
+and marks A05 PARTIAL because whole-lifecycle hard-deadline protection is not proved.
+Historical checks below retain their original source and do not prove this follow-up.
+The sole Draft PR is `#177`.
 The corrected implementation head
 `c0687efcb252b7c7c7e138fa5d7286f6a1e8d245` reached `11/11` successful checks;
 the dedicated Kimi workflow is run `35063749325`, and general CI run

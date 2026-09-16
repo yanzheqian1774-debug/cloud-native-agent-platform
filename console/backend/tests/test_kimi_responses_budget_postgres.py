@@ -5,12 +5,16 @@ import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
+import psycopg
 import pytest
 from agent_console.draft_assistance import (
     DraftAssistanceError,
     DraftAssistanceProfileRevision,
+    DraftResultKind,
     DraftScope,
+    ObservationState,
     ProviderBudgetQuote,
+    ProviderObservation,
 )
 from agent_console.draft_provider_budget_postgres import PostgresProviderCallBudget
 from agent_console.kimi_responses_draft_adapter import ADAPTER_ID, ADAPTER_REVISION
@@ -93,3 +97,45 @@ def test_kimi_test_only_reservation_survives_restart_without_dispatch(database_u
             restarted.reserve("reserve-over-cap", _invocation(3), quote)
     finally:
         restarted.close()
+
+
+@pytest.mark.parametrize(
+    "usage", [(None, None), (1, None), (None, 1), (1001, 1), (1, 4097)]
+)
+def test_valid_output_with_incomplete_or_out_of_bound_usage_retains_reservation(
+    database_url, usage
+):
+    ledger_id = f"s5-v023-impl-320-usage-{uuid.uuid4().hex}"
+    ledger = _ledger(database_url, ledger_id)
+    try:
+        quote = ProviderBudgetQuote(1000, 4096, 9192)
+        reservation = ledger.reserve("reserve-usage", _invocation(1), quote)
+        observation = ProviderObservation(
+            "usage-observation",
+            ObservationState.SUCCEEDED,
+            result_kind=DraftResultKind.NEEDS_CLARIFICATION,
+            clarification_question="请补充完成标准。",
+            input_tokens=usage[0],
+            output_tokens=usage[1],
+        )
+        ledger.record_usage("record-usage", reservation, observation)
+        assert observation.state is ObservationState.SUCCEEDED
+        with psycopg.connect(database_url) as connection:
+            assert (
+                connection.execute(
+                    "SELECT count(*) FROM draft_provider_budget.settlements "
+                    "WHERE ledger_id=%s",
+                    (ledger_id,),
+                ).fetchone()[0]
+                == 0
+            )
+            assert (
+                connection.execute(
+                    "SELECT worst_case_cost_microusd "
+                    "FROM draft_provider_budget.reservations WHERE ledger_id=%s",
+                    (ledger_id,),
+                ).fetchone()[0]
+                == quote.worst_case_cost_microusd
+            )
+    finally:
+        ledger.close()

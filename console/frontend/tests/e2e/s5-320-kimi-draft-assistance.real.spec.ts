@@ -145,3 +145,48 @@ test("S5-320 Kimi nonterminal remains UNKNOWN and is never redispatched", async 
   await administratorContext.close();
   await applicantContext.close();
 });
+
+test("S5-320 formal budget refusal blocks product dispatch on the same ledger", async ({ browser, request }, testInfo) => {
+  test.setTimeout(240_000);
+  const administratorContext = await browser.newContext();
+  const administrator = await login(administratorContext, administratorCredential);
+  let consumed = await providerDispatches(request);
+  // Distinct user operations consume the existing immutable ledger; no ledger,
+  // profile, or failed-operation key is replaced to evade its cap.
+  while (consumed < 10) {
+    const context = await browser.newContext();
+    const applicant = await login(context, applicantCredential);
+    await applicant.getByLabel("你希望解决什么问题？").fill(`合成预算消耗问题 ${consumed}`);
+    await applicant.getByLabel("你希望解决什么问题？").press("Enter");
+    const card = await authorizeDraft(applicant, administrator);
+    await expect(card).toContainText("需要补充信息");
+    expect(await providerDispatches(request)).toBe(consumed + 1);
+    consumed += 1;
+    await context.close();
+  }
+  const context = await browser.newContext();
+  const applicant = await login(context, applicantCredential);
+  const before = await providerDispatches(request);
+  await applicant.getByLabel("你希望解决什么问题？").fill("合成预算上限拒绝问题");
+  await applicant.getByLabel("你希望解决什么问题？").press("Enter");
+  const card = await authorizeDraft(applicant, administrator);
+  const refusal = card.locator("xpath=ancestor::article[1]").getByRole("alert");
+  await expect(refusal).toContainText("PROVIDER_BUDGET_DENIED");
+  await expect(card).not.toContainText("可修改草稿已生成");
+  await expect(applicant.getByLabel("问题草稿卡片")).toHaveCount(0);
+  await expect(applicant.getByRole("heading", { name: "业务问题已创建", exact: true })).toHaveCount(0);
+  const after = await providerDispatches(request);
+  expect(before).toBe(10);
+  expect(after).toBe(before);
+  await refusal.getByRole("button", { name: "继续原辅助调用", exact: true }).click();
+  await expect(applicant.getByText("PROVIDER_BUDGET_DENIED", { exact: true })).toBeVisible();
+  await expect(applicant.getByLabel("问题草稿卡片")).toHaveCount(0);
+  expect(await providerDispatches(request)).toBe(after);
+  await testInfo.attach("budget-refusal-counts", {
+    body: Buffer.from(JSON.stringify({ ledgerId: "s5-v023-impl-320-kimi-mock-provider", before, after, afterSameKeyReplay: after, callCap: 10, reason: "PROVIDER_BUDGET_DENIED" })),
+    contentType: "application/json",
+  });
+  await applicant.screenshot({ path: testInfo.outputPath("s5-320-kimi-budget-refusal.png") });
+  await context.close();
+  await administratorContext.close();
+});

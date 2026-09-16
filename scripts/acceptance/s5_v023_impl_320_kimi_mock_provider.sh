@@ -131,17 +131,19 @@ else
   browser_status=$?
 fi
 printf '%s\n' "$browser_status" > "$browser_exit"
+curl --insecure --fail --silent "https://127.0.0.1:$mock_port/stats" > "$mock_stats"
 if (( browser_status != 0 )); then
   exit "$browser_status"
 fi
 
-curl --insecure --fail --silent "https://127.0.0.1:$mock_port/stats" > "$mock_stats"
 SOURCE_SHA="$(git rev-parse HEAD)" TREE_SHA="$(git rev-parse 'HEAD^{tree}')" \
+WORKTREE_DIRTY="$(test -z "$(git status --porcelain)" && printf false || printf true)" \
 BUILD_SHA="$(find console/frontend/dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)" \
 OUTPUT_DIR="$output_dir" STARTUP="$startup" REPORT="$browser_report" \
 MOCK_STATS="$mock_stats" RUNTIME_DIR="$runtime_dir" \
 uv run python - <<'PY'
 import glob
+import base64
 import hashlib
 import json
 import os
@@ -166,10 +168,33 @@ with psycopg.connect(os.environ["ACCEPTANCE_DATABASE_URL"]) as connection:
     ).fetchone()[0]
 if not dispatch_count <= reservation_count <= 10:
     raise SystemExit("S5_320_RESERVATION_DISPATCH_INVARIANT_FAILED")
+if (
+    dispatch_count != 10 or reservation_count != 10
+    or report_document.get("stats", {}).get("expected") != 4
+):
+    raise SystemExit("S5_320_BUDGET_REFUSAL_JOURNEY_NOT_PROVEN")
+
+def documents(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from documents(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from documents(child)
+
+refusal = next(
+    json.loads(base64.b64decode(item["body"]))
+    for item in documents(report_document)
+    if item.get("name") == "budget-refusal-counts" and "body" in item
+)
+if not refusal["before"] == refusal["after"] == refusal["afterSameKeyReplay"] == 10:
+    raise SystemExit("S5_320_BUDGET_REFUSAL_DISPATCH_INCREASED")
 evidence = {
     "schemaVersion": "s5-v023-impl-320-kimi-mock-provider-acceptance.v1",
     "source": os.environ["SOURCE_SHA"],
     "tree": os.environ["TREE_SHA"],
+    "sourceWorktreeDirty": os.environ["WORKTREE_DIRTY"] == "true",
     "frontendBuildDigest": os.environ["BUILD_SHA"],
     "provider": "LOCAL_HTTPS_KIMI_RESPONSES_MOCK",
     "adapter": {"id": "kimi-responses-draft", "revision": "v1", "protocol": "KIMI_RESPONSES_V1"},
@@ -177,6 +202,7 @@ evidence = {
     "quoteLabel": "TEST_ONLY_SYNTHETIC_USD_QUOTE / NOT_KIMI_PRICE",
     "reservationCount": reservation_count,
     "dispatchCount": dispatch_count,
+    "budgetRefusal": refusal,
     "realProviderCalls": 0,
     "timeouts": {"connectSeconds": 2, "readSeconds": 3, "totalSeconds": 5},
     "cumulativeMachineWait": "NOT_IMPLEMENTED / HUMAN DECISION PENDING",
