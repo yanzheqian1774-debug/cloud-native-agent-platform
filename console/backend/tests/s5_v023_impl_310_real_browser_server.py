@@ -831,6 +831,13 @@ def seed_dynamic_grants(repository, agent: dict, now: datetime) -> None:
 
 
 def build_fixture(args, startup: BoundedStartupStatus):
+    draft_assistance_fixture = (
+        "320"
+        if os.environ.get("S5_320_DRAFT_ASSISTANCE") == "1"
+        else "319"
+        if os.environ.get("S5_319_DRAFT_ASSISTANCE") == "1"
+        else None
+    )
     startup.begin("DATABASE_CONNECTION")
     now = datetime.now(UTC)
     agent_repository = PostgresAgentDefinitionRepository(
@@ -934,7 +941,7 @@ def build_fixture(args, startup: BoundedStartupStatus):
             if args.rel_317
             else "s5-v023-rel-316-trusted-preparation"
         ),
-        draft_assistance=os.environ.get("S5_319_DRAFT_ASSISTANCE") == "1",
+        draft_assistance=draft_assistance_fixture is not None,
     )
     (args.runtime_dir / "runtime.json").write_text(
         json.dumps(
@@ -958,15 +965,19 @@ def build_fixture(args, startup: BoundedStartupStatus):
     initialize_authority_generation(runtime, control_epoch=1, recovery_epoch=1, now=now)
     problems = build_business_problem_application(args.database_url, assembly)
     draft_composition = None
-    if os.environ.get("S5_319_DRAFT_ASSISTANCE") == "1":
-        from s5_v023_impl_319_draft_fixture import build_fixture
+    if draft_assistance_fixture is not None:
+        if draft_assistance_fixture == "320":
+            from s5_v023_impl_320_draft_fixture import build_fixture
+        else:
+            from s5_v023_impl_319_draft_fixture import build_fixture
 
-        responses_url = os.environ.get("S5_319_MOCK_RESPONSES_URL")
+        prefix = f"S5_{draft_assistance_fixture}"
+        responses_url = os.environ.get(f"{prefix}_MOCK_RESPONSES_URL")
         if responses_url:
-            ca_file = os.environ.get("S5_319_MOCK_CA_FILE")
-            credential_file = os.environ.get("S5_319_MOCK_CREDENTIAL_FILE")
+            ca_file = os.environ.get(f"{prefix}_MOCK_CA_FILE")
+            credential_file = os.environ.get(f"{prefix}_MOCK_CREDENTIAL_FILE")
             if not ca_file or not credential_file:
-                raise ValueError("S5_319_REAL_PROVIDER_FIXTURE_INCOMPLETE")
+                raise ValueError(f"{prefix}_REAL_PROVIDER_FIXTURE_INCOMPLETE")
             draft_composition = build_fixture(
                 args.database_url,
                 args.runtime_dir,

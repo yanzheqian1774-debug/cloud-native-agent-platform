@@ -24,6 +24,23 @@ from agent_console.draft_assistance_support import (
     OpaqueSyntheticCredentialResolver,
 )
 from agent_console.draft_provider_budget_postgres import PostgresProviderCallBudget
+from agent_console.kimi_responses_draft_adapter import (
+    ADAPTER_ID as KIMI_ADAPTER_ID,
+)
+from agent_console.kimi_responses_draft_adapter import (
+    ADAPTER_REVISION as KIMI_ADAPTER_REVISION,
+)
+from agent_console.kimi_responses_draft_adapter import (
+    OUTPUT_SCHEMA_VERSION as KIMI_OUTPUT_SCHEMA_VERSION,
+)
+from agent_console.kimi_responses_draft_adapter import (
+    PROTOCOL as KIMI_PROTOCOL,
+)
+from agent_console.kimi_responses_draft_adapter import (
+    ExactFileKimiCredentialResolver,
+    KimiResponsesConfiguration,
+    KimiResponsesDraftTransport,
+)
 from agent_console.model_binding_resolution import (
     ExactModelBinding,
     ExactModelUse,
@@ -65,7 +82,9 @@ class GovernedProfileModelResolver:
     def __init__(
         self,
         repository: PostgresModelGovernanceRepository,
-        real_configuration: OpenAIResponsesConfiguration | None = None,
+        real_configuration: (
+            OpenAIResponsesConfiguration | KimiResponsesConfiguration | None
+        ) = None,
     ) -> None:
         self.repository = repository
         self.resolver = ModelGovernanceExactResolver(repository, repository, repository)
@@ -146,7 +165,7 @@ def _profile(
 ) -> tuple[
     DraftAssistanceProfileRevision,
     Path,
-    OpenAIResponsesConfiguration | None,
+    OpenAIResponsesConfiguration | KimiResponsesConfiguration | None,
     dict[str, int | str] | None,
 ]:
     common = {
@@ -185,7 +204,15 @@ def _profile(
         "tls",
         "budget",
     }
-    expected = common if transport_kind == "SYNTHETIC" else common | real_fields
+    provider_protocol = document.get("providerProtocol")
+    provider_fields = (
+        {"reasoningEffort"} if provider_protocol == KIMI_PROTOCOL else set()
+    )
+    expected = (
+        common
+        if transport_kind == "SYNTHETIC"
+        else (common | real_fields | provider_fields)
+    )
     if (
         set(document) != expected
         or document.get("schemaVersion") != ("draft-assistance-runtime.v1")
@@ -244,17 +271,13 @@ def _profile(
     tls = document["tls"]
     budget = document["budget"]
     if (
-        document["providerProtocol"] != OPENAI_PROTOCOL
-        or (
+        (
             document["executionClass"] != "REAL_PROVIDER"
             and not (
                 allow_local_https_mock
                 and document["executionClass"] == "LOCAL_HTTPS_MOCK"
             )
         )
-        or value.adapter_id != OPENAI_ADAPTER_ID
-        or value.adapter_revision != OPENAI_ADAPTER_REVISION
-        or value.output_schema_version != OPENAI_OUTPUT_SCHEMA_VERSION
         or not isinstance(credential, dict)
         or set(credential)
         != {"reference", "version", "resolverId", "resolverRevision", "file"}
@@ -294,7 +317,7 @@ def _profile(
     try:
         credential_file = Path(credential["file"])
         ca_file = None if tls["caFile"] is None else Path(tls["caFile"])
-        real_configuration = OpenAIResponsesConfiguration(
+        common_configuration = (
             document["executionClass"],
             document["responsesUrl"],
             document["nativeModelId"],
@@ -311,8 +334,33 @@ def _profile(
             document["maximumResponseBytes"],
             budget["inputPriceMicrousdPerMillionTokens"],
             budget["outputPriceMicrousdPerMillionTokens"],
-            ca_file,
         )
+        adapter_tuple = (
+            document["providerProtocol"],
+            value.adapter_id,
+            value.adapter_revision,
+            value.output_schema_version,
+        )
+        if adapter_tuple == (
+            OPENAI_PROTOCOL,
+            OPENAI_ADAPTER_ID,
+            OPENAI_ADAPTER_REVISION,
+            OPENAI_OUTPUT_SCHEMA_VERSION,
+        ):
+            real_configuration = OpenAIResponsesConfiguration(
+                *common_configuration, ca_file
+            )
+        elif adapter_tuple == (
+            KIMI_PROTOCOL,
+            KIMI_ADAPTER_ID,
+            KIMI_ADAPTER_REVISION,
+            KIMI_OUTPUT_SCHEMA_VERSION,
+        ):
+            real_configuration = KimiResponsesConfiguration(
+                *common_configuration, document["reasoningEffort"], ca_file
+            )
+        else:
+            raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
         normalized_budget = {
             "ledgerId": budget["ledgerId"],
             "callCap": budget["callCap"],
@@ -393,15 +441,23 @@ def build_draft_assistance_composition(
                 ),
             )
             budget_owner.migrate_and_configure()
-            credentials = ExactFileOpenAICredentialResolver(
-                real_configuration,
-                expected_profile_revision_id=profile.profile_revision_id,
-                expected_connection_profile_id=profile.connection_profile_id,
-                expected_connection_profile_revision_id=(
+            resolver_arguments = {
+                "expected_profile_revision_id": profile.profile_revision_id,
+                "expected_connection_profile_id": profile.connection_profile_id,
+                "expected_connection_profile_revision_id": (
                     profile.connection_profile_revision_id
                 ),
-            )
-            transport = OpenAIResponsesDraftTransport(real_configuration)
+            }
+            if isinstance(real_configuration, KimiResponsesConfiguration):
+                credentials = ExactFileKimiCredentialResolver(
+                    real_configuration, **resolver_arguments
+                )
+                transport = KimiResponsesDraftTransport(real_configuration)
+            else:
+                credentials = ExactFileOpenAICredentialResolver(
+                    real_configuration, **resolver_arguments
+                )
+                transport = OpenAIResponsesDraftTransport(real_configuration)
             budget_owner_for_service = budget_owner
         service = DraftAssistanceService(
             draft_repository,
