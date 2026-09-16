@@ -1,0 +1,157 @@
+name: S5 IMPL 320 Kimi Mock Provider Acceptance
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/s5-v023-impl-320-kimi-mock-provider.yml"
+      - "console/backend/**"
+      - "console/frontend/**"
+      - "scripts/acceptance/s5_v023_impl_320_owned_cleanup.sh"
+      - "scripts/acceptance/s5_v023_impl_320_kimi_mock_provider.sh"
+      - "docs/exec-plans/active/S5-V023-IMPL-320-KIMI-RESPONSES-ADAPTER.md"
+      - "docs/evidence/s5/v0.2/s5-v023-impl-320/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: s5-v023-impl-320-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kimi-mock-provider:
+    name: PostgreSQL HTTPS Chromium Kimi Mock
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: s5_v023_impl_320_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d s5_v023_impl_320_acceptance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PYTHONPATH: conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:console/backend/tests:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures
+      ACCEPTANCE_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/s5_v023_impl_320_acceptance
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+
+      - run: uv python install 3.12
+      - run: uv sync --frozen
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+
+      - name: Install frontend and Chromium
+        working-directory: console/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build and lint exact frontend
+        working-directory: console/frontend
+        env:
+          VITE_SUPPLIER_QUALITY_DEMO_MODE: live
+          VITE_PROBLEM_DRAFT_ASSISTANCE: enabled
+        run: |
+          npm run lint
+          npm run build
+
+      - name: Focused backend and contract tests
+        env:
+          DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL: ${{ env.ACCEPTANCE_DATABASE_URL }}
+        run: |
+          uv run ruff check \
+            console/backend/src/agent_console/draft_assistance_bootstrap.py \
+            console/backend/src/agent_console/kimi_responses_draft_adapter.py \
+            console/backend/src/agent_console/openai_responses_draft_adapter.py \
+            console/backend/tests/s5_v023_impl_310_real_browser_server.py \
+            console/backend/tests/s5_v023_impl_320_draft_fixture.py \
+            console/backend/tests/s5_v023_impl_320_mock_responses_server.py \
+            console/backend/tests/test_kimi_responses_budget_postgres.py \
+            console/backend/tests/test_kimi_responses_draft_adapter.py
+          uv run pytest -q \
+            console/backend/tests/test_kimi_responses_draft_adapter.py \
+            console/backend/tests/test_kimi_responses_budget_postgres.py \
+            console/backend/tests/test_openai_responses_draft_adapter.py \
+            console/backend/tests/test_draft_assistance.py \
+            console/backend/tests/test_draft_provider_budget_postgres.py \
+            console/frontend/tests/test_s5_v023_impl_319_mock_provider_workflow.py \
+            console/frontend/tests/test_s5_v023_impl_320_kimi_mock_provider_workflow.py
+
+      - name: Prove owned cleanup preserves an injected failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          bash -c '
+            set -euo pipefail
+            source scripts/acceptance/s5_v023_impl_320_owned_cleanup.sh
+            mock_pid=""
+            server_pid=""
+            trap s5_320_exit_trap EXIT
+            trap "s5_320_signal_trap 130" INT
+            trap "s5_320_signal_trap 143" TERM
+            exit 37
+          '
+          injected_status=$?
+          set -e
+          test "$injected_status" -eq 37
+
+      - name: Discover dedicated browser journeys
+        working-directory: console/frontend
+        env:
+          S5_320_WORKBENCH_URL: https://127.0.0.1:19543
+          S5_320_APPLICANT_CREDENTIAL: discovery-only
+          S5_320_ADMIN_CREDENTIAL: discovery-only
+          S5_320_MOCK_RESPONSES_URL: https://127.0.0.1:19545/v1/responses
+        run: >-
+          npx playwright test --config playwright.s5-320.config.ts
+          --list --workers=1 --retries=0 --forbid-only
+
+      - name: Run native HTTPS Kimi mock journeys
+        shell: bash
+        env:
+          S5_320_EVIDENCE_DIR: ${{ runner.temp }}
+        run: bash scripts/acceptance/s5_v023_impl_320_kimi_mock_provider.sh
+
+      - name: Upload bounded 320 acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s5-v023-impl-320-kimi-mock-provider-evidence
+          path: |
+            ${{ runner.temp }}/s5-v023-impl-320-evidence.json
+            ${{ runner.temp }}/s5-v023-impl-320-playwright/
+            ${{ runner.temp }}/s5-v023-impl-320-playwright.json
+            ${{ runner.temp }}/s5-v023-impl-320-playwright.stderr.log
+            ${{ runner.temp }}/s5-v023-impl-320-playwright.exit
+            ${{ runner.temp }}/s5-v023-impl-320-build-mode.txt
+            ${{ runner.temp }}/s5-v023-impl-320-readiness.txt
+            ${{ runner.temp }}/s5-v023-impl-320-startup.json
+            ${{ runner.temp }}/s5-v023-impl-320-mock-stats.json
+            ${{ runner.temp }}/s5-v023-impl-320-mock.log
+            ${{ runner.temp }}/s5-v023-impl-320-server.log
+            ${{ runner.temp }}/s5-v023-impl-320-runtime/s5-v023-impl-320-quote-label.txt
+          if-no-files-found: error
+          retention-days: 14
