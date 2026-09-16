@@ -133,7 +133,8 @@ test("S5-319 shows authorization denial without a provider call", async ({ brows
   await deny(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
   await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
-  const denial = applicant.getByRole("alert");
+  const denial = card.getByRole("alert");
+  await expect(denial).toHaveCount(1);
   await expect(denial).toContainText("无法打开该内容");
   await expect(denial).toContainText("DRAFT_ASSISTANCE_NOT_FOUND");
   await expect(card).toContainText("AUTHORIZATION_PENDING");
