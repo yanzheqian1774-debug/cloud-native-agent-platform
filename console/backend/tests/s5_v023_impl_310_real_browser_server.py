@@ -961,7 +961,21 @@ def build_fixture(args, startup: BoundedStartupStatus):
     if os.environ.get("S5_319_DRAFT_ASSISTANCE") == "1":
         from s5_v023_impl_319_draft_fixture import build_fixture
 
-        draft_composition = build_fixture(args.database_url, args.runtime_dir)
+        responses_url = os.environ.get("S5_319_MOCK_RESPONSES_URL")
+        if responses_url:
+            ca_file = os.environ.get("S5_319_MOCK_CA_FILE")
+            credential_file = os.environ.get("S5_319_MOCK_CREDENTIAL_FILE")
+            if not ca_file or not credential_file:
+                raise ValueError("S5_319_REAL_PROVIDER_FIXTURE_INCOMPLETE")
+            draft_composition = build_fixture(
+                args.database_url,
+                args.runtime_dir,
+                responses_url=responses_url,
+                ca_file=Path(ca_file),
+                credential_file=Path(credential_file),
+            )
+        else:
+            draft_composition = build_fixture(args.database_url, args.runtime_dir)
     composition = build_workbench_composition(
         runtime_configuration_path=args.runtime_dir / "runtime.json",
         allowed_host=f"127.0.0.1:{args.public_port}",

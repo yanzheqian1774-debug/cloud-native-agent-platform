@@ -6,8 +6,10 @@
 
 This package is a request for a separate Human gate. It does not authorize reading
 the credential reference, enabling the real adapter, sending either payload, retrying
-an ambiguous call, accepting provider terms, or spending funds. The shipped product
-composition enables only the visibly labelled deterministic synthetic transport.
+an ambiguous call, accepting provider terms, or spending funds. The default shipped
+configuration remains the visibly labelled deterministic synthetic transport. The
+real-provider composition is dormant unless a complete, exact `REAL_PROVIDER` profile
+and separately approved credential reference are supplied.
 
 ## Implementation split
 
@@ -20,23 +22,44 @@ composition enables only the visibly labelled deterministic synthetic transport.
   and high-water snapshot;
 - PostgreSQL invocation, contextual Resource Use and allowlisted Evidence recording,
   including owner-only repair without redispatch, are implemented;
-- the API and UI distinguish `SYNTHETIC` from `REAL_PROVIDER` results.
+- the API and UI distinguish `SYNTHETIC` from `REAL_PROVIDER` results;
+- an OpenAI Responses foreground adapter is implemented with text-only input, strict
+  JSON Schema output, `store=false`, no tools/files/web, no previous response, no
+  redirect following and no automatic retry;
+- an exact file credential resolver is implemented without environment-variable or
+  default credential fallback; it executes only after current authorization, exact
+  binding, Resource Use, budget reservation, admission and the durable dispatch CAS;
+- a PostgreSQL reservation ledger enforces task-scoped call and worst-case cost caps
+  under concurrency. Missing, invalid or over-bound usage retains the worst-case
+  reservation;
+- the real adapter contract is covered with fake credentials and a local HTTPS
+  Responses mock. This proves request/response, classification, redaction and budget
+  behavior without contacting a provider or incurring cost.
 
-### Not implemented or enabled
+### Implemented limitations and work not proved by this package
 
-- there is no OpenAI Responses adapter in the production composition;
-- there is no production credential resolver for this Draft Assistance path;
-- the runtime profile parser deliberately accepts only `transportKind: SYNTHETIC`;
-- no provider-side budget meter, provider correlation observer/canceller, or
-  provider-specific response/schema adapter has been reviewed and installed.
+- no `REAL_PROVIDER` runtime profile or credential value is committed or enabled;
+- no real provider call, provider account, organization/project, billing limit,
+  retention setting, model availability or current price has been verified;
+- foreground `store=false` Responses expose no supported remote observe/cancel path
+  in this adapter. Observe and cancel therefore return explicit unsupported/unknown
+  classifications and never fabricate cancellation confirmation;
+- the PostgreSQL ledger is a task-scoped admission guard, not provider-account
+  billing authority. It cannot prove total account spend outside these reservations;
+- qualitative usefulness and faithfulness remain unproved until a separately
+  authorized Human evaluates the real clarification and draft. JSON validity alone
+  is not acceptance;
+- the exact candidate's dedicated PostgreSQL + HTTPS + Chromium + local-mock journey
+  must pass in PR CI; other regression jobs cannot substitute for that check.
 
 ### Human-owned inputs still required
 
 The Human gate must supply or approve the exact provider organization/project,
 provider and model revision, endpoint and data-retention posture, credential
 reference and resolver ownership, per-call and total budget, timeouts, allowed input,
-and the persons authorized to grant both calls. None of the values recommended below
-is filled, approved or executable merely because it appears in this document.
+validity window, authorization subject and the persons authorized to grant both
+calls. None of the values recommended below is filled, approved or executable merely
+because it appears in this document.
 
 ## Proposed exact call boundary awaiting Human completion
 

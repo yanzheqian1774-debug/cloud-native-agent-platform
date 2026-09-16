@@ -168,3 +168,77 @@ retry, Human-set token/cost ceilings, connect/read/total timeouts, provider data
 policy, Evidence/redaction settings, acceptance criteria, and stop conditions. Until
 Human approval, credential reads and real dispatches are prohibited and the gate is
 reported `PENDING`.
+
+## 8. Resumed real-adapter implementation increment (2026-09-16)
+
+Human resumed the same Session, branch, worktree, and Draft PR at source
+`e39bcc89b726e2445bd028b86abe592636438c58`, tree
+`f4a8bf197ad405f6fde0d53886d9102af32061b9`. This remains a G1 increment
+under the accepted ARCH-318 owner and protocol decisions; it does not change a
+public API/CRD, persistent-infrastructure choice, or owner boundary.
+
+Before repository edits, the two closure database exports still under `/tmp`
+were verified against the review hashes and copied without deleting the
+originals into the existing external recovery directory. The immediately prior
+execution task was `systemError`; its final tool invocation performed only
+documentation discovery and no repository write. The resumed worktree was
+clean and had no active writer.
+
+### 8.1 Added implementation scope
+
+- Add an OpenAI Responses foreground adapter behind an exact
+  `REAL_PROVIDER` runtime profile. It sends text-only requests with no tools,
+  `store=false`, no `previous_response_id`, disabled input truncation, a strict
+  JSON Schema, a bounded response body, and no application/HTTP retry or
+  redirect following.
+- Add an exact, purpose-scoped file credential resolver. It accepts only the
+  configured Secret Reference identity/version and absolute credential file;
+  it has no environment, default-model, endpoint, or credential fallback.
+- Extend production composition parsing with a closed `SYNTHETIC` versus
+  `REAL_PROVIDER` union. The real variant requires every endpoint, native model,
+  adapter, credential, TLS, timeout, input/output token and price/budget field;
+  omission or mismatch fails closed. No real profile or credential is committed
+  by this task.
+- Add a PostgreSQL-backed, task-scoped reservation ledger for dispatch count
+  and worst-case cost. Reservation serializes concurrent admission, quotes the
+  complete serialized request including instructions and schema, and reserves
+  the configured output/reasoning ceiling. Missing reliable bounds fail closed;
+  ambiguous transport or missing/invalid usage retains the reservation rather
+  than releasing it. This ledger is an acceptance guard, not provider-account
+  billing authority.
+- Preserve current exact authorization, Model readback, Resource Use and CAS
+  ordering. Request preparation and budget reservation occur before credential
+  resolution; only the durable dispatch CAS winner receives the credential and
+  calls the adapter.
+- Report foreground `store=false` observation/cancellation truthfully: there is
+  no remote retrieve/cancel operation. A cancel intent or later local result is
+  applied only to the original invocation; lack of provider confirmation stays
+  requested/unknown and never becomes confirmed cancellation.
+- Add the five focused negative tests named by the resumed task, a small set of
+  visible negative Chromium paths, and a task-owned CI workflow using a fresh
+  PostgreSQL service, native HTTPS, Chromium, and a local HTTPS Responses mock.
+  The workflow records exact source/tree/build/test/screenshot identities and
+  remains isolated from the default Playwright suites.
+
+### 8.2 Incremental validation matrix
+
+| Boundary | Positive proof | Negative/fail-closed proof |
+| --- | --- | --- |
+| Profile/composition | exact REAL_PROVIDER union builds with every bound field | disabled/default, missing/extra fields, adapter/model/endpoint/Secret Reference mismatch and env fallback rejected |
+| Responses request | mock HTTPS receives one foreground, text-only, strict-schema request with exact model and `store=false` | tools/files/web, previous response, redirect, oversized body and a second automatic attempt are absent/rejected |
+| Response classification | completed schema-valid clarification/draft and authoritative usage settle correctly | refusal, incomplete/max-output truncation, failed status, schema/type error, HTTP rejection and transport ambiguity remain typed non-success |
+| Credential order/redaction | exact resolver called only after authorization, Model, Resource Use and budget admission | all earlier denial/failure paths have zero resolver/network calls; secret absent from errors, records and Evidence |
+| Budget/quota | full serialized request plus output/reasoning ceiling is reserved durably; authoritative usage can settle downward | concurrent admissions cannot exceed call/cost caps; absent usage, timeout and ambiguity keep worst-case reservation; unbounded quote fails closed |
+| Recovery gaps | different body while pending is rejected; Resource Use repair counts both dispatch/observe; provenance retry links only; cancellation-late-result stays on original | no replay redispatch, no owner-repair observe, no second Problem creation, no successor contamination |
+| Browser/CI | task-owned PostgreSQL + native HTTPS + Chromium + mock provider drives the product journey and emits candidate identities | authorization denial, UNKNOWN resubmit/observe and cancellation/recovery are user-visible; no real credential/provider/cost |
+
+### 8.3 Compatibility and stop conditions
+
+The additive budget tables stay in the existing PostgreSQL dependency and do
+not alter Attempt Resource Use v1 or the ARCH-318 contextual sibling. The
+provider-neutral service ports remain internal and non-frozen. If implementation
+would require a new owner, stored raw content, background Responses storage,
+public API/CRD change, or relaxation of exact authorization/binding, work stops
+for G2 escalation. Provider/model/project/data-policy/call cap/cost cap/validity
+and authorization-subject values in the call package remain Human choices and
+are not registered as approved by this increment.

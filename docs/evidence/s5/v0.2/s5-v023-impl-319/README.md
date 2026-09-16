@@ -4,8 +4,10 @@
 
 This directory records implementation and deterministic acceptance evidence for
 `S5-V023-IMPL-319`. The candidate is not Ready, merged, deployed, released or closed.
-Real-provider acceptance is `PENDING / NOT_AUTHORIZED / NOT_EXECUTED`; all model-call
-results described here came from the visibly labelled synthetic transport.
+Real-provider acceptance is `PENDING / NOT_AUTHORIZED / NOT_EXECUTED`; no real
+credential was read and no real provider was contacted. The resumed candidate adds a
+dormant OpenAI Responses composition that is exercised only with fake credentials
+and a visibly labelled local HTTPS mock until a separate Human gate is granted.
 
 ## Fixed inputs and dependency reception
 
@@ -23,10 +25,11 @@ authorization symbols. Existing authority/BFF files were retained and composed; 
 whole-branch replacement was used.
 
 Migration `0019_model_governance.sql` retains its original 308 identity and checksum.
-The task adds `0023_draft_assistance.sql`; it does not edit or claim `0020`, `0022`,
-the separately observed but unavailable `0021`, or another task's database. Real
-PostgreSQL acceptance used only container `s5-v023-impl-319-postgres`, database
-`s5_v023_impl_319`, on loopback port `55431`.
+The task adds `0023_draft_assistance.sql` and the resumed increment adds the isolated
+`0024_draft_provider_budget.sql`; neither edits or claims `0020`, `0022`, the
+separately observed but unavailable `0021`, or another task's database. Real
+PostgreSQL acceptance used only container `s5-v023-impl-319-postgres` on loopback
+port `55431`.
 
 ## Implemented boundary
 
@@ -34,7 +37,10 @@ PostgreSQL acceptance used only container `s5-v023-impl-319-postgres`, database
   versions, with HMAC-SHA-256 body commitment and no raw-content persistence;
 - separate exact Draft request/read/cancel and Model invoke authorization, current
   dispatch admission, exact Model/Provider/Endpoint/Profile/adapter snapshot;
-- provider-neutral dispatch/observe/cancel plus a synthetic-only production adapter;
+- provider-neutral dispatch/observe/cancel, the deterministic synthetic adapter, and
+  a disabled-by-default exact OpenAI Responses foreground composition;
+- an exact file credential resolver with no environment fallback and a task-scoped
+  PostgreSQL call/worst-case-cost reservation ledger;
 - Execution-owned `contextual-resource-use.v2` non-Attempt sibling and independent
   `model-draft-assistance-invocation-evidence.v1` allowlisted Evidence;
 - deterministic B/E/F/G operation IDs and repair without credential resolution or
@@ -45,9 +51,11 @@ PostgreSQL acceptance used only container `s5-v023-impl-319-postgres`, database
 Draft invocation responses disclose only whether Resource Use/Evidence was recorded.
 Their exact identifiers/content stay behind separate owner read authorization.
 
-## Validation record
+## Committed synthetic baseline validation
 
-The post-recovery candidate checks establish:
+The checks below apply to the committed synthetic baseline through `e39bcc8`; they
+remain historical evidence and are not presented as validation of the resumed
+real-adapter increment:
 
 | Check | Result |
 | --- | --- |
@@ -60,6 +68,21 @@ The post-recovery candidate checks establish:
 | Raw-content scan of Draft, contextual Resource Use and Evidence records | `PASS`; zero matches for the browser input strings in a 70,119-byte data-only dump |
 | Native HTTPS Chromium product journey | `PASS`; 1 test in 6.0s, using the live product build with `VITE_PROBLEM_DRAFT_ASSISTANCE=enabled`, two-stage authorization, clarification, supplement/new turn, structured draft, Human edit, formal create and authorized readback |
 | Provider type used | `SYNTHETIC`; real provider calls `0` |
+
+## Resumed real-adapter increment validation
+
+The uncommitted resumed increment was checked independently before delivery:
+
+| Check | Result |
+| --- | --- |
+| Focused adapter, resolver, service, budget and workflow tests | `PASS`; 48 tests, including 5 task-database budget tests |
+| Focused Ruff and shell syntax | `PASS`; bash and zsh syntax accepted both acceptance helpers |
+| Cleanup failure injection | `PASS`; bash and zsh each preserved exit code `37` |
+| Frontend ESLint and exact Vite build | `PASS`; built with both required variables and found both product markers in `dist` |
+| Repository `make check` | `PASS`; 1,775 passed / 193 skipped / 1 warning |
+| Normal pre-commit hooks | `PASS`; Ruff lint, Ruff format and pytest |
+| Reused-database local mock journey | `NOT A PASS`; preserved database state caused fixture `IDEMPOTENCY_PAYLOAD_MISMATCH` before listener readiness, so no browser or provider call ran |
+| Dedicated clean PostgreSQL + HTTPS + Chromium + local-mock CI | `PENDING`; this is the required complete-click gate for the resumed candidate |
 
 The passing browser run used the product's buttons and forms, not direct business
 API mutation. The server reported `READY` through `LISTENER_READINESS`; its startup

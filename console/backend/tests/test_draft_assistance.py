@@ -37,6 +37,7 @@ from agent_console.draft_assistance_support import (
     ExactProfileModelResolver,
     InMemoryContextualResourceUseOwner,
     InMemoryDraftEvidenceOwner,
+    InMemoryProviderCallBudget,
     OpaqueSyntheticCredentialResolver,
     StaticDraftAuthorization,
 )
@@ -137,6 +138,7 @@ def build(*, authorization_state=AuthorizationState.ALLOWED, now=NOW):
         transport,
         resource_use,
         evidence,
+        InMemoryProviderCallBudget(),
         clock=lambda: now,
         identity_factory=Identities(),
     )
@@ -215,6 +217,25 @@ def test_pending_authorization_requires_same_body_resubmission() -> None:
     resumed = service.begin(context(), key="draft-key-1", content="需要进一步说明")
     assert resumed.invocation.state is DraftInvocationState.SUCCEEDED
     assert transport.dispatch_count == 1
+
+
+def test_pending_authorization_rejects_different_body_without_dispatch() -> None:
+    service, authorization, credentials, transport, *_ = build(
+        authorization_state=AuthorizationState.PENDING
+    )
+    first = service.begin(
+        context(), key="draft-key-pending-different", content="需要进一步说明"
+    )
+    assert first.invocation.state is DraftInvocationState.AUTHORIZATION_PENDING
+
+    authorization.state = AuthorizationState.ALLOWED
+    with pytest.raises(DraftAssistanceError, match="IDEMPOTENCY_PAYLOAD_MISMATCH"):
+        service.begin(
+            context(),
+            key="draft-key-pending-different",
+            content="这是不同的正文，不能借原授权调用。",
+        )
+    assert credentials.calls == transport.dispatch_count == 0
 
 
 def test_replay_requires_read_before_payload_comparison() -> None:
@@ -346,7 +367,7 @@ def test_cancel_reject_and_problem_link_do_not_claim_business_success() -> None:
 
 
 def test_dispatch_cas_has_one_transport_winner_under_same_key_race() -> None:
-    service, authorization, _, transport, *_ = build()
+    service, authorization, credentials, transport, *_ = build()
     gate = Barrier(2)
     original = authorization.validate_current_and_admit
 
@@ -369,7 +390,35 @@ def test_dispatch_cas_has_one_transport_winner_under_same_key_race() -> None:
     assert {item.invocation.invocation_id for item in results} == {
         results[0].invocation.invocation_id
     }
-    assert transport.dispatch_count == 1
+    assert credentials.calls == transport.dispatch_count == 1
+
+
+def test_credential_failure_occurs_after_dispatch_fence_and_before_transport() -> None:
+    service, authorization, credentials, transport, *_ = build()
+
+    def unavailable(*_args):
+        credentials.calls += 1
+        raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
+
+    credentials.resolve = unavailable
+    with pytest.raises(DraftAssistanceError, match="CREDENTIAL_RESOLUTION_FAILED"):
+        service.begin(
+            context(),
+            key="draft-key-credential-failure",
+            content="季度末前将供应商缺陷率降低到百分之一以内。",
+        )
+    restored = service.repository.get_by_key(
+        DraftScope.from_context(context()),
+        "human:alice",
+        "draft-key-credential-failure",
+    )
+    assert restored is not None
+    assert restored.state is DraftInvocationState.FAILED_PRE_DISPATCH
+    assert restored.admission_id is not None
+    assert restored.dispatch_fence is not None
+    assert restored.budget_reservation_id is not None
+    assert authorization.admission_count == credentials.calls == 1
+    assert transport.dispatch_count == 0
 
 
 def test_evidence_repair_replays_owner_write_without_provider_dispatch() -> None:
@@ -446,10 +495,100 @@ def test_owner_repair_preserves_provider_reason_code() -> None:
     )
     assert first.invocation.reason_code == "TRANSPORT_AMBIGUOUS"
     assert first.invocation.owner_write_reason_code == "RESOURCE_USE_COMPLETION_PENDING"
+    observe_calls = 0
+    original_transport_observe = transport.observe
+
+    def observe(correlation):
+        nonlocal observe_calls
+        observe_calls += 1
+        return original_transport_observe(correlation)
+
+    transport.observe = observe
     repaired = service.observe(context(), first.invocation.invocation_id)
     assert repaired.invocation.reason_code == "TRANSPORT_AMBIGUOUS"
     assert repaired.invocation.owner_write_reason_code is None
     assert transport.dispatch_count == 1
+    assert observe_calls == 0
+
+
+def test_problem_provenance_link_failure_retries_only_link() -> None:
+    service, *_prefix, transport, _, _ = build()
+    result = service.begin(
+        context(),
+        key="draft-key-link-repair",
+        content="季度末前将供应商缺陷率降低到百分之一以内。",
+    )
+    original_compare_and_set = service.repository.compare_and_set
+    failures = 0
+
+    def fail_link_once(expected_version, replacement):
+        nonlocal failures
+        if replacement.problem_id and failures == 0:
+            failures += 1
+            raise DraftAssistanceError("DRAFT_STORAGE_UNAVAILABLE")
+        return original_compare_and_set(expected_version, replacement)
+
+    service.repository.compare_and_set = fail_link_once
+    with pytest.raises(DraftAssistanceError, match="DRAFT_STORAGE_UNAVAILABLE"):
+        service.link_problem(
+            context(),
+            result.invocation.invocation_id,
+            problem_id="problem-already-created",
+            problem_revision_id="problem-revision-1",
+            problem_digest=DIGEST,
+        )
+    linked = service.link_problem(
+        context(),
+        result.invocation.invocation_id,
+        problem_id="problem-already-created",
+        problem_revision_id="problem-revision-1",
+        problem_digest=DIGEST,
+    )
+    assert linked.invocation.problem_id == "problem-already-created"
+    assert transport.dispatch_count == 1
+
+
+def test_cancel_request_late_result_updates_only_original_not_successor() -> None:
+    service, *_prefix, transport, _, _ = build()
+    original = service.begin(
+        context(), key="draft-key-cancel-late", content="[UNKNOWN] 模拟取消后晚到"
+    )
+    correlation = original.invocation.provider_correlation
+    assert correlation
+
+    transport.cancel = lambda value: type(transport.observations[correlation])(
+        "cancel-not-confirmed",
+        transport.observations[correlation].state,
+        correlation=value,
+        reason_code="PROVIDER_CANCELLATION_UNSUPPORTED_FOREGROUND",
+    )
+    requested = service.cancel(context(), original.invocation.invocation_id)
+    assert requested.invocation.state is DraftInvocationState.CANCELLATION_REQUESTED
+    successor = service.begin(
+        context(),
+        key="draft-key-cancel-late-successor",
+        content="季度末前将供应商缺陷率降低到百分之一以内。",
+        parent_context_id=original.invocation.context_id,
+        parent_turn_id=original.invocation.turn_id,
+        expected_parent_version=original.invocation.turn_version,
+        predecessor_invocation_id=original.invocation.invocation_id,
+    )
+    transport.observations[correlation] = type(transport.observations[correlation])(
+        "late-after-cancel",
+        transport.observations[successor.invocation.provider_correlation].state,
+        correlation=correlation,
+        result_kind=DraftResultKind.DRAFT_READY,
+        title="原调用晚到结果",
+        description="该结果只能归属原调用。",
+    )
+    observed = service.observe(context(), original.invocation.invocation_id)
+    persisted_successor = service.read(context(), successor.invocation.invocation_id)
+    assert observed.invocation.state is DraftInvocationState.SUCCEEDED
+    assert (
+        persisted_successor.invocation.invocation_id
+        == successor.invocation.invocation_id
+    )
+    assert persisted_successor.invocation.last_observation_id != "late-after-cancel"
 
 
 def test_late_result_updates_original_and_never_successor() -> None:

@@ -36,6 +36,13 @@ async function approve(administrator: Page, requestId: string): Promise<void> {
   await expect(administrator.getByText("已批准", { exact: true })).toBeVisible();
 }
 
+async function deny(administrator: Page, requestId: string): Promise<void> {
+  await administrator.goto(`/authorization-admin?request=${encodeURIComponent(requestId)}`);
+  await administrator.getByRole("button", { name: "检查授权申请", exact: true }).click();
+  await administrator.getByRole("button", { name: "拒绝申请", exact: true }).click();
+  await expect(administrator.getByText("已拒绝", { exact: true })).toBeVisible();
+}
+
 async function authorizeDraft(applicant: Page, administrator: Page): Promise<Locator> {
   const card = applicant.getByLabel("AI 问题理解与草稿辅助");
   await expect(card).toContainText("AUTHORIZATION_PENDING");
@@ -100,6 +107,52 @@ test("S5-319 completes governed clarification, editable draft, confirmation, and
   expect(formalProblem!.y).toBeGreaterThanOrEqual(topbar!.y + topbar!.height);
   await applicant.locator("#formal-problem-message").scrollIntoViewIfNeeded();
   await applicant.screenshot({path: testInfo.outputPath("s5-319-formal-and-criteria-viewport-1440x1000.png")});
+  await administratorContext.close();
+  await applicantContext.close();
+});
+
+test("S5-319 shows authorization denial without a provider call", async ({ browser }) => {
+  const applicantContext = await browser.newContext();
+  const administratorContext = await browser.newContext();
+  const applicant = await login(applicantContext, applicantCredential);
+  const administrator = await login(administratorContext, administratorCredential);
+  await applicant.getByLabel("你希望解决什么问题？").fill("授权拒绝的供应商质量问题");
+  await applicant.getByLabel("你希望解决什么问题？").press("Enter");
+  const card = applicant.getByLabel("AI 问题理解与草稿辅助");
+  await deny(administrator, await technicalValue(card, "辅助授权申请"));
+  await applicant.bringToFront();
+  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await expect(card).toContainText("DRAFT_ASSISTANCE_AUTHORIZATION_DENIED");
+  await expect(card).toContainText("尚未建立");
+  await administratorContext.close();
+  await applicantContext.close();
+});
+
+test("S5-319 keeps ambiguous foreground calls observable and cancellation unconfirmed", async ({ browser }) => {
+  const applicantContext = await browser.newContext();
+  const administratorContext = await browser.newContext();
+  const applicant = await login(applicantContext, applicantCredential);
+  const administrator = await login(administratorContext, administratorCredential);
+  await applicant.getByLabel("你希望解决什么问题？").fill("[UNKNOWN] 供应商质量问题");
+  await applicant.getByLabel("你希望解决什么问题？").press("Enter");
+  const card = applicant.getByLabel("AI 问题理解与草稿辅助");
+  await approve(administrator, await technicalValue(card, "辅助授权申请"));
+  await applicant.bringToFront();
+  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await expect.poll(() => technicalValue(card, "模型授权申请")).not.toBe("尚未提交");
+  await approve(administrator, await technicalValue(card, "模型授权申请"));
+  await applicant.bringToFront();
+  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  const retry = applicant.getByRole("button", { name: "继续原辅助调用", exact: true });
+  await expect(retry).toBeVisible();
+  await retry.click();
+  await expect(card).toContainText("调用结果尚不确定");
+  await card.getByRole("button", { name: "观察原调用", exact: true }).click();
+  await expect(card).toContainText("PROVIDER_OBSERVATION_UNSUPPORTED_FOREGROUND");
+  await card.getByRole("button", { name: "请求取消", exact: true }).click();
+  await expect(card).toContainText("正在请求取消");
+  await expect(card).toContainText("PROVIDER_CANCELLATION_UNSUPPORTED_FOREGROUND");
+  await expect(card).not.toContainText("已确认取消");
   await administratorContext.close();
   await applicantContext.close();
 });

@@ -16,6 +16,7 @@ from agent_console.draft_assistance import (
     DraftAuthorization,
     DraftBindingSnapshot,
     DraftInvocation,
+    ProviderBudgetQuote,
     ProviderObservation,
 )
 from agent_console.model_binding_resolution import ExactModelUse, ResolvedModelBinding
@@ -123,6 +124,44 @@ class OpaqueSyntheticCredentialResolver:
         del profile, invocation_id
         self.calls += 1
         return object()
+
+
+class InMemoryProviderCallBudget:
+    """Deterministic reservation guard for unit tests and synthetic fixtures."""
+
+    def __init__(self, *, call_cap: int = 10, cost_cap_microusd: int = 1_000_000):
+        self.call_cap = call_cap
+        self.cost_cap_microusd = cost_cap_microusd
+        self.reservations: dict[str, tuple[str, ProviderBudgetQuote]] = {}
+        self.usage: dict[str, tuple[int, int]] = {}
+
+    def reserve(self, operation_id, invocation, quote):
+        existing = self.reservations.get(operation_id)
+        payload = (invocation.invocation_id, quote)
+        if existing is not None:
+            if existing != payload:
+                raise DraftAssistanceError("PROVIDER_BUDGET_OPERATION_CONFLICT")
+            return f"provider-budget-reservation:{invocation.invocation_id}"
+        effective_cost = sum(
+            saved_quote.worst_case_cost_microusd
+            for _, saved_quote in self.reservations.values()
+        )
+        if (
+            len(self.reservations) >= self.call_cap
+            or effective_cost + quote.worst_case_cost_microusd > self.cost_cap_microusd
+        ):
+            raise DraftAssistanceError("PROVIDER_BUDGET_EXHAUSTED")
+        self.reservations[operation_id] = payload
+        return f"provider-budget-reservation:{invocation.invocation_id}"
+
+    def record_usage(self, operation_id, reservation_id, observation):
+        del operation_id
+        if observation.input_tokens is None or observation.output_tokens is None:
+            return
+        self.usage[reservation_id] = (
+            observation.input_tokens,
+            observation.output_tokens,
+        )
 
 
 @dataclass(frozen=True, slots=True)

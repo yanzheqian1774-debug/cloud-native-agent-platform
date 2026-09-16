@@ -28,6 +28,7 @@ from agent_console.draft_assistance_postgres import (
 )
 from agent_console.draft_assistance_support import (
     ExactProfileModelResolver,
+    InMemoryProviderCallBudget,
     OpaqueSyntheticCredentialResolver,
     StaticDraftAuthorization,
 )
@@ -135,6 +136,7 @@ def _service(database_url):
         transport,
         resource_use,
         evidence,
+        InMemoryProviderCallBudget(),
         clock=lambda: datetime(2029, 1, 1, tzinfo=UTC),
     )
     return service, repository, resource_use, evidence, transport

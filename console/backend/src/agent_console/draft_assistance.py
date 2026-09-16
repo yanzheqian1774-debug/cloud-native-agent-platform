@@ -15,6 +15,7 @@ import secrets
 import struct
 import threading
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -135,7 +136,11 @@ class DraftAssistanceProfileRevision:
                 char not in "0123456789abcdef" for char in digest
             ):
                 raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
-        if self.maximum_input_bytes < 1 or self.maximum_output_tokens < 1:
+        if (
+            self.maximum_input_bytes < 1
+            or self.maximum_output_tokens < 1
+            or self.total_timeout_seconds < 1
+        ):
             raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
 
 
@@ -209,6 +214,29 @@ class ProviderObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderBudgetQuote:
+    input_token_upper_bound: int
+    output_token_ceiling: int
+    worst_case_cost_microusd: int
+
+    def __post_init__(self) -> None:
+        if (
+            self.input_token_upper_bound < 1
+            or self.output_token_ceiling < 1
+            or self.worst_case_cost_microusd < 0
+        ):
+            raise DraftAssistanceError("PROVIDER_BUDGET_QUOTE_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedProviderRequest:
+    """Ephemeral provider request; its payload is never persisted or logged."""
+
+    payload: object
+    quote: ProviderBudgetQuote
+
+
+@dataclass(frozen=True, slots=True)
 class DraftInvocation:
     context_id: str
     turn_id: str
@@ -237,6 +265,7 @@ class DraftInvocation:
     snapshot: DraftBindingSnapshot | None = None
     admission_id: str | None = None
     dispatch_fence: int | None = None
+    budget_reservation_id: str | None = None
     provider_correlation: str | None = None
     terminal_observation_id: str | None = None
     last_observation_id: str | None = None
@@ -328,11 +357,19 @@ class ProviderCredentialResolver(Protocol):
 class DraftProviderTransport(Protocol):
     synthetic: bool
 
-    def dispatch(
+    def prepare(
         self,
         *,
         invocation_id: str,
         content: str,
+        profile: DraftAssistanceProfileRevision,
+    ) -> PreparedProviderRequest: ...
+
+    def dispatch(
+        self,
+        *,
+        invocation_id: str,
+        request: PreparedProviderRequest,
         credential: object,
         profile: DraftAssistanceProfileRevision,
     ) -> ProviderObservation: ...
@@ -340,6 +377,22 @@ class DraftProviderTransport(Protocol):
     def observe(self, correlation: str) -> ProviderObservation: ...
 
     def cancel(self, correlation: str) -> ProviderObservation: ...
+
+
+class ProviderCallBudgetPort(Protocol):
+    def reserve(
+        self,
+        operation_id: str,
+        invocation: DraftInvocation,
+        quote: ProviderBudgetQuote,
+    ) -> str: ...
+
+    def record_usage(
+        self,
+        operation_id: str,
+        reservation_id: str,
+        observation: ProviderObservation,
+    ) -> None: ...
 
 
 class ContextualResourceUsePort(Protocol):
@@ -492,10 +545,24 @@ class DeterministicSyntheticDraftTransport:
         self.dispatch_count = 0
         self.observations: dict[str, ProviderObservation] = {}
 
-    def dispatch(self, *, invocation_id, content, credential, profile):
+    def prepare(self, *, invocation_id, content, profile):
+        del invocation_id
+        return PreparedProviderRequest(
+            content,
+            ProviderBudgetQuote(
+                max(1, len(content.encode("utf-8"))),
+                profile.maximum_output_tokens,
+                0,
+            ),
+        )
+
+    def dispatch(self, *, invocation_id, request, credential, profile):
         del credential, profile
         self.dispatch_count += 1
         correlation = f"synthetic:{invocation_id}"
+        content = request.payload
+        if not isinstance(content, str):
+            raise DraftAssistanceError("PROVIDER_REQUEST_INVALID")
         normalized = content.strip()
         if "[UNKNOWN]" in normalized:
             observation = ProviderObservation(
@@ -601,6 +668,7 @@ class DraftAssistanceService:
         transport: DraftProviderTransport,
         resource_use: ContextualResourceUsePort,
         evidence: DraftEvidencePort,
+        budget: ProviderCallBudgetPort,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         identity_factory: Callable[[str], str] = lambda prefix: (
@@ -617,6 +685,7 @@ class DraftAssistanceService:
         self.transport = transport
         self.resource_use = resource_use
         self.evidence = evidence
+        self.budget = budget
         self.clock = clock
         self.identity_factory = identity_factory
         self.replay_window = replay_window
@@ -915,6 +984,21 @@ class DraftAssistanceService:
         if invocation.snapshot is None:
             raise DraftAssistanceError("MODEL_BINDING_MISMATCH")
         try:
+            prepared = self.transport.prepare(
+                invocation_id=invocation.invocation_id,
+                content=content,
+                profile=self.profile,
+            )
+        except Exception as exc:
+            self._replace(
+                invocation,
+                state=DraftInvocationState.FAILED_PRE_DISPATCH,
+                reason_code="PROVIDER_REQUEST_INVALID",
+            )
+            if isinstance(exc, DraftAssistanceError):
+                raise
+            raise DraftAssistanceError("PROVIDER_REQUEST_INVALID") from exc
+        try:
             resource_use_id = self.resource_use.record_requested(
                 _operation_id("resource-use-requested", invocation.invocation_id, "v1"),
                 invocation,
@@ -927,6 +1011,22 @@ class DraftAssistanceService:
                 reason_code="RESOURCE_USE_ADMISSION_FAILED",
             )
             raise DraftAssistanceError("RESOURCE_USE_ADMISSION_FAILED") from exc
+        try:
+            budget_reservation_id = self.budget.reserve(
+                _operation_id(
+                    "provider-budget-reservation", invocation.invocation_id, "v1"
+                ),
+                invocation,
+                prepared.quote,
+            )
+        except Exception as exc:
+            self._replace(
+                invocation,
+                resource_use_id=resource_use_id,
+                state=DraftInvocationState.FAILED_PRE_DISPATCH,
+                reason_code="PROVIDER_BUDGET_DENIED",
+            )
+            raise DraftAssistanceError("PROVIDER_BUDGET_DENIED") from exc
         admitted = self.authorization.validate_current_and_admit(
             context, invocation, invocation.snapshot
         )
@@ -934,26 +1034,16 @@ class DraftAssistanceService:
             self._replace(
                 invocation,
                 resource_use_id=resource_use_id,
+                budget_reservation_id=budget_reservation_id,
                 state=DraftInvocationState.FAILED_PRE_DISPATCH,
                 reason_code="DISPATCH_ADMISSION_DENIED",
             )
             raise DraftAssistanceError("DISPATCH_ADMISSION_DENIED")
-        try:
-            credential = self.credentials.resolve(
-                self.profile, invocation.invocation_id
-            )
-        except Exception as exc:
-            self._replace(
-                invocation,
-                resource_use_id=resource_use_id,
-                state=DraftInvocationState.FAILED_PRE_DISPATCH,
-                reason_code="CREDENTIAL_RESOLUTION_FAILED",
-            )
-            raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED") from exc
         replacement = replace(
             invocation,
             aggregate_version=invocation.aggregate_version + 1,
             resource_use_id=resource_use_id,
+            budget_reservation_id=budget_reservation_id,
             admission_id=admitted.admission_id,
             dispatch_fence=admitted.fence,
             state=DraftInvocationState.DISPATCH_RECORDED,
@@ -967,9 +1057,20 @@ class DraftAssistanceService:
                 raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
             return DraftResponse(current, synthetic=self.transport.synthetic)
         try:
+            credential = self.credentials.resolve(
+                self.profile, invocation.invocation_id
+            )
+        except Exception as exc:
+            self._replace(
+                dispatch_recorded,
+                state=DraftInvocationState.FAILED_PRE_DISPATCH,
+                reason_code="CREDENTIAL_RESOLUTION_FAILED",
+            )
+            raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED") from exc
+        try:
             observation = self.transport.dispatch(
                 invocation_id=invocation.invocation_id,
-                content=content,
+                request=prepared,
                 credential=credential,
                 profile=self.profile,
             )
@@ -996,6 +1097,16 @@ class DraftAssistanceService:
             ),
         }
         projected_state = state_map[observation.state]
+        if (
+            invocation.state is DraftInvocationState.CANCELLATION_REQUESTED
+            and observation.state
+            in {
+                ObservationState.ACCEPTED,
+                ObservationState.RUNNING,
+                ObservationState.UNKNOWN,
+            }
+        ):
+            projected_state = DraftInvocationState.CANCELLATION_REQUESTED
         if invocation.last_observation_id == observation.observation_id:
             if invocation.state is projected_state:
                 repaired = self._complete_observation_refs(invocation, observation)
@@ -1050,6 +1161,17 @@ class DraftAssistanceService:
     ) -> DraftInvocation:
         updated = invocation
         pending_reason: str | None = None
+        if invocation.budget_reservation_id is not None:
+            with suppress(Exception):
+                self.budget.record_usage(
+                    _operation_id(
+                        "provider-budget-usage",
+                        invocation.invocation_id,
+                        observation.observation_id,
+                    ),
+                    invocation.budget_reservation_id,
+                    observation,
+                )
         try:
             self.resource_use.record_observation(
                 _operation_id(
