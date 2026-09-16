@@ -81,6 +81,15 @@ GrantBuilder = Callable[
     Sequence[ExactGrant],
 ]
 PostCommitHandler = Callable[[TrustedRequestContext, Any], Mapping[str, Any]]
+WorkbenchRouteInstaller = Callable[
+    [
+        FastAPI,
+        Callable[[Request], Any],
+        Callable[[Request, Any], None],
+        "WorkbenchBffPolicy",
+    ],
+    None,
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +185,7 @@ def create_workbench_bff(
     *,
     operations: Sequence[WorkbenchOperation] = (),
     grant_administration: GrantAdministrationService | None = None,
+    route_installers: Sequence[WorkbenchRouteInstaller] = (),
 ) -> FastAPI:
     """Build the public route set from an explicit, duplicate-free registry."""
 
@@ -568,5 +578,8 @@ def create_workbench_bff(
             methods=[operation.method],
             name=operation.name,
         )
+
+    for install in route_installers:
+        install(app, authenticate, require_csrf, policy)
 
     return app

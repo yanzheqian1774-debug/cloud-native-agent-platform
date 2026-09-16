@@ -35,6 +35,22 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "SKILL": frozenset({"INVOKE_SKILL", "READ_SKILL_INVOCATION"}),
     "RESOURCE_USE": frozenset({"READ"}),
     "EVIDENCE": frozenset({"READ_REFERENCE"}),
+    "MODEL_GOVERNANCE": frozenset(
+        {
+            "CREATE_MODEL",
+            "READ_MODEL",
+            "MANAGE_MODEL_REVISION",
+            "BIND_MODEL",
+            "INVOKE_MODEL",
+        }
+    ),
+    "DRAFT_ASSISTANCE": frozenset(
+        {
+            "REQUEST_DRAFT_ASSISTANCE",
+            "READ_DRAFT_ASSISTANCE_INVOCATION",
+            "CANCEL_DRAFT_ASSISTANCE_INVOCATION",
+        }
+    ),
 }
 
 OWNER_RESOURCE_PREFIXES = {
@@ -52,6 +68,8 @@ OWNER_RESOURCE_PREFIXES = {
     "SKILL": "skill-invocation:",
     "RESOURCE_USE": "resource-use:",
     "EVIDENCE": "evidence-reference:",
+    "MODEL_GOVERNANCE": "model:",
+    "DRAFT_ASSISTANCE": "draft-assistance:",
 }
 
 META_OWNERS = frozenset({"GRANT_ADMIN", "CONTINUATION_ASSIGNMENT"})
@@ -71,6 +89,7 @@ BROWSER_BOOTSTRAP_GRANTS = frozenset(
         ("EMPLOYEE", "CREATE", "employee:collection"),
         ("EMPLOYEE", "LIST", "employee:collection"),
         ("INSTANCE", "CREATE", "instance:collection"),
+        ("MODEL_GOVERNANCE", "CREATE_MODEL", "model:collection"),
     }
 )
 
