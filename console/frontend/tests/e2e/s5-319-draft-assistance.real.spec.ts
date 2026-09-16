@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -8,6 +8,16 @@ function required(name: string): string {
 
 const applicantCredential = required("S5_319_APPLICANT_CREDENTIAL");
 const administratorCredential = required("S5_319_ADMIN_CREDENTIAL");
+
+async function providerCalls(request: APIRequestContext): Promise<number> {
+  const responsesUrl = process.env.S5_319_MOCK_RESPONSES_URL;
+  if (!responsesUrl) throw new Error("S5_319_MOCK_RESPONSES_URL_REQUIRED");
+  const response = await request.get(new URL("/stats", responsesUrl).toString());
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json() as { calls?: unknown };
+  expect(typeof body.calls).toBe("number");
+  return body.calls as number;
+}
 
 async function login(context: BrowserContext, credential: string): Promise<Page> {
   const page = await context.newPage();
@@ -111,7 +121,7 @@ test("S5-319 completes governed clarification, editable draft, confirmation, and
   await applicantContext.close();
 });
 
-test("S5-319 shows authorization denial without a provider call", async ({ browser }) => {
+test("S5-319 shows authorization denial without a provider call", async ({ browser, request }) => {
   const applicantContext = await browser.newContext();
   const administratorContext = await browser.newContext();
   const applicant = await login(applicantContext, applicantCredential);
@@ -119,21 +129,26 @@ test("S5-319 shows authorization denial without a provider call", async ({ brows
   await applicant.getByLabel("你希望解决什么问题？").fill("授权拒绝的供应商质量问题");
   await applicant.getByLabel("你希望解决什么问题？").press("Enter");
   const card = applicant.getByLabel("AI 问题理解与草稿辅助");
+  const callsBeforeDenial = await providerCalls(request);
   await deny(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
   await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
-  await expect(card).toContainText("DRAFT_ASSISTANCE_AUTHORIZATION_DENIED");
+  const denial = applicant.getByRole("alert");
+  await expect(denial).toContainText("无法打开该内容");
+  await expect(denial).toContainText("DRAFT_ASSISTANCE_NOT_FOUND");
+  await expect(card).toContainText("AUTHORIZATION_PENDING");
   await expect(card).toContainText("尚未建立");
+  expect(await providerCalls(request)).toBe(callsBeforeDenial);
   await administratorContext.close();
   await applicantContext.close();
 });
 
-test("S5-319 keeps ambiguous foreground calls observable and cancellation unconfirmed", async ({ browser }) => {
+test("S5-319 keeps nonterminal foreground calls observable and cancellation unconfirmed", async ({ browser, request }) => {
   const applicantContext = await browser.newContext();
   const administratorContext = await browser.newContext();
   const applicant = await login(applicantContext, applicantCredential);
   const administrator = await login(administratorContext, administratorCredential);
-  await applicant.getByLabel("你希望解决什么问题？").fill("[UNKNOWN] 供应商质量问题");
+  await applicant.getByLabel("你希望解决什么问题？").fill("[NONTERMINAL] 供应商质量问题");
   await applicant.getByLabel("你希望解决什么问题？").press("Enter");
   const card = applicant.getByLabel("AI 问题理解与草稿辅助");
   await approve(administrator, await technicalValue(card, "辅助授权申请"));
@@ -143,16 +158,17 @@ test("S5-319 keeps ambiguous foreground calls observable and cancellation unconf
   await approve(administrator, await technicalValue(card, "模型授权申请"));
   await applicant.bringToFront();
   await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
-  const retry = applicant.getByRole("button", { name: "继续原辅助调用", exact: true });
-  await expect(retry).toBeVisible();
-  await retry.click();
   await expect(card).toContainText("调用结果尚不确定");
+  await expect(card).toContainText("PROVIDER_FOREGROUND_NONTERMINAL");
+  const callsAfterDispatch = await providerCalls(request);
   await card.getByRole("button", { name: "观察原调用", exact: true }).click();
   await expect(card).toContainText("PROVIDER_OBSERVATION_UNSUPPORTED_FOREGROUND");
+  expect(await providerCalls(request)).toBe(callsAfterDispatch);
   await card.getByRole("button", { name: "请求取消", exact: true }).click();
   await expect(card).toContainText("正在请求取消");
   await expect(card).toContainText("PROVIDER_CANCELLATION_UNSUPPORTED_FOREGROUND");
   await expect(card).not.toContainText("已确认取消");
+  expect(await providerCalls(request)).toBe(callsAfterDispatch);
   await administratorContext.close();
   await applicantContext.close();
 });

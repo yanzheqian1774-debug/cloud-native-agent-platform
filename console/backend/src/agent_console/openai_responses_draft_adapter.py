@@ -453,6 +453,16 @@ class OpenAIResponsesDraftTransport:
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
             )
+        if status in {"queued", "in_progress"}:
+            return ProviderObservation(
+                self._observation_id(invocation_id, correlation, str(status)),
+                ObservationState.UNKNOWN,
+                correlation=correlation,
+                reason_code="PROVIDER_FOREGROUND_NONTERMINAL",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+            )
         if status != "completed":
             return self._failure(
                 invocation_id,

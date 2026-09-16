@@ -617,6 +617,44 @@ def test_real_adapter_classifies_non_success_without_retry(
     assert len(_ResponsesHandler.requests) == transport.dispatch_count == 1
 
 
+def test_foreground_nonterminal_response_stays_unknown_with_correlation(
+    mock_responses,
+):
+    server, cert, tmp_path = mock_responses
+    credential_file = _credential_file(tmp_path)
+    configuration = _configuration(server, cert, credential_file)
+    transport = OpenAIResponsesDraftTransport(configuration)
+    resolver = ExactFileOpenAICredentialResolver(
+        configuration,
+        expected_profile_revision_id="draft-profile-real-1",
+        expected_connection_profile_id="connection-profile-1",
+        expected_connection_profile_revision_id="connection-profile-revision-1",
+    )
+    _ResponsesHandler.response = {
+        "id": "resp_mock_nonterminal_319",
+        "status": "in_progress",
+        "model": "mock-model-319",
+        "output": [],
+        "usage": {"input_tokens": 50, "output_tokens": 0},
+    }
+
+    observation = transport.dispatch(
+        invocation_id="invocation-nonterminal",
+        request=transport.prepare(
+            invocation_id="invocation-nonterminal",
+            content="test",
+            profile=_profile(),
+        ),
+        credential=resolver.resolve(_profile(), "invocation-nonterminal"),
+        profile=_profile(),
+    )
+
+    assert observation.state is ObservationState.UNKNOWN
+    assert observation.correlation == "req_mock_319"
+    assert observation.reason_code == "PROVIDER_FOREGROUND_NONTERMINAL"
+    assert len(_ResponsesHandler.requests) == transport.dispatch_count == 1
+
+
 def test_redirect_and_transport_disconnect_are_never_retried(mock_responses):
     server, cert, tmp_path = mock_responses
     credential_file = _credential_file(tmp_path)

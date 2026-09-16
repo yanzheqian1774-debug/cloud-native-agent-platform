@@ -10,17 +10,28 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class Handler(BaseHTTPRequestHandler):
+    calls = 0
+
     def do_GET(self):
-        if self.path != "/ready":
+        if self.path == "/ready":
+            self.send_response(204)
+            self.end_headers()
+            return
+        if self.path != "/stats":
             self.send_error(404)
             return
-        self.send_response(204)
+        payload = json.dumps({"calls": type(self).calls}).encode()
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(payload)))
         self.end_headers()
+        self.wfile.write(payload)
 
     def do_POST(self):
         if self.path != "/v1/responses":
             self.send_error(404)
             return
+        type(self).calls += 1
         size = int(self.headers.get("content-length", "0"))
         if size < 1 or size > 64_000:
             self.send_error(400)
@@ -44,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
         ):
             self.send_error(422)
             return
-        if "[UNKNOWN]" in content:
+        if "[DISCONNECT]" in content:
             self.connection.shutdown(2)
             self.connection.close()
             return
@@ -63,19 +74,31 @@ class Handler(BaseHTTPRequestHandler):
                 "description": content,
             }
         )
-        response = {
-            "id": "resp_local_mock_319",
-            "status": "completed",
-            "model": "mock-model-319",
-            "output": [
-                {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": json.dumps(result)}],
-                }
-            ],
-            "usage": {"input_tokens": 80, "output_tokens": 40},
-        }
+        response = (
+            {
+                "id": "resp_local_mock_319_nonterminal",
+                "status": "in_progress",
+                "model": "mock-model-319",
+                "output": [],
+                "usage": {"input_tokens": 80, "output_tokens": 0},
+            }
+            if "[NONTERMINAL]" in content
+            else {
+                "id": "resp_local_mock_319",
+                "status": "completed",
+                "model": "mock-model-319",
+                "output": [
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [
+                            {"type": "output_text", "text": json.dumps(result)}
+                        ],
+                    }
+                ],
+                "usage": {"input_tokens": 80, "output_tokens": 40},
+            }
+        )
         payload = json.dumps(response).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
