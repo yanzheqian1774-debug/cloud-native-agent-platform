@@ -1,5 +1,48 @@
 # S5-V023-IMPL-320 implementation evidence
 
+## Human bounded acceptance registration
+
+Human explicitly confirmed `PASS_WITH_CONSTRAINTS / BOUNDED_ACCEPTED` in the
+continuing S5-V023-IMPL-320 “Human 有界接受最小登记” instruction.
+Accepted source is `e1bacd7c69bbd5ded49bb86fb97567f65002f040`, tree
+`f8861027c033b4b4a980782d0d62e43bf16c130a`, parent
+`aaa2b773c28a02d4fa16455704e8fe4034a5c585`.
+This registration commit records that decision; it does not mean Human accepted
+the registration commit's new SHA.
+
+The accepted scope is the local HTTPS mock Kimi adapter implementation: exact
+configuration and authorization, structured output, A04 conservative measurement,
+and A13 budget refusal with same-key zero additional dispatch. It does not include
+real model quality, production availability or the complete business workflow.
+
+A05 remains `PARTIAL / NOT_PROVEN` and its obligation remains `OPEN`: the current
+implementation lacks a complete absolute deadline mechanism across headers/body.
+Its disposition must be explicitly decided before real provider calls. Session
+remains `OPEN`; the PR remains Draft. This acceptance does not authorize Ready,
+merge, real credentials/provider calls, deployment, release, cleanup or Session close.
+Real provider remains `PENDING / NOT_AUTHORIZED / NOT_EXECUTED`.
+
+Acceptance basis and immutable external record are in
+`/Users/tristan/Documents/S5-V023-IMPL-320-recovery-20260916T154202/`:
+
+- `FINAL-ACCEPTANCE-PREFLIGHT.md`, SHA-256
+  `97284067164765edb0dd16d877be68b632a329eb74d5530665618bc3fba23e6f`.
+- `HUMAN-BOUNDED-ACCEPTANCE-e1bacd7.md`, SHA-256
+  `9bec091bf3dcf06666faa8444e7961b7c54687b5dad13f110492cd3c34c8f98f`.
+
+Accepted-source CI: dedicated run/job `35068758162 / 104705045883`, attempt 1,
+SUCCESS, actual checkout at accepted source/tree, focused `67 passed`, Chromium
+`4/4`; ledger reservations `10`, dispatch before refusal/after refusal/after same-key
+continuation `10/10/10`. All 11 jobs succeeded. Five dedicated jobs checked out the
+accepted source; six general/Identity jobs checked out PR merge
+`6dff9e183981cb13be2092efb92156758e4a4fe6`, with the same tree and parents
+`7fffd064cfe999cdd1c72833cdb7c151d87f2230` and the accepted source.
+Preflight contains the full run/job/attempt/checkout table and preserved failure
+history. Historical sections below keep their original source identities; they
+are not new-head evidence. No previous report, checksum manifest or failed-run
+record is overwritten by this registration.
+
+
 ## Boundary
 
 The authorized follow-up from fixed candidate `aaa2b77` supersedes the previous
