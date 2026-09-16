@@ -166,3 +166,54 @@ reasoning/output ceilings, real timeout values, 24-hour authorization semantics,
 cross-call cumulative wait, and any real sample remain pending. `4096/low` is a
 mock contract value only. Real provider status remains
 `PENDING / NOT_AUTHORIZED / NOT_EXECUTED`.
+
+## Authorized absolute-deadline follow-up (G1)
+
+Human authorizes a new bounded implementation/Draft PR from main
+`d22aa01ce50c9de7b6ad3b142007d62dc68c2b5d`, tree
+`011e63f7cbfaf3ffe3ebc726ce84a3600ed5cede`. Branch
+`codex/s5-v023-impl-320-kimi-absolute-deadline`, isolated worktree `d3d2`;
+old worktree, PR #177 and its accepted identities remain historical.
+
+Plan before implementation:
+
+1. Keep projection/parser, OpenAI, business states, authorization, owner and
+   budget contracts unchanged. Add Kimi-private single-request process supervision.
+   Python 3.12 POSIX spawn works with the current macOS development and Linux CI
+   process/thread hosting; do not fork a threaded backend or create a daemon/service.
+2. Parent monotonic total deadline starts before worker launch and covers worker
+   startup, DNS/TCP/TLS, send, headers/body, IPC and result validation. The separate
+   connect deadline conservatively includes launch/startup until TLS completes.
+   No activity resets either deadline. Deadline wins equality and late results.
+3. One worker and one connection attempt per dispatch, no restart/retry. Deadline
+   failure raises existing TRANSPORT_AMBIGUOUS, so existing owner maps UNKNOWN and
+   retains reservation/call count. No remote cancellation claim.
+4. Anonymous IPC only; no credentials/content in argv, added environment variables,
+   logs or temporary files. Worker stdout/stderr disabled, core dumps disabled;
+   worker has no credential resolver or database/owner handle. Parent loss closes
+   IPC and terminates worker. Parent closes IPC, kills and joins its exact worker.
+5. Cleanup budget is at most 1 second, measured separately from decision latency.
+   OS scheduling/process creation and uninterruptible kernel failures are not hard
+   realtime guarantees; cleanup overrun/failure must fail closed and be exposed,
+   never accepted as successful or silently restarted.
+6. Tests: preserve parser/OpenAI regression; deterministic supervisor race/late
+   result, stalled phases and cleanup; real local HTTPS delayed headers, slow body,
+   cumulative phases and late valid JSON; UNKNOWN same-key no dispatch and
+   conservative PostgreSQL reservation. Run targeted tests, make check and normal
+   hooks, then one new Draft PR and automatic CI only. Update existing evidence
+   incrementally; no real provider call or deployment.
+
+Real-call authorization has been supplied separately but runtime configuration
+and startup prerequisites remain pending; this repair performs synthetic local
+HTTPS requests only. This follow-up does not change prior acceptance or close A05
+by assertion: results and environment limits must be recorded after validation.
+
+Local repair outcome before commit: focused suite 91 passed, including real local
+HTTPS total expiry and PostgreSQL UNKNOWN/same-key conservative reservation.
+Implementation and measured cutoff/cleanup evidence are incrementally recorded in
+[the existing README](../../evidence/s5/v0.2/s5-v023-impl-320/README.md).
+Full repository gate and new Draft PR CI are still required; no Human acceptance
+or real-provider execution is inferred from local validation.
+
+Final local gate after phase-entry refinement: `make check` passed with
+1818 passed / 201 skipped; Ruff lint/format passed. No frontend source changed.

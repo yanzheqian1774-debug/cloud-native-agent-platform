@@ -42,6 +42,8 @@ class _KimiHandler(BaseHTTPRequestHandler):
     response: object = {}
     disconnect = False
     delay_seconds = 0.0
+    chunk_delay = 0.0
+    chunks = 1
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers["content-length"]))
@@ -66,7 +68,16 @@ class _KimiHandler(BaseHTTPRequestHandler):
         if 300 <= type(self).status < 400:
             self.send_header("location", "https://redirect.invalid/v1/responses")
         self.end_headers()
-        self.wfile.write(payload)
+        try:
+            size = max(1, len(payload) // type(self).chunks)
+            for offset in range(0, len(payload), size):
+                self.wfile.write(payload[offset : offset + size])
+                self.wfile.flush()
+                if type(self).chunk_delay:
+                    time.sleep(type(self).chunk_delay)
+        except OSError:
+            # Expected when the deadline supervisor closes its one connection.
+            pass
 
     def log_message(self, _format, *_args):
         return
@@ -103,6 +114,8 @@ def kimi_mock(tmp_path):
     _KimiHandler.response = {}
     _KimiHandler.disconnect = False
     _KimiHandler.delay_seconds = 0.0
+    _KimiHandler.chunk_delay = 0.0
+    _KimiHandler.chunks = 1
     server = ThreadingHTTPServer(("127.0.0.1", 0), _KimiHandler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
@@ -567,7 +580,8 @@ def test_missing_ca_is_configuration_failure_before_dispatch(kimi_mock):
             credential=_resolver(invalid).resolve(_profile(), "invocation-kimi-tls"),
             profile=_profile(),
         )
-    assert transport.dispatch_count == 0
+    assert transport.dispatch_count == 1
+    assert transport.last_deadline_metrics.reaped
 
 
 def test_kimi_profile_selection_is_exact_and_mixed_adapter_fails_closed(kimi_mock):
@@ -645,7 +659,7 @@ def test_connect_timeout_and_independent_deadline_are_separate(
     monkeypatch.setattr(adapter.http.client, "HTTPSConnection", Connection)
     monkeypatch.setattr(adapter.time, "monotonic", lambda: clock[0])
     with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS") as failure:
-        transport.dispatch(
+        transport._dispatch_once(
             invocation_id=branch,
             request=transport.prepare(
                 invocation_id=branch, content="test", profile=_profile()
@@ -666,3 +680,448 @@ def test_kimi_credential_resolver_has_no_environment_fallback(kimi_mock, monkeyp
     with pytest.raises(DraftAssistanceError, match="CREDENTIAL_RESOLUTION_FAILED"):
         _resolver(configuration).resolve(_profile(), "invocation-no-env")
     assert _KimiHandler.requests == []
+
+
+# Fault injection below runs inside a fresh real spawned process. It does not
+# claim actual stalled DNS/TCP/TLS integration evidence.
+def _stalled_deadline_worker(channel, configuration, phase):
+    import http.client
+    import socket
+
+    from agent_console.kimi_deadline import _worker
+
+    def stall(*args, **kwargs):
+        time.sleep(30)
+        raise TimeoutError
+
+    if phase == "dns":
+        socket.getaddrinfo = stall
+    elif phase == "tcp":
+        socket.socket.connect = stall
+    elif phase == "tls":
+        ssl.SSLContext.wrap_socket = stall
+    elif phase == "send":
+        http.client.HTTPSConnection.request = stall
+    elif phase == "headers":
+        http.client.HTTPSConnection.getresponse = stall
+    else:
+        http.client.HTTPResponse.read = stall
+    _worker(channel, configuration, phase)
+
+
+def _stalled_receiver_worker(channel, configuration, phase):
+    time.sleep(30)
+
+
+def _partial_result_worker(channel, configuration, phase):
+    from agent_console.kimi_deadline import _send
+
+    _send(channel, {"connected": True})
+    channel.sendall(b'{"result":')
+    time.sleep(30)
+
+
+@pytest.mark.parametrize("phase", ["dns", "tcp", "tls", "send", "headers", "body"])
+def test_parent_deadline_kills_stalled_phase_and_reaps(
+    kimi_mock, phase, record_property
+):
+    import os
+
+    from agent_console.kimi_deadline import _supervise
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=1,
+        read_timeout_seconds=1,
+        total_timeout_seconds=2,
+    )
+    records = []
+    started = time.monotonic()
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        _supervise(
+            config,
+            phase,
+            KimiResponsesDraftTransport(config).prepare(
+                invocation_id=phase,
+                content="test",
+                profile=replace(_profile(), total_timeout_seconds=2),
+            ),
+            _resolver(config).resolve(_profile(), phase),
+            records.append,
+            worker=_stalled_deadline_worker,
+        )
+    elapsed = time.monotonic() - started
+    metric = records[0]
+    from dataclasses import asdict
+
+    record_property("deadline_metrics", json.dumps(asdict(metric)))
+    expected = (
+        "CONNECT_DEADLINE" if phase in {"dns", "tcp", "tls"} else "TOTAL_DEADLINE"
+    )
+    assert metric.reason == expected
+    assert metric.reaped and metric.cleanup_seconds <= 1
+    assert metric.decision_seconds >= (1 if expected == "CONNECT_DEADLINE" else 2)
+    assert elapsed < (2 if expected == "CONNECT_DEADLINE" else 3)
+    with pytest.raises(ProcessLookupError):
+        os.kill(metric.worker_pid, 0)
+    assert len(_KimiHandler.requests) == (1 if phase in {"headers", "body"} else 0)
+
+
+def test_partial_ipc_cannot_block_parent_past_total(kimi_mock):
+    from agent_console.kimi_deadline import _supervise
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=1,
+        read_timeout_seconds=1,
+        total_timeout_seconds=1,
+    )
+    records = []
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        _supervise(
+            config, "ipc", None, None, records.append, worker=_partial_result_worker
+        )
+    assert records[0].reason == "TOTAL_DEADLINE"
+    assert records[0].reaped and records[0].cleanup_seconds <= 1
+
+
+@pytest.mark.parametrize(
+    "now,connected,expected",
+    [
+        (0.9, False, None),
+        (1.0, False, "CONNECT_DEADLINE"),
+        (1.0, True, None),
+        (1.999, True, None),
+        (2.0, True, "TOTAL_DEADLINE"),
+        (2.001, True, "TOTAL_DEADLINE"),
+        (2.0, False, "TOTAL_DEADLINE"),
+    ],
+)
+def test_deadline_wins_equality_and_readable_result_race(now, connected, expected):
+    from agent_console.kimi_deadline import _check_deadline
+
+    assert _check_deadline(now, 2.0, 1.0, connected) == expected
+
+
+@pytest.mark.parametrize("mode", ["late-headers", "slow-body", "cumulative"])
+def test_real_https_total_deadline_rejects_late_valid_json(
+    kimi_mock, mode, record_property
+):
+    import os
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=1,
+        read_timeout_seconds=2,
+        total_timeout_seconds=2,
+    )
+    _KimiHandler.response = _completed(
+        {
+            "kind": "NEEDS_CLARIFICATION",
+            "clarificationQuestion": "Synthetic question",
+            "title": None,
+            "description": None,
+        }
+    )
+    if mode == "late-headers":
+        _KimiHandler.delay_seconds = 2.5
+    elif mode == "slow-body":
+        _KimiHandler.chunk_delay = 0.3
+        _KimiHandler.chunks = 12
+    else:
+        _KimiHandler.delay_seconds = 0.9
+        _KimiHandler.chunk_delay = 0.3
+        _KimiHandler.chunks = 6
+    transport = KimiResponsesDraftTransport(config)
+    started = time.monotonic()
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        transport.dispatch(
+            invocation_id="late-valid-json",
+            profile=_profile(),
+            request=transport.prepare(
+                invocation_id="late-valid-json",
+                content="test",
+                profile=replace(_profile(), total_timeout_seconds=2),
+            ),
+            credential=_resolver(config).resolve(_profile(), "late-valid-json"),
+        )
+    elapsed = time.monotonic() - started
+    metric = transport.last_deadline_metrics
+    from dataclasses import asdict
+
+    record_property("deadline_metrics", json.dumps(asdict(metric)))
+    assert metric.reason == "TOTAL_DEADLINE"
+    assert 2 <= metric.decision_seconds < 2.5
+    assert metric.cleanup_seconds <= 1 and metric.reaped
+    assert elapsed < 3
+    assert transport.dispatch_count == len(_KimiHandler.requests) == 1
+    with pytest.raises(ProcessLookupError):
+        os.kill(metric.worker_pid, 0)
+
+
+def test_worker_result_is_rejected_if_parent_validation_finishes_at_deadline(
+    kimi_mock, monkeypatch
+):
+    from agent_console import kimi_deadline
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=1,
+        read_timeout_seconds=1,
+        total_timeout_seconds=1,
+    )
+    _KimiHandler.response = _completed(
+        {
+            "kind": "NEEDS_CLARIFICATION",
+            "clarificationQuestion": "Synthetic",
+            "title": None,
+            "description": None,
+        }
+    )
+    original = kimi_deadline.ProviderObservation
+
+    def delayed_validation(**value):
+        result = original(**value)
+        time.sleep(1.05)
+        return result
+
+    monkeypatch.setattr(kimi_deadline, "ProviderObservation", delayed_validation)
+    transport = KimiResponsesDraftTransport(config)
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        transport.dispatch(
+            invocation_id="validation-race",
+            profile=_profile(),
+            request=transport.prepare(
+                invocation_id="validation-race",
+                content="test",
+                profile=replace(_profile(), total_timeout_seconds=1),
+            ),
+            credential=_resolver(config).resolve(_profile(), "validation-race"),
+        )
+    assert transport.last_deadline_metrics.reason == "TOTAL_DEADLINE"
+    assert transport.last_deadline_metrics.reaped
+    assert transport.dispatch_count == len(_KimiHandler.requests) == 1
+
+
+def _noisy_request_worker(channel, configuration, invocation_id):
+    import os
+
+    from agent_console.kimi_deadline import _worker
+
+    def noisy_once(self, **kwargs):
+        import resource
+
+        assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0)
+        os.write(1, b"synthetic-secret-must-not-log")
+        os.write(2, b"synthetic-body-must-not-log")
+        raise RuntimeError("synthetic-secret-must-not-log")
+
+    KimiResponsesDraftTransport._dispatch_once = noisy_once
+    _worker(channel, configuration, invocation_id)
+
+
+def test_worker_silences_sensitive_diagnostics_and_leaves_no_secret_files(
+    kimi_mock, capfd
+):
+    from agent_console.kimi_deadline import _supervise
+
+    server, cert, tmp_path = kimi_mock
+    config = _configuration(server, cert, _credential_file(tmp_path))
+    before = set(tmp_path.rglob("*"))
+    records = []
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        _supervise(
+            config,
+            "silent",
+            KimiResponsesDraftTransport(config).prepare(
+                invocation_id="silent", content="test", profile=_profile()
+            ),
+            _resolver(config).resolve(_profile(), "silent"),
+            records.append,
+            worker=_noisy_request_worker,
+        )
+    captured = capfd.readouterr()
+    assert "synthetic-secret" not in captured.out + captured.err
+    assert "synthetic-body" not in captured.out + captured.err
+    assert set(tmp_path.rglob("*")) == before
+    assert records[0].reaped
+
+
+def test_worker_exits_on_parent_channel_loss_during_https_body(kimi_mock):
+    import multiprocessing
+    import socket
+
+    from agent_console.kimi_deadline import _worker
+
+    server, cert, tmp_path = kimi_mock
+    config = _configuration(server, cert, _credential_file(tmp_path))
+    transport = KimiResponsesDraftTransport(config)
+    _KimiHandler.delay_seconds = 2
+    parent, child = socket.socketpair()
+    from agent_console.kimi_deadline import _request_message
+
+    process = multiprocessing.get_context("spawn").Process(
+        target=_worker,
+        args=(child, config, "parent-loss"),
+    )
+    try:
+        process.start()
+        child.close()
+        parent.settimeout(1.5)
+        parent.sendall(
+            _request_message(
+                transport.prepare(
+                    invocation_id="parent-loss", content="test", profile=_profile()
+                ),
+                _resolver(config).resolve(_profile(), "parent-loss"),
+            )
+        )
+        assert b'"connected": true' in parent.recv(256)
+        parent.close()  # EOF fault injection, equivalent to loss of parent endpoint.
+        process.join(1)
+        assert not process.is_alive()
+        assert process.exitcode == 0
+    finally:
+        parent.close()
+        child.close()
+        if process.is_alive():
+            process.kill()
+            process.join(1)
+        process.close()
+
+
+def test_blocked_large_request_ipc_obeys_parent_deadline(kimi_mock):
+    from agent_console.draft_assistance import (
+        PreparedProviderRequest,
+        ProviderBudgetQuote,
+    )
+    from agent_console.kimi_deadline import _supervise
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        maximum_input_tokens=1_000_000,
+        connect_timeout_seconds=1,
+        read_timeout_seconds=1,
+        total_timeout_seconds=1,
+    )
+    request = PreparedProviderRequest(
+        b"x" * 600_000, ProviderBudgetQuote(600_000, 4096, 608192)
+    )
+    records = []
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        _supervise(
+            config,
+            "dns",
+            request,
+            _resolver(config).resolve(_profile(), "ipc"),
+            records.append,
+            worker=_stalled_receiver_worker,
+        )
+    assert records[0].reason == "TOTAL_DEADLINE"
+    assert records[0].decision_seconds < 1.5
+    assert records[0].cleanup_seconds <= 1 and records[0].reaped
+
+
+def test_cleanup_failure_never_returns_worker_success(kimi_mock, monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_console import kimi_deadline
+
+    server, cert, tmp_path = kimi_mock
+    config = _configuration(server, cert, _credential_file(tmp_path))
+
+    class UnreapableProcess:
+        pid = 999999
+
+        def __init__(self, *, target, args, name):
+            self.channel = args[0]
+
+        def start(self):
+            kimi_deadline._send(self.channel, {"connected": True})
+            kimi_deadline._send(
+                self.channel,
+                {
+                    "result": {
+                        "observation_id": "fake-valid",
+                        "state": "SUCCEEDED",
+                        "result_kind": "NEEDS_CLARIFICATION",
+                        "clarification_question": "Synthetic",
+                    }
+                },
+            )
+
+        def is_alive(self):
+            return True
+
+        def kill(self):
+            pass
+
+        def join(self, timeout):
+            assert 0 <= timeout <= 1
+
+    monkeypatch.setattr(
+        kimi_deadline.multiprocessing,
+        "get_context",
+        lambda method: SimpleNamespace(Process=UnreapableProcess),
+    )
+    # Fake process emulates kernel cleanup failure; no real PID is signalled.
+    transport = KimiResponsesDraftTransport(config)
+    request = transport.prepare(
+        invocation_id="cleanup", content="test", profile=_profile()
+    )
+    credential = _resolver(config).resolve(_profile(), "cleanup")
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        transport.dispatch(
+            invocation_id="cleanup",
+            request=request,
+            credential=credential,
+            profile=_profile(),
+        )
+    assert transport.last_deadline_metrics.reason == "CLEANUP_FAILURE"
+    assert not transport.last_deadline_metrics.reaped
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        transport.dispatch(
+            invocation_id="cleanup-again",
+            request=request,
+            credential=credential,
+            profile=_profile(),
+        )
+    assert transport.dispatch_count == 1
+
+
+def test_supervised_transport_runs_from_backend_thread(kimi_mock):
+    from concurrent.futures import ThreadPoolExecutor
+
+    server, cert, tmp_path = kimi_mock
+    config = _configuration(server, cert, _credential_file(tmp_path))
+    transport = KimiResponsesDraftTransport(config)
+    _KimiHandler.response = _completed(
+        {
+            "kind": "NEEDS_CLARIFICATION",
+            "clarificationQuestion": "Synthetic",
+            "title": None,
+            "description": None,
+        }
+    )
+    request = transport.prepare(
+        invocation_id="thread", content="test", profile=_profile()
+    )
+    credential = _resolver(config).resolve(_profile(), "thread")
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(
+            transport.dispatch,
+            invocation_id="thread",
+            request=request,
+            credential=credential,
+            profile=_profile(),
+        ).result(timeout=6)
+    assert result.state is ObservationState.SUCCEEDED
+    assert transport.dispatch_count == len(_KimiHandler.requests) == 1
+    assert transport.last_deadline_metrics.reaped
+    assert transport.last_deadline_metrics.cleanup_seconds <= 1
+    assert transport.last_deadline_metrics.decision_seconds < 5

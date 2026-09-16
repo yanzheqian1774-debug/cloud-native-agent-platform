@@ -214,6 +214,7 @@ class KimiResponsesDraftTransport:
         self.configuration = configuration
         self.synthetic = configuration.execution_class == "LOCAL_HTTPS_MOCK"
         self.dispatch_count = 0
+        self.last_deadline_metrics = None
 
     @staticmethod
     def _cost(tokens: int, price_microusd_per_million: int) -> int:
@@ -301,6 +302,32 @@ class KimiResponsesDraftTransport:
         )
 
     def dispatch(self, *, invocation_id, request, credential, profile):
+        from agent_console.kimi_deadline import supervise
+
+        if (
+            not isinstance(request.payload, bytes)
+            or not isinstance(credential, ResolvedKimiCredential)
+            or credential.reference != self.configuration.credential_reference
+            or credential.version != self.configuration.credential_version
+        ):
+            raise DraftAssistanceError("KIMI_RESPONSES_REQUEST_INVALID")
+        if (
+            self.last_deadline_metrics is not None
+            and not self.last_deadline_metrics.reaped
+        ):
+            raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
+        self.dispatch_count += 1
+        return supervise(
+            self.configuration,
+            invocation_id,
+            request,
+            credential,
+            lambda value: setattr(self, "last_deadline_metrics", value),
+        )
+
+    def _dispatch_once(
+        self, *, invocation_id, request, credential, profile, connected=lambda: None
+    ):
         del profile
         if (
             not isinstance(request.payload, bytes)
@@ -332,6 +359,7 @@ class KimiResponsesDraftTransport:
         self.dispatch_count += 1
         try:
             connection.connect()
+            connected()
             elapsed = time.monotonic() - started
             remaining = self.configuration.total_timeout_seconds - elapsed
             if remaining <= 0:
