@@ -18,7 +18,10 @@ from agent_console.plan_suggestion_service import PlanningSuggestionService
 from test_plan_suggestion_v2 import proposal, repository  # noqa: F401
 
 
-@pytest.mark.parametrize("outcome", ["valid", "clarification", "invalid", "unknown"])
+@pytest.mark.parametrize(
+    "outcome",
+    ["valid", "clarification", "invalid", "unknown", "denied", "budget", "input"],
+)
 def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noqa: F811
     now = datetime.now(UTC)
     sample = proposal()
@@ -33,6 +36,8 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
 
     class ModelAuthority:
         def authorize_use(self, scope, subject, use):
+            if outcome == "denied":
+                return None
             return model_fixture.authorization(
                 scope=scope,
                 subject=subject,
@@ -45,7 +50,7 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
         synthetic = True
         calls = 0
 
-        def suggest(self, request, binding, profile):
+        def suggest(self, request, binding, profile, business_context):
             self.calls += 1
             if outcome == "unknown":
                 raise TimeoutError
@@ -71,11 +76,23 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
     invocations = PostgresPlanningInvocations(repository)
     invocations.migrate()
     provider = Provider()
+
+    class Budget(InMemoryProviderCallBudget):
+        def reserve(self, *args):
+            if outcome == "budget":
+                from agent_console.draft_assistance import DraftAssistanceError
+
+                raise DraftAssistanceError("PROVIDER_BUDGET_EXHAUSTED")
+            return super().reserve(*args)
+
     app = SimpleNamespace(
         repository=repository,
         authority=Authority(),
         scope=lambda principal: scope,
         validate_target=lambda *args, **kwargs: None,
+        current_input=lambda *args: {
+            "title": "x" * 65536 if outcome == "input" else "Controlled test Problem"
+        },
     )
     service = PlanningSuggestionService(
         app,
@@ -95,7 +112,7 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
         ),
         model_authorizer=ModelAuthority(),
         model_resolver=model_fixture.RecordingResolver([]),
-        budget=InMemoryProviderCallBudget(),
+        budget=Budget(),
         quote=ProviderBudgetQuote(65536, 8192, 100),
         provider=provider,
         model_use_owner=PostgresPlanModelUseOwner(repository),
@@ -109,6 +126,20 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
     request = PlanningRequest(
         target=sample.semantics.target, idempotency_key="same-key"
     )
+    if outcome in {"denied", "budget", "input"}:
+        from agent_console.draft_assistance import DraftAssistanceError
+        from agent_console.model_binding_resolution import ModelBindingResolutionFailure
+
+        with pytest.raises(
+            (DraftAssistanceError, ModelBindingResolutionFailure, PlanningError)
+        ):
+            service.begin(principal, request)
+        assert provider.calls == 0
+        if outcome == "budget":
+            replay = service.begin(principal, request)
+            assert replay["result"]["technical_status"] == "OUTCOME_UNKNOWN"
+            assert provider.calls == 0
+        return
     result = service.begin(principal, request)
     assert service.begin(principal, request) == result
     assert provider.calls == 1

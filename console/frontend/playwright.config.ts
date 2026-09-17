@@ -16,6 +16,7 @@ export default defineConfig({
           "**/s5-319-draft-assistance.real.spec.ts",
           "**/s5-320-kimi-draft-assistance.real.spec.ts",
           "**/s5-321-understanding*.spec.ts",
+          "**/s5-323-planning.real.spec.ts",
         ]
       : [
           "**/digital-employee-work-participation.real.spec.ts",
@@ -24,6 +25,7 @@ export default defineConfig({
           "**/s5-319-draft-assistance.real.spec.ts",
           "**/s5-320-kimi-draft-assistance.real.spec.ts",
           "**/s5-321-understanding*.spec.ts",
+          "**/s5-323-planning.real.spec.ts",
           "**/*-live.spec.ts",
         ],
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,

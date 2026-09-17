@@ -452,3 +452,30 @@ Human 已明确授权原 323 增量一产品实现、独立环境迁移、验证
 前端首次 lint/build 因 node_modules 不存在无法运行；随后在原323工作树 `npm ci` 成功（锁文件未改），lint 0 errors / 1 React cleanup warning，build通过；cleanup warning随后修复，待下一轮重验。当前页面尚未加入主路由，因此该 build 不是页面浏览器证明。
 
 共享UI ownership复核：321恢复载体和322恢复载体均idle，322最新回执明确停止视觉实施。原323是本工作树唯一writer。下一步在原分支接收 exact 321 `97b8603` 与322 `e5fa882` 的依赖，保留main恢复/焦点保护，解决本地文件级差异；不合并父PR、不修改其工作树/环境。完成接收后再接入主路由并记录组合source/tree及适用新测试。
+
+### 10.6 再恢复检查点（2026-09-17 21:26 +08:00）
+
+旧恢复载体 `01a0af54-6e6e-7bd1-932f-3527d9e1ce18` 为 systemError，最后只读命令 exit 0；此前 HTTPS 启动 exit 1（DRAFT_PROFILE_INVALID），未留下 server/test/hook writer。原 b923 分支 HEAD `cccf1519c0b678415c87b9fcd17090817213f9a5` / tree `f199062a108e51a311a72895ae61014570c50826`，321/322 本地接收完成，不重复 merge。Registry 321/322/323 各一行，保留父状态。
+
+原7项 tracked修改、5项untracked文件已保全到专属验收目录 `recovery-20260917-212650`（binary patch及untracked tar）；原日志、证书、独立PG及全部数据保留。当前载体为唯一323 writer。提交/hooks时禁止并发写入。下一步恢复已部分seed的专属browser库，不删除或重新生产已有资源；解除错误复用draft composition造成的启动故障，再完成治理/BFF/owner/browser与最终门禁。历史1906通过不计为后续改动验证。
+
+### 10.7 组合接线及独立验收（2026-09-17）
+
+已完成可信 planning-input / invocation BFF 路由、生产 composition 的显式 `PlanningInvocationDependencies` 接缝、前端主路由与必要补问入口。默认无 provider；部署必须显式提供 profile、当前精确授权、Model owner resolver、budget、commitment key 与受控 provider。`PLANNING_V2_ENABLED` 单独只开启版本化读/确认/资源操作，不偷偷启用真实模型。专属 HTTPS 环境实际复用该 invocation composition、真实 Model owner、动态 exact grants、Postgres budget、canonical contextual Resource Use 与 Model Evidence。
+
+独立环境：原PG容器与 `planning323` 保留；`planning323_browser` 中断时已部分seed的 Problem/Criteria/Employee/Model 全部读回恢复，未删除、重建、覆盖。修复了测试启动器错误复用 draft profile、同generation重复激活和授权窗口不合规；321环境/账本/凭据/调度未操作。专属 `https://127.0.0.1:19324`，外部验收资产 `/Users/tristan/Documents/s5-v023-arch-323-acceptance`，其中凭据与私钥不入库。
+
+实际验证：
+
+- `make check`：1916 passed / 201 skipped / 1 upstream deprecation warning（80.39s）；跳过项为未配置其他专属PG/Qdrant/Linux环境，不称全外部矩阵通过。之后补充输入总字节边界的定向 invocation 测试：7 passed（3.41s）；最终提交 hooks 仍须正常运行。
+- 真实owner与新planning PG定向测试合计覆盖17项：结构/采购DAG、事务rollback、并发不同key确认、CAS/history、真实Problem/Criteria陈旧校验、exact Employee读取、拒绝/错误摘要/required/optional、受控结果分类、治理拒绝/预算失败零dispatch、输入预算及未知不重发。
+- 旧v1真实HTTP/PG回归：3 passed / 1 deselected（13.22s），覆盖事务rollback、版本/CAS/独立grant、错误精确资源与改变标准拒绝确认；未运行其业务执行测试。
+- frontend lint/build通过，保留bundle >500kB提示；W2A/W3组合回归19 passed（15.2s）。该mock回归中部分criteria请求落到未运行的8000代理，断言全部通过；不将其当真实后端证明。
+- 首轮真实HTTPS/PG PC浏览器1 passed：必要补问、刷新补问、三阶段五任务、资源刷新、一次确认、再刷新/history一致。独立进程重启后浏览器1 passed：Plan/Approval/source history严格相等。资源状态为8需求、1匹配、6必要缺口、1可选，不使用设计图9/4数值冒充事实。
+- `s5_v023_arch_323_readback.py`实际PASS：CSRF拒绝、重复确认、资源刷新、未知ID拒绝、历史不变；全部资源/执行owner及invocation/Model Use/Evidence/budget计数前后不变，2条受控调用均关联canonical Use/Evidence。没有模型重放、Run/TaskRun/Attempt/Assignment/Placement或业务资源生产/发布。无真实模型调用。
+
+视觉依据为102/103/112：PC左侧目标与三阶段五任务，任务可展开查看职责/依赖/I/O/资源用途；右侧边界/资源计数/版本；确认紧接方案，缺口详情随后。首轮全展开过长已改为任务摘要，重启截图已检查。保留当前父级shell；全链路视觉统一仍属10.3后继，不称整链视觉验收完成。原始截图、browser receipt、side-effects receipt及日志位于专属验收目录，最终source/tree和截图/构建摘要绑定在该目录manifest。
+
+限制：资源仅对已配置Employee reader作真实exact匹配；未配置的Skill/MCP/Knowledge/Workflow reader明确UNKNOWN，未选required为MISSING。模型仍为CONTROLLED_TEST_PROVIDER、业务资源为测试owner资料；真实AI接通/质量、企业采购资源齐套、D3执行与Human接受/merge均未授予。仅在既有323项交付一个Draft PR；Registry中321/322行已与接收候选逐字比对一致。
+
+最终PC浏览器补验：2 passed（2.5s），包含重启后精确history读回、网络响应丢失后刷新仍复用opaque idempotency key；URL不保存回答正文。frontend最新构建为 `index-CnQjc8aV.js` / `index-CXGJAZF9.css`。提交前停止323验收服务并冻结工作树，仅正常hooks可写格式；不绕过hooks。

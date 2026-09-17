@@ -30,7 +30,9 @@ from agent_console.draft_assistance_authorization import (
     GrantAdministrationDraftAuthorization,
 )
 from agent_console.governed_execution_ownership import execution_database_fingerprint
+from agent_console.plan_suggestion_api import install_planning_invocations
 from agent_console.plan_suggestion_application import PlanningApplication
+from agent_console.plan_suggestion_bootstrap import PlanningInvocationDependencies
 from agent_console.plan_suggestion_postgres import PostgresPlanningRepository
 from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_bff import (
@@ -81,6 +83,7 @@ def build_workbench_composition(
     draft_assistance: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     planning_v2_enabled: bool = False,
+    planning_invocations: PlanningInvocationDependencies | None = None,
     managed_closeables: tuple[object, ...] = (),
 ) -> WorkbenchComposition:
     """Build only after every external authority and owner dependency is present."""
@@ -105,6 +108,8 @@ def build_workbench_composition(
         workflow_database_url
     ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    if planning_invocations is not None and not planning_v2_enabled:
+        raise AuthorityError("PLANNING_V2_DISABLED")
     planning = None
     if planning_v2_enabled:
         planning_repository = PostgresPlanningRepository(
@@ -185,10 +190,25 @@ def build_workbench_composition(
             **(
                 {
                     "route_installers": (
-                        install_draft_assistance_routes(draft_assistance),
+                        (
+                            (install_draft_assistance_routes(draft_assistance),)
+                            if draft_assistance is not None
+                            else ()
+                        )
+                        + (
+                            (
+                                install_planning_invocations(
+                                    planning_invocations.bind(
+                                        planning, foundation.grants.authorization
+                                    )
+                                ),
+                            )
+                            if planning_invocations is not None
+                            else ()
+                        )
                     )
                 }
-                if draft_assistance is not None
+                if draft_assistance is not None or planning_invocations is not None
                 else {}
             ),
         )

@@ -138,3 +138,56 @@ class PlanningApplication:
                 principal, plan.semantics.target, cursor.connection, current=False
             )
             return result
+
+    def current_input(self, principal, problem_id, connection):
+        from dataclasses import asdict
+
+        from .plan_suggestion_domain import ExactReference, ProblemTarget
+
+        self.authority.require(
+            principal, "BUSINESS_PROBLEM", "READ", problem_resource(problem_id)
+        )
+        self.authority.require(
+            principal, "SUCCESS_CRITERIA_SET", "READ", criteria_resource(problem_id)
+        )
+        scope = self.scope(principal)
+        aggregate = self.problems.get_aggregate(
+            scope, problem_id, authorized=True, connection=connection
+        )
+        revisions = self.problems.get_problem(
+            scope, problem_id, authorized=True, connection=connection
+        )
+        sets = self.problems.list_criteria_set_revisions(
+            scope, problem_id, authorized=True, connection=connection
+        )
+        if aggregate.current_state != BusinessProblemState.ACTIVE or not sets:
+            raise PlanningConflict("PLANNING_CONFIRMED_PROBLEM_AND_CRITERIA_REQUIRED")
+        revision = next(
+            r for r in revisions if r.revision_id == aggregate.current_revision_id
+        )
+        criteria = sets[-1]
+        target = ProblemTarget(
+            problem=ExactReference(
+                resource_id=problem_id,
+                revision_id=revision.revision_id,
+                digest=revision.digest,
+            ),
+            criteria=ExactReference(
+                resource_id=problem_id,
+                revision_id=criteria.set_revision_id,
+                digest=criteria.digest,
+            ),
+            criterion_revision_ids=criteria.ordered_criterion_revision_ids,
+            expected_problem_version=aggregate.aggregate_version,
+        )
+        self.validate_target(principal, target, connection)
+        members = self.problems.list_criterion_revisions(
+            scope, problem_id, authorized=True, connection=connection
+        )
+        selected = {r.revision_id: asdict(r) for r in members}
+        return {
+            "target": target.model_dump(mode="json"),
+            "title": revision.title,
+            "description": revision.description,
+            "criteria": [selected[i] for i in target.criterion_revision_ids],
+        }

@@ -50,7 +50,7 @@ class PlanningInvocationTarget(Immutable):
     problem: ProblemTarget
     source_proposal: ExactReference | None
     variant: Literal["FIRST_PROPOSAL", "SUCCESSOR_PROPOSAL"]
-    resource_snapshot: ExactReference
+    resource_snapshot: ExactReference | None
     input_commitment: Digest
     output_schema: Literal["plan-suggestion-output.v1"] = "plan-suggestion-output.v1"
     policy_version: Identity

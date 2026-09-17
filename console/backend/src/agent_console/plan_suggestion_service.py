@@ -44,6 +44,7 @@ class PlanningSuggestionService:
         model_use_owner,
         commitment_key,
         prepare_resources,
+        identity_factory=lambda: str(uuid4()),
     ):
         self.application = application
         self.invocations = invocations
@@ -56,6 +57,7 @@ class PlanningSuggestionService:
         self.model_use_owner = model_use_owner
         self.commitment_key = commitment_key
         self.prepare_resources = prepare_resources
+        self.identity_factory = identity_factory
         if len(commitment_key) < 32:
             raise PlanningError("PLANNING_COMMITMENT_KEY_REQUIRED")
 
@@ -82,6 +84,13 @@ class PlanningSuggestionService:
             scope, request.target.problem.resource_id, authorized=True
         ) as cursor:
             app.validate_target(principal, request.target, cursor.connection)
+            business_context = app.current_input(
+                principal, request.target.problem.resource_id, cursor.connection
+            )
+        if len(encoded) + len(canonical_bytes(business_context)) > (
+            self.profile.maximum_input_bytes
+        ):
+            raise PlanningError("PLANNING_INPUT_TOO_LARGE")
         synthetic = self.provider.synthetic
         if not synthetic and not self.profile.real_calls_enabled:
             raise PlanningError("PLANNING_REAL_CALLS_DISABLED")
@@ -117,8 +126,8 @@ class PlanningSuggestionService:
                 if source.digest != source_ref.digest:
                     raise PlanningConflict("PLANNING_SOURCE_DIGEST_CONFLICT")
         resource_snapshot = self.prepare_resources(principal, request.target)
-        invocation_id = str(uuid4())
-        context_id = source.proposal_id if source else str(uuid4())
+        invocation_id = self.identity_factory()
+        context_id = source.proposal_id if source else self.identity_factory()
         request_revision = 1
         predecessor_id = source.invocation_id if source else None
         if request.predecessor_invocation_id is not None:
@@ -133,6 +142,10 @@ class PlanningSuggestionService:
                 raise PlanningConflict("PLANNING_PREDECESSOR_TARGET_CONFLICT")
             if previous["result"]["technical_status"] != "SUCCEEDED":
                 raise PlanningConflict("PLANNING_PREDECESSOR_NOT_TERMINAL")
+            if source is None and previous["result"]["kind"] != "NEEDS_CLARIFICATION":
+                raise PlanningConflict("PLANNING_PREDECESSOR_REQUIRES_SOURCE")
+            if previous_target.request_revision >= 8:
+                raise PlanningConflict("PLANNING_CLARIFICATION_LIMIT")
             context_id = previous_target.suggestion_context_id
             request_revision = previous_target.request_revision + 1
             predecessor_id = request.predecessor_invocation_id
@@ -183,7 +196,9 @@ class PlanningSuggestionService:
             principal, "MODEL_GOVERNANCE", "INVOKE_MODEL", use.exact_resource
         )
         try:
-            raw = self.provider.suggest(request, resolved, self.profile)
+            raw = self.provider.suggest(
+                request, resolved, self.profile, business_context
+            )
         except (TimeoutError, ConnectionError):
             result = {
                 "technical_status": "OUTCOME_UNKNOWN",

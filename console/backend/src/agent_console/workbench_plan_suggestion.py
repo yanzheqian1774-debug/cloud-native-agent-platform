@@ -47,8 +47,10 @@ class PlanningOwnerAdapter:
             self.application.repository.pool, call.connection
         )
         app = PlanningApplication(repo, self.application.problems, call.authority)
-        identity = call.path["proposal_id"]
+        identity = call.path.get("proposal_id", call.path.get("problem_id"))
         try:
+            if call.operation == "READ_PLANNING_INPUT_V2":
+                return app.current_input(principal, identity, call.connection)
             if call.operation == "CONFIRM_PLAN_V2":
                 body = ConfirmSuggestion.model_validate(call.payload)
                 return app.confirm(
@@ -117,6 +119,19 @@ def planning_operations(application, employees=None):
     handler = PlanningOwnerAdapter(application, employees)
     path = f"{PREFIX}/planning-v2/{{proposal_id}}"
     return (
+        WorkbenchOperation(
+            "READ_PLANNING_INPUT_V2",
+            "GET",
+            f"{PREFIX}/planning-input/{{problem_id}}",
+            None,
+            None,
+            lambda ctx, path, payload, query: (
+                ExactGrant(
+                    "BUSINESS_PROBLEM", "READ", f"business-problem:{path['problem_id']}"
+                ),
+            ),
+            handler,
+        ),
         WorkbenchOperation(
             "REFRESH_PLAN_RESOURCES_V2",
             "POST",
