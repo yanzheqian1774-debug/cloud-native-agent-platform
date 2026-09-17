@@ -30,6 +30,8 @@ from agent_console.draft_assistance_authorization import (
     GrantAdministrationDraftAuthorization,
 )
 from agent_console.governed_execution_ownership import execution_database_fingerprint
+from agent_console.plan_suggestion_application import PlanningApplication
+from agent_console.plan_suggestion_postgres import PostgresPlanningRepository
 from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
@@ -43,6 +45,10 @@ from agent_console.workbench_employee import (
 from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from agent_console.workbench_pagination import WorkbenchCursorCodec
+from agent_console.workbench_plan_suggestion import (
+    PlanningGrantTargetValidator,
+    planning_operations,
+)
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_service import WorkflowDefinitionService
 
@@ -74,6 +80,7 @@ def build_workbench_composition(
     workflows: WorkflowDefinitionService | None = None,
     draft_assistance: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
+    planning_v2_enabled: bool = False,
     managed_closeables: tuple[object, ...] = (),
 ) -> WorkbenchComposition:
     """Build only after every external authority and owner dependency is present."""
@@ -98,6 +105,15 @@ def build_workbench_composition(
         workflow_database_url
     ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    planning = None
+    if planning_v2_enabled:
+        planning_repository = PostgresPlanningRepository(
+            business_problems.problems.pool
+        )
+        planning_repository.migrate()
+        planning = PlanningApplication(
+            planning_repository, business_problems.problems, None
+        )
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
@@ -111,7 +127,8 @@ def build_workbench_composition(
             )
             if draft_assistance is not None
             else ()
-        ),
+        )
+        + ((PlanningGrantTargetValidator(),) if planning is not None else ()),
     )
     foundation = build_authority_foundation(
         runtime,
@@ -141,6 +158,11 @@ def build_workbench_composition(
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             grant_administration=foundation.grants,
             operations=(
+                *(
+                    planning_operations(planning, employee_definitions)
+                    if planning is not None
+                    else ()
+                ),
                 *business_problem_operations(
                     business_problems,
                     BusinessProblemCreateCoordinator(

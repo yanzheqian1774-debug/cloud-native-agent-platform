@@ -1952,6 +1952,7 @@ def _configure_workbench() -> None:
             owner_database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
             agent_database_url=os.environ.get("AGENT_DEFINITION_DATABASE_URL", ""),
             business_problems=_business_problem_application,
+            planning_v2_enabled=os.environ.get("PLANNING_V2_ENABLED") == "true",
             agent_definitions=_agent_definition_service.repository,
             employee_definitions=_digital_employee_assembly.employee_definitions,
             digital_employees=_digital_employee_assembly.repository,

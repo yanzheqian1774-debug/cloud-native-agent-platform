@@ -442,3 +442,13 @@ Human 已明确授权原 323 增量一产品实现、独立环境迁移、验证
 实际执行 `PLANNING323_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:25432/planning323 uv run pytest -q console/backend/tests/test_plan_suggestion_v2.py`：**9 passed in 2.58s**。覆盖真实 Problem/Criteria owner、拒绝未授权/陈旧目标、确认响应丢失后历史重放、不同 key 并发收敛、key 冲突、rollback、successor、history、跨 scope 及资源 UNKNOWN/optional。新文件 Ruff check/format 已通过。尚未运行全量 make check、frontend、browser；新候选 CI 尚无。
 
 下一未完成步骤：完成 invocation 的 D2 typed target、persist-before-effect、现有 model binding/budget 与 contextual Resource Use/Evidence owner 接线；资源 real-owner 精确读回补验；可信 BFF/生产 composition 与 102/103/112 PC 页面；独立服务重启/browser、全量门禁、正常 push/唯一 Draft PR。后端首段的测试通过不能替代这些步骤。
+
+### 10.5 接线中的检查点
+
+首段提交实际成功：`42f0021`，正常 Ruff/format/pytest hooks Passed。之后新增 D2 typed target/output、Planning invocation claim/result、`0026` additive contextual kind/Evidence variant、受控 provider service、可信 BFF read/history/confirm/resource refresh，以及独立 `frontend/src/planning/` 组件。当前生成服务尚未完成生产 composition、前端生成入口和端到端接线，不作为功能已完成。
+
+实际 PG + controlled-provider 定向结果：13 passed in 3.70s；四路径为 VALID_SUGGESTION / NEEDS_CLARIFICATION / INVALID / OUTCOME_UNKNOWN，重放 provider call count 保持1，真实provider关闭。真实 Problem owner 校验与此前事务测试继续通过。资源 owner 精确实例、真实BFF/browser/restart仍待验证。
+
+前端首次 lint/build 因 node_modules 不存在无法运行；随后在原323工作树 `npm ci` 成功（锁文件未改），lint 0 errors / 1 React cleanup warning，build通过；cleanup warning随后修复，待下一轮重验。当前页面尚未加入主路由，因此该 build 不是页面浏览器证明。
+
+共享UI ownership复核：321恢复载体和322恢复载体均idle，322最新回执明确停止视觉实施。原323是本工作树唯一writer。下一步在原分支接收 exact 321 `97b8603` 与322 `e5fa882` 的依赖，保留main恢复/焦点保护，解决本地文件级差异；不合并父PR、不修改其工作树/环境。完成接收后再接入主路由并记录组合source/tree及适用新测试。

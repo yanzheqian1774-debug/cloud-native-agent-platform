@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,8 +25,9 @@ from .workflow_control_domain import ApprovalDecision
 class PostgresPlanningRepository:
     """All confirmations use the caller's same-owner transaction and target lock."""
 
-    def __init__(self, pool):
+    def __init__(self, pool, connection=None):
         self.pool = pool
+        self.connection = connection
 
     def migrate(self):
         path = Path(__file__).parents[2] / "migrations/0025_plan_suggestion.sql"
@@ -58,8 +59,12 @@ class PostgresPlanningRepository:
         if not authorized:
             raise PlanningError("PLANNING_NOT_AUTHORIZED")
         with (
-            self.pool.connection() as connection,
-            connection.transaction(),
+            (
+                nullcontext(self.connection)
+                if self.connection is not None
+                else self.pool.connection()
+            ) as connection,
+            nullcontext() if self.connection is not None else connection.transaction(),
             connection.cursor(row_factory=dict_row) as cursor,
         ):
             connection.row_factory = dict_row
@@ -143,6 +148,11 @@ class PostgresPlanningRepository:
         before_commit=None,
         validate_current=None,
     ):
+        persisted = self.proposal(
+            cursor, scope, proposal.proposal_id, proposal.revision
+        )
+        if persisted != proposal:
+            raise PlanningConflict("PROPOSAL_DIGEST_CONFLICT")
         payload = canonical_digest(
             [
                 proposal.proposal_id,
@@ -263,3 +273,38 @@ class PostgresPlanningRepository:
             "approval": row["approval"],
             "execution_status": "NOT_STARTED",
         }
+
+    def history(self, cursor, scope, proposal_id):
+        rows = cursor.execute(
+            "SELECT revision,record FROM workflow_planning.proposals "
+            "WHERE namespace=%s "
+            "AND security_domain=%s AND proposal_id=%s ORDER BY revision LIMIT 100",
+            (*self._scope(scope), proposal_id),
+        ).fetchall()
+        plans = cursor.execute(
+            "SELECT version FROM workflow_planning.plans WHERE namespace=%s "
+            "AND security_domain=%s AND plan_id=%s ORDER BY version LIMIT 100",
+            (*self._scope(scope), proposal_id),
+        ).fetchall()
+        return {
+            "proposals": [row["record"] for row in rows],
+            "plans": [
+                self.read_plan(cursor, scope, proposal_id, row["version"])
+                for row in plans
+            ],
+        }
+
+    def save_resources(self, cursor, scope, proposal, snapshot):
+        snapshot.pending_required(proposal)
+        cursor.execute(
+            "INSERT INTO workflow_planning.resource_snapshots "
+            "VALUES(%s,%s,%s,%s,%s,%s)",
+            (
+                *self._scope(scope),
+                snapshot.snapshot_id,
+                proposal.proposal_id,
+                proposal.revision,
+                Jsonb(snapshot.model_dump(mode="json")),
+            ),
+        )
+        return snapshot
