@@ -1,0 +1,9 @@
+{
+  "kind": "REAL_BACKEND_LOCAL_HTTPS_PROVIDER_FIXTURE",
+  "modelQuality": "NOT_MEASURED",
+  "problemId": "14019ced-cc5f-5da2-bda5-c4a12358cec6",
+  "createCommands": 1,
+  "independentRead": true,
+  "refreshRead": true,
+  "uiModelCalls": 2
+}

@@ -97,6 +97,7 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
             ),
             "contentDisposition": value.content_disposition,
             "clarificationQuestion": response.clarification_question,
+            "understanding": response.understanding,
             "draft": (
                 {"title": response.title, "description": response.description}
                 if response.title and response.description

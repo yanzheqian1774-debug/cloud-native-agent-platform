@@ -1,0 +1,23 @@
+{
+  "session": "S5-V023-IMPL-321",
+  "tables": {
+    "draft_assistance.schema_migrations": 1,
+    "draft_assistance.contexts": 4,
+    "draft_assistance.turns": 6,
+    "draft_assistance.invocations": 6,
+    "draft_assistance.idempotency_claims": 6,
+    "draft_assistance.invocation_versions": 28,
+    "contextual_resource_use.uses": 3,
+    "contextual_resource_use.facts": 6,
+    "contextual_resource_use.operations": 9,
+    "model_evidence.records": 3,
+    "draft_provider_budget.schema_migrations": 1,
+    "draft_provider_budget.policies": 1,
+    "draft_provider_budget.reservations": 3,
+    "draft_provider_budget.settlements": 3
+  },
+  "rawContentMatches": {},
+  "formalProblems": 1,
+  "formalRevisions": 1,
+  "modelQuality": "NOT_MEASURED"
+}

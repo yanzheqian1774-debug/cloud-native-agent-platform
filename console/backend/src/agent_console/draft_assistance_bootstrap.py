@@ -14,6 +14,7 @@ from agent_console.draft_assistance import (
     DraftScope,
     StaticPepperResolver,
 )
+from agent_console.draft_assistance_policy import PolicyValidationError, policy_for
 from agent_console.draft_assistance_postgres import (
     PostgresContextualResourceUseOwner,
     PostgresDraftAssistanceRepository,
@@ -26,12 +27,6 @@ from agent_console.draft_assistance_support import (
 from agent_console.draft_provider_budget_postgres import PostgresProviderCallBudget
 from agent_console.kimi_responses_draft_adapter import (
     ADAPTER_ID as KIMI_ADAPTER_ID,
-)
-from agent_console.kimi_responses_draft_adapter import (
-    ADAPTER_REVISION as KIMI_ADAPTER_REVISION,
-)
-from agent_console.kimi_responses_draft_adapter import (
-    OUTPUT_SCHEMA_VERSION as KIMI_OUTPUT_SCHEMA_VERSION,
 )
 from agent_console.kimi_responses_draft_adapter import (
     PROTOCOL as KIMI_PROTOCOL,
@@ -51,12 +46,6 @@ from agent_console.model_governance_authorization import ModelGovernanceExactRes
 from agent_console.model_governance_postgres import PostgresModelGovernanceRepository
 from agent_console.openai_responses_draft_adapter import (
     ADAPTER_ID as OPENAI_ADAPTER_ID,
-)
-from agent_console.openai_responses_draft_adapter import (
-    ADAPTER_REVISION as OPENAI_ADAPTER_REVISION,
-)
-from agent_console.openai_responses_draft_adapter import (
-    OUTPUT_SCHEMA_VERSION as OPENAI_OUTPUT_SCHEMA_VERSION,
 )
 from agent_console.openai_responses_draft_adapter import (
     PROTOCOL as OPENAI_PROTOCOL,
@@ -214,6 +203,11 @@ def _profile(
         else (common | real_fields | provider_fields)
     )
     if (
+        isinstance(document.get("adapter"), dict)
+        and document["adapter"].get("revision") == "v2"
+    ):
+        expected = expected | {"policyDigest"}
+    if (
         set(document) != expected
         or document.get("schemaVersion") != ("draft-assistance-runtime.v1")
         or transport_kind not in {"SYNTHETIC", "REAL_PROVIDER"}
@@ -335,17 +329,16 @@ def _profile(
             budget["inputPriceMicrousdPerMillionTokens"],
             budget["outputPriceMicrousdPerMillionTokens"],
         )
+        policy = policy_for(value.adapter_revision, value.output_schema_version)
+        if policy.revision == "v2" and document["policyDigest"] != policy.digest:
+            raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
         adapter_tuple = (
             document["providerProtocol"],
             value.adapter_id,
-            value.adapter_revision,
-            value.output_schema_version,
         )
         if adapter_tuple == (
             OPENAI_PROTOCOL,
             OPENAI_ADAPTER_ID,
-            OPENAI_ADAPTER_REVISION,
-            OPENAI_OUTPUT_SCHEMA_VERSION,
         ):
             real_configuration = OpenAIResponsesConfiguration(
                 *common_configuration, ca_file
@@ -353,8 +346,6 @@ def _profile(
         elif adapter_tuple == (
             KIMI_PROTOCOL,
             KIMI_ADAPTER_ID,
-            KIMI_ADAPTER_REVISION,
-            KIMI_OUTPUT_SCHEMA_VERSION,
         ):
             real_configuration = KimiResponsesConfiguration(
                 *common_configuration, document["reasoningEffort"], ca_file
@@ -372,7 +363,7 @@ def _profile(
                 "outputPriceMicrousdPerMillionTokens"
             ],
         }
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, PolicyValidationError) as exc:
         raise DraftAssistanceError("DRAFT_PROFILE_INVALID") from exc
     return value, pepper_path, real_configuration, normalized_budget
 

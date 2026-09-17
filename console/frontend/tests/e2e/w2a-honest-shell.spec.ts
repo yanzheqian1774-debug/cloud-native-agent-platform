@@ -469,7 +469,9 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(page.locator("#authorization-message").getByText("问题详情已读取成功", { exact: false })).toBeVisible();
   await expect(waitingComposer).toHaveValue(pendingText);
   await expect(userFocusTarget).toBeFocused();
-  expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
+  await test.step("W2A_AUTH_READ_SCROLL_PRESERVED", async () => {
+    expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
+  });
   await expect(desktopSummary.getByText(pendingText, { exact: true })).toHaveCount(0);
   expect(exactReads).toBe(1);
   const formalProblem = page.locator("#formal-problem-message");
