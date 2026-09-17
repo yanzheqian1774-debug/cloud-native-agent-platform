@@ -1,0 +1,12 @@
+{
+  "kind": "UI_API_FIXTURE",
+  "width": 390,
+  "input": "供应商质量需要改善，请帮我明确目标。",
+  "supplement": "只看A供应商，缺陷率低于2%，禁止更换设备；具体季度、基线和测量口径未知。",
+  "corrected": "只看A供应商，缺陷率低于1%，禁止更换设备；具体季度、基线和测量口径未知。",
+  "fixtureInvocations": 3,
+  "fixtureCreates": 1,
+  "providerCalls": 0,
+  "databaseWrites": 0,
+  "modelQuality": "NOT_MEASURED"
+}

@@ -324,3 +324,175 @@ These are forward terminal addenda. Historical checkpoint evidence is unchanged 
 The independent review found no contradictory v0.2 classification, missing package, circular dependency, public API/CRD/Graph/Workflow assumption, unsupported capability claim, or broken authority boundary. It required one bounded linear clarification: the exact Package 3/4 synchronization gate, explicit zero-call preapproval coverage, complete misuse dispositions, and exact Ruff inspection wording in the evidence index.
 
 This remains a planning artifact only. The next gate is the Human S5-PLAN-003 Merge Gate, followed by an independently authorized merge/close sequence. Until those gates pass, every downstream package and identifier remains `UNALLOCATED / NOT_ACTIVE / NOT_AUTHORIZED`.
+
+
+<a id="s5-v023-impl-322"></a>
+## S5-V023-IMPL-322 — 问题工作台视觉收口——对齐最终效果图
+
+2026-09-17 Human-authorized bounded frontend increment. This entry owns scope,
+comparison, evidence and remaining work; no parallel plan or authority package.
+Registration is local in the existing Governance Registry, not durable-main or
+external Delivery-Tracking publication. Repository registries across available
+worktrees, local branches, remote matching heads, GitHub issue/PR search and
+visible tasks found no competing allocation. The sole matching task is this task.
+
+### Baseline and write gate
+
+- Read-only starting main: `b5e013f806bd864e0c10ba421b7966e084b36576`.
+- Reference candidate: PR #181 OPEN, source `4001b412340398ea42d813efd7f7f5f2cf9bf01d`, tree `846e7b5536ebd68d2e12d31d907d0e32a6195a70`; not received, copied or merged.
+- Current owner task is ACTIVE and has uncommitted `DraftAssistanceCard.tsx` and `s5-321-understanding.spec.ts` changes. Candidate delivery does not transfer write ownership. No shared UI write is permitted yet.
+- Implementation baseline remains UNSELECTED pending explicit owner handoff and mutually fixed source/tree. Existing Session closure is not required. No automatic integration of #179/#180/#181.
+- One existing isolated worktree, one branch `codex/s5-v023-impl-322-workbench-visual`, one eventual Draft PR. No subtask Session or subagent.
+
+### Final references and observed gaps
+
+Final references: `/Users/tristan/Downloads/101.png` and `102.png` for conversation
+and confirmation; `103.png` for visual styling only. All three are available.
+No earlier replaced images are used. Future execution, planning and resource
+buttons shown in references are not authorized functionality.
+
+Observed comparison inputs are the upstream owner's current local
+`docs/evidence/s5/v0.2/s5-v023-impl-321/experience-review/` screenshots:
+`02-clarification.png`, `05-confirm-current.png`, `07-refreshed-fixture.png`.
+These are labelled UI/API fixtures, currently uncommitted, not immutable candidate
+or real-model proof. Their gaps must be rechecked against the handed-off baseline.
+
+| State | Observed gap | Bounded proposed change | Protected behavior |
+| --- | --- | --- | --- |
+| Initial input | Large nested shell and competing contextual text | Clear heading, readable input and a single primary submit action | Existing authorization and explicit submission |
+| Clarification | Refusal/manual fallback are prominent; answer action distant; draft-success badge can conflict with missing information | Foreground question and current understanding; secondary fallback styling; state-accurate badge | Current owner's ongoing status fix; user corrections and unknown facts |
+| Confirmation | Small fact labels/body; conversation and confirmation are visually fragmented | Readable goal/fact card, consistent spacing, one primary confirm action | Latest revision equals submitted payload; no automatic confirmation |
+| Created/readback | Heading remains new conversation; permission and summary cards repeat; refresh action dominates | State-aware heading, one next action, quieter historical authorization details | Creation fact card stays mounted; READ is independent; restoration provenance and scroll stability |
+| All states | Dense nested cards, small labels, multiple equally weighted outlines | Scoped typography, blue/neutral palette, lighter borders/shadows, consistent buttons and status chips | Visible focus, keyboard and mobile access |
+
+### Proposed implementation scope
+
+Reuse `console/frontend/src/problems/ProblemWorkspacePage.tsx`,
+`ProblemConversation.tsx`, `DraftAssistanceCard.tsx`, the existing understanding
+and context-card components, and their current stylesheet. Limit style selectors
+to the problem workspace. Inspect handed-off CSS and source before changing;
+do not redesign global navigation or introduce another workspace.
+Keep handlers, contracts, model policies, persistence, authorization and
+idempotency unchanged. Technical details default collapsed; material failures,
+unknown outcomes, synthetic provenance and required approvals remain visible.
+Never relabel created/read-back as executing or solved.
+
+### Validation and delivery plan
+
+After handoff, capture the same synthetic case before and after at desktop and
+390px mobile widths: initial input, clarification, confirmation and readback.
+Reuse existing understanding, W2A/W3 and isolated browser journeys. Verify IME,
+held Enter, focus visibility/order, stale response protection, correction adoption,
+creation retry/idempotency, independent READ and refresh/scroll restoration.
+Use a task-owned isolated environment, never the upstream acceptance environment
+or a formal Problem; real model calls prohibited. Fixture screenshots are visual
+proof only, not backend persistence proof.
+Run `make check`, frontend `npm run lint` and `npm run build`, relevant browser
+gates, normal commit hooks and non-force push; create only one Draft PR after
+baseline selection. No tests were executed in this read-only preparation stage.
+
+Remaining: explicit handoff/source/tree/sole writer; immutable before screenshots;
+UI implementation; after screenshots; relevant gates; one reviewable Draft PR.
+Nonblocking extra ideas stay in this existing plan entry as follow-up, not scope
+expansion. Completion requires visual consistency and no behavioral regression;
+Human controls Ready, merge, deployment and Session closure.
+
+
+### Formal shared UI handoff received — 2026-09-17
+
+Owner task `01a0adf4-2cb3-78e1-8ec5-276c8d7a3db2` explicitly stopped writes to
+`console/frontend/src/api/draftAssistanceTypes.ts`,
+`src/problems/{DraftAssistanceCard,ProblemConversation,ProblemWorkspacePage}.tsx`,
+`src/problems/{problemConversationModel,problemUnderstandingModel}.ts`
+(all src paths beneath console/frontend), and frontend styles/shell/browser tests.
+The owner states remaining work is quality-preparation documentation only;
+no remaining shared UI modification was identified. This task accepts that
+file-ownership handoff; shared UI remains unwritten pending the baseline gate.
+
+Verified PR #181 OPEN/Draft head:
+`0de78aa8fe7f50325a525506f8aee33b295aca80`,
+tree `d8ddcaa33d755f39d077382cb3f17c54a2943eac`.
+All five screenshot hashes in the owner's `experience-review/fixed-0de78aa/receipt.json`
+match files (input, clarification, understanding, correction pending, confirmation).
+This fixed-source fixture stops before creation; it is not new database/readback
+or model-quality evidence. Retain the corrected “等待补充信息” label.
+
+Baseline discrepancy: current branch main `b5e013f` contains merged #179 commits
+`89a8dad` and `8fd78e8` (including Evidence keyboard-focus behavior), absent from
+the handed-off candidate. Common ancestor is
+`e51334aa9780291b3d077a1edb698dca630a6b3f`. Replacing current code with #181 would
+lose already-delivered behavior; combining them would constitute candidate
+integration, which Human explicitly prohibited doing autonomously.
+Thus UI ownership is received but implementation baseline remains UNSELECTED.
+Required next input is an explicitly accepted combined baseline, or Human's
+explicit instruction for a stacked candidate and later integration ownership.
+No merge, cherry-pick, candidate copy, branch reset or shared UI edit performed.
+
+
+### Development baseline authorized — 2026-09-17
+
+Human explicitly authorized the fixed `0de78aa8fe7f50325a525506f8aee33b295aca80`
+source / `d8ddcaa33d755f39d077382cb3f17c54a2943eac` tree for this independent
+worktree. This supersedes the preceding baseline pause. Existing branch and
+preparation edits retained; no upstream worktree changes or PR integration.
+Actual owner activity checked: quality preparation, existing fixture services,
+no shared UI build/test writer observed. Explicit file handoff remains effective.
+This task is sole writer for its own UI increment. Parent #181 is still Draft/open;
+its changes are dependencies, not this task's diff. #179 integration is not part
+of this task; do not claim the candidate includes current-main-only commits.
+
+Implement the six agreed presentation changes; keep state transitions and API
+contracts untouched. Capture before/after using the same isolated UI/API fixture
+case at 1440x1050 and 390x844, with no real provider or database access.
+
+
+### Visual candidate delivery evidence
+
+Implemented only the bounded presentation changes: explicit clarification-answer
+focus entry; secondary fallback actions; readable fact/source typography; user
+corrections before the current confirmation; no-wrap unavailable search label;
+state-aware heading; collapsed read-complete authorization summary and technical
+facts. Creation/restoration cards remain mounted. No API handlers, models,
+contracts, idempotency payloads, persistent domains or authorization flows changed.
+
+Owned UI changes: DraftAssistanceCard.tsx, ProblemConversation.tsx,
+ProblemWorkspacePage.tsx, ProblemTaskSummary.tsx, product-experience.css.
+The existing interaction config accepts an isolated port (original default retained);
+the existing interaction suite includes three additional visual/focus/order journeys.
+No 321 tree, runtime or database was modified. Existing services were not stopped.
+
+[Before/after viewer](../../evidence/s5/v0.2/s5-v023-impl-322/index.html) contains
+28 unedited screenshots (1440x1050 / 390x844): input, clarification, confirmation,
+created, independently authorized fixture readback and refresh, plus mobile action
+positions. [Capture manifest](../../evidence/s5/v0.2/s5-v023-impl-322/capture-manifest.json)
+binds baseline source/tree, changed-file hashes, built assets and screenshot hashes.
+The same synthetic DTO scenario runs before and after. This is UI regression
+proof, not a fresh true-backend/PG or model-quality claim.
+
+Validation actually executed:
+- `make check`: 1853 passed, 200 pre-existing environment-dependent skips, one warning.
+- Frontend `npm run lint`: PASS; production `npm run build` via both Playwright configs: PASS (existing chunk-size warning).
+- Existing understanding suite plus three visual/focus/order journeys: 33 passed, retries 0.
+- Existing W2A/W3 suites: 19 passed, unchanged assertions, including exact scroll position, focus/modal containment, independent READ and refresh restoration.
+- Fixed-source baseline screenshot journeys: 2 passed.
+- `git diff --check`: PASS.
+
+Retained failures: occupied initial port (no service touched); malformed screenshot
+fixture link response (corrected fixture, recaptured baseline); real visual
+regression of scroll 365→348 after approval (read-complete geometry restored;
+original scroll assertion then passes). Logs remain in the evidence checks folder.
+No arbitrary sleeps, weakened assertions or additional test skips were introduced.
+
+Delivery uses this single branch and one Draft PR based on the #181 branch so the
+review diff excludes parent work. Parent source remains fixed above; parent
+12/12 CI is not claimed as this candidate's checks. Normal hooks/commit/non-force
+push and candidate CI are tracked in that PR with exact source/tree. Default CI
+only auto-runs for main-target PRs; dispatch its existing workflow against this
+branch rather than weakening filters or merging parent candidates.
+
+Remaining close conditions: Human visual review; applicable candidate CI terminal
+results; separately authorized parent integration/rebase and exact-main verification
+before merge. This candidate does not include main-only #179 changes, does not
+integrate #181, and does not close either Session. No Ready/merge/deploy authority.
+Nonblocking follow-up: broader shell/navigation and real model quality remain
+outside this visual increment, under their existing owners and plans.

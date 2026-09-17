@@ -1,0 +1,17 @@
+[WebServer] (node:45628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[WebServer] (node:45662) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] error when starting preview server:
+[WebServer] Error: Port 19322 is already in use
+[WebServer]     at httpServerStart (file:///Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/node_modules/vite/dist/node/chunks/node.js:11656:10)
+[WebServer]     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[WebServer]     at async preview (file:///Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/node_modules/vite/dist/node/chunks/node.js:35778:2)
+[WebServer]     at async CAC.<anonymous> (file:///Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/node_modules/vite/dist/node/cli.js:807:18)
+Error: Process from config.webServer was not able to start. Exit code: 1
+
