@@ -538,3 +538,25 @@ logs and fixture receipt are in its pc-review directory. Original evidence remai
 unchanged and labelled historical. Exact candidate CI is recorded on PR #182.
 Human visual approval of these corrections and separately authorized dependency
 integration remain; no Ready, merge, deployment or Session closure.
+
+### 2026-09-17 Human bounded PC acceptance — fixed candidate
+
+Human explicitly accepts source `79f62d006b66c8bb8f059e850f48a1c378ef233d`,
+tree `8e7203919d4fbf2686c803e61ca3730174ec0d8e`. This supersedes the pending
+visual-review gate above only for the following scope: PC clarification,
+confirmation and readback layout/information hierarchy; original-text versus
+structured-state wording; message location and action visibility. It does not
+accept real-model quality or imply that all reference-design capabilities exist.
+
+Status: `BOUNDED_ACCEPTED / WAITING_PARENT_INTEGRATION`; Session remains OPEN.
+Stop further visual optimization in this round; nonblocking suggestions remain
+in the existing follow-up list. Keep the sole Draft PR #182 and its #181 dependency.
+After the parent receives authorization and is integrated, inspect the combined
+diff and required gates before returning a mergeable candidate. This decision
+does not authorize Ready, merge, deployment or Session closure. Do not change
+321's fixed evaluation version or runtime environment.
+
+This is a documentation-only acceptance registration. The accepted source/tree
+and their existing screenshot/validation evidence remain fixed; a later
+registration commit is not a new implementation acceptance or combined-candidate
+validation. No code, screenshots, evaluation inputs or environment were changed.
