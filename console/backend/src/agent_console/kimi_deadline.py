@@ -120,7 +120,8 @@ def _worker(channel, configuration, invocation_id):
         )
         del document, incoming
         threading.Thread(target=_parent_watch, args=(channel,), daemon=True).start()
-        result = KimiResponsesDraftTransport(configuration)._dispatch_once(
+        transport = KimiResponsesDraftTransport(configuration)
+        result = transport._dispatch_once(
             invocation_id=invocation_id,
             request=request,
             credential=credential,
@@ -129,7 +130,10 @@ def _worker(channel, configuration, invocation_id):
             progress=progress,
         )
         progress("IPC")
-        _send(channel, {"result": asdict(result)})
+        message = {"result": asdict(result)}
+        if transport.last_http_diagnostic is not None:
+            message["diagnostic"] = transport.last_http_diagnostic
+        _send(channel, message)
     except BaseException as exc:
         # No exception text/traceback, request, credential or body diagnostics.
         code = (
@@ -177,13 +181,30 @@ def _request_message(request, credential):
     )
 
 
-def supervise(configuration, invocation_id, request, credential, metrics):
+def supervise(
+    configuration, invocation_id, request, credential, metrics, *, diagnostic=None
+):
     return _supervise(
-        configuration, invocation_id, request, credential, metrics, worker=_worker
+        configuration,
+        invocation_id,
+        request,
+        credential,
+        metrics,
+        worker=_worker,
+        diagnostic=diagnostic,
     )
 
 
-def _supervise(configuration, invocation_id, request, credential, metrics, *, worker):
+def _supervise(
+    configuration,
+    invocation_id,
+    request,
+    credential,
+    metrics,
+    *,
+    worker,
+    diagnostic=None,
+):
     started = time.monotonic()
     total_at = started + configuration.total_timeout_seconds
     connect_at = started + configuration.connect_timeout_seconds
@@ -300,7 +321,10 @@ def _supervise(configuration, invocation_id, request, credential, metrics, *, wo
                         }:
                             code = "TRANSPORT_AMBIGUOUS"
                         raise DraftAssistanceError(code) from cause
-                    if not connected or set(message) != {"result"}:
+                    if not connected or set(message) not in (
+                        {"result"},
+                        {"result", "diagnostic"},
+                    ):
                         raise OSError
                     value = message["result"]
                     value["state"] = ObservationState(value["state"])
@@ -313,6 +337,8 @@ def _supervise(configuration, invocation_id, request, credential, metrics, *, wo
                         reason = "TOTAL_DEADLINE"
                         raise TimeoutError
                     reason = "RESULT_ACCEPTED"
+                    if diagnostic is not None and "diagnostic" in message:
+                        diagnostic(message["diagnostic"])
                     return result
     except DraftAssistanceError:
         raise

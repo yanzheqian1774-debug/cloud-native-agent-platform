@@ -235,17 +235,25 @@ def integrated_authority():
             authorization,
         )
 
-        def build_application(*, coordinator_clock=None):
+        def build_application(*, coordinator_clock=None, restricted=False):
+            from agent_console.acceptance_recovery_create import restricted_operation
+
             coordinator = BusinessProblemCreateCoordinator(
                 grants,
                 clock=coordinator_clock or grants.clock,
                 identity_factory=grants.identity_factory,
             )
+            operations = business_problem_operations(application, coordinator)
+            if restricted:
+                operations = tuple(
+                    restricted_operation(op) if op.name == "CREATE_PROBLEM" else op
+                    for op in operations
+                )
             return create_workbench_bff(
                 sessions,
                 authorizer,
                 WorkbenchBffPolicy("console.example", "https://console.example"),
-                operations=business_problem_operations(application, coordinator),
+                operations=operations,
                 grant_administration=grants,
             )
 
@@ -284,6 +292,43 @@ def login(client: TestClient, credential: str) -> str:
     session = client.get(f"{PREFIX}/session")
     assert session.status_code == 200
     return session.json()["csrfToken"]
+
+
+def test_recovery_fixed_key_rebuild_uses_one_owner_fact(integrated_authority):
+    from agent_console.acceptance_recovery_create import PAYLOAD
+
+    owner = integrated_authority
+    ids = []
+    for _ in range(2):
+        app = owner.build_application(restricted=True)
+        with TestClient(app, base_url="https://console.example") as client:
+            assert client.post(f"{PREFIX}/problems", json=PAYLOAD).status_code != 201
+            csrf = login(client, "alice-secret")
+            headers = {"origin": "https://console.example", "x-csrf-token": csrf}
+            assert (
+                client.post(
+                    f"{PREFIX}/problems",
+                    json={**PAYLOAD, "idempotencyKey": "other"},
+                    headers=headers,
+                ).status_code
+                == 403
+            )
+            for _ in range(2):
+                response = client.post(
+                    f"{PREFIX}/problems", json=PAYLOAD, headers=headers
+                )
+                assert response.status_code == 201
+                result = response.json()["result"]
+                assert result["creatorContinuation"]["state"] == "AVAILABLE"
+                ids.append(result["revision"]["business_problem_id"])
+    assert len(set(ids)) == 1
+    with psycopg.connect(owner.database_url) as connection:
+        assert (
+            connection.execute(
+                "SELECT count(*) FROM business_problem_authority.problems"
+            ).fetchone()[0]
+            == 1
+        )
 
 
 def create_problem(client: TestClient, csrf: str, *, key: str = "create-one"):

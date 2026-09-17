@@ -223,6 +223,7 @@ class KimiResponsesDraftTransport:
         self.synthetic = configuration.execution_class == "LOCAL_HTTPS_MOCK"
         self.dispatch_count = 0
         self.last_deadline_metrics = None
+        self.last_http_diagnostic = None
 
     @staticmethod
     def _cost(tokens: int, price_microusd_per_million: int) -> int:
@@ -335,6 +336,7 @@ class KimiResponsesDraftTransport:
             and not self.last_deadline_metrics.reaped
         ):
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
+        self.last_http_diagnostic = None
         self.dispatch_count += 1
         return supervise(
             self.configuration,
@@ -342,6 +344,7 @@ class KimiResponsesDraftTransport:
             request,
             credential,
             lambda value: setattr(self, "last_deadline_metrics", value),
+            diagnostic=lambda value: setattr(self, "last_http_diagnostic", value),
         )
 
     def _dispatch_once(
@@ -419,6 +422,10 @@ class KimiResponsesDraftTransport:
                 and re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", raw_correlation)
                 else f"http-{response.status}-{invocation_id}"
             )
+            diagnostic_headers = {
+                "x-request-id": raw_correlation,
+                "retry-after": response.getheader("retry-after"),
+            }
             body = response.read(self.configuration.maximum_response_bytes + 1)
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
@@ -426,6 +433,23 @@ class KimiResponsesDraftTransport:
             connection.close()
         progress("VALIDATE_RESPONSE")
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
+        if not 200 <= response.status < 300:
+            from agent_console.kimi_http_diagnostics import non2xx_diagnostic
+
+            self.last_http_diagnostic = non2xx_diagnostic(
+                status=response.status,
+                host=parsed.hostname,
+                path=parsed.path,
+                latency_ms=latency_ms,
+                headers=diagnostic_headers,
+                body=body,
+                maximum_body_bytes=self.configuration.maximum_response_bytes,
+                secret=credential.authorization_value()[len("Bearer ") :],
+            )
+            # A hostile request-id must not bypass sanitization via Evidence.
+            correlation = self.last_http_diagnostic["provider_request_id"]["value"] or (
+                f"http-{response.status}-{invocation_id}"
+            )
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(
                 invocation_id,

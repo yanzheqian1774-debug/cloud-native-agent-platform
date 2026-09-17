@@ -154,7 +154,8 @@ export function ProblemWorkspacePage(){
     if(!session||!turn||turnRef.current!==turn||mutationFlight.current||assistanceFlight.current||(recover&&(!pendingCreate||turn.phase!=="UNKNOWN"))||(!recover&&(!["DRAFT","FAILED"].includes(turn.phase)||composerTarget!=="SUPPLEMENT"||!turn.draft.title.trim()||!turn.draft.description.trim()||turn.draft.title.length>200||turn.draft.description.length>2000||(assistanceEnabled&&(Boolean(inputValue.current.trim())||turn.version!==uiRevision.current)))))return;
     const token=epoch.current,currentSession=sessionKey(session);
     const payload:CreatePayload=recover&&pendingCreate?pendingCreate.payload:{title:turn.draft.title.trim(),description:turn.draft.description.trim(),ownerId:session.principal.principalId};
-    const command:PendingCreate=recover&&pendingCreate?pendingCreate:{payload,key:operationKey("create-problem",payload),turnId:turn.id,version:turn.version,epoch:token};
+    const acceptanceKey=!assistanceEnabled&&import.meta.env.VITE_ACCEPTANCE_RECOVERY_CREATE_KEY;
+    const command:PendingCreate=recover&&pendingCreate?pendingCreate:{payload,key:acceptanceKey||operationKey("create-problem",payload),turnId:turn.id,version:turn.version,epoch:token};
     if(command.epoch!==token||command.turnId!==turn.id||command.version!==turn.version||sessionKey(session)!==currentSession)return;
     mutationFlight.current=true;setPendingCreate(command);setTurn({...turn,phase:"SUBMITTING"});setBusy(true);setFailure(null);
     try{
