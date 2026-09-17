@@ -5,13 +5,14 @@ type Props = {
   compact?: boolean;
   busy: boolean;
   onRefresh: () => void;
+  onAnswer?: () => void;
   onObserve: () => void;
   onCancel: () => void;
   onReject: () => void;
   onManualFallback: () => void;
 };
 
-export function DraftAssistanceCard({result,compact=false,busy,onRefresh,onObserve,onCancel,onReject,onManualFallback}:Props){
+export function DraftAssistanceCard({result,compact=false,busy,onAnswer,onRefresh,onObserve,onCancel,onReject,onManualFallback}:Props){
   const pending=result.state==="AUTHORIZATION_PENDING"||result.state==="REQUESTED_AWAITING_CONTENT";
   const unknown=result.state==="OUTCOME_UNKNOWN"||result.state==="CANCELLATION_REQUESTED";
   const finished=result.state==="SUCCEEDED";
@@ -21,13 +22,13 @@ export function DraftAssistanceCard({result,compact=false,busy,onRefresh,onObser
   const Wrapper=compact?"details":"section";
   return <Wrapper id="draft-assistance-message" tabIndex={-1} className="px-inline-card px-assistance-card" aria-label="AI 问题理解与草稿辅助">
     {compact&&<summary>AI 辅助来源与调用状态</summary>}
-    <header><div><span className="px-eyebrow">AI 建议草稿（尚未创建）</span><h2>{pending?"等待精确授权":unknown?"调用结果尚不确定":result.resultKind==="NEEDS_CLARIFICATION"?"需要补充信息":result.resultKind==="DRAFT_READY"?"可修改草稿已生成":"辅助状态已更新"}</h2></div><span className={`px-status ${finished?"success":result.state.includes("REJECT")||result.state.includes("FAIL")?"danger":"warning"}`}>{statusLabel}</span></header>
+    <header><div><span className="px-eyebrow">{clarification?"AI 需要你补充":"AI 建议草稿（尚未创建）"}</span><h2>{pending?"等待精确授权":unknown?"调用结果尚不确定":result.resultKind==="NEEDS_CLARIFICATION"?"需要补充信息":result.resultKind==="DRAFT_READY"?"可修改草稿已生成":"辅助状态已更新"}</h2></div><span className={`px-status ${clarification?"warning":finished?"success":result.state.includes("REJECT")||result.state.includes("FAIL")?"danger":"warning"}`}>{statusLabel}</span></header>
     <p className="px-truth-note">{result.transport==="SYNTHETIC"?"本次使用明确标识的模拟辅助生成，没有调用真实 AI 服务。":draftReady?"本次草稿来自已授权的真实 AI 服务；仍需人工核对和确认。":clarification?"本次补问来自已授权的真实 AI 服务；尚未生成可确认草稿。":"本次辅助使用真实 AI 服务通道；是否完成以调用状态为准。"}</p>
-    {result.clarificationQuestion&&<div className="px-assistance-question"><strong>补问</strong><p>{result.clarificationQuestion}</p></div>}
+    {result.clarificationQuestion&&<div className="px-assistance-question"><strong>请补充以下关键信息</strong><p>{result.clarificationQuestion}</p>{onAnswer&&<button type="button" className="px-primary-button" disabled={busy} onClick={onAnswer}>回答补问</button>}</div>}
     {result.reasonCode&&<p className="px-mode-note">状态说明：<code>{result.reasonCode}</code>{result.reasonCode==="RESULT_CONTENT_NOT_RETAINED"?"。服务端可恢复调用事实，但不会恢复原草稿正文；请明确选择手工草稿或新 successor。":""}</p>}
     {pending&&<p>服务端只保留非正文元数据。授权完成或连接恢复后，请用当前页面重交同一正文；页面不会自动重派。</p>}
     {unknown&&<p>系统只会检查原调用的后续结果；不会把待确认状态显示为成功，也不会自动发起替代调用。</p>}
-    <div className="px-card-actions">
+    <div className={`px-card-actions${clarification?" px-secondary-actions":""}`}>
       {pending&&<button type="button" className="px-primary-button" disabled={busy} onClick={onRefresh}>重交正文并刷新授权</button>}
       {unknown&&<button type="button" className="px-primary-button" disabled={busy} onClick={onObserve}>观察原调用</button>}
       {!finished&&<button type="button" disabled={busy} onClick={onCancel}>请求取消</button>}
