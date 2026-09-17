@@ -1,6 +1,6 @@
 [WebServer] (node:45628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 [WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
-[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] [plugin builtin:vite-reporter]
 [WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
 [WebServer] - Using dynamic import() to code-split the application
 [WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
@@ -14,4 +14,3 @@
 [WebServer]     at async preview (file:///Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/node_modules/vite/dist/node/chunks/node.js:35778:2)
 [WebServer]     at async CAC.<anonymous> (file:///Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/node_modules/vite/dist/node/cli.js:807:18)
 Error: Process from config.webServer was not able to start. Exit code: 1
-

@@ -496,3 +496,5 @@ before merge. This candidate does not include main-only #179 changes, does not
 integrate #181, and does not close either Session. No Ready/merge/deploy authority.
 Nonblocking follow-up: broader shell/navigation and real model quality remain
 outside this visual increment, under their existing owners and plans.
+
+Normal commit hooks passed for implementation source `4e9ec6895e9a315cdae3154c0f28e9c69b303064` / tree `bbcc960cae0958a6f7755a3b84a6738f25e1181a`. The evidence-text successor trims log trailing whitespace only (original logs retained in the task temporary directory); UI and screenshot hashes remain identical. Final candidate identity and CI links are pinned in the single Draft PR.
