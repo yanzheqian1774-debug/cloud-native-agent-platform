@@ -439,3 +439,22 @@ that succeeds. Human Checkpoint A may grant only:
 PASS /
 V0_2_3_P1_CORE_CAPABILITY_AND_BUSINESS_ASSEMBLY_CONTROL_READY_FOR_HUMAN_CHECKPOINT_A
 ```
+
+## Bounded follow-on attachment — S5-V023-ARCH-323
+
+[问题到任务规划：主线架构与首个可执行切片](S5-V023-ARCH-323-PROBLEM-TO-TASK-PLANNING.md)
+records a 2026-09-17 exact-main and candidate-source audit, a proposed Problem/Criteria
+→ Plan → read-only execution design, the overdue-purchase-order example, and two
+bounded implementation exits. It is authored under the new Human-authorized ARCH-323
+Session; CONTROL-254 and its historical decisions are not reopened. The attachment
+does not renumber versions or work packages, reorder this baseline, grant P1-A/P1-B
+acceptance, allocate resource sub-Sessions, or authorize product implementation.
+Human accepted D1/D2 in the existing attachment and accepted D3 direction with its
+detailed execution contract deferred until increment two; this does not block
+increment-one preparation or grant implementation/model-call authority.
+
+Human approved this attachment location for the currently verifiable baseline.
+**外部主计划映射待核对**: the earlier WP-numbered delivery plan was not located
+in this repository during this bounded audit. CONTROL-254 is not presumed to
+supersede it; existing task order, versions and milestones remain unchanged.
+No WP identifiers or mappings are invented, and no global reconciliation is opened.
