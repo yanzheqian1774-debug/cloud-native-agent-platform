@@ -16,7 +16,7 @@ import struct
 import threading
 from collections.abc import Callable
 from contextlib import suppress
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Protocol
@@ -189,13 +189,14 @@ class ProviderObservation:
     state: ObservationState
     correlation: str | None = None
     result_kind: DraftResultKind | None = None
-    clarification_question: str | None = None
-    title: str | None = None
-    description: str | None = None
+    clarification_question: str | None = field(default=None, repr=False)
+    title: str | None = field(default=None, repr=False)
+    description: str | None = field(default=None, repr=False)
     reason_code: str | None = None
     latency_ms: int | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    understanding: list[dict] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.state is ObservationState.SUCCEEDED:
@@ -232,7 +233,7 @@ class ProviderBudgetQuote:
 class PreparedProviderRequest:
     """Ephemeral provider request; its payload is never persisted or logged."""
 
-    payload: object
+    payload: object = field(repr=False)
     quote: ProviderBudgetQuote
 
 
@@ -287,10 +288,11 @@ class DraftInvocation:
 @dataclass(frozen=True, slots=True)
 class DraftResponse:
     invocation: DraftInvocation
-    clarification_question: str | None = None
-    title: str | None = None
-    description: str | None = None
+    clarification_question: str | None = field(default=None, repr=False)
+    title: str | None = field(default=None, repr=False)
+    description: str | None = field(default=None, repr=False)
     synthetic: bool = True
+    understanding: list[dict] | None = field(default=None, repr=False)
 
 
 class DraftAssistanceRepository(Protocol):
@@ -547,6 +549,9 @@ class DeterministicSyntheticDraftTransport:
 
     def prepare(self, *, invocation_id, content, profile):
         del invocation_id
+        from agent_console.draft_assistance_policy import legacy_content
+
+        content = legacy_content(content)
         return PreparedProviderRequest(
             content,
             ProviderBudgetQuote(
@@ -1151,6 +1156,7 @@ class DraftAssistanceService:
         return DraftResponse(
             updated,
             clarification_question=observation.clarification_question,
+            understanding=observation.understanding,
             title=observation.title,
             description=observation.description,
             synthetic=self.transport.synthetic,

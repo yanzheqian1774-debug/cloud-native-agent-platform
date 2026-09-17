@@ -68,6 +68,10 @@ FIRST_FAILURE_V1_FIELDS = FIRST_FAILURE_FIELDS - {
 }
 FIRST_FAILURE_ASSERTION_IDS = {
     (
+        "w2a-honest-shell.spec.ts",
+        "created problem continues through pending approval to a fresh exact read",
+    ): "W2A_CREATED_PROBLEM_AUTHORIZED_READ",
+    (
         "agent-workbench.spec.ts",
         "publishes an exact reviewed revision through the real Workbench",
     ): "AGENT_WORKBENCH_PUBLISH_REVIEWED_REVISION",
@@ -1004,7 +1008,11 @@ UNIFIED_PRODUCT_STEP_IDS = {
     "UNIFIED_07_EMPLOYEE_MANAGEMENT": ("EMPLOYEES", "DESKTOP", "IDENTITY_CHECK"),
     "UNIFIED_08_RESTART_READBACK": ("EMPLOYEES", "DESKTOP", "RESTART_READINESS"),
 }
+W2A_AUTH_READ_STEP_IDS = {
+    "W2A_AUTH_READ_SCROLL_PRESERVED": ("WORK", "DESKTOP", "STATE_CHECK"),
+}
 DIAGNOSTIC_STEP_IDS = {
+    **W2A_AUTH_READ_STEP_IDS,
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
         for step_id, (route, viewport) in PRIMARY_STEP_IDS.items()
@@ -1023,6 +1031,9 @@ ACTION_CLASSES = frozenset(
 def _step_identity(scenario: str, title: object):
     if not isinstance(title, str):
         return None
+    if scenario == "W2A_CREATED_PROBLEM_AUTHORIZED_READ":
+        identity = W2A_AUTH_READ_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     if scenario == "PLATFORM_PRIMARY_RESPONSIVE_FOCUS":
         identity = PRIMARY_STEP_IDS.get(title)
         if identity is None:
@@ -1047,6 +1058,7 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         (Path(str(suite.get("file", ""))).name, spec.get("title"))
     )
     if mapped != scenario or scenario not in {
+        "W2A_CREATED_PROBLEM_AUTHORIZED_READ",
         "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",

@@ -1,0 +1,39 @@
+name: S5-321 Understanding Interaction
+on:
+  pull_request:
+    paths:
+      - 'console/frontend/**'
+      - 'console/backend/src/agent_console/draft_assistance*'
+      - 'console/backend/tests/fixtures/s5_321_quality_cases.json'
+      - '.github/workflows/s5-v023-impl-321-understanding.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  understanding:
+    name: Understanding Interaction (mock, not model quality)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+      - name: Install frontend and Chromium
+        working-directory: console/frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Verify interaction and bounded context contracts
+        working-directory: console/frontend
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: ${{ runner.temp }}/s5-321-interaction
+        run: npx playwright test --config playwright.s5-321.config.ts --reporter=list
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s5-321-mock-interaction-not-model-quality
+          path: ${{ runner.temp }}/s5-321-interaction
+          if-no-files-found: warn

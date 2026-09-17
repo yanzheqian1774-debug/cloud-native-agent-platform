@@ -28,34 +28,24 @@ from agent_console.draft_assistance import (
     ProviderBudgetQuote,
     ProviderObservation,
 )
+from agent_console.draft_assistance_policy import (
+    V1_INSTRUCTIONS,
+    V1_SCHEMA,
+    PolicyValidationError,
+    context_references,
+    legacy_content,
+    policy_for,
+    validate_result,
+)
 
 ADAPTER_ID = "openai-responses-draft"
 ADAPTER_REVISION = "v1"
 PROTOCOL = "OPENAI_RESPONSES_V1"
 OUTPUT_SCHEMA_VERSION = "problem-draft-assistance-output.v1"
 
-INSTRUCTIONS = (
-    "Help the user clarify a business problem before any formal Problem is created. "
-    "Return exactly the requested JSON schema. Ask one concise clarification question "
-    "when outcome, scope, or completion criteria are missing; otherwise return a title "
-    "and faithful description. Do not invent facts, use tools, or claim business "
-    "success."
-)
+INSTRUCTIONS = V1_INSTRUCTIONS
 
-OUTPUT_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "kind": {
-            "type": "string",
-            "enum": ["NEEDS_CLARIFICATION", "DRAFT_READY"],
-        },
-        "clarificationQuestion": {"type": ["string", "null"]},
-        "title": {"type": ["string", "null"]},
-        "description": {"type": ["string", "null"]},
-    },
-    "required": ["kind", "clarificationQuestion", "title", "description"],
-}
+OUTPUT_SCHEMA = V1_SCHEMA
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,7 +174,11 @@ class ExactFileOpenAICredentialResolver:
             or profile.connection_profile_revision_id
             != self.expected_connection_profile_revision_id
             or profile.adapter_id != ADAPTER_ID
-            or profile.adapter_revision != ADAPTER_REVISION
+            or (profile.adapter_revision, profile.output_schema_version)
+            not in {
+                (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                ("v2", "problem-draft-assistance-output.v2"),
+            }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
         descriptor = None
@@ -236,15 +230,26 @@ class OpenAIResponsesDraftTransport:
         del invocation_id
         if (
             profile.adapter_id != ADAPTER_ID
-            or profile.adapter_revision != ADAPTER_REVISION
-            or profile.output_schema_version != OUTPUT_SCHEMA_VERSION
+            or (profile.adapter_revision, profile.output_schema_version)
+            not in {
+                (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                ("v2", "problem-draft-assistance-output.v2"),
+            }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
         ):
             raise DraftAssistanceError("OPENAI_RESPONSES_PROFILE_MISMATCH")
+        try:
+            policy = policy_for(profile.adapter_revision, profile.output_schema_version)
+            if policy.revision == "v2":
+                context_references(content)
+            else:
+                content = legacy_content(content)
+        except PolicyValidationError as exc:
+            raise DraftAssistanceError(str(exc)) from None
         document = {
             "model": self.configuration.native_model_id,
-            "instructions": INSTRUCTIONS,
+            "instructions": policy.instructions,
             "input": [
                 {
                     "role": "user",
@@ -263,7 +268,7 @@ class OpenAIResponsesDraftTransport:
                     "type": "json_schema",
                     "name": "problem_draft_assistance_output",
                     "strict": True,
-                    "schema": OUTPUT_SCHEMA,
+                    "schema": policy.schema,
                 }
             },
         }
@@ -317,7 +322,7 @@ class OpenAIResponsesDraftTransport:
         )
 
     def dispatch(self, *, invocation_id, request, credential, profile):
-        del profile
+        policy = policy_for(profile.adapter_revision, profile.output_schema_version)
         if (
             not isinstance(request.payload, bytes)
             or not isinstance(credential, ResolvedOpenAICredential)
@@ -528,12 +533,13 @@ class OpenAIResponsesDraftTransport:
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
             )
-        if not isinstance(result, dict) or set(result) != {
-            "kind",
-            "clarificationQuestion",
-            "title",
-            "description",
-        }:
+        try:
+            refs = frozenset()
+            if policy.revision == "v2":
+                sent = json.loads(request.payload)
+                refs = context_references(sent["input"][0]["content"][0]["text"])
+            understanding = validate_result(result, policy, refs)
+        except (PolicyValidationError, ValueError, KeyError, TypeError):
             return self._failure(
                 invocation_id,
                 correlation,
@@ -558,6 +564,7 @@ class OpenAIResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    understanding=understanding,
                     result_kind=DraftResultKind.NEEDS_CLARIFICATION,
                     clarification_question=question,
                     latency_ms=latency_ms,
@@ -578,6 +585,7 @@ class OpenAIResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    understanding=understanding,
                     result_kind=DraftResultKind.DRAFT_READY,
                     title=title,
                     description=description,
