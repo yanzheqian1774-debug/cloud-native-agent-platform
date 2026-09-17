@@ -17,12 +17,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg import sql
 
+from agent_console.acceptance_recovery_create import (
+    RestrictedReadGrants,
+    restricted_operation,
+)
 from agent_console.authority_configuration import AuthorityRuntimeConfiguration
 from agent_console.authority_contracts import AuthorityError
 from agent_console.authority_foundation import build_authority_foundation
 from agent_console.browser_session_application import BrowserSessionPolicy
 from agent_console.business_plan_postgres import PostgresProblemPlanUnitOfWork
 from agent_console.business_problem_application import BusinessProblemApplication
+from agent_console.business_problem_continuation import BusinessProblemCreateCoordinator
 from agent_console.business_problem_postgres import PostgresBusinessProblemRepository
 from agent_console.draft_assistance import (
     DraftAssistanceError,
@@ -177,16 +182,29 @@ def acquire_writer(connection, database: str) -> None:
         raise RecoveryError("COMPETING_DATABASE_CLIENT")
 
 
-def mutation_allowed(method: str, path: str) -> bool:
-    return method in {"GET", "HEAD"} or (
-        path == f"{PREFIX}/session" and method in {"POST", "DELETE"}
+def mutation_allowed(method: str, path: str, restricted_create: bool = False) -> bool:
+    return (
+        method in {"GET", "HEAD"}
+        or (path == f"{PREFIX}/session" and method in {"POST", "DELETE"})
+        or (
+            restricted_create
+            and method == "POST"
+            and (
+                path in {f"{PREFIX}/problems", f"{PREFIX}/authorization/grant-requests"}
+                or (
+                    path.startswith(f"{PREFIX}/authorization/grant-requests/")
+                    and path.endswith("/decisions")
+                    and path.count("/") == 7
+                )
+            )
+        )
     )
 
 
-def install_recovery_boundary(app, check_serving_assets):
+def install_recovery_boundary(app, check_serving_assets, *, restricted_create=False):
     @app.middleware("http")
     async def recovery_boundary(request, call_next):
-        if not mutation_allowed(request.method, request.url.path):
+        if not mutation_allowed(request.method, request.url.path, restricted_create):
             return JSONResponse(
                 status_code=403,
                 content={"reasonCode": "ACCEPTANCE_RECOVERY_READ_ONLY"},
@@ -201,7 +219,9 @@ def install_recovery_boundary(app, check_serving_assets):
         return await call_next(request)
 
 
-def build_application(runtime, migrations: Path, stack: ExitStack):
+def build_application(
+    runtime, migrations: Path, stack: ExitStack, *, restricted_create=False
+):
     problems = PostgresBusinessProblemRepository(
         runtime.database_url,
         migration_path=migrations / "0013_business_problem_authority.sql",
@@ -266,21 +286,42 @@ def build_application(runtime, migrations: Path, stack: ExitStack):
         None,
         None,
     )
+    coordinator = (
+        BusinessProblemCreateCoordinator(foundation.grants)
+        if restricted_create
+        else None
+    )
+    operations = tuple(
+        restricted_operation(operation)
+        if operation.name == "CREATE_PROBLEM"
+        else operation
+        for operation in business_problem_operations(business, coordinator)
+        if operation.name
+        in (
+            {"CREATE_PROBLEM", "LIST_PROBLEMS", "READ_PROBLEM"}
+            if restricted_create
+            else {"LIST_PROBLEMS", "READ_PROBLEM"}
+        )
+    )
+    grant_options = (
+        {"grant_administration": RestrictedReadGrants(foundation.grants, problems)}
+        if restricted_create
+        else {}
+    )
     app = create_workbench_bff(
         foundation.sessions,
         authorizer,
         WorkbenchBffPolicy("127.0.0.1:19643", "https://127.0.0.1:19643"),
-        operations=tuple(
-            operation
-            for operation in business_problem_operations(business)
-            if operation.name in {"LIST_PROBLEMS", "READ_PROBLEM"}
-        ),
+        operations=operations,
         route_installers=(install_reads,),
+        **grant_options,
     )
     return app, foundation
 
 
-def serve(manifest_path: Path, expected_manifest_digest: str) -> None:
+def serve(
+    manifest_path: Path, expected_manifest_digest: str, *, restricted_create=False
+) -> None:
     """Manifest creation is a separate, reviewed read-only preservation step."""
     import uvicorn
 
@@ -292,6 +333,20 @@ def serve(manifest_path: Path, expected_manifest_digest: str) -> None:
     manifest = json.loads(manifest_path.read_text())
     if manifest["schemaVersion"] != "kimi-acceptance-recovery.v1":
         raise RecoveryError("MANIFEST_INVALID")
+    if manifest.get("restrictedCreate", False) is not restricted_create:
+        raise RecoveryError("CREATE_MODE_MISMATCH")
+    if restricted_create:
+        from agent_console import acceptance_recovery_create
+
+        candidate = manifest.get("candidate", {})
+        for name, module in {
+            "recovery": __file__,
+            "restrictedCreate": acceptance_recovery_create.__file__,
+        }.items():
+            if file_identity(Path(module))["sha256"] != candidate.get(
+                "modules", {}
+            ).get(name):
+                raise RecoveryError("CANDIDATE_MODULE_MISMATCH")
     verify_files(manifest["files"])
     runtime = AuthorityRuntimeConfiguration.from_mapping(
         json.loads(Path(manifest["runtime"]).read_text())
@@ -308,7 +363,9 @@ def serve(manifest_path: Path, expected_manifest_digest: str) -> None:
         acquire_writer(owner, manifest["database"]["database"])
         verify_database(manifest["database"], database_snapshot(owner))
         verify_owner_schemas(owner, migrations)
-        app, foundation = build_application(runtime, migrations, stack)
+        app, foundation = build_application(
+            runtime, migrations, stack, restricted_create=restricted_create
+        )
         verify_database(manifest["database"], database_snapshot(owner))
         verify_files(manifest["files"])
         control = foundation.generation_controller.control.read()
@@ -322,7 +379,9 @@ def serve(manifest_path: Path, expected_manifest_digest: str) -> None:
             with foundation.generation_controller.protected_request():
                 pass
 
-        install_recovery_boundary(app, check_serving_assets)
+        install_recovery_boundary(
+            app, check_serving_assets, restricted_create=restricted_create
+        )
 
         dist = Path(manifest["dist"])
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
@@ -353,7 +412,14 @@ def serve(manifest_path: Path, expected_manifest_digest: str) -> None:
             log_level="warning",
         )
         print(
-            "RECOVERY_ASSETS_VERIFIED; MODEL_DISPATCH_DISABLED; FORMAL_WRITES_DISABLED",
+            "RECOVERY_ASSETS_VERIFIED; MODEL_DISPATCH_DISABLED; "
+            + (
+                "FIXED_KEY_CREATE_ENABLED"
+                if restricted_create
+                else "FORMAL_WRITES_DISABLED"
+            ),
             flush=True,
         )
+        if restricted_create:
+            print(json.dumps(manifest["candidate"], sort_keys=True), flush=True)
         uvicorn.Server(config).run(sockets=[sockets[0]])

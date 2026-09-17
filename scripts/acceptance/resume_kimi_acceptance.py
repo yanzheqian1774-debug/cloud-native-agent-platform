@@ -23,9 +23,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--manifest-sha256", required=True)
+    parser.add_argument("--restricted-create", action="store_true")
     args = parser.parse_args()
     try:
-        serve(args.manifest, args.manifest_sha256)
+        serve(
+            args.manifest,
+            args.manifest_sha256,
+            restricted_create=args.restricted_create,
+        )
     except (RecoveryError, AuthorityError) as exc:
         reason = exc.reason_code if isinstance(exc, AuthorityError) else str(exc)
         print(f"RECOVERY_REFUSED:{reason}", file=sys.stderr)

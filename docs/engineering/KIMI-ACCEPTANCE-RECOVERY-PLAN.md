@@ -41,6 +41,27 @@ merge, deployment, release or cleanup.
 
 ## Risks and stop conditions
 
+## 2026-09-17 bounded creation amendment (Human authorized)
+
+Keep the default read-only composition. Add an explicit CLI + manifest opt-in
+for one synthetic Problem owned by human:alice in tenant-a/quality, with the
+Human-approved exact title/description and a fixed durable owner idempotency key.
+Reuse CREATE_PROBLEM and its coordinator; retain existing_only foundation,
+authentication, CSRF and current CREATE authorization. No provider is assembled.
+The acceptance-only frontend build supplies that same fixed key; default
+frontend behavior is unchanged. Grant administration is exposed only through a
+restricted facade allowing the creator continuation and exact READ of this one
+owner receipt, approved by human:admin through the existing independent flow.
+No other grant, business write, migration, initialization or epoch change.
+
+Validate isolated mismatch/denial/replay/restart/coordinator cases before any
+actual cutover. Preserve an incremental consistent backup and asset identities;
+stop the old listener before binding the reviewed candidate. New private manifest
+binds current state, source/tree/module digests and the opt-in. Rollback is to
+read-only serving with a newly reviewed current-state manifest, never restoring
+an old DB over committed records. Append actual results to the original record.
+Human accepts ownerId=human:alice only for this synthetic scenario, not production.
+
 The original launcher rewrites keys and seeds state and must not run. Historical
 loaded versions cannot be inferred from the current export or mtime. Preserve
 uncertain provenance explicitly. Missing keys, stale host control, incompatible
