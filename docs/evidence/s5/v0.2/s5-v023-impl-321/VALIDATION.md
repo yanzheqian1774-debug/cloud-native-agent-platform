@@ -138,3 +138,92 @@ No command here authorizes accessing 319 assets, clearing ledgers, or real calls
   Normal pre-commit hooks and remote CI are recorded in the final delivery receipt.
 - No real provider/model quality run occurred. All Q01–Q16 real metrics remain
   NOT_MEASURED; optional real evaluation needs the separate gate document.
+
+
+## Browser CI recovery — 2026-09-17
+
+Original candidate: source `36737e7f726ebeeaec9a5099ee8d4619c928e7ef`,
+tree `ce407a8fbfcf0243dcfb29585656365a6866546f`, Draft PR #181. Previous
+writer `01a0acf9-0260-76c0-8be0-aa4c92f5ab96` is idle after compaction transport
+failure. Its final command completed (exit 0 for inspection); the preceding
+legacy reproduction completed exit 1, 18 passed/1 failed. No competing 321
+test/build process or uncommitted file was present at this takeover. Existing
+PostgreSQL container ID and loopback port match the recovery identity above;
+provider/backend PIDs 4699/11467 remain running. No database reset, initialization,
+new Problem, model call, budget/credential change or 319 asset operation occurred.
+
+### Preserved first CI failure
+
+[CI run 35172307975, attempt 1](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35172307975)
+ended FAILURE; total PR checks 11 success/1 failure. Browser job 105046376790
+reported 77 selected/executed, 76 passed, 1 failed, 0 flaky/skipped. Its summary
+was `BROWSER_DIAGNOSTIC_GAP`, scenario `NOT_RETAINED`, subtype `UNKNOWN`.
+GitHub reported no retained artifacts. Original log remains
+`/tmp/s5-321-ci-first-failure.log`. No rerun of this failed attempt was requested.
+Actual checkout was `aaec7978bed08a2d5e339587d960bed4cdd1c4f7`, with parents
+`e51334aa9780291b3d077a1edb698dca630a6b3f` and the candidate above; its tree
+exactly equals the candidate tree. The historical CI scenario/cause remains
+UNKNOWN; the matching local regression below does not retroactively recover
+missing CI diagnostics.
+
+### Proven local defect and bounded fix
+
+`w2a-honest-shell.spec.ts`, “created problem continues through pending approval
+to a fresh exact read”, failed at strict scroll-position equality in the old
+`/tmp/s5-321-legacy-repro.log` and fresh `/tmp/s5-321-scroll-diagnosis-02.log`.
+Structural diagnostics show scrollTop 313 -> 162, viewport height 180, receipt
+height 131 plus 20px message margin. The candidate's `!selected` condition
+removed the creation-fact card when authorized exact READ completed, triggering
+Chromium scroll anchoring. Focus and pending composer text assertions passed.
+
+A diagnostic CSS experiment disabled anchoring: scroll remained 313, but the
+next existing assertion failed because reload also hid “已恢复正式业务记录”.
+The CSS experiment was discarded. The final product fix removes only that
+`!selected` condition, keeping the existing creation/restoration fact card beside
+the independently authorized detail. No new disclosure, action or persistence.
+`/tmp/s5-321-scroll-fix-02.log` passed the full scenario with default browser
+anchoring and scrollTop 313 -> 313. No sleep, weakened assertion or exclusion.
+The local diagnosis-01 attempt selected all files before grep and failed test
+collection for missing unrelated backend env; diagnosis-02 correctly selected
+only the mocked legacy spec. Neither touched the isolated real database.
+
+The harness now allowlists this exact static scenario and scroll assertion step,
+retaining classification, source declaration and bounded duration only. It does
+not retain error text, credentials, bodies, locators or requests/responses. A
+regression injects private sentinel text and checks that it cannot be emitted.
+
+Recovery local gates (fresh executions on the final code):
+
+- Harness: 160 passed; `/tmp/s5-321-harness-recovery.log`.
+- W2A/W3: 19 passed, retries 0; `/tmp/s5-321-legacy-fixed-final.log`.
+- 321 mock interaction: 28 passed, retries 0;
+  `/tmp/s5-321-understanding-recovery-final.log`.
+- `make check`: exit 0, 1853 passed, 200 existing external-environment skips,
+  one warning; `/tmp/s5-321-recovery-make-check.log`. No tests newly skipped.
+- Frontend lint/build: exit 0; `/tmp/s5-321-recovery-frontend-lint.log` and
+  `/tmp/s5-321-recovery-frontend-build.log`; existing bundle-size advisory.
+- `git diff --check` and the six-file scoped diff reviewed. Temporary geometry
+  console logs and the CSS diagnostic experiment are absent from the candidate.
+
+Checkpoint: local validation complete. Next command is normal commit (hooks
+expected to run), then non-force push original branch and CI terminal tracking.
+Real quality stays NOT_MEASURED. No real create journey is replayed.
+
+
+Normal commit attempt 1 was blocked by the existing Kimi
+`test_parent_deadline_kills_stalled_phase_and_reaps[send]` test:
+CONNECT_DEADLINE at 1.0028s (worker reaped), expected TOTAL_DEADLINE.
+`/tmp/s5-321-recovery-commit.log` is retained; 1852 passed/1 failed/200 skipped.
+No source in that adapter or test changed. This is a separate local gate failure,
+not evidence identifying the original browser CI failure. Root cause of missing
+connected notification by the 1s deadline is UNKNOWN; host load was observed but
+does not establish causation.
+
+One isolated diagnostic of that exact test passed without modification:
+TOTAL_DEADLINE at 2.0009s, cleanup 0.0060s, reaped true;
+`/tmp/s5-321-hook-send-diagnostic.log` and `.xml`. Given the fresh full make-check
+pass plus this exact-test metric, perform one normal commit retry with all hooks
+enabled. Do not loop if it fails again.
+
+Read-only 321 PG count check remains unchanged: 1 Problem, 1 revision,
+6 invocations, 3 reservations, 3 settlements. No real browser create replay.

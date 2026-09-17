@@ -97,7 +97,7 @@ def test_summary_static_scenarios(mapping):
     report["suites"][0]["file"] = name
     report["suites"][0]["specs"][0]["title"] = title
     summary = make_summary(report)
-    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 19
+    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 20
     assert summary["scenarioId"] == scenario
     assert summary["spec"] == "console/frontend/tests/e2e/" + name
     assert summary["sourceLine"] == 42
@@ -1553,3 +1553,29 @@ def test_validation_helpers_prohibit_broad_file_dump_commands() -> None:
 def test_harness_connects_digital_employee_authority_to_validated_postgres() -> None:
     source = MODULE_PATH.read_text(encoding="utf-8")
     assert '"EXECUTION_DATABASE_URL": self.args.postgres_url' in source
+
+
+def test_w2a_scroll_failure_retains_only_static_step_identity():
+    report = summary_report()
+    report["suites"][0]["file"] = "w2a-honest-shell.spec.ts"
+    spec = report["suites"][0]["specs"][0]
+    spec["title"] = (
+        "created problem continues through pending approval to a fresh exact read"
+    )
+    spec["tests"][0]["results"][0]["steps"] = [
+        {
+            "title": "W2A_AUTH_READ_SCROLL_PRESERVED",
+            "duration": 12,
+            "error": {"message": "PRIVATE_BODY PRIVATE_CREDENTIAL"},
+        }
+    ]
+    summary = make_summary(report)
+    assert summary["scenarioId"] == "W2A_CREATED_PROBLEM_AUTHORIZED_READ"
+    assert summary["stepDiagnostic"]["failedStep"] == {
+        "routeKey": "WORK",
+        "viewportKey": "DESKTOP",
+        "stepId": "W2A_AUTH_READ_SCROLL_PRESERVED",
+        "actionClass": "STATE_CHECK",
+        "elapsedMs": 12,
+    }
+    assert "PRIVATE" not in harness_module.encode_failure_summary(summary)

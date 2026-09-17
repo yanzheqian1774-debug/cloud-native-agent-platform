@@ -200,3 +200,20 @@ mock用于严格schema、上下文包、版本和UI契约；人工确认过的�
 本轮实际完成：只读源码/规则/计划/PR核对，16个合成用例、8条浏览器旅程、旧版待测基准及新版门槛设计；只生成本文本地附件。未修改产品代码或台账、未运行产品测试、未创建分支/worktree/PR、未读取真实凭据、未调用模型、未操作319服务/数据库/浏览器。估算及目标尚无实施/测试通过含义。
 
 原计划输入：[26上下文能力计划](/Users/tristan/Downloads/project-document-consistency-20260916/pending-writeback/Delivery-Tracking/26-context-memory-capability-plan.md)、[既有mainline-plan](/Users/tristan/Downloads/project-document-consistency-20260916/pending-writeback/Delivery-Tracking/mainline-plan.json)、[字段归属](/Users/tristan/Downloads/project-document-consistency-20260916/pending-writeback/Delivery-Tracking/FIELD-OWNERSHIP.md)。
+
+## CI recovery continuation — 2026-09-17
+
+Reuse the original branch/worktree and Draft PR #181. Candidate on takeover is
+36737e7f726ebeeaec9a5099ee8d4619c928e7ef (tree
+ce407a8fbfcf0243dcfb29585656365a6866546f), with a clean worktree. Previous
+writer is idle after a failed compaction; no remaining test/build writer found.
+Keep the existing 321 PostgreSQL and HTTPS services and all failure history.
+
+Bounded plan: recover the original CI and local reproduction; inspect only
+scroll/focus behavior in the existing authorization-read journey; add structural
+diagnostics if required; fix the demonstrated regression without weakening the
+assertion; validate the affected browser suites plus make check/frontend gates;
+commit normally and non-force push to #181; track CI checkout identity and terminal
+results. No model calls, new Problem, authority/contract/persistence changes or
+319 asset operations. First CI scenario remains UNKNOWN unless retained evidence
+identifies it. Model-quality assessment remains NOT_MEASURED.
