@@ -227,3 +227,38 @@ enabled. Do not loop if it fails again.
 
 Read-only 321 PG count check remains unchanged: 1 Problem, 1 revision,
 6 invocations, 3 reservations, 3 settlements. No real browser create replay.
+
+
+### Engineering delivery result
+
+Normal commit retry completed exit 0 with Ruff lint/format and full pytest hooks
+PASS; no hook bypass or modified file from hooks. Non-force push updated the
+original branch from `36737e7` to `7e01ba392ea0d16311f55aaa75ddb95fa1b29a7d`
+(tree `0a1dbe2e2d5cdf58934960f8b3fe146f6eb019d7`). Worktree was clean.
+
+All 12 PR checks completed SUCCESS on that repair candidate, including
+[general browser/quality CI 35184497121](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35184497121)
+and the dedicated 321 interaction, Identity Chain, 310, 319-mock, 320-mock,
+316 and 317 workflows. These are CI-owned fixtures, not the preserved local
+319 or 321 acceptance environments. Watch exited 0.
+
+Browser job `105083525969` actually checked out
+`f0fb4ea91333bd6a2fcd30fc2507348726819c22`; parents are base
+`e51334aa9780291b3d077a1edb698dca630a6b3f` and repair source above. Its tree is
+exactly `0a1dbe2e2d5cdf58934960f8b3fe146f6eb019d7`. Captured results:
+`/tmp/s5-321-recovery-ci-terminal.json`, `/tmp/s5-321-recovery-browser-ci.log`,
+`/tmp/s5-321-recovery-ci-watch.log`. Original failed attempt remains unchanged.
+
+This documentation-only successor records those completed checks; it changes no
+product, test, harness, workflow or dependency file. Final successor source/tree,
+actual checkout and its CI terminal state are recorded in the **existing**
+[Draft PR #181 delivery receipt](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/181).
+No second PR or separate authoritative handoff package is created.
+
+Known limits: first historical CI scenario/cause remain UNKNOWN because its
+allowlist omitted the scene; the local same-candidate regression and bounded fix
+are proven independently. The preserved local Kimi hook failure is not explained
+by evidence beyond its measured deadline phase. Real-model Q01–Q16 baseline and
+candidate quality remain NOT_MEASURED, including fact/time/comparison fidelity,
+repeated-question/omission rates and manual-edit reduction. Separate authorization
+is still required for evaluation. No Ready, merge, deployment or Session closure.

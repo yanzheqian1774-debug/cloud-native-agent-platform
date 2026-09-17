@@ -217,3 +217,22 @@ commit normally and non-force push to #181; track CI checkout identity and termi
 results. No model calls, new Problem, authority/contract/persistence changes or
 319 asset operations. First CI scenario remains UNKNOWN unless retained evidence
 identifies it. Model-quality assessment remains NOT_MEASURED.
+
+### Recovery engineering outcome
+
+The bounded receipt-card regression is fixed: authorized exact READ no longer
+removes creation/restoration facts or shifts the existing reader position.
+Only one render condition changed; original assertions remain, with an allowlisted
+scenario/scroll-step diagnostic and a disclosure regression. Local make check
+1853 passed/200 existing external-environment skips; frontend lint/build,
+19 W2A/W3 and 28 understanding browser scenarios passed. Normal hooks passed
+and repair source `7e01ba392ea0d16311f55aaa75ddb95fa1b29a7d` was non-force pushed;
+all 12 CI checks completed SUCCESS. Details, failed attempts and checkout/tree
+identity are appended to the existing VALIDATION.md. The documentation-only
+successor and its final CI are tracked in the existing Draft PR #181 receipt.
+
+No DB reset or duplicate Problem; local PG counts remain 1 Problem/1 revision,
+6 invocations, 3 reservations/3 settlements. No real model call or 319 asset
+operation. Historical first-CI cause stays UNKNOWN; the local scroll/removal
+defect is confirmed. Engineering delivery does not close this Session or the
+Q01–Q16 real-model quality gate, which remains NOT_MEASURED.
