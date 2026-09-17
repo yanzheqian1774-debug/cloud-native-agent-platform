@@ -328,3 +328,25 @@ and is not repair evidence. The subsequent correct edit and fresh30 suite are
 tracked separately; no tests/limits were weakened.
 
 Repair validation: make check exit0, 1853 passed/200 existing environment skips/1 warning; frontend lint exit0; Playwright config performed production build and all30 interaction cases passed, retries0. Logs: /tmp/s5-321-review-make-check.log, /tmp/s5-321-review-lint.log, /tmp/s5-321-review-label-final.log. Corrected seven-step screenshots are in the same gallery corrected/ directory; original screenshots retained. No real model or database creation. Normal commit and successor CI are the next gate.
+
+
+Normal repair commit/hooks passed and non-force push completed: source
+18447f8667b3acbb46f8025e08f28be01d6c5929, tree
+5b0248ba8f4cacc07055335831cdff8ccb6f180c, parent4001b412.
+All12 new automatic checks started; terminal result is recorded in original PR181.
+This documentation successor corrects the proposed ledger composition: existing
+PostgresProviderBudgetLedger binds one exact Profile; v1/v2 therefore need two
+fixed ledgers, each28/USD4, collectively56/USD8, with no cap transfer. No budget
+implementation changed, no ledger instantiated, no authorization inferred.
+
+Concurrency observation: after the initial idle check, the previous321 task
+01a0adb5 became systemError after independently producing experience-review/
+fixtures. Its last command exec-26882393 completed exit0; all preceding browser
+commands completed. No active writer or product edits remained. Its untracked
+experience-review/ (including fixture-dto-failure/) is preserved untouched and
+excluded from this commit. This review's images live in the external gallery.
+Do not describe the worktree as fully clean while that directory remains.
+
+Final successor identity/CI is the existing PR181 receipt. This document-only
+successor does not alter the validated repair product bytes/policies. Model
+quality remains NOT_MEASURED; 14:30–22:30 +08 window and56/USD8 await Human approval.

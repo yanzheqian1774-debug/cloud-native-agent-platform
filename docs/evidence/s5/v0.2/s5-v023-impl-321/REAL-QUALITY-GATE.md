@@ -77,7 +77,7 @@ manual corrections and formal Problem creation never upgrade model-quality statu
 | 受控接线 | 321独立评测目录0700；获批后由指定Secret受控物化owner-only 0400普通文件，exact-file-resolver/v1，校验UID/RV、owner/mode、非symlink；不复用319的文件、ledger、DB或服务 |
 | 治理绑定 | `quality-comparison-preflight.json`列出两版明确model/provider/endpoint/connection/profile revision IDs、schema和policy digest；状态NOT_REGISTERED。proposalManifestSha256仅为提案身份，绝不是已登记治理对象digest或批准回执 |
 | 启动前绑定门禁 | 独立321评测存储中正常登记上述精确对象，取得真实domain digest与eligibility，固定两版Profile及resolver；当前Human授权下逐invocation的Draft/Model exact grant仍须current admission；不伪造已批准状态 |
-| Ledger | 提议唯一`kimi-real-s5-321-quality-round-1`，两版共用56次/USD8总帽；创建前查重/核对本轮历史。不是重置旧ledger；原321 fixture ledger及319账本都不动 |
+| Ledger | 现有ledger锁定一个Profile，故提议固定`kimi-real-s5-321-quality-v1-round-1`及`kimi-real-s5-321-quality-v2-round-1`，各28次/USD4，总计56次/USD8。创建前查重/核对本轮历史，逐次同时检查两本累计；不跨版本转移额度或增加第三本。不是重置旧ledger；原321 fixture ledger及319账本都不动 |
 
 32768完整请求上界高于旧319的4096；1024输出沿用321原G1而低于旧319的4096。
 二者均是本次待接受的不同参数，不继承旧真实成功请求的兼容/充分性结论。

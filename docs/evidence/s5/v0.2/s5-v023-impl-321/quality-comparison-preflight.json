@@ -1,10 +1,11 @@
 {
-  "status": "PREPARED_NOT_AUTHORIZED_REBIND_SUCCESSOR_REQUIRED",
+  "status": "PREPARED_NOT_AUTHORIZED_NOT_DISPATCHABLE",
   "session": "S5-V023-IMPL-321",
   "candidate": {
-    "source": "4001b412340398ea42d813efd7f7f5f2cf9bf01d",
-    "tree": "846e7b5536ebd68d2e12d31d907d0e32a6195a70",
-    "status": "SUPERSEDED_FOR_EXECUTION_PENDING_LABEL_REPAIR_CANDIDATE"
+    "source": "18447f8667b3acbb46f8025e08f28be01d6c5929",
+    "tree": "5b0248ba8f4cacc07055335831cdff8ccb6f180c",
+    "status": "REPAIR_CODE_CANDIDATE_CI_PENDING",
+    "finalDocumentationSuccessor": "bind exact source/tree from original PR181 delivery receipt before dispatch"
   },
   "baseline": {
     "source": "e51334aa9780291b3d077a1edb698dca630a6b3f",
@@ -561,6 +562,22 @@
         "humanRevision": null,
         "finalConfirmedText": null
       }
+    }
+  ],
+  "ledgers": [
+    {
+      "id": "kimi-real-s5-321-quality-v1-round-1",
+      "adapterRevision": "v1",
+      "callCap": 28,
+      "costCapMicrousd": 4000000,
+      "status": "NOT_CREATED"
+    },
+    {
+      "id": "kimi-real-s5-321-quality-v2-round-1",
+      "adapterRevision": "v2",
+      "callCap": 28,
+      "costCapMicrousd": 4000000,
+      "status": "NOT_CREATED"
     }
   ]
 }

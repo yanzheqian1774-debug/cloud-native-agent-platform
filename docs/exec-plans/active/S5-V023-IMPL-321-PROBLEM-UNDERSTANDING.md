@@ -254,3 +254,10 @@ Q01–Q16成对NOT_MEASURED记录、精确v1/v2策略与上下文差异、凭据
 按本轮Human已授权范围修复DraftAssistanceCard结果状态与说明，增加两个纯fixture浏览器
 回归；不改Prompt、上下文、模型参数或正式对象。前段“无新工程修复/固定候选不变”仅为
 初始检查点，现被本段覆盖。生成后继候选须单独报告source/tree和CI，4001b412不冒充新结果。
+
+
+文案修复候选已正常提交推送：18447f8667b3acbb46f8025e08f28be01d6c5929 /
+5b0248ba8f4cacc07055335831cdff8ccb6f180c。新make check1853/200 skip、前端lint/build、
+30项交互通过；新12项CI已自动启动，不沿用4001b412 CI。预算提案按现有精确Profile绑定
+改为v1/v2各28次/USD4固定ledger，共56/USD8，均未创建。最终文档后继source/tree和CI
+见原PR181交付回执，真实调用门禁仍等待Human，不Ready/merge/部署/关闭。
