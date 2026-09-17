@@ -113,6 +113,32 @@ class PostgresAuthorityRepository:
         except (OSError, PsycopgError) as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
+    def verify_existing_schema(self) -> None:
+        """Validate an already installed schema without DDL or repair."""
+        if self.migration_path.name[:4] != "0018":
+            raise AuthorityError("AUTHORITY_SCHEMA_INCOMPATIBLE")
+        try:
+            with self.pool.connection() as connection, connection.transaction():
+                connection.execute("SET TRANSACTION READ ONLY")
+                for schema in ("browser_identity", "authorization_admin"):
+                    rows = connection.execute(
+                        f"SELECT version,checksum,adapter FROM {schema}.schema_migrations "
+                        "WHERE version >= %s ORDER BY version",
+                        (MIGRATION_VERSION,),
+                    ).fetchall()
+                    if rows != [
+                        {
+                            "version": MIGRATION_VERSION,
+                            "checksum": self.migration_checksum,
+                            "adapter": ADAPTER,
+                        }
+                    ]:
+                        raise AuthorityError("AUTHORITY_SCHEMA_INCOMPATIBLE")
+        except AuthorityError:
+            raise
+        except (OSError, PsycopgError) as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
     def close(self) -> None:
         self.pool.close()
 

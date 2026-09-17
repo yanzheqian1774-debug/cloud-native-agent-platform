@@ -1258,10 +1258,13 @@ class DraftAssistanceService:
         )
 
     def read(self, context: TrustedRequestContext, invocation_id: str) -> DraftResponse:
-        value = self.repository.get(DraftScope.from_context(context), invocation_id)
-        if value is None or not self.authorization.can_read(context, value):
-            raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
-        return DraftResponse(value, synthetic=self.transport.synthetic)
+        return read_authorized_invocation(
+            self.repository,
+            self.authorization,
+            context,
+            invocation_id,
+            synthetic=self.transport.synthetic,
+        )
 
     def observe(
         self, context: TrustedRequestContext, invocation_id: str
@@ -1352,3 +1355,18 @@ class DraftAssistanceService:
             ),
             synthetic=self.transport.synthetic,
         )
+
+
+def read_authorized_invocation(
+    repository: DraftAssistanceRepository,
+    authorization: DraftAuthorizationPort,
+    context: TrustedRequestContext,
+    invocation_id: str,
+    *,
+    synthetic: bool,
+) -> DraftResponse:
+    """Read persisted facts with the same exact authorization, without a transport."""
+    value = repository.get(DraftScope.from_context(context), invocation_id)
+    if value is None or not authorization.can_read(context, value):
+        raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
+    return DraftResponse(value, synthetic=synthetic)

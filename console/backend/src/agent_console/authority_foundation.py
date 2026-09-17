@@ -451,6 +451,7 @@ def build_authority_foundation(
     session_policy: BrowserSessionPolicy,
     *,
     target_validator: GrantTargetValidator | None = None,
+    existing_only: bool = False,
 ) -> AuthorityFoundation:
     """Construct I1 ports only when DB, immutable file, and host gate agree."""
     generation = StaticAuthorityLoader.load(
@@ -461,7 +462,10 @@ def build_authority_foundation(
         migration_path=runtime.migration_path,
     )
     try:
-        repository.migrate()
+        if existing_only:
+            repository.verify_existing_schema()
+        else:
+            repository.migrate()
         active = repository.active_generation()
         if active is None or active[:2] != (generation.generation, generation.digest):
             raise AuthorityError("AUTHORITY_RECOVERY_REQUIRED")
