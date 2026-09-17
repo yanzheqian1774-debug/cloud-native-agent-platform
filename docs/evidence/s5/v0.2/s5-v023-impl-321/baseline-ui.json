@@ -1,0 +1,13 @@
+{
+  "source": "e51334aa9780291b3d077a1edb698dca630a6b3f",
+  "kind": "MOCK_UI_BASELINE",
+  "modelQuality": "NOT_MEASURED",
+  "directConfirmAvailable": true,
+  "forcedEditVisits": 0,
+  "naturalCorrectionAdopted": false,
+  "initialSend": 1,
+  "correctionSend": 1,
+  "businessConfirmClicks": 1,
+  "assistanceRequests": 1,
+  "problemCommands": 1
+}

@@ -1,0 +1,140 @@
+# S5-V023-IMPL-321 verification and recovery
+
+Session OPEN; implementation authorization is the existing G1 plan. No Ready,
+merge, release, deployment, cleanup, or Session closure is implied.
+
+## Recovery identity
+
+- Original task `01a0acd1-626a-7b00-a7fc-898f5d734fd3` ended in `systemError`
+  (remote compaction transport failure); its implementation turn was failed.
+- Original worktree and branch reused. Base source
+  `e51334aa9780291b3d077a1edb698dca630a6b3f`, tree
+  `535fdd12cd11e4f2a029f03170f2a100e0fd8b49`. Remote main was rechecked unchanged.
+- No other 321 writer or active Playwright/build/database preparation process was
+  found before takeover. No subagent, replacement branch, worktree or Session.
+- Incremental recovery archive (modified/untracked files, binary diff, hashes,
+  original browser failures):
+  `/Users/tristan/.codex/visualizations/2026/09/17/01a0acf9-0260-76c0-8be0-aa4c92f5ab96/321-recovery-20260917T012944Z`.
+- The old final Docker command completed with exit 0 and container ID
+  `cc09ee568d385ae9d46e563e8aa3cd5f4500bc3f3c3b2a091861432d3916e2be`.
+  Container `s5-v023-impl-321-postgres` was running, with only
+  `127.0.0.1:55441 -> 5432/tcp`; database `s5_v023_impl_321_acceptance`
+  initially had no relations or ledger. It was reused, never deleted or reset.
+- Current local test runtime: `/tmp/s5-v023-impl-321-runtime` (private directory).
+  HTTPS Workbench `127.0.0.1:19322`; deterministic HTTPS provider `127.0.0.1:19323`.
+  Test-only trust and ephemeral local credentials/TLS are not deployment defaults.
+- PR #179 fixed head `89a8dad42e8746d50248015e7c6f8a0cdff7918e` and #180
+  `6cd4a644a5ad83976685f2d3019afdfce5ccf6a5` were OPEN/DRAFT when inspected.
+  Overlaps: Kimi adapter (#179), draft domain and ProblemWorkspacePage (#180).
+  Their recovery/diagnostic implementations were not received or overwritten.
+  No overlap with their published frontend test configuration changes. Shared
+  source compatibility remains an integration-owner review if they land first.
+
+## Evidence categories (do not combine scores)
+
+1. **Old engineering baseline:** recovered old task records report 75 passing
+   domain/adapter tests on the fixed baseline. This is historical, not a new run.
+2. **Old browser experiment:** `baseline-ui.json` / `baseline-ui.png` reproduce
+   natural correction not adopted and an old draft remaining submitable.
+3. **Mock interaction:** B01–B08 and additional race/length cases use page.route.
+   They prove UI contracts, not PostgreSQL, real authorization or model quality.
+4. **Real backend browser:** production Workbench/Authority/Problem/Draft owners,
+   existing PG migrations, independent exact grants, and a local deterministic
+   HTTPS Responses fixture. No page.route, direct DB Problem insertion, recovery
+   endpoint, real provider, or 319 credential is used.
+5. **Real model quality:** baseline and candidate remain `NOT_MEASURED`.
+
+## Failure history preserved
+
+- Original browser run: exit 1, B01/B02/B04/B05/B06 failed. The old writer fixed
+  revision trimming, successor handling, a textbox locator and mock continuation
+  expiry but did not rerun before interruption.
+- `/tmp/s5-321-browser-recovery-01.log`: 22 passed, 2 failed. B05/B06 assumed
+  READ after creator receipt. Added an explicit independent authorization journey.
+- `/tmp/s5-321-browser-recovery-02.log`: 22 passed, 2 failed. Mock grant endpoints
+  incorrectly returned a `result` envelope; their real DTO is top-level. Corrected
+  the fixture to the production contract, retaining all disclosure assertions.
+- `/tmp/s5-321-browser-recovery-03.log`: B05/B06 both passed after that correction.
+- Initial dedicated server attempts failed before imports (missing source paths),
+  then at the Workflow owner ledger compatibility check. Existing prerequisite SQL
+  was retained; the missing owner ledger was registered through its existing port.
+  `--resume` continued preparation; no database reset or duplicate seed was used.
+- `/tmp/s5-321-real-01.log`: one passed, one failed. The first real invocation
+  completed, but successor authorization was folded behind the previous draft.
+  Fixed rendering to expose the current authorization action and fence old cards.
+  The authorization-denial test proved zero additional provider calls.
+- `/tmp/s5-321-targeted.log`: 102 passed, one existing Kimi slow-body deadline
+  scenario failed with CONNECT_DEADLINE while builds/browsers ran concurrently.
+  No assertion, timeout or deadline implementation was weakened. Full validation
+  is run without concurrent browser builds to distinguish scheduling from logic.
+
+## Quality-case audit
+
+The 16-case JSON carries frozen synthetic inputs, human-review oracles and empty
+real metrics. The original 16 parametrized Python/browser cases check envelope
+shape and request transmission ONLY. They do not execute their semantic oracle;
+none is scored as a quality PASS. Q13's field-edit behavior is exercised by B02;
+Q14 additionally has a deterministic exact-repeat/overflow test. Schema tests
+cover at most two questions, source-reference validity, unknown/suggestion labels,
+authority-field rejection, size limits, profile policy identity and v1 rollback.
+These are structural constraints; valid references do not prove entailment.
+Q01–Q16 semantic fidelity, repeated-question rates, atomic-fact omissions and
+manual-edit reductions all remain pending independently authorized real evaluation.
+
+## Reproduction boundaries
+
+Run `make check`, `npm run lint` and `npm run build` from their documented roots.
+Mock UI: from `console/frontend`, use `playwright.s5-321.config.ts` and a NEW
+`PLAYWRIGHT_OUTPUT_DIR`. Real UI: `playwright.s5-321-real.config.ts` with
+`S5_321_RUNTIME_DIR` pointing to this task's private identity/credential directory.
+The dedicated mock provider and browser server are under `console/backend/tests`;
+set `PYTHONPATH=console/backend/src:core/src:runtime/src:operator/src` from repo root.
+Use `--resume` for an existing database/runtime. Do not replay first initialization.
+The real fixture preserves invocation history and the provider budget ledger.
+
+Fresh acceptance preparation requires a new explicitly owned test database/runtime;
+the supplied server refuses any database URL other than this task's isolated one.
+No command here authorizes accessing 319 assets, clearing ledgers, or real calls.
+
+
+## Completed isolated browser/PG result
+
+- `/tmp/s5-321-browser-final-01.log`: **27 passed**, retries 0.
+- `/tmp/s5-321-real-02.log`: **2 passed**, retries 0; no request routing/mock BFF.
+- Formal Problem `14019ced-cc5f-5da2-bda5-c4a12358cec6`, revision 1, one browser
+  create command; exact READ approval and refresh readback verified. Synthetic
+  acceptance principal is local `human:alice` in this task's separate authority,
+  never the 319 runtime identity or credentials.
+- Ledger has 3 reservations/3 settlements, 3 model Evidence records, 3 Resource
+  Uses; includes the first failed browser journey's completed first invocation.
+  Six invocation identities (including rejected/pending history) are retained.
+  Formal Problem/revision count is 1/1. See `pg-verification.json` for counts.
+- No test sentinel正文 in the 14 queried auxiliary/budget/use/evidence tables.
+  Confirmed Product content remains in the existing Business Problem owner.
+- Screenshots visually inspected: current-understanding card and authorized
+  readback preserve the final `<1%`, no-device-change constraint and explicit
+  unknowns; criteria authorization remains separate. These are synthetic fixtures.
+- Make-check first failure was a new Kimi test using the OpenAI fixture's response
+  model ID, correctly rejected by exact binding. Test now uses Kimi's own model
+  response fixture. No production binding check was changed to accept it.
+- Final review also added legacy-envelope unwrapping to the deterministic v1
+  fallback and a regression; it must not expose the JSON envelope as draft text.
+
+
+## Final local gates
+
+- `make check`: exit 0; **1851 passed, 200 skipped, 1 warning**. The 200 skips are
+  existing external-service/dedicated-database conditions, not newly skipped tests.
+  This task's actual PG/HTTPS acceptance is recorded separately above.
+- `npm run lint`: exit 0. `npm run build`: exit 0 (also executed by the dedicated
+  Playwright webServer); existing bundle-size advisory remains.
+- Final mock suite `/tmp/s5-321-browser-final-02.log`: exit 0, **28 passed**, no
+  retries. This includes IME/229/held Enter/Tab, stale input, manual fallback,
+  field-edit correction, UNKNOWN same-key recovery and independent READ errors.
+- Real HTTPS browser suite: **2 passed**. The later local changes were the manual
+  fallback unsent-input guard and deterministic-v1 envelope compatibility; they do
+  not modify the validated real v2 create/READ path. CI tests the committed source.
+- `git diff --check` passed; changed source/evidence and untracked assets reviewed.
+  Normal pre-commit hooks and remote CI are recorded in the final delivery receipt.
+- No real provider/model quality run occurred. All Q01–Q16 real metrics remain
+  NOT_MEASURED; optional real evaluation needs the separate gate document.
