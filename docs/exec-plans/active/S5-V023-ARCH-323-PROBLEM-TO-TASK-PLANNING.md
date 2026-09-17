@@ -479,3 +479,11 @@ Human 已明确授权原 323 增量一产品实现、独立环境迁移、验证
 限制：资源仅对已配置Employee reader作真实exact匹配；未配置的Skill/MCP/Knowledge/Workflow reader明确UNKNOWN，未选required为MISSING。模型仍为CONTROLLED_TEST_PROVIDER、业务资源为测试owner资料；真实AI接通/质量、企业采购资源齐套、D3执行与Human接受/merge均未授予。仅在既有323项交付一个Draft PR；Registry中321/322行已与接收候选逐字比对一致。
 
 最终PC浏览器补验：2 passed（2.5s），包含重启后精确history读回、网络响应丢失后刷新仍复用opaque idempotency key；URL不保存回答正文。frontend最新构建为 `index-CnQjc8aV.js` / `index-CXGJAZF9.css`。提交前停止323验收服务并冻结工作树，仅正常hooks可写格式；不绕过hooks。
+
+### 10.8 唯一Draft交付检查点
+
+实现已正常提交并non-force推送：source `b9d2068f554f8e34ba24d6fb1f494bd773faf53c`，tree `b9d240dc664acd4ad60b720d8bfdfe2c7980e3ca`。提交Ruff/format/pytest hooks全部Passed，提交后工作树干净；无后台writer，未绕过hooks。正常hooks包含最新输入边界及全部17项planning测试（设置专属PG变量）。提交后非变更Ruff check/format-check通过。
+
+唯一Draft PR：[183](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/183)，base main。父PR状态未改。提交后使用该source重启专属服务，HTTPS只读/确认重放/资源刷新与副作用检查再次PASS，2条controlled调用的Use/Evidence关联不变。随后停止验收server，保留PG、runtime和全部数据；重启命令见测试启动器。最终截图/构建摘要/source/tree在既有验收目录 `capture-manifest.json`，没有将凭据或私钥入库。
+
+本条及Registry状态是交付登记增量，不改变上述实现候选。登记时12项远端CI正在运行，终态以PR exact head checks为准；不把pending写为通过。本Session停在Human接受与合并前，仍OPEN。
