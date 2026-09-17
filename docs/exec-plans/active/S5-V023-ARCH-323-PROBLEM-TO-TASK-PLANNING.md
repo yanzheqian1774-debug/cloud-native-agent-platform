@@ -517,3 +517,18 @@ Human已授权在原323、原分支及唯一Draft PR #183继续视觉实施，�
 同案例改造前对照从旧固定source的只读archive构建，未新建分支/worktree/Session；index.html、icons.svg、favicon.svg、JS/CSS五个构建文件逐一与原manifest SHA-256相同。旧源/树、review六图及manifest保留。新UI fixture截图与真实PG截图分别记录，参考101/102/103/112为目标，322仅回归。资产目录仍为原验收根下 `visual/`，其中对照入口 `index.html`、新候选身份/截图/build哈希 `visual-capture-manifest.json`、CI回执和checkout审计跟随本次推送登记，不回填到旧通过记录。
 
 本次是原323视觉增量，唯一PR仍#183 Draft；正常hooks提交后非force推送，最终source/tree及CI实际checkout以既有PR和外部manifest为准。无D3执行、资源生产、Ready/merge/部署/关闭。完成实施和工程验证后返回Human视觉验收，不自行宣称Human已接受。
+
+
+### 10.11 PC视觉恢复与最终收口（2026-09-18）
+
+旧writer `01a0afb7-b849-7953-a598-f27b2712733d` 为 systemError；原视觉提交及non-force push均已成功，复用 `a5afecc4b3c393ade3afa6fa32dca1aeccd3207d` / tree `cfa148c82737e11d41dd3ad4c378a118dedcd9bd`。原b923工作树、分支、暂存区及历史证据完整，接管时干净，无未完成git/hook进程。只保留原323验收服务与baseline预览，不操作321环境；当前恢复载体为唯一writer。
+
+该视觉候选CI实测10成功、2失败，两项均因299静态测试仍要求已替换的旧文案，未进入后续浏览器阶段。恢复仅更新两处静态边界断言，分别检查单独发起/确认规划且不执行、禁用辅助时不自动调用模型或资源、确认前不创建问题/执行/准备资源；未删除或跳过测试，未改产品源码。相关两文件17项通过，Ruff检查通过。既有make check默认testpaths不包括console/frontend/tests，因此1917通过不能替代这些静态检查。
+
+额外执行整个frontend Python目录曾得到96通过/2失败：一项为上述同源旧文案，已修复；另一项test_s5_impl_274_wave1::test_digital_employee_keeps_core_concepts_separate要求旧数字员工页面字面量。已逐字验证该测试及产品文件与保留基线2b8e66f相同，旧源同样不含Agent Definition，登记为既有范围外测试债务，不修改、不隐藏，也不声称整个目录通过。
+
+39项交互、21项工作区、1917项make check及HTTPS/PG副作用证据复用10.10原日志；本轮产品源码未变。以最终前端source重建到验收目录recovery-build，五个文件与原dist逐字一致，不覆盖原构建或截图。最终source/tree（包含此次测试与登记变更）、最新CI终态及实际checkout关系在原visual/visual-capture-manifest.json、visual/ci-checkout-audit.json与唯一Draft PR #183登记；不沿用旧12成功，也不把旧失败候选改写为成功。
+
+对照入口visual/index.html保留11组前/后/效果图，UI_API_FIXTURE与HTTPS_REAL_PG_EXISTING_RECORDS分别标记，非真实模型完整旅程。102目标/任务/确认同屏、步骤条和蓝白层级已落实；103任务职责/依赖业务名称、资源用途已落实，但执行状态仍未实现；112已按资源种类分组并保留真实1匹配/6必要缺口/1可选，未照搬9/4/5。机器人形象、导航编排、目标标签化、资源表密度及后续生产/责任分配操作与效果图仍有差别，交Human验收决定，不追加润色。
+
+保持原Session OPEN / HUMAN_REVIEW_PENDING、唯一#183 Draft。旧2b8e66f及全部历史证据保留；真实模型关闭，不启动增量二，不改变父PR，不Ready、merge、部署或关闭。

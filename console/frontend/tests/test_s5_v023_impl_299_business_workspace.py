@@ -89,7 +89,9 @@ def test_plan_execution_and_resource_gaps_are_not_fabricated() -> None:
         "数字员工",
         "Workflow / Plan",
         "Human Intervention",
-        "当前不接入模型分析或任务执行",
+        "规划需要单独发起和确认\uff1b当前页面不会启动执行",
+        "本页不会自动调用数字员工、Agent、Skill、知识库、附件或模型",
+        "确认前不会创建问题\uff0c也不会启动任务或准备资源",
     ):
         assert boundary in page
     assert "成功标准不等于已经达成" in page
