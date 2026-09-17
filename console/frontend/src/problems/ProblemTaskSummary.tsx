@@ -2,14 +2,14 @@ import {useEffect,useRef,useState} from "react";
 import type {BusinessProblemDetail,BusinessProblemRevision,CriteriaSetRevision,CriterionRevision,GrantRequestStatus,ProblemCreatorContinuation} from "../api/businessWorkspace";
 
 import type {UnderstandingItem} from "../api/draftAssistanceTypes";
-import {fieldLabels} from "./problemUnderstandingModel";
+import {fieldLabels,isUnstructuredStatement} from "./problemUnderstandingModel";
 
 type AuthorizationSummary={continuation?:ProblemCreatorContinuation;request?:GrantRequestStatus};
-type Props={understanding?:UnderstandingItem[];clarification?:string|null;revision?:BusinessProblemRevision;detail?:BusinessProblemDetail;criteria:CriterionRevision[];sets:CriteriaSetRevision[];authorization:AuthorizationSummary;busy:boolean;readFailed:boolean;contextKey:string;onLocateProblem:()=>void;onLocateAuthorization:()=>void};
+type Props={description?:string;understanding?:UnderstandingItem[];clarification?:string|null;revision?:BusinessProblemRevision;detail?:BusinessProblemDetail;criteria:CriterionRevision[];sets:CriteriaSetRevision[];authorization:AuthorizationSummary;busy:boolean;readFailed:boolean;contextKey:string;onLocateProblem:()=>void;onLocateAuthorization:()=>void};
 
 const latest=<T extends {revision:number}>(values:T[])=>[...values].sort((a,b)=>b.revision-a.revision)[0];
 
-export function ProblemTaskSummary({understanding,clarification,revision,detail,criteria,sets,authorization,busy,readFailed,contextKey,onLocateProblem,onLocateAuthorization}:Props){
+export function ProblemTaskSummary({description="",understanding,clarification,revision,detail,criteria,sets,authorization,busy,readFailed,contextKey,onLocateProblem,onLocateAuthorization}:Props){
   const trigger=useRef<HTMLButtonElement>(null),dialog=useRef<HTMLDialogElement>(null),activeContext=useRef(contextKey),[copiedContext,setCopiedContext]=useState("");
   const exact=detail?.revisions.find(item=>item.revision_id===detail.problem.current_revision_id)??(detail?latest(detail.revisions):undefined),formal=exact??revision;
   useEffect(()=>{activeContext.current=contextKey;if(dialog.current?.open)dialog.current.close()},[contextKey]);
@@ -17,7 +17,7 @@ export function ProblemTaskSummary({understanding,clarification,revision,detail,
   function close(){dialog.current?.close();trigger.current?.focus()}
   async function copyRequest(){const requestId=authorization.request?.requestId,expectedContext=activeContext.current;if(!requestId)return;try{await navigator.clipboard.writeText(requestId);if(activeContext.current===expectedContext)setCopiedContext(expectedContext)}catch{if(activeContext.current===expectedContext)setCopiedContext("")}}
   function locate(target:()=>void){if(dialog.current?.open)dialog.current.close();requestAnimationFrame(target)}
-  const content=<SummaryContent understanding={understanding} clarification={clarification} revision={formal} exact={exact} criteria={criteria} sets={sets} authorization={authorization} busy={busy} readFailed={readFailed} copied={copiedContext===contextKey} onCopy={()=>void copyRequest()} onLocateProblem={()=>locate(onLocateProblem)} onLocateAuthorization={()=>locate(onLocateAuthorization)}/>;
+  const content=<SummaryContent description={description} understanding={understanding} clarification={clarification} revision={formal} exact={exact} criteria={criteria} sets={sets} authorization={authorization} busy={busy} readFailed={readFailed} copied={copiedContext===contextKey} onCopy={()=>void copyRequest()} onLocateProblem={()=>locate(onLocateProblem)} onLocateAuthorization={()=>locate(onLocateAuthorization)}/>;
   return <div className="px-task-summary">
     <button ref={trigger} type="button" className="px-task-summary-trigger" aria-label="本任务" aria-haspopup="dialog" onClick={open}><span><strong>本任务</strong><small>查看摘要与授权状态</small></span><span aria-hidden="true">›</span></button>
     <aside className="px-task-summary-panel" aria-labelledby="task-summary-title"><h2 id="task-summary-title">本任务</h2><p>根据当前问题与授权状态汇总。</p>{content}</aside>
@@ -25,15 +25,17 @@ export function ProblemTaskSummary({understanding,clarification,revision,detail,
   </div>;
 }
 
-function SummaryContent({understanding,clarification,revision,exact,criteria,sets,authorization,busy,readFailed,copied,onCopy,onLocateProblem,onLocateAuthorization}:{understanding?:UnderstandingItem[];clarification?:string|null;revision?:BusinessProblemRevision;exact?:BusinessProblemRevision;criteria:CriterionRevision[];sets:CriteriaSetRevision[];authorization:AuthorizationSummary;busy:boolean;readFailed:boolean;copied:boolean;onCopy:()=>void;onLocateProblem:()=>void;onLocateAuthorization:()=>void}){
+function SummaryContent({description="",understanding,clarification,revision,exact,criteria,sets,authorization,busy,readFailed,copied,onCopy,onLocateProblem,onLocateAuthorization}:{description?:string;understanding?:UnderstandingItem[];clarification?:string|null;revision?:BusinessProblemRevision;exact?:BusinessProblemRevision;criteria:CriterionRevision[];sets:CriteriaSetRevision[];authorization:AuthorizationSummary;busy:boolean;readFailed:boolean;copied:boolean;onCopy:()=>void;onLocateProblem:()=>void;onLocateAuthorization:()=>void}){
   const request=authorization.request,continuation=authorization.continuation;
   const authorizationState=request?.state==="PENDING"?"等待审批":request?.state==="APPROVED"?"已批准":request?.state==="REJECTED"?"已拒绝":continuation?.state==="AVAILABLE"?"待申请":continuation?.state==="EXPIRED"?"申请已过期":revision?"尚未申请":"暂无申请";
   const readState=exact?"读取成功":request?.state==="APPROVED"&&busy?"正在读取":request?.state==="APPROVED"&&readFailed?"暂时无法读取":"尚未读取";
   const next=exact?"可返回问题详情；修改此问题需要另行授权。":request?.state==="APPROVED"?(readFailed?"回到授权卡片重新读取。":"正在读取获准的问题详情。"):request?.state==="REJECTED"?"如仍需查看，请按正式流程重新取得授权。":request?.state==="PENDING"?"由独立管理员处理后，在授权卡片刷新。":continuation?.state==="AVAILABLE"?"回到授权卡片申请查看权限。":continuation?.state==="EXPIRED"?"已创建问题保留；本页不会自动延长申请窗口。":"先在对话中确认并创建问题。";
   const highest=[...sets].sort((a,b)=>b.revision-a.revision)[0],members=highest?.ordered_criterion_revision_ids.map(id=>criteria.find(item=>item.revision_id===id)).filter((item):item is CriterionRevision=>Boolean(item))??[];
+  const organized=understanding?.filter(item=>item.source!=="UNKNOWN"&&!isUnstructuredStatement(item,description))??[];
+  const unorganized=understanding?.filter(item=>item.source==="UNKNOWN")??[];
   const RequestContainer=exact?"details":"section";
   if(!revision)return <div className="px-task-summary-content">
-    <section><span className="px-eyebrow">当前理解</span><h3>{clarification?"等待你补充":understanding?.length?"核对目标与约束":"从你的问题开始"}</h3>{understanding?.length?<><p>当前卡片已整理 {understanding.length} 项理解，请核对后确认。</p>{understanding.some(item=>item.source==="UNKNOWN")&&<p className="px-summary-open-items">尚待明确：{[...new Set(understanding.filter(item=>item.source==="UNKNOWN").map(item=>fieldLabels[item.field]))].join("、")}。未知信息仍按未知保留。</p>}</>:<p>{clarification?"在左侧回答补问，也可以直接说明要修正的内容。":"描述希望解决的问题，补齐关键信息后，再核对当前卡片。"}</p>}</section>
+    <section><span className="px-eyebrow">当前理解</span><h3>{clarification?"等待你补充":understanding?.length?"核对你提供的信息":"从你的问题开始"}</h3>{understanding?.length?<><p>{organized.length?`当前卡片单独列出 ${organized.length} 项内容，请对照原文核对来源。`:"当前保留你提供的信息，尚未形成单独整理的字段。"}</p>{unorganized.length>0&&<p className="px-summary-open-items">尚未单独整理：{[...new Set(unorganized.map(item=>fieldLabels[item.field]))].join("、")}。这不代表你未提供，不据此判断原文缺少信息。</p>}</>:<p>{clarification?"在左侧回答补问，也可以直接说明要修正的内容。":"描述希望解决的问题，补齐关键信息后，再核对当前卡片。"}</p>}</section>
     <section><span className="px-eyebrow">下一步</span><p>{clarification?"回答补问后更新理解；现在尚未创建正式问题。":"在对话中补充或修正内容，核对卡片后确认创建。未提交内容仅保留在本页。"}</p></section>
   </div>;
   return <div className="px-task-summary-content">

@@ -498,3 +498,43 @@ Nonblocking follow-up: broader shell/navigation and real model quality remain
 outside this visual increment, under their existing owners and plans.
 
 Normal commit hooks passed for implementation source `4e9ec6895e9a315cdae3154c0f28e9c69b303064` / tree `bbcc960cae0958a6f7755a3b84a6738f25e1181a`. The evidence-text successor trims log trailing whitespace only (original logs retained in the task temporary directory); UI and screenshot hashes remain identical. Final candidate identity and CI links are pinned in the single Draft PR.
+
+### 2026-09-17 PC acceptance follow-up (same 322 / PR #182)
+
+Human accepted the overall PC layout and authorized only two bounded corrections.
+G0 presentation fix within the existing implementation scope: label exact complete
+description echoes as user-provided information; do not count unknown placeholders
+as structured facts or equate unorganized fields with absent user input. Keep DTOs,
+model requests, authorization and create payloads unchanged. Locate the complete
+message including its author label, and check scroll/composer geometry.
+
+Validation plan: extend existing synthetic PC journey with text, source and geometry
+assertions; capture confirmation/readback at 1440x1050; run understanding and existing
+W2A/W3 regression suites, frontend lint/build and make check. Preserve mobile checks
+and earlier evidence. Update only the original Draft PR, no Ready/merge/deployment.
+
+Follow-up implemented and locally verified: exact full-description echoes retain
+their text under “你提供的信息”; UNKNOWN rows say “尚未单独整理” and explicitly
+do not imply the user omitted information. The sidebar counts only separately
+returned non-UNKNOWN content and retains suggestion provenance. No semantic
+extraction or inference, request-context change, backend/model or create change.
+Duplicate description display is omitted only when the same full text is visible
+in the facts row. Independently returned fields remain field-labelled.
+
+Message location now includes the author label. Captures locate the same complete
+message rather than its inner card. Initial full-visibility assertion exposed a
+confirmation button extending below the scroll viewport; explanatory copy was
+compacted and PC conversation capacity increased by 16px. The retained assertion
+now verifies labels, complete primary buttons and non-overlapping composer bounds.
+The readback next action is also reachable with a 12-line composer. Existing
+mobile layout rules and mobile regression tests remain.
+
+Current local results: make check 1853 passed / 200 existing environment skips /
+1 warning; understanding 34 passed; W2A/W3 19 passed with original assertions;
+frontend lint and production build passed (existing chunk-size warning).
+[Updated confirmation/readback](../../evidence/s5/v0.2/s5-v023-impl-322/index.html)
+and pcReview in the existing manifest bind source-file hashes and image hashes;
+logs and fixture receipt are in its pc-review directory. Original evidence remains
+unchanged and labelled historical. Exact candidate CI is recorded on PR #182.
+Human visual approval of these corrections and separately authorized dependency
+integration remain; no Ready, merge, deployment or Session closure.

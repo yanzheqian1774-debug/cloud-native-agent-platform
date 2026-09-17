@@ -72,5 +72,49 @@
     "Screenshots use existing simplistic understanding fixture; unknown fields are not semantic quality results.",
     "UI/API mocks do not establish database or true backend authorization conformance.",
     "Parent #181 remains an unmerged dependency; its code and prior results are not this increment."
-  ]
+  ],
+  "originalCandidate": {
+    "source": "122cfa99f8a0bb7a8a0ce9a1b541ca012971bde6",
+    "tree": "8fd5a8f56e6ba93e5f2f2998152f3fb94ae13e96",
+    "note": "Top-level afterFiles/assets/screenshots/validation describe the original capture; preserved unchanged. Latest PC evidence is in pcReview."
+  },
+  "pcReview": {
+    "captureWorkingBaseSource": "122cfa99f8a0bb7a8a0ce9a1b541ca012971bde6",
+    "binding": "Captured with the uncommitted follow-up below; source file SHA-256 values bind the screenshots to the delivered candidate. Final source/tree recorded in PR #182.",
+    "kind": "UI_API_FIXTURE_NOT_REAL_MODEL_OR_DATABASE",
+    "viewport": {
+      "width": 1440,
+      "height": 1050
+    },
+    "providerCalls": 0,
+    "databaseWrites": 0,
+    "sourceFiles": {
+      "console/frontend/playwright.s5-321.config.ts": "f85fa2f93ead5e4211a494e8cad8ded9a6695f7cc492e6e5b1e09f88cbf8df99",
+      "console/frontend/src/problems/DraftAssistanceCard.tsx": "7ca2334a034fd886f71a2baa4ef095f0b725b32a4c85564a3c83899e55fa9d21",
+      "console/frontend/src/problems/ProblemConversation.tsx": "edef55a0c1c8c4892170404891c6373c47fdf097897a7a8e4c6c2859d27bea2a",
+      "console/frontend/src/problems/ProblemTaskSummary.tsx": "4c2946c8739a4c7b57fffecbf61e3ddc5807a4c5afe298dbcfbd137148da090f",
+      "console/frontend/src/problems/ProblemWorkspacePage.tsx": "8b0ad068ea29b8d7c86467350807f13f9a0facc9a5404482bcef5caa644bb7d1",
+      "console/frontend/src/styles/product-experience.css": "a6ca5504a18dc7c3bdbbe50b69a1057e8b095720e23a3fbde9b606e1503d771d",
+      "console/frontend/tests/e2e/s5-321-understanding.spec.ts": "05f2a2d1779c74502e2761137848b1886b818b856947df12ffc6a5df45ecdb8f",
+      "console/frontend/src/problems/problemUnderstandingModel.ts": "5d418af19057377001c6c9b14eedfa099da7ca3ad59f1cabd025748c976f9492"
+    },
+    "screenshots": {
+      "pc-review/05-readback.png": "4ed77739d420dc8bf76d5578bcae6bfe785e607658559def05abf41e63761ae3",
+      "pc-review/03-confirm.png": "c22a1dea6c2a6a280306db4ecf0381ec73e5286cacc55ad2c92d5d8aeb5da0b3"
+    },
+    "validation": {
+      "makeCheck": "1853 passed, 200 existing environment-dependent skips, 1 warning",
+      "understanding": "34 passed, retries 0",
+      "legacyW2AW3": "19 passed, original assertions retained",
+      "frontendLint": "PASS",
+      "frontendBuild": "PASS via Playwright webServer production build"
+    },
+    "geometry": "Full author label and primary card action visible at PC capture size; stream bottom does not overlap composer; next action remains fully reachable with composer expanded to 12 lines.",
+    "retainedFailure": "Initial PC confirmation action visibility ratio was 0.884 after extra explanatory row; merged explanation into existing version note and added 16px PC stream capacity. Full-visibility assertion retained and passes.",
+    "limits": [
+      "UI/API fixture, not real model quality or new database acceptance.",
+      "UNKNOWN does not prove the user omitted information; no semantic field extraction added.",
+      "Existing mobile captures remain historical evidence; existing mobile checks still run."
+    ]
+  }
 }

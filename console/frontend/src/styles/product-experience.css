@@ -84,7 +84,7 @@
 .px-workspace .px-page-title>div>span{font-size:14px;line-height:1.6}
 .px-workspace .px-problem-switcher>summary{font-size:13px}
 .px-workspace .px-workspace-body{grid-template-columns:minmax(0,1fr) 290px;gap:24px}
-.px-workspace .px-conversation{height:clamp(530px,calc(100svh - 282px),820px);min-height:0;border:0;background:transparent;box-shadow:none;overflow:hidden}
+.px-workspace .px-conversation{height:clamp(530px,calc(100svh - 266px),820px);min-height:0;border:0;background:transparent;box-shadow:none;overflow:hidden}
 .px-workspace .px-message-stream{padding:12px 4px 24px;scroll-padding-block:16px}
 .px-workspace .px-message{margin-bottom:24px;gap:12px}
 .px-workspace .px-user-message{grid-template-columns:minmax(0,1fr) 38px;margin-left:44px}
@@ -102,7 +102,7 @@
 .px-workspace .px-inline-card details>summary,.px-workspace .px-task-summary-content details>summary{font-size:12px;line-height:1.6;color:#536882;cursor:pointer}
 .px-workspace .px-inline-card dl{font-size:13px;line-height:1.65}
 .px-workspace .px-inline-card .px-truth-note{font-size:12px;background:#f1f6ff;color:#536882;border-left:0;padding:8px 12px}
-.px-workspace .px-inline-card .px-understanding-facts{grid-template-columns:76px minmax(0,1fr);gap:0;font-size:14px}
+.px-workspace .px-inline-card .px-understanding-facts{grid-template-columns:104px minmax(0,1fr);gap:0;font-size:14px}
 .px-workspace .px-understanding-facts>dt,.px-workspace .px-understanding-facts>dd{padding:8px 0;border-top:1px solid #e3ebf7}
 .px-workspace .px-understanding-facts>dd{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;color:#243d60}
 .px-workspace .px-fact-source{font-size:11px;color:#58749a}
