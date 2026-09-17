@@ -6,8 +6,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 
+from agent_console.knowledge_document_parser import (
+    MAX_UPLOAD_BYTES,
+    KnowledgeDocumentParseFailure,
+    parse_document,
+)
 from agent_console.knowledge_lifecycle_service import (
     KnowledgeLifecycleFailure,
     KnowledgeLifecycleService,
@@ -133,6 +147,7 @@ def call(operation):
             status_code=404, detail={"reasonCode": "KNOWLEDGE_NOT_FOUND"}
         ) from exc
     except (
+        KnowledgeDocumentParseFailure,
         KnowledgeLifecycleFailure,
         KnowledgeQualityFailure,
         KnowledgeRepositoryError,
@@ -144,11 +159,55 @@ def call(operation):
             else "KNOWLEDGE_OPERATION_FAILED"
         )
         status_code = 404 if code == "KNOWLEDGE_ACCESS_DENIED" else 409
+        if code.endswith("LIMIT_EXCEEDED"):
+            status_code = 413
+        elif code == "DOCUMENT_PARSE_TIMEOUT":
+            status_code = 408
+        elif code.startswith(
+            (
+                "CORRUPT_",
+                "DOCUMENT_",
+                "EMPTY_",
+                "INVALID_",
+                "MACRO_",
+                "EMBEDDED_",
+                "PASSWORD_",
+                "UNSAFE_",
+                "UNSUPPORTED_",
+            )
+        ):
+            status_code = 422
         if code in {"KNOWLEDGE_STORAGE_UNAVAILABLE", "QDRANT_UNAVAILABLE"}:
             status_code = 503
         raise HTTPException(
             status_code=status_code, detail={"reasonCode": code}
         ) from exc
+
+
+@router.post("/operations/documents/parse")
+async def parse_document_preview(
+    request: Request,
+    file_name: str = Query(alias="fileName", min_length=1, max_length=255),
+    scope: KnowledgeScope = Depends(trusted_scope),
+):
+    # The private route stays in the existing Knowledge scope. The trusted browser
+    # identity and exact grants remain the responsibility of the 305 BFF.
+    del scope
+    content = bytearray()
+    async for chunk in request.stream():
+        content.extend(chunk)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail={"reasonCode": "DOCUMENT_UPLOAD_LIMIT_EXCEEDED"},
+            )
+    return call(
+        lambda: parse_document(
+            file_name,
+            request.headers.get("content-type", "application/octet-stream"),
+            bytes(content),
+        )
+    )
 
 
 @router.get("/operations/dashboard")

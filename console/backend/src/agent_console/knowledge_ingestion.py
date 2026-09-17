@@ -49,6 +49,60 @@ def ingest_text(document_id: str, text: str) -> tuple[list[dict[str, Any]], str]
     return chunks, hashlib.sha256(content.encode()).hexdigest()
 
 
+def ingest_parsed_segments(
+    document_id: str,
+    text: str,
+    segments: object,
+    expected_content_digest: object,
+) -> tuple[list[dict[str, Any]], str]:
+    """Validate parser output and retain only truthful, bounded locations."""
+
+    if not isinstance(segments, list) or not segments:
+        raise ValueError("INVALID_PARSED_SEGMENTS")
+    normalized_text = (
+        unicodedata.normalize("NFC", text).replace("\r\n", "\n").replace("\r", "\n")
+    )
+    content_digest = hashlib.sha256(normalized_text.encode()).hexdigest()
+    if expected_content_digest != content_digest:
+        raise ValueError("PARSED_CONTENT_DIGEST_MISMATCH")
+    chunks: list[dict[str, Any]] = []
+    normalized_segments: list[str] = []
+    for ordinal, segment in enumerate(segments, 1):
+        if not isinstance(segment, dict) or set(segment) != {"content", "location"}:
+            raise ValueError("INVALID_PARSED_SEGMENTS")
+        paragraph = segment.get("content")
+        location = segment.get("location")
+        if not isinstance(paragraph, str) or not isinstance(location, dict):
+            raise ValueError("INVALID_PARSED_SEGMENTS")
+        paragraph = unicodedata.normalize("NFC", paragraph).strip()
+        if not paragraph or len(paragraph.encode()) > MAX_CHUNK_BYTES:
+            raise ValueError("CHUNK_LIMIT_EXCEEDED")
+        if set(location) - {"pageNumber", "paragraphNumber"} or not location:
+            raise ValueError("INVALID_PARSED_LOCATION")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+            for value in location.values()
+        ):
+            raise ValueError("INVALID_PARSED_LOCATION")
+        digest = canonical_digest(
+            {"documentId": document_id, "ordinal": ordinal, "content": paragraph},
+            domain="knowledge-operation-chunk.v1",
+        )
+        chunks.append(
+            {
+                "chunkId": f"{document_id}:chunk:{ordinal}",
+                "ordinal": ordinal,
+                "content": paragraph,
+                "contentDigest": digest,
+                "location": dict(location),
+            }
+        )
+        normalized_segments.append(paragraph)
+    if "\n\n".join(normalized_segments) != normalized_text:
+        raise ValueError("PARSED_CONTENT_MISMATCH")
+    return chunks, content_digest
+
+
 def deterministic_vector(content: str, dimensions: int = 8) -> list[float]:
     """Local deterministic test/reference embedding; not a model claim."""
     raw = hashlib.sha256(content.encode()).digest()
