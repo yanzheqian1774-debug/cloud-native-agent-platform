@@ -345,8 +345,16 @@ class KimiResponsesDraftTransport:
         )
 
     def _dispatch_once(
-        self, *, invocation_id, request, credential, profile, connected=lambda: None
+        self,
+        *,
+        invocation_id,
+        request,
+        credential,
+        profile,
+        connected=lambda: None,
+        progress=lambda _stage: None,
     ):
+        progress("VALIDATE_RESPONSE")
         policy = prepared_policy(request.payload)
         if (
             not isinstance(request.payload, bytes)
@@ -355,6 +363,7 @@ class KimiResponsesDraftTransport:
             or credential.version != self.configuration.credential_version
         ):
             raise DraftAssistanceError("KIMI_RESPONSES_REQUEST_INVALID")
+        progress("CONNECT")
         parsed = urlsplit(self.configuration.responses_url)
         try:
             ssl_context = ssl.create_default_context(
@@ -388,6 +397,7 @@ class KimiResponsesDraftTransport:
             connection.sock.settimeout(
                 min(self.configuration.read_timeout_seconds, remaining)
             )
+            progress("SEND_REQUEST")
             connection.request(
                 "POST",
                 parsed.path,
@@ -399,7 +409,9 @@ class KimiResponsesDraftTransport:
                     "Connection": "close",
                 },
             )
+            progress("WAIT_HEADERS")
             response = connection.getresponse()
+            progress("READ_BODY")
             raw_correlation = response.getheader("x-request-id")
             correlation = (
                 raw_correlation
@@ -412,6 +424,7 @@ class KimiResponsesDraftTransport:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
             connection.close()
+        progress("VALIDATE_RESPONSE")
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(

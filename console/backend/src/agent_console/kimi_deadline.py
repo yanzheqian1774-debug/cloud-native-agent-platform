@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import multiprocessing
 import os
@@ -34,6 +35,37 @@ class DeadlineMetrics:
     reason: str
     worker_pid: int | None
     reaped: bool
+    failure_stage: str = "UNKNOWN"
+    exception_category: str = "NONE"
+    worker_exit_status: int | str = "UNKNOWN"
+    worker_kill_requested: bool = False
+    stage_seconds: dict[str, float] | None = None
+
+
+STAGES = {
+    "IPC",
+    "CONNECT",
+    "SEND_REQUEST",
+    "WAIT_HEADERS",
+    "READ_BODY",
+    "VALIDATE_RESPONSE",
+}
+
+
+def exception_category(exc):
+    # Never serialize exception names, messages, arguments or tracebacks.
+    cause = exc.__cause__ if exc.__cause__ is not None else exc
+    for kind, label in (
+        (TimeoutError, "TIMEOUT"),
+        (ssl.SSLError, "TLS"),
+        (http.client.RemoteDisconnected, "REMOTE_DISCONNECT"),
+        (http.client.HTTPException, "HTTP_PROTOCOL"),
+        (OSError, "IO"),
+        (ValueError, "INVALID_DATA"),
+    ):
+        if isinstance(cause, kind):
+            return label
+    return "UNEXPECTED"
 
 
 def _send(channel, value):
@@ -52,6 +84,13 @@ def _parent_watch(channel):
 def _worker(channel, configuration, invocation_id):
     # Spawn, not fork: no inherited database connections or threaded SSL state.
     # Only anonymous spawn IPC carries the already-resolved credential/content.
+    stage = "IPC"
+
+    def progress(value):
+        nonlocal stage
+        stage = value
+        _send(channel, {"stage": value})
+
     try:
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         with open(os.devnull, "wb") as sink:
@@ -87,7 +126,9 @@ def _worker(channel, configuration, invocation_id):
             credential=credential,
             profile=None,
             connected=lambda: _send(channel, {"connected": True}),
+            progress=progress,
         )
+        progress("IPC")
         _send(channel, {"result": asdict(result)})
     except BaseException as exc:
         # No exception text/traceback, request, credential or body diagnostics.
@@ -101,7 +142,15 @@ def _worker(channel, configuration, invocation_id):
             "TLS" if isinstance(exc.__cause__, ssl.SSLCertVerificationError) else "IO"
         )
         with suppress(OSError):
-            _send(channel, {"error": code, "cause": cause})
+            _send(
+                channel,
+                {
+                    "error": code,
+                    "cause": cause,
+                    "stage": stage,
+                    "exception_category": exception_category(exc),
+                },
+            )
     finally:
         channel.close()
 
@@ -145,6 +194,12 @@ def _supervise(configuration, invocation_id, request, credential, metrics, *, wo
         name="kimi-one-request",
     )
     connected = False
+    stage = "IPC"
+    stage_started = started
+    durations = {}
+    category = "NONE"
+    killed = False
+    exit_status = "UNKNOWN"
     reason = "WORKER_FAILURE"
     decision = None
     pid = None
@@ -210,7 +265,28 @@ def _supervise(configuration, invocation_id, request, credential, metrics, *, wo
                     if message == {"connected": True} and not connected:
                         connected = True
                         continue
+                    if set(message) == {"stage"} and message["stage"] in STAGES:
+                        timestamp = time.monotonic()
+                        durations[stage] = (
+                            durations.get(stage, 0.0) + timestamp - stage_started
+                        )
+                        stage_started = timestamp
+                        stage = message["stage"]
+                        continue
                     if "error" in message:
+                        if message.get("stage") in STAGES:
+                            stage = message["stage"]
+                        category = message.get("exception_category", "UNEXPECTED")
+                        if category not in {
+                            "TIMEOUT",
+                            "TLS",
+                            "REMOTE_DISCONNECT",
+                            "HTTP_PROTOCOL",
+                            "IO",
+                            "INVALID_DATA",
+                            "UNEXPECTED",
+                        }:
+                            category = "UNEXPECTED"
                         reason = "WORKER_ERROR"
                         cause = (
                             ssl.SSLCertVerificationError("Kimi TLS verification failed")
@@ -241,9 +317,13 @@ def _supervise(configuration, invocation_id, request, credential, metrics, *, wo
     except DraftAssistanceError:
         raise
     except Exception as exc:
+        category = exception_category(exc)
+        if reason == "WORKER_FAILURE":
+            stage = "IPC"
         raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
     finally:
         decision = time.monotonic() if decision is None else decision
+        durations[stage] = durations.get(stage, 0.0) + decision - stage_started
         cleanup_started = time.monotonic()
         parent.close()
         child.close()
@@ -251,18 +331,35 @@ def _supervise(configuration, invocation_id, request, credential, metrics, *, wo
         try:
             if pid is not None:
                 if process.is_alive():
+                    killed = True
                     process.kill()
                 process.join(
                     max(0.0, CLEANUP_SECONDS - (time.monotonic() - cleanup_started))
                 )
                 reaped = not process.is_alive()
+                observed_exit = getattr(process, "exitcode", None)
+                if observed_exit is not None:
+                    exit_status = observed_exit
             if reaped:
                 process.close()
         finally:
             cleanup = time.monotonic() - cleanup_started
             if not reaped or cleanup > CLEANUP_SECONDS:
                 reason = "CLEANUP_FAILURE"
-            metrics(DeadlineMetrics(decision - started, cleanup, reason, pid, reaped))
+            metrics(
+                DeadlineMetrics(
+                    decision - started,
+                    cleanup,
+                    reason,
+                    pid,
+                    reaped,
+                    stage if reason != "RESULT_ACCEPTED" else "NONE",
+                    category,
+                    exit_status,
+                    killed,
+                    durations,
+                )
+            )
         if not reaped or cleanup > CLEANUP_SECONDS:
             # No late success, hidden background reaper, or automatic restart.
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")

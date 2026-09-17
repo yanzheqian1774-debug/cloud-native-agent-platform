@@ -980,7 +980,13 @@ def test_worker_exits_on_parent_channel_loss_during_https_body(kimi_mock):
                 _resolver(config).resolve(_profile(), "parent-loss"),
             )
         )
-        assert b'"connected": true' in parent.recv(256)
+        received = bytearray()
+        until = time.monotonic() + 1.5
+        while b'"connected": true' not in received and time.monotonic() < until:
+            chunk = parent.recv(256)
+            assert chunk
+            received.extend(chunk)
+        assert b'"connected": true' in received
         parent.close()  # EOF fault injection, equivalent to loss of parent endpoint.
         process.join(1)
         assert not process.is_alive()
@@ -1084,6 +1090,7 @@ def test_cleanup_failure_never_returns_worker_success(kimi_mock, monkeypatch):
         )
     assert transport.last_deadline_metrics.reason == "CLEANUP_FAILURE"
     assert not transport.last_deadline_metrics.reaped
+    assert transport.last_deadline_metrics.worker_exit_status == "UNKNOWN"
     with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
         transport.dispatch(
             invocation_id="cleanup-again",
@@ -1125,3 +1132,66 @@ def test_supervised_transport_runs_from_backend_thread(kimi_mock):
     assert transport.last_deadline_metrics.reaped
     assert transport.last_deadline_metrics.cleanup_seconds <= 1
     assert transport.last_deadline_metrics.decision_seconds < 5
+
+
+@pytest.mark.parametrize(
+    "fault,stage,category",
+    [
+        ("headers", "WAIT_HEADERS", "TIMEOUT"),
+        ("body", "READ_BODY", "TIMEOUT"),
+        ("disconnect", "WAIT_HEADERS", "REMOTE_DISCONNECT"),
+    ],
+)
+def test_safe_worker_diagnostics_survive_parent_mapping(
+    kimi_mock, fault, stage, category
+):
+    from dataclasses import asdict
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=3,
+        read_timeout_seconds=1,
+        total_timeout_seconds=5,
+    )
+    if fault == "headers":
+        _KimiHandler.delay_seconds = 1.5
+    elif fault == "body":
+        _KimiHandler.response = {"sentinel": "PRIVATE_RESPONSE_SENTINEL" * 50}
+        _KimiHandler.chunks = 2
+        _KimiHandler.chunk_delay = 1.5
+    else:
+        _KimiHandler.disconnect = True
+    transport = KimiResponsesDraftTransport(config)
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        transport.dispatch(
+            invocation_id="safe-diagnostics",
+            request=transport.prepare(
+                invocation_id="safe-diagnostics",
+                content="PRIVATE_REQUEST_SENTINEL",
+                profile=_profile(),
+            ),
+            credential=_resolver(config).resolve(_profile(), "safe-diagnostics"),
+            profile=_profile(),
+        )
+    metrics = transport.last_deadline_metrics
+    assert metrics.failure_stage == stage
+    assert metrics.exception_category == category
+    assert metrics.reason == "WORKER_ERROR"
+    assert metrics.reaped
+    assert isinstance(metrics.worker_exit_status, int)
+    assert metrics.stage_seconds[stage] >= 0
+    assert transport.dispatch_count == len(_KimiHandler.requests) == 1
+    serialized = json.dumps(asdict(metrics))
+    assert "PRIVATE_" not in serialized
+    assert "Bearer" not in serialized
+
+
+def test_exception_categories_never_include_exception_text():
+    from agent_console.kimi_deadline import exception_category
+
+    class SecretException(Exception):
+        pass
+
+    assert exception_category(SecretException("PRIVATE_SECRET")) == "UNEXPECTED"
+    assert exception_category(TimeoutError("PRIVATE_SECRET")) == "TIMEOUT"
