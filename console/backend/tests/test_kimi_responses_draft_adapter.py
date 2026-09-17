@@ -44,6 +44,8 @@ class _KimiHandler(BaseHTTPRequestHandler):
     delay_seconds = 0.0
     chunk_delay = 0.0
     chunks = 1
+    raw_response = None
+    request_id = "req_kimi_mock_320"
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers["content-length"]))
@@ -60,11 +62,16 @@ class _KimiHandler(BaseHTTPRequestHandler):
             return
         if type(self).delay_seconds:
             time.sleep(type(self).delay_seconds)
-        payload = json.dumps(type(self).response).encode()
+        payload = (
+            type(self).raw_response
+            if type(self).raw_response is not None
+            else json.dumps(type(self).response).encode()
+        )
         self.send_response(type(self).status)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(payload)))
-        self.send_header("x-request-id", "req_kimi_mock_320")
+        if type(self).request_id is not None:
+            self.send_header("x-request-id", type(self).request_id)
         if 300 <= type(self).status < 400:
             self.send_header("location", "https://redirect.invalid/v1/responses")
         self.end_headers()
@@ -116,6 +123,8 @@ def kimi_mock(tmp_path):
     _KimiHandler.delay_seconds = 0.0
     _KimiHandler.chunk_delay = 0.0
     _KimiHandler.chunks = 1
+    _KimiHandler.raw_response = None
+    _KimiHandler.request_id = "req_kimi_mock_320"
     server = ThreadingHTTPServer(("127.0.0.1", 0), _KimiHandler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
@@ -1125,3 +1134,51 @@ def test_supervised_transport_runs_from_backend_thread(kimi_mock):
     assert transport.last_deadline_metrics.reaped
     assert transport.last_deadline_metrics.cleanup_seconds <= 1
     assert transport.last_deadline_metrics.decision_seconds < 5
+
+
+@pytest.mark.parametrize("invalid_body", [False, True])
+def test_non2xx_safe_diagnostic_crosses_worker_without_extra_dispatch(
+    kimi_mock, invalid_body
+):
+    server, cert, directory = kimi_mock
+    configuration = _configuration(server, cert, _credential_file(directory))
+    transport = KimiResponsesDraftTransport(configuration)
+    profile = _profile()
+    credential = _resolver(configuration).resolve(profile, "diagnostic-once")
+    _KimiHandler.status = 429
+    _KimiHandler.response = {
+        "error": {
+            "type": "engine_overloaded_error",
+            "message": "The engine is currently overloaded, please try again later",
+        }
+    }
+    if invalid_body:
+        _KimiHandler.raw_response = b"<html>unknown private server text</html>"
+        _KimiHandler.request_id = None
+    request = transport.prepare(
+        invocation_id="diagnostic-once", content="Synthetic", profile=profile
+    )
+    result = transport.dispatch(
+        invocation_id="diagnostic-once",
+        request=request,
+        credential=credential,
+        profile=profile,
+    )
+    assert result.reason_code == "PROVIDER_RATE_LIMITED"
+    assert len(_KimiHandler.requests) == transport.dispatch_count == 1
+    assert transport.last_deadline_metrics.reaped
+    diagnostic = transport.last_http_diagnostic
+    assert diagnostic["http_status"] == 429
+    if invalid_body:
+        assert diagnostic["parse_failed"]
+        assert diagnostic["provider_request_id"]["missing"]
+        assert diagnostic["provider_request_id_header"] is None
+        assert diagnostic["error"]["type"]["missing"]
+        assert result.correlation == "http-429-diagnostic-once"
+        assert "unknown private server text" not in json.dumps(diagnostic)
+    else:
+        assert diagnostic["error"]["type"]["value"] == "engine_overloaded_error"
+        assert diagnostic["provider_request_id_header"] == "x-request-id"
+    assert diagnostic["retry_after"]["missing"]
+    assert diagnostic["error"]["code"]["missing"]
+    assert "fake-kimi-provider-key-320" not in json.dumps(diagnostic)
