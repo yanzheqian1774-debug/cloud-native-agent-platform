@@ -10,6 +10,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { ConsoleShell } from "./components/ConsoleShell";
 import { WorkflowDetailPage } from "./pages/WorkflowDetailPage";
@@ -55,14 +56,18 @@ function EvidencePage() {
   const location=useLocation(),navigate=useNavigate(),parsed=parseUrlContext(location.search);
   const context=parsed.state==="VALID"?parsed.context:{};
   const [traceability,setTraceability]=useState<TraceabilityDTO|null>(null),[traceabilityError,setTraceabilityError]=useState<ProductAssemblyError|null>(null),[retry,setRetry]=useState(0);
+  const [closing,setClosing]=useState(false);
   useEffect(()=>{if(!context.kind||!context.resourceId||!context.revisionId||!context.digest)return;let active=true;getProductTraceability(context.kind,context.resourceId,context.revisionId,context.digest).then(value=>{if(active){setTraceability(value);setTraceabilityError(null)}}).catch(value=>active&&setTraceabilityError(value));return()=>{active=false}},[context.kind,context.resourceId,context.revisionId,context.digest,retry]);
   if(!location.search)return <EvidenceCenterPage/>;
   if(parsed.state==="INVALID"||!parsed.context.resourceId)return <main className="assembly-page"><ControlledState kind="not-found" title="Evidence 上下文不可用" detail="URL 中的资源身份无效或当前不受支持。"/></main>;
   const close=()=>{
     const focusId=parsed.context.claimKey?`claim-${parsed.context.claimKey}`:parsed.context.factKey?`fact-${parsed.context.factKey}`:"";
     const destination=parsed.context.claimKey?`/product-view?${location.search.slice(1)}`:parsed.context.factKey?`/technical-view?${location.search.slice(1)}`:parsed.context.returnTo&&parsed.context.returnTo.startsWith("/")?parsed.context.returnTo:"/catalog";
-    navigate(destination);
     cancelPendingEvidenceFocus?.();
+    // Finish removing the inspector before another key can target its old DOM.
+    // Delayed projection focus below still yields to subsequent user input.
+    flushSync(()=>setClosing(true));
+    navigate(destination,{state:focusId?{evidenceFocusReturn:true}:null});
     if(!focusId)return;
     const expectedUrl=new URL(destination,window.location.href);let observer:MutationObserver|null=null,timeoutId=0,frameId=0,stopped=false;
     const cleanup=()=>{if(stopped)return;stopped=true;observer?.disconnect();window.clearTimeout(timeoutId);window.cancelAnimationFrame(frameId);document.removeEventListener("pointerdown",cleanup,true);document.removeEventListener("keydown",cleanup,true);if(cancelPendingEvidenceFocus===cleanup)cancelPendingEvidenceFocus=null};
@@ -74,6 +79,7 @@ function EvidencePage() {
     document.addEventListener("pointerdown",cleanup,true);document.addEventListener("keydown",cleanup,true);
     timeoutId=window.setTimeout(cleanup,5_000);frameId=window.requestAnimationFrame(monitorRoute);focusTarget();
   };
+  if(closing)return null;
   return <EvidenceInspector context={parsed.context} onClose={close} data={traceability} error={traceabilityError} retry={()=>setRetry(value=>value+1)}/>;
 }
 
