@@ -487,3 +487,33 @@ Human 已明确授权原 323 增量一产品实现、独立环境迁移、验证
 唯一Draft PR：[183](https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/pull/183)，base main。父PR状态未改。提交后使用该source重启专属服务，HTTPS只读/确认重放/资源刷新与副作用检查再次PASS，2条controlled调用的Use/Evidence关联不变。随后停止验收server，保留PG、runtime和全部数据；重启命令见测试启动器。最终截图/构建摘要/source/tree在既有验收目录 `capture-manifest.json`，没有将凭据或私钥入库。
 
 本条及Registry状态是交付登记增量，不改变上述实现候选。登记时12项远端CI正在运行，终态以PR exact head checks为准；不把pending写为通过。本Session停在Human接受与合并前，仍OPEN。
+
+### 10.9 PC视觉统一实施授权与计划（2026-09-17）
+
+Human已授权在原323、原分支及唯一Draft PR #183继续视觉实施，替代10.3的“未授权”状态。功能检查点2b8e66f350ac91be83f8c8ac4263692a1d17ce07/tree b7ef029e188c7eef96eabadf84519c3ef57e4766及原review证据保留。当前恢复载体为唯一323 writer；321 idle、322 notLoaded，均不操作其环境或共享文件。原b923工作树干净，无其他323实施writer。
+
+有界G1计划：先用既有323合成采购案例完成目标/计划同屏及实际PC截图，展示后继续推广；提取共享页头/步骤/卡片/时间格式与局部视觉tokens，覆盖问题提出、补问、纠正、确认创建、正式读回、规划补问、三阶段五任务、资源缺口、计划确认和历史。导航仅调整呈现，路由保持可达；业务名称从已有任务/资源语义派生，未知项明确标识，不改持久化数据。技术ID/digest进入展开详情，测试来源保持显式。
+
+边界：只修改frontend展示与针对性测试；保留授权、请求key、UNKNOWN、身份切换/迟到响应和焦点防护。无模型链路/后端存储/执行/资源生产能力变更。102/103/112及原整套效果图为目标，322截图只作回归参考。代表页在1500×1050检查同屏，1366×768检查滚动/可达性；输入、折叠、确认及历史以浏览器交互回归和323独立controlled-provider环境验证，不使用321诊断环境或真实模型。
+
+门禁：frontend lint/build，问题理解/确认/身份保护及规划针对性Playwright回归，make check，正常提交hooks；新提交推送后记录exact source/tree、截图hash、12项CI实际checkout身份。历史验证不冒充新结果。保持Draft，等待Human视觉验收，不Ready/merge/部署/关闭Session。
+
+### 10.10 PC视觉统一交付（2026-09-18）
+
+按10.9授权完成前端呈现：问题提出/补问/纠正/确认创建/正式读回与规划入口使用同一蓝白外框、标题、步骤条、卡片、按钮和右侧摘要。PC次级导航折叠分组，既有全部路由保留；视觉shell精确限定 `/work` 与其子路由，不影响 `/workflow-definitions`。身份读取、焦点、异步恢复、授权/幂等/UNKNOWN与确认函数未修改。
+
+规划默认展示三阶段五任务的职责、数字员工、资源摘要；展开显示Skill/MCP用途和状态，依赖使用任务名称，A类产物标识映射为生产任务的业务结果名称，原标识保留在详情。资源按kind分组，统计为已匹配+必要缺口+可选未匹配的完整分解，匹配不冒充执行就绪。批准、精确资源修订和digest折叠；程序生成的时间统一北京时间中文显示，业务原文不改写。1500×1050默认目标/任务/确认同屏，1366×768实际滚动可达；移动端保留摘要抽屉、焦点与原文读回。
+
+可选构建参数 `VITE_ACCEPTANCE_LABEL` 仅显示测试来源文字，不选择provider或改变API。验收构建显式标记323合成采购案例；未设置时不显示测试条。前段截图为UI_API_FIXTURE，覆盖合成补问、自然纠正、一次确认和授权后读回；不冒充模型质量或真实Problem持久化新旅程。规划部分继续复用323原真实HTTPS/PG记录：历史补问、同一建议修订和确认关联。确认按钮单次写入由UI fixture验证；真实后端确认重放、CSRF、owner、历史及副作用由独立HTTPS检查验证，不制造第二套正式业务数据。无真实模型调用、无321诊断环境操作。
+
+新验证（旧2b8e66f检查点结果未计入）：
+
+- frontend lint与TypeScript/Vite build通过，保留原bundle >500kB提示。
+- 问题理解/视觉/规划交互：39 passed（25.2s）。包含原34项回归及5项323同案例、两PC尺寸、历史/UNKNOWN、导航边界检查。
+- W2A/W3及Evidence焦点：21 passed（23.8s）。按已授权的技术详情折叠更新测试，增加“默认隐藏→显式展开→原值可读”断言，保留精确授权/迟到响应/滚动/焦点/移动端检查。部分原mock criteria请求仍记录8000代理未运行，断言通过，不计真实后端证据。
+- `PLANNING323_TEST_DATABASE_URL=.../planning323 make check`：1917 passed / 201 skipped / 1 warning（88.25s），skips为未配置的其他外部环境；323专属PG属于本地证据。
+- 真实HTTPS确认重放/CSRF/owner/history PASS；业务与执行计数不变，原2条受控调用关联Use/Evidence，无新增模型调用。
+
+同案例改造前对照从旧固定source的只读archive构建，未新建分支/worktree/Session；index.html、icons.svg、favicon.svg、JS/CSS五个构建文件逐一与原manifest SHA-256相同。旧源/树、review六图及manifest保留。新UI fixture截图与真实PG截图分别记录，参考101/102/103/112为目标，322仅回归。资产目录仍为原验收根下 `visual/`，其中对照入口 `index.html`、新候选身份/截图/build哈希 `visual-capture-manifest.json`、CI回执和checkout审计跟随本次推送登记，不回填到旧通过记录。
+
+本次是原323视觉增量，唯一PR仍#183 Draft；正常hooks提交后非force推送，最终source/tree及CI实际checkout以既有PR和外部manifest为准。无D3执行、资源生产、Ready/merge/部署/关闭。完成实施和工程验证后返回Human视觉验收，不自行宣称Human已接受。
