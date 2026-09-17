@@ -236,3 +236,21 @@ No DB reset or duplicate Problem; local PG counts remain 1 Problem/1 revision,
 operation. Historical first-CI cause stays UNKNOWN; the local scroll/removal
 defect is confirmed. Engineering delivery does not close this Session or the
 Q01–Q16 real-model quality gate, which remains NOT_MEASURED.
+
+## 2026-09-17 固定候选体验审阅 / 真实质量准备检查点
+
+继续原321，审阅固定4001b412/846e7b55，复用12/12 CI。仅在原VALIDATION和
+REAL-QUALITY-GATE原位补充：完整七步浏览器fixture展示、原真实后端fixture唯一对象证据、
+Q01–Q16成对NOT_MEASURED记录、精确v1/v2策略与上下文差异、凭据元数据、56次/USD8预算
+及2026-09-17 14:30—22:30 +08窗口提案。均未启动真实调用或接线，不延续旧窗口/额度。
+没有新工程修复，不改产品实现、固定候选、PR或Session；本轮文档记录未提交。
+
+原“319质量与体验遗留接收”仍有效，承接改进不等于历史输出PASS；179/180集成与
+319资产不在321范围。下一步由Human一次明确本次模型参数/预算/绝对窗口，然后核验
+新精确治理对象与current grants再执行原16例；未执行项继续NOT_MEASURED。
+
+
+补充：最终截图审阅发现NEEDS_CLARIFICATION被标成“草稿已生成”的明确状态文案缺陷。
+按本轮Human已授权范围修复DraftAssistanceCard结果状态与说明，增加两个纯fixture浏览器
+回归；不改Prompt、上下文、模型参数或正式对象。前段“无新工程修复/固定候选不变”仅为
+初始检查点，现被本段覆盖。生成后继候选须单独报告source/tree和CI，4001b412不冒充新结果。

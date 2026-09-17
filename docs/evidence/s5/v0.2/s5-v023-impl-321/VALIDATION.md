@@ -262,3 +262,69 @@ by evidence beyond its measured deadline phase. Real-model Q01–Q16 baseline an
 candidate quality remain NOT_MEASURED, including fact/time/comparison fidelity,
 repeated-question/omission rates and manual-edit reduction. Separate authorization
 is still required for evaluation. No Ready, merge, deployment or Session closure.
+
+## Fixed-candidate experience review and quality preflight — 2026-09-17
+
+Current reviewer: 01a0addd-ab41-7063-982e-9cd8108b26ee, continuing 321. Prior
+321 writers are idle/notLoaded; original branch was clean at fixed source
+4001b412340398ea42d813efd7f7f5f2cf9bf01d, tree
+846e7b5536ebd68d2e12d31d907d0e32a6195a70. No product change or new engineering
+recovery/test-suite rerun. Existing 12/12 CI evidence is reused for that source.
+
+[Seven-step visual walkthrough](/Users/tristan/.codex/visualizations/2026/09/17/01a0addd-ab41-7063-982e-9cd8108b26ee/321-experience-review/index.html)
+adds the missing clarification presentation: input → fixture clarification →
+answer/understanding → pending correction disables confirmation → corrected
+card → fixture creation → independent fixture READ/refresh. Three simulated
+assistance requests, one simulated creation command, zero provider calls and
+zero database writes. Uses the existing 321 served dist, not a fresh build;
+asset hashes, script and receipt are preserved beside the gallery. Screenshots
+are browser captures, not generated mockups. This is explicitly a browser-route
+fixture and not a new real-backend or model-quality acceptance run.
+
+The fixture's simple understanding generator puts the full text in goal and marks
+other fields unknown. Its redundant unknown labels are fixture behavior, not
+proof that the real model extracted scope/constraints correctly. Preset responses
+cannot prove no repeated questions or factual fidelity. No semantic scores assigned.
+
+Real backend evidence is reused unchanged: existing real-understanding.png,
+real-readback-criteria-independent.png and receipt.json; local HTTPS provider was
+a deterministic fixture. Existing sole Problem 14019ced-cc5f-5da2-bda5-c4a12358cec6,
+revision1, independent exact READ and refresh. No new CREATE or DB mutation.
+Prior B01–B08/28 mock cases and real HTTPS2 cases support revision fencing,
+no forced full edit, one confirmation, IME/held Enter, independent disclosure;
+prior final W2A/W3 evidence supports scroll313→313 through exact READ. These
+historical checks were not rerun. Reload recovers identity/content; it does not
+establish arbitrary scroll-position persistence across every full-page reload.
+
+Review recommendation: bounded engineering/fixture interaction acceptance is
+supported, with original service/provider/CI limitations retained. Real model
+fidelity, duplicate-question reduction, omission/manual-edit reduction and
+regressions remain NOT_MEASURED for all Q01–Q16. Initial observation was superseded by the clarification-label defect below. Do not grant semantic
+quality acceptance or Ready/merge from fixture results.
+
+The existing REAL-QUALITY-GATE.md now contains the concrete parameter table,
+credential metadata, immutable policy identities, fair baseline behavior, proposed
+56-call/USD8 cap and absolute 8-hour window. quality-comparison-preflight.json
+holds 16 paired result rows, all metrics null. No credentials materialized,
+real evaluation governance registration, ledger creation or provider dispatch.
+The initial documentation-only review was followed by the bounded repair below;
+the successor must receive its own source/tree and checks.
+
+### Clarification result label repair
+
+Visual inspection of 02-clarification.png found a confirmed product defect:
+SUCCEEDED/NEEDS_CLARIFICATION displayed “草稿已生成”; the real-channel note also
+claimed a draft existed. Original screenshot remains in the review gallery.
+DraftAssistanceCard now derives the badge, provider note and rejection label from
+resultKind, so a successful clarification is not presented as a ready draft.
+No request, output schema, policy, authorization or creation behavior changes.
+Two browser regressions cover SYNTHETIC and REAL_PROVIDER projections using routed
+fixtures, assert no generated-draft claim or confirmation button, and preserve
+all prior 28 interaction cases. Real provider dispatch remains zero.
+
+The first edit command used an incorrect working-directory-relative path and
+failed before writing. Its trailing browser command ran the old28 suite (28 passed)
+and is not repair evidence. The subsequent correct edit and fresh30 suite are
+tracked separately; no tests/limits were weakened.
+
+Repair validation: make check exit0, 1853 passed/200 existing environment skips/1 warning; frontend lint exit0; Playwright config performed production build and all30 interaction cases passed, retries0. Logs: /tmp/s5-321-review-make-check.log, /tmp/s5-321-review-lint.log, /tmp/s5-321-review-label-final.log. Corrected seven-step screenshots are in the same gallery corrected/ directory; original screenshots retained. No real model or database creation. Normal commit and successor CI are the next gate.

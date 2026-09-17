@@ -138,3 +138,17 @@ test('B03 manual fallback cannot silently discard an unsent correction',async({p
  const assistance=page.getByLabel('AI 问题理解与草稿辅助');await assistance.locator(':scope > summary').click();await assistance.getByRole('button',{name:'切换为手工草稿',exact:true}).click();
  await expect(page.locator('#problem-composer')).toHaveValue('只看B供应商');await expect(confirm(page)).toBeDisabled();await expect(page.getByText('当前输入尚未采用；请先发送修改，或清空输入后明确选择手工草稿并编辑。',{exact:true})).toBeVisible();expect(state.writes).toHaveLength(0);
 });
+
+for(const transport of ['SYNTHETIC','REAL_PROVIDER'])test(`clarification is not labelled as a generated draft (${transport})`,async({page})=>{
+ await setup(page);
+ await page.route('**/draft-assistance/invocations',async route=>{await route.fulfill({json:{result:{contextId:'context:321',turnId:'turn:1',turnVersion:1,invocationId:'inv:1',state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',transport,draft:null,clarificationQuestion:'希望达到什么目标？',contentDisposition:'CONTENT_NOT_RETAINED'}}});});
+ await send(page,'供应商质量不好');
+ const card=page.getByLabel('AI 问题理解与草稿辅助');
+ await expect(card.getByRole('heading',{name:'需要补充信息',exact:true})).toBeVisible();
+ await expect(card.locator('.px-status')).toHaveText('等待补充信息');
+ await expect(card).not.toContainText('草稿已生成');
+ await expect(card).not.toContainText('本次草稿来自');
+ await expect(card.getByRole('button',{name:'拒绝本次辅助',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'确认创建',exact:true})).toHaveCount(0);
+ if(transport==='REAL_PROVIDER')await expect(card).toContainText('尚未生成可确认草稿');
+});
