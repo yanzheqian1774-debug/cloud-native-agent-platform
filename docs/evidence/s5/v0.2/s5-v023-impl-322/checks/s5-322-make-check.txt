@@ -1,0 +1,412 @@
+uv run ruff check .
+Using CPython 3.12.13
+Creating virtual environment at: .venv
+Installed 60 packages in 574ms
+All checks passed!
+uv run ruff format --check .
+463 files already formatted
+uv run pytest
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform
+configfile: pyproject.toml
+testpaths: core/tests, tests, gateway/tests, operator/tests, runtime/tests, workflow/tests, console/backend/tests, experiments/s5-spike-005-runtime-target-manifest/tests, experiments/s5-spike-007-capability-rest-fixtures/tests
+plugins: cov-7.1.0, anyio-4.14.2
+collected 2053 items
+
+core/tests/test_compatibility.py ..                                      [  0%]
+core/tests/test_domain.py ....................                           [  1%]
+core/tests/test_execution_contract.py .............................      [  2%]
+core/tests/test_execution_evidence.py ............                       [  3%]
+core/tests/test_execution_repository_contract.py ..                      [  3%]
+core/tests/test_interface_spine.py .....................                 [  4%]
+core/tests/test_postgres_evidence_repository.py sss                      [  4%]
+core/tests/test_repository.py .........                                  [  4%]
+core/tests/test_serialization.py ............                            [  5%]
+core/tests/test_sqlite_evidence_repository.py .........                  [  5%]
+tests/acceptance/openclaw/test_openclaw_provider_acceptance.py .         [  5%]
+tests/conformance_harness/test_adapters.py ..                            [  5%]
+tests/conformance_harness/test_fixtures.py ...............               [  6%]
+tests/conformance_harness/test_manifest.py ..................            [  7%]
+tests/conformance_harness/test_runner.py ..................              [  8%]
+tests/conformance_harness/test_targets.py ....                           [  8%]
+tests/test_project_setup.py ...                                          [  8%]
+tests/test_s5_impl_010_product_view.py ................................. [ 10%]
+.....                                                                    [ 10%]
+tests/test_s5_impl_011_technical_view.py ..............................  [ 12%]
+tests/test_s5_impl_036_supplier_quality_scenario_pack.py ...........     [ 12%]
+tests/test_s5_impl_037_package_7_live_integration.py ..                  [ 12%]
+tests/test_s5_impl_072_isolated_browser_harness.py ..................... [ 13%]
+........................................................................ [ 17%]
+...................................................................      [ 20%]
+tests/test_s5_impl_078_release_runner.py ............................... [ 22%]
+...................s.....................                                [ 24%]
+tests/test_s5_impl_092_producer_reporter_parser.py ......                [ 24%]
+tests/test_s5_impl_092_release_contract_v2.py .......................... [ 25%]
+...                                                                      [ 25%]
+tests/test_s5_impl_095_continuity_monitor.py .................           [ 26%]
+tests/test_s5_spike_008_prototype.py ................................    [ 28%]
+tests/test_s5_test_007_enhanced_golden_demo_acceptance.py .....          [ 28%]
+tests/test_task_crd.py .....                                             [ 28%]
+tests/test_workflow_crd.py ............                                  [ 29%]
+gateway/tests/test_capability_gateway.py ............................... [ 30%]
+..........................                                               [ 31%]
+operator/tests/test_compatibility_interpreter.py ....................... [ 33%]
+..........                                                               [ 33%]
+operator/tests/test_errors.py .....                                      [ 33%]
+operator/tests/test_execution_coordinator.py ....................        [ 34%]
+operator/tests/test_identity_adapter.py ......                           [ 35%]
+operator/tests/test_native_dispatch_reconciler.py ......                 [ 35%]
+operator/tests/test_native_runtime_adapter.py ..                         [ 35%]
+operator/tests/test_openclaw_runtime_adapter.py ....                     [ 35%]
+operator/tests/test_openclaw_runtime_driver.py ..                        [ 35%]
+operator/tests/test_operator.py ....                                     [ 35%]
+operator/tests/test_resources.py .......                                 [ 36%]
+operator/tests/test_retry.py ............                                [ 36%]
+operator/tests/test_runtime_identity_translation.py ..                   [ 36%]
+operator/tests/test_runtime_kubernetes_observer.py ...                   [ 37%]
+operator/tests/test_runtime_manager.py .......                           [ 37%]
+operator/tests/test_runtime_provider_factory.py ...                      [ 37%]
+operator/tests/test_task_controller.py ..............................    [ 39%]
+operator/tests/test_workflow_controller.py ............................. [ 40%]
+................                                                         [ 41%]
+operator/tests/test_workflow_graph.py ..........................         [ 42%]
+runtime/tests/openclaw/test_compatibility.py ..                          [ 42%]
+runtime/tests/openclaw/test_provider.py .........                        [ 43%]
+runtime/tests/test_native_provider_compatibility.py ....                 [ 43%]
+runtime/tests/test_native_runtime_manager.py ...                         [ 43%]
+runtime/tests/test_native_runtime_provider.py .......................... [ 44%]
+.................................                                        [ 46%]
+runtime/tests/test_providers.py ......                                   [ 46%]
+runtime/tests/test_runtime.py ......                                     [ 46%]
+console/backend/tests/test_agent_binding_validation.py .....             [ 47%]
+console/backend/tests/test_agent_definition_api.py ..                    [ 47%]
+console/backend/tests/test_agent_definition_postgres.py ss               [ 47%]
+console/backend/tests/test_agent_definition_repository.py .              [ 47%]
+console/backend/tests/test_agent_definition_restart_recovery.py s        [ 47%]
+console/backend/tests/test_agent_definition_service.py ....              [ 47%]
+console/backend/tests/test_app.py .....                                  [ 47%]
+console/backend/tests/test_authoring.py ................                 [ 48%]
+console/backend/tests/test_authority_configuration.py .......            [ 48%]
+console/backend/tests/test_authority_foundation_postgres.py ssssssssssss [ 49%]
+s                                                                        [ 49%]
+console/backend/tests/test_authority_recovery.py ......                  [ 49%]
+console/backend/tests/test_blueprint_authority.py .............          [ 50%]
+console/backend/tests/test_browser_session_application.py ..             [ 50%]
+console/backend/tests/test_business_problem_api_postgres.py ssss         [ 50%]
+console/backend/tests/test_business_problem_continuation.py .......      [ 51%]
+console/backend/tests/test_business_problem_domain.py ............       [ 51%]
+console/backend/tests/test_business_problem_entry_foundation.py ........ [ 52%]
+...s.                                                                    [ 52%]
+console/backend/tests/test_business_problem_postgres.py sss              [ 52%]
+console/backend/tests/test_definition_authority.py ..................... [ 53%]
+.                                                                        [ 53%]
+console/backend/tests/test_digital_employee_api.py ...                   [ 53%]
+console/backend/tests/test_digital_employee_api_postgres.py ss           [ 53%]
+console/backend/tests/test_digital_employee_application.py ........      [ 54%]
+console/backend/tests/test_digital_employee_definition.py .............. [ 54%]
+                                                                         [ 54%]
+console/backend/tests/test_digital_employee_definition_postgres.py sss   [ 55%]
+console/backend/tests/test_digital_employee_postgres.py s                [ 55%]
+console/backend/tests/test_draft_assistance.py ...................       [ 56%]
+console/backend/tests/test_draft_assistance_policy.py .................. [ 56%]
+..............                                                           [ 57%]
+console/backend/tests/test_draft_assistance_postgres.py ss               [ 57%]
+console/backend/tests/test_draft_provider_budget_postgres.py sssss       [ 57%]
+console/backend/tests/test_employee_identity_chain_postgres.py sssssssss [ 58%]
+ssssssss                                                                 [ 58%]
+console/backend/tests/test_execution_accounting.py ...................   [ 59%]
+console/backend/tests/test_execution_application.py ...........          [ 60%]
+console/backend/tests/test_execution_application_postgres.py ss          [ 60%]
+console/backend/tests/test_execution_evidence_cutover.py ...s            [ 60%]
+console/backend/tests/test_execution_evidence_import.py ...s             [ 60%]
+console/backend/tests/test_execution_evidence_security.py ....           [ 60%]
+console/backend/tests/test_execution_postgres.py ssss                    [ 61%]
+console/backend/tests/test_execution_restart_recovery.py .               [ 61%]
+console/backend/tests/test_execution_snapshot.py ...........             [ 61%]
+console/backend/tests/test_governed_execution_api_postgres.py ssssssssss [ 62%]
+sssssss                                                                  [ 62%]
+console/backend/tests/test_governed_execution_authorization.py ......    [ 62%]
+console/backend/tests/test_graph_projection.py ......................... [ 64%]
+....                                                                     [ 64%]
+console/backend/tests/test_intervention_feedback.py ................     [ 64%]
+console/backend/tests/test_intervention_feedback_api.py ..........       [ 65%]
+console/backend/tests/test_kimi_responses_budget_postgres.py sssssss     [ 65%]
+console/backend/tests/test_kimi_responses_draft_adapter.py ............. [ 66%]
+..............................                                           [ 67%]
+console/backend/tests/test_knowledge_api.py ..                           [ 67%]
+console/backend/tests/test_knowledge_attempt_integration.py s            [ 68%]
+console/backend/tests/test_knowledge_attempt_retrieval.py .......        [ 68%]
+console/backend/tests/test_knowledge_authorization_security.py ......... [ 68%]
+......                                                                   [ 69%]
+console/backend/tests/test_knowledge_evidence_and_citations.py .....     [ 69%]
+console/backend/tests/test_knowledge_ingestion.py ..                     [ 69%]
+console/backend/tests/test_knowledge_lifecycle_service.py ...            [ 69%]
+console/backend/tests/test_knowledge_pack_contract.py ......             [ 69%]
+console/backend/tests/test_knowledge_postgres.py sss                     [ 70%]
+console/backend/tests/test_knowledge_purge_recovery.py .                 [ 70%]
+console/backend/tests/test_knowledge_qdrant.py .s                        [ 70%]
+console/backend/tests/test_knowledge_quality_operations.py .....         [ 70%]
+console/backend/tests/test_knowledge_rebuild.py .                        [ 70%]
+console/backend/tests/test_knowledge_repository.py .                     [ 70%]
+console/backend/tests/test_knowledge_resource_use_integration.py sss     [ 70%]
+console/backend/tests/test_knowledge_restart_recovery.py .               [ 70%]
+console/backend/tests/test_knowledge_retrieval_contract.py .........     [ 71%]
+console/backend/tests/test_knowledge_retrieval_disclosure.py ...         [ 71%]
+console/backend/tests/test_live_journey.py ...........                   [ 71%]
+console/backend/tests/test_live_journey_api.py ....                      [ 72%]
+console/backend/tests/test_live_journey_stream.py ...........            [ 72%]
+console/backend/tests/test_live_journey_stream_api.py ..                 [ 72%]
+console/backend/tests/test_matching.py ...............                   [ 73%]
+console/backend/tests/test_model_authorization_postgres.py s             [ 73%]
+console/backend/tests/test_model_binding_resolution.py ................. [ 74%]
+..                                                                       [ 74%]
+console/backend/tests/test_model_governance.py ......................... [ 75%]
+...                                                                      [ 75%]
+console/backend/tests/test_model_governance_authorization.py ........... [ 76%]
+                                                                         [ 76%]
+console/backend/tests/test_model_governance_postgres.py ssss             [ 76%]
+console/backend/tests/test_native_dispatch_application.py sssssssssssss  [ 77%]
+console/backend/tests/test_openai_responses_draft_adapter.py ........... [ 77%]
+..                                                                       [ 77%]
+console/backend/tests/test_persistence_bootstrap.py ....                 [ 77%]
+console/backend/tests/test_planning.py ........................          [ 79%]
+console/backend/tests/test_planning_generator.py ...                     [ 79%]
+console/backend/tests/test_postgres_schema_compatibility.py .....        [ 79%]
+console/backend/tests/test_preview_api.py ....                           [ 79%]
+console/backend/tests/test_problem_model_providers.py .................. [ 80%]
+....................                                                     [ 81%]
+console/backend/tests/test_problem_planning_v021.py ..............       [ 82%]
+console/backend/tests/test_product_evidence_service.py .....             [ 82%]
+console/backend/tests/test_projection.py ........                        [ 82%]
+console/backend/tests/test_question_to_outcome_demo.py .......           [ 83%]
+console/backend/tests/test_repository.py ...                             [ 83%]
+console/backend/tests/test_resource_use_domain.py ......                 [ 83%]
+console/backend/tests/test_resource_use_postgres.py s                    [ 83%]
+console/backend/tests/test_restart_schema_compatibility_postgres.py ssss [ 83%]
+sssssss                                                                  [ 84%]
+console/backend/tests/test_runtime_placement.py ........................ [ 85%]
+.........                                                                [ 85%]
+console/backend/tests/test_runtime_profile_api.py ..                     [ 85%]
+console/backend/tests/test_runtime_profile_postgres.py s                 [ 85%]
+console/backend/tests/test_runtime_profile_repository.py .               [ 86%]
+console/backend/tests/test_runtime_profile_restart_recovery.py s         [ 86%]
+console/backend/tests/test_runtime_profile_service.py ......             [ 86%]
+console/backend/tests/test_s5_v023_impl_310_startup_status.py .....      [ 86%]
+console/backend/tests/test_schemas.py .....                              [ 86%]
+console/backend/tests/test_service.py ...                                [ 86%]
+console/backend/tests/test_shared_views.py ...................           [ 87%]
+console/backend/tests/test_skill_invocation_domain.py ..                 [ 88%]
+console/backend/tests/test_skill_invocation_postgres.py ssssssssssssssss [ 88%]
+                                                                         [ 88%]
+console/backend/tests/test_skill_mcp_api.py .                            [ 88%]
+console/backend/tests/test_skill_mcp_invocation.py .                     [ 88%]
+console/backend/tests/test_skill_mcp_postgres.py .s                      [ 88%]
+console/backend/tests/test_skill_mcp_professional_experience.py .        [ 89%]
+console/backend/tests/test_skill_mcp_repository.py .                     [ 89%]
+console/backend/tests/test_skill_mcp_restart_recovery.py .               [ 89%]
+console/backend/tests/test_skill_mcp_service.py ..                       [ 89%]
+console/backend/tests/test_skill_operation_schema.py ..                  [ 89%]
+console/backend/tests/test_solution_blueprint.py .......                 [ 89%]
+console/backend/tests/test_supplier_quality_demo.py .......              [ 90%]
+console/backend/tests/test_supplier_quality_demo_api.py ...              [ 90%]
+console/backend/tests/test_unified_product_assembly.py ......            [ 90%]
+console/backend/tests/test_workbench_agent.py .....                      [ 90%]
+console/backend/tests/test_workbench_authorization_postgres.py .ssssssss [ 91%]
+sssssssssss                                                              [ 91%]
+console/backend/tests/test_workbench_bff.py ...................          [ 92%]
+console/backend/tests/test_workbench_bootstrap.py ......                 [ 92%]
+console/backend/tests/test_workbench_business_problem.py ...             [ 93%]
+console/backend/tests/test_workbench_creator_continuation_postgres.py ss [ 93%]
+ssssssss                                                                 [ 93%]
+console/backend/tests/test_workbench_dual_listener.py ..........         [ 94%]
+console/backend/tests/test_workbench_employee.py .................       [ 94%]
+console/backend/tests/test_workbench_employee_commands_postgres.py sssss [ 95%]
+s                                                                        [ 95%]
+console/backend/tests/test_workbench_pagination.py .                     [ 95%]
+console/backend/tests/test_workbench_workflow.py ....                    [ 95%]
+console/backend/tests/test_workflow_control_application.py ........      [ 95%]
+console/backend/tests/test_workflow_control_application_postgres.py s    [ 95%]
+console/backend/tests/test_workflow_control_domain.py .....              [ 96%]
+console/backend/tests/test_workflow_control_postgres.py sssssssssssss    [ 96%]
+console/backend/tests/test_workflow_definition_api.py ....               [ 96%]
+console/backend/tests/test_workflow_definition_postgres.py ss            [ 96%]
+console/backend/tests/test_workflow_definition_repository.py ...         [ 97%]
+console/backend/tests/test_workflow_definition_resolver.py ..            [ 97%]
+console/backend/tests/test_workflow_definition_restart_recovery.py s     [ 97%]
+console/backend/tests/test_workflow_definition_service.py ............   [ 97%]
+console/backend/tests/test_workflow_skill_authoring_postgres.py s        [ 97%]
+experiments/s5-spike-005-runtime-target-manifest/tests/test_manifest_candidate.py . [ 97%]
+................                                                         [ 98%]
+experiments/s5-spike-007-capability-rest-fixtures/tests/test_capability_fixture.py . [ 98%]
+.........................                                                [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] core/tests/test_postgres_evidence_repository.py:63: real PostgreSQL 15 required
+SKIPPED [1] core/tests/test_postgres_evidence_repository.py:93: real PostgreSQL 15 required
+SKIPPED [1] core/tests/test_postgres_evidence_repository.py:109: real PostgreSQL 15 required
+SKIPPED [1] tests/test_s5_impl_078_release_runner.py:813: real bind-remount control requires root in an isolated Linux environment
+SKIPPED [1] console/backend/tests/test_agent_definition_postgres.py:41: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_agent_definition_postgres.py:94: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_agent_definition_restart_recovery.py:28: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:124: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:140: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:155: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:183: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:249: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:339: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:522: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:744: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:867: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:1054: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:1101: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:1188: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_authority_foundation_postgres.py:1400: 302 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_business_problem_api_postgres.py:531: 297 exclusive real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_business_problem_api_postgres.py:705: 297 exclusive real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_business_problem_api_postgres.py:823: 297 exclusive real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_business_problem_api_postgres.py:960: 297 exclusive real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_business_problem_entry_foundation.py:169: 297 exclusive PostgreSQL required
+SKIPPED [1] console/backend/tests/test_business_problem_postgres.py:63: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_business_problem_postgres.py:310: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_business_problem_postgres.py:357: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_digital_employee_api_postgres.py:196: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_digital_employee_api_postgres.py:417: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_digital_employee_definition_postgres.py:254: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_digital_employee_definition_postgres.py:354: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_digital_employee_definition_postgres.py:384: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_digital_employee_postgres.py:36: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_draft_assistance_postgres.py:145: DRAFT_ASSISTANCE_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_draft_assistance_postgres.py:159: DRAFT_ASSISTANCE_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_draft_provider_budget_postgres.py:76: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_draft_provider_budget_postgres.py:101: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_draft_provider_budget_postgres.py:128: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_draft_provider_budget_postgres.py:155: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_draft_provider_budget_postgres.py:168: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:72: real dedicated PostgreSQL required
+SKIPPED [7] console/backend/tests/test_employee_identity_chain_postgres.py:144: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:187: real dedicated PostgreSQL required
+SKIPPED [3] console/backend/tests/test_employee_identity_chain_postgres.py:255: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:292: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:315: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:332: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:385: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_employee_identity_chain_postgres.py:471: real dedicated PostgreSQL required
+SKIPPED [1] console/backend/tests/test_execution_application_postgres.py:163: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_application_postgres.py:222: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_evidence_cutover.py:103: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_evidence_import.py:87: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_postgres.py:67: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_postgres.py:100: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_postgres.py:201: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_execution_postgres.py:275: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:854: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1042: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1073: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1097: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1121: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1150: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1188: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1219: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1271: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1304: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1357: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1381: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1432: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1496: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1600: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1636: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_governed_execution_api_postgres.py:1689: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_kimi_responses_budget_postgres.py:80: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [5] console/backend/tests/test_kimi_responses_budget_postgres.py:102: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_kimi_responses_budget_postgres.py:144: DRAFT_PROVIDER_BUDGET_TEST_DATABASE_URL is not configured
+SKIPPED [1] console/backend/tests/test_knowledge_attempt_integration.py:30: real PostgreSQL 15 and Qdrant required
+SKIPPED [1] console/backend/tests/test_knowledge_postgres.py:18: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_knowledge_postgres.py:50: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_knowledge_postgres.py:89: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_knowledge_qdrant.py:36: real Qdrant required
+SKIPPED [1] console/backend/tests/test_knowledge_resource_use_integration.py:203: real dedicated PostgreSQL 15 and Qdrant required
+SKIPPED [1] console/backend/tests/test_knowledge_resource_use_integration.py:247: real dedicated PostgreSQL 15 and Qdrant required
+SKIPPED [1] console/backend/tests/test_knowledge_resource_use_integration.py:288: real dedicated PostgreSQL 15 and Qdrant required
+SKIPPED [1] console/backend/tests/test_model_authorization_postgres.py:307: 308 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_model_governance_postgres.py:137: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_model_governance_postgres.py:207: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_model_governance_postgres.py:280: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_model_governance_postgres.py:318: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_native_dispatch_application.py:239: real PostgreSQL 15 required
+SKIPPED [3] console/backend/tests/test_native_dispatch_application.py:273: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_native_dispatch_application.py:293: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_native_dispatch_application.py:303: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_native_dispatch_application.py:319: real PostgreSQL 15 required
+SKIPPED [4] console/backend/tests/test_native_dispatch_application.py:339: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_native_dispatch_application.py:409: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_native_dispatch_application.py:542: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_resource_use_postgres.py:33: real PostgreSQL 15 required
+SKIPPED [7] console/backend/tests/test_restart_schema_compatibility_postgres.py:171: real task-owned PostgreSQL 15 required
+SKIPPED [3] console/backend/tests/test_restart_schema_compatibility_postgres.py:200: real task-owned PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_restart_schema_compatibility_postgres.py:224: real task-owned PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_runtime_profile_postgres.py:31: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_runtime_profile_restart_recovery.py:30: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:495: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:552: real dedicated PostgreSQL 15 required
+SKIPPED [5] console/backend/tests/test_skill_invocation_postgres.py:574: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:596: real dedicated PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_skill_invocation_postgres.py:623: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:638: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:650: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:684: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:704: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:729: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_invocation_postgres.py:788: real dedicated PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_skill_mcp_postgres.py:36: real PostgreSQL required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:537: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:780: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:1162: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:1363: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:1517: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:1714: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:1960: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:2146: 305 exclusive real PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_authorization_postgres.py:2220: 305 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_authorization_postgres.py:2297: 305 exclusive real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:305: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:439: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:461: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:565: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:597: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:638: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [2] console/backend/tests/test_workbench_creator_continuation_postgres.py:685: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:711: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_creator_continuation_postgres.py:730: 305 creator-continuation PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_employee_commands_postgres.py:466: 310 Employee Workbench PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_employee_commands_postgres.py:653: 310 Employee Workbench PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_employee_commands_postgres.py:707: 310 Employee Workbench PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_employee_commands_postgres.py:730: 310 Employee Workbench PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_employee_commands_postgres.py:916: 310 Employee Workbench PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workbench_employee_commands_postgres.py:985: 310 Employee Workbench PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_application_postgres.py:152: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:208: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:253: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:291: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:317: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:424: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:458: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:491: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:540: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:594: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:671: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:772: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:857: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_control_postgres.py:965: real PostgreSQL 15 required
+SKIPPED [1] console/backend/tests/test_workflow_definition_postgres.py:22: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_workflow_definition_postgres.py:61: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_workflow_definition_restart_recovery.py:18: real PostgreSQL required
+SKIPPED [1] console/backend/tests/test_workflow_skill_authoring_postgres.py:247: real dedicated PostgreSQL 15 required
+=========== 1853 passed, 200 skipped, 1 warning in 136.86s (0:02:16) ===========
+All local quality checks passed.

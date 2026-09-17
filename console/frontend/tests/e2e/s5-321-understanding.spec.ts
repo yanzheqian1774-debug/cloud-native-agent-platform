@@ -152,3 +152,125 @@ for(const transport of ['SYNTHETIC','REAL_PROVIDER'])test(`clarification is not 
  await expect(page.getByRole('button',{name:'确认创建',exact:true})).toHaveCount(0);
  if(transport==='REAL_PROVIDER')await expect(card).toContainText('尚未生成可确认草稿');
 });
+
+
+// Same synthetic journey captured at both sizes; no provider or database writes.
+for(const width of [1440,390])test(`V322 visual journey ${width}`,async({page},info)=>{
+  await page.setViewportSize({width,height:width===390?844:1050});
+  const initial='供应商质量需要改善，请帮我明确目标。';
+  const supplement='只看A供应商，缺陷率低于2%，禁止更换设备；具体季度、基线和测量口径未知。';
+  const corrected='只看A供应商，缺陷率低于1%，禁止更换设备；具体季度、基线和测量口径未知。';
+  const state=await setup(page,['',supplement,corrected]);
+  state.criteriaStatus=200;
+  await page.route('**/problem-link',route=>route.fulfill({json:{result:{contextId:'context:321',turnId:'turn:3',turnVersion:3,invocationId:'inv:3',state:'SUCCEEDED',resultKind:'DRAFT_READY',transport:'SYNTHETIC',contentDisposition:'CONTENT_NOT_RETAINED',draft:{title:'来料改善',description:corrected},understanding:understanding(corrected)}}}));
+  let first=true;
+  await page.route('**/draft-assistance/invocations',async route=>{
+    if(!first){await route.fallback();return}first=false;
+    state.requests.push(route.request().postDataJSON());
+    await route.fulfill({json:{result:{contextId:'context:321',turnId:'turn:1',turnVersion:1,aggregateVersion:1,invocationId:'inv:1',state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',transport:'SYNTHETIC',clarificationQuestion:'需要覆盖哪些供应商？希望达到什么目标，有哪些限制？',contentDisposition:'CONTENT_NOT_RETAINED'}}});
+  });
+  async function shot(name:string,target?:string){
+    if(target)await page.locator(target).evaluate(node=>{(node.closest(".px-message")??node).scrollIntoView({block:"start",behavior:"instant"});window.scrollTo({top:0,behavior:"instant"})});
+    await expect(page.locator('.px-workspace')).toBeVisible();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:info.outputPath(`${name}.png`)});
+  }
+  await shot('01-input');await send(page,initial);
+  await expect(page.getByLabel('AI 问题理解与草稿辅助')).toContainText('等待补充信息');
+  await shot('02-clarification','#draft-assistance-message');
+  if(width===390)await shot('02-clarification-answer','.px-assistance-question');
+  await send(page,supplement);await ready(page);
+  await send(page,'只把阈值改成低于1%，其他保持。');await ready(page);
+  await expect(page.getByLabel('问题草稿卡片')).toContainText(corrected);
+  const facts=page.getByLabel('当前问题理解');
+  await expect(facts.locator('dt').filter({hasText:'你提供的信息'})).toHaveCount(1);
+  await expect(facts.locator('dt').filter({hasText:/^目标$/})).toHaveCount(0);
+  await expect(facts).toContainText('尚未单独整理');
+  await expect(page.locator('.px-task-summary-panel')).not.toContainText('已整理 5');
+  await expect(page.locator('.px-task-summary-panel')).not.toContainText('尚待明确');
+  await expect(page.locator('.px-task-summary-panel')).toContainText('不代表你未提供');
+  await shot('03-confirm','#draft-problem-message');
+  if(width===1440)await assertPCGeometry(page,'#draft-problem-message','确认创建');
+  if(width===390)await shot('03-confirm-action','#draft-problem-message .px-card-actions');
+  await confirm(page).click();await expect(page.getByRole('heading',{name:'业务问题已创建',exact:true})).toBeVisible();
+  await shot('04-created','#created-problem-message');
+  await authorizeRead(page,state);
+  if(width===1440){
+    await page.getByRole('button',{name:'定位问题消息',exact:true}).click();
+    await expect.poll(()=>page.locator('#formal-problem-message').evaluate(node=>{
+      const message=node.closest('.px-message')!,stream=node.closest('.px-message-stream')!;
+      return message.getBoundingClientRect().top>=stream.getBoundingClientRect().top;
+    })).toBe(true);
+    await assertPCGeometry(page,'#formal-problem-message','修改正式问题');
+  }
+  await shot('05-readback','#formal-problem-message');
+  if(width===1440){
+    const next=page.getByRole('button',{name:'定义成功标准',exact:true});
+    await expect(next).toBeInViewport({ratio:1});
+    const input=page.locator('#problem-composer');
+    await input.fill('待处理补充\n'.repeat(12));
+    await next.scrollIntoViewIfNeeded();
+    await expect(next).toBeInViewport({ratio:1});
+    expect(await page.locator('.px-message-stream').evaluate(node=>node.getBoundingClientRect().bottom<=document.querySelector('.px-composer')!.getBoundingClientRect().top)).toBe(true);
+    await input.fill('');
+  }
+  await page.reload();await expect(page.getByRole('heading',{name:'问题详情已读取',exact:true})).toBeVisible();
+  await expect(page.locator('#created-problem-message')).toContainText('已恢复正式业务记录');
+  await shot('06-refreshed','#formal-problem-message');
+  expect(state.writes).toHaveLength(1);expect(state.writes[0].description).toBe(corrected);
+  writeFileSync(info.outputPath('visual-receipt.json'),JSON.stringify({kind:'UI_API_FIXTURE',width,input:initial,supplement,corrected,fixtureInvocations:state.requests.length,fixtureCreates:state.writes.length,providerCalls:0,databaseWrites:0,modelQuality:'NOT_MEASURED'},null,2));
+});
+
+test('V322 answer focus, correction order and readable confirmation preserve explicit create',async({page})=>{
+  const state=await setup(page,['A供应商，缺陷率低于2%。','A供应商，缺陷率低于1%。']);
+  await page.route('**/draft-assistance/invocations',async route=>{
+    await route.fulfill({json:{result:{contextId:'context:321',turnId:'turn:clarify',turnVersion:1,invocationId:'inv:clarify',state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',transport:'SYNTHETIC',clarificationQuestion:'请明确供应商范围。',contentDisposition:'CONTENT_NOT_RETAINED'}}});
+  });
+  await send(page,'改善来料质量');
+  const input=page.locator('#problem-composer');await expect(input).toBeFocused();
+  const answer=page.getByRole('button',{name:'回答补问',exact:true});await answer.focus();await page.keyboard.press('Enter');await expect(input).toBeFocused();
+  expect(state.writes).toHaveLength(0);
+  await page.unroute('**/draft-assistance/invocations');
+  await send(page,'仅A供应商，缺陷率低于2%。');await ready(page);
+  const correction='只把目标改为低于1%。';await send(page,correction);await ready(page);
+  await expect(input).toBeFocused();
+  const card=page.getByLabel('问题草稿卡片');
+  expect(await page.getByText(correction,{exact:true}).evaluate(node=>Boolean(node.compareDocumentPosition(document.getElementById('draft-problem-message')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  expect(await card.locator('.px-understanding-facts').evaluate(node=>parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(14);
+  expect(await page.locator('.px-search>span').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('nowrap');
+  await expect(card).toContainText(state.outputs[1]);expect(state.writes).toHaveLength(0);
+});
+
+async function assertPCGeometry(page:Page,selector:string,action:string){
+  const geometry=await page.locator(selector).evaluate(node=>{
+    const stream=node.closest('.px-message-stream')!.getBoundingClientRect();
+    const label=node.closest('.px-message')!.querySelector('.px-message-author')!.getBoundingClientRect();
+    const composer=document.querySelector('.px-composer')!.getBoundingClientRect();
+    return {streamBottom:stream.bottom,composerTop:composer.top,labelTop:label.top,streamTop:stream.top};
+  });
+  expect(geometry.labelTop).toBeGreaterThanOrEqual(geometry.streamTop);
+  expect(geometry.streamBottom).toBeLessThanOrEqual(geometry.composerTop);
+  const button=page.locator(selector).getByRole('button',{name:action,exact:true});
+  await expect(button).toBeInViewport({ratio:1});
+  const box=(await button.boundingBox())!;
+  expect(box.y+box.height).toBeLessThanOrEqual(geometry.streamBottom);
+}
+
+test('V322 separately returned fields retain their values and suggestion source',async({page})=>{
+  const state=await setup(page);
+  const items:UnderstandingItem[]=[
+    {field:'goal',value:'降低缺陷率',source:'USER_STATEMENT',sourceRefs:['user:fixture']},
+    {field:'scope',value:'A供应商',source:'USER_STATEMENT',sourceRefs:['user:fixture']},
+    {field:'successCriteria',value:'建议每周复核',source:'MODEL_SUGGESTION',sourceRefs:[]},
+    {field:'time',value:'尚不清楚',source:'UNKNOWN',sourceRefs:[]},
+  ];
+  await page.route('**/draft-assistance/invocations',route=>route.fulfill({json:{result:{contextId:'context:321',turnId:'turn:1',turnVersion:1,invocationId:'inv:1',state:'SUCCEEDED',resultKind:'DRAFT_READY',transport:'SYNTHETIC',contentDisposition:'CONTENT_NOT_RETAINED',draft:{title:'来料改善',description:state.outputs[0]},understanding:items}}}));
+  await send(page,state.outputs[0]);await ready(page);
+  const facts=page.getByLabel('当前问题理解');
+  await expect(facts).toContainText('目标');await expect(facts).toContainText('降低缺陷率');
+  await expect(facts).toContainText('A供应商');await expect(facts).toContainText('建议，尚未采用');
+  await expect(page.locator('.px-task-summary-panel')).toContainText('单独列出 3 项内容');
+  expect(state.writes).toHaveLength(0);
+  await confirm(page).click();await expect.poll(()=>state.writes.length).toBe(1);
+  expect(state.writes[0].description).toBe(state.outputs[0]);
+});

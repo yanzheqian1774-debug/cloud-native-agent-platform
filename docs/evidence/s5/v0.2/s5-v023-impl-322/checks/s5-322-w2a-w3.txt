@@ -1,0 +1,65 @@
+[WebServer] (node:49001) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [plugin builtin:vite-reporter]
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[WebServer] (node:49019) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 19 tests using 1 worker
+
+(node:49020) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/e2e/w2a-honest-shell.spec.ts:77:1 › uses only current session identity and keeps legacy planning out of trusted Problem reads (988ms)
+  ✓   2 tests/e2e/w2a-honest-shell.spec.ts:118:1 › shows honest controls with keyboard access and no overflow at 390px (356ms)
+  ✓   3 tests/e2e/w2a-honest-shell.spec.ts:141:1 › business workbench creates a message draft before any write and supports complete replacement (994ms)
+  ✓   4 tests/e2e/w2a-honest-shell.spec.ts:232:1 › unknown create replays the exact payload and key while double activation stays single (512ms)
+  ✓   5 tests/e2e/w2a-honest-shell.spec.ts:275:1 › an in-flight create keeps the independent composer and late success does not steal focus (410ms)
+  ✓   6 tests/e2e/w2a-honest-shell.spec.ts:308:1 › cancel remains local and an upward reader receives a new-message affordance (402ms)
+  ✓   7 tests/e2e/w2a-honest-shell.spec.ts:332:1 › a changed principal, tenant, or security domain isolates local input and ignores an old create response (543ms)
+  ✓   8 tests/e2e/w2a-honest-shell.spec.ts:372:1 › switching Problems requires confirmation and does not carry page-only supplements (344ms)
+[WebServer] 3:08:20 PM [vite] http proxy error: /api/workbench/v1/problems/problem%3Aconversation-1/criteria-sets
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8000
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1638:16)
+[WebServer] 3:08:20 PM [vite] http proxy error: /api/workbench/v1/problems/problem%3Aconversation-1/criteria
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8000
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1638:16)
+  ✘   9 tests/e2e/w2a-honest-shell.spec.ts:400:1 › created problem continues through pending approval to a fresh exact read (571ms)
+(node:49033) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  10 tests/e2e/w2a-honest-shell.spec.ts:518:1 › a rejected authorization card does not perform an exact read (264ms)
+  ✓  11 tests/e2e/w2a-honest-shell.spec.ts:534:1 › an expired creator continuation is explicit and does not read protected content (231ms)
+  ✓  12 tests/e2e/w2a-honest-shell.spec.ts:547:1 › a hidden Problem 404 preserves the non-disclosure boundary (225ms)
+  ✓  13 tests/e2e/w2a-honest-shell.spec.ts:556:1 › an unbound request id is ignored for the current session and Problem (234ms)
+  ✓  14 tests/e2e/w3-success-criteria.spec.ts:47:1 › confirm is the write gate and official readback survives refresh and revision (688ms)
+  ✓  15 tests/e2e/w3-success-criteria.spec.ts:59:1 › unknown commands preserve payload and new input while access denial and stale CAS fail closed (929ms)
+  ✓  16 tests/e2e/w3-success-criteria.spec.ts:65:1 › Problem read does not grant success criterion writes (458ms)
+  ✓  17 tests/e2e/w3-success-criteria.spec.ts:69:1 › formal requests and independent decisions resume the frozen criterion and set commands (840ms)
+  ✓  18 tests/e2e/w3-success-criteria.spec.ts:77:1 › a changed trusted session isolates an in-flight criterion command (604ms)
+  ✓  19 tests/e2e/w3-success-criteria.spec.ts:82:1 › saved summary and exact revision controls remain reachable at 390 by 844 (488ms)
+
+
+  1) tests/e2e/w2a-honest-shell.spec.ts:400:1 › created problem continues through pending approval to a fresh exact read › W2A_AUTH_READ_SCROLL_PRESERVED
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 365
+    Received: 348
+
+      471 |   await expect(userFocusTarget).toBeFocused();
+      472 |   await test.step("W2A_AUTH_READ_SCROLL_PRESERVED", async () => {
+    > 473 |     expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
+          |                                                                 ^
+      474 |   });
+      475 |   await expect(desktopSummary.getByText(pendingText, { exact: true })).toHaveCount(0);
+      476 |   expect(exactReads).toBe(1);
+        at /Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/tests/e2e/w2a-honest-shell.spec.ts:473:65
+        at /Users/tristan/.codex/worktrees/7b25/cloud-native-agent-platform/console/frontend/tests/e2e/w2a-honest-shell.spec.ts:472:3
+
+    Error Context: ../../../../../../../../tmp/s5-322-w2a-w3/w2a-honest-shell-created-p-5357c-roval-to-a-fresh-exact-read/error-context.md
+
+  1 failed
+    tests/e2e/w2a-honest-shell.spec.ts:400:1 › created problem continues through pending approval to a fresh exact read
+  18 passed (22.2s)

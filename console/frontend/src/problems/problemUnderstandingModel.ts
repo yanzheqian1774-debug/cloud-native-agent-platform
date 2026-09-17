@@ -18,3 +18,12 @@ export function understandingContent(messages:UserFactMessage[],uiRevision:numbe
 }
 export const fieldLabels={goal:'目标',scope:'范围',time:'时间',constraints:'约束',successCriteria:'成功标准',openItem:'待确认'};
 export const sourceLabels={USER_STATEMENT:'你提供的信息',MODEL_SUGGESTION:'建议，尚未采用',UNKNOWN:'尚不清楚'};
+
+// Presentation only: exact full-description echo is not evidence of field extraction.
+export function isUnstructuredStatement(item:UnderstandingItem,description:string){
+  return item.source==='USER_STATEMENT'&&item.value.trim()===description.trim();
+}
+export function understandingDisplay(item:UnderstandingItem,description:string){
+  return {label:isUnstructuredStatement(item,description)?'你提供的信息':fieldLabels[item.field],
+    value:item.source==='UNKNOWN'?'尚未单独整理':item.value};
+}
