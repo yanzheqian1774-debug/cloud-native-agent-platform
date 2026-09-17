@@ -1,5 +1,7 @@
 # S5-V023-ARCH-323 — 问题到任务规划：主线架构与首个可执行切片
 
+> 当前授权以第 10 节为准；第 1–9 节保留设计阶段历史，原“实施未授权”不再代表当前状态。
+
 ## 1. 本次交付与权威
 
 - Session：`S5-V023-ARCH-323`；Human 已授权有界架构设计、只读实现核对和实施准备。
@@ -400,3 +402,43 @@ D3 的详细推荐仍是保留一个 Run 根 Assignment 并添加 Task 参与绑
 ### 9.2 本次决定收口验证
 
 仅更新原附件、第 8 节决定记录、既有 Registry 的 323 行以及 CONTROL-254 的关联说明。检查 Markdown 链接、状态一致性、修改路径与 `git diff --check`；不新增 Session/WP/台账，不执行产品编码、迁移、真实模型或实现 PR。首轮 56 项测试是首轮历史结果，不作为本次重新运行结果。设计决定已登记；Session 保持 REVIEW，不自动 CLOSED，也不授予实施权限。
+
+
+## 10. 增量一 G1 与恢复检查点（2026-09-17）
+
+Human 已明确授权原 323 增量一产品实现、独立环境迁移、验证、正常提交与 non-force push、唯一 Draft PR；停在 Human 接受/合并前。真实模型、正式迁移、部署、业务执行仍关闭。D1/D2 沿用接受结果；D3 详细契约不阻塞本轮。
+
+### 10.1 已核验恢复点与唯一 writer
+
+- 原载体 `01a0af15-ada4-7a92-b68a-252e871b2aa7` 状态 systemError，最后一条 commit 命令 completed / exit 0，hooks pytest Passed；最后提交 `f1a1822fa97c47bc2fb2b51b8d0ea3bf1957855a`。没有重复运行该提交。
+- 原工作树 `/Users/tristan/.codex/worktrees/b923/cloud-native-agent-platform` 保持原分支；恢复时 tracked/untracked status 均空。未 reset、clean、覆盖；未发现遗留 git/test/server 实施进程。本恢复载体是唯一 323 writer。
+- 实时远端 main `f6a931017dc4b68b7a92ffe0abaaf2819eec6cb7`；321 `97b8603e8a8507eea719099e465e559b81240925`；322 `e5fa882a0b18dfbf3465cc6fb17a663f83228db7`。323 尚无远端分支或 PR。
+- 322 最近回执保持 e5fa882、视觉接受身份 79f62d0，不新增实施或同步；当前载体 idle。独立后端先行，共享 UI 接入前再核验 exact 文件差异与 writer。父 PR 不擅自合并；323 依赖将按实际接收内容记录。
+- 设计已提交；G1/实现尚未开始是本次恢复起点。历史测试不计入新候选结果。
+
+### 10.2 实施顺序、接口与兼容
+
+1. planning v2 typed domain：exact Problem/Criteria、不可变 proposal、阶段/Task/资源需求、服务端结构及采购案例约束校验；规范化 digest，不保留 raw provider 内容。
+2. Workflow Control owner 的 additive PostgreSQL v2 repository/UoW：建议、正式 Plan revision、ApprovalDecision 与确认关联；唯一约束、幂等、CAS、原子 rollback、successor/history。旧 v1 不改，不伪造 Workflow/Instance/Assignment。
+3. confirmed-Problem plan-suggestion application：既有授权、模型 binding/budget 与 contextual Resource Use/Evidence 接缝；typed 非 Attempt target；persist-before-effect、UNKNOWN 不重发、有限补问与有效/无效结果分类。只用 controlled provider 验证。
+4. 授权后的资源 owner 精确读回与独立快照；required/optional、未知/不可读/版本不符不误标就绪；不生产发布资源，不执行 MCP/Skill。
+5. 可信 BFF 与独立 PC 规划区域：当前问题补问、三阶段五任务、用途/缺口、一次确认、刷新/重启/history。确认不启动执行，缺资源明确“计划已确认，资源待准备，尚未开始执行”。
+6. 独立 PostgreSQL/BFF/browser 验证；make check、frontend lint/build、定向集成与截图；review diff/status 后正常提交、推送唯一 Draft PR。
+
+私有版本化路由和迁移编号在源码查重后固定；reader 先于 writer 启用，回退关闭 v2 writer、保留历史。风险集中在原子确认、跨 scope 授权、不可变 digest、owner 解析和治理调用副作用；测试覆盖并发不同 key、同 key 异 payload、响应丢失重放、故障回滚、successor CAS、跨 scope、刷新零执行/模型调用及 v1 回归。
+
+### 10.3 视觉与后继
+
+102/103/112 是本轮直接权威素材；此前简称 02/03/11 按用户说明分别对应目标/方案连续呈现、阶段任务用途、多资源缺口总览，即 102/103/112，不推断为另三个文件。322 截图仅供现状与回归。采购代表页面先浏览器核对再复用其他状态；局部布局包含在原 11–19 净人日估算，非工期承诺。
+
+增量一阶段验收后，后继统一问题提出、AI 补问、用户纠正、确认创建、读回与规划确认的 PC 视觉：布局、信息层级、卡片、留白、导航及右侧摘要。此项另行估算及授权，不新开 Session、不重开已关闭任务，不提前实施。“323 规划功能完成”与“整条演示链视觉达标”分别记录。
+
+### 10.4 实施检查点：独立后端首段（未交付）
+
+已新增 `plan_suggestion_domain.py`、`plan_suggestion_postgres.py`、`plan_suggestion_application.py`、`plan_suggestion_resources.py` 及 additive `0025_plan_suggestion.sql`。当前仅为未接入生产入口的后端首段：typed 不可变语义、采购三阶段五 Task 结构、same-owner 原子 Plan/Approval/source、幂等/CAS/history、Problem/Criteria owner 精确校验与资源状态解析。未声称完整增量一完成。
+
+独立容器 `s5-v023-arch-323-pg`（postgres:15），仅监听 `127.0.0.1:25432`，数据库 `planning323`，合成测试环境 localhost trust，无企业凭据。各 PG 测试创建独立临时数据库并在结束清理自身临时库；保留容器与主测试库。未操作其他任务环境。
+
+实际执行 `PLANNING323_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:25432/planning323 uv run pytest -q console/backend/tests/test_plan_suggestion_v2.py`：**9 passed in 2.58s**。覆盖真实 Problem/Criteria owner、拒绝未授权/陈旧目标、确认响应丢失后历史重放、不同 key 并发收敛、key 冲突、rollback、successor、history、跨 scope 及资源 UNKNOWN/optional。新文件 Ruff check/format 已通过。尚未运行全量 make check、frontend、browser；新候选 CI 尚无。
+
+下一未完成步骤：完成 invocation 的 D2 typed target、persist-before-effect、现有 model binding/budget 与 contextual Resource Use/Evidence owner 接线；资源 real-owner 精确读回补验；可信 BFF/生产 composition 与 102/103/112 PC 页面；独立服务重启/browser、全量门禁、正常 push/唯一 Draft PR。后端首段的测试通过不能替代这些步骤。
