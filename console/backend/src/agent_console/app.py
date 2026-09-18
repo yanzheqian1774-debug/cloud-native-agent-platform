@@ -1937,7 +1937,22 @@ def _configure_workbench() -> None:
         except HTTPException:
             _workbench_startup_error = "WORKFLOW_DEFINITION_STORAGE_UNAVAILABLE"
             return
+    from agent_console.plan_suggestion_domain import PlanningError
+    from agent_console.plan_suggestion_runtime import build_planning_runtime
+
+    planning_runtime = None
+    planning_unavailable = "PLANNING_NOT_CONFIGURED"
+    planning_path = os.environ.get("PLANNING_RUNTIME_FILE", "")
     try:
+        if planning_path and os.environ.get("PLANNING_V2_ENABLED") == "true":
+            try:
+                planning_runtime = build_planning_runtime(
+                    database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+                    runtime_configuration_path=Path(planning_path),
+                    migrations_path=_MIGRATIONS,
+                )
+            except PlanningError:
+                planning_unavailable = "PLANNING_CONFIGURATION_INVALID"
         draft_profile_path = os.environ.get("DRAFT_ASSISTANCE_RUNTIME_FILE", "")
         if draft_profile_path:
             _draft_assistance_composition = build_draft_assistance_composition(
@@ -1953,6 +1968,10 @@ def _configure_workbench() -> None:
             agent_database_url=os.environ.get("AGENT_DEFINITION_DATABASE_URL", ""),
             business_problems=_business_problem_application,
             planning_v2_enabled=os.environ.get("PLANNING_V2_ENABLED") == "true",
+            planning_invocations=(
+                planning_runtime.dependencies if planning_runtime else None
+            ),
+            planning_unavailable_reason=planning_unavailable,
             agent_definitions=_agent_definition_service.repository,
             employee_definitions=_digital_employee_assembly.employee_definitions,
             digital_employees=_digital_employee_assembly.repository,
@@ -1967,11 +1986,14 @@ def _configure_workbench() -> None:
                 (_draft_assistance_composition,)
                 if _draft_assistance_composition is not None
                 else ()
-            ),
+            )
+            + ((planning_runtime,) if planning_runtime is not None else ()),
         )
         workbench_app = _workbench_composition.application
         _workbench_startup_error = ""
     except (OSError, ValueError):
+        if planning_runtime is not None:
+            planning_runtime.close()
         if _draft_assistance_composition is not None:
             _draft_assistance_composition.close()
             _draft_assistance_composition = None

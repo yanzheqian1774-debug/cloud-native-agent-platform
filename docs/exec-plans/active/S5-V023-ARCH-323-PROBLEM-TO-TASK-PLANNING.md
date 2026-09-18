@@ -646,3 +646,114 @@ A=主线必需的能力切片（不要求先完成整页），B=可并行的非�
 | 技术Agent A01–A12；重点A04–A11 | F`resources/AgentWorkbenchPage.tsx`/AgentBuilder及RuntimeProfileWorkbench；B`agent_definition_*`、model governance、Native/Placement；定义/资源精确binding已有 | P0：所选路线确需的模型profile/运行profile、Agent/员工/Assignment关联和真实观测；模型adapter与Agent配置不可混为一项 | P1：A07验证报告、A08版本影响、A11关联任务与A12unknown诊断可见性 | P2：全套AI定义生产、批量实例控制与完整运维；不能承诺暂停能撤销已发请求 |
 
 优先级按真实主线依赖，不按72图顺序机械开工；A中能力有现成合格owner时复用，只补真实接线/证据，不重复造后台。每次后续实施须引用页面ID、tab、状态转换、exact对象、授权和契约；完整创建/编辑/测试/发布/生命周期仍留在后续规划，不因本次最小闭环删除。
+
+## 12. 正式规划接线增量（2026-09-18，Human授权G1）
+
+本轮Human授权原323/原分支/唯一Draft #183补正式provider接线、必要配置/前端/测试、隔离受控验证及D3草案；正常提交/non-force push。基线1132b641445a4c2286c4d21e90d3ea0e597bf9c1/tree92041a19c99f95afd8664cda4a8504be48a7e767与PR一致、工作树干净。原9b产品视觉接受不自动扩展至新行为。禁止外部真实模型/付费、生产/321/共享环境改动、实际实例/派发/资源生产、增量二执行及Outcome实现、Ready/merge/deploy/close。历史AUTHORIZATION_NOT_FOUND不重试，文案不顺改。
+
+实施映射：复用PlanningSuggestionService及现有typed Proposal/target/授权/幂等/PG原子确认；复用Responses连接配置、exact Model治理、凭据resolver、预算owner；增加明确PLANNING_RUNTIME_FILE、规划purpose的版本化prompt/schema和Responses输出投影，在app正式组合注入。测试provider仅由测试依赖替换，正式配置缺失/禁用/失败均fail-closed，无fixture fallback。保留unknown资源；补问与纠正始终使用最新exact Problem/Criteria，旧target拒绝。复用预算基础且规划使用独立ledger/profile，不能消耗draft授权。
+
+验证：正式app组合入口受控装配（无网络外呼）覆盖配置/未配置、完整/补问/后继、过期target、非法结构/依赖/引用、权限/UNKNOWN/错误/超时及幂等；复用并按变更范围执行现有规划PG确认零执行回归；make check及正常hooks，前端若改则lint/build/针对交互；新CI逐候选登记。真实质量保持NOT_MEASURED。D3及真实调用包另列PROPOSED，不实施执行。
+
+### 12.1 正式调用路径与配置边界
+
+`app._configure_workbench`读取显式`PLANNING_RUNTIME_FILE`，仅在`PLANNING_V2_ENABLED=true`时装配；`build_planning_runtime`→`PlanningInvocationDependencies.bind`→`install_planning_invocations`→`PlanningSuggestionService.begin`→`PlanningResponsesProvider`→既有`OpenAIResponsesDraftTransport.exchange`。网络交换从既有adapter提取复用，草稿dispatch保留原策略/解释语义；本轮正式规划支持`OPENAI_RESPONSES_V1`协议，不自动认定任意兼容endpoint或Kimi已验证。未选实际供应商/模型。Kimi draft adapter仍是问题理解路径，不自动当作规划adapter。
+
+`planning-runtime.v1`复用现有runtime配置字段（scope、profile/model/provider/endpoint/connection精确revision/digest、Responses地址、nativeModelId、限额、credential引用/file、TLS、预算和commitment pepper引用）；规划另要求`outputSchemaVersion=plan-suggestion-output.v1`、`targetFormatVersion=plan-suggestion-target.v1`、`policyDigest`匹配`plan_suggestion_policy.POLICY_DIGEST`、adapter revision v1、显式boolean `realCallsEnabled`。配置样例见同目录`S5-V023-ARCH-323-PLANNING-RUNTIME.example.json`，全部身份/地址/价格为占位，realCallsEnabled=false，不能直接作为调用授权或生产配置。Planning与Draft必须使用各自profile/ledger及purpose精确grant。真实endpoint与Model owner中的native model/connection/限额逐项匹配后才能调用；没有发布资源reader时prepare snapshot为空，不生成假目录快照，后续owner刷新维持UNKNOWN。
+
+本轮复用PostgresProviderCallBudget，每次按包含完整prompt/schema的输入字节保守上界及最大输出预留；规划暂不基于provider usage释放预留，仍报告NOT_COLLECTED，不把缺失usage记零。该ledger不是供应商账户级账单硬上限。当前共享Responses网络交换保留既有connect/read/total配置及歧义失败边界；并不宣称具备Kimi监督worker的全阶段硬墙钟回收保证，真实调用包必须接受或先补齐此限制。无自动重试，无fixture fallback。
+
+诊断记录保留purpose、exact target/profile/model/provider引用、配置model名称、transport class、policy版本/digest、output契约及调用id；不新增正文/credential/原始response日志。错误只保存固定reason code；网络歧义OUTCOME_UNKNOWN、provider拒绝FAILED、业务结构非法INVALID，均不产生批准/执行。当前上下文及授权在dispatch前复核，完成时再次校验target；晚到过期结果不得写成新proposal。补问传上轮问题和累计回答，source successor传经授权的旧proposal与当前exact target；旧Problem/Criteria不继续作为当前规划输入。
+
+### 12.2 真实调用授权包（PROPOSED／本轮不执行）
+
+| 条件 | 具体提案与状态 |
+| --- | --- |
+| Provider/model | 已有可复用协议：OPENAI_RESPONSES_V1；本轮规划适配支持此路径。实际provider、nativeModelId、Model/provider/endpoint/connection精确revision/digest、adapter资格及有效价格均未给定，不自行选定付费模型。既有Kimi问题理解配置不推定规划兼容；若选择Kimi须先补对应规划适配与受控验证。 |
+| 配置与权限 | 显式PLANNING_RUNTIME_FILE、独立planning profile及ledger、精确PLAN PREPARE/READ与MODEL_GOVERNANCE INVOKE_MODEL（purpose plan-suggestion）、Problem/Criteria独立READ；credential仅由既有resolver按引用在获授权调用时解析。本轮不读取真实配置/凭据。Human需确认身份、用途及授权到期；缺任一项保持关闭。 |
+| 隔离 | 后续独立323模型验收进程、loopback端口及专属测试DB/认证配置/日志目录；不挂321或生产目录，不复用旧采购历史作为新数据。当前接线测试容器s5-v023-arch-323-wiring-pg只含测试fixture，不自动转作真实调用环境。 |
+| 数据 | 建议只用人工可审阅的合成采购Problem/Criteria、日期/数量/单位/公司范围和假资源标识，不用生产订单、企业正文或个人信息。prompt/schema及所有上下文共同计入输入上限。任务计划不读订单、不调用资源。 |
+| 案例 | 信息充分：保留全部事实且合理拆解；缺信息：只问必要问题并保留未知；歧义冲突：指出冲突，不擅选；纠正：新exact版本和否定事实生效；资源不足：提出需求但不编造引用/ready；权限不足：前置确定性拒绝且provider dispatch=0，不请模型判断权限。每类至少2个固定场景。 |
+| 分级证据 | 单次smoke只证明一次接通：一个合法结构、exact lineage、真实Use/Evidence、无effect。质量阶段：六类案例逐例按事实/补问/纠正/任务依赖/资源幻觉rubric打分，所有权威/副作用硬边界须100%满足，建议语义case通过率至少90%，不通过项保留。稳定阶段：同10个可调用case各重复3次，分别报告成功率、类别一致性、补问差异、延迟及失败/未知；建议至少27/30通过且无越权/假引用/未经确认执行，不承诺零错误。阈值由Human接受。 |
+| 次数/token/费用 | 建议分阶段单独放行：smoke最多1次/$1；质量最多20次（10个可调用case，各最多2轮）/$4；稳定最多60次（10case×3次×最多2轮）/$12。权限不足case不分配模型调用。单次完整输入保守上界32768 tokens、最大输出4096；合计最多81次、输入2654208/output331776 tokens、总$17，仅为待批准上限而非预计花费。实际价格未确定前无法配置可信预算，不执行；保守预留可能更早耗尽。原321预算不能挪用。 |
+| 停止条件 | 任一权限/版本/秘密泄露/外部effect违规立即停止；UNKNOWN不自动重发；达到任一call/token/cost限额、grant失效或连续2次provider技术失败停止；结构/语义失败保留结果，不用mock补齐。若全阶段硬timeout是Human前置条件，先补其实现/受控证据，不直接开展真实调用。 |
+| 窗口 | 建议Human批准后另定一个明确起止、最长8小时窗口，并让exact grants到期同步；分别批准下一阶段，不默认串行消费全部预算。本轮没有生效窗口。 |
+| 持久化/清理 | 需Human明确允许测试记录写入：专属DB中的合成Problem/Criteria、model配置元数据/授权、planning invocation/proposal、contextual Use/Evidence、预算预留；计划确认测试若批准则增加Plan/Approval/source。无Assignment/Run/业务订单。证据导出脱敏manifest与逐例评分，建议保留14天或至Human审阅完成后另行批准清理；不自动删旧历史，不清理321。 |
+| 已具备/待决定 | 已有治理/结构/调用基础与受控接线测试；待决定具体模型及精确配置、兼容性、费用、数据、隔离环境、记录写入/保留、时间窗、质量阈值、timeout限制和各阶段调用授权。服务可配置不等于已获调用许可。 |
+
+### 12.3 本轮验证及门禁记录
+
+- 正式app→真实Workbench组合→Planning服务→Responses网络边界替身：最初13项通过，加入当前Problem/Criteria纠正后继、CSRF和配置策略拒绝后为16项；与真实独立PG runtime/预算测试合跑17 passed（4.87s）。网络/认证与部分owner为显式测试依赖，不能冒充真实模型或生产部署。
+- 规划typed/owner/invocation/确认PG回归、原Responses adapter和Workbench组合回归：49 passed（145.14s，包含当时13项新装配测试）；原子确认重放、rollback、缺口及无执行边界保留。新PG预算测试验证正式runtime初始化、scope适配、重复预留同结果、超限拒绝、零provider dispatch。
+- frontend lint PASS；交互配置自动执行TypeScript/Vite build PASS（既有bundle提示），41 passed（35.3s，包含2项新错误/多轮回答用例）。测试preview只在323专用端口19329，未使用321运行环境。新图是测试产物，原视觉接受仍绑定9b；不重标旧图。
+- 两次make check的Ruff/format PASS，但pytest门禁失败，日志均保留：首轮1929 passed/201 skipped/2 failed；第二轮1932 passed/201 skipped/2 failed。首轮Kimi stalled-send提前CONNECT_DEADLINE、validation-race无请求到达；第二轮stalled-headers提前CONNECT_DEADLINE、parent-channel-loss接收超时。相关Kimi代码和测试与基线逐字未变；原因UNKNOWN，不能仅凭主机负载归因。首轮两个失败单独复核2 passed（4.60s），不将其替代全量门禁。
+- 所有数据库测试位于新建`session=S5-V023-ARCH-323`、`purpose=isolated-wiring-test`的`s5-v023-arch-323-wiring-pg`（postgres:15，loopback随机端口59407）；fixture使用临时数据库并按既有测试teardown清理，仅测试数据。未操作原采购历史、321、生产或共享配置。
+- 正常提交hook及新候选CI终态继续记录在原PR与外部`visual/wiring-*`回执，不跳过/弱化Kimi门禁；若hook拒绝则保留工作树、报告未提交/未推送，不宣称全部门禁通过。真实模型质量仍NOT_MEASURED，无外部/付费调用、任务执行或资源生产。
+
+本轮最终门禁终态：第二轮两项失败单独复核2 passed（6.48s）；正常提交hook的Ruff/format PASS，但pytest仍1932 passed/201 skipped/2 failed（176.94s），失败为Kimi stalled-send及stalled-headers的提前CONNECT_DEADLINE。提交exit1，未生成新commit，未push，没有本轮新候选CI。停止重复运行，15文件保留暂存区；本地HEAD/远端PR仍1132b641445a4c2286c4d21e90d3ea0e597bf9c1/tree92041a19c99f95afd8664cda4a8504be48a7e767。可复核暂存Tree、patch/hash和失败日志在原external续接回执记录，不把暂存Tree当已提交Source。本轮受控正式接线验证完成，但整体交付状态COMMIT_GATE_BLOCKED；需先对既有Kimi期限门禁的环境/启动时序作有界诊断或取得其维护授权，不降低期限、不跳过测试、不操作321环境。
+
+### 12.4 Kimi期限门禁诊断与最小修复（后续Human授权）
+
+Human随后授权本地有界诊断、必要最小修复、正常验证/提交/普通推送及原Draft PR更新。本节接续12.3失败检查点，不删除其日志或把历史失败改写为通过；不改变320既有期限契约，不授权真实调用或D3执行。
+
+- 起点实核：HEAD `1132b641445a4c2286c4d21e90d3ea0e597bf9c1`、提交Tree `92041a19c99f95afd8664cda4a8504be48a7e767`、15文件暂存Tree `712a7b25399d9987676a7d207212e34d57fb5ac1`完全吻合；PR同HEAD、OPEN/Draft；无旧commit/hook/pytest writer。原patch、截图及日志全部保留，无reset/clean/rebase。
+- 契约：connect和total均在spawn前起算，connect包含启动至TLS完成；total覆盖全部阶段及父进程校验，边界相等时total优先，均不重置。独立1s清理预算仍fail closed。旧hook失败的send/headers只有IPC阶段，分别约1.008/1.004s即CONNECT_DEADLINE且worker已回收，不能证明进入了send/headers；该分类符合契约。
+- 有证据的测试设计缺陷：spawn目标定义在整个测试模块中，child反序列化时重导入pytest及数据库/模型装配等非必要依赖，占用1s连接预算。一次全量时间线诊断1922 passed/213 skipped（未启用规划PG），实际到达send/headers时均按total终止。再以固定1.1s child装配模块导入延迟作有界对照：HEAD原测试两例均复现IPC/CONNECT_DEADLINE；相同延迟下轻量spawn目标两例及启动停滞回归3 passed。诊断脚本/时间线/前后日志保存在既有`visual/deadline-*`证据包；人为延迟不是历史主机负载测量。
+- 最小修复仅限Kimi两个测试文件：`kimi_deadline_test_workers.py`搬迁既有fault targets，避免child导入整个测试模块；原六阶段增加精确failure_stage断言；新增启动停滞应为IPC/CONNECT的用例；HTTPS fixture停止等待并join非daemon handler，避免延迟线程跨fixture观察共享类状态。没有更改产品期限实现、数值、错误码、断言预期或provider fallback。
+- 归因边界：原失败的直接条件是连接预算在目标阶段建立前耗尽；导入耦合通过受控注入复现。fixture未join是确切隔离缺陷，但没有证据证明它触发了历史IPC失败。未记录当时的调度/IO压力，不能把环境负载写成已确证根因。Kimi自行执行_dispatch_once/监督器，只从OpenAI模块取schema常量；新增planning分支的policy导入仅在planning=True时发生，不改Kimi默认profile路径。未发现本轮正式接线改变期限分类的间接回归，仍不声称穷尽所有主机时序因素。
+- 验证：原Kimi套件49 passed（49.81s，JUnit属性格式警告），全部六阶段及三类local HTTPS的reaped/期限指标保留。修复后首次make check为1934 passed/201 skipped、1个新增测试配置错误（read>total）；更正该新用例read=1后，最终完整`make check`：Ruff/format PASS，1935 passed/201 skipped/1 warning（112.66s）。原send/headers、parent-channel-loss、validation-race、相邻回收及所有正式接线测试均包含在全量门禁内。不是单独通过替代全量，也不是重复运行同一失败候选碰运气。
+- 正常commit hook和新候选CI必须继续按实际结果记录于原PR及`visual/deadline-delivery-receipt.json`、`deadline-ci-checkout-audit.json`，不使用旧候选12项CI替代。最终Source/Tree在提交后登记外部回执，避免提交自引用；本次新增测试文件使总交付变为17文件，不丢弃原15文件实现。
+- 本轮仅重启并使用独立`s5-v023-arch-323-wiring-pg`，loopback随机端口50993，测试临时数据库正常teardown；原采购历史/321/生产均未访问。原frontend lint/build/41交互通过证据复用，Kimi修复未改前端；不是本轮重新运行。
+- **正式规划Responses限制**：规划仍调用OpenAI exchange，未进入Kimi进程监督器。受控装配、非法输出/timeout到UNKNOWN和确认不执行已验证；socket connect/read timeout、连接后remaining检查及finally-close不等于全阶段绝对硬期限或1s kill/reap。本次没有证明规划DNS/send/慢滴流/父进程校验及回收硬界，也未验证真实模型质量/稳定性；如该保证是实际调用前置条件，需另行授权最小实现及故障注入验证。不得移植Kimi通过结果冒充规划保证。
+
+原产品视觉接受仍仅绑定9b5b342/31d0ecd；本次正式接线形成新产品候选，不自动继承新增行为接受。D3保持第13节PROPOSED，历史补问缺图延期、AUTHORIZATION_NOT_FOUND及确认态文案非阻断项不变。停止位置仍为正式接线受控验证完成、真实调用待授权、D3草案待审阅；Draft/Session OPEN。
+
+## 13. D3详细执行契约草案（PROPOSED，待Human审阅；本轮不实现）
+
+本节仅细化第6节增量二，依赖现有ARCH-019/208/258/259/263/264/266及D1/D2。既有架构决定：Execution层次与owner、exact批准、MCP trust/credential、单Skill slot、UNKNOWN不盲重发、terminalRun作为业务验收根；不重开CLOSED架构。以下同Run协调/Task Assignment/I/O细则是建议，尚未获批准，不能从“D3方向接受”推导实施许可。
+
+### 13.1 来源、任务与角色
+
+推荐一个已获授权的只读采购tool，固定公司/采购组织/日期范围、asOf日期及时区、字段白名单、最大行数与分页完整性。只允许读取订单号/明细/供应商标识/承诺日期/未交数量/单位/状态及来源revision；不读联系人、账户或其他生产敏感字段。实际endpoint/tool/revision/digest与范围尚待Human提供和授权；无合格MCP时BLOCKED_RESOURCE。冻结导出是原第4节允许的候选替代路线，但变更输入来源必须显式披露并确认，不静默切换。
+
+| 阶段／Task | 名称／依赖 | 精确输入→不可变产物 | 推荐职责 |
+| --- | --- | --- | --- |
+| S1 / T1 | 读取快照；无前置 | 授权scope/asOf/schema、分页约束→A1 manifest、bounded rows、完整性/来源digest、MCP读取Evidence | E1采购分析员 |
+| S2 / T2a | 校验数据；T1 | A1→A2有效行、缺失/冲突/重复/范围外分类、逐行lineage与规则版本 | E2数据核验员 |
+| S2 / T2b | 识别延期；T2a | A2+exact Criteria→A3延期/未延期/UNKNOWN分区；promisedDate严格早于asOf且未交量>0，同日不延期 | E2数据核验员 |
+| S3 / T3a | 供应商汇总；T2b | A3→A4 supplier分组，按unit分桶、行数及distinct订单可复算，不跨单位相加 | E1采购分析员 |
+| S3 / T3b | 生成报告；T3a | A1–A4+Criteria/Evidence snapshot→A5清单/摘要/异常/局限/来源及digest；不生成无证据结论 | E1采购分析员 |
+
+最多两职责。Definition表示已发布业务职责和精确能力引用；Instance是实际受管理员工；Task Assignment是该Instance对某个批准Task的scope/有效期/责任绑定。建议root Assignment归E1作为此计划协调责任，Task级分别引用E1/E2实例；root不赋予跨实例代执行权，E2任务必须独立验证其合法Assignment。该root/Task关系扩展是D3待Human明确接受项；不以复制五个旧start调用生成五Run代替。
+
+### 13.2 准入、身份与生命周期
+
+- **资源准入**：Employee/Agent/Skill/MCP/Workflow精确revision+digest、published/non-revoked、能力覆盖/schema兼容、scope/READ/INVOKE、MCP trust/tool selection、credential受控引用、实例/Assignment有效及所选Runtime readiness均分别核实；未知/缺失必要项拒绝启动。资源健康观测不改批准语义；更换资源/职责/I/O则生成successor Plan并重新批准。
+- **Plan→Run**：同一scope、exactPlan revision/digest、Approval及显式start request key形成唯一admission记录，关联root及五Task Assignment、资源快照、Criteria。重放同key同payload返回原Run；不同payload冲突。批准不创建Assignment/Run/Attempt/Placement。Human准备实例/分工与显式启动分别授权；本轮不执行任何一步。
+- **Task/Attempt**：复用Execution owner合法状态，不从UI自造终态；协调read model区分依赖等待、准入阻塞、运行中、成功、失败、未知和未执行。Attempt成功必须有匹配task/plan/attempt、schema/digest的产物及真实completion；只创建了invocation不算成功。每Task同时最多一个活动Attempt/Skill slot；依赖完成且输入artifact绑定精确后才可派发。
+- **重试/幂等**：start/admission与每Task dispatch claim持久化；known failure允许经授权的只读retry，创建新Attempt并引用前一Attempt，不改历史。UNKNOWN先observe/reconcile原调用，禁止自动重复effect。late observation仅落原Attempt，不能污染后继。网络请求状态与业务完成状态分别记录。
+- **I/O与报告**：A1–A5均有sourceTask/Attempt/Plan、schema/version/digest、输入artifact引用及来源证据；有界PG记录复用现有设施，不新增文件服务。每阶段成功要求全部required Task成功，不能用已生成报告遮盖前序异常/缺失。超过行数/产物上限明确失败/需缩小范围，不截断后宣称完整。
+- **失败/超时/干预**：已知失败停止依赖后续；缺权限/资源为阻塞，不能由模型自批；未知保持待核实。暂停为request，协调持久fence/ack后才宣称停止后续admission，不能撤销已发请求。恢复复用原Run/Task和claim；Human纠正业务语义走successor Plan/Run，技术只读重试走新Attempt。
+- **只读边界**：禁止采购写回、更新订单、发邮件/催交/通知、发布资源、创建生产实例、任意shell或网络fallback；Task只能调用批准operation。Native与同步Skill不得拥有同一次effect的双dispatch；T1通过Skill封装MCP时仍须记录实际MCP invocation/Evidence并保留trust authority。
+
+### 13.3 Evidence、终态与业务验收
+
+Execution owner持有Run/Task/Attempt与completion，MCP/Skill等owner提供可验证调用事实，canonical Resource Use/Evidence按ARCH-266关联实际使用，不拿resource声明充调用；Frontend仅投影。读回须独立权限、scope、exact identity，并披露未知/过期，不补造缺失证据。
+
+推荐Run终态：required Task均得到确定终态或经明确终止处置且不存在未决effect；仍有OUTCOME_UNKNOWN时不伪称成功terminal。具体失败/取消聚合映射复用届时Execution合法枚举，D3实施前接受精确转换表。技术成功要求五Task成功、产物链完整；业务目标是否达成另按第4.4节C1a–C1f判断。
+
+terminalRun后，按ARCH-264依次产生不可变Criteria Evaluation（exact criteria/evidence snapshot）、append-only Human确认或否决及后继Outcome；UNKNOWN/NOT_MEASURABLE不得填零。Human可以否决技术成功的报告并记录原因；未确认不自动标问题解决。验收不新增空执行Task/Attempt。相关typed service/repository/API/产品投影属于原I2.5后续实现，本轮仅提案。
+
+### 13.4 待实现、验收与Human选择
+
+| 类别 | 本轮建议 |
+| --- | --- |
+| 可复用 | 323 proposal/Plan/Approval、模型治理、published resource owners/matcher、Execution身份与幂等、Skill slot、MCP/Native、Placement、Use/Evidence与独立READ、PG事务 |
+| 需补齐 | D3 root/Task Assignment与同Run admission/coordinator、Task输入输出绑定、真实采购R1–R5、exact资源eligibility、五Task进度/故障恢复、ARCH-264 Evaluation/Confirmation/Outcome；真实资源是否齐套仍未证 |
+| 必验 | 正常五Task同Run；并发start单Run；缺权限/撤权/缺资源零effect；跨scope/错误版本/过期Assignment拒绝；日期边界/缺日期/重复/单位oracle；分页不完整拒绝；known failure新Attempt；timeout/UNKNOWN不重发；重启/late observation不污染；pause request/ack；未terminal不可验收；Human否决；独立授权读回 |
+| Human需明确 | 单MCP或冻结导出路线、数据scope/asOf/行数上限；E1/E2实际职责与root/Task Assignment推荐结构；exact资源及effect owner路线；故障/取消终态与暂停语义；D3契约接受及后续G1实施/测试执行授权。若涉及既有Accepted Contract不兼容变更，先G2，不自行修改 |
+| 推荐下一切片 | 先审定D3并做无effect的exact资源/Task Assignment admission与同Run身份验证，再单独授权只读五Task执行与恢复，最后I2.5结果验收；不要先实现72页再补主线，也不以单任务跑通代替五Task闭环 |
+
+### 13.5 最小页面衔接
+
+本轮仅规划入口的调用/失败/补问上下文衔接。后续D3最小依赖：A04模型配置引用与诊断（不展示秘密）；D08/D09实例与分工；D04/S04/S09/M03/M04/M07/M11精确资源/契约/发布/授权；W09/W11准入与关联计划；W12/A11/A12任务/Attempt/UNKNOWN与证据；业务Outcome的Criteria Evaluation和Human确认/否决。已有owner能力优先复用，完整管理仍按11.5后续规划。首页H01–H07当前323工作区未收到可核实图集/契约，登记“设计资料待同步”，未审图、不阻断后端接线；本轮不实现首页或72页。

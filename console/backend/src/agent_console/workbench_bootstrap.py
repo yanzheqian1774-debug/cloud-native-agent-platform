@@ -84,6 +84,7 @@ def build_workbench_composition(
     model_grant_target_validator=None,
     planning_v2_enabled: bool = False,
     planning_invocations: PlanningInvocationDependencies | None = None,
+    planning_unavailable_reason: str = "PLANNING_NOT_CONFIGURED",
     managed_closeables: tuple[object, ...] = (),
 ) -> WorkbenchComposition:
     """Build only after every external authority and owner dependency is present."""
@@ -201,14 +202,17 @@ def build_workbench_composition(
                                     planning_invocations.bind(
                                         planning, foundation.grants.authorization
                                     )
+                                    if planning_invocations is not None
+                                    else None,
+                                    planning_unavailable_reason,
                                 ),
                             )
-                            if planning_invocations is not None
+                            if planning_v2_enabled
                             else ()
                         )
                     )
                 }
-                if draft_assistance is not None or planning_invocations is not None
+                if draft_assistance is not None or planning_v2_enabled
                 else {}
             ),
         )

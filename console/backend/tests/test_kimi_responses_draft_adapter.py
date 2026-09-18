@@ -32,6 +32,12 @@ from agent_console.model_binding_resolution import ExactModelBinding
 from agent_console.openai_responses_draft_adapter import (
     ADAPTER_ID as OPENAI_ADAPTER_ID,
 )
+from kimi_deadline_test_workers import (
+    _noisy_request_worker,
+    _partial_result_worker,
+    _stalled_deadline_worker,
+    _stalled_receiver_worker,
+)
 
 DIGEST = "a" * 64
 
@@ -60,8 +66,10 @@ class _KimiHandler(BaseHTTPRequestHandler):
             self.connection.shutdown(2)
             self.connection.close()
             return
-        if type(self).delay_seconds:
-            time.sleep(type(self).delay_seconds)
+        if type(self).delay_seconds and self.server.stop_requests.wait(
+            type(self).delay_seconds
+        ):
+            return
         payload = (
             type(self).raw_response
             if type(self).raw_response is not None
@@ -80,8 +88,10 @@ class _KimiHandler(BaseHTTPRequestHandler):
             for offset in range(0, len(payload), size):
                 self.wfile.write(payload[offset : offset + size])
                 self.wfile.flush()
-                if type(self).chunk_delay:
-                    time.sleep(type(self).chunk_delay)
+                if type(self).chunk_delay and self.server.stop_requests.wait(
+                    type(self).chunk_delay
+                ):
+                    return
         except OSError:
             # Expected when the deadline supervisor closes its one connection.
             pass
@@ -126,6 +136,10 @@ def kimi_mock(tmp_path):
     _KimiHandler.raw_response = None
     _KimiHandler.request_id = "req_kimi_mock_320"
     server = ThreadingHTTPServer(("127.0.0.1", 0), _KimiHandler)
+    # ThreadingHTTPServer defaults to daemon handlers: server_close would not
+    # join them, allowing delayed responses to read the next test's class state.
+    server.daemon_threads = False
+    server.stop_requests = threading.Event()
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
     server.socket = context.wrap_socket(server.socket, server_side=True)
@@ -134,9 +148,11 @@ def kimi_mock(tmp_path):
     try:
         yield server, cert, tmp_path
     finally:
+        server.stop_requests.set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+        assert not thread.is_alive()
 
 
 def _profile() -> DraftAssistanceProfileRevision:
@@ -691,45 +707,6 @@ def test_kimi_credential_resolver_has_no_environment_fallback(kimi_mock, monkeyp
     assert _KimiHandler.requests == []
 
 
-# Fault injection below runs inside a fresh real spawned process. It does not
-# claim actual stalled DNS/TCP/TLS integration evidence.
-def _stalled_deadline_worker(channel, configuration, phase):
-    import http.client
-    import socket
-
-    from agent_console.kimi_deadline import _worker
-
-    def stall(*args, **kwargs):
-        time.sleep(30)
-        raise TimeoutError
-
-    if phase == "dns":
-        socket.getaddrinfo = stall
-    elif phase == "tcp":
-        socket.socket.connect = stall
-    elif phase == "tls":
-        ssl.SSLContext.wrap_socket = stall
-    elif phase == "send":
-        http.client.HTTPSConnection.request = stall
-    elif phase == "headers":
-        http.client.HTTPSConnection.getresponse = stall
-    else:
-        http.client.HTTPResponse.read = stall
-    _worker(channel, configuration, phase)
-
-
-def _stalled_receiver_worker(channel, configuration, phase):
-    time.sleep(30)
-
-
-def _partial_result_worker(channel, configuration, phase):
-    from agent_console.kimi_deadline import _send
-
-    _send(channel, {"connected": True})
-    channel.sendall(b'{"result":')
-    time.sleep(30)
-
-
 @pytest.mark.parametrize("phase", ["dns", "tcp", "tls", "send", "headers", "body"])
 def test_parent_deadline_kills_stalled_phase_and_reaps(
     kimi_mock, phase, record_property
@@ -769,12 +746,52 @@ def test_parent_deadline_kills_stalled_phase_and_reaps(
         "CONNECT_DEADLINE" if phase in {"dns", "tcp", "tls"} else "TOTAL_DEADLINE"
     )
     assert metric.reason == expected
+    assert (
+        metric.failure_stage
+        == {
+            "dns": "CONNECT",
+            "tcp": "CONNECT",
+            "tls": "CONNECT",
+            "send": "SEND_REQUEST",
+            "headers": "WAIT_HEADERS",
+            "body": "READ_BODY",
+        }[phase]
+    )
     assert metric.reaped and metric.cleanup_seconds <= 1
     assert metric.decision_seconds >= (1 if expected == "CONNECT_DEADLINE" else 2)
     assert elapsed < (2 if expected == "CONNECT_DEADLINE" else 3)
     with pytest.raises(ProcessLookupError):
         os.kill(metric.worker_pid, 0)
     assert len(_KimiHandler.requests) == (1 if phase in {"headers", "body"} else 0)
+
+
+def test_startup_stall_is_connect_deadline_before_any_network_phase(kimi_mock):
+    """A startup/IPC stall is not evidence that send or headers was reached."""
+    from agent_console.kimi_deadline import _supervise
+
+    server, cert, tmp_path = kimi_mock
+    config = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=1,
+        read_timeout_seconds=1,
+        total_timeout_seconds=2,
+    )
+    records = []
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        _supervise(
+            config,
+            "startup",
+            None,
+            None,
+            records.append,
+            worker=_stalled_receiver_worker,
+        )
+    metric = records[0]
+    assert metric.reason == "CONNECT_DEADLINE"
+    assert metric.failure_stage == "IPC"
+    assert 1 <= metric.decision_seconds < 2
+    assert metric.reaped and metric.cleanup_seconds <= 1
+    assert _KimiHandler.requests == []
 
 
 def test_partial_ipc_cannot_block_parent_past_total(kimi_mock):
@@ -914,23 +931,6 @@ def test_worker_result_is_rejected_if_parent_validation_finishes_at_deadline(
     assert transport.last_deadline_metrics.reason == "TOTAL_DEADLINE"
     assert transport.last_deadline_metrics.reaped
     assert transport.dispatch_count == len(_KimiHandler.requests) == 1
-
-
-def _noisy_request_worker(channel, configuration, invocation_id):
-    import os
-
-    from agent_console.kimi_deadline import _worker
-
-    def noisy_once(self, **kwargs):
-        import resource
-
-        assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0)
-        os.write(1, b"synthetic-secret-must-not-log")
-        os.write(2, b"synthetic-body-must-not-log")
-        raise RuntimeError("synthetic-secret-must-not-log")
-
-    KimiResponsesDraftTransport._dispatch_once = noisy_once
-    _worker(channel, configuration, invocation_id)
 
 
 def test_worker_silences_sensitive_diagnostics_and_leaves_no_secret_files(

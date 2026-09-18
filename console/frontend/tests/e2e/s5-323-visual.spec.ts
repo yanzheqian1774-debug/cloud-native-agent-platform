@@ -121,3 +121,49 @@ test('V323 grouped navigation keeps destinations and stays outside workflow page
  await page.locator('.px-sidebar').getByText('平台支撑',{exact:true}).click();await expect(page.locator('.px-sidebar').getByRole('link',{name:'系统设置',exact:true})).toHaveAttribute('href','/settings');
  await page.locator('.px-primary-nav').getByRole('link',{name:'Workflow',exact:false}).click();await expect(page.locator('.journey-shell')).toHaveCount(0);
 });
+
+test('V323 formal planning errors are visible and do not create or execute',async({page})=>{
+  let calls=0;
+  await page.route('**/api/workbench/v1/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:323',tenantId:'isolated-323',securityDomain:'test'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'test'}});
+    if(path.includes('/planning-input/'))return route.fulfill({json:{result:{target:{},title:'受控规划',description:'仅测试接线'}}});
+    if(path.endsWith('/planning-v2/invocations')){calls++;return route.fulfill({json:{result:{invocation:{target:{invocation_id:'failed:323'}},result:{technical_status:'FAILED',kind:null,reason:'PLANNING_PROVIDER_HTTP_REJECTED'},facts_status:'RECORDED'}}});}
+    if(path.endsWith('/invocations/failed:323'))return route.fulfill({json:{result:{invocation:{target:{invocation_id:'failed:323'}},result:{technical_status:'FAILED',kind:null,reason:'PLANNING_PROVIDER_HTTP_REJECTED'},facts_status:'RECORDED'}}});
+    return route.fulfill({json:{result:{}}});
+  });
+  await page.goto('/work/plan?problem=test:323');
+  await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('没有创建建议、批准或执行');
+  await expect(page.getByRole('button',{name:'生成建议计划',exact:true})).toBeDisabled();
+  expect(calls).toBe(1);
+});
+
+test('V323 missing planning configuration is explicit and clarification retains answers',async({page})=>{
+  const requests:Record<string,unknown>[]=[];let missing=true;
+  const value=(id:string)=>({invocation:{target:{invocation_id:id}},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['请补充统计日期或口径']},facts_status:'RECORDED'});
+  await page.route('**/api/workbench/v1/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:323',tenantId:'isolated-323',securityDomain:'test'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'test'}});
+    if(path.includes('/planning-input/'))return route.fulfill({json:{result:{target:{},title:'受控规划',description:'仅测试接线'}}});
+    if(path.endsWith('/planning-v2/invocations')){
+      if(missing)return route.fulfill({status:503,json:{reasonCode:'PLANNING_NOT_CONFIGURED'}});
+      requests.push(route.request().postDataJSON());return route.fulfill({json:{result:value(`clarification:${requests.length}`)}});
+    }
+    if(path.includes('/planning-v2/invocations/'))return route.fulfill({json:{result:value(path.split('/').at(-1)!)}});
+    return route.fulfill({json:{result:{}}});
+  });
+  await page.goto('/work/plan?problem=test:323');
+  await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('PLANNING_NOT_CONFIGURED');
+  expect(requests).toHaveLength(0);missing=false;
+  await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+  await page.getByLabel('补充回答').fill('2026-09-18');
+  await page.getByRole('button',{name:'提交补充并生成建议'}).click();
+  await expect(page.getByLabel('补充回答')).toHaveValue('');
+  await page.getByLabel('补充回答').fill('纠正：仅公司A，不含已取消订单');
+  await page.getByRole('button',{name:'提交补充并生成建议'}).click();
+  await expect.poll(()=>requests.length).toBe(3);
+  expect(requests[2].answers).toEqual(['2026-09-18','纠正：仅公司A，不含已取消订单']);
+  expect(page.url()).not.toContain('公司A');
+});

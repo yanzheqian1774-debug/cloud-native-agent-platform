@@ -177,6 +177,7 @@ class ExactFileOpenAICredentialResolver:
             or (profile.adapter_revision, profile.output_schema_version)
             not in {
                 (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                (ADAPTER_REVISION, "plan-suggestion-output.v1"),
                 ("v2", "problem-draft-assistance-output.v2"),
             }
         ):
@@ -321,8 +322,8 @@ class OpenAIResponsesDraftTransport:
             latency_ms=latency_ms,
         )
 
-    def dispatch(self, *, invocation_id, request, credential, profile):
-        policy = policy_for(profile.adapter_revision, profile.output_schema_version)
+    def exchange(self, *, invocation_id, request, credential):
+        """Shared one-shot Responses HTTP exchange; no purpose-specific semantics."""
         if (
             not isinstance(request.payload, bytes)
             or not isinstance(credential, ResolvedOpenAICredential)
@@ -382,6 +383,13 @@ class OpenAIResponsesDraftTransport:
         finally:
             connection.close()
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
+        return response.status, body, correlation, latency_ms
+
+    def dispatch(self, *, invocation_id, request, credential, profile):
+        policy = policy_for(profile.adapter_revision, profile.output_schema_version)
+        status_code, body, correlation, latency_ms = self.exchange(
+            invocation_id=invocation_id, request=request, credential=credential
+        )
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(
                 invocation_id,
@@ -389,10 +397,10 @@ class OpenAIResponsesDraftTransport:
                 "PROVIDER_RESPONSE_TOO_LARGE",
                 latency_ms=latency_ms,
             )
-        if not 200 <= response.status < 300:
-            if response.status == 429:
+        if not 200 <= status_code < 300:
+            if status_code == 429:
                 reason = "PROVIDER_RATE_LIMITED"
-            elif response.status >= 500:
+            elif status_code >= 500:
                 reason = "PROVIDER_UNAVAILABLE"
             else:
                 reason = "PROVIDER_HTTP_REJECTED"

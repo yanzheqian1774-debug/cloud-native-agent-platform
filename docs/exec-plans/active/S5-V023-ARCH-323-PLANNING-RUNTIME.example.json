@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "planning-runtime.v1",
+  "transportKind": "REAL_PROVIDER",
+  "scope": {
+    "namespace": "tenant-a",
+    "securityDomain": "quality"
+  },
+  "profileRevisionId": "planning-profile-not-configured",
+  "profileDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "model": {
+    "id": "model-1",
+    "revisionId": "model-revision-1",
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "provider": {
+    "id": "provider-1",
+    "revisionId": "provider-revision-1",
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "endpoint": {
+    "id": "endpoint-1",
+    "revisionId": "endpoint-revision-1",
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "connectionProfile": {
+    "id": "connection-profile-1",
+    "revisionId": "connection-profile-revision-1",
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "adapter": {
+    "id": "openai-responses-draft",
+    "revision": "v1"
+  },
+  "outputSchemaVersion": "plan-suggestion-output.v1",
+  "targetFormatVersion": "plan-suggestion-target.v1",
+  "maximumInputBytes": 16384,
+  "maximumOutputTokens": 4096,
+  "totalTimeoutSeconds": 60,
+  "pepperReference": "pepper:planning-NOT_CONFIGURED",
+  "pepperVersion": "v1",
+  "pepperFile": "/REQUIRES_HUMAN_CONFIGURATION/323/pepper",
+  "providerProtocol": "OPENAI_RESPONSES_V1",
+  "executionClass": "REAL_PROVIDER",
+  "responsesUrl": "https://provider.invalid/v1/responses",
+  "nativeModelId": "MODEL_NOT_SELECTED",
+  "maximumInputTokens": 32768,
+  "maximumResponseBytes": 64000,
+  "connectTimeoutSeconds": 5,
+  "readTimeoutSeconds": 30,
+  "credential": {
+    "reference": "secret-reference:NOT_CONFIGURED",
+    "version": "v1",
+    "resolverId": "exact-file-resolver",
+    "resolverRevision": "v1",
+    "file": "/REQUIRES_HUMAN_CONFIGURATION/323/credential"
+  },
+  "tls": {
+    "caFile": null
+  },
+  "budget": {
+    "ledgerId": "planning-ledger-NOT_CONFIGURED",
+    "currency": "USD",
+    "callCap": 1,
+    "totalCostCapMicrousd": 1000000,
+    "inputPriceMicrousdPerMillionTokens": 0,
+    "outputPriceMicrousdPerMillionTokens": 0
+  },
+  "realCallsEnabled": false,
+  "policyDigest": "bdcc866f29075d12112599f02b9555ce086e1ec6f984bb8b5b1d669f23f29af8"
+}

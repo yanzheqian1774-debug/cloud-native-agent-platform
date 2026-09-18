@@ -20,6 +20,7 @@ from .model_binding_resolution import (
 )
 from .plan_suggestion_domain import PlanningConflict, PlanningError, ProposalRevision
 from .plan_suggestion_invocation import PlanningInvocationTarget, PlanningProviderResult
+from .plan_suggestion_policy import POLICY_DIGEST, VERSION
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,7 @@ class PlanningSuggestionService:
             evaluation_time=datetime.now(UTC),
         )
         source = None
+        previous_questions = []
         if request.source_proposal is not None:
             source_ref = request.source_proposal
             app.require(principal, "READ", source_ref.resource_id)
@@ -125,6 +127,11 @@ class PlanningSuggestionService:
                 )
                 if source.digest != source_ref.digest:
                     raise PlanningConflict("PLANNING_SOURCE_DIGEST_CONFLICT")
+        if source is not None and (
+            source.semantics.target.problem.resource_id
+            != request.target.problem.resource_id
+        ):
+            raise PlanningConflict("PLANNING_SOURCE_TARGET_CONFLICT")
         resource_snapshot = self.prepare_resources(principal, request.target)
         invocation_id = self.identity_factory()
         context_id = source.proposal_id if source else self.identity_factory()
@@ -135,7 +142,7 @@ class PlanningSuggestionService:
             previous_target = PlanningInvocationTarget.model_validate(
                 previous["invocation"]["target"]
             )
-            if previous_target.problem != request.target or (
+            if (previous_target.problem != request.target and source is None) or (
                 source is not None
                 and source.proposal_id != previous_target.suggestion_context_id
             ):
@@ -146,6 +153,7 @@ class PlanningSuggestionService:
                 raise PlanningConflict("PLANNING_PREDECESSOR_REQUIRES_SOURCE")
             if previous_target.request_revision >= 8:
                 raise PlanningConflict("PLANNING_CLARIFICATION_LIMIT")
+            previous_questions = previous["result"].get("questions", [])
             context_id = previous_target.suggestion_context_id
             request_revision = previous_target.request_revision + 1
             predecessor_id = request.predecessor_invocation_id
@@ -161,7 +169,7 @@ class PlanningSuggestionService:
             variant="SUCCESSOR_PROPOSAL" if source else "FIRST_PROPOSAL",
             resource_snapshot=resource_snapshot,
             input_commitment=commitment,
-            policy_version="planning-validator.v1",
+            policy_version=VERSION,
         )
         decision = app.authority.require(
             principal, "MODEL_GOVERNANCE", "INVOKE_MODEL", use.exact_resource
@@ -173,6 +181,9 @@ class PlanningSuggestionService:
             "profile": self.profile.model_dump(mode="json"),
             "authorization_decision_id": decision.decision_id,
             "transport": "CONTROLLED_TEST_PROVIDER" if synthetic else "REAL_PROVIDER",
+            "policy_digest": POLICY_DIGEST,
+            "call_path": "CONFIRMED_PROBLEM_PLAN_SUGGESTION",
+            "provider_configuration": getattr(self.provider, "diagnostics", {}),
         }
         persisted, claimed = self.invocations.claim(
             scope, principal.principal_id, request.idempotency_key, commitment, record
@@ -195,6 +206,17 @@ class PlanningSuggestionService:
         app.authority.require(
             principal, "MODEL_GOVERNANCE", "INVOKE_MODEL", use.exact_resource
         )
+        business_context = {
+            **business_context,
+            "planning_context": {
+                "invocation_id": invocation_id,
+                "previous_questions": previous_questions,
+                "source_proposal": source.model_dump(mode="json") if source else None,
+            },
+        }
+        # Recheck current Problem/Criteria immediately before the network boundary.
+        with app.repository.transaction(scope, context_id, authorized=True) as cursor:
+            app.validate_target(principal, request.target, cursor.connection)
         try:
             raw = self.provider.suggest(
                 request, resolved, self.profile, business_context
@@ -205,6 +227,16 @@ class PlanningSuggestionService:
                 "kind": None,
                 "reason": "PROVIDER_OUTCOME_UNKNOWN",
             }
+            self.invocations.finish(scope, invocation_id, result)
+            self.model_use_owner.observed(scope, record, result)
+            return self.read(principal, invocation_id)
+        except PlanningError as exc:
+            # Only provider-owned fixed codes are surfaced, never exception bodies.
+            from .plan_suggestion_runtime import PlanningProviderFailure
+
+            if not isinstance(exc, PlanningProviderFailure):
+                raise
+            result = {"technical_status": "FAILED", "kind": None, "reason": str(exc)}
             self.invocations.finish(scope, invocation_id, result)
             self.model_use_owner.observed(scope, record, result)
             return self.read(principal, invocation_id)

@@ -12,12 +12,18 @@ from .workbench_bff import PREFIX
 from .workbench_business_problem import OwnerPrincipal
 
 
-def install_planning_invocations(service_factory):
+def install_planning_invocations(
+    service_factory, unavailable_reason="PLANNING_NOT_CONFIGURED"
+):
     def install(app, authenticate, require_csrf, policy):
         def invoke(request, action):
             session, context = authenticate(request)
             if request.method != "GET":
                 require_csrf(request, session)
+            if service_factory is None:
+                return JSONResponse(
+                    status_code=503, content={"reasonCode": unavailable_reason}
+                )
             service = service_factory(context)
             principal = OwnerPrincipal(
                 context.principal_id,
