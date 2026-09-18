@@ -97,7 +97,7 @@ def test_summary_static_scenarios(mapping):
     report["suites"][0]["file"] = name
     report["suites"][0]["specs"][0]["title"] = title
     summary = make_summary(report)
-    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 82
+    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 86
     assert summary["scenarioId"] == scenario
     assert summary["spec"] == "console/frontend/tests/e2e/" + name
     assert summary["sourceLine"] == 42

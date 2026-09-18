@@ -17,6 +17,7 @@ export default defineConfig({
           "**/s5-320-kimi-draft-assistance.real.spec.ts",
           "**/s5-321-understanding*.spec.ts",
           "**/s5-323-planning.real.spec.ts",
+          "**/s5-323-page.real.spec.ts",
           "**/s5-323-visual.spec.ts",
         ]
       : [
@@ -27,6 +28,7 @@ export default defineConfig({
           "**/s5-320-kimi-draft-assistance.real.spec.ts",
           "**/s5-321-understanding*.spec.ts",
           "**/s5-323-planning.real.spec.ts",
+          "**/s5-323-page.real.spec.ts",
           "**/s5-323-visual.spec.ts",
           "**/*-live.spec.ts",
         ],

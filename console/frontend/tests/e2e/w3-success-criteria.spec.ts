@@ -6,12 +6,12 @@ const envelope=(result:unknown)=>({schemaVersion:"workbench-operation.v1",result
 type CriterionPayload={successCriterionId?:string;predecessorRevisionId?:string;expectedVersion?:number;criterionType:string;measurement:Record<string,unknown>;requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:Record<string,unknown>;idempotencyKey:string};
 type SetPayload={problemRevisionId:string;predecessorSetRevisionId?:string;orderedCriterionRevisionIds:string[];expectedVersion:number;idempotencyKey:string};
 type GrantPayload={purpose:string;requestedGrants:{owner:string;action:string;resource:string}[]};
-type State={aggregateVersion:number;criteria:CriterionRevision[];sets:CriteriaSetRevision[];criterionWrites:CriterionPayload[];setWrites:SetPayload[];grantWrites?:GrantPayload[];grantState?:"PENDING"|"APPROVED"|"REJECTED";principalId?:string;denyCriterion?:boolean;denySet?:boolean;staleSet?:boolean;unknownCriterionOnce?:boolean;unknownSetOnce?:boolean;holdCriterion?:boolean;continueCriterion?:()=>void;holdSet?:boolean;continueSet?:()=>void};
+type State={lifecycle?:string;activationWrites?:unknown[];denyActivation?:boolean;loseActivation?:boolean;aggregateVersion:number;criteria:CriterionRevision[];sets:CriteriaSetRevision[];criterionWrites:CriterionPayload[];setWrites:SetPayload[];grantWrites?:GrantPayload[];grantState?:"PENDING"|"APPROVED"|"REJECTED";principalId?:string;denyCriterion?:boolean;denySet?:boolean;staleSet?:boolean;unknownCriterionOnce?:boolean;unknownSetOnce?:boolean;holdCriterion?:boolean;continueCriterion?:()=>void;holdSet?:boolean;continueSet?:()=>void};
 
 async function installRoutes(page:import("@playwright/test").Page,state:State){
   await page.route("**/api/workbench/v1/session",route=>route.fulfill({contentType:"application/json",body:JSON.stringify({schemaVersion:"workbench-session.v1",principal:{principalId:state.principalId??"human:owner",tenantId:"tenant-a",securityDomain:"quality"},session:{expiresAt:"2026-09-15T00:00:00Z",idleExpiresAt:"2026-09-14T01:00:00Z"},csrfToken:"csrf-test"})}));
   await page.route("**/api/workbench/v1/problems",route=>route.fulfill({contentType:"application/json",body:JSON.stringify(envelope({problems:[problem]}))}));
-  await page.route("**/api/workbench/v1/problems/problem%3Aw3-1",route=>route.fulfill({contentType:"application/json",body:JSON.stringify(envelope({problem:{scope:problem.scope,business_problem_id:problem.business_problem_id,owner_id:problem.owner_id,current_state:"DRAFT",aggregate_version:state.aggregateVersion,current_revision_id:problem.revision_id,created_by:problem.created_by,created_at:problem.created_at,updated_at:problem.created_at},revisions:[problem],lifecycle:[]}))}));
+  await page.route("**/api/workbench/v1/problems/problem%3Aw3-1",route=>route.fulfill({contentType:"application/json",body:JSON.stringify(envelope({problem:{scope:problem.scope,business_problem_id:problem.business_problem_id,owner_id:problem.owner_id,current_state:state.lifecycle??"DRAFT",aggregate_version:state.aggregateVersion,current_revision_id:problem.revision_id,created_by:problem.created_by,created_at:problem.created_at,updated_at:problem.created_at},revisions:[problem],lifecycle:[]}))}));
   await page.route("**/api/workbench/v1/problems/problem%3Aw3-1/criteria",route=>route.fulfill({contentType:"application/json",body:JSON.stringify(envelope({revisions:state.criteria}))}));
   await page.route("**/api/workbench/v1/problems/problem%3Aw3-1/criteria-sets",async route=>{
     if(route.request().method()==="GET"){await route.fulfill({contentType:"application/json",body:JSON.stringify(envelope({revisions:state.sets}))});return}
@@ -21,6 +21,14 @@ async function installRoutes(page:import("@playwright/test").Page,state:State){
     if(state.unknownSetOnce){state.unknownSetOnce=false;await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({reasonCode:"BUSINESS_PROBLEM_STORAGE_UNAVAILABLE"})});return}
     if(state.holdSet){state.holdSet=false;await new Promise<void>(resolve=>{state.continueSet=resolve})}
     const revision={scope:problem.scope,set_revision_id:`set:w3:${state.sets.length+1}`,business_problem_id:problem.business_problem_id,problem_revision_id:payload.problemRevisionId,revision:state.sets.length+1,predecessor_set_revision_id:payload.predecessorSetRevisionId??null,ordered_criterion_revision_ids:payload.orderedCriterionRevisionIds,created_by:"human:owner",created_at:"2026-09-14T00:30:00Z",digest:"d".repeat(64)};state.sets.push(revision);state.aggregateVersion+=1;await route.fulfill({status:201,contentType:"application/json",body:JSON.stringify(envelope({revision}))});
+  });
+  await page.route("**/api/workbench/v1/problems/problem%3Aw3-1/lifecycle",async route=>{
+    const payload=route.request().postDataJSON();(state.activationWrites??=[]).push(payload);
+    if(state.denyActivation){await route.fulfill({status:403,json:{reasonCode:"AUTHORIZATION_DENIED"}});return}
+    if(payload.expectedVersion!==state.aggregateVersion){await route.fulfill({status:409,json:{reasonCode:"STALE_AGGREGATE_VERSION"}});return}
+    state.lifecycle="ACTIVE";state.aggregateVersion++;
+    if(state.loseActivation){state.loseActivation=false;await route.abort();return}
+    await route.fulfill({json:envelope({businessProblemId:problem.business_problem_id,aggregateVersion:state.aggregateVersion})});
   });
   await page.route("**/api/workbench/v1/success-criteria",async route=>{
     const payload=route.request().postDataJSON() as CriterionPayload;state.criterionWrites.push(payload);
@@ -84,3 +92,29 @@ test("saved summary and exact revision controls remain reachable at 390 by 844",
   const set:CriteriaSetRevision={scope:problem.scope,set_revision_id:"set:w3:1",business_problem_id:problem.business_problem_id,problem_revision_id:problem.revision_id,revision:1,predecessor_set_revision_id:null,ordered_criterion_revision_ids:[criterion.revision_id],created_by:"human:owner",created_at:"2026-09-14T00:30:00Z",digest:"d".repeat(64)};
   const state:State={aggregateVersion:2,criteria:[criterion],sets:[set],criterionWrites:[],setWrites:[]};await installRoutes(page,state);await page.setViewportSize({width:390,height:844});await page.goto("/work?problem=problem%3Aw3-1");const history=page.getByLabel("已保存成功标准");await expect(history).toBeVisible();await history.getByRole("button",{name:"修订此标准"}).click();const composer=page.getByLabel("修改成功标准原文");await expect(composer).toBeFocused();await composer.fill("负责人确认五批交付恢复。");await page.getByRole("button",{name:"采用标准原文"}).click();await expect(page.getByLabel("成功标准待确认卡片")).toBeVisible();await page.getByRole("button",{name:"本任务"}).click();await expect(page.getByRole("dialog")).toContainText("负责人确认三批交付恢复。");expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:testInfo.outputPath("w3-success-criteria-390x844.png")});
 });
+
+for(const mode of ["normal","denied","lost","stale"] as const){
+  test(`problem confirmation preserves saved criteria and recovers ${mode}`,async({page},info)=>{
+    const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[]};
+    await installRoutes(page,state);await page.goto("/work?problem=problem%3Aw3-1");
+    const gate=page.getByLabel("问题与完成标准确认");
+    await expect(gate.getByRole("button",{name:"确认问题与完成标准",exact:true})).toBeDisabled();
+    const card=await draftCriterion(page,"合成采购报告可追溯，缺失资源单列，不启动执行。");
+    await card.getByRole("button",{name:"确认并保存",exact:true}).click();
+    await expect(card).toContainText("已保存并完成正式关联");
+    expect(state.activationWrites??[]).toHaveLength(0);
+    await page.screenshot({path:info.outputPath(`323-before-confirm-${mode}.png`),fullPage:true});
+    state.denyActivation=mode==="denied";state.loseActivation=mode==="lost";
+    if(mode==="stale")state.aggregateVersion++;
+    await gate.getByRole("button",{name:"确认问题与完成标准",exact:true}).evaluate((button:HTMLButtonElement)=>{button.click();button.click()});
+    if(mode==="normal")await expect(gate.getByRole("link",{name:"制定建议计划"})).toBeVisible();
+    else await expect(gate.getByRole("alert")).toBeVisible();
+    expect(state.criterionWrites).toHaveLength(1);expect(state.setWrites).toHaveLength(1);
+    expect(state.activationWrites??[]).toHaveLength(mode==="stale"?0:1);
+    await page.reload();await expect(page.getByLabel("已保存成功标准")).toContainText("合成采购报告可追溯");
+    if(mode==="normal"||mode==="lost")await expect(page.getByRole("link",{name:"制定建议计划"})).toBeVisible();
+    else await expect(page.getByRole("link",{name:"制定建议计划"})).toHaveCount(0);
+    expect(state.activationWrites??[]).toHaveLength(mode==="stale"?0:1);
+    await page.screenshot({path:info.outputPath(`323-after-confirm-${mode}.png`),fullPage:true});
+  });
+}

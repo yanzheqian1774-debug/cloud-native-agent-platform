@@ -981,3 +981,41 @@ G0有界诊断计划：核对默认79测试与20条静态诊断白名单（仅�
 本轮受控验证结果：92 passed / 2 warnings（31.48s）；包括理解v2本地HTTPS及sourceRefs/纠正契约、显式synthetic草稿来源link、正式规划app接线、Responses停滞/取消/非法输出/权限拒绝、独立PG准入与确认历史。新增断言证明新DRAFT即使已有Criteria仍拒绝规划输入；测试显式调用既有repository transition后才验证两职责方案持久化，该步骤只作后端受控测试，绝不宣称产品页面具备激活。未发现应在本轮修改的局部产品实现缺陷；主要是正式演示前置/页面接线缺项。证据`demo-preparation/controlled-validation.log`及JUnit。两个warning为既有Starlette/httpx与record_property/JUnit格式，不影响断言结果。
 
 本轮完整门禁：首轮在新增测试的nested-with及全角标点lint处停止，日志保留；只修格式后make check Ruff/format PASS，2017 passed / 201 skipped / 1 warning（117.89s）。前端产品未改，不重复浏览器或build；正常hook仍运行。独立容器`s5-v023-arch-323-demo-prep-pg`仅loopback64324、session=323/purpose=isolated-demo-preparation；fixture新建测试库并teardown。hook结束后停止并清理本轮容器/临时卷，真实演示服务未启动。最终Source/Tree、hook及候选CI checkout/Tree登记原PR和既有验收目录`demo-preparation/preparation-receipt.json`，不把旧CI或旧历史当新同案证据。脚本合成输入与逐turn digest位于同目录`demo-cases.json`，结果明确NOT_RUN。
+
+## 17. 问题确认至规划的页面接线（Human 有界实施授权）
+
+实施计划（G1，编码前记录）：复用现有 Problem lifecycle 与 Criteria 端口，不改状态机、权限或持久化契约。保留标准独立保存，在现有对话区域提供显式“确认问题与完成标准”操作；重新读取 Problem/Criteria exact 修订、digest 和 aggregate version，匹配用户当前可见版本后才提交 DRAFT→ACTIVE。Criteria 写入会增加 Problem aggregate version，既有 CAS 拒绝检查后并发修订。已保存标准/激活失败分别显示；未知转换保留上下文绑定幂等键，刷新先读状态，不自动重发。ACTIVE 且当前标准可读才显示规划入口，进入规划不启动执行。验证覆盖权限、修订冲突、部分成功、双击、丢响应与刷新，并以专属隔离合成同案走正式页面至持久计划。配置候选与期限方案只作待决文档，不调用外部模型、不增加隔离架构或执行切片。
+
+### 17.1 实现与受控证据
+
+新增 ProblemPlanningGate，在原对话区域复用既有卡片样式，导航和右侧信息栏不变。标准仍通过原明确保存操作持久化；随后显式确认当前问题与完成标准，才调用既有 lifecycle。重新读取 exact Problem revision/digest、最高 CriteriaSet revision/digest 及可读成员，与当前页面比对；不匹配则刷新并要求重新核对，绝不自动采用新修订提交。未保存编辑/标准/补充、来源补记未完成时阻止进入规划。期间输入变化不继续提交。不存在任何加载自动激活。确认幂等 key 仅保存本会话身份/租户/域/Problem 对应的 metadata，未知结果刷新先读；ACTIVE 当前标准可读才显示规划入口。标准保存不回滚，不伪装两次调用原子；403/409/不可用明确呈现。
+
+新同案受控证据位于既有验收包 `page-confirmation/`：新专属PG `127.0.0.1:64325/page323`，HTTPS UI/BFF `19424`，本地理解替身 `19425`；没有使用旧323采购库、321环境或真实provider。复用正式 `build_workbench_composition`、Problem/Criteria/Authority/planning owners与PG，理解通过本地HTTPS v2 adapter，规划明确CONTROLLED_PROVIDER（synthetic=True）。该装配是隔离验收harness，不宣称真实部署配置已生效；此前正式app装配证据仍单独适用。
+
+同一浏览器案例新建合成采购问题，公司A/日期18日纠正为公司B/19日，显式创建、独立管理员批准读取/标准权限、保存标准、页面激活、生成三阶段五任务两职责建议、确认计划、刷新相同历史读回。该案例真实页面/BFF/PG链成立；理解输出是受控echo，规划输出是受控typed建议，**真实语义质量未测**。TRANSITION/REVISE与PLAN/MODEL权限在第一次使用之前由隔离测试setup精确配置，登记`exact-test-grants.json`，不是产品自动授权；管理员UI处理的理解/READ/Criteria申请独立保留。没有重试被拒绝的旧历史请求。未创建Employee Instance、Assignment、Run或业务执行。
+
+### 17.2 理解/规划配置候选（只读，尚无可启用真实实例）
+
+| 段 | 已实现可兼容候选 | 配置/凭据/权限缺项 |
+| --- | --- | --- |
+| 理解 | openai-responses-draft v2 / OPENAI_RESPONSES_V1；或 kimi-responses-draft v2 / KIMI_RESPONSES_V1 | DRAFT_ASSISTANCE_RUNTIME_FILE；exact model/provider/endpoint/connection profile revision+digest、nativeModelId、credential reference/version/resolver/file元数据、purpose ledger、exact辅助与模型授权均需Human/管理员提供。当前仅新隔离local HTTPS mock运行，不能据此称真实凭据可用 |
+| 规划 | openai-responses-draft v1 / OPENAI_RESPONSES_V1，经 PlanningResponsesProvider；Kimi专属协议不能直接替换 | PLANNING_V2_ENABLED、PLANNING_RUNTIME_FILE、realCallsEnabled、exact上述引用及CONFIRMED_PROBLEM_PLAN_SUGGESTION用途权限/预算尚未配置真实实例。受控provider不能作为真实配置证据 |
+
+未读取真实密钥或扫描其他任务环境。供应商/模型名称、官方价格、次数、费用、绝对窗口与保留期限继续待决；§16.4的8次/USD2/窗口仅建议，未启用、未预约，不自动补跑。
+
+### 17.3 最小期限/取消/回收方案（PROPOSED，未实现）
+
+保持§14既有事实：socket静默超时不等于全阶段硬期限，客户端取消不等于底层停止。两方案供Human比较：
+
+1. **维持现状并明确接受限制**：复用当前socket超时、返回路径close和UNKNOWN预算预留；不宣称DNS、慢滴/发送、解析或close绝对有界。优点是无期限语义/隔离架构变化；缺点是在途请求可能跨过授权窗口，不能保证本地及时回收。不是本轮对真实调用的授权。
+2. **推荐：另行批准调用工作单元隔离及deadline契约**：从获准调度且预算已预留、进入模型调用工作单元前启动单调总时钟，覆盖DNS、TCP、TLS、发送、响应头、完整有界响应体、解析及结构校验；连接子期限只覆盖DNS/TCP/TLS，取父剩余预算与连接预算较小值。具体错误码与同时到期优先级必须与既有契约逐项审定，不沿用Kimi推定Responses语义。父级停止接收晚到结果；取消或总期限触发后先请求协作退出，建议最多1秒，之后终止专属工作单元并建议再等1秒reap/确认文件描述符关闭（均待批准/测量，不是保证）。若仍未reap，隔离标记清理失败并阻止后继调用，绝不能返回成功。模型credentials通过既有安全resolver，不进入日志/命令行；不要以线程join timeout冒充线程已停止。
+
+两个方案均不能保证供应商已取消、未执行或未收费。发出请求后没有可证实终态时持久标记UNKNOWN，保留原invocation/idempotency身份及预算预留，不自动重试/释放预算；独立查原状态、供应商审计或人工核对后按既有结算规则处理。权限拒绝在预算/网络调度前阻断。硬期限只能界定本地占用，不能提供远端exactly-once或退款保证。
+
+Human待决差异：是否把本地硬界作为真实调用前置；是否授权新的工作单元隔离/kill-reap架构；各阶段起算与分类、取消语义、清理上限/失败准入；预算UNKNOWN处理是否保持原规则。当前不修改任何期限/预算契约，不加入线程/进程隔离实现。资源/分工准入和D3保持PROPOSED。
+
+本轮验证：前端lint/build通过（已有chunk大小提示）；问题/标准浏览器10项通过，包含新增4项确认/拒绝/丢响应刷新/版本冲突；同案HTTPS/PG页面旅程1项通过，最终构建对同一持久案例只读刷新1项通过，不重复业务操作。make check 2017 passed / 201 skipped / 1 warning（148.83s）；只启用新323测试PG，其他集成测试保持原配置skip。额外尝试直接运行默认浏览器套件在收集期报告缺少CONSOLE_BACKEND_URL/owned harness，零用例执行，不计通过、不盲重跑；完整默认套件由候选CI的原隔离harness执行。正常hooks及新候选CI终态、source/tree与checkout/tree在原PR及page-confirmation交付回执绑定，不沿用旧12项。
+
+截图区分：`same-case/`是页面激活前后与同案旅程，`final-readback/`是最终构建对同一持久案例的只读页面；早期旅程发生在补充输入变更防护之前，最终回归覆盖该防护，原案例未重建。`frontend-binding.json`绑定最终产品源文件/构建hash，manifest逐图记录实际来源和限制。历史供应商质量截图只作旧候选外观参考，不归入本轮同案证据。测试数据及脚本保留在专属验收目录；交付后停本轮服务器/provider并停止独立容器，保留隔离PG用于受权恢复，不保持监听或自动调用。
+
+门禁续记：补入4个新场景诊断ID后，首次正常提交hook发现既有映射测试仍断言82项，导致86个参数化实例失败；未产生提交。精确断言同步为86项（不删除或放宽其他断言），诊断专项230 passed；最终完整make check 2021 passed / 201 skipped / 1 warning（115.01s），随后再次正常提交运行全部hooks。首轮日志保留，最终结果不把2017历史计数当新候选终态。

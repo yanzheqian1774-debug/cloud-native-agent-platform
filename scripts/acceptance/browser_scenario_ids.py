@@ -266,4 +266,20 @@ BROWSER_SCENARIO_IDS = {
         "workflow-runtime-workbench.spec.ts",
         "handles FastAPI detail arrays without losing controlled error states",
     ): "BROWSER_11950E5E4F9E8018",
+    (
+        "w3-success-criteria.spec.ts",
+        "problem confirmation preserves saved criteria and recovers normal",
+    ): "BROWSER_81CD7E2BD711A2FC",
+    (
+        "w3-success-criteria.spec.ts",
+        "problem confirmation preserves saved criteria and recovers denied",
+    ): "BROWSER_7964D811FFB17121",
+    (
+        "w3-success-criteria.spec.ts",
+        "problem confirmation preserves saved criteria and recovers lost",
+    ): "BROWSER_91A6803DC4B05E25",
+    (
+        "w3-success-criteria.spec.ts",
+        "problem confirmation preserves saved criteria and recovers stale",
+    ): "BROWSER_574DCDA673CFCB1B",
 }
