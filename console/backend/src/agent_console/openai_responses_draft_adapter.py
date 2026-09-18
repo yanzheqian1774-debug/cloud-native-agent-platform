@@ -347,6 +347,7 @@ class OpenAIResponsesDraftTransport:
         )
         started = time.monotonic()
         self.dispatch_count += 1
+        response = None
         try:
             connection.connect()
             elapsed = time.monotonic() - started
@@ -381,7 +382,13 @@ class OpenAIResponsesDraftTransport:
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
-            connection.close()
+            # Connection: close transfers ownership of the stream to the response.
+            # A short/oversized/failed read must not rely on garbage collection.
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                connection.close()
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         return response.status, body, correlation, latency_ms
 

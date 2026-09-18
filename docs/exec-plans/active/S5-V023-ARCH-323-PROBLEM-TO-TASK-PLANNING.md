@@ -759,3 +759,132 @@ terminalRun后，按ARCH-264依次产生不可变Criteria Evaluation（exact cri
 ### 13.5 最小页面衔接
 
 本轮仅规划入口的调用/失败/补问上下文衔接。后续D3最小依赖：A04模型配置引用与诊断（不展示秘密）；D08/D09实例与分工；D04/S04/S09/M03/M04/M07/M11精确资源/契约/发布/授权；W09/W11准入与关联计划；W12/A11/A12任务/Attempt/UNKNOWN与证据；业务Outcome的Criteria Evaluation和Human确认/否决。已有owner能力优先复用，完整管理仍按11.5后续规划。首页H01–H07当前323工作区未收到可核实图集/契约，登记“设计资料待同步”，未审图、不阻断后端接线；本轮不实现首页或72页。
+
+### 13.6 D3可审阅决策包（PROPOSED；不分配新Session、不开始实施）
+
+本节整理13.1–13.5，不新增平行权威。标记：**既定约束**为本Session已接受D1/D2/D3方向或binding架构；**建议**为可比较实施选择；**待Human决定**为尚未生效的选择/授权。D3是同Run下Task级多员工绑定及执行契约的待决部分；增量二是第6节I2.1–I2.6实施集合，包含执行、恢复及I2.5业务验收，二者不是同义词。
+
+依据导航（后文沿用简称）：
+
+- P323：本计划§3.0、§4.2–4.5、§6、§8（后续Human授权优于早期架构阶段范围）；§13保留原D3草案。
+- A019：[Execution/Runtime权威](../../../architecture/s5/v0.2/S5-ARCH-019-V023-EXECUTION-RUNTIME-AUTHORITY-V1.md) §§2–4，BINDING；Definition/Instance/Assignment/Placement及执行层次不可合并。
+- A258：[Problem/Criteria](../../../architecture/s5/v0.2/S5-V023-ARCH-258-BUSINESS-PROBLEM-SUCCESS-CRITERIA-AUTHORITY-V1.md) §§3–7；A259：[MCP trust](../../../architecture/s5/v0.2/S5-V023-ARCH-259-MCP-ENDPOINT-TRUST-CREDENTIAL-AUTHORITY-V1.md) §§3–7；A263：[Skill Attempt](../../../architecture/s5/v0.2/S5-V023-ARCH-263-SKILL-ATTEMPT-EXECUTOR-SIDE-EFFECT-CONTRACT-V1.md) §§3–7；A264：[Evaluation/Human/Outcome](../../../architecture/s5/v0.2/S5-V023-ARCH-264-SUCCESS-CRITERIA-EVALUATION-HUMAN-CONFIRMATION-OUTCOME-CONTRACT-V1.md) §§2–7；A266：[Resource Use](../../../architecture/s5/v0.2/S5-V023-ARCH-266-UNIFIED-ATTEMPT-RESOURCE-USE-MEASUREMENT-AUTHORITY-V1.md) §§3–7。均按各文档接受约束解释，architecture accepted不等于implemented。
+- **来源差异明确保留**：[ARCH-208](../../../architecture/s5/v0.2/S5-V023-ARCH-208-WORKFLOW-CONTROL-PLAN-APPROVAL-INTERVENTION-PERSISTENCE-V1.md) §1及Registry仍标`PROPOSED / CHECKPOINT_A_CANDIDATE`，不能笼统称其全文已接受。当前Plan/批准/控制行为以`workflow_control_*`、`governed_execution.py:GovernedExecutionApplication.start`、`execution_application.py`及测试为准；本Session D1/D2和A019/258/263/264/266约束继续有效。不重开208；D3涉及其未决部分时，审定本包的具体兼容关系，不凭候选文档自行改变状态机。
+- 版本/实施顺序：[PLAN-001](S5-PLAN-001-V0.2-IMPLEMENTATION-PORTFOLIO.md)、[PLAN-003](S5-PLAN-003-V0.2-PRODUCT-INTENT-GOLDEN-DEMO-REBASELINE.md) Packages 5/6A、[CONTROL-254](S5-V023-CONTROL-254-P1-CORE-CAPABILITY-AND-BUSINESS-ASSEMBLY-BASELINE.md) §§业务/技术边界、实施矩阵及323 follow-on attachment。这里只细化既有方向，不改版本归属、不替代P1完整验收。
+
+| 决策项 | 既定约束及来源 | 选项与推荐（建议） | 待Human决定及影响 |
+| --- | --- | --- | --- |
+| A 单一来源 | P323§4.2/4.4、A259：授权、exact来源、只读、完整分页；不得模拟真实来源 | 推荐一项已有批准MCP订单查询；替代为带来源/digest冻结导出，必须明确路线变更。禁止无授权自动切换 | 选来源、公司/采购组织/日期范围、可用endpoint/tool及权限；缺失则阻断T1，不制造数据 |
+| A 快照口径 | A258、P323 C1：exact Criteria、未知不填零 | 建议manifest含source ID/revision、scope、asOf即时刻+业务日期、IANA时区、schema、page count/complete、acquiredAt、rows digest；去重键company+orderId+lineId+scheduleLineId（若源无schedule行，需选定等价键） | 确认主键、业务日历/时区、范围、分页能力及保留；主键不唯一或分页不可证停止，不“取最新” |
+| A 字段/保留 | P323§4.4/A266：有界最小披露、缺失/冲突保留来源 | 必需company、order/line IDs、supplierId、promisedDate、outstanding、unit、status、sourceRevision；名称可选。建议首片≤500行、A1–A4各≤256KiB、A5≤64KiB；专属测试数据保留14天待审阅再授权清理 | 上限和保留是建议，待选定；不保留联系人、账户、秘密、raw模型payload；超界失败不截断冒充完整 |
+| B 两职责 | P323§8已接受Task级多员工方向；A019/A263：Definition≠Instance≠Assignment≠Placement，一Attempt一managed Skill | 推荐E1采购分析、E2数据核验；E1 root Assignment只负责协调，Task分别验证E1/E2绑定。备选单E1需真实职责覆盖并重新确认语义，不能假扮两员工 | 审定root/Task绑定结构；指定两个已治理Instance/Assignment；没有实例不自动创建；Placement仅由既有Runtime authority产生 |
+| B effect owner | A263/A259/A266：先持久claim、只读、真实use，不双dispatch | 推荐T1经一个Skill slot封装MCP并记录MCP实际调用；T2a/T2b/T3a/T3b各一个确定性Skill；R6复用既有Native profile | 核实是否有合格T1适配与R2–R5发布资源。若无则另经资源流程准备，不由323自动生产资源 |
+| C 同案同Run | P323 D1/D3、A019/A258：exact Plan/Approval继承Problem/Criteria，不能多个Run冒充一个 | 推荐一次显式start建立单Run及五TaskRun；一个root Assignment，加Task参与绑定；CAS/唯一约束原子记录准入和身份 | 接受typed Task参与绑定、复用/扩展owner的兼容方案；不得绕过旧单任务start创建五个Run |
+| D 三阶段五任务 | P323§4.3及第6节：线性依赖，不做通用DAG/循环 | 沿T1→T2a→T2b→T3a→T3b，资源检查/分工/准入分离，见下表 | 确认exact Workflow node mapping、每Task输入输出schema及大小限制；模型不得提供任意执行脚本 |
+| E 未知与恢复 | A263/A266：UNKNOWN不是未发生；取消请求≠确认；不承诺外部exactly-once | 推荐未知冻结依赖，仅observe/reconcile；已知失败且授权后新Attempt；暂停只在持久fence及ack后成立 | 明确各provider可观察/可取消能力；无法证实终态保留RECOVERY_REQUIRED，不自动retry |
+| F 结果验收 | A264既定：terminal Run为唯一业务根，Evaluation不可变、Human独立授权、Outcome successor | 推荐C1a–C1e确定性评估，C1f人工确认/否决；缺证据UNKNOWN；技术成功可被Human否决 | evaluator exact版本、Evidence冻结点和验收者权限待配置；不得让模型决定权限/解决状态，不自动关闭Session |
+| G 顺序 | P323§6 I2.1–I2.6、CONTROL-254/PLAN-003：完整管理/结果链仍在后续规划 | 推荐先无effect准入，再只读五任务，再结果验收；非必需管理页并行、完整72页后续 | 分片逐一授权；本包不启动任何一片，不把准备/设计视为业务验收 |
+
+### 13.7 精确资源与同案身份契约（PROPOSED细化）
+
+本轮未读取生产资源目录，以下每个E/R的实际ID、revision、digest、授权有效期及运行可用性均为 **UNKNOWN**，不是虚构绑定。实现前需填写owner返回的exact值并校验；“R2”等只是需求符号，不是发布身份。
+
+| Task / 阶段 | 职责、资源需求（所有exact值待提供） | 依赖 / I/O | 所需权限与准入缺口 |
+| --- | --- | --- | --- |
+| T1 读取快照 / S1 | E1 Definition+Instance+Assignment；R1 MCP endpoint/trust/discovery/tool/schema/credential-ref revision+digest；T1 Skill/executor及R6 Workflow/Runtime profile exact refs | 无前置；scope/asOf→A1 manifest+完整行集+读取Evidence | EXECUTION START、Instance/Assignment use、Skill INVOKE、MCP tool READ/INVOKE分别授权；private endpoint另需enterprise policy；全部UNKNOWN，缺一阻断 |
+| T2a 校验数据 / S2 | E2 exact三类绑定；R2 Skill/operation/executor及R6 | T1/A1→A2有效/重复/范围外/异常行及lineage | 授权读取A1、Skill INVOKE；published/non-revoked、schema一致、input digest验证、实例/Placement观测新鲜；UNKNOWN阻断 |
+| T2b 识别延期 / S2 | E2；R3 Skill exact版本、Criteria evaluator/rule version；R6 | T2a/A2+C1→A3延期/未延期/UNKNOWN分区 | 授权C1/A2及operation；严格promisedDate<asOf业务日期且未交量>0；同日不延期；缺日/冲突不猜测 |
+| T3a 供应商汇总 / S3 | E1；R4 Skill exact版本；R6 | T2b/A3→A4 supplier+unit分桶、distinct订单统计 | READ A3、INVOKE R4；分桶与守恒oracle校验，不跨单位合计；资源UNKNOWN阻断 |
+| T3b 生成报告 / S3 | E1；R5 deterministic renderer exact版本；R6 | T3a/A4及A1–A3→A5有界报告及引用 | READ各产物、INVOKE R5；报告数字必须lineage可追溯，禁止采购写回/邮件/通知/新资源发布 |
+
+检查位置分离：规划期`ResourceResolutionSnapshot`只说明候选资源/缺口，可缺资源确认语义；分工准备期解析实际Instance/Assignment及exact资源，不创建Placement、不触发任务；显式start时Execution admission重新验证批准、权限、资源版本/生命周期和Runtime readiness，事务建立同Run身份；各Task dispatch前再次验证/fence并持久claim；Placement由Runtime/Execution既有owner处理，不是角色名字或模型建议。
+
+同案身份校验表（建议新关系不冒称现有API）：
+
+| 身份链 | 精确校验 / 幂等与生命周期边界 | 依据 / 分类 |
+| --- | --- | --- |
+| Problem→Criteria Set→Proposal | 同scope；Problem revision/digest、Criteria Set revision/digest及membership；提案target完全一致，纠正生成successor | A258/P323 D1/D2，既定；当前323实现可复用 |
+| Proposal→Plan→Approval | Plan保存批准语义、source proposal exact revision/digest；Approval绑定Plan版本/digest及可信actor；重复确认返回原Plan/Approval | P323 D1及`plan_suggestion_application.py`/PG测试，CURRENT；确认不创建任何执行对象 |
+| Definition→Instance→Assignment | Definition精确发布修订定义能力；Instance为有生命周期的实体；Assignment限定该实例职责/scope/有效期。Task binding只能缩小授权，root不能代替E2授权 | A019既定分离；root+Task typed关系建议，待D3审定 |
+| Plan/Approval→Run→TaskRun | 显式start携带exact批准、Workflow映射、root/Task参与绑定；scoped key+canonical digest唯一Run；同key不同内容冲突。TaskRun稳定引用Run与node | A019/P323约束；五Task同Run物化需新增实现，当前`governed_execution.py:start`不能直接当多Task coordinator |
+| TaskRun→Attempt→Placement | retry创建新Attempt、原TaskRun不变；Placement是Runtime选择/观测事实，关联Attempt/Instance/profile，不能由分工表声称已就绪 | A019/A263既定；不改旧状态枚举；恢复须读持久claim/高水位 |
+| Attempt→Invocation→ResourceUse→Evidence | 每类单slot/occurrence，exact Plan/Task/Attempt/Instance/resource/provider/authority；dispatch前claim，事件source ID+digest去重；晚到事实只归原Attempt | A263/A266既定，实际MCP/Skill事实不可由配置推断；Evidence独立READ授权 |
+| terminal Run→Evaluation→Human→Outcome | 固定C1、Evidence及ResourceUse snapshot ID/digest/high-water、evaluator版本；同target/evaluator/snapshot唯一结果；否决/新证据走append-only successor | A264既定；RECOVERY_REQUIRED禁止authoritative Business Outcome；UNKNOWN/NOT_MEASURABLE/INVALIDATED只能UNDETERMINED |
+
+异常选择：dispatch前拒绝不宣称运行；dispatch后timeout/disconnect且无原生终态保留UNKNOWN并阻止依赖。取消、暂停必须保留request/ack/observed不同事实；切断本地等待不表示远端停止。恢复先re-observe原invocation，跨scope/版本/授权过期不得resume。明确已知失败、只读operation、资源仍有效且Human授权才可新Attempt重试；语义或资源职责变化走successor Plan及新批准。取消/失败Run的业务评估仍需合法terminal、证据和A264限制，不能把未执行Task伪装成功。原事实、拒绝理由与旧Outcome保留，不自动关闭Session。
+
+### 13.8 分片与下一片完整任务草案（全部PROPOSED）
+
+| 切片 | 范围与前置条件 | 验收证据 | 停止条件 |
+| --- | --- | --- | --- |
+| 1 无effect资源/分工准入与同Run身份校验 | D3关系被审定；读既有Plan/Approval、exact资源、Instance/Assignment；构造typed admission snapshot及五Task映射；不创建实例、Placement、真实Run或dispatch | 隔离PG事务/CAS/重放/重启；同案5节点一致；越权/撤权/跨scope/错digest/缺资源均零模型/Skill/MCP/Runtime effect；刷新只读；原Plan确认回归 | 新架构/owner冲突、required UNKNOWN、需要新资源/生产数据、涉及既有公共契约变化时停止 |
+| 2 单一来源只读五Task执行 | 切片1通过；单来源、资源、分工、Runtime实际就绪且获单独执行授权；实现同Run coordinator、I/O lineage、fence/recovery；显式start才物化Run/Task/Attempt | 同案真实服务/PG/浏览器证据；五行oracle及边界数据；同key并发start一个Run；真实MCP/Skill Evidence；timeout/UNKNOWN不重发、retry successor、restart/late fact/pause ack | 来源变化、授权失效、写operation、分页不全、未知effect、双dispatch、证据缺失；不以fixture替代真实闭环 |
+| 3 结果评估/Human/Outcome | 切片2有terminal Run和足够Evidence；A264 exact evaluator/权限；I2.5 typed服务/PG/API与产品投影 | nonterminal/RECOVERY_REQUIRED拒绝；C1a–f逐项；独立Human确认/否决、UNKNOWN/NOT_MEASURABLE、幂等/CAS/失效/后继/重启；真实浏览器读回 | 缺Evidence权限/快照、伪造actor、模型自评代替权威、需改冻结契约；不自动关闭问题或Session |
+
+**下一片任务草案，不创建Task/Session/PR：**“323 增量二准备：无effect exact资源／Task分工准入与同Run身份校验”。状态PROPOSED，Gate建议G1；若root/Task关系触及A019 owner或公共契约，先G2决策。目标用户为已确认计划的Human：看清五Task将由哪些已治理实例承担、资源为何不就绪；不因确认计划启动执行。
+
+- 授权输入：批准本包root/Task关系、资源ref/schema、授权语义、只读输入范围、PG内部迁移和本地验证范围；实际实现位置/文件ownership由原主控分配，本文不自行分配编号。
+- 建议改动：323 `plan_suggestion_*`边界新增内部typed admission service/port及授权read API（路由名待接口评审）；复用`governed_execution.py`的exact Plan/Approval核对、`execution_application.py` scoped identity/claims、`runtime_placement.py` readiness规则、资源owner和PG UoW。避免调用现有start作为“验证”。不新增基础设施、不改CRD/Control Plane权威。
+- 契约输入：scope/trusted principal、exact Plan/Approval、五node mapping、最多两Instance及Assignment refs、resource exact集合、expected versions；输出：READY_TO_REQUEST_START或BLOCKED/UNKNOWN及逐Task诊断、source versions/digests/observedAt。输出是有界准入快照，不是Run、批准或可永久复用的授权；实际start必须fresh recheck。
+- 持久化建议：已有PG内append-only admission snapshot+scoped key/canonical digest；同key同内容读回，同key不同内容冲突；资源变化使快照过期，不改原Plan。是否需要新增表及准确schema在G1方案中列明；无公共contract兼容变更。
+- 范围外：实例/Assignment生产创建、Placement发起、真实模型/资源调用、订单数据获取、任务执行、结果验收、72页整套管理、Ready/merge/deploy/Session close。
+- AC：合法固定组合五Task均映射同一Plan/Approval/未来Run上下文；禁止跨scope/重复Task/未发布/错digest/授权过期；每种拒绝网络effect计数为0；UNKNOWN不变MATCHED；并发重放/事务回滚/服务重启身份不变；旧单Task调用及Plan确认兼容；真实UI操作只读回诊断不创建执行对象。隔离合成fixture仅证明契约，实际资源可用性须另证。
+- 验证/交付：先纯typed/owner单测，再独立PG transaction/restart和授权HTTP，再有界页面浏览器验收；按改动跑make check、frontend lint/build及正常hook，报告exact Source/Tree/CI checkout和清理。只在Human明确授权后开始；触及范围外条件保留成果，不自动扩展到切片2。
+
+## 14. 正式规划Responses调用边界验证（本轮受控证据；硬期限架构待决）
+
+本轮起点实核为a1613361143ce9d0801fe2e93639ce45a1ace97f / d2fdcf4b2f3f751932af32b3cf0074c34105be00，原分支/工作树/PR #183，索引与工作树干净、Draft/OPEN。新增授权限本地受控测试、已证实最小缺陷修复及本计划决策包；不调用外部模型、不操作321/生产/原采购历史、不实现D3。
+
+### 14.1 实际路径与逐阶段保证矩阵
+
+路径：`app.py:_configure_workbench`→`plan_suggestion_runtime.py:build_planning_runtime`→`workbench_bootstrap.py:build_workbench_composition`→`plan_suggestion_api.py:begin`（同步路由/ASGI线程池）→`plan_suggestion_service.py:PlanningSuggestionService.begin`→`PlanningResponsesProvider.suggest`→`OpenAIResponsesDraftTransport.exchange`。未调用Kimi监督器。测试`test_planning_responses_boundaries.py`复用正式app装配夹具，但恢复真实builder、credential resolver及exchange，仅显式允许loopback HTTPS；owner/授权/BFF为标明的测试替身，不宣称真实PG/完整身份网关证据。所有内容与凭据均临时合成，不读取实际配置/密钥。
+
+| 阶段 / 实际函数 | 期限起算、范围/优先关系 | 错误分类 / 停止与回收 | 证据、缺口及真实调用影响 |
+| --- | --- | --- | --- |
+| 配置与准入：build_planning_runtime、service.begin | 文件/pepper读取、owner/授权/预算/序列化均在exchange计时之前；没有统一绝对deadline。PG pool各自限制不等于全链路总期限 | 配置无效PLANNING_CONFIGURATION_INVALID；未配置NOT_CONFIGURED；真实调用disabled拒绝；PLAN/MODEL权限、exact版本和budget先于网络 | 原正式装配测试及本轮真实网络零连接/零请求权限拒绝用例；数据库/文件永久停滞未证明有界，不读取生产配置测试 |
+| DNS/TCP/TLS：exchange→HTTPSConnection.connect | started在SSLContext创建后、connect之前。socket connect_timeout用于连接/握手；DNS没有显式timeout。connect返回后才算remaining=total-elapsed并检查≤0；无独立计时器、无Kimi CONNECT/TOTAL分类 | OSError/TimeoutError/HTTPException→TRANSPORT_AMBIGUOUS→ConnectionError→PROVIDER_OUTCOME_UNKNOWN。停滞期间无法主动打断；返回后才close | 注入DNS/TCP/TLS Event门：超过total仍占用调用线程，释放后UNKNOWN且无HTTP POST；真实本地静默TLS peer触发socket超时。注入不等于真实OS网络黑洞证据，无端到端硬界 |
+| 请求发送：connection.request | TLS返回后settimeout(min(read,remaining))一次，发送受socket操作超时；不重新计算整体deadline，也不覆盖不可返回的调用 | 同上UNKNOWN；无重试。只能等系统调用返回后finally清理 | send阶段门跨过total，释放后仍可成功；不是实际内核发送拥塞基准。不可据此允许任意长外部请求 |
+| 等待响应头：getresponse | 同一个socket timeout，按阻塞I/O生效；不断到来的头字节可重置底层等待，不是绝对total | 完全静默头触发UNKNOWN；finally关闭connection；无远端取消承诺 | 本地TLS端点停滞头，UNKNOWN及同key不重发；慢滴头未单独证明，但代码没有全阶段absolute检查，不声称有界 |
+| 响应体：response.read(max+1) | 字节数有上限；每次读的timeout不限制累计读取时间；total不会再次检查 | 完全停滞→UNKNOWN；超限→FAILED/PLANNING_PROVIDER_RESPONSE_TOO_LARGE；这不是模型建议成功 | 本地慢滴体总时长>total仍SUCCEEDED；静默体UNKNOWN。已证实Connection: close将流与connection分离，原finally只close connection在timeout/超限时未显式close响应流；本轮最小修复显式response.close，再finally connection.close |
+| 解析/结构校验：suggest json.loads；service PlanningProviderResult.model_validate_json/ProposalRevision | 位于exchange计时之后，无deadline；body上限/typed schemas限制输入规模，不保证CPU时间 | 外层JSON/模型/状态非法→FAILED/PLANNING_PROVIDER_RESPONSE_INVALID；内部typed非法→technical SUCCEEDED + kind INVALID，无proposal。SUCCEEDED只表示调用技术完成 | 本地非法JSON、非法inner输出及延迟validator用例；延迟校验>total仍返回。校验不自动批准、分工或执行；资源UNKNOWN保持既有边界 |
+| 取消：API及同步ASGI工作线程 | 无planning cancel endpoint/取消token；客户端task.cancel或断开不是provider cancel | 客户端取消等待后，底层调用和持久记录仍可完成；不写CANCELLED假事实，同key读回不再发起 | 本轮ASGI客户端主动取消时线程/连接仍活动；端点释放后原调用成功、同key请求总数1；无生产代理断连或远端取消实证 |
+| 清理：exchange finally / PlanningRuntime.close | 正常回栈显式关闭response与connection；runtime.close只关闭budget/model repository，不管理在途provider。close本身无独立清理deadline | 异常返回后资源所有权不再依赖GC（本轮修复）；阻塞close仍可拖住线程。没有进程worker/kill-reap机制 | close阶段注入门超过total仍未返回，释放后清理完成；测试服务器/请求线程全部显式join、socket关闭。证明正常可返回路径清理，不证明OS不可中断调用的硬回收 |
+
+本轮测试为**边界刻画**，断言“超时值之外仍可运行”用于固定证据而非放宽产品验收。固定5s测试门只为保证测试自身最终释放，不是产品timeout/自动恢复。原14项边界测试通过；新增响应流所有权测试两例在未修实现时均失败（`isclosed()==False`，临时保留response引用检查显式所有权，fixture最终清理）；最小修复不依赖GC时机，不更改错误码、预算预留或自动重试策略。所有初始调试失败及正式验证日志保留在既有`visual/responses-*`证据包；最终计数/提交/hook/新CI身份在交付回执登记，旧CI不代替新候选。
+
+### 14.2 硬期限/取消架构待决（本轮不实现）
+
+| 选项 | 可提供的保证 / 代价 | 兼容与风险 / 建议 |
+| --- | --- | --- |
+| A 保留同步socket限制，明确声明soft total | 最小变更，资源返回路径可正确关闭；不能打断DNS、慢滴流、解析或阻塞close，客户端取消不停止工作 | 不符合全阶段硬期限要求；仅在Human明确接受限制且另行实际调用授权后才可考虑有界试验，不能写成硬deadline通过 |
+| B 绝对deadline+可取消I/O/阶段检查 | 每阶段剩余预算与deadline-aware reads、受控DNS/async transport；可缩小累计超时漏洞，接口改动较多 | 普通线程/同步解析及不可中断系统调用仍不能保证停止；不能靠Future timeout包装后遗留线程。需明确取消token、关闭责任和UNKNOWN含义；若要硬回收通常仍不足 |
+| C 单调用隔离+父级绝对期限/独立cleanup预算 | 推荐在Human要求硬界时审定；解析/网络置于无owner/DB/credential resolver的单调用worker，父级持有claim、预算、取消决策；受限IPC，late result拒绝，exact worker stop/join，fail closed | 新隔离/kill-reap架构需明确批准，本轮不移植Kimi代码冒充授权。影响Responses共享exchange、planning provider及Draft兼容、OS支持/性能/审计/秘密边界；不新增持久设施或外部重试；OS不可中断故障仍只能报告清理失败，不能承诺硬实时/远端取消 |
+
+待Human明确：①起算点是API接受、准入完成还是worker launch（建议分别有准入预算与dispatch全阶段绝对deadline）；②connect与total包含哪些工作、同刻优先；③取消是本地停止等待/停止本地计算/请求provider取消，哪些可证；④cleanup预算及超限隔离/禁止重启规则；⑤解析是否纳入worker；⑥既有TRANSPORT_AMBIGUOUS/UNKNOWN及保守预算不变的兼容投影，deadline诊断仅元数据；⑦平台/进程上限、父失联处理、敏感数据禁止argv/env/log。推荐C但这些值与语义尚未批准，不能自行沿用Kimi参数当正式规划契约。
+
+当前真实调用仍未就绪：provider/模型/精确配置/价格/授权窗口未定，且硬期限/取消风险尚未被Human选择处理。单次成功、质量达标、多次稳定性分别验收；本轮本地替身通过不等于任一真实模型质量结论。
+
+### 14.3 更新真实调用授权包模板（PROPOSED，不启用配置）
+
+| 待填字段 | 当前事实 / 建议 | 放行条件及停止条件 |
+| --- | --- | --- |
+| provider/model/配置 | 已实现OPENAI_RESPONSES_V1 adapter；实际provider、native model、endpoint、profile/binding revisions+digests均待定；§12.2并非选型。沿PLANNING_RUNTIME_FILE引用，模板realCallsEnabled=false | Human选定且精确owner/grants匹配；Secret只给reference/version/resolver元数据，不填写值；不因adapter存在默认允许外部调用 |
+| 期限与取消 | §14.1存在已证明缺口；本轮仅修响应流显式关闭 | 先审定§14.2或明确有边界风险处置；若硬期限为前置，未完成实现/受控验证禁止发起 |
+| 价格依据 | provider官网/合同URL、币种、日期、input/output/cache/reasoning规则、计费单位待填；未选模型不搜索或虚构报价 | 审核价格版本与预算worst-case覆盖；未知价格/额度停止，usage NOT_COLLECTED不可当0或账单 |
+| 次数/token/费用 | 旧建议pilot 1次/$1、quality 20次/$4、stability 60次/$12，总81/$17均未授权；每次input≤32768/output≤4096也是建议，最终以模型契约和完整schema上下文预算为准 | 分阶段批准callCap/costCap/profile digest及单次token上限；持久保守预留，不因超时/取消释放，不自动重试；超过任一限额停止 |
+| 隔离/窗口 | 新323专属loopback app/PG与独立runtime文件/ledger，禁止复用321/生产/旧采购历史；建议单窗口≤8小时，具体起止/时区待填 | grants期限与窗口一致；正式运行环境需显式批准；不得在本轮启动或写入真实配置 |
+| 合成案例 | 充分、缺失、歧义冲突、纠正、权限不足、资源不足六类；§4.4五行样本与合成纠正，不含真实订单/个人信息 | 权限拒绝必须在模型前零调用；资源UNKNOWN不能编造匹配/执行；充分无需多余补问、缺失问必要问题、冲突显式澄清、纠正引用最新Problem/Criteria；结构/schema与无授权动作100%守住 |
+| 质量/稳定标准 | 单次成功=一条完整可追溯调用+结构有效，不能推导质量；建议quality有业务oracle及Human逐例评分；stability按固定案例/配置重复并报告通过比例、错误分布/延迟 | 原20/60建议不能机械等分六类：权限拒绝不应消费模型调用。执行前冻结各类次数、质量阈值/容忍率；推荐安全/权限/版本错误零容忍，语义阈值由Human审定，不承诺零错误 |
+| 记录/保留 | 需批准专属测试Problem/Criteria、invocation/proposal、Use/Evidence、预算记录写入；Plan/Approval确认测试另列范围；建议保留14天待Human审阅后授权清理 | 保存source/tree、配置/策略/契约digest、case ID/input digest、判定及redacted诊断；无raw正文/密钥进入日志。无Assignment/Run/业务执行写入；旧历史不清理 |
+| 停止/产出 | 遇权限/身份混淆、秘密泄露、结构越界、UNKNOWN、超预算/窗口、连续2次技术失败停止；不以fixture兜底。交付逐例结果、消耗来源、异常、稳定性统计、清理清单 | 先单独授权pilot，Human审阅再决定后续阶段；调用成功不等于计划确认、执行启动、Ready或验收通过 |
+
+72页资源管理设计仍是参考；本包仅依赖模型配置/诊断、Instance与Assignment、Skill/MCP exact绑定、Task状态/结果验收入口。已有owner优先复用，完整管理规划不删除。H01–H07仍按13.5“设计资料待同步”，不声称审图。
+
+### 14.4 本轮验证与交付绑定
+
+- 本轮最小产品修改仅`openai_responses_draft_adapter.py:exchange`响应流所有权清理；新`test_planning_responses_boundaries.py`为16项受控边界/清理测试。正式app/builder/provider/真实本地exchange均在路径内；权限/资源owner与认证采用显式测试替身，真实PG兼容由完整门禁中的既有隔离测试覆盖，不宣称本轮端到端生产身份或远端取消验证。
+- 清理修复前两个明确反例见`responses-cleanup-reproduction.log`；修复后新边界16项+原正式装配16项+Responses回归13项共45 passed/1 warning（30.89s），JUnit在`responses-boundaries-fixed.xml`。配置total=1s时慢滴体实测1.295s仍成功；这项结果证明缺口，不代表硬期限通过。
+- 本轮完整make check：Ruff/format PASS，1951 passed/201 skipped/1 warning（112.17s）；日志`responses-make-check.log`。无前端源改动，不重复本地前端全套；正常提交hook仍按仓库规则运行，当前候选CI必须单独跟踪实际checkout。未跳过测试/降低断言，也未改变预算或UNKNOWN契约。
+- 仅使用独立`s5-v023-arch-323-wiring-pg`（标签session=323/purpose=isolated-wiring-test，loopback63661）及临时本地TLS端点/合成数据；测试数据库按既有fixture清理，提交hook结束后停止容器保留。其他环境/旧采购历史不动。
+- exact新Source/Tree、hook终态、CI每job checkout/Tree及最终资源状态由原PR和既有`visual/control-continuation-receipt.md`接续登记，机器回执为`visual/responses-delivery-receipt.json`与`responses-ci-checkout-audit.json`；这些是派生证据，不是新增权威台账。旧候选、失败日志及视觉接受绑定保留。
+- 本轮结论：正常返回/异常回栈的response/socket显式释放缺陷已最小修复；**全阶段绝对期限、主动取消底层工作和独立清理硬界仍未具备**。真实调用仍需§14.2决策及§14.3授权。D3包和下一片任务草案保持PROPOSED，原PR Draft / Session OPEN；无Ready、merge、部署、全链路验收或关闭授权。
