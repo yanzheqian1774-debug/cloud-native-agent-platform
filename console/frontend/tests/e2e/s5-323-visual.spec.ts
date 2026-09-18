@@ -123,20 +123,27 @@ test('V323 grouped navigation keeps destinations and stays outside workflow page
 });
 
 test('V323 formal planning errors are visible and do not create or execute',async({page})=>{
-  let calls=0;
+  let calls=0,reads=0;const writes:string[]=[];
   await page.route('**/api/workbench/v1/**',async route=>{
-    const path=new URL(route.request().url()).pathname;
+    // Match the server's decoded path parameter, including opaque IDs with colons.
+    const path=decodeURIComponent(new URL(route.request().url()).pathname);
+    if(route.request().method()==='POST')writes.push(path);
     if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:323',tenantId:'isolated-323',securityDomain:'test'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'test'}});
     if(path.includes('/planning-input/'))return route.fulfill({json:{result:{target:{},title:'受控规划',description:'仅测试接线'}}});
     if(path.endsWith('/planning-v2/invocations')){calls++;return route.fulfill({json:{result:{invocation:{target:{invocation_id:'failed:323'}},result:{technical_status:'FAILED',kind:null,reason:'PLANNING_PROVIDER_HTTP_REJECTED'},facts_status:'RECORDED'}}});}
-    if(path.endsWith('/invocations/failed:323'))return route.fulfill({json:{result:{invocation:{target:{invocation_id:'failed:323'}},result:{technical_status:'FAILED',kind:null,reason:'PLANNING_PROVIDER_HTTP_REJECTED'},facts_status:'RECORDED'}}});
+    if(path.endsWith('/invocations/failed:323')){reads++;return route.fulfill({json:{result:{invocation:{target:{invocation_id:'failed:323'}},result:{technical_status:'FAILED',kind:null,reason:'PLANNING_PROVIDER_HTTP_REJECTED'},facts_status:'RECORDED'}}});}
     return route.fulfill({json:{result:{}}});
   });
   await page.goto('/work/plan?problem=test:323');
+  const readBack=page.waitForResponse(response=>response.url().endsWith('/planning-v2/invocations/failed%3A323'));
   await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+  await readBack;
+  await page.reload();
   await expect(page.getByRole('alert')).toContainText('没有创建建议、批准或执行');
   await expect(page.getByRole('button',{name:'生成建议计划',exact:true})).toBeDisabled();
   expect(calls).toBe(1);
+  expect(reads).toBeGreaterThanOrEqual(2);
+  expect(writes).toEqual(['/api/workbench/v1/planning-v2/invocations']);
 });
 
 test('V323 missing planning configuration is explicit and clarification retains answers',async({page})=>{

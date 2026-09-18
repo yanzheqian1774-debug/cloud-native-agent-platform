@@ -706,6 +706,8 @@ Human随后授权本地有界诊断、必要最小修复、正常验证/提交/�
 - 本轮仅重启并使用独立`s5-v023-arch-323-wiring-pg`，loopback随机端口50993，测试临时数据库正常teardown；原采购历史/321/生产均未访问。原frontend lint/build/41交互通过证据复用，Kimi修复未改前端；不是本轮重新运行。
 - **正式规划Responses限制**：规划仍调用OpenAI exchange，未进入Kimi进程监督器。受控装配、非法输出/timeout到UNKNOWN和确认不执行已验证；socket connect/read timeout、连接后remaining检查及finally-close不等于全阶段绝对硬期限或1s kill/reap。本次没有证明规划DNS/send/慢滴流/父进程校验及回收硬界，也未验证真实模型质量/稳定性；如该保证是实际调用前置条件，需另行授权最小实现及故障注入验证。不得移植Kimi通过结果冒充规划保证。
 
+补充CI终态与受控修复：首次正常提交/普通推送产生Source `19b8dee2fcbd7c4f50e9d089599cca366795ec44` / Tree `623398504d616ac82b1fe5e2cb1558bd1845c70b`，hook三项PASS；CI为11 SUCCESS/1 FAILURE。5项实际checkout该Source，7项checkout合并候选`a50a77a1140adae6dc2958a9cd934147a9dd6197`，Tree均为6233985；Kimi mock与Quality Gates均成功。唯一失败是本次新增规划错误态UI fixture用未编码`failed:323`匹配实际GET的`failed%3A323`，读回落到空result；此前本地断言可能在读回前通过。新增明确等待该GET并reload可确定复现失败，随后仅修fixture解码路径，保留等待/刷新断言，增加至少两次读回及唯一POST断言；没有产品行为修改、扩大超时或重跑失败CI碰运气。后继候选的本地前端lint/build/完整41交互、正常hook及新CI结果分别登记`deadline-frontend-lint-final.log`、`deadline-interaction-final.log`、`deadline-followup-hooks.log`与外部最终回执；首候选CI日志及checkout审计另存`deadline-first-candidate-*`，不覆盖为成功。后继Source/Tree随测试/治理文件变化，产品实现仍与19b8dee相同。
+
 原产品视觉接受仍仅绑定9b5b342/31d0ecd；本次正式接线形成新产品候选，不自动继承新增行为接受。D3保持第13节PROPOSED，历史补问缺图延期、AUTHORIZATION_NOT_FOUND及确认态文案非阻断项不变。停止位置仍为正式接线受控验证完成、真实调用待授权、D3草案待审阅；Draft/Session OPEN。
 
 ## 13. D3详细执行契约草案（PROPOSED，待Human审阅；本轮不实现）
