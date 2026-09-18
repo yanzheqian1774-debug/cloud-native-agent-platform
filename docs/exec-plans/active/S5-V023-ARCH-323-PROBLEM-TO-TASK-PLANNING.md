@@ -543,3 +543,106 @@ Human有界接受前段布局改善；全链路最终视觉验收待规划截图
 保留f65aeb1/tree 9f6311f对应的现有规划同屏、任务展开、资源缺口三图。新候选只改变上述导航文本；新增截图仅在323独立服务读回同一既有采购记录，不创建业务数据、不调用模型。新source/tree、构建hash、逐图候选身份及新候选CI在原visual manifest与PR登记，旧截图不得重标为新候选原始截图。
 
 本轮实际验证：frontend lint/build通过；39项交互通过（26.9s）；make check 1917 passed / 201 skipped / 1 warning（92.31s）。新规划截图只读原Plan/history，history与原回执相等；116张表中，登录session/nonce各增加2，authorization_admin.audit_events增加2（均为SESSION_CREATED/COMMITTED/AUTHENTICATED），其余113张表计数不变；业务/模型/执行计数未变。历史补问invocation读回返回AUTHORIZATION_NOT_FOUND，未修改授权或重发调用，沿用旧候选补问图并单独标注，不把它算为新候选补验通过。最终以所请求的目标/任务/确认同屏、任务用途展开、资源缺口三图交Human审阅。
+
+### 10.13 Human有边界视觉接受登记（2026-09-18）
+
+本节依据Human本轮明确决定，更新10.11/10.12中仍待采购规划视觉审阅的状态，不改写历史记录。原文：
+
+> 接受当前固定候选的采购规划主体及本增量有边界视觉表达；
+> 当前候选历史补问缺图延期补证，不以旧图或 fixture 替代；
+> 已确认态引导文案作为非阻断后续项。
+> 此次不授予全链路业务验收、Ready、合并、部署或 Session 关闭，
+> 保持 Draft／OPEN。
+
+接受仅绑定产品Source `9b5b342245b8c6d56ee77d66bf80d8a134f02bfa` / Tree `31d0ecd4dc063c739813ad7703724cdb37a9a681`。本轮开始只读核对本地HEAD/tree、干净工作树、唯一#183 head均相符，PR OPEN/Draft；该候选12项CI均SUCCESS。原CI checkout与tree关系保留在外部`visual/ci-checkout-audit.json`，不挪用于后继治理提交。前段布局既有Human有边界接受继续保留；采购规划主体及本增量视觉表达现为Human有边界接受，绝不是全链路业务验收通过。
+
+当前候选采购历史必要补问截图仍缺失，既有`AUTHORIZATION_NOT_FOUND`事实保留：延期补证，未永久豁免。本轮不重试/绕过，不用旧候选图、供应商质量fixture或独立采购fixture替代。已确认态仍显示“先核对目标与方案，再确认计划”是非阻断后续项；建议后续统一改为“计划已确认，可查看任务、资源缺口与历史；执行尚未开始。”本轮不修改产品代码。
+
+证据继续使用原验收目录`/Users/tristan/Documents/s5-v023-arch-323-acceptance/visual/`的`visual-capture-manifest.json`、`control-continuation-screenshot-matrix.json`、`label-real/02-goal-and-plan.png`至`07-scroll-1366.png`。A供应商质量UI fixture、B独立采购UI fixture、C采购HTTPS/PG受控provider既有历史互不拼接为同案真实模型旅程。`control-continuation-receipt.md`是派生回执，其旧“等待Human决定”由本节决定取代，不构成新权威台账。
+
+本轮仅更新本计划及Registry的323登记。治理提交及其新Tree、更新后PR HEAD另由原PR和派生续接回执登记；不得声称治理Tree仍等于上述被接受产品Tree。产品接受不自动扩展到新产品变更。保留旧功能候选`2b8e66f350ac91be83f8c8ac4263692a1d17ce07`及全部历史证据。Ready/merge/deploy/Session close仍NOT_GRANTED，Session OPEN。
+
+### 10.14 本轮收口核对
+
+| 分类 | 事实与依据 | 对收口的实际影响 |
+| --- | --- | --- |
+| 已实现 | 10.7–10.12：增量一受控建议/必要补问、exact Problem/Criteria绑定、不可变proposal、资源缺口、原子Plan/Approval/source确认、刷新/重启读回、PC统一及来源标识 | 工程实现已交付；不能据此宣称真实模型稳定或执行完成 |
+| 已有验证 | 10.10–10.12：lint/build、39项交互、21项工作区历史回归、1917 passed/201 skipped/1 warning、HTTPS/PG历史与副作用回执；9b候选12项CI成功 | 本轮复用，非本轮重跑；后继治理CI单独关联 |
+| Human已接受 | 10.12前段布局；10.13采购规划主体及当前增量有边界视觉表达 | 本增量视觉决定已完成，不重复要求同一决定 |
+| 非阻断后续 | 已确认态引导文案；10.11既有274字面量测试债务；未获新增润色授权 | 不阻断本次有边界视觉接受；保留责任与后续处理 |
+| 延期补证 | 当前候选C来源历史补问缺图，AUTHORIZATION_NOT_FOUND | 已获明确延期，不再作为要求重作视觉决定的理由；未永久豁免，后续补证需有效读权限与约定候选 |
+| 实现验收尚缺 | 第5节明确“真实AI建议接通”需另行授权真实模型证据；本轮11节查出正式规划provider接线缺口、真实质量NOT_MEASURED | 阻断无约束的真实AI接通/完整增量一验收声明，不能用fixture顶替；后续须授权补齐或明确有界验收处置 |
+| 增量二前置 | 第6节及D3：同Run多Task契约、真实资源、执行/结果验收接线未完成 | 不追溯阻断已接受的增量一视觉；阻断启动/宣称增量二闭环 |
+| 任务关闭与发布 | 全链路业务验收、Ready、合并、部署、关闭均未授予；相应DoD/集成门禁须届时核对 | 本轮无自动关闭条件；Human后续分别决定实现验收边界、延期补证归属、集成与关闭，不捆绑为视觉再验收 |
+
+## 11. 真实AI主线只读核对与后续建议（2026-09-18，PROPOSED非实施授权）
+
+### 11.1 核对基线与直接结论
+
+以下基于10.13固定产品source，读取当前源代码及既有证据；未启动服务、读取凭据、调用模型、创建数据、派发任务或重新运行质量评测。源路径相对仓库根；后端缩写B=`console/backend/src/agent_console/`，前端F=`console/frontend/src/`。测试存在不等于本轮执行，静态接线存在不等于部署已配置。
+
+- **不能确认真实AI已稳定提问/理解/拆解。** 理解与补问已有真实provider适配能力、v2提示策略及校验；321既有Q01–Q16质量仍NOT_MEASURED。规划调用框架存在，但当前正式启动未注入具体provider，323运行证据仅CONTROLLED_TEST_PROVIDER。
+- **当前323没有完成实际任务分配。** 模型/受控provider给出Task、角色要求及可选Definition引用；owner验证不等于绑定员工Instance/Task Assignment。D3接线尚待实施。
+- **模型接入分段成立。** `/work`草稿理解可由运行profile接OpenAI/Kimi；当前部署是否配置/可用本轮未读取运行配置，不作肯定。planning-v2的正式`app.py`仅传`planning_v2_enabled`，未传`planning_invocations`；仓库具体`PlanningInvocationDependencies(...)`构造只见323验收服务器。不能声称当前产品完整模型主线已接通。
+- **已有同案证据到受控采购规划确认及持久历史读回。** 前段供应商质量/独立采购fixture不能与C历史拼接。真实模型从问题到计划的同案证据、该计划到执行和业务结果验收都未建立。平台另有执行基础，不能写成“全平台没有执行实现”。
+
+### 11.2 逐段实现、接线与证据矩阵
+
+| 环节／产品入口或接口 | 核心文件及函数 | 输入→输出 | 当前主线接线与实现分类 | 模型／确定性责任、数据来源 | 持久化／权限／生命周期 | 既有证据与断点／补齐 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 问题输入 `/work` | F`problems/ProblemWorkspacePage.tsx`，`beginDraftAssistance`调用 | 用户原文/纠正消息→版本化当前会话输入 | 已接入；`VITE_PROBLEM_DRAFT_ASSISTANCE=enabled`控制辅助入口 | 人工原文；禁用时人工草稿，不是假模型fallback | session/CSRF、上下文epoch/迟到响应隔离；未确认不建Problem | 321及323交互fixture覆盖；非真实语义证据 |
+| 模型调用 `POST /api/workbench/v1/draft-assistance/invocations` | B`app.py`启动组合、`draft_assistance_bootstrap.build_draft_assistance_composition`、`DraftAssistanceService.begin` | content+exact profile/binding→Invocation/result | 真实adapter已实现且有条件接入正式启动；部署实配未知 | OpenAI/Kimi或显式synthetic transport；结果不得静默换mock | scoped grant、exact model binding、预算、幂等、PG调用元数据及Use/Evidence | 319/320 HTTPS mock、321验证；未找到已完成当前真实质量运行凭据，不推定不存在其他外部运行 |
+| 必要补问/理解 | B`draft_assistance_policy.policy_for/validate_result`；OpenAI/Kimi transport prepare/send | 用户消息→NEEDS_CLARIFICATION或DRAFT_READY+understanding | 草稿路径已接；真实稳定性未验证 | v2提示要求只问1–2必要问题、保留未知/冲突/纠正；结构与引用规则确定性校验，不能保证模型语义 | invocation/turn lineage；补充产生受控后继，不自动创建业务对象 | 321 Q01–Q16未测；当前历史C补问读回权限拒绝不重试 |
+| 纠正与确认创建 | F`ProblemWorkspacePage.tsx` create/update流程；B`business_problem_application.py` | 最新用户确认草稿→正式Problem revision | 已实现/当前入口已接；已有独立受控后端创建读回证据 | 模型建议不具有确认权；用户编辑与确认决定正式输入 | 一次显式确认、幂等、trusted actor；创建与独立READ授权分开 | 321既有真实PG+HTTPS但provider为fixture；与323 C不是同案完整旅程 |
+| 目标/完成标准 | F`ProblemWorkspacePage.tsx` `saveCriterion`；B`plan_suggestion_application.current_input/validate_target` | 正式Problem+Criterion/CriteriaSet→exact planning target | 人工标准路径已接；非模型自动发布标准 | 规则取当前ACTIVE Problem、最新标准集与digest；Human确认标准 | 独立Criteria权限、revision/CAS、stale target拒绝 | 323 target/stale确认测试；正式新问题到ACTIVE/标准授权前置需在同案验证中覆盖，不能假定一步自动完成 |
+| 规划必要补问与拆解 `planning-v2/invocations` | F`planning/PlanningEntry.tsx` `generate`；B`PlanningSuggestionService.begin/read`、`plan_suggestion_api.install_planning_invocations` | target+answers+predecessor→questions/typed proposal | 框架与UI已实现；正式app缺provider注入；验收server已接受控provider | provider提建议；`PlanningProviderResult`及`PlanSemantics.validate_graph`验证exact target、引用、无环、采购三阶段五Task线性依赖；非真实模型生成证据 | PREPARE/INVOKE_MODEL、预算、claim幂等、不可变revision；真实开关默认false | `test_plan_suggestion_invocation.py`、`test_plan_suggestion_v2.py`、323受控PG历史；补真实planning adapter/profile/prompt/调用组合及质量验证 |
+| 数字员工/能力匹配 `planning-v2/{id}/resources` | B`PlanningResourceResolver.resolve`、`EmployeePlanningReader.observe`、`digital_employee_definition_postgres.read_for_plan` | requirement.selected→owner observation/snapshot | Employee reader已接；其余kind无reader为UNKNOWN；不是Task分配 | 受控provider/未来模型可提精确引用；owner检查scope/READ/已发布revision/digest；`PublishedRoleMatcher.match`另有实现，未由323resolver调用 | 不写Instance/Assignment；缺失MISSING、不可读UNREADABLE、不可用UNAVAILABLE/UNKNOWN分开 | owner测试和真实1匹配/6必要缺口/1可选；不证明能力覆盖、运行可用性、Skill/MCP授权齐套；补owner eligibility及D3绑定 |
+| 计划确认 `planning-v2/{id}/confirm` | F`planning/PlanningPage.tsx`；B`PlanningApplication.confirm`、`plan_suggestion_postgres.confirmation` | exactproposal/digest+expectedversion+key→Plan/Approval/source | 已接入且有受控HTTPS/PG验收证据 | 规则原子确认；不自动调用模型、不执行；资源有缺口仍允许保存计划 | APPROVE、trusted actor、CAS/幂等、事务rollback、immutable history | 并发重放/rollback/CSRF/owner/刷新重启证据；缺口不在确认时强制齐套是设计，不能宣称ready |
+| 执行派发 `/api/internal/v0.2.3/executions` | B`GovernedExecutionApplication.start`、`ExecutionApplicationService.start`、`native_dispatch_application.py` | exactapprovedplan+Assignment/Instance/Skill binding→Run/Task/Attempt/dispatch | 平台实现已有；未接323planning-v2；同Run多员工协调未完成 | 规则鉴权/批准/operation校验，Skill/Native负责effect；模型不直接派发 | START及INVOKE_SKILL、scope/exact绑定、单slot、unknown不重发 | 310/316/317与execution/Skill测试为基础证据，非323五Task真实运行；start identity seed含task_id，不能逐Task重复start冒充同Run |
+| 状态/结果/Evidence读回 | B`GovernedExecutionApplication.read`、`execution_application` outcome/completion record、resource_use；F`evidence/EvidenceCenterPage.tsx` | exactRun/Task/Attempt→观测/Use/Evidence | 平台读回基础已实现；323展示execution_status=NOT_STARTED，未接五Task进度 | 来自owner执行事实，不能从Plan/资源声明生成成功 | 独立READ、append-only证据、attempt lineage、未知保留 | 平台测试/历史非本案；补stage聚合、任务产物I/O及重启reconciliation |
+| 业务结果验收 | F`outcomes/OutcomeCenterPage.tsx`；ARCH-264契约 | terminalRun+Criteria/Evidence→Evaluation→HumanConfirmation→Outcome | 当前页面明确NOT_CONNECTED、旧v0.2.1上下文；323主线未实现闭环 | 系统评估与Human业务确认分离；技术completion不是解决问题 | terminal gate、exact evidence、Human actor及否决历史待接线 | 原增量二I2.5明确需新增typed services/repos/API；不能以旧outcome或批准代替 |
+
+完整源文件是实现依据。正式构造搜索覆盖仓库Python源/测试，`PlanningInvocationDependencies`只在323 browser server实例化；它不是可用真实provider的隐式默认值。旧`problems/ProblemPlanningPage.tsx`的v0.2.1“实时AI辅助”独立入口也不能替代当前`/work`接线证明。
+
+### 11.3 模型调用与分配专项约束
+
+配置引用已存在：`DRAFT_ASSISTANCE_RUNTIME_FILE`指定运行profile，内含provider/model/endpoint/connection/adapter/schema及credential引用；`VITE_PROBLEM_DRAFT_ASSISTANCE`控制前端；`PLANNING_V2_ENABLED`只启用规划owner操作。未读取secret/令牌值，未核实当前运行文件内容。真实adapter准备请求时绑定v1/v2策略、structured schema、输入/token上限；321前端不是单纯美化，它传递版本化用户事实及纠正，后端v2理解策略已存在；323后续PC视觉改动本身没有新增模型接线。
+
+Draft transport有connect/read/total timeout、响应体上限及错误/UNKNOWN处理，Kimi还有受监督worker期限/回收实现；320历史A05接受记录仍有未证义务，321后继deadline测试/修复记录并存，不能以旧登记断言当前代码无监督，也不能以一次mock测试证明真实provider全链期限可靠。后续真实调用授权应明确采用的adapter候选和期限证据。服务保留幂等claim、预算reservation及上下文Use/Evidence；未知不自动重发，显式恢复/后继有独立语义。synthetic与LOCAL_HTTPS_MOCK有标签；未见“真实失败就以mock成功顶替”的合法路径。
+
+Planning profile与provider协议已存在，但没有具体真实transport配置/提示词组合落地；`provider.suggest`为同步注入接口，服务捕获TimeoutError/ConnectionError并记OUTCOME_UNKNOWN。没有由该接口框架自行提供的完整网络deadline/retry guarantee；具体transport、输入输出语义与审计还需补齐，不能把draft transport直接等同planning已接。真实开关false；本轮未改变。
+
+AI/受控provider提出的是建议与角色要求，可携带候选Definition引用；资源owner确认引用事实，Human批准计划。只有未来经D3校验的Instance/Task Assignment与运行准入才构成实际分配。当前Employee read_for_plan只保证授权、scope、published和digest，不等于PublishedRoleMatcher能力覆盖或Instance可用性。必要资源缺口应阻断未来执行准入；当前323没有执行按钮/派发路径，允许确认待准备计划并不绕过执行门禁。
+
+稳定性证据分类：信息充分、信息缺失、歧义/冲突、用户纠正已有321策略与模拟交互；权限不足已有授权拒绝/身份隔离测试；资源不足已有323owner/缺口测试。以上均不能升级为真实模型语义稳定性验收。后续建议固定模型/profile/prompt/schema、预先标注的六类用例及多轮纠正样本，分离结构合法率、事实/数字/时间保真、重复补问/遗漏率、纠正保留率、任务依赖与资源幻觉、人工修改量；固定预算与重复次数、逐例保存可披露结果和exact调用证据，报告分母/失败/未知，不只展示成功样例。321 Q01–Q16可复用为草稿质量基线；规划补充同案任务与资源oracle。阈值、样本量及调用预算待Human接受，本轮无新增评测。
+
+### 11.4 增量二最小方案（PROPOSED）
+
+原定义是第6节“同一计划只读执行和结果验收”，含I2.1–I2.6；D3是第3节中同Run多Task/多员工契约的方向，详细契约延期至增量二实施前。延期原因是增量一只需要建议、Definition引用和确认，不需要实例分工/执行；D3的root/Task Assignment、terminal聚合、I/O、retry/pause fencing需先定型。D3不是另一个已完成实现，也不等同全部增量二；本轮没有启动或实施授权。
+
+建议按以下依赖顺序，不改变v0.2现有归属或重开CLOSED架构任务：
+
+1. **先补真实提问/拆解接线，作为增量一真实AI接通缺口。** 复用319/321 draft profile/adapter/策略、323typed proposal与调用审计；补正式planning provider/配置组合、版本化规划提示与输出校验，固定同一个Problem/Criteria。Human先给精确provider/model/endpoint/profile、用途、数据范围、credential受控引用、预算/时间窗和调用授权，再开展同案真实质量验证。此项不能藏进“已完成视觉”的结论，也不通过另一个fixture补齐。
+2. **确认D3并补任务分配。** Human接受有界root/Task Assignment契约；复用published employee/Agent/Skill/MCP/Workflow owner与matcher，将角色要求落到最多2类职责的实际实例、精确能力和有效分工，验证发布、权限、capability/schema、trust/availability；资源不足允许计划待准备，执行fail-closed。业务确认、资源发布、实例创建、分工与启动各自独立授权。
+3. **场景与边界。** 延期采购订单分析：一个只读订单来源/固定schema，三阶段五Task（快照→日期校验→延期计算→供应商汇总→清单），最多两职责、线性链。起点是同案已批准exactPlan且资源就绪；终点是一个terminalRun、可读清单/异常/来源证据、Criteria评估及Human确认/否决。前段真实问题理解作为前置同案证据串联。范围外：订单写回/通知、动态DAG/循环、通用调度/资源工厂、全部72页、生产发布。
+4. **执行接线。** 复用Execution身份、single Skill slot、Native handoff/Placement、授权、Postgres及已有operator readiness算法；补同Run coordinator、持久依赖与artifact I/O、每Task effect owner，禁止Native和同步Skill双派发。不能对五Task各调用旧start生成五Run。
+5. **结果与恢复。** I2.4聚合真实Task事实和有界产物；I2.5按ARCH-264实现terminalRun→Evaluation→HumanConfirmation→Outcome；I2.6重启读回、retry新Attempt、未知不重发、pause request/ack分离。执行和结果验收本来就在增量二，不另假定范围外。
+6. **同案验收。** 逐段绑定Problem/Criteria/Invocation/Proposal/Approval/Assignment/Run/Task/Attempt/ResourceUse/Evidence/Outcome精确ID与digest；真实授权只读来源、真实模型、真实Skill分别证明，不相互替代。五Task产物对第4.4节R1–R5 oracle；正常、缺失日期、权限拒绝/撤权、资源不足、timeout/unknown、并发start、故障恢复、Human否决都有独立期望。刷新和重启不新增effect。真实模型质量另按11.3测量，工程用例通过不是质量稳定证据。
+7. **必要授权与门禁。** 先恢复届时main/现有集成状态与共享路径ownership；Human明确D3接受、增量二G1实施范围、必要资源准备归属、模型调用包、只读数据/执行与验收授权，再按既有治理流程安排实施。没有任何新Task编号在此自动创建；不授予Ready/merge/deploy。若需要改变Accepted架构或增加基础设施，走G2，不能在323悄然扩大。
+
+### 11.5 72页管理设计与主线依赖（PROPOSED）
+
+已找到本地完整设计包`/Users/tristan/Downloads/Resource-Management-PC-72-Pages/`：72张`pages/*.png`、`PAGE-CONTRACT.md`、`coverage.csv`、`IMAGE-MANIFEST.json`、`IMPLEMENTATION-ORDER.md`及`index.html`。已读取页面契约/目录/实施建议；这是2026-09-18目标设计与合成数据，页面编号不是Session编号，不代表功能已实现或获授权。仓库依据为CONTROL-254的Complete Product page inventory（数字员工、Skill、MCP、Knowledge、Workflow等）及PLAN-003模型候选/确定性权威边界；PLAN-001/003早期CURRENT段不是当前源码替代。
+
+A=主线必需的能力切片（不要求先完成整页），B=可并行的非阻断管理体验，C=后续完整管理能力。下面是现有文件/契约层核对，不声称72页逐控件验收。
+
+| 模块／设计依据 | 已有实现与前后端契约 | A 首批依赖／缺口 | B 可并行 | C 后续完整能力 |
+| --- | --- | --- | --- | --- |
+| 数字员工 D01–D12；重点D04/D07–D11 | F`digital-employees/DigitalEmployeesPage.tsx`、B`digital_employee_*`、`workbench_employee.py`；Definition/Instance/Assignment与授权有现有owner | P0：D04精确能力版本与缺口、D08/09实例和有效Task分工、D11真实Placement；补323到D3映射，不把role卡当Assignment | P1：D05验证呈现、D06版本差异/引用影响、D10任务返回入口 | P2：完整AI创建向导、部门管理与D12批量生命周期；不自动生产员工 |
+| Skill S01–S12；重点S03–S09/S11 | F`resources/SkillWorkbenchPage.tsx`；B`skill_mcp_*`、`skill_invocation_*`、`skill_executor.py`，定义/生命周期与调用owner分离 | P0：采购R2–R5真实规则、schema、eligible exactrevision与只读执行、S11实际Evidence；具体采购资源是否齐备未证，当前有缺口 | P1：S07/08测试用例/失败呈现与S10差异；发布门禁必须有，完整UI可后补 | P2：批量导入/克隆/导出、完整AI辅助生产；图中测试通过不是真实发布事实 |
+| MCP M01–M12；重点M03/04/07/08/11/12 | F`resources/McpWorkbenchPage.tsx`复用ResourceWorkbench；B`skill_mcp_*`与endpoint/trust相关owner；连接/发现/选择和调用独立 | P0：一个真实只读订单tool，受控credential引用、trust/schema/授权与exact选择、unknown诊断/Evidence；planning owner reader尚未接 | P1：M09诊断/发现差异/引用影响视图 | P2：M05 Resources/M06 Prompts完整发现管理及多connector；不得因Tools已有就宣称两类也完成 |
+| Knowledge K01–K12；重点K08/09/10/11 | F`resources/KnowledgeWorkbenchPage.tsx`、B`knowledge_*`；源/revision/索引/检索能力，页面明确workbench retrieval非Attempt Evidence | 场景实际引用Knowledge时为P0：精确已发布source/index、授权检索与可追溯citation；若原采购方案无必需Knowledge则不额外阻塞（需Human确认资源范围） | P1：K08/09来源定位、K10差异与引用；已有检索不代表该Task采用 | P2：K03–K07完整PDF/DOCX解析/预览、批量任务、企业连接器与清理策略；保留后续完整性要求 |
+| Workflow W01–W12；重点W04–W06/W08/W09/W11/W12 | F`workflows/WorkflowWorkbenchPage.tsx`/Builder，B`workflow_definition_*`/`workflow_control_*`；现有定义、binding与批准基础 | P0：exactPlan绑定、五Task依赖/I/O、D3准入、同Run事实、恢复/干预与结果；当前323确认不派发 | P1：W03编辑体验、W10版本对比/引用影响 | P2：W07通用条件分支/汇合及完整模板/AI定义管理；本切片仍线性 |
+| 技术Agent A01–A12；重点A04–A11 | F`resources/AgentWorkbenchPage.tsx`/AgentBuilder及RuntimeProfileWorkbench；B`agent_definition_*`、model governance、Native/Placement；定义/资源精确binding已有 | P0：所选路线确需的模型profile/运行profile、Agent/员工/Assignment关联和真实观测；模型adapter与Agent配置不可混为一项 | P1：A07验证报告、A08版本影响、A11关联任务与A12unknown诊断可见性 | P2：全套AI定义生产、批量实例控制与完整运维；不能承诺暂停能撤销已发请求 |
+
+优先级按真实主线依赖，不按72图顺序机械开工；A中能力有现成合格owner时复用，只补真实接线/证据，不重复造后台。每次后续实施须引用页面ID、tab、状态转换、exact对象、授权和契约；完整创建/编辑/测试/发布/生命周期仍留在后续规划，不因本次最小闭环删除。
