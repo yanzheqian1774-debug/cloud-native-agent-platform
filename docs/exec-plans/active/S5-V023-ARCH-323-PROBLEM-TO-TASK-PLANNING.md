@@ -900,3 +900,84 @@ G0有界诊断计划：核对默认79测试与20条静态诊断白名单（仅�
 独立诊断负例：临时synthetic spec主动expect(1).toBe(2)，真实Playwright JSON经同一sanitizer得到ASSERTION/第3行并通过披露扫描；它只验证诊断链，不是原失败重现或业务证据。现有测试名映射覆盖默认79/79（枚举采集未执行业务）。外部证据`ci-diagnosis-negative-control.json`中的零manifest仅用于该负例，不归入产品候选构建验收。
 
 本轮make check：Ruff/format通过，2017 passed / 201 skipped / 1 warning（142.84s），日志`visual/ci-diagnosis-make-check.log`；仅PLANNING323专属测试库启用，其余未配置集成测试按原门禁规则skip，未删除/新增skip。frontend源未改，复现前live build通过；CI将独立执行完整受影响浏览器门禁及其他检查。正常hook和新候选CI未沿用历史结果，终态在原PR和`ci-diagnosis-delivery-receipt.json`绑定。
+
+## 16. 真实AI问题到持久计划：演示准备（2026-09-18授权；真实调用未授权）
+
+### 16.1 基线、配置与可演示结论
+
+恢复实核Source `1d8892b1fe1f26bb86517a889155012550b5e55c` / Tree `59d9583ca3ad3942f9d0feacc9aed266e9632689`，原b923工作树干净、PR #183同HEAD且Draft/OPEN。§15历史浏览器失败根因继续UNKNOWN，不重启该诊断。本轮仅新建独立受控测试PG、复用本地HTTPS测试、补充演示前置风险测试和本节准备记录，不调用真实模型/MCP，不启动资源分工准入或执行。
+
+**完整的“全新问题→全程页面操作→持久计划”演示当前尚未就绪**。已实现分段的理解/补问、确认创建、Criteria、正式规划provider及持久Plan，但新建Problem为DRAFT，规划要求ACTIVE且已有Criteria；当前`ProblemWorkspacePage.tsx`与`api/businessWorkspace.ts`没有调用既有Problem lifecycle的激活入口。既有323 HTTPS测试直接从预置ACTIVE采购Problem开始，不能替代新问题起点。本轮不悄悄用SQL/fixture激活，也不新增激活交互或改变生命周期。
+
+配置核对范围：只检查本323执行上下文的配置引用和仓库模板，不检查321、生产、其他进程环境或凭据值。下列UNSET不代表全平台没有配置；表示本次没有已证明可用于本演示的运行实例。
+
+| 段落 | 正式入口/装配/adapter | 协议/版本/配置来源 | 当前生效/模型/凭据就绪事实 |
+| --- | --- | --- | --- |
+| 理解、必要补问、纠正 | `/work`→`beginDraftAssistance`→BFF draft-assistance invocations→`app._configure_workbench`→`build_draft_assistance_composition` | `DRAFT_ASSISTANCE_RUNTIME_FILE`；`openai-responses-draft`或`kimi-responses-draft`；理解应选adapter revision v2、`problem-draft-assistance-output.v2`、`problem-understanding-context.v1`、`policy_for(v2).digest`；协议分别OPENAI_RESPONSES_V1/KIMI_RESPONSES_V1 | 本执行上下文文件引用UNSET，nativeModelId未选定、exact Model/Provider/Endpoint/Profile revision/digest无有效实例证据，credential reference/version/resolver/file均未提供。前端构建开关`VITE_PROBLEM_DRAFT_ASSISTANCE=enabled`当前env UNSET；已有dist不能据此推定启用。SYNTHETIC仅测试；REAL_PROVIDER不是默认自动启用。理解配置没有规划的realCallsEnabled字段，不能误以为一个共享开关会关闭两段 |
+| 三阶段五任务规划 | `/work/plan?problem=...`→PlanningEntry→planning-v2 invocations→正式app→`build_planning_runtime`→`PlanningResponsesProvider`→OpenAI exchange | `PLANNING_V2_ENABLED=true`与`PLANNING_RUNTIME_FILE`；adapter `openai-responses-draft`/v1；只支持OPENAI_RESPONSES_V1；`planning-suggestion.v1`、`plan-suggestion-output.v1`、`plan-suggestion-target.v1`及policy digest | 本执行上下文两项UNSET。原`S5-V023-ARCH-323-PLANNING-RUNTIME.example.json`只是模板：MODEL_NOT_SELECTED、provider.invalid、NOT_CONFIGURED引用、零占位价格、realCallsEnabled=false；不可当生效配置或免费价格。没有可用凭据声明；不读模板credential路径对应内容 |
+| 登录/存储 | 正式`app._configure_workbench`/Workbench bootstrap；session/CSRF与各owner授权 | `WORKBENCH_AUTHORITY_RUNTIME_FILE`、allowed host/origin及专属owner数据库引用 | 本执行上下文authority引用UNSET；未配置独立演示用户或grant。现有测试中的authority/owner替身不是真实登录权限证据 |
+
+凭据准备应由Human/管理员提供**引用而非值**：exact Model/Provider/Endpoint/ConnectionProfile及其digest，credential reference/version/resolver ID/revision与本地安全文件路径。仅可核对文件存在、非symlink、所有者/0600等元数据；真正resolver读取和provider认证仍属于之后授权调用，文件存在不证明凭据有效。本轮没有发现可适用真实配置，所以未读取任何实际凭据，也没有擅自扫描其他任务目录寻找密钥。
+
+### 16.2 同案身份及环节缺口
+
+| 环节 | CURRENT关联与校验 | 证据/缺口及演示处理 |
+| --- | --- | --- |
+| 原始问题→补充/纠正→理解 | UI `understandingContent`发送当前user messages、修订、prior understanding、last question；后继带parentContextId/parentTurnId/expectedParentVersion/predecessorInvocationId；v2结构/sourceRefs确定性校验 | 正文在当前页面/受控请求中，服务端metadata读回不保留原理解正文。不承诺刷新恢复完整对话；演示manifest只保留合成case文本/digest与turn/invocation IDs，明确内容证据来源 |
+| 理解→Human确认→Problem | `createBusinessProblem`幂等创建；前端`linkDraftAssistanceProblem`补记exact Problem ID/revision/digest，失败可只重试link不重复create | link是单独步骤，不是与Problem创建原子事务。必须验收link成功，失败时保留Problem、停止宣称来源链完整 |
+| 创建→读取/标准 | 创建不等于READ授权；creator continuation→独立审批→exact READ；Human明确保存HUMAN_EVALUATED Criterion与CriteriaSet版本 | 不能用创建者身份绕过读取。缺权限应走现有管理员独立决策；未答/冲突字段不得偷偷转成已确认标准 |
+| 新Problem→规划准入 | PG create初始DRAFT；既有BFF `POST /api/workbench/v1/problems/{id}/lifecycle`支持明确TRANSITION/READ权限、expectedVersion、幂等key；规划要求ACTIVE+当前Criteria | **阻塞全页面演示**：当前UI没有激活动作。最小建议：另行明确允许把既有DRAFT→ACTIVE接口接入现有问题卡，显式Human确认、CAS/错误/权限处理，不自动激活；不改API/状态机/授权。或Human接受一次显式受权API激活为演示准备步骤，但必须标为“非全页面”，不能把其藏在fixture中。本轮两者均不执行 |
+| 正式Problem纠正→Criteria→规划 | `reviseBusinessProblem`后继修订；`PlanningApplication.current_input/validate_target`取当前Problem/最新Criteria及membership/digests；stale target拒绝；规划补问answers+previous questions/source proposal传入provider | 正式Problem建立后页内“补充”不会自动修订Problem；必须明确编辑保存并重新绑定CriteriaSet。post-create补充也不会自动再调用理解模型，不能把未采用文本算入规划。演示将“AI纠正”放在创建前；创建后修订另列受控验证 |
+| 规划→职责/资源 | schema检查三阶段五任务、无环、引用与I/O非空；职责是EMPLOYEE requirement，不是Instance/Assignment；owner读缺失保留UNKNOWN | schema并不保证恰好两职责或语义合理、已答不重复；这些是演示oracle/真实质量验收项，不能用结构通过替代。建议E1采购分析负责T1/T3a/T3b，E2数据核验负责T2a/T2b |
+| Proposal→Plan/Approval→刷新 | exact target、proposal revision/digest、批准身份；PG事务原子保存Plan/Approval/source；重复确认读原记录；history独立READ | 已有PG并发/rollback/历史证据；旧采购历史不作为本轮新案证据。资源未齐仍可确认计划，但不是执行就绪；不创建Assignment/Run/TaskRun |
+
+本轮受控证据分为：A理解v2本地HTTPS/合成服务测试；B正式app规划装配及本地HTTPS边界测试（部分owner/auth为替身）；C新建独立PG中的真实Problem/Criteria准入、两职责计划确认及读回。**A/B/C是分段证据，不是一条已经通过的同案浏览器旅程**。无真实模型质量/稳定性声明。
+
+### 16.3 可复现演示脚本与验收表（未执行真实调用）
+
+演示数据全部合成，两个case各自独立，不拼接为一个Problem：
+
+- S（充分）：`[SYNTHETIC-323-DEMO-S] 仅分析虚构公司A的未关闭、未取消且未交量>0采购明细，以2026-09-18 Asia/Shanghai业务日判定，承诺日严格早于判定日才延期；缺日期和冲突单列，按公司/订单/明细/分期去重，供应商+单位分组，不跨单位相加。输出可追溯报告，不改订单、不催交、不发通知。采购分析与数据核验两职责完成读取快照、校验数据、识别延期、供应商汇总、生成报告。尚无已绑定资源，请展示缺口。`
+- M（缺失→补充→纠正）：先输入`[SYNTHETIC-323-DEMO-M] 帮我整理延期采购订单，输出报告，不执行业务操作。`；模型只问必要scope/asOf/口径。回答采用S的公司A、日期、单位/只读口径；随后明确纠正`只保留公司B，判定日改为2026-09-19 Asia/Shanghai；公司A及9月18日已作废，其余已回答规则不变。`。最终Problem及规划不得继续使用公司A/旧日期。没有真实订单、连接器、人员信息；演示到计划，不读取任何订单来源。
+
+| 步骤 | 正式操作与记录 | 必须观察到的验收结果/停止条件 |
+| --- | --- | --- |
+| 0 preflight | 绑定source/tree/frontend manifest；核对两runtime文件/各purpose ledger、exact grants、窗口、预算；登录专属用户及独立管理员 | 未配置、grant失效、无价格依据或窗口过期则零调用停止；不自动修权限或补跑 |
+| 1 理解 | `/work`发送S或M；记录case、input digest、invocation/context/turn/profile/model/policy refs | S不无故补问；M只问必要缺项；UNKNOWN不得改用fixture成功，手工草稿必须显式标识且不算AI通过 |
+| 2 补充/纠正 | 同一M上下文补答、再纠正；记录predecessor链与新输入digest | 已答内容不重复问；旧否定事实不复活；不含权限/资源就绪幻觉；无效结构停止，不自动付费重试 |
+| 3 确认问题 | Human核对理解/可编辑草稿，点击确认；记录Problem/revision/digest与draft provenance link | 恰好一次创建；独立READ授权正常完成；link失败只修link，不重复创建或跳过拒绝 |
+| 4 确认标准 | 在同一Problem明确采用并保存目标/完成标准、必要修订，记录Criterion/CriteriaSet exact refs | 不把AI草稿自动发布为标准；新Problem仍DRAFT时如实停止在激活缺口。本轮不调用lifecycle替代缺少的UI |
+| 5 规划（前置解决后） | 同一ACTIVE Problem进入制定建议计划，核对target，再生成；必要补问使用同一predecessor | T1→T2a→T2b→T3a→T3b线性依赖，三阶段；两职责覆盖5Task，每Task输入/输出来源可说明；不得把未来产物写成已存在 |
+| 6 资源 | 刷新资源状态 | 缺失/无reader/无权限分别如实显示；UNKNOWN不等于匹配，角色需求不等于实际分配，不点击执行 |
+| 7 确认与刷新 | Human确认exact Proposal；保存Plan/Approval/source引用，刷新并独立GET history | 同一Plan ID/version/digest及批准，重复确认无第二Plan/批准，无Assignment/Run/TaskRun；最终状态“尚未开始执行” |
+| 8 收证 | 保存脱敏逐例判定、关联IDs/digests、候选/配置/预算、错误分类和清理状态 | 信息充分/缺失/已答/纠正/双职责/持久化逐项PASS/FAIL/NOT_RUN；人工语义评分，不用mock结果写真实质量PASS |
+
+当前可重复的**受控验证命令**（专属PG，不能指向旧环境）：`PLANNING323_TEST_DATABASE_URL=<新323测试PG URL> uv run pytest -q console/backend/tests/test_draft_assistance_policy.py console/backend/tests/test_draft_assistance.py console/backend/tests/test_planning_runtime.py console/backend/tests/test_planning_responses_boundaries.py console/backend/tests/test_plan_suggestion_v2.py`。这些测试使用临时合成内容、loopback HTTPS或显式provider/owner替身；PG fixture创建并销毁唯一测试库。本轮仅补充既有PG用例中的新DRAFT准入断言及两职责确认后读回断言，避免重复造浏览器业务数据。
+
+正式演示环境启动配方（**待前置具备，不是已运行环境**）：新323专属目录/PG与loopback HTTPS后端，不能复用硬编码25432旧323采购库或55441旧321 server；正式入口是`uvicorn agent_console.app:app`，不是旧acceptance server。由已批准runtime配置引用专属EXECUTION/AGENT_DEFINITION/WORKFLOW_RUNTIME等owner数据库、`WORKBENCH_AUTHORITY_RUNTIME_FILE`及exact allowedHost/origin；build前设置`VITE_PROBLEM_DRAFT_ASSISTANCE=enabled`，规划后端开关和独立runtime配置均显式提供；同源可信TLS终止/前后端路由，绑定dist manifest，启用前核验无外部调用配置继承。存储/authority bootstrap复用既有部署程序，但新环境所需owner schema初始化/账户/grants未获具体配置前不盲目迁移启动。专属登录用户`demo323-requester`与独立`demo323-approver`为建议名称，不是已存在账号。所需既有权限：Problem CREATE/READ/REVISE/TRANSITION、Criteria CREATE/READ/REVISE/集合写入及exact revisions、两purpose模型INVOKE、Plan PREPARE/READ/APPROVE、资源独立READ；按exact资源授权，禁用泛化grant和自批。遇拒绝停在原授权流程，不绕过。
+
+### 16.4 一次性真实调用决策包（PROPOSED；本轮零外部调用）
+
+| 项目 | 具体方案/事实 | 必须由Human确定的值 |
+| --- | --- | --- |
+| 两段provider/模型 | 推荐演示优先采用同一已批准供应商的OPENAI_RESPONSES_V1协议以复用现有接线；理解v2、规划v1分别独立profile/ledger。理解可选KIMI_RESPONSES_V1，但规划当前不支持直接替换Kimi协议 | 不是已选定供应商或模型。须给出理解/规划各自nativeModelId、provider及exact Model/Provider/Endpoint/ConnectionProfile revisions+digests；不自行购买、选付费模型或推定OpenAI品牌供应商 |
+| 精确配置/凭据 | 理解runtime绝对路径和规划runtime绝对路径、policy/schema、credential reference/version/resolver/file元数据、pepper引用与独立purpose ledger；规划realCallsEnabled保持false至正式获准 | 当前全部缺失；template不是有效配置。理解没有同名realCallsEnabled，必须以其runtime不装配REAL_PROVIDER/授权未发放来保持关闭。真实认证可用性尚未测 |
+| 价格 | 选定模型后，以供应商官方价格页或合同URL、日期、币种、input/output/cache/reasoning单位填写；本轮未选模型，不虚构价格 | 两段精确单价；模板0不是免费。按现有ceil保守预留，预算不能凭usage缺失当零 |
+| 有界调用建议 | 两个独立合成case，理解最多5次、规划最多3次，共8次；充分case目标理解1/规划1，缺失纠正case理解最多3、规划最多2，剩余理解1仅Human明确使用；不把8次当必须消费 | 新建议不是旧1/20/60授权。建议两ledger各USD1、合计USD2硬cap；input≤32768（实现按完整序列化字节保守准入）、output≤4096/次；输入合计≤262144、输出≤32768。必须先证明选定价格的最坏预留满足预算，否则重新审定，不能自动增额 |
+| 时间窗 | 建议2026-09-19 10:00:00–12:00:00 Asia/Shanghai（UTC+08:00） | 明确接受或替换绝对窗口，grants同步到期。该窗口是待决，不是已经生效；届时未就绪/已过期即暂停，不补跑 |
+| 数据/写入 | 仅16.3合成S/M；独立PG存模型配置元数据/授权、draft invocation/Use/Evidence/预算、Problem/Criteria、planning invocation/Proposal、Plan/Approval/source；不写订单、Instance/Assignment/Run/TaskRun | 同意两个独立case的数据写入；建议脱敏证据与测试DB保留至2026-10-03 12:00 Asia/Shanghai或Human审阅完成，再显式批准清理。无真实MCP调用，缺资源不补造 |
+| 期限/取消/清理 | Responses静默socket超时及正常回栈response/connection关闭已证；慢滴、DNS/发送/校验/阻塞close无绝对硬界，客户端取消不停止底层工作；见§14 | 选择把硬期限作为前置则必须另行审定实现；或明确有边界风险接受后再授权演示。不能把8次/预算/墙钟窗口称为能杀死挂起调用；超窗不再发新请求，仍在途记录UNKNOWN并人工核对 |
+| 停止与UNKNOWN | 任一身份/权限/版本/泄露/假资源/越权动作异常、非法输出、超限/过期立即停止；语义不合格保存并停在Human复核；不得自动重发UNKNOWN | 理解只用既有observe/read原invocation；规划GET原invocation，同key恢复不得新key重复调用。仅凭本地超时无法判断provider是否完成或收费，保留预算claim，人工供应商审计不产生新模型请求 |
+| 证据位置 | 原验收目录`demo-preparation/`保存候选、配置引用/digests、case manifest、调用链、逐项评分、预算与异常；正文仅合成固定脚本，不保存密钥/raw响应/私密推理 | 真实调用包全部关键值冻结后才允许一次pilot；多案例质量和重复稳定性另行授权，不因本次受控通过推导真实质量 |
+
+一次决定所需最小清单：①全页面激活局部接线另行授权，或明确接受显式API激活的非全页面演示；②两段模型和exact配置/凭据元数据；③官方/合同价格及8次/USD2等上限；④上述绝对窗口及数据保留；⑤接受Responses限制还是先审定硬期限；⑥独立账号与exact grants。任何未填项均BLOCKED，不用默认值替代。
+
+### 16.5 资源/分工准入后续准备（不实施）
+
+复用§13.6–13.8完整PROPOSED草案及A019/258/259/263/264/266约束，不另开任务：Plan/Approval/Problem/Criteria exact继承；Definition≠Instance≠Assignment≠Placement；owner published revisions/digests/权限/可用性观察；同Run五Task的输入输出、Task参与绑定与幂等；确认计划不启动。实际资源ID/版本/digest/权限仍UNKNOWN。
+
+依赖与测试清单：exact资源缺失/撤回/无权限零副作用，UNKNOWN阻断执行；跨scope/旧修订/错误digest拒绝；多职责权限分别验证；同key重放返回原身份、冲突key拒绝、并发唯一、重启读回；资源检查不是execution-ready；绝不创建Placement/Run或调用MCP来测试准入。后续先审定绑定关系与资源owner兼容性，再独立授权该切片。本轮没有编码该切片。
+
+本轮受控验证结果：92 passed / 2 warnings（31.48s）；包括理解v2本地HTTPS及sourceRefs/纠正契约、显式synthetic草稿来源link、正式规划app接线、Responses停滞/取消/非法输出/权限拒绝、独立PG准入与确认历史。新增断言证明新DRAFT即使已有Criteria仍拒绝规划输入；测试显式调用既有repository transition后才验证两职责方案持久化，该步骤只作后端受控测试，绝不宣称产品页面具备激活。未发现应在本轮修改的局部产品实现缺陷；主要是正式演示前置/页面接线缺项。证据`demo-preparation/controlled-validation.log`及JUnit。两个warning为既有Starlette/httpx与record_property/JUnit格式，不影响断言结果。
+
+本轮完整门禁：首轮在新增测试的nested-with及全角标点lint处停止，日志保留；只修格式后make check Ruff/format PASS，2017 passed / 201 skipped / 1 warning（117.89s）。前端产品未改，不重复浏览器或build；正常hook仍运行。独立容器`s5-v023-arch-323-demo-prep-pg`仅loopback64324、session=323/purpose=isolated-demo-preparation；fixture新建测试库并teardown。hook结束后停止并清理本轮容器/临时卷，真实演示服务未启动。最终Source/Tree、hook及候选CI checkout/Tree登记原PR和既有验收目录`demo-preparation/preparation-receipt.json`，不把旧CI或旧历史当新同案证据。脚本合成输入与逐turn digest位于同目录`demo-cases.json`，结果明确NOT_RUN。

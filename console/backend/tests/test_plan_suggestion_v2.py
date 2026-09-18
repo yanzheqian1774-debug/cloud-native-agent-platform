@@ -375,6 +375,24 @@ def test_real_problem_criteria_validation_and_stale_confirmation(repository):
             authorized=True,
         )
         aggregate = problems.get_aggregate(scope, identity, authorized=True)
+        # A freshly confirmed UI draft is still DRAFT, even with saved criteria.
+        # Do not let an acceptance fixture silently skip the activation gate.
+        assert aggregate.current_state is BusinessProblemState.DRAFT
+        draft_authority = ExactTestAuthority()
+        for owner, resource in (
+            ("BUSINESS_PROBLEM", f"business-problem:{identity}"),
+            ("SUCCESS_CRITERIA_SET", f"success-criteria-set:{identity}"),
+        ):
+            draft_authority.grants.add(("author", owner, "READ", resource))
+        draft_app = PlanningApplication(repository, problems, draft_authority)
+        with (
+            repository.transaction(scope, identity, authorized=True) as cursor,
+            pytest.raises(
+                PlanningConflict,
+                match="PLANNING_CONFIRMED_PROBLEM_AND_CRITERIA_REQUIRED",
+            ),
+        ):
+            draft_app.current_input(principal, identity, cursor.connection)
         version = problems.transition(
             scope,
             identity,
@@ -387,6 +405,18 @@ def test_real_problem_criteria_validation_and_stale_confirmation(repository):
             authorized=True,
         )
         data = sample()
+        data["requirements"].append(
+            {
+                **data["requirements"][0],
+                "requirement_id": "data-checker",
+                "name": "数据核验职责",
+                "purpose": "校验输入及延期规则; 仅职责需求, 不绑定实例",
+            }
+        )
+        for task in data["tasks"]:
+            if task["task_id"] in {"T2a", "T2b"}:
+                task["employee_requirement_id"] = "data-checker"
+                task["responsibility"] = "数据核验职责"
         data["target"] = {
             "problem": {
                 "resource_id": identity,
@@ -435,6 +465,10 @@ def test_real_problem_criteria_validation_and_stale_confirmation(repository):
             key="confirm",
         )
         assert app.read(principal, value.proposal_id, 1) == result
+        assert {
+            task["employee_requirement_id"]
+            for task in result["plan"]["semantics"]["tasks"]
+        } == {"employee", "data-checker"}
         # A changed current Problem cannot invalidate response-loss replay or history.
         problems.transition(
             scope,
