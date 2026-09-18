@@ -532,3 +532,14 @@ Human已授权在原323、原分支及唯一Draft PR #183继续视觉实施，�
 对照入口visual/index.html保留11组前/后/效果图，UI_API_FIXTURE与HTTPS_REAL_PG_EXISTING_RECORDS分别标记，非真实模型完整旅程。102目标/任务/确认同屏、步骤条和蓝白层级已落实；103任务职责/依赖业务名称、资源用途已落实，但执行状态仍未实现；112已按资源种类分组并保留真实1匹配/6必要缺口/1可选，未照搬9/4/5。机器人形象、导航编排、目标标签化、资源表密度及后续生产/责任分配操作与效果图仍有差别，交Human验收决定，不追加润色。
 
 保持原Session OPEN / HUMAN_REVIEW_PENDING、唯一#183 Draft。旧2b8e66f及全部历史证据保留；真实模型关闭，不启动增量二，不改变父PR，不Ready、merge、部署或关闭。
+
+
+### 10.12 Human前段接受与来源标识核对（2026-09-18）
+
+Human有界接受前段布局改善；全链路最终视觉验收待规划截图审阅，Session仍OPEN、唯一#183仍Draft。前段证据必须分组：s5-321-understanding/V322为供应商质量（来料改善）UI fixture；s5-323-visual同案例测试为采购UI fixture；真实HTTPS/PG规划为既有采购计划历史。共享采购标签曾错误覆盖供应商质量截图，旧图保留为历史且明确其标签错误，不宣称同一案例端到端或真实模型旅程。后续fixture构建使用不指定业务案例的通用UI模拟标签，案例从各测试输入/回执识别；规划独立标记采购历史读回。
+
+共享导航“v0.3 能力建设中”起自71937ef（253中文产品体验），指向/dashboard#planned，属于历史规划入口，不是本次版本归属。只将导航文案改为“查看规划能力”，保留链接、键盘焦点、授权、确认、UNKNOWN及模型输出真实性，不修改ROADMAP或首页能力定义，不增加视觉润色。
+
+保留f65aeb1/tree 9f6311f对应的现有规划同屏、任务展开、资源缺口三图。新候选只改变上述导航文本；新增截图仅在323独立服务读回同一既有采购记录，不创建业务数据、不调用模型。新source/tree、构建hash、逐图候选身份及新候选CI在原visual manifest与PR登记，旧截图不得重标为新候选原始截图。
+
+本轮实际验证：frontend lint/build通过；39项交互通过（26.9s）；make check 1917 passed / 201 skipped / 1 warning（92.31s）。新规划截图只读原Plan/history，history与原回执相等；116张表中，登录session/nonce各增加2，authorization_admin.audit_events增加2（均为SESSION_CREATED/COMMITTED/AUTHENTICATED），其余113张表计数不变；业务/模型/执行计数未变。历史补问invocation读回返回AUTHORIZATION_NOT_FOUND，未修改授权或重发调用，沿用旧候选补问图并单独标注，不把它算为新候选补验通过。最终以所请求的目标/任务/确认同屏、任务用途展开、资源缺口三图交Human审阅。
