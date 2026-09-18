@@ -97,7 +97,7 @@ def test_summary_static_scenarios(mapping):
     report["suites"][0]["file"] = name
     report["suites"][0]["specs"][0]["title"] = title
     summary = make_summary(report)
-    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 20
+    assert len(harness_module.FIRST_FAILURE_ASSERTION_IDS) == 82
     assert summary["scenarioId"] == scenario
     assert summary["spec"] == "console/frontend/tests/e2e/" + name
     assert summary["sourceLine"] == 42
@@ -1579,3 +1579,28 @@ def test_w2a_scroll_failure_retains_only_static_step_identity():
         "elapsedMs": 12,
     }
     assert "PRIVATE" not in harness_module.encode_failure_summary(summary)
+
+
+@pytest.mark.parametrize(
+    "file,line,expected",
+    [
+        ("/tmp/private/w2a-honest-shell.spec.ts", 123, True),
+        ("/tmp/private/unknown.ts", 123, False),
+        ("w2a-honest-shell.spec.ts", True, False),
+        ("w2a-honest-shell.spec.ts", 100001, False),
+    ],
+)
+def test_summary_assertion_location_is_bounded_and_does_not_disclose(
+    file, line, expected
+):
+    report = summary_report()
+    report["suites"][0]["specs"][0]["tests"][0]["results"][0]["error"] = {
+        "location": {"file": file, "line": line},
+        "message": "PRIVATE_SECRET",
+    }
+    summary = make_summary(report)
+    assert summary["sourceLine"] == (123 if expected else 42)
+    assert summary["locationKind"] == ("ASSERTION" if expected else "TEST_DECLARATION")
+    encoded = harness_module.encode_failure_summary(summary)
+    minimum_disclosure._scan_bytes(encoded.encode())
+    assert "private" not in encoded and "PRIVATE" not in encoded

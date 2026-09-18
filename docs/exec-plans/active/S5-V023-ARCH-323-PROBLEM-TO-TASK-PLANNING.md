@@ -888,3 +888,15 @@ terminalRun后，按ARCH-264依次产生不可变Criteria Evaluation（exact cri
 - 仅使用独立`s5-v023-arch-323-wiring-pg`（标签session=323/purpose=isolated-wiring-test，loopback63661）及临时本地TLS端点/合成数据；测试数据库按既有fixture清理，提交hook结束后停止容器保留。其他环境/旧采购历史不动。
 - exact新Source/Tree、hook终态、CI每job checkout/Tree及最终资源状态由原PR和既有`visual/control-continuation-receipt.md`接续登记，机器回执为`visual/responses-delivery-receipt.json`与`responses-ci-checkout-audit.json`；这些是派生证据，不是新增权威台账。旧候选、失败日志及视觉接受绑定保留。
 - 本轮结论：正常返回/异常回栈的response/socket显式释放缺陷已最小修复；**全阶段绝对期限、主动取消底层工作和独立清理硬界仍未具备**。真实调用仍需§14.2决策及§14.3授权。D3包和下一片任务草案保持PROPOSED，原PR Draft / Session OPEN；无Ready、merge、部署、全链路验收或关闭授权。
+
+### 15 浏览器CI失败诊断与有界恢复（2026-09-18授权）
+
+Human正式发送CI诊断任务，允许原PR内必要测试辅助修复、受控复现、正常提交/推送。起点e0f3b66/e064228，工作树干净；原CI 11成功/1失败，79中78通过，失败身份NOT_RETAINED，历史原始产物缺失，不能补造根因。
+
+G0有界诊断计划：核对默认79测试与20条静态诊断白名单（仅覆盖17项当前测试，62项缺项）；补充显式静态测试身份和受限断言位置，保持未知身份fail closed及既有最小披露扫描/退出码/清理。原始console、pageerror、请求体、服务正文、trace/截图不直接上传（既有075最小披露限制）；先用静态名称/分类/行号定位，需要更多信息时仅增补对应脱敏枚举。使用新323专属PG/Qdrant和不可变本地构建，单worker、零重试运行完整套件一次，记录source/tree及诊断补丁；定位后仅修已证实范围内缺陷。公共契约、共享产品owner或硬期限架构变化停止审定。保留前次失败，不把复现转绿称为根因解决。D3 PROPOSED、无外部模型、无生产/321/原历史操作，Draft/OPEN。
+
+本轮一次完整隔离浏览器复现通过（默认79项集合、单worker、retries=0，harness验证无unexpected/skipped/flaky）；不可变release前后digest相同，受管backend重启6次后清理。未复现原失败，原浏览器根因仍UNKNOWN，不能归因环境偶发或宣称原产品缺陷已修复。确定修复的是诊断覆盖缺陷：新增62项固定测试身份，保留20项旧映射（当前匹配17项），总82；只从匹配spec提取有界断言行号，未知仍NOT_RETAINED。226项诊断单测通过，包括原披露拒绝/退出码/清理控制及新增位置负例。CI增加扫描后保留4个静态/脱敏JSON，7天，无原始trace/截图/console/服务正文上传。候选对比e0f3b66与前次成功a161336仅响应流清理/测试/文档变化，无足够证据证明因果；本轮不改产品代码。下一次新候选CI目的为验证诊断补丁并捕获若再现的具体测试/位置，不作无改动循环重跑。exact候选、门禁及CI终态按原PR/续接回执登记。
+
+独立诊断负例：临时synthetic spec主动expect(1).toBe(2)，真实Playwright JSON经同一sanitizer得到ASSERTION/第3行并通过披露扫描；它只验证诊断链，不是原失败重现或业务证据。现有测试名映射覆盖默认79/79（枚举采集未执行业务）。外部证据`ci-diagnosis-negative-control.json`中的零manifest仅用于该负例，不归入产品候选构建验收。
+
+本轮make check：Ruff/format通过，2017 passed / 201 skipped / 1 warning（142.84s），日志`visual/ci-diagnosis-make-check.log`；仅PLANNING323专属测试库启用，其余未配置集成测试按原门禁规则skip，未删除/新增skip。frontend源未改，复现前live build通过；CI将独立执行完整受影响浏览器门禁及其他检查。正常hook和新候选CI未沿用历史结果，终态在原PR和`ci-diagnosis-delivery-receipt.json`绑定。
