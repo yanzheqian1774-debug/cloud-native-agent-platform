@@ -16,7 +16,7 @@ import re
 import ssl
 import stat
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -412,7 +412,7 @@ class OpenAIResponsesDraftTransport:
                 raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
             self.dispatch_count += 1
             try:
-                value, self.last_deadline = supervise(
+                value, diagnostic = supervise(
                     DraftResponsesJob(
                         self.configuration, invocation_id, request, credential, profile
                     ),
@@ -420,15 +420,45 @@ class OpenAIResponsesDraftTransport:
                 )
             except ResponsesBoundaryError as exc:
                 self.last_deadline = exc.diagnostic
-                self.cleanup_failed = exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+                self.cleanup_failed = (
+                    self.cleanup_failed or exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+                )
                 raise
+            self.last_deadline = diagnostic
             value["state"] = ObservationState(value["state"])
             if value.get("result_kind"):
                 value["result_kind"] = DraftResultKind(value["result_kind"])
-            return ProviderObservation(**value)
+            return replace(ProviderObservation(**value), local_cleanup=diagnostic)
+        self._measurement = None
+        result = self._dispatch_observation(
+            invocation_id=invocation_id,
+            request=request,
+            credential=credential,
+            profile=profile,
+        )
+        m = self._measurement
+        return replace(
+            result,
+            measurement=m,
+            input_tokens=m["usage"]["input_tokens"] if m and m["settleable"] else None,
+            output_tokens=m["usage"]["output_tokens"]
+            if m and m["settleable"]
+            else None,
+        )
+
+    def _dispatch_observation(self, *, invocation_id, request, credential, profile):
         policy = policy_for(profile.adapter_revision, profile.output_schema_version)
         status_code, body, correlation, latency_ms = self.exchange(
             invocation_id=invocation_id, request=request, credential=credential
+        )
+        from .planning_measurement import measurement
+
+        try:
+            metered_response = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            metered_response = {}
+        self._measurement = measurement(
+            metered_response, correlation, invocation_id, latency_ms, self.configuration
         )
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(

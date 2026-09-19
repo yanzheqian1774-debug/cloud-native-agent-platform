@@ -105,11 +105,11 @@ def endpoint(tmp_path):
                     state.release.wait(5)
                 if state.mode == "drip":
                     # Each inter-byte wait is below read timeout, cumulative > total.
-                    size = (len(body) + 5) // 6
+                    size = 1
                     for offset in range(0, len(body), size):
                         self.wfile.write(body[offset : offset + size])
                         self.wfile.flush()
-                        if state.stopped.wait(0.25):
+                        if state.stopped.wait(0.05):
                             return
                 else:
                     self.wfile.write(body)
@@ -141,7 +141,7 @@ def endpoint(tmp_path):
 
 
 @pytest.fixture
-def network(formal, endpoint, monkeypatch):
+def network(formal, endpoint, monkeypatch, request):
     # Only this explicit test seam permits local HTTPS in the production builder.
     monkeypatch.setattr(
         runtime,
@@ -163,6 +163,7 @@ def network(formal, endpoint, monkeypatch):
         readTimeoutSeconds=1,
         totalTimeoutSeconds=1,
     )
+    document.update(getattr(request, "param", {}))
     from pathlib import Path
 
     credential = Path(document["credential"]["file"])
@@ -194,18 +195,35 @@ def result(response):
     return response.json()["result"]["result"]
 
 
+@pytest.mark.parametrize(
+    "network", [{"totalTimeoutSeconds": 5, "readTimeoutSeconds": 5}], indirect=True
+)
 @pytest.mark.parametrize("mode", ["headers", "body", "drip"])
 def test_actual_local_https_deadline_reaps_and_replay_never_retries(
     network, mode, record_property
 ):
+    from concurrent.futures import ThreadPoolExecutor
+
+    # This case must reach the named real HTTPS phase, not test cold imports.
+    # Startup remains inside total; a separate readiness gate fails explicitly
+    # if it consumes the setup allowance. Shared startup tests retain short budgets.
     network.endpoint.mode = mode
     started = time.monotonic()
-    response = send(network.client)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(send, network.client)
+        reached = network.endpoint.accepted.wait(2.5)
+        response = pending.result(timeout=7.5)
     value = result(response)
-    assert time.monotonic() - started < 3.5
+    assert time.monotonic() - started < 7.5
     assert value["technical_status"] == "OUTCOME_UNKNOWN"
     saved = receipt(network, response)
     record_property("deadline", saved["deadline"])
+    assert reached, saved["deadline"]
+    assert saved["deadline"]["reason"] == "TOTAL_DEADLINE"
+    assert saved["deadline"]["stage"] == (
+        "WAIT_HEADERS" if mode == "headers" else "READ_BODY"
+    )
+    assert 5 <= saved["deadline"]["decision_seconds"] < 5.5
     assert saved["deadline"]["reaped"]
     assert saved["deadline"]["cleanup_seconds"] <= 2
     assert network.endpoint.requests == 1

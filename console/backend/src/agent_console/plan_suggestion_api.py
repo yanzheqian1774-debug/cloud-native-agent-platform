@@ -53,6 +53,16 @@ def install_planning_invocations(
                 ),
             )
 
+        @app.get(f"{PREFIX}/planning-v2/invocations/{{invocation_id}}/usage")
+        def usage(request: Request, invocation_id: str):
+            def read_usage(service, principal):
+                try:
+                    return service.read_usage(principal, invocation_id)
+                except (PlanningError, AuthorityError, DraftAssistanceError):
+                    raise AuthorityError("PROVIDER_USAGE_NOT_FOUND") from None
+
+            return invoke(request, read_usage)
+
         @app.get(f"{PREFIX}/planning-v2/invocations/{{invocation_id}}")
         def read(request: Request, invocation_id: str):
             return invoke(

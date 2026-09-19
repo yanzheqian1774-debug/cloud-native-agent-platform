@@ -105,7 +105,16 @@ jobs:
             --junitxml=${{ runner.temp }}/responses-323.xml \
             console/backend/tests/test_responses_deadline.py \
             console/backend/tests/test_planning_responses_boundaries.py \
-            console/backend/tests/test_planning_usage_closure.py
+            console/backend/tests/test_planning_usage_closure.py \
+            console/backend/tests/test_understanding_usage_closure.py \
+            console/backend/tests/test_provider_usage_authorization.py
+
+      - name: Understanding usage and cancellation UI (controlled 323)
+        working-directory: console/frontend
+        env:
+          CONSOLE_FRONTEND_PORT: "19329"
+          PLAYWRIGHT_OUTPUT_DIR: ${{ runner.temp }}/understanding-usage-ui
+        run: npx playwright test --config playwright.s5-323-usage.config.ts
 
       - name: Prove owned cleanup preserves an injected failure
         shell: bash

@@ -124,6 +124,10 @@ def _record(value: DraftInvocation) -> dict[str, Any]:
         "dispatchFence": value.dispatch_fence,
         "budgetReservationId": value.budget_reservation_id,
         "providerCorrelation": value.provider_correlation,
+        "measurement": value.measurement,
+        "pricing": value.pricing,
+        "settlementStatus": value.settlement_status,
+        "localCleanup": value.local_cleanup,
         "terminalObservationId": value.terminal_observation_id,
         "lastObservationId": value.last_observation_id,
         "resultKind": value.result_kind.value if value.result_kind else None,
@@ -215,6 +219,10 @@ def _invocation(value: dict[str, Any]) -> DraftInvocation:
         dispatch_fence=value["dispatchFence"],
         budget_reservation_id=value.get("budgetReservationId"),
         provider_correlation=value["providerCorrelation"],
+        measurement=value.get("measurement"),
+        pricing=value.get("pricing"),
+        settlement_status=value.get("settlementStatus", "NOT_MEASURED"),
+        local_cleanup=value.get("localCleanup"),
         terminal_observation_id=value["terminalObservationId"],
         last_observation_id=value.get("lastObservationId"),
         result_kind=(
@@ -769,7 +777,18 @@ class PostgresDraftEvidenceOwner(_Pool):
             "inputTokens": observation.input_tokens,
             "outputTokens": observation.output_tokens,
             "callCount": 1,
-            "costMeasurement": "NOT_COLLECTED",
+            "costMeasurement": "OWNER_LEDGER_ESTIMATE"
+            if observation.measurement is not None
+            else "NOT_COLLECTED",
+            **(
+                {
+                    "measurement": observation.measurement,
+                    "pricing": invocation.pricing,
+                    "budgetReservationId": invocation.budget_reservation_id,
+                }
+                if observation.measurement is not None
+                else {}
+            ),
             "requestedAt": invocation.created_at.isoformat(),
             "limitationCode": observation.reason_code,
         }

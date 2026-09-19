@@ -316,6 +316,29 @@ class PlanningSuggestionService:
         self.model_use_owner.observed(scope, record, result)
         return self.read(principal, invocation_id)
 
+    def read_usage(self, principal, invocation_id):
+        from .provider_usage import authorize, projection, unavailable
+
+        app = self.application
+        authorize(
+            lambda *grant: app.authority.require(principal, *grant),
+            "planning",
+            invocation_id,
+        )
+        scope = app.scope(principal)
+        receipt = self.invocations.receipt(scope, invocation_id)
+        if receipt is None:
+            raise unavailable()
+        if receipt["pricing"] != self.budget.pricing():
+            raise unavailable()
+        return projection(
+            receipt.get("measurement"),
+            receipt["pricing"],
+            receipt["reservation_id"],
+            self.budget.owner.read_settlement(receipt["reservation_id"]),
+            local_cleanup=receipt.get("deadline"),
+        )
+
     def read(self, principal, invocation_id):
         app = self.application
         scope = app.scope(principal)

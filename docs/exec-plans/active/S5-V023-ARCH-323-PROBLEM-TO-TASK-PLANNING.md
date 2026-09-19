@@ -1174,3 +1174,195 @@ receipt先提交；可靠终态usage无论业务schema有效与否均由既有�
 最终权限复核：依据ARCH-266独立Resource Use/Evidence披露边界，Plan READ响应不新增provider receipt、native request/response ID或价格明细。receipt/用量/结算仍在原owner持久化，有权计划读回仅修复既有已批准结算操作；详细计量通过owner受控检查及脱敏交付证据核验，不把Plan READ升级为计量披露权限。本轮未增加grant或测量查询端点。最终完整make check（补齐TLS与事务断言后）2062 passed/189 skipped/1 warning；披露收窄后另跑聚焦与正常完整hooks，结果见交付回执。
 
 远端门禁补齐：在既有PostgreSQL HTTPS Chromium Mock Provider工作流中加入Responses 323隔离及规划usage闭环步骤，使用该job独立PG及用例自建/销毁测试库，上传responses-323.xml；不连接321或共享环境。质量门禁仍运行全量，PG闭环不再仅依赖本地证据。正常提交hooks已通过；补入此CI配置后再次正常hooks生成最终未推送候选，再普通推送原分支。
+
+## 20. 真实AI同案演示配置预检与授权包定稿（2026-09-19，待Human批准运行）
+
+本节依本轮配置预检授权更新原计划，不新增权威台账、不实施产品修复。§18关于“方案B未授权/未实现”的历史判断已被§19授权及交付取代；§18模型、费用、窗口建议仍不是调用授权。本节为当前预检结论，不能将模板填写视作配置已部署。
+
+### 20.1 候选、检查方式与证据身份
+
+原工作树 `/Users/tristan/.codex/worktrees/b923/cloud-native-agent-platform`，分支 `codex/s5-v023-arch-323-problem-task-planning`；实际 Source `f3971365929552a4b3fac1b6e10ddb5bcbf30541`，Tree `cf9e51820f96b496876e0f5531d5d8b84062d3db`，与输入一致。开始时工作树及暂存区干净。只读查询PR #183：HEAD一致、Draft=true、OPEN，12项现有CI全部SUCCESS；未重新执行。既有 `responses-isolation/ci-checkout-audit.json` 记录5项直接检出该Source，7项检出merge `3dc5df15b6e96822899a40ae47e24b3c0be99bcc`，实际tree均为上述Tree。本轮只修改本计划，不提交或推送，不生成新产品候选；未提交文档不包含在上述Git Tree中。原视觉接受仍只绑定9b5b342…/31d0ecd…。
+
+复用既有 `responses-isolation/delivery-receipt.json`、`disclosure-focused.xml`、`usage-readback-evidence.json`、`nominal-60s.json`；2062通过/189跳过为上轮本地make check，45通过为上轮聚焦，2054通过/197跳过为候选CI质量门禁，均非本轮重跑。理解路径另查 `test_openai_responses_draft_adapter.py` 的正式transport本地HTTPS请求/usage/非终态/无重试用例，以及 `test_draft_assistance.py` 的权限拒绝零调用、凭据失败、owner修复用例；共享监督器的阶段替身测试不冒充理解正式装配的逐阶段测试。规划正式服务的HTTPS/PG/取消证据在 `test_planning_responses_boundaries.py`，不用于代替理解专属证明。
+
+本轮仅检查当前进程环境是否设置（不输出值）及建议配置文件是否存在：DRAFT_ASSISTANCE_RUNTIME_FILE、PLANNING_RUNTIME_FILE、WORKBENCH_AUTHORITY_RUNTIME_FILE、PLANNING_V2_ENABLED均UNSET；`/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/runtime/understanding.json` 与同目录 `planning.json` 均ABSENT。未扫描其他任务配置、未读取凭据内容，未做供应商探测。这仅说明当前任务环境未配置，不断言整台机器不存在配置。
+
+### 20.2 两段正式路径预检矩阵
+
+下列文件均相对 `console/backend/src/agent_console/`。当前两段结论都是：代码支持；本任务真实配置未装配；凭据可引用性未知；供应商认证、模型访问、schema接受与质量均未真实验证。
+
+| 项目 | 理解路径 | 规划路径 |
+| --- | --- | --- |
+| 正式入口 | app.py → draft_assistance_bootstrap.py → DraftAssistanceService._dispatch → OpenAIResponsesDraftTransport.dispatch | app.py → plan_suggestion_runtime.build_planning_runtime → PlanningSuggestionService.begin → PlanningResponsesProvider.suggest |
+| 启用/配置 | DRAFT_ASSISTANCE_RUNTIME_FILE；REAL_PROVIDER profile；没有规划同名realCallsEnabled开关，授权前不装配真实profile | PLANNING_V2_ENABLED=true、PLANNING_RUNTIME_FILE、realCallsEnabled=true三者及有效owner依赖；授权前不启用 |
+| 支持/首选adapter | OpenAI Responses：openai-responses-draft v2，problem-draft-assistance-output.v2、problem-understanding-context.v1；亦有Kimi专用adapter，但不选用 | OpenAI Responses：openai-responses-draft v1，plan-suggestion-output.v1、plan-suggestion-target.v1；不能直接替换成Kimi协议 |
+| 隔离 | responses_jobs.DraftResponsesJob，默认spawn；prepare和credential解析在父进程、期限外 | PlanningResponsesJob，worker内请求构造、凭据解析、exchange及typed结果校验 |
+| 期限 | 从supervise入口至worker返回/解析校验，含启动、DNS/TCP/TLS、发送、头、体；父级准备/凭据/DB不在其中 | 同一监督机制；含worker内准备/凭据；准入、数据库、父级owner复核和持久化不在其中 |
+| 取消/失败 | HTTP断连/ASGI取消经cancellable_request通知worker；domain cancel另见20.4，不保证按按钮即中止worker。边界异常记录OUTCOME_UNKNOWN/TRANSPORT_AMBIGUOUS | 同一HTTP取消桥接；boundary返回PROVIDER_OUTCOME_UNKNOWN及deadline诊断，晚结果拒收 |
+| 回收失败 | cleanup_failed阻止同transport实例后继dispatch；last_deadline在内存 | cleanup_failed阻止同provider实例后继suggest，receipt可含deadline诊断 |
+| 请求与计量 | invocation及幂等键、provider correlation、observation ID、input/output tokens、reservation；不是规划完整receipt。correlation可为本地合成回退值，不当作真实供应商ID | 本地invocation、供应商x-request-id与body response.id分别记录；immutable receipt关联精确目标、usage、价格digest及reservation |
+| 预算/结算 | draft_provider_budget_postgres既有固定profile/ledger，先预留，observation持久化后幂等record_usage；owner修复可重放计量，不重新调模型 | 同一预算owner；receipt先持久化，可靠usage即使业务非法仍结算；业务Proposal独立保存；读回可修复结算 |
+| 缺失/冲突 | usage缺失不是零；预算写入异常被捕获，不能仅凭业务成功断言已结算，须独立核对账本 | 部分/无可靠usage、receipt写失败等保留预留；重复冲突拒绝；未知不再派发 |
+| 独立证据能力 | 理解专属本地HTTPS正常/错误/计量测试存在；未找到覆盖所有阶段的正式理解入口端到端取消/回收矩阵 | 已有正式服务本地HTTPS、PG读回与并发/事务失败45项聚焦证据；不是外部模型质量证明 |
+
+配置字段取值建议：两段provider均OpenAI、protocol `OPENAI_RESPONSES_V1`、nativeModelId `gpt-4.1-2025-04-14`，endpoint `https://api.openai.com/v1/responses`。固定快照支持Responses和Structured Outputs，符合现有非流式严格结构解析路径；不声称未调用过的完整schema已获供应商接受。store=false、background=false、tools=[]、tool_choice=none、truncation=disabled。业务上下文maxInputBytes=16384、完整请求maxInputTokens=32768（现实现按UTF-8序列化字节保守准入，非tokenizer）、maxResponseBytes=64000；理解maxOutputTokens=2048、规划4096。connect=5秒、read idle=30秒、total=60秒；更短total应正常生效。理解与规划Provider revision不同，各自目录引用必须匹配，不直接复制同一个不匹配profile。
+
+建议runtime绝对路径即20.1两个文件；目前这是目标位置，尚无可执行exact配置。每份必须由配置负责人提供：tenant/domain、Model/Provider/Endpoint/ConnectionProfile ID+revision+digest、profile revision/digest、purpose、policy/schema版本、独立ledger ID、credential reference/version/resolver、凭据绝对文件引用及pepper引用。不得用例子中的MODEL_NOT_SELECTED、provider.invalid、NOT_CONFIGURED或零价格上线。exact-file-resolver/v1检查非symlink普通文件、私有权限与值格式；本轮未提供真实reference，故文件权限/可读性亦未验证。未来安全stat和本地schema校验通过仍不证明供应商实际可用。
+
+### 20.3 权限及责任清单
+
+权限依据 `authority_configuration.py` 的owner/actions及相应服务，不生成宽权限或临时绕过。Human批准演示不能自动制造技术grant。
+
+| 所需条件 | 当前情况 / 负责人 |
+| --- | --- |
+| BUSINESS_PROBLEM CREATE/LIST/READ/REVISE/TRANSITION；SUCCESS_CRITERION与SUCCESS_CRITERIA_SET CREATE/READ/REVISE | 能力已存在，演示scope/principal/exact资源及有效期尚未配置；隔离环境管理员提供，独立审批人审定 |
+| DRAFT_ASSISTANCE REQUEST_DRAFT_ASSISTANCE、READ_DRAFT_ASSISTANCE_INVOCATION及需要时CANCEL_DRAFT_ASSISTANCE_INVOCATION | 已有权限契约，演示grant缺失；权限负责人按purpose/对象精确配置 |
+| MODEL_GOVERNANCE INVOKE_MODEL、两段各自用途、精确revision绑定；PLAN PREPARE/APPROVE/READ | 代码已有，演示身份、模型目录与批准事实缺失；模型目录负责人+审批人 |
+| RESOURCE_USE READ（resource-use:精确ID）、EVIDENCE READ_REFERENCE（evidence-reference:精确ID） | 独立权限目录存在；READ_REFERENCE只表示引用读取，不代表费用内容披露许可。当前governed_execution读路径依赖Attempt/Run，不适用于无执行的本演示 |
+| 理解/规划计量、receipt及账本脱敏读回 | 原owner存储已具备；未确认存在可供演示主体直接使用的规划费用明细受控API。必须由数据owner明确批准只读范围、检查者、导出方法和审计；若要求正式产品页面读取，应先另行授权最小实现，不借Plan READ或直接DB访问绕过 |
+| 独立前端/BFF/后端/PG、登录、CSRF、authority、模型配置 | 未启动；环境负责人提供全新隔离命名空间/数据库/本地端口及运行候选digest，不复用321、生产、旧采购历史 |
+| 供应商项目、凭据文件reference/version、账户模型访问与限额 | 未提供；凭据管理员负责；本地可引用与供应商实际可用分开登记，禁止额外探测调用 |
+| 费用/窗口/到期清理及值守 | Human尚未批准；20.5—20.7给出具体建议和填写项 |
+
+只需Problem/Criteria/Plan及模型建议相关权限；不授予INSTANCE/ASSIGNMENT/EXECUTION或真实Skill/MCP调用权限。申请人与审批人分离；新对象的exact授权按既有流程在首次使用前完成。权限拒绝后停止，不自动扩大范围恢复。
+
+### 20.4 代码缺口和最小后续建议（本轮不修改）
+
+1. **理解显式取消与在途worker未绑定**：`draft_assistance.py:DraftAssistanceService.cancel`只记录CANCELLATION_REQUESTED；没有provider_correlation时直接返回，已有correlation时transport.cancel仍报告foreground不支持远端取消。`console/frontend/src/api/businessWorkspace.ts:write/cancelDraftAssistance`没有请求AbortSignal，页面使用独立cancel端点。不得宣称按钮已停止本地在途调用。最小建议：明确本地取消语义后，将已授权invocation取消信号接到同worker，覆盖并发终态/CAS、迟到成功和预算UNKNOWN；至少验证正式理解API与页面取消、本地reap、拒绝零调用。若涉及新跨进程取消注册契约，应先审定。现状演示仅可接受有限调用期限，不能承诺按钮即时终止。
+2. **理解全路径和诊断保证较窄**：`draft_assistance.py:_dispatch`的prepare/credentials.resolve在supervise之外；`openai_responses_draft_adapter.py:dispatch`的last_deadline及cleanup_failed仅在进程内。最小建议：先补理解正式装配专属各阶段受控验证；若需要凭据/准备也有硬界或重启后清理锁，另行明确契约和最小实现，不把规划测试覆盖直接迁移为结论。当前本地60+2秒不含这些阶段，也不含DB；清理失败后禁止人工重启继续调用，先值守核查残留及UNKNOWN。
+3. **理解计量粒度/修复可观测性**：adapter没有规划同款原始usage/cache明细、独立body response.id；`_complete_observation_refs`中预算异常被suppress，不保证只发生预算失败时设置owner_write_reason_code。最小建议：保留当前owner，补预算pending可观察状态和独立授权重放入口，测试“业务成功但费用写失败→重启→仅重放结算”，不得重新发模型。演示必须独立检查结算，发现pending即停止。缓存不另收费且不计折扣的保守估算仍可用，不宣称供应商实际账单已结清。
+4. **无执行计量披露入口未闭合**：`plan_suggestion_service.py`读回不披露receipt；`plan_model_use_postgres.py`/`plan_invocation_postgres.py`是owner存储，不是用户授权查询接口；`governed_execution.py`的独立Resource Use/Evidence读取依赖执行对象。最小建议：优先由owner审批一次脱敏只读证据核验的具体方式；若必须页面完成，另行实现有独立权限的规划用量读取投影，验证Plan READ单独无权、跨scope/跨actor拒绝、字段最小披露。不能为读取而创建Run，也不把READ_REFERENCE扩大成费用明细权限。
+
+以上不等于“无实现”。本轮准备已完成，但全脚本执行准入仍被实际配置/独立披露方式缺失阻断；若Human要求即时页面取消或理解全路径硬界，还须相应修复与专属验证，不能用授权文字代替技术保证。
+
+### 20.5 首选价格、调用配额与精确预算（PROPOSED）
+
+官方资料查询时间2026-09-19约20:00 Asia/Shanghai：[GPT-4.1模型和快照](https://developers.openai.com/api/docs/models/gpt-4.1)、[官方价格](https://developers.openai.com/api/docs/pricing)。标准文本每百万tokens：输入USD2.00、缓存输入USD0.50、输出USD8.00。所选端点不使用工具；不是Batch折扣或账单含税价格。账户可访问性与项目限额未验证。
+
+| 用途 | 次数上限 | 每次输入/输出上限 | 每次最大保守预留USD | 全用途最大估算USD | 用途金额准入上限USD |
+| --- | --- | --- | --- | --- | --- |
+| 理解 | 3 | 32768 / 2048 | 32768×2/1000000 + 2048×8/1000000 = 0.081920 | 0.245760 | 0.250000 |
+| 规划 | 2 | 32768 / 4096 | 32768×2/1000000 + 4096×8/1000000 = 0.098304 | 0.196608 | 0.200000 |
+| 合计 | 5，串行并发1 | 累计163840 / 14336 | 按每次实际保守quote预留 | 0.442368 | **0.450000** |
+
+配置价格使用inputPriceMicrousdPerMillionTokens=2000000、outputPriceMicrousdPerMillionTokens=8000000；ledger callCap分别3/2、totalCostCapMicrousd分别250000/200000。两用途固定不同ledger、禁止转移额度，合计上限由两者之和界定，不声称已实现第三个跨账本预算owner。价格版本冻结profile/ledger及两项价格，规划另保存price_version_digest。已有实现逐输入/输出分别ceil到microUSD，不重复叠加缓存或reasoning子集；缓存全部按普通输入估算，折扣只能用于后续账单对账。额外0.007632是金额余量，不购买额外调用。
+
+理解U1：初始信息不足时生成必要补问；U2：同context回答后生成充分理解；U3：用户纠正后生成最终理解。信息充分时应直接理解，不为消耗额度制造补问。规划P1：当前ACTIVE Problem和已保存Criteria生成建议；P2仅用于合法必要补问的回答后继规划，不用于失败重试。问题创建、理解明确确认、Criteria保存、激活、Plan确认、刷新GET与独立证据读取均不另发模型请求；观察若触发新调用则停止查明。
+
+usage不完整、结果未知、网络错误均不记零，不自动释放预留、不重发。已知可靠usage对应估算可以结算，但不改变业务非法/失败状态。预留不等于成本，估算不等于供应商账单；本地取消不保证远端未运行或未计费。上述USD0.45是本地准入控制建议，非供应商信用卡绝对扣款硬界；不计税费/汇率，最终账单独立核对。任何新模型/价格变化都需要重新冻结配置及Human决定，不自动换模型。
+
+### 20.6 同案演示操作脚本与验收表（条件具备后执行，当前未运行）
+
+**前置检查清单**：20.3各负责人补齐精确配置及权限、独立用量披露方式；冻结source/tree/frontend build/config digest和价格；确认账户限额、隔离本地服务/PG及synthetic标识；值守人确认窗口未过期和两个ledger无旧预留。不得用额外“测试请求”验证凭据。任一条件缺失不发U1。
+
+合成案例建议输入：“演示企业甲需要对一份合成采购订单快照评估交付延期，按供应商汇总并提出可核验的报告计划；只读，不联系供应商、不改订单。请先明确缺失的范围和延期判定。”不含真实公司/人员/订单数据。回答模板：“仅采购组织DEMO-A；以2026-09-18 18:00 Asia/Shanghai为截点，承诺交付时间早于截点且未收齐视为延期；取消行排除，缺日期标记UNKNOWN；订单号+行号去重。只规划，不实际读取数据或生成业务报告。”纠正模板：“将采购组织更正为DEMO-B，截点改为2026-09-19 18:00 Asia/Shanghai；其余规则不变。”模型应使用纠正值，不能继续旧值；若未问关键问题不代替模型捏造补问。日期是合成业务截止点，不是调用窗口。
+
+| 步骤 | 正式页面动作 / 调用 | 同案记录与通过标准 |
+| --- | --- | --- |
+| 1 | 新问题输入，U1 | 记录case标识、understanding context/turn、invocation/幂等键、配置与原始输入；必要补问针对缺失项，不无端索取执行权限 |
+| 2 | 在原对话回答U1实际补问，U2 | predecessorInvocation、parentContext/Turn、expectedParentVersion连续；不重复已回答项。若U1已充分，记录无补问，不强制伪造该分支 |
+| 3 | 原对话提交上述纠正，U3；显式接受最终理解 | 保存纠正前后turn/revision及最终文本；DEMO-B和19日进入后继，旧值不能作为有效范围；模型仅建议，无自动发布 |
+| 4 | 显式创建问题 | 保存新Problem ID/revision/digest及理解problem-link；不得复用旧采购Problem；幂等键与实际提交体对应 |
+| 5 | 独立保存完成标准 | 标准应要求未来报告的延期规则/供应商覆盖/UNKNOWN说明/来源可追溯；绑定当前Problem revision和CriteriaSet revision/digest；此时只是未来验收标准，不宣称报告已产出 |
+| 6 | “确认问题与完成标准”显式激活 | 页面复核最新Problem/Criteria；DRAFT→ACTIVE成功才进入规划，文案“进入规划，不启动执行”；保存成功激活失败分别记录，停止而非自动重试 |
+| 7 | 生成规划P1，必要合法补问才P2 | Proposal精确target必须是步骤6当前Problem/Criteria；三阶段五任务为读取快照→校验数据→识别延期→供应商汇总→生成报告，依赖及输入输出一致，最多两职责仅为建议；未绑定实例不能叫实际分配 |
+| 8 | 审阅资源缺口并显式确认计划 | 未有授权资源读回保持UNKNOWN，不宣称匹配成功或执行就绪；记录Proposal→Plan/Approval/source及确认幂等键，不创建Assignment/Run/TaskRun |
+| 9 | 刷新，正式历史入口读回 | 相同Plan/Approval及Problem/Criteria修订；无新增批准/模型调用。缺图如实缺图，不借fixture或旧截图 |
+| 10 | 独立授权检查者核对两用途用量/结算 | owner批准的精确只读方式；逐invocation关联reservation、usage、price/profile、settlement及独立Evidence。Plan READ不足以通过本步；供应商response.id理解路径未保存则明确缺项，不伪造。模型文本、页面、持久记录、计量分别留证并互相关联 |
+
+证据位置建议仍为 `/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/`，只在未来批准后写入。可保留合成输入、规范化模型业务输出（非私密推理）、截图、脱敏配置digest、独立授权事实、上述业务和计量记录；不得保留密钥、认证头或真实采购资料。底层PG保留同一隔离scope所有引用关系，不能只删一部分而破坏计量核对。一次演示成功只证明本次同案，不证明稳定性或完整质量套件通过。
+
+### 20.7 Human一次性授权文本（须填完整并明确发送，当前不是授权）
+
+> 我批准S5-V023-ARCH-323仅在以下前置条件完成后执行一次新合成采购同案演示，运行候选Source/Tree：[填写；若采用当前候选为f3971365929552a4b3fac1b6e10ddb5bcbf30541 / cf9e51820f96b496876e0f5531d5d8b84062d3db]。两段均使用OpenAI、gpt-4.1-2025-04-14、OPENAI_RESPONSES_V1、https://api.openai.com/v1/responses；理解v2、规划v1适配。冻结配置清单路径/digest：[填写]，包含20.2全部exact目录引用、profile、schema、purpose、价格及两个ledger；runtime路径使用20.1建议位置或填写：[填写]。凭据仅引用reference/version/resolver及文件元数据：[分别填写，不填密钥]。
+>
+> 隔离tenant/domain、数据库和服务标识：[填写]；调用主体：[填写]；独立审批主体：[填写]；精确权限清单及有效期：[填写]。用量证据检查主体及owner批准的读取/脱敏导出方法与范围：[填写]；RESOURCE_USE READ与EVIDENCE READ_REFERENCE不自动包含费用明细披露，也不从Plan READ派生。若没有可执行授权读回方式，不开始调用。
+>
+> 同意20.5标准价格、理解最多3次/输出2048 tokens、规划最多2次/输出4096 tokens，每次输入保守上限32768，业务输入16384字节、响应64000字节，串行并发1；理解USD0.25、规划USD0.20，本地总准入上限USD0.45。预留按最坏quote、已知usage依既有账本幂等估算，缓存不重复计费且暂不折扣；税费/汇率及供应商最终账单另核对，不将本地上限解释为供应商绝对扣款保证。
+>
+> 窗口：[必须填写绝对起止时间，Asia/Shanghai]。建议若准备及时完成，可选2026-09-20 14:00:00至15:00:00 Asia/Shanghai；这是待选窗口，尚未生效，过期不补跑。值守人/停止核对人：[填写]。本地证据绝对保留到期日：[必须填写]；若采用上述窗口，建议2026-09-27 15:00:00 Asia/Shanghai，到期由指定负责人按owner保留要求人工核对后处理；未结清UNKNOWN不得自动删除，需新的明确保留决定。不创建定时任务。供应商侧保留政策/项目设置确认记录：[填写]；store=false不等于供应商零保留。
+>
+> 仅允许20.6合成案例与列明记录写入，不读生产/321/旧采购历史，不创建Assignment/Run/TaskRun，不调用真实MCP或执行业务。接受本地worker调用60秒+最多2秒清理的已测工程边界，DB/准入及理解prepare/凭据在界外；不保证远端取消/停止收费、OS故障绝对可回收或页面cancel即时中止。对20.4未补齐项的处置：[填写接受当前限制，或要求先完成另行授权的最小修复；不能仅签字宣称技术缺口消失]。
+>
+> 拒绝、配置/版本冲突、非法或语义不合格输出、预算不足、超时、清理失败或UNKNOWN立即停止后继模型调用。只读核对原invocation/receipt/账本及供应商审计，不自动重发、释放未知预留、增加额度、换模型、扩大权限或重启清理失败实例继续调用。确认计划不启动执行；保持原Draft PR #183 / Session OPEN，不授予Ready、合并、部署、D3或关闭。
+
+### 20.8 本轮操作及停止位置
+
+已完成本地源码/测试与现有脱敏证据读取、当前环境变量存在性及两建议文件存在性核对、PR只读状态查询、官方公开文档价格查核、原计划本节更新及文档diff检查。未做外部模型请求或凭据探测，未读取密钥，未启动服务/容器/业务数据，未运行产品测试、迁移、提交、推送或新增CI。已有受控证据复用，不表示本轮重跑。本轮未创建需清理的测试资源；此前资源清理事实以原交付回执为准。
+
+停止于“配置预检与授权模板完成；真实配置/凭据引用、独立费用披露办法及Human运行批准仍缺失”。不能凭本模板直接启用调用，也不把本轮计划修改扩展为产品实现授权。
+
+## 21. 理解计量、独立披露与关闭态配置（本轮G1实施计划）
+
+Human已授权本节最小实施，真实调用仍未授权。保留§20历史预检。基线f397136…/cf9e518…；唯一未提交文件为本计划。复用既有预算owner、Draft invocation append-only JSON和规划receipt；不新建账本/数据库，不改变生命周期、预算及批准契约。
+
+实现选择：理解observation增加allowlisted Responses measurement，invocation保存measurement、精确预算价格快照、结算状态及本地回收摘要；旧JSON缺字段按未知读取，不修改历史记录，无SQL迁移。可靠usage与业务有效性独立，预算异常标记pending，显式原调用observe只修复owner写入；重复/并发结算沿用既有唯一约束。不可靠usage保留预留。
+
+新增两段GET usage最小入口，复用当前可信身份与exact grant机制；在任何invocation lookup前分别检查RESOURCE_USE READ及EVIDENCE READ_MEASUREMENT（新增兼容action，明确不同于READ_REFERENCE）。授权目标为调用上下文的确定性引用，非Plan READ；scope隔离保留，拒绝返回统一不含对象信息的响应。读取只投影allowlisted身份、usage、价格和结算，不返回正文/凭据/内部异常。理解修复仍经原observe授权；费用GET不派发、不自动修复未知调用。
+
+取消只补状态表达和晚结果保护，不建立跨服务取消registry；页面取消请求不表示worker退出，未知本地回收和远端执行分别显示；理解期限外prepare/凭据/DB仍明确。不扩大60+2秒保证。配置产物只建立不装配的关闭态模板，实际ID/digest/凭据/身份缺失保持待提供，不构造假配置成功。
+
+验证：理解正式装配本地HTTPS计量/身份、非法业务但可靠usage、缺失/部分/矛盾usage；PG结算失败恢复/重启/并发幂等；两段费用读取授权先行及拒绝脱敏；取消/晚结果和页面结算提示；模板关闭状态与调用次数核对。聚焦后make check、前端lint/build、正常hooks、普通push与新候选CI实际checkout核对。所有模型替身限隔离本地，不访问外部模型、321或历史采购。完成后更新本节结果、Registry及原PR，保持Draft/OPEN。
+
+### 21.1 实现契约与权限入口
+
+理解正式OpenAI transport在worker内使用既有Responses计量归一化函数，分别记录local_request_id、供应商x-request-id、body response.id、输入/输出/total及缓存/reasoning子集。不存在供应商ID时保留null，不用本地回退ID冒充。仅allowlist计量元数据，非raw响应正文。缺失、部分、不一致、超上限或非可靠终态usage保持不可结算；可靠usage即使业务schema不合法仍在原预算owner结算。两段均以总输入/输出收费估算，不重复计算缓存/reasoning，供应商账单独立。
+
+Draft invocation既有append-only JSON新增measurement/pricing/settlementStatus/localCleanup；旧记录缺字段按NOT_MEASURED/未知读取，无迁移。预算价格快照由既有PostgresProviderCallBudget产生，规划复用相同函数。理解恢复使用原observation ID与operation ID，费用失败持久标记SETTLEMENT_WRITE_PENDING/PROVIDER_BUDGET_SETTLEMENT_PENDING；显式observe重放owner写入，不重发模型；终态再次observe仅返回原记录，避免unsupported观察伪造终态冲突。费用GET只读，不自动结算。
+
+最小入口（正式BFF session认证；GET不要求CSRF；不支持匿名或Plan READ派生）：
+
+- 理解：`GET /api/workbench/v1/draft-assistance/invocations/{id}/usage`。
+- 规划：`GET /api/workbench/v1/planning-v2/invocations/{id}/usage`。
+- 两者lookup前都要求 `RESOURCE_USE / READ / resource-use:contextual-resource-use:{id}`。
+- 另分别要求 `EVIDENCE / READ_MEASUREMENT / evidence-reference:provider-usage:understanding:{id}` 或 `…:planning:{id}`。此target是上下文计量披露引用，不伪造已有Evidence对象ID；READ_MEASUREMENT为当前EVIDENCE owner内的加法action，READ_REFERENCE不包含它。
+- 授权绑定当前principal、tenant、domain与exact target；两个权限缺任一、跨scope、目标不存在均最小披露404 `PROVIDER_USAGE_NOT_FOUND`，无费用/标识/关联对象详情。不要将Plan READ或另一个invocation的权限迁移过来。
+- 成功投影`provider-usage-read.v1`：measurement、pricing、reservationId、settlement、localCleanup及远端取消/账单NOT_PROVEN/NOT_VERIFIED。无prompt、raw body、凭据或新增预算owner。供应商原生ID仅在此独立授权入口显示。授权审批仍走现有exact grants，不自动创建宽权限。
+
+普通理解响应只增加结算状态及本地回收状态摘要，不披露费用数额或供应商标识。即使草稿业务成功，结算待恢复/用量未知提示仍可见，紧凑卡片默认展开该异常提示。页面取消为“取消已请求，停止未确认”；worker状态无证据为NOT_OBSERVED，不显示已终止。并发取消后的旧dispatch成功响应不再显示业务成功，但保留可靠usage；后续既有显式observe可将真实明确终态归属原invocation，不影响successor。未新增立即取消registry或远端取消承诺。
+
+两段期限仍以§19为准：父级supervise覆盖worker启动/网络/解析/校验；理解prepare/credential读取以及两段配置/权限/DB/持久化在外。清理失败阻止当前transport实例后继调用，本地reaped不证明远端停止或停止计费；不宣称重启自动继承全局清理锁。
+
+### 21.2 配置完成矩阵与集中待提供项
+
+新增本目录 `S5-V023-ARCH-323-UNDERSTANDING-RUNTIME.template.json`、`S5-V023-ARCH-323-PLANNING-RUNTIME.template.json`。两者**仅模板、不可直接运行**：未知目录/身份/digest/凭据/pepper/ledger引用为null，解析明确拒绝；规划另realCallsEnabled=false。理解没有同名开关，真实runtime不装配且模板校验拒绝，不能把NULL替换为示例假ID后启用。模板内明确首选gpt-4.1-2025-04-14、OpenAI Responses端点/协议、理解v2/规划v1及各自正确policy digest、§20建议Token/价格/预算，均不构成真实调用或模型选择授权。
+
+| 条件 | 状态 | 负责人剩余输入 |
+| --- | --- | --- |
+| 正式接线、隔离、原owner计量和独立读取代码 | 本轮实现，按21.4门禁结果判断 | 工程负责人完成新候选验证；不替代供应商验证 |
+| 两段配置、模型、协议、price字段 | 仅模板，未装配 | 模型目录负责人提供真实Model/Provider/Endpoint/ConnectionProfile ID/revision/digest、profile/purpose并核对协议兼容性 |
+| 凭据和pepper | 缺失，未读秘密、未探测 | 凭据管理员提供reference/version/resolver及受限本地文件引用；文件存在/权限校验不证明远端认证 |
+| 隔离身份、登录、scope、exact grants | 缺失 | 环境/权限负责人提供独立演示实例、数据库/端口、申请人/独立审批人、问题/标准/激活/理解/规划/批准/读取及上述独立费用披露授权 |
+| 价格与预算owner配置 | 模板USD0.25+0.20、3+2次；未创建真实ledger | 预算负责人提供两个固定ledger与price/profile引用；Human批准金额与次数，不转移用途额度 |
+| 供应商可用性、项目访问及实际账单 | 远端未验证 | 供应商账户负责人确认已有账户条件；首个被批准业务调用才提供真实证据，不新增探测请求 |
+| 调用窗口、值守、保留期限 | 缺失 | Human填写新的绝对Asia/Shanghai起止、值守人及绝对保留到期日；不继承§20建议或任何过期窗口，不创建调度 |
+
+本轮隔离PG/local HTTPS只用于受控测试，不是演示身份、真实配置或真实模型质量证据。
+
+### 21.3 实际调用次数账本与更新授权模板
+
+依据页面`ProblemWorkspacePage.requestAssistance/refreshAssistance`及`planning/PlanningEntry.generate`和后端幂等：每次新用户补充/纠正会创建理解successor并消耗一次；同请求授权前pending未派发不耗模型调用，批准后重交同正文的首次派发耗一次。重复同幂等键读回不另耗，但不能据此自动重发UNKNOWN。
+
+| 步骤 | 本次新增模型调用 | 累计U/P | 限制 |
+| --- | --- | --- | --- |
+| 首次理解（信息缺失） | U1 | 1/0 | 应给出必要补问，不保证真实模型一定符合 |
+| 回答一轮必要补问 | U2 | 2/0 | 回答应一次补全；再问一轮会额外耗U |
+| 一次纠正后的后继理解 | U3 | 3/0 | 保留同context与predecessor；最终内容明确确认 |
+| 创建Problem、独立保存Criteria、显式激活 | 0 | 3/0 | 确定性权限/契约校验，不调用模型 |
+| 首次规划 | P1 | 3/1 | 当前exact Problem/Criteria版本 |
+| 一轮规划补问回答 **或** 一次已批准的规划修订 | P2 | 3/2 | 二选一，不能既补问又追加修订；非法/超时不是可重试额度 |
+| Plan确认、刷新同Plan/Approval、独立费用GET、仅结算修复 | 0 | 3/2 | 修复仅原usage；不创建Assignment/Run/TaskRun |
+
+因此3U+2P足以覆盖“一轮理解补问+一次理解纠正+最多一轮规划后继”的有界脚本；不覆盖多轮理解补问、规划补问后再修订或完整稳定性测试。最小缩减方案：充分初始输入→一次纠正（2U）、完整标准→单次规划（1P），最大估算USD0.262144；不证明必要补问分支。备选4U+3P可多容纳各一次合法后继，最大保守估算USD0.622592，建议用途上限USD0.33+0.30=0.63；**均未授权，不自动增额**。原3U+2P每次输入32768、理解输出2048、规划输出4096及USD0.442368估算/0.45准入上限仍见§20.5。
+
+> Human运行授权（未填写/未发送前不得调用）：批准运行候选Source/Tree：[填写最终新候选]；两段首选OpenAI gpt-4.1-2025-04-14、Responses、理解v2/规划v1；exact配置清单路径/digest：[填写]，真实credential/pepper引用及版本：[填写，不填值]，隔离实例/scope/登录主体：[填写]，独立审批人：[填写]，业务exact grants及两段RESOURCE_USE READ + EVIDENCE READ_MEASUREMENT清单/有效期：[填写]。批准脚本选择：[默认3U+2P有界脚本，或明确填写其他方案]，两用途ledger：[填写]，默认Token上限与USD0.25+0.20总0.45，价格采用§20.5标准价并冻结引用：[填写]。调用窗口：[绝对起止Asia/Shanghai]，值守人：[填写]，本地证据绝对保留到期：[填写]，供应商保留条件核对：[填写]。只写入全新合成采购同案及授权/计量/Evidence记录，不真实读取订单/调用MCP，不创建Assignment/Run/TaskRun。接受期限外步骤、取消请求不等于退出、回收不等于远端停止/停止计费、估算不等于账单。任何拒绝、配置冲突、非法输出、结算pending、预算不足、超时、清理失败或UNKNOWN停止后继调用，不自动重发/释放未知预留/扩权/换模型/增预算；只允许按独立权限核对原调用及显式幂等owner修复。窗口过期不补跑。Draft/OPEN，不授予D3、Ready、合并、部署或关闭。
+
+### 21.4 受控验证与诊断记录（实施中更新）
+
+本轮证据目录 `/Users/tristan/Documents/s5-v023-arch-323-acceptance/understanding-metering/`。测试用独立容器`s5-323-understanding-metering-pg`、127.0.0.1:64327、每用例新建并删除专属数据库；未操作旧323/321容器或采购数据。理解装配使用正式runtime builder、路由、spawn adapter和本地HTTPS及PG，模型目录/准入为明确测试替身；不声称真实目录授权和供应商已验证。v2理解、权限拒绝零worker/HTTP、usage可靠性、非法业务、结算故障/重启及并发恢复均有专属断言。费用权限另使用正式exact授权适配器测试lookup前两权限、跨actor/scope及404脱敏。页面2项受控浏览器可见性验证通过（非模型质量），前端lint/build通过。
+
+诊断保留：首轮新增PG用例错误设置了测试resolver属性，均在MODEL_BINDING_NOT_ELIGIBLE前置拒绝，未派发；纠正测试装配后6项通过、并发恢复暴露终态重复observe问题，产品修复为终态原记录读回。新拒绝用例最初误写不存在的AUTHORIZATION_DENIED状态，按既有REJECTED + DRAFT_ASSISTANCE_AUTHORIZATION_DENIED契约修正，保持零worker/网络断言。新增NULL模板的失败类型为MODEL_IDENTITY_REQUIRED，按实际解析契约断言。第一次从仓库根执行前端npm lint未进入前端工程，改在console/frontend运行并通过，不计根目录失败为通过。
+
+一次扩大聚焦126项出现2失败：上述拒绝断言，以及既有规划drip用例在STARTUP而非网络阶段耗尽1秒总预算。JUnit时间线：headers/body分别约0.58秒进入网络，drip在1.001715秒STARTUP到期，0.004840秒回收、零请求。不能将此记为慢滴体覆盖成功，也不能只因本轮未改规划exchange而认定无关。测试修复保留实际正式装配/HTTPS/单调总期限，增加独立2.5秒请求到达门禁；该三阶段测试显式5秒总/5秒idle，慢滴体每50ms一字节（累积超过总期限），严格要求WAIT_HEADERS/READ_BODY、TOTAL_DEADLINE、5至5.5秒判定、≤2秒回收、请求恰为1且重放不再发。冷启动仍算入总预算；未在到达门禁前进入目标阶段则明确失败。其他startup阶段测试保留原短预算。首次修订误设idle6>total5，被配置契约拒绝零调用；改为合法5/5，不修改产品期限约束。不是接受多种错误码或跳过失败用例。
+
+本轮完整make check结果：**2065 passed / 201 skipped / 1既有Starlette warning**，Ruff与format均通过；新理解PG/披露用例实际执行，非skip。与§19旧计数区别保留，不将旧门禁当本轮。网络三目标阶段修复后独立3项通过并保存network-phase.xml；新理解/权限/旧理解及其余边界曾聚焦48项通过，完整make check最终覆盖修订后全套，不将失败轮JUnit作为成功证据。前端npm lint通过，专属323受控浏览器2项通过，其启动步骤完成tsc/vite build。正常提交hooks及新候选CI将单独绑定本目录派生交付回执与原PR；不引用f397旧12成功作为新候选结论。原§20未提交准备材料完整纳入本次交付。

@@ -266,22 +266,9 @@ class PlanningBudget:
         return self.owner.reserve(key, normalized, quote)
 
     def pricing(self):
-        from .business_problem_domain import canonical_digest
+        from .draft_provider_budget_postgres import PostgresProviderCallBudget
 
-        owner = self.owner
-        document = {
-            "ledger_id": owner.ledger_id,
-            "profile_revision_id": owner.profile.profile_revision_id,
-            "profile_digest": owner.profile.profile_digest,
-            "currency": "USD",
-            "unit": "MICROUSD_PER_MILLION_TOKENS",
-            "input_price": owner.input_price,
-            "output_price": owner.output_price,
-            "calculation_version": "draft-provider-budget.v1.ceil-separate-totals",
-            "cached_input_policy": "INCLUDED_AT_STANDARD_INPUT_RATE_NO_ADDITION",
-            "classification": "TOKEN_COST_ESTIMATE_NOT_PROVIDER_INVOICE",
-        }
-        return {**document, "price_version_digest": canonical_digest(document)}
+        return PostgresProviderCallBudget.pricing(self.owner)
 
     def settle(self, invocation_id, reservation_id, observation):
         self.owner.record_usage(

@@ -97,6 +97,13 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
                 )
             ),
             "contentDisposition": value.content_disposition,
+            "settlementStatus": value.settlement_status,
+            "localWorkerState": (
+                "REAPED" if value.local_cleanup.get("reaped") else "CLEANUP_NOT_PROVEN"
+            )
+            if value.local_cleanup
+            else "NOT_OBSERVED",
+            "remoteCancellation": "NOT_PROVEN",
             "clarificationQuestion": response.clarification_question,
             "understanding": response.understanding,
             "draft": (
@@ -183,6 +190,18 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                 return JSONResponse(
                     status_code=_status(exc.reason_code),
                     content={"reasonCode": exc.reason_code},
+                )
+
+        @app.get(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/usage")
+        def usage(invocation_id: str, request: Request):
+            from .authority_contracts import AuthorityError
+
+            _, context = authenticate(request)
+            try:
+                return {"result": service.read_usage(context, invocation_id)}
+            except (DraftAssistanceError, AuthorityError):
+                return JSONResponse(
+                    status_code=404, content={"reasonCode": "PROVIDER_USAGE_NOT_FOUND"}
                 )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/observe")

@@ -19,6 +19,7 @@ export default defineConfig({
           "**/s5-323-planning.real.spec.ts",
           "**/s5-323-page.real.spec.ts",
           "**/s5-323-visual.spec.ts",
+          "**/s5-323-usage.spec.ts",
         ]
       : [
           "**/digital-employee-work-participation.real.spec.ts",
@@ -30,6 +31,7 @@ export default defineConfig({
           "**/s5-323-planning.real.spec.ts",
           "**/s5-323-page.real.spec.ts",
           "**/s5-323-visual.spec.ts",
+          "**/s5-323-usage.spec.ts",
           "**/*-live.spec.ts",
         ],
   outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,
