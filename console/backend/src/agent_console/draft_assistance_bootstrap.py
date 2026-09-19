@@ -14,6 +14,7 @@ from agent_console.draft_assistance import (
     DraftScope,
     StaticPepperResolver,
 )
+from agent_console.draft_assistance_policy import PolicyValidationError, policy_for
 from agent_console.draft_assistance_postgres import (
     PostgresContextualResourceUseOwner,
     PostgresDraftAssistanceRepository,
@@ -26,12 +27,6 @@ from agent_console.draft_assistance_support import (
 from agent_console.draft_provider_budget_postgres import PostgresProviderCallBudget
 from agent_console.kimi_responses_draft_adapter import (
     ADAPTER_ID as KIMI_ADAPTER_ID,
-)
-from agent_console.kimi_responses_draft_adapter import (
-    ADAPTER_REVISION as KIMI_ADAPTER_REVISION,
-)
-from agent_console.kimi_responses_draft_adapter import (
-    OUTPUT_SCHEMA_VERSION as KIMI_OUTPUT_SCHEMA_VERSION,
 )
 from agent_console.kimi_responses_draft_adapter import (
     PROTOCOL as KIMI_PROTOCOL,
@@ -51,12 +46,6 @@ from agent_console.model_governance_authorization import ModelGovernanceExactRes
 from agent_console.model_governance_postgres import PostgresModelGovernanceRepository
 from agent_console.openai_responses_draft_adapter import (
     ADAPTER_ID as OPENAI_ADAPTER_ID,
-)
-from agent_console.openai_responses_draft_adapter import (
-    ADAPTER_REVISION as OPENAI_ADAPTER_REVISION,
-)
-from agent_console.openai_responses_draft_adapter import (
-    OUTPUT_SCHEMA_VERSION as OPENAI_OUTPUT_SCHEMA_VERSION,
 )
 from agent_console.openai_responses_draft_adapter import (
     PROTOCOL as OPENAI_PROTOCOL,
@@ -162,6 +151,7 @@ def _profile(
     document: object,
     *,
     allow_local_https_mock: bool = False,
+    planning: bool = False,
 ) -> tuple[
     DraftAssistanceProfileRevision,
     Path,
@@ -208,14 +198,22 @@ def _profile(
     provider_fields = (
         {"reasoningEffort"} if provider_protocol == KIMI_PROTOCOL else set()
     )
+    if planning:
+        common = common | {"policyDigest", "realCallsEnabled"}
     expected = (
         common
         if transport_kind == "SYNTHETIC"
         else (common | real_fields | provider_fields)
     )
     if (
+        isinstance(document.get("adapter"), dict)
+        and document["adapter"].get("revision") == "v2"
+    ):
+        expected = expected | {"policyDigest"}
+    if (
         set(document) != expected
-        or document.get("schemaVersion") != ("draft-assistance-runtime.v1")
+        or document.get("schemaVersion")
+        != ("planning-runtime.v1" if planning else "draft-assistance-runtime.v1")
         or transport_kind not in {"SYNTHETIC", "REAL_PROVIDER"}
     ):
         raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
@@ -335,17 +333,29 @@ def _profile(
             budget["inputPriceMicrousdPerMillionTokens"],
             budget["outputPriceMicrousdPerMillionTokens"],
         )
+        if planning:
+            from .plan_suggestion_policy import POLICY_DIGEST
+
+            if (
+                value.adapter_revision != "v1"
+                or value.output_schema_version != "plan-suggestion-output.v1"
+                or value.target_format_version != "plan-suggestion-target.v1"
+                or document["policyDigest"] != POLICY_DIGEST
+                or type(document["realCallsEnabled"]) is not bool
+                or document["providerProtocol"] not in {OPENAI_PROTOCOL, KIMI_PROTOCOL}
+            ):
+                raise DraftAssistanceError("PLANNING_PROFILE_INVALID")
+        else:
+            policy = policy_for(value.adapter_revision, value.output_schema_version)
+            if policy.revision == "v2" and document["policyDigest"] != policy.digest:
+                raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
         adapter_tuple = (
             document["providerProtocol"],
             value.adapter_id,
-            value.adapter_revision,
-            value.output_schema_version,
         )
         if adapter_tuple == (
             OPENAI_PROTOCOL,
             OPENAI_ADAPTER_ID,
-            OPENAI_ADAPTER_REVISION,
-            OPENAI_OUTPUT_SCHEMA_VERSION,
         ):
             real_configuration = OpenAIResponsesConfiguration(
                 *common_configuration, ca_file
@@ -353,8 +363,6 @@ def _profile(
         elif adapter_tuple == (
             KIMI_PROTOCOL,
             KIMI_ADAPTER_ID,
-            KIMI_ADAPTER_REVISION,
-            KIMI_OUTPUT_SCHEMA_VERSION,
         ):
             real_configuration = KimiResponsesConfiguration(
                 *common_configuration, document["reasoningEffort"], ca_file
@@ -372,7 +380,7 @@ def _profile(
                 "outputPriceMicrousdPerMillionTokens"
             ],
         }
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, PolicyValidationError) as exc:
         raise DraftAssistanceError("DRAFT_PROFILE_INVALID") from exc
     return value, pepper_path, real_configuration, normalized_budget
 

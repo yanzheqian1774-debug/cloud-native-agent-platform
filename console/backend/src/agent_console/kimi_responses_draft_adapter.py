@@ -16,7 +16,7 @@ import re
 import ssl
 import stat
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -28,8 +28,17 @@ from agent_console.draft_assistance import (
     ProviderBudgetQuote,
     ProviderObservation,
 )
+from agent_console.draft_assistance_policy import (
+    V1_INSTRUCTIONS,
+    V1_SCHEMA,
+    PolicyValidationError,
+    context_references,
+    legacy_content,
+    policy_for,
+    prepared_policy,
+    validate_result,
+)
 from agent_console.openai_responses_draft_adapter import (
-    OUTPUT_SCHEMA,
     OUTPUT_SCHEMA_VERSION,
 )
 
@@ -38,13 +47,8 @@ ADAPTER_REVISION = "v1"
 PROTOCOL = "KIMI_RESPONSES_V1"
 REASONING_EFFORTS = frozenset({"low", "high", "max"})
 
-INSTRUCTIONS = (
-    "Help the user clarify a business problem before any formal Problem is created. "
-    "Return exactly the requested JSON schema. Ask one concise clarification question "
-    "when outcome, scope, or completion criteria are missing; otherwise return a title "
-    "and faithful description. Do not invent facts, use tools, or claim business "
-    "success."
-)
+INSTRUCTIONS = V1_INSTRUCTIONS
+OUTPUT_SCHEMA = V1_SCHEMA
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,7 +173,12 @@ class ExactFileKimiCredentialResolver:
             or profile.connection_profile_revision_id
             != self.expected_connection_profile_revision_id
             or profile.adapter_id != ADAPTER_ID
-            or profile.adapter_revision != ADAPTER_REVISION
+            or (profile.adapter_revision, profile.output_schema_version)
+            not in {
+                (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                ("v2", "problem-draft-assistance-output.v2"),
+                ("v1", "plan-suggestion-output.v1"),
+            }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
         descriptor = None
@@ -225,15 +234,26 @@ class KimiResponsesDraftTransport:
         del invocation_id
         if (
             profile.adapter_id != ADAPTER_ID
-            or profile.adapter_revision != ADAPTER_REVISION
-            or profile.output_schema_version != OUTPUT_SCHEMA_VERSION
+            or (profile.adapter_revision, profile.output_schema_version)
+            not in {
+                (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                ("v2", "problem-draft-assistance-output.v2"),
+            }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
         ):
             raise DraftAssistanceError("KIMI_RESPONSES_PROFILE_MISMATCH")
+        try:
+            policy = policy_for(profile.adapter_revision, profile.output_schema_version)
+            if policy.revision == "v2":
+                context_references(content)
+            else:
+                content = legacy_content(content)
+        except PolicyValidationError as exc:
+            raise DraftAssistanceError(str(exc)) from None
         document = {
             "model": self.configuration.native_model_id,
-            "instructions": INSTRUCTIONS,
+            "instructions": policy.instructions,
             "input": [
                 {
                     "role": "user",
@@ -249,7 +269,7 @@ class KimiResponsesDraftTransport:
                     "type": "json_schema",
                     "name": "problem_draft_assistance_output",
                     "strict": True,
-                    "schema": OUTPUT_SCHEMA,
+                    "schema": policy.schema,
                 }
             },
         }
@@ -312,26 +332,43 @@ class KimiResponsesDraftTransport:
             or credential.version != self.configuration.credential_version
         ):
             raise DraftAssistanceError("KIMI_RESPONSES_REQUEST_INVALID")
-        if (
-            self.last_deadline_metrics is not None
-            and not self.last_deadline_metrics.reaped
+        if self.last_deadline_metrics is not None and (
+            not self.last_deadline_metrics.reaped
+            or self.last_deadline_metrics.reason == "CLEANUP_FAILURE"
         ):
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
         self.last_http_diagnostic = None
         self.dispatch_count += 1
-        return supervise(
-            self.configuration,
-            invocation_id,
-            request,
-            credential,
-            lambda value: setattr(self, "last_deadline_metrics", value),
-            diagnostic=lambda value: setattr(self, "last_http_diagnostic", value),
-        )
+        diagnostics = []
 
-    def _dispatch_once(
-        self, *, invocation_id, request, credential, profile, connected=lambda: None
+        def record(value):
+            self.last_deadline_metrics = value
+            diagnostics.append(asdict(value))
+
+        try:
+            result = supervise(
+                self.configuration,
+                invocation_id,
+                request,
+                credential,
+                record,
+                diagnostic=lambda value: setattr(self, "last_http_diagnostic", value),
+            )
+        except DraftAssistanceError as exc:
+            if diagnostics:
+                exc.diagnostic = diagnostics[-1]
+            raise
+        return replace(result, local_cleanup=diagnostics[-1] if diagnostics else None)
+
+    def exchange(
+        self,
+        *,
+        invocation_id,
+        request,
+        credential,
+        connected=lambda: None,
+        progress=lambda _stage: None,
     ):
-        del profile
         if (
             not isinstance(request.payload, bytes)
             or not isinstance(credential, ResolvedKimiCredential)
@@ -339,6 +376,7 @@ class KimiResponsesDraftTransport:
             or credential.version != self.configuration.credential_version
         ):
             raise DraftAssistanceError("KIMI_RESPONSES_REQUEST_INVALID")
+        progress("CONNECT")
         parsed = urlsplit(self.configuration.responses_url)
         try:
             ssl_context = ssl.create_default_context(
@@ -360,6 +398,7 @@ class KimiResponsesDraftTransport:
         )
         started = time.monotonic()
         self.dispatch_count += 1
+        response = None
         try:
             connection.connect()
             connected()
@@ -372,6 +411,7 @@ class KimiResponsesDraftTransport:
             connection.sock.settimeout(
                 min(self.configuration.read_timeout_seconds, remaining)
             )
+            progress("SEND_REQUEST")
             connection.request(
                 "POST",
                 parsed.path,
@@ -383,7 +423,9 @@ class KimiResponsesDraftTransport:
                     "Connection": "close",
                 },
             )
+            progress("WAIT_HEADERS")
             response = connection.getresponse()
+            progress("READ_BODY")
             raw_correlation = response.getheader("x-request-id")
             correlation = (
                 raw_correlation
@@ -399,7 +441,12 @@ class KimiResponsesDraftTransport:
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
-            connection.close()
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                connection.close()
+        progress("VALIDATE_RESPONSE")
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         if not 200 <= response.status < 300:
             from agent_console.kimi_http_diagnostics import non2xx_diagnostic
@@ -418,6 +465,63 @@ class KimiResponsesDraftTransport:
             correlation = self.last_http_diagnostic["provider_request_id"]["value"] or (
                 f"http-{response.status}-{invocation_id}"
             )
+        return response.status, body, correlation, latency_ms
+
+    def _dispatch_once(
+        self,
+        *,
+        invocation_id,
+        request,
+        credential,
+        profile,
+        connected=lambda: None,
+        progress=lambda _stage: None,
+    ):
+        progress("VALIDATE_RESPONSE")
+        policy = prepared_policy(request.payload)
+        status, body, correlation, latency_ms = self.exchange(
+            invocation_id=invocation_id,
+            request=request,
+            credential=credential,
+            connected=connected,
+            progress=progress,
+        )
+        from .planning_measurement import measurement
+
+        try:
+            response = json.loads(body)
+        except (ValueError, UnicodeDecodeError):
+            response = {}
+        measured = measurement(
+            response,
+            correlation,
+            invocation_id,
+            latency_ms,
+            self.configuration,
+            protocol=PROTOCOL,
+        )
+        if (
+            not 200 <= status < 300
+            or len(body) > self.configuration.maximum_response_bytes
+        ):
+            measured["settleable"] = False
+        result = self._interpret_response(
+            invocation_id, request, policy, status, body, correlation, latency_ms
+        )
+        return replace(
+            result,
+            measurement=measured,
+            input_tokens=measured["usage"]["input_tokens"]
+            if measured["settleable"]
+            else None,
+            output_tokens=measured["usage"]["output_tokens"]
+            if measured["settleable"]
+            else None,
+        )
+
+    def _interpret_response(
+        self, invocation_id, request, policy, status_code, body, correlation, latency_ms
+    ):
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(
                 invocation_id,
@@ -425,10 +529,10 @@ class KimiResponsesDraftTransport:
                 "PROVIDER_RESPONSE_TOO_LARGE",
                 latency_ms=latency_ms,
             )
-        if not 200 <= response.status < 300:
-            if response.status == 429:
+        if not 200 <= status_code < 300:
+            if status_code == 429:
                 reason = "PROVIDER_RATE_LIMITED"
-            elif response.status >= 500:
+            elif status_code >= 500:
                 reason = "PROVIDER_UNAVAILABLE"
             else:
                 reason = "PROVIDER_HTTP_REJECTED"
@@ -569,12 +673,13 @@ class KimiResponsesDraftTransport:
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
             )
-        if not isinstance(result, dict) or set(result) != {
-            "kind",
-            "clarificationQuestion",
-            "title",
-            "description",
-        }:
+        try:
+            refs = frozenset()
+            if policy.revision == "v2":
+                sent = json.loads(request.payload)
+                refs = context_references(sent["input"][0]["content"][0]["text"])
+            understanding = validate_result(result, policy, refs)
+        except (PolicyValidationError, ValueError, KeyError, TypeError):
             return self._failure(
                 invocation_id,
                 correlation,
@@ -599,6 +704,7 @@ class KimiResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    understanding=understanding,
                     result_kind=DraftResultKind.NEEDS_CLARIFICATION,
                     clarification_question=question,
                     latency_ms=latency_ms,
@@ -619,6 +725,7 @@ class KimiResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    understanding=understanding,
                     result_kind=DraftResultKind.DRAFT_READY,
                     title=title,
                     description=description,

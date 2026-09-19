@@ -1,0 +1,120 @@
+{
+  "session": "S5-V023-IMPL-322",
+  "beforeSource": "0de78aa8fe7f50325a525506f8aee33b295aca80",
+  "beforeTree": "d8ddcaa33d755f39d077382cb3f17c54a2943eac",
+  "kind": "UI_API_FIXTURE_NOT_REAL_MODEL_OR_DATABASE",
+  "fixtureCase": "A supplier quality, clarify <2%, correct to <1%, no replacement equipment; dates/baseline unknown",
+  "providerCalls": 0,
+  "databaseWrites": 0,
+  "baselineSourceVerified": true,
+  "afterFiles": {
+    "console/frontend/playwright.s5-321.config.ts": "f85fa2f93ead5e4211a494e8cad8ded9a6695f7cc492e6e5b1e09f88cbf8df99",
+    "console/frontend/src/problems/DraftAssistanceCard.tsx": "7ca2334a034fd886f71a2baa4ef095f0b725b32a4c85564a3c83899e55fa9d21",
+    "console/frontend/src/problems/ProblemConversation.tsx": "1822983cf974861c754a5968995155508dacfa46566b0c7da7591134d8e58ad2",
+    "console/frontend/src/problems/ProblemTaskSummary.tsx": "9d321084ec012cdf3cca2865a0e343c5b6c96b58a38812af2c0000062cad8a9f",
+    "console/frontend/src/problems/ProblemWorkspacePage.tsx": "0f55eb28973f91f529713379a77f247504d08641bd25a2e1b6fb7c25576b1043",
+    "console/frontend/src/styles/product-experience.css": "f66d0d2a9d999be93680a7f72c64d3660a2a00e679c11987c23ca98c86d478e0",
+    "console/frontend/tests/e2e/s5-321-understanding.spec.ts": "1c07f34bbdbba0f558c97f4193210319e5e9a5cc4147c162ade678eedb008249"
+  },
+  "assets": {
+    "before": {
+      "index-Dv8P9W7r.css": "35760e1c78e0551e362e206a1660ea80afb2fc32c512a210ed6218db7ba5dd59",
+      "index-CEfAuQYX.js": "f7bc21f193226c68382dd148970e938622f4452c03664362f8bcf85dfd23fb9c"
+    },
+    "after": {
+      "index-CqzcYQdR.css": "3edd7c2320070ef64ecdbe40eed9b2b649c914fa1b337fb7fdc795ae466ce154",
+      "index-DqZzJ8s2.js": "664439297e804682c4b5c7f35de4fb9719d9c8c0ad72e8a7dcc2b404bbda20de"
+    }
+  },
+  "screenshots": {
+    "after/1440/01-input.png": "26ba97c46f6c50d72d45ad7432120d96b65017381fa2b6a8ccbafceab740b75c",
+    "after/1440/02-clarification.png": "7da5cc801f49a3705f776814b5a107c1157f1a5fd8b4c4de7442a85ae170f0ed",
+    "after/1440/03-confirm.png": "d0a896afbd4d3a9875fb9f28470e081bab18d3c08e3816e11a21c2b9f3b7cf1d",
+    "after/1440/04-created.png": "d29d78eaa47323f37c438f762358aa481358f1d918b65fb591e87fb02343a83a",
+    "after/1440/05-readback.png": "f6ee90d93ea000c27972648b363a4245980f7f86c0bad3cad0d6eef6e9677185",
+    "after/1440/06-refreshed.png": "cc02f7120e4bfb3f518684e3c89befa3926122c2fd1699004a2c6b695356dba6",
+    "after/390/01-input.png": "161846b626fc60c3dcac00547e7fd3a36dd327b675d46af5c89689e0eece9892",
+    "after/390/02-clarification-answer.png": "176a6f19ee820c9d2300218fc88e07fb4ba121ee2f37fd52107cdff67b33c95e",
+    "after/390/02-clarification.png": "52b8295a9251112a81bfebcc4840c64ffd5855b6749ad8b750b7ba81ebe2c9c3",
+    "after/390/03-confirm-action.png": "434231e89badab1bbbe6c49434ee3b856be7eaca3a74d437e144985942a2ba97",
+    "after/390/03-confirm.png": "e44efa83c3fb5664a1f5a0dd143e6cdddd36307bca055ffac5a575c33e10f1d9",
+    "after/390/04-created.png": "374cf67b8b5dffc41df8c3c8f0d08a06c45ac99c73d404aa11d0f1eeb8f4f5ab",
+    "after/390/05-readback.png": "3514b1ae31f5bdf1d68b17bffd953f58f7c240686fcead023f4427b7b6a0c190",
+    "after/390/06-refreshed.png": "483421bc8ed176c3ed3b766ba1740aa704e4a72e162ca6056decc8df32ef7477",
+    "before/1440/01-input.png": "d35857427e8f85b6307f750eb38678d0087262e05e11a24ef3765293422075d0",
+    "before/1440/02-clarification.png": "f018172887ad294115d687d8f40939ba03b760ab32654e75f4ea5435d06ed45d",
+    "before/1440/03-confirm.png": "1816d1405cf042797f51a612750454b3767e0cb5c8bf385f8ec22a0af93b2e18",
+    "before/1440/04-created.png": "b529e82a3b8021e5000e82b8999f62feeac96204432c6f10ff36cd8ac5162d3d",
+    "before/1440/05-readback.png": "9ac6ce133a66ad4986684bae09f6f5c9eabb67b850d7c45baa9ad2352a6d8ec1",
+    "before/1440/06-refreshed.png": "cf45388aad9b804b7c97905be2263d2af22bb143cfe46ba23b9e9332975d8ee6",
+    "before/390/01-input.png": "7703124d3e44eb29ecf2f954f27a4c645fb8123a932c94e78809767277fcd937",
+    "before/390/02-clarification-answer.png": "8c0b03e95c2070e87364a29df066d97617144e0a950d757f5fc3909798d21ce1",
+    "before/390/02-clarification.png": "8c0b03e95c2070e87364a29df066d97617144e0a950d757f5fc3909798d21ce1",
+    "before/390/03-confirm-action.png": "4893493174e4144dd4fb8ba19071df27170e488b4c1fe3c08bf0c42d861a9de6",
+    "before/390/03-confirm.png": "ed69dc3b378a4a22e55ba8ad44e4101ed9448c7300a34ce0b14093f1dfebca77",
+    "before/390/04-created.png": "0a6e237ec1811eb4e2c9cf499cc45cfcedfaae85891cc8404548a8f097d9f358",
+    "before/390/05-readback.png": "a2433850192090cdda16e275187e5406c1fb0913e539436d4b78b0659c7ee761",
+    "before/390/06-refreshed.png": "371f1217b688711cfb1746b183cd46127cc825bd9e6ac60c49a0e3dcf62d154c"
+  },
+  "validation": {
+    "makeCheck": "1853 passed, 200 existing environment-dependent skipped, one warning",
+    "interaction": "33 passed, retries 0",
+    "legacyW2AW3": "19 passed, original assertions retained",
+    "frontendLint": "PASS",
+    "frontendBuild": "PASS via Playwright webServer production build"
+  },
+  "retainedFailures": [
+    "Initial capture port 19322 occupied; no service reused or stopped.",
+    "First capture fixture problem-link response omitted result fields; both journeys failed; fixture corrected, baseline recaptured.",
+    "W2A scroll regression 365 to 348 caused by read-complete spacing; stable geometry restored; original assertion passes."
+  ],
+  "limits": [
+    "Screenshots use existing simplistic understanding fixture; unknown fields are not semantic quality results.",
+    "UI/API mocks do not establish database or true backend authorization conformance.",
+    "Parent #181 remains an unmerged dependency; its code and prior results are not this increment."
+  ],
+  "originalCandidate": {
+    "source": "122cfa99f8a0bb7a8a0ce9a1b541ca012971bde6",
+    "tree": "8fd5a8f56e6ba93e5f2f2998152f3fb94ae13e96",
+    "note": "Top-level afterFiles/assets/screenshots/validation describe the original capture; preserved unchanged. Latest PC evidence is in pcReview."
+  },
+  "pcReview": {
+    "captureWorkingBaseSource": "122cfa99f8a0bb7a8a0ce9a1b541ca012971bde6",
+    "binding": "Captured with the uncommitted follow-up below; source file SHA-256 values bind the screenshots to the delivered candidate. Final source/tree recorded in PR #182.",
+    "kind": "UI_API_FIXTURE_NOT_REAL_MODEL_OR_DATABASE",
+    "viewport": {
+      "width": 1440,
+      "height": 1050
+    },
+    "providerCalls": 0,
+    "databaseWrites": 0,
+    "sourceFiles": {
+      "console/frontend/playwright.s5-321.config.ts": "f85fa2f93ead5e4211a494e8cad8ded9a6695f7cc492e6e5b1e09f88cbf8df99",
+      "console/frontend/src/problems/DraftAssistanceCard.tsx": "7ca2334a034fd886f71a2baa4ef095f0b725b32a4c85564a3c83899e55fa9d21",
+      "console/frontend/src/problems/ProblemConversation.tsx": "edef55a0c1c8c4892170404891c6373c47fdf097897a7a8e4c6c2859d27bea2a",
+      "console/frontend/src/problems/ProblemTaskSummary.tsx": "4c2946c8739a4c7b57fffecbf61e3ddc5807a4c5afe298dbcfbd137148da090f",
+      "console/frontend/src/problems/ProblemWorkspacePage.tsx": "8b0ad068ea29b8d7c86467350807f13f9a0facc9a5404482bcef5caa644bb7d1",
+      "console/frontend/src/styles/product-experience.css": "a6ca5504a18dc7c3bdbbe50b69a1057e8b095720e23a3fbde9b606e1503d771d",
+      "console/frontend/tests/e2e/s5-321-understanding.spec.ts": "05f2a2d1779c74502e2761137848b1886b818b856947df12ffc6a5df45ecdb8f",
+      "console/frontend/src/problems/problemUnderstandingModel.ts": "5d418af19057377001c6c9b14eedfa099da7ca3ad59f1cabd025748c976f9492"
+    },
+    "screenshots": {
+      "pc-review/05-readback.png": "4ed77739d420dc8bf76d5578bcae6bfe785e607658559def05abf41e63761ae3",
+      "pc-review/03-confirm.png": "c22a1dea6c2a6a280306db4ecf0381ec73e5286cacc55ad2c92d5d8aeb5da0b3"
+    },
+    "validation": {
+      "makeCheck": "1853 passed, 200 existing environment-dependent skips, 1 warning",
+      "understanding": "34 passed, retries 0",
+      "legacyW2AW3": "19 passed, original assertions retained",
+      "frontendLint": "PASS",
+      "frontendBuild": "PASS via Playwright webServer production build"
+    },
+    "geometry": "Full author label and primary card action visible at PC capture size; stream bottom does not overlap composer; next action remains fully reachable with composer expanded to 12 lines.",
+    "retainedFailure": "Initial PC confirmation action visibility ratio was 0.884 after extra explanatory row; merged explanation into existing version note and added 16px PC stream capacity. Full-visibility assertion retained and passes.",
+    "limits": [
+      "UI/API fixture, not real model quality or new database acceptance.",
+      "UNKNOWN does not prove the user omitted information; no semantic field extraction added.",
+      "Existing mobile captures remain historical evidence; existing mobile checks still run."
+    ]
+  }
+}

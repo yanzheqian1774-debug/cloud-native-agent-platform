@@ -16,7 +16,7 @@ import re
 import ssl
 import stat
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -28,34 +28,24 @@ from agent_console.draft_assistance import (
     ProviderBudgetQuote,
     ProviderObservation,
 )
+from agent_console.draft_assistance_policy import (
+    V1_INSTRUCTIONS,
+    V1_SCHEMA,
+    PolicyValidationError,
+    context_references,
+    legacy_content,
+    policy_for,
+    validate_result,
+)
 
 ADAPTER_ID = "openai-responses-draft"
 ADAPTER_REVISION = "v1"
 PROTOCOL = "OPENAI_RESPONSES_V1"
 OUTPUT_SCHEMA_VERSION = "problem-draft-assistance-output.v1"
 
-INSTRUCTIONS = (
-    "Help the user clarify a business problem before any formal Problem is created. "
-    "Return exactly the requested JSON schema. Ask one concise clarification question "
-    "when outcome, scope, or completion criteria are missing; otherwise return a title "
-    "and faithful description. Do not invent facts, use tools, or claim business "
-    "success."
-)
+INSTRUCTIONS = V1_INSTRUCTIONS
 
-OUTPUT_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "kind": {
-            "type": "string",
-            "enum": ["NEEDS_CLARIFICATION", "DRAFT_READY"],
-        },
-        "clarificationQuestion": {"type": ["string", "null"]},
-        "title": {"type": ["string", "null"]},
-        "description": {"type": ["string", "null"]},
-    },
-    "required": ["kind", "clarificationQuestion", "title", "description"],
-}
+OUTPUT_SCHEMA = V1_SCHEMA
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,7 +174,12 @@ class ExactFileOpenAICredentialResolver:
             or profile.connection_profile_revision_id
             != self.expected_connection_profile_revision_id
             or profile.adapter_id != ADAPTER_ID
-            or profile.adapter_revision != ADAPTER_REVISION
+            or (profile.adapter_revision, profile.output_schema_version)
+            not in {
+                (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                (ADAPTER_REVISION, "plan-suggestion-output.v1"),
+                ("v2", "problem-draft-assistance-output.v2"),
+            }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
         descriptor = None
@@ -227,6 +222,10 @@ class OpenAIResponsesDraftTransport:
         self.configuration = configuration
         self.synthetic = configuration.execution_class == "LOCAL_HTTPS_MOCK"
         self.dispatch_count = 0
+        self.isolation_enabled = True
+        self.cleanup_failed = False
+        self.last_deadline = None
+        self.progress = lambda stage: None
 
     @staticmethod
     def _cost(tokens: int, price_microusd_per_million: int) -> int:
@@ -236,15 +235,26 @@ class OpenAIResponsesDraftTransport:
         del invocation_id
         if (
             profile.adapter_id != ADAPTER_ID
-            or profile.adapter_revision != ADAPTER_REVISION
-            or profile.output_schema_version != OUTPUT_SCHEMA_VERSION
+            or (profile.adapter_revision, profile.output_schema_version)
+            not in {
+                (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
+                ("v2", "problem-draft-assistance-output.v2"),
+            }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
         ):
             raise DraftAssistanceError("OPENAI_RESPONSES_PROFILE_MISMATCH")
+        try:
+            policy = policy_for(profile.adapter_revision, profile.output_schema_version)
+            if policy.revision == "v2":
+                context_references(content)
+            else:
+                content = legacy_content(content)
+        except PolicyValidationError as exc:
+            raise DraftAssistanceError(str(exc)) from None
         document = {
             "model": self.configuration.native_model_id,
-            "instructions": INSTRUCTIONS,
+            "instructions": policy.instructions,
             "input": [
                 {
                     "role": "user",
@@ -263,7 +273,7 @@ class OpenAIResponsesDraftTransport:
                     "type": "json_schema",
                     "name": "problem_draft_assistance_output",
                     "strict": True,
-                    "schema": OUTPUT_SCHEMA,
+                    "schema": policy.schema,
                 }
             },
         }
@@ -316,8 +326,8 @@ class OpenAIResponsesDraftTransport:
             latency_ms=latency_ms,
         )
 
-    def dispatch(self, *, invocation_id, request, credential, profile):
-        del profile
+    def exchange(self, *, invocation_id, request, credential):
+        """Shared one-shot Responses HTTP exchange; no purpose-specific semantics."""
         if (
             not isinstance(request.payload, bytes)
             or not isinstance(credential, ResolvedOpenAICredential)
@@ -341,7 +351,9 @@ class OpenAIResponsesDraftTransport:
         )
         started = time.monotonic()
         self.dispatch_count += 1
+        response = None
         try:
+            self.progress("CONNECT")
             connection.connect()
             elapsed = time.monotonic() - started
             remaining = self.configuration.total_timeout_seconds - elapsed
@@ -352,17 +364,20 @@ class OpenAIResponsesDraftTransport:
             connection.sock.settimeout(
                 min(self.configuration.read_timeout_seconds, remaining)
             )
+            self.progress("SEND_REQUEST")
             connection.request(
                 "POST",
                 parsed.path,
                 body=request.payload,
                 headers={
                     "Authorization": credential.authorization_value(),
+                    "X-Client-Request-Id": invocation_id,
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                     "Connection": "close",
                 },
             )
+            self.progress("WAIT_HEADERS")
             response = connection.getresponse()
             raw_correlation = response.getheader("x-request-id")
             correlation = (
@@ -371,12 +386,80 @@ class OpenAIResponsesDraftTransport:
                 and re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", raw_correlation)
                 else f"http-{response.status}-{invocation_id}"
             )
+            self.progress("READ_BODY")
             body = response.read(self.configuration.maximum_response_bytes + 1)
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
-            connection.close()
+            self.progress("CLOSE")
+            # Connection: close transfers ownership of the stream to the response.
+            # A short/oversized/failed read must not rely on garbage collection.
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                connection.close()
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
+        self.progress("VALIDATE_RESPONSE")
+        return response.status, body, correlation, latency_ms
+
+    def dispatch(self, *, invocation_id, request, credential, profile):
+        if self.isolation_enabled:
+            from .responses_deadline import ResponsesBoundaryError, supervise
+            from .responses_jobs import DraftResponsesJob
+
+            if self.cleanup_failed:
+                raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
+            self.dispatch_count += 1
+            try:
+                value, diagnostic = supervise(
+                    DraftResponsesJob(
+                        self.configuration, invocation_id, request, credential, profile
+                    ),
+                    self.configuration,
+                )
+            except ResponsesBoundaryError as exc:
+                self.last_deadline = exc.diagnostic
+                self.cleanup_failed = (
+                    self.cleanup_failed or exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+                )
+                raise
+            self.last_deadline = diagnostic
+            value["state"] = ObservationState(value["state"])
+            if value.get("result_kind"):
+                value["result_kind"] = DraftResultKind(value["result_kind"])
+            return replace(ProviderObservation(**value), local_cleanup=diagnostic)
+        self._measurement = None
+        result = self._dispatch_observation(
+            invocation_id=invocation_id,
+            request=request,
+            credential=credential,
+            profile=profile,
+        )
+        m = self._measurement
+        return replace(
+            result,
+            measurement=m,
+            input_tokens=m["usage"]["input_tokens"] if m and m["settleable"] else None,
+            output_tokens=m["usage"]["output_tokens"]
+            if m and m["settleable"]
+            else None,
+        )
+
+    def _dispatch_observation(self, *, invocation_id, request, credential, profile):
+        policy = policy_for(profile.adapter_revision, profile.output_schema_version)
+        status_code, body, correlation, latency_ms = self.exchange(
+            invocation_id=invocation_id, request=request, credential=credential
+        )
+        from .planning_measurement import measurement
+
+        try:
+            metered_response = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            metered_response = {}
+        self._measurement = measurement(
+            metered_response, correlation, invocation_id, latency_ms, self.configuration
+        )
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(
                 invocation_id,
@@ -384,10 +467,10 @@ class OpenAIResponsesDraftTransport:
                 "PROVIDER_RESPONSE_TOO_LARGE",
                 latency_ms=latency_ms,
             )
-        if not 200 <= response.status < 300:
-            if response.status == 429:
+        if not 200 <= status_code < 300:
+            if status_code == 429:
                 reason = "PROVIDER_RATE_LIMITED"
-            elif response.status >= 500:
+            elif status_code >= 500:
                 reason = "PROVIDER_UNAVAILABLE"
             else:
                 reason = "PROVIDER_HTTP_REJECTED"
@@ -528,12 +611,13 @@ class OpenAIResponsesDraftTransport:
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
             )
-        if not isinstance(result, dict) or set(result) != {
-            "kind",
-            "clarificationQuestion",
-            "title",
-            "description",
-        }:
+        try:
+            refs = frozenset()
+            if policy.revision == "v2":
+                sent = json.loads(request.payload)
+                refs = context_references(sent["input"][0]["content"][0]["text"])
+            understanding = validate_result(result, policy, refs)
+        except (PolicyValidationError, ValueError, KeyError, TypeError):
             return self._failure(
                 invocation_id,
                 correlation,
@@ -558,6 +642,7 @@ class OpenAIResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    understanding=understanding,
                     result_kind=DraftResultKind.NEEDS_CLARIFICATION,
                     clarification_question=question,
                     latency_ms=latency_ms,
@@ -578,6 +663,7 @@ class OpenAIResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    understanding=understanding,
                     result_kind=DraftResultKind.DRAFT_READY,
                     title=title,
                     description=description,

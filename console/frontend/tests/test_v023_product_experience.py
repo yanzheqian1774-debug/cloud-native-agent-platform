@@ -105,7 +105,9 @@ def test_problem_workspace_preserves_governed_execution_boundaries() -> None:
     for truthful_state in ("未配置", "未绑定", "未执行", "暂不可用", "执行失败"):
         assert truthful_state in workspace
     assert "只有 Attempt 事实才能证明本次实际使用" in workspace
-    assert "当前不接入模型分析或任务执行" in workspace
+    assert "规划需要单独发起和确认\uff1b当前页面不会启动执行" in workspace
+    assert "本页不会自动调用数字员工、Agent、Skill、知识库、附件或模型" in workspace
+    assert "确认前不会创建问题\uff0c也不会启动任务或准备资源" in workspace
     assert "getKnowledge" not in workspace
     assert "listDigitalEmployeeTemplates" not in workspace
 

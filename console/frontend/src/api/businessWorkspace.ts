@@ -93,3 +93,7 @@ export function writeCriterion(csrfToken:string,input:{successCriterionId?:strin
 export function writeCriteriaSet(csrfToken:string,problemId:string,input:{problemRevisionId:string;predecessorSetRevisionId?:string;orderedCriterionRevisionIds:string[];expectedVersion:number;idempotencyKey:string}){
   return write<{revision:CriteriaSetRevision}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`,csrfToken,input);
 }
+
+export function transitionBusinessProblem(csrfToken:string,problemId:string,input:{toState:"ACTIVE";expectedVersion:number;idempotencyKey:string}){
+  return write<{businessProblemId:string;aggregateVersion:number}>(`/problems/${encodeURIComponent(problemId)}/lifecycle`,csrfToken,input);
+}

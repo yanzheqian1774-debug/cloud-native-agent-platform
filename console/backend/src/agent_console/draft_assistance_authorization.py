@@ -77,6 +77,10 @@ class GrantAdministrationDraftAuthorization:
             context, grant, now=self.clock()
         )
 
+    def require_usage(self, context, owner, action, resource):
+        if self._current(context, ExactGrant(owner, action, resource)) is None:
+            raise DraftAssistanceError("PROVIDER_USAGE_NOT_FOUND")
+
     def _submit(
         self,
         context: TrustedRequestContext,

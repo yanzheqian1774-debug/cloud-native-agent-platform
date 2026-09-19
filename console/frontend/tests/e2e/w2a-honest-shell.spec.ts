@@ -450,6 +450,8 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(desktopSummary.getByText("内容读取", { exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("尚未读取", { exact: true })).toBeVisible();
   await expect(desktopSummary.getByRole("heading", { name: "等待审批", exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeHidden();
+  await desktopSummary.getByText("申请编号与复制", { exact: true }).click();
   await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-waiting-authorization-1440.png"), fullPage: true });
   const stream = page.locator(".px-message-stream");
@@ -469,7 +471,9 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(page.locator("#authorization-message").getByText("问题详情已读取成功", { exact: false })).toBeVisible();
   await expect(waitingComposer).toHaveValue(pendingText);
   await expect(userFocusTarget).toBeFocused();
-  expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
+  await test.step("W2A_AUTH_READ_SCROLL_PRESERVED", async () => {
+    expect(await stream.evaluate(element => element.scrollTop)).toBe(scrollAfterDispatch);
+  });
   await expect(desktopSummary.getByText(pendingText, { exact: true })).toHaveCount(0);
   expect(exactReads).toBe(1);
   const formalProblem = page.locator("#formal-problem-message");
@@ -477,6 +481,8 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeHidden();
   await formalProblem.getByText("技术详情", { exact: true }).click();
   await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
+  await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeHidden();
+  await desktopSummary.getByText("查看正式描述", { exact: true }).click();
   await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("读取成功", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "保留补充", exact: true }).click();

@@ -13,6 +13,7 @@ from agent_console.draft_assistance import (
     DraftAssistanceService,
     DraftResponse,
 )
+from agent_console.responses_deadline import cancellable_request
 from agent_console.workbench_bff import PREFIX, WorkbenchBffPolicy
 
 
@@ -96,7 +97,15 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
                 )
             ),
             "contentDisposition": value.content_disposition,
+            "settlementStatus": value.settlement_status,
+            "localWorkerState": (
+                "REAPED" if value.local_cleanup.get("reaped") else "CLEANUP_NOT_PROVEN"
+            )
+            if value.local_cleanup
+            else "NOT_OBSERVED",
+            "remoteCancellation": "NOT_PROVEN",
             "clarificationQuestion": response.clarification_question,
+            "understanding": response.understanding,
             "draft": (
                 {"title": response.title, "description": response.description}
                 if response.title and response.description
@@ -141,22 +150,25 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                 )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations", status_code=201)
-        def begin(body: BeginDraftAssistance, request: Request):
-            return invoke(
-                lambda context: service.begin(
-                    context,
-                    key=body.idempotencyKey,
-                    content=body.content,
-                    parent_context_id=body.parentContextId,
-                    parent_turn_id=body.parentTurnId,
-                    expected_parent_version=body.expectedParentVersion,
-                    predecessor_invocation_id=body.predecessorInvocationId,
-                ),
+        async def begin(body: BeginDraftAssistance, request: Request):
+            return await cancellable_request(
                 request,
+                lambda: invoke(
+                    lambda context: service.begin(
+                        context,
+                        key=body.idempotencyKey,
+                        content=body.content,
+                        parent_context_id=body.parentContextId,
+                        parent_turn_id=body.parentTurnId,
+                        expected_parent_version=body.expectedParentVersion,
+                        predecessor_invocation_id=body.predecessorInvocationId,
+                    ),
+                    request,
+                ),
             )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/resubmit")
-        def resubmit(
+        async def resubmit(
             invocation_id: str, body: ResubmitDraftAssistance, request: Request
         ):
             def action(context):
@@ -167,7 +179,7 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                     raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
                 return result
 
-            return invoke(action, request)
+            return await cancellable_request(request, lambda: invoke(action, request))
 
         @app.get(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}")
         def read(invocation_id: str, request: Request):
@@ -178,6 +190,18 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                 return JSONResponse(
                     status_code=_status(exc.reason_code),
                     content={"reasonCode": exc.reason_code},
+                )
+
+        @app.get(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/usage")
+        def usage(invocation_id: str, request: Request):
+            from .authority_contracts import AuthorityError
+
+            _, context = authenticate(request)
+            try:
+                return {"result": service.read_usage(context, invocation_id)}
+            except (DraftAssistanceError, AuthorityError):
+                return JSONResponse(
+                    status_code=404, content={"reasonCode": "PROVIDER_USAGE_NOT_FOUND"}
                 )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/observe")

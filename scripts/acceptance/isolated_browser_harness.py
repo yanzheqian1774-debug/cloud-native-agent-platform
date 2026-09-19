@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 
 import psycopg
 from browser_build_preflight import verify_build_identity
+from browser_scenario_ids import BROWSER_SCENARIO_IDS
 from minimum_disclosure import (
     EVIDENCE_FIELDS,
     extract_allowlisted,
@@ -67,6 +68,10 @@ FIRST_FAILURE_V1_FIELDS = FIRST_FAILURE_FIELDS - {
     "httpStatusSourceClass",
 }
 FIRST_FAILURE_ASSERTION_IDS = {
+    (
+        "w2a-honest-shell.spec.ts",
+        "created problem continues through pending approval to a fresh exact read",
+    ): "W2A_CREATED_PROBLEM_AUTHORIZED_READ",
     (
         "agent-workbench.spec.ts",
         "publishes an exact reviewed revision through the real Workbench",
@@ -152,6 +157,8 @@ FIRST_FAILURE_ASSERTION_IDS.update(
         )
     }
 )
+FIRST_FAILURE_ASSERTION_IDS.update(BROWSER_SCENARIO_IDS)
+
 FAILURE_CATEGORIES = frozenset(
     {
         "BROWSER_ASSERTION",
@@ -1004,7 +1011,11 @@ UNIFIED_PRODUCT_STEP_IDS = {
     "UNIFIED_07_EMPLOYEE_MANAGEMENT": ("EMPLOYEES", "DESKTOP", "IDENTITY_CHECK"),
     "UNIFIED_08_RESTART_READBACK": ("EMPLOYEES", "DESKTOP", "RESTART_READINESS"),
 }
+W2A_AUTH_READ_STEP_IDS = {
+    "W2A_AUTH_READ_SCROLL_PRESERVED": ("WORK", "DESKTOP", "STATE_CHECK"),
+}
 DIAGNOSTIC_STEP_IDS = {
+    **W2A_AUTH_READ_STEP_IDS,
     **{
         step_id: (route, viewport, _primary_action_class(step_id))
         for step_id, (route, viewport) in PRIMARY_STEP_IDS.items()
@@ -1023,6 +1034,9 @@ ACTION_CLASSES = frozenset(
 def _step_identity(scenario: str, title: object):
     if not isinstance(title, str):
         return None
+    if scenario == "W2A_CREATED_PROBLEM_AUTHORIZED_READ":
+        identity = W2A_AUTH_READ_STEP_IDS.get(title)
+        return (title, *identity) if identity is not None else None
     if scenario == "PLATFORM_PRIMARY_RESPONSIVE_FOCUS":
         identity = PRIMARY_STEP_IDS.get(title)
         if identity is None:
@@ -1047,6 +1061,7 @@ def step_diagnostic(failure_context: object, scenario: str) -> dict[str, object]
         (Path(str(suite.get("file", ""))).name, spec.get("title"))
     )
     if mapped != scenario or scenario not in {
+        "W2A_CREATED_PROBLEM_AUTHORIZED_READ",
         "PLATFORM_PRIMARY_RESPONSIVE_FOCUS",
         "WAVE_3B_REAL_SERVICE_JOURNEYS",
         "UNIFIED_PRODUCT_ASSEMBLY_DURABLE_JOURNEY",
@@ -1215,12 +1230,28 @@ def build_failure_summary(
                 if type(candidate) is int and 1 <= candidate <= MAX_DIAGNOSTIC_COUNT:
                     line = candidate
                 break
+    location_kind = "TEST_DECLARATION" if line is not None else "UNKNOWN"
+    if mapping and context is not None:
+        result = context[3]
+        error = result.get("error")
+        location = error.get("location") if isinstance(error, dict) else None
+        if isinstance(location, dict):
+            error_file = location.get("file")
+            error_line = location.get("line")
+            if (
+                isinstance(error_file, str)
+                and Path(error_file).name == mapping[0]
+                and type(error_line) is int
+                and 1 <= error_line <= MAX_DIAGNOSTIC_COUNT
+            ):
+                line = error_line
+                location_kind = "ASSERTION"
     summary = {
         "schemaVersion": 1,
         "scenarioId": scenario,
         "spec": f"console/frontend/tests/e2e/{mapping[0]}" if mapping else None,
         "sourceLine": line,
-        "locationKind": "TEST_DECLARATION" if line is not None else "UNKNOWN",
+        "locationKind": location_kind,
         "failureCategory": failure["failureCategory"],
         "failureSubtype": failure["failureSubtype"],
         "actionClass": "UNKNOWN",
@@ -1270,8 +1301,8 @@ def encode_failure_summary(summary: dict[str, object]) -> str:
         or not 1 <= line <= MAX_DIAGNOSTIC_COUNT
     ):
         raise ValueError("summary location violation")
-    if summary["locationKind"] != (
-        "TEST_DECLARATION" if line is not None else "UNKNOWN"
+    if summary["locationKind"] not in (
+        {"TEST_DECLARATION", "ASSERTION"} if line is not None else {"UNKNOWN"}
     ):
         raise ValueError("summary location violation")
     if (

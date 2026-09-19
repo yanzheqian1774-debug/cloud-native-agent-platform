@@ -166,7 +166,8 @@ test("S5-319 keeps nonterminal foreground calls observable and cancellation unco
   await expect(card).toContainText("PROVIDER_OBSERVATION_UNSUPPORTED_FOREGROUND");
   expect(await providerCalls(request)).toBe(callsAfterDispatch);
   await card.getByRole("button", { name: "请求取消", exact: true }).click();
-  await expect(card).toContainText("正在请求取消");
+  await expect(card).toContainText("取消已请求，停止未确认");
+  await expect(card).toContainText("远端停止和停止计费均未证实");
   await expect(card).toContainText("PROVIDER_CANCELLATION_UNSUPPORTED_FOREGROUND");
   await expect(card).not.toContainText("已确认取消");
   expect(await providerCalls(request)).toBe(callsAfterDispatch);

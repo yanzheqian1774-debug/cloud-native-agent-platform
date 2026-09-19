@@ -658,6 +658,32 @@ class PostgresModelGrantTargetLookup:
                 return bool(row["known"])
         return False
 
+    def is_known_planning_target(self, scope, grant, binding, *, connection):
+        """Discover the configured binding; admission still checks eligibility."""
+        if grant.owner != "MODEL_GOVERNANCE" or grant.action != "INVOKE_MODEL":
+            return False
+        expected = (
+            f"model:invocation:plan-suggestion:{binding.resource_id}:"
+            f"{binding.revision_id}:{binding.digest}"
+        )
+        if grant.exact_resource != expected:
+            return False
+        return (
+            connection.execute(
+                "SELECT 1 FROM model_governance.model_revisions WHERE namespace=%s "
+                "AND security_domain=%s AND model_id=%s "
+                "AND revision_id=%s AND digest=%s",
+                (
+                    scope.tenant_id,
+                    scope.security_domain,
+                    binding.resource_id,
+                    binding.revision_id,
+                    binding.digest,
+                ),
+            ).fetchone()
+            is not None
+        )
+
     def is_current_creator_definition(
         self,
         scope: ModelScope,

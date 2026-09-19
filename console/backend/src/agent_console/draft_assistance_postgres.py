@@ -124,6 +124,10 @@ def _record(value: DraftInvocation) -> dict[str, Any]:
         "dispatchFence": value.dispatch_fence,
         "budgetReservationId": value.budget_reservation_id,
         "providerCorrelation": value.provider_correlation,
+        "measurement": value.measurement,
+        "pricing": value.pricing,
+        "settlementStatus": value.settlement_status,
+        "localCleanup": value.local_cleanup,
         "terminalObservationId": value.terminal_observation_id,
         "lastObservationId": value.last_observation_id,
         "resultKind": value.result_kind.value if value.result_kind else None,
@@ -215,6 +219,10 @@ def _invocation(value: dict[str, Any]) -> DraftInvocation:
         dispatch_fence=value["dispatchFence"],
         budget_reservation_id=value.get("budgetReservationId"),
         provider_correlation=value["providerCorrelation"],
+        measurement=value.get("measurement"),
+        pricing=value.get("pricing"),
+        settlement_status=value.get("settlementStatus", "NOT_MEASURED"),
+        local_cleanup=value.get("localCleanup"),
         terminal_observation_id=value["terminalObservationId"],
         last_observation_id=value.get("lastObservationId"),
         result_kind=(
@@ -263,6 +271,30 @@ class _Pool:
 
 
 class PostgresDraftAssistanceRepository(_Pool):
+    def has_usage_target(self, connection, scope, identity, *, measurement):
+        """Read canonical owner facts in the grant caller's transaction."""
+        row = connection.execute(
+            "SELECT v.record FROM draft_assistance.invocations i "
+            "JOIN contextual_resource_use.uses u ON u.namespace=i.namespace "
+            "AND u.security_domain=i.security_domain AND u.context_id=i.invocation_id "
+            "AND u.context_kind='DRAFT_ASSISTANCE_INVOCATION' "
+            "AND u.resource_use_id=%s "
+            "JOIN draft_assistance.invocation_versions v ON v.namespace=i.namespace "
+            "AND v.security_domain=i.security_domain "
+            "AND v.invocation_id=i.invocation_id "
+            "WHERE i.namespace=%s AND i.security_domain=%s AND i.invocation_id=%s "
+            "ORDER BY v.aggregate_version DESC LIMIT 1",
+            (
+                "contextual-resource-use:" + identity,
+                scope.tenant_id,
+                scope.security_domain,
+                identity,
+            ),
+        ).fetchone()
+        return row is not None and (
+            not measurement or isinstance(row["record"].get("measurement"), dict)
+        )
+
     def __init__(
         self, database_url: str, *, migration_path: Path, timeout: float = 5.0
     ) -> None:
@@ -769,7 +801,18 @@ class PostgresDraftEvidenceOwner(_Pool):
             "inputTokens": observation.input_tokens,
             "outputTokens": observation.output_tokens,
             "callCount": 1,
-            "costMeasurement": "NOT_COLLECTED",
+            "costMeasurement": "OWNER_LEDGER_ESTIMATE"
+            if observation.measurement is not None
+            else "NOT_COLLECTED",
+            **(
+                {
+                    "measurement": observation.measurement,
+                    "pricing": invocation.pricing,
+                    "budgetReservationId": invocation.budget_reservation_id,
+                }
+                if observation.measurement is not None
+                else {}
+            ),
             "requestedAt": invocation.created_at.isoformat(),
             "limitationCode": observation.reason_code,
         }
