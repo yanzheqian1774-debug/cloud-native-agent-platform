@@ -195,7 +195,9 @@ class PlanningSuggestionService:
         identity = PlanningBudgetIdentity(
             scope, invocation_id, self.profile.profile_revision_id
         )
-        self.budget.reserve(invocation_id + ":budget", identity, self.quote)
+        reservation_id = self.budget.reserve(
+            invocation_id + ":budget", identity, self.quote
+        )
         self.model_use_owner.requested(scope, record)
         app.authority.require(
             principal,
@@ -240,6 +242,39 @@ class PlanningSuggestionService:
             self.invocations.finish(scope, invocation_id, result)
             self.model_use_owner.observed(scope, record, result)
             return self.read(principal, invocation_id)
+        if isinstance(raw, dict):
+            # Durable metering is independent of business validity and target CAS.
+            receipt = {
+                "schema_version": "planning-provider-receipt.v1",
+                "invocation_id": invocation_id,
+                "target_digest": record["target_digest"],
+                "reservation_id": reservation_id,
+                "measurement": raw.get("measurement", {}),
+                "deadline": raw.get("deadline"),
+                "pricing": self.budget.pricing(),
+            }
+            self.invocations.save_receipt(scope, invocation_id, receipt)
+            from .planning_measurement import settle
+
+            settle(self.budget, invocation_id, receipt)
+            failure = raw.get("failure")
+            if failure:
+                status = (
+                    "OUTCOME_UNKNOWN"
+                    if failure == "PROVIDER_OUTCOME_UNKNOWN"
+                    else "SUCCEEDED"
+                    if failure == "PLANNING_OUTPUT_SCHEMA_INVALID"
+                    else "FAILED"
+                )
+                result = {
+                    "technical_status": status,
+                    "kind": "INVALID" if status == "SUCCEEDED" else None,
+                    "reason": failure,
+                }
+                self.invocations.finish(scope, invocation_id, result)
+                self.model_use_owner.observed(scope, record, result)
+                return self.read(principal, invocation_id)
+            raw = raw["text"]
         proposal = None
         try:
             if not isinstance(raw, str) or len(raw.encode()) > 131072:
@@ -298,5 +333,15 @@ class PlanningSuggestionService:
             app.validate_target(
                 principal, target.problem, cursor.connection, current=False
             )
+        if hasattr(self.invocations, "receipt"):
+            receipt = self.invocations.receipt(scope, invocation_id)
+            if receipt is not None:
+                from .planning_measurement import settle
+
+                # Authorization above precedes recovery of an already authorized effect.
+                if receipt["pricing"] != self.budget.pricing():
+                    raise PlanningConflict("PLANNING_PRICE_VERSION_CONFLICT")
+                settle(self.budget, invocation_id, receipt)
+                # PLAN READ does not grant disclosure of provider IDs or pricing.
         result["facts_status"] = self.model_use_owner.status(scope, invocation_id)
         return result

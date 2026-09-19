@@ -41,6 +41,8 @@ class PlanningResponsesProvider:
         self.transport_profile = transport_profile
         self.credentials = credentials
         self.transport = OpenAIResponsesDraftTransport(configuration)
+        self.isolation_enabled = True
+        self.cleanup_failed = False
         self.synthetic = configuration.execution_class == "LOCAL_HTTPS_MOCK"
         self.diagnostics = {
             "protocol": "OPENAI_RESPONSES_V1",
@@ -50,6 +52,36 @@ class PlanningResponsesProvider:
 
     def suggest(self, request, binding, profile, business_context):
         del binding  # Already exact-resolved and checked by the governed resolver.
+        from .responses_deadline import ResponsesBoundaryError, supervise
+        from .responses_jobs import PlanningResponsesJob
+
+        if self.cleanup_failed:
+            raise ConnectionError("LOCAL_CLEANUP_BLOCKED")
+        if not self.isolation_enabled:  # Explicit in-process unit-test seam only.
+            return self._suggest_once(request, profile, business_context)
+        try:
+            result, diagnostic = supervise(
+                PlanningResponsesJob(
+                    self.configuration,
+                    self.transport_profile,
+                    request,
+                    profile,
+                    business_context,
+                ),
+                self.configuration,
+            )
+            result["deadline"] = diagnostic
+            return result
+        except ResponsesBoundaryError as exc:
+            self.cleanup_failed = exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+            return {
+                "text": None,
+                "failure": "PROVIDER_OUTCOME_UNKNOWN",
+                "measurement": {},
+                "deadline": exc.diagnostic,
+            }
+
+    def _suggest_once(self, request, profile, business_context):
         invocation_id = business_context["planning_context"]["invocation_id"]
         document = {
             "model": self.configuration.native_model_id,
@@ -89,8 +121,9 @@ class PlanningResponsesProvider:
             raise PlanningProviderFailure("PLANNING_PROVIDER_INPUT_TOO_LARGE")
         prepared = PreparedProviderRequest(payload, budget_quote(self.configuration))
         try:
+            self.transport.progress("CREDENTIAL")
             credential = self.credentials.resolve(self.transport_profile, invocation_id)
-            status, body, _correlation, _latency = self.transport.exchange(
+            status, body, correlation, latency = self.transport.exchange(
                 invocation_id=invocation_id, request=prepared, credential=credential
             )
         except (OSError, TimeoutError):
@@ -99,18 +132,38 @@ class PlanningResponsesProvider:
             if str(exc) == "TRANSPORT_AMBIGUOUS":
                 raise ConnectionError from None
             raise PlanningProviderFailure("PLANNING_CREDENTIAL_UNAVAILABLE") from None
+        from .plan_suggestion_invocation import PlanningProviderResult
+        from .planning_measurement import measurement
+
+        receipt = {
+            "local_request_id": invocation_id,
+            "provider_request_id": None,
+            "provider_response_id": None,
+            "usage": None,
+            "configured_model": self.configuration.native_model_id,
+            "metering": "OPENAI_RESPONSES_V1",
+            "latency_ms": latency,
+        }
+
+        def failed(reason):
+            return {"text": None, "failure": reason, "measurement": receipt}
+
         if len(body) > self.configuration.maximum_response_bytes:
-            raise PlanningProviderFailure("PLANNING_PROVIDER_RESPONSE_TOO_LARGE")
-        if not 200 <= status < 300:
-            raise PlanningProviderFailure("PLANNING_PROVIDER_HTTP_REJECTED")
+            return failed("PLANNING_PROVIDER_RESPONSE_TOO_LARGE")
         try:
             response = json.loads(body)
+            receipt = measurement(
+                response, correlation, invocation_id, latency, self.configuration
+            )
+            if not 200 <= status < 300:
+                receipt["settleable"] = False
+                return failed("PLANNING_PROVIDER_HTTP_REJECTED")
             if response["model"] != self.configuration.native_model_id:
-                raise ValueError
+                return failed("PLANNING_PROVIDER_RESPONSE_INVALID")
             if response["status"] in {"queued", "in_progress"}:
-                raise ConnectionError
+                return failed("PROVIDER_OUTCOME_UNKNOWN")
             if response["status"] != "completed":
-                raise ValueError
+                return failed("PLANNING_PROVIDER_RESPONSE_INVALID")
             output = response["output"]
             if len(output) != 1 or output[0]["type"] != "message":
                 raise ValueError
@@ -120,11 +173,22 @@ class PlanningResponsesProvider:
             text = content[0]["text"]
             if not isinstance(text, str):
                 raise ValueError
-            return text
         except (KeyError, TypeError, ValueError, IndexError):
-            raise PlanningProviderFailure(
-                "PLANNING_PROVIDER_RESPONSE_INVALID"
-            ) from None
+            return failed("PLANNING_PROVIDER_RESPONSE_INVALID")
+        try:
+            parsed = PlanningProviderResult.model_validate_json(text)
+            if (
+                parsed.semantics is not None
+                and parsed.semantics.target != request.target
+            ):
+                raise ValueError
+        except ValueError:
+            return {
+                "text": None,
+                "failure": "PLANNING_OUTPUT_SCHEMA_INVALID",
+                "measurement": receipt,
+            }
+        return {"text": text, "failure": None, "measurement": receipt}
 
 
 def budget_quote(configuration):
@@ -200,6 +264,30 @@ class PlanningBudget:
             profile_revision_id=identity.profile_revision_id,
         )
         return self.owner.reserve(key, normalized, quote)
+
+    def pricing(self):
+        from .business_problem_domain import canonical_digest
+
+        owner = self.owner
+        document = {
+            "ledger_id": owner.ledger_id,
+            "profile_revision_id": owner.profile.profile_revision_id,
+            "profile_digest": owner.profile.profile_digest,
+            "currency": "USD",
+            "unit": "MICROUSD_PER_MILLION_TOKENS",
+            "input_price": owner.input_price,
+            "output_price": owner.output_price,
+            "calculation_version": "draft-provider-budget.v1.ceil-separate-totals",
+            "cached_input_policy": "INCLUDED_AT_STANDARD_INPUT_RATE_NO_ADDITION",
+            "classification": "TOKEN_COST_ESTIMATE_NOT_PROVIDER_INVOICE",
+        }
+        return {**document, "price_version_digest": canonical_digest(document)}
+
+    def settle(self, invocation_id, reservation_id, observation):
+        self.owner.record_usage(
+            invocation_id + ":usage:v1", reservation_id, observation
+        )
+        return self.owner.read_settlement(reservation_id)
 
 
 @dataclass

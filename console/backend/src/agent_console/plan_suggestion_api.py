@@ -43,9 +43,14 @@ def install_planning_invocations(
                 return JSONResponse(status_code=404, content={"reasonCode": str(exc)})
 
         @app.post(f"{PREFIX}/planning-v2/invocations", status_code=201)
-        def begin(request: Request, body: PlanningRequest):
-            return invoke(
-                request, lambda service, principal: service.begin(principal, body)
+        async def begin(request: Request, body: PlanningRequest):
+            from .responses_deadline import cancellable_request
+
+            return await cancellable_request(
+                request,
+                lambda: invoke(
+                    request, lambda service, principal: service.begin(principal, body)
+                ),
             )
 
         @app.get(f"{PREFIX}/planning-v2/invocations/{{invocation_id}}")

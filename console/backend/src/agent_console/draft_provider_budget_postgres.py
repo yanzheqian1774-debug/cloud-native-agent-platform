@@ -332,5 +332,29 @@ class PostgresProviderCallBudget:
         except PsycopgError as exc:
             raise DraftAssistanceError("PROVIDER_BUDGET_STORAGE_UNAVAILABLE") from exc
 
+    def read_settlement(self, reservation_id):
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT input_tokens,output_tokens,actual_cost_microusd "
+                "FROM draft_provider_budget.settlements WHERE namespace=%s "
+                "AND security_domain=%s AND ledger_id=%s AND reservation_id=%s",
+                (
+                    self.profile.scope.namespace,
+                    self.profile.scope.security_domain,
+                    self.ledger_id,
+                    reservation_id,
+                ),
+            ).fetchone()
+        if row is None:
+            return {"status": "PENDING_RECONCILIATION", "reservation_retained": True}
+        return {
+            "status": "ESTIMATE_SETTLED",
+            "reservation_retained": False,
+            "estimate_microusd": row["actual_cost_microusd"],
+            "input_tokens": row["input_tokens"],
+            "output_tokens": row["output_tokens"],
+            "provider_invoice": "NOT_VERIFIED",
+        }
+
     def close(self) -> None:
         self.pool.close()

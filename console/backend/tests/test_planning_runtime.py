@@ -28,6 +28,11 @@ from test_workbench_bootstrap import runtime_file
 
 class Store:
     def __init__(self, *args, **kwargs):
+        self.ledger_id = "test-ledger"
+        self.profile = kwargs.get(
+            "profile", NS(profile_revision_id="test", profile_digest="e" * 64)
+        )
+        self.input_price = self.output_price = 1
         self.rows = {}
         self.pool = self
 
@@ -36,6 +41,12 @@ class Store:
 
     def migrate_and_configure(self):
         pass
+
+    def record_usage(self, *args):
+        pass
+
+    def read_settlement(self, *args):
+        return {"status": "ESTIMATE_SETTLED"}
 
     def close(self):
         pass
@@ -49,6 +60,12 @@ class Store:
 
 
 class Invocations(Store):
+    def save_receipt(self, scope, identity, receipt):
+        self.rows[identity]["receipt"] = receipt
+
+    def receipt(self, scope, identity):
+        return self.rows[identity].get("receipt")
+
     def find_request(self, scope, actor, key, commitment):
         for identity, row in self.rows.items():
             if row["key"] == key:
@@ -93,6 +110,15 @@ class Facts:
 @pytest.fixture
 def formal(tmp_path, monkeypatch):
     state = NS(mode="valid", calls=[], denied=False, version=3)
+    # This fixture replaces network/credential/storage only; boundary tests restore
+    # the actual spawned provider and loopback HTTPS separately.
+    original_init = runtime.PlanningResponsesProvider.__init__
+
+    def provider_init(self, *args):
+        original_init(self, *args)
+        self.isolation_enabled = False
+
+    monkeypatch.setattr(runtime.PlanningResponsesProvider, "__init__", provider_init)
     database = "postgresql://test-only.invalid/isolated323"
     authority = runtime_file(tmp_path, database)
     document = _real_runtime_document(NS(server_port=443), None, tmp_path)

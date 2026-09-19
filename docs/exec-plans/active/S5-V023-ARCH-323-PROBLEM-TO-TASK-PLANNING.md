@@ -1019,3 +1019,158 @@ Human待决差异：是否把本地硬界作为真实调用前置；是否授权
 截图区分：`same-case/`是页面激活前后与同案旅程，`final-readback/`是最终构建对同一持久案例的只读页面；早期旅程发生在补充输入变更防护之前，最终回归覆盖该防护，原案例未重建。`frontend-binding.json`绑定最终产品源文件/构建hash，manifest逐图记录实际来源和限制。历史供应商质量截图只作旧候选外观参考，不归入本轮同案证据。测试数据及脚本保留在专属验收目录；交付后停本轮服务器/provider并停止独立容器，保留隔离PG用于受权恢复，不保持监听或自动调用。
 
 门禁续记：补入4个新场景诊断ID后，首次正常提交hook发现既有映射测试仍断言82项，导致86个参数化实例失败；未产生提交。精确断言同步为86项（不删除或放宽其他断言），诊断专项230 passed；最终完整make check 2021 passed / 201 skipped / 1 warning（115.01s），随后再次正常提交运行全部hooks。首轮日志保留，最终结果不把2017历史计数当新候选终态。
+
+## 18. 真实AI同案演示决策包（PROPOSED；2026-09-19核对）
+
+本节收敛§16.4、§17.2–17.3的建议，不构成真实调用或架构实施授权；历史5次理解+3次规划/USD2及旧窗口均未生效，不补跑。当前核对Source `9e4cb890ffc3d52a4e0e3bc884d27bfaebfdbae2`、Tree `093cf2cd2f4af51b4df958447c86401a90598a16`，原分支及#183 HEAD一致、Draft/OPEN，写本节前工作树干净。本节仅文档修改，不产生新产品候选，不继承扩大旧视觉接受。复用page-confirmation/delivery-receipt.json、ci-checkout-audit.json中的历史门禁：12项成功；其中5项checkout为该Source，7项为merge `8288421b7ff1ca4593682b2e0fcdfc91f01af4b5`，Tree均为上述Tree。本轮没有重新运行这些测试。
+
+### 18.1 推荐配置与四种事实状态
+
+推荐两段均采用OpenAI标准文本Responses、固定快照 `gpt-4.1-2025-04-14`；备选两段均改为 `gpt-4.1-mini-2025-04-14`，只能在调用前重新冻结配置，不能自动降级。选择依据是当前解析器要求返回model与nativeModelId完全相同、仅一个message及一个output_text，非推理固定快照适合减少额外输出形态及别名漂移；不声称这是最新或所有任务最优模型。官方文档支持Responses及Structured Outputs，尚未证明本项目完整schema在该账户下真实可用、模型有权访问或语义合格。
+
+| 路径 | 当前代码支持/实际调用关系 | 推荐配置 | 当前配置/凭据/真实证据状态 |
+| --- | --- | --- | --- |
+| 理解 | 正式app装配 → DraftAssistanceService → openai-responses-draft v2 → OpenAIResponsesDraftTransport；另支持kimi-responses-draft v2/KIMI_RESPONSES_V1 | OPENAI_RESPONSES_V1；output problem-draft-assistance-output.v2；context problem-understanding-context.v1；policy及digest从当前policy_for生成并冻结 | 当前执行环境DRAFT_ASSISTANCE_RUNTIME_FILE未设置；仅有受控证据；真实exact配置/凭据引用未提供，不能称不可用或已验证 |
+| 规划 | 正式app装配 → PlanSuggestionService → PlanningResponsesProvider → 同一OpenAI exchange；不是Kimi专属路径 | openai-responses-draft v1/OPENAI_RESPONSES_V1；plan-suggestion-output.v1、plan-suggestion-target.v1及当前policy digest | PLANNING_RUNTIME_FILE、PLANNING_V2_ENABLED未设置；仓库example为占位模板，realCallsEnabled=false；无真实调用证据 |
+
+本次仅检查上述任务环境变量是否存在，不扫描其他任务配置或读取秘密。WORKBENCH_AUTHORITY_RUNTIME_FILE亦未设置；这不代表用户机器上不存在其他配置。真实凭据状态是“尚无指定引用，未验证”，不是认证失败。
+
+两路径共同建议端点 `https://api.openai.com/v1/responses`，nativeModelId为所选固定快照；background=false、store=false、无tools、strict JSON schema；maxInputTokens=32768（当前按包含schema/指令的完整序列化UTF-8字节数保守准入，并非真实tokenizer计数），业务上下文maxInputBytes=16384，maxResponseBytes=64000；理解maxOutputTokens=2048，规划=4096；connectTimeoutSeconds=5、readTimeoutSeconds=30、totalTimeoutSeconds=60，后者现状不是绝对墙钟保证。不得填写错误的字段名直接启用：实际runtime按各自既有schema生成并验证，以上是逐字段取值要求。
+
+建议未来文件位置为验收目录 `real-demo/runtime/understanding.json`、`real-demo/runtime/planning.json`（本轮未创建）；分别映射DRAFT_ASSISTANCE_RUNTIME_FILE及PLANNING_RUNTIME_FILE。必须冻结tenant/domain、Model/Provider/Endpoint/ConnectionProfile的ID、revision、digest、purpose、policy/schema版本、预算ledger、credential reference/version/resolver和pepper引用。理解adapter v2与规划v1不能随意复用不匹配的Provider revision；即使native模型相同，也需各自匹配的精确目录绑定。未知ID/digest不伪造。前端VITE_PROBLEM_DRAFT_ASSISTANCE=enabled、正式authority/BFF及规划开关均须在未来隔离部署中核对，当前没有生效实例。
+
+凭据推荐专属供应商项目、分用途密钥引用和隔离租户身份；沿用exact-file-resolver/v1，文件绝对路径在批准配置中填写，禁止仓库保存密钥。现有resolver检查O_NOFOLLOW、普通文件、无group/other权限及值格式；未来仅输出引用/version、文件权限等脱敏元数据，不输出值。文件存在/可安全读取不等于远端认证通过。理解没有realCallsEnabled同名开关，未获授权时不装配其REAL_PROVIDER；规划开关保持false。申请人和审批人分离、exact grants沿用§16.3，不扩权、不自批。
+
+### 18.2 官方价格、预算与计量缺口
+
+查询日期2026-09-19（Asia/Shanghai）。官方来源：[GPT-4.1](https://developers.openai.com/api/docs/models/gpt-4.1)、[GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini)、[计费说明](https://developers.openai.com/api/docs/pricing)、[结构化输出](https://developers.openai.com/api/docs/guides/structured-outputs)。标准文本USD/百万token：
+
+| 模型 | 输入 | 缓存输入 | 输出 |
+| --- | ---: | ---: | ---: |
+| gpt-4.1-2025-04-14 | 2.00 | 0.50 | 8.00 |
+| gpt-4.1-mini-2025-04-14 | 0.40 | 0.10 | 1.60 |
+
+不使用Batch/Flex/Priority、工具、图像或音频价格；Responses不另收协议费用。预算不假定缓存命中，不含税或汇兑；未来窗口价格或账户合同不符则停止重新审定。
+
+一个合成采购案例，最多理解3次、规划2次，串行且并发1；不是必须消费配额，不含额外探测或失败自动重试。输入上界5×32768=163840，输出上界3×2048+2×4096=14336。主推荐每次理解 `(32768×2+2048×8)/1000000 = 0.081920 USD`，3次=0.245760；每次规划 `(32768×2+4096×8)/1000000 = 0.098304 USD`，2次=0.196608；总计0.442368。建议理解ledger callCap=3/totalCostCapMicrousd=250000，规划=2/200000，两个固定ledger合计USD0.45，不额外创建ledger或增额；input/outputPriceMicrousdPerMillion分别2000000/8000000。
+
+mini备选按既有分别向上取整到microUSD规则：理解ceil(13107.2)+ceil(3276.8)=16385 microUSD/次，规划ceil(13107.2)+ceil(6553.6)=19662/次；合计88479 microUSD。两ledger分别USD0.05，合计USD0.10；单价字段400000/1600000。先冻结选择，禁止因主模型失败自动切备选。
+
+复用DraftProviderBudgetPostgres.reserve/record_usage：行锁准入、invocation幂等、最坏预留；理解按实际序列化请求保守报价，规划按配置上界报价。重复确认/GET不新发模型请求；同幂等身份恢复先读原记录。usage缺失、失败、UNKNOWN或越界时保留预留，不能当零费或释放；相同结算身份不得重复结算。已记录“实际费用”是按配置费率计算的token费用，不是供应商账单；缓存细分目前未解析，因此计算保守且不等于折扣后结算。预算只能阻止后继准入，不是供应商账户硬扣款上限，也不证明在途请求已经停止计费。
+
+**必须显式处置的缺口**：理解保留provider correlation、input/output usage并结算；PlanningResponsesProvider.suggest只返回文本，丢弃exchange返回的correlation/latency及响应usage/id，PlanningBudget只提供reserve。因此规划成功也不能证明逐调用实际token费用已留存，保守预留不等于已结算。推荐后续另行授权最小调用元数据/usage传递与幂等结算补丁（invocation关联、provider request/response ID、配置/返回模型、input/output及可用缓存usage、latency、终态；不得记录密钥/raw headers/私密推理），先审查现有持久化契约可否承载，不在本轮实现完整经营模块或擅改schema。备选是明确接受规划实际费用UNKNOWN，只保存预留及隔离项目窗口聚合账单；聚合不能冒充逐调用费用证据，也不满足完整逐调用验收。
+
+### 18.3 Responses逐阶段保证及期限选择
+
+依据源码openai_responses_draft_adapter.py的prepare/exchange、plan_suggestion_runtime.py的suggest、draft_assistance.py及§14既有受控证据，不用Kimi结果替代。本轮不复跑。
+
+| 阶段 | 当前范围/分类 | 停止与回收的实际限制 |
+| --- | --- | --- |
+| 配置/准入/序列化 | exact scope/权限、版本、预算先行；缺配置/无权限阻断；prepare在exchange时钟外 | 既有受控证据证明权限拒绝零模型网络；未证明整个页面操作硬期限 |
+| 凭据/SSL context | resolver和SSL context准备早于exchange started | 不在该total计时范围内；文件/系统阻塞无独立回收保证 |
+| DNS/TCP/TLS | started在connect前，HTTPSConnection connect timeout；连接返回后才扣除elapsed | DNS系统解析及连接全阶段不能仅据socket timeout宣称硬界 |
+| 发送/响应头 | connect后一次设置min(readTimeout, remaining) | 是socket操作超时，不持续更新绝对剩余时间；错误/超时转TRANSPORT_AMBIGUOUS，规划持久OUTCOME_UNKNOWN |
+| 响应体 | read(maxResponseBytes+1)，超大小明确拒绝 | 慢滴可能不断续socket等待；§14 total=1秒时曾1.295秒返回成功，已反证绝对总界 |
+| 解析/结构校验 | 响应模型/状态/单文本校验，typed proposal/引用/依赖校验 | 在exchange时钟外；输出非法明确失败或kind=INVALID，technical_status=SUCCEEDED不能单独作为业务通过 |
+| 取消/close | finally依次response.close/connection.close，正常回栈清理；理解远端observe/cancel明确unsupported | 浏览器停止等待不停止底层；阻塞close/残留请求没有独立硬界，不保证远端取消或费用停止 |
+
+| 方案 | 配置/实现范围 | 风险、验证和选择 |
+| --- | --- | --- |
+| A 保留现状 | 5秒connect/30秒socket idle/名义60秒total；一次在途；人工在场；无架构修改 | 不能保证60秒停止或有界回收；DNS/慢滴/发送/解析/close及晚到结果仍有风险。任一UNKNOWN停止后继并保留预算。仅Human明确接受这些限制才可作为演示路径；不是本轮授权 |
+| B 补齐隔离与有界回收（推荐，未实现） | 单独调用工作进程，父级预算/身份/结果闸门与单调时钟；确定性权限及预算预留之后、凭据读取/序列化之前起算60秒，覆盖网络、解析及schema校验；DNS/TCP/TLS子预算5秒，idle30秒受父剩余约束 | 这是新增隔离架构和期限契约审定事项。建议取消/到期后1秒协作退出+1秒终止/kill/reap，目标本地≤62秒，需测量且受OS可回收前提约束；不能把该建议写成已有保证。无法reap则清理失败、阻止后继、人工处理；DB准入另受其既有边界，不宣称页面全流程62秒 |
+
+B必须先批准错误码映射、同时到期优先级、取消终态、晚结果拒收、UNKNOWN持久化与清理失败准入，不改变既有预算保留原则。验证至少覆盖DNS/连接/TLS/发送/头/慢滴体/解析/close阻塞、主动取消/进程崩溃/双终态/权限零网络/重放及负载下无残留进程线程socket；不以join超时冒充退出。不引入新持久基础设施，不提供远端exactly-once或退款保证。当前无任何隔离实现授权，本节只请求后续具体审定。
+
+### 18.4 同案脚本、验收与证据关联
+
+只用§17既有合成采购脚本语义，未来创建一个全新Problem，不能复用旧采购历史或fixture为真实模型证据。U1输入合成采购问题并刻意缺少判定截止日/必需范围；U2回答必要补问；U3明确纠正公司A/18日为公司B/19日，日期、订单字段均标记合成。充分上下文应停止重复补问。若U1未提出必要补问、U2重复询问已答内容或U3未吸收纠正，则记录不合格并停止，不换prompt反复抽到成功。
+
+| 步骤 | 通过标准 | 需要保留的关联证据/失败处理 |
+| --- | --- | --- |
+| U1必要补问 | 只问生成有效标准所必需的缺项，无虚构事实 | case/turn、调用invocation、模型/协议/policy、规范化可见回复；不是HTTP200即通过 |
+| U2补充/U3纠正 | sourceRefs/后继理解关联上一轮，最终目标/标准采用纠正值，不重复已回答问题 | 每turn输入digest及回答、Problem revision/digest、Criteria成员及集合revision/digest；旧版引用即停 |
+| 保存与页面激活 | 显式保存标准并确认当前修订；部分成功可见；DRAFT→ACTIVE独立授权 | 保存/转换幂等身份及返回；无权限停下，不借新grant绕过；加载不自动激活 |
+| P1真实规划/P2可选必要补问 | exact ACTIVE Problem/Criteria进入同一请求；三阶段五任务为读取快照、校验数据、识别延期、供应商汇总、生成报告，依赖/输入输出合理；最多两职责 | planning invocation target/Proposal revisions、policy/model配置和规范化回复；第二次只用于模型提出的必要补问及Human补充，不是失败重试 |
+| 资源表达 | 实际可读资源与版本正确；缺失维持UNKNOWN，不宣称绑定/执行就绪 | 资源读取/拒绝事实与页面；不创建资源以补齐演示，不调用真实MCP |
+| 确认与刷新 | 独立有权Human确认，保存同一Plan/Approval/source；刷新读回身份与内容一致 | Problem/Criteria→Proposal→Plan/Approval/source的exact关联；重复确认不重复批准，不产生Assignment/Run |
+| 调用与费用 | 回复、页面、持久记录、费用四条证据分别记录，再用调用/同案身份关联 | 预算reservation/settlement、usage、provider request/response ID及账单来源；规划缺失不能用UI成功补齐，按18.2决策标未通过/UNKNOWN |
+
+所有证据绑定实际运行候选Source/Tree、前端build、配置digest、隔离scope和时间；允许保存规范化模型业务回复（不含私密推理）、合成输入及截图，不保存密钥/raw认证头。预定位置是既有验收目录 `real-demo/`，本轮不创建运行证据或业务数据。独立PG保留必要授权、调用、Problem/Criteria、Proposal、Plan/Approval/source、预算/Evidence，禁止订单生产写入/Instance/Assignment/Run/TaskRun。一次成功只证明该次演示；信息歧义、资源不足、权限不足及重复稳定性完整质量套件另行授权，不据一次结果宣称稳定。
+
+本地建议自批准窗口结束保留14天，审批时填绝对到期日；到期暂停使用，清理由Human明确批准，不安排自动任务。供应商侧另遵循[官方数据控制](https://developers.openai.com/api/docs/guides/your-data)：store=false不等于零保留；默认滥用监控日志可保留30天。账户ZDR/地区/合同没有核实，若要求零供应商保留则是阻断，不能以本地14天替代供应商政策。
+
+### 18.5 一次性决策表
+
+| 项目 | 推荐值 | 备选 | 依据 | 未决项 | Human需要确认的内容 |
+| --- | --- | --- | --- | --- | --- |
+| 模型/精确配置 | 两段gpt-4.1-2025-04-14、OpenAI Responses端点；理解v2/规划v1，18.1限制 | 两段gpt-4.1-mini-2025-04-14；不自动切换 | 官方能力及现有单文本解析器 | 实际目录ID/revision/digest及runtime绝对路径未提供 | 选组合，批准冻结配置清单；账户访问仍未验证 |
+| 凭据/隔离身份 | 专属项目、分用途文件引用；323新隔离scope，申请/审批分离 | 既有明确授权专属项目，仍分purpose绑定 | exact-file-resolver与authority契约 | 凭据引用/元数据、模型和业务exact grants/pepper缺失 | 指定安全引用及独立管理员，不能提交密钥正文 |
+| 数据/保留 | 单一合成采购case，限定上述owner记录，本地窗口结束+14天 | 更短本地期限，由Human指定 | 同案验收及供应商数据控制 | 绝对清理日期、账户数据条款 | 同意写入范围/供应商政策，填到期时间 |
+| 次数/token/金额 | 3理解+2规划，串行1；32768输入/次，输出2048/4096；USD0.25+0.20 | mini同配额USD0.05+0.05 | 18.2可复算最坏预留 | 价格冻结日期、项目资金/税项 | 批准固定两ledger及无自动增额/重试 |
+| 费用证据 | 先另行授权最小规划metadata/usage与幂等结算补齐 | 接受规划实际费用UNKNOWN，仅保守预留+窗口聚合 | suggest当前丢弃correlation/usage | 实现与存储兼容性尚未审定 | 是否要求完整逐调用费用证据；备选不算此项通过 |
+| 期限/回收 | B，先审定隔离及60秒+建议2秒清理并受控验证 | A，明确接受无硬界和在途跨窗风险 | 当前源码及慢滴反例 | 架构/错误优先级/清理失败契约 | 单独授权B实施，或具体接受A限制；均不代表远端取消 |
+| 窗口 | 所有前置完成后填写绝对起止，Asia/Shanghai，建议2小时 | 更短人工值守窗口 | 当前没有就绪实例/凭据 | 具体日期时间与值守人 | 填YYYY-MM-DD HH:mm:ss至同格式时间；过期不补跑 |
+| 停止/UNKNOWN | 任一拒绝、冲突、非法/不合格输出、超限/超窗/超时、泄露/清理失败即停后继；保留原身份与预留 | 无自动重试备选 | 既有幂等/预算及远端不可知性 | 供应商审计可用性 | 指定人工核对负责人，未证实前不重发/退款/宣称未发生 |
+
+### 18.6 可填写授权文本（模板，不是已授权）
+
+> 我选择：主推荐GPT-4.1固定快照 / mini备选（删除另一项），理解与规划均采用18.1所述端点、协议及各自adapter版本。批准的运行候选Source/Tree：[填写；如先实施B/计量修复，填写其验证后的新候选，不自动沿用旧接受]。
+>
+> 冻结配置清单位置及digest：[填写]；理解runtime绝对路径：[填写]；规划runtime绝对路径：[填写]。两段Model/Provider/Endpoint/ConnectionProfile精确引用、policy/schema及purpose ledger均在清单中。凭据仅引用：[分别填写reference/version/resolver/file元数据，不填写密钥]；隔离tenant/domain、申请人、独立审批人及exact grants清单：[填写]。
+>
+> 我批准未来仅一个全新合成采购案例，最多3次理解+2次规划、并发1，输入上界32768/次，输出上界理解2048/规划4096。选择主推荐时两ledger金额上限USD0.25/0.20（合计0.45），mini为0.05/0.05（合计0.10）；无额度转移、额外探测、自动重试或自动切换模型。官方价格/账户计费复核日期：[填写]。
+>
+> 期限选择：[B先实施并验证，需明确批准新增调用进程隔离、60秒范围、取消/错误优先级和建议2秒清理契约；或A接受18.3全部现有限制]。此项当前仅请求准备性变更授权，B验收前真实调用不得开始。费用证据选择：[先批准最小metadata/usage补齐且验证后运行；或明确接受规划逐调用实际费用UNKNOWN及该项验收缺失]。
+>
+> 在全部前置证据具备后，真实调用窗口为：[YYYY-MM-DD HH:mm:ss]至[YYYY-MM-DD HH:mm:ss] Asia/Shanghai（UTC+08:00），值守人：[填写]；窗口未开始/已过期不调用、不补跑、不自动调度。若上述前置未完成，本授权相应部分暂停。
+>
+> 我同意18.4的合成数据及限定持久记录，脱敏证据保存在原验收包real-demo目录，本地保留至：[绝对日期时间，建议窗口结束+14天]，到期清理由Human明确批准。供应商保留政策/地区及账户附加限制：[确认或填写冲突]。
+>
+> 任一权限拒绝、版本冲突、非法或语义不合格输出、超时/UNKNOWN、预算/窗口耗尽、清理失败立即停止新调用。核对人：[填写]；只读原invocation和预算记录并人工供应商审计，不另发模型请求核对；UNKNOWN不自动重试、不释放预留、不宣称未收费。确认计划不启动执行，不创建Assignment/Run，不做真实MCP业务调用。保持Draft/OPEN，不授予D3、Ready、合并、部署或关闭。
+
+### 18.7 本轮操作与剩余阻塞
+
+已做：候选/工作区/PR及既有回执只读核对，源码/config引用与计量检查、官方资料查询、原计划决策包更新。仅文档diff检查，不重复产品测试或CI，不启动服务、不创建数据、不读取凭据正文、不探测端点、不创建调度、不提交/推送。产品HEAD/PR仍是本节开头候选；本节是未提交治理文档，不能声称当前工作区Tree仍等于HEAD Tree。
+
+剩余阻塞是可执行配置/隔离身份与凭据引用未提供、期限A/B及规划费用证据选择未定，以及随前置就绪才可填写的窗口；不是页面激活功能再次待实现。推荐先批准B的具体契约与最小计量关联补齐，再隔离受控验证，最后由Human填入配置与绝对窗口授权一次同案真实演示。此建议不启动实现，资源分工准入/D3继续PROPOSED。
+
+## 19. 真实演示前置实施契约（Human方案B授权，编码前G1计划）
+
+本轮承接Human明确授权实现本地Responses隔离与规划计量，不启用真实调用。复用现有owner/权限/预算，不改Kimi期限或业务生命周期。目标60秒调用+最多2秒清理，配置中的更小total仍生效；是否达到以受控验证为准。
+
+- 父进程单调总时钟从监督入口开始，涵盖IPC序列化、spawn启动/导入、worker内凭据解析（规划）、请求构造、DNS/TCP/TLS、发送、头/体、JSON及业务schema校验；连接子时钟从worker明确CONNECT阶段开始，避免把冷启动错判连接超时。总期限优先于同时到期的连接期限；取消与到期均先关闭成功接收闸门。配置加载、目录/权限/数据库准入及预算预留不在调用时钟内；理解既有prepare/credential解析在准入流程中的位置保留，明确不宣称其全路径已有硬界。
+- 独立spawn进程，不fork继承DB/SSL线程；匿名socket IPC、长度上限、脱敏阶段枚举；不把正文/凭据放命令行或日志。父级只接收已校验有界结果。先关闭IPC请求协作退出（最多1秒），仍未退出则kill并在剩余1秒内join/reap；清理失败可观察并使该provider拒绝后继调用，不返回成功。OS进程创建/不可中断内核操作不能宣称绝对数学保证，失败必须显式报告。
+- 网络未知、超时、取消、worker崩溃沿用TRANSPORT_AMBIGUOUS/OUTCOME_UNKNOWN，不自动重发；细分deadline/stage/reaped等为脱敏诊断。非法结构保持既有FAILED或INVALID业务分类。HTTP客户端断连通过请求级取消信号通知监督者，取消不代表远端停止或退款。
+- 规划receipt将本地invocation、供应商HTTP request ID、响应body ID分别保存，附usage允许字段、模型、latency、期限诊断、精确profile与预算policy价格digest。新增0027仅在既有workflow_planning内追加不可变receipt，不另建费用权威。先持久receipt，再调用现有预算owner幂等结算，再保存业务结果；跨owner不假称原子事务。receipt已存而结算失败可在有权读回时重放同一结算操作，不重发模型；receipt写失败则原claim UNKNOWN/预算保留，不凭空恢复丢失响应。
+- input包含cached子集，output包含reasoning子集，不重复相加；保留计量字段而当前v1价格仍按总input/output标准费率保守估算，明确非供应商最终账单。缺失/部分/非法/超过预留usage不结算为零，保持预留待核对。可靠终态usage可独立于非法业务输出结算。未知远端终态或迟到结果不自动释放预留。
+- 验证先阶段替身及真实本地HTTPS，再独立PG验证receipt/并发/失败/重启/结算，最后make check及正常hooks、原PR新候选CI。保留原§18决策包，真实模型授权次数/预算/凭据/窗口/保留期仍未生效。
+
+### 19.1 实际实现与边界
+
+Responses使用独立responses_deadline监督模块，复用Kimi已验证的spawn/匿名IPC/父关闭监测思路但不改其实现；只在worker中执行Responses自己的exchange及typed输出校验。规划从工作单元开始涵盖凭据读取/请求构造；理解沿用既有准入前prepare及准入后resolver，其dispatch开始进入监督。connect子期限从CONNECT事件起算，启动/导入仍消耗总预算。总期限、取消后不接受成功；1秒协作退出后kill，剩余至2秒join/reap，清理失败阻断同provider后继。正式理解/规划HTTP请求断连或ASGI取消会通知父级信号并等待owner记录UNKNOWN；没有添加规划取消端点或远端cancel调用。理解原独立cancel领域接口不因此获得远端取消保证。
+
+配置/数据库/权限/预算准入、父级对已校验结果的owner一致性复核及结果持久化不纳入网络工作单元时钟；因此不宣称整个HTTP请求60+2秒。POSIX进程创建和不可中断内核行为仍依赖OS；测试覆盖worker启动停滞及无法reap的可观察失败，不声称OS失效时仍绝对可回收。所有成功也必须先reap；无后台自动reaper或自动重试。未启用真实配置，默认正式Responses路径启用隔离，in-process seam仅由测试显式设置，不是runtime配置选项。
+
+规划使用既有workflow_planning追加0027 provider_receipts（检查最高既有编号26、checksum/advisory锁、不可变触发器、旧26迁移不改）；receipt是传输来源，不是第二套费用账。local_request_id作为X-Client-Request-Id发送，与供应商x-request-id和body响应id分别保存。只保留allowlist原始计量数值和缺失状态，不保存整份raw response/prompt/credential。输入总数含cached子集，输出总数含reasoning子集；不重复相加。沿用预算v1标准输入/输出价格、分项ceil至microUSD，记录不可变ledger/profile及价格digest；当前不计算缓存折扣，ESTIMATE_SETTLED不是供应商最终账单。
+
+receipt先提交；可靠终态usage无论业务schema有效与否均由既有预算owner结算；业务结果及Proposal仍由原事务/CAS保存。canonical contextual Resource Use与Model Evidence引用receipt digest、计量及价格版本，owner归属不变。receipt写失败：原claim已存在，读回UNKNOWN、不重新派发、预留保留；receipt成功/结算失败：有权读回重放同一结算操作；结算成功/业务保存失败：费用可读、业务UNKNOWN或冲突，不能伪造Proposal。重复receipt不同内容拒绝，重复结算相同内容幂等、冲突拒绝。没有provider webhook或自动补取远端用量；迟到/无可靠/部分usage保留预算，由Human核对供应商事实，不自动转换为零。owner账本仍是唯一费用准入与结算权威。
+
+### 19.2 受控验证与交付证据
+
+本轮独立PG：s5-323-responses-boundary-pg，127.0.0.1:64326，session/purpose标签限定323；每个规划PG用例创建唯一临时数据库并teardown，未连接原采购库、321或生产。真实本地HTTPS覆盖成功、非法JSON/typed输出、响应头/静默体/慢滴体、取消及身份/usage回传；真实本地TCP不完成TLS握手用例通过。DNS/TCP/TLS/send/parse/close等单阶段无限阻塞使用明确标记的worker内阶段替身；测试必须证明到达目标阶段，不依赖冷启动耗时。无法reap使用模拟Process，不留下真实不可回收进程。
+
+已运行：初始接线29 passed；边界22 passed；PG首次3 failed/19 passed，原因是计量专用observation误用了要求业务payload的SUCCEEDED envelope，改为明确USAGE_ONLY_NOT_BUSINESS_STATUS中性观察，不修改预算断言；后续聚焦39 passed、正式服务/理解32 passed。首轮完整make check：2059 passed/189 skipped/1既有Starlette warning，lint/format通过。补充并发/结算事务失败/canonical Evidence/清理失败后继阻断后，聚焦44 passed，单独实际TLS停滞1 passed，JUnit及各轮失败日志保留。一次测试文件名误写导致collection零执行，记录保留、不计通过。
+
+证据根目录为既有验收包responses-isolation/：focused.xml、tls.xml含逐阶段时间、reaped以及脱敏receipt/settlement；make-check-1.log为本轮全量，不引用旧产品计数。最终正常hook、Source/Tree与新CI实际checkout身份在同目录delivery-receipt.json及ci-checkout-audit.json绑定，不能用旧候选12项替代。未改前端，无新增页面业务操作或视觉接受主张。
+
+### 19.3 更新的真实演示授权包
+
+§18推荐模型/报价/同案脚本继续PROPOSED；“方案B和最小计量接线是否允许实施”已由本轮Human授权取代，不再要求重复决定这一实施事项。受控结果只证明本地装配/期限/回收/持久化，不证明远端取消、供应商费用停止、真实model可用性或质量。
+
+后续仍必须填写：两段精确模型和目录/端点/profile引用、凭据reference/version及隔离身份grants；采纳何种模型价格与预算（§18的3理解+2规划/USD0.45或mini/USD0.10仍只是建议）；绝对Asia/Shanghai调用窗口和值守人；合成数据写入/本地保留绝对到期日及供应商数据条款。另明确接受数据库/父级owner操作及OS边界、缓存折扣未计入/账单需独立核对、UNKNOWN不自动重发。上述未全部具备前不启动演示，窗口过期不补跑，无自动调度。D3、资源分工准入与实际执行不启动；Draft/Session OPEN，原视觉接受仅绑定原固定产品候选。
+
+名义60秒额外实测：独立无网络READ_BODY阶段替身在60.002483秒判定TOTAL_DEADLINE，0.009900秒协作退出并reap，未接受预定70秒晚结果；nominal-60s.json记录实际PID、stage及计时。该结果是本地受控工程证据，不是对供应商远端工作/费用或OS故障的保证。首次独立脚本因缺少模块搜索路径在import阶段退出，未启动worker；修正为项目源码路径后完成本次唯一60秒运行，原诊断日志保留。
+
+最终权限复核：依据ARCH-266独立Resource Use/Evidence披露边界，Plan READ响应不新增provider receipt、native request/response ID或价格明细。receipt/用量/结算仍在原owner持久化，有权计划读回仅修复既有已批准结算操作；详细计量通过owner受控检查及脱敏交付证据核验，不把Plan READ升级为计量披露权限。本轮未增加grant或测量查询端点。最终完整make check（补齐TLS与事务断言后）2062 passed/189 skipped/1 warning；披露收窄后另跑聚焦与正常完整hooks，结果见交付回执。
+
+远端门禁补齐：在既有PostgreSQL HTTPS Chromium Mock Provider工作流中加入Responses 323隔离及规划usage闭环步骤，使用该job独立PG及用例自建/销毁测试库，上传responses-323.xml；不连接321或共享环境。质量门禁仍运行全量，PG闭环不再仅依赖本地证据。正常提交hooks已通过；补入此CI配置后再次正常hooks生成最终未推送候选，再普通推送原分支。

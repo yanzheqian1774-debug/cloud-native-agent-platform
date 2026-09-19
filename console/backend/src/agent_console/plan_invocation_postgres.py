@@ -14,15 +14,18 @@ class PostgresPlanningInvocations:
         self.planning = planning
 
     def migrate(self):
-        path = (
-            Path(__file__).parents[2] / "migrations/0026_plan_suggestion_invocation.sql"
-        )
+        self._migrate(26, "0026_plan_suggestion_invocation.sql")
+        self._migrate(27, "0027_planning_provider_receipt.sql")
+
+    def _migrate(self, version, filename):
+        path = Path(__file__).parents[2] / "migrations" / filename
         checksum = hashlib.sha256(path.read_bytes()).hexdigest()
         with self.planning.pool.connection() as conn, conn.transaction():
             conn.execute("SELECT pg_advisory_xact_lock(3230026)")
             row = conn.execute(
                 "SELECT checksum FROM workflow_planning.schema_migrations "
-                "WHERE version=26"
+                "WHERE version=%s",
+                (version,),
             ).fetchone()
             if row:
                 existing = row["checksum"] if isinstance(row, dict) else row[0]
@@ -31,8 +34,8 @@ class PostgresPlanningInvocations:
                 return
             conn.execute(path.read_text())
             conn.execute(
-                "INSERT INTO workflow_planning.schema_migrations VALUES (26,%s)",
-                (checksum,),
+                "INSERT INTO workflow_planning.schema_migrations VALUES (%s,%s)",
+                (version, checksum),
             )
 
     def claim(self, scope, actor, key, digest, record):
@@ -106,6 +109,31 @@ class PostgresPlanningInvocations:
                 ).fetchone()
                 if existing["record"] != result:
                     raise PlanningConflict("PLANNING_RESULT_IMMUTABLE")
+
+    def save_receipt(self, scope, invocation_id, receipt):
+        with self.planning.transaction(scope, invocation_id, authorized=True) as cursor:
+            inserted = cursor.execute(
+                "INSERT INTO workflow_planning.provider_receipts VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT DO NOTHING RETURNING invocation_id",
+                (scope.namespace, scope.security_domain, invocation_id, Jsonb(receipt)),
+            ).fetchone()
+            if inserted is None:
+                existing = cursor.execute(
+                    "SELECT record FROM workflow_planning.provider_receipts "
+                    "WHERE namespace=%s AND security_domain=%s AND invocation_id=%s",
+                    (scope.namespace, scope.security_domain, invocation_id),
+                ).fetchone()
+                if existing["record"] != receipt:
+                    raise PlanningConflict("PLANNING_RECEIPT_IMMUTABLE")
+
+    def receipt(self, scope, invocation_id):
+        with self.planning.transaction(scope, invocation_id, authorized=True) as cursor:
+            row = cursor.execute(
+                "SELECT record FROM workflow_planning.provider_receipts "
+                "WHERE namespace=%s AND security_domain=%s AND invocation_id=%s",
+                (scope.namespace, scope.security_domain, invocation_id),
+            ).fetchone()
+            return row["record"] if row else None
 
     def find_request(self, scope, actor, key, digest):
         with self.planning.transaction(

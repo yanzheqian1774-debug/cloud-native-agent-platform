@@ -71,6 +71,25 @@ class PostgresPlanModelUseOwner:
             "outputTokens": None,
             "measurementState": "NOT_COLLECTED",
         }
+        # Receipt is transport provenance, not a second accounting authority.
+        from .plan_invocation_postgres import PostgresPlanningInvocations
+
+        receipt = PostgresPlanningInvocations(self.repository).receipt(scope, identity)
+        if receipt is not None:
+            measurement = receipt.get("measurement", {})
+            usage = measurement.get("usage") or {}
+            record.update(
+                providerReceiptDigest=canonical_digest(receipt),
+                providerRequestId=measurement.get("provider_request_id"),
+                providerResponseId=measurement.get("provider_response_id"),
+                inputTokens=usage.get("input_tokens"),
+                outputTokens=usage.get("output_tokens"),
+                measurementState=(
+                    "MEASURED" if measurement.get("settleable") else "NOT_COLLECTED"
+                ),
+                priceVersionDigest=receipt["pricing"]["price_version_digest"],
+                budgetReservationId=receipt["reservation_id"],
+            )
         digest = canonical_digest(record)
         evidence_id = "model-evidence:" + digest
         operation = identity + ":terminal"
@@ -112,7 +131,7 @@ class PostgresPlanModelUseOwner:
                         {
                             "status": result["technical_status"],
                             "evidenceId": evidence_id,
-                            "measurementState": "NOT_COLLECTED",
+                            "measurementState": record["measurementState"],
                         }
                     ),
                 ),

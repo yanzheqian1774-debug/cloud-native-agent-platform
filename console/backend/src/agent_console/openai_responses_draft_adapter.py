@@ -222,6 +222,10 @@ class OpenAIResponsesDraftTransport:
         self.configuration = configuration
         self.synthetic = configuration.execution_class == "LOCAL_HTTPS_MOCK"
         self.dispatch_count = 0
+        self.isolation_enabled = True
+        self.cleanup_failed = False
+        self.last_deadline = None
+        self.progress = lambda stage: None
 
     @staticmethod
     def _cost(tokens: int, price_microusd_per_million: int) -> int:
@@ -349,6 +353,7 @@ class OpenAIResponsesDraftTransport:
         self.dispatch_count += 1
         response = None
         try:
+            self.progress("CONNECT")
             connection.connect()
             elapsed = time.monotonic() - started
             remaining = self.configuration.total_timeout_seconds - elapsed
@@ -359,17 +364,20 @@ class OpenAIResponsesDraftTransport:
             connection.sock.settimeout(
                 min(self.configuration.read_timeout_seconds, remaining)
             )
+            self.progress("SEND_REQUEST")
             connection.request(
                 "POST",
                 parsed.path,
                 body=request.payload,
                 headers={
                     "Authorization": credential.authorization_value(),
+                    "X-Client-Request-Id": invocation_id,
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                     "Connection": "close",
                 },
             )
+            self.progress("WAIT_HEADERS")
             response = connection.getresponse()
             raw_correlation = response.getheader("x-request-id")
             correlation = (
@@ -378,10 +386,12 @@ class OpenAIResponsesDraftTransport:
                 and re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", raw_correlation)
                 else f"http-{response.status}-{invocation_id}"
             )
+            self.progress("READ_BODY")
             body = response.read(self.configuration.maximum_response_bytes + 1)
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
+            self.progress("CLOSE")
             # Connection: close transfers ownership of the stream to the response.
             # A short/oversized/failed read must not rely on garbage collection.
             try:
@@ -390,9 +400,32 @@ class OpenAIResponsesDraftTransport:
             finally:
                 connection.close()
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
+        self.progress("VALIDATE_RESPONSE")
         return response.status, body, correlation, latency_ms
 
     def dispatch(self, *, invocation_id, request, credential, profile):
+        if self.isolation_enabled:
+            from .responses_deadline import ResponsesBoundaryError, supervise
+            from .responses_jobs import DraftResponsesJob
+
+            if self.cleanup_failed:
+                raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
+            self.dispatch_count += 1
+            try:
+                value, self.last_deadline = supervise(
+                    DraftResponsesJob(
+                        self.configuration, invocation_id, request, credential, profile
+                    ),
+                    self.configuration,
+                )
+            except ResponsesBoundaryError as exc:
+                self.last_deadline = exc.diagnostic
+                self.cleanup_failed = exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+                raise
+            value["state"] = ObservationState(value["state"])
+            if value.get("result_kind"):
+                value["result_kind"] = DraftResultKind(value["result_kind"])
+            return ProviderObservation(**value)
         policy = policy_for(profile.adapter_revision, profile.output_schema_version)
         status_code, body, correlation, latency_ms = self.exchange(
             invocation_id=invocation_id, request=request, credential=credential

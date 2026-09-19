@@ -97,6 +97,16 @@ jobs:
             console/frontend/tests/test_s5_v023_impl_299_business_workspace.py \
             console/frontend/tests/test_s5_v023_impl_319_mock_provider_workflow.py
 
+      - name: Responses 323 isolation and planning usage closure
+        env:
+          PLANNING323_TEST_DATABASE_URL: ${{ env.ACCEPTANCE_DATABASE_URL }}
+        run: |
+          uv run pytest -q -o junit_family=legacy \
+            --junitxml=${{ runner.temp }}/responses-323.xml \
+            console/backend/tests/test_responses_deadline.py \
+            console/backend/tests/test_planning_responses_boundaries.py \
+            console/backend/tests/test_planning_usage_closure.py
+
       - name: Prove owned cleanup preserves an injected failure
         shell: bash
         run: |
@@ -138,6 +148,7 @@ jobs:
         with:
           name: s5-v023-impl-319-mock-provider-evidence
           path: |
+            ${{ runner.temp }}/responses-323.xml
             ${{ runner.temp }}/s5-v023-impl-319-evidence.json
             ${{ runner.temp }}/s5-v023-impl-319-playwright/
             ${{ runner.temp }}/s5-v023-impl-319-playwright.json
