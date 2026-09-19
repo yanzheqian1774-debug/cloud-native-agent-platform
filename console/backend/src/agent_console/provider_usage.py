@@ -39,3 +39,42 @@ def projection(measurement, pricing, reservation_id, settlement, *, local_cleanu
         "remoteCancellation": "NOT_PROVEN",
         "providerInvoice": "NOT_VERIFIED",
     }
+
+
+class ProviderUsageGrantTargetValidator:
+    """Only canonical, already recorded targets may be requested; never grants."""
+
+    def __init__(self, understanding=None, planning=None):
+        self.owners = {"understanding": understanding, "planning": planning}
+
+    def is_known_exact_target(self, context, grant, *, connection=None):
+        if connection is None:
+            return False
+        measurement = grant.owner == "EVIDENCE" and grant.action == "READ_MEASUREMENT"
+        if measurement:
+            for kind, owner in self.owners.items():
+                prefix = f"evidence-reference:provider-usage:{kind}:"
+                if grant.exact_resource.startswith(prefix):
+                    identity = grant.exact_resource[len(prefix) :]
+                    return bool(
+                        identity
+                        and owner is not None
+                        and owner.has_usage_target(
+                            connection, context.scope, identity, measurement=True
+                        )
+                    )
+            return False
+        prefix = "resource-use:contextual-resource-use:"
+        if (grant.owner, grant.action) != (
+            "RESOURCE_USE",
+            "READ",
+        ) or not grant.exact_resource.startswith(prefix):
+            return False
+        identity = grant.exact_resource[len(prefix) :]
+        return bool(identity) and any(
+            owner is not None
+            and owner.has_usage_target(
+                connection, context.scope, identity, measurement=False
+            )
+            for owner in self.owners.values()
+        )

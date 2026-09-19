@@ -107,7 +107,8 @@ jobs:
             console/backend/tests/test_planning_responses_boundaries.py \
             console/backend/tests/test_planning_usage_closure.py \
             console/backend/tests/test_understanding_usage_closure.py \
-            console/backend/tests/test_provider_usage_authorization.py
+            console/backend/tests/test_provider_usage_authorization.py \
+            console/backend/tests/test_provider_usage_grant_flow.py
 
       - name: Understanding usage and cancellation UI (controlled 323)
         working-directory: console/frontend

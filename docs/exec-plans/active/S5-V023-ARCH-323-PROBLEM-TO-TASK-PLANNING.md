@@ -1368,3 +1368,33 @@ Draft invocation既有append-only JSON新增measurement/pricing/settlementStatus
 本轮完整make check结果：**2065 passed / 201 skipped / 1既有Starlette warning**，Ruff与format均通过；新理解PG/披露用例实际执行，非skip。与§19旧计数区别保留，不将旧门禁当本轮。网络三目标阶段修复后独立3项通过并保存network-phase.xml；新理解/权限/旧理解及其余边界曾聚焦48项通过，完整make check最终覆盖修订后全套，不将失败轮JUnit作为成功证据。前端npm lint通过，专属323受控浏览器2项通过，其启动步骤完成tsc/vite build。正常提交hooks及新候选CI将单独绑定本目录派生交付回执与原PR；不引用f397旧12成功作为新候选结论。原§20未提交准备材料完整纳入本次交付。
 
 提交后浏览器契约复核：既有s5-319受控HTTPS浏览器用例仍断言旧“正在请求取消”文案，与本轮精确状态表达不一致。同步为“取消已请求，停止未确认”，并增加“远端停止和停止计费均未证实”断言；保留unsupported reason、未确认取消及provider调用次数不增加的断言。这是测试预期随本次UI契约更新，不修改产品或降低断言。再次正常提交/普通推送；每个候选CI分别保留，最终只以最新候选实际checkout为准。
+
+## 22. 费用授权流程、隔离配置与真实同案演示（G1，2026-09-20）
+
+最新Human决定替代§20–21的旧调用次数/金额待批口径：已授权323真实同案演示及必要质量验证按需调用模型；3U+2P/USD0.45不再是固定额度或逐次批准门槛。仍须实际供应商/模型/凭据、可信身份、独立审批、有效窗口及保留条件具备，沿用有限预算准入、计量及UNKNOWN核对，不自动重发未知结果。不得冒充审批人或授予管理员权限。D3/Assignment/Run/TaskRun、Ready/合并/部署/Session关闭不在范围。
+
+实现计划：在既有owner适配器增加调用方事务内的费用目标存在性查询；理解须有同scope真实invocation及上下文ResourceUse，披露目标另须最新invocation计量记录；规划须有同scope真实invocation及对应ResourceUse，披露目标另须provider receipt。usage缺失但已有计量观察可显示UNKNOWN，不要求费用已结清；记录尚未形成明确拒绝，等待原调用核对，不重新调模型。正式Workbench装配两段validator，保持原requestability、申请/独立审批、自批禁止、双权限读取及最小披露。不新增owner、grant捷径或迁移。
+
+验证计划：通过正式Workbench装配与原BFF申请/审批/读取入口验证真实/伪造/错误种类/跨scope目标、计量未形成、自批拒绝、幂等与缺任一权限。使用专属隔离PG和受控provider；真实账户未落实前不对外调用。聚焦后make check、正常hooks、普通push及新候选CI实际checkout核验。
+
+配置计划：复用既有real-demo/runtime与模板、模型目录/权限/预算owner；内部ID/revision/digest由正式创建结果取得。无外部输入时仅准备关闭态配置及装配说明；本任务pepper/签名可本地安全生成，不输出值。已一次性询问供应商/模型、凭据引用版本、可信主体/scope、有效窗口与保留责任。继续不依赖这些输入的修复，不将配置准备误记为真实演示完成。
+
+### 22.1 当前实现与配置落地
+
+费用查询使用原调用方事务连接、原owner记录与scope；不要求reader等于调用人（独立检查者由exact approval决定）。ResourceUse要求真实invocation及同种类上下文记录；EVIDENCE理解要求最新invocation measurement对象，规划要求provider receipt。usage为null仍是可披露UNKNOWN；尚无记录拒绝申请，不能靠重发生成记录。requestability沿原契约仅接受owner标准前缀resource-use:/evidence-reference:，这是允许申请的类型，不是授予前缀读取权；每个grant仍是完整invocation精确目标且要通过存在性校验。审批保持版本/幂等、有效时间和禁止自批。
+
+本轮已生成关闭态准备文件（非生效runtime）：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/runtime/understanding.json`、同目录`planning.json`。来自§21模板，nativeModelId与价格保持null，因为实际供应商/模型尚未由Human提供；OpenAI协议/端点字段仅为原建议分支，不代表选定。scope、目录身份/digest、凭据及ledger保持未解析。未导出runtime环境变量，规划realCallsEnabled=false；理解不装配。private目录0700，四项本地随机pepper/签名材料0600，仅记录路径和版本，未展示值、未提交仓库。外部模型凭据未复制、未探测。
+
+有限准入配置为理解最多12次/USD10、规划最多8次/USD10，合计20次/USD20、串行并发1；这是本次Human委托下设置的任务上限，不是强制消耗或每次审批。基础同案最多3U+2P；其余用于至多三个有明确问题/目的的质量或修复验证批次（单批最多3U+2P），最小接通计入此总数。未批准更大范围或无限自动重试。沿模板输入32768、理解输出2048/规划4096上限；如最终选择原建议USD2/8每百万标准价，20次最坏估算为12×0.081920+8×0.098304=USD1.769472；USD20为宽裕但有限的本地准入上限。实际模型未选定，价格快照仍未配置，必须按实际官方价格核实quote；超出既设有限额度则缩减验证范围或报告，不设零价/无限额度。预算预留、估算与供应商账单分离。
+
+待外部输入仅为：供应商账户/项目及实际模型；安全置备凭据引用/版本/位置；真实调用/审批/费用检查主体与允许scope；管理员；有效调用窗口及保留/清理责任。已通过本会话一次性问题收集，不要求Human填写内部ID。输入到位后由原owner创建或复用目录/profile、两用途ledger及真实身份映射；不能自行赋管理员权限、不能冒充审批人。演示PG/端口配置及登录装配待scope/身份落实；当前仅启动专属受控验证容器s5-323-usage-grants-pg，127.0.0.1:64328，不代表真实环境就绪。调用窗口不得由旧建议自动填充。
+
+授权流程：真实invocation形成后，费用检查主体POST原`/api/workbench/v1/authorization/grant-requests`，schema exact-grant-request.v1、purpose与requestability一致、两个完整exact targets、独立幂等键；独立审批主体POST同request的decisions，schema exact-grant-decision.v1、expectedVersion、TICKET/POLICY依据、绝对有效期；此后GET对应usage。不提前伪造ID。拒绝、记录未形成、结果未知则停止后继调用、核对原记录；不得直接插grant或跳过独立审批。动态请求/审批流程具备后，真实同案仍以实际身份和批准记录为证据，受控主体不是实际Human身份。
+
+### 22.2 验证与当前阻塞
+
+正式`build_workbench_composition`及真实authority PG/session/CSRF/target validator/申请/审批/usage路由完整验证4组：两段分别按两种单权限顺序批准，单权限始终404、双权限独立批准后200；错误kind/伪造ID/跨scope/尚无measurement或receipt均拒绝；具有DECIDE权限的申请人自批仍被禁止；申请与决定幂等。测试身份为显式controlled bootstrap，调用记录经原owner接口形成，未直接插入动态grant。模型和计量输入是合成owner记录，用量UNKNOWN读回不证明模型质量。`grant-chain.xml`及派生`grant-chain-evidence.json`保留实际测试invocation/request/decision关联，外部调用0。
+
+本轮聚焦16 passed；完整`make check` 2069 passed / 201 skipped / 1既有Starlette warning，Ruff/format通过。新PG授权流程实际执行非skip；专属CI步骤增加该文件以保证远端PG执行。测试修订诊断：初始controlled generation缺staticGrantRevocationTombstones、requestability用了非标准子前缀、请求遗漏schemaVersion，均在严格配置/请求检查前拒绝；按现有契约修正测试资料，不放宽产品检查。一次pytest诊断参数拼写错误未执行测试，后改为--no-showlocals。代码评审修正owner SQL为显式同scope join。失败记录保留，不记为成功。没有前端修改，不重复视觉或全量浏览器采集。
+
+证据目录：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/usage-grant-flow/`。配置预检记录两文件MODEL_IDENTITY_REQUIRED、未挂载、四项private材料0600。真实模型尚未选定、凭据和真实主体未提供；这属于外部配置阻塞，不是缺少本轮模型调用授权，也不要求同范围逐次批准。配置/identity/window具备后沿本次授权推进，不自动补跑过期窗口。最终提交、hooks、CI及资源清理另由同目录派生回执绑定，原PR仍Draft/OPEN。

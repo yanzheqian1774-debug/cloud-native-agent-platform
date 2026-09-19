@@ -13,6 +13,27 @@ class PostgresPlanningInvocations:
     def __init__(self, planning: PostgresPlanningRepository):
         self.planning = planning
 
+    def has_usage_target(self, connection, scope, identity, *, measurement):
+        """Validate persisted invocation, kind and receipt without dispatch."""
+        row = connection.execute(
+            "SELECT r.record FROM workflow_planning.invocations i "
+            "JOIN contextual_resource_use.uses u ON u.namespace=i.namespace "
+            "AND u.security_domain=i.security_domain AND u.context_id=i.invocation_id "
+            "AND u.context_kind='PLAN_SUGGESTION_INVOCATION' "
+            "AND u.resource_use_id=%s "
+            "LEFT JOIN workflow_planning.provider_receipts r "
+            "ON r.namespace=i.namespace AND r.security_domain=i.security_domain "
+            "AND r.invocation_id=i.invocation_id "
+            "WHERE i.namespace=%s AND i.security_domain=%s AND i.invocation_id=%s",
+            (
+                "contextual-resource-use:" + identity,
+                scope.tenant_id,
+                scope.security_domain,
+                identity,
+            ),
+        ).fetchone()
+        return row is not None and (not measurement or isinstance(row["record"], dict))
+
     def migrate(self):
         self._migrate(26, "0026_plan_suggestion_invocation.sql")
         self._migrate(27, "0027_planning_provider_receipt.sql")

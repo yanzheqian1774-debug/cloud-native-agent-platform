@@ -271,6 +271,30 @@ class _Pool:
 
 
 class PostgresDraftAssistanceRepository(_Pool):
+    def has_usage_target(self, connection, scope, identity, *, measurement):
+        """Read canonical owner facts in the grant caller's transaction."""
+        row = connection.execute(
+            "SELECT v.record FROM draft_assistance.invocations i "
+            "JOIN contextual_resource_use.uses u ON u.namespace=i.namespace "
+            "AND u.security_domain=i.security_domain AND u.context_id=i.invocation_id "
+            "AND u.context_kind='DRAFT_ASSISTANCE_INVOCATION' "
+            "AND u.resource_use_id=%s "
+            "JOIN draft_assistance.invocation_versions v ON v.namespace=i.namespace "
+            "AND v.security_domain=i.security_domain "
+            "AND v.invocation_id=i.invocation_id "
+            "WHERE i.namespace=%s AND i.security_domain=%s AND i.invocation_id=%s "
+            "ORDER BY v.aggregate_version DESC LIMIT 1",
+            (
+                "contextual-resource-use:" + identity,
+                scope.tenant_id,
+                scope.security_domain,
+                identity,
+            ),
+        ).fetchone()
+        return row is not None and (
+            not measurement or isinstance(row["record"].get("measurement"), dict)
+        )
+
     def __init__(
         self, database_url: str, *, migration_path: Path, timeout: float = 5.0
     ) -> None:

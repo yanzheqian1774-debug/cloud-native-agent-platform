@@ -30,10 +30,12 @@ from agent_console.draft_assistance_authorization import (
     GrantAdministrationDraftAuthorization,
 )
 from agent_console.governed_execution_ownership import execution_database_fingerprint
+from agent_console.plan_invocation_postgres import PostgresPlanningInvocations
 from agent_console.plan_suggestion_api import install_planning_invocations
 from agent_console.plan_suggestion_application import PlanningApplication
 from agent_console.plan_suggestion_bootstrap import PlanningInvocationDependencies
 from agent_console.plan_suggestion_postgres import PostgresPlanningRepository
+from agent_console.provider_usage import ProviderUsageGrantTargetValidator
 from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
@@ -134,7 +136,17 @@ def build_workbench_composition(
             if draft_assistance is not None
             else ()
         )
-        + ((PlanningGrantTargetValidator(),) if planning is not None else ()),
+        + ((PlanningGrantTargetValidator(),) if planning is not None else ())
+        + (
+            ProviderUsageGrantTargetValidator(
+                understanding=draft_assistance.repository
+                if draft_assistance is not None
+                else None,
+                planning=PostgresPlanningInvocations(planning.repository)
+                if planning_invocations is not None
+                else None,
+            ),
+        ),
     )
     foundation = build_authority_foundation(
         runtime,
