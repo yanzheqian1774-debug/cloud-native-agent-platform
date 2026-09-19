@@ -342,7 +342,7 @@ def _profile(
                 or value.target_format_version != "plan-suggestion-target.v1"
                 or document["policyDigest"] != POLICY_DIGEST
                 or type(document["realCallsEnabled"]) is not bool
-                or document["providerProtocol"] != OPENAI_PROTOCOL
+                or document["providerProtocol"] not in {OPENAI_PROTOCOL, KIMI_PROTOCOL}
             ):
                 raise DraftAssistanceError("PLANNING_PROFILE_INVALID")
         else:

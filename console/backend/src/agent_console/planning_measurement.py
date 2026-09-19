@@ -18,7 +18,15 @@ def _count(value):
     return value if type(value) is int and 0 <= value <= 1_000_000_000 else None
 
 
-def measurement(response, correlation, invocation_id, latency, configuration):
+def measurement(
+    response,
+    correlation,
+    invocation_id,
+    latency,
+    configuration,
+    *,
+    protocol="OPENAI_RESPONSES_V1",
+):
     response = response if isinstance(response, dict) else {}
     raw = response.get("usage")
     raw = raw if isinstance(raw, dict) else {}
@@ -32,6 +40,13 @@ def measurement(response, correlation, invocation_id, latency, configuration):
     ):
         detail = raw.get(parent)
         usage[child] = _count(detail.get(child)) if isinstance(detail, dict) else None
+    if protocol == "KIMI_RESPONSES_V1":
+        detail = raw.get("input_tokens_details")
+        usage["cache_write_tokens"] = (
+            _count(detail.get("cache_write_tokens"))
+            if isinstance(detail, dict)
+            else None
+        )
     i, o, c, r, total = (
         usage[k]
         for k in (
@@ -67,6 +82,15 @@ def measurement(response, correlation, invocation_id, latency, configuration):
             or (child in raw[parent] and _count(raw[parent][child]) is None)
         ):
             reliable = False
+    if protocol == "KIMI_RESPONSES_V1":
+        detail = raw.get("input_tokens_details")
+        w = usage["cache_write_tokens"]
+        if (
+            isinstance(detail, dict)
+            and "cache_write_tokens" in detail
+            and (w is None or i is None or (c or 0) + w > i)
+        ):
+            reliable = False
     return {
         "local_request_id": invocation_id,
         "provider_request_id": _identity(correlation)
@@ -82,7 +106,7 @@ def measurement(response, correlation, invocation_id, latency, configuration):
         else "UNKNOWN",
         "usage": usage,
         "settleable": reliable,
-        "metering": "OPENAI_RESPONSES_V1_TOTALS_INCLUDE_DETAILS",
+        "metering": protocol + "_TOTALS_INCLUDE_DETAILS",
         "latency_ms": latency,
     }
 

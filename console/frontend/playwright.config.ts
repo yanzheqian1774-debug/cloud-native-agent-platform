@@ -18,6 +18,7 @@ export default defineConfig({
           "**/s5-321-understanding*.spec.ts",
           "**/s5-323-planning.real.spec.ts",
           "**/s5-323-page.real.spec.ts",
+          "**/s5-323-kimi.real.spec.ts",
           "**/s5-323-visual.spec.ts",
           "**/s5-323-usage.spec.ts",
         ]
@@ -30,6 +31,7 @@ export default defineConfig({
           "**/s5-321-understanding*.spec.ts",
           "**/s5-323-planning.real.spec.ts",
           "**/s5-323-page.real.spec.ts",
+          "**/s5-323-kimi.real.spec.ts",
           "**/s5-323-visual.spec.ts",
           "**/s5-323-usage.spec.ts",
           "**/*-live.spec.ts",

@@ -31,6 +31,38 @@ from .plan_suggestion_invocation import PlanningProfile
 from .plan_suggestion_policy import INSTRUCTIONS, output_schema
 
 
+def planning_transport(configuration):
+    from .kimi_responses_draft_adapter import (
+        KimiResponsesConfiguration,
+        KimiResponsesDraftTransport,
+    )
+
+    return (
+        KimiResponsesDraftTransport(configuration)
+        if isinstance(configuration, KimiResponsesConfiguration)
+        else OpenAIResponsesDraftTransport(configuration)
+    )
+
+
+def planning_credentials(configuration, profile):
+    from .kimi_responses_draft_adapter import (
+        ExactFileKimiCredentialResolver,
+        KimiResponsesConfiguration,
+    )
+
+    resolver = (
+        ExactFileKimiCredentialResolver
+        if isinstance(configuration, KimiResponsesConfiguration)
+        else ExactFileOpenAICredentialResolver
+    )
+    return resolver(
+        configuration,
+        expected_profile_revision_id=profile.profile_revision_id,
+        expected_connection_profile_id=profile.connection_profile_id,
+        expected_connection_profile_revision_id=profile.connection_profile_revision_id,
+    )
+
+
 class PlanningProviderFailure(PlanningError):
     """Only a fixed disclosure-safe reason is retained, never provider bodies."""
 
@@ -40,12 +72,19 @@ class PlanningResponsesProvider:
         self.configuration = configuration
         self.transport_profile = transport_profile
         self.credentials = credentials
-        self.transport = OpenAIResponsesDraftTransport(configuration)
+        self.transport = planning_transport(configuration)
+        if not hasattr(self.transport, "progress"):
+            self.transport.progress = lambda _stage: None
+        self.protocol = (
+            "KIMI_RESPONSES_V1"
+            if hasattr(configuration, "reasoning_effort")
+            else "OPENAI_RESPONSES_V1"
+        )
         self.isolation_enabled = True
         self.cleanup_failed = False
         self.synthetic = configuration.execution_class == "LOCAL_HTTPS_MOCK"
         self.diagnostics = {
-            "protocol": "OPENAI_RESPONSES_V1",
+            "protocol": self.protocol,
             "configured_model": configuration.native_model_id,
             "execution_class": configuration.execution_class,
         }
@@ -73,7 +112,9 @@ class PlanningResponsesProvider:
             result["deadline"] = diagnostic
             return result
         except ResponsesBoundaryError as exc:
-            self.cleanup_failed = exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+            self.cleanup_failed = (
+                self.cleanup_failed or exc.diagnostic["reason"] == "CLEANUP_FAILURE"
+            )
             return {
                 "text": None,
                 "failure": "PROVIDER_OUTCOME_UNKNOWN",
@@ -115,6 +156,8 @@ class PlanningResponsesProvider:
                 }
             },
         }
+        if self.protocol == "KIMI_RESPONSES_V1":
+            document["reasoning"] = {"effort": self.configuration.reasoning_effort}
         payload = canonical_bytes(document)
         # Byte count is a conservative token admission bound, including schema.
         if len(payload) > self.configuration.maximum_input_tokens:
@@ -124,7 +167,17 @@ class PlanningResponsesProvider:
             self.transport.progress("CREDENTIAL")
             credential = self.credentials.resolve(self.transport_profile, invocation_id)
             status, body, correlation, latency = self.transport.exchange(
-                invocation_id=invocation_id, request=prepared, credential=credential
+                invocation_id=invocation_id,
+                request=prepared,
+                credential=credential,
+                **(
+                    {
+                        "connected": lambda: self.transport.progress("SEND_REQUEST"),
+                        "progress": self.transport.progress,
+                    }
+                    if self.protocol == "KIMI_RESPONSES_V1"
+                    else {}
+                ),
             )
         except (OSError, TimeoutError):
             raise ConnectionError from None
@@ -141,7 +194,7 @@ class PlanningResponsesProvider:
             "provider_response_id": None,
             "usage": None,
             "configured_model": self.configuration.native_model_id,
-            "metering": "OPENAI_RESPONSES_V1",
+            "metering": self.protocol,
             "latency_ms": latency,
         }
 
@@ -153,7 +206,12 @@ class PlanningResponsesProvider:
         try:
             response = json.loads(body)
             receipt = measurement(
-                response, correlation, invocation_id, latency, self.configuration
+                response,
+                correlation,
+                invocation_id,
+                latency,
+                self.configuration,
+                protocol=self.protocol,
             )
             if not 200 <= status < 300:
                 receipt["settleable"] = False
@@ -165,6 +223,14 @@ class PlanningResponsesProvider:
             if response["status"] != "completed":
                 return failed("PLANNING_PROVIDER_RESPONSE_INVALID")
             output = response["output"]
+            if self.protocol == "KIMI_RESPONSES_V1":
+                if not isinstance(output, list) or any(
+                    not isinstance(item, dict)
+                    or item.get("type") not in {"reasoning", "message"}
+                    for item in output
+                ):
+                    raise ValueError
+                output = [item for item in output if item.get("type") == "message"]
             if len(output) != 1 or output[0]["type"] != "message":
                 raise ValueError
             content = output[0]["content"]
@@ -313,7 +379,11 @@ def build_planning_runtime(
         profile, pepper_path, configuration, budget_config = _profile(
             document, planning=True, allow_local_https_mock=allow_local_https_mock
         )
-        if not isinstance(configuration, OpenAIResponsesConfiguration):
+        from .kimi_responses_draft_adapter import KimiResponsesConfiguration
+
+        if not isinstance(
+            configuration, (OpenAIResponsesConfiguration, KimiResponsesConfiguration)
+        ):
             raise ValueError
         commitment = pepper_path.read_bytes()
         if len(commitment) < 32:
@@ -337,12 +407,7 @@ def build_planning_runtime(
             ],
         )
         budget.migrate_and_configure()
-        credentials = ExactFileOpenAICredentialResolver(
-            configuration,
-            expected_profile_revision_id=profile.profile_revision_id,
-            expected_connection_profile_id=profile.connection_profile_id,
-            expected_connection_profile_revision_id=profile.connection_profile_revision_id,
-        )
+        credentials = planning_credentials(configuration, profile)
         dependencies = PlanningInvocationDependencies(
             profile=PlanningProfile(
                 profile_revision_id=profile.profile_revision_id,

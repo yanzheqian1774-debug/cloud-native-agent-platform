@@ -31,11 +31,22 @@ from test_plan_suggestion_v2 import repository as repository
 
 
 @pytest.fixture
-def assembled(repository, mock_responses):
+def assembled(repository, mock_responses, request):
     server, cert, tmp = mock_responses
     _credential_file(tmp)
     (tmp / "pepper").write_bytes(b"controlled-only-pepper" * 3)
     document = _real_runtime_document(server, cert, tmp)
+    if getattr(request, "param", None) == "kimi":
+        from test_kimi_responses_draft_adapter import _runtime_document
+
+        base = document
+        document = _runtime_document(server, cert, tmp)
+        for field in ("model", "provider", "endpoint", "connectionProfile"):
+            document[field] = base[field]
+        document["nativeModelId"] = "mock-model-319"
+        document["maximumInputTokens"] = 65536
+        document["budget"]["inputPriceMicrousdPerMillionTokens"] = 2000000
+        document["budget"]["outputPriceMicrousdPerMillionTokens"] = 8000000
     document["budget"].update(callCap=3, totalCostCapMicrousd=250000)
     path = tmp / "runtime.json"
     path.write_text(json.dumps(document))

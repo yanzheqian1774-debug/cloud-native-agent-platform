@@ -39,19 +39,14 @@ class PlanningResponsesJob:
     business_context: dict
 
     def run(self, progress):
-        from .openai_responses_draft_adapter import ExactFileOpenAICredentialResolver
         from .plan_suggestion_runtime import (
             PlanningProviderFailure,
             PlanningResponsesProvider,
+            planning_credentials,
         )
 
         p = self.transport_profile
-        credentials = ExactFileOpenAICredentialResolver(
-            self.configuration,
-            expected_profile_revision_id=p.profile_revision_id,
-            expected_connection_profile_id=p.connection_profile_id,
-            expected_connection_profile_revision_id=p.connection_profile_revision_id,
-        )
+        credentials = planning_credentials(self.configuration, p)
         provider = PlanningResponsesProvider(self.configuration, p, credentials)
         provider.isolation_enabled = False
         provider.transport.progress = progress

@@ -136,7 +136,17 @@ def build_workbench_composition(
             if draft_assistance is not None
             else ()
         )
-        + ((PlanningGrantTargetValidator(),) if planning is not None else ())
+        + (
+            (
+                PlanningGrantTargetValidator(
+                    planning_invocations.profile
+                    if planning_invocations is not None
+                    else None
+                ),
+            )
+            if planning is not None
+            else ()
+        )
         + (
             ProviderUsageGrantTargetValidator(
                 understanding=draft_assistance.repository

@@ -168,9 +168,40 @@ def planning_operations(application, employees=None):
 class PlanningGrantTargetValidator:
     """Exact v2 grant discovery; no wildcard or cross-scope target inference."""
 
+    def __init__(self, profile=None):
+        self.profile = profile
+
     def is_known_exact_target(self, context, grant, *, connection=None):
-        if connection is None or grant.owner != "PLAN":
+        if connection is None:
             return False
+        if grant.owner == "MODEL_GOVERNANCE" and grant.action == "INVOKE_MODEL":
+            if self.profile is None:
+                return False
+            from .model_governance_authorization import PostgresModelGrantTargetLookup
+
+            return PostgresModelGrantTargetLookup(None).is_known_planning_target(
+                context.scope, grant, self.profile.model, connection=connection
+            )
+        if grant.owner != "PLAN":
+            return False
+        for action, prefix in (
+            ("PREPARE", "plan:prepare:"),
+            ("READ", "plan:prepared:"),
+        ):
+            if grant.action == action and grant.exact_resource.startswith(prefix):
+                return (
+                    connection.execute(
+                        "SELECT 1 FROM business_problem_authority.problems "
+                        "WHERE namespace=%s AND security_domain=%s "
+                        "AND business_problem_id=%s FOR SHARE",
+                        (
+                            context.scope.tenant_id,
+                            context.scope.security_domain,
+                            grant.exact_resource[len(prefix) :],
+                        ),
+                    ).fetchone()
+                    is not None
+                )
         prefix = "plan:v2:"
         if not grant.exact_resource.startswith(prefix):
             return False

@@ -56,6 +56,7 @@ def endpoint(tmp_path):
     state = NS(
         mode="valid",
         requests=0,
+        documents=[],
         accepted=threading.Event(),
         release=threading.Event(),
         stopped=threading.Event(),
@@ -63,7 +64,9 @@ def endpoint(tmp_path):
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
-            self.rfile.read(int(self.headers["content-length"]))
+            state.documents.append(
+                json.loads(self.rfile.read(int(self.headers["content-length"])))
+            )
             state.requests += 1
             state.accepted.set()
             inner = {"kind": "NEEDS_CLARIFICATION", "questions": ["Synthetic date?"]}

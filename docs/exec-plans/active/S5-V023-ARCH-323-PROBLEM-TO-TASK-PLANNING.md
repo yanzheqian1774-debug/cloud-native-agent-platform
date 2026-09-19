@@ -1398,3 +1398,53 @@ Draft invocation既有append-only JSON新增measurement/pricing/settlementStatus
 本轮聚焦16 passed；完整`make check` 2069 passed / 201 skipped / 1既有Starlette warning，Ruff/format通过。新PG授权流程实际执行非skip；专属CI步骤增加该文件以保证远端PG执行。测试修订诊断：初始controlled generation缺staticGrantRevocationTombstones、requestability用了非标准子前缀、请求遗漏schemaVersion，均在严格配置/请求检查前拒绝；按现有契约修正测试资料，不放宽产品检查。一次pytest诊断参数拼写错误未执行测试，后改为--no-showlocals。代码评审修正owner SQL为显式同scope join。失败记录保留，不记为成功。没有前端修改，不重复视觉或全量浏览器采集。
 
 证据目录：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/usage-grant-flow/`。配置预检记录两文件MODEL_IDENTITY_REQUIRED、未挂载、四项private材料0600。真实模型尚未选定、凭据和真实主体未提供；这属于外部配置阻塞，不是缺少本轮模型调用授权，也不要求同范围逐次批准。配置/identity/window具备后沿本次授权推进，不自动补跑过期窗口。最终提交、hooks、CI及资源清理另由同目录派生回执绑定，原PR仍Draft/OPEN。
+
+### 22.3 Kimi既有配置恢复（2026-09-20；零网络本地核验）
+
+Human已选择此前Kimi并授权按321交付资料明确引用恢复/复用账户及凭据信息；不再把模型/密钥位置退回Human。实际记录为Moonshot `kimi-k3`、`https://api.moonshot.cn/v1/responses`、`KIMI_RESPONSES_V1`；理解适配`kimi-responses-draft` v1/v2。来源`/Users/tristan/Documents/s5-v023-impl-321-real-quality/runtime-v1.json`与runtime-v2.json；真实调用summary/DIAGNOSIS记录4请求、3成功响应、1UNKNOWN，完整同案0，质量未通过。不是mock或仅示例。provider项目显示名未记载，不伪造，也不将其作为再次索要密钥的理由。
+
+credential reference=`k8s://kind-agentos-dev/agent-workloads/model-credentials#api-key`，version=`uid:23a20259-1aea-41a8-8a45-f11189a96c7d;rv:122913`，exact-file-resolver/v1，安全文件为该交付目录/provider-key。仅通过既有resolver在内存解析，两版本通过；文件为普通非symlink、0400。禁止网络的离线核验不证明供应商当前认证有效。未打印/复制secret，未访问Kubernetes secret、未修改321。323理解准备文件已引用此原位置并采用Kimi专有adapter/protocol/reasoning字段；保留323独立pepper/有限预算及未解析的新目录ID，不复制321 ledger/profile/invocation或UNKNOWN；原关闭态文件已保全为understanding.before-kimi-selection.json。规划文件仍未启用，不伪装Kimi可用。
+
+具体产品断点（当前0bd24c7）：`draft_assistance_bootstrap._profile(planning=True)`明确只允许OPENAI_RESPONSES_V1；`PlanningResponsesProvider`与`responses_jobs.PlanningResponsesJob`硬编码OpenAI transport/resolver及metering。Kimi transport仅prepare理解schema，resolver也限制理解v1/v2，不能换模型名即用规划schema。Kimi返回observation目前只有旧input/output计数/correlation，不携带本轮新增measurement/local_cleanup；因此§22费用target会拒绝尚无measurement的Kimi理解披露，旧计数不等于精确usage/response ID闭环。
+
+最小后续修复范围：在原provider/bootstrap/job选择处增加明确Kimi规划分支；复用Kimi安全resolver和受控网络交换但使用独立规划prompt/schema/reasoning投影，保留typed proposal/目标修订/依赖校验；为Kimi理解及规划接入原计量/预算owner的allowlisted measurement（本地/供应商请求/响应ID分离，可靠性校验及非法业务仍可计费），将本地回收摘要绑定原invocation。不能把Kimi现有1秒清理实现直接标成Responses的2秒工程证据；复用现有隔离架构并单独验证实际Kimi路径，不改变期限错误码/未知语义。受控验收须覆盖正式装配、Kimi请求结构与schema、usage可靠/缺失/不一致、错误/超时/回收，以及实际Kimi形态记录经申请/独立审批/费用读回；随后真实接通只算相应一次证据。该适配是产品修改，不作为配置完成隐含通过；本轮先报告断点及最小范围，未改产品代码或发真实调用。
+
+身份恢复：原authority-runtime明确引用diagnostic-once-20260918/generation-3.json；human:321-quality-owner与human:admin均在2026-09-18 10:15 Asia/Shanghai到期。不可延长旧凭据或冒充审批人。仅需管理员给323独立scope提供有效调用/独立审批/费用检查身份及有效期，原凭据位置已找到无需再次提供；新有效窗口及保留/清理责任仍不能继承321。原321及321-9-18自动化均只读核实PAUSED，未修改其服务/调度/STOP/UNKNOWN或账本。旧记忆2444计划路径不存在，经git worktree记录解析到原分支工作树s5-v023-impl-321并只读核对，未恢复/重建旧目录。
+
+本轮派生脱敏核验：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/usage-grant-flow/kimi-recovery-preflight.json`。当前产品候选不变；仅本计划未提交说明和323本地准备材料更新，未提交/推送/重跑测试，外部模型调用0。授权不是阻塞；阻塞为上述Kimi适配及过期平台身份，不能以绕过正式入口的直连探测冒充同案进展。
+
+## 23. Kimi两段正式接入与同案交付（G1，Human预先批准）
+
+保留§22.3恢复记录。基线0bd24c7/46b6477；本任务明确批准Kimi规划、理解计量/回收、费用申请、独立配置和必要页面接线及测试。沿用provider/预算/权限/记录owner，不新建权威、迁移或隔离架构。方案：从Kimi既有网络交换抽取受控exchange，理解解释与规划typed解释分离；profile/runtime/job显式协议选择，Kimi专属reasoning和结构化schema投影；allowlist usage归一化复用原逻辑但协议标识区分；可靠usage与业务成败独立，原observation/receipt持久化及原预算owner结算。Kimi理解复用原supervisor，规划复用现有Responses工作单元监督并验证Kimi实路，不扩大整个HTTP请求期限。
+
+验证顺序：Kimi专属网络/结构/计量/回收测试→两段正式启动装配和独立PG费用流程→页面同案→完整门禁/正常hooks/普通push及精确CI→条件具备的真实同案。无真实管理员访问时继续工程与受控验证，不伪造登录/签名主体、冒充审批人、自批或插入grant。真实调用次数12U/8P，各USD10，并发1；最小接通与质量复测计入，不无限重试、不转移用途额度。旧321资产/UNKNOWN/ledger/PAUSED不动。
+
+可信接收时刻来自本会话持久化user message response_item：2026-09-20 02:34:34.697 Asia/Shanghai；有效期至2026-09-21 02:34:34.697 Asia/Shanghai；脱敏证据默认保留至2026-10-05 02:34:34.697 Asia/Shanghai。每次真实派发前核对窗口和有限额度，过期不补跑；缺少实际identity授权则不得派发。时间依据及任务上限保存在既有交付目录kimi-mainline/authorization-window.json（派生执行证据，非新授权owner）。
+
+### 23.1 正式同案授权装配缺口（受控发现，G1补充）
+
+Kimi页面受控理解/纠正已到创建Problem；正式exact申请返回GRANT_REQUEST_NOT_FOUND。源码显示现有BUSINESS_PROBLEM TRANSITION、PLAN PREPARE plan:prepare:{problem}、PLAN READ plan:prepared:{problem}及MODEL_GOVERNANCE INVOKE_MODEL plan-suggestion精确用途已被业务接口要求，但目标发现未接入。旧页面harness预置权限不能替代这一路证据。本轮按“完整主线必要接线”补齐这些既有目标的owner存在性/scope/精确模型binding校验；不新增action、资源格式、宽泛授权或审批权，不修改READ creator continuation规则。只允许当前配置规划模型及同scope真实Problem，费用权限仍独立。补充伪造/跨scope/错误用途/错误digest和正式申请/独立审批测试；不重放已成功理解，页面从现有合成Problem续接。
+
+### 23.2 实现、受控证据与保证边界
+
+| 路径 | 当前实现/证据 | 不扩大解释 |
+| --- | --- | --- |
+| Kimi理解v1/v2 | 正式draft builder→Kimi adapter→原Kimi spawn supervisor；本地/供应商请求/响应ID、usage、价格摘要、结算及回收摘要进入原invocation owner；非法业务仍按可靠usage结算；7项专属HTTPS/PG测试覆盖缺失/部分/不一致usage、重启、并发修复和v2上下文 | 外部模型质量未测；prepare/配置/授权/数据库不在网络工作单元期限内；页面取消请求不等于底层已停止 |
+| Kimi规划v1 | 正式app planning runtime→显式Kimi配置/credential resolver→Responses spawn job→Kimi HTTPS exchange→规划typed/schema/target校验；reasoning=low，非OpenAI工具参数；允许Kimi reasoning item但不披露内容 | 不把OpenAI测试替代Kimi证据；不降级fixture；计划确认不派发 |
+| 期限与回收 | 两段分别受控实路验证；规划真实本地HTTPS头/静默体/慢滴体5秒总预算、≤2秒清理，阶段替身DNS/TCP/TLS/send/validate/close；理解复用Kimi总/连接期限、≤1秒清理；cleanup failure即使已reap但超预算仍阻断后续；显式关闭response和connection | 60秒是实际配置工作单元预算，不是整个应用请求硬界；本地终止不证明远端取消或计费停止；UNKNOWN不重发/不释放未知预留 |
+| 费用授权 | 正式BFF + PG测试两种费用目标、自批拒绝、重复申请/审批、缺任一权限/跨scope/假ID拒绝；页面同案2U+1P分别精确申请、独立测试管理员审批后读回 | 测试身份和测试预算不是供应商或真实管理员授权；Plan READ不包含计量读取 |
+| 页面同案 | 同一新合成Problem，理解后纠正→创建→独立Criteria保存→显式ACTIVE→Kimi协议本地HTTPS规划→三阶段五任务/两职责/三项资源缺口→唯一Plan/Approval→刷新相同历史；费用实际invocation对应 | 合成wire fixture，不证明真实模型提问/规划质量；本案例未制造无必要补问，补问分支由专属受控测试覆盖；原视觉接受不扩展 |
+
+派生证据统一在`/Users/tristan/Documents/s5-v023-arch-323-acceptance/kimi-mainline/`：`focused.xml`（81项）、`discovery-tests.log`（1项真实PG精确目标）、`browser-4.log`（同案恢复1项）、`same-case-persistence.json`、`visual-capture-manifest.json`、`source-binding.json`及`browser-resume-4/*/fees.json`。所有执行对象计数为0。页面初轮2U已成功后不重复；授权接线修复后续接原Problem。规划已收到VALID_SUGGESTION后发现页面需要独立proposal READ，先核对原invocation及proposal再申请/批准并刷新，未重发规划。其间测试purpose不匹配返回404，按既有requestability使用正确purpose，不放宽契约。原§22.3未提交恢复记录完整保留。
+
+### 23.3 真实配置、价格及外部阻塞
+
+两段关闭态准备文件沿用`real-demo/runtime/{understanding,planning}.json`；明确KIMI_RESPONSES_V1、kimi-k3、https://api.moonshot.cn/v1/responses、kimi-responses-draft/v2理解和v1规划、原已恢复credential reference/version与exact-file-resolver；不复制供应商秘密。规划realCallsEnabled=false，理解未装配。实际目录/profile/ledger身份须在真实管理员确定323 scope后经原owner生成，不把受控库目录/身份冒充真实配置。已一次性请求有效管理员/调用/独立审批身份的安全引用；已知原两个主体2026-09-18 10:15 Asia/Shanghai过期。没有凭据探测、外部模型请求或未知远端调用。
+
+2026-09-20查核官方[价格](https://platform.kimi.com/docs/pricing/chat)及[Responses契约](https://platform.kimi.com/docs/api/responses)：K3每百万token CNY未缓存输入20、命中2、写入5m20/1h40、输出100。input_tokens已含互斥cache/read/write类别，新增保留cache_write_tokens并校验cached+write不超过总输入；owner仍按配置总输入/输出单价估算，不重复相加，不冒充供应商账单。原owner不按缓存档逐项出最终账单，本轮采用明确保守任务估算：最高输入CNY40、输出CNY100，以USD0.20/CNY作为预算缓冲假设（不是观测汇率），即USD8/20每百万。每次65536输入+8192输出最多USD0.688128，12U上界8.257536、8P上界5.505024，分别低于USD10。真实启用前须核对该账户实际计费及转换仍被缓冲覆盖；如不成立停止，不以零价格启动。精确来源hash、计量口径、估算政策保存在`price-snapshot.json`。该准备不会自动创建预算记录或发起请求。
+
+供应商store/background固定false不代表零留存；官方说明组织级缓存默认5m，至少5分钟无活动后过期且不支持手工清除。只允许合成数据；不改账户设置，无法证明账户侧最终保留行为。可信有效期/保留期见§23首段；任何真实调用仍受实际身份、精确grants、窗口及额度准入。真实调用目前0，成功/失败/UNKNOWN均0，真实Token/估算账单为NOT_MEASURED（不能把测试估算USD0.0102记为供应商费用）。唯一待外部落实项为有效平台管理员/调用/独立审批与费用检查主体及允许scope；内部配置余项随后由Codex通过正式机制完成，无需Human手填内部ID。本轮不启动D3，Draft/OPEN。
+
+本轮完整门禁：make check **2097 passed / 201 skipped / 1既有warning**，未把201项未启用其他数据库测试计为通过；专属323 PG用例实际执行。前端lint及标准build通过。最终只读截图核对发现标准build未启用既有VITE_PROBLEM_DRAFT_ASSISTANCE，故composer不可见；不是模型或授权错误，零业务重试。验收构建须显式启用既有功能开关并加本地Kimi fixture来源标签，再只读原Plan/Approval并核对无新增调用，不改产品布局或默认开关。
+
+最终验收构建带“323 Kimi 本地HTTPS替身 · 同案合成采购 · 非真实模型”标签，原Plan只读刷新及展开任务截图1项通过；8张图保留分阶段来源，`index.html`优先展示最终3张只读截图。新增`playwright.s5-323-kimi.config.ts`专门选择需要显式隔离runtime的Kimi同案用例，与既有*.real用例一致，不纳入默认无隔离配置的浏览器套件；该专属用例已实际运行，不跳过原CI测试。正常提交hooks和候选CI身份另在同目录回执绑定。
