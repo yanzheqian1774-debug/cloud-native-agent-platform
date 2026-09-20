@@ -1483,3 +1483,25 @@ G1实施计划：增加 authority owner 内的追加式委托/撤销/授权关�
 演示事实：`real-demo/recovery-1218-readback.json`保留原唯一v5 `FAILED_PRE_DISPATCH / PROVIDER_REQUEST_INVALID`，原理解/规划ledger分别12次/USD10及8次/USD10，reservation/settlement均0。一次性审批脚本保留原版本副本，新增与正式入口共用的manifest解析、认证器/独立管理权限、原context和budget核验；`--preflight`严格只读，不创建/刷新session、不批准、不派发。若需有效session，单独的`--prepare-session`仅走正式登录，认证写入与无副作用预检分开记录。只有新候选门禁/CI及实际部署回执有效、预检通过后才交Human输入APPROVE_TASK。真实调用仍受原2026-09-21 02:34:34.697 Asia/Shanghai截止；正式委托批准前不派发。
 
 后续source/tree、hooks、普通push、直接候选/临时合并树CI身份、实际部署及无副作用预检结果追加记录于`/Users/tristan/Documents/s5-v023-arch-323-acceptance/task-delegation/recovery-delivery.json`，原计划/Registry为本Session登记入口。保持Draft/OPEN；真实模型质量NOT_MEASURED，D3/Runtime/OpenClaw/客户端不实施。
+
+### 24.3 Human V2 开发验证修订决定与G1计划（2026-09-20）
+
+Decision Status: Accepted；Implementation Status: Not Started（本节登记时）。Human明确批准V2准入语义、G1实施及门禁通过后的原323本地隔离实例集中激活。17:03持续开发授权通过正式追加修订落实，至完成或Human暂停/撤销；旧12U/8P、USD10/用途及绝对调用窗口不再是该任务开发验证上限。保留旧批准、UNKNOWN、预留和计量；仅323同一隔离scope/subject/context/Problem、原ledger、既定Kimi配置及合成案例。1U+4P仅首批建议。串行、单次期限/输出上限、回收、撤销、独立签发与审计继续执行。
+
+显式接受已知UNKNOWN可能远端继续处理/计费的风险；owner核验原worker已回收且无cleanup failure、同案绑定及新调用标识/幂等键后准入诊断后继。新的UNKNOWN需保存并审计后再准入，不能自动无限重发或忽略未知在途。独立DECIDE主体签发一次持续修订，调用方不能自批。保持Draft/OPEN，不修改321，不扩大生产部署、管理员权限、D3或业务执行。
+
+V2文档的read55期限变体及身份续期不在本次批准内，不自动实施。现有credential仍按实际有效期检查。
+
+G1：新增0029 authority追加修订及逐次诊断许可；正式session/CSRF API；原预算owner读取有效修订取代旧总额度/调用窗口但保留单次报价及累计计量；共享委托锁内精确许可和reservation校验；保留旧无修订行为与旧二进制拒绝。恢复许可绑定原规划UNKNOWN清单、receipt摘要、回收事实、精确Problem target与后继request key，每次消费由原invocation幂等约束保证。既有澄清后继语义不变，诊断关联为独立authority审计事实。
+
+验证：隔离64331 PG中验证独立签发、自批/跨scope拒绝、旧行为、旧额度/窗口替代、未知负债不变、未审计UNKNOWN/cleanup failure/在途拒绝、精确目标/键/配置绑定、并发幂等、撤销/credential有效期、重启及旧二进制保护；运行正常make check/hooks及原PR候选CI。门禁完成后原实例一致备份、排除旧writer、owner迁移、入口无副作用预检、一次独立签发、正式读回，再连续真实同案规划/确认/usage验证。恢复决定及只读起点回执位于real-demo/same-case/RECOVERY-ADMISSION-AND-ACTIVATION-V2.md及recovery-current-preparation-20260920.json；旧成果保留。
+
+### 24.4 V2实施与激活前恢复回执（2026-09-20）
+
+新增0029追加开发修订、逐次诊断许可及PAUSED/COMPLETED停止事实；原28/24账本/批准不改。独立DECIDE签发绑定原digest、generation、scope/subject/context及两段精确配置；预算owner仅对正式修订取消旧累计次数/金额/调用窗口限制，单次报价、Token和配置检查保留。后继planning request key精确绑定原UNKNOWN清单、receipt/reservation、同案target和诊断原因；owner验证持久reaped且PID不在，不能据此宣称远端停止。未列UNKNOWN、在途预留、cleanup failure和已结算但缺终态的规划均阻断。调用者停止只能收紧权限，不能恢复/扩权。
+
+首轮完整门禁保留2129 passed / 201 skipped / 1 failure：Kimi CLOSE替身在1秒总期限内停于STARTUP；单次定向回执随后实际到达CLOSE(0.3788s)、总期限1.0008s并回收，原调度原因未证实。查明spawn provider导入了无关数据库/装配模块，移至父进程工厂，独立进程验证不导入psycopg/bootstrap；未增大期限或弱化阶段断言。原fixture仍patch旧导入名导致54装配错误，已改为相同存储替身注入新工厂；保留失败日志。装配/CLOSE定向17 passed。中间态make check为2133 passed / 201 skipped；随后终态缺口防护及最终委托/恢复定向37 passed。实际eac22dd旧二进制verify/migrate拒绝29扩展库测试1 passed。最终候选的正常hooks、只读ruff/format和CI绑定由development-v2回执记录，不能把中间态当最终候选证据。
+
+真实库无副作用入口预检比较125表完全一致，原3预留/2结算、原规划UNKNOWN及receipt、零Plan/Approval/执行对象保留；本阶段真实调用0。集中入口real-demo/323-development-v2-activate.command待最终source/tree、entry hashes及候选CI绑定后使用：一次Human输入执行原323服务停止、一致备份、正式装配迁移、精确版本/原账本核对、独立主体签发及读回。调用者继续入口为continue_development_v2.py，无独立签发凭据消费。既定connect5/read30/total60和输出8192不变；不纳入期限变体、身份续期、生产部署、321或D3。任何激活启动回执已存在时先恢复核对，不重复执行入口。
+
+正常提交hook首次未通过：2133 passed / 201 skipped / 1 failure，未提交。失败为既有理解adapter缺失usage用例，worker在IPC耗时2.056s达到原2s连接期限，尚未连接；reaped=true，原回执保留于development-v2/commit-hooks.log。一次保持原断言/配置的诊断记录IPC0.1919s、总0.2418s、RESULT_ACCEPTED并回收；未复现失败。主机10逻辑核、观察到负载14–16，存在调度延迟可能，但不将该推断当已证根因。未修改321 adapter、原期限或断言；诊断后只作一次完整正常hook复核，其结果单独保存，不用定向通过冒充完整门禁。

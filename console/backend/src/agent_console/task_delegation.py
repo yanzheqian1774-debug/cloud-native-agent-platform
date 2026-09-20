@@ -102,7 +102,9 @@ def available(connection):
     )
 
 
-def active(connection, identity, *, lock=False):
+def active(connection, identity, *, lock=False, allow_expired=False):
+    from .task_development import revision, stopped
+
     row = connection.execute(
         "SELECT d.*,control.revoked FROM authorization_admin.task_delegations d "
         "JOIN authorization_admin.task_delegation_control control "
@@ -123,7 +125,12 @@ def active(connection, identity, *, lock=False):
         (identity,),
     ).fetchone()
     if (
-        now >= row["expires_at"]
+        (
+            now >= row["expires_at"]
+            and not allow_expired
+            and not revision(connection, identity)
+        )
+        or stopped(connection, identity)
         or row["revoked"]
         or revoked
         or generation is None
@@ -299,6 +306,24 @@ class TaskDelegationService:
             c.execute(
                 "INSERT INTO authorization_admin.task_delegation_migrations "
                 "VALUES(28,%s) ON CONFLICT DO NOTHING",
+                (checksum,),
+            )
+
+        path = Path(__file__).parents[2] / "migrations/0029_task_development.sql"
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.repository.connection_scope() as c:
+            c.execute("SELECT pg_advisory_xact_lock(3230028)")
+            row = c.execute(
+                "SELECT checksum FROM authorization_admin.schema_migrations "
+                "WHERE version=29"
+            ).fetchone()
+            if row and row["checksum"] != checksum:
+                raise AuthorityError("TASK_DELEGATION_SCHEMA_INCOMPATIBLE")
+            c.execute(path.read_text())
+            c.execute(
+                "INSERT INTO authorization_admin.schema_migrations"
+                "(version,checksum,adapter) VALUES(29,%s,'task-development-v1') "
+                "ON CONFLICT DO NOTHING",
                 (checksum,),
             )
 
@@ -590,9 +615,11 @@ class TaskDelegationService:
                 return previous["decision_id"]
             if request.status is not GrantRequestStatus.PENDING:
                 raise AuthorityError("AUTHORIZATION_STATE_STALE")
-            expires = min(
-                row["expires_at"], credential.expires_at, now + timedelta(hours=8)
-            )
+            from .task_development import revision
+
+            expires = min(credential.expires_at, now + timedelta(hours=8))
+            if not revision(c, identity):
+                expires = min(expires, row["expires_at"])
             decision_id = "grant-decision-" + secrets.token_hex(16)
             decision = GrantDecision(
                 decision_id,
@@ -684,7 +711,12 @@ class TaskDelegationService:
                 "delegation_id=%s",
                 (identity,),
             ).fetchone()
+            from .task_development import revision, stopped
+
             return {
+                "development_stopped": stopped(c, identity),
+                "development_revision": revision(c, identity),
+                "original_digest": row["digest"],
                 "delegation_id": identity,
                 "approval": row["record"],
                 "issuer_id": row["issuer_id"],
@@ -716,12 +748,35 @@ def grant_condition(connection):
     """SQL predicate for existing grant readers; legacy grants remain unchanged."""
     if not available(connection):
         return ""
+    has_extension = (
+        connection.execute(
+            "SELECT to_regclass("
+            "'authorization_admin.task_development_revisions') AS name"
+        ).fetchone()["name"]
+        is not None
+    )
+    expiry = "d.expires_at<=clock_timestamp()"
+    if has_extension:
+        expiry = (
+            "(" + expiry + " AND NOT EXISTS(SELECT 1 FROM "
+            "authorization_admin.task_development_revisions v "
+            "WHERE v.delegation_id=d.delegation_id))"
+        )
+    stop_predicate = ""
+    if has_extension:
+        stop_predicate = (
+            "EXISTS(SELECT 1 FROM authorization_admin.task_development_stops st "
+            "WHERE st.delegation_id=d.delegation_id) OR "
+        )
     return (
         " AND NOT EXISTS (SELECT 1 FROM "
         "authorization_admin.task_delegation_decisions td JOIN "
         "authorization_admin.task_delegations d USING(delegation_id) WHERE "
-        "td.decision_id=g.decision_id AND (d.expires_at<=clock_timestamp() OR "
-        "EXISTS(SELECT 1 FROM authorization_admin.task_delegation_revocations r "
+        "td.decision_id=g.decision_id AND ("
+        + expiry
+        + " OR "
+        + stop_predicate
+        + "EXISTS(SELECT 1 FROM authorization_admin.task_delegation_revocations r "
         "WHERE r.delegation_id=d.delegation_id) OR d.generation<>(SELECT "
         "generation FROM authorization_admin.active_generation WHERE "
         "singleton=true) OR d.recovery_epoch<>g.recovery_epoch)) "
@@ -745,6 +800,9 @@ def guard_budget(connection, budget, invocation, quote):
     if not link:
         return
     row, _ = active(connection, link["delegation_id"], lock=True)
+    from .task_development import permitted_unknowns, revision
+
+    permitted = permitted_unknowns(connection, row, invocation)
     limits = row["record"][link["purpose"]]
     if getattr(budget, "delegation_configuration", None) != limits:
         raise AuthorityError("TASK_DELEGATION_CONFIGURATION_MISMATCH")
@@ -760,14 +818,30 @@ def guard_budget(connection, budget, invocation, quote):
     ):
         raise AuthorityError("TASK_DELEGATION_OUTCOME_UNKNOWN")
     unknown_plans = connection.execute(
-        "SELECT i.invocation_id FROM workflow_planning.invocations i JOIN "
+        "SELECT i.invocation_id FROM workflow_planning.invocations i LEFT JOIN "
         "workflow_planning.invocation_results r "
         "USING(namespace,security_domain,invocation_id) WHERE i.namespace=%s AND "
         "i.security_domain=%s AND i.actor_id=%s AND "
-        "r.record->>'technical_status'='OUTCOME_UNKNOWN'",
-        (row["tenant_id"], row["security_domain"], row["subject_id"]),
+        "(r.record->>'technical_status'='OUTCOME_UNKNOWN' "
+        "OR (i.invocation_id<>%s AND r.invocation_id IS NULL AND EXISTS(SELECT 1 FROM "
+        "draft_provider_budget.reservations br "
+        "JOIN draft_provider_budget.settlements bs "
+        "USING(namespace,security_domain,ledger_id,reservation_id) "
+        "WHERE br.namespace=i.namespace "
+        "AND br.security_domain=i.security_domain "
+        "AND br.invocation_id=i.invocation_id)))",
+        (
+            row["tenant_id"],
+            row["security_domain"],
+            row["subject_id"],
+            invocation.invocation_id,
+        ),
     ).fetchall()
-    if any(planning_record(connection, row, r["invocation_id"]) for r in unknown_plans):
+    if any(
+        planning_record(connection, row, r["invocation_id"])
+        and r["invocation_id"] not in permitted
+        for r in unknown_plans
+    ):
         raise AuthorityError("TASK_DELEGATION_OUTCOME_UNKNOWN")
     if link["purpose"] == "understanding":
         records = draft_records(connection, row)
@@ -791,11 +865,12 @@ def guard_budget(connection, budget, invocation, quote):
         "(s.namespace,s.security_domain,s.ledger_id,s.reservation_id)="
         "(r.namespace,r.security_domain,r.ledger_id,r.reservation_id) "
         "WHERE l.delegation_id=%s AND s.reservation_id IS NULL "
-        "AND r.invocation_id<>%s LIMIT 1",
-        (row["delegation_id"], invocation.invocation_id),
+        "AND r.invocation_id<>%s AND NOT (r.invocation_id=ANY(%s)) LIMIT 1",
+        (row["delegation_id"], invocation.invocation_id, list(permitted)),
     ).fetchone()
     if pending:
         raise AuthorityError("TASK_DELEGATION_PENDING_RESERVATION")
+    return bool(revision(connection, row["delegation_id"]))
 
 
 def lock_grant_delegations(connection, context, grant):

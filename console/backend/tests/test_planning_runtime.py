@@ -170,8 +170,8 @@ def formal(tmp_path, monkeypatch):
         "_workbench_startup_error": "TEST",
     }.items():
         monkeypatch.setattr(app, name, value)
-    monkeypatch.setattr(runtime, "PostgresModelGovernanceRepository", Store)
-    monkeypatch.setattr(runtime, "PostgresProviderCallBudget", Store)
+    monkeypatch.setattr(runtime, "create_model_repository", Store)
+    monkeypatch.setattr(runtime, "create_provider_budget", Store)
     monkeypatch.setattr(
         runtime, "PlanningModelResolver", lambda *_: model_fixture.RecordingResolver([])
     )

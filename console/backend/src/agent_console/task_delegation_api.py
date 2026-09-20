@@ -5,6 +5,14 @@ from pydantic import ValidationError
 
 from .authority_contracts import AuthorityError
 from .task_delegation import TaskApproval
+from .task_development import (
+    DevelopmentRevision,
+    DevelopmentStop,
+    DiagnosticAdmission,
+    admit,
+    revise,
+    stop,
+)
 
 
 def install_task_delegation_routes(service):
@@ -35,6 +43,36 @@ def install_task_delegation_routes(service):
         def read(identity: str, request: Request):
             _, context = authenticate(request)
             return service.read(context, identity)
+
+        @app.post(prefix + "/{identity}/development-revision")
+        async def development_revision(identity: str, request: Request):
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            try:
+                spec = DevelopmentRevision.model_validate_json(await request.body())
+            except ValidationError:
+                raise AuthorityError("TASK_DEVELOPMENT_INVALID") from None
+            return revise(service, context, identity, spec)
+
+        @app.post(prefix + "/{identity}/diagnostic-admissions")
+        async def diagnostic_admission(identity: str, request: Request):
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            try:
+                spec = DiagnosticAdmission.model_validate_json(await request.body())
+            except ValidationError:
+                raise AuthorityError("TASK_DIAGNOSTIC_INVALID") from None
+            return admit(service, context, identity, spec)
+
+        @app.post(prefix + "/{identity}/development-stop")
+        async def development_stop(identity: str, request: Request):
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            try:
+                spec = DevelopmentStop.model_validate_json(await request.body())
+            except ValidationError:
+                raise AuthorityError("TASK_DEVELOPMENT_INVALID") from None
+            return stop(service, context, identity, spec)
 
         @app.post(prefix + "/{identity}/revoke")
         def revoke(identity: str, request: Request):

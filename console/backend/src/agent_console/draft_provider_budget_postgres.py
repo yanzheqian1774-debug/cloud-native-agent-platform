@@ -197,7 +197,9 @@ class PostgresProviderCallBudget:
             with self._connection() as connection:
                 from .task_delegation import guard_budget
 
-                guard_budget(connection, self, invocation, quote)
+                continuous_development = guard_budget(
+                    connection, self, invocation, quote
+                )
                 policy = connection.execute(
                     "SELECT call_cap,total_cost_cap_microusd "
                     "FROM draft_provider_budget.policies WHERE namespace=%s "
@@ -230,7 +232,7 @@ class PostgresProviderCallBudget:
                     "AND r.ledger_id=%s",
                     scope,
                 ).fetchone()
-                if (
+                if not continuous_development and (
                     totals["calls"] + 1 > policy["call_cap"]
                     or totals["cost"] + quote.worst_case_cost_microusd
                     > policy["total_cost_cap_microusd"]

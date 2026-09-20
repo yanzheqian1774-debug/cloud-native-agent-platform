@@ -1,13 +1,13 @@
 """Explicit planning composition, with no synthetic fallback or import-time IO."""
 
+from __future__ import annotations
+
 import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-
-from psycopg import Error as PsycopgError
-from psycopg_pool import PoolTimeout
+from typing import TYPE_CHECKING
 
 from .business_problem_domain import canonical_bytes
 from .draft_assistance import (
@@ -16,19 +16,17 @@ from .draft_assistance import (
     PreparedProviderRequest,
     ProviderBudgetQuote,
 )
-from .draft_assistance_bootstrap import GovernedProfileModelResolver, _profile
-from .draft_provider_budget_postgres import PostgresProviderCallBudget
-from .model_governance import ModelGovernanceError
-from .model_governance_postgres import PostgresModelGovernanceRepository
 from .openai_responses_draft_adapter import (
     ExactFileOpenAICredentialResolver,
     OpenAIResponsesConfiguration,
     OpenAIResponsesDraftTransport,
 )
-from .plan_suggestion_bootstrap import PlanningInvocationDependencies
 from .plan_suggestion_domain import ExactReference, PlanningError
 from .plan_suggestion_invocation import PlanningProfile
 from .plan_suggestion_policy import INSTRUCTIONS, output_schema
+
+if TYPE_CHECKING:
+    from .plan_suggestion_bootstrap import PlanningInvocationDependencies
 
 
 def planning_transport(configuration):
@@ -277,6 +275,8 @@ def budget_quote(configuration):
 
 class PlanningModelResolver:
     def __init__(self, repository, configuration, profile):
+        from .draft_assistance_bootstrap import GovernedProfileModelResolver
+
         self.resolver = GovernedProfileModelResolver(repository, configuration)
         self.profile = profile
 
@@ -368,6 +368,18 @@ class PlanningRuntime:
             self.model_repository.close()
 
 
+def create_model_repository(*args, **kwargs):
+    from .model_governance_postgres import PostgresModelGovernanceRepository
+
+    return PostgresModelGovernanceRepository(*args, **kwargs)
+
+
+def create_provider_budget(*args, **kwargs):
+    from .draft_provider_budget_postgres import PostgresProviderCallBudget
+
+    return PostgresProviderCallBudget(*args, **kwargs)
+
+
 def build_planning_runtime(
     *,
     database_url,
@@ -376,6 +388,14 @@ def build_planning_runtime(
     allow_local_https_mock=False,
 ):
     """Called by app's formal startup. Tests may explicitly allow loopback HTTPS."""
+    # Database and app assembly imports belong to the parent, not spawned transport.
+    from psycopg import Error as PsycopgError
+    from psycopg_pool import PoolTimeout
+
+    from .draft_assistance_bootstrap import _profile
+    from .model_governance import ModelGovernanceError
+    from .plan_suggestion_bootstrap import PlanningInvocationDependencies
+
     model_repository = budget = None
     try:
         path = Path(runtime_configuration_path)
@@ -399,11 +419,11 @@ def build_planning_runtime(
         commitment = pepper_path.read_bytes()
         if len(commitment) < 32:
             raise ValueError
-        model_repository = PostgresModelGovernanceRepository(
+        model_repository = create_model_repository(
             database_url, migration_path=migrations_path / "0019_model_governance.sql"
         )
         model_repository.migrate()
-        budget = PostgresProviderCallBudget(
+        budget = create_provider_budget(
             database_url,
             migration_path=migrations_path / "0024_draft_provider_budget.sql",
             profile=profile,

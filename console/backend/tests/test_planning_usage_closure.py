@@ -238,7 +238,7 @@ def test_formal_service_persists_metering_before_business_finish(
         budgets.append(value)
         return value
 
-    monkeypatch.setattr(runtime, "PostgresProviderCallBudget", owner)
+    monkeypatch.setattr(runtime, "create_provider_budget", owner)
     original_exchange = runtime.OpenAIResponsesDraftTransport.exchange
 
     def metered(self, **kwargs):

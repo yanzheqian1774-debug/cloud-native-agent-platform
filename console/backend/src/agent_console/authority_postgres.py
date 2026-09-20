@@ -151,14 +151,22 @@ class PostgresAuthorityRepository:
     def _valid_delegation_extension(self, schema, rows):
         if schema != "authorization_admin":
             return False
-        path = self.migration_path.parent / "0028_task_delegation.sql"
-        return path.is_file() and rows == [
-            {
-                "version": 28,
-                "adapter": "task-delegation-v1",
-                "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
-            }
-        ]
+        expected = []
+        for version, name, adapter in (
+            (28, "0028_task_delegation.sql", "task-delegation-v1"),
+            (29, "0029_task_development.sql", "task-development-v1"),
+        ):
+            path = self.migration_path.parent / name
+            if not path.is_file():
+                return False
+            expected.append(
+                {
+                    "version": version,
+                    "adapter": adapter,
+                    "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+        return rows in (expected[:1], expected)
 
     def close(self) -> None:
         self.pool.close()
