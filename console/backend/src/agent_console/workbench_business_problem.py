@@ -48,6 +48,10 @@ class PlanVersionQuery(BaseModel):
     version: int = Field(ge=1)
 
 
+class CreateCaseBusinessProblem(CreateBusinessProblem):
+    draftInvocationId: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 @dataclass(frozen=True, slots=True)
 class OwnerPrincipal:
     principal_id: str
@@ -83,14 +87,28 @@ class BusinessProblemOwnerAdapter:
                     raise WorkbenchOwnerError("CREATOR_RECEIPT_REQUIRED", 409)
                 result = service.create_problem(
                     principal,
-                    CreateBusinessProblem.model_validate(call.payload),
+                    CreateBusinessProblem.model_validate(
+                        {
+                            k: v
+                            for k, v in call.payload.items()
+                            if k != "draftInvocationId"
+                        }
+                    ),
                     connection=call.connection,
                     receipt_policy_generation=call.policy_generation,
                     receipt_recovery_epoch=call.recovery_epoch,
                 )
                 return (
                     self.task_binding(
-                        call.connection, call.context, "BUSINESS_PROBLEM", result
+                        call.connection,
+                        call.context,
+                        "BUSINESS_PROBLEM",
+                        result,
+                        **(
+                            {"draft_invocation_id": call.payload["draftInvocationId"]}
+                            if call.payload.get("draftInvocationId")
+                            else {}
+                        ),
                     )
                     if self.task_binding
                     else result
@@ -332,7 +350,7 @@ def business_problem_operations(
             "CREATE_PROBLEM",
             "POST",
             f"{PREFIX}/problems",
-            CreateBusinessProblem,
+            CreateCaseBusinessProblem,
             None,
             _problem_collection,
             handler,

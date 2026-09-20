@@ -9,12 +9,14 @@ from pydantic import Field, model_validator
 from .plan_suggestion_domain import (
     Digest,
     ExactReference,
+    FlexiblePlanSemantics,
     Identity,
     Immutable,
     PlanSemantics,
     ProblemTarget,
     Text,
 )
+from .planning_contracts import PlanningPolicy
 
 PURPOSE = "CONFIRMED_PROBLEM_PLAN_SUGGESTION"
 
@@ -36,6 +38,7 @@ class PlanningRequest(Immutable):
     answers: tuple[Text, ...] = Field(default=(), max_length=16)
     idempotency_key: Identity
     predecessor_invocation_id: Identity | None = None
+    policy: PlanningPolicy | None = None
 
 
 class PlanningInvocationTarget(Immutable):
@@ -53,7 +56,9 @@ class PlanningInvocationTarget(Immutable):
     resource_snapshot: ExactReference | None
     input_commitment: Digest
     output_schema: Literal[
-        "plan-suggestion-output.v1", "planning-diagnostic-output.v1"
+        "plan-suggestion-output.v1",
+        "plan-suggestion-output.v2",
+        "planning-diagnostic-output.v1",
     ] = "plan-suggestion-output.v1"
     policy_version: Identity
 
@@ -82,3 +87,7 @@ class PlanningProviderResult(Immutable):
         elif self.questions or self.semantics is not None:
             raise ValueError("PLANNING_RESULT_INVALID")
         return self
+
+
+class FlexiblePlanningProviderResult(PlanningProviderResult):
+    semantics: FlexiblePlanSemantics | None = None

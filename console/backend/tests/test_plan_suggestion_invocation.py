@@ -22,9 +22,17 @@ from test_plan_suggestion_v2 import proposal, repository  # noqa: F401
     "outcome",
     ["valid", "clarification", "invalid", "unknown", "denied", "budget", "input"],
 )
-def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noqa: F811
+@pytest.mark.parametrize("modern_policy", [False, True])
+def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_policy):  # noqa: F811
     now = datetime.now(UTC)
     sample = proposal()
+    if modern_policy:
+        from agent_console.plan_suggestion_domain import FlexiblePlanSemantics
+        from test_planning_contracts import modern
+
+        sample = sample.model_copy(
+            update={"semantics": FlexiblePlanSemantics.model_validate(modern())}
+        )
     scope = ScopeIdentity("tenant-a", "quality")
     principal = SimpleNamespace(principal_id="employee:17")
     observed = []
@@ -124,7 +132,9 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
         ),
     )
     request = PlanningRequest(
-        target=sample.semantics.target, idempotency_key="same-key"
+        target=sample.semantics.target,
+        idempotency_key="same-key",
+        policy=sample.semantics.policy if modern_policy else None,
     )
     if outcome in {"denied", "budget", "input"}:
         from agent_console.draft_assistance import DraftAssistanceError
@@ -143,6 +153,23 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome):  # noq
     result = service.begin(principal, request)
     assert service.begin(principal, request) == result
     assert provider.calls == 1
+    if modern_policy:
+        assert result["invocation"]["request"]["policy"] == request.policy.model_dump(
+            mode="json"
+        )
+        assert result["invocation"]["submitted_at"]
+        if outcome == "valid":
+            assert result["result"]["generated_at"]
+            assert result["result"]["validation"]["status"] == "DECLARED_CONTRACT_VALID"
+            with repository.transaction(
+                scope, result["result"]["proposal"]["proposal_id"], authorized=True
+            ) as cursor:
+                history = repository.history(
+                    cursor, scope, result["result"]["proposal"]["proposal_id"]
+                )
+                assert history["conversation"][0]["request"][
+                    "policy"
+                ] == request.policy.model_dump(mode="json")
     assert result["facts_status"] == "RECORDED"
     target = result["invocation"]["target"]
     assert target["purpose"] == "CONFIRMED_PROBLEM_PLAN_SUGGESTION"

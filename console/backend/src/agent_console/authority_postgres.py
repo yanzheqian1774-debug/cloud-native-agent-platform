@@ -155,6 +155,7 @@ class PostgresAuthorityRepository:
         for version, name, adapter in (
             (28, "0028_task_delegation.sql", "task-delegation-v1"),
             (29, "0029_task_development.sql", "task-development-v1"),
+            (30, "0030_task_cases.sql", "task-cases-v1"),
         ):
             path = self.migration_path.parent / name
             if not path.is_file():
@@ -166,7 +167,7 @@ class PostgresAuthorityRepository:
                     "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
                 }
             )
-        return rows in (expected[:1], expected)
+        return any(rows == expected[:n] for n in range(1, len(expected) + 1))
 
     def close(self) -> None:
         self.pool.close()

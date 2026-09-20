@@ -87,7 +87,7 @@ for(const width of [1500,1366])test(`V323 planning layout and interactions ${wid
  await page.setViewportSize({width,height:width===1500?1050:768});const state=await planning(page);
  await expect(page.locator('.planning-stage')).toHaveCount(3);
  for(const task of await page.locator('.planning-task').all()){await expect(task.locator(':scope > summary')).toContainText('职责：');await expect(task.locator(':scope > summary')).toContainText('数字员工：');}
- if(width===1500){await expect(page.locator('.planning-goal')).toBeInViewport({ratio:1});await expect(page.locator('.planning-task').last()).toBeInViewport({ratio:1});await expect(page.getByRole('button',{name:'确认计划',exact:true})).toBeInViewport({ratio:1});}
+ if(width===1500){await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();await page.locator('.planning-goal').scrollIntoViewIfNeeded();await expect(page.locator('.planning-goal')).toBeInViewport({ratio:1});await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();await page.getByRole('button',{name:'确认计划',exact:true}).scrollIntoViewIfNeeded();await expect(page.getByRole('button',{name:'确认计划',exact:true})).toBeInViewport({ratio:1});await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();}
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('07-goal-and-plan.png')});
  const task=page.locator('.planning-task').nth(1);await task.locator(':scope > summary').click();await expect(task).toContainText('读取快照结果');await expect(task).toContainText('检查缺失日期与来源冲突');
@@ -136,40 +136,43 @@ test('V323 formal planning errors are visible and do not create or execute',asyn
   });
   await page.goto('/work/plan?problem=test:323');
   const readBack=page.waitForResponse(response=>response.url().endsWith('/planning-v2/invocations/failed%3A323'));
-  await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+  await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();
   await readBack;
   await page.reload();
   await expect(page.getByRole('alert')).toContainText('没有创建建议、批准或执行');
-  await expect(page.getByRole('button',{name:'生成建议计划',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'依据已确认目标生成建议',exact:true})).toBeDisabled();
   expect(calls).toBe(1);
   expect(reads).toBeGreaterThanOrEqual(2);
-  expect(writes).toEqual(['/api/workbench/v1/planning-v2/invocations']);
+  expect(writes).toEqual(['/api/workbench/v1/planning-v2/preflight','/api/workbench/v1/planning-v2/invocations']);
 });
 
 test('V323 missing planning configuration is explicit and clarification retains answers',async({page})=>{
   const requests:Record<string,unknown>[]=[];let missing=true;
-  const value=(id:string)=>({invocation:{target:{invocation_id:id}},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['请补充统计日期或口径']},facts_status:'RECORDED'});
+  const value=(id:string)=>({invocation:{target:{invocation_id:id},request:requests[Number(id.split(':').at(-1))-1]},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['请补充统计日期或口径']},facts_status:'RECORDED'});
   await page.route('**/api/workbench/v1/**',async route=>{
     const path=new URL(route.request().url()).pathname;
     if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:323',tenantId:'isolated-323',securityDomain:'test'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'test'}});
     if(path.includes('/planning-input/'))return route.fulfill({json:{result:{target:{},title:'受控规划',description:'仅测试接线'}}});
+    if(path.endsWith('/planning-v2/preflight')&&missing)return route.fulfill({status:503,json:{reasonCode:'PLANNING_NOT_CONFIGURED'}});
     if(path.endsWith('/planning-v2/invocations')){
       if(missing)return route.fulfill({status:503,json:{reasonCode:'PLANNING_NOT_CONFIGURED'}});
       requests.push(route.request().postDataJSON());return route.fulfill({json:{result:value(`clarification:${requests.length}`)}});
     }
-    if(path.includes('/planning-v2/invocations/'))return route.fulfill({json:{result:value(path.split('/').at(-1)!)}});
+    if(path.includes('/planning-v2/invocations/'))return route.fulfill({json:{result:value(decodeURIComponent(path.split('/').at(-1)!))}});
     return route.fulfill({json:{result:{}}});
   });
   await page.goto('/work/plan?problem=test:323');
-  await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+  await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('PLANNING_NOT_CONFIGURED');
   expect(requests).toHaveLength(0);missing=false;
-  await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
-  await page.getByLabel('补充回答').fill('2026-09-18');
-  await page.getByRole('button',{name:'提交补充并生成建议'}).click();
-  await expect(page.getByLabel('补充回答')).toHaveValue('');
-  await page.getByLabel('补充回答').fill('纠正：仅公司A，不含已取消订单');
-  await page.getByRole('button',{name:'提交补充并生成建议'}).click();
+  await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();
+  await page.getByLabel('补充信息或提出方案修改').fill('2026-09-18');
+  await page.getByRole('button',{name:'提交规划补充'}).click();
+  await expect(page.getByLabel('补充信息或提出方案修改')).toHaveValue('');
+  await page.reload();
+  await expect(page.getByText('2026-09-18',{exact:true})).toBeVisible();
+  await page.getByLabel('补充信息或提出方案修改').fill('纠正：仅公司A，不含已取消订单');
+  await page.getByRole('button',{name:'提交规划补充'}).click();
   await expect.poll(()=>requests.length).toBe(3);
   expect(requests[2].answers).toEqual(['2026-09-18','纠正：仅公司A，不含已取消订单']);
   expect(page.url()).not.toContain('公司A');

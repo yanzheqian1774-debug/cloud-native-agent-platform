@@ -291,9 +291,23 @@ def main():
                         "questions": ["请补充测试快照时点和数据来源说明。"],
                     }
                 )
-            return json.dumps(
-                {"kind": "VALID_SUGGESTION", "semantics": saved["semantics"]}
-            )
+            semantics = json.loads(json.dumps(saved["semantics"]))
+            if request.policy:
+                from agent_console.planning_contracts import OUTPUTS, PROCUREMENT
+
+                semantics.update(
+                    schema_version="planning.v3",
+                    policy=request.policy.model_dump(mode="json"),
+                )
+                for index, task in enumerate(semantics["tasks"]):
+                    task.update(
+                        operation=PROCUREMENT[index],
+                        output_kind=OUTPUTS[PROCUREMENT[index]],
+                        input_kinds=[OUTPUTS[PROCUREMENT[index - 1]]]
+                        if index
+                        else ["CONTEXT"],
+                    )
+            return json.dumps({"kind": "VALID_SUGGESTION", "semantics": semantics})
 
     identities = iter(())
 

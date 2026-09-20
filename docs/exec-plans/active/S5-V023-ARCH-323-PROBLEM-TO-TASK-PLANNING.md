@@ -1597,3 +1597,57 @@ Human本轮授权同任务新增独立成本合成案例；17:03持续开发验�
 **实际前置条件**：①Human审定D3 root/Task最小关系及无Workflow时matcher输入契约；②主控明确原owner文件ownership与实施授权；③候选owner授权reader和published exact资源确有可查询配置；④确定每Task operation/I/O及artifact大小上限，现采购Plan不能直接满足；⑤实例/Assignment只读权限与runtime观测来源；⑥隔离PG/合成测试范围及迁移兼容方案。前两项未接受、后四项未实际核实，当前不能标READY。资源缺失可交付准确BLOCKED快照，但不能宣称正向执行准入成立。
 
 **交付/停止**：提交代码/契约/针对性测试、owner能力矩阵、浏览器准备状态、source/tree/CI身份及恢复说明；不扩展到§13.8切片2真实执行或切片3验收。触及公共/冻结契约、需新增管理员权限、实际业务副作用或资源来源替换时先决策；不以多个Run假装同Run、不把人工复核任务当ARCH-264验收。
+
+## 25. 多场景策略、对话修订与第二案例（Human批准；G1实施计划）
+
+2026-09-20 Human明确批准：三阶段五任务由平台默认要求改为特定采购模板/显式强约束案例；规划模式版本化；确定性约束检查及确认前校验；目标/规划对话修订和真实时间；显式第二案例登记，复用原授权/ledger/UNKNOWN，受控验证后集中独立激活并完成真实成本案例。此决定接受§24.9所需精确case扩展，不追认旧采购Plan、不修改历史策略/摘要，也不授权D3或任何业务执行。原§24.7旧契约不符合结论保留；业务目标覆盖另列人工评估，不当作已执行验收。
+
+### 25.1 契约与兼容
+
+- 保留`planning.v2`、planning-suggestion.v1输出/旧省略策略请求的兼容路径及既有digest；新产品入口显式使用版本化策略，默认FREE，另选TEMPLATE_ASSISTED或STRICT_WORKFLOW。新增typed语义版本，显式绑定模式/template/要求/禁止operation集合；采购模板v1仅强约束模式强制read→validate→classify→aggregate→report，不以Task名字、数量或关键字代替职责检查。
+- 新Task声明受支持只读operation及typed输入/输出类别；生成前检查模式/template、相斥operation及目标标准引用，生成后及确认前验证operation/I/O/依赖兼容、所有criterion revision覆盖、目标/策略一致及required/prohibited约束。自由模式允许1–32 Task，仍无执行资格。结构化覆盖不证明rubric每一句自然语言均满足；文本矛盾和真实业务充分性须人工核对，不新增模型评价调用。
+- 新policy/schema摘要绑定invocation，新结果进入不可变Proposal successor及同一Plan后继确认。旧Plan/Approval/response/UNKNOWN/reservations和旧策略保持逐字不变。历史无时间字段显示未知，不用迁移时间或页面刷新补造发生时间。
+
+### 25.2 对话与持久化
+
+- 复用ConversationFrame/Composer及既有右栏。新规划请求持久保存有界对话输入、source target、策略、server submittedAt；结果另存generatedAt，确认沿用decidedAt，资源沿用checkedAt。读取经原exact授权；不将provider原始正文或秘密写入对话。
+- 规划页面支持补问回答/提出方案修改，通过source proposal exact ref生成后继，返回并读回才展示新建议；列出受影响标准/Task及前后差异。已确认旧Plan/Approval不改，新建议待确认。目标/标准纠正引导既有正式REVISE/Criteria successor，输入先显示待保存，正式响应后显示持久版本，并说明旧Plan仍绑定旧标准。
+- 恢复使用持久invocation/request key只读查询，刷新无POST/无模型重发；幂等payload冲突拒绝，UNKNOWN保持只读恢复。修正已确认引导；执行/验收明确暂未实现而非可操作阶段。
+
+### 25.3 原委托下的显式案例登记
+
+- 在现有authorization_admin中追加case enrollment及case→Problem绑定，不改原委托、V2修订或ledger。登记由原独立DECIDE签发，绑定新owner context、same task/subject/scope/generation/config、合成case描述digest及原三UNKNOWN receipt/reservation/回收事实；非已登记context不获权限，owner创建时原子绑定唯一Problem，不能收编采购对象。保留旧单案例路径。
+- 本次仅显式追加成本case；同task共享budget锁、配置和计量。两用途新调用可消费精确历史负债许可，原UNKNOWN保持未结、远端状态未知。新UNKNOWN/在途/cleanup failure仍阻断，逐次诊断沿正式owner核验和精确新key，不通配继承新失败。停止/撤销/credential/generation仍有效；无身份续期/主体替换/ledger替换。
+- 实施前查重新增0030 owner migration，沿checksum及旧二进制拒绝机制；所有创建/签发幂等、追加式审计。门禁后集中备份/原实例切换/迁移/独立登记/正式读回；已完成步骤只恢复不重做。
+
+### 25.4 验证、风险与交付
+
+受控验证覆盖：自由2/3/多Task、模板辅助不强制五Task、严格operation/I/O违例、策略相斥、criterion遗漏、目标纠正后stale拒绝、后继Plan确认保留旧批准；对话实际持久读回和刷新零POST；旧摘要/调用重放兼容；case自批/跨scope/未登记/跨case对象拒绝、原三UNKNOWN和费用不变、串行并发、未列UNKNOWN/撤销/重启/旧二进制保护。按新增变更跑定向、隔离PG、frontend lint/build与浏览器；正常hooks/普通push/新候选CI精确checkout。保留已有采购真实证据，不重新调用采购。
+
+成本case使用§24.9独立合成资料，由真实Kimi必要补问，记录费用归集纠正、保存标准、显式激活、自由规划、页面确认及刷新/PG/独立usage读回。缺账单不造支出/归因/节约；每次调用有目的，失败分层诊断、不盲重发。风险为将类型声明误称自然语言证明、对话提交不确定时重发、case授权过宽、历史digest漂移；分别用有限能力提示、持久恢复、精确绑定和历史兼容测试约束。保持原PR Draft/Session OPEN，无Assignment/Run/TaskRun/业务执行/资源发布/D3/merge/deploy/close。
+
+### 25.5 有限校验与采购业务覆盖的独立结论
+
+新规划使用`planning-policy.v2`和`planning.v3`语义；旧请求省略policy时仍使用原v1策略与v2语义，旧摘要算法不变。页面新发起默认FREE，模板辅助不强制图结构，强约束采购按类型化职责、阶段和生产者依赖验证。支持的只读操作为读取、校验、延期分类、汇总、分析、建议及报告；不增加执行operation实现。显式required/prohibited冲突在请求解析时阻断，确认再次检查类型化产物和标准引用覆盖。引用覆盖并不证明自然语言标准每一句已满足；页面明确保留人工含义复核，不能宣称检测任意自然语言冲突。
+
+采购原Plan的两个结论分别保留：
+
+| 维度 | 结论及证据边界 |
+| --- | --- |
+| 旧固定职责契约 | `SEMANTIC_CONTRACT_MISMATCH`；§24.7逐任务差异继续有效，不能因本次新策略追认旧Plan |
+| 业务目标覆盖评估 | 建议文本涉及快照读取/校验、延期识别、供应商与单位汇总、报告和人工复核，方向上覆盖当前rubric；合并职责及新增复核说明模型响应了该业务输入，但未证明全部口径、异常处理和证据条件得到正确实现 |
+| 实际业务验收 | `NOT_EXECUTED / NOT_EVALUATED`；没有账单/采购快照处理、任务产物、Criteria Evaluation或业务执行，不把建议中的人工复核当作已发生的独立验收 |
+
+对话使用原ConversationFrame/Composer；正式目标补充进入待保存修订，方案补充写入规划调用记录并产生后继建议。旧Plan/Approval不更新，新建议独立确认。消息提交、生成、批准和资源观察使用各自owner时间；没有历史生成时间则明确未提供。刷新使用原请求标识只读恢复，不自动重发。任务影响展示为持久化字段差异，不伪装自然语言理解结论。
+
+第二成本案例已通过原真实服务登记未授权context，仍`AUTHORIZATION_PENDING`；未触发模型，9预留/6结算、原Plan/Approval和零执行对象计数未变。确切案例签发使用独立issuer和0030扩展，仍在同一delegation、subject、scope、provider配置及两份原ledger内；不可复用采购业务对象的精确权限。签发绑定三条原UNKNOWN回执及回收事实，保留远端处理和潜在费用未知。新/其他pending调用仍阻断串行准入。
+
+### 25.6 当前验证与激活交接边界
+
+本轮全量Python检查2074 passed / 294 skipped；专用PostgreSQL验证另行执行，不把skip计为通过。新纯契约15项通过；初轮委托/恢复/规划PG 56项通过；新版持久化组合26项通过、1项测试准备失败（合成输入还在补问状态），补齐同context回答后该精确绑定/预留保留用例通过。失败原日志保留，不放宽DRAFT_READY门禁。前端lint/build通过；规划对话、丢失响应只读恢复和1500/1366布局检查通过。旧按钮名称和URL编码测试夹具按新交互修正，保留次数、正文、旧确认与刷新断言；完整最终结果、截图、正常提交hooks和CI checkout身份写入`real-demo/multi-scene-v3`回执，不在此提前声明候选通过。
+
+0030迁移属于原隔离数据库的显式扩展，旧二进制不能继续接入。激活操作应冻结候选、验证入口hash/CI树、备份原库、回收旧服务、正式owner迁移、切换新页面/服务，再由独立`human:demo323-approver`签发确切成本context；原调用方不可自签。三条UNKNOWN、预算预留、采购Plan/Approval和所有provider receipt逐表摘要在切换前后比较。若操作中断，读取阶段回执恢复剩余动作，不能重复全套操作。新真实成本调用尚未发生，真实响应/确认/持久读回仍为激活后的待完成项；保持Draft/OPEN。
+
+补充共享页面检查：26项对话/目标/标准浏览器用例中24项通过，2项定位为新增断言使用包裹式label的文本定位差异；改用同一精确可访问名称的textbox定位后2项通过，保留完整描述、前驱版本、写入次数、刷新及旧修订断言。新正式修订用例已证明发送时0写入，显式保存后1次精确后继写入，刷新仍1次；未以文本变化冒充后端成功。相关API夹具均明确为受控页面证据，不是真实Kimi或真实业务执行。
+
+入口预检更正：成本首个待授权context准备采用了普通文本，不符合既定理解v2 adapter的结构化上下文要求；未授权、未dispatch、未预留。保留原准备记录，在同一context登记结构化后继（独立invocation/key），使用正式Kimi adapter `prepare`零网络校验通过；集中签发及后续恢复绑定该context当前后继，不重发旧正文。`legacy-policy-readback.json`已验证当前兼容策略摘要与采购成功invocation的持久policy_digest完全相同。

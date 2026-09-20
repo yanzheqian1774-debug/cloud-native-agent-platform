@@ -9,6 +9,7 @@ from .plan_suggestion_application import PlanningApplication
 from .plan_suggestion_domain import PlanningConflict, PlanningError, ProposalRevision
 from .plan_suggestion_postgres import PostgresPlanningRepository
 from .plan_suggestion_resources import EmployeePlanningReader, PlanningResourceResolver
+from .planning_contracts import validation_report
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_business_problem import OwnerPrincipal
 from .workbench_owner_authorization import WorkbenchOwnerError
@@ -108,6 +109,15 @@ class PlanningOwnerAdapter:
                     "digest": proposal.digest,
                     "execution_status": "NOT_STARTED",
                     "snapshot": snapshot["record"] if snapshot else None,
+                    "validation": validation_report(proposal.semantics),
+                    "generated_at": next(
+                        (
+                            m["generated_at"]
+                            for m in history["conversation"]
+                            if m["invocation_id"] == proposal.invocation_id
+                        ),
+                        None,
+                    ),
                 }
         except PlanningConflict as exc:
             raise WorkbenchOwnerError(str(exc), 409) from exc

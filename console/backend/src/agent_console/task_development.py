@@ -229,14 +229,16 @@ def admit(service, context, identity, spec):
 
 
 def permitted_unknowns(c, row, invocation):
-    """Each new planning request needs an exact permit; no wildcard carryover."""
+    """Only exact diagnostic permits or independently enrolled case liabilities."""
+    from .task_cases import historical_unknowns
     from .task_delegation import planning_record
 
     if not revision(c, row["delegation_id"]):
         return set()
+    historical = historical_unknowns(c, row, invocation)
     inv = planning_record(c, row, invocation.invocation_id)
     if inv is None:
-        return set()
+        return historical
     permit = c.execute(
         "SELECT a.record FROM authorization_admin.task_diagnostic_admissions a "
         "JOIN workflow_planning.invocations i ON i.request_key=a.request_key "
@@ -251,12 +253,12 @@ def permitted_unknowns(c, row, invocation):
         ),
     ).fetchone()
     if not permit:
-        return set()
+        return historical
     record = permit["record"]
     facts, target = unknown_facts(c, row, record["unknown_invocation_ids"])
     if facts != record["facts"] or target != inv["target"]["problem"]:
         raise AuthorityError("DIAGNOSTIC_TARGET_MISMATCH")
-    return {f["invocation_id"] for f in facts}
+    return historical | {f["invocation_id"] for f in facts}
 
 
 class DevelopmentStop(BaseModel):

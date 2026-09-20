@@ -7,6 +7,12 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .business_problem_domain import canonical_digest
+from .planning_contracts import (
+    ArtifactKind,
+    Operation,
+    PlanningPolicy,
+    validate_semantics,
+)
 
 Text = Annotated[str, Field(min_length=1, max_length=500)]
 Identity = Annotated[str, Field(min_length=1, max_length=200)]
@@ -116,7 +122,10 @@ class PlanSemantics(Immutable):
                 raise ValueError("PLAN_DEPENDENCY_CYCLE")
             completed.update(ready)
             pending = {key: t for key, t in pending.items() if key not in ready}
-        if self.scenario == "OVERDUE_PURCHASE_ORDERS":
+        if (
+            self.schema_version == "planning.v2"
+            and self.scenario == "OVERDUE_PURCHASE_ORDERS"
+        ):
             expected = (("T1",), ("T2a", "T2b"), ("T3a", "T3b"))
             if tuple(s.task_ids for s in self.stages) != expected:
                 raise ValueError("PROCUREMENT_STAGE_TASK_CONTRACT")
@@ -132,12 +141,34 @@ class PlanSemantics(Immutable):
         return canonical_digest(self.model_dump(mode="json"))
 
 
+class FlexiblePlanningTask(PlanningTask):
+    operation: Operation
+    input_kinds: tuple[ArtifactKind, ...] = Field(min_length=1, max_length=8)
+    output_kind: ArtifactKind
+
+
+class FlexiblePlanSemantics(PlanSemantics):
+    schema_version: Literal["planning.v3"] = "planning.v3"
+    policy: PlanningPolicy
+    tasks: tuple[FlexiblePlanningTask, ...] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def declared_contract(self):
+        validate_semantics(self)
+        return self
+
+
+VersionedSemantics = Annotated[
+    PlanSemantics | FlexiblePlanSemantics, Field(discriminator="schema_version")
+]
+
+
 class ProposalRevision(Immutable):
     proposal_id: Identity
     revision: int = Field(ge=1)
     predecessor_digest: Digest | None
     invocation_id: Identity
-    semantics: PlanSemantics
+    semantics: VersionedSemantics
 
     @property
     def digest(self):
@@ -188,7 +219,7 @@ class ConfirmedPlanRevision(Immutable):
     source_proposal_revision: int = Field(ge=1)
     source_proposal_digest: Digest
     predecessor_digest: Digest | None
-    semantics: PlanSemantics
+    semantics: VersionedSemantics
 
     @property
     def digest(self):

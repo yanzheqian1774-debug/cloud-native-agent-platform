@@ -2,13 +2,15 @@ import { WorkbenchRequestError } from "../api/businessWorkspace";
 
 export type ExactRef = { resource_id: string; revision_id: string; digest: string };
 export type Requirement = { requirement_id: string; kind: string; name: string; purpose: string; required: boolean; selected: ExactRef | null; preparation: string };
-export type Task = { task_id: string; title: string; responsibility: string; employee_requirement_id: string; depends_on: string[]; inputs: string[]; outputs: string[]; requirement_ids: string[] };
-export type Semantics = { title: string; business_rules: string[]; boundaries: string[]; stages: { stage_id: string; title: string; task_ids: string[] }[]; tasks: Task[]; requirements: Requirement[]; target: { problem: ExactRef; criteria: ExactRef } };
-export type Proposal = { proposal_id: string; revision: number; semantics: Semantics };
+export type Task = { task_id: string; title: string; responsibility: string; employee_requirement_id: string; depends_on: string[]; inputs: string[]; outputs: string[]; requirement_ids: string[]; criterion_revision_ids?: string[]; operation?: string; input_kinds?: string[]; output_kind?: string };
+export type PlanningPolicy = { schema_version: "planning-policy.v2"; mode: "FREE" | "TEMPLATE_ASSISTED" | "STRICT_WORKFLOW"; template: "procurement-overdue.v1" | null; required_operations: string[]; prohibited_operations: string[]; business_acceptance_as_task: false };
+export type Semantics = { schema_version?: string; policy?: PlanningPolicy; title: string; business_rules: string[]; boundaries: string[]; stages: { stage_id: string; title: string; task_ids: string[] }[]; tasks: Task[]; requirements: Requirement[]; target: { problem: ExactRef; criteria: ExactRef } };
+export type Proposal = { proposal_id: string; revision: number; invocation_id?: string; semantics: Semantics };
 export type Snapshot = { checked_at: string; observations: { requirement_id: string; status: string; reason: string }[] };
-export type ProposalRead = { proposal: Proposal; digest: string; snapshot: Snapshot | null };
+export type ProposalRead = { proposal: Proposal; digest: string; snapshot: Snapshot | null; generated_at?: string | null; validation?: { status: string; natural_language_coverage: string } };
 export type Confirmation = { plan: { plan_id: string; version: number; source_proposal_revision: number; semantics: Semantics }; digest: string; approval: { approval_decision_id: string; decided_at: string }; execution_status: "NOT_STARTED" };
-export type History = { proposals: Proposal[]; plans: Confirmation[] };
+export type Conversation = { invocation_id: string; request: {answers: string[]}; submitted_at: string; generated_at?: string; questions?: string[]; kind?: string };
+export type History = { conversation?: Conversation[]; proposals: Proposal[]; plans: Confirmation[] };
 
 async function request<T>(path: string, csrf?: string, body?: object): Promise<T> {
   const response = await fetch(`/api/workbench/v1/planning-v2/${path}`, {

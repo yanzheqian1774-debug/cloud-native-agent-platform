@@ -83,6 +83,47 @@ def install_planning_invocations(
 
             return invoke(request, read_usage)
 
+        @app.get(f"{PREFIX}/planning-v2/requests/{{request_key}}")
+        def recover_request(request: Request, request_key: str):
+            def recover(service, principal):
+                identity = service.invocations.find_request(
+                    service.application.scope(principal),
+                    principal.principal_id,
+                    request_key,
+                )
+                if identity is None:
+                    raise PlanningError("PLANNING_NOT_FOUND")
+                return service.read(principal, identity)
+
+            return invoke(request, recover)
+
+        @app.post(f"{PREFIX}/planning-v2/preflight")
+        def preflight(request: Request, body: PlanningRequest):
+            def check(service, principal):
+                app = service.application
+                app.authority.require(
+                    principal,
+                    "PLAN",
+                    "PREPARE",
+                    f"plan:prepare:{body.target.problem.resource_id}",
+                )
+                with app.repository.transaction(
+                    app.scope(principal),
+                    body.target.problem.resource_id,
+                    authorized=True,
+                ) as cursor:
+                    app.validate_target(principal, body.target, cursor.connection)
+                return {
+                    "policy": body.policy.model_dump(mode="json")
+                    if body.policy
+                    else None,
+                    "status": "EXPLICIT_CONSTRAINTS_VALID",
+                    "natural_language_conflicts": "NOT_EXHAUSTIVELY_DETECTABLE",
+                    "dispatch_count": 0,
+                }
+
+            return invoke(request, check)
+
         @app.get(f"{PREFIX}/planning-v2/invocations/{{invocation_id}}")
         def read(request: Request, invocation_id: str):
             return invoke(

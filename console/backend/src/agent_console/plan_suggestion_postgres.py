@@ -286,8 +286,28 @@ class PostgresPlanningRepository:
             "AND security_domain=%s AND plan_id=%s ORDER BY version LIMIT 100",
             (*self._scope(scope), proposal_id),
         ).fetchall()
+        conversation = []
+        if cursor.execute(
+            "SELECT to_regclass('workflow_planning.invocations') AS name"
+        ).fetchone()["name"]:
+            messages = cursor.execute(
+                "SELECT i.invocation_id,i.actor_id,i.record->'request' AS request, "
+                "i.record->>'submitted_at' AS submitted_at, "
+                "r.record->>'generated_at' AS generated_at, "
+                "r.record->'questions' AS questions,r.record->>'kind' AS kind "
+                "FROM workflow_planning.invocations i LEFT JOIN "
+                "workflow_planning.invocation_results r "
+                "USING(namespace,security_domain,invocation_id) WHERE namespace=%s "
+                "AND security_domain=%s "
+                "AND i.record->'target'->>'suggestion_context_id'=%s "
+                "AND i.record ? 'request' ORDER BY "
+                "i.record->>'submitted_at',i.invocation_id LIMIT 100",
+                (*self._scope(scope), proposal_id),
+            ).fetchall()
+            conversation = [dict(row) for row in messages]
         return {
             "proposals": [row["record"] for row in rows],
+            "conversation": conversation,
             "plans": [
                 self.read_plan(cursor, scope, proposal_id, row["version"])
                 for row in plans

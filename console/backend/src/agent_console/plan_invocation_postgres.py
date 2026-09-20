@@ -156,7 +156,7 @@ class PostgresPlanningInvocations:
             ).fetchone()
             return row["record"] if row else None
 
-    def find_request(self, scope, actor, key, digest):
+    def find_request(self, scope, actor, key, digest=None):
         with self.planning.transaction(
             scope, "invocation:" + actor + key, authorized=True
         ) as cursor:
@@ -167,6 +167,6 @@ class PostgresPlanningInvocations:
                 "AND actor_id=%s AND request_key=%s",
                 (scope.namespace, scope.security_domain, actor, key),
             ).fetchone()
-            if row and row["payload_digest"] != digest:
+            if row and digest is not None and row["payload_digest"] != digest:
                 raise PlanningConflict("PLANNING_IDEMPOTENCY_CONFLICT")
             return row["invocation_id"] if row else None

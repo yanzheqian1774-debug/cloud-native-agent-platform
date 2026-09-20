@@ -49,7 +49,7 @@ test('323 same-case controlled understanding to durable plan',async({browser},in
  await page.screenshot({path:info.outputPath('323-before-activation.png'),fullPage:true});
  await page.getByRole('button',{name:'确认问题与完成标准',exact:true}).click();await expect(page.getByRole('link',{name:'制定建议计划'})).toBeVisible();
  await page.screenshot({path:info.outputPath('323-after-activation.png'),fullPage:true});
- await page.getByRole('link',{name:'制定建议计划'}).click();await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+ await page.getByRole('link',{name:'制定建议计划'}).click();await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();
  await expect(page.locator('.planning-stage')).toHaveCount(3);await expect(page.locator('.planning-task')).toHaveCount(5);
  await page.screenshot({path:info.outputPath('323-plan-proposal.png'),fullPage:true});
  await page.getByRole('button',{name:'确认计划',exact:true}).click();await expect(page.getByRole('heading',{name:'计划已确认，资源待准备，尚未开始执行',exact:true})).toBeVisible();

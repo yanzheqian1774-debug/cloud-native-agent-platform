@@ -2,8 +2,8 @@ const steps = ["理解问题", "确认目标", "制定方案", "执行", "验收
 
 export function JourneySteps({ current }: { current: 1 | 2 | 3 }) {
   return <ol className="journey-steps" aria-label="当前阶段">{steps.map((label, index) =>
-    <li key={label} className={index + 1 < current ? "is-complete" : ""} aria-current={index + 1 === current ? "step" : undefined}>
-      <span aria-hidden="true">{index + 1 < current ? "✓" : index + 1}</span><strong>{label}</strong>
+    <li key={label} className={index + 1 < current ? "is-complete" : ""} aria-disabled={index > 2 || undefined} aria-current={index + 1 === current ? "step" : undefined}>
+      <span aria-hidden="true">{index + 1 < current ? "✓" : index + 1}</span><strong>{label}{index > 2 && <small> · 暂未实现</small>}</strong>
     </li>,
   )}</ol>;
 }

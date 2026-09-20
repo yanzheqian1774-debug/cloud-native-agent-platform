@@ -86,6 +86,7 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
             "turnId": value.turn_id,
             "turnVersion": value.turn_version,
             "invocationId": value.invocation_id,
+            "submittedAt": value.created_at.isoformat(),
             "state": value.state.value,
             "aggregateVersion": value.aggregate_version,
             "resultKind": value.result_kind.value if value.result_kind else None,

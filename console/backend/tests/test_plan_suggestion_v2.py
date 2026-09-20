@@ -160,10 +160,18 @@ def confirm(repo, scope, value, key, expected=0, fail=None):
         )
 
 
-def test_atomic_concurrent_replay_history_isolation(repository):
+@pytest.mark.parametrize("modern_policy", [False, True])
+def test_atomic_concurrent_replay_history_isolation(repository, modern_policy):
     repo = repository
     scope = ScopeIdentity("test-323-" + uuid4().hex, "test")
     value = proposal()
+    if modern_policy:
+        from agent_console.plan_suggestion_domain import FlexiblePlanSemantics
+        from test_planning_contracts import modern
+
+        value = value.model_copy(
+            update={"semantics": FlexiblePlanSemantics.model_validate(modern())}
+        )
     with repo.transaction(scope, value.proposal_id, authorized=True) as cursor:
         repo.add_proposal(cursor, scope, value)
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -183,7 +191,7 @@ def test_atomic_concurrent_replay_history_isolation(repository):
         revision=2,
         predecessor_digest=value.digest,
         invocation_id=uuid4().hex,
-        semantics=PlanSemantics.model_validate(semantics),
+        semantics=type(value.semantics).model_validate(semantics),
     )
     with repo.transaction(scope, value.proposal_id, authorized=True) as cursor:
         repo.add_proposal(cursor, scope, successor)

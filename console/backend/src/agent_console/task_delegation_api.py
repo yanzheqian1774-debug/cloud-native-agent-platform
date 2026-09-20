@@ -74,6 +74,18 @@ def install_task_delegation_routes(service):
                 raise AuthorityError("TASK_DEVELOPMENT_INVALID") from None
             return stop(service, context, identity, spec)
 
+        @app.post(prefix + "/{identity}/cases")
+        async def enroll_case(identity: str, request: Request):
+            from .task_cases import CaseEnrollment, enroll
+
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            try:
+                spec = CaseEnrollment.model_validate_json(await request.body())
+            except ValidationError:
+                raise AuthorityError("TASK_CASE_INVALID") from None
+            return enroll(service, context, identity, spec)
+
         @app.post(prefix + "/{identity}/revoke")
         def revoke(identity: str, request: Request):
             session, context = authenticate(request)

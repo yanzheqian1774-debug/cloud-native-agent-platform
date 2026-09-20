@@ -19,12 +19,12 @@ test('323 HTTPS planning, clarification, confirmation and durable readback',asyn
  }
  await page.goto('/work/plan?problem=problem%3A323-purchase');
  await expect(page.getByRole('heading',{name:'整理延期采购订单清单',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+ await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();
  await expect(page.getByRole('heading',{name:'需要补充的信息',exact:true})).toBeVisible();
  await page.reload();
  await expect(page.getByRole('heading',{name:'需要补充的信息',exact:true})).toBeVisible();
- await page.getByLabel('补充回答').fill('2026年9月17日10:00，323五行合成采购样本，仅只读分析。');
- await page.getByRole('button',{name:'提交补充并生成建议',exact:true}).click();
+ await page.getByLabel('补充信息或提出方案修改').fill('2026年9月17日10:00，323五行合成采购样本，仅只读分析。');
+ await page.getByRole('button',{name:'提交规划补充',exact:true}).click();
  await expect(page.getByRole('heading',{name:'建议方案',exact:false})).toBeVisible();
  await expect(page.locator('.planning-stage')).toHaveCount(3);
  await expect(page.locator('.planning-task')).toHaveCount(5);
@@ -54,11 +54,11 @@ test('opaque request identity survives a lost response and browser refresh',asyn
   requests.push(route.request().postDataJSON());await route.abort('failed');
  });
  await page.goto('/work/plan?problem=problem%3A323-purchase');
- await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
+ await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();
  await expect(page.getByRole('alert')).toBeVisible();
  await page.reload();
- await page.getByRole('button',{name:'生成建议计划',exact:true}).click();
  await expect(page.getByRole('alert')).toBeVisible();
- expect(requests).toHaveLength(2);expect(requests[1]).toEqual(requests[0]);
+ await expect(page.getByRole('button',{name:'依据已确认目标生成建议',exact:true})).toBeDisabled();
+ expect(requests).toHaveLength(1);
  expect(new URL(page.url()).searchParams.get('request')).toBe(requests[0].idempotency_key);
 });

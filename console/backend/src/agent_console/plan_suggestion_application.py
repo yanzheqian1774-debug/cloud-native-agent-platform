@@ -110,6 +110,9 @@ class PlanningApplication:
             proposal = self.repository.proposal(cursor, scope, proposal_id, revision)
             if proposal.digest != digest:
                 raise PlanningConflict("PROPOSAL_DIGEST_CONFLICT")
+            from .planning_contracts import validation_report
+
+            validation_report(proposal.semantics)
             self.validate_target(
                 principal, proposal.semantics.target, cursor.connection, current=False
             )

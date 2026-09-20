@@ -13,3 +13,15 @@
 @media(max-width:760px){.planning-layout{grid-template-columns:1fr}.planning-layout aside{position:static;max-height:none;overflow:visible}.planning-page{padding:16px}.planning-heading{align-items:flex-start}.planning-heading h1{font-size:21px}.planning-card{padding:14px}.planning-task-overview{grid-template-columns:1fr}.journey-steps{padding-left:0;padding-right:0}.journey-steps li{font-size:11px}.planning-resource>summary{align-items:flex-start}.planning-page table{font-size:12px}}
 /* Keep the complete default plan and its confirmation within the primary PC viewport. */
 @media(min-width:1201px){.planning-page{padding-top:18px}.planning-heading{margin-bottom:8px}.planning-layout main{gap:10px}.planning-layout .journey-steps{padding-top:4px;padding-bottom:4px}.planning-goal{padding:12px 18px}.planning-goal h2{padding-bottom:7px;margin-bottom:6px}.planning-goal li{font-size:13px;line-height:1.6;padding:1px 0}.planning-goal .journey-technical{margin-top:4px}.planning-proposal{padding:12px 18px}.planning-proposal h2{margin-bottom:8px;padding-bottom:7px}.planning-stage{padding-bottom:4px}.planning-stage-title{margin-bottom:2px}.planning-task{margin:3px 0}.planning-task>summary{padding:5px 10px}.planning-task-overview{line-height:1.45}.planning-task-meta{line-height:1.5}.planning-confirm{padding:10px 18px}}
+
+/* The ongoing composer stays visible while the plan conversation scrolls. */
+.planning-layout main>.px-conversation{height:calc(100svh - 310px);min-height:360px;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.planning-layout .px-message-stream{min-height:0;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px;padding:4px}
+.planning-layout .px-conversation>section[aria-label="持续规划对话"]{flex-shrink:0;margin:0;padding:10px 14px;border-color:#bfd4f5;max-height:45vh;overflow:auto}
+.planning-layout section[aria-label="持续规划对话"]>p{font-size:12px;margin:6px 0}
+.planning-layout .px-composer{margin:0}
+.px-message time{display:block;font-size:11px;color:#64748b}
+
+.planning-layout .px-composer textarea{min-height:44px;max-height:112px}
+.planning-layout .px-composer{padding:10px 12px}
+.planning-layout section[aria-label="持续规划对话"]>details{margin-bottom:8px;font-size:13px}

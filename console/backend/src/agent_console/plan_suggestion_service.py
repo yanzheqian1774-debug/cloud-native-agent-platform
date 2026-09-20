@@ -20,8 +20,12 @@ from .model_binding_resolution import (
     resolve_authorized_model_binding,
 )
 from .plan_suggestion_domain import PlanningConflict, PlanningError, ProposalRevision
-from .plan_suggestion_invocation import PlanningInvocationTarget, PlanningProviderResult
-from .plan_suggestion_policy import POLICY_DIGEST, VERSION
+from .plan_suggestion_invocation import (
+    FlexiblePlanningProviderResult,
+    PlanningInvocationTarget,
+    PlanningProviderResult,
+)
+from .plan_suggestion_policy import POLICY_DIGEST, V2_POLICY_DIGEST, VERSION
 
 
 @dataclass(frozen=True)
@@ -73,7 +77,9 @@ class PlanningSuggestionService:
             "PREPARE",
             f"plan:prepare:{request.target.problem.resource_id}",
         )
-        document = request.model_dump(mode="json")
+        document = request.model_dump(
+            mode="json", exclude={"policy"} if request.policy is None else set()
+        )
         if diagnostic_layer is not None:
             from .planning_diagnostics import LAYERS
 
@@ -85,6 +91,7 @@ class PlanningSuggestionService:
                 request.answers
                 or request.source_proposal
                 or request.predecessor_invocation_id
+                or request.policy
             ):
                 raise PlanningError("PLANNING_DIAGNOSTIC_INPUT_INVALID")
             document["diagnostic_layer"] = diagnostic_layer
@@ -185,10 +192,14 @@ class PlanningSuggestionService:
             variant="SUCCESSOR_PROPOSAL" if source else "FIRST_PROPOSAL",
             resource_snapshot=resource_snapshot,
             input_commitment=commitment,
-            policy_version=VERSION
+            policy_version=("planning-suggestion.v2" if request.policy else VERSION)
             if diagnostic_layer is None
             else "planning-diagnostic.v1",
-            output_schema="plan-suggestion-output.v1"
+            output_schema=(
+                "plan-suggestion-output.v2"
+                if request.policy
+                else "plan-suggestion-output.v1"
+            )
             if diagnostic_layer is None
             else "planning-diagnostic-output.v1",
         )
@@ -202,10 +213,13 @@ class PlanningSuggestionService:
             "profile": self.profile.model_dump(mode="json"),
             "authorization_decision_id": decision.decision_id,
             "transport": "CONTROLLED_TEST_PROVIDER" if synthetic else "REAL_PROVIDER",
-            "policy_digest": POLICY_DIGEST,
+            "policy_digest": V2_POLICY_DIGEST if request.policy else POLICY_DIGEST,
             "call_path": "CONFIRMED_PROBLEM_PLAN_SUGGESTION",
             "provider_configuration": getattr(self.provider, "diagnostics", {}),
         }
+        if request.policy:
+            record["request"] = document
+            record["submitted_at"] = datetime.now(UTC).isoformat()
         if diagnostic_layer is not None:
             from .planning_diagnostics import policy_digest
 
@@ -243,6 +257,8 @@ class PlanningSuggestionService:
                 "source_proposal": source.model_dump(mode="json") if source else None,
             },
         }
+        if request.policy:
+            business_context["planning_policy"] = request.policy.model_dump(mode="json")
         if diagnostic_layer is not None:
             business_context["diagnostic_layer"] = diagnostic_layer
         # Recheck current Problem/Criteria immediately before the network boundary.
@@ -338,10 +354,16 @@ class PlanningSuggestionService:
         try:
             if not isinstance(raw, str) or len(raw.encode()) > 131072:
                 raise ValueError("PLANNING_OUTPUT_TOO_LARGE")
-            parsed = PlanningProviderResult.model_validate_json(raw)
+            parsed = (
+                FlexiblePlanningProviderResult
+                if request.policy
+                else PlanningProviderResult
+            ).model_validate_json(raw)
             if parsed.semantics is not None:
                 if parsed.semantics.target != request.target:
                     raise ValueError("PLANNING_OUTPUT_TARGET_MISMATCH")
+                if request.policy and parsed.semantics.policy != request.policy:
+                    raise ValueError("PLANNING_OUTPUT_POLICY_MISMATCH")
                 proposal = ProposalRevision(
                     proposal_id=context_id,
                     revision=source.revision + 1 if source else 1,
@@ -357,6 +379,13 @@ class PlanningSuggestionService:
                 "proposal_digest": proposal.digest if proposal else None,
                 "output_digest": canonical_digest(parsed.model_dump(mode="json")),
             }
+            if request.policy:
+                from .planning_contracts import validation_report
+
+                result["generated_at"] = datetime.now(UTC).isoformat()
+                result["validation"] = (
+                    validation_report(parsed.semantics) if parsed.semantics else None
+                )
         except (ValidationError, ValueError):
             result = {
                 "technical_status": "SUCCEEDED",

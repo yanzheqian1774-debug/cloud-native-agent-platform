@@ -23,7 +23,7 @@ from .openai_responses_draft_adapter import (
 )
 from .plan_suggestion_domain import ExactReference, PlanningError
 from .plan_suggestion_invocation import PlanningProfile
-from .plan_suggestion_policy import INSTRUCTIONS, output_schema
+from .plan_suggestion_policy import INSTRUCTIONS, V2_INSTRUCTIONS, output_schema
 
 if TYPE_CHECKING:
     from .plan_suggestion_bootstrap import PlanningInvocationDependencies
@@ -128,7 +128,7 @@ class PlanningResponsesProvider:
         invocation_id = business_context["planning_context"]["invocation_id"]
         document = {
             "model": self.configuration.native_model_id,
-            "instructions": INSTRUCTIONS,
+            "instructions": V2_INSTRUCTIONS if request.policy else INSTRUCTIONS,
             "input": [
                 {
                     "role": "user",
@@ -154,7 +154,7 @@ class PlanningResponsesProvider:
                     "type": "json_schema",
                     "name": "plan_suggestion_output",
                     "strict": True,
-                    "schema": output_schema(),
+                    "schema": output_schema(modern=request.policy is not None),
                 }
             },
         }
@@ -206,7 +206,10 @@ class PlanningResponsesProvider:
                     "transport_failure": {"category": exception_category(exc)},
                 }
             raise PlanningProviderFailure("PLANNING_CREDENTIAL_UNAVAILABLE") from None
-        from .plan_suggestion_invocation import PlanningProviderResult
+        from .plan_suggestion_invocation import (
+            FlexiblePlanningProviderResult,
+            PlanningProviderResult,
+        )
         from .planning_measurement import measurement
 
         receipt = {
@@ -272,10 +275,20 @@ class PlanningResponsesProvider:
                 "diagnostic_passed": validate_diagnostic(layer, text),
             }
         try:
-            parsed = PlanningProviderResult.model_validate_json(text)
+            parsed = (
+                FlexiblePlanningProviderResult
+                if request.policy
+                else PlanningProviderResult
+            ).model_validate_json(text)
             if (
                 parsed.semantics is not None
                 and parsed.semantics.target != request.target
+            ):
+                raise ValueError
+            if (
+                parsed.semantics is not None
+                and request.policy
+                and parsed.semantics.policy != request.policy
             ):
                 raise ValueError
         except ValueError:

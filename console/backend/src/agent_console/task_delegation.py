@@ -142,18 +142,20 @@ def active(connection, identity, *, lock=False, allow_expired=False):
 
 
 def draft_records(connection, row):
+    from .task_cases import context_ids
+
     return [
         item["record"]
         for item in connection.execute(
             "SELECT DISTINCT ON (invocation_id) record FROM "
             "draft_assistance.invocation_versions WHERE namespace=%s AND "
-            "security_domain=%s AND record->>'contextId'=%s AND "
+            "security_domain=%s AND record->>'contextId'=ANY(%s) AND "
             "record->>'initiatingPrincipalId'=%s ORDER BY "
             "invocation_id,aggregate_version DESC",
             (
                 row["tenant_id"],
                 row["security_domain"],
-                row["root_context_id"],
+                context_ids(connection, row),
                 row["subject_id"],
             ),
         ).fetchall()
@@ -161,6 +163,8 @@ def draft_records(connection, row):
 
 
 def task_problem_ids(connection, row):
+    from .task_cases import cases
+
     linked = {
         r["problemId"] for r in draft_records(connection, row) if r.get("problemId")
     }
@@ -169,6 +173,15 @@ def task_problem_ids(connection, row):
         "WHERE delegation_id=%s AND owner='BUSINESS_PROBLEM'",
         (row["delegation_id"],),
     ).fetchall()
+    if cases(connection, row["delegation_id"]):
+        linked.update(
+            r["problem_id"]
+            for r in connection.execute(
+                "SELECT problem_id FROM authorization_admin.task_case_problems WHERE "
+                "delegation_id=%s",
+                (row["delegation_id"],),
+            ).fetchall()
+        )
     return linked.intersection(r["resource_id"] for r in owned)
 
 
@@ -290,13 +303,22 @@ class TaskDelegationService:
         checksum = hashlib.sha256(path.read_bytes()).hexdigest()
         with self.repository.connection_scope() as c:
             c.execute("SELECT pg_advisory_xact_lock(3230028)")
-            c.execute(path.read_text())
-            row = c.execute(
-                "SELECT checksum FROM "
-                "authorization_admin.task_delegation_migrations WHERE version=28"
-            ).fetchone()
+            existing = c.execute(
+                "SELECT to_regclass('authorization_admin.task_delegation_migrations')"
+                " AS name"
+            ).fetchone()["name"]
+            row = (
+                c.execute(
+                    "SELECT checksum FROM "
+                    "authorization_admin.task_delegation_migrations WHERE version=28"
+                ).fetchone()
+                if existing
+                else None
+            )
             if row and row["checksum"] != checksum:
                 raise AuthorityError("TASK_DELEGATION_SCHEMA_INCOMPATIBLE")
+            if row is None:
+                c.execute(path.read_text())
             c.execute(
                 "INSERT INTO authorization_admin.schema_migrations"
                 "(version,checksum,adapter) "
@@ -326,6 +348,24 @@ class TaskDelegationService:
                 "ON CONFLICT DO NOTHING",
                 (checksum,),
             )
+        path = Path(__file__).parents[2] / "migrations/0030_task_cases.sql"
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.repository.connection_scope() as c:
+            c.execute("SELECT pg_advisory_xact_lock(3230028)")
+            row = c.execute(
+                "SELECT checksum FROM authorization_admin.schema_migrations WHERE "
+                "version=30"
+            ).fetchone()
+            if row and row["checksum"] != checksum:
+                raise AuthorityError("TASK_DELEGATION_SCHEMA_INCOMPATIBLE")
+            if row is None:
+                c.execute(path.read_text())
+                c.execute(
+                    "INSERT INTO "
+                    "authorization_admin.schema_migrations(version,checksum,adapter) "
+                    "VALUES(30,%s,'task-cases-v1')",
+                    (checksum,),
+                )
 
     def _admin(self, context, connection=None):
         meta = ExactGrant(
@@ -711,11 +751,13 @@ class TaskDelegationService:
                 "delegation_id=%s",
                 (identity,),
             ).fetchone()
+            from .task_cases import cases
             from .task_development import revision, stopped
 
             return {
                 "development_stopped": stopped(c, identity),
                 "development_revision": revision(c, identity),
+                "cases": cases(c, identity),
                 "original_digest": row["digest"],
                 "delegation_id": identity,
                 "approval": row["record"],
@@ -895,7 +937,9 @@ def lock_grant_delegations(connection, context, grant):
     ).fetchall()
 
 
-def record_created_object(connection, context, owner, result):
+def record_created_object(
+    connection, context, owner, result, *, draft_invocation_id=None
+):
     """Owner-side binding, in the creation transaction, never a client task label.
 
     This bounded mode permits one immutable task per subject/isolated scope.
@@ -926,12 +970,19 @@ def record_created_object(connection, context, owner, result):
         else [revision["success_criterion_id"], revision["revision_id"]]
     )
     if owner == "BUSINESS_PROBLEM":
+        enrolled_case = False
+        if draft_invocation_id:
+            from .task_cases import bind_problem
+
+            enrolled_case = bind_problem(
+                connection, delegation, context, identities[0], draft_invocation_id
+            )
         previous = connection.execute(
             "SELECT resource_id FROM authorization_admin.task_delegation_resources "
             "WHERE delegation_id=%s AND owner='BUSINESS_PROBLEM'",
             (row["delegation_id"],),
         ).fetchone()
-        if previous and previous["resource_id"] != identities[0]:
+        if previous and previous["resource_id"] != identities[0] and not enrolled_case:
             raise AuthorityError("TASK_DELEGATION_PROBLEM_ALREADY_BOUND")
     for identity in identities:
         c = connection.execute(

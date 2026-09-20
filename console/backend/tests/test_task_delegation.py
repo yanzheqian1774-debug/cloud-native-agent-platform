@@ -496,7 +496,7 @@ def test_expired_task_blocks_existing_grant_and_dispatch(env):
         e.service.authorize(e.contexts["reader"], d, r.request_id)
 
 
-def create_task_problem(e, key="problem"):
+def create_task_problem(e, key="problem", draft=None):
     from dataclasses import asdict
 
     from agent_console.business_problem_domain import BusinessProblemRevision
@@ -532,11 +532,15 @@ def create_task_problem(e, key="problem"):
                 connection=c,
             )
             record_created_object(
-                c, e.contexts["reader"], "BUSINESS_PROBLEM", {"revision": asdict(saved)}
+                c,
+                e.contexts["reader"],
+                "BUSINESS_PROBLEM",
+                {"revision": asdict(saved)},
+                **({"draft_invocation_id": draft.invocation_id} if draft else {}),
             )
         e.synthetic.link_problem(
             context("human:reader"),
-            e.first.invocation_id,
+            (draft or e.first).invocation_id,
             problem_id=saved.business_problem_id,
             problem_revision_id=saved.revision_id,
             problem_digest=saved.digest,
