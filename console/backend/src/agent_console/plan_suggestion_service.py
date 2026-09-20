@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from .authority_contracts import AuthorityError
 from .business_problem_domain import canonical_bytes, canonical_digest
 from .model_binding_resolution import (
     ExactModelBinding,
@@ -219,10 +220,27 @@ class PlanningSuggestionService:
         # Recheck current Problem/Criteria immediately before the network boundary.
         with app.repository.transaction(scope, context_id, authorized=True) as cursor:
             app.validate_target(principal, request.target, cursor.connection)
+        provider_entered = False
         try:
-            raw = self.provider.suggest(
-                request, resolved, self.profile, business_context
-            )
+            from contextlib import nullcontext
+
+            guard = getattr(self.budget, "dispatch_guard", None)
+            with guard(identity, self.quote) if guard else nullcontext():
+                provider_entered = True
+                raw = self.provider.suggest(
+                    request, resolved, self.profile, business_context
+                )
+        except AuthorityError:
+            result = {
+                "technical_status": "OUTCOME_UNKNOWN" if provider_entered else "FAILED",
+                "kind": None,
+                "reason": "PROVIDER_OUTCOME_UNKNOWN"
+                if provider_entered
+                else "DISPATCH_ADMISSION_DENIED",
+            }
+            self.invocations.finish(scope, invocation_id, result)
+            self.model_use_owner.observed(scope, record, result)
+            return self.read(principal, invocation_id)
         except (TimeoutError, ConnectionError):
             result = {
                 "technical_status": "OUTCOME_UNKNOWN",

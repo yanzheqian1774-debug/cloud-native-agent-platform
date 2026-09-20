@@ -331,6 +331,17 @@ class PlanningBudget:
         )
         return self.owner.reserve(key, normalized, quote)
 
+    def dispatch_guard(self, identity, quote):
+        normalized = SimpleNamespace(
+            scope=DraftScope(identity.scope.namespace, identity.scope.security_domain),
+            invocation_id=identity.invocation_id,
+            profile_revision_id=identity.profile_revision_id,
+        )
+        from contextlib import nullcontext
+
+        guard = getattr(self.owner, "dispatch_guard", None)
+        return guard(normalized, quote) if guard else nullcontext()
+
     def pricing(self):
         from .draft_provider_budget_postgres import PostgresProviderCallBudget
 

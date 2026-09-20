@@ -180,6 +180,42 @@ def build_workbench_composition(
                 authorizer,
                 clock=foundation.grants.clock,
             )
+        delegation_routes = ()
+        task_binding = None
+        if (
+            draft_assistance is not None
+            and planning_invocations is not None
+            and hasattr(draft_assistance.transport, "configuration")
+            and hasattr(planning_invocations.provider, "configuration")
+        ):
+            from .task_delegation import TaskDelegationService, configured_limits
+            from .task_delegation_api import install_task_delegation_routes
+
+            configurations = {
+                "understanding": configured_limits(
+                    draft_assistance.profile,
+                    draft_assistance.transport.configuration,
+                    draft_assistance.budget,
+                ),
+                "planning": configured_limits(
+                    planning_invocations.provider.transport_profile,
+                    planning_invocations.provider.configuration,
+                    planning_invocations.budget.owner,
+                    planning=True,
+                ),
+            }
+            draft_assistance.budget.delegation_configuration = configurations[
+                "understanding"
+            ]
+            planning_invocations.budget.owner.delegation_configuration = configurations[
+                "planning"
+            ]
+            delegation = TaskDelegationService(foundation.grants, configurations)
+            delegation.migrate()
+            from .task_delegation import record_created_object
+
+            task_binding = record_created_object
+            delegation_routes = (install_task_delegation_routes(delegation),)
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -198,6 +234,7 @@ def build_workbench_composition(
                         clock=foundation.grants.clock,
                         identity_factory=foundation.grants.identity_factory,
                     ),
+                    task_binding=task_binding,
                 ),
                 *agent_operations(
                     agent_definitions,
@@ -213,7 +250,8 @@ def build_workbench_composition(
             **(
                 {
                     "route_installers": (
-                        (
+                        delegation_routes
+                        + (
                             (install_draft_assistance_routes(draft_assistance),)
                             if draft_assistance is not None
                             else ()

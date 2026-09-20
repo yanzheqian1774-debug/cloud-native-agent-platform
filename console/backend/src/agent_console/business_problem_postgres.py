@@ -83,7 +83,11 @@ class PostgresBusinessProblemRepository:
     ) -> bool:
         """Validate a direct Workbench grant target from canonical owner facts."""
         try:
-            if owner == "BUSINESS_PROBLEM" and action == "TRANSITION":
+            if owner == "BUSINESS_PROBLEM" and action in {
+                "READ",
+                "REVISE",
+                "TRANSITION",
+            }:
                 return (
                     connection.execute(
                         "SELECT 1 FROM business_problem_authority.problems "

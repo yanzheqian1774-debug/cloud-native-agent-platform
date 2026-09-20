@@ -153,6 +153,15 @@ class PostgresProviderCallBudget:
         except (OSError, PsycopgError) as exc:
             raise DraftAssistanceError("PROVIDER_BUDGET_STORAGE_UNAVAILABLE") from exc
 
+    @contextmanager
+    def dispatch_guard(self, invocation, quote):
+        """Pin admission; revocation does not cancel an admitted call."""
+        from .task_delegation import guard_budget
+
+        with self._connection() as connection:
+            guard_budget(connection, self, invocation, quote)
+            yield
+
     def reserve(
         self,
         operation_id: str,
@@ -186,6 +195,9 @@ class PostgresProviderCallBudget:
         )
         try:
             with self._connection() as connection:
+                from .task_delegation import guard_budget
+
+                guard_budget(connection, self, invocation, quote)
                 policy = connection.execute(
                     "SELECT call_cap,total_cost_cap_microusd "
                     "FROM draft_provider_budget.policies WHERE namespace=%s "

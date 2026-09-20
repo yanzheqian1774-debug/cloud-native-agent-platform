@@ -65,7 +65,8 @@ class WorkbenchGrantTargetValidator:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE")
         try:
             if grant.owner in {"SUCCESS_CRITERION", "SUCCESS_CRITERIA_SET"} or (
-                grant.owner == "BUSINESS_PROBLEM" and grant.action == "TRANSITION"
+                grant.owner == "BUSINESS_PROBLEM"
+                and grant.action in {"READ", "REVISE", "TRANSITION"}
             ):
                 if self.problems is None:
                     return False

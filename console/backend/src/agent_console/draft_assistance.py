@@ -1081,14 +1081,29 @@ class DraftAssistanceService:
                 reason_code="CREDENTIAL_RESOLUTION_FAILED",
             )
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED") from exc
+        provider_entered = False
         try:
-            observation = self.transport.dispatch(
-                invocation_id=invocation.invocation_id,
-                request=prepared,
-                credential=credential,
-                profile=self.profile,
-            )
+            from contextlib import nullcontext
+
+            guard = getattr(self.budget, "dispatch_guard", None)
+            with guard(invocation, prepared.quote) if guard else nullcontext():
+                provider_entered = True
+                observation = self.transport.dispatch(
+                    invocation_id=invocation.invocation_id,
+                    request=prepared,
+                    credential=credential,
+                    profile=self.profile,
+                )
         except Exception as exc:
+            from .authority_contracts import AuthorityError
+
+            if isinstance(exc, AuthorityError) and not provider_entered:
+                self._replace(
+                    dispatch_recorded,
+                    state=DraftInvocationState.FAILED_PRE_DISPATCH,
+                    reason_code="DISPATCH_ADMISSION_DENIED",
+                )
+                raise DraftAssistanceError("DISPATCH_ADMISSION_DENIED") from exc
             self._replace(
                 dispatch_recorded,
                 state=DraftInvocationState.OUTCOME_UNKNOWN,

@@ -1448,3 +1448,38 @@ Kimi页面受控理解/纠正已到创建Problem；正式exact申请返回GRANT_
 本轮完整门禁：make check **2097 passed / 201 skipped / 1既有warning**，未把201项未启用其他数据库测试计为通过；专属323 PG用例实际执行。前端lint及标准build通过。最终只读截图核对发现标准build未启用既有VITE_PROBLEM_DRAFT_ASSISTANCE，故composer不可见；不是模型或授权错误，零业务重试。验收构建须显式启用既有功能开关并加本地Kimi fixture来源标签，再只读原Plan/Approval并核对无新增调用，不改产品布局或默认开关。
 
 最终验收构建带“323 Kimi 本地HTTPS替身 · 同案合成采购 · 非真实模型”标签，原Plan只读刷新及展开任务截图1项通过；8张图保留分阶段来源，`index.html`优先展示最终3张只读截图。新增`playwright.s5-323-kimi.config.ts`专门选择需要显式隔离runtime的Kimi同案用例，与既有*.real用例一致，不纳入默认无隔离配置的浏览器套件；该专属用例已实际运行，不跳过原CI测试。正常提交hooks和候选CI身份另在同目录回执绑定。
+
+## 24. 有界任务委托（Human G2 决定，实施中）
+
+2026-09-20 Human 明确批准服务端任务委托及实施，复用 authority 与 provider-budget owner。一次独立批准绑定任务、主体/scope、原理解 context、两段精确配置/模型、用途、原账本、次数/Token/USD 上限和绝对截止时间。调用主体不能批准或扩大委托。委托只生成通过现有 owner 存在性校验且属于同案的精确 grant；费用 READ 与 READ_MEASUREMENT 分离。不得授予通配或管理员权限。撤销/到期阻断新授权和派发，不承诺取消远端请求，UNKNOWN 保留原预留。
+
+G1实施计划：增加 authority owner 内的追加式委托/撤销/授权关联记录及正式独立批准、读取、撤销、精确授权入口；服务端核对可信主体、同案来源及配置。原 budget owner 在同一事务串行检查跨用途在途预留、原计数/金额和逐次Token上限，禁止重置额度。现有独立精确审批继续兼容。调用方在每次派发前执行schema/adapter配置预检；原v5 FAILED_PRE_DISPATCH保留，修正后继必须沿原context建立，不覆盖原幂等键。
+
+验证：正式PG下的独立审批/自批拒绝、目标/用途/配置/任务越界、到期/撤销与派发、幂等/并发/审计及旧审批兼容；聚焦验证后正常make check/hooks、原分支提交与原PR CI。工程实现和受控验证可超过原调用窗口；真实请求仍截止2026-09-21 02:34:34.697 Asia/Shanghai，不自动续期。无新Session/PR/数据库或通用管理台；Draft/OPEN，D3/业务执行/Ready/merge/deploy/close均未授权。
+
+### 24.1 实现边界与受控核验（进行中）
+
+- 新增0028仅扩展既有authorization_admin，批准/撤销/精确决定关联/对象归属为追加事实，control为撤销投影；不新增数据库或费用owner。authority迁移登记28并校验checksum，旧不识别该扩展的二进制拒绝启动；部署须先排除旧服务和writer，不能新旧服务并行使用委托库。
+- 正式BFF入口沿用session/CSRF。独立DECIDE主体批准不可变manifest；调用人只能请求服务解释该委托并产生普通exact grants，服务审计身份明确为task-delegation，不冒充Human。每条grant关联delegation/request/target digest；授权有效期取委托/调用credential/8小时最小值，原任务截止不变。旧独立审批入口保留。
+- 这是323隔离用途的单任务绑定：同一主体/scope只绑定一个不可变任务和原理解context；非通用多任务策略。唯一Problem及其标准在owner创建事务中登记任务归属，不能靠客户端problem-link认领既有对象；后继理解只能沿原context，规划/Proposal/费用目标须追溯同案。业务Problem已有READ/REVISE exact动作补齐owner存在性发现，不增加新业务权限。
+- 原预算owner使用同一委托锁串行理解/规划准入，保留原ledger、已消费/未结算预留、逐次Token/金额及次数限制。派发入口重新检查委托并保持准入锁；撤销在线性化时已准入的调用后完成，不承诺远端取消。UNKNOWN即使usage已结算仍阻止后继；未结算预留不释放。派发前委托拒绝与进入provider后的不确定错误分别记录，不能把后者误记成零派发。
+- 原v5失败及旧回执不改，真实新调用仍0。修正v2正文在real-demo/corrected-v2-context.json；独立任务审批入口real-demo/323-task-delegation-review.command已准备但未执行，只有Human交互确认后才会向正式BFF提交。该入口将核对已验证部署候选及固定原截止，不读取或输出秘密到回执。
+- 受控验证使用专属临时s5-323-delegation-test-pg / loopback64331，每个PG用例独立数据库；没有对real-demo或321做测试、迁移、预算写入或模型派发。首轮fixture错误（authenticator缺少source、成功observation缺少业务结构、repository.close应为pool.close）及预算JOIN列歧义已定位修正，未降低断言。现有替身预算没有dispatch_guard时保留原不启用委托行为；正式持久budget始终实现guard。
+- 新增PG/HTTP受控20项及派发错误分类2项已通过；既有Kimi正式装配/本地HTTPS27项通过。全量门禁、正常hook及候选CI仍待最终回执，不继承旧候选结果。frontend产品未修改；不将这些验证记为真实模型质量或演示完成。
+
+
+### 24.2 中断恢复、版本保护与交付门禁（2026-09-20）
+
+恢复保留原分支、工作树与PR #183；起点HEAD/远端均为`368d62e7ad6b51a0329cb254b8e2aadf111a6afc`，委托修改尚未提交。未发现旧make/pytest/git写入进程；原演示服务PID 16373和旧逐条审批终端PID 37028尚在，切换演示候选前须排除这两个旧进程。没有reset、清理、覆盖旧invocation、重置账本或复用失败请求键。
+
+原完整门禁实际失败：`task-delegation/make-check.log`为2116 passed / 201 skipped / 1 failed；旧精确目标发现测试仍断言Problem READ不可发现，与§24已批准的READ/REVISE owner发现不符。修正测试将READ/REVISE纳入真实存在、伪造ID和跨scope校验；发现目标不授予权限，独立费用及旧exact审批测试保留。早期PG fixture错误和原失败日志未改写。
+
+当前验证：`task-delegation/recovery-focused.log` **24 passed**；`recovery-make-check.log` **2120 passed / 201 skipped / 1既有warning**，Ruff lint/format及完整make check通过，专属PG64331实际启用。新增缺少扩展文件及checksum篡改的拒绝测试。另从原HEAD提取实际旧authority源码，在隔离受控PG运行`old-binary-guard.log` **1 passed**，旧`verify_existing_schema`及旧`migrate`均报`AUTHORITY_SCHEMA_INCOMPATIBLE`；新版本仍能验证原扩展库。此前Kimi27项受控结果保留，且本轮完整门禁已包含既有Kimi用例。frontend产品未改动，不重复本地视觉验收；正常commit hooks及新候选CI由本节关联续接回执记录，不套用旧候选CI。
+
+适用库和迁移顺序：0028依附于已有`authorization_admin`，仅用于323这套同时装配理解与规划、共享authority/budget/业务owner的隔离数据库；本次演示目标限定`127.0.0.1:64330/s5_323_real_demo`，测试仅64331的fixture数据库。升级先停止该323旧服务和审批writer并只读检查在途/UNKNOWN及原账本；保存既有库备份，验证新候选后按原owner启动顺序保留0018 authority、0023理解、0024预算、0025/0026/0027规划迁移，最后由TaskDelegationService登记0028扩展及checksum。不得单独执行SQL跳过登记、删除版本行、伪造checksum或让旧新服务同时写扩展库。
+
+回退限制：0028后旧二进制拒绝扩展库是必要保护；不能通过忽略版本、删除委托/授权关联/撤销历史或重置预算回退。优先修复前进；只有确认备份后没有任何新授权、预留、调用或业务事实且经单独恢复决定时，才可考虑整体一致备份恢复。已发生远端或UNKNOWN调用后，恢复旧账本会失去消费/预留事实，禁止作为普通代码回滚。321数据库、服务、身份配置和原ledger不迁移；本轮只读校验321的5个既有保护文件hash一致，不能据此声称321全部运行状态已验收。
+
+演示事实：`real-demo/recovery-1218-readback.json`保留原唯一v5 `FAILED_PRE_DISPATCH / PROVIDER_REQUEST_INVALID`，原理解/规划ledger分别12次/USD10及8次/USD10，reservation/settlement均0。一次性审批脚本保留原版本副本，新增与正式入口共用的manifest解析、认证器/独立管理权限、原context和budget核验；`--preflight`严格只读，不创建/刷新session、不批准、不派发。若需有效session，单独的`--prepare-session`仅走正式登录，认证写入与无副作用预检分开记录。只有新候选门禁/CI及实际部署回执有效、预检通过后才交Human输入APPROVE_TASK。真实调用仍受原2026-09-21 02:34:34.697 Asia/Shanghai截止；正式委托批准前不派发。
+
+后续source/tree、hooks、普通push、直接候选/临时合并树CI身份、实际部署及无副作用预检结果追加记录于`/Users/tristan/Documents/s5-v023-arch-323-acceptance/task-delegation/recovery-delivery.json`，原计划/Registry为本Session登记入口。保持Draft/OPEN；真实模型质量NOT_MEASURED，D3/Runtime/OpenClaw/客户端不实施。

@@ -63,6 +63,8 @@ def test_canonical_discovery_rejects_forged_scope_and_digest(repository):
         context = NS(scope=AuthorityScope(scope.namespace, scope.security_domain))
         foreign = NS(scope=AuthorityScope("foreign", scope.security_domain))
         targets = [
+            ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:problem-323"),
+            ExactGrant("BUSINESS_PROBLEM", "REVISE", "business-problem:problem-323"),
             ExactGrant(
                 "BUSINESS_PROBLEM", "TRANSITION", "business-problem:problem-323"
             ),
@@ -89,12 +91,7 @@ def test_canonical_discovery_rejects_forged_scope_and_digest(repository):
                     ),
                     connection=current,
                 )
-            # TRANSITION does not infer READ; creator continuation is unchanged.
-            assert not validator.is_known_exact_target(
-                context,
-                ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:problem-323"),
-                connection=current,
-            )
+            # Discovery only identifies owner-backed targets; it grants no action.
             assert not validator.is_known_exact_target(
                 context,
                 ExactGrant("PLAN", "APPROVE", "plan:prepare:problem-323"),
