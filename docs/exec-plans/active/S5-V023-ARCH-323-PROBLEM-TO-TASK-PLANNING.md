@@ -1669,3 +1669,19 @@ Human授权复用既有9次调用及已确认Problem/Criteria，先离线核验�
 正式修订12a1ecb0已由独立主体签发并加载c422640。原完整业务请求（新key 323-cost-full-read55-01）在54.058963秒返回completed/真实用量3749入1845出，总期限尚余5.941037秒；worker13571已回收。本次不是UNKNOWN，旧六条UNKNOWN及预留不变。请求cd4b22ab-d649-4f12-9b94-dea4a57f4c1d结果为SUCCEEDED/INVALID/PLANNING_OUTPUT_SCHEMA_INVALID，未产生Plan。回执脚本将正常201误作状态异常，已通过原request只读读回，不重发。
 
 当前adapter把Pydantic结构/确定性契约、target不一致、policy不一致全部压缩为相同错误，未保留正文；因此不能据现有回执断言具体字段或业务规则。最小诊断实现：仅追加受限字段路径、校验类型、白名单契约代码、输出长度与摘要，保留于原provider receipt；不记录正文、input值、自由错误信息、凭据或推理，不放宽原校验，不改变provider请求。针对错误路径、未知键脱敏、契约分类及持久回执测试后正常提交/CI，沿用已签发55秒配置和原case/账本加载新候选，不重复签发。下一次调用假设为定位已观察到的INVALID边界，输入/schema/期限不变；保留原INVALID，不覆盖或冒充修复原结果。若产生明确契约错误，再仅针对该错误做必要修复或输入说明；无新信息则结束该分支。
+
+### 25.9 成本真实规划确认与持久读回收口（2026-09-21）
+
+复用真实理解、补问、8,000元纠正、原Problem/Criteria及已正式激活的成本case。独立read55修订digest `12a1ecb000136b1ae19bca4c3e40aafc102236dd115e4bff15771933478cc225`与实际配置摘要核对一致；本轮没有重新理解/保存标准/激活case/签发配置。仅正常加载后端诊断代码，原0031及签发记录不变。
+
+五次新尝试逐项记录：H1完整原输入仅read30→55，54.059秒返回SUCCEEDED/INVALID；H2仅新增校验可观测性，53.566秒定位PLAN_REFERENCE_INVALID；H3只补引用约束，55.469秒WAIT_HEADERS/TIMEOUT（总期限余4.531秒），新增UNKNOWN保留；H4仅加简洁英文要求，55.110秒返回且引用检查通过，定位PLANNING_OPERATION_INPUT_CONFLICT（output2033，不声称提示实际减少输出）；H5只澄清既有直接前驱产物/input_kinds规则，49.033秒生成VALID_SUGGESTION。每次独立key/调用身份、正式UNKNOWN恢复准入；未放宽契约，未重复无信息分支，未用短诊断对象替代业务计划。前三个30秒失败历史及本轮全部失败保留。旧H1正文未留存，不能补证其具体字段错误。
+
+**真实结果**：invocation `ac512acd-29a3-49f7-b757-e937378358eb`，provider response `resp_6ab023592e2159415a1cea28`；FREE/planning.v3，4阶段6任务：收集、校验、汇总、分析、建议、报告。确定性引用/数据流/criterion覆盖通过；Codex在Human授权下另做业务复核：RMB8,000且10,000作废，排除试验项目；9月1–20日观察与10月建议区分，不把20天等同期比较整月预算；缺账单/usage/时长/分摊，实际金额、超支和归因未知；建议须有证据、影响与风险。两项必要资源selected=null、0匹配/2缺口。没有虚构账单、资源就绪、原因或节约结果。
+
+**页面闭环**：2026-09-21 02:21:25.514+08，原requester按已授权范围通过页面确认Plan `5ad74afd-a6bf-4b04-b395-34d18d01c3b6` v1，digest `b8944fd42a8b7764700f7c9fda7b9db4a1c4f681ad1b6f50641dc307d81c8f94`；Approval `367ae569-7d5b-4334-9349-f89be8b74daa`。一次确认POST、刷新0 POST；确认/刷新历史与独立PostgreSQL Plan及Approval逐字段一致。不是业务执行或Criteria Evaluation。采购Plan/Approval及原Problem/Criteria、六条UNKNOWN/预留逐行哈希未变；新增UNKNOWN `6b846bbb-be11-4d1c-be72-5e06c0724569`保留。
+
+**用量**：本轮5次尝试、4条可计量结算，15,532 input /7,519 output，按既定价格估算USD0.274636，另新增UNKNOWN预留USD0.688128。成本累计14条调用记录、10条已计量，21,827/9,865 tokens，估算USD0.371916；成本4条UNKNOWN预留USD2.752512。原账本合计16条结算USD0.499580、7条UNKNOWN待决预留USD4.816896。估算非供应商账单，UNKNOWN不是零费用；cached/reasoning细分不重复计量。五次新worker均已回收且PID不存在，本地结束不证明远端停止。
+
+**交付与限制**：运行代码候选 `59224afeffec77d0eac0125753c0d278736c22b4`，tree `7a33ff22b06da26dd042dc086938fdbfe4b36056`，正常hooks、12项CI成功且逐job核验checkout/tree；诊断相关19项通过，补充target/policy区分后该文件5项通过。最终文档登记候选另行正常提交/CI，不为文档变更重启服务。回执、完整规范化真实模型方案、各阶段截图、原精确用量读回、PG行哈希及诊断序列位于 `/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/timeout-revision/COST-REAL-CLOSURE-RECEIPT.md` 与同目录JSON/PNG。本地201/202回执处理错误也保留，均先读回原对象后续接，未重发模型或grant请求。
+
+**后续清单不扩范围**：规则级诊断尚缺任务/边精确定位；模型仍需显式引用/数据流补充，不宣称无干预可靠性；INVALID恢复页“等待正式生成”文案待修；输入框位置/表单堆叠/裁切/发送可见性/滚动与低干预、自适应交互留下一任务。前端未改，本轮功能截图不当设计基线或视觉验收；后续必须读取图集index/CATALOG/页/交互契约并记版本/页号/摘要。§24.10原D2/D3/增量二及资源/执行前置任务包状态保持：D2已实施；D3执行契约递延，资源exact绑定、artifact/Evidence包装及执行准入未落实。Assignment/Run/TaskRun/Attempt均0。成本规划收口完成，PR Draft/Session OPEN；Ready/merge/deploy/close、ReAct、D3与真实业务验收不自动推进。
