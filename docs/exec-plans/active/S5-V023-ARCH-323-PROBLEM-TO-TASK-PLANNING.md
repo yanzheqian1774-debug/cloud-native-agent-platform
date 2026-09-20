@@ -1651,3 +1651,15 @@ Human本轮授权同任务新增独立成本合成案例；17:03持续开发验�
 补充共享页面检查：26项对话/目标/标准浏览器用例中24项通过，2项定位为新增断言使用包裹式label的文本定位差异；改用同一精确可访问名称的textbox定位后2项通过，保留完整描述、前驱版本、写入次数、刷新及旧修订断言。新正式修订用例已证明发送时0写入，显式保存后1次精确后继写入，刷新仍1次；未以文本变化冒充后端成功。相关API夹具均明确为受控页面证据，不是真实Kimi或真实业务执行。
 
 入口预检更正：成本首个待授权context准备采用了普通文本，不符合既定理解v2 adapter的结构化上下文要求；未授权、未dispatch、未预留。保留原准备记录，在同一context登记结构化后继（独立invocation/key），使用正式Kimi adapter `prepare`零网络校验通过；集中签发及后续恢复绑定该context当前后继，不重发旧正文。`legacy-policy-readback.json`已验证当前兼容策略摘要与采购成功invocation的持久policy_digest完全相同。
+
+### 25.7 完整成本请求期限诊断与配置修订（2026-09-21，G1）
+
+Human授权复用既有9次调用及已确认Problem/Criteria，先离线核验，再单变量调整有界响应等待。当前实值connect=5s、socket read=30s、parent total=60s、cleanup≤2s。代码在连接后对socket设置min(read,remaining)，三个WAIT_HEADERS/TIMEOUT由worker返回TRANSPORT_FAILURE，而非父进程TOTAL_DEADLINE；尚余约29.4s。不是根据30.5s耗时猜测计时器。历史wire body未留存，使用原生产builder、不可变请求及未变化业务输入零IO重构；完整请求14342/14829/14820 bytes、现代schema6872 bytes，诊断252/448/5664 bytes，ADAPTER仅使用旧schema5202 bytes及固定短结果。均非流式、background/store=false、8192输出上限、low reasoning；诊断通过不证明完整现代规划可用。
+
+实施只扩展原323委托的可审计planning读等待修订：append-only记录、独立DECIDE主体、原配置摘要CAS、同scope/主体/已登记成本Problem；保持profile/model/账本/价格/token/connect/total/cleanup不变，唯一provider配置变量readTimeoutSeconds 30→55。服务根据真实configuration反向构造旧read配置并匹配原摘要，不能接受任意新digest。原委托、case、V2、UNKNOWN、预留不可改写。预算和授权使用正式生效配置，未签发的新配置fail closed；新配置派发限定已登记成本Problem。历史读仍可使用既有权限。
+
+需新增0031迁移、独立timeout-revision私有路由、启动composition的真实配置来源、有效配置读取及预算/诊断一致性；不改CRD/前端/理解/模型配置其他字段。不重新理解、0030迁移或案例签发。针对测试涵盖自批拒绝、scope/目标/旧摘要/其他配置变化、幂等冲突、原记录保留、未签发生效拒绝、恢复UNKNOWN准入与deadline/cleanup独立性；正常hooks/CI后将新服务加载与剩余独立配置签发合并为一次有回执操作。
+
+首个真实验证复用首次完整FREE请求的Problem/Criteria/schema/answers=[]，仅read=55；独立新key及既有诊断准入关联成本三UNKNOWN。成功后核验8000、排除试验项目和无虚构结论，再页面确认/刷新/PG；若新结果没有新增信息停止该分支。不会把旧30秒当不可调整业务要求，也不直接绕过配置摘要。Draft/OPEN，无D3/ReAct/业务执行。
+
+针对性验证：本次54项中53项通过；新增预算测试因夹具错误混用execution与draft的ScopeIdentity而在quote校验提前失败，已改为原draft invocation的scope，同一预算测试1项通过。保留失败日志，不弱化配置不匹配、原UNKNOWN/预留保留或总期限/回收断言。HTTP测试覆盖CSRF、自批拒绝与独立签发；父总期限各阶段及回收测试通过。Ruff lint/format全库通过。真实55秒验证尚未发生，须先正常候选门禁与独立签发，不能将受控测试称为成本案例收口。

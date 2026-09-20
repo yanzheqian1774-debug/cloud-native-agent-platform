@@ -33,7 +33,11 @@ def require_diagnostic(connection, budget, principal, request):
     row, _ = active(connection, row["delegation_id"], lock=True)
     if not revision(connection, row["delegation_id"]):
         raise AuthorityError("PLANNING_DIAGNOSTIC_NOT_AUTHORIZED")
-    if getattr(budget, "delegation_configuration", None) != row["record"]["planning"]:
+    from .task_timeout_revision import effective_limits
+
+    if getattr(budget, "delegation_configuration", None) != effective_limits(
+        connection, row, "planning"
+    ):
         raise AuthorityError("TASK_DELEGATION_CONFIGURATION_MISMATCH")
     admission = connection.execute(
         "SELECT record FROM authorization_admin.task_diagnostic_admissions "

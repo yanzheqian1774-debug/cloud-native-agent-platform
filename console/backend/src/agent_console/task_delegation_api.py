@@ -86,6 +86,19 @@ def install_task_delegation_routes(service):
                 raise AuthorityError("TASK_CASE_INVALID") from None
             return enroll(service, context, identity, spec)
 
+        @app.post(prefix + "/{identity}/timeout-revision")
+        async def timeout_revision(identity: str, request: Request):
+            from .task_timeout_revision import TimeoutRevision
+            from .task_timeout_revision import revise as revise_timeout
+
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            try:
+                spec = TimeoutRevision.model_validate_json(await request.body())
+            except ValidationError:
+                raise AuthorityError("TASK_TIMEOUT_REVISION_INVALID") from None
+            return revise_timeout(service, context, identity, spec)
+
         @app.post(prefix + "/{identity}/revoke")
         def revoke(identity: str, request: Request):
             session, context = authenticate(request)

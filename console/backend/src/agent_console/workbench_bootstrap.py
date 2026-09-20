@@ -210,7 +210,15 @@ def build_workbench_composition(
             planning_invocations.budget.owner.delegation_configuration = configurations[
                 "planning"
             ]
-            delegation = TaskDelegationService(foundation.grants, configurations)
+            delegation = TaskDelegationService(
+                foundation.grants,
+                configurations,
+                timeout_source=(
+                    planning_invocations.provider.transport_profile,
+                    planning_invocations.provider.configuration,
+                    planning_invocations.budget.owner,
+                ),
+            )
             delegation.migrate()
             from .task_delegation import record_created_object
 

@@ -156,6 +156,7 @@ class PostgresAuthorityRepository:
             (28, "0028_task_delegation.sql", "task-delegation-v1"),
             (29, "0029_task_development.sql", "task-development-v1"),
             (30, "0030_task_cases.sql", "task-cases-v1"),
+            (31, "0031_task_timeout_revision.sql", "task-timeout-revision-v1"),
         ):
             path = self.migration_path.parent / name
             if not path.is_file():

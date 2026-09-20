@@ -85,6 +85,10 @@ class PlanningResponsesProvider:
             "protocol": self.protocol,
             "configured_model": configuration.native_model_id,
             "execution_class": configuration.execution_class,
+            "connect_timeout_seconds": configuration.connect_timeout_seconds,
+            "read_timeout_seconds": configuration.read_timeout_seconds,
+            "total_timeout_seconds": configuration.total_timeout_seconds,
+            "maximum_output_tokens": configuration.maximum_output_tokens,
         }
 
     def suggest(self, request, binding, profile, business_context):

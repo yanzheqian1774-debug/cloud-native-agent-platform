@@ -293,10 +293,11 @@ def target_in_task(connection, row, grant):
 
 
 class TaskDelegationService:
-    def __init__(self, grants, configurations):
+    def __init__(self, grants, configurations, *, timeout_source=None):
         self.grants = grants
         self.repository = grants.repository
         self.configurations = configurations
+        self.timeout_source = timeout_source
 
     def migrate(self):
         path = Path(__file__).parents[2] / "migrations/0028_task_delegation.sql"
@@ -364,6 +365,25 @@ class TaskDelegationService:
                     "INSERT INTO "
                     "authorization_admin.schema_migrations(version,checksum,adapter) "
                     "VALUES(30,%s,'task-cases-v1')",
+                    (checksum,),
+                )
+
+        path = Path(__file__).parents[2] / "migrations/0031_task_timeout_revision.sql"
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.repository.connection_scope() as c:
+            c.execute("SELECT pg_advisory_xact_lock(3230028)")
+            row = c.execute(
+                "SELECT checksum FROM authorization_admin.schema_migrations "
+                "WHERE version=31"
+            ).fetchone()
+            if row and row["checksum"] != checksum:
+                raise AuthorityError("TASK_DELEGATION_SCHEMA_INCOMPATIBLE")
+            if row is None:
+                c.execute(path.read_text())
+                c.execute(
+                    "INSERT INTO authorization_admin.schema_migrations"
+                    "(version,checksum,adapter) "
+                    "VALUES(31,%s,'task-timeout-revision-v1')",
                     (checksum,),
                 )
 
@@ -601,8 +621,10 @@ class TaskDelegationService:
     def _authorize(self, context, identity, request_id):
         with self.repository.connection_scope() as c:
             row, now = active(c, identity, lock=True)
+            from .task_timeout_revision import effective_limits
+
             if any(
-                row["record"][kind] != self.configurations[kind]
+                effective_limits(c, row, kind) != self.configurations[kind]
                 for kind in ("understanding", "planning")
             ):
                 raise AuthorityError("TASK_DELEGATION_CONFIGURATION_MISMATCH")
@@ -753,8 +775,10 @@ class TaskDelegationService:
             ).fetchone()
             from .task_cases import cases
             from .task_development import revision, stopped
+            from .task_timeout_revision import current as timeout_revision
 
             return {
+                "timeout_revision": timeout_revision(c, identity),
                 "development_stopped": stopped(c, identity),
                 "development_revision": revision(c, identity),
                 "cases": cases(c, identity),
@@ -845,7 +869,9 @@ def guard_budget(connection, budget, invocation, quote):
     from .task_development import permitted_unknowns, revision
 
     permitted = permitted_unknowns(connection, row, invocation)
-    limits = row["record"][link["purpose"]]
+    from .task_timeout_revision import effective_limits
+
+    limits = effective_limits(connection, row, link["purpose"], invocation)
     if getattr(budget, "delegation_configuration", None) != limits:
         raise AuthorityError("TASK_DELEGATION_CONFIGURATION_MISMATCH")
     if (
