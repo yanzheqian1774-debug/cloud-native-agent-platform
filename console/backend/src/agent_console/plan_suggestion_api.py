@@ -1,5 +1,7 @@
 """Session and CSRF protected planning invocation routes; no default provider."""
 
+from typing import Literal
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -50,6 +52,24 @@ def install_planning_invocations(
                 request,
                 lambda: invoke(
                     request, lambda service, principal: service.begin(principal, body)
+                ),
+            )
+
+        @app.post(f"{PREFIX}/planning-v2/diagnostics/{'{'}layer{'}'}", status_code=201)
+        async def diagnose(
+            request: Request,
+            body: PlanningRequest,
+            layer: Literal["MINIMAL", "STRUCTURED", "ADAPTER"],
+        ):
+            from .responses_deadline import cancellable_request
+
+            return await cancellable_request(
+                request,
+                lambda: invoke(
+                    request,
+                    lambda service, principal: service.begin(
+                        principal, body, diagnostic_layer=layer
+                    ),
                 ),
             )
 

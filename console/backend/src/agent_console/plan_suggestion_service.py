@@ -63,7 +63,7 @@ class PlanningSuggestionService:
         if len(commitment_key) < 32:
             raise PlanningError("PLANNING_COMMITMENT_KEY_REQUIRED")
 
-    def begin(self, principal, request):
+    def begin(self, principal, request, *, diagnostic_layer=None):
         app = self.application
         scope = app.scope(principal)
         # Purpose permission is exact to the confirmed Problem, before owner lookup.
@@ -73,7 +73,22 @@ class PlanningSuggestionService:
             "PREPARE",
             f"plan:prepare:{request.target.problem.resource_id}",
         )
-        encoded = canonical_bytes(request.model_dump(mode="json"))
+        document = request.model_dump(mode="json")
+        if diagnostic_layer is not None:
+            from .planning_diagnostics import LAYERS
+
+            authorize = getattr(self.budget, "require_diagnostic", None)
+            if diagnostic_layer not in LAYERS or authorize is None:
+                raise AuthorityError("PLANNING_DIAGNOSTIC_NOT_AUTHORIZED")
+            authorize(principal, request)
+            if (
+                request.answers
+                or request.source_proposal
+                or request.predecessor_invocation_id
+            ):
+                raise PlanningError("PLANNING_DIAGNOSTIC_INPUT_INVALID")
+            document["diagnostic_layer"] = diagnostic_layer
+        encoded = canonical_bytes(document)
         if len(encoded) > self.profile.maximum_input_bytes:
             raise PlanningError("PLANNING_INPUT_TOO_LARGE")
         commitment = hmac.new(self.commitment_key, encoded, sha256).hexdigest()
@@ -170,7 +185,12 @@ class PlanningSuggestionService:
             variant="SUCCESSOR_PROPOSAL" if source else "FIRST_PROPOSAL",
             resource_snapshot=resource_snapshot,
             input_commitment=commitment,
-            policy_version=VERSION,
+            policy_version=VERSION
+            if diagnostic_layer is None
+            else "planning-diagnostic.v1",
+            output_schema="plan-suggestion-output.v1"
+            if diagnostic_layer is None
+            else "planning-diagnostic-output.v1",
         )
         decision = app.authority.require(
             principal, "MODEL_GOVERNANCE", "INVOKE_MODEL", use.exact_resource
@@ -186,6 +206,12 @@ class PlanningSuggestionService:
             "call_path": "CONFIRMED_PROBLEM_PLAN_SUGGESTION",
             "provider_configuration": getattr(self.provider, "diagnostics", {}),
         }
+        if diagnostic_layer is not None:
+            from .planning_diagnostics import policy_digest
+
+            record["policy_digest"] = policy_digest(diagnostic_layer)
+            record["diagnostic_layer"] = diagnostic_layer
+            record["call_path"] = "S5_323_DEVELOPMENT_DIAGNOSTIC"
         persisted, claimed = self.invocations.claim(
             scope, principal.principal_id, request.idempotency_key, commitment, record
         )
@@ -217,6 +243,8 @@ class PlanningSuggestionService:
                 "source_proposal": source.model_dump(mode="json") if source else None,
             },
         }
+        if diagnostic_layer is not None:
+            business_context["diagnostic_layer"] = diagnostic_layer
         # Recheck current Problem/Criteria immediately before the network boundary.
         with app.repository.transaction(scope, context_id, authorized=True) as cursor:
             app.validate_target(principal, request.target, cursor.connection)
@@ -292,7 +320,20 @@ class PlanningSuggestionService:
                 self.invocations.finish(scope, invocation_id, result)
                 self.model_use_owner.observed(scope, record, result)
                 return self.read(principal, invocation_id)
+            if diagnostic_layer is not None:
+                result = {
+                    "technical_status": "SUCCEEDED",
+                    "kind": "DIAGNOSTIC",
+                    "diagnostic_layer": diagnostic_layer,
+                    "passed": raw.get("diagnostic_passed") is True,
+                    "reason": "DIAGNOSTIC_ONLY_NOT_A_BUSINESS_PLAN",
+                }
+                self.invocations.finish(scope, invocation_id, result)
+                self.model_use_owner.observed(scope, record, result)
+                return self.read(principal, invocation_id)
             raw = raw["text"]
+        if diagnostic_layer is not None:
+            raise PlanningError("PLANNING_DIAGNOSTIC_RESPONSE_INVALID")
         proposal = None
         try:
             if not isinstance(raw, str) or len(raw.encode()) > 131072:

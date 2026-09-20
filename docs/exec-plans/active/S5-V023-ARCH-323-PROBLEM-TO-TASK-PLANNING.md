@@ -1505,3 +1505,11 @@ G1：新增0029 authority追加修订及逐次诊断许可；正式session/CSRF 
 真实库无副作用入口预检比较125表完全一致，原3预留/2结算、原规划UNKNOWN及receipt、零Plan/Approval/执行对象保留；本阶段真实调用0。集中入口real-demo/323-development-v2-activate.command待最终source/tree、entry hashes及候选CI绑定后使用：一次Human输入执行原323服务停止、一致备份、正式装配迁移、精确版本/原账本核对、独立主体签发及读回。调用者继续入口为continue_development_v2.py，无独立签发凭据消费。既定connect5/read30/total60和输出8192不变；不纳入期限变体、身份续期、生产部署、321或D3。任何激活启动回执已存在时先恢复核对，不重复执行入口。
 
 正常提交hook首次未通过：2133 passed / 201 skipped / 1 failure，未提交。失败为既有理解adapter缺失usage用例，worker在IPC耗时2.056s达到原2s连接期限，尚未连接；reaped=true，原回执保留于development-v2/commit-hooks.log。一次保持原断言/配置的诊断记录IPC0.1919s、总0.2418s、RESULT_ACCEPTED并回收；未复现失败。主机10逻辑核、观察到负载14–16，存在调度延迟可能，但不将该推断当已证根因。未修改321 adapter、原期限或断言；诊断后只作一次完整正常hook复核，其结果单独保存，不用定向通过冒充完整门禁。
+
+### 24.5 激活后故障恢复与分层诊断 G1（2026-09-20）
+
+Human已批准V2集中激活和持续同案诊断。实际激活在owner迁移/服务切换后因已打开httpx客户端重复进入context而中断；按原Human确认的精确manifest恢复剩余正式独立签发并读回，未重做迁移/备份。首次后继在STARTUP遇到继承终端stdin revoked；服务使用DEVNULL重启，同候选无模型spawn/reap验证通过。第二次后继到WAIT_HEADERS约30秒失败。两次后继和原UNKNOWN均保留，不能从时长推断已证实的远端原因。
+
+实施计划：在323规划owner内增设开发诊断入口，复用原PlanningRequest、exact授权、同案target、signed V2及逐次admission、claim/幂等、原budget reserve/guard/receipt/settlement；仅固定MINIMAL、STRUCTURED、ADAPTER三个诊断层，禁止客户端传任意prompt/endpoint/config。不创建Proposal或Plan，不重跑理解。每个层次具有独立调用标识、同案及假设审计；最小固定响应、最小严格schema、正式planning schema短响应分别隔离连通、结构化支持、adapter验证，之后才完整同案。诊断不改变既定Kimi配置、输出上限或期限，不新增模型/账本/持久基础设施或迁移。Planning专用worker保留allowlisted异常类别和失败阶段，不保存原异常/请求/响应正文；不修改321通道。旧规划入口/承诺/结果语义保持原样；新诊断缺signed V2或精确admission即拒绝。属于已批准诊断范围内G1内部BFF能力，无CRD/frozen Contract/业务生命周期改动。
+
+验证：诊断入口无V2/目标或键不匹配拒绝；各层payload不接收任意覆盖；全部保留model/store/background/reasoning/token上限；成功诊断不产生计划；失败/UNKNOWN及费用记录保持；原正常planning兼容；错误内容不泄露；定向与正常门禁后只切换原隔离服务。主要风险是把诊断成功误作业务成功，明确以DIAGNOSTIC结果分离，最终仍须真实完整同案、确认和持久读回。

@@ -479,3 +479,50 @@ def test_settlement_without_terminal_result_still_blocks_successor(env):
     third = claim("third", "third")
     with pytest.raises(AuthorityError, match="OUTCOME_UNKNOWN"):
         b.reserve("third-budget", third, quote)
+
+
+def test_fixed_diagnostic_requires_signed_revision_exact_admission_and_scope(env):
+    from agent_console.planning_diagnostics import require_diagnostic
+    from agent_console.workbench_business_problem import OwnerPrincipal
+
+    e = env
+    d, spec = setup(e)
+    b, _, _ = planning(e, d)
+    principal = OwnerPrincipal("human:reader", "tenant-a", "quality")
+    with (
+        e.service.repository.connection_scope() as c,
+        pytest.raises(AuthorityError, match="NOT_AUTHORIZED"),
+    ):
+        require_diagnostic(c, b, principal, NS(idempotency_key="probe"))
+    revise(e.service, e.contexts["approver"], d, spec)
+    permit = admit(
+        e.service,
+        e.contexts["reader"],
+        d,
+        DiagnosticAdmission(
+            request_key="probe",
+            unknown_invocation_ids=["old-unknown"],
+            reason="minimum fixed protocol probe",
+        ),
+    )
+    target = permit["record"]["target"]
+    request = NS(idempotency_key="probe", target=NS(model_dump=lambda **kw: target))
+    with e.service.repository.connection_scope() as c:
+        require_diagnostic(c, b, principal, request)
+        for denied in [
+            OwnerPrincipal("human:other", "tenant-a", "quality"),
+            OwnerPrincipal("human:reader", "other", "quality"),
+        ]:
+            with pytest.raises(AuthorityError, match="NOT_AUTHORIZED"):
+                require_diagnostic(c, b, denied, request)
+        with pytest.raises(AuthorityError, match="NOT_AUTHORIZED"):
+            require_diagnostic(
+                c, b, principal, NS(idempotency_key="different", target=request.target)
+            )
+        with pytest.raises(AuthorityError, match="NOT_AUTHORIZED"):
+            require_diagnostic(
+                c,
+                b,
+                principal,
+                NS(idempotency_key="probe", target=NS(model_dump=lambda **kw: {})),
+            )

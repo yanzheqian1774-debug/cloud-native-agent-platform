@@ -52,7 +52,9 @@ class PlanningInvocationTarget(Immutable):
     variant: Literal["FIRST_PROPOSAL", "SUCCESSOR_PROPOSAL"]
     resource_snapshot: ExactReference | None
     input_commitment: Digest
-    output_schema: Literal["plan-suggestion-output.v1"] = "plan-suggestion-output.v1"
+    output_schema: Literal[
+        "plan-suggestion-output.v1", "planning-diagnostic-output.v1"
+    ] = "plan-suggestion-output.v1"
     policy_version: Identity
 
     @model_validator(mode="after")

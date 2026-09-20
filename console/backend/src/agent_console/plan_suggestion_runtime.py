@@ -107,6 +107,10 @@ class PlanningResponsesProvider:
                 ),
                 self.configuration,
             )
+            failure = result.pop("transport_failure", None)
+            if failure is not None:
+                diagnostic["exception_category"] = failure["category"]
+                diagnostic["reason"] = "TRANSPORT_FAILURE"
             result["deadline"] = diagnostic
             return result
         except ResponsesBoundaryError as exc:
@@ -156,6 +160,11 @@ class PlanningResponsesProvider:
         }
         if self.protocol == "KIMI_RESPONSES_V1":
             document["reasoning"] = {"effort": self.configuration.reasoning_effort}
+        layer = business_context.get("diagnostic_layer")
+        if layer is not None:
+            from .planning_diagnostics import diagnostic_document
+
+            document = diagnostic_document(document, layer)
         payload = canonical_bytes(document)
         # Byte count is a conservative token admission bound, including schema.
         if len(payload) > self.configuration.maximum_input_tokens:
@@ -177,11 +186,25 @@ class PlanningResponsesProvider:
                     else {}
                 ),
             )
-        except (OSError, TimeoutError):
-            raise ConnectionError from None
+        except (OSError, TimeoutError) as exc:
+            from .kimi_deadline import exception_category
+
+            return {
+                "text": None,
+                "failure": "PROVIDER_OUTCOME_UNKNOWN",
+                "measurement": {},
+                "transport_failure": {"category": exception_category(exc)},
+            }
         except DraftAssistanceError as exc:
             if str(exc) == "TRANSPORT_AMBIGUOUS":
-                raise ConnectionError from None
+                from .kimi_deadline import exception_category
+
+                return {
+                    "text": None,
+                    "failure": "PROVIDER_OUTCOME_UNKNOWN",
+                    "measurement": {},
+                    "transport_failure": {"category": exception_category(exc)},
+                }
             raise PlanningProviderFailure("PLANNING_CREDENTIAL_UNAVAILABLE") from None
         from .plan_suggestion_invocation import PlanningProviderResult
         from .planning_measurement import measurement
@@ -239,6 +262,15 @@ class PlanningResponsesProvider:
                 raise ValueError
         except (KeyError, TypeError, ValueError, IndexError):
             return failed("PLANNING_PROVIDER_RESPONSE_INVALID")
+        if layer is not None:
+            from .planning_diagnostics import validate_diagnostic
+
+            return {
+                "text": None,
+                "failure": None,
+                "measurement": receipt,
+                "diagnostic_passed": validate_diagnostic(layer, text),
+            }
         try:
             parsed = PlanningProviderResult.model_validate_json(text)
             if (
@@ -341,6 +373,12 @@ class PlanningBudget:
 
         guard = getattr(self.owner, "dispatch_guard", None)
         return guard(normalized, quote) if guard else nullcontext()
+
+    def require_diagnostic(self, principal, request):
+        from .planning_diagnostics import require_diagnostic
+
+        with self.owner._connection() as connection:
+            require_diagnostic(connection, self.owner, principal, request)
 
     def pricing(self):
         from .draft_provider_budget_postgres import PostgresProviderCallBudget
