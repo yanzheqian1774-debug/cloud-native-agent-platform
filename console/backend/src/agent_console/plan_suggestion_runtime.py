@@ -278,28 +278,37 @@ class PlanningResponsesProvider:
                 "measurement": receipt,
                 "diagnostic_passed": validate_diagnostic(layer, text),
             }
+        from pydantic import ValidationError
+
+        from .planning_output_diagnostics import diagnostic
+
+        validation = None
         try:
             parsed = (
                 FlexiblePlanningProviderResult
                 if request.policy
                 else PlanningProviderResult
             ).model_validate_json(text)
+        except ValidationError as exc:
+            validation = diagnostic(text, "SCHEMA_OR_CONTRACT", exc)
+        else:
             if (
                 parsed.semantics is not None
                 and parsed.semantics.target != request.target
             ):
-                raise ValueError
-            if (
+                validation = diagnostic(text, "TARGET_MISMATCH")
+            elif (
                 parsed.semantics is not None
                 and request.policy
                 and parsed.semantics.policy != request.policy
             ):
-                raise ValueError
-        except ValueError:
+                validation = diagnostic(text, "POLICY_MISMATCH")
+        if validation is not None:
             return {
                 "text": None,
                 "failure": "PLANNING_OUTPUT_SCHEMA_INVALID",
                 "measurement": receipt,
+                "validation_diagnostic": validation,
             }
         return {"text": text, "failure": None, "measurement": receipt}
 

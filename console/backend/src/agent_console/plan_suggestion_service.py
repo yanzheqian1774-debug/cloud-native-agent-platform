@@ -315,6 +315,8 @@ class PlanningSuggestionService:
                 "deadline": raw.get("deadline"),
                 "pricing": self.budget.pricing(),
             }
+            if raw.get("validation_diagnostic") is not None:
+                receipt["validation_diagnostic"] = raw["validation_diagnostic"]
             self.invocations.save_receipt(scope, invocation_id, receipt)
             from .planning_measurement import settle
 

@@ -1663,3 +1663,9 @@ Human授权复用既有9次调用及已确认Problem/Criteria，先离线核验�
 首个真实验证复用首次完整FREE请求的Problem/Criteria/schema/answers=[]，仅read=55；独立新key及既有诊断准入关联成本三UNKNOWN。成功后核验8000、排除试验项目和无虚构结论，再页面确认/刷新/PG；若新结果没有新增信息停止该分支。不会把旧30秒当不可调整业务要求，也不直接绕过配置摘要。Draft/OPEN，无D3/ReAct/业务执行。
 
 针对性验证：本次54项中53项通过；新增预算测试因夹具错误混用execution与draft的ScopeIdentity而在quote校验提前失败，已改为原draft invocation的scope，同一预算测试1项通过。保留失败日志，不弱化配置不匹配、原UNKNOWN/预留保留或总期限/回收断言。HTTP测试覆盖CSRF、自批拒绝与独立签发；父总期限各阶段及回收测试通过。Ruff lint/format全库通过。真实55秒验证尚未发生，须先正常候选门禁与独立签发，不能将受控测试称为成本案例收口。
+
+### 25.8 成本read55单变量结果与校验诊断（2026-09-21，G1）
+
+正式修订12a1ecb0已由独立主体签发并加载c422640。原完整业务请求（新key 323-cost-full-read55-01）在54.058963秒返回completed/真实用量3749入1845出，总期限尚余5.941037秒；worker13571已回收。本次不是UNKNOWN，旧六条UNKNOWN及预留不变。请求cd4b22ab-d649-4f12-9b94-dea4a57f4c1d结果为SUCCEEDED/INVALID/PLANNING_OUTPUT_SCHEMA_INVALID，未产生Plan。回执脚本将正常201误作状态异常，已通过原request只读读回，不重发。
+
+当前adapter把Pydantic结构/确定性契约、target不一致、policy不一致全部压缩为相同错误，未保留正文；因此不能据现有回执断言具体字段或业务规则。最小诊断实现：仅追加受限字段路径、校验类型、白名单契约代码、输出长度与摘要，保留于原provider receipt；不记录正文、input值、自由错误信息、凭据或推理，不放宽原校验，不改变provider请求。针对错误路径、未知键脱敏、契约分类及持久回执测试后正常提交/CI，沿用已签发55秒配置和原case/账本加载新候选，不重复签发。下一次调用假设为定位已观察到的INVALID边界，输入/schema/期限不变；保留原INVALID，不覆盖或冒充修复原结果。若产生明确契约错误，再仅针对该错误做必要修复或输入说明；无新信息则结束该分支。
