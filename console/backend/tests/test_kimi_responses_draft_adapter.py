@@ -8,6 +8,7 @@ import time
 from dataclasses import replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
@@ -892,6 +893,7 @@ def test_worker_result_is_rejected_if_parent_validation_finishes_at_deadline(
     kimi_mock, monkeypatch
 ):
     from agent_console import kimi_deadline
+    from deadline_test_clock import DeadlineClock
 
     server, cert, tmp_path = kimi_mock
     config = replace(
@@ -909,10 +911,16 @@ def test_worker_result_is_rejected_if_parent_validation_finishes_at_deadline(
         }
     )
     original = kimi_deadline.ProviderObservation
+    clock = DeadlineClock()
+    validated = []
+    monkeypatch.setattr(
+        kimi_deadline, "time", SimpleNamespace(monotonic=clock.monotonic)
+    )
 
     def delayed_validation(**value):
         result = original(**value)
-        time.sleep(1.05)
+        validated.append(True)
+        clock.expire()
         return result
 
     monkeypatch.setattr(kimi_deadline, "ProviderObservation", delayed_validation)
@@ -931,6 +939,9 @@ def test_worker_result_is_rejected_if_parent_validation_finishes_at_deadline(
     assert transport.last_deadline_metrics.reason == "TOTAL_DEADLINE"
     assert transport.last_deadline_metrics.reaped
     assert transport.dispatch_count == len(_KimiHandler.requests) == 1
+    assert validated == [True]
+    assert not clock.wall_guard_fired
+    assert time.monotonic() - clock.started < clock.wall_limit + 1
 
 
 def test_worker_silences_sensitive_diagnostics_and_leaves_no_secret_files(

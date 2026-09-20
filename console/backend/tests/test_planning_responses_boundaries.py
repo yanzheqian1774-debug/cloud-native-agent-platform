@@ -305,12 +305,31 @@ def test_formal_worker_phase_substitutes_are_bounded(
     network, monkeypatch, phase, record_property
 ):
     from agent_console import responses_deadline
+    from deadline_test_clock import DeadlineClock
     from responses_deadline_test_jobs import NetworkPhaseJob
 
     original = responses_deadline.supervise
+    clock = DeadlineClock()
+    reached = network.endpoint.cert.parent / f"stalled-{phase}"
+    loads = responses_deadline.json.loads
+
+    def stage_message(data):
+        message = loads(data)
+        if message == {"stage": phase} and reached.exists():
+            clock.after_stage_read()
+        return message
+
+    # Test the deadline decision at the actual worker phase, independently of
+    # host scheduling. Real startup/HTTPS total-bound tests keep the real clock.
+    monkeypatch.setattr(responses_deadline, "time", NS(monotonic=clock.monotonic))
+    monkeypatch.setattr(
+        responses_deadline,
+        "json",
+        NS(loads=stage_message, dumps=json.dumps),
+    )
 
     def stage_supervise(job, configuration):
-        return original(NetworkPhaseJob(job, phase), configuration)
+        return original(NetworkPhaseJob(job, phase, str(reached)), configuration)
 
     monkeypatch.setattr(responses_deadline, "supervise", stage_supervise)
     response = send(network.client)
@@ -322,11 +341,17 @@ def test_formal_worker_phase_substitutes_are_bounded(
     assert d["reason"] == "TOTAL_DEADLINE"
     assert d["reaped"]
     assert d["decision_seconds"] < 1.6
+    assert not clock.wall_guard_fired
+    assert reached.exists()  # the injected function ran, not only a phase label
+    assert time.monotonic() - clock.started < clock.wall_limit + 2
     assert network.endpoint.requests == (
         1 if phase in {"VALIDATE_RESPONSE", "CLOSE"} else 0
     )
 
 
+@pytest.mark.parametrize(
+    "network", [{"totalTimeoutSeconds": 5, "readTimeoutSeconds": 5}], indirect=True
+)
 def test_actual_local_https_retains_separate_ids_and_usage(network):
     response = send(network.client)
     saved = receipt(network, response)

@@ -50,11 +50,13 @@ class NetworkPhaseJob:
 
     job: object
     phase: str
+    reached_path: str
 
     def run(self, progress):
         import http.client
         import socket
         import ssl
+        from pathlib import Path
 
         from agent_console.plan_suggestion_invocation import PlanningProviderResult
 
@@ -68,6 +70,7 @@ class NetworkPhaseJob:
         }[self.phase]
 
         def stalled(*args, **kwargs):
+            Path(self.reached_path).touch(exist_ok=False)
             progress(self.phase)
             time.sleep(20)
 

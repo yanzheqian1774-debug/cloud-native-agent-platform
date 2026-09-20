@@ -1513,3 +1513,87 @@ Human已批准V2集中激活和持续同案诊断。实际激活在owner迁移/�
 实施计划：在323规划owner内增设开发诊断入口，复用原PlanningRequest、exact授权、同案target、signed V2及逐次admission、claim/幂等、原budget reserve/guard/receipt/settlement；仅固定MINIMAL、STRUCTURED、ADAPTER三个诊断层，禁止客户端传任意prompt/endpoint/config。不创建Proposal或Plan，不重跑理解。每个层次具有独立调用标识、同案及假设审计；最小固定响应、最小严格schema、正式planning schema短响应分别隔离连通、结构化支持、adapter验证，之后才完整同案。诊断不改变既定Kimi配置、输出上限或期限，不新增模型/账本/持久基础设施或迁移。Planning专用worker保留allowlisted异常类别和失败阶段，不保存原异常/请求/响应正文；不修改321通道。旧规划入口/承诺/结果语义保持原样；新诊断缺signed V2或精确admission即拒绝。属于已批准诊断范围内G1内部BFF能力，无CRD/frozen Contract/业务生命周期改动。
 
 验证：诊断入口无V2/目标或键不匹配拒绝；各层payload不接收任意覆盖；全部保留model/store/background/reasoning/token上限；成功诊断不产生计划；失败/UNKNOWN及费用记录保持；原正常planning兼容；错误内容不泄露；定向与正常门禁后只切换原隔离服务。主要风险是把诊断成功误作业务成功，明确以DIAGNOSTIC结果分离，最终仍须真实完整同案、确认和持久读回。
+
+### 24.6 真实同案完成、持久读回及计量回执（2026-09-20）
+
+V2正式追加修订已由原独立审批主体`human:demo323-approver`签发并读回，原委托/账本未覆盖。实际运行候选`13ef646773cb8ea58f197b01e40dad7c736d3fa9`，tree `d1a6f3001850e731d234df6a3b6242ea5eadd5c3`；原隔离服务19436已生效，stdin明确DEVNULL。服务切换前后128表逐表快照比较未变，未重复迁移/独立签发。此处后续文档提交不代表服务自动换版。
+
+已完成三个固定真实诊断：MINIMAL `5ff2a944-e9dc-4013-b828-7337fb9f0939`（6.66s，108/54 input/output tokens）；STRUCTURED `39583501-ca0b-4de1-b5f1-3d700ee20a37`（4.25s，195/58）；ADAPTER `b5906030-9804-4987-b4ad-1eb5e3028d41`（7.40s，1487/82）。均为DIAGNOSTIC，不作为业务方案、业务UNSUPPORTED判断或生产质量证明。
+
+同一Problem `f4e3f8b4-a9ba-5909-80bf-846c8827f4de`及原Criteria Set `59f4f43f-a01e-5f82-a064-296338623860`的完整真实规划`588f8175-4a38-4859-a6ff-baab3fcf64c6`返回VALID_SUGGESTION；仅增加简洁表达要求，未改口径/配置/期限/资源事实。实际29.73s，input3069/output1684 tokens，估算USD0.058232。该单次成功接近30s读期限，不构成稳定性证明，也不能反证旧WAIT_HEADERS失败根因。原理解流程未重复。
+
+Proposal/Plan `65acd64a-2338-43a2-bbc6-174440b90595` v1，proposal digest `56cc341738c5a81948a2ddf381387baa9d3e26f01e9130b92f323f8f9ad2c373`，plan digest `ce940419b496623c94e32f2ddae5add15e6fed5406a4c1ae618e172cdac0d3fb`。正式exact PLAN READ/APPROVE后，通过真实浏览器确认，审批`1c08b6a7-eef0-46b9-b124-0a873f5e2f36`，2026-09-20 19:17:37 Asia/Shanghai。确认后辅助脚本因HTTP读回缺baseURL失败，先核对数据库确有唯一Plan/Approval，只恢复只读检查；没有二次确认。新浏览器会话及页面刷新读回历史一致。三阶段五任务、原判定日/数量/单位/异常规则、分析与人工复核职责通过计划审查；快照和两个人员资源仍缺，业务执行及业务验收未发生。Assignment/WorkflowRun/TaskRun/Attempt均0。
+
+全部9条有预留调用均完成独立usage/measurement exact授权和正式API读回：6条结算共input7528/output3372 tokens，保守估算USD0.127664（非供应商发票）；其中既有理解USD0.051232、本轮三诊断及真实规划USD0.076432。原UNKNOWN及两次新失败（STARTUP、WAIT_HEADERS）均原样保留，共3条未结预留USD2.064384；不能计作实际费用或零费用，不声称远端已停止。无重置、补记成功、重复旧幂等键或额外理解调用。
+
+候选正常hooks为2059 passed/283 skipped/0失败；专属PG15 passed；定向装配/诊断21 passed，新增安全分类测试纳入正常hooks；提交后ruff/format通过。候选CI12/12 SUCCESS，实际checkout为13ef646及临时merge b4b68a6，tree均同上；详见`real-demo/development-v2/layered-ci/ci-checkout-audit.json`。首轮PG测试缺认证（14 setup errors）及命令参数误用均保留记录，不改测试断言。前端原演示标签“原窗口限额”改为“V2 持续开发验证”，npm lint/build通过；首轮构建遗漏live路由flag被浏览器检查发现，恢复原index后按原live配置重建，最终JS逐字比较仅标签变化，旧资产全部保留，最终只读浏览器验证通过。
+
+最终证据目录`/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/development-v2`：正式activation/readback、各次hypothesis/admission/receipt、`real-proposal-review.json`、`confirmed-browser-v2-label.json`、`real-confirmed-v2-refreshed.png`、`final-usage-all.json`。原失败及历史文件不覆写。保持原Draft PR #183、Session OPEN；未改321、D3、管理员权限或生产部署，未合并/关闭。已完成本轮真实规划→确认→持久读回；资源准备/实际执行/业务验收不在本轮成果内。
+
+交付文档提交的正常hooks首次失败，未提交：2057 passed/283 skipped/2 failed。既有Kimi父进程迟验证测试未到HTTP（预期1个请求，实际0），规划本地HTTPS计量用例返回空measurement；完整原日志`delivery-doc-hooks.log`保留。对原两测试仅外置阶段采集，不改变源码、期限或断言的一次诊断为2 passed：Kimi实际到HTTP/VALIDATE_RESPONSE，父进程迟验证在1.2308s按原1s总期限拒绝并回收；规划0.2885s完成并回收、ID及usage断言通过。原规划失败详细deadline未保留，不能将本次通过当原根因证明；主机负载13.93/16.64/14.60仅支持调度竞争假设。未改321或忽略测试，诊断后一次正常完整hook复核结果另存`delivery-doc-hooks-revalidation.*`；真实同案不重跑。
+
+上述一次完整复核实际为2058 passed/283 skipped/1 failed：`test_kimi_phase_substitutes[kimi_network0-SEND_REQUEST]`在原1秒期限内仍为STARTUP（decision1.0004s，未到指定阶段），保持原失败。此后未继续盲目重跑，未修改321/期限/阶段断言、未跳过hooks。交付登记两份文档保留工作区待提交；实现HEAD/原PR仍为已通过门禁和CI的13ef646，真实同案/费用证据完成不等于该文档提交已通过。此项本地阶段到达不稳定为未解决工程限制，原始回执保留供后续诊断。
+
+### 24.7 采购固定任务语义复核：确认成功不等于契约符合
+
+2026-09-20续接只读核验：原Plan/Approval逐字段与§24.6持久回执一致，全部七条规划provider receipt未变、worker均已回收且PID不存在；仍9预留/6结算/3 UNKNOWN，未结预留合计USD2.064384，所有执行对象0。未重新调用理解或采购规划。新回执`real-demo/cross-scenario/recovery-readback.json`。
+
+**更正§24.6“通过计划审查”的范围**：该记录证明真实技术调用、结构校验、页面确认和持久读回；不能证明符合§3.0/§4.3固定Task职责。原审查文件保留，但本次语义结论为`SEMANTIC_CONTRACT_MISMATCH`，不是采购业务完成或全链路验收。
+
+| stable Task | §4.3批准的样例职责 | 已确认Plan v1实际职责 | 结论 |
+| --- | --- | --- | --- |
+| T1 | 读取快照，产生A1 | 读取并校验快照，产生过滤行和异常 | 合并了T2a职责，I/O边界变化 |
+| T2a | 校验A1，产生A2及lineage | 识别延期订单行 | stable ID职责错位 |
+| T2b | 延期识别，产生A3分区 | 按供应商/单位汇总 | stable ID职责错位 |
+| T3a | 供应商汇总，产生A4 | 生成报告草案 | stable ID职责错位 |
+| T3b | 确定性报告，产生A5 | 人工复核报告 | 替换了原职责，并将Human复核放入执行Task形状 |
+
+原§4.3 S4明确“验收/非新的execution Task”；ARCH-264的terminal Run→Evaluation→独立Human Confirmation→Outcome不能由模型建议的T3b取代。建议中的人工复核可作为草稿质量步骤讨论，但不是已经发生的业务验收，也未经本计划固定五Task语义批准。实际Plan只要求一名数据分析角色加人工复核角色，与E1/E2职责也不能凭角色数量等价认定。
+
+代码原因已定位：`plan_suggestion_policy.py`明确要求read/validate/classify/aggregate/report，`PlanSemantics.validate_graph`仅检查三阶段Task IDs与线性依赖，没有typed operation/I/O语义约束；自然语言职责不同仍会通过。此为产品校验缺口，不归因于用户已确认就自动豁免。§4日期是设计样例，实际确认Criteria的2026-09-20可合法不同；日期实例化与stable Task职责变化须分开判断。
+
+另有上游输入冲突：既有合成Criteria rubric实际要求“口径与数据准备、延期识别与按供应商/单位汇总、报告复核三个阶段”及“数据分析与人工复核职责”。模型结果响应了这份业务输入，不能笼统说它忽略最新Criteria；但该rubric不构成对§3.0固定stable Task语义及独立业务验收契约的架构修订。输入/固定policy冲突未在生成或确认前显式提示，也是产品缺口；后续应先解释/解决冲突，而非靠重试模型或改写已确认对象。
+
+原Plan `65acd64a-2338-43a2-bbc6-174440b90595` v1及Approval保留，不改数据库、不重新规划、不冒充满足执行前置。后续如要用于固定采购执行，必须先处理职责差异并按D1走显式successor/确认；本轮不追认、不创建successor。下一片准入应将本Plan作为不兼容负例，禁止直接映射五个既定operation。typed operation语义校验是待评审修复任务，不能靠关键词硬猜模型文本。
+
+### 24.8 阶段时序测试最小修复
+
+已留存失败分别是：阶段替身未到SEND_REQUEST就耗尽1秒启动预算；父进程迟验证用例尚未HTTP便超时；计量用例未返回measurement。只有第一项明确有STARTUP回执，另外两项原始根因不可补证。修复针对测试将“到达指定注入阶段”与“整个冷启动必须在1秒内”混为一个断言的问题，不声称修复真实provider稳定性。
+
+仅测试侧增加parent-only `DeadlineClock`：保留配置1秒及原stage/reason/回收/请求数断言，真实spawn/TLS继续发生；worker在注入函数写入临时到达标记，父进程收到该阶段后在下一期限检查推进逻辑时钟至到期。未到达时独立10秒真实看门狗使测试失败；cleanup仍用真实经过时间。原真实启动1秒、真实HTTPS总期限/取消/零重发测试不变，不能把逻辑时钟测试计为真实1秒网络保证。父进程验证用例在真实验证返回时精确推进至期限，并新增“验证确实执行一次”断言，去掉固定sleep。仅非期限用途的ID/计量成功测试使用既有5秒fixture配置，不变更任何真实模型配置。
+
+未改321生产实现、工作树、provider配置或服务进程；共享Kimi测试文件只改阻断提交的父进程验证夹具。新增变更在原工作树完成定向测试和正常hooks，不跳过或排除任何测试；结果及最终候选单独登记，旧失败日志不覆盖。 定向验证实际52 passed/7 skipped（未配置专属PG的既有用例），包含真实启动/HTTPS期限、回收、重放及本次阶段时序修复；`cross-scenario/timing-targeted.xml`保存每项结果。测试夹具改动不涉及PG实现，复用原候选已通过的PG证据，不将本轮skip宣称为PG通过。 完整正常hook测试实际2059 passed/283 skipped/0 failed；提交因agent在hook运行期间补充上述Criteria冲突文档而被“files were modified”门禁拒绝，非pytest失败。该操作失误保留在`cross-scenario/commit-hooks.log/xml`；冻结文件后再次正常提交，最终结果另存`commit-final-hooks.*`，不修改或排除测试。
+
+### 24.9 第二真实场景准备与正式准入缺口
+
+Human本轮授权同任务新增独立成本合成案例；17:03持续开发验证有效，不重问调用/费用。当前schema支持`GENERAL_READ_ONLY`及1–32个任务，不能强制采购五任务。新场景必须独立context/Problem/Criteria/调用键，使用纠正后的项目、期间、基线、费用范围/归集规则；没有账单则只形成获取数据与分析建议计划，实际支出、涨幅、原因、节约均UNKNOWN。
+
+正式机制尚不支持第二案例：`task_delegation.approve`禁止同task/subject重复委托；`draft_records/task_problem_ids`限定原context；`record_created_object`拒绝第二Problem；`task_development.permitted_unknowns`限定同Problem规划后继，不能放行新理解调用。不能借复用采购exact grants、换主体/ledger、放宽SQL绕过这些边界。
+
+已准备单一G2决定包`real-demo/cross-scenario/CASE-ENROLLMENT-DECISION.md`：仅追加一个成本case、owner唯一绑定、独立DECIDE签发、原ledger共享串行锁、原三UNKNOWN精确保留为负债并允许该case理解/规划准入、未列UNKNOWN仍阻断；包含G1范围、兼容/旧二进制保护、验证矩阵及门禁后一次原实例集中激活。批准前状态PROPOSED，不编码该authority变更、不签发或调用。请求此决定是改变原已接受单案例及同案准入语义所需，不是再次审批已接受的费用风险。
+
+合成资料：星桥内部知识助手，2026年9月1–20日Asia/Shanghai，未结账；同口径9月预算CNY10,000，比较8月相同20天；下月建议针对10月。账单/实际资源未提供。先由真实模型必要补问；合成回答后明确一次纠正：平台分摊**不含**模型API费，两项分别归集；共享调用按项目标签，缺标签列未分配，不按人数猜摊。保存旧回答与纠正，最终确认目标/标准及规划必须反映最新口径。此为将来用户输入准备，不是已发生模型响应或分析结论。
+
+### 24.10 下一实施切片任务包：资源发现、核验与执行前置
+
+**编号/版本不变**：D2为已接受且已实施的confirmed-Problem规划调用用途；D3仍`DIRECTION_ACCEPTED / EXECUTION_CONTRACT_DEFERRED`；增量二仍§6 I2.1–I2.6，其中I2.5是结果验收，D3不等于整个增量二。本节细化§13.8原“无effect资源/分工准入与同Run身份校验”切片，状态PROPOSED；不创建新Task/Session/PR，不实施D3。
+
+**任务目标**：Human读到已确认Plan后，能查看权限范围内的候选及匹配理由、exact版本与运行缺口、每Task的Definition/Instance/Assignment对应，以及未来单Run与验收证据契约；候选、已选择、当前可用、获准执行四种事实分开。不得从资源名称或模型自述推断就绪。
+
+| 交付 | CURRENT及可复用来源 | 本片需补齐 | 后续决定/执行边界 |
+| --- | --- | --- | --- |
+| 授权资源发现/推荐 | `matching.PublishedRoleMatcher`可对published Definition做有界匹配并给reason/tie/missing；323 resolver目前只查已selected的引用，不调用matcher | 对员工、Skill、MCP、Knowledge接入各owner的授权候选读取；返回requirement→候选exact ref、能力/I/O/只读用途匹配理由、未满足项与来源快照；先鉴权再list/count，ties交Human选择 | matcher输入目前要求canonical Workflow revision/digest；尚无Workflow的Plan不能填虚拟ID，先审定Plan-target adapter契约。不自动发布/创建资源或授予权限 |
+| 资源可用性核验 | `PlanningResourceResolver`支持不可变snapshot；`EmployeePlanningReader`核对授权与exact发布版本；未接reader为UNKNOWN | 各owner逐项证明revision/digest、operation、I/O schema、权限、trust/credential-reference、runtime条件/观测时间；明确MISSING/UNREADABLE/UNKNOWN/UNAVAILABLE，不披露无权资源存在性 | published Definition不等于Instance可用；MCP管理测试不等于业务调用；禁止为“检查”执行模型/Skill/MCP操作 |
+| 分工准入 | A019区分Definition/Instance/Assignment；当前Plan仅职责/Definition引用 | 有界typed Task参与绑定快照：Task→已选Definition exact ref→Instance→Assignment→scope/有效期/职责覆盖；root仅协调，不能代理其他Task权限 | D3 root/Task关系、兼容方案及owner边界待Human接受；不创建Instance/Assignment/Placement |
+| 执行衔接 | D1 Plan/Approval原子持久；现有`GovernedExecutionApplication.start`验证旧exact批准及单managed Skill路径 | exact Plan/Approval→Workflow节点/Task映射→候选单Run admission identity；scoped key+canonical digest/CAS/唯一约束；依赖边和artifact字段/schema映射 | 不调用start当预检，不创建Run。真实coordinator、fence/retry/pause/终态表仍需D3及后续执行授权；采购现Plan的职责错位必须阻断 |
+| 验收衔接 | A263/A266定义Attempt-bound Use/Evidence，A264定义terminal Run→Evaluation→Human→Outcome；实际业务API链未接通 | 每Task产物type/version/digest/lineage→Evidence来源/可见性→criterion exact revision/evaluator所需输入的契约矩阵；缺证据显式UNKNOWN | I2.5后续实现Evaluation/Confirmation/Outcome；本片不创建Evaluation、不认定成本已分析或采购已解决 |
+
+**建议实现接口及owner**：规划application协调只读ports，资源owner独占catalog/eligibility，Workflow Control独占Plan与选择变化的successor/确认，Execution独占准入/Run/Task/Attempt，Runtime独占Placement。候选查询输入trusted scope/principal、exact Plan/version/digest及requirement；输出有界候选与原因/owner snapshot。候选选择若改变已批准语义，走D1 successor，不写入历史Plan。核验输入exact refs及expected版本，输出append-only准备快照；仅健康变化刷新snapshot，不改Plan。路由名/私有schema/迁移在批准后的G1中定稿；不改CRD或新增基础设施。
+
+**依赖契约**：Task node ID不是标题，必须携带受支持operation与typed I/O映射；artifact reference绑定生产Task/Attempt、schema/digest、授权scope；只能消费已成功前驱的相容产物，缺失/循环/版本错位阻断。成本场景允许不同任务数，不能为了同Run能力硬编码采购模板；首个执行实例仍遵守§4固定采购链，其他场景执行不自动获准。UNKNOWN前驱不推进依赖，已知失败重试只新Attempt，晚到结果归原identity。
+
+**验收标准及测试**：授权候选正例与隐藏资源不泄漏；名字相同但能力/I/O不符拒绝；exact版本/撤权/失效/缺资源/读不到均不READY；采购职责错位负例及一般场景非五任务正例；跨scope/跨Plan/重复Task/循环/悬空I/O拒绝；同key重放/异payload冲突、并发唯一、事务回滚和重启读回；刷新不改Plan；模型、Skill、MCP、Runtime effect以及Assignment/Run/TaskRun/Attempt写入计数均0。保留现有v1/323确认回归；按实际代码跑typed/owner、独立PG、授权HTTP、浏览器，前端变更才新增lint/build，正常hooks/CI绑定candidate/checkout。受控测试不充真实资源可用性。
+
+**实际前置条件**：①Human审定D3 root/Task最小关系及无Workflow时matcher输入契约；②主控明确原owner文件ownership与实施授权；③候选owner授权reader和published exact资源确有可查询配置；④确定每Task operation/I/O及artifact大小上限，现采购Plan不能直接满足；⑤实例/Assignment只读权限与runtime观测来源；⑥隔离PG/合成测试范围及迁移兼容方案。前两项未接受、后四项未实际核实，当前不能标READY。资源缺失可交付准确BLOCKED快照，但不能宣称正向执行准入成立。
+
+**交付/停止**：提交代码/契约/针对性测试、owner能力矩阵、浏览器准备状态、source/tree/CI身份及恢复说明；不扩展到§13.8切片2真实执行或切片3验收。触及公共/冻结契约、需新增管理员权限、实际业务副作用或资源来源替换时先决策；不以多个Run假装同Run、不把人工复核任务当ARCH-264验收。
