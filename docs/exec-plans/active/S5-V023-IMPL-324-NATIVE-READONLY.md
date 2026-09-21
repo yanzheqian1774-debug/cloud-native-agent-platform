@@ -86,3 +86,5 @@ S04/M07再次实读后，局部吸收#168身份详情，新增受管operation输
 续接实现提交 `778f639` 的正常 Ruff/format/pytest 钩子全通过，钩子未输出测试总数，不复用旧数量。新增六产物与 Criteria/ResourceUse 评价关联及 Human 后继测试 2 项通过；测试变量重名导致的首次尾部断言失败保留。前端 lint/live build 通过（既有大 chunk 提示）。正式 Native composition 预检通过且未调用 run_once，固定 kind context 私有副本；原库 Run/Attempt/命令均零。与保留完整备份比较 26 组保护记录一致。当前 CI 以原 PR #186 的后续实际候选检查为准，继续 Draft。
 
 证据追加提交门禁首次失败：2117 passed / 348 skipped / 2 failed（既有 Responses invalid-json 预期 FAILED 实得 UNKNOWN、取消测试取消前已返回）。原日志 `/tmp/s5-324-evidence-commit.log` 保留。一次定点诊断 2 passed：真实收据 PREPARE 已消耗 0.733–0.775 秒，而该 fixture 总预算 1 秒；推测对冷启动/调度敏感，原失败未输出收据，不能认定其确切 phase。仅追加失败时 deadline 和取消前状态诊断，不改任何阈值、断言或生产代码，不把单测复现当完整门禁。
+
+`b508e29` 正常提交门禁通过，保留前两次失败。第一次新诊断未向 Kimi 复用测试传递 record_property，引起 4 项 TypeError；已补传，定点 4 passed，原断言/阈值未改。`778f639` CI 为 11 success / 1 failure；本轮 324 PG 与 UI 步骤成功，后续既有 319 旅程因 324 测试重建 dist 时遗漏原 Draft Assistance enabled 模式而失败。修正 workflow 保留该构建标志；按相同顺序本地 324 UI 2 passed，随后真实 HTTPS mock-provider 旅程 3 passed，使用新建测试子库、清理已完成，未使用原 323 库。失败 ZIP、SHA 及修正证据见 `ci-build-mode-correction.json`。最后候选 CI 另核验，不据局部通过报告整体验收。

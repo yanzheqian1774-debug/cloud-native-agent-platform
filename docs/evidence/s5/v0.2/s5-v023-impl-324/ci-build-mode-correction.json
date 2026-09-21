@@ -1,0 +1,33 @@
+{
+  "failedCandidate": "778f6392b8100f0f90fc17fabc9b52d1ab849320",
+  "failedRun": 35601449012,
+  "failedStage": "Run native HTTPS mock-provider journeys",
+  "failureEvidence": {
+    "browserExpected": 0,
+    "browserUnexpected": 3,
+    "firstFailure": "AI problem-understanding assistance card absent; page readback was manual draft mode",
+    "artifactSha256": "142aa72a1f9eaed40da834b4be328e9e19dbaec4909e23e4e7da1b433a86523b",
+    "retainedArtifact": "/tmp/s5-324-ci-778f639-evidence.zip"
+  },
+  "cause": "New 324 browser step rebuilt shared dist without preserving VITE_PROBLEM_DRAFT_ASSISTANCE=enabled required by later 319 journey",
+  "fix": "Preserve existing enabled build flag on 324 step; no business test assertion or timeout changed",
+  "verification": {
+    "prepared324Browser": {
+      "passed": 2,
+      "durationSeconds": 13.2,
+      "output": "/tmp/s5-324-enabled-ui"
+    },
+    "following319RealHTTPSMockBrowser": {
+      "startTime": "2026-09-21T13:02:57.088Z",
+      "duration": 19286.054,
+      "expected": 3,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "followingEvidence": "/tmp/s5-324-fixed-combination/s5-v023-impl-319-evidence.json",
+    "database": "New disposable child of dedicated 324 test PostgreSQL; dropped after owned cleanup",
+    "original323DatabaseUsed": false
+  },
+  "finalCandidateCI": "PENDING"
+}
