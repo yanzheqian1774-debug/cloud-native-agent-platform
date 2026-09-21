@@ -1,0 +1,17 @@
+98d70f00b3371aa55ae31dd035b611d72eadbe43
+100644 feb5b5f73173a8bd89eb84631a86c739a3c3868f 1	console/backend/src/agent_console/execution_postgres.py
+100644 431554f168986981f015455d7091da7b13889dd9 2	console/backend/src/agent_console/execution_postgres.py
+100644 2566004f5840b86c10141c51624d0ac00984184f 3	console/backend/src/agent_console/execution_postgres.py
+100644 8ea515a7dfb79038c408ccb488ca7dff029749fa 1	docs/governance/REGISTRY.md
+100644 fde244583af864951e86b98444eefbf65f557c64 2	docs/governance/REGISTRY.md
+100644 2932a06230b81d40117871231b2062e7e6e41f22 3	docs/governance/REGISTRY.md
+100644 342d051f00f3bc364a8036e9385d4df40e579cbd 1	operator/src/agent_operator/main.py
+100644 aedcb84f8033dc0b3e95bd49b853f7b001b68d31 2	operator/src/agent_operator/main.py
+100644 840d77b02c7b48d3be3cb180e912119a0ae17283 3	operator/src/agent_operator/main.py
+
+Auto-merging console/backend/src/agent_console/execution_postgres.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/execution_postgres.py
+Auto-merging docs/governance/REGISTRY.md
+CONFLICT (content): Merge conflict in docs/governance/REGISTRY.md
+Auto-merging operator/src/agent_operator/main.py
+CONFLICT (content): Merge conflict in operator/src/agent_operator/main.py

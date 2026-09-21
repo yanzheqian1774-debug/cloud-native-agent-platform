@@ -1,0 +1,8 @@
+c6efeb7a419a903c31a8b8a5db14bb33b0c1563b
+100644 ced86278680c8f82d9ef89e3a626be54487fd16c 1	.github/workflows/ci.yml
+100644 d95e240f9d0e2558c77cbc6d13c7ad54ead83f08 2	.github/workflows/ci.yml
+100644 2566ad70e29c1fc740446ad5d318e6349cfaf802 3	.github/workflows/ci.yml
+
+Auto-merging .github/workflows/ci.yml
+CONFLICT (content): Merge conflict in .github/workflows/ci.yml
+Auto-merging console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
