@@ -81,3 +81,25 @@ test('login presentation uses official nonce form and expiry hides business cont
  await expect(page.getByRole('link',{name:'重新登录并读回'})).toHaveAttribute('href','/api/workbench/v1/login?returnTo=%2Fwork');
  await page.screenshot({path:info.outputPath('IAM03-expired-1536x1024.png')});
 });
+
+test('long persisted technical context is disclosed without displacing the plan',async({page})=>{
+ const original='保留8,000元预算与账单缺口。 Technical identifiers remain exact. '.repeat(8);
+ let writes=0;
+ await page.route('**/api/workbench/v1/**',async route=>{
+  if(route.request().method()!=='GET')writes++;
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:controlled',tenantId:'fixture',securityDomain:'fixture'},session:{},csrfToken:'fixture'}});
+  const result=path.endsWith('/history')?{proposals:[proposal],plans:[],conversation:[{invocation_id:'controlled-history',request:{answers:[original]},submitted_at:'2026-09-21T00:00:00Z'}]}:{proposal,digest:translation.source_digest,snapshot:null};
+  return route.fulfill({json:{result}});
+ });
+ await page.setViewportSize({width:1536,height:1024});
+ await page.goto(`/work/planning/${proposal.proposal_id}?revision=1`);
+ const disclosure=page.locator('.planning-saved-context');
+ await expect(disclosure).not.toHaveAttribute('open','');
+ await expect(page.getByRole('heading',{name:/建议方案/})).toBeInViewport();
+ await expect(disclosure.locator('p')).toBeHidden();
+ await disclosure.locator('summary').click();
+ await expect(disclosure.locator('p')).toHaveText(original);
+ await expect(disclosure.locator('p')).toBeVisible();
+ await page.reload();await expect(disclosure.locator('p')).toBeHidden();expect(writes).toBe(0);
+});
