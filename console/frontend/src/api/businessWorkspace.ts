@@ -98,3 +98,5 @@ export function writeCriteriaSet(csrfToken:string,problemId:string,input:{proble
 export function transitionBusinessProblem(csrfToken:string,problemId:string,input:{toState:"ACTIVE";expectedVersion:number;idempotencyKey:string}){
   return write<{businessProblemId:string;aggregateVersion:number}>(`/problems/${encodeURIComponent(problemId)}/lifecycle`,csrfToken,input);
 }
+
+export async function logoutWorkbenchSession(){const session=await readWorkbenchSession();const response=await fetch(`${PREFIX}/session`,{method:"DELETE",credentials:"same-origin",headers:{"X-CSRF-Token":session.csrfToken,Accept:"application/json"}});if(!response.ok)await decode(response);}

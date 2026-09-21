@@ -38,3 +38,7 @@
 本轮改动前再次实读同版 R30 原 PNG，沿用上表文件及 SHA-256，不替换为新规划图集。`/work?execution=<正式摘要>` 的 PreparedExecutionPanel 对应 H05/P08 任务依赖、身份分工、状态/资源/时间和产物，H06 对应 Criteria 与 Human 决定。`/work?resource=<精确引用>` 的 PreparedResourceReviewPanel 对应 S04/R04/K05/D09 四 owner 的精确修订、Schema、摘要、发布与缺口。保留当前外壳与持续输入区，不新建首页或重做公共框架。
 
 实读 fixture 截图后修正窄容器布局和未准入按钮、明确技术成功与业务未定。浏览器两项通过，包括部分资源发布失败保留、刷新不发送命令、125% 缩放输入区可见。证据在同目录 324 evidence 的 `*.fixture.png`；这些是控件/布局测试，不是实际案例状态截图，也不是 Human 视觉接受。真实浏览器打开准入入口显示登录要求，受保护业务内容仍待独立授权后验证。
+
+## D324-4 登录局部绑定
+
+实现前实读 R30 `/Users/tristan/Downloads/Resource-Management-PC-R30/pages/IAM01.png`，SHA-256 `4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7`。绑定 `/api/workbench/v1/login`，保留原 IAM01 两栏、插画、品牌与层次；仅表单改账号/密码/显示密码/中文帮助及错误，明确本地隔离测试而非 SSO。登录后现有身份区增加测试环境及退出。不采用图中企业邮箱/组织选择，不替换 R30 为 R33；实读不等于视觉验收。

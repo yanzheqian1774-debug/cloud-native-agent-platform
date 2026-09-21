@@ -220,12 +220,33 @@ def create_workbench_bff(
                     response = await call_next(request)
             else:
                 response = await call_next(request)
+        if response.status_code >= 400 and request.url.path in {
+            f"{PREFIX}/login",
+            f"{PREFIX}/session",
+            f"{PREFIX}/session/rotate",
+        }:
+            import logging
+
+            diagnostic = _request_id()
+            response.headers["X-Diagnostic-ID"] = diagnostic
+            logging.getLogger(__name__).warning(
+                "identity_boundary request_id=%s method=%s path=%s status=%s",
+                diagnostic,
+                request.method,
+                request.url.path,
+                response.status_code,
+            )
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         is_login_form = (
             request.method == "GET"
             and request.url.path == f"{PREFIX}/login"
             and response.status_code == 200
+        ) or (
+            request.method == "POST"
+            and request.url.path == f"{PREFIX}/session"
+            and response.status_code == 401
+            and "text/html" in response.headers.get("content-type", "")
         )
         response.headers["Referrer-Policy"] = (
             "same-origin" if is_login_form else "no-referrer"
@@ -299,7 +320,15 @@ def create_workbench_bff(
             login_document(
                 sessions.issue_login_nonce(),
                 request.query_params.get("returnTo", "/workbench"),
+                accounts=getattr(sessions, "accounts_enabled", False),
             )
+        )
+
+    @app.get(f"{PREFIX}/login-script")
+    def login_script():
+        return Response(
+            'document.getElementById("show-password")?.addEventListener("change",event=>{document.getElementById("password").type=event.target.checked?"text":"password";});',
+            media_type="application/javascript",
         )
 
     @app.post(f"{PREFIX}/session", status_code=303)
@@ -312,19 +341,42 @@ def create_workbench_bff(
             raise WorkbenchBoundaryError("REQUEST_TOO_LARGE", 413)
         try:
             values = parse_qs(body.decode("utf-8"), strict_parsing=True)
+            account_form = "username" in values or "password" in values
+            required = (
+                {"loginNonce", "username", "password"}
+                if account_form
+                else {"loginNonce", "bootstrapCredential"}
+            )
             if (
-                not {"loginNonce", "bootstrapCredential"} <= set(values)
-                or not set(values) <= {"loginNonce", "bootstrapCredential", "returnTo"}
+                not required <= set(values)
+                or not set(values) <= required | {"returnTo"}
                 or any(len(item) != 1 for item in values.values())
             ):
                 raise ValueError
             login_nonce = values["loginNonce"][0]
-            credential = values["bootstrapCredential"][0]
         except (UnicodeDecodeError, ValueError, KeyError) as exc:
             raise WorkbenchBoundaryError("REQUEST_INVALID", 422) from exc
         try:
-            secret = sessions.create_session(login_nonce, credential)
-        except AuthorityError:
+            if account_form:
+                if policy.allowed_host.split(":")[0] not in {"127.0.0.1", "localhost"}:
+                    raise AuthorityError("AUTHENTICATION_REQUIRED")
+                secret = sessions.create_account_session(
+                    login_nonce, values["username"][0], values["password"][0]
+                )
+            else:
+                secret = sessions.create_session(
+                    login_nonce, values["bootstrapCredential"][0]
+                )
+        except AuthorityError as exc:
+            import logging
+
+            request_id = _request_id()
+            logging.getLogger(__name__).warning(
+                "login_denied request_id=%s reason=%s method=%s",
+                request_id,
+                getattr(exc, "diagnostic_reason", exc.reason_code),
+                "ACCOUNT" if account_form else "BOOTSTRAP",
+            )
             if "text/html" not in request.headers.get("accept", ""):
                 raise
             from .workbench_login import login_document
@@ -334,8 +386,10 @@ def create_workbench_bff(
                     sessions.issue_login_nonce(),
                     values.get("returnTo", ["/work"])[0],
                     error=True,
+                    accounts=getattr(sessions, "accounts_enabled", False),
+                    request_id=request_id,
                 ),
-                status_code=401,
+                status_code=_status_for_authority_error(exc.reason_code),
             )
         from .workbench_login import safe_return
 

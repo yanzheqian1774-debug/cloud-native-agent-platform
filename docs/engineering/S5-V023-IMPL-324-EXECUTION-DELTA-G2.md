@@ -77,3 +77,45 @@ artifact采用已有PG/Evidence owner：每Task至多16个产物、每产物256K
 0034 添加原 planning owner 的精确引用登记与 Task 参与身份，不复制或覆盖 v2。PreparedNativeCoordinator/SkillCaller 与既有 NativeDispatchWorker 接线，Runtime/Task/Skill 每次派发均再校验当前授权；UNKNOWN 不重发。取消已请求且 effect 尚未获准时形成可核对停止收据，不能仅从 Attempt 集合推断取消；已获 effect 许可而无停止证据仍不能 CANCELLED。0033 的历史累计原子限额由 Skill 终态事务调用，超限回滚不隐藏旧产物。
 
 0035 保存 exact Criteria / artifact / ResourceUse 终态快照、标准评价、Human 确认及 Outcome 后继，幂等命令不重复记录，异议不覆盖原评价。原案例 Human 规划标准无法被合成执行自动判 PASS；此限制在页面、评价和操作包持续披露。服务端独立准入与 Human 记录仍未由开发授权替代。
+
+## D324-4：隔离测试账号与短期会话分离（ACCEPTED）
+
+2026-09-21 用户将测试账号密码登录纳入同一 324 / PR #186，并明确若触及认证架构须先提交最小差异。本节只处理新增认证边界；D324-1/2/3 及其三项约束保持 ACCEPTED，不重新申请模型、费用或执行总体范围。
+
+### 现状与实际阻塞
+
+当前 `StaticGenerationAuthenticator` 对用户提交的完整 bearer 凭据作 SHA-256 比对；`BrowserSessionService` 的会话有效期被该凭据有效期截断。`GenerationAuthorizationReader._current_credential` 在授权时再次要求有效的 generation credential。没有账号、密码哈希、账号停用或密码重置 owner；仅改表单为用户名/密码无法满足用户要求，长期 bearer 包装或自动续期亦不能作为实现。
+
+`ARCHITECTURE_GATES.md` G2 明确列出 **authentication architecture** 并要求批准前停止实施。ARCH-300 文档及 Registry 仍标 PROPOSED，不在本节擅自更改其状态；302 源码、测试及实施文档用于识别当前能力，不据文档标题推定新认证已获批准。
+
+[本次入口诊断](../evidence/s5/v0.2/s5-v023-impl-324/login-diagnosis-v1.json)：运行 generation 4 / recovery epoch 1；当前业务主体新凭据未过期、文件无首尾空白且摘要匹配。真实 HTTPS POST 使用新 nonce 返回 303，Cookie 为 Secure/HttpOnly/SameSite=Strict/__Host-，随后 session GET 200、目标页 200；缺 CSRF 的退出 403，正确 CSRF 退出 204，旧 nonce 重放 401。没有使用审批身份或发送业务命令。
+
+历史失败的原 POST/响应原因未留存：服务 access log 关闭，HTML 登录 handler 将所有 AuthorityError 合并为相同提示，当前浏览器错误日志为空。恢复后诊断前没有 generation 4 新 session。以上不足以判定历史失败发生于过期、nonce、提交内容、Origin 或浏览器 Cookie；禁止把本次成功复现当作历史根因已确认。
+
+### 请求批准的最小增量
+
+1. **身份 owner**：在现有 PostgreSQL 的 Browser Session Authority 内增加隔离测试账号及认证修订，不新增数据库、外部 IdP 或另一身份权威。`demo324` 固定映射 `human:demo323-requester`，`reviewer324` 固定映射 `human:demo323-approver`；scope 固定 `s5-323-demo / isolated-real-demo`。登录表单不能指定 principal、scope、角色或权限。功能显式开启，仅用于已批准本地隔离环境，生产默认关闭。
+2. **账号生命周期**：账号在 operator 显式停用/撤销前可用，不依赖数小时更换演示口令；会话仍 idle 30 分钟、absolute 8 小时、nonce 5 分钟、CSRF 10 分钟。不将原 bootstrap 凭据改为永久有效，不自动续签 Grant，不复活 323 委托/连续性。保留旧 bootstrap 兼容路径及旧凭据期限。
+3. **密码与管理**：服务端使用带随机 salt 的自适应密码哈希（实现选用 scrypt 并校准成本）；前端、仓库、日志不保存密码。operator 通过受控本机命令提供首次随机密码、停用、不可逆撤销及重置，私有领取文件 0600；无公共注册、找回邮件、SSO 或完整账号管理平台。重置追加密码修订，旧哈希不可再认证；停用/撤销/重置均使旧会话失效，重复 operator 命令幂等并保留审计，撤销不被重置抵消。
+4. **统一当前身份校验**：新增账号认证版本绑定，与现有 generation / recovery epoch 一起进入 Browser Session 与 exact authorization 的同事务当前性校验。会话读取、业务 owner、独立准入及 Native dispatch 均使用同一身份有效性规则；不能只在登录检查账号状态。并发停用/重置与业务操作按现有授权事务锁/快照顺序线性化，旧 writer 对新增认证模式 fail closed。旧会话和旧授权证据不改写。
+5. **权限边界**：账号只证明原主体。原业务 bootstrap 权限与独立审批人的 exact meta 范围保持，不新增业务权限；静态 tombstone 与动态撤销优先。原三条 PENDING 请求继续按原 ID/version 决定；新 Grant 仍由独立本人签发、保留原有效期规则。会话/账号长期可用不延长 Grant 或执行准入。代理不得登录 reviewer324 代作独立决定。
+6. **页面与诊断**：沿用已接受的 IAM01 登录外观及当前 R30 实施基线，只调整账号、密码、显示密码、错误与帮助，并显示当前身份/隔离环境。保留安全 returnTo、Host/Origin、Cookie、CSRF、退出与零自动业务重发。中文外部错误不泄露账号存在性；服务端以 correlation ID 记录受控枚举原因（解析、nonce、密码/停用、Origin、会话、CSRF、跳转），不记录密码、凭据、Cookie、nonce、CSRF 原值或完整请求体。加入持久的有界登录节流及重启后拒绝绕过的验证。
+
+### 影响、兼容与替代
+
+影响 `browser_session_application`、`authority_configuration`、`authority_postgres`、`grant_administration_application`、Workbench BFF/登录页/身份投影、现有 runtime composition 和一条追加迁移。保留 Browser Session Authority 和 Grant Administration Authority 的分工；不修改公开 CRD、Kubernetes API group、业务 Plan/Approval/Run 契约。若实现发现必须修改其他 frozen Contract，另报具体差异，不能由本决定泛化授权。
+
+建议批准上述有界本地账号适配。替代 A：维持 bearer 登录并补诊断，可定位失败但不满足稳定账号要求；替代 B：接入企业 IdP，范围明显超出本批，不推荐。账号绑定、生命周期和所有 current-authorization 路径必须一并实现，不能仅以更换登录表单交付。
+
+### 批准后的验证与续接（尚未实施）
+
+- 迁移升级/摘要/回滚；密码错误、枚举隐藏、节流、停用/撤销/重置、并发当前性和重启持久性；会话过期与 Grant 过期相互独立、跨 scope/自批拒绝。
+- 真实入口以 demo324 验证登录、Cookie/CSRF/安全跳转、当前主体/环境、刷新零重发；reviewer324 登录由本人验证，不以 fixture 替代。
+- 登录前实读既定 IAM01 图片并补页/摘要绑定；视觉与功能验证分别记录。R33 不替换 R30。
+- 正常门禁及原 PR #186 最终候选 CI；一次性交付账号、URL、本机密码领取及必要人工步骤。三条原申请 → 资源/Employee 发布 → 窄后继确认 → 独立执行准入 → 实际 Native → 产物/Criteria → Human 决定 → 持久读回。
+
+**待决定：批准 D324-4 上述六项最小增量作为同一 324 的实施依据。该决定不代替任何业务发布、Plan 确认、执行准入或 Human 结果决定。**
+
+### D324-4 Human 批准（2026-09-21）
+
+用户明确批准上述六项增量，固定 demo324/reviewer324 映射原主体；旧 bootstrap 到期后账号仍可登录，授权依当前账号及有效 Grant，不延长旧凭据/复活委托/隐式续签。密码本机安全生成且正常重启不重建。独立签发仍由本人完成，批准连续实施、门禁、真实验证并回接原主链，非业务审批或完成记录。

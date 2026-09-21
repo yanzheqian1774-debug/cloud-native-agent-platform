@@ -287,13 +287,19 @@ def test_client_cancellation_reaps_and_persists_unknown(network, record_property
                     headers={"x-csrf-token": "test-csrf"},
                 )
             )
-            assert await asyncio.to_thread(network.endpoint.accepted.wait, 3)
+            reached = await asyncio.to_thread(network.endpoint.accepted.wait, 3)
+            record_property("endpoint_reached_before_cancel", reached)
             record_property("before_cancel_task_done", task.done())
             if task.done() and not task.cancelled() and task.exception() is None:
                 record_property(
                     "deadline_before_cancel",
                     receipt(network, task.result())["deadline"],
                 )
+            assert reached, (
+                receipt(network, task.result())["deadline"]
+                if task.done() and not task.cancelled() and task.exception() is None
+                else "endpoint not reached before cancellation"
+            )
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task

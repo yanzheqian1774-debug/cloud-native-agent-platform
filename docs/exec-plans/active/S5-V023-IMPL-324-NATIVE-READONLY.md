@@ -88,3 +88,27 @@ S04/M07再次实读后，局部吸收#168身份详情，新增受管operation输
 证据追加提交门禁首次失败：2117 passed / 348 skipped / 2 failed（既有 Responses invalid-json 预期 FAILED 实得 UNKNOWN、取消测试取消前已返回）。原日志 `/tmp/s5-324-evidence-commit.log` 保留。一次定点诊断 2 passed：真实收据 PREPARE 已消耗 0.733–0.775 秒，而该 fixture 总预算 1 秒；推测对冷启动/调度敏感，原失败未输出收据，不能认定其确切 phase。仅追加失败时 deadline 和取消前状态诊断，不改任何阈值、断言或生产代码，不把单测复现当完整门禁。
 
 `b508e29` 正常提交门禁通过，保留前两次失败。第一次新诊断未向 Kimi 复用测试传递 record_property，引起 4 项 TypeError；已补传，定点 4 passed，原断言/阈值未改。`778f639` CI 为 11 success / 1 failure；本轮 324 PG 与 UI 步骤成功，后续既有 319 旅程因 324 测试重建 dist 时遗漏原 Draft Assistance enabled 模式而失败。修正 workflow 保留该构建标志；按相同顺序本地 324 UI 2 passed，随后真实 HTTPS mock-provider 旅程 3 passed，使用新建测试子库、清理已完成，未使用原 323 库。失败 ZIP、SHA 及修正证据见 `ci-build-mode-correction.json`。最后候选 CI 另核验，不据局部通过报告整体验收。
+
+## 2026-09-21 登录产品化补充与原主链续接
+
+用户将稳定账号密码登录纳入同一任务及 PR #186。沿用原计划，追加 [D324-4 最小认证差异](../../engineering/S5-V023-IMPL-324-EXECUTION-DELTA-G2.md#d324-4隔离测试账号与短期会话分离proposed待-human-决定)，状态 PROPOSED / 待认证 G2 决定；D324-1/2/3 不重新审批。未创建账号、未实施新认证、未修改登录视觉。
+
+此前现有 Authority controller 已追加 generation 4 的两个新限时凭据，原凭据/策略/meta 范围保留；没有追加 323 连续性批准。当前配置为本机 `identity-recovery-v1/runtime.json`，旧 generation 3 runtime 保留，不得作为当前 writer 启动。候选仍为 dceb251；其历史 12 项 CI 通过不作为未来账号实现的验证。
+
+本次真实 HTTPS 诊断确认业务主体登录 303、session/跳转 200、Cookie 安全标记、CSRF 403/204 和 nonce 重放 401；未使用独立审批凭据、未业务执行。历史失败缺少原 POST 和细分错误记录，根因未定，不能归因为过期。三条原申请仍 PENDING/version 1。详见 `login-diagnosis-v1.json`。
+
+批准 D324-4 后按其最小实现/验证顺序推进，并接回既有三条申请及 Native 闭环，不重建理解或规划、不新开 PR/Session、不触动 323 CLOSED、旧 Plan v2/Approval、七 UNKNOWN、预留及结算。当前仍未完成实际 Native、产物、标准评价与 Human 结果决定。
+
+D324-4 已于本次用户决定中 ACCEPTED。按原六项增量实施账号 owner、统一当前性校验、页面与受控验证；旧 PROPOSED 为历史检查点，不再阻塞该范围。
+
+## D324-4 实施候选（待实际入口与 Human）
+
+新增 0036 Browser Session Authority 账号/密码修订/会话绑定/限流/操作审计表；原 0018、0032–0035 不改。generation 增加显式本地账号绑定，引用原主体及静态权限范围，不含 bearer secret 或账号截止时间；旧配置解析继续兼容，旧 writer 拒绝新增 schema/generation。账号会话的兼容 credential_expires_at 字段仅保存该次会话截止时间，绝不延长原 bootstrap。
+
+scrypt N=131072/r=8/p=1 随机 salt 服务端校验；正常启动不生成密码，operator 脚本仅显式 CREATE/RESET 写本机 0600 文件。停用/撤销/重置追加版本，登录、会话、exact Grant/owner 事务同样检查当前账号版本，account 锁先于 session 锁；旧静态来源撤销仍优先。旧 323 委托不接受账号绑定，不追加连续性。持续 15 分钟窗口的全局/账号限流保存在 PG，未知账号使用固定共享桶及同成本密码校验。
+
+IAM01/R30 实读与摘要已补绑定；保留原外观，添加账号/密码/显示密码、中文帮助、身份环境与正常退出。401 表单仍为 same-origin referrer policy，避免错误页后重试丢失同源语义；服务日志记录脱敏诊断编号，不保存密码/Cookie/nonce。恢复原 returnTo，不重发业务。
+
+相关首轮 38 passed / 1 failed：新授权测试缺精确资源目录，正式 owner 正确拒绝。第二轮 fixture 修改未命中目标行，保留同一失败；实际补齐 fixture 后账号套件 9 passed（非实际 Human 证据）。后加迁移摘要/事务保护测试随完整门禁验证。frontend lint/build 通过；首次误在仓库根执行 npm 导致 ENOENT，纠正 cwd 后通过，未改依赖。全库 Ruff/format 通过，正常提交钩子和当前候选 CI 另记。登录诊断及三个历史申请仍保留，不将本候选等同实际 Native 闭环。
+
+D324-4 首次完整提交钩子：2138 passed / 335 skipped / 4 failed。三项旧 recovery fixture 的 SimpleNamespace 缺新增 local_accounts 字段，已显式补空绑定，原断言不变。另一个既有取消测试在 endpoint accepted 前已返回 HTTP 201；原收据未保留，不能判断确切 deadline phase。追加失败前 endpoint/task/deadline 诊断（不改等待、阈值或断言），一次定点运行 16 passed，记录 endpoint_reached=True、before_cancel_task_done=False；不以此覆盖第一次失败或宣称完整门禁通过。日志 `/tmp/s5-324-account-commit.log`、`/tmp/s5-324-account-cancel-diagnostic.log` 及 XML 保留。正常修正后的提交门禁另记。

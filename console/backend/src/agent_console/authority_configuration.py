@@ -142,6 +142,19 @@ class RequestabilityRule:
 
 
 @dataclass(frozen=True, slots=True)
+class LocalAccountBinding:
+    """Non-secret identity binding; neither a bearer credential nor an expiry."""
+
+    credential_id: CredentialId
+    username: str
+    principal_id: str
+    scope: AuthorityScope
+    grant_source_id: CredentialId
+    grants: tuple[StaticGrant, ...]
+    authentication_source: GrantSource = GrantSource.BROWSER_BOOTSTRAP
+
+
+@dataclass(frozen=True, slots=True)
 class StaticAuthorityGeneration:
     generation: int
     digest: str
@@ -153,6 +166,13 @@ class StaticAuthorityGeneration:
     static_grant_revocation_tombstones: frozenset[tuple[CredentialId, ExactGrant]] = (
         frozenset()
     )
+
+    local_accounts: tuple[LocalAccountBinding, ...] = ()
+
+    def account_by_id(self, identity: CredentialId) -> LocalAccountBinding | None:
+        return next(
+            (a for a in self.local_accounts if a.credential_id == identity), None
+        )
 
     def credential(self, digest: str) -> CredentialConfiguration | None:
         return next(
@@ -324,7 +344,7 @@ class StaticAuthorityLoader:
         }
         if (
             not isinstance(document, dict)
-            or set(document) != expected_keys
+            or set(document) not in (expected_keys, expected_keys | {"localAccounts"})
             or document.get("schemaVersion") != SCHEMA_VERSION
         ):
             raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
@@ -370,6 +390,53 @@ class StaticAuthorityLoader:
         if len(grant_tombstones) != len(grant_tombstone_values):
             raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
         StaticAuthorityLoader._validate_unique(credentials, requestability)
+        accounts = []
+        account_values = document.get("localAccounts", [])
+        if not isinstance(account_values, list):
+            raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
+        for value in account_values:
+            if not isinstance(value, dict) or set(value) != {
+                "username",
+                "grantSourceCredentialId",
+            }:
+                raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
+            username = value["username"]
+            # Bounded local test adapter, not a production identity directory.
+            expected = {
+                "demo324": "human:demo323-requester",
+                "reviewer324": "human:demo323-approver",
+            }
+            source = next(
+                (
+                    c
+                    for c in credentials
+                    if c.credential_id == value["grantSourceCredentialId"]
+                ),
+                None,
+            )
+            if (
+                not isinstance(username, str)
+                or username not in expected
+                or source is None
+                or source.principal_id != expected[username]
+                or source.scope != AuthorityScope("s5-323-demo", "isolated-real-demo")
+                or source.authentication_source is not GrantSource.BROWSER_BOOTSTRAP
+            ):
+                raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
+            accounts.append(
+                LocalAccountBinding(
+                    CredentialId("local-account:" + username),
+                    username,
+                    source.principal_id,
+                    source.scope,
+                    source.credential_id,
+                    source.grants,
+                )
+            )
+        if len({a.credential_id for a in accounts}) != len(accounts) or any(
+            c.credential_id.startswith("local-account:") for c in credentials
+        ):
+            raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
         return StaticAuthorityGeneration(
             generation=generation,
             digest=digest,
@@ -379,6 +446,7 @@ class StaticAuthorityLoader:
             requestability=requestability,
             credential_revocation_tombstones=tombstones,
             static_grant_revocation_tombstones=grant_tombstones,
+            local_accounts=tuple(accounts),
         )
 
     @staticmethod

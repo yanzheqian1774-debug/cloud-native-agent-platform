@@ -149,6 +149,10 @@ class PostgresAuthorityRepository:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
     def _valid_delegation_extension(self, schema, rows):
+        if schema == "browser_identity":
+            from .local_accounts import schema_record
+
+            return rows == [schema_record(self)]
         if schema != "authorization_admin":
             return False
         expected = []
@@ -324,6 +328,10 @@ class PostgresAuthorityRepository:
     ) -> BrowserSession | None:
         try:
             with self.connection_scope() as connection:
+                from .local_accounts import current_session_account
+
+                if not current_session_account(connection, secret_digest=secret_digest):
+                    return None
                 row = connection.execute(
                     "SELECT s.* FROM browser_identity.sessions s "
                     "LEFT JOIN browser_identity.session_revocation_facts r "
@@ -356,6 +364,12 @@ class PostgresAuthorityRepository:
     ) -> bool:
         try:
             with self.connection_scope() as connection:
+                from .local_accounts import current_session_account
+
+                if not current_session_account(
+                    connection, session_id=current_session_id
+                ):
+                    return False
                 row = connection.execute(
                     "SELECT s.session_id FROM browser_identity.sessions s "
                     "LEFT JOIN browser_identity.session_revocation_facts r "
@@ -368,6 +382,11 @@ class PostgresAuthorityRepository:
                 if row is None:
                     return False
                 self._insert_session(connection, replacement, replacement_secret_digest)
+                if replacement.principal.credential_id.startswith("local-account:"):
+                    connection.execute(
+                        "INSERT INTO browser_identity.local_account_sessions SELECT %s,account_id,account_revision FROM browser_identity.local_account_sessions WHERE session_id=%s",
+                        (replacement.session_id, current_session_id),
+                    )
                 connection.execute(
                     "UPDATE browser_identity.sessions SET rotated_to_session_id=%s "
                     "WHERE session_id=%s",
@@ -506,6 +525,12 @@ class PostgresAuthorityRepository:
         lock_clause = " FOR SHARE OF s" if lock_session else ""
         if context.authentication_source.value == "SERVICE_CREDENTIAL":
             return CredentialId(context.session_id_or_service_credential_id)
+        from .local_accounts import current_session_account
+
+        if not current_session_account(
+            connection, session_id=context.session_id_or_service_credential_id
+        ):
+            return None
         row = connection.execute(
             "SELECT s.credential_id FROM browser_identity.sessions s "
             "LEFT JOIN browser_identity.session_revocation_facts r "
