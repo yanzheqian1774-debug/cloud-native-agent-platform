@@ -93,7 +93,13 @@ class PostgresAuthorityRepository:
                         (MIGRATION_VERSION,),
                     ).fetchone()
                     if newer is not None:
-                        raise AuthorityError("AUTHORITY_SCHEMA_INCOMPATIBLE")
+                        extension = connection.execute(
+                            f"SELECT version,checksum,adapter FROM {schema}.schema_migrations "
+                            "WHERE version>%s ORDER BY version",
+                            (MIGRATION_VERSION,),
+                        ).fetchall()
+                        if not self._valid_delegation_extension(schema, extension):
+                            raise AuthorityError("AUTHORITY_SCHEMA_INCOMPATIBLE")
                     row = connection.execute(
                         f"SELECT checksum,adapter FROM {schema}.schema_migrations "
                         "WHERE version=%s",
@@ -126,18 +132,43 @@ class PostgresAuthorityRepository:
                         "WHERE version >= %s ORDER BY version",
                         (MIGRATION_VERSION,),
                     ).fetchall()
-                    if rows != [
+                    if rows[:1] != [
                         {
                             "version": MIGRATION_VERSION,
                             "checksum": self.migration_checksum,
                             "adapter": ADAPTER,
                         }
-                    ]:
+                    ] or (
+                        rows[1:]
+                        and not self._valid_delegation_extension(schema, rows[1:])
+                    ):
                         raise AuthorityError("AUTHORITY_SCHEMA_INCOMPATIBLE")
         except AuthorityError:
             raise
         except (OSError, PsycopgError) as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def _valid_delegation_extension(self, schema, rows):
+        if schema != "authorization_admin":
+            return False
+        expected = []
+        for version, name, adapter in (
+            (28, "0028_task_delegation.sql", "task-delegation-v1"),
+            (29, "0029_task_development.sql", "task-development-v1"),
+            (30, "0030_task_cases.sql", "task-cases-v1"),
+            (31, "0031_task_timeout_revision.sql", "task-timeout-revision-v1"),
+        ):
+            path = self.migration_path.parent / name
+            if not path.is_file():
+                return False
+            expected.append(
+                {
+                    "version": version,
+                    "adapter": adapter,
+                    "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+        return any(rows == expected[:n] for n in range(1, len(expected) + 1))
 
     def close(self) -> None:
         self.pool.close()
@@ -578,6 +609,8 @@ class PostgresAuthorityRepository:
             )
             if state is not DynamicAuthorizationState.ALLOWED:
                 return credential_id, None
+            from .task_delegation import grant_condition
+
             row = current.execute(
                 "SELECT g.decision_id,g.policy_version,g.created_at,g.expires_at,"
                 "a.generation FROM authorization_admin.active_generation a JOIN "
@@ -587,7 +620,9 @@ class PostgresAuthorityRepository:
                 "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
                 "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
                 "AND g.recovery_epoch=%s AND a.generation=%s "
-                "AND a.recovery_epoch=%s ORDER BY g.created_at DESC,g.grant_id DESC "
+                "AND a.recovery_epoch=%s "
+                + grant_condition(current)
+                + " ORDER BY g.created_at DESC,g.grant_id DESC "
                 "LIMIT 1",
                 (
                     context.principal_id,
@@ -678,7 +713,10 @@ class PostgresAuthorityRepository:
         connection, context: TrustedRequestContext, grants: Sequence[ExactGrant]
     ) -> None:
         """Serialize matching revocations behind the caller-owned owner commit."""
+        from .task_delegation import lock_grant_delegations
+
         for grant in grants:
+            lock_grant_delegations(connection, context, grant)
             connection.execute(
                 "SELECT g.grant_id FROM authorization_admin.grants g "
                 "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
@@ -1587,6 +1625,8 @@ class PostgresAuthorityRepository:
         generation: int,
         recovery_epoch: int,
     ) -> DynamicAuthorizationState:
+        from .task_delegation import grant_condition
+
         row = connection.execute(
             "SELECT a.generation,a.recovery_epoch,"
             "(SELECT max(r.revoked_at) FROM authorization_admin.grants g "
@@ -1599,7 +1639,9 @@ class PostgresAuthorityRepository:
             "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
             "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
             "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
-            "AND g.recovery_epoch=%s) AS latest_grant "
+            "AND g.recovery_epoch=%s "
+            + grant_condition(connection)
+            + ") AS latest_grant "
             "FROM authorization_admin.active_generation a WHERE a.singleton=true",
             (
                 context.principal_id,

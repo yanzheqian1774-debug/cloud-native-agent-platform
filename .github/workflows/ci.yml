@@ -184,6 +184,17 @@ jobs:
             --command "CREATE ROLE browser_validation LOGIN" \
             --command "GRANT CONNECT, CREATE ON DATABASE agent_platform TO browser_validation"
 
+      - name: Record browser checkout identity
+        run: |
+          python - <<'PYCODE'
+          import json, os, pathlib, subprocess
+          value = {
+              "source": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+              "tree": subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip(),
+          }
+          pathlib.Path(os.environ["RUNNER_TEMP"], "browser-checkout.json").write_text(json.dumps(value))
+          PYCODE
+
       - name: Run real browser acceptance
         env:
           CONSOLE_FRONTEND_PORT: "14173"
@@ -212,3 +223,34 @@ jobs:
             --python-path conformance_harness/src:core/src:gateway/src:operator/src:runtime/src:console/backend/src:experiments/s5-spike-005-runtime-target-manifest:experiments/s5-spike-007-capability-rest-fixtures \
             -- npm --prefix console/frontend run test:e2e -- \
               --workers 1 --retries 0 --forbid-only --reporter json
+
+      - name: Scan browser diagnostics before retention
+        id: scan-browser-diagnostics
+        if: always()
+        run: |
+          python - <<'PYCODE'
+          import os, pathlib, sys
+          sys.path.insert(0, "scripts/acceptance")
+          from minimum_disclosure import scan_generated_artifacts
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          runtime = root / ("s5-impl-072-" + os.environ["GITHUB_RUN_ID"])
+          scan_generated_artifacts([
+              root / "browser-checkout.json",
+              root / "s5-impl-075-build-identity.json",
+              runtime / "browser-first-failure.json",
+              runtime / "startup-diagnostics.json",
+          ])
+          PYCODE
+
+      - name: Retain minimum-disclosure browser diagnostics
+        if: always() && steps.scan-browser-diagnostics.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/browser-checkout.json
+            ${{ runner.temp }}/s5-impl-075-build-identity.json
+            ${{ runner.temp }}/s5-impl-072-${{ github.run_id }}/browser-first-failure.json
+            ${{ runner.temp }}/s5-impl-072-${{ github.run_id }}/startup-diagnostics.json

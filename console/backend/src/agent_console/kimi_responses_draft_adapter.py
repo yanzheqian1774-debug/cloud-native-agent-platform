@@ -16,7 +16,7 @@ import re
 import ssl
 import stat
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -177,6 +177,7 @@ class ExactFileKimiCredentialResolver:
             not in {
                 (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
                 ("v2", "problem-draft-assistance-output.v2"),
+                ("v1", "plan-suggestion-output.v1"),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -331,34 +332,43 @@ class KimiResponsesDraftTransport:
             or credential.version != self.configuration.credential_version
         ):
             raise DraftAssistanceError("KIMI_RESPONSES_REQUEST_INVALID")
-        if (
-            self.last_deadline_metrics is not None
-            and not self.last_deadline_metrics.reaped
+        if self.last_deadline_metrics is not None and (
+            not self.last_deadline_metrics.reaped
+            or self.last_deadline_metrics.reason == "CLEANUP_FAILURE"
         ):
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS")
         self.last_http_diagnostic = None
         self.dispatch_count += 1
-        return supervise(
-            self.configuration,
-            invocation_id,
-            request,
-            credential,
-            lambda value: setattr(self, "last_deadline_metrics", value),
-            diagnostic=lambda value: setattr(self, "last_http_diagnostic", value),
-        )
+        diagnostics = []
 
-    def _dispatch_once(
+        def record(value):
+            self.last_deadline_metrics = value
+            diagnostics.append(asdict(value))
+
+        try:
+            result = supervise(
+                self.configuration,
+                invocation_id,
+                request,
+                credential,
+                record,
+                diagnostic=lambda value: setattr(self, "last_http_diagnostic", value),
+            )
+        except DraftAssistanceError as exc:
+            if diagnostics:
+                exc.diagnostic = diagnostics[-1]
+            raise
+        return replace(result, local_cleanup=diagnostics[-1] if diagnostics else None)
+
+    def exchange(
         self,
         *,
         invocation_id,
         request,
         credential,
-        profile,
         connected=lambda: None,
         progress=lambda _stage: None,
     ):
-        progress("VALIDATE_RESPONSE")
-        policy = prepared_policy(request.payload)
         if (
             not isinstance(request.payload, bytes)
             or not isinstance(credential, ResolvedKimiCredential)
@@ -388,6 +398,7 @@ class KimiResponsesDraftTransport:
         )
         started = time.monotonic()
         self.dispatch_count += 1
+        response = None
         try:
             connection.connect()
             connected()
@@ -430,7 +441,11 @@ class KimiResponsesDraftTransport:
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
-            connection.close()
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                connection.close()
         progress("VALIDATE_RESPONSE")
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         if not 200 <= response.status < 300:
@@ -450,6 +465,63 @@ class KimiResponsesDraftTransport:
             correlation = self.last_http_diagnostic["provider_request_id"]["value"] or (
                 f"http-{response.status}-{invocation_id}"
             )
+        return response.status, body, correlation, latency_ms
+
+    def _dispatch_once(
+        self,
+        *,
+        invocation_id,
+        request,
+        credential,
+        profile,
+        connected=lambda: None,
+        progress=lambda _stage: None,
+    ):
+        progress("VALIDATE_RESPONSE")
+        policy = prepared_policy(request.payload)
+        status, body, correlation, latency_ms = self.exchange(
+            invocation_id=invocation_id,
+            request=request,
+            credential=credential,
+            connected=connected,
+            progress=progress,
+        )
+        from .planning_measurement import measurement
+
+        try:
+            response = json.loads(body)
+        except (ValueError, UnicodeDecodeError):
+            response = {}
+        measured = measurement(
+            response,
+            correlation,
+            invocation_id,
+            latency_ms,
+            self.configuration,
+            protocol=PROTOCOL,
+        )
+        if (
+            not 200 <= status < 300
+            or len(body) > self.configuration.maximum_response_bytes
+        ):
+            measured["settleable"] = False
+        result = self._interpret_response(
+            invocation_id, request, policy, status, body, correlation, latency_ms
+        )
+        return replace(
+            result,
+            measurement=measured,
+            input_tokens=measured["usage"]["input_tokens"]
+            if measured["settleable"]
+            else None,
+            output_tokens=measured["usage"]["output_tokens"]
+            if measured["settleable"]
+            else None,
+        )
+
+    def _interpret_response(
+        self, invocation_id, request, policy, status_code, body, correlation, latency_ms
+    ):
         if len(body) > self.configuration.maximum_response_bytes:
             return self._failure(
                 invocation_id,
@@ -457,10 +529,10 @@ class KimiResponsesDraftTransport:
                 "PROVIDER_RESPONSE_TOO_LARGE",
                 latency_ms=latency_ms,
             )
-        if not 200 <= response.status < 300:
-            if response.status == 429:
+        if not 200 <= status_code < 300:
+            if status_code == 429:
                 reason = "PROVIDER_RATE_LIMITED"
-            elif response.status >= 500:
+            elif status_code >= 500:
                 reason = "PROVIDER_UNAVAILABLE"
             else:
                 reason = "PROVIDER_HTTP_REJECTED"

@@ -151,6 +151,7 @@ def _profile(
     document: object,
     *,
     allow_local_https_mock: bool = False,
+    planning: bool = False,
 ) -> tuple[
     DraftAssistanceProfileRevision,
     Path,
@@ -197,6 +198,8 @@ def _profile(
     provider_fields = (
         {"reasoningEffort"} if provider_protocol == KIMI_PROTOCOL else set()
     )
+    if planning:
+        common = common | {"policyDigest", "realCallsEnabled"}
     expected = (
         common
         if transport_kind == "SYNTHETIC"
@@ -209,7 +212,8 @@ def _profile(
         expected = expected | {"policyDigest"}
     if (
         set(document) != expected
-        or document.get("schemaVersion") != ("draft-assistance-runtime.v1")
+        or document.get("schemaVersion")
+        != ("planning-runtime.v1" if planning else "draft-assistance-runtime.v1")
         or transport_kind not in {"SYNTHETIC", "REAL_PROVIDER"}
     ):
         raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
@@ -329,9 +333,22 @@ def _profile(
             budget["inputPriceMicrousdPerMillionTokens"],
             budget["outputPriceMicrousdPerMillionTokens"],
         )
-        policy = policy_for(value.adapter_revision, value.output_schema_version)
-        if policy.revision == "v2" and document["policyDigest"] != policy.digest:
-            raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
+        if planning:
+            from .plan_suggestion_policy import POLICY_DIGEST
+
+            if (
+                value.adapter_revision != "v1"
+                or value.output_schema_version != "plan-suggestion-output.v1"
+                or value.target_format_version != "plan-suggestion-target.v1"
+                or document["policyDigest"] != POLICY_DIGEST
+                or type(document["realCallsEnabled"]) is not bool
+                or document["providerProtocol"] not in {OPENAI_PROTOCOL, KIMI_PROTOCOL}
+            ):
+                raise DraftAssistanceError("PLANNING_PROFILE_INVALID")
+        else:
+            policy = policy_for(value.adapter_revision, value.output_schema_version)
+            if policy.revision == "v2" and document["policyDigest"] != policy.digest:
+                raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
         adapter_tuple = (
             document["providerProtocol"],
             value.adapter_id,

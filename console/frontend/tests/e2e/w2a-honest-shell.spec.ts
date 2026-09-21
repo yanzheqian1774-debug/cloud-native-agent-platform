@@ -382,7 +382,7 @@ test("switching Problems requires confirmation and does not carry page-only supp
   await page.route("**/api/workbench/v1/problems/*/criteria", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ schemaVersion: "workbench-operation.v1", result: { revisions: [] }, continuationIds: [] }) }));
 
   await page.goto("/work?problem=problem%3Aconversation-1");
-  const composer = page.getByLabel("待处理补充（仅本页）");
+  const composer = page.getByLabel("补充或纠正正式目标");
   await composer.fill("只属于第一个问题的页内补充。");
   await page.getByText("业务问题与新建入口", { exact: true }).click();
   page.once("dialog", async dialog => {
@@ -437,7 +437,7 @@ test("created problem continues through pending approval to a fresh exact read",
   await page.getByRole("button", { name: "确认创建", exact: true }).click();
   await page.getByRole("button", { name: "申请查看权限", exact: true }).click();
   await expect(page.getByText("等待管理员处理", { exact: true })).toBeVisible();
-  const waitingComposer = page.getByLabel("待处理补充（仅本页）");
+  const waitingComposer = page.locator("#problem-composer");
   await expect(waitingComposer).toBeEnabled();
   await expect(page.getByText("尚未修改正式问题，管理员不会自动收到", { exact: false })).toBeVisible();
   const pendingText = "等待审批期间补充：同时核对恢复责任与日期。";
@@ -450,6 +450,8 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(desktopSummary.getByText("内容读取", { exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("尚未读取", { exact: true })).toBeVisible();
   await expect(desktopSummary.getByRole("heading", { name: "等待审批", exact: true })).toBeVisible();
+  await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeHidden();
+  await desktopSummary.getByText("申请编号与复制", { exact: true }).click();
   await expect(desktopSummary.getByText("grant-request:conversation-1", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-waiting-authorization-1440.png"), fullPage: true });
   const stream = page.locator(".px-message-stream");
@@ -479,10 +481,13 @@ test("created problem continues through pending approval to a fresh exact read",
   await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeHidden();
   await formalProblem.getByText("技术详情", { exact: true }).click();
   await expect(formalProblem.getByText("READ 不隐含 REVISE。", { exact: false })).toBeVisible();
+  await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeHidden();
+  await desktopSummary.getByText("查看正式描述", { exact: true }).click();
   await expect(desktopSummary.getByText(createdProblem.description, { exact: true })).toBeVisible();
   await expect(desktopSummary.getByText("读取成功", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "保留补充", exact: true }).click();
-  await expect(page.getByText(pendingText, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "准备正式修订", exact: true }).click();
+  await expect(page.getByRole("textbox", {name:"完整描述",exact:true})).toHaveValue(`${createdProblem.description}\n补充或纠正：${pendingText}`);
+  await expect(page.getByText("本次正式修订尚未保存。", {exact:false})).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("w2c-approved-exact-read-1440.png"), fullPage: true });
   await page.reload();
   await expect(page.getByRole("heading", { name: "已恢复正式业务记录", exact: true })).toBeVisible();
@@ -566,4 +571,27 @@ test("an unbound request id is ignored for the current session and Problem", asy
   await expect(page.getByText("链接中的申请编号不属于当前会话与问题", { exact: false })).toBeVisible();
   expect(requestInspections).toBe(0);
   await expect(page.getByText("grant-request:foreign", { exact: true })).toHaveCount(0);
+});
+
+test("formal dialogue supplement saves an exact successor and refresh never resubmits",async({page})=>{
+  await installRoutes(page,{value:"human:applicant"});
+  const revisions=[createdProblem];const writes:Record<string,unknown>[]=[];
+  await page.route("**/api/workbench/v1/problems",route=>route.fulfill({json:{result:{problems:[revisions.at(-1)]}}}));
+  await page.route("**/api/workbench/v1/problems/*/criteria-sets",route=>route.fulfill({json:{result:{revisions:[]}}}));
+  await page.route("**/api/workbench/v1/problems/*/criteria",route=>route.fulfill({json:{result:{revisions:[]}}}));
+  await page.route("**/api/workbench/v1/problems/problem%3Aconversation-1",route=>route.fulfill({json:{result:{problem:{business_problem_id:createdProblem.business_problem_id,current_revision_id:revisions.at(-1)!.revision_id,aggregate_version:revisions.length,current_state:"DRAFT"},revisions,lifecycle:[]}}}));
+  await page.route("**/api/workbench/v1/problems/*/revisions",route=>{
+    const body=route.request().postDataJSON();writes.push(body);
+    revisions.push({...createdProblem,revision:2,revision_id:"problem:successor:2",description:body.description});
+    return route.fulfill({json:{result:{revision:revisions.at(-1)}}});
+  });
+  await page.goto("/work?problem=problem%3Aconversation-1");
+  await page.getByLabel("补充或纠正正式目标").fill("纠正：仅正式项目，不含试验项目。");
+  await page.getByRole("button",{name:"准备正式修订",exact:true}).click();
+  const expected=createdProblem.description+"\n补充或纠正：纠正：仅正式项目，不含试验项目。";
+  await expect(page.getByRole("textbox",{name:"完整描述",exact:true})).toHaveValue(expected);expect(writes).toHaveLength(0);
+  await page.getByRole("button",{name:"保存正式修订",exact:true}).click();
+  await expect(page.locator("#formal-problem-message").getByText(expected,{exact:true})).toBeVisible();
+  expect(writes).toHaveLength(1);expect(writes[0].predecessorRevisionId).toBe(createdProblem.revision_id);expect(writes[0].expectedVersion).toBe(1);
+  await page.reload();await expect(page.locator("#formal-problem-message").getByText(expected,{exact:true})).toBeVisible();expect(writes).toHaveLength(1);expect(revisions[0]).toEqual(createdProblem);
 });

@@ -49,7 +49,7 @@ export const readBusinessProblem=(problemId:string)=>read<BusinessProblemDetail>
 export const readCriteriaSets=(problemId:string)=>read<{revisions:CriteriaSetRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`);
 export const readProblemCriteria=(problemId:string)=>read<{revisions:CriterionRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria`);
 
-export function createBusinessProblem(csrfToken:string,input:{title:string;description:string;ownerId:string;idempotencyKey:string}){
+export function createBusinessProblem(csrfToken:string,input:{title:string;description:string;ownerId:string;idempotencyKey:string;draftInvocationId?:string}){
   return write<{revision:BusinessProblemRevision;creatorContinuation:ProblemCreatorContinuation}>("/problems",csrfToken,input);
 }
 
@@ -92,4 +92,8 @@ export function writeCriterion(csrfToken:string,input:{successCriterionId?:strin
 
 export function writeCriteriaSet(csrfToken:string,problemId:string,input:{problemRevisionId:string;predecessorSetRevisionId?:string;orderedCriterionRevisionIds:string[];expectedVersion:number;idempotencyKey:string}){
   return write<{revision:CriteriaSetRevision}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`,csrfToken,input);
+}
+
+export function transitionBusinessProblem(csrfToken:string,problemId:string,input:{toState:"ACTIVE";expectedVersion:number;idempotencyKey:string}){
+  return write<{businessProblemId:string;aggregateVersion:number}>(`/problems/${encodeURIComponent(problemId)}/lifecycle`,csrfToken,input);
 }

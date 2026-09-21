@@ -30,6 +30,12 @@ from agent_console.draft_assistance_authorization import (
     GrantAdministrationDraftAuthorization,
 )
 from agent_console.governed_execution_ownership import execution_database_fingerprint
+from agent_console.plan_invocation_postgres import PostgresPlanningInvocations
+from agent_console.plan_suggestion_api import install_planning_invocations
+from agent_console.plan_suggestion_application import PlanningApplication
+from agent_console.plan_suggestion_bootstrap import PlanningInvocationDependencies
+from agent_console.plan_suggestion_postgres import PostgresPlanningRepository
+from agent_console.provider_usage import ProviderUsageGrantTargetValidator
 from agent_console.workbench_agent import agent_operations
 from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
@@ -43,6 +49,10 @@ from agent_console.workbench_employee import (
 from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from agent_console.workbench_pagination import WorkbenchCursorCodec
+from agent_console.workbench_plan_suggestion import (
+    PlanningGrantTargetValidator,
+    planning_operations,
+)
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_service import WorkflowDefinitionService
 
@@ -74,6 +84,9 @@ def build_workbench_composition(
     workflows: WorkflowDefinitionService | None = None,
     draft_assistance: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
+    planning_v2_enabled: bool = False,
+    planning_invocations: PlanningInvocationDependencies | None = None,
+    planning_unavailable_reason: str = "PLANNING_NOT_CONFIGURED",
     managed_closeables: tuple[object, ...] = (),
 ) -> WorkbenchComposition:
     """Build only after every external authority and owner dependency is present."""
@@ -98,6 +111,17 @@ def build_workbench_composition(
         workflow_database_url
     ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    if planning_invocations is not None and not planning_v2_enabled:
+        raise AuthorityError("PLANNING_V2_DISABLED")
+    planning = None
+    if planning_v2_enabled:
+        planning_repository = PostgresPlanningRepository(
+            business_problems.problems.pool
+        )
+        planning_repository.migrate()
+        planning = PlanningApplication(
+            planning_repository, business_problems.problems, None
+        )
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
@@ -111,6 +135,27 @@ def build_workbench_composition(
             )
             if draft_assistance is not None
             else ()
+        )
+        + (
+            (
+                PlanningGrantTargetValidator(
+                    planning_invocations.profile
+                    if planning_invocations is not None
+                    else None
+                ),
+            )
+            if planning is not None
+            else ()
+        )
+        + (
+            ProviderUsageGrantTargetValidator(
+                understanding=draft_assistance.repository
+                if draft_assistance is not None
+                else None,
+                planning=PostgresPlanningInvocations(planning.repository)
+                if planning_invocations is not None
+                else None,
+            ),
         ),
     )
     foundation = build_authority_foundation(
@@ -135,12 +180,61 @@ def build_workbench_composition(
                 authorizer,
                 clock=foundation.grants.clock,
             )
+        delegation_routes = ()
+        task_binding = None
+        if (
+            draft_assistance is not None
+            and planning_invocations is not None
+            and hasattr(draft_assistance.transport, "configuration")
+            and hasattr(planning_invocations.provider, "configuration")
+        ):
+            from .task_delegation import TaskDelegationService, configured_limits
+            from .task_delegation_api import install_task_delegation_routes
+
+            configurations = {
+                "understanding": configured_limits(
+                    draft_assistance.profile,
+                    draft_assistance.transport.configuration,
+                    draft_assistance.budget,
+                ),
+                "planning": configured_limits(
+                    planning_invocations.provider.transport_profile,
+                    planning_invocations.provider.configuration,
+                    planning_invocations.budget.owner,
+                    planning=True,
+                ),
+            }
+            draft_assistance.budget.delegation_configuration = configurations[
+                "understanding"
+            ]
+            planning_invocations.budget.owner.delegation_configuration = configurations[
+                "planning"
+            ]
+            delegation = TaskDelegationService(
+                foundation.grants,
+                configurations,
+                timeout_source=(
+                    planning_invocations.provider.transport_profile,
+                    planning_invocations.provider.configuration,
+                    planning_invocations.budget.owner,
+                ),
+            )
+            delegation.migrate()
+            from .task_delegation import record_created_object
+
+            task_binding = record_created_object
+            delegation_routes = (install_task_delegation_routes(delegation),)
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             grant_administration=foundation.grants,
             operations=(
+                *(
+                    planning_operations(planning, employee_definitions)
+                    if planning is not None
+                    else ()
+                ),
                 *business_problem_operations(
                     business_problems,
                     BusinessProblemCreateCoordinator(
@@ -148,6 +242,7 @@ def build_workbench_composition(
                         clock=foundation.grants.clock,
                         identity_factory=foundation.grants.identity_factory,
                     ),
+                    task_binding=task_binding,
                 ),
                 *agent_operations(
                     agent_definitions,
@@ -163,10 +258,29 @@ def build_workbench_composition(
             **(
                 {
                     "route_installers": (
-                        install_draft_assistance_routes(draft_assistance),
+                        delegation_routes
+                        + (
+                            (install_draft_assistance_routes(draft_assistance),)
+                            if draft_assistance is not None
+                            else ()
+                        )
+                        + (
+                            (
+                                install_planning_invocations(
+                                    planning_invocations.bind(
+                                        planning, foundation.grants.authorization
+                                    )
+                                    if planning_invocations is not None
+                                    else None,
+                                    planning_unavailable_reason,
+                                ),
+                            )
+                            if planning_v2_enabled
+                            else ()
+                        )
                     )
                 }
-                if draft_assistance is not None
+                if draft_assistance is not None or planning_v2_enabled
                 else {}
             ),
         )

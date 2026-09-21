@@ -34,7 +34,7 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "EXECUTION": frozenset({"START", "READ"}),
     "SKILL": frozenset({"INVOKE_SKILL", "READ_SKILL_INVOCATION"}),
     "RESOURCE_USE": frozenset({"READ"}),
-    "EVIDENCE": frozenset({"READ_REFERENCE"}),
+    "EVIDENCE": frozenset({"READ_REFERENCE", "READ_MEASUREMENT"}),
     "MODEL_GOVERNANCE": frozenset(
         {
             "CREATE_MODEL",

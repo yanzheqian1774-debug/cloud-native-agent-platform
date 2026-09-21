@@ -153,6 +153,15 @@ class PostgresProviderCallBudget:
         except (OSError, PsycopgError) as exc:
             raise DraftAssistanceError("PROVIDER_BUDGET_STORAGE_UNAVAILABLE") from exc
 
+    @contextmanager
+    def dispatch_guard(self, invocation, quote):
+        """Pin admission; revocation does not cancel an admitted call."""
+        from .task_delegation import guard_budget
+
+        with self._connection() as connection:
+            guard_budget(connection, self, invocation, quote)
+            yield
+
     def reserve(
         self,
         operation_id: str,
@@ -186,6 +195,11 @@ class PostgresProviderCallBudget:
         )
         try:
             with self._connection() as connection:
+                from .task_delegation import guard_budget
+
+                continuous_development = guard_budget(
+                    connection, self, invocation, quote
+                )
                 policy = connection.execute(
                     "SELECT call_cap,total_cost_cap_microusd "
                     "FROM draft_provider_budget.policies WHERE namespace=%s "
@@ -218,7 +232,7 @@ class PostgresProviderCallBudget:
                     "AND r.ledger_id=%s",
                     scope,
                 ).fetchone()
-                if (
+                if not continuous_development and (
                     totals["calls"] + 1 > policy["call_cap"]
                     or totals["cost"] + quote.worst_case_cost_microusd
                     > policy["total_cost_cap_microusd"]
@@ -331,6 +345,48 @@ class PostgresProviderCallBudget:
             raise
         except PsycopgError as exc:
             raise DraftAssistanceError("PROVIDER_BUDGET_STORAGE_UNAVAILABLE") from exc
+
+    def read_settlement(self, reservation_id):
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT input_tokens,output_tokens,actual_cost_microusd "
+                "FROM draft_provider_budget.settlements WHERE namespace=%s "
+                "AND security_domain=%s AND ledger_id=%s AND reservation_id=%s",
+                (
+                    self.profile.scope.namespace,
+                    self.profile.scope.security_domain,
+                    self.ledger_id,
+                    reservation_id,
+                ),
+            ).fetchone()
+        if row is None:
+            return {"status": "PENDING_RECONCILIATION", "reservation_retained": True}
+        return {
+            "status": "ESTIMATE_SETTLED",
+            "reservation_retained": False,
+            "estimate_microusd": row["actual_cost_microusd"],
+            "input_tokens": row["input_tokens"],
+            "output_tokens": row["output_tokens"],
+            "provider_invoice": "NOT_VERIFIED",
+        }
+
+    def pricing(self):
+        from .business_problem_domain import canonical_digest
+
+        owner = self
+        document = {
+            "ledger_id": owner.ledger_id,
+            "profile_revision_id": owner.profile.profile_revision_id,
+            "profile_digest": owner.profile.profile_digest,
+            "currency": "USD",
+            "unit": "MICROUSD_PER_MILLION_TOKENS",
+            "input_price": owner.input_price,
+            "output_price": owner.output_price,
+            "calculation_version": "draft-provider-budget.v1.ceil-separate-totals",
+            "cached_input_policy": "INCLUDED_AT_STANDARD_INPUT_RATE_NO_ADDITION",
+            "classification": "TOKEN_COST_ESTIMATE_NOT_PROVIDER_INVOICE",
+        }
+        return {**document, "price_version_digest": canonical_digest(document)}
 
     def close(self) -> None:
         self.pool.close()

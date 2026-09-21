@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 
 import psycopg
 from browser_build_preflight import verify_build_identity
+from browser_scenario_ids import BROWSER_SCENARIO_IDS
 from minimum_disclosure import (
     EVIDENCE_FIELDS,
     extract_allowlisted,
@@ -156,6 +157,8 @@ FIRST_FAILURE_ASSERTION_IDS.update(
         )
     }
 )
+FIRST_FAILURE_ASSERTION_IDS.update(BROWSER_SCENARIO_IDS)
+
 FAILURE_CATEGORIES = frozenset(
     {
         "BROWSER_ASSERTION",
@@ -1227,12 +1230,28 @@ def build_failure_summary(
                 if type(candidate) is int and 1 <= candidate <= MAX_DIAGNOSTIC_COUNT:
                     line = candidate
                 break
+    location_kind = "TEST_DECLARATION" if line is not None else "UNKNOWN"
+    if mapping and context is not None:
+        result = context[3]
+        error = result.get("error")
+        location = error.get("location") if isinstance(error, dict) else None
+        if isinstance(location, dict):
+            error_file = location.get("file")
+            error_line = location.get("line")
+            if (
+                isinstance(error_file, str)
+                and Path(error_file).name == mapping[0]
+                and type(error_line) is int
+                and 1 <= error_line <= MAX_DIAGNOSTIC_COUNT
+            ):
+                line = error_line
+                location_kind = "ASSERTION"
     summary = {
         "schemaVersion": 1,
         "scenarioId": scenario,
         "spec": f"console/frontend/tests/e2e/{mapping[0]}" if mapping else None,
         "sourceLine": line,
-        "locationKind": "TEST_DECLARATION" if line is not None else "UNKNOWN",
+        "locationKind": location_kind,
         "failureCategory": failure["failureCategory"],
         "failureSubtype": failure["failureSubtype"],
         "actionClass": "UNKNOWN",
@@ -1282,8 +1301,8 @@ def encode_failure_summary(summary: dict[str, object]) -> str:
         or not 1 <= line <= MAX_DIAGNOSTIC_COUNT
     ):
         raise ValueError("summary location violation")
-    if summary["locationKind"] != (
-        "TEST_DECLARATION" if line is not None else "UNKNOWN"
+    if summary["locationKind"] not in (
+        {"TEST_DECLARATION", "ASSERTION"} if line is not None else {"UNKNOWN"}
     ):
         raise ValueError("summary location violation")
     if (

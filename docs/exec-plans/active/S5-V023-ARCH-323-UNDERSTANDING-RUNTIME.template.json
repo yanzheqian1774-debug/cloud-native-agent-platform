@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "draft-assistance-runtime.v1",
+  "transportKind": "REAL_PROVIDER",
+  "scope": {
+    "namespace": null,
+    "securityDomain": null
+  },
+  "profileRevisionId": null,
+  "profileDigest": null,
+  "model": {
+    "id": null,
+    "revisionId": null,
+    "digest": null
+  },
+  "provider": {
+    "id": null,
+    "revisionId": null,
+    "digest": null
+  },
+  "endpoint": {
+    "id": null,
+    "revisionId": null,
+    "digest": null
+  },
+  "connectionProfile": {
+    "id": null,
+    "revisionId": null,
+    "digest": null
+  },
+  "adapter": {
+    "id": "openai-responses-draft",
+    "revision": "v2"
+  },
+  "outputSchemaVersion": "problem-draft-assistance-output.v2",
+  "targetFormatVersion": "draft-assistance-target.v1",
+  "maximumInputBytes": 16384,
+  "maximumOutputTokens": 2048,
+  "totalTimeoutSeconds": 60,
+  "pepperReference": null,
+  "pepperVersion": null,
+  "pepperFile": null,
+  "providerProtocol": "OPENAI_RESPONSES_V1",
+  "executionClass": "REAL_PROVIDER",
+  "responsesUrl": "https://api.openai.com/v1/responses",
+  "nativeModelId": "gpt-4.1-2025-04-14",
+  "maximumInputTokens": 32768,
+  "maximumResponseBytes": 64000,
+  "connectTimeoutSeconds": 5,
+  "readTimeoutSeconds": 30,
+  "credential": {
+    "reference": null,
+    "version": null,
+    "resolverId": "exact-file-resolver",
+    "resolverRevision": "v1",
+    "file": null
+  },
+  "tls": {
+    "caFile": null
+  },
+  "budget": {
+    "ledgerId": null,
+    "currency": "USD",
+    "callCap": 3,
+    "totalCostCapMicrousd": 250000,
+    "inputPriceMicrousdPerMillionTokens": 2000000,
+    "outputPriceMicrousdPerMillionTokens": 8000000
+  },
+  "policyDigest": "3a0a6f45193595d221119f1394a36daf8f0bf83b979a5241860217653ab54723"
+}
