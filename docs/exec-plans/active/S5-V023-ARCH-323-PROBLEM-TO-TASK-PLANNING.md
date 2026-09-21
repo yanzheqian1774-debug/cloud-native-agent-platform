@@ -1737,3 +1737,7 @@ Human已批准首批Ready/普通merge及本轮实际编码，Session仍OPEN。18
 2026-09-21只读核验：原requester与approver凭据均已过期。正式代次激活会改变active_generation；task_delegation.active严格拒绝原代次委托；0028对同task/subject/root/ledger有唯一绑定，不能重新签一个同范围委托规避。不得编辑generation-1、延长原文件、改库原record、忽略代次校验或由调用方代签。身份恢复不代表缺少模型/费用授权。
 
 此处新增的是“独立签发的委托代次连续性”语义，按Architecture Gates的authentication architecture G2单独提出；在决定前不编码该机制、不切换旧实例。精确建议及替代方案见productization回执；本轮产品代码、图集对照、受控测试、Draft候选与CI继续完成。新中文理解配置修订同样不能绕过原configuration摘要，列入一次后续正式恢复包，不能将旧30秒/固定次数重作总授权上限。
+
+### 27.5 身份连续性G2正式提交（PROPOSED）
+
+按Human续接要求直接固化既有决定包，见`docs/engineering/S5-V023-ARCH-323-IDENTITY-CONTINUITY-G2.md` v1：可信operator代次摘要链、原独立issuer当前权限、追加连续性/8小时技术期、撤销优先、单链头并发幂等、旧writer拒绝与恢复。决定状态仍PROPOSED，未编码/激活。实现批准与后续原入口独立签发分开；不重新申请模型/费用。中文理解新owner绑定不纳入通用恢复授权，先复用原理解/标准完成中文规划验证。完整便携视觉对照包另交付，不能代替视觉接受。

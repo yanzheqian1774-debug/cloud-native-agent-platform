@@ -68,3 +68,9 @@ main bcf2def的CI 35551586800与Employee Identity Chain 35551586836成功。保�
 后续 Draft PR 为 #184。首轮远端候选811f066：Quality Gates、Frontend Quality Gates及身份链三项通过；浏览器失败分别定位为中文登录仍使用旧英文按钮定位、旧视觉测试仍使用原卡片DOM、过期身份提示旧文案。保留失败产物后同步准确中文按钮与新表格/资源区定位，不删除职责、角色、UNKNOWN、确认次数、身份消失/恢复等断言。布局1500/1366、资源UNKNOWN/版本不符、导航隔离4项补验通过。最终提交与CI身份继续记录在外部交付回执，不把首轮失败标为通过。
 
 第二候选035223a的核心、前端、主浏览器、理解交互、身份链、资源准备/组合及Kimi mock门禁通过；310场景进入登录POST后暴露默认Location兼容性。已将无returnTo登录表单恢复到原`/workbench`，显式原对象安全返回不变，保留原Location断言。BFF22项通过；使用专用64332测试库、独立20443/20444端口完整运行原HTTPS工作台场景通过，不使用原演示库或真实provider。最终修复另经正常提交门禁。
+
+## 身份连续性决定提交与便携视觉包
+
+Human要求直接提交此前准备的决定：见[身份连续性G2 v1](S5-V023-ARCH-323-IDENTITY-CONTINUITY-G2.md)，状态PROPOSED，未实现/激活。明确可信operator旧新代次摘要链、原独立issuer当前精确权限、撤销优先、8小时技术有效期、追加单链头、并发/幂等、旧writer拒绝、运行恢复与实现批准的分别证据。不是重新申请模型/费用；不包含模型资源自动发布。
+
+完整对照依赖包：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/R24-323-visual-review-v1.zip`，SHA256 `862d18b44116a279c0993060a231bdbdaa6dc01e42c3fb9a59a0910894845002`。解压打开`visual-comparison.html`，3张参考+6张实际图、版本/契约及文件摘要，全部相对路径；不是完整280页图集。视觉接受仍NOT_GRANTED，IAM插画/SSO/组织入口等已知差异明确保留供审阅，不称完全贴图一致。
