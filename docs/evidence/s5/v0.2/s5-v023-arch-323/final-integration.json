@@ -1,0 +1,589 @@
+{
+  "verifiedAt": "2026-09-21T07:26:23.111667+00:00",
+  "humanDecision": "CURRENT_SESSION_APPROVED_READY_NORMAL_MERGE_EXACT_MAIN_VERIFY_AND_BOUNDED_CLOSE",
+  "session": "CLOSED",
+  "reviewedHead": "036bb702b4cbc219cef34c4c162f48b0bb462947",
+  "tree": "340fd86ad49c498be8f3bb89ec525ac76aaddb2e",
+  "merge": "d26018bd8a24ef7e55200963fa39744e335b973d",
+  "firstParent": "bcf2defe8c2a6900b1bbba94ad7931c91db1b26b",
+  "pr184": "MERGED_NORMAL_MERGE_SOURCE_BRANCH_RETAINED",
+  "exactMain": {
+    "sha": "d26018bd8a24ef7e55200963fa39744e335b973d",
+    "jobs": [
+      {
+        "name": "PostgreSQL Identity Chain",
+        "conclusion": "success",
+        "checkout": "d26018bd8a24ef7e55200963fa39744e335b973d",
+        "url": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35572423070/job/106246691859"
+      },
+      {
+        "name": "PostgreSQL Skill Invocation",
+        "conclusion": "success",
+        "checkout": "d26018bd8a24ef7e55200963fa39744e335b973d",
+        "url": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35572423070/job/106246691942"
+      },
+      {
+        "name": "PostgreSQL Business Problem and Plan Entry",
+        "conclusion": "success",
+        "checkout": "d26018bd8a24ef7e55200963fa39744e335b973d",
+        "url": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35572423070/job/106246692059"
+      },
+      {
+        "name": "Frontend Quality Gates",
+        "conclusion": "success",
+        "checkout": "d26018bd8a24ef7e55200963fa39744e335b973d",
+        "url": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35572423036/job/106246691830"
+      },
+      {
+        "name": "Quality Gates",
+        "conclusion": "success",
+        "checkout": "d26018bd8a24ef7e55200963fa39744e335b973d",
+        "url": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35572423036/job/106246691952"
+      },
+      {
+        "name": "Agent Workbench Browser Acceptance",
+        "conclusion": "success",
+        "checkout": "d26018bd8a24ef7e55200963fa39744e335b973d",
+        "url": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/35572423036/job/106246692081"
+      }
+    ],
+    "allExact": true
+  },
+  "remainingPrs": [
+    {
+      "pr": 170,
+      "head": "020c1d6eae35c47a418d210b5e982e8d54b03889",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34883132009/job/104107054924"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34883132006/job/104107055354"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34883132009/job/104107054927"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34883132006/job/104107055469"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34883132009/job/104107054625"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34883132006/job/104107054939"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "422126c23c7da04edcc16d9d9ff52f09ca4f33bc\n100644 1a0b6f04df58ce371df3aadca3e54e3c0230bbde 1\tconsole/backend/src/agent_console/app.py\n100644 8d8750aa6a96216758094fa6c68c4d417b2946ac 2\tconsole/backend/src/agent_console/app.py\n100644 218affe5073ed859cc39c926ecb3904f2fbb419a 3\tconsole/backend/src/agent_console/app.py\n100644 2def25b7db6f30b5f79bfdaf29c96e12cf05aa00 1\tconsole/backend/src/agent_console/authority_contracts.py\n100644 18fa520a46ad747eeda03733c4c68b712b116855 2\tconsole/backend/src/agent_console/authority_contracts.py\n100644 3e9a94f9f863f2cd610af9e83b5eab0600c6ac7f 3\tconsole/backend/src/agent_console/authority_contracts.py\n100644 7c63befb65dccc1d116927559d75e76645a590dc 1\tconsole/backend/src/agent_console/authority_postgres.py\n100644 a3366687b07f8c3ba9adc7f22fdd3fe1344400a9 2\tconsole/backend/src/agent_console/authority_postgres.py\n100644 570214d5ecd3c8e7d9d1c5f0d09e5d76338a5c91 3\tconsole/backend/src/agent_console/authority_postgres.py\n100644 63fa95b8812634a90f945ea9d63eed027df25be2 1\tconsole/backend/src/agent_console/business_problem_application.py\n100644 bdd2f219d545bbcafd5b2e92fd958cfc4b6d6f9f 2\tconsole/backend/src/agent_console/business_problem_application.py\n100644 044b9d79879be453c4e0b6de372917bd6801e8ed 3\tconsole/backend/src/agent_console/business_problem_application.py\n100644 f02ce9b4f4e0041164124307a84a36f4b8b7a263 1\tconsole/backend/src/agent_console/business_problem_postgres.py\n100644 084dff2042f066c87d9d13254d115e259d832947 2\tconsole/backend/src/agent_console/business_problem_postgres.py\n100644 e0f3ead8a434595849e5358d614b59d877b45c6c 3\tconsole/backend/src/agent_console/business_problem_postgres.py\n100644 f1cf444003af6ffe257031131b7e063318b16bf2 1\tconsole/backend/src/agent_console/grant_administration_application.py\n100644 5b63733b51a39e82cfd9e30fd0c081825ff55fab 2\tconsole/backend/src/agent_console/grant_administration_application.py\n100644 f0d367bd16f0820f26eea822b25f24eb984564ea 3\tconsole/backend/src/agent_console/grant_administration_application.py\n100644 ed9a4cb9a7d154be941ac301cba54bb7794af35c 2\tconsole/backend/src/agent_console/workbench_bff.py\n100644 cb4cbec9f0ee4e97a6bce8def1f3cea7a727018b 3\tconsole/backend/src/agent_console/workbench_bff.py\n100644 53c73394a7104a95c12f32c42fe229f2381d3a4f 2\tconsole/backend/src/agent_console/workbench_bff_schemas.py\n100644 50c5d4345d372bf64c759082c2b140e018422dbf 3\tconsole/backend/src/agent_console/workbench_bff_schemas.py\n100644 0613442099751a7ce227f572c39abee2158a2f0b 2\tconsole/backend/src/agent_console/workbench_bootstrap.py\n100644 691bf171fd885404c72a40f8ab006eea262c444b 3\tconsole/backend/src/agent_console/workbench_bootstrap.py\n100644 785d5408ed35646740ae42c07118f564fa24d2ad 2\tconsole/backend/src/agent_console/workbench_business_problem.py\n100644 59ba67d63b9201658d7bb40abbb79a0332e7422f 3\tconsole/backend/src/agent_console/workbench_business_problem.py\n100644 24a4f1889fbc7b4c731f1d1a8ece79c7f47b869f 2\tconsole/backend/src/agent_console/workbench_grant_targets.py\n100644 b37d33b0cb62453faa5da2cfae7981c9910f2541 3\tconsole/backend/src/agent_console/workbench_grant_targets.py\n100644 7eb13b98d18632d520d4a1ecf21a25df042d88bf 2\tconsole/backend/tests/test_workbench_bff.py\n100644 b9bd665a029b1f75283c70af71c9280dce1fe537 3\tconsole/backend/tests/test_workbench_bff.py\n100644 8405f1aee9fa1cce417ecef56163ccd735a87080 2\tconsole/backend/tests/test_workbench_creator_continuation_postgres.py\n100644 9cb90cc2379b1f4791d9a159923094679577ebb9 3\tconsole/backend/tests/test_workbench_creator_continuation_postgres.py\n100644 06d539a2d14996f62904afa13fe4f753c6004a33 1\tconsole/frontend/playwright.config.ts\n100644 2dbaa9a0c8748be3484b59f29c229574f4cc64f1 2\tconsole/frontend/playwright.config.ts\n100644 b546b98ddbf1157cf21fc2d884b13c7b3338992f 3\tconsole/frontend/playwright.config.ts\n100644 357e87a448485642b66bc53fccf86be76bfba323 1\tconsole/frontend/src/App.tsx\n100644 a35b04219f2eb0c2d17788cf0bdea6c211ee4007 2\tconsole/frontend/src/App.tsx\n100644 564d6de7f3ddf4aba0d3873047990cf5c45a2ba9 3\tconsole/frontend/src/App.tsx\n100644 44181dc0f16253b2e55054bb1e254c7801ffe199 2\tconsole/frontend/src/api/businessWorkspace.ts\n100644 3d8944798297222f1d91a28d80985939b1930463 3\tconsole/frontend/src/api/businessWorkspace.ts\n100644 f69fea64fa29969421a4587a9ddaab6290d0ccf3 1\tconsole/frontend/src/components/ConsoleShell.tsx\n100644 15ffb466596a55b3e5a053c6e72209457fc70e64 2\tconsole/frontend/src/components/ConsoleShell.tsx\n100644 654a1e6d5256f39ee40dea8459d394475ed1f9df 3\tconsole/frontend/src/components/ConsoleShell.tsx\n100644 2652a9acd40b62db55011218baac2e37d2c58eb5 2\tconsole/frontend/src/problems/ProblemConversation.tsx\n100644 4ae03e4157de5d317cd8e0c31096f0a458460da5 3\tconsole/frontend/src/problems/ProblemConversation.tsx\n100644 82ffe1a26526818dd3c9c6b467b77858df970232 2\tconsole/frontend/src/problems/ProblemTaskSummary.tsx\n100644 f26127b92ffbef82dbebff16638eb213a45300ae 3\tconsole/frontend/src/problems/ProblemTaskSummary.tsx\n100644 ce8054f0538988ca54c312c609e8b3b512202952 1\tconsole/frontend/src/problems/ProblemWorkspacePage.tsx\n100644 cab9e73abdbdeb479f6dba188e0829713d08f34f 2\tconsole/frontend/src/problems/ProblemWorkspacePage.tsx\n100644 183b6b7773c1697d4b43ad3292e5a810b2cab809 3\tconsole/frontend/src/problems/ProblemWorkspacePage.tsx\n100644 5b6fbe5b58ad4cd135b4a2bc0e32af4beffa0ae4 2\tconsole/frontend/src/problems/SuccessCriterionCard.tsx\n100644 dd7c2f104ace256b14911b66964a2023c5d820d1 3\tconsole/frontend/src/problems/SuccessCriterionCard.tsx\n100644 3e7595e3bfb8be322c70ffd90dd8ae8f1ef22c09 2\tconsole/frontend/src/problems/WorkbenchErrorNotice.tsx\n100644 278296c72532ec9a207aaf1407ac2ff86d94ff30 3\tconsole/frontend/src/problems/WorkbenchErrorNotice.tsx\n100644 791473dffd81bfa4424d1c8a8f1577dd60b617d4 2\tconsole/frontend/src/problems/problemConversationModel.ts\n100644 5b1c3bdcbac47aaf304dce50b519f819c1a19d73 3\tconsole/frontend/src/problems/problemConversationModel.ts\n100644 07b16d21a275acf5f4db97a844c957fe43220f8e 1\tconsole/frontend/src/styles/product-experience.css\n100644 b06a31eae224677cffee6a4d56f0bfbd58ac3abb 2\tconsole/frontend/src/styles/product-experience.css\n100644 1f019196c3456b5cc4cb0d57b48c6ac14f6b42fb 3\tconsole/frontend/src/styles/product-experience.css\n100644 42fcf641a514d13da1b57086cc9bcd5426b8b948 1\tconsole/frontend/tests/e2e/platform-support-surfaces.spec.ts\n100644 719e20272f0976fab32539651f0207d61d595b3c 2\tconsole/frontend/tests/e2e/platform-support-surfaces.spec.ts\n100644 accaca229ec7639726b65d3fcdfdf9ebb55cb2f5 3\tconsole/frontend/tests/e2e/platform-support-surfaces.spec.ts\n100644 055e44b44232181fe3be0d56412a4a8993d1cad3 2\tconsole/frontend/tests/e2e/w2a-honest-shell.spec.ts\n100644 8d35c23813768fd30bab3dff31d97856a37a0ca6 3\tconsole/frontend/tests/e2e/w2a-honest-shell.spec.ts\n100644 4b54598abfb4a82b793c112c01eb30752f80a68c 2\tconsole/frontend/tests/e2e/w3-native-https-live.spec.ts\n100644 4c72de30c379bf08e4e153d4fed08eb34aae4e1d 3\tconsole/frontend/tests/e2e/w3-native-https-live.spec.ts\n100644 4e646e3f96ef352b8e1d92d50a5e3029f4308f99 2\tconsole/frontend/tests/e2e/w3-success-criteria-live.spec.ts\n100644 cb228ac6eef4bbb08e641a45e0a3569f14920d43 3\tconsole/frontend/tests/e2e/w3-success-criteria-live.spec.ts\n100644 0e60eed2dbfa3f8974c1496fff5d61229942c46f 2\tconsole/frontend/tests/e2e/w3-success-criteria.spec.ts\n100644 09b4643c64f4229e383df0e35163672894d9b746 3\tconsole/frontend/tests/e2e/w3-success-criteria.spec.ts\n100644 c22c48ff53080c8bb2548ff8f80bbcbb1269e51e 1\tconsole/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\n100644 6aea8648045d7c39831d2e60209334205ad3e8c0 2\tconsole/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\n100644 10bbc51ec32fa9388aef3612b55b4a78364c93ae 3\tconsole/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\n100644 4954c78e72e5d1a81997d98023b02259d05e0691 2\tconsole/frontend/tests/test_s5_v023_impl_299_business_workspace.py\n100644 e09d1c12163797ad8112f30912dda9345d93991f 3\tconsole/frontend/tests/test_s5_v023_impl_299_business_workspace.py\n100644 cd6faab725337a8f4f1d06429a299917927cb058 1\tscripts/acceptance/isolated_browser_harness.py\n100644 dca9e140b54e2dc73d5af18d3102a13e20b559f9 2\tscripts/acceptance/isolated_browser_harness.py\n100644 1da3de00cffc34c8f2e48e2e7f8e83bb4404186e 3\tscripts/acceptance/isolated_browser_harness.py\n\nAuto-merging console/backend/src/agent_console/app.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/app.py\nAuto-merging console/backend/src/agent_console/authority_contracts.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_contracts.py\nAuto-merging console/backend/src/agent_console/authority_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_postgres.py\nAuto-merging console/backend/src/agent_console/business_problem_application.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/business_problem_application.py\nAuto-merging console/backend/src/agent_console/business_problem_bootstrap.py\nAuto-merging console/backend/src/agent_console/business_problem_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/business_problem_postgres.py\nAuto-merging console/backend/src/agent_console/grant_administration_application.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/grant_administration_application.py\nAuto-merging console/backend/src/agent_console/workbench_bff.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_bff.py\nAuto-merging console/backend/src/agent_console/workbench_bff_schemas.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_bff_schemas.py\nAuto-merging console/backend/src/agent_console/workbench_bootstrap.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_bootstrap.py\nAuto-merging console/backend/src/agent_console/workbench_business_problem.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_business_problem.py\nAuto-merging console/backend/src/agent_console/workbench_grant_targets.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_grant_targets.py\nAuto-merging console/backend/tests/test_workbench_bff.py\nCONFLICT (add/add): Merge conflict in console/backend/tests/test_workbench_bff.py\nAuto-merging console/backend/tests/test_workbench_creator_continuation_postgres.py\nCONFLICT (add/add): Merge conflict in console/backend/tests/test_workbench_creator_continuation_postgres.py\nAuto-merging console/frontend/playwright.config.ts\nCONFLICT (content): Merge conflict in console/frontend/playwright.config.ts\nAuto-merging console/frontend/src/App.tsx\nCONFLICT (content): Merge conflict in console/frontend/src/App.tsx\nAuto-merging console/frontend/src/api/businessWorkspace.ts\nCONFLICT (add/add): Merge conflict in console/frontend/src/api/businessWorkspace.ts\nAuto-merging console/frontend/src/components/ConsoleShell.tsx\nCONFLICT (content): Merge conflict in console/frontend/src/components/ConsoleShell.tsx\nAuto-merging console/frontend/src/problems/ProblemConversation.tsx\nCONFLICT (add/add): Merge conflict in console/frontend/src/problems/ProblemConversation.tsx\nAuto-merging console/frontend/src/problems/ProblemTaskSummary.tsx\nCONFLICT (add/add): Merge conflict in console/frontend/src/problems/ProblemTaskSummary.tsx\nAuto-merging console/frontend/src/problems/ProblemWorkspacePage.tsx\nCONFLICT (content): Merge conflict in console/frontend/src/problems/ProblemWorkspacePage.tsx\nAuto-merging console/frontend/src/problems/SuccessCriterionCard.tsx\nCONFLICT (add/add): Merge conflict in console/frontend/src/problems/SuccessCriterionCard.tsx\nAuto-merging console/frontend/src/problems/WorkbenchErrorNotice.tsx\nCONFLICT (add/add): Merge conflict in console/frontend/src/problems/WorkbenchErrorNotice.tsx\nAuto-merging console/frontend/src/problems/problemConversationModel.ts\nCONFLICT (add/add): Merge conflict in console/frontend/src/problems/problemConversationModel.ts\nAuto-merging console/frontend/src/styles/product-experience.css\nCONFLICT (content): Merge conflict in console/frontend/src/styles/product-experience.css\nAuto-merging console/frontend/src/styles/resource-management.css\nAuto-merging console/frontend/tests/e2e/platform-support-surfaces.spec.ts\nCONFLICT (content): Merge conflict in console/frontend/tests/e2e/platform-support-surfaces.spec.ts\nAuto-merging console/frontend/tests/e2e/w2a-honest-shell.spec.ts\nCONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w2a-honest-shell.spec.ts\nAuto-merging console/frontend/tests/e2e/w3-native-https-live.spec.ts\nCONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w3-native-https-live.spec.ts\nAuto-merging console/frontend/tests/e2e/w3-success-criteria-live.spec.ts\nCONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w3-success-criteria-live.spec.ts\nAuto-merging console/frontend/tests/e2e/w3-success-criteria.spec.ts\nCONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w3-success-criteria.spec.ts\nAuto-merging console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\nCONFLICT (content): Merge conflict in console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\nAuto-merging console/frontend/tests/test_s5_v023_impl_299_business_workspace.py\nCONFLICT (add/add): Merge conflict in console/frontend/tests/test_s5_v023_impl_299_business_workspace.py\nAuto-merging console/frontend/tests/test_v023_product_experience.py\nAuto-merging scripts/acceptance/isolated_browser_harness.py\nCONFLICT (content): Merge conflict in scripts/acceptance/isolated_browser_harness.py\nAuto-merging tests/test_s5_impl_072_isolated_browser_harness.py\n",
+      "error": ""
+    },
+    {
+      "pr": 169,
+      "head": "947a4ca25221541d7e2ff54bee5ab0fa11d6d480",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34735543441/job/103666202424"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34735543464/job/103666202415"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34735543441/job/103666202398"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34735543464/job/103666202401"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "FAILURE",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34735543441/job/103666202342"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34735543464/job/103666202339"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "5cfdbea536d11f9fc2f6351f033986a6acbf1a2a\n100644 feb5b5f73173a8bd89eb84631a86c739a3c3868f 1\tconsole/backend/src/agent_console/execution_postgres.py\n100644 431554f168986981f015455d7091da7b13889dd9 2\tconsole/backend/src/agent_console/execution_postgres.py\n100644 2566004f5840b86c10141c51624d0ac00984184f 3\tconsole/backend/src/agent_console/execution_postgres.py\n100644 8ea515a7dfb79038c408ccb488ca7dff029749fa 1\tdocs/governance/REGISTRY.md\n100644 cec45ed22fc6678cac2c62fbc28019812fa93324 2\tdocs/governance/REGISTRY.md\n100644 2932a06230b81d40117871231b2062e7e6e41f22 3\tdocs/governance/REGISTRY.md\n100644 342d051f00f3bc364a8036e9385d4df40e579cbd 1\toperator/src/agent_operator/main.py\n100644 aedcb84f8033dc0b3e95bd49b853f7b001b68d31 2\toperator/src/agent_operator/main.py\n100644 840d77b02c7b48d3be3cb180e912119a0ae17283 3\toperator/src/agent_operator/main.py\n\nAuto-merging console/backend/src/agent_console/execution_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/execution_postgres.py\nAuto-merging docs/governance/REGISTRY.md\nCONFLICT (content): Merge conflict in docs/governance/REGISTRY.md\nAuto-merging operator/src/agent_operator/main.py\nCONFLICT (content): Merge conflict in operator/src/agent_operator/main.py\n",
+      "error": ""
+    },
+    {
+      "pr": 168,
+      "head": "388b6e3993fcbd41526cb4038cd8974446980ce0",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34685115711/job/103530656131"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34685115710/job/103530656255"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34685115711/job/103530656101"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34685115710/job/103530656300"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34685115711/job/103530656031"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34685115710/job/103530656174"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "43c0af4be86c0a4633ae78e57c56595c4fc79651\n100644 cd6faab725337a8f4f1d06429a299917927cb058 1\tscripts/acceptance/isolated_browser_harness.py\n100644 dca9e140b54e2dc73d5af18d3102a13e20b559f9 2\tscripts/acceptance/isolated_browser_harness.py\n100644 655129846b7e5765ecef5b11bcaacad7832fbd9c 3\tscripts/acceptance/isolated_browser_harness.py\n100644 2cdf1466bdab2d10d8743e2f228b7c8377bf0dc7 1\ttests/test_s5_impl_072_isolated_browser_harness.py\n100644 4fb1a868bcdf4b112ca9c666ef3a47a40c574d9a 2\ttests/test_s5_impl_072_isolated_browser_harness.py\n100644 154726fa5fde7f94019b28122fbf3b350bb83a91 3\ttests/test_s5_impl_072_isolated_browser_harness.py\n\nAuto-merging scripts/acceptance/isolated_browser_harness.py\nCONFLICT (content): Merge conflict in scripts/acceptance/isolated_browser_harness.py\nAuto-merging tests/test_s5_impl_072_isolated_browser_harness.py\nCONFLICT (content): Merge conflict in tests/test_s5_impl_072_isolated_browser_harness.py\n",
+      "error": ""
+    },
+    {
+      "pr": 167,
+      "head": "bb1f821ee0c11e525e8634e0cf1e09db799b828d",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34438303832/job/102747883534"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34438303841/job/102747883895"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34438303832/job/102747883595"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34438303841/job/102747884125"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34438303832/job/102747883347"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34438303841/job/102747884133"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "87c2b4f3d7eb01c6196def80cf72a48a7db4abda\n100644 ced86278680c8f82d9ef89e3a626be54487fd16c 1\t.github/workflows/ci.yml\n100644 d95e240f9d0e2558c77cbc6d13c7ad54ead83f08 2\t.github/workflows/ci.yml\n100644 2566ad70e29c1fc740446ad5d318e6349cfaf802 3\t.github/workflows/ci.yml\n\nAuto-merging .github/workflows/ci.yml\nCONFLICT (content): Merge conflict in .github/workflows/ci.yml\nAuto-merging console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\n",
+      "error": ""
+    },
+    {
+      "pr": 166,
+      "head": "b0f934e7d5e958e5f8303eb194b100e0a4757c6a",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34454708322/job/102798299810"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34454708376/job/102798309433"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34454708322/job/102798299639"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34454708376/job/102798309009"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34454708322/job/102798299498"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34454708376/job/102798309314"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "042bc28f087feedc929fef7e2a6c7e722254bcea\n100644 cd6faab725337a8f4f1d06429a299917927cb058 1\tscripts/acceptance/isolated_browser_harness.py\n100644 dca9e140b54e2dc73d5af18d3102a13e20b559f9 2\tscripts/acceptance/isolated_browser_harness.py\n100644 7468e451885dde70218f5fe67a6ab7dd7ce7d8d2 3\tscripts/acceptance/isolated_browser_harness.py\n\nAuto-merging .github/workflows/ci.yml\nAuto-merging scripts/acceptance/isolated_browser_harness.py\nCONFLICT (content): Merge conflict in scripts/acceptance/isolated_browser_harness.py\nAuto-merging tests/test_s5_impl_072_isolated_browser_harness.py\n",
+      "error": ""
+    },
+    {
+      "pr": 164,
+      "head": "5a32fbb918a3c30ad50141e8bfbe7613673dc412",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34848277270/job/103989446245"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34848277375/job/103989446034"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34848277270/job/103989445711"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34848277375/job/103989445472"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34848277270/job/103989446018"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34848277375/job/103989445908"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "6a6ad03fcde9c5dba4a2ebace863f9916b0f7623\n100644 c3f117904a7d4adab0e799df4e6130059e4b8c43 1\tconsole/backend/src/agent_console/authority_postgres.py\n100644 a3366687b07f8c3ba9adc7f22fdd3fe1344400a9 2\tconsole/backend/src/agent_console/authority_postgres.py\n100644 b9604881a2de876f51b08b4db34d363c6a428eba 3\tconsole/backend/src/agent_console/authority_postgres.py\n100644 f02ce9b4f4e0041164124307a84a36f4b8b7a263 1\tconsole/backend/src/agent_console/business_problem_postgres.py\n100644 084dff2042f066c87d9d13254d115e259d832947 2\tconsole/backend/src/agent_console/business_problem_postgres.py\n100644 65f2435a3bea83f64e47fc5f342cfceccaf1bf41 3\tconsole/backend/src/agent_console/business_problem_postgres.py\n100644 202a827002ad0893f94aa5004ea4b5bf173a4016 1\tconsole/backend/src/agent_console/digital_employee_definition_postgres.py\n100644 14930c432cfad576711edc34d585ecc92c9dc3ac 2\tconsole/backend/src/agent_console/digital_employee_definition_postgres.py\n100644 9847cebf5d2416238a25b4d4c0f47a12dde6e3f9 3\tconsole/backend/src/agent_console/digital_employee_definition_postgres.py\n100644 d1772424a9699819694a8f0fc6e656c19c223c2a 1\tconsole/backend/src/agent_console/grant_administration_application.py\n100644 5b63733b51a39e82cfd9e30fd0c081825ff55fab 2\tconsole/backend/src/agent_console/grant_administration_application.py\n100644 e6f2f8cc2d6d9a5bf6db0f781ecc624f19b9fd5b 3\tconsole/backend/src/agent_console/grant_administration_application.py\n100644 e338c3785ba6080af51039cba1f7530049632836 1\tconsole/backend/src/agent_console/workbench_bff.py\n100644 ed9a4cb9a7d154be941ac301cba54bb7794af35c 2\tconsole/backend/src/agent_console/workbench_bff.py\n100644 7110c9bd76c8d556547eeac07c5a51410d5746a3 3\tconsole/backend/src/agent_console/workbench_bff.py\n100644 56b9ffb62188a431205520f50165af8ba9df90bb 1\tconsole/backend/src/agent_console/workbench_bff_schemas.py\n100644 53c73394a7104a95c12f32c42fe229f2381d3a4f 2\tconsole/backend/src/agent_console/workbench_bff_schemas.py\n100644 3b6bc0ed89e9373b1e2d82ea24089ce5b108e34b 3\tconsole/backend/src/agent_console/workbench_bff_schemas.py\n100644 08f48f533c6fcb2bf7f7fe46fe520a05dcae4461 1\tconsole/backend/src/agent_console/workbench_bootstrap.py\n100644 0613442099751a7ce227f572c39abee2158a2f0b 2\tconsole/backend/src/agent_console/workbench_bootstrap.py\n100644 0b10c5d56a4073675088adb441d7279eb2fd6462 3\tconsole/backend/src/agent_console/workbench_bootstrap.py\n100644 c2c7452dc3fe89c0d84af956bbc6fe6c99f4592d 1\tconsole/backend/src/agent_console/workbench_business_problem.py\n100644 785d5408ed35646740ae42c07118f564fa24d2ad 2\tconsole/backend/src/agent_console/workbench_business_problem.py\n100644 fe9e2d41cddffc0f0121d19881f8f77449ffb003 3\tconsole/backend/src/agent_console/workbench_business_problem.py\n100644 24a4f1889fbc7b4c731f1d1a8ece79c7f47b869f 2\tconsole/backend/src/agent_console/workbench_grant_targets.py\n100644 6d5dd4891b821f64f31308835b9603889140f207 3\tconsole/backend/src/agent_console/workbench_grant_targets.py\n100644 bc1823b98fe33f87e87e9d00bf55307f7ca31ded 1\tconsole/backend/tests/test_workbench_bff.py\n100644 7eb13b98d18632d520d4a1ecf21a25df042d88bf 2\tconsole/backend/tests/test_workbench_bff.py\n100644 5fb8dec794d2e70f63964258dcc1b8964bc25bc0 3\tconsole/backend/tests/test_workbench_bff.py\n100644 2d3db33d3d9df8e831989bedfbfd9bd746fc5a44 1\tconsole/backend/tests/test_workbench_bootstrap.py\n100644 a43d94c9624be88eeb409a0ebf7d2f29979f34ff 2\tconsole/backend/tests/test_workbench_bootstrap.py\n100644 e1cb4aacbf9910e58763ee5fd0ad6d76619b507e 3\tconsole/backend/tests/test_workbench_bootstrap.py\n100644 8405f1aee9fa1cce417ecef56163ccd735a87080 2\tconsole/backend/tests/test_workbench_creator_continuation_postgres.py\n100644 a7860c44ee273d5e3cdd579f26cec0cc4fa98654 3\tconsole/backend/tests/test_workbench_creator_continuation_postgres.py\n100644 e2e205e38361f70d3e6fe2cdb93d800164756a9b 1\tconsole/backend/tests/test_workbench_employee.py\n100644 00dfca7f0c63451adecec37240e1938b8a567c07 2\tconsole/backend/tests/test_workbench_employee.py\n100644 35cbd3e41a3af3ec32c983ff46f29e44fa739442 3\tconsole/backend/tests/test_workbench_employee.py\n100644 9f378b7e01e052578dbdb1382a954eb64dada7ab 2\tconsole/backend/tests/test_workbench_employee_commands_postgres.py\n100644 4f86bb0d52d8c2ce73a0d63e94a8d19b959e81f2 3\tconsole/backend/tests/test_workbench_employee_commands_postgres.py\n\nAuto-merging console/backend/src/agent_console/authority_configuration.py\nAuto-merging console/backend/src/agent_console/authority_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_postgres.py\nAuto-merging console/backend/src/agent_console/business_problem_application.py\nAuto-merging console/backend/src/agent_console/business_problem_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/business_problem_postgres.py\nAuto-merging console/backend/src/agent_console/digital_employee_definition_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/digital_employee_definition_postgres.py\nAuto-merging console/backend/src/agent_console/grant_administration_application.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/grant_administration_application.py\nAuto-merging console/backend/src/agent_console/workbench_bff.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/workbench_bff.py\nAuto-merging console/backend/src/agent_console/workbench_bff_schemas.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/workbench_bff_schemas.py\nAuto-merging console/backend/src/agent_console/workbench_bootstrap.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/workbench_bootstrap.py\nAuto-merging console/backend/src/agent_console/workbench_business_problem.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/workbench_business_problem.py\nAuto-merging console/backend/src/agent_console/workbench_grant_targets.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_grant_targets.py\nAuto-merging console/backend/tests/test_authority_configuration.py\nAuto-merging console/backend/tests/test_workbench_authorization_postgres.py\nAuto-merging console/backend/tests/test_workbench_bff.py\nCONFLICT (content): Merge conflict in console/backend/tests/test_workbench_bff.py\nAuto-merging console/backend/tests/test_workbench_bootstrap.py\nCONFLICT (content): Merge conflict in console/backend/tests/test_workbench_bootstrap.py\nAuto-merging console/backend/tests/test_workbench_business_problem.py\nAuto-merging console/backend/tests/test_workbench_creator_continuation_postgres.py\nCONFLICT (add/add): Merge conflict in console/backend/tests/test_workbench_creator_continuation_postgres.py\nAuto-merging console/backend/tests/test_workbench_employee.py\nCONFLICT (content): Merge conflict in console/backend/tests/test_workbench_employee.py\nAuto-merging console/backend/tests/test_workbench_employee_commands_postgres.py\nCONFLICT (add/add): Merge conflict in console/backend/tests/test_workbench_employee_commands_postgres.py\n",
+      "error": ""
+    },
+    {
+      "pr": 163,
+      "head": "141a17ecd34ec3b721e1c8a8ae33277c4b454e42",
+      "checks": [
+        {
+          "name": "Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34696868889/job/103561735050"
+        },
+        {
+          "name": "PostgreSQL Identity Chain",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34696868895/job/103561735003"
+        },
+        {
+          "name": "Frontend Quality Gates",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34696868889/job/103561734960"
+        },
+        {
+          "name": "PostgreSQL Skill Invocation",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34696868895/job/103561735156"
+        },
+        {
+          "name": "Agent Workbench Browser Acceptance",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34696868889/job/103561735054"
+        },
+        {
+          "name": "PostgreSQL Business Problem and Plan Entry",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/yanzheqian1774-debug/cloud-native-agent-platform/actions/runs/34696868895/job/103561735347"
+        }
+      ],
+      "mergeTreeExit": 1,
+      "mergeTree": "54525d3104b5e233c7ad8702ad779f344b7c8403\n100644 6d520369e59ccd6dd9dc86bdfacee2e9c466183b 1\tconsole/backend/src/agent_console/authority_configuration.py\n100644 122f63f86d825f43e9eb1c3de546a33be3a6626b 2\tconsole/backend/src/agent_console/authority_configuration.py\n100644 e95f19f9124a22b9339b92e835d562bbac677631 3\tconsole/backend/src/agent_console/authority_configuration.py\n100644 7c63befb65dccc1d116927559d75e76645a590dc 1\tconsole/backend/src/agent_console/authority_postgres.py\n100644 a3366687b07f8c3ba9adc7f22fdd3fe1344400a9 2\tconsole/backend/src/agent_console/authority_postgres.py\n100644 e0fc2a64f730f6384f0e5fa3a543085360851631 3\tconsole/backend/src/agent_console/authority_postgres.py\n100644 37b91c5b43cf74357ea9d4348b3448e771c2a8c5 2\tconsole/backend/src/agent_console/model_governance_authorization.py\n100644 4c6ce5f169cc9135e90faa2578badec06f9ef3d9 3\tconsole/backend/src/agent_console/model_governance_authorization.py\n100644 2cdf1466bdab2d10d8743e2f228b7c8377bf0dc7 1\ttests/test_s5_impl_072_isolated_browser_harness.py\n100644 4fb1a868bcdf4b112ca9c666ef3a47a40c574d9a 2\ttests/test_s5_impl_072_isolated_browser_harness.py\n100644 3e38217edbcee2a52a67d0ae3b2adcc044aea1c5 3\ttests/test_s5_impl_072_isolated_browser_harness.py\n\nAuto-merging console/backend/src/agent_console/authority_configuration.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_configuration.py\nAuto-merging console/backend/src/agent_console/authority_contracts.py\nAuto-merging console/backend/src/agent_console/authority_postgres.py\nCONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_postgres.py\nAuto-merging console/backend/src/agent_console/grant_administration_application.py\nAuto-merging console/backend/src/agent_console/model_governance_authorization.py\nCONFLICT (add/add): Merge conflict in console/backend/src/agent_console/model_governance_authorization.py\nAuto-merging console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts\nAuto-merging scripts/acceptance/isolated_browser_harness.py\nAuto-merging tests/test_s5_impl_072_isolated_browser_harness.py\nCONFLICT (content): Merge conflict in tests/test_s5_impl_072_isolated_browser_harness.py\n",
+      "error": ""
+    }
+  ],
+  "gallery": {
+    "folder": "/Users/tristan/Downloads/Resource-Management-PC-R29",
+    "version": {
+      "version": "R29",
+      "previous_version": "R28",
+      "folder": "Resource-Management-PC-R29",
+      "current_images": 179,
+      "historical_images": 105,
+      "new_images": 0,
+      "comparison_pairs": 97,
+      "status": "按认可视觉方向实现Index；待页面审阅",
+      "rule": "整体替换；当前实施保持已锁定基线；R26用于后续任务评审，不自动扩大实施范围",
+      "new_interactive_scenarios": 4,
+      "interaction_components": 12,
+      "revised_images": 0,
+      "new_interactive_shell": 1
+    },
+    "selected": [
+      {
+        "id": "H05",
+        "title": "执行进度入口",
+        "module": "H",
+        "note": "恢复原首页设计；合成场景、示例日期；原稿导航保留，待统一。不是运行证据。",
+        "src": "pages/H05.png",
+        "origin": "恢复原设计",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": [
+          "procurement"
+        ]
+      },
+      {
+        "id": "H06",
+        "title": "成果验收入口",
+        "module": "H",
+        "note": "恢复原首页设计；合成场景、示例日期；原稿导航保留，待统一。不是运行证据。",
+        "src": "pages/H06.png",
+        "origin": "恢复原设计",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": [
+          "procurement"
+        ]
+      },
+      {
+        "id": "P06",
+        "title": "已确认计划与持续协作",
+        "module": "P",
+        "note": "用户右、助手左；历史快照与当前状态分离；询问不自动生成草稿。合成设计示例，非实施证据。",
+        "src": "pages/P06.png",
+        "origin": "R26对话方向与状态语义修订",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": [
+          "procurement"
+        ]
+      },
+      {
+        "id": "P07",
+        "title": "部分成功与未知结果",
+        "module": "P",
+        "note": "合成设计示例，非323实际证据。补生成/确认/观测/数据截止或接收时间；未发生事件不造时间。与旧稿可对照。P07是独立激活UNKNOWN分支，不与P05/P06拼成同一次成功旅程。",
+        "src": "pages/P07.png",
+        "origin": "R20时间语义修订 · 待审阅",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "P08",
+        "title": "推荐解释与资源缺口",
+        "module": "P",
+        "note": "R8适配设计草案；统一导航参考见design-system.html；图片残余差异见R8检查记录，非实现证据。",
+        "src": "pages/P08.png",
+        "origin": "R8新增设计",
+        "surface": "platform",
+        "relatedModules": [
+          "D",
+          "S",
+          "M"
+        ],
+        "journeyReferences": []
+      },
+      {
+        "id": "D07",
+        "title": "员工实例目录",
+        "module": "D",
+        "note": "员工实例Tab选中；员工实例与角色定义区别；采购分析员01已启用但未运行，02已停用；部门、角色版本、分工状态。",
+        "src": "pages/D07.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "D09",
+        "title": "实例分工",
+        "module": "D",
+        "note": "实例分工Tab选中；Assignment采购延期分析、起止时间、职责范围、阶段参与；实例已启用与分工有效独立；结束分工需确认影响。",
+        "src": "pages/D09.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "S03",
+        "title": "业务规则",
+        "module": "S",
+        "note": "本轮修订：三例统计日统一；缺失或冲突归数据异常；右栏引用与依赖保留；剩余：面包屑技能与菜单技能（Skill）命名仍可统一；时区在详细契约明确。设计非实现证据。",
+        "src": "pages/S03.png",
+        "origin": "R9修订 · 待审阅",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "M03",
+        "title": "连接配置",
+        "module": "M",
+        "note": "连接Tab选中；HTTPS example.test服务地址、Streamable HTTP、secret://引用不展示秘密、超时、系统负责人；测试连接。",
+        "src": "pages/M03.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "K03",
+        "title": "文档管理",
+        "module": "K",
+        "note": "文档Tab；PDF/DOCX文件表；已解析、待核对、解析失败；来源、版本、更新时间；导入/查看/归档。",
+        "src": "pages/K03.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "W06",
+        "title": "输入输出映射",
+        "module": "W",
+        "note": "节点配置>输入输出选中；orders←校验结果.valid_orders，输出overdue_orders；字段类型与必填，样本预览与不匹配提示。",
+        "src": "pages/W06.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "W12",
+        "title": "运行详情与历史",
+        "module": "W",
+        "note": "运行记录Tab；合成Run展示5任务进度、Attempt、产物证据、生命周期；查看详情、干预入口、新对话；定义发布/计划批准/执行分开。",
+        "src": "pages/W12.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "R04",
+        "title": "运行位置分配",
+        "module": "R",
+        "note": "新增审阅稿 · 采购分析员01 / Agent实例 agent-proc-017，期望分析环境v2，Placement待分配。候选环境、资源权限兼容性检查表均待核实。右栏分工来源、准入缺项、保存分配不启动。",
+        "src": "pages/R04.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": [
+          "adoption"
+        ]
+      },
+      {
+        "id": "O02",
+        "title": "适配能力与版本",
+        "module": "O",
+        "note": "新增审阅稿 · 版本字段待核实，协议/连接/观测/任务回执/取消/恢复能力矩阵全部待核实；支持不由勾选声称。右栏证据来源、版本变更影响、兼容检查入口。",
+        "src": "pages/O02.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "O08",
+        "title": "任务执行追踪",
+        "module": "O",
+        "note": "新增审阅稿 · 计划P017已确认示例，Run未创建；五任务：读取快照→校验数据→识别延期→供应商汇总→生成报告，均未执行；Task/Attempt/Evidence空态。右栏角色要求不等于Assignment、输出未生成。",
+        "src": "pages/O08.png",
+        "surface": "platform",
+        "relatedModules": [],
+        "journeyReferences": []
+      },
+      {
+        "id": "P10",
+        "title": "持续对话与资源不足干预",
+        "module": "P",
+        "note": "R13目标设计，合成数据；候选与准入分开，持续对话与右栏保留。",
+        "src": "pages/P10.png",
+        "origin": "R13新增 · 待审阅",
+        "surface": "platform",
+        "relatedModules": [
+          "D",
+          "S",
+          "M",
+          "C",
+          "H"
+        ],
+        "journeyReferences": [
+          "procurement"
+        ]
+      }
+    ],
+    "sha256": {
+      "VERSION.json": "f9949bc1265d4692889b80d388915a496e6c6fdd6677fe29d01c83efcb203acb",
+      "CATALOG.json": "9ba6dc1813cbb0f0215318c1d77eca445dc33fcc6a594c2074bd825bf75d8c3b",
+      "index.html": "88ee88f13796ad2624002ff546bd840a394443dadda837f56f75b635e4001377",
+      "PAGE-CONTRACT.md": "9e45593b54f3440647c22c7e4d17e4a8f3c2a263a72bfca8c7374a3e1cb05f47",
+      "design-system.html": "92776955c44c9fd5b9e953a7bf85715bcdad385e80ef8afc5eb33991a9ca0d98",
+      "conversation-lab.html": "da384ef85150ff2cbf94593ad5de19c36ece0283f262eed89d33253c4fafefab",
+      "Memory-Context-Capability-Contract.md": "c238d2897dbe262d7313e883df218d770803d2ba3ea01b746ac6d77ef62fc4b9",
+      "pages/H05.png": "18372bbd4048ae249b0831a875b693e1a98d3adb67491f2d38f8ca996011d62e",
+      "pages/H06.png": "c690783e7cfe345c8ef1c1f9a73b660bb09347a16687d51b412280acb788e81d",
+      "pages/P06.png": "ea6b73500b67ca37fe140c30b99851f1b4458324caa74d6d91ba3724d4a83eed",
+      "pages/P07.png": "4031c57a5b4bbba1e58ebca6102a74102c4656ed22f78b61142d693da75951be",
+      "pages/P08.png": "d3e305af349a8f92e3f993dc9ba5482a5e2dd2cf161088243743958e8f8b660f",
+      "pages/D07.png": "da1517837f59cf01f2ff03fb699a2ccbd529829385492a995d8596c01c05a102",
+      "pages/D09.png": "08d6061f8a4395f9dacd0467dacd1bc36bf61cd533326170cf545f892ffe89a5",
+      "pages/S03.png": "bda97038ca7ff680a81d58928b7bb1c4c726c8ef6a46ea2f682233a26a4407cd",
+      "pages/M03.png": "285ce79e5cca1d0ffb94d337ac8ce6e85a5266ba4870345fa1b2e167cc0812ea",
+      "pages/K03.png": "a6464a19ac8e2298aafa8528d1804b5a1b31c32e7b19ecd55996ca253641f912",
+      "pages/W06.png": "db90e367ffc483f02a225e5a969ca6a31230c018db0f487ecf41e0ed94fc6a26",
+      "pages/W12.png": "9b111c709ee087bb9f68b7f9755d09c5c82bb07b584c1593c4bcfdabfa582dfb",
+      "pages/R04.png": "369a4aae5fe3b8b6172146a06b8c9848b1af1f167d911c6a396de65cc23fb4d0",
+      "pages/O02.png": "61de155b8c673eb043da4585177320e3a1eb2decbc66569bce1dabd97ca12ad3",
+      "pages/O08.png": "67846469961375d4a3cc806c0f239b38980645d415bab2895d74f44c5ec65b20",
+      "pages/P10.png": "9bfca3bd522387487c63ec76b274335bf2f48592d1f80d049e99b13cff00881d"
+    },
+    "manifestMismatches": [],
+    "visuallyOpened": [
+      "P08",
+      "D07",
+      "W06",
+      "R04",
+      "D09",
+      "H05",
+      "H06",
+      "O08"
+    ],
+    "acceptance": "REFERENCE_ONLY_PENDING_PAGE_REVIEW; R24 partial acceptance unchanged"
+  },
+  "currentTurnModelCalls": 0,
+  "currentTurnBusinessExecution": 0,
+  "historyEvidence": "productization/closure.json",
+  "historicalUnknown": 7,
+  "reservationMicrousd": 4816896,
+  "estimatedSettlementMicrousd": 582440,
+  "settlements": 17,
+  "databaseMigrationThisTurn": false,
+  "runtimeSwitchedThisTurn": false,
+  "scope": "understanding_existing_clarification_correction_chinese_planning_revision_page_confirmation_persistent_readback_only",
+  "excluded": [
+    "resource_ready",
+    "business_execution",
+    "result_acceptance",
+    "stability_acceptance",
+    "full_gallery_visual_acceptance",
+    "production_deployment"
+  ]
+}
