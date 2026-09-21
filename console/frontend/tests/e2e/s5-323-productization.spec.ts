@@ -69,6 +69,7 @@ test('login presentation uses official nonce form and expiry hides business cont
  const css=readFileSync(new URL('../../../backend/src/agent_console/workbench_login.css',import.meta.url),'utf8');
  await page.route('**/api/workbench/v1/login',route=>route.fulfill({contentType:'text/html',body:html}));
  await page.route('**/api/workbench/v1/login-style',route=>route.fulfill({contentType:'text/css',body:css}));
+ await page.route('**/api/workbench/v1/login-illustration',route=>route.fulfill({contentType:'image/png',body:readFileSync(new URL('../../../backend/src/agent_console/workbench_login_reference.png',import.meta.url))}));
  await page.route('**/api/workbench/v1/session',route=>route.fulfill({status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}));
  await page.goto('/api/workbench/v1/login');
  await expect(page.getByLabel('登录凭据')).toHaveAttribute('type','password');

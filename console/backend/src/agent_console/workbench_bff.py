@@ -282,6 +282,15 @@ def create_workbench_bff(
             media_type="text/css",
         )
 
+    @app.get(f"{PREFIX}/login-illustration")
+    def login_illustration():
+        from pathlib import Path
+
+        return Response(
+            Path(__file__).with_name("workbench_login_reference.png").read_bytes(),
+            media_type="image/png",
+        )
+
     @app.get(f"{PREFIX}/login", response_class=HTMLResponse)
     def login_form(request: Request) -> HTMLResponse:
         from .workbench_login import login_document

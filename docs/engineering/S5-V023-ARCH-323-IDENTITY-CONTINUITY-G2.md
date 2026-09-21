@@ -1,8 +1,10 @@
 # ARCH-323 身份连续性 G2 决定包 v1
 
-Decision Status: PROPOSED — 待 Human 决定。Implementation Status: NOT IMPLEMENTED。
+Decision Status: ACCEPTED — Human于本轮明确批准第1–5节及第6节实施、测试与集中激活流程。Implementation Status: IN PROGRESS。
 
-关联：原计划§27.4、323产品化回执、PR #184。Session OPEN；仅323本地隔离验证。本文直接固化既有阻塞与建议，不重新申请模型、费用或同范围持续开发授权。Human本次要求提交决定包不等于已批准新身份语义；批准记录须追加实际决定及时间。
+接受依据：S5-V023-ARCH-323「身份连续性恢复、中文真实验证与视觉差异收口」指令；运行签发仍须有效独立主体，本文批准不替代其签名。
+
+关联：原计划§27.4、323产品化回执、PR #184。Session OPEN；仅323本地隔离验证。本文直接固化既有阻塞与建议，不重新申请模型、费用或同范围持续开发授权。本次明确批准已记录于文首；此前提交包与本次批准为不同事件。
 
 ## 1. 请求决定与推荐
 

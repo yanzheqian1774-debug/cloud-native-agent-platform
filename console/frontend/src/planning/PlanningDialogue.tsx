@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState, type ReactNode} from "react";
-import {useNavigate, useSearchParams} from "react-router-dom";
+import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import {ConversationFrame, ConversationComposer, SystemMessage, UserMessage} from "../problems/ProblemConversation";
 import {clarificationChoices} from "./clarificationChoices";
 import {formatTime} from "../journey/formatTime";
@@ -49,6 +49,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
   const blocked = disabled || busy || unresolved || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
   return <ConversationFrame startAtTop newMessageKey={`${source?.proposal.revision ?? 0}:${result?.invocation.target.invocation_id ?? ""}`} composer={<section className="planning-composer" aria-label="持续规划对话">    <details><summary>规划方式：{policy.mode === "FREE" ? "自由规划" : policy.mode === "TEMPLATE_ASSISTED" ? "模板辅助" : "强约束流程"} · 查看或调整</summary><label>规划方式<select aria-label="规划方式" value={policy.mode} disabled={busy || unresolved || !!result} onChange={e => {const mode=e.target.value as PlanningPolicy["mode"];setPolicy({...free, mode, template: mode === "FREE" ? null : "procurement-overdue.v1"});}}><option value="FREE">自由规划 · 不固定阶段和任务数</option><option value="TEMPLATE_ASSISTED">采购模板辅助 · 可调整结构</option><option value="STRICT_WORKFLOW">采购强约束 · 三阶段五项职责</option></select></label>
     <p>校验显式操作、输入输出依赖和标准引用覆盖；不能穷尽自然语言冲突，需要人工核对业务含义。</p></details>
+    <p className="planning-action-boundary">对话补充仅用于新建议，不修改已确认标准。<Link to={`/work?problem=${encodeURIComponent(problem)}`}>正式修订目标与标准 →</Link> 计划确认请使用方案卡片中的独立按钮。</p>
     <ConversationComposer value={answer} onChange={setAnswer} onSend={()=>void generate()} onCancelEdit={()=>setAnswer("")} disabled={blocked} mode="PLANNING" maxLength={500}/>
     {!source && (!result || result.result.technical_status !== "SUCCEEDED") && <button type="button" disabled={blocked} onClick={()=>void generate()}>依据已确认目标生成建议</button>}
 </section>}>

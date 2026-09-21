@@ -267,5 +267,24 @@
       "sha256": "3df530f13c66b04aebbe56b1af7ce5513551e37052b6266480dc3a653d389dd7"
     }
   ],
-  "acceptance": "User-approved blue-white composition and continuous dialogue; draft-specific scope is not blanket accepted."
+  "acceptance": "User-approved blue-white composition and continuous dialogue; draft-specific scope is not blanket accepted.",
+  "continuityVisualReview": {
+    "pages": [
+      "P06",
+      "IAM01",
+      "IAM03"
+    ],
+    "actuallyOpened": true,
+    "viewport": "1536x1024",
+    "acceptance": "Human指定局部修正；非整包视觉接受；临时品牌/人物/示例任务数不采用",
+    "files": {
+      "index.html": "ffa64d62b8d978276637a7d180662ae5a8827ecf25543184695f111f8b708a90",
+      "CATALOG.json": "3a049135423af333c3a4a73ac2eb9c9acccdca45785b08e296b2a8749858962c",
+      "PAGE-CONTRACT.md": "9e45593b54f3440647c22c7e4d17e4a8f3c2a263a72bfca8c7374a3e1cb05f47",
+      "review/R23-PAGE-CONTRACTS.json": "a08ddf0ba4a4390b574e53fc952baed09a61c3221250f8d04eb0a4609dcfde39",
+      "pages/P06.png": "2a7a8050271924732ed8ab6d9762f525278512c69911ff66916712c4d4ec27aa",
+      "pages/IAM01.png": "4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7",
+      "pages/IAM03.png": "897507461cc8f7d7f7a10073dfbff6ea6939be273750e766d0f93e017e3f9e2e"
+    }
+  }
 }

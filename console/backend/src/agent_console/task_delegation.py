@@ -105,6 +105,11 @@ def available(connection):
 def active(connection, identity, *, lock=False, allow_expired=False):
     from .task_development import revision, stopped
 
+    connection.execute("SELECT pg_advisory_xact_lock(3230028)")
+    generation = connection.execute(
+        "SELECT generation,generation_digest,recovery_epoch FROM "
+        "authorization_admin.active_generation WHERE singleton=true FOR SHARE"
+    ).fetchone()
     row = connection.execute(
         "SELECT d.*,control.revoked FROM authorization_admin.task_delegations d "
         "JOIN authorization_admin.task_delegation_control control "
@@ -115,15 +120,16 @@ def active(connection, identity, *, lock=False, allow_expired=False):
     if row is None:
         raise AuthorityError("TASK_DELEGATION_NOT_FOUND")
     now = connection.execute("SELECT clock_timestamp() AS now").fetchone()["now"]
-    generation = connection.execute(
-        "SELECT generation,recovery_epoch FROM "
-        "authorization_admin.active_generation WHERE singleton=true"
-    ).fetchone()
     revoked = connection.execute(
         "SELECT 1 FROM authorization_admin.task_delegation_revocations WHERE "
         "delegation_id=%s",
         (identity,),
     ).fetchone()
+    from .task_identity_continuity import effective
+
+    continuity = effective(connection, row, generation, now) if generation else None
+    if continuity:
+        row["_continuity"] = continuity
     if (
         (
             now >= row["expires_at"]
@@ -134,7 +140,7 @@ def active(connection, identity, *, lock=False, allow_expired=False):
         or row["revoked"]
         or revoked
         or generation is None
-        or generation["generation"] != row["generation"]
+        or (generation["generation"] != row["generation"] and continuity is None)
         or generation["recovery_epoch"] != row["recovery_epoch"]
     ):
         raise AuthorityError("TASK_DELEGATION_INACTIVE")
@@ -363,7 +369,8 @@ class TaskDelegationService:
                 c.execute(path.read_text())
                 c.execute(
                     "INSERT INTO "
-                    "authorization_admin.schema_migrations(version,checksum,adapter) "
+                    "authorization_admin.schema_migrations"
+                    "(version,checksum,adapter) "
                     "VALUES(30,%s,'task-cases-v1')",
                     (checksum,),
                 )
@@ -387,6 +394,30 @@ class TaskDelegationService:
                     (checksum,),
                 )
 
+        path = (
+            Path(__file__).parents[2] / "migrations/0032_task_identity_continuity.sql"
+        )
+        checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.repository.connection_scope() as c:
+            c.execute("SELECT pg_advisory_xact_lock(3230028)")
+            row = c.execute(
+                "SELECT checksum FROM authorization_admin.schema_migrations "
+                "WHERE version=32"
+            ).fetchone()
+            if row and row["checksum"] != checksum:
+                raise AuthorityError("TASK_DELEGATION_SCHEMA_INCOMPATIBLE")
+            if row is None:
+                c.execute(path.read_text())
+                c.execute(
+                    (
+                        "INSERT INTO "
+                        "authorization_admin.schema_migrations"
+                        "(version,checksum,adapter) "
+                        "VALUES(32,%s,'task-identity-continuity-v1')"
+                    ),
+                    (checksum,),
+                )
+
     def _admin(self, context, connection=None):
         meta = ExactGrant(
             "GRANT_ADMIN",
@@ -396,6 +427,7 @@ class TaskDelegationService:
         if connection is None:
             self.grants._require(context, meta)
             return
+        connection.execute("SELECT pg_advisory_xact_lock(3230028)")
         generation = connection.execute(
             "SELECT generation,recovery_epoch FROM "
             "authorization_admin.active_generation WHERE singleton=true FOR SHARE"
@@ -643,6 +675,11 @@ class TaskDelegationService:
                 recovery_epoch=self.grants.recovery_epoch,
                 lock_session=True,
             )
+            if (
+                row.get("_continuity")
+                and credential_id != row["_continuity"]["subject_credential_id"]
+            ):
+                raise AuthorityError("TASK_CONTINUITY_IDENTITY_INVALID")
             credential = self.grants.generation.credential_by_id(credential_id)
             if credential is None or now >= credential.expires_at:
                 raise AuthorityError("TASK_DELEGATION_SUBJECT_INVALID")
@@ -659,6 +696,9 @@ class TaskDelegationService:
                 raise AuthorityError("TASK_DELEGATION_NOT_FOUND")
             allowed = PURPOSES.get(request.purpose, set())
             for member in request.members:
+                from .task_identity_continuity import require_unrevoked_member
+
+                require_unrevoked_member(c, row, member)
                 if (
                     (member.owner, member.action) not in allowed
                     or not self.grants.target_validator.is_known_exact_target(
@@ -682,6 +722,8 @@ class TaskDelegationService:
             expires = min(credential.expires_at, now + timedelta(hours=8))
             if not revision(c, identity):
                 expires = min(expires, row["expires_at"])
+            if row.get("_continuity"):
+                expires = min(expires, row["_continuity"]["expires_at"])
             decision_id = "grant-decision-" + secrets.token_hex(16)
             decision = GrantDecision(
                 decision_id,
@@ -775,9 +817,11 @@ class TaskDelegationService:
             ).fetchone()
             from .task_cases import cases
             from .task_development import revision, stopped
+            from .task_identity_continuity import latest
             from .task_timeout_revision import current as timeout_revision
 
             return {
+                "identity_continuity": latest(c, identity),
                 "timeout_revision": timeout_revision(c, identity),
                 "development_stopped": stopped(c, identity),
                 "development_revision": revision(c, identity),
@@ -810,7 +854,7 @@ def configured_limits(profile, configuration, budget, *, planning=False):
     }
 
 
-def grant_condition(connection):
+def grant_condition(connection, credential_id=None):
     """SQL predicate for existing grant readers; legacy grants remain unchanged."""
     if not available(connection):
         return ""
@@ -834,6 +878,40 @@ def grant_condition(connection):
             "EXISTS(SELECT 1 FROM authorization_admin.task_development_stops st "
             "WHERE st.delegation_id=d.delegation_id) OR "
         )
+    from .task_identity_continuity import available as continuity_available
+
+    generation_mismatch = (
+        "d.generation<>(SELECT generation FROM "
+        "authorization_admin.active_generation WHERE singleton=true)"
+    )
+    if continuity_available(connection):
+        from psycopg.sql import Literal
+
+        credential_sql = Literal(credential_id).as_string(connection)
+        generation_mismatch = (
+            "NOT ("
+            + generation_mismatch.replace("<>", "=")
+            + (
+                " OR EXISTS(SELECT 1 FROM "
+                "authorization_admin.task_identity_continuities cc JOIN "
+                "authorization_admin.task_identity_transitions tr "
+                "USING(transition_id) JOIN authorization_admin.active_generation "
+                "ag ON ag.singleton=true WHERE cc.delegation_id=d.delegation_id "
+                "AND cc.generation=ag.generation AND "
+                "cc.recovery_epoch=ag.recovery_epoch AND "
+                "tr.generation_digest=ag.generation_digest AND "
+                "cc.expires_at>clock_timestamp() AND g.created_at>=cc.created_at "
+                + "AND cc.subject_credential_id="
+                + credential_sql
+                + " "
+                + "AND NOT EXISTS(SELECT 1 FROM "
+                "authorization_admin.task_identity_continuities nx WHERE "
+                "nx.delegation_id=cc.delegation_id AND nx.ordinal>cc.ordinal) AND "
+                "NOT EXISTS(SELECT 1 FROM "
+                "authorization_admin.task_identity_continuity_revocations cr WHERE"
+                " cr.continuity_id=cc.continuity_id)))"
+            )
+        )
     return (
         " AND NOT EXISTS (SELECT 1 FROM "
         "authorization_admin.task_delegation_decisions td JOIN "
@@ -843,9 +921,9 @@ def grant_condition(connection):
         + " OR "
         + stop_predicate
         + "EXISTS(SELECT 1 FROM authorization_admin.task_delegation_revocations r "
-        "WHERE r.delegation_id=d.delegation_id) OR d.generation<>(SELECT "
-        "generation FROM authorization_admin.active_generation WHERE "
-        "singleton=true) OR d.recovery_epoch<>g.recovery_epoch)) "
+        "WHERE r.delegation_id=d.delegation_id) OR "
+        + generation_mismatch
+        + " OR d.recovery_epoch<>g.recovery_epoch)) "
     )
 
 

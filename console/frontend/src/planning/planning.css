@@ -50,3 +50,10 @@
 .planning-task-table .planning-stage-row th{background:#f0f7ff;color:#0866ff;text-align:left;font-weight:600}.planning-task-table td{vertical-align:top}.planning-task-table td:last-child{white-space:normal}.planning-task-table .planning-task{border:0;background:transparent;margin:0}.planning-task-table .planning-task>summary{display:block;padding:0}.planning-task-table .planning-task small{display:block;color:#647797;font-size:11px}.planning-task-table .planning-task p{font-size:13px}.planning-task-table .planning-task dl{display:block}.planning-task-table .planning-task dd{margin:4px 0 10px}
 .px-primary-nav>.px-nav-group{margin:0;border:0;padding:0}.px-primary-nav>.px-nav-group>summary{display:flex;align-items:center;gap:12px;padding:14px 18px;color:#314363;font-size:15px;font-weight:600}.px-primary-nav>.px-nav-group>summary svg{width:22px;height:22px}.px-primary-nav>.px-nav-group>nav{padding-left:38px}
 .planning-goal>summary{cursor:pointer;list-style:none}.planning-goal>summary h2{margin:0;border:0;padding:0}.planning-goal[open]>summary{margin-bottom:10px}
+
+/* Reviewed R24 P06: durable business cards live inside the continuing dialogue. */
+.planning-page .px-system-message>.px-message-body{min-width:0;width:100%;background:#edf6ff;border:1px solid #dcecff;border-radius:12px;padding:12px}
+.planning-page .px-message{align-items:flex-start;margin:0 0 16px;gap:12px}.planning-page .px-message>.px-avatar{flex-shrink:0}
+.planning-page .px-message-body>.planning-card{margin-top:12px}.planning-fact-summary{margin:8px 0 12px;font-size:14px;color:#294675}
+.planning-conversation-history:empty{display:none}.planning-context-note{display:block;color:#607aa1;font-size:12px;margin-bottom:5px}
+.planning-action-boundary{font-size:11px;line-height:1.5;color:#58749a;margin:0 0 6px}.planning-action-boundary a{margin:0 6px}
