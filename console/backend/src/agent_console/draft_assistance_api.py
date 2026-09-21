@@ -44,6 +44,11 @@ class LinkDraftProblem(BaseModel):
 
 
 def _status(reason: str) -> int:
+    if (
+        reason.startswith("CONTEXT_ADMISSION_")
+        or reason == "DRAFT_AUTHORIZATION_UNAVAILABLE"
+    ):
+        return 403
     if reason in {
         "IDEMPOTENCY_PAYLOAD_MISMATCH",
         "IDEMPOTENCY_REPLAY_UNVERIFIABLE",

@@ -24,7 +24,7 @@ test('324 real-data panel separates binding from admission and reload sends no m
 });
 
 test('324 resource review preserves partial publication and reload never repeats Human commands',async({page},info)=>{
- let writes=0;const resources=['skill','runtime','knowledge','agent'].map(kind=>({kind,identity:`fixture-${kind}`,name:`隔离合成${kind}（视图测试）`,aggregateVersion:1,revision:{revisionId:'fixture-revision',digest:(kind==='runtime'?'sha256:':'')+'a'.repeat(64),state:'DRAFT',content:{synthetic:true,description:'仅用于页面交互验证，不是正式资源发布。'}},publishedRevisionId:null as string|null}));
+ let writes=0;const resources=['skill','runtime','knowledge','agent'].map(kind=>({kind,identity:`fixture-${kind}`,name:`隔离合成${kind}（视图测试）`,aggregateVersion:1,revision:{revisionId:'fixture-revision',digest:(kind==='runtime'?'sha256:':'')+'a'.repeat(64),state:'DRAFT',content:{synthetic:true,description:'仅用于页面交互验证，不是正式资源发布。',operations:[{name:'fixture-read',sideEffectClass:'READ_ONLY',inputSchema:{type:'object',required:['source'],properties:{source:{type:'string',description:'精确合成来源，保留长中文说明。'.repeat(8)}}},outputSchema:{type:'object',properties:{result:{type:'string'}}}}]}},publishedRevisionId:null as string|null}));
  await page.route('**/api/workbench/v1/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
@@ -33,5 +33,34 @@ test('324 resource review preserves partial publication and reload never repeats
  });
  const query=new URLSearchParams({problem:problem.business_problem_id});resources.forEach(r=>query.append('resource',[r.kind,r.identity,r.revision.revisionId].join('|')));
  await page.setViewportSize({width:1536,height:1024});await page.goto('/work?'+query.toString());const panel=page.getByRole('region',{name:'本次执行必要资源审核'});
- await expect(panel.getByRole('button',{name:'审核并发布待处理的 4 项资源'})).toBeDisabled();await panel.getByRole('textbox').fill('视图测试：已核对合成范围和精确修订');await panel.getByRole('checkbox').check();await panel.getByRole('button',{name:'审核并发布待处理的 4 项资源'}).click();await expect(panel.getByRole('alert')).toContainText('已保存记录保留');await expect(panel.getByRole('button',{name:'审核并发布待处理的 3 项资源'})).toBeVisible();expect(writes).toBe(2);await page.reload();await expect(panel).toContainText('已发布');expect(writes).toBe(2);await panel.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('S04-R04-K05-D09-resource-review.png')});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await expect(page.locator('.px-composer button[type="submit"]')).toBeInViewport();
+ await expect(panel.getByRole('button',{name:'审核并发布待处理的 4 项资源'})).toBeDisabled();await panel.getByRole('textbox').fill('视图测试：已核对合成范围和精确修订');await panel.getByRole('checkbox').check();await panel.getByRole('button',{name:'审核并发布待处理的 4 项资源'}).click();await expect(panel.getByRole('alert')).toContainText('已保存记录保留');await expect(panel.getByRole('button',{name:'审核并发布待处理的 3 项资源'})).toBeVisible();expect(writes).toBe(2);await page.reload();await expect(panel).toContainText('已发布');expect(writes).toBe(2);await panel.scrollIntoViewIfNeeded();await panel.locator('.prepared-resource-card').first().locator('summary').first().click();await panel.getByText('fixture-read · 只读',{exact:true}).click();await expect(panel.getByRole('region',{name:'操作输入字段'})).toContainText('精确合成来源');await page.screenshot({path:info.outputPath('S04-R04-K05-D09-resource-review.png')});for(const scale of [1,1.25]){await page.setViewportSize({width:Math.floor(1536/scale),height:Math.floor(1024/scale)});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await expect(page.locator('.px-composer button[type="submit"]')).toBeInViewport();await panel.getByRole('region',{name:'操作输入字段'}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath(`resource-long-zh-${scale}.png`)})};expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await expect(page.locator('.px-composer button[type="submit"]')).toBeInViewport();
+});
+
+test('324 expired session preserves exact return object and re-entry never replays business writes',async({page})=>{
+ let expired=false,writes=0;
+ const state=view();
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill(expired?{status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}:{json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};
+  return route.fulfill({json:{result}});
+ });
+ const originalUrl=`/work?problem=${problem.business_problem_id}&execution=${state.digest}`;
+ await page.goto(originalUrl);
+ await expect(page.getByRole('region',{name:'Native 执行与成果验收'})).toBeAttached();
+ await page.locator('#problem-composer').fill('尚未发送的中文补充，不得重新登录后自动提交。');
+ expired=true;
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ const login=page.getByRole('link',{name:'重新登录并读回'});
+ await expect(login).toBeVisible();
+ await expect(login).toHaveAttribute('href',`/api/workbench/v1/login?returnTo=${encodeURIComponent(originalUrl)}`);
+ await expect(page.locator('#problem-composer')).toHaveCount(0);
+ expect(new URL(page.url()).search).toBe(new URL(originalUrl,'http://fixture').search);
+ // Simulate the successful server login redirect; this is UI behavior, not authentication proof.
+ expired=false;
+ await page.goto(originalUrl);
+ await expect(page.getByRole('region',{name:'Native 执行与成果验收'})).toBeAttached();
+ await expect(page.locator('#problem-composer')).toHaveValue('');
+ expect(writes).toBe(0);
 });

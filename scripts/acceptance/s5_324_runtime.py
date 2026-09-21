@@ -1,8 +1,9 @@
 """324 local composition: requestability successor, no grants or Human decisions.
 
 Uses the existing authority controller; credentials, expirations, static grants,
-323 delegations and UNKNOWN reservations are never changed. No model runtime is
-loaded. Serve only after stopping the old same-database writer.
+323 delegations and UNKNOWN reservations are never changed. Model runtime is
+loaded only through explicit D324-5 configuration; this never issues admission.
+Serve only after stopping the old same-database writer.
 """
 
 import argparse
@@ -176,6 +177,21 @@ def serve(output, tls_manifest, origin):
         "AGENT_EXECUTION_EVIDENCE_DB",
     ):
         os.environ.pop(key, None)
+    os.environ.pop("CONTEXT_CALL_ADMISSION_ENABLED", None)
+    model_manifest = output / "context-call-runtime.json"
+    if model_manifest.is_file():
+        model_runtime = json.loads(model_manifest.read_text())
+        if model_runtime.get("contextCallAdmission") != "D324-5":
+            raise ValueError("D324_5_RUNTIME_CONFIGURATION_INVALID")
+        for key, field in (
+            ("DRAFT_ASSISTANCE_RUNTIME_FILE", "draftAssistanceRuntimeFile"),
+            ("PLANNING_RUNTIME_FILE", "planningRuntimeFile"),
+        ):
+            path = Path(model_runtime[field])
+            if not path.is_file():
+                raise ValueError("D324_5_RUNTIME_CONFIGURATION_MISSING")
+            os.environ[key] = str(path)
+        os.environ["CONTEXT_CALL_ADMISSION_ENABLED"] = "true"
     os.environ.update(
         WORKBENCH_AUTHORITY_RUNTIME_FILE=str(output / "runtime.json"),
         WORKBENCH_ALLOWED_HOST=urlsplit(origin).netloc,

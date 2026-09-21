@@ -9,6 +9,7 @@ from __future__ import annotations
 import secrets
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import parse_qs
 
@@ -242,7 +243,8 @@ def create_workbench_bff(
 
             route = getattr(request.scope.get("route"), "path", "UNREGISTERED")
             logging.getLogger("uvicorn.error").info(
-                "workbench_request request_id=%s method=%s route=%s status=%s",
+                "workbench_request at=%s request_id=%s method=%s route=%s status=%s",
+                datetime.now(UTC).isoformat(),
                 request.state.diagnostic_id,
                 request.method,
                 route,
@@ -683,5 +685,20 @@ def create_workbench_bff(
 
     for install in route_installers:
         install(app, authenticate, require_csrf, policy)
+
+    draft_path = f"{PREFIX}/draft-assistance/invocations"
+    if not any(
+        getattr(route, "path", None) == draft_path
+        and "POST" in (getattr(route, "methods", None) or ())
+        for route in app.routes
+    ):
+
+        @app.post(draft_path)
+        def unavailable_draft_assistance(request: Request):
+            # A disabled composition must not fall through to the SPA's 405.
+            # Authenticate first; do not create a context, request or provider job.
+            session, _ = authenticate(request)
+            require_csrf(request, session)
+            return _error("DRAFT_ASSISTANCE_NOT_CONFIGURED", 503)
 
     return app

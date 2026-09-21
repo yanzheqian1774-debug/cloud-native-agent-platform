@@ -807,3 +807,43 @@ def test_browser_login_form_preserves_legacy_default_and_explicit_return(
     )
     assert response.status_code == 303
     assert response.headers["location"] == expected
+
+
+def test_unconfigured_draft_entry_is_explicit_and_preserves_identity_boundary():
+    client, _, authorizer = build_client()
+    path = f"{PREFIX}/draft-assistance/invocations"
+    headers = {"origin": "https://console.example", "x-csrf-token": "csrf-token"}
+    assert client.post(path, headers=headers, json={}).status_code == 401
+    login(client)
+    assert (
+        client.post(path, headers={"origin": headers["origin"]}, json={}).status_code
+        == 403
+    )
+    response = client.post(path, headers=headers, json={"content": "synthetic"})
+    assert response.status_code == 503
+    assert response.json()["reasonCode"] == "DRAFT_ASSISTANCE_NOT_CONFIGURED"
+    assert response.json()["requestId"].startswith("workbench-request-")
+    assert not authorizer.calls
+
+
+def test_configured_draft_route_is_not_shadowed_by_unavailable_fallback():
+    sessions = SessionStub()
+
+    def configured(app, authenticate, require_csrf, policy):
+        @app.post(f"{PREFIX}/draft-assistance/invocations")
+        def begin():
+            return {"configured": True}
+
+    app = create_workbench_bff(
+        sessions,
+        SimpleNamespace(),
+        WorkbenchBffPolicy("console.example", "https://console.example"),
+        route_installers=(configured,),
+    )
+    routes = [
+        r
+        for r in app.routes
+        if getattr(r, "path", "") == f"{PREFIX}/draft-assistance/invocations"
+    ]
+    assert len(routes) == 1
+    assert routes[0].endpoint() == {"configured": True}

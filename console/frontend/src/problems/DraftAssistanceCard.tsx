@@ -18,7 +18,7 @@ export function DraftAssistanceCard({result,compact=false,busy,onAnswer,onRefres
   const finished=result.state==="SUCCEEDED";
   const draftReady=finished&&result.resultKind==="DRAFT_READY";
   const clarification=finished&&result.resultKind==="NEEDS_CLARIFICATION";
-  const statusLabel=clarification?"等待补充信息":({AUTHORIZATION_PENDING:"等待授权",REQUESTED_AWAITING_CONTENT:"等待正文重交",OUTCOME_UNKNOWN:"结果待确认",CANCELLATION_REQUESTED:"取消已请求，停止未确认",CANCELLATION_CONFIRMED:"收到取消确认",REJECTED_BY_USER:"已拒绝",SUCCEEDED:draftReady?"草稿已生成":"辅助已完成",FAILED:"辅助失败"} as Record<string,string>)[result.state]??"状态已更新";
+  const statusLabel=clarification?"等待补充信息":({AUTHORIZATION_PENDING:"等待授权",REQUESTED_AWAITING_CONTENT:"等待正文重交",OUTCOME_UNKNOWN:"结果待确认",CANCELLATION_REQUESTED:"取消已请求，停止未确认",CANCELLATION_CONFIRMED:"收到取消确认",REJECTED_BY_USER:"已拒绝",SUCCEEDED:draftReady?"草稿已生成":"辅助已完成",FAILED:"辅助失败",FAILED_PRE_DISPATCH:"派发前未通过"} as Record<string,string>)[result.state]??"状态已更新";
   const Wrapper=compact?"details":"section";
   return <Wrapper {...(compact&&result.settlementStatus&&!["NOT_MEASURED","ESTIMATE_SETTLED"].includes(result.settlementStatus)?{open:true}:{})} id="draft-assistance-message" tabIndex={-1} className="px-inline-card px-assistance-card" aria-label="AI 问题理解与草稿辅助">
     {compact&&<summary>AI 辅助来源与调用状态</summary>}
@@ -28,6 +28,9 @@ export function DraftAssistanceCard({result,compact=false,busy,onAnswer,onRefres
     {(unknown||result.state==="CANCELLATION_CONFIRMED")&&<p>取消请求不等于底层工作已停止。本地 worker：{result.localWorkerState==="REAPED"?"已回收":result.localWorkerState==="CLEANUP_NOT_PROVEN"?"回收未证实":"尚无退出证据"}；远端停止和停止计费均未证实。</p>}
     {result.clarificationQuestion&&<div className="px-assistance-question"><strong>请补充以下关键信息</strong><p>{result.clarificationQuestion}</p>{onAnswer&&<button type="button" className="px-primary-button" disabled={busy} onClick={onAnswer}>回答补问</button>}</div>}
     {result.reasonCode&&<p className="px-mode-note">状态说明：<code>{result.reasonCode}</code>{result.reasonCode==="RESULT_CONTENT_NOT_RETAINED"?"。服务端可恢复调用事实，但不会恢复原草稿正文；请明确选择手工草稿或新 successor。":""}</p>}
+    {result.state==="FAILED_PRE_DISPATCH"&&<p role="alert">本次在模型派发前被拒绝。请核对配置、精确权限及预算准入；修复后通过正式后继流程继续，旧记录保持失败，不重复使用旧标识发送新内容。</p>}
+    {result.state==="FAILED"&&["OUTPUT_SCHEMA_INVALID","PROVIDER_RESPONSE_INVALID"].includes(result.reasonCode??"")&&<p role="alert">模型返回内容未通过契约校验，生成未完成。不能将本次结果作为可确认草稿；请保留原调用证据并按后继修正流程处理。</p>}
+    {pending&&<div className="px-mode-note"><strong>待独立准入，不是模型超时</strong><p>草稿辅助与模型调用分别保留正式授权记录。登录成功不会自动取得这些权限。</p><p><a href={`/authorization-admin?context=${encodeURIComponent(result.contextId)}`}>核对本 context 的独立调用准入</a></p>{result.requestAuthorizationRequestId&&<p><a href={`/authorization-admin?request=${encodeURIComponent(result.requestAuthorizationRequestId)}`}>查看本次草稿辅助申请</a></p>}{result.modelAuthorizationRequestId&&<p><a href={`/authorization-admin?request=${encodeURIComponent(result.modelAuthorizationRequestId)}`}>查看本次模型调用申请</a></p>}</div>}
     {pending&&<p>服务端只保留非正文元数据。授权完成或连接恢复后，请用当前页面重交同一正文；页面不会自动重派。</p>}
     {unknown&&<p>系统只会检查原调用的后续结果；不会把待确认状态显示为成功，也不会自动发起替代调用。</p>}
     <div className={`px-card-actions${clarification?" px-secondary-actions":""}`}>

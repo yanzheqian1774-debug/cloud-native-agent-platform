@@ -142,7 +142,7 @@ jobs:
           CONSOLE_FRONTEND_PORT: "19330"
           VITE_PROBLEM_DRAFT_ASSISTANCE: enabled
           PLAYWRIGHT_OUTPUT_DIR: ${{ runner.temp }}/prepared-324-ui
-        run: npx playwright test tests/e2e/s5-324-execution.spec.ts --retries=0 --forbid-only
+        run: npx playwright test tests/e2e/s5-324-execution.spec.ts tests/e2e/s5-324-entry-diagnostics.spec.ts --retries=0 --forbid-only
 
       - name: Prove owned cleanup preserves an injected failure
         shell: bash

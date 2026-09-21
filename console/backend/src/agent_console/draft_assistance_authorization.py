@@ -71,6 +71,7 @@ class GrantAdministrationDraftAuthorization:
         self.grants = grants
         self.owner_authorization = owner_authorization
         self.clock = clock
+        self.context_admission = None
 
     def _current(self, context: TrustedRequestContext, grant: ExactGrant):
         return self.grants.authorization.authorize_current(
@@ -106,6 +107,11 @@ class GrantAdministrationDraftAuthorization:
         request = request_grant(invocation)
         model = model_grant(invocation)
         try:
+            independent_context = (
+                self.context_admission.prepare(context, invocation)
+                if self.context_admission is not None
+                else False
+            )
             if current is None:
                 submitted = self._submit(
                     context,
@@ -114,14 +120,25 @@ class GrantAdministrationDraftAuthorization:
                     grants=(request, read_grant(invocation), cancel_grant(invocation)),
                     suffix="request",
                 )
+                model_request = (
+                    self._submit(
+                        context,
+                        invocation,
+                        purpose="PROBLEM_DRAFT_MODEL_INVOKE",
+                        grants=(model,),
+                        suffix="model",
+                    )
+                    if independent_context
+                    else None
+                )
                 return DraftAuthorization(
                     AuthorizationState.PENDING,
                     submitted.request_id,
-                    None,
+                    model_request.request_id if model_request else None,
                     "",
                     None,
                     submitted.aggregate_version,
-                    0,
+                    model_request.aggregate_version if model_request else 0,
                 )
             request_status = self.grants.inspect_request(
                 context, current.request_authorization_request_id
@@ -183,6 +200,12 @@ class GrantAdministrationDraftAuthorization:
                 )
             else:
                 return current
+            if (
+                state is AuthorizationState.ALLOWED
+                and self.context_admission is not None
+                and not self.context_admission.ready(context, invocation)
+            ):
+                state = AuthorizationState.PENDING
             return DraftAuthorization(
                 state,
                 request_status.request_id,
@@ -193,7 +216,11 @@ class GrantAdministrationDraftAuthorization:
                 model_status.aggregate_version,
             )
         except AuthorityError as exc:
-            raise DraftAssistanceError("DRAFT_AUTHORIZATION_UNAVAILABLE") from exc
+            raise DraftAssistanceError(
+                exc.reason_code
+                if exc.reason_code.startswith("CONTEXT_ADMISSION_")
+                else "DRAFT_AUTHORIZATION_UNAVAILABLE"
+            ) from exc
 
     def _check(
         self,

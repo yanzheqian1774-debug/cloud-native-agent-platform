@@ -1,0 +1,134 @@
+{
+  "atlas": "R35",
+  "versionStatus": {
+    "version": "R35",
+    "previous_version": "R34",
+    "folder": "Resource-Management-PC-R35",
+    "current_images": 179,
+    "historical_images": 105,
+    "new_images": 0,
+    "comparison_pairs": 97,
+    "status": "七页细节精修及参考绑定；待视觉审阅",
+    "rule": "整体替换展示包；不自动替换实施任务锁定的图片与验收基线",
+    "new_interactive_scenarios": 4,
+    "interaction_components": 12,
+    "revised_images": 0,
+    "new_interactive_shell": 1,
+    "previous": "R34",
+    "index_new_assets": 7,
+    "new_homepage_reference": 0
+  },
+  "indexSha256": "2d534306b791b58d03b6e0b0a5837f1b6e77b3d8e69e1c8ff711d00269b23822",
+  "pages": [
+    {
+      "page": "IAM01",
+      "route": "/api/workbench/v1/login",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/IAM01.png",
+      "sha256": "4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "P06",
+      "route": "/work/planning/:proposal",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/P06.png",
+      "sha256": "ea6b73500b67ca37fe140c30b99851f1b4458324caa74d6d91ba3724d4a83eed",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "P08",
+      "route": "/work?resource=exact",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/P08.png",
+      "sha256": "d3e305af349a8f92e3f993dc9ba5482a5e2dd2cf161088243743958e8f8b660f",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "H05",
+      "route": "/work?execution=digest",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/H05.png",
+      "sha256": "18372bbd4048ae249b0831a875b693e1a98d3adb67491f2d38f8ca996011d62e",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "H06",
+      "route": "/work?execution=digest",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/H06.png",
+      "sha256": "c690783e7cfe345c8ef1c1f9a73b660bb09347a16687d51b412280acb788e81d",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "S04",
+      "route": "/work?resource=skill|exact",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/S04.png",
+      "sha256": "885004011133abdac2c2642e6f996ab6ccf30335e8817df37cb1bc9cc4d01fe5",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "R04",
+      "route": "/work?resource=runtime|exact",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/R04.png",
+      "sha256": "369a4aae5fe3b8b6172146a06b8c9848b1af1f167d911c6a396de65cc23fb4d0",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "K05",
+      "route": "/work?resource=knowledge|exact",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/K05.png",
+      "sha256": "f5f0fea4b9b151c8c3f36cf1a524f73920ebf9d811f0ffed63272e073698e379",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "D09",
+      "route": "/digital-employees",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/D09.png",
+      "sha256": "08d6061f8a4395f9dacd0467dacd1bc36bf61cd533326170cf545f892ffe89a5",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "P01",
+      "route": "/work (新建对话)",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/P01.png",
+      "sha256": "c76241d275d8bd19a251db37c56e86eab686ada5fda4a316e985ae5a827087ea",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "P02",
+      "route": "/work (补问)",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/P02.png",
+      "sha256": "e7945a4a38fa0fb893e5b9664403c35ce041a1fb20571bb9da694362d60fae4b",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "P03",
+      "route": "/work (草稿确认)",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/P03.png",
+      "sha256": "373e7853b5ed10ede1e4b1e6534b196d0f5f7f7eb093a137acb61b2833513a00",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    },
+    {
+      "page": "IAM03",
+      "route": "/work (会话失效恢复)",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/IAM03.png",
+      "sha256": "897507461cc8f7d7f7a10073dfbff6ea6939be273750e766d0f93e017e3f9e2e",
+      "identicalToR30": true,
+      "imageReadThisTurn": true
+    }
+  ],
+  "visualAcceptance": "NOT_GRANTED",
+  "note": "R35 package is latest; these business images are byte-identical to locked R30. Portal revisions do not authorize full platform redesign.",
+  "gaps": [
+    "未发现新 context 独立签发面板的已确认专用效果图；沿现有授权页面组件呈现，视觉接受 NOT_GRANTED。",
+    "P02/P03 历史图消息方向与用户最新约束不同，实施以用户消息靠右、系统靠左为准。"
+  ]
+}

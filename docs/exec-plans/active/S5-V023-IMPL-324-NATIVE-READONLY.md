@@ -117,3 +117,35 @@ D324-4 首次完整提交钩子：2138 passed / 335 skipped / 4 failed。三项�
 D324-4 `561a896` 正常提交门禁通过并推送原 PR #186。实际入口发现旧 runtime 的 migrationPath 指向旧工作树，因此 0036 未找到；失败发生在 DDL 前。shell 顺序未阻断后续 generic activation，使 generation 5 已激活但 schema 缺失；服务保持停止，无账号/业务执行。保留原配置并追加 active/runtime.json，核对 0018 原文完全一致后用当前 checkout 迁移目录完成 0036。随后正式创建两个 revision 1 账号，密码分别为本机 0600 文件。补正 stage 的迁移定位，并让 Authority controller 在发布账号代次前核验 schema，阻止同类不完整激活；不改已应用 0036 字节。
 
 实际 HTTPS 与浏览器：旧过期 bootstrap 401，demo324 账号登录 303/session 200；原主体与隔离环境可见，显示密码、中文失败及错误页重登、刷新、正常退出已验证。初次前端构建遗漏 live 路由标志，曾显示 synthetic 外壳；以 VITE_SUPPLIER_QUALITY_DEMO_MODE=live / VITE_PROBLEM_DRAFT_ASSISTANCE=enabled 重建后读回原案例授权缺口，保留该区别。未使用 reviewer324；三条原申请及既有授权事实逐表不变。截图/检查点在 local-account-entry-checkpoint.json，参考图与实际页面已分别实读，不宣称 Human 视觉接受。最终候选重启、读回与 CI 另记私有交付回执，当前不宣称 Native 已执行。
+
+## 2026-09-22 同任务续接
+
+用户要求完成剩余主链并在实施前核对本机最新完整图集。现场代码/服务仍为 3379f9f；原三条申请 PENDING v1，四资源均 DRAFT，Run 为零。未重复创建申请、资源或业务记录。R35 的版本说明及 index 已读取；本批 IAM01、P06、P08、H05/H06、S04、R04、K05、D09 原图逐页实读，字节与 R30 相同。最新包的七页门户调整不扩展本批首页范围。
+
+本次必要修正：会话到期仅清除旧身份状态与草稿，不删除原对象 URL 定位；重新登录仍逐项授权读取，不重发业务。资源审核沿用现有正式 owner 及发布命令，将用途、输入输出字段、期望配置、来源原文与不可变摘要分层显示，原始 JSON 保留可展开。页面修改不新增权限，不把发布视为准入或调用。围绕失效恢复零重发、部分发布和长中文/缩放做定向浏览器验证，再走正常提交门禁。本人独立签发仍为下一实际写入的前置条件；技术校验与绑定继续由代理办理，不伪造后续对象。
+
+### 同轮新增：全新问题 AI 入口
+
+以实际 demo324 浏览器一次合成供应商问题复现：POST /draft-assistance/invocations 为 405 / WORKBENCH_METHOD_NOT_ALLOWED，诊断 c28a72abf37b02da1062a162。324 serve 主动清除 DRAFT_ASSISTANCE_RUNTIME_FILE；前端开关启用而后端未安装路由。会话有效，失败先于 context/turn/invocation 创建及模型派发。旧理解表最后记录仍为 2026-09-20；不要求用户重试。
+
+先修未配置入口的受保护 503/明确 reasonCode 和中文错误、诊断及状态说明，保留原输入、不自动重发。真实新问题还遇到原 ledger 绑定已到期 323 delegation 的实质机制限制，登记原决定包 D324-5 最小差异；未实施准入绕行，不复活旧委托，不复制旧 context。原 Native 必要人工步骤保持，二者不混同。
+
+本轮首次正常提交门禁失败：规划边界 oversized 与 cancellation 均 TOTAL_DEADLINE / STARTUP，约 1.00 秒，端点尚未收到请求；2117 passed / 359 skipped / 2 failed。完整日志保留于 /tmp/s5-324-sep22-commit.log，不修改断言或延长阈值；后续先隔离诊断，再执行正常门禁，不能以重复重跑掩盖。
+
+D324-5 已获用户明确批准（2026-09-22），按原决定包有界追加机制实施。先完成独立 context 准入记录、精确配置/账号当前性与共享账本原子检查，再装配真实入口；具体调用仍待实际对象的独立本人签发，不能把本次架构批准当作 Grant。原三条申请及资源—Native 主链继续复用。
+
+后续规划（用户 2026-09-22 明确要求登记，本轮不实施）：评估“场景级授权、范围内自动准入”，以场景边界、额度、有效期、精确资源约束与撤销为前提，仍保留职责分离、审计和 UNKNOWN 恢复规则。另行形成可审查决定，不能把本轮逐 context 独立签发隐式升级为范围授权。
+
+### D324-5 实施追加检查点
+
+0037 在原 authorization owner 追加 context 申请、独立决定、撤销及 Problem 来源关联；新 writer 核验迁移摘要，旧 writer 遇到 0037 拒绝启动。仅精确隔离主体、当前启用账号修订、新生成合成 context 可申请，旧 323 context 不可收编。新签发最长八小时，页面默认一小时；实际 Grants 仍独立签发且在派发事务重新校验。原 budget guard 通过新 context 精确记录选择新路径，明确返回 False，不能继承旧持续开发修订的额度绕过；原 ledger 锁继续累计全部历史结算/预留与次数。新 context UNKNOWN 或未结算阻断后继。
+
+原理解配置摘要只读核验完全匹配 80e9c70f3cca1120128e7140e5ad2b76b66b1df605ad3faa3ff107cd6944787d；当前原理解账本 5/12 次，已结算或预留 USD 0.131092。规划账本 19/8 次为既有连续开发历史，保留；本批不重跑规划，新有界调用不能绕过原上限。七 UNKNOWN 和原 USD 4.816896 预留保持。配置装配不签发权限、不派发模型。
+
+隔离 PostgreSQL 定向五项通过：请求/独立决定/幂等/撤销、账号及配置拒绝、UNKNOWN、并发共享账本上限与历史保留、旧 guard 仍到期拒绝。首轮缺测试环境、辅助命令参数错误、测试调用不存在 verify_schema，均为 fixture/检查调用问题；更正为既有 verify_existing_schema 后通过，没有改弱断言。浏览器首轮四类错误通过；新审批面板 fixture 缺 workbench-session.v1 导致面板未加载，正式会话校验正确拒绝，修正 fixture 后另记结果。未使用实际 reviewer324，实际调用与 Native 仍未开始。
+
+兼容回退：停当前 writer，保留 0037 与全部新旧记录；不能回退到不识别 0037 的旧 writer，也不删除新表伪装可兼容。关闭 D324-5 装配只会关闭新入口，不恢复已到期委托。新问题本轮确认范围止于正常 Problem 草稿确认；原成本案例的 Criteria/Plan/Native 主链独立继续。
+
+D324-5 候选 make check 通过：2121 passed / 364 skipped（含未配置独立 PG 的套件，另行五项实际隔离 PG 已通过）/ 1 warning，158.03 秒。原 1 秒 STARTUP deadline 失败日志保留，本次未修改 deadline 或断言。前端未知结果禁止普通发送，保留诊断与原调用观察；浏览器新五项与前端最后构建另记最终候选。
+
+实际入口（当前工作差异，经 make check 后预检）：0037 已应用，旧 writer 精确停止且完整备份保留。demo324 经正常登录回到 /work，提交明确合成供应商问题返回 201 / AUTHORIZATION_PENDING；实际 context 0477d775cd85ee477a22fe465dc42419，invocation 5d66b44e407f6c34c3c0346f5baad139，草稿申请 907a9386901269b8a69bd62d13ee157c、模型申请 59c08d23163426bdd1efcd2934ffb56f 均 PENDING。新 context 独立决定为零，模型预留/派发为零；业务账号可核对独立准入摘要，自签按钮禁用。原三条申请仍 PENDING，未重建。最终提交候选重启/CI 另记，324 未完成。

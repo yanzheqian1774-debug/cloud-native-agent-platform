@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -294,6 +295,18 @@ def build_workbench_composition(
 
             task_binding = record_created_object
             delegation_routes = (install_task_delegation_routes(delegation),)
+            if os.environ.get("CONTEXT_CALL_ADMISSION_ENABLED") == "true":
+                from .context_call_admission import ContextCallAdmission
+                from .context_call_admission_api import install_context_call_admission
+
+                admission = ContextCallAdmission(
+                    delegation, configurations["understanding"]
+                )
+                admission.migrate()
+                draft_assistance.authorization.context_admission = admission
+                draft_assistance.budget.context_admission = admission
+                delegation_routes += (install_context_call_admission(admission),)
+
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,

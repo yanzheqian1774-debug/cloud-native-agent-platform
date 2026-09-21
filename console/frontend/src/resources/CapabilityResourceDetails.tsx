@@ -8,7 +8,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const text = (value: unknown, fallback = "未声明") =>
   typeof value === "string" && value.length > 0 ? value : fallback;
 
-function SchemaDetails({label, schema}: {label: string; schema: unknown}) {
+export function SchemaDetails({label, schema}: {label: string; schema: unknown}) {
   if (!isRecord(schema)) return <section><h5>{label}</h5><p>未声明 Schema，不能推断输入输出兼容。</p></section>;
   const properties = isRecord(schema.properties) ? Object.entries(schema.properties) : [];
   const required = Array.isArray(schema.required) ? schema.required : [];
