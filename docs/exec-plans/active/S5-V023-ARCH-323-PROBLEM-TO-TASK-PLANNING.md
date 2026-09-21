@@ -1,6 +1,6 @@
 # S5-V023-ARCH-323 — 问题到任务规划：主线架构与首个可执行切片
 
-> 当前授权以第 10 节为准；第 1–9 节保留设计阶段历史，原“实施未授权”不再代表当前状态。
+> 当前收口以第 28 节为准：Session CLOSED（Human授权，限定验收）。前文各阶段OPEN、未授权及待办文字保留历史，不代表当前状态；后续实施须新Session承接，不重开323。
 
 ## 1. 本次交付与权威
 
@@ -1799,3 +1799,20 @@ Human已明确P06、IAM01本轮局部视觉接受；IAM03保留过期隐藏业�
 收口矩阵：真实中文生成/显式页面确认/刷新/PG关联与历史保护完成；P06/IAM01局部视觉接受已获Human决定；IAM03安全功能既有验证复用，视觉为非阻断后续；投影未测，新中文理解未真实验证，真实自动修正未自然触发、受控修正证据独立；资源缺口仍2，资源/执行/业务验收不宣称完成。已知初次返回缺精确READ导致404的结果恢复证据保留，不把HTTP失败记为模型失败。
 
 合并准备：复核main bcf2def是产品候选祖先，GitHub MERGEABLE/CLEAN；181/183依赖已合入，无需其他开放PR。仅新增0032追加迁移且旧迁移摘要不改；ruleset要求PR、严格Quality Gates，禁止非快进及删分支。建议完成最终候选CI与审阅后，由Human另行决定Ready/普通merge；本任务不操作。回退保留追加审计并使用兼容0032的候选/只读维护，不启旧writer、不覆盖恢复数据库备份。Session保持OPEN，后续范围沿§26/§27.7，不新分配D2/D3/增量二。
+
+
+## 28. Human最终集成与限定收口（2026-09-21）
+
+Human明确接受本次收口并授权#184 Ready、普通merge、exact-main验证后关闭323；不授权生产部署或业务执行。G0仅集成、证据复用及文档收口，无新产品代码/模型/确认/迁移/运行切换。
+
+已审阅HEAD `036bb702b4cbc219cef34c4c162f48b0bb462947` / tree `340fd86ad49c498be8f3bb89ec525ac76aaddb2e`，12/12候选CI成功；main未漂移，规则要求PR及strict Quality Gates，GitHub必要review数0，reviews空，Human接受来自本Session（不伪造GitHub审批）。正常Ready及merge生成 `d26018bd8a24ef7e55200963fa39744e335b973d`，第一父`bcf2defe8c2a6900b1bbba94ad7931c91db1b26b`；tree与审阅候选一致。合并后两个push workflow全部6项成功，日志checkout均为exact-main；未用旧候选绿灯代替。#181/#183依赖在main，#182已包含关闭，#184来源分支保留。
+
+**Session CLOSED / bounded PASS**：接受真实理解与既有案例必要补问/纠正、标准与版本关联、真实中文规划、方案修订、原主体页面显式确认、刷新及PostgreSQL同一Plan/Approval读回。原成本中文修订2四阶段六任务、8000预算/排除试验项目/数据缺口保持；Plan v2及Approval 6d30f690闭环复用§27.9。原七UNKNOWN、USD4.816896预留、17条USD0.582440估算结算与全部旧Plan/Approval保留；本次集成模型调用0、重复确认0、业务执行0。Session关闭不把UNKNOWN结清或终止远端，也不撤改已签发历史。
+
+**不接受/不宣称**：资源就绪、业务执行、成本分析结果与标准验收、稳定性、全图集视觉接受。P06/IAM01仅R24局部接受；IAM03安全功能保留，视觉非阻断；投影未测、新中文理解未真实验证、自然自动修正未触发（受控修正证据独立）。采购历史旧契约不符合结论保持。
+
+迁移0032为本PR唯一新增SQL，append-only且旧binary拒绝新schema；本轮未执行迁移。升级后回退只用0032兼容候选/forward repair/只读维护，不能恢复旧DB覆盖新增历史。原隔离服务仍backend9d39a67/frontend036bb70，不将Git合并表述为部署。
+
+[最终集成事实、exact-main检查、剩余PR及图集摘要](../../evidence/s5/v0.2/s5-v023-arch-323/final-integration.json)；[下一批完整任务草案](../../engineering/S5-V023-ARCH-323-NEXT-EXECUTION-HANDOFF.md)，沿§26 A/B/C、D2/D3和§6 I2.1–I2.6，不新编号不授权实施。当前R29实读为设计参考，非整包接受；六任务/多依赖与原五任务线性范围差异集中列G2。后续只纳同案资源→单Run→产物/标准/Human结果必要能力；完整Fleet/客户端/全面改版留待办。
+
+本节及Registry为正常文档分支/PR登记，不向已合并#184继续堆积。该文档候选/门禁及最终main精确身份由原外部`final-integration`回执追加，避免自引用SHA循环。若登记PR集成失败则交付保留阻塞状态，不将未入main文档当已集成。
