@@ -99,6 +99,34 @@ class PlanningApplication:
             )
             return self.repository.add_proposal(cursor, scope, proposal)
 
+    def prepare_cost_execution_revision(self, principal, plan_id, request):
+        from .cost_execution_revision import execution_successor
+        from .plan_suggestion_domain import ConfirmedPlanRevision
+
+        self.require(principal, "READ", plan_id)
+        self.require(principal, "PREPARE", plan_id)
+        scope = self.scope(principal)
+        with self.repository.transaction(scope, plan_id, authorized=True) as cursor:
+            result = self.repository.read_plan(
+                cursor, scope, plan_id, request.plan_version
+            )
+            plan = ConfirmedPlanRevision.model_validate(result["plan"])
+            self.validate_target(principal, plan.semantics.target, cursor.connection)
+            source = self.repository.proposal(
+                cursor, scope, plan.source_proposal_id, plan.source_proposal_revision
+            )
+            successor, changes = execution_successor(plan, source, request)
+            self.repository.add_proposal(cursor, scope, successor)
+            return {
+                "proposal": successor.model_dump(mode="json"),
+                "digest": successor.digest,
+                "source_plan_digest": plan.digest,
+                "changes": changes,
+                "execution_status": "NOT_STARTED",
+                "confirmation_required": True,
+                "independent_admission_required": True,
+            }
+
     def confirm(
         self, principal, proposal_id, revision, digest, *, expected_plan_version, key
     ):

@@ -25,3 +25,7 @@ main相对该候选已增加MCP server closeAllConnections、PC/移动视口焦�
 后续按各domain schema_migrations验证版本/checksum/依赖，特别是execution0008、Native dispatch0022及OpenClaw0021并存；不把全目录顺序执行当升级方案。兼容回退保留新事实并停新writer，禁止覆盖原数据库。
 
 当前仅预检，内容整合、差异逐项处置、组合测试和可评审合并顺序仍待完成。旧绿灯不算324候选CI。
+
+## 324局部吸收记录
+
+从#168 HEAD `388b6e3993fcbd41526cb4038cd8974446980ce0`吸收ResourceRelationship精确来源类型与CapabilityResourceDetails身份/operation/tool区分结构，在本分支重写为中文、只读Schema与缺口详情，绑定S04/M07。未宣称完整合入#168：目录、clone/import/export确认、harness/reporter和其原验收仍未整合；不关闭来源PR。#167以及其他残余处置仍待实施，不因此局部吸收标成DONE。

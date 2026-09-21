@@ -1,12 +1,12 @@
 # IMPL-324 执行契约集中差异决定包 v1
 
-状态：PROPOSED，非服务端执行签发；2026-09-21。原323保持CLOSED。
+状态：ACCEPTED_WITH_CONSTRAINTS（本Session Human集中决定），非服务端执行签发；2026-09-21。原323保持CLOSED。
 
 ## 已接受方向与本次唯一请求
 
 本Session及附件已经授权：同案成本Plan复用、四阶段六任务、单Run、有限静态DAG、精确资源映射、不强制Workflow编辑器、Native只读优先、合成数据、真实产物和Human结果决定。以上不再请求批准。
 
-本包请求接受下列D3具体责任及状态语义，作为324编码的架构依据。不是请求重新理解、重新生成计划或批准相同开发方向；也不代替后续服务端独立准入与页面Human决定。
+本包已获Human接受下列D3具体责任及状态语义，作为324编码的架构依据。不是请求重新理解、重新生成计划或批准相同开发方向；也不代替后续服务端独立准入与页面Human决定。
 
 ## 现场依据与冲突
 
@@ -32,10 +32,10 @@
 | 持久事实 | 后继Task | 无关分支 | Run及恢复规则 |
 | --- | --- | --- | --- |
 | 依赖全部成功且产物验证通过 | 可排队，每Attempt仅一个effect owner和managed Skill | 按依赖就绪 | QUEUED不能显示为运行；以worker事实推进 |
-| 已知FAILED/TIMED_OUT且已证实停止 | 所有必需依赖后裔SKIPPED | 继续已准入的只读分支 | 所有Task已终结后Run失败；可明确授权新Attempt重试，保留旧事实 |
+| 已知FAILED/TIMED_OUT且已证实停止 | 先进入RETRY_WAIT；明确放弃/耗尽重试后FINAL_FAILED，才传播后裔SKIPPED | 继续已准入的只读分支 | RETRY_WAIT期间Run不终态；所有Task已终结后Run失败，终态不可复活 |
 | effect结果UNKNOWN或fence失联 | 不派发依赖任务 | 停止新增派发，已运行继续观测 | RECOVERY_REQUIRED，不自动重试，不作为terminal Business Outcome输入 |
 | 用户取消请求已保存 | 不再新增派发，未派发Task记录取消原因 | 向已运行Attempt发有权取消请求 | CANCEL_REQUESTED不等于CANCELLED；无ack保持待确认/UNKNOWN |
-| 全部运行Attempt停止已确认 | 未运行任务终结并保留原因 | 无新增派发 | 汇聚CANCELLED；部分成功产物仍保留 |
+| 已保存取消请求且全部运行Attempt停止已确认 | 未运行任务终结并保留原因 | 无新增派发 | 汇聚CANCELLED；部分成功产物仍保留 |
 | 全部必需Task成功、产物齐备 | 无 | 无 | 技术SUCCEEDED；终态快照后评价，不能直接关闭Problem |
 
 合法重试必须重新校验授权与exact资源，使用同Run/TaskRun的新Attempt；旧UNKNOWN没有权威解决事实时禁止重试。取消与自然完成竞争按持久事实/CAS排序，不把晚到ack覆盖已确认完成。stage状态按真实成员聚合，未终结不算完成。
@@ -62,4 +62,12 @@ artifact采用已有PG/Evidence owner：每Task至多16个产物、每产物256K
 
 按附件§7全矩阵验证，包括六Task分支、环/超限、重复Start换key、同key冲突、跨scope、资源撤销、crash/fence、UNKNOWN无重发、取消无ack、合法重试、产物篡改、重启和历史摘要。前端按已实读[R30绑定](S5-V023-IMPL-324-DESIGN-BINDING.md)实施；图间导航差异不宣称视觉通过。
 
-建议Human一次决定：接受D324-1/2/3，或列出修改项。未接受前不实施上述身份与生命周期扩展。
+## Human集中决定（2026-09-21）
+
+本Session用户明确批准D324-1/2/3作为实施依据，同时要求：
+
+1. 先记录Attempt失败与停止依据；允许重试的Task进入RETRY_WAIT、阻塞其后裔；合法重试生成新Attempt。明确最终失败后才将Task置FINAL_FAILED并传播SKIPPED；全部Task终结后才形成Run终态。已终态Run/Task/Attempt不得静默复活。
+2. CANCELLED须同时有持久取消请求与停止确认依据；自然停止不构成取消。
+3. 每Task产物数量按全部Attempt历史累计，Run字节按全部Task/Attempt历史累计；锁定同Run预算行原子校验后追加，重放同产物不重计，冲突拒绝；不得删除历史或重置额度。
+
+本次准许连续实施、必要资源整合、受控验证和页面交付；不再次请求同方向确认。保留Plan v2，通过正常后继流程形成隔离合成资料只读执行修订及可审查差异，不重新生成理解或整套规划。实现与实际入口预检通过后集中提供修订确认及独立准入操作流程，分别保留正式记录。323 CLOSED、旧Approval、七UNKNOWN与账本不变；新首页、平台底座和完整记忆平台不纳入本批。

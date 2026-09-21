@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict, Field
 
 from .authority_contracts import ExactGrant
+from .cost_execution_revision import CostExecutionRevisionRequest
 from .plan_suggestion_application import PlanningApplication
 from .plan_suggestion_domain import PlanningConflict, PlanningError, ProposalRevision
 from .plan_suggestion_postgres import PostgresPlanningRepository
@@ -52,6 +53,12 @@ class PlanningOwnerAdapter:
         try:
             if call.operation == "READ_PLANNING_INPUT_V2":
                 return app.current_input(principal, identity, call.connection)
+            if call.operation == "PREPARE_COST_EXECUTION_REVISION":
+                return app.prepare_cost_execution_revision(
+                    principal,
+                    identity,
+                    CostExecutionRevisionRequest.model_validate(call.payload),
+                )
             if call.operation == "CONFIRM_PLAN_V2":
                 body = ConfirmSuggestion.model_validate(call.payload)
                 return app.confirm(
@@ -167,6 +174,15 @@ def planning_operations(application, employees=None):
             handler,
         ),
         WorkbenchOperation(
+            "PREPARE_COST_EXECUTION_REVISION",
+            "POST",
+            path + "/execution-revision",
+            CostExecutionRevisionRequest,
+            None,
+            _grant("PREPARE"),
+            handler,
+        ),
+        WorkbenchOperation(
             "CONFIRM_PLAN_V2",
             "POST",
             path + "/confirm",
@@ -218,7 +234,7 @@ class PlanningGrantTargetValidator:
         prefix = "plan:v2:"
         if not grant.exact_resource.startswith(prefix):
             return False
-        if grant.action not in {"READ", "APPROVE"}:
+        if grant.action not in {"READ", "APPROVE", "PREPARE"}:
             return False
         identity = grant.exact_resource[len(prefix) :]
         row = connection.execute(

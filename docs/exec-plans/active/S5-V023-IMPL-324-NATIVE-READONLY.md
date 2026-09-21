@@ -41,3 +41,24 @@
 截至此检查点仍未产品编码、创建执行对象、调用模型、迁移、推送/PR/CI、实际Native或Human结果决定；完整任务未完成。
 
 提交钩子首次pytest：2097通过、331跳过、1失败（父通道丢失worker退出测试）；未改代码的单测复现1通过/2.44s，尚不据此宣称全门禁通过。失败保留，完整提交门禁待重试。
+
+## 当前执行检查点：Human集中决定已接受
+
+2026-09-21用户批准D324-1/2/3并追加重试等待→最终失败→后裔SKIPPED→Run终态顺序、取消请求+停止确认、跨重试历史的原子产物限额三项约束，已登记原决定包。先前PROPOSED/等待决定为历史检查点，当前编码门禁已解除。
+163544f提交钩子完整重跑通过，Ruff lint/format检查通过；首次失败保留。实施继续，不重跑理解/规划、不重置旧账本，不扩首页/平台底座/完整记忆平台。
+
+## 实施检查点：状态、产物与窄后继基础层
+
+已实现接受的重试/最终失败/后裔传播规则、取消请求与停止确认分离、UNKNOWN禁止新增派发、终态不复活。0033追加准备/进度/事件/产物表，引用现有canonical身份；Run锁下原子检查全部Task/Attempt历史，单Task16项/单项256KiB/Run4MiB，历史不可覆盖或删除。独立PG并发、重试、重连、CAS、重放和迁移摘要漂移测试通过。此层尚未接入canonical多Task准入或Native worker，不宣称执行就绪。
+
+新增窄后继提案入口 `/api/workbench/v1/planning-v2/{proposal_id}/execution-revision`，要求现有PLAN READ/PREPARE exact授权；保持Problem/Criteria、Task/DAG/阶段、预算规则、缺口和policy，只变更已批准的执行边界与exact选择。通过原追加确认机制另生Approval，准备本身不确认、不准入、不启动。确定性修订标记 `execution-revision:`，不是模型调用记录；原案例尚未调用该入口。
+
+[本检查点证据](../../evidence/s5/v0.2/s5-v023-impl-324/implementation-checkpoint.json)：相关39项含真实PG通过、无跳过。make check首次2113通过/334跳过/1失败，既有Kimi send deadline单项未改代码复现通过；全门禁不因单项通过而标绿。仅使用新建324测试容器，未修改323数据库或运行原接管脚本。
+
+下一实施步骤仍为canonical planning-owner引用与Task参与身份接线、Native唯一Skill effect owner、资源整合及实际页面。未完成入口预检，不提前发出Human准入包；尚无实际Native/产物/评价/Human决定或交付完成声明。
+
+### 资源页局部与检查记录
+
+S04/M07再次实读后，局部吸收#168身份详情，新增受管operation输入输出、MCP缺口、中文字段表及完整Schema键盘展开。前端npm ci/lint/build通过，视图fixture浏览器2项通过（2.5s），125%缩放无页面横向溢出，截图保留且已实读；不是实际资源或主链验收。#168完整目录/复用/harness与#167仍未完成。
+
+提交钩子另一次2113通过/336跳过/1失败（Responses READ_BODY deadline）；提交未生成，未跳过钩子。首次浏览器启动60s超时，以及复用默认模式构建导致路由不显示均保留；正确live构建后原断言通过。
