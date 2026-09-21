@@ -104,7 +104,7 @@ test("uses only current session identity and keeps legacy planning out of truste
     page.waitForResponse(response => response.url().endsWith("/api/workbench/v1/session") && response.status() === 401),
     page.evaluate(() => document.dispatchEvent(new Event("visibilitychange"))),
   ]);
-  await expect(page.getByText("未显示可信身份", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "登录工作台", exact: true })).toBeVisible();
   await expect(page.getByText("human:applicant", { exact: true })).toHaveCount(0);
   identity.value = "human:applicant-refocused";
   await Promise.all([

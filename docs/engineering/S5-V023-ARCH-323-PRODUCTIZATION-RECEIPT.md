@@ -64,3 +64,5 @@ main bcf2def的CI 35551586800与Employee Identity Chain 35551586836成功。保�
 首轮完整make check：2204通过、201跳过、1失败及关联teardown错误；原因是对frozen装配依赖赋值，改用dataclasses.replace，BFF装配/资源/循环21项补验通过。正常提交7f37ca7的Ruff和完整pytest hooks通过。未削弱断言、未跳过hook。随后共享ConsoleShell回归发现过期遮蔽越过主链路，已限定问题工作台/审批页并恢复外围既有导航契约；9项浏览器回归通过，新增规划PG测试21项通过。首轮失败与修复日志保留，不能将受控测试称作新真实模型质量验证。
 
 同视口对照页：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/visual-comparison.html`。截图、执行日志及SHA清单在同目录。正常后继提交及最终PR/CI精确身份由该目录交付回执追加登记，不将运行旧服务59224af冒充新候选。
+
+后续 Draft PR 为 #184。首轮远端候选811f066：Quality Gates、Frontend Quality Gates及身份链三项通过；浏览器失败分别定位为中文登录仍使用旧英文按钮定位、旧视觉测试仍使用原卡片DOM、过期身份提示旧文案。保留失败产物后同步准确中文按钮与新表格/资源区定位，不删除职责、角色、UNKNOWN、确认次数、身份消失/恢复等断言。布局1500/1366、资源UNKNOWN/版本不符、导航隔离4项补验通过。最终提交与CI身份继续记录在外部交付回执，不把首轮失败标为通过。

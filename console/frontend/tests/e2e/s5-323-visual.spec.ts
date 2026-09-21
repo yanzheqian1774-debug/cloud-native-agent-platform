@@ -85,8 +85,8 @@ async function planning(page:Page){
 
 for(const width of [1500,1366])test(`V323 planning layout and interactions ${width}`,async({page},info)=>{
  await page.setViewportSize({width,height:width===1500?1050:768});const state=await planning(page);
- await expect(page.locator('.planning-stage')).toHaveCount(3);
- for(const task of await page.locator('.planning-task').all()){await expect(task.locator(':scope > summary')).toContainText('职责：');await expect(task.locator(':scope > summary')).toContainText('数字员工：');}
+ await expect(page.locator('.planning-stage-row')).toHaveCount(3);
+ for(const [index,task] of (await page.locator('.planning-task').all()).entries()){await task.locator(':scope > summary').click();await expect(task).toContainText(procurement.tasks[index].responsibility);await expect(task.locator('xpath=ancestor::tr')).toContainText(procurement.requirements.find(r=>r.requirement_id===procurement.tasks[index].employee_requirement_id)!.name);await task.locator(':scope > summary').click();}
  if(width===1500){await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();await page.locator('.planning-goal').scrollIntoViewIfNeeded();await expect(page.locator('.planning-goal')).toBeInViewport({ratio:1});await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();await page.getByRole('button',{name:'确认计划',exact:true}).scrollIntoViewIfNeeded();await expect(page.getByRole('button',{name:'确认计划',exact:true})).toBeInViewport({ratio:1});await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();}
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath('07-goal-and-plan.png')});
@@ -110,7 +110,7 @@ test('V323 history and unknown resources never imply readiness or silently confi
  state.history.proposals.push({...state.history.proposals[0],revision:2});await page.reload();
  await expect(page.getByRole('button',{name:'确认计划',exact:true})).toBeDisabled();
  await page.locator('.planning-task').first().locator(':scope > summary').click();
- await expect(page.locator('.planning-task').first()).toContainText('待核实');await expect(page.locator('.planning-task').first()).toContainText('版本不符');
+ await expect(page.locator('#requirement-employee')).toContainText('待核实');await expect(page.locator('#requirement-snapshot')).toContainText('版本不符');await expect(page.locator('.planning-task').first().locator('xpath=ancestor::tr')).toContainText('尚未执行');
  await page.getByLabel('查看历史建议').selectOption('2');await expect(page.getByRole('button',{name:'确认计划',exact:true})).toBeEnabled();
  expect(state.commands).toHaveLength(0);expect(state.history.plans).toHaveLength(0);
 });
@@ -119,7 +119,7 @@ test('V323 grouped navigation keeps destinations and stays outside workflow page
  await planning(page);await page.locator('.px-sidebar').getByText('管理与技术',{exact:true}).click();
  await expect(page.locator('.px-sidebar').getByRole('link',{name:'问题审核与修订',exact:true})).toHaveAttribute('href','/problems');
  await page.locator('.px-sidebar').getByText('平台支撑',{exact:true}).click();await expect(page.locator('.px-sidebar').getByRole('link',{name:'系统设置',exact:true})).toHaveAttribute('href','/settings');
- await page.locator('.px-primary-nav').getByRole('link',{name:'Workflow',exact:false}).click();await expect(page.locator('.journey-shell')).toHaveCount(0);
+ await page.locator('.px-primary-nav').getByRole('link',{name:'工作流',exact:true}).click();await expect(page.locator('.journey-shell')).toHaveCount(0);
 });
 
 test('V323 formal planning errors are visible and do not create or execute',async({page})=>{
