@@ -149,3 +149,11 @@ D324-5 已获用户明确批准（2026-09-22），按原决定包有界追加机
 D324-5 候选 make check 通过：2121 passed / 364 skipped（含未配置独立 PG 的套件，另行五项实际隔离 PG 已通过）/ 1 warning，158.03 秒。原 1 秒 STARTUP deadline 失败日志保留，本次未修改 deadline 或断言。前端未知结果禁止普通发送，保留诊断与原调用观察；浏览器新五项与前端最后构建另记最终候选。
 
 实际入口（当前工作差异，经 make check 后预检）：0037 已应用，旧 writer 精确停止且完整备份保留。demo324 经正常登录回到 /work，提交明确合成供应商问题返回 201 / AUTHORIZATION_PENDING；实际 context 0477d775cd85ee477a22fe465dc42419，invocation 5d66b44e407f6c34c3c0346f5baad139，草稿申请 907a9386901269b8a69bd62d13ee157c、模型申请 59c08d23163426bdd1efcd2934ffb56f 均 PENDING。新 context 独立决定为零，模型预留/派发为零；业务账号可核对独立准入摘要，自签按钮禁用。原三条申请仍 PENDING，未重建。最终提交候选重启/CI 另记，324 未完成。
+
+### 候选 d3c5e07 的 CI 诊断与兼容修正
+
+两个 HTTPS CI 首先因原错误文案/诊断编号契约失败；保留原断言，恢复通用操作标识说明，复制字段明确命名 diagnosticId。Agent Workbench CI 报 102 项中的六项失败但未留具体场景（BROWSER_DIAGNOSTIC_GAP）；本地分别复现四项 AI 错误用例被放入关闭 AI 的手动草稿构建、两项原页面要求诊断编号默认折叠。AI 用例原样移到 assisted-entry 独立构建，专用 workflow 继续强制运行全部五项；原手动草稿测试及断言保持。可见诊断仅用于本批 AI 入口，并去除重复编号。不是 skip/retry 掩盖失败。
+
+额外前端静态扫描 94 passed / 4 failed：旧导航/数字员工文本断言与当前源不符（业务问题、Agent Definition、未显示可信身份）。相关两源文件和两测试文件经 git diff 3379f9f HEAD 确认均未变化，登记为既有跟进，未扩展本批页面文案改造。最终 CI、构建模式定向回归和正常提交另记。
+
+兼容修正定向结果：手动构建 23 passed、AI 专用构建 5 passed，均零 skipped；前端旧契约 12 passed、lint/build、Ruff/format check 通过。全部保留原业务与诊断断言；正常提交门禁与最终 CI 继续核验。

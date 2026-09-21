@@ -40,7 +40,7 @@ function message(error:unknown,operation:WorkbenchOperation,mutation:boolean){
   if(status===409)return{title:`${operation}遇到版本冲突`,detail:"服务器中的内容已经变化。你的输入仍保留在页面中；请刷新当前状态，核对后再提交。"};
   if(status===422)return{title:`${operation}的内容未通过校验`,detail:`请检查页面标出的必填项和长度限制，修改后再提交。${mutation?"你的当前输入仍保留。":""}`};
   if(status===503||status===0)return mutation
-    ?{title:`${operation}的结果暂时无法确认`,detail:"你的输入仍保留在页面中。先核对原操作是否已保存或派发；结果未知时查询原记录，不直接重发。只有确认可恢复后才沿用原操作标识继续。"}
+    ?{title:`${operation}的结果暂时无法确认`,detail:"你的输入仍保留在页面中。先核对原操作是否已保存或派发；结果未知时查询原记录，不直接重发。只有确认可恢复后，系统会沿用本次操作标识继续。"}
     :{title:`暂时无法${operation}`,detail:"服务当前不可用。请保留本页并稍后重试；页面不会把这次失败解释为资源不存在或无权限。"};
   return{title:`${operation}未完成`,detail:"你的当前输入没有被清除。请展开技术详情记录诊断信息，确认服务恢复后再重试。"};
 }
@@ -49,10 +49,11 @@ export function WorkbenchErrorNotice({error,operation,mutation=false,onRetry,ret
   const [copyState,setCopyState]=useState("");
   const known=error instanceof WorkbenchRequestError;
   const copy=message(error,operation,mutation);
+  const visibleDiagnostic=operation.includes("AI");
   return <section className="px-workbench-error" role="alert" aria-live="assertive">
     <strong>{copy.title}</strong>
     <p>{copy.detail}</p>
-    {known&&error.requestId&&<p>诊断编号：<code>{error.requestId}</code> <button type="button" onClick={()=>{void navigator.clipboard.writeText(JSON.stringify({operation,status:error.status,reasonCode:error.reasonCode,requestId:error.requestId})).then(()=>setCopyState("诊断信息已复制"),()=>setCopyState("复制未完成，请选中诊断编号复制"))}}>复制诊断信息</button></p>}
+    {visibleDiagnostic&&known&&error.requestId&&<p>诊断编号：<code>{error.requestId}</code> <button type="button" onClick={()=>{void navigator.clipboard.writeText(JSON.stringify({operation,status:error.status,reasonCode:error.reasonCode,diagnosticId:error.requestId})).then(()=>setCopyState("诊断信息已复制"),()=>setCopyState("复制未完成，请选中诊断编号复制"))}}>复制诊断信息</button></p>}
     {copyState&&<p role="status">{copyState}</p>}
     {known&&operation.includes("AI")&&(error.status===403||error.reasonCode==="DRAFT_AUTHORIZATION_UNAVAILABLE")&&<a href="/authorization-admin">查看授权申请入口</a>}
     {onRetry&&<button type="button" onClick={onRetry}>{retryLabel}</button>}
@@ -60,7 +61,7 @@ export function WorkbenchErrorNotice({error,operation,mutation=false,onRetry,ret
       <dt>操作</dt><dd>{operation}</dd>
       <dt>状态</dt><dd>{known&&error.status>0?error.status:"网络或响应不可用"}</dd>
       <dt>技术码</dt><dd><code>{known?error.reasonCode:"WORKBENCH_UNAVAILABLE"}</code></dd>
-      {known&&error.requestId&&<><dt>诊断 ID</dt><dd><code>{error.requestId}</code></dd></>}
+      {!visibleDiagnostic&&known&&error.requestId&&<><dt>诊断 ID</dt><dd><code>{error.requestId}</code></dd></>}
     </dl></details>
   </section>;
 }

@@ -38,5 +38,22 @@
     "height": 1024,
     "scrollWidth": 1536
   },
-  "actual125Percent": "NOT_VERIFIED: browser override did not change the target tab; fixture 125% test passed separately"
+  "actual125Percent": "NOT_VERIFIED: browser override did not change the target tab; fixture 125% test passed separately",
+  "ciCompatibilityCorrection": {
+    "sourceCandidate": "d3c5e07",
+    "manualBuildBrowser": {
+      "passed": 23,
+      "skipped": 0
+    },
+    "assistedBuildBrowser": {
+      "passed": 5,
+      "skipped": 0
+    },
+    "frontendContractTests": {
+      "passed": 12
+    },
+    "assertionsWeakened": false,
+    "inheritedBroadStaticFailures": 4,
+    "ci": "PENDING_FINAL_CANDIDATE"
+  }
 }
