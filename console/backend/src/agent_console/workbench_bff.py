@@ -198,6 +198,7 @@ def create_workbench_bff(
 
     @app.middleware("http")
     async def browser_boundary(request: Request, call_next):
+        request.state.diagnostic_id = _request_id()
         if request.headers.get("host") != policy.allowed_host:
             response = _error("WORKBENCH_HOST_REJECTED", 400)
         elif UNTRUSTED_IDENTITY_HEADERS.intersection(request.headers.keys()):
@@ -227,13 +228,24 @@ def create_workbench_bff(
         }:
             import logging
 
-            diagnostic = _request_id()
+            diagnostic = request.state.diagnostic_id
             response.headers["X-Diagnostic-ID"] = diagnostic
             logging.getLogger(__name__).warning(
                 "identity_boundary request_id=%s method=%s path=%s status=%s",
                 diagnostic,
                 request.method,
                 request.url.path,
+                response.status_code,
+            )
+        if request.url.path.startswith(PREFIX):
+            import logging
+
+            route = getattr(request.scope.get("route"), "path", "UNREGISTERED")
+            logging.getLogger("uvicorn.error").info(
+                "workbench_request request_id=%s method=%s route=%s status=%s",
+                request.state.diagnostic_id,
+                request.method,
+                route,
                 response.status_code,
             )
         response.headers["Cache-Control"] = "no-store"
@@ -370,7 +382,7 @@ def create_workbench_bff(
         except AuthorityError as exc:
             import logging
 
-            request_id = _request_id()
+            request_id = request.state.diagnostic_id
             logging.getLogger(__name__).warning(
                 "login_denied request_id=%s reason=%s method=%s",
                 request_id,

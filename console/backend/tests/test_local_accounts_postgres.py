@@ -519,3 +519,36 @@ def test_account_schema_checksum_and_transaction_rollback(setup, tmp_path):
             ).fetchone()["n"]
             == before
         )
+
+
+def test_account_activation_refuses_missing_extension(setup, monkeypatch):
+    from types import SimpleNamespace
+
+    from agent_console import local_accounts
+    from agent_console.authority_foundation import (
+        ActivationBarrier,
+        AuthorityGenerationController,
+    )
+
+    repo, generation, _, _ = setup
+    touched = []
+
+    def missing(_):
+        raise AuthorityError("AUTHORITY_SCHEMA_INCOMPATIBLE")
+
+    monkeypatch.setattr(local_accounts, "verify_schema", missing)
+    controller = AuthorityGenerationController(
+        ActivationBarrier(generation),
+        repo,
+        SimpleNamespace(replace=lambda _: touched.append(True)),
+        SimpleNamespace(recovery_epoch=1),
+    )
+    with pytest.raises(AuthorityError, match="AUTHORITY_SCHEMA_INCOMPATIBLE"):
+        controller.activate(
+            replace(generation, generation=2),
+            control_epoch=2,
+            operator_id="operator:test",
+            now=datetime.now(UTC),
+        )
+    assert touched == []
+    assert repo.active_generation()[0] == 1

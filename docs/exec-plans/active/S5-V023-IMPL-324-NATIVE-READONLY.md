@@ -91,7 +91,7 @@ S04/M07再次实读后，局部吸收#168身份详情，新增受管operation输
 
 ## 2026-09-21 登录产品化补充与原主链续接
 
-用户将稳定账号密码登录纳入同一任务及 PR #186。沿用原计划，追加 [D324-4 最小认证差异](../../engineering/S5-V023-IMPL-324-EXECUTION-DELTA-G2.md#d324-4隔离测试账号与短期会话分离proposed待-human-决定)，状态 PROPOSED / 待认证 G2 决定；D324-1/2/3 不重新审批。未创建账号、未实施新认证、未修改登录视觉。
+用户将稳定账号密码登录纳入同一任务及 PR #186。沿用原计划，追加 [D324-4 最小认证差异](../../engineering/S5-V023-IMPL-324-EXECUTION-DELTA-G2.md)，状态 PROPOSED / 待认证 G2 决定；D324-1/2/3 不重新审批。未创建账号、未实施新认证、未修改登录视觉。
 
 此前现有 Authority controller 已追加 generation 4 的两个新限时凭据，原凭据/策略/meta 范围保留；没有追加 323 连续性批准。当前配置为本机 `identity-recovery-v1/runtime.json`，旧 generation 3 runtime 保留，不得作为当前 writer 启动。候选仍为 dceb251；其历史 12 项 CI 通过不作为未来账号实现的验证。
 
@@ -112,3 +112,8 @@ IAM01/R30 实读与摘要已补绑定；保留原外观，添加账号/密码/�
 相关首轮 38 passed / 1 failed：新授权测试缺精确资源目录，正式 owner 正确拒绝。第二轮 fixture 修改未命中目标行，保留同一失败；实际补齐 fixture 后账号套件 9 passed（非实际 Human 证据）。后加迁移摘要/事务保护测试随完整门禁验证。frontend lint/build 通过；首次误在仓库根执行 npm 导致 ENOENT，纠正 cwd 后通过，未改依赖。全库 Ruff/format 通过，正常提交钩子和当前候选 CI 另记。登录诊断及三个历史申请仍保留，不将本候选等同实际 Native 闭环。
 
 D324-4 首次完整提交钩子：2138 passed / 335 skipped / 4 failed。三项旧 recovery fixture 的 SimpleNamespace 缺新增 local_accounts 字段，已显式补空绑定，原断言不变。另一个既有取消测试在 endpoint accepted 前已返回 HTTP 201；原收据未保留，不能判断确切 deadline phase。追加失败前 endpoint/task/deadline 诊断（不改等待、阈值或断言），一次定点运行 16 passed，记录 endpoint_reached=True、before_cancel_task_done=False；不以此覆盖第一次失败或宣称完整门禁通过。日志 `/tmp/s5-324-account-commit.log`、`/tmp/s5-324-account-cancel-diagnostic.log` 及 XML 保留。正常修正后的提交门禁另记。
+
+
+D324-4 `561a896` 正常提交门禁通过并推送原 PR #186。实际入口发现旧 runtime 的 migrationPath 指向旧工作树，因此 0036 未找到；失败发生在 DDL 前。shell 顺序未阻断后续 generic activation，使 generation 5 已激活但 schema 缺失；服务保持停止，无账号/业务执行。保留原配置并追加 active/runtime.json，核对 0018 原文完全一致后用当前 checkout 迁移目录完成 0036。随后正式创建两个 revision 1 账号，密码分别为本机 0600 文件。补正 stage 的迁移定位，并让 Authority controller 在发布账号代次前核验 schema，阻止同类不完整激活；不改已应用 0036 字节。
+
+实际 HTTPS 与浏览器：旧过期 bootstrap 401，demo324 账号登录 303/session 200；原主体与隔离环境可见，显示密码、中文失败及错误页重登、刷新、正常退出已验证。初次前端构建遗漏 live 路由标志，曾显示 synthetic 外壳；以 VITE_SUPPLIER_QUALITY_DEMO_MODE=live / VITE_PROBLEM_DRAFT_ASSISTANCE=enabled 重建后读回原案例授权缺口，保留该区别。未使用 reviewer324；三条原申请及既有授权事实逐表不变。截图/检查点在 local-account-entry-checkpoint.json，参考图与实际页面已分别实读，不宣称 Human 视觉接受。最终候选重启、读回与 CI 另记私有交付回执，当前不宣称 Native 已执行。

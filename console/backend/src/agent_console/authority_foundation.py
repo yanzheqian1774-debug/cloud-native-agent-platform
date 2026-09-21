@@ -154,6 +154,12 @@ class AuthorityGenerationController:
         now: datetime,
     ) -> AuthorityReadiness:
         current = self.barrier.snapshot
+        if candidate.local_accounts and isinstance(
+            self.repository, PostgresAuthorityRepository
+        ):
+            from .local_accounts import verify_schema
+
+            verify_schema(self.repository)
         same_published_candidate = (
             candidate.generation == current.generation
             and candidate.digest == current.digest

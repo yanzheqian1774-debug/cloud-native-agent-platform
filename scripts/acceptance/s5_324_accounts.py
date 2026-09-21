@@ -53,6 +53,12 @@ def stage(source, output):
             ]
         ],
     }
+    migration = (
+        Path(__file__).resolve().parents[2]
+        / "console/backend/migrations/0018_browser_session_grant_authority.sql"
+    )
+    if migration.read_bytes() != Path(runtime["migrationPath"]).read_bytes():
+        raise ValueError("BASE_AUTHORITY_MIGRATION_CONFLICT")
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
     digest = write_once(output / "generation.json", candidate)
     StaticAuthorityLoader.load(output / "generation.json", expected_digest=digest)
@@ -61,6 +67,7 @@ def stage(source, output):
         output / "runtime.json",
         {
             **runtime,
+            "migrationPath": str(migration),
             "generationPath": str(output / "generation.json"),
             "generationDigest": digest,
             "operatorId": "operator:s5-324-local-accounts",
