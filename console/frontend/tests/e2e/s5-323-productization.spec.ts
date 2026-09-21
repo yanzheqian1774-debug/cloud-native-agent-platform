@@ -98,6 +98,12 @@ test('long persisted technical context is disclosed without displacing the plan'
  await expect(disclosure).not.toHaveAttribute('open','');
  await expect(page.getByRole('heading',{name:/建议方案/})).toBeInViewport();
  await expect(disclosure.locator('p')).toBeHidden();
+ const message=page.locator('.planning-conversation-history .px-user-message');
+ const avatar=await message.locator('.px-avatar').boundingBox();
+ const content=await message.locator('.px-user-content').boundingBox();
+ expect(avatar).toBeTruthy();expect(content).toBeTruthy();
+ expect(Math.abs(content!.x-(avatar!.x+avatar!.width+12))).toBeLessThan(2);
+ expect(await disclosure.evaluate(e=>e.parentElement?.tagName)).toBe('DIV');
  await disclosure.locator('summary').click();
  await expect(disclosure.locator('p')).toHaveText(original);
  await expect(disclosure.locator('p')).toBeVisible();

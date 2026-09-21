@@ -57,3 +57,10 @@
 .planning-page .px-message-body>.planning-card{margin-top:12px}.planning-fact-summary{margin:8px 0 12px;font-size:14px;color:#294675}
 .planning-conversation-history:empty{display:none}.planning-context-note{display:block;color:#607aa1;font-size:12px;margin-bottom:5px}
 .planning-action-boundary{font-size:11px;line-height:1.5;color:#58749a;margin:0 0 6px}.planning-action-boundary a{margin:0 6px}
+
+/* R24 P06 keeps the avatar and persisted input adjacent on the left. */
+.planning-page article.px-user-message{display:grid;grid-template-columns:38px minmax(0,1fr);justify-content:start;width:100%;max-width:none;margin-left:0}
+.planning-page article.px-user-message>.px-avatar{grid-column:1;grid-row:1}
+.planning-page article.px-user-message>div:last-child{grid-column:2;grid-row:1;justify-self:start;min-width:0;max-width:100%}
+.planning-page .px-user-content{background:#e5eeff;padding:12px 16px;border-radius:3px 12px 12px 12px;margin-top:5px;font-size:14px;line-height:1.65;overflow-wrap:anywhere}
+.planning-page .px-user-content p{margin:8px 0 0;padding:0;background:transparent}

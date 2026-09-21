@@ -10,6 +10,8 @@ Session OPEN / PR #184 Draft。G2 v1已获Human批准；实现和运行独立签
 
 集中脚本`scripts/acceptance/s5_323_identity_continuity.py`先在独立64332数据库/19438 HTTPS服务演练：原合成数据库只读导出→受控副本迁移→可信代次激活→新服务健康/认证检查→受控独立签发→持久读回；全程零provider dispatch。第一次签发后读回发现datetime规范化差异，修复后按已有签发恢复，未重复签发。原失败日志与原签名保留。再次重入复用代次/签名，原20集合摘要不变。该证据不是原实例激活。
 
+提交门禁一次在redirect语义测试的IPC阶段触发2秒CONNECT_DEADLINE（尚余约3秒总期限），HTTP未到达；只为该测试及其一致的profile设置connect5/total10有界启动余量，全部重定向/断连/无重试断言及专用短期限测试保持，真实配置read55/total60不改。失败日志保留，针对性验证通过。
+
 最终复核补齐owner事务入口的治理锁顺序，避免先持control读取锁再进入active()与独立撤销反向等待；专用并发测试观察撤销在治理锁等待后，owner事务继续绑定并提交，再完成撤销。激活入口另核对host control与数据库epoch、旧/新代次及databaseFingerprint，拒绝无关恢复状态。受控新subject已沿正式exact申请/委托签发读回原成本Problem、Criteria、Plan与历史，旧Grant保持。
 
 ## 视觉差异

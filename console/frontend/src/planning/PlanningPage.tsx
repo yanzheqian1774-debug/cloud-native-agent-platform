@@ -75,7 +75,7 @@ export function PlanningPage() {
       <PlanningDialogue key={`${proposalId}:${data.proposal.revision}`} problem={plan.target.problem.resource_id} source={data} disabled={data.proposal.revision !== latest}>
       <section className="planning-conversation-history" aria-label="已保存的规划对话">
         {history.conversation?.length ? history.conversation.map(message => <Fragment key={message.invocation_id}>
-          {message.request.answers.length > 0 && <UserMessage authorLabel="已保存的规划输入" occurredAt={message.submitted_at}><span className="planning-context-note">该次请求携带的补充信息（可能包含前次上下文）</span>{message.request.answers.join("\n").length > 240 ? <details className="planning-saved-context"><summary>查看已保存的补充原文（含技术上下文）</summary><p style={{whiteSpace:"pre-wrap"}}>{message.request.answers.join("\n")}</p></details> : <span style={{whiteSpace:"pre-wrap"}}>{message.request.answers.join("\n")}</span>}</UserMessage>}
+          {message.request.answers.length > 0 && <UserMessage richContent authorLabel="已保存的规划输入" occurredAt={message.submitted_at}><span className="planning-context-note">该次请求携带的补充信息（可能包含前次上下文）</span>{message.request.answers.join("\n").length > 240 ? <details className="planning-saved-context"><summary>查看已保存的补充原文（含技术上下文）</summary><p style={{whiteSpace:"pre-wrap"}}>{message.request.answers.join("\n")}</p></details> : <span style={{whiteSpace:"pre-wrap"}}>{message.request.answers.join("\n")}</span>}</UserMessage>}
           {message.questions?.map(q=><SystemMessage label="模型补问记录" key={q} occurredAt={message.generated_at}><p>{q}</p></SystemMessage>)}
         </Fragment>) : <p className="journey-muted">当前读回未提供历史对话；仅展示已保存的方案和批准，不补造消息。</p>}
       </section>
