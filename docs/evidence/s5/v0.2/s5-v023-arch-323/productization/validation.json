@@ -1,0 +1,31 @@
+{
+  "kind": "CONTROLLED_VALIDATION_NOT_NEW_REAL_MODEL",
+  "baselineMain": "bcf2defe8c2a6900b1bbba94ad7931c91db1b26b",
+  "targeted": {
+    "governed_unknown": {
+      "passed": 17,
+      "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/task-development-tests.log",
+      "sha256": "feb3d3e2a65af5b9e4cf4ee94aa579d5db520f3366cae88ff13f6ffd4a698ef5"
+    },
+    "post_assembly_fix": {
+      "passed": 21,
+      "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/post-gate-fix.log",
+      "sha256": "be0a28a502b9702cfe904fb09a5237711f4d26385306cf429618c91fa982df02"
+    },
+    "versioned_understanding_policy": {
+      "passed": 33,
+      "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/chinese-policy-tests.log",
+      "sha256": "a4a7407e08b21a6be247cd5145f97a0b420c3e4bc16e032b34d76234e50d8b20"
+    }
+  },
+  "first_full_gate": {
+    "passed": 2204,
+    "skipped": 201,
+    "failed": 1,
+    "teardown_error": 1,
+    "cause": "Frozen dependency mutation in BFF composition; fixed with dataclasses.replace; targeted assembly passes",
+    "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/make-check.log"
+  },
+  "realProviderDispatches": 0,
+  "originalDatabaseReadback": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/timeout-revision/productization-audit.json"
+}

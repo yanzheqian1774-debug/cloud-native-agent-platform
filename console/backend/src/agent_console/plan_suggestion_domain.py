@@ -188,6 +188,12 @@ class ResourceObservation(Immutable):
     ]
     reason: Text
     owner_high_water: Text | None = None
+    exact_reference: ExactReference | None = None
+    publication_checked: bool = False
+    permission_checked: bool = False
+    io_status: Literal["UNKNOWN", "DECLARED"] = "UNKNOWN"
+    availability_status: Literal["UNKNOWN", "UNAVAILABLE"] = "UNKNOWN"
+    discovery_status: Literal["NOT_REQUESTED", "OWNER_PORT_REQUIRED"] = "NOT_REQUESTED"
 
 
 class ResourceSnapshot(Immutable):
@@ -195,6 +201,10 @@ class ResourceSnapshot(Immutable):
     proposal_digest: Digest
     checked_at: Text
     observations: tuple[ResourceObservation, ...] = Field(max_length=128)
+    preparation_contract: Literal[
+        "TYPED_DECLARATIONS_VALID", "LEGACY_SUCCESSOR_REQUIRED"
+    ] = "LEGACY_SUCCESSOR_REQUIRED"
+    execution_eligible: Literal[False] = False
 
     def pending_required(self, proposal: ProposalRevision):
         if self.proposal_digest != proposal.digest:

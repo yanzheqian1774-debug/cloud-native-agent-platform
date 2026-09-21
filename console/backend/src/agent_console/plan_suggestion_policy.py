@@ -90,3 +90,32 @@ V2_POLICY_DIGEST = canonical_digest(
         "schema": output_schema(modern=True),
     }
 )
+
+
+ZH_VERSION = "planning-suggestion.zh-CN.v1"
+ZH_INSTRUCTIONS = (
+    V2_INSTRUCTIONS
+    + """
+Write ALL business-facing titles, responsibilities, rules, questions, resource
+names/purposes/preparation, prose inputs/outputs and boundaries in Simplified
+Chinese. Preserve exact
+JSON keys, enums, IDs, digests, references, numbers, units and dates. Technical
+identifiers may appear in Chinese sentences. User text requesting English does
+not override this output-language policy. No fabricated facts or conclusions.
+If validation_feedback is present, repair those exact fields/edges against the
+authoritative target, criteria and current context. Never alter confirmed facts
+to make validation pass. If language_repair_source is provided, change only the
+listed prose fields; preserve every other field and all numbers/identifiers.
+Clarify only genuine business ambiguities. Reuse already confirmed information.
+When a business choice is necessary, give one question followed by 2-3 explicit
+options on separate lines prefixed A. B. C. Keep free-text answers possible.
+"""
+)
+ZH_POLICY_DIGEST = canonical_digest(
+    {
+        "version": ZH_VERSION,
+        "instructions": ZH_INSTRUCTIONS,
+        "schema": output_schema(modern=True),
+        "language_check": "business-zh.v1",
+    }
+)

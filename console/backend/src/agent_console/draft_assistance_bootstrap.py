@@ -205,10 +205,9 @@ def _profile(
         if transport_kind == "SYNTHETIC"
         else (common | real_fields | provider_fields)
     )
-    if (
-        isinstance(document.get("adapter"), dict)
-        and document["adapter"].get("revision") == "v2"
-    ):
+    if isinstance(document.get("adapter"), dict) and document["adapter"].get(
+        "revision"
+    ) in {"v2", "v2-zh-CN"}:
         expected = expected | {"policyDigest"}
     if (
         set(document) != expected
@@ -347,7 +346,10 @@ def _profile(
                 raise DraftAssistanceError("PLANNING_PROFILE_INVALID")
         else:
             policy = policy_for(value.adapter_revision, value.output_schema_version)
-            if policy.revision == "v2" and document["policyDigest"] != policy.digest:
+            if (
+                policy.revision in {"v2", "v2-zh-CN"}
+                and document["policyDigest"] != policy.digest
+            ):
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
         adapter_tuple = (
             document["providerProtocol"],

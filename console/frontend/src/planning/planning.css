@@ -25,3 +25,28 @@
 .planning-layout .px-composer textarea{min-height:44px;max-height:112px}
 .planning-layout .px-composer{padding:10px 12px}
 .planning-layout section[aria-label="持续规划对话"]>details{margin-bottom:8px;font-size:13px}
+/* 323 productization: one central scroll region, separate rail and compact composer. */
+.planning-layout .planning-composer{flex-shrink:0;padding:8px 12px;background:white;border-top:1px solid #c7dbfa;border-radius:0 0 12px 12px}
+.planning-composer>details{font-size:12px;margin-bottom:6px}.planning-composer>details[open]{max-height:150px;overflow:auto}.planning-composer>button{margin-top:6px;padding:6px 12px;min-height:34px}
+.planning-composer .px-composer{padding:8px 12px;box-shadow:none}.planning-composer .px-composer textarea{margin:0;border:0;padding:4px 0;min-height:36px}.planning-composer .px-composer-footer>span{max-width:65%;font-size:11px}.planning-composer .px-composer-footer button{white-space:nowrap}
+.planning-dialogue-status{margin:0;color:#42628a;font-size:13px}.planning-translation{background:#f4f9ff;border:1px solid #d8e5fb;border-radius:8px;padding:6px 12px;font-size:12px;overflow-wrap:anywhere}.planning-translation button{padding:2px 8px;min-height:28px;font-size:12px}
+.planning-page :is(p,li,strong,summary,td){overflow-wrap:anywhere}.planning-page .planning-task-responsibility{font-size:13px}.planning-page .planning-task-meta{font-size:12px}
+@media(min-width:1000px) and (min-height:650px){
+ .planning-page{height:calc(100svh - 64px);min-height:0;padding:14px 20px;display:flex;flex-direction:column;overflow:hidden}
+ .planning-heading{flex-shrink:0}.planning-layout{flex:1;min-height:0;align-items:stretch;gap:18px}
+ .planning-layout main{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+ .planning-layout main>.px-conversation{height:auto;min-height:0;flex:1;border:1px solid #d8e5fb;box-shadow:none}
+ .planning-layout aside{position:static;max-height:none;min-height:0;overflow-y:auto;padding:0 3px 8px 0;align-content:start}
+ .planning-layout .px-message-stream{padding:14px;scroll-padding-block:14px}
+}
+@media(max-width:999px),(max-height:649px){.planning-layout main>.px-conversation{height:65svh;min-height:340px}.planning-composer .px-composer-footer{flex-wrap:wrap}.planning-composer .px-composer-footer>span{max-width:100%}}
+/* R24 P06/P12: compact bottom row; the accessible label and guidance remain. */
+.planning-composer .px-composer{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
+.planning-composer .px-composer>label,.planning-composer .px-composer-footer>span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.planning-composer .px-composer-footer{display:contents}
+.planning-composer .px-composer textarea{max-height:112px;resize:none}
+.planning-composer .px-composer-footer button{margin:0;min-height:38px}
+.planning-task-table{table-layout:fixed}.planning-task-table th:first-child{width:6%}.planning-task-table th:nth-child(2){width:30%}.planning-task-table th:nth-child(3){width:10%}.planning-task-table th:nth-child(4){width:16%}.planning-task-table th:nth-child(5){width:25%}.planning-task-table th:nth-child(6){width:13%}
+.planning-task-table .planning-stage-row th{background:#f0f7ff;color:#0866ff;text-align:left;font-weight:600}.planning-task-table td{vertical-align:top}.planning-task-table td:last-child{white-space:normal}.planning-task-table .planning-task{border:0;background:transparent;margin:0}.planning-task-table .planning-task>summary{display:block;padding:0}.planning-task-table .planning-task small{display:block;color:#647797;font-size:11px}.planning-task-table .planning-task p{font-size:13px}.planning-task-table .planning-task dl{display:block}.planning-task-table .planning-task dd{margin:4px 0 10px}
+.px-primary-nav>.px-nav-group{margin:0;border:0;padding:0}.px-primary-nav>.px-nav-group>summary{display:flex;align-items:center;gap:12px;padding:14px 18px;color:#314363;font-size:15px;font-weight:600}.px-primary-nav>.px-nav-group>summary svg{width:22px;height:22px}.px-primary-nav>.px-nav-group>nav{padding-left:38px}
+.planning-goal>summary{cursor:pointer;list-style:none}.planning-goal>summary h2{margin:0;border:0;padding:0}.planning-goal[open]>summary{margin-bottom:10px}

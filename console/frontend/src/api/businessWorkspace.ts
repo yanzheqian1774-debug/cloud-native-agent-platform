@@ -24,6 +24,7 @@ export class WorkbenchRequestError extends Error{
 
 async function decode<T>(response:Response):Promise<T>{
   const body=await response.json().catch(()=>null) as ErrorBody|null;
+  if(response.status===401)window.dispatchEvent(new Event("workbench-session-expired"));
   if(!response.ok)throw new WorkbenchRequestError(body?.reasonCode??"WORKBENCH_UNAVAILABLE",response.status,body?.requestId);
   return body as T;
 }

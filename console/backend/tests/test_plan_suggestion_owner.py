@@ -68,6 +68,16 @@ def test_real_employee_reference_gaps_denial_and_no_writes(repository):  # noqa:
         before = counts()
         result = resolver.resolve(principal, proposal)
         assert result.observations[0].status == "MATCHED"
+        assert result.observations[0].publication_checked
+        assert result.observations[0].permission_checked
+        assert (
+            result.observations[0].exact_reference
+            == proposal.semantics.requirements[0].selected
+        )
+        assert result.observations[0].availability_status == "UNKNOWN"
+        assert result.observations[0].io_status == "UNKNOWN"
+        assert result.preparation_contract == "LEGACY_SUCCESSOR_REQUIRED"
+        assert result.execution_eligible is False
         assert len(result.pending_required(proposal)) == 6
         assert result.observations[-1].status == "NOT_REQUIRED"
         authorization.deny = True

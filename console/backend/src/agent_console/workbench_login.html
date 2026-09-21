@@ -1,0 +1,4 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>登录 · 企业智能体平台</title>
+<link rel="stylesheet" href="/api/workbench/v1/login-style">
+<header>企业智能体平台</header><main><section><h1>从业务问题出发<br>让协作过程可追溯</h1><p>理解与纠正问题，确认完成标准，制定中文方案并查看资源缺口。</p><p>确认计划不启动执行。历史方案与批准始终保留。</p></section><form method="post" action="/api/workbench/v1/session"><h2>登录工作台</h2>{{error}}<p>使用管理员通过正式渠道提供的工作台登录凭据。</p><input type="hidden" name="loginNonce" value="{{nonce}}"><input type="hidden" name="returnTo" value="{{return}}"><label for="credential">登录凭据</label><input id="credential" type="password" name="bootstrapCredential" autocomplete="current-password" required><button type="submit">登录并返回工作台</button><small>登录后按真实身份核验组织范围与权限。凭据不会保存到浏览器本地存储；重新登录不自动重发原请求。</small><small>企业单点登录、组织切换尚未接入，不提供模拟入口。</small></form></main></html>

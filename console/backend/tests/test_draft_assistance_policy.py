@@ -282,3 +282,21 @@ def test_v1_synthetic_fallback_unwraps_new_client_context():
     )
     assert observation.result_kind.value == "NEEDS_CLARIFICATION"
     assert observation.understanding is None
+
+
+def test_chinese_policy_is_explicit_and_preserves_date_values():
+    legacy = policy_for("v2", V2_SCHEMA_VERSION)
+    chinese = policy_for("v2-zh-CN", V2_SCHEMA_VERSION)
+    assert chinese.schema == legacy.schema
+    assert chinese.digest != legacy.digest
+    value = result()
+    validate_result(value, legacy, frozenset({"user:1"}))
+    with pytest.raises(PolicyValidationError, match="OUTPUT_LANGUAGE_INVALID"):
+        validate_result(value, chinese, frozenset({"user:1"}))
+    value["title"] = "费用口径分析"
+    value["description"] = "预算8000元, 排除试验项目"
+    for item in value["understanding"]:
+        item["value"] = "2026-09-01" if item["field"] == "time" else "尚不清楚"
+    assert (
+        validate_result(value, chinese, frozenset({"user:1"})) == value["understanding"]
+    )

@@ -25,7 +25,13 @@ from .plan_suggestion_invocation import (
     PlanningInvocationTarget,
     PlanningProviderResult,
 )
-from .plan_suggestion_policy import POLICY_DIGEST, V2_POLICY_DIGEST, VERSION
+from .plan_suggestion_policy import (
+    POLICY_DIGEST,
+    V2_POLICY_DIGEST,
+    VERSION,
+    ZH_POLICY_DIGEST,
+    ZH_VERSION,
+)
 
 
 @dataclass(frozen=True)
@@ -51,7 +57,13 @@ class PlanningSuggestionService:
         commitment_key,
         prepare_resources,
         identity_factory=lambda: str(uuid4()),
+        adaptive_limits=None,
+        prepare_admission=None,
     ):
+        from .planning_adaptive import AdaptiveLimits
+
+        self.adaptive_limits = adaptive_limits or AdaptiveLimits()
+        self.prepare_admission = prepare_admission
         self.application = application
         self.invocations = invocations
         self.profile = profile
@@ -67,7 +79,21 @@ class PlanningSuggestionService:
         if len(commitment_key) < 32:
             raise PlanningError("PLANNING_COMMITMENT_KEY_REQUIRED")
 
-    def begin(self, principal, request, *, diagnostic_layer=None):
+    def begin_adaptive(self, principal, request):
+        from .planning_adaptive import run
+
+        configured = getattr(
+            getattr(self.provider, "configuration", None),
+            "total_timeout_seconds",
+            self.adaptive_limits.single_seconds,
+        )
+        if configured > self.adaptive_limits.single_seconds:
+            raise PlanningError("PLANNING_LOOP_SINGLE_DEADLINE_CONFLICT")
+        return run(self, principal, request, self.adaptive_limits)
+
+    def begin(
+        self, principal, request, *, diagnostic_layer=None, repair=None, loop=None
+    ):
         app = self.application
         scope = app.scope(principal)
         # Purpose permission is exact to the confirmed Problem, before owner lookup.
@@ -78,8 +104,16 @@ class PlanningSuggestionService:
             f"plan:prepare:{request.target.problem.resource_id}",
         )
         document = request.model_dump(
-            mode="json", exclude={"policy"} if request.policy is None else set()
+            mode="json",
+            exclude=({"policy"} if request.policy is None else set())
+            | ({"output_language"} if request.output_language is None else set()),
         )
+        if request.output_language and not request.policy:
+            raise PlanningError("PLANNING_LANGUAGE_REQUIRES_MODERN_POLICY")
+        if repair is not None:
+            document["validation_feedback"] = repair
+        if loop is not None:
+            document["adaptive_loop"] = loop
         if diagnostic_layer is not None:
             from .planning_diagnostics import LAYERS
 
@@ -172,7 +206,11 @@ class PlanningSuggestionService:
                 raise PlanningConflict("PLANNING_PREDECESSOR_TARGET_CONFLICT")
             if previous["result"]["technical_status"] != "SUCCEEDED":
                 raise PlanningConflict("PLANNING_PREDECESSOR_NOT_TERMINAL")
-            if source is None and previous["result"]["kind"] != "NEEDS_CLARIFICATION":
+            if (
+                source is None
+                and previous["result"]["kind"] != "NEEDS_CLARIFICATION"
+                and not (repair is not None and previous["result"]["kind"] == "INVALID")
+            ):
                 raise PlanningConflict("PLANNING_PREDECESSOR_REQUIRES_SOURCE")
             if previous_target.request_revision >= 8:
                 raise PlanningConflict("PLANNING_CLARIFICATION_LIMIT")
@@ -192,7 +230,13 @@ class PlanningSuggestionService:
             variant="SUCCESSOR_PROPOSAL" if source else "FIRST_PROPOSAL",
             resource_snapshot=resource_snapshot,
             input_commitment=commitment,
-            policy_version=("planning-suggestion.v2" if request.policy else VERSION)
+            policy_version=(
+                ZH_VERSION
+                if request.output_language
+                else "planning-suggestion.v2"
+                if request.policy
+                else VERSION
+            )
             if diagnostic_layer is None
             else "planning-diagnostic.v1",
             output_schema=(
@@ -213,7 +257,11 @@ class PlanningSuggestionService:
             "profile": self.profile.model_dump(mode="json"),
             "authorization_decision_id": decision.decision_id,
             "transport": "CONTROLLED_TEST_PROVIDER" if synthetic else "REAL_PROVIDER",
-            "policy_digest": V2_POLICY_DIGEST if request.policy else POLICY_DIGEST,
+            "policy_digest": ZH_POLICY_DIGEST
+            if request.output_language
+            else V2_POLICY_DIGEST
+            if request.policy
+            else POLICY_DIGEST,
             "call_path": "CONFIRMED_PROBLEM_PLAN_SUGGESTION",
             "provider_configuration": getattr(self.provider, "diagnostics", {}),
         }
@@ -226,6 +274,8 @@ class PlanningSuggestionService:
             record["policy_digest"] = policy_digest(diagnostic_layer)
             record["diagnostic_layer"] = diagnostic_layer
             record["call_path"] = "S5_323_DEVELOPMENT_DIAGNOSTIC"
+        if request.output_language and self.prepare_admission:
+            self.prepare_admission(request)
         persisted, claimed = self.invocations.claim(
             scope, principal.principal_id, request.idempotency_key, commitment, record
         )
@@ -257,6 +307,8 @@ class PlanningSuggestionService:
                 "source_proposal": source.model_dump(mode="json") if source else None,
             },
         }
+        if repair is not None:
+            business_context["validation_feedback"] = repair
         if request.policy:
             business_context["planning_policy"] = request.policy.model_dump(mode="json")
         if diagnostic_layer is not None:
@@ -334,6 +386,11 @@ class PlanningSuggestionService:
                     "technical_status": status,
                     "kind": "INVALID" if status == "SUCCEEDED" else None,
                     "reason": failure,
+                    **(
+                        {"validation_diagnostic": raw.get("validation_diagnostic")}
+                        if request.output_language
+                        else {}
+                    ),
                 }
                 self.invocations.finish(scope, invocation_id, result)
                 self.model_use_owner.observed(scope, record, result)
@@ -361,6 +418,48 @@ class PlanningSuggestionService:
                 if request.policy
                 else PlanningProviderResult
             ).model_validate_json(raw)
+            if request.output_language:
+                from .planning_language import report
+
+                parsed_document = parsed.model_dump(mode="json")
+                language = report(parsed_document)
+                if repair and repair.get("language_repair_source"):
+                    from .planning_repair import language_repair_issues
+
+                    guarded = language_repair_issues(
+                        repair["language_repair_source"],
+                        parsed_document,
+                        [item["path"] for item in repair["issues"]],
+                    )
+                    language["issues"].extend(guarded)
+                    language["error_count"] = len(language["issues"])
+                    language["fingerprint"] = canonical_digest(language["issues"])
+                if language["issues"]:
+                    self.invocations.finish(
+                        scope,
+                        invocation_id,
+                        {
+                            "technical_status": "SUCCEEDED",
+                            "kind": "INVALID",
+                            "reason": "PLANNING_LANGUAGE_INVALID",
+                            "validation_diagnostic": language,
+                            **(
+                                {"language_repair_source": parsed_document}
+                                if not repair
+                                else {}
+                            ),
+                        },
+                    )
+                    self.model_use_owner.observed(
+                        scope,
+                        record,
+                        {
+                            "technical_status": "SUCCEEDED",
+                            "kind": "INVALID",
+                            "reason": "PLANNING_LANGUAGE_INVALID",
+                        },
+                    )
+                    return self.read(principal, invocation_id)
             if parsed.semantics is not None:
                 if parsed.semantics.target != request.target:
                     raise ValueError("PLANNING_OUTPUT_TARGET_MISMATCH")
@@ -388,11 +487,18 @@ class PlanningSuggestionService:
                 result["validation"] = (
                     validation_report(parsed.semantics) if parsed.semantics else None
                 )
-        except (ValidationError, ValueError):
+        except (ValidationError, ValueError) as exc:
+            from .planning_output_diagnostics import diagnostic
+
             result = {
                 "technical_status": "SUCCEEDED",
                 "kind": "INVALID",
                 "reason": "PLANNING_OUTPUT_SCHEMA_INVALID",
+                "validation_diagnostic": diagnostic(
+                    raw,
+                    "SCHEMA_OR_CONTRACT",
+                    exc if isinstance(exc, ValidationError) else None,
+                ),
             }
         self.invocations.finish(
             scope,

@@ -39,6 +39,7 @@ class PlanningRequest(Immutable):
     idempotency_key: Identity
     predecessor_invocation_id: Identity | None = None
     policy: PlanningPolicy | None = None
+    output_language: Literal["zh-CN"] | None = None
 
 
 class PlanningInvocationTarget(Immutable):

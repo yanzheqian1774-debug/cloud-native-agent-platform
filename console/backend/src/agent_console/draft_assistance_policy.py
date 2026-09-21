@@ -131,6 +131,15 @@ def policy_for(adapter_revision: str, schema_version: str) -> DraftPolicy:
         return DraftPolicy("v1", V1_SCHEMA_VERSION, V1_INSTRUCTIONS)
     if (adapter_revision, schema_version) == ("v2", V2_SCHEMA_VERSION):
         return DraftPolicy("v2", V2_SCHEMA_VERSION, V2_INSTRUCTIONS)
+    if (adapter_revision, schema_version) == ("v2-zh-CN", V2_SCHEMA_VERSION):
+        return DraftPolicy(
+            "v2-zh-CN",
+            V2_SCHEMA_VERSION,
+            V2_INSTRUCTIONS
+            + "\nUse Simplified Chinese for all business prose, questions, title and "
+            "description, even when user text is English. Preserve exact numbers, "
+            "dates, units and sourceRefs. Never translate user input in place.",
+        )
     raise PolicyValidationError("DRAFT_POLICY_MISMATCH")
 
 
@@ -264,6 +273,16 @@ def validate_result(
             raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
     else:
         raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+    if policy.revision == "v2-zh-CN":
+        from .planning_language import issues
+
+        prose = [
+            result.get(name)
+            for name in ("title", "description", "clarificationQuestion")
+        ]
+        prose.extend(item["value"] for item in understanding or [])
+        if issues({"questions": [text for text in prose if text]}):
+            raise PolicyValidationError("OUTPUT_LANGUAGE_INVALID")
     return understanding
 
 
@@ -289,7 +308,11 @@ def prepared_policy(payload: bytes) -> DraftPolicy:
     """Resolve only an exact immutable prepared schema/prompt, including in IPC."""
     try:
         value = json.loads(payload)
-        for revision, version in (("v1", V1_SCHEMA_VERSION), ("v2", V2_SCHEMA_VERSION)):
+        for revision, version in (
+            ("v1", V1_SCHEMA_VERSION),
+            ("v2", V2_SCHEMA_VERSION),
+            ("v2-zh-CN", V2_SCHEMA_VERSION),
+        ):
             policy = policy_for(revision, version)
             if (
                 value["instructions"] == policy.instructions
