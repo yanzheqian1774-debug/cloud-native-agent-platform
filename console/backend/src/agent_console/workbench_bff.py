@@ -6,7 +6,6 @@ compose every domain operation with a transactional owner handler.
 
 from __future__ import annotations
 
-import html
 import secrets
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -112,7 +111,8 @@ class WorkbenchOperation:
             or not self.path.startswith(f"{PREFIX}/")
             or "//" in self.path
             or self.path.startswith(f"{PREFIX}/authorization/")
-            or self.path in {f"{PREFIX}/login", f"{PREFIX}/session"}
+            or self.path
+            in {f"{PREFIX}/login", f"{PREFIX}/session", f"{PREFIX}/login-style"}
         ):
             raise AuthorityError("WORKBENCH_OPERATION_INVALID")
         if self.method in {"GET", "DELETE"} and self.request_model is not None:
@@ -273,18 +273,34 @@ def create_workbench_bff(
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get(f"{PREFIX}/login", response_class=HTMLResponse)
-    def login_form() -> HTMLResponse:
-        nonce = html.escape(sessions.issue_login_nonce(), quote=True)
-        document = (
-            '<!doctype html><html><body><form method="post" '
-            f'action="{PREFIX}/session">'
-            f'<input type="hidden" name="loginNonce" value="{nonce}">'
-            '<input type="password" name="bootstrapCredential" '
-            'autocomplete="current-password" required>'
-            '<button type="submit">Sign in</button></form></body></html>'
+    @app.get(f"{PREFIX}/login-style")
+    def login_style():
+        from pathlib import Path
+
+        return Response(
+            Path(__file__).with_name("workbench_login.css").read_text(),
+            media_type="text/css",
         )
-        return HTMLResponse(document)
+
+    @app.get(f"{PREFIX}/login-illustration")
+    def login_illustration():
+        from pathlib import Path
+
+        return Response(
+            Path(__file__).with_name("workbench_login_reference.png").read_bytes(),
+            media_type="image/png",
+        )
+
+    @app.get(f"{PREFIX}/login", response_class=HTMLResponse)
+    def login_form(request: Request) -> HTMLResponse:
+        from .workbench_login import login_document
+
+        return HTMLResponse(
+            login_document(
+                sessions.issue_login_nonce(),
+                request.query_params.get("returnTo", "/workbench"),
+            )
+        )
 
     @app.post(f"{PREFIX}/session", status_code=303)
     async def create_session(request: Request) -> Response:
@@ -296,16 +312,36 @@ def create_workbench_bff(
             raise WorkbenchBoundaryError("REQUEST_TOO_LARGE", 413)
         try:
             values = parse_qs(body.decode("utf-8"), strict_parsing=True)
-            if set(values) != {"loginNonce", "bootstrapCredential"} or any(
-                len(item) != 1 for item in values.values()
+            if (
+                not {"loginNonce", "bootstrapCredential"} <= set(values)
+                or not set(values) <= {"loginNonce", "bootstrapCredential", "returnTo"}
+                or any(len(item) != 1 for item in values.values())
             ):
                 raise ValueError
             login_nonce = values["loginNonce"][0]
             credential = values["bootstrapCredential"][0]
         except (UnicodeDecodeError, ValueError, KeyError) as exc:
             raise WorkbenchBoundaryError("REQUEST_INVALID", 422) from exc
-        secret = sessions.create_session(login_nonce, credential)
-        response = RedirectResponse("/workbench", status_code=303)
+        try:
+            secret = sessions.create_session(login_nonce, credential)
+        except AuthorityError:
+            if "text/html" not in request.headers.get("accept", ""):
+                raise
+            from .workbench_login import login_document
+
+            return HTMLResponse(
+                login_document(
+                    sessions.issue_login_nonce(),
+                    values.get("returnTo", ["/work"])[0],
+                    error=True,
+                ),
+                status_code=401,
+            )
+        from .workbench_login import safe_return
+
+        response = RedirectResponse(
+            safe_return(values.get("returnTo", ["/workbench"])[0]), status_code=303
+        )
         response.set_cookie(
             SESSION_COOKIE,
             secret.value,

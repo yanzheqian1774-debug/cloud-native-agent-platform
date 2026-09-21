@@ -51,7 +51,12 @@ def install_planning_invocations(
             return await cancellable_request(
                 request,
                 lambda: invoke(
-                    request, lambda service, principal: service.begin(principal, body)
+                    request,
+                    lambda service, principal: (
+                        service.begin_adaptive(principal, body)
+                        if body.output_language
+                        else service.begin(principal, body)
+                    ),
                 ),
             )
 
@@ -93,7 +98,11 @@ def install_planning_invocations(
                 )
                 if identity is None:
                     raise PlanningError("PLANNING_NOT_FOUND")
-                return service.read(principal, identity)
+                from .planning_adaptive import recovery
+
+                return recovery(
+                    service, principal, request_key, service.read(principal, identity)
+                )
 
             return invoke(request, recover)
 

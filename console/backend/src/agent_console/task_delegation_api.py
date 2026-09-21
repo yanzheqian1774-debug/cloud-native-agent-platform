@@ -99,6 +99,33 @@ def install_task_delegation_routes(service):
                 raise AuthorityError("TASK_TIMEOUT_REVISION_INVALID") from None
             return revise_timeout(service, context, identity, spec)
 
+        @app.get(prefix + "/{identity}/identity-continuity/preflight")
+        def continuity_preflight(identity: str, request: Request):
+            from .task_identity_continuity import preflight
+
+            _, context = authenticate(request)
+            return preflight(service, context, identity)
+
+        @app.post(prefix + "/{identity}/identity-continuity")
+        async def continuity_approval(identity: str, request: Request):
+            from .task_identity_continuity import ContinuityApproval, approve
+
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            try:
+                spec = ContinuityApproval.model_validate_json(await request.body())
+            except ValidationError:
+                raise AuthorityError("TASK_CONTINUITY_INVALID") from None
+            return approve(service, context, identity, spec)
+
+        @app.post(prefix + "/{identity}/identity-continuity/{continuity_id}/revoke")
+        def continuity_revoke(identity: str, continuity_id: str, request: Request):
+            from .task_identity_continuity import revoke
+
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            return revoke(service, context, identity, continuity_id)
+
         @app.post(prefix + "/{identity}/revoke")
         def revoke(identity: str, request: Request):
             session, context = authenticate(request)

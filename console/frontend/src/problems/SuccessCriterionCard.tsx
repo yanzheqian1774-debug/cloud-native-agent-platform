@@ -17,8 +17,8 @@ export function SuccessCriterionCard({turn,busy,composerEditing,authorization,on
         <label><input type="radio" name={`criterion-kind-${turn.id}`} checked={turn.draft.kind==="HUMAN_EVALUATED"} onChange={()=>onChange({...turn.draft,kind:"HUMAN_EVALUATED"})}/> 人工验收标准</label>
         <small>由人根据这段原文判断是否满足。数值阈值、证据存在等其他类型本批尚未接入，系统不会代填技术字段。</small>
       </fieldset>
-      <small>草稿版本 {turn.version} · 关联当前 Problem <code>{turn.problemId}</code>。{saved?"以上内容来自本次正式响应；刷新后将由正式读回恢复。":"确认前只保存在当前页面。"}</small>
-      <details><summary>实际提交内容与精确修订</summary><dl><dt>类型</dt><dd>HUMAN_EVALUATED</dd><dt>Measurement rubric</dt><dd>{turn.draft.text}</dd><dt>Evidence kinds</dt><dd>空列表</dd><dt>Evaluator</dt><dd>HUMAN / v1</dd><dt>Applicability</dt><dd>空对象</dd>{turn.baseSet&&<><dt>基于 Criteria Set</dt><dd><code>{turn.baseSet.setRevisionId}</code>（修订 {turn.baseSet.revision}）</dd></>}{turn.source&&<><dt>修订 Criterion</dt><dd><code>{turn.source.revisionId}</code>（修订 {turn.source.revision}）</dd></>}</dl></details>
+      <small>草稿版本 {turn.version} · 关联当前问题 <code>{turn.problemId}</code>。{saved?"以上内容来自本次正式响应；刷新后将由正式读回恢复。":"确认前只保存在当前页面。"}</small>
+      <details><summary>实际提交内容与精确修订</summary><dl><dt>类型</dt><dd>HUMAN_EVALUATED</dd><dt>验收说明</dt><dd>{turn.draft.text}</dd><dt>证据类型</dt><dd>空列表</dd><dt>验收方式</dt><dd>HUMAN / v1</dd><dt>适用范围</dt><dd>空对象</dd>{turn.baseSet&&<><dt>基于标准集合</dt><dd><code>{turn.baseSet.setRevisionId}</code>（修订 {turn.baseSet.revision}）</dd></>}{turn.source&&<><dt>修订标准</dt><dd><code>{turn.source.revisionId}</code>（修订 {turn.source.revision}）</dd></>}</dl></details>
       {composerEditing&&<p className="px-mode-note">正在底部同一个输入框修改标准原文；采用或取消前，卡片确认操作不可用。</p>}
       {saving&&<p className="px-mode-note">{turn.phase==="SAVING_CRITERION"?"正在创建不可变标准修订。":"标准修订已返回，正在写入 Success Criteria Set 关联。"}你仍可在底部输入框记录新的页内补充。</p>}
       {unknown&&<p className="px-mode-note">原命令、payload 和幂等键已冻结。恢复只会重放这条命令，不会创建新标准。</p>}

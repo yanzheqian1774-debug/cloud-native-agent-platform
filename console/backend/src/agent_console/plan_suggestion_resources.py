@@ -27,6 +27,7 @@ class PlanningResourceResolver:
                 status = "MISSING" if requirement.required else "NOT_REQUIRED"
                 observation = ResourceObservation(
                     requirement_id=requirement.requirement_id,
+                    discovery_status="OWNER_PORT_REQUIRED",
                     status=status,
                     reason="EXPLICIT_UNRESOLVED_REQUIREMENT"
                     if requirement.required
@@ -50,6 +51,9 @@ class PlanningResourceResolver:
             proposal_digest=proposal.digest,
             checked_at=datetime.now(UTC).isoformat(),
             observations=tuple(observations),
+            preparation_contract="TYPED_DECLARATIONS_VALID"
+            if proposal.semantics.schema_version == "planning.v3"
+            else "LEGACY_SUCCESSOR_REQUIRED",
         )
 
 
@@ -105,4 +109,7 @@ class EmployeePlanningReader:
             status="MATCHED",
             reason="OWNER_EXACT_PUBLISHED_REFERENCE",
             owner_high_water=str(value["digest"]),
+            exact_reference=reference,
+            publication_checked=True,
+            permission_checked=True,
         )

@@ -21,6 +21,8 @@ class PlanningInvocationDependencies:
     commitment_key: bytes
     prepare_resources: object
     identity_factory: object = lambda: str(uuid4())
+    adaptive_limits: object = None
+    admission_factory: object = None
 
     def bind(self, application, authorization):
         invocations = PostgresPlanningInvocations(application.repository)
@@ -45,6 +47,10 @@ class PlanningInvocationDependencies:
                 commitment_key=self.commitment_key,
                 prepare_resources=self.prepare_resources,
                 identity_factory=self.identity_factory,
+                adaptive_limits=self.adaptive_limits,
+                prepare_admission=self.admission_factory(context)
+                if self.admission_factory
+                else None,
             )
 
         return factory

@@ -1,0 +1,290 @@
+{
+  "package": "R24",
+  "path": "/Users/tristan/Downloads/Resource-Management-PC-R24",
+  "imageCount": 280,
+  "allImageHashesVerified": true,
+  "pages": [
+    {
+      "id": "P01",
+      "title": "描述业务问题",
+      "module": "P",
+      "note": "R7新增设计 · 合成示例 · 实现状态待核实；不代表真实同案或执行授权。",
+      "src": "pages/P01.png",
+      "origin": "R7新增设计",
+      "surface": "platform",
+      "relatedModules": [],
+      "journeyReferences": [
+        "procurement"
+      ]
+    },
+    {
+      "id": "P02",
+      "title": "必要补问",
+      "module": "P",
+      "note": "R15持续会话、结构化确认卡片与右侧状态统一；合成示例。保存、激活、确认计划与执行准入分别处理；对话不绕过权限或UNKNOWN。原生1536×1024，未宣称4K。P04使用采购延期清单短名称，完整同案人物、命名和时间仍待精修。",
+      "src": "pages/P02.png",
+      "origin": "R15持续对话修订 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [],
+      "journeyReferences": [
+        "procurement"
+      ]
+    },
+    {
+      "id": "P03",
+      "title": "理解纠正与确认",
+      "module": "P",
+      "note": "R15持续会话、结构化确认卡片与右侧状态统一；合成示例。保存、激活、确认计划与执行准入分别处理；对话不绕过权限或UNKNOWN。原生1536×1024，未宣称4K。P04使用采购延期清单短名称，完整同案人物、命名和时间仍待精修。",
+      "src": "pages/P03.png",
+      "origin": "R15持续对话修订 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [],
+      "journeyReferences": [
+        "procurement"
+      ]
+    },
+    {
+      "id": "P04",
+      "title": "目标标准与明确激活",
+      "module": "P",
+      "note": "R15持续会话、结构化确认卡片与右侧状态统一；合成示例。保存、激活、确认计划与执行准入分别处理；对话不绕过权限或UNKNOWN。原生1536×1024，未宣称4K。P04使用采购延期清单短名称，完整同案人物、命名和时间仍待精修。",
+      "src": "pages/P04.png",
+      "origin": "R15持续对话修订 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [],
+      "journeyReferences": [
+        "procurement"
+      ]
+    },
+    {
+      "id": "P05",
+      "title": "目标与五任务计划",
+      "module": "P",
+      "note": "合成设计示例，非323实际证据。补生成/确认/观测/数据截止或接收时间；未发生事件不造时间。与旧稿可对照。P07是独立激活UNKNOWN分支，不与P05/P06拼成同一次成功旅程。",
+      "src": "pages/P05.png",
+      "origin": "R20时间语义修订 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "W"
+      ],
+      "journeyReferences": [
+        "procurement"
+      ]
+    },
+    {
+      "id": "P06",
+      "title": "计划确认与历史读回",
+      "module": "P",
+      "note": "合成设计示例，非323实际证据。补生成/确认/观测/数据截止或接收时间；未发生事件不造时间。与旧稿可对照。P07是独立激活UNKNOWN分支，不与P05/P06拼成同一次成功旅程。",
+      "src": "pages/P06.png",
+      "origin": "R20时间语义修订 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [],
+      "journeyReferences": [
+        "procurement"
+      ]
+    },
+    {
+      "id": "P07",
+      "title": "部分成功与未知结果",
+      "module": "P",
+      "note": "合成设计示例，非323实际证据。补生成/确认/观测/数据截止或接收时间；未发生事件不造时间。与旧稿可对照。P07是独立激活UNKNOWN分支，不与P05/P06拼成同一次成功旅程。",
+      "src": "pages/P07.png",
+      "origin": "R20时间语义修订 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [],
+      "journeyReferences": []
+    },
+    {
+      "id": "IAM01",
+      "title": "企业登录与隔离演示入口",
+      "module": "IAM",
+      "note": "R23新增设计 · 合成示例 · 待审阅。不保存明文凭据；错误不披露账号是否存在；重试不复用失效会话",
+      "src": "pages/IAM01.png",
+      "origin": "R23新增 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "P"
+      ],
+      "journeyReferences": []
+    },
+    {
+      "id": "IAM03",
+      "title": "会话过期与安全恢复",
+      "module": "IAM",
+      "note": "R23新增设计 · 合成示例 · 待审阅。刷新与重新登录均不重发请求；未发送草稿须按身份隔离和保留策略存储",
+      "src": "pages/IAM03.png",
+      "origin": "R23新增 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "P"
+      ],
+      "journeyReferences": []
+    },
+    {
+      "id": "IAM07",
+      "title": "有界任务集中审批",
+      "module": "IAM",
+      "note": "R23新增设计 · 合成示例 · 待审阅。决定绑定精确修订；重新认证不得默批变化后的范围；批准自身不调用模型",
+      "src": "pages/IAM07.png",
+      "origin": "R23新增 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "P"
+      ],
+      "journeyReferences": []
+    },
+    {
+      "id": "P12",
+      "title": "持续对话与固定输入区",
+      "module": "P",
+      "note": "R23新增设计 · 合成示例 · 待审阅。中间对话滚动；底部输入区和右栏保留；输入不自动确认计划或执行",
+      "src": "pages/P12.png",
+      "origin": "R23新增 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "IAM",
+        "CTX"
+      ],
+      "journeyReferences": []
+    },
+    {
+      "id": "P13",
+      "title": "自适应核对与必要选择",
+      "module": "P",
+      "note": "R23新增设计 · 合成示例 · 待审阅。只展示依据与进度摘要；不展示内部推理；不把猜测写成事实；目标变更回正式标准修订",
+      "src": "pages/P13.png",
+      "origin": "R23新增 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "IAM",
+        "CTX"
+      ],
+      "journeyReferences": []
+    },
+    {
+      "id": "P14",
+      "title": "方案修订差异与确认",
+      "module": "P",
+      "note": "R23新增设计 · 合成示例 · 待审阅。任务数按问题决定；三任务仅此设计示例；确认计划不创建执行；缺数据不估算结果",
+      "src": "pages/P14.png",
+      "origin": "R23新增 · 待审阅",
+      "surface": "platform",
+      "relatedModules": [
+        "IAM",
+        "CTX"
+      ],
+      "journeyReferences": []
+    }
+  ],
+  "files": [
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/VERSION.json",
+      "sha256": "a10fb462a2335e9a38010d39adec536c2f3fb257e3ecb4ca14ccea15cf4633d5"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/index.html",
+      "sha256": "ffa64d62b8d978276637a7d180662ae5a8827ecf25543184695f111f8b708a90"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/CATALOG.json",
+      "sha256": "3a049135423af333c3a4a73ac2eb9c9acccdca45785b08e296b2a8749858962c"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/PAGE-CONTRACT.md",
+      "sha256": "9e45593b54f3440647c22c7e4d17e4a8f3c2a263a72bfca8c7374a3e1cb05f47"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/NAVIGATION.json",
+      "sha256": "2f5d771c223f7654c20e2ae29e38778e7c1fd5ca707b22450dff40ae61cffd34"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/design-system.html",
+      "sha256": "7a4ee41507b13a01b5b99ba942a0e2a4e0d2b1bc1f26e6f77e9b4285c5a6f61e"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/review/R23-PAGE-CONTRACTS.json",
+      "sha256": "a08ddf0ba4a4390b574e53fc952baed09a61c3221250f8d04eb0a4609dcfde39"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/review/R23-REVIEW.md",
+      "sha256": "609522142900afb8aae5d545da89fbceaf6839cacdc9796ca18638ff5eac9f6b"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/review/R20-TIME-CONTRACT.md",
+      "sha256": "aee011e805f23c4216b694c14da0a45e09f76975da613fd5ad59d8a5e48d041b"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P01.png",
+      "sha256": "c76241d275d8bd19a251db37c56e86eab686ada5fda4a316e985ae5a827087ea"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P02.png",
+      "sha256": "e7945a4a38fa0fb893e5b9664403c35ce041a1fb20571bb9da694362d60fae4b"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P03.png",
+      "sha256": "373e7853b5ed10ede1e4b1e6534b196d0f5f7f7eb093a137acb61b2833513a00"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P04.png",
+      "sha256": "fd0e512ec9ac11d3fe92d0a0be2496129c0e7b9c198c858e0b9ba84a62a5fbcb"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P05.png",
+      "sha256": "22c3b2962204d97c29079a68c5753908ebc5b85e3e7c5a66746050151ee31cf5"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P06.png",
+      "sha256": "2a7a8050271924732ed8ab6d9762f525278512c69911ff66916712c4d4ec27aa"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P07.png",
+      "sha256": "4031c57a5b4bbba1e58ebca6102a74102c4656ed22f78b61142d693da75951be"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P12.png",
+      "sha256": "3ada1b7d3eb065ad23c159fb337e05e3dfc62c114d3979207d497bf843188217"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P13.png",
+      "sha256": "b8009ce7951a5ea1a6403b307a4cdcda465875398753f18bd556abea10fe0e94"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/P14.png",
+      "sha256": "f7743c6006716eea4e31ca9a9724680d195e8494ee3f513f70da5548ba3d15b4"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/IAM01.png",
+      "sha256": "4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/IAM03.png",
+      "sha256": "897507461cc8f7d7f7a10073dfbff6ea6939be273750e766d0f93e017e3f9e2e"
+    },
+    {
+      "path": "/Users/tristan/Downloads/Resource-Management-PC-R24/pages/IAM07.png",
+      "sha256": "3df530f13c66b04aebbe56b1af7ce5513551e37052b6266480dc3a653d389dd7"
+    }
+  ],
+  "acceptance": "User-approved blue-white composition and continuous dialogue; draft-specific scope is not blanket accepted.",
+  "continuityVisualReview": {
+    "pages": [
+      "P06",
+      "IAM01",
+      "IAM03"
+    ],
+    "actuallyOpened": true,
+    "viewport": "1536x1024",
+    "acceptance": "Human指定局部修正；非整包视觉接受；临时品牌/人物/示例任务数不采用",
+    "files": {
+      "index.html": "ffa64d62b8d978276637a7d180662ae5a8827ecf25543184695f111f8b708a90",
+      "CATALOG.json": "3a049135423af333c3a4a73ac2eb9c9acccdca45785b08e296b2a8749858962c",
+      "PAGE-CONTRACT.md": "9e45593b54f3440647c22c7e4d17e4a8f3c2a263a72bfca8c7374a3e1cb05f47",
+      "review/R23-PAGE-CONTRACTS.json": "a08ddf0ba4a4390b574e53fc952baed09a61c3221250f8d04eb0a4609dcfde39",
+      "pages/P06.png": "2a7a8050271924732ed8ab6d9762f525278512c69911ff66916712c4d4ec27aa",
+      "pages/IAM01.png": "4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7",
+      "pages/IAM03.png": "897507461cc8f7d7f7a10073dfbff6ea6939be273750e766d0f93e017e3f9e2e"
+    }
+  }
+}

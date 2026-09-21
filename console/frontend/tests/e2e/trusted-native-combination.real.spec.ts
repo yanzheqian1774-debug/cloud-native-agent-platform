@@ -22,7 +22,7 @@ async function login(context: BrowserContext, credential: string): Promise<Page>
   const response = page.waitForResponse(value =>
     value.request().method() === "POST"
     && new URL(value.url()).pathname === "/api/workbench/v1/session");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "登录并返回工作台", exact: true }).click();
   expect((await response).status()).toBe(303);
   await page.goto("/work");
   await expect(page.getByRole("heading", { name: "新建对话", exact: true })).toBeVisible();

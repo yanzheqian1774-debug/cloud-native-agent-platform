@@ -240,6 +240,13 @@ class AuthorityGenerationController:
                 self.control.replace(pending)
             committed = self.repository.active_generation()
             if committed != candidate_identity:
+                transition = {}
+                if isinstance(self.repository, PostgresAuthorityRepository):
+                    from .task_identity_continuity import transition_proof
+
+                    transition["continuity_proof"] = transition_proof(
+                        current, candidate, self.readiness
+                    )
                 self.repository.activate_generation(
                     candidate.generation,
                     candidate.digest,
@@ -247,6 +254,7 @@ class AuthorityGenerationController:
                     operator_id=operator_id,
                     revoked_credentials=revoked_credentials,
                     now=now,
+                    **transition,
                 )
             self.barrier.publish(candidate)
             active = HostControlRecord(

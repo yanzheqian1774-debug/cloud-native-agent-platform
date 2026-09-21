@@ -157,6 +157,7 @@ class PostgresAuthorityRepository:
             (29, "0029_task_development.sql", "task-development-v1"),
             (30, "0030_task_cases.sql", "task-cases-v1"),
             (31, "0031_task_timeout_revision.sql", "task-timeout-revision-v1"),
+            (32, "0032_task_identity_continuity.sql", "task-identity-continuity-v1"),
         ):
             path = self.migration_path.parent / name
             if not path.is_file():
@@ -588,6 +589,10 @@ class PostgresAuthorityRepository:
         def read(current, *, lock_for_owner: bool):
             if configure_transaction:
                 current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            if lock_for_owner:
+                from .task_identity_continuity import lock_owner_generation
+
+                lock_owner_generation(current)
             credential_id = self._current_credential_id(
                 current,
                 context,
@@ -621,7 +626,7 @@ class PostgresAuthorityRepository:
                 "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
                 "AND g.recovery_epoch=%s AND a.generation=%s "
                 "AND a.recovery_epoch=%s "
-                + grant_condition(current)
+                + grant_condition(current, credential_id)
                 + " ORDER BY g.created_at DESC,g.grant_id DESC "
                 "LIMIT 1",
                 (
@@ -676,6 +681,10 @@ class PostgresAuthorityRepository:
         def read(current, *, lock_for_owner: bool):
             if configure_transaction:
                 current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            if lock_for_owner:
+                from .task_identity_continuity import lock_owner_generation
+
+                lock_owner_generation(current)
             credential_id = self._current_credential_id(
                 current,
                 context,
@@ -1640,7 +1649,12 @@ class PostgresAuthorityRepository:
             "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
             "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
             "AND g.recovery_epoch=%s "
-            + grant_condition(connection)
+            + grant_condition(
+                connection,
+                PostgresAuthorityRepository._current_credential_id(
+                    connection, context, now=now, recovery_epoch=recovery_epoch
+                ),
+            )
             + ") AS latest_grant "
             "FROM authorization_admin.active_generation a WHERE a.singleton=true",
             (
@@ -1822,11 +1836,13 @@ class PostgresAuthorityRepository:
         operator_id: str,
         revoked_credentials: Sequence[CredentialId],
         now: datetime,
+        continuity_proof=None,
     ) -> None:
         try:
             with self.connection_scope() as connection:
+                connection.execute("SELECT pg_advisory_xact_lock(3230028)")
                 row = connection.execute(
-                    "SELECT generation,recovery_epoch FROM "
+                    "SELECT generation,generation_digest,recovery_epoch FROM "
                     "authorization_admin.active_generation WHERE singleton=true FOR UPDATE"
                 ).fetchone()
                 if row is not None and (
@@ -1834,6 +1850,16 @@ class PostgresAuthorityRepository:
                     or recovery_epoch < row["recovery_epoch"]
                 ):
                     raise AuthorityError("AUTHORITY_GENERATION_STALE")
+                if continuity_proof is not None:
+                    from .task_identity_continuity import record_transition
+
+                    record_transition(
+                        connection,
+                        continuity_proof,
+                        row,
+                        operator_id=operator_id,
+                        now=now,
+                    )
                 if row is None:
                     connection.execute(
                         "INSERT INTO authorization_admin.active_generation"

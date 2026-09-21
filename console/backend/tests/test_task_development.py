@@ -526,3 +526,43 @@ def test_fixed_diagnostic_requires_signed_revision_exact_admission_and_scope(env
                 principal,
                 NS(idempotency_key="probe", target=NS(model_dump=lambda **kw: {})),
             )
+
+
+@pytest.mark.parametrize("reaped", [True, False])
+def test_chinese_attempt_uses_formal_same_case_admission_only(env, reaped):
+    from agent_console.task_development import prepare_planning_admission
+
+    e = env
+    d, spec = setup(e)
+    planning(e, d, reaped=reaped)
+    revise(e.service, e.contexts["approver"], d, spec)
+    with e.service.repository.connection_scope() as c:
+        original = c.execute(
+            "SELECT record FROM workflow_planning.invocations "
+            "WHERE invocation_id='old-unknown'"
+        ).fetchone()["record"]
+    request = NS(
+        target=NS(
+            problem=NS(
+                resource_id=original["target"]["problem"]["problem"]["resource_id"]
+            )
+        ),
+        idempotency_key="zh-formal-successor",
+    )
+    if not reaped:
+        with pytest.raises(AuthorityError, match="WORKER_NOT_REAPED"):
+            prepare_planning_admission(e.service, e.contexts["reader"], request)
+        return
+    first = prepare_planning_admission(e.service, e.contexts["reader"], request)
+    again = prepare_planning_admission(e.service, e.contexts["reader"], request)
+    assert first == again
+    assert first["record"]["unknown_invocation_ids"] == ["old-unknown"]
+    assert prepare_planning_admission(e.service, e.contexts["other"], request) is None
+    with e.service.repository.connection_scope() as c:
+        assert (
+            c.execute(
+                "SELECT record FROM workflow_planning.invocation_results "
+                "WHERE invocation_id='old-unknown'"
+            ).fetchone()["record"]["technical_status"]
+            == "OUTCOME_UNKNOWN"
+        )

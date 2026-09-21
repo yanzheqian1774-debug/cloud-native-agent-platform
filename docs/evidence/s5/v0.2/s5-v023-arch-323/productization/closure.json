@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "arch323-final-closure.v1",
+  "backendCandidate": "9d39a6737d68ffc42c31479b6f43afce108793ea",
+  "confirmation": {
+    "verifiedAt": "2026-09-21T06:58:07.131285+00:00",
+    "planId": "5ad74afd-a6bf-4b04-b395-34d18d01c3b6",
+    "version": 2,
+    "planDigest": "a789015b006cecc053dc5297529edf80fa430411253aa13e869c210292623492",
+    "approval": {
+      "ordinal": 1,
+      "plan_id": "5ad74afd-a6bf-4b04-b395-34d18d01c3b6",
+      "actor_id": "human:demo323-requester",
+      "decision": "APPROVE",
+      "decided_at": "2026-09-21T06:56:40.637661+00:00",
+      "plan_digest": "a789015b006cecc053dc5297529edf80fa430411253aa13e869c210292623492",
+      "plan_version": 2,
+      "authority_basis": "TRUSTED_EXACT_PLAN_APPROVAL",
+      "decision_digest": "7818283b4c2b71e0e605a1334947244914660d22954557ecda39828313945650",
+      "reason_category": "BUSINESS_APPROVAL",
+      "approval_decision_id": "6d30f690-d10b-4e6c-afcf-4d8ccea14e4b"
+    },
+    "sourceProposalRevision": 2,
+    "sourceProposalDigest": "66449ca1af78ff99387048894cebaef94ca467f421e223e1a62f83e246ef7784",
+    "problemCriteriaUnchanged": true,
+    "oldPlanApprovalPreserved": true,
+    "refreshDuplicateConfirmation": false,
+    "modelCallsThisFinalization": 0
+  },
+  "evidenceRoot": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/real-chinese",
+  "visualDecision": {
+    "recordedAt": "2026-09-21T05:59:48.394881+00:00",
+    "authority": "Human current S5-V023-ARCH-323 instruction",
+    "baseline": "R24 / visual-review-v3",
+    "P06": "本轮局部视觉接受",
+    "IAM01": "本轮局部视觉接受",
+    "IAM03": "保留过期隐藏业务内容、重新登录不自动重发；相关功能验证通过后视觉差异为非阻断后续项，本轮不重做",
+    "scope": "不等于全图集接受或实际投影验证；不改变原业务对象",
+    "deferred": [
+      "新中文理解验证",
+      "公共框架",
+      "多任务交互"
+    ],
+    "pr": "184 Draft",
+    "session": "OPEN"
+  },
+  "files": {
+    "confirmation-readback.json": "c6b409ae7aad6ba51646d628120094201bacdd201f5c58a570bcbcbbbffc74a6",
+    "pg-confirmed-plans-approvals.json": "733272904aed86afc2967e1e11e0ab635c7f8531c44616f125ac2ad1a07123e4",
+    "usage.json": "d54e1d072a267d6214dc44e87e878b53096a3852aa4306fd5d7578ec2a1fbb3d",
+    "content-and-preservation.json": "9527ce519681fa0c232685224c22d0baa6a9177575689db751917381918736c2",
+    "page/01-before-confirm.png": "203400bf78a8de8f84273ea6c7a5fab469837d813815489b2ec453661f63208e",
+    "page/01-before-confirm.txt": "0328b6d3715a0fb9424171e4f5c0fdc375042d8e884fbbb9f7b83f79b802130f",
+    "page/02-confirmed.png": "0702454ebc118d978e81d7e5a36064a48acea5d4846c1270c4c6268f3e0187dd",
+    "page/03-refreshed.png": "81f7d7a9cadcfb412bcc6027b639a5e6b8ea5aab921a71c96e85da9912523115",
+    "page/03-refreshed.txt": "f501080d066a299f4dddd3ee6325851f05dd46d01d324ef8e4c5cb0978546b0f"
+  },
+  "finalizationModelCalls": 0,
+  "scope": "Draft/OPEN; zero business execution; final CI identity recorded externally after push"
+}

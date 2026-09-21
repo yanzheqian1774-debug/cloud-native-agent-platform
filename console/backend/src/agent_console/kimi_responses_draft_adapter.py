@@ -177,6 +177,7 @@ class ExactFileKimiCredentialResolver:
             not in {
                 (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
                 ("v2", "problem-draft-assistance-output.v2"),
+                ("v2-zh-CN", "problem-draft-assistance-output.v2"),
                 ("v1", "plan-suggestion-output.v1"),
             }
         ):
@@ -238,6 +239,7 @@ class KimiResponsesDraftTransport:
             not in {
                 (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
                 ("v2", "problem-draft-assistance-output.v2"),
+                ("v2-zh-CN", "problem-draft-assistance-output.v2"),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
@@ -245,7 +247,7 @@ class KimiResponsesDraftTransport:
             raise DraftAssistanceError("KIMI_RESPONSES_PROFILE_MISMATCH")
         try:
             policy = policy_for(profile.adapter_revision, profile.output_schema_version)
-            if policy.revision == "v2":
+            if policy.revision in {"v2", "v2-zh-CN"}:
                 context_references(content)
             else:
                 content = legacy_content(content)
@@ -675,7 +677,7 @@ class KimiResponsesDraftTransport:
             )
         try:
             refs = frozenset()
-            if policy.revision == "v2":
+            if policy.revision in {"v2", "v2-zh-CN"}:
                 sent = json.loads(request.payload)
                 refs = context_references(sent["input"][0]["content"][0]["text"])
             understanding = validate_result(result, policy, refs)

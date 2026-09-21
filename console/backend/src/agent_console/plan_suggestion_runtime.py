@@ -23,7 +23,12 @@ from .openai_responses_draft_adapter import (
 )
 from .plan_suggestion_domain import ExactReference, PlanningError
 from .plan_suggestion_invocation import PlanningProfile
-from .plan_suggestion_policy import INSTRUCTIONS, V2_INSTRUCTIONS, output_schema
+from .plan_suggestion_policy import (
+    INSTRUCTIONS,
+    V2_INSTRUCTIONS,
+    ZH_INSTRUCTIONS,
+    output_schema,
+)
 
 if TYPE_CHECKING:
     from .plan_suggestion_bootstrap import PlanningInvocationDependencies
@@ -132,7 +137,9 @@ class PlanningResponsesProvider:
         invocation_id = business_context["planning_context"]["invocation_id"]
         document = {
             "model": self.configuration.native_model_id,
-            "instructions": V2_INSTRUCTIONS if request.policy else INSTRUCTIONS,
+            "instructions": ZH_INSTRUCTIONS
+            if request.output_language
+            else (V2_INSTRUCTIONS if request.policy else INSTRUCTIONS),
             "input": [
                 {
                     "role": "user",

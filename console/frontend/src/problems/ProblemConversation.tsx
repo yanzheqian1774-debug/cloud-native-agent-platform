@@ -40,9 +40,9 @@ export function ConversationComposer({value,onChange,onSend,onCancelEdit,disable
   </form>;
 }
 
-export function UserMessage({children,occurredAt}:{children:ReactNode;occurredAt?:string}){return <article className="px-message px-user-message"><div className="px-avatar" aria-hidden="true">H</div><div><span className="px-message-author">你</span>{occurredAt&&<time dateTime={occurredAt}>{formatTime(occurredAt)}</time>}<p>{children}</p></div></article>}
+export function UserMessage({children,occurredAt,authorLabel="你",richContent=false}:{children:ReactNode;occurredAt?:string;authorLabel?:string;richContent?:boolean}){return <article className="px-message px-user-message"><div className="px-avatar" aria-hidden="true">H</div><div><span className="px-message-author">{authorLabel}</span>{occurredAt&&<time dateTime={occurredAt}>{formatTime(occurredAt)}</time>}{richContent ? <div className="px-user-content">{children}</div> : <p>{children}</p>}</div></article>}
 
-export function SystemMessage({children,label="系统"}:{children:ReactNode;label?:string}){return <article className="px-message px-system-message"><div className="px-avatar" aria-hidden="true">系</div><div className="px-message-body"><span className="px-message-author">{label}</span>{children}</div></article>}
+export function SystemMessage({children,label="系统",occurredAt}:{children:ReactNode;label?:string;occurredAt?:string}){return <article className="px-message px-system-message"><div className="px-avatar" aria-hidden="true">系</div><div className="px-message-body"><span className="px-message-author">{label}</span>{occurredAt&&<time dateTime={occurredAt}>{formatTime(occurredAt)}</time>}{children}</div></article>}
 
 export function DraftCard({turn,busy,confirmBlocked=false,composerEditing,onConfirm,onRecover,onEditFields,onFinishFields,onEditWithComposer,onCancel,onChange}:{turn:DraftTurn;busy:boolean;confirmBlocked?:boolean;composerEditing:boolean;onConfirm:()=>void;onRecover:()=>void;onEditFields:()=>void;onFinishFields:()=>void;onEditWithComposer:()=>void;onCancel:()=>void;onChange:(draft:ProblemDraft)=>void}){
   const active=turn.phase==="DRAFT"||turn.phase==="FAILED"||turn.phase==="EDITING",editable=turn.phase==="EDITING"&&!composerEditing;

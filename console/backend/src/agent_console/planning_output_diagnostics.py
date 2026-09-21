@@ -55,11 +55,76 @@ def diagnostic(text, phase, error=None):
                 "rule": rule if rule in RULES else None,
             }
         )
+    located = located_contract_issues(text)
     payload = text.encode()
     return {
+        "locations": located,
         "phase": phase,
         "output_bytes": len(payload),
         "output_sha256": hashlib.sha256(payload).hexdigest(),
         "error_count": len(errors),
         "issues": issues,
     }
+
+
+def located_contract_issues(text):
+    """Locate finite graph violations without disclosing arbitrary provider values."""
+    import json
+
+    from .planning_contracts import INPUTS, OUTPUTS
+
+    try:
+        plan = json.loads(text).get("semantics") or {}
+        tasks = plan.get("tasks", [])
+        if not isinstance(tasks, list) or len(tasks) > 32:
+            return []
+        by_id = {t["task_id"]: t for t in tasks}
+        requirements = {r["requirement_id"]: r for r in plan.get("requirements", [])}
+        criteria = set(plan["target"]["criterion_revision_ids"])
+        found = []
+        for index, task in enumerate(tasks):
+
+            def add(field, rule, index=index):
+                found.append(
+                    {
+                        "path": ["semantics", "tasks", index, field],
+                        "type": "contract",
+                        "rule": rule,
+                    }
+                )
+
+            if (
+                task.get("employee_requirement_id") not in requirements
+                or requirements[task["employee_requirement_id"]].get("kind")
+                != "EMPLOYEE"
+            ):
+                add("employee_requirement_id", "PLAN_REFERENCE_INVALID")
+            if not set(task.get("requirement_ids", [])) <= requirements.keys():
+                add("requirement_ids", "PLAN_REFERENCE_INVALID")
+            if not set(task.get("criterion_revision_ids", [])) <= criteria:
+                add("criterion_revision_ids", "PLANNING_CRITERION_COVERAGE_MISSING")
+            deps = task.get("depends_on", [])
+            if not set(deps) <= by_id.keys() or task["task_id"] in deps:
+                add("depends_on", "PLAN_REFERENCE_INVALID")
+                continue
+            operation = task.get("operation")
+            if operation not in OUTPUTS:
+                continue
+            if task.get("output_kind") != OUTPUTS[operation]:
+                add("output_kind", "PLANNING_OPERATION_OUTPUT_CONFLICT")
+            incoming = set(task.get("input_kinds", []))
+            produced = {by_id[dep].get("output_kind") for dep in deps}
+            valid = (
+                (not deps and incoming == {"CONTEXT"})
+                if operation == "READ_DATA"
+                else (
+                    bool(produced)
+                    and incoming == produced
+                    and bool(incoming & INPUTS[operation])
+                )
+            )
+            if not valid:
+                add("input_kinds", "PLANNING_OPERATION_INPUT_CONFLICT")
+        return found[:16]
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return []

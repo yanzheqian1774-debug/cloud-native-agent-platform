@@ -7,7 +7,7 @@ test('323 HTTPS planning, clarification, confirmation and durable readback',asyn
  const failures:string[]=[];page.on('pageerror',e=>failures.push(e.message));
  await page.goto('/api/workbench/v1/login');
  await page.locator('input[name="bootstrapCredential"]').fill(credentials.browser);
- await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.getByRole('button',{name:'登录并返回工作台',exact:true}).click();
  if(process.env.S5_323_RESTART_READ==='1'){
   const saved=JSON.parse(readFileSync(`${runtime}/browser-receipt.json`,'utf8'));
   await page.goto(saved.url);
@@ -48,7 +48,7 @@ test('323 HTTPS planning, clarification, confirmation and durable readback',asyn
 test('opaque request identity survives a lost response and browser refresh',async({page})=>{
  await page.goto('/api/workbench/v1/login');
  await page.locator('input[name="bootstrapCredential"]').fill(credentials.browser);
- await page.getByRole('button',{name:'Sign in',exact:true}).click();
+ await page.getByRole('button',{name:'登录并返回工作台',exact:true}).click();
  const requests:Record<string,unknown>[]=[];
  await page.route('**/api/workbench/v1/planning-v2/invocations',async route=>{
   requests.push(route.request().postDataJSON());await route.abort('failed');

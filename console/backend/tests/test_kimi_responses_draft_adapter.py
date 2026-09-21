@@ -499,15 +499,23 @@ def test_missing_or_invalid_usage_is_not_fabricated(kimi_mock, usage):
 
 def test_redirect_disconnect_observe_and_cancel_do_not_retry(kimi_mock):
     server, cert, tmp_path = kimi_mock
-    configuration = _configuration(server, cert, _credential_file(tmp_path))
+    # This tests HTTP redirect/disconnect semantics, not process startup speed.
+    # Keep finite limits while allowing a spawned interpreter to reach HTTP under
+    # load. Dedicated deadline tests retain their deliberately short boundaries.
+    configuration = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=5,
+        total_timeout_seconds=10,
+    )
+    profile = replace(_profile(), total_timeout_seconds=10)
     transport = KimiResponsesDraftTransport(configuration)
     resolver = _resolver(configuration)
-    request = transport.prepare(invocation_id="i", content="test", profile=_profile())
-    credential = resolver.resolve(_profile(), "i")
+    request = transport.prepare(invocation_id="i", content="test", profile=profile)
+    credential = resolver.resolve(profile, "i")
 
     _KimiHandler.status = 307
     redirected = transport.dispatch(
-        invocation_id="i", request=request, credential=credential, profile=_profile()
+        invocation_id="i", request=request, credential=credential, profile=profile
     )
     assert redirected.reason_code == "PROVIDER_HTTP_REJECTED"
     assert len(_KimiHandler.requests) == 1
@@ -518,10 +526,10 @@ def test_redirect_disconnect_observe_and_cancel_do_not_retry(kimi_mock):
         transport.dispatch(
             invocation_id="i2",
             request=transport.prepare(
-                invocation_id="i2", content="test", profile=_profile()
+                invocation_id="i2", content="test", profile=profile
             ),
             credential=credential,
-            profile=_profile(),
+            profile=profile,
         )
     assert len(_KimiHandler.requests) == transport.dispatch_count == 2
     calls = transport.dispatch_count

@@ -108,7 +108,7 @@ async function login(
     await page.locator('input[name="bootstrapCredential"]').fill(credential);
   });
   await test.step(submitStep, async () => {
-    const submit = page.getByRole("button", { name: "Sign in", exact: true });
+    const submit = page.getByRole("button", { name: "登录并返回工作台", exact: true });
     await expect(submit).toHaveCount(1);
     if (kind === "FULL") {
       const requestPromise = page.waitForRequest(isSessionPost).then(

@@ -220,6 +220,18 @@ def build_workbench_composition(
                 ),
             )
             delegation.migrate()
+            from dataclasses import replace
+
+            from .task_development import prepare_planning_admission
+
+            planning_invocations = replace(
+                planning_invocations,
+                admission_factory=lambda context: (
+                    lambda request: prepare_planning_admission(
+                        delegation, context, request
+                    )
+                ),
+            )
             from .task_delegation import record_created_object
 
             task_binding = record_created_object

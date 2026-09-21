@@ -1700,3 +1700,102 @@ Human授权只读核验323、十个未合并PR、完整设计图集及后续三�
 图集CATALOG/NAVIGATION为R21、index title仍R18、README主体R15；166当前+104历史=270图片hash全部匹配。P02–04为R15、P05–07为R20待审阅，P11新增不改全局基线。本轮仅登记输入/裁切/表单/右栏/时间/失败/语言差异，不改前端或Plan。后续包A入口与视觉、包B有界自适应规划、包C只读资源/执行前置均为任务准备，不自动授予实施。D2已实施；D3详细执行契约递延；增量二I2.1–I2.6/I2.5归属不变。正常文档门禁/候选/CI在本轮交付回执记录，保持Draft/Session OPEN。
 
 §26补充Human要求：问题到解决主链路中文化纳入后续包A/B（本轮只核验/准备）。固定文案、模型输出、资源元数据分开；新业务字段默认中文并有界语言修正，exact标识/结构/8000等业务约束保持；已确认英文Plan仅可追溯中文展示译文+原文入口，不改Plan/Approval、不重确认、不自动模型调用。长中文/右栏/固定可见输入区/投影及同页前后截图列为明确验收，普通用户无需英文即可完成已实现主链路。详见审计§4.1；不据此重新设计或扩大执行范围。
+
+
+§26后续包关联补充（本轮不实施；沿用包A/B/C、D2/D3与增量二原编号）：
+
+| 既有包及事项 | 现状与缺口 | 实际依赖与效果图 | 验收条件 |
+| --- | --- | --- | --- |
+| A：对话式工作台组件契约 | 已有ConversationFrame、持久方案卡、底部输入；跨阶段消息/卡片/滚动契约尚未统一 | R24 P01–P07；先区分对话补充、标准正式修订和计划确认；复用已核验布局 | 同案真实历史可追溯；刷新零重发；长中文、缩放、键盘与固定发送/右栏同视口对照；缺历史不补造 |
+| B：按项目、场景、功能用途配置模型 | 当前理解/规划固定owner profile；新中文理解代码有受控验证但未正式加载 | 模型资源owner精确版本、权限与配置摘要；图集模型资源页面在该切片开工前核验，不能借P06增加发布权 | 显式配置选用、审计版本与账本一致；无权限/缺资源真实报错；不把身份连续性当资源发布授权 |
+| B：同案上下文与分层记忆 | 已保存Problem/Criteria/纠正/Plan/调用前驱；尚无统一项目长期记忆契约 | Business/Planning owner引用与版本；P02–P06对话及历史；敏感数据访问范围另行审定 | 优先利用已确认信息；纠正覆盖只影响后继；引用可读回、跨案例隔离、裁剪可追溯；不暗中新增存储权威 |
+| C：Skill/MCP/知识集成与图集 | 已有相关owner与PR审计；规划只读快照明确缺失/无权/未知，无Workflow匹配契约 | 复用§26十PR清单与owner版本/迁移依赖；该资源页面以实际最新图集逐页核验 | 去重集成、候选/I/O/权限/状态准确；采购旧语义负例和成本六任务正例；零执行写入；不以有候选声称资源就绪 |
+| C：Runtime/OpenClaw/Hermes与执行验收 | D2已实施，D3详细执行契约仍递延；Runtime不等于Agent，现有相关PR不等于323已可执行 | §24.10及增量二I2.1–I2.6既有归属；Plan/Approval→Assignment/Run/Task/Attempt、Placement及Evidence/Criteria关系先定；执行效果图须单独核验 | 从确切执行需求选可替换adapter；显式执行授权、单Run身份、恢复/取消/UNKNOWN及产物标准评价可验；本轮不物化执行对象 |
+| A/C：客户端及平台依赖 | 当前PC可信工作台；独立客户端能力和平台API边界未定 | 登录/组织scope/独立审批/安全返回，IAM01/03及后续客户端图需另行确认；依赖稳定owner API | 不另建身份权威；只提供已实现入口，离线/会话失效/重试契约明确；布局和权限均有独立验收，不将客户端包装成执行能力 |
+
+
+## 27. 主链路产品化 G1 实施记录（2026-09-21）
+
+Human已批准首批Ready/普通merge及本轮实际编码，Session仍OPEN。181→183分别合并a6dfbe317c7ae968bbb13cfecb75a4fd3d8d05b2、bcf2defe8c2a6900b1bbba94ad7931c91db1b26b；182完整包含后关闭，来源分支保留。后续分支codex/s5-323-productization从bcf2def开始，另建Draft PR，不向旧PR追加。
+
+### 27.1 范围、接口、兼容
+
+1. 复用可信BFF login/session/CSRF、exact request/独立决定接口，新增登录展示与安全同源返回；不增加身份权威、组织枚举或自批。登录/页面读取不派发模型。
+2. 版本化中文输出策略为显式新请求选项，旧v1/v2与历史摘要保持；schema/target/policy/typed依赖校验之后检查业务字段语言。服务器有界循环仅针对已终态INVALID，不自动越过UNKNOWN或失败；每步独立调用/幂等键/前驱/计量，复用现有invocation权威。总时长、次数由服务器固定配置；重复错误指纹停止。逐次读回可恢复但刷新不自动续派发。
+3. 历史英文成本Plan增加精确source digest绑定的人工中文展示材料，字段白名单与译文来源摘要；不写Plan/Approval、不改用户原文、不调用模型。模型新内容与展示译文严格分开。
+4. 保留ConversationFrame、业务主区/右栏/紧凑底部输入；真实状态/时间来源，中文固定标签。图片未覆盖的错误、无权与过期沿现有组件补齐。
+5. 资源准备复用PlanningResourceResolver及现有持久snapshot：准确owner版本/I/O/权限观测，仅权限内候选，不伪造Workflow匹配；缺reader明确UNKNOWN。D3和无Workflow匹配契约只记录差异，不创建执行对象。
+
+### 27.2 图集范围
+
+最新本地完整包R24，176当前/104历史，全部280图摘要校验；index和CATALOG为R24，README保留历史R23/R22段落，不覆盖旧包或只改版本号。固定文件与摘要见productization/design-baseline.json。P04/P06以及P12–14/IAM01/07已实际打开视检，编码涉及其他页先视检。P12–14/IAM是R23待审草案，仅采用与Human本任务及既有蓝白、持续输入、右栏约束一致部分；P11深色侧栏/品牌不采纳，组织管理和IAM完整角色编辑不采纳。任务数来自真实数据，不来自图片例子。
+
+### 27.3 验证与风险
+
+定向后端测试覆盖语言白名单、错误位置、有限循环、重复无进展、幂等/重启读回、撤权、UNKNOWN、旧摘要；资源授权前读取及零执行。前端lint/build与Playwright覆盖登录/安全返回、独立审批拒自批、中文历史切换零写入、对话修订、同视口截图/长中文/缩放/滚动/发送可达。正常make check和hooks；CI绑定最终候选。真实Kimi仅验证新增中文生成/修正，先完成实现、受控测试及入口预检；必要独立签发合并一次操作包，不由调用方签发。旧七UNKNOWN/预留/Plan/Approval哈希前后核对。视觉与功能分别报告，投影未做不称通过。
+
+风险：自然语言检测有限、翻译否定/金额/范围需审校；服务端同步总期限必须覆盖单次预算，UNKNOWN停止且不释放预留；既有真实服务配置更新需正式摘要修订，不能直接替换旧授权。新的G2仅暂停受影响子项，其余独立工作继续。
+
+### 27.3 实施与正式准入补充
+
+新中文规划请求保留旧profile/configuration/ledger，仅增加版本化输出策略与有界编排。每步仍通过原模型授权、claim、reservation、dispatch guard和结算；原signed V2同案准入由owner逐次调用既有admit，重新核对UNKNOWN回收与同案事实，不新增Human签名、不跨案例继承。无signed V2则原门禁继续生效。UNKNOWN发生即停止本轮；重新打开和重复root只读既有后继。语言修正仅允许定位字段改变，数字、URL/backtick标识及其他结构保持；普通自然语言真伪仍不声称可完整判断。单次总期限与外层总期限共享取消监督，回收上限独立保留。默认3次/180秒/单次60秒/回收2秒为服务端技术配置，不取代持续开发授权。
+
+图集追加实际视检P01/P02/P03/P05/P07/IAM03；P05/P06阶段分组表格按当前真实任务数呈现，长中文输入可编辑，选择式补问只呈现模型明确给出的2–3个选项，不自行推断答案。输入选择不自动提交。
+
+理解adapter新增显式v2-zh-CN策略，旧v1/v2不变。既有真实理解profile尚未切换；配置身份恢复前不宣称新策略已真实生效。历史成本人工译文绑定fee868ba...精确proposal摘要，源Plan/Approval不改，译文与原文切换/刷新零模型调用。
+
+### 27.4 真实验证实际阻塞（不影响其他实施）
+
+2026-09-21只读核验：原requester与approver凭据均已过期。正式代次激活会改变active_generation；task_delegation.active严格拒绝原代次委托；0028对同task/subject/root/ledger有唯一绑定，不能重新签一个同范围委托规避。不得编辑generation-1、延长原文件、改库原record、忽略代次校验或由调用方代签。身份恢复不代表缺少模型/费用授权。
+
+此处新增的是“独立签发的委托代次连续性”语义，按Architecture Gates的authentication architecture G2单独提出；在决定前不编码该机制、不切换旧实例。精确建议及替代方案见productization回执；本轮产品代码、图集对照、受控测试、Draft候选与CI继续完成。新中文理解配置修订同样不能绕过原configuration摘要，列入一次后续正式恢复包，不能将旧30秒/固定次数重作总授权上限。
+
+### 27.5 身份连续性G2正式提交（PROPOSED）
+
+按Human续接要求直接固化既有决定包，见`docs/engineering/S5-V023-ARCH-323-IDENTITY-CONTINUITY-G2.md` v1：可信operator代次摘要链、原独立issuer当前权限、追加连续性/8小时技术期、撤销优先、单链头并发幂等、旧writer拒绝与恢复。决定状态仍PROPOSED，未编码/激活。实现批准与后续原入口独立签发分开；不重新申请模型/费用。中文理解新owner绑定不纳入通用恢复授权，先复用原理解/标准完成中文规划验证。完整便携视觉对照包另交付，不能代替视觉接受。
+
+
+### 27.6 已批准连续性及视觉修正 G1（实施前）
+
+起点82e13f0工作区干净，GitHub该SHA实际12项检查全部SUCCESS；不借用2cc0d2a的结果。Human批准G2 v1第1–5节及第6节；原内容保留，状态Accepted/实施中。
+
+- Authority Foundation operator激活追加旧新代次可信事件，不新增身份权威；0032追加连续性与撤销记录，原表/账本保持。管理API复用当前session/CSRF/精确GRANT_ADMIN、原issuer与subject隔离。CAS链头/幂等/撤销/技术8小时上限；旧新writer不得并存。有效投影只消费连续性，不复制Grant。
+- task_delegation、development、cases、timeout和dispatch的旧记录关联保持原generation，仅在准入边界解析有效代次。新Grant仍走正式exact申请与独立委托授权，撤销优先，持续授权不变。检查列表/后台选择SQL不能继续错误过滤原代次。
+- 先定向PG覆盖可信激活/签发/撤销/自批/到期/并发/幂等/旧代次/旧writer、原UNKNOWN/预留，再做正常门禁；真实库只读预检，激活前完成合成数据库脚本全流程及中断恢复演练。独立签发只由Human当前有效issuer完成。
+- 前端先实际视检R24 P06/IAM01/IAM03，SHA及页面契约更新基线清单。P06复用ConversationFrame，将真实业务卡片作为持久事实呈现；有记录才显示历史消息。对话补充不直接改已确认标准，正式标准修订和计划确认各自明确操作。IAM01恢复图文布局与品牌层次，保留真实bootstrap；IAM03不显示过期业务内容、零自动重发。
+- 定向浏览器覆盖真实历史/缺失不伪造、修订边界、确认/刷新、长中文、固定输入/右栏及同视口前后；frontend lint/build，功能与视觉分别报告。
+- 集中激活包绑定实际候选tree、migration/config/generation摘要与issuer/subject、原cases/ledger，持久检查点和有期限就绪。审批人只在全部门禁及入口预检通过后执行一次可恢复操作包，不由调用方代签。新理解策略不增加owner发布权限。
+
+后续事项补充到§26既有三个任务包/下一切片，不新建台账：对话组件契约、项目/场景/用途模型配置、同案上下文/分层记忆、Skill/MCP/知识PR及图集、Runtime/OpenClaw/Hermes与执行验收、客户端平台依赖；沿原D2/D3/增量二归属，不纳入当前编码。
+
+
+### 27.7 真实中文后继与最终页面收口（2026-09-21）
+
+运行及产品候选9d39a6737d68ffc42c31479b6f43afce108793ea，12/12对应CI成功。原独立issuer已正式签发 task-continuity-583aecc338d64a5a9ad1901f34848484，可信代次1→2，原subject及s5-323-demo / isolated-real-demo保持；新subject凭据技术期限至2026-09-21 21:33:04北京时间，不修改旧凭据或委托。原read55/total60/output8192配置保持，新中文理解策略未加载。
+
+原成本Problem/Criteria复用，真实Kimi调用4a588fc0-a101-4474-a5fa-51a555ad6b51首轮成功；同proposal 5ad74afd-a6bf-4b04-b395-34d18d01c3b6修订2，摘要66449ca1af78ff99387048894cebaef94ca467f421e223e1a62f83e246ef7784。四阶段六任务中文业务字段，8,000元、排除试验项目、账单及分摊缺口、部分月可比限制均保持；依赖/引用/语言规则通过并另作业务内容审阅。真实自动修正未触发，不人为追加调用，受控修正证据独立保留。输入5745、输出1845 token，估算USD0.082860（非供应商账单）。原七UNKNOWN与USD4.816896预留、原16结算及旧方案/批准逐行不变；新增第17结算，总估算USD0.582440。执行对象零。
+
+模型成功后的HTTP读回因缺plan:prepared精确READ而404；已走原委托正式申请并按原key GET恢复，未重发模型。最终收口本轮禁止invoke_once.py或任何新模型调用。现场仍仅旧Plan/Approval v1；修订2页面确认、刷新与同一新Plan/Approval读回待浏览器证书信任处理。不能以proposal持久化代替确认。当前证书为127.0.0.1自签叶证书，与运行服务TLS实测一致；macOS trust验证尚不信任，未关闭TLS或绕过浏览器警告。平台subject凭据已正式登录验证，非模型API key/issuer凭据。
+
+Human已明确P06、IAM01本轮局部视觉接受；IAM03保留过期隐藏业务内容、重认证核验身份权限、零自动重发/确认/执行，功能证据通过后的视觉差异为非阻断后续项。本轮不重做。实际投影未测。继续绑定R24局部基线，R26–R28仅后续资料。
+
+§26既有A包补充：登录凭据获取说明及完整账号体验；公共框架/名称/导航/搜索/个人与组织入口；用户右侧、助手左侧、系统事件独立呈现；咨询、轻任务、复杂任务及多任务交叉交互。当前仅bootstrap凭据登录及单案工作台，缺账号获取说明与跨任务交互契约；依赖后续Human确认的组件/交互与图集基线，验收需同页参考对照、身份安全、状态及任务隔离，不以R26–R28自动替换R24。§26B保留新中文理解策略真实验证，依赖正式owner配置/精确授权，不重做已有理解；验收为真实中文补问/纠正/标准持久链。§26C继续资源准备增强、Runtime/OpenClaw/Hermes、D3与结果验收，沿既定D2/D3/增量二定义及前置契约，不纳入本轮。上述条目不新建重复台账。
+
+证据沿既有productization入口：本地real-chinese/receipt.json、content-and-preservation.json、usage.json、certificate-verification.json和human-visual-decision.json。当前main bcf2def仍为候选祖先，GitHub MERGEABLE/CLEAN；仅新增0032迁移，0028–0031不改，依赖已合入181/183。最终页面闭环前保持Draft；未执行Ready/merge/deploy/Session关闭。
+
+### 27.8 最终确认现场最小修复 G1（编码前）
+
+证书信任已由Human完成，2026-09-21 14:56页面以原subject确认修订2并刷新；PG新增同Plan v2及Approval 6d30f690-d10b-4e6c-afcf-4d8ccea14e4b，旧记录保持，本轮模型调用0。现场发现修订影响把对象JSON键序当内容差异，错误提示成功标准已变化，而精确resource_id/revision_id/digest均相同。只将标准引用比较改为三个契约字段的值比较，覆盖键序变动不误报、真实修订变化仍报告；不改变任务、标准、批准、布局或图集。编码前再次实际查看R24 P06.png并读取index/CATALOG/PAGE-CONTRACT及R23页面契约，文件摘要与既有design-baseline一致。定向浏览器验证、frontend lint/build、正常hooks/CI；仅更新前端静态资产到已验证候选，不重启后端、重激活身份或发起模型。保留原资产快照及加载摘要，新旧后台/前端候选分别记录。
+
+
+### 27.9 中文规划页面闭环完成与本轮收口
+
+2026-09-21 14:55 macOS证书正式信任验证成功，Codex内置浏览器可正常TLS访问。以原subject当前代次平台凭据通过正式nonce登录，页面显示human:demo323-requester及s5-323-demo / isolated-real-demo；未用issuer/模型凭据、未重新签发。14:56:40通过修订2页面“确认计划”保存Plan v2，刷新后仍显示同一确认时间。API及PostgreSQL只读核验：Plan ID 5ad74afd-a6bf-4b04-b395-34d18d01c3b6，version2，digest a789015b006cecc053dc5297529edf80fa430411253aa13e869c210292623492；Approval 6d30f690-d10b-4e6c-afcf-4d8ccea14e4b，精确绑定该Plan版本和摘要；source proposal revision2/digest66449ca1...与原Problem/Criteria引用一致。
+
+旧成本v1和采购Plan/Approval逐行保留。总Plan/Approval由2各增至3（含采购），调用/回执仍各19，七UNKNOWN与USD4.816896预留、17结算保持，执行对象仍0；本次最终确认轮模型调用0。恢复登录、确认及刷新均未重新生成或重复确认。截图page/01-before-confirm.png、02-confirmed.png、03-refreshed.png与confirmation-readback.json、pg-confirmed-plans-approvals.json沿既有productization/real-chinese入口保存，敏感凭据不进入截图或交付。
+
+标准版本误报已按§27.8最小修复：相同精确引用的键序变化不再误报，真实revision变化仍报告；两项针对性浏览器测试、frontend lint/build通过。正常hooks及最终远端CI按本提交另存外部候选审计，不借用9d39a67的CI。后端运行保留9d39a67；静态前端在新候选门禁通过后切到该构建，额外刷新验证不触发业务写入，实际双版本记入最终运行回执。
+
+收口矩阵：真实中文生成/显式页面确认/刷新/PG关联与历史保护完成；P06/IAM01局部视觉接受已获Human决定；IAM03安全功能既有验证复用，视觉为非阻断后续；投影未测，新中文理解未真实验证，真实自动修正未自然触发、受控修正证据独立；资源缺口仍2，资源/执行/业务验收不宣称完成。已知初次返回缺精确READ导致404的结果恢复证据保留，不把HTTP失败记为模型失败。
+
+合并准备：复核main bcf2def是产品候选祖先，GitHub MERGEABLE/CLEAN；181/183依赖已合入，无需其他开放PR。仅新增0032追加迁移且旧迁移摘要不改；ruleset要求PR、严格Quality Gates，禁止非快进及删分支。建议完成最终候选CI与审阅后，由Human另行决定Ready/普通merge；本任务不操作。回退保留追加审计并使用兼容0032的候选/只读维护，不启旧writer、不覆盖恢复数据库备份。Session保持OPEN，后续范围沿§26/§27.7，不新分配D2/D3/增量二。

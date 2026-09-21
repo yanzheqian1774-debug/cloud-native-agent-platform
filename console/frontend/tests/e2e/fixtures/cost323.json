@@ -1,0 +1,264 @@
+{
+  "revision": 1,
+  "semantics": {
+    "tasks": [
+      {
+        "title": "Collect billing and usage data",
+        "inputs": [
+          "Confirmed problem statement, scope, periods, RMB 8,000 budget baseline"
+        ],
+        "outputs": [
+          "Raw source snapshot of bills/usage plus documented data gaps"
+        ],
+        "task_id": "t1-read",
+        "operation": "READ_DATA",
+        "depends_on": [],
+        "input_kinds": [
+          "CONTEXT"
+        ],
+        "output_kind": "SOURCE_SNAPSHOT",
+        "responsibility": "Gather per-project/period itemized bills with project tags, token/model call detail, digital-employee runtime, shared-resource allocation records; record data gaps.",
+        "requirement_ids": [
+          "req-emp-analyst",
+          "req-knowledge-billing"
+        ],
+        "criterion_revision_ids": [
+          "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+        ],
+        "employee_requirement_id": "req-emp-analyst"
+      },
+      {
+        "title": "Validate scope and billing integrity",
+        "inputs": [
+          "Source snapshot from t1-read"
+        ],
+        "outputs": [
+          "Validated dataset with exclusions and integrity findings"
+        ],
+        "task_id": "t2-validate",
+        "operation": "VALIDATE_DATA",
+        "depends_on": [
+          "t1-read"
+        ],
+        "input_kinds": [
+          "SOURCE_SNAPSHOT"
+        ],
+        "output_kind": "VALIDATED_DATA",
+        "responsibility": "Verify per-project/period coverage, exclude trial-project fees, check duplicate billing and allocation-caliber errors; flag missing tags/records.",
+        "requirement_ids": [
+          "req-emp-analyst"
+        ],
+        "criterion_revision_ids": [
+          "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+        ],
+        "employee_requirement_id": "req-emp-analyst"
+      },
+      {
+        "title": "Summarize validated costs",
+        "inputs": [
+          "Validated data from t2-validate"
+        ],
+        "outputs": [
+          "Cost summary with comparability notes and open gaps"
+        ],
+        "task_id": "t3-summarize",
+        "operation": "SUMMARIZE",
+        "depends_on": [
+          "t2-validate"
+        ],
+        "input_kinds": [
+          "VALIDATED_DATA"
+        ],
+        "output_kind": "SUMMARY",
+        "responsibility": "Summarize validated costs by project/period with partial-month vs full-month budget comparability caveats; no equal-period claims.",
+        "requirement_ids": [
+          "req-emp-analyst"
+        ],
+        "criterion_revision_ids": [
+          "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+        ],
+        "employee_requirement_id": "req-emp-analyst"
+      },
+      {
+        "title": "Test candidate cost drivers",
+        "inputs": [
+          "Validated data and summary from t2-validate, t3-summarize"
+        ],
+        "outputs": [
+          "Factor analysis distinguishing evidence-backed vs untested causes"
+        ],
+        "task_id": "t4-analyze",
+        "operation": "ANALYZE_DATA",
+        "depends_on": [
+          "t2-validate",
+          "t3-summarize"
+        ],
+        "input_kinds": [
+          "VALIDATED_DATA",
+          "SUMMARY"
+        ],
+        "output_kind": "ANALYSIS",
+        "responsibility": "Examine usage, unit price, model mix, runtime resource config, duplicate billing, allocation errors, trial-fee mixing; mark each as supported/unproven by evidence.",
+        "requirement_ids": [
+          "req-emp-analyst"
+        ],
+        "criterion_revision_ids": [
+          "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+        ],
+        "employee_requirement_id": "req-emp-analyst"
+      },
+      {
+        "title": "Draft evidence-based October recommendations",
+        "inputs": [
+          "Analysis from t4-analyze"
+        ],
+        "outputs": [
+          "Recommendations with evidence links, impact, risk"
+        ],
+        "task_id": "t5-recommend",
+        "operation": "RECOMMEND",
+        "depends_on": [
+          "t4-analyze"
+        ],
+        "input_kinds": [
+          "ANALYSIS"
+        ],
+        "output_kind": "RECOMMENDATIONS",
+        "responsibility": "Propose 2026-10 adjustments only where evidence supports, with impact and risk; state gaps where evidence is insufficient.",
+        "requirement_ids": [
+          "req-emp-analyst"
+        ],
+        "criterion_revision_ids": [
+          "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+        ],
+        "employee_requirement_id": "req-emp-analyst"
+      },
+      {
+        "title": "Render final analysis report",
+        "inputs": [
+          "Recommendations from t5-recommend"
+        ],
+        "outputs": [
+          "Final read-only report for human review"
+        ],
+        "task_id": "t6-report",
+        "operation": "RENDER_REPORT",
+        "depends_on": [
+          "t5-recommend"
+        ],
+        "input_kinds": [
+          "RECOMMENDATIONS"
+        ],
+        "output_kind": "REPORT",
+        "responsibility": "Compile report covering data validation, factor findings, recommendations, remaining data/resource gaps; no fabricated results.",
+        "requirement_ids": [
+          "req-emp-analyst"
+        ],
+        "criterion_revision_ids": [
+          "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+        ],
+        "employee_requirement_id": "req-emp-analyst"
+      }
+    ],
+    "title": "星河客服（正式项目）2026-09模型与数字员工费用偏高分析规划",
+    "effect": "READ_ONLY",
+    "policy": {
+      "mode": "FREE",
+      "template": null,
+      "schema_version": "planning-policy.v2",
+      "required_operations": [],
+      "prohibited_operations": [],
+      "business_acceptance_as_task": false
+    },
+    "stages": [
+      {
+        "title": "Data Collection",
+        "stage_id": "stage-collect",
+        "task_ids": [
+          "t1-read"
+        ]
+      },
+      {
+        "title": "Verification & Summary",
+        "stage_id": "stage-verify",
+        "task_ids": [
+          "t2-validate",
+          "t3-summarize"
+        ]
+      },
+      {
+        "title": "Analysis & Recommendation",
+        "stage_id": "stage-analyze",
+        "task_ids": [
+          "t4-analyze",
+          "t5-recommend"
+        ]
+      },
+      {
+        "title": "Reporting",
+        "stage_id": "stage-report",
+        "task_ids": [
+          "t6-report"
+        ]
+      }
+    ],
+    "target": {
+      "problem": {
+        "digest": "594d364f17e0ddc2a3fdb378d01cbc51886f395d40c25b3a39ed81036f0c6ad6",
+        "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+        "revision_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b:1"
+      },
+      "criteria": {
+        "digest": "93f51f474d8daa0c8a0891f0ca25cee0f81e2b7c09cafb74a775571de2c6aa89",
+        "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+        "revision_id": "48d112c8-6cd7-53b4-8eef-b8920e91b312"
+      },
+      "criterion_revision_ids": [
+        "f7494721-f0c8-56b0-b803-c4ca66a5919f"
+      ],
+      "expected_problem_version": 3
+    },
+    "scenario": "GENERAL_READ_ONLY",
+    "boundaries": [
+      "Read-only data collection and analysis planning.",
+      "No guessing trial-fee share; missing tags/allocation records must be filled first.",
+      "Data and resource gaps must be listed when bills are unavailable.",
+      "Resource readiness and business results are not asserted."
+    ],
+    "requirements": [
+      {
+        "kind": "EMPLOYEE",
+        "name": "Cost analysis digital employee",
+        "purpose": "Execute read-only data collection, validation, analysis and reporting tasks",
+        "required": true,
+        "selected": null,
+        "operation": null,
+        "preparation": "Provision employee with billing-data access; resource not yet available",
+        "requirement_id": "req-emp-analyst"
+      },
+      {
+        "kind": "KNOWLEDGE",
+        "name": "Billing and allocation data sources",
+        "purpose": "Provide itemized bills, project tags, token/model detail, runtime and shared-resource allocation records",
+        "required": true,
+        "selected": null,
+        "operation": null,
+        "preparation": "Obtain exports from billing/monitoring systems; currently missing",
+        "requirement_id": "req-knowledge-billing"
+      }
+    ],
+    "business_rules": [
+      "Scope: official project 星河客服 only; exclude trial projects and their fees under same account.",
+      "Fees limited to model API and digital-employee compute; exclude salaries and software purchase.",
+      "Observation 2026-09-01..09-20 Asia/Shanghai (partial month); recommendation 2026-10-01..10-31; budget baseline RMB 8,000 (latest correction, 10,000 voided, unverified).",
+      "No equal-period comparison between 20-day observation and full-month budget.",
+      "Bills, token/model breakdowns, runtimes, shared-resource allocation records not provided; actual spend and overrun unknown.",
+      "Report no fabricated spend, unproven causes, or savings; recommendations only with evidence, plus impact and risk.",
+      "Planning only: no Assignment/Run/TaskRun, no execution or config changes; human acceptance is outside tasks."
+    ],
+    "schema_version": "planning.v3"
+  },
+  "proposal_id": "5ad74afd-a6bf-4b04-b395-34d18d01c3b6",
+  "invocation_id": "ac512acd-29a3-49f7-b757-e937378358eb",
+  "predecessor_digest": null
+}

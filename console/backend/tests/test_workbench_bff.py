@@ -752,3 +752,58 @@ def test_employee_registry_exposes_bounded_commands_and_exact_read() -> None:
                 "employee:employee-definition:quality:aggregate",
             ),
         )
+
+
+def test_login_page_return_and_html_failure_do_not_expose_credentials():
+    client, _, _ = build_client()
+    response = client.get(f"{PREFIX}/login?returnTo=%2Fwork%2Fplanning%2Fcost")
+    assert response.status_code == 200
+    assert 'value="/work/planning/cost"' in response.text
+    assert f'href="{PREFIX}/login-style"' in response.text
+    assert (
+        client.get(f"{PREFIX}/login-style")
+        .headers["content-type"]
+        .startswith("text/css")
+    )
+    failure = client.post(
+        f"{PREFIX}/session",
+        headers={"origin": "https://console.example", "accept": "text/html"},
+        data={
+            "loginNonce": "login-nonce",
+            "bootstrapCredential": "rejected-private-value",
+        },
+    )
+    assert failure.status_code == 401
+    assert "登录未完成" in failure.text
+    assert "rejected-private-value" not in failure.text
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("", "/workbench"),
+        ("?returnTo=%2Fwork%2Fplanning%2Fcost", "/work/planning/cost"),
+    ],
+)
+def test_browser_login_form_preserves_legacy_default_and_explicit_return(
+    query, expected
+):
+    import html
+    import re
+
+    client, _, _ = build_client()
+    form = client.get(f"{PREFIX}/login{query}")
+    destination = re.search(r'name="returnTo" value="([^"]*)"', form.text)
+    assert destination is not None
+    response = client.post(
+        f"{PREFIX}/session",
+        headers={"origin": "https://console.example"},
+        data={
+            "loginNonce": "login-nonce",
+            "bootstrapCredential": "bootstrap-secret",
+            "returnTo": html.unescape(destination.group(1)),
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == expected

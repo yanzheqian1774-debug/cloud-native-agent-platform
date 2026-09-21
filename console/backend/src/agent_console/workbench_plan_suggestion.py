@@ -104,7 +104,10 @@ class PlanningOwnerAdapter:
                     "AND revision=%s ORDER BY record->>'checked_at' DESC LIMIT 1",
                     (scope.namespace, scope.security_domain, identity, version),
                 ).fetchone()
+                from .planning_translation import display_translation
+
                 return {
+                    "display_translation": display_translation(proposal),
                     "proposal": proposal.model_dump(mode="json"),
                     "digest": proposal.digest,
                     "execution_status": "NOT_STARTED",

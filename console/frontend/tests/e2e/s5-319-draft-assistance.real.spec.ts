@@ -23,7 +23,7 @@ async function login(context: BrowserContext, credential: string): Promise<Page>
   const page = await context.newPage();
   await page.goto("/api/workbench/v1/login");
   await page.locator('input[name="bootstrapCredential"]').fill(credential);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "登录并返回工作台", exact: true }).click();
   await page.goto("/work");
   await expect(page.getByRole("heading", { name: "新建对话", exact: true })).toBeVisible();
   return page;

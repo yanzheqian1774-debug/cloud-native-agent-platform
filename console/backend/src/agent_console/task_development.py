@@ -279,7 +279,10 @@ def stopped(c, identity):
 
 
 def stop(service, context, identity, spec):
+    from .task_identity_continuity import lock_owner_generation
+
     with service.repository.connection_scope() as c:
+        lock_owner_generation(c)
         row = c.execute(
             "SELECT * FROM authorization_admin.task_delegations "
             "WHERE delegation_id=%s AND tenant_id=%s AND security_domain=%s "
@@ -296,3 +299,65 @@ def stop(service, context, identity, spec):
             (identity, context.principal_id, spec.reason),
         )
         return {"stopped": True}
+
+
+def prepare_planning_admission(service, context, request):
+    """Use the existing signed 323 exception before a new Chinese attempt.
+
+    This is an owner observation, never an independent signature. It cannot
+    enroll cases, accept another task's liabilities, or admit a live worker.
+    """
+    from .authority_contracts import ExactGrant
+    from .task_delegation import target_in_task
+
+    with service.repository.connection_scope() as c:
+        rows = c.execute(
+            "SELECT * FROM authorization_admin.task_delegations WHERE subject_id=%s "
+            "AND tenant_id=%s AND security_domain=%s AND task_id=%s",
+            (
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                "S5-V023-ARCH-323",
+            ),
+        ).fetchall()
+        exact = ExactGrant(
+            "PLAN", "PREPARE", f"plan:prepare:{request.target.problem.resource_id}"
+        )
+        matches = [
+            row
+            for row in rows
+            if revision(c, row["delegation_id"]) and target_in_task(c, row, exact)
+        ]
+        if not matches:
+            return  # Ordinary admission remains in force, including UNKNOWN guard.
+        if len(matches) != 1:
+            raise AuthorityError("TASK_DELEGATION_AMBIGUOUS")
+        identity = matches[0]["delegation_id"]
+        unknowns = c.execute(
+            "SELECT i.invocation_id FROM workflow_planning.invocations i "
+            "JOIN workflow_planning.invocation_results r USING "
+            "(namespace,security_domain,invocation_id) WHERE i.namespace=%s "
+            "AND i.security_domain=%s AND i.actor_id=%s "
+            "AND i.record->'target'->'problem'->'problem'->>'resource_id'=%s "
+            "AND r.record->>'technical_status'='OUTCOME_UNKNOWN' "
+            "ORDER BY i.invocation_id",
+            (
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                context.principal_id,
+                request.target.problem.resource_id,
+            ),
+        ).fetchall()
+    if unknowns:
+        return admit(
+            service,
+            context,
+            identity,
+            DiagnosticAdmission(
+                request_key=request.idempotency_key,
+                unknown_invocation_ids=[row["invocation_id"] for row in unknowns],
+                reason="Chinese bounded planning; signed 323 risk acceptance, "
+                "same-case owner recheck; original UNKNOWN and reservations retained",
+            ),
+        )
