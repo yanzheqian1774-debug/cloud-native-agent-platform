@@ -66,3 +66,5 @@ main bcf2def的CI 35551586800与Employee Identity Chain 35551586836成功。保�
 同视口对照页：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/visual-comparison.html`。截图、执行日志及SHA清单在同目录。正常后继提交及最终PR/CI精确身份由该目录交付回执追加登记，不将运行旧服务59224af冒充新候选。
 
 后续 Draft PR 为 #184。首轮远端候选811f066：Quality Gates、Frontend Quality Gates及身份链三项通过；浏览器失败分别定位为中文登录仍使用旧英文按钮定位、旧视觉测试仍使用原卡片DOM、过期身份提示旧文案。保留失败产物后同步准确中文按钮与新表格/资源区定位，不删除职责、角色、UNKNOWN、确认次数、身份消失/恢复等断言。布局1500/1366、资源UNKNOWN/版本不符、导航隔离4项补验通过。最终提交与CI身份继续记录在外部交付回执，不把首轮失败标为通过。
+
+第二候选035223a的核心、前端、主浏览器、理解交互、身份链、资源准备/组合及Kimi mock门禁通过；310场景进入登录POST后暴露默认Location兼容性。已将无returnTo登录表单恢复到原`/workbench`，显式原对象安全返回不变，保留原Location断言。BFF22项通过；使用专用64332测试库、独立20443/20444端口完整运行原HTTPS工作台场景通过，不使用原演示库或真实provider。最终修复另经正常提交门禁。

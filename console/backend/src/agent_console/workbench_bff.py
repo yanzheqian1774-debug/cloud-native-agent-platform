@@ -289,7 +289,7 @@ def create_workbench_bff(
         return HTMLResponse(
             login_document(
                 sessions.issue_login_nonce(),
-                request.query_params.get("returnTo", "/work"),
+                request.query_params.get("returnTo", "/workbench"),
             )
         )
 
