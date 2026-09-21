@@ -279,7 +279,10 @@ def stopped(c, identity):
 
 
 def stop(service, context, identity, spec):
+    from .task_identity_continuity import lock_owner_generation
+
     with service.repository.connection_scope() as c:
+        lock_owner_generation(c)
         row = c.execute(
             "SELECT * FROM authorization_admin.task_delegations "
             "WHERE delegation_id=%s AND tenant_id=%s AND security_domain=%s "

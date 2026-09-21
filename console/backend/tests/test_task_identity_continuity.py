@@ -362,7 +362,10 @@ def test_revoked_exact_grant_cannot_be_restored_by_new_identity(env, tmp_path):
         env.service.authorize(env.contexts["reader"], identity, fresh.request_id)
 
 
-def test_owner_read_then_active_and_revocation_share_one_lock_order(env, tmp_path):
+@pytest.mark.parametrize("operation", ["revoke", "stop"])
+def test_owner_read_then_active_and_revocation_share_one_lock_order(
+    env, tmp_path, operation
+):
     from threading import Event
     from time import monotonic
 
@@ -413,7 +416,19 @@ def test_owner_read_then_active_and_revocation_share_one_lock_order(env, tmp_pat
     def revoker():
         assert read_ready.wait(5)
         revoke_started.set()
-        revoke(env.service, env.contexts["approver"], identity, record["continuity_id"])
+        if operation == "revoke":
+            revoke(
+                env.service, env.contexts["approver"], identity, record["continuity_id"]
+            )
+        else:
+            from agent_console.task_development import DevelopmentStop, stop
+
+            stop(
+                env.service,
+                env.contexts["approver"],
+                identity,
+                DevelopmentStop(reason="PAUSED"),
+            )
         return "revoked"
 
     with ThreadPoolExecutor(max_workers=2) as pool:
