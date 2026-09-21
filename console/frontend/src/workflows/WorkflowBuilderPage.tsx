@@ -1,29 +1,49 @@
-import {referenceSupportsBinding,type ExactReference,type WorkflowContent,type WorkflowTask} from "../api/workflowDefinitions";
+import {useEffect,useMemo,useState} from "react";
+import type {WorkflowContent,WorkflowTask} from "../api/workflowDefinitions";
 import type {WorkflowSkillOperationEntry} from "../api/workflowSkillOperations";
-import {WorkflowSkillOperationBindingEditor} from "./WorkflowSkillOperationBindingEditor";
+import "../styles/workflow-designer.css";
+import {WorkflowCanvas} from "./WorkflowCanvas";
+import {WorkflowNodeForm} from "./WorkflowNodeForm";
+import {WorkflowResourceDetails} from "./WorkflowResourceDetails";
+import {inspectWorkflowGraph,nextTaskId,removeTask,renameTask,replaceTask} from "./workflowDesignerModel";
 
-const kinds: ExactReference["kind"][] = ["AGENT", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE"];
-const csv = (value: string) => value.split(",").map(item => item.trim()).filter(Boolean);
-const emptyTask = (index: number): WorkflowTask => ({taskId:`step-${index}`,name:"",dependsOn:[],inputs:[],outputs:[],capabilityRequirements:[],references:[],retryLimit:0,timeoutSeconds:300,failurePolicy:"FAIL_WORKFLOW"});
+const csv=(value:string)=>value.split(",").map(item=>item.trim()).filter(Boolean);
+const emptyTask=(taskId:string):WorkflowTask=>({taskId,name:"",dependsOn:[],inputs:[],outputs:[],capabilityRequirements:[],references:[],retryLimit:0,timeoutSeconds:300,failurePolicy:"FAIL_WORKFLOW"});
+type DesignerView="canvas"|"list"|"config";
 
 export function WorkflowBuilderPage({content,onChange,operationDirectory=[],operationDirectoryState="UNAVAILABLE",operationDirectoryReason,isLocked=()=>false}:{content:WorkflowContent;onChange:(value:WorkflowContent)=>void;operationDirectory?:WorkflowSkillOperationEntry[];operationDirectoryState?:"LOADING"|"READY"|"UNAVAILABLE";operationDirectoryReason?:string|null;isLocked?:()=>boolean}){
-  const updateTask=(index:number,patch:Partial<WorkflowTask>)=>{if(isLocked())return;onChange({...content,tasks:content.tasks.map((task,position)=>position===index?{...task,...patch}:task)})};
-  const updateReference=(taskIndex:number,referenceIndex:number,patch:Partial<ExactReference>)=>updateTask(taskIndex,{references:content.tasks[taskIndex].references.map((reference,index)=>index===referenceIndex?{...reference,...patch}:reference)});
-  return <section className="workbench-card resource-form" aria-label="Workflow Builder">
-    <header><p className="eyebrow">Definition Builder</p><h3>Workflow Definition 编写器</h3><p>这里保存定义，不创建 Workflow Run、Task Run 或 Attempt。</p></header>
-    <label>用途说明<textarea value={content.description} onChange={event=>onChange({...content,description:event.target.value})}/></label>
-    <div className="resource-form-grid"><label>Workflow 输入（逗号分隔）<input value={content.inputs.join(", ")} onChange={event=>onChange({...content,inputs:csv(event.target.value)})}/></label><label>Workflow 输出（逗号分隔）<input value={content.outputs.join(", ")} onChange={event=>onChange({...content,outputs:csv(event.target.value)})}/></label></div>
-    <fieldset><legend>精确 Runtime Profile 绑定</legend><label>资源 ID<input value={content.runtimeProfile.resourceId} onChange={event=>onChange({...content,runtimeProfile:{...content.runtimeProfile,resourceId:event.target.value}})}/></label><label>修订 ID<input value={content.runtimeProfile.revisionId} onChange={event=>onChange({...content,runtimeProfile:{...content.runtimeProfile,revisionId:event.target.value}})}/></label></fieldset>
-    {content.tasks.map((task,index)=><fieldset key={`${index}-${task.taskId}`}><legend>步骤 {index+1}</legend>
-      <label>步骤 ID<input value={task.taskId} pattern="[a-z][a-z0-9-]{0,62}" onChange={event=>updateTask(index,{taskId:event.target.value})}/></label><label>名称<input value={task.name} onChange={event=>updateTask(index,{name:event.target.value})}/></label>
-      <label>依赖步骤 ID（逗号分隔）<input value={task.dependsOn.join(", ")} onChange={event=>updateTask(index,{dependsOn:csv(event.target.value)})}/></label><label>能力要求（逗号分隔）<input value={task.capabilityRequirements.join(", ")} onChange={event=>updateTask(index,{capabilityRequirements:csv(event.target.value)})}/></label>
-      <label>输入（逗号分隔）<input value={task.inputs.join(", ")} onChange={event=>updateTask(index,{inputs:csv(event.target.value)})}/></label><label>输出（逗号分隔）<input value={task.outputs.join(", ")} onChange={event=>updateTask(index,{outputs:csv(event.target.value)})}/></label>
-      <label>重试上限<input type="number" min="0" max="10" value={task.retryLimit} onChange={event=>updateTask(index,{retryLimit:Number(event.target.value)})}/></label><label>超时秒数<input type="number" min="1" max="86400" value={task.timeoutSeconds} onChange={event=>updateTask(index,{timeoutSeconds:Number(event.target.value)})}/></label>
-      <label>失败策略<select value={task.failurePolicy} onChange={event=>updateTask(index,{failurePolicy:event.target.value as WorkflowTask["failurePolicy"]})}><option value="FAIL_WORKFLOW">FAIL_WORKFLOW</option><option value="SKIP_DEPENDENTS">SKIP_DEPENDENTS</option></select></label>
-      <div className="resource-reference-list"><strong>步骤资源引用</strong><p>通用资源引用不会自动创建 Skill operation binding。</p>{task.references.map((reference,referenceIndex)=>{const protectsBinding=task.skillOperationBindings?.some(binding=>referenceSupportsBinding(task,binding)&&reference.kind==="SKILL"&&reference.resourceId===binding.skillId&&reference.revisionId===binding.skillRevisionId);return <div className="resource-reference" key={referenceIndex}><label>类型<select value={reference.kind} disabled={protectsBinding} onChange={event=>updateReference(index,referenceIndex,{kind:event.target.value as ExactReference["kind"]})}>{kinds.map(kind=><option key={kind}>{kind}</option>)}</select></label><label>资源 ID<input value={reference.resourceId} readOnly={protectsBinding} onChange={event=>updateReference(index,referenceIndex,{resourceId:event.target.value})}/></label><label>修订 ID<input value={reference.revisionId} readOnly={protectsBinding} onChange={event=>updateReference(index,referenceIndex,{revisionId:event.target.value})}/></label><label>Digest（可选）<input value={reference.digest??""} readOnly={protectsBinding} onChange={event=>updateReference(index,referenceIndex,{digest:event.target.value||null})}/></label><button type="button" disabled={protectsBinding} title={protectsBinding?"当前契约不支持仅删除已有 Skill operation binding":""} onClick={()=>updateTask(index,{references:task.references.filter((_,position)=>position!==referenceIndex)})}>移除此引用</button></div>})}<button type="button" onClick={()=>updateTask(index,{references:[...task.references,{kind:"SKILL",resourceId:"",revisionId:""}]})}>添加精确资源引用</button></div>
-      <WorkflowSkillOperationBindingEditor task={task} isLocked={isLocked} directory={operationDirectory} directoryState={operationDirectoryState} directoryReason={operationDirectoryReason} onChange={value=>updateTask(index,value)}/>
-      <button type="button" disabled={content.tasks.length===1} onClick={()=>onChange({...content,tasks:content.tasks.filter((_,position)=>position!==index)})}>移除此步骤</button>
-    </fieldset>)}
-    <button type="button" onClick={()=>onChange({...content,tasks:[...content.tasks,emptyTask(content.tasks.length+1)]})}>添加步骤</button>
+  const [selectedTaskId,setSelectedTaskId]=useState<string|null>(content.tasks[0]?.taskId??null),[view,setView]=useState<DesignerView>("canvas"),[inspectorOpen,setInspectorOpen]=useState(true);
+  const effectiveTaskId=content.tasks.some(task=>task.taskId===selectedTaskId)?selectedTaskId:(content.tasks[0]?.taskId??null);
+  const selected=content.tasks.find(task=>task.taskId===effectiveTaskId)??null;
+  const issues=useMemo(()=>inspectWorkflowGraph(content.tasks),[content.tasks]);
+  useEffect(()=>{
+    const narrow=window.matchMedia("(max-width: 720px)");
+    const enterNarrow=(event:MediaQueryListEvent|MediaQueryList)=>{if(event.matches&&effectiveTaskId)setView("config")};
+    enterNarrow(narrow);
+    narrow.addEventListener("change",enterNarrow);
+    return()=>narrow.removeEventListener("change",enterNarrow);
+  },[effectiveTaskId]);
+  function select(taskId:string){setSelectedTaskId(taskId);setInspectorOpen(true);if(window.matchMedia("(max-width: 720px)").matches)setView("config")}
+  function update(task:WorkflowTask){if(!isLocked())onChange(replaceTask(content,task.taskId,task))}
+  function rename(nextId:string){if(!selected||isLocked())return;const prior=selected.taskId;onChange(renameTask(content,prior,nextId));setSelectedTaskId(nextId)}
+  function remove(){if(!selected||isLocked())return;const index=content.tasks.findIndex(task=>task.taskId===selected.taskId),next=content.tasks[index+1]??content.tasks[index-1]??null;onChange(removeTask(content,selected.taskId));setSelectedTaskId(next?.taskId??null);setView("canvas")}
+  function add(){if(isLocked())return;const taskId=nextTaskId(content.tasks);onChange({...content,tasks:[...content.tasks,emptyTask(taskId)]});setSelectedTaskId(taskId);setInspectorOpen(true);setView("config")}
+  function focusIssue(taskId:string|undefined,field:string){if(taskId){setSelectedTaskId(taskId);setInspectorOpen(true);setView("config");requestAnimationFrame(()=>document.getElementById(`workflow-task-${taskId.replace(/[^a-zA-Z0-9_-]/g,"_")}-${field}`)?.focus())}}
+  return <section className="workbench-card resource-form workflow-designer" aria-label="Workflow Builder" data-current-view={view}>
+    <header><div><p className="eyebrow">流程设计</p><h3>工作流设计器</h3><span className="workflow-sr-only">Workflow Definition 编写器</span><p>画布、步骤列表和节点详情共同编辑同一份正式定义。</p></div><span className={`workflow-designer__status${issues.length?" has-issues":""}`}>{issues.length?`${issues.length} 个待处理问题`:"结构检查通过（非运行状态）"}</span></header>
+    <details className="workflow-designer__definition" open><summary>工作流基本信息与运行配置</summary><div className="workflow-designer__definition-fields"><label>用途说明<textarea value={content.description} onChange={event=>{if(!isLocked())onChange({...content,description:event.target.value})}}/></label><div className="resource-form-grid"><label>工作流输入（逗号分隔）<input value={content.inputs.join(", ")} onChange={event=>{if(!isLocked())onChange({...content,inputs:csv(event.target.value)})}}/></label><label>工作流输出（逗号分隔）<input value={content.outputs.join(", ")} onChange={event=>{if(!isLocked())onChange({...content,outputs:csv(event.target.value)})}}/></label></div><fieldset><legend>精确 Runtime Profile 绑定</legend><label>资源 ID<input value={content.runtimeProfile.resourceId} onChange={event=>{if(!isLocked())onChange({...content,runtimeProfile:{...content.runtimeProfile,resourceId:event.target.value}})}}/></label><label>修订 ID<input value={content.runtimeProfile.revisionId} onChange={event=>{if(!isLocked())onChange({...content,runtimeProfile:{...content.runtimeProfile,revisionId:event.target.value}})}}/></label><label>Digest（GET 已有时保留）<input value={content.runtimeProfile.digest??""} onChange={event=>{if(!isLocked())onChange({...content,runtimeProfile:{...content.runtimeProfile,digest:event.target.value||null}})}}/></label></fieldset></div></details>
+    <div className="workflow-designer__tabs" role="tablist" aria-label="Workflow 设计器视图"><button type="button" role="tab" aria-selected={view==="canvas"} onClick={()=>setView("canvas")}>流程画布</button><button type="button" role="tab" aria-selected={view==="list"} onClick={()=>setView("list")}>步骤列表</button><button type="button" role="tab" aria-selected={view==="config"} disabled={!selected} onClick={()=>{setInspectorOpen(true);setView("config")}}>节点详情</button></div>
+    {issues.length>0&&<section className="workflow-designer__errors" aria-label="Workflow 校验错误列表" tabIndex={-1}><h4>需要修正的步骤与依赖</h4><ul>{issues.map(issue=><li key={issue.id}>{issue.taskId?<button type="button" onClick={()=>focusIssue(issue.taskId,issue.field)}>{issue.message}</button>:issue.message}</li>)}</ul><p>这些前端提示不会替代后端权威校验。</p></section>}
+    <div className={`workflow-designer__workspace${inspectorOpen?"":" workflow-designer__workspace--inspector-collapsed"}`}>
+      <section className={`workflow-designer__primary ${view==="config"?"workflow-designer__mobile-hidden":""}`}>
+        {!inspectorOpen&&selected&&<button type="button" className="workflow-designer__show-inspector" onClick={()=>setInspectorOpen(true)}>展开节点详情 · {selected.name||selected.taskId}</button>}
+        {view!=="list"?<WorkflowCanvas tasks={content.tasks} selectedTaskId={effectiveTaskId} onSelect={select}/>:<section className="workflow-designer__list" aria-label="等价 Workflow 步骤列表"><h4>步骤与真实依赖</h4><ol>{content.tasks.map(task=><li key={task.taskId}><button type="button" aria-pressed={effectiveTaskId===task.taskId} onClick={()=>select(task.taskId)}><strong>{task.name||"未命名步骤"}</strong><code>{task.taskId}</code><span>依赖：{task.dependsOn.join("、")||"无"}</span><span>{task.inputs.length} 个输入 · {task.outputs.length} 个输出 · {task.references.length} 个资源 · {task.skillOperationBindings?.length??0} 个操作</span></button></li>)}</ol></section>}
+        <button type="button" className="workflow-designer__add workflow-primary-action" aria-label="添加步骤" onClick={add}>＋ 添加未连接步骤</button>
+      </section>
+      <aside className={`workflow-designer__inspector${inspectorOpen?"":" is-collapsed"}${view==="config"?" is-active":""}`} aria-label="Workflow 节点侧边配置">
+        {selected?<><button type="button" className="workflow-designer__close" onClick={()=>{const id=selected.taskId;setInspectorOpen(false);setView("canvas");requestAnimationFrame(()=>document.querySelector<HTMLButtonElement>(`[data-workflow-node="${CSS.escape(`editor:${id}`)}"]`)?.focus())}}>收起节点详情</button><WorkflowNodeForm task={selected} content={content} onUpdate={update} onRename={rename} onRemove={remove} directory={operationDirectory} directoryState={operationDirectoryState} directoryReason={operationDirectoryReason} isLocked={isLocked}/><WorkflowResourceDetails task={selected} runtimeProfile={content.runtimeProfile} directory={operationDirectory} directoryState={operationDirectoryState}/></>:<div className="empty-state"><h3>选择步骤</h3><p>从画布或等价列表选择节点以查看配置与资源身份。</p></div>}
+      </aside>
+    </div>
+    <details className="workflow-designer__layout-boundary"><summary>布局保存说明</summary><p>自动布局为默认；拖动位置仅保留在当前页面视图，不写入 Workflow content，也不会跨设备保存。</p></details>
   </section>;
 }

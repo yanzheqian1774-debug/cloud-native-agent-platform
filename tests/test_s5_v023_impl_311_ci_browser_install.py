@@ -1,0 +1,347 @@
+from __future__ import annotations
+
+import os
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github/workflows/ci.yml"
+GOOGLE_APT_INDEX = (
+    "https://dl.google.com/linux/chrome-stable/deb/dists/stable/"
+    "main/binary-amd64/Packages.gz"
+)
+
+
+def browser_job() -> dict[str, object]:
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    return workflow["jobs"]["agent-workbench-browser"]
+
+
+def named_step(name: str) -> dict[str, object]:
+    return next(step for step in browser_job()["steps"] if step["name"] == name)
+
+
+@dataclass(frozen=True)
+class InstallResult:
+    completed: subprocess.CompletedProcess[str]
+    attempts: int
+    sleeps: list[str]
+    trace: list[str]
+
+
+def write_executable(path: Path, source: str) -> None:
+    path.write_text(source, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def run_install_step(
+    tmp_path: Path,
+    outcomes: list[tuple[int, str]],
+    *,
+    fail_tee: bool = False,
+) -> InstallResult:
+    mock_bin = tmp_path / "bin"
+    mock_bin.mkdir()
+    scenario = tmp_path / "scenario"
+    scenario.mkdir()
+    trace = tmp_path / "trace"
+    counter = tmp_path / "counter"
+    sleeps = tmp_path / "sleeps"
+
+    for attempt, (exit_code, output) in enumerate(outcomes, start=1):
+        (scenario / f"{attempt}.exit").write_text(str(exit_code), encoding="utf-8")
+        (scenario / f"{attempt}.log").write_text(output, encoding="utf-8")
+
+    write_executable(
+        mock_bin / "npm",
+        """#!/usr/bin/env bash
+echo "npm $*" >>"$INSTALL_TRACE"
+exit 0
+""",
+    )
+    write_executable(
+        mock_bin / "npx",
+        """#!/usr/bin/env bash
+echo "npx $*" >>"$INSTALL_TRACE"
+attempt=0
+if [ -f "$INSTALL_COUNTER" ]; then
+  attempt="$(<"$INSTALL_COUNTER")"
+fi
+attempt="$((attempt + 1))"
+echo "$attempt" >"$INSTALL_COUNTER"
+scenario="$INSTALL_SCENARIO/$attempt"
+if [ ! -f "$scenario.exit" ]; then
+  echo "unexpected extra install attempt" >&2
+  exit 99
+fi
+command cat "$scenario.log"
+exit "$(<"$scenario.exit")"
+""",
+    )
+    write_executable(
+        mock_bin / "sleep",
+        """#!/usr/bin/env bash
+echo "$1" >>"$INSTALL_SLEEPS"
+""",
+    )
+    if fail_tee:
+        write_executable(mock_bin / "tee", "#!/usr/bin/env bash\nexit 74\n")
+
+    install_step = named_step("Install frontend and Chromium")
+    completed = subprocess.run(
+        ["bash", "-e", "-c", install_step["run"]],
+        cwd=ROOT / install_step["working-directory"],
+        env={
+            **os.environ,
+            "PATH": f"{mock_bin}{os.pathsep}{os.environ['PATH']}",
+            "RUNNER_TEMP": str(tmp_path),
+            "INSTALL_TRACE": str(trace),
+            "INSTALL_COUNTER": str(counter),
+            "INSTALL_SCENARIO": str(scenario),
+            "INSTALL_SLEEPS": str(sleeps),
+        },
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    attempt_count = int(counter.read_text(encoding="utf-8")) if counter.exists() else 0
+    sleep_values = (
+        sleeps.read_text(encoding="utf-8").splitlines() if sleeps.exists() else []
+    )
+    trace_values = trace.read_text(encoding="utf-8").splitlines()
+    return InstallResult(completed, attempt_count, sleep_values, trace_values)
+
+
+EXPECTED_DETAILS = (
+    "    - Filesize:1412 [weak]",
+    f"    - SHA256:{'01' * 32}",
+)
+RECEIVED_DETAILS = (
+    "    - Filesize:1401 [weak]",
+    f"    - SHA256:{'fe' * 32}",
+)
+
+
+def apt_hash_failure(
+    *additional_lines: str,
+    expected_details: tuple[str, ...] = EXPECTED_DETAILS,
+    received_details: tuple[str, ...] = RECEIVED_DETAILS,
+    section_order: tuple[str, ...] = ("expected", "received"),
+) -> str:
+    sections = {
+        "expected": ("   Hashes of expected file:", *expected_details),
+        "received": ("   Hashes of received file:", *received_details),
+    }
+    details = tuple(line for section in section_order for line in sections[section])
+    return "\n".join(
+        (
+            f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch",
+            *details,
+            "   Last modification reported: Thu, 10 Sep 2026 01:00:00 +0000",
+            "   Release file created at: Thu, 10 Sep 2026 00:59:00 +0000",
+            "E: Some index files failed to download. They have been ignored, "
+            "or old ones used instead.",
+            "Failed to install browsers",
+            "Error: Installation process exited with code: 100",
+            *additional_lines,
+            "",
+        )
+    )
+
+
+def test_workflow_runs_locked_install_once_on_success(tmp_path: Path) -> None:
+    step = named_step("Install frontend and Chromium")
+    assert step["timeout-minutes"] == 5
+
+    result = run_install_step(tmp_path, [(0, "Chromium installed\n")])
+
+    assert result.completed.returncode == 0
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert result.trace == [
+        "npm ci",
+        "npx playwright install --with-deps chromium",
+    ]
+    assert "attempt=1/3 exit_code=0 error_category=none" in result.completed.stdout
+
+
+def test_known_google_apt_hash_failure_retries_with_short_backoff(
+    tmp_path: Path,
+) -> None:
+    result = run_install_step(
+        tmp_path,
+        [(1, apt_hash_failure()), (1, apt_hash_failure()), (0, "installed\n")],
+    )
+
+    assert result.completed.returncode == 0
+    assert result.attempts == 3
+    assert result.sleeps == ["30", "60"]
+    assert (
+        result.completed.stdout.count(
+            "error_category=google_apt_index_hash_sum_mismatch"
+        )
+        == 2
+    )
+    assert "attempt=3/3 exit_code=0 error_category=none" in result.completed.stdout
+
+
+def test_known_google_apt_hash_failure_fails_closed_after_three_attempts(
+    tmp_path: Path,
+) -> None:
+    result = run_install_step(tmp_path, [(1, apt_hash_failure())] * 3)
+
+    assert result.completed.returncode == 1
+    assert result.attempts == 3
+    assert result.sleeps == ["30", "60"]
+    assert "attempt=3/3 exit_code=1" in result.completed.stdout
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "output", "category"),
+    [
+        (
+            23,
+            apt_hash_failure("Error: disk full"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            31,
+            apt_hash_failure("npm error cache write failed"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            32,
+            apt_hash_failure("Killed"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            33,
+            apt_hash_failure("process terminated by signal 9"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            34,
+            apt_hash_failure("unexpected condition 42"),
+            "mixed_playwright_install_failure",
+        ),
+        (
+            17,
+            "Get:1 https://dl.google.com/linux/chrome-stable/deb Packages\n"
+            "E: Failed to fetch https://mirror.invalid/Packages.gz  "
+            "Hash Sum mismatch\n",
+            "playwright_install_failure_unclassified",
+        ),
+        (
+            42,
+            "unexpected installer failure\n",
+            "playwright_install_failure_unclassified",
+        ),
+    ],
+)
+def test_non_allowed_install_failures_do_not_retry(
+    tmp_path: Path,
+    exit_code: int,
+    output: str,
+    category: str,
+) -> None:
+    result = run_install_step(tmp_path, [(exit_code, output)])
+
+    assert result.completed.returncode == exit_code
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert f"attempt=1/3 exit_code={exit_code} error_category={category}" in (
+        result.completed.stdout
+    )
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        apt_hash_failure(section_order=()),
+        apt_hash_failure(section_order=("received",)),
+        apt_hash_failure(section_order=("expected",)),
+        apt_hash_failure(section_order=("received", "expected")),
+        apt_hash_failure(expected_details=(), received_details=()),
+        apt_hash_failure(
+            expected_details=(
+                EXPECTED_DETAILS[0],
+                f"    - SHA256:{'01' * 31}0",
+            )
+        ),
+        apt_hash_failure(
+            expected_details=(
+                EXPECTED_DETAILS[0],
+                f"    - SHA256:{'01' * 32} [weak]",
+            )
+        ),
+        apt_hash_failure(
+            received_details=(
+                RECEIVED_DETAILS[0],
+                "    - SHA1:0123456789abcdef0123456789abcdef01234567",
+            )
+        ),
+        apt_hash_failure(
+            received_details=(
+                EXPECTED_DETAILS[0],
+                EXPECTED_DETAILS[1],
+            )
+        ),
+    ],
+    ids=[
+        "all-details-missing",
+        "expected-section-missing",
+        "received-section-missing",
+        "detail-sections-reordered",
+        "empty-detail-sections",
+        "invalid-digest-format",
+        "strong-digest-marked-weak",
+        "different-field-sets",
+        "no-expected-received-mismatch",
+    ],
+)
+def test_incomplete_hash_detail_structure_does_not_retry(
+    tmp_path: Path, output: str
+) -> None:
+    result = run_install_step(tmp_path, [(35, output)])
+
+    assert result.completed.returncode == 35
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert "attempt=1/3 exit_code=35" in result.completed.stdout
+    assert "error_category=google_apt_index_hash_sum_mismatch" not in (
+        result.completed.stdout
+    )
+
+
+def test_reordered_allowed_failure_structure_does_not_retry(tmp_path: Path) -> None:
+    output = "\n".join(
+        (
+            f"E: Failed to fetch {GOOGLE_APT_INDEX}  Hash Sum mismatch",
+            "Failed to install browsers",
+            "E: Some index files failed to download. They have been ignored, "
+            "or old ones used instead.",
+            "Error: Installation process exited with code: 100",
+            "",
+        )
+    )
+    result = run_install_step(tmp_path, [(36, output)])
+
+    assert result.completed.returncode == 36
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert "error_category=mixed_playwright_install_failure" in (
+        result.completed.stdout
+    )
+
+
+def test_install_log_write_failure_stops_without_retry(tmp_path: Path) -> None:
+    result = run_install_step(tmp_path, [(1, "")], fail_tee=True)
+
+    assert result.completed.returncode == 74
+    assert result.attempts == 1
+    assert result.sleeps == []
+    assert "error_category=install_log_write_failure" in result.completed.stdout
