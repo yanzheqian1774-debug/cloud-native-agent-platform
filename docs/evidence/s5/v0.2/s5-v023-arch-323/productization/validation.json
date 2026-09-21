@@ -27,5 +27,24 @@
     "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/make-check.log"
   },
   "realProviderDispatches": 0,
-  "originalDatabaseReadback": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/timeout-revision/productization-audit.json"
+  "originalDatabaseReadback": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/real-demo/timeout-revision/productization-audit.json",
+  "normal_hooks": {
+    "candidate": "7f37ca7354818b795541e87ea70d8faeb06f504a",
+    "ruff_lint": "PASS",
+    "ruff_format": "PASS",
+    "full_pytest": "PASS",
+    "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/commit-hooks.log"
+  },
+  "follow_up": {
+    "cause": "Shared expiry mask incorrectly hid non-workbench read-only surfaces; retain their existing navigation contracts. Minimum loop cleanup must cover actual supervisor cleanup.",
+    "adaptive_pg_tests": {
+      "passed": 21,
+      "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/final-adaptive-tests.log"
+    },
+    "shared_shell_and_productization_browser": {
+      "passed": 9,
+      "log": "/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/shared-shell-fixed.log"
+    },
+    "providerDispatches": 0
+  }
 }

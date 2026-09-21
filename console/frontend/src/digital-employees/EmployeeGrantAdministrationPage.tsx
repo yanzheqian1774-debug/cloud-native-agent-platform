@@ -73,7 +73,7 @@ export function AuthorizationAdministrationPage() {
           decision,
           reasonCategory: decision === "APPROVE" ? "ASSIGNED_BUSINESS_DUTY" : "REQUEST_NOT_JUSTIFIED",
           basisType: "TICKET",
-          basisReference: `S5-V023-IMPL-310:${request.requestId}`,
+          basisReference: `workbench-grant-request:${request.requestId}`,
           ...(decision === "APPROVE" ? { expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() } : {}),
         },
         idempotencyKey,

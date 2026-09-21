@@ -8,6 +8,6 @@ export const resourceKinds: Record<string, string> = {
 export function artifactLabel(id: string, plan: Semantics): string {
   const producer = plan.tasks.find(task => task.outputs.includes(id));
   // Preserve provided business labels; resolve opaque graph references without changing semantics.
-  if (!/^A\d+\w*$/.test(id)) return id;
+  if (!/^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(id)) return id;
   return producer ? `${producer.title}结果` : "外部输入（名称待补充）";
 }

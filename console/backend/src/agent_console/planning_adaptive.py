@@ -23,7 +23,7 @@ class AdaptiveLimits:
             1 <= self.maximum_attempts <= 4
             and 1 <= self.single_seconds <= 300
             and self.single_seconds <= self.total_seconds <= 900
-            and 0 <= self.cleanup_seconds <= 5
+            and 2 <= self.cleanup_seconds <= 5
         ):
             raise ValueError("PLANNING_LOOP_LIMIT_INVALID")
 

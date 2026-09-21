@@ -62,7 +62,9 @@ def test_safe_same_object_return():
     )
 
 
-@pytest.mark.parametrize("mode", ["repair", "repeat", "unknown", "deadline"])
+@pytest.mark.parametrize(
+    "mode", ["repair", "reference", "repeat", "unknown", "deadline"]
+)
 def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mode):  # noqa: F811
     scope = ScopeIdentity("tenant-a", "quality")
     principal = SimpleNamespace(principal_id="employee:17")
@@ -96,7 +98,9 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
             if mode == "unknown":
                 raise TimeoutError
             output = deepcopy(semantics)
-            if self.calls == 1 or mode == "repeat":
+            if mode == "reference" and self.calls == 1:
+                output["tasks"][0]["employee_requirement_id"] = "not-declared"
+            elif mode != "reference" and (self.calls == 1 or mode == "repeat"):
                 output["tasks"][0]["title"] = (
                     "Collect billing records and usage details"
                 )
@@ -164,6 +168,7 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
             result["adaptive"]["stop_reason"]
             == {
                 "repair": "AWAIT_CONFIRMATION",
+                "reference": "AWAIT_CONFIRMATION",
                 "repeat": "NO_PROGRESS",
                 "unknown": "OUTCOME_UNKNOWN",
             }[mode]
@@ -172,12 +177,12 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
     again = service.begin_adaptive(principal, request)
     assert provider.calls == saved_calls
     assert again["result"] == result["result"]
-    if mode == "repair":
+    if mode in {"repair", "reference"}:
         assert provider.contexts[1]["validation_feedback"]["issues"][0]["path"] == [
             "semantics",
             "tasks",
             0,
-            "title",
+            "title" if mode == "repair" else "employee_requirement_id",
         ]
         assert result["result"]["proposal"]["semantics"][
             "target"
@@ -254,3 +259,8 @@ def test_loop_deadline_combines_disconnect_without_clearing_parent():
     assert cancellation.is_set()
     parent.clear()
     assert LoopCancellation(parent, 10, lambda: 10).is_set()
+
+
+def test_loop_cannot_advertise_less_than_supervisor_cleanup_bound():
+    with pytest.raises(ValueError, match="PLANNING_LOOP_LIMIT_INVALID"):
+        AdaptiveLimits(cleanup_seconds=0)

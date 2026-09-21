@@ -57,3 +57,10 @@ main bcf2def的CI 35551586800与Employee Identity Chain 35551586836成功。保�
 ## 未完成事项
 
 真实新增中文生成与修正、正式页面完整旅程需上述恢复；理解新策略尚未实际加载。资源候选发现与I/O/runtime可用性owner接口不足明确保留，不称作资源执行就绪。D2/D3/增量二定义沿原计划，不实施D3、ReAct、分工或业务执行。视觉接受与投影均不自动授予。新Draft PR及Session保持开放。
+
+
+## 验证记录
+
+首轮完整make check：2204通过、201跳过、1失败及关联teardown错误；原因是对frozen装配依赖赋值，改用dataclasses.replace，BFF装配/资源/循环21项补验通过。正常提交7f37ca7的Ruff和完整pytest hooks通过。未削弱断言、未跳过hook。随后共享ConsoleShell回归发现过期遮蔽越过主链路，已限定问题工作台/审批页并恢复外围既有导航契约；9项浏览器回归通过，新增规划PG测试21项通过。首轮失败与修复日志保留，不能将受控测试称作新真实模型质量验证。
+
+同视口对照页：`/Users/tristan/Documents/s5-v023-arch-323-acceptance/productization/visual-comparison.html`。截图、执行日志及SHA清单在同目录。正常后继提交及最终PR/CI精确身份由该目录交付回执追加登记，不将运行旧服务59224af冒充新候选。
