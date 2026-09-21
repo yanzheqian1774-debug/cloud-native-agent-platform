@@ -11,7 +11,7 @@ async function login(context:BrowserContext,credential:string){
   await page.locator('input[name="bootstrapCredential"]').fill(credential);
   await Promise.all([
     page.waitForURL(url=>url.pathname==="/work"),
-    page.getByRole("button",{name:"Sign in"}).click(),
+    page.getByRole("button",{name:"登录并返回工作台"}).click(),
   ]);
   return page;
 }

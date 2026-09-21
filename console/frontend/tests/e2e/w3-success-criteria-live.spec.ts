@@ -3,7 +3,7 @@ import {expect,test,type BrowserContext,type Locator,type Page} from "@playwrigh
 test.skip(process.env.S5_V023_IMPL_299_LIVE!=="1","requires the exclusive IMPL-299 PostgreSQL/Public HTTP harness");
 
 async function login(context:BrowserContext,credential:string){
-  const page=await context.newPage();await page.goto("/api/workbench/v1/login");await page.locator('input[name="bootstrapCredential"]').fill(credential);await Promise.all([page.waitForURL(url=>url.pathname==="/work"),page.getByRole("button",{name:"Sign in"}).click()]);return page;
+  const page=await context.newPage();await page.goto("/api/workbench/v1/login");await page.locator('input[name="bootstrapCredential"]').fill(credential);await Promise.all([page.waitForURL(url=>url.pathname==="/work"),page.getByRole("button",{name:"登录并返回工作台"}).click()]);return page;
 }
 
 async function approve(page:Page,requestId:string){
