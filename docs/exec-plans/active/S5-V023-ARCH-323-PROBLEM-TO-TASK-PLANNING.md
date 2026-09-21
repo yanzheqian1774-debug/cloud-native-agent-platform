@@ -1767,3 +1767,35 @@ Human已批准首批Ready/普通merge及本轮实际编码，Session仍OPEN。18
 - 集中激活包绑定实际候选tree、migration/config/generation摘要与issuer/subject、原cases/ledger，持久检查点和有期限就绪。审批人只在全部门禁及入口预检通过后执行一次可恢复操作包，不由调用方代签。新理解策略不增加owner发布权限。
 
 后续事项补充到§26既有三个任务包/下一切片，不新建台账：对话组件契约、项目/场景/用途模型配置、同案上下文/分层记忆、Skill/MCP/知识PR及图集、Runtime/OpenClaw/Hermes与执行验收、客户端平台依赖；沿原D2/D3/增量二归属，不纳入当前编码。
+
+
+### 27.7 真实中文后继与最终页面收口（2026-09-21）
+
+运行及产品候选9d39a6737d68ffc42c31479b6f43afce108793ea，12/12对应CI成功。原独立issuer已正式签发 task-continuity-583aecc338d64a5a9ad1901f34848484，可信代次1→2，原subject及s5-323-demo / isolated-real-demo保持；新subject凭据技术期限至2026-09-21 21:33:04北京时间，不修改旧凭据或委托。原read55/total60/output8192配置保持，新中文理解策略未加载。
+
+原成本Problem/Criteria复用，真实Kimi调用4a588fc0-a101-4474-a5fa-51a555ad6b51首轮成功；同proposal 5ad74afd-a6bf-4b04-b395-34d18d01c3b6修订2，摘要66449ca1af78ff99387048894cebaef94ca467f421e223e1a62f83e246ef7784。四阶段六任务中文业务字段，8,000元、排除试验项目、账单及分摊缺口、部分月可比限制均保持；依赖/引用/语言规则通过并另作业务内容审阅。真实自动修正未触发，不人为追加调用，受控修正证据独立保留。输入5745、输出1845 token，估算USD0.082860（非供应商账单）。原七UNKNOWN与USD4.816896预留、原16结算及旧方案/批准逐行不变；新增第17结算，总估算USD0.582440。执行对象零。
+
+模型成功后的HTTP读回因缺plan:prepared精确READ而404；已走原委托正式申请并按原key GET恢复，未重发模型。最终收口本轮禁止invoke_once.py或任何新模型调用。现场仍仅旧Plan/Approval v1；修订2页面确认、刷新与同一新Plan/Approval读回待浏览器证书信任处理。不能以proposal持久化代替确认。当前证书为127.0.0.1自签叶证书，与运行服务TLS实测一致；macOS trust验证尚不信任，未关闭TLS或绕过浏览器警告。平台subject凭据已正式登录验证，非模型API key/issuer凭据。
+
+Human已明确P06、IAM01本轮局部视觉接受；IAM03保留过期隐藏业务内容、重认证核验身份权限、零自动重发/确认/执行，功能证据通过后的视觉差异为非阻断后续项。本轮不重做。实际投影未测。继续绑定R24局部基线，R26–R28仅后续资料。
+
+§26既有A包补充：登录凭据获取说明及完整账号体验；公共框架/名称/导航/搜索/个人与组织入口；用户右侧、助手左侧、系统事件独立呈现；咨询、轻任务、复杂任务及多任务交叉交互。当前仅bootstrap凭据登录及单案工作台，缺账号获取说明与跨任务交互契约；依赖后续Human确认的组件/交互与图集基线，验收需同页参考对照、身份安全、状态及任务隔离，不以R26–R28自动替换R24。§26B保留新中文理解策略真实验证，依赖正式owner配置/精确授权，不重做已有理解；验收为真实中文补问/纠正/标准持久链。§26C继续资源准备增强、Runtime/OpenClaw/Hermes、D3与结果验收，沿既定D2/D3/增量二定义及前置契约，不纳入本轮。上述条目不新建重复台账。
+
+证据沿既有productization入口：本地real-chinese/receipt.json、content-and-preservation.json、usage.json、certificate-verification.json和human-visual-decision.json。当前main bcf2def仍为候选祖先，GitHub MERGEABLE/CLEAN；仅新增0032迁移，0028–0031不改，依赖已合入181/183。最终页面闭环前保持Draft；未执行Ready/merge/deploy/Session关闭。
+
+### 27.8 最终确认现场最小修复 G1（编码前）
+
+证书信任已由Human完成，2026-09-21 14:56页面以原subject确认修订2并刷新；PG新增同Plan v2及Approval 6d30f690-d10b-4e6c-afcf-4d8ccea14e4b，旧记录保持，本轮模型调用0。现场发现修订影响把对象JSON键序当内容差异，错误提示成功标准已变化，而精确resource_id/revision_id/digest均相同。只将标准引用比较改为三个契约字段的值比较，覆盖键序变动不误报、真实修订变化仍报告；不改变任务、标准、批准、布局或图集。编码前再次实际查看R24 P06.png并读取index/CATALOG/PAGE-CONTRACT及R23页面契约，文件摘要与既有design-baseline一致。定向浏览器验证、frontend lint/build、正常hooks/CI；仅更新前端静态资产到已验证候选，不重启后端、重激活身份或发起模型。保留原资产快照及加载摘要，新旧后台/前端候选分别记录。
+
+
+### 27.9 中文规划页面闭环完成与本轮收口
+
+2026-09-21 14:55 macOS证书正式信任验证成功，Codex内置浏览器可正常TLS访问。以原subject当前代次平台凭据通过正式nonce登录，页面显示human:demo323-requester及s5-323-demo / isolated-real-demo；未用issuer/模型凭据、未重新签发。14:56:40通过修订2页面“确认计划”保存Plan v2，刷新后仍显示同一确认时间。API及PostgreSQL只读核验：Plan ID 5ad74afd-a6bf-4b04-b395-34d18d01c3b6，version2，digest a789015b006cecc053dc5297529edf80fa430411253aa13e869c210292623492；Approval 6d30f690-d10b-4e6c-afcf-4d8ccea14e4b，精确绑定该Plan版本和摘要；source proposal revision2/digest66449ca1...与原Problem/Criteria引用一致。
+
+旧成本v1和采购Plan/Approval逐行保留。总Plan/Approval由2各增至3（含采购），调用/回执仍各19，七UNKNOWN与USD4.816896预留、17结算保持，执行对象仍0；本次最终确认轮模型调用0。恢复登录、确认及刷新均未重新生成或重复确认。截图page/01-before-confirm.png、02-confirmed.png、03-refreshed.png与confirmation-readback.json、pg-confirmed-plans-approvals.json沿既有productization/real-chinese入口保存，敏感凭据不进入截图或交付。
+
+标准版本误报已按§27.8最小修复：相同精确引用的键序变化不再误报，真实revision变化仍报告；两项针对性浏览器测试、frontend lint/build通过。正常hooks及最终远端CI按本提交另存外部候选审计，不借用9d39a67的CI。后端运行保留9d39a67；静态前端在新候选门禁通过后切到该构建，额外刷新验证不触发业务写入，实际双版本记入最终运行回执。
+
+收口矩阵：真实中文生成/显式页面确认/刷新/PG关联与历史保护完成；P06/IAM01局部视觉接受已获Human决定；IAM03安全功能既有验证复用，视觉为非阻断后续；投影未测，新中文理解未真实验证，真实自动修正未自然触发、受控修正证据独立；资源缺口仍2，资源/执行/业务验收不宣称完成。已知初次返回缺精确READ导致404的结果恢复证据保留，不把HTTP失败记为模型失败。
+
+合并准备：复核main bcf2def是产品候选祖先，GitHub MERGEABLE/CLEAN；181/183依赖已合入，无需其他开放PR。仅新增0032追加迁移且旧迁移摘要不改；ruleset要求PR、严格Quality Gates，禁止非快进及删分支。建议完成最终候选CI与审阅后，由Human另行决定Ready/普通merge；本任务不操作。回退保留追加审计并使用兼容0032的候选/只读维护，不启旧writer、不覆盖恢复数据库备份。Session保持OPEN，后续范围沿§26/§27.7，不新分配D2/D3/增量二。

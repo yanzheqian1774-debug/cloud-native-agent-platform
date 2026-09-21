@@ -61,7 +61,7 @@ export function PlanningPage() {
   }
   const previous = history.proposals.find(p => p.revision === data.proposal.revision - 1);
   const changedTasks = previous ? [...new Set([...previous.semantics.tasks.map(t=>t.task_id), ...data.proposal.semantics.tasks.map(t=>t.task_id)])].filter(id=>JSON.stringify(previous.semantics.tasks.find(t=>t.task_id===id))!==JSON.stringify(data.proposal.semantics.tasks.find(t=>t.task_id===id))) : [];
-  const criteriaChanged = previous && JSON.stringify(previous.semantics.target.criteria) !== JSON.stringify(plan.target.criteria);
+  const criteriaChanged = previous && (["resource_id", "revision_id", "digest"] as const).some(key => previous.semantics.target.criteria[key] !== plan.target.criteria[key]);
   const optional = plan.requirements.filter(r => !r.required);
   const optionalUnmatched = optional.filter(r => status(r) !== "MATCHED");
   const kinds = [...new Set(plan.requirements.map(r => r.kind))];

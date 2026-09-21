@@ -109,3 +109,21 @@ test('long persisted technical context is disclosed without displacing the plan'
  await expect(disclosure.locator('p')).toBeVisible();
  await page.reload();await expect(disclosure.locator('p')).toBeHidden();expect(writes).toBe(0);
 });
+
+for (const changed of [false, true]) {
+ test(`criteria revision comparison ignores object key order but detects real changes: ${changed}`, async ({page}) => {
+  const current=structuredClone(proposal); current.revision=2;
+  const criteria=proposal.semantics.target.criteria;
+  current.semantics.target.criteria={digest:criteria.digest,revision_id:changed ? 'new-criteria-revision' : criteria.revision_id,resource_id:criteria.resource_id};
+  let writes=0;
+  await page.route('**/api/workbench/v1/**', async route=>{
+   if(route.request().method()!=='GET')writes++;
+   const path=new URL(route.request().url()).pathname;
+   if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:controlled',tenantId:'fixture',securityDomain:'fixture'},session:{},csrfToken:'fixture'}});
+   return route.fulfill({json:{result:path.endsWith('/history')?{proposals:[proposal,current],plans:[],conversation:[]}:{proposal:current,digest:'controlled-revision-digest',snapshot:null}}});
+  });
+  await page.goto(`/work/planning/${proposal.proposal_id}?revision=2`);
+  await expect(page.getByText(changed ? /成功标准版本：已变化/ : /成功标准版本：保持原已确认版本/)).toBeVisible();
+  expect(writes).toBe(0);
+ });
+}
