@@ -13,7 +13,8 @@
     "artifactEvaluationFollowup": {
       "passed": 2,
       "skipped": 0,
-      "junit": "/tmp/s5-324-evaluation-pg.xml"
+      "junit": "/tmp/s5-324-evaluation-pg.xml",
+      "retainedFailure": "Test variable target shadowed by Evidence adapter; corrected final digest reference, all assertions retained"
     },
     "browserFixture": {
       "passed": 2,
@@ -26,6 +27,51 @@
       "warning": 1,
       "log": "/tmp/s5-324-continuation-check-v2.log",
       "finalCandidateGate": "PENDING"
+    },
+    "normalCommitGate": {
+      "ruffLint": "PASS",
+      "ruffFormat": "PASS",
+      "pytest": "PASS",
+      "log": "/tmp/s5-324-continuation-commit.log",
+      "exactTestCount": "Not emitted by successful pre-commit hook; do not reuse earlier counts"
+    },
+    "frontend": {
+      "lint": "PASS",
+      "liveBuild": "PASS",
+      "warning": "existing chunk above 500 kB"
+    },
+    "evidenceCommitFirstGate": {
+      "status": "FAILED",
+      "passed": 2117,
+      "skipped": 348,
+      "failed": 2,
+      "warning": 1,
+      "log": "/tmp/s5-324-evidence-commit.log",
+      "tests": [
+        "test_local_https_outputs_and_metering_are_independent[invalid-json-FAILED-None]",
+        "test_client_cancellation_reaps_and_persists_unknown"
+      ],
+      "oneDiagnosticReproduction": "2 passed; deadline-continuation-diagnostic.json",
+      "inference": "Cold spawned PREPARE consumes 0.733-0.775 s of fixed 1 s total; original failed run lacked receipt diagnostics, so exact original stage is unproven",
+      "change": "Add receipt diagnostics only; no deadline, assertion, skip or runtime behavior changes"
+    },
+    "evidenceCommitSecondGate": {
+      "status": "FAILED",
+      "passed": 2115,
+      "skipped": 348,
+      "failed": 4,
+      "log": "/tmp/s5-324-evidence-commit-v2.log",
+      "cause": "Diagnostic record_property parameter omitted by four Kimi test reuse callers; parameter forwarding corrected",
+      "targetedFollowup": "4 passed, 23 deselected; unchanged assertions/timeouts"
+    },
+    "implementationCandidateCI": {
+      "commit": "778f6392b8100f0f90fc17fabc9b52d1ab849320",
+      "passed": 11,
+      "failed": 1,
+      "failureRun": 35601449012,
+      "failureStage": "existing Run native HTTPS mock-provider journeys",
+      "prepared324BackendAndBrowserStages": "PASS",
+      "diagnosis": "artifact retrieval pending; no blind workflow rerun"
     }
   },
   "migrationSha256": {
@@ -52,7 +98,8 @@
     "humanDecision": 0,
     "resourcePublication": "PENDING_HUMAN",
     "grantRequests": 3,
-    "grantDecisions": 0
+    "grantDecisions": 0,
+    "nativeCompositionPreflight": "PASS_WITHOUT_RUN_ONCE"
   },
   "limitations": [
     "Actual Kubernetes Native dispatch and resulting evidence not yet executed",
@@ -60,5 +107,7 @@
     "Reference binding and fixture screenshots are not Human visual acceptance",
     "Full source PR integration and OpenClaw execution remain outside this bounded Native resource path"
   ],
-  "noReadyMergeDeploymentOrSessionClosure": true
+  "noReadyMergeDeploymentOrSessionClosure": true,
+  "implementationCommit": "778f6392b8100f0f90fc17fabc9b52d1ab849320",
+  "historyPreservation": "26 protected tables unchanged against retained full backup; continuation-final-preservation.json"
 }

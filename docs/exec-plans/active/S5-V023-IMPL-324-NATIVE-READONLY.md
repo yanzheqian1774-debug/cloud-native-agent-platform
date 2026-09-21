@@ -82,3 +82,7 @@ S04/M07再次实读后，局部吸收#168身份详情，新增受管operation输
 保留所有失败：旧 Kimi SEND / Responses READ_BODY deadline；本续接完整门禁首次 core compatibility consumer allowlist 失败；六 Task 首次 Skill const-only Schema 不支持、Evidence writer 尚未激活和测试基线 ledger 缺失；首次服务启动缺 gateway PYTHONPATH。按证据修正，未删断言、跳过或覆盖失败。旧第一次门禁/单项复现记录保持。
 
 完整 324 未完成：原案例 Native、真实产物、正式评价、Human 决定和执行后刷新/重启读回均待顺序完成。323 CLOSED，七 UNKNOWN、预留和结算不改；不 Ready/合并/部署/关闭 Session。
+
+续接实现提交 `778f639` 的正常 Ruff/format/pytest 钩子全通过，钩子未输出测试总数，不复用旧数量。新增六产物与 Criteria/ResourceUse 评价关联及 Human 后继测试 2 项通过；测试变量重名导致的首次尾部断言失败保留。前端 lint/live build 通过（既有大 chunk 提示）。正式 Native composition 预检通过且未调用 run_once，固定 kind context 私有副本；原库 Run/Attempt/命令均零。与保留完整备份比较 26 组保护记录一致。当前 CI 以原 PR #186 的后续实际候选检查为准，继续 Draft。
+
+证据追加提交门禁首次失败：2117 passed / 348 skipped / 2 failed（既有 Responses invalid-json 预期 FAILED 实得 UNKNOWN、取消测试取消前已返回）。原日志 `/tmp/s5-324-evidence-commit.log` 保留。一次定点诊断 2 passed：真实收据 PREPARE 已消耗 0.733–0.775 秒，而该 fixture 总预算 1 秒；推测对冷启动/调度敏感，原失败未输出收据，不能认定其确切 phase。仅追加失败时 deadline 和取消前状态诊断，不改任何阈值、断言或生产代码，不把单测复现当完整门禁。

@@ -1,0 +1,65 @@
+[
+  {
+    "test": "console/backend/tests/test_planning_responses_boundaries.py::test_local_https_outputs_and_metering_are_independent[invalid-json-FAILED-None]",
+    "outcome": "passed",
+    "requests": 1,
+    "receipts": [
+      {
+        "result": {
+          "technical_status": "FAILED",
+          "kind": null,
+          "reason": "PLANNING_PROVIDER_RESPONSE_INVALID"
+        },
+        "deadline": {
+          "reason": "RESULT_ACCEPTED",
+          "stage": "VALIDATE_RESPONSE",
+          "stage_seconds": {
+            "PREPARE": 0.7749896659952356,
+            "CREDENTIAL": 0.7785931659891503,
+            "CONNECT": 0.7832861659990158,
+            "SEND_REQUEST": 0.8145207079942338,
+            "WAIT_HEADERS": 0.8145624159951694,
+            "READ_BODY": 0.8177861250005662,
+            "CLOSE": 0.8178016659949208,
+            "VALIDATE_RESPONSE": 0.8178084159881109
+          },
+          "decision_seconds": 0.8204950409999583,
+          "cleanup_seconds": 0.0020396670006448403,
+          "worker_pid": 32283,
+          "reaped": true,
+          "kill_requested": false
+        }
+      }
+    ]
+  },
+  {
+    "test": "console/backend/tests/test_planning_responses_boundaries.py::test_client_cancellation_reaps_and_persists_unknown",
+    "outcome": "passed",
+    "requests": 1,
+    "receipts": [
+      {
+        "result": {
+          "technical_status": "OUTCOME_UNKNOWN",
+          "kind": null,
+          "reason": "PROVIDER_OUTCOME_UNKNOWN"
+        },
+        "deadline": {
+          "reason": "CANCELLED",
+          "stage": "WAIT_HEADERS",
+          "stage_seconds": {
+            "PREPARE": 0.7326829170051496,
+            "CREDENTIAL": 0.7369221669941908,
+            "CONNECT": 0.7414133330021286,
+            "SEND_REQUEST": 0.7690207080013352,
+            "WAIT_HEADERS": 0.7693409579951549
+          },
+          "decision_seconds": 0.7949375419993885,
+          "cleanup_seconds": 0.002322375003132038,
+          "worker_pid": 32293,
+          "reaped": true,
+          "kill_requested": false
+        }
+      }
+    ]
+  }
+]
