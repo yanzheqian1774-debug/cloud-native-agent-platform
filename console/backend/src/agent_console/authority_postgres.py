@@ -589,6 +589,10 @@ class PostgresAuthorityRepository:
         def read(current, *, lock_for_owner: bool):
             if configure_transaction:
                 current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            if lock_for_owner:
+                from .task_identity_continuity import lock_owner_generation
+
+                lock_owner_generation(current)
             credential_id = self._current_credential_id(
                 current,
                 context,
@@ -677,6 +681,10 @@ class PostgresAuthorityRepository:
         def read(current, *, lock_for_owner: bool):
             if configure_transaction:
                 current.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            if lock_for_owner:
+                from .task_identity_continuity import lock_owner_generation
+
+                lock_owner_generation(current)
             credential_id = self._current_credential_id(
                 current,
                 context,

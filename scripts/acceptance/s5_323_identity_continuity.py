@@ -398,6 +398,35 @@ class Activation:
                 "UNEXPECTED_ACTIVE_GENERATION",
             )
             control = HostRecoveryControl(Path(runtime["recoveryControlPath"]))
+            host = control.read()
+            from agent_console.authority_contracts import ControlState
+            from agent_console.governed_execution_ownership import (
+                execution_database_fingerprint,
+            )
+
+            host_identity = (host.generation, host.generation_digest)
+            require(
+                host.database_fingerprint
+                == runtime["databaseFingerprint"]
+                == execution_database_fingerprint(self.db)
+                and host.recovery_epoch == state[2]
+                and host_identity
+                in (
+                    (old.generation, old.digest),
+                    (candidate.generation, candidate.digest),
+                )
+                and host.state in (ControlState.ACTIVE, ControlState.ACTIVATION_PENDING)
+                and (
+                    state[0] != candidate.generation
+                    or host_identity == (candidate.generation, candidate.digest)
+                )
+                and (
+                    state[0] != old.generation
+                    or host_identity == (old.generation, old.digest)
+                    or host.state is ControlState.ACTIVATION_PENDING
+                ),
+                "HOST_DATABASE_TRANSITION_MISMATCH",
+            )
             current = candidate if state[0] == candidate.generation else old
             controller = AuthorityGenerationController(
                 ActivationBarrier(current),

@@ -360,3 +360,63 @@ def test_revoked_exact_grant_cannot_be_restored_by_new_identity(env, tmp_path):
     )
     with pytest.raises(AuthorityError, match="REVOKED_PERMISSION"):
         env.service.authorize(env.contexts["reader"], identity, fresh.request_id)
+
+
+def test_owner_read_then_active_and_revocation_share_one_lock_order(env, tmp_path):
+    from threading import Event
+    from time import monotonic
+
+    from agent_console.grant_administration_application import GrantRequestCommand
+
+    identity, spec, *_ = prepared(env, tmp_path)
+    record = approve(env.service, env.contexts["approver"], identity, spec)
+    member = submit(env).members[0]
+    request = env.grants.submit_request(
+        env.contexts["reader"],
+        GrantRequestCommand("PROBLEM_DRAFT_ASSISTANCE", (member,), "owner-lock-order"),
+    )
+    env.service.authorize(env.contexts["reader"], identity, request.request_id)
+    read_ready, revoke_started = Event(), Event()
+
+    def owner():
+        with env.service.repository.connection_scope() as c:
+            assert env.grants.authorization.has_current_grants(
+                env.contexts["reader"],
+                (member,),
+                now=datetime.now(UTC),
+                generation=2,
+                recovery_epoch=1,
+                connection=c,
+            ) == (True,)
+            read_ready.set()
+            assert revoke_started.wait(5)
+            deadline = monotonic() + 5
+            waiting = False
+            while monotonic() < deadline:
+                waiting = c.execute(
+                    "SELECT 1 FROM pg_locks WHERE locktype='advisory' "
+                    "AND objid=3230028 AND NOT granted AND pid<>pg_backend_pid() "
+                    "AND database=(SELECT oid FROM pg_database "
+                    "WHERE datname=current_database())"
+                ).fetchone()
+                if waiting:
+                    break
+                Event().wait(0.02)
+            assert waiting, "revocation must wait at governance, before control locks"
+            # This later owner binding used to risk control -> governance inversion.
+            assert (
+                active(c, identity)[0]["_continuity"]["continuity_id"]
+                == record["continuity_id"]
+            )
+        return "committed-before-revocation"
+
+    def revoker():
+        assert read_ready.wait(5)
+        revoke_started.set()
+        revoke(env.service, env.contexts["approver"], identity, record["continuity_id"])
+        return "revoked"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        a, b = pool.submit(owner), pool.submit(revoker)
+        assert a.result(10) == "committed-before-revocation"
+        assert b.result(10) == "revoked"

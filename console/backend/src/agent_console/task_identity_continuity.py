@@ -35,6 +35,21 @@ def available(c):
     )
 
 
+def lock_owner_generation(c):
+    """Owner transactions take governance locks before session/grant/control locks.
+
+    A criteria revision can enter active() later in its owner transaction. Taking
+    this lock only there would invert the order against an independent revocation.
+    Legacy databases without this extension keep their existing locking behavior.
+    """
+    if available(c):
+        c.execute("SELECT pg_advisory_xact_lock(3230028)")
+        c.execute(
+            "SELECT generation FROM authorization_admin.active_generation "
+            "WHERE singleton=true FOR SHARE"
+        ).fetchone()
+
+
 def transition_proof(current, candidate, readiness):
     """Only called by the trusted Foundation controller, never from an HTTP body."""
 

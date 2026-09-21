@@ -10,6 +10,8 @@ Session OPEN / PR #184 Draft。G2 v1已获Human批准；实现和运行独立签
 
 集中脚本`scripts/acceptance/s5_323_identity_continuity.py`先在独立64332数据库/19438 HTTPS服务演练：原合成数据库只读导出→受控副本迁移→可信代次激活→新服务健康/认证检查→受控独立签发→持久读回；全程零provider dispatch。第一次签发后读回发现datetime规范化差异，修复后按已有签发恢复，未重复签发。原失败日志与原签名保留。再次重入复用代次/签名，原20集合摘要不变。该证据不是原实例激活。
 
+最终复核补齐owner事务入口的治理锁顺序，避免先持control读取锁再进入active()与独立撤销反向等待；专用并发测试观察撤销在治理锁等待后，owner事务继续绑定并提交，再完成撤销。激活入口另核对host control与数据库epoch、旧/新代次及databaseFingerprint，拒绝无关恢复状态。受控新subject已沿正式exact申请/委托签发读回原成本Problem、Criteria、Plan与历史，旧Grant保持。
+
 ## 视觉差异
 
 R24 P06/IAM01/IAM03实际打开查看，index/CATALOG/页/契约摘要追加design-baseline.json。P06持久业务卡进入持续对话；请求携带历史上下文标为“已保存的规划输入”，不伪造为新消息；历史缺失明确提示。对话补充仅影响新建议，正式标准修改独立链接，方案确认独立按钮。历史译文来源/原文入口/摘要保留。
