@@ -85,6 +85,8 @@ def build_workbench_composition(
     draft_assistance: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     planning_v2_enabled: bool = False,
+    prepared_execution_coordinator=None,
+    prepared_resource_services=None,
     planning_invocations: PlanningInvocationDependencies | None = None,
     planning_unavailable_reason: str = "PLANNING_NOT_CONFIGURED",
     managed_closeables: tuple[object, ...] = (),
@@ -122,11 +124,67 @@ def build_workbench_composition(
         planning = PlanningApplication(
             planning_repository, business_problems.problems, None
         )
+    from .workbench_prepared_execution import (
+        PreparedExecutionGrantTargets,
+        prepared_execution_operations,
+    )
+
+    if prepared_execution_coordinator is not None and not planning_v2_enabled:
+        raise AuthorityError("PREPARED_EXECUTION_REQUIRES_PLANNING")
+    if (
+        prepared_execution_coordinator is not None
+        and authority_database
+        != execution_database_fingerprint(
+            prepared_execution_coordinator.repository.pool.conninfo
+        )
+    ):
+        raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    if prepared_execution_coordinator is not None:
+        from .prepared_execution_schema import migrate as migrate_prepared
+        from .prepared_result_review import migrate as migrate_review
+        from .resource_use_postgres import PostgresResourceUseRepository
+
+        resource_use = PostgresResourceUseRepository(
+            owner_database_url,
+            migration_path=Path(__file__).parents[2]
+            / "migrations/0015_resource_use_measurement.sql",
+        )
+        try:
+            resource_use.migrate()
+        finally:
+            resource_use.close()
+
+        with (
+            business_problems.problems.pool.connection() as connection,
+            connection.transaction(),
+        ):
+            migrate_prepared(connection)
+            migrate_review(connection)
+    from .workbench_prepared_resources import (
+        PreparedResourceTargets,
+        prepared_resource_operations,
+    )
+
+    if prepared_resource_services:
+        if prepared_execution_coordinator is None:
+            raise AuthorityError("PREPARED_EXECUTION_DISABLED")
+        for service in prepared_resource_services.values():
+            if (
+                execution_database_fingerprint(service.repository.pool.conninfo)
+                != authority_database
+            ):
+                raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
-        additional=(
+        additional=((PreparedResourceTargets(),) if prepared_resource_services else ())
+        + (
+            (PreparedExecutionGrantTargets(),)
+            if prepared_execution_coordinator is not None
+            else ()
+        )
+        + (
             (
                 DraftAssistanceGrantTargetValidator(
                     draft_assistance.repository,
@@ -243,6 +301,16 @@ def build_workbench_composition(
             grant_administration=foundation.grants,
             operations=(
                 *(
+                    prepared_resource_operations(prepared_resource_services)
+                    if prepared_resource_services
+                    else ()
+                ),
+                *(
+                    prepared_execution_operations(prepared_execution_coordinator)
+                    if prepared_execution_coordinator is not None
+                    else ()
+                ),
+                *(
                     planning_operations(planning, employee_definitions)
                     if planning is not None
                     else ()
@@ -263,6 +331,7 @@ def build_workbench_composition(
                 *employee_operations(
                     employee_definitions,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    prepared_resource_reads=prepared_resource_services is not None,
                 ),
                 *digital_employee_operations(digital_employees),
                 *(workflow_operations(workflows) if workflows is not None else ()),

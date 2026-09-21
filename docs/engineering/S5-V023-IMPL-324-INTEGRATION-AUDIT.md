@@ -29,3 +29,9 @@ main相对该候选已增加MCP server closeAllConnections、PC/移动视口焦�
 ## 324局部吸收记录
 
 从#168 HEAD `388b6e3993fcbd41526cb4038cd8974446980ce0`吸收ResourceRelationship精确来源类型与CapabilityResourceDetails身份/operation/tool区分结构，在本分支重写为中文、只读Schema与缺口详情，绑定S04/M07。未宣称完整合入#168：目录、clone/import/export确认、harness/reporter和其原验收仍未整合；不关闭来源PR。#167以及其他残余处置仍待实施，不因此局部吸收标成DONE。
+
+## 本批必要资源的处理结果
+
+继续复用 main 已有 Skill、Knowledge、Agent、RuntimeProfile、Employee 生命周期与持久 owner，仅补本次四资源精确读取/审核、Task 绑定和 Native Skill 接线。#168 仅前述结构局部吸收；#167 的完整来源浏览/导入/预览并非本案例必需：本批固定合成单快照与摘要，直接使用已有 Knowledge owner，不新增 PDF/Qdrant 路线。#166 编辑器不作为静态精确映射前置。#163/#164/#170 已有 main owner 不回退，残余整体 PR 差异不统一重做。#169 OpenClaw 与 0021 仍保留独立后续，其旧失败诊断未宣称修复；本批 Native 改动不合并 OpenClaw 源分支。
+
+因此本批是必要资源接线，不是七个来源 PR 全量整合验收。来源 PR 保留，不 Ready、不关闭；后续按原残余清单继续。新增 0034/0035 不占用 0021，已在原隔离库正常注册并保留 checksum，旧 writer 停止；兼容回退保留新事实、不得用旧 writer 写新 schema。

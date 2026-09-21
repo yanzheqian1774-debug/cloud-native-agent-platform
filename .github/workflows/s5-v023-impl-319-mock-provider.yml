@@ -115,12 +115,33 @@ jobs:
             console/backend/tests/test_task_development.py \
             console/backend/tests/test_task_identity_continuity.py
 
+      - name: Prepared Native owner and artifact transactions (isolated 324)
+        env:
+          PLANNING323_TEST_DATABASE_URL: ${{ env.ACCEPTANCE_DATABASE_URL }}
+          PREPARED_EXECUTION_TEST_DATABASE_URL: ${{ env.ACCEPTANCE_DATABASE_URL }}
+        run: |
+          uv run pytest -q --junitxml=${{ runner.temp }}/prepared-324.xml \
+            console/backend/tests/test_prepared_execution_binding.py \
+            console/backend/tests/test_prepared_native_pipeline.py \
+            console/backend/tests/test_prepared_result_review.py \
+            console/backend/tests/test_prepared_resource_owners.py \
+            console/backend/tests/test_execution_preparation.py \
+            console/backend/tests/test_execution_preparation_postgres.py \
+            console/backend/tests/test_synthetic_cost_skill.py
+
       - name: Understanding usage and cancellation UI (controlled 323)
         working-directory: console/frontend
         env:
           CONSOLE_FRONTEND_PORT: "19329"
           PLAYWRIGHT_OUTPUT_DIR: ${{ runner.temp }}/understanding-usage-ui
         run: npx playwright test --config playwright.s5-323-usage.config.ts
+
+      - name: Prepared execution and resource review UI (controlled 324)
+        working-directory: console/frontend
+        env:
+          CONSOLE_FRONTEND_PORT: "19330"
+          PLAYWRIGHT_OUTPUT_DIR: ${{ runner.temp }}/prepared-324-ui
+        run: npx playwright test tests/e2e/s5-324-execution.spec.ts --retries=0 --forbid-only
 
       - name: Prove owned cleanup preserves an injected failure
         shell: bash
@@ -164,6 +185,8 @@ jobs:
           name: s5-v023-impl-319-mock-provider-evidence
           path: |
             ${{ runner.temp }}/responses-323.xml
+            ${{ runner.temp }}/prepared-324.xml
+            ${{ runner.temp }}/prepared-324-ui/
             ${{ runner.temp }}/s5-v023-impl-319-evidence.json
             ${{ runner.temp }}/s5-v023-impl-319-playwright/
             ${{ runner.temp }}/s5-v023-impl-319-playwright.json

@@ -102,6 +102,25 @@ class ExecutionPreparation(Immutable):
         return canonical_digest(self.model_dump(mode="json"))
 
     @property
+    def mapping_digest(self):
+        # Known before successor confirmation; excludes Plan/Approval to avoid a cycle.
+        return canonical_digest(
+            {
+                key: self.model_dump(mode="json")[key]
+                for key in (
+                    "namespace",
+                    "security_domain",
+                    "root_assignment_id",
+                    "root_instance_id",
+                    "participants",
+                    "source_snapshot",
+                    "synthetic",
+                    "execution_boundary",
+                )
+            }
+        )
+
+    @property
     def run_id(self) -> str:
         # Request keys and individual Task IDs deliberately do not enter this ID.
         return "workflow-run:" + self.digest

@@ -123,8 +123,11 @@ class EmployeeDefinitionCommandOwnerAdapter:
         MemberKind.WORKFLOW: "WORKFLOW",
     }
 
-    def __init__(self, repository: EmployeeDefinitionRepository) -> None:
+    def __init__(
+        self, repository: EmployeeDefinitionRepository, *, prepared_resource_reads=False
+    ) -> None:
         self.repository = repository
+        self.prepared_resource_reads = prepared_resource_reads
 
     @staticmethod
     def _scope(call: AuthorizedOwnerCall) -> ScopeIdentity:
@@ -171,6 +174,25 @@ class EmployeeDefinitionCommandOwnerAdapter:
             call.context.scope.security_domain,
         )
         for member in revision.members:
+            if self.prepared_resource_reads and member.kind in {
+                MemberKind.SKILL,
+                MemberKind.KNOWLEDGE,
+                MemberKind.RUNTIME_PROFILE,
+            }:
+                from .workbench_prepared_resources import OWNERS, reference
+
+                kind = {
+                    MemberKind.SKILL: "skill",
+                    MemberKind.KNOWLEDGE: "knowledge",
+                    MemberKind.RUNTIME_PROFILE: "runtime",
+                }[member.kind]
+                call.authority.require(
+                    principal,
+                    OWNERS[kind],
+                    "READ_RESOURCE",
+                    reference(kind, member.resource_id, member.revision_id),
+                )
+                continue
             owner = self._MEMBER_READ_OWNERS.get(member.kind)
             if owner is None:
                 raise WorkbenchOwnerError("EMPLOYEE_MEMBER_AUTHORITY_UNAVAILABLE", 409)
@@ -521,8 +543,12 @@ def _placement_read(context, path, payload, query):
 def employee_operations(
     repository: EmployeeDefinitionRepository,
     cursors: WorkbenchCursorCodec,
+    *,
+    prepared_resource_reads=False,
 ) -> tuple[WorkbenchOperation, ...]:
-    command_handler = EmployeeDefinitionCommandOwnerAdapter(repository)
+    command_handler = EmployeeDefinitionCommandOwnerAdapter(
+        repository, prepared_resource_reads=prepared_resource_reads
+    )
     return (
         WorkbenchOperation(
             "LIST_EMPLOYEES",

@@ -1943,6 +1943,7 @@ def _configure_workbench() -> None:
     planning_runtime = None
     planning_unavailable = "PLANNING_NOT_CONFIGURED"
     planning_path = os.environ.get("PLANNING_RUNTIME_FILE", "")
+    prepared_knowledge_pool = None
     try:
         if planning_path and os.environ.get("PLANNING_V2_ENABLED") == "true":
             try:
@@ -1960,6 +1961,38 @@ def _configure_workbench() -> None:
                 runtime_configuration_path=Path(draft_profile_path),
                 migrations_path=_MIGRATIONS,
             )
+        prepared_coordinator = None
+        prepared_resource_services = None
+        if os.environ.get("PREPARED_EXECUTION_ENABLED") == "true":
+            if _native_dispatch_application is None:
+                raise ValueError("PREPARED_NATIVE_STORAGE_UNAVAILABLE")
+            from agent_console.prepared_native_coordinator import (
+                PreparedNativeCoordinator,
+            )
+
+            prepared_coordinator = PreparedNativeCoordinator(
+                _native_dispatch_application.repository
+            )
+            # This bounded path reads the published source document, not a
+            # retrieval index. Reuse the Knowledge lifecycle owner without
+            # installing or pretending to configure a vector store.
+            from agent_console.knowledge_lifecycle_service import (
+                KnowledgeLifecycleService,
+            )
+            from agent_console.knowledge_postgres import PostgresKnowledgeRepository
+
+            prepared_knowledge = PostgresKnowledgeRepository(
+                os.environ.get("EXECUTION_DATABASE_URL", ""),
+                migration_path=_MIGRATIONS / "0003_knowledge_operations.sql",
+            )
+            prepared_knowledge_pool = prepared_knowledge.pool
+            prepared_knowledge.compatibility()
+            prepared_resource_services = {
+                "skill": skill_mcp_api.get_skill_mcp_service(),
+                "runtime": runtime_profile_api.get_service(),
+                "knowledge": KnowledgeLifecycleService(prepared_knowledge),
+                "agent": _agent_definition_service,
+            }
         _workbench_composition = build_workbench_composition(
             runtime_configuration_path=Path(runtime_path),
             allowed_host=allowed_host,
@@ -1972,6 +2005,8 @@ def _configure_workbench() -> None:
                 planning_runtime.dependencies if planning_runtime else None
             ),
             planning_unavailable_reason=planning_unavailable,
+            prepared_execution_coordinator=prepared_coordinator,
+            prepared_resource_services=prepared_resource_services,
             agent_definitions=_agent_definition_service.repository,
             employee_definitions=_digital_employee_assembly.employee_definitions,
             digital_employees=_digital_employee_assembly.repository,
@@ -1987,11 +2022,14 @@ def _configure_workbench() -> None:
                 if _draft_assistance_composition is not None
                 else ()
             )
-            + ((planning_runtime,) if planning_runtime is not None else ()),
+            + ((planning_runtime,) if planning_runtime is not None else ())
+            + ((prepared_knowledge_pool,) if prepared_knowledge_pool else ()),
         )
         workbench_app = _workbench_composition.application
         _workbench_startup_error = ""
     except (OSError, ValueError):
+        if prepared_knowledge_pool is not None:
+            prepared_knowledge_pool.close()
         if planning_runtime is not None:
             planning_runtime.close()
         if _draft_assistance_composition is not None:

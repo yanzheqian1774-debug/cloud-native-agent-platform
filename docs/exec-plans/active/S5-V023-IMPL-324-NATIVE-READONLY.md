@@ -62,3 +62,23 @@
 S04/M07再次实读后，局部吸收#168身份详情，新增受管operation输入输出、MCP缺口、中文字段表及完整Schema键盘展开。前端npm ci/lint/build通过，视图fixture浏览器2项通过（2.5s），125%缩放无页面横向溢出，截图保留且已实读；不是实际资源或主链验收。#168完整目录/复用/harness与#167仍未完成。
 
 提交钩子另一次2113通过/336跳过/1失败（Responses READ_BODY deadline）；提交未生成，未跳过钩子。首次浏览器启动60s超时，以及复用默认模式构建导致路由不显示均保留；正确live构建后原断言通过。
+
+## 断点续接：正式装配与待人工步骤（2026-09-21）
+
+从 a103b99 / 原 Draft PR #186 续接，核对原候选 12/12 CI；旧绿灯不代表本续接候选。没有重建 Session、Plan、Approval 或模型规划。D324-1/2/3 及三项约束仍是实施依据。
+
+已接通 planning owner 原始 Plan 引用、root 与 Task 参与 Assignment、精确发布资源、同一个 Native worker 的 managed Skill effect、幂等控制、取消停止收据和 PostgreSQL 产物；新增 0034/0035 各 domain checksum 注册。已有 Canonical Run 身份不变量不变，不复制旧 Plan 到另一 owner；资源 READ、Task START、Skill ordinal INVOKE 分别授权。Evidence writer 必须已通过正常切换验证，否则零 Run/派发。
+
+结果评价绑定确切 Criteria、终态快照、产物摘要及 ResourceUse 快照；技术 SUCCEEDED 不等于标准通过或业务解决。原案例标准是 Human 评价的规划标准，且保留“只规划”历史，合成数据不能证实真实成本结论：本批先形成 UNKNOWN/UNDETERMINED，Human 可确认限制或异议，不能自动关闭 Problem。
+
+四项必要资源（Skill、Native profile、Knowledge 合成快照、Agent）及一个 Employee 草稿已通过正常 owner 创建，仍待 Human 发布。Skill Schema 修正和 Employee 重绑均创建正常不可变后继，旧草稿保留。无 MCP 实际依赖，不为演示强加 MCP/Qdrant/模型；Knowledge 使用现有 PG lifecycle/source snapshot。真实绑定/实例/Assignment/执行修订尚未创建，等待发布事实。
+
+原 writer 已精确核对后停止，备份完成，现有 authority controller 激活 generation 3，仅增加请求资格、不发 grant、不延长凭据。原 26 组保护摘要未变化。原执行域确认为零记录后，用明确新建的空 324 SQLite 初始源，经已有导入与校验切换到 PG；它不是历史 323 SQLite 备份。初始化 receipt 保留来源及零记录校验，未来不再执行初始化。
+
+[实际入口预检](../../evidence/s5/v0.2/s5-v023-impl-324/actual-entry-preflight.json)：HTTPS 证书验证、健康、原工作台和独立审批读取三条实际申请均通过；浏览器已打开实际准入入口，显示需要登录。未模拟批准。三条准备申请 PENDING，[集中操作包](../../evidence/s5/v0.2/s5-v023-impl-324/human-operation-package.md) 明确顺序、真实 ID 和范围；完成资源/Employee Human 发布后，再生成实际窄后继、确认及独立执行申请，不能预造将来对象。
+
+受控验证：32 项准备/PG/资源/状态/Skill 测试通过；六 Task 使用真实 PG、Skill owner 和 Native worker，Kubernetes 明确为替身，不能当作原案例实际执行。增加六产物与标准评价关联验证另记结果。前端 lint/build 与两项浏览器 fixture 通过，刷新零命令重发、部分发布失败保留、125% 输入区可见；视觉参考绑定不等于 Human 视觉验收。完整提交门禁和当前候选 CI 待记录。
+
+保留所有失败：旧 Kimi SEND / Responses READ_BODY deadline；本续接完整门禁首次 core compatibility consumer allowlist 失败；六 Task 首次 Skill const-only Schema 不支持、Evidence writer 尚未激活和测试基线 ledger 缺失；首次服务启动缺 gateway PYTHONPATH。按证据修正，未删断言、跳过或覆盖失败。旧第一次门禁/单项复现记录保持。
+
+完整 324 未完成：原案例 Native、真实产物、正式评价、Human 决定和执行后刷新/重启读回均待顺序完成。323 CLOSED，七 UNKNOWN、预留和结算不改；不 Ready/合并/部署/关闭 Session。

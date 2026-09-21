@@ -71,3 +71,9 @@ artifact采用已有PG/Evidence owner：每Task至多16个产物、每产物256K
 3. 每Task产物数量按全部Attempt历史累计，Run字节按全部Task/Attempt历史累计；锁定同Run预算行原子校验后追加，重放同产物不重计，冲突拒绝；不得删除历史或重置额度。
 
 本次准许连续实施、必要资源整合、受控验证和页面交付；不再次请求同方向确认。保留Plan v2，通过正常后继流程形成隔离合成资料只读执行修订及可审查差异，不重新生成理解或整套规划。实现与实际入口预检通过后集中提供修订确认及独立准入操作流程，分别保留正式记录。323 CLOSED、旧Approval、七UNKNOWN与账本不变；新首页、平台底座和完整记忆平台不纳入本批。
+
+## 接受决定的实现落点（续接）
+
+0034 添加原 planning owner 的精确引用登记与 Task 参与身份，不复制或覆盖 v2。PreparedNativeCoordinator/SkillCaller 与既有 NativeDispatchWorker 接线，Runtime/Task/Skill 每次派发均再校验当前授权；UNKNOWN 不重发。取消已请求且 effect 尚未获准时形成可核对停止收据，不能仅从 Attempt 集合推断取消；已获 effect 许可而无停止证据仍不能 CANCELLED。0033 的历史累计原子限额由 Skill 终态事务调用，超限回滚不隐藏旧产物。
+
+0035 保存 exact Criteria / artifact / ResourceUse 终态快照、标准评价、Human 确认及 Outcome 后继，幂等命令不重复记录，异议不覆盖原评价。原案例 Human 规划标准无法被合成执行自动判 PASS；此限制在页面、评价和操作包持续披露。服务端独立准入与 Human 记录仍未由开发授权替代。
