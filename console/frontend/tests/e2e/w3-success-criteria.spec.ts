@@ -54,6 +54,7 @@ async function draftCriterion(page:import("@playwright/test").Page,text:string){
 
 test("confirm is the write gate and official readback survives refresh and revision",async({page},testInfo)=>{
   const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[]};await installRoutes(page,state);await page.goto("/work?problem=problem%3Aw3-1");
+  await expect(page.locator(".px-task-summary-panel")).toContainText("查看权限已核验");await expect(page.locator(".px-task-summary-panel")).not.toContainText("尚未申请");
   const card=await draftCriterion(page,"客户确认未来三批均能按承诺日期交付。");expect(state.criterionWrites).toHaveLength(0);
   await card.getByRole("button",{name:"修改原文"}).click();await page.getByLabel("修改成功标准原文").fill("业务负责人确认未来三批均能按承诺日期交付。");await page.getByRole("button",{name:"采用标准原文"}).click();
   const confirm=card.getByRole("button",{name:"确认并保存"});await confirm.evaluate((button:HTMLButtonElement)=>{button.click();button.click()});await expect(card).toContainText("已保存并完成正式关联");
