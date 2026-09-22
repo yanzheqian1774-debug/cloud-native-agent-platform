@@ -45,11 +45,24 @@ def validate_approved_preparation(connection, preparation):
         or row["approval"].get("plan_digest") != p.plan_digest
     ):
         raise ExecutionPreparationError("PREPARED_PLAN_APPROVAL_MISMATCH")
-    from .cost_execution_revision import EXECUTION_ONLY, SYNTHETIC_ONLY
+    from .cost_execution_revision import (
+        DELIVERY_SYNTHETIC_ONLY,
+        EXECUTION_ONLY,
+        SYNTHETIC_ONLY,
+    )
+    from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+
+    delivery = [
+        t.executor_id == SyntheticDeliverySkillExecutor.revision.executor_id
+        for t in p.participants
+    ]
+    if any(delivery) and not all(delivery):
+        raise ExecutionPreparationError("PREPARED_EXECUTION_CASE_MIXED")
+    boundary = DELIVERY_SYNTHETIC_ONLY if all(delivery) else SYNTHETIC_ONLY
 
     if (
         EXECUTION_ONLY not in plan.semantics.business_rules
-        or SYNTHETIC_ONLY not in plan.semantics.boundaries
+        or boundary not in plan.semantics.boundaries
     ):
         raise ExecutionPreparationError("PREPARED_EXECUTION_SUCCESSOR_REQUIRED")
     requirements = {r.requirement_id: r for r in plan.semantics.requirements}
@@ -71,10 +84,15 @@ def validate_approved_preparation(connection, preparation):
             if requirement.required and requirement.kind not in {
                 "EMPLOYEE",
                 "KNOWLEDGE",
+                "SKILL",
             }:
                 raise ExecutionPreparationError(
                     "PREPARED_REQUIREMENT_OWNER_NOT_CONFIGURED"
                 )
+            if requirement.kind == "SKILL" and (
+                requirement.selected != participant.skill.reference
+            ):
+                raise ExecutionPreparationError("PREPARED_SKILL_SELECTION_MISMATCH")
     expected = f"执行准备映射SHA256：{p.mapping_digest}；"
     if not any(text.startswith(expected) for text in plan.semantics.boundaries):
         raise ExecutionPreparationError("PREPARED_MAPPING_NOT_APPROVED")

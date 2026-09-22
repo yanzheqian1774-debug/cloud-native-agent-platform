@@ -1,6 +1,8 @@
 # ruff: noqa: RUF001 -- Preserve approved Chinese boundary text exactly.
 """D324's narrow human-reviewable successor, without understanding/model calls."""
 
+from typing import Literal
+
 from pydantic import Field
 
 from .plan_suggestion_domain import (
@@ -28,9 +30,14 @@ SYNTHETIC_ONLY = (
     "仅对本次固定的隔离合成资料进行只读采集与分析；"
     "产物不能证明星河客服真实费用、超支原因或节约效果。"
 )
+DELIVERY_SYNTHETIC_ONLY = (
+    "仅对本次固定快照及判定日期的合成采购订单分析交付及时性；"
+    "不得读取真实企业数据，产物不证明真实业务损失或真实企业问题已解决。"
+)
 
 
 class CostExecutionRevisionRequest(Immutable):
+    case: Literal["cost", "delivery"] = "cost"
     plan_version: int = Field(ge=1)
     plan_digest: Digest
     source_snapshot: ExactReference
@@ -39,7 +46,10 @@ class CostExecutionRevisionRequest(Immutable):
 
     @property
     def digest(self):
-        return canonical_digest(self.model_dump(mode="json"))
+        record = self.model_dump(mode="json")
+        if self.case == "cost":
+            record.pop("case")  # Preserve all existing request/replay identities.
+        return canonical_digest(record)
 
 
 def execution_successor(
@@ -73,7 +83,9 @@ def execution_successor(
         EXECUTION_ONLY if text == PLANNING_ONLY else text for text in old.business_rules
     ]
     record["boundaries"] = [
-        SYNTHETIC_ONLY if text == READ_ONLY_PLANNING else text
+        (DELIVERY_SYNTHETIC_ONLY if request.case == "delivery" else SYNTHETIC_ONLY)
+        if text == READ_ONLY_PLANNING
+        else text
         for text in old.boundaries
     ] + [
         f"隔离合成来源：{request.source_snapshot.resource_id}；"

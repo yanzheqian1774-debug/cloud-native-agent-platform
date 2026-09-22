@@ -45,3 +45,13 @@ Employee精确读取已有owner聚合版本，BFF projection遗漏。增量返�
 ### 最终候选CI发现的真实owner缺口
 
 0f4ed09 的 PostgreSQL Business Problem and Plan Entry 在两项Employee精确读取/撤销测试失败，KeyError aggregateVersion。根因是普通owner.read已有字段，但read_revision_for_workbench独立SQL投影没有；初始单元替身人工提供该字段，未覆盖真实SQL路径。已在同一授权事务/FOR SHARE内选择definition.aggregate_version并返回，不新增授权、不读取其他修订；真实PG两项回归通过，继续核查相邻授权路径。保留失败job106698749023；不得以重跑掩盖。
+
+## 交付场景接线增量（2026-09-22，实施前 G1）
+
+沿用用户已批准的交付专用能力适配。执行后继请求增加有界case=cost/delivery（默认cost）；cost请求摘要继续按旧字段计算，旧幂等身份不变。delivery使用交付专属合成限制；原图、目标、标准、成本及任务均保持，通过正常后继确认。执行准入按参与者的精确executor区分边界，禁止delivery套用cost边界。required SKILL选择必须精确等于参与者Skill；MCP/WORKFLOW仍拒绝，不扩建owner。无新权限或自动确认，D7待审不实施。
+
+验证：旧请求摘要/后继不变、delivery边界生成且成本声明缺席、错用executor/资源拒绝；既有PG正式后继/Native管线回归。对象准备只用正常owner入口；无有效Grant或缺少无模型合成计划来源契约时保留准备材料，不向库注入批准或伪造invocation。404使用当前session及只读PG诊断授权时间/主体/scope/精确对象，保留发布。前端如无修改，复用c74b880修改页D09基线并补实际页面对照，权限拒绝不能算已发布详情的视觉接受。
+
+### 实际页面发现的相邻入口缺陷及G1实施增量
+
+真实Chrome登录前URL含完整Employee ID/revision/section，提交后却到/work；safe_return仅允许work/authorization，故加入本批实际只读页面的精确白名单（不放行api/外站/路径逃逸）。另运行脚本直接挂载共享dist，普通测试构建将VITE_PROBLEM_DRAFT_ASSISTANCE清除后实际页面退化手工模式。为构建生成非秘密模式清单，serve校验模型装配需要assistance=enabled，并按内容摘要复制固定前端包，测试build不再改变运行资产。无新业务权限或模型调用；验证清单不匹配拒绝、源dist后续修改不影响固定包、真实登录返回及截图。

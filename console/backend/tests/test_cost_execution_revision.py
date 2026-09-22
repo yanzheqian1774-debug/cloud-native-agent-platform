@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 from agent_console.cost_execution_revision import (
+    DELIVERY_SYNTHETIC_ONLY,
+    SYNTHETIC_ONLY,
     CostExecutionRevisionRequest,
     execution_successor,
 )
@@ -14,6 +16,25 @@ from agent_console.plan_suggestion_domain import (
     ProposalRevision,
 )
 from test_plan_suggestion_v2 import repository as repository
+
+
+def test_case_is_explicit_and_legacy_request_digest_is_unchanged():
+    from agent_console.resource_use_domain import canonical_digest
+
+    plan, source, request = inputs()
+    old_record = request.model_dump(mode="json", exclude={"case"})
+    assert request.digest == canonical_digest(old_record)
+    delivery = request.model_copy(update={"case": "delivery"})
+    assert delivery.digest != request.digest
+    successor, _ = execution_successor(plan, source, delivery)
+    assert DELIVERY_SYNTHETIC_ONLY in successor.semantics.boundaries
+    assert SYNTHETIC_ONLY not in successor.semantics.boundaries
+    assert successor.semantics.tasks == plan.semantics.tasks
+    assert successor.semantics.target == plan.semantics.target
+    assert (
+        execution_successor(plan, source, request)[0].semantics.boundaries[0]
+        == SYNTHETIC_ONLY
+    )
 
 
 def inputs():
@@ -127,3 +148,28 @@ def test_revision_uses_normal_append_only_confirmation(repository):
     assert result["approval"] != before["approval"]
     with repository.transaction(scope, source.proposal_id, authorized=True) as cur:
         assert repository.read_plan(cur, scope, source.proposal_id, 2) == before
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_delivery_executor_cannot_reuse_cost_only_approval(repository, mixed):
+    from agent_console.execution_preparation import ExecutionPreparationError
+    from agent_console.prepared_execution_lineage import validate_approved_preparation
+    from agent_console.synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+    from prepared_execution_support import seed
+
+    p = seed(repository)
+    participants = list(p.participants)
+    for index, participant in enumerate(participants):
+        if not mixed or index == 0:
+            participants[index] = participant.model_copy(
+                update={
+                    "executor_id": SyntheticDeliverySkillExecutor.revision.executor_id
+                }
+            )
+    p = p.model_copy(update={"participants": tuple(participants)})
+    reason = "CASE_MIXED" if mixed else "EXECUTION_SUCCESSOR_REQUIRED"
+    with (
+        repository.pool.connection() as connection,
+        pytest.raises(ExecutionPreparationError, match=reason),
+    ):
+        validate_approved_preparation(connection, p)

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from agent_console.cost_execution_revision import (
+    DELIVERY_SYNTHETIC_ONLY,
     EXECUTION_ONLY,
     SYNTHETIC_ONLY,
 )
@@ -280,7 +281,9 @@ def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
                 for r in p.semantics.requirements
             ),
             "boundaries": (
-                SYNTHETIC_ONLY,
+                DELIVERY_SYNTHETIC_ONLY
+                if synthetic_skill == "delivery"
+                else SYNTHETIC_ONLY,
                 f"执行准备映射SHA256：{p.mapping_digest}；fixture",
             ),
         }

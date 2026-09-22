@@ -205,7 +205,26 @@ def serve(output, tls_manifest, origin):
     from fastapi.staticfiles import StaticFiles
 
     app = get_workbench_app()
-    dist = ROOT / "console/frontend/dist"
+    from agent_console.workbench_static_bundle import pin_frontend
+
+    dist = pin_frontend(
+        ROOT / "console/frontend/dist",
+        output / "frontend-builds",
+        assistance_required=model_manifest.is_file(),
+    )
+    (output / "frontend-runtime.json").write_text(
+        json.dumps(
+            {
+                "bundleDigest": dist.name,
+                "directory": str(dist),
+                "profile": json.loads(
+                    (dist / "workbench-build-profile.json").read_text()
+                ),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
 
     @app.get("/{path:path}")

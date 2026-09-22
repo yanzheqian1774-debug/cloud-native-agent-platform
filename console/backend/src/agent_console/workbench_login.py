@@ -20,7 +20,17 @@ def safe_return(value):
         or any(part in {".", ".."} for part in path.split("/"))
         or path.startswith("//")
         or not (
-            path in {"/work", "/workbench", "/authorization-admin"}
+            path
+            in {
+                "/work",
+                "/workbench",
+                "/authorization-admin",
+                "/digital-employees",
+                "/skills",
+                "/knowledge",
+                "/agents",
+                "/runtime-profiles",
+            }
             or path.startswith("/work/")
         )
     ):
