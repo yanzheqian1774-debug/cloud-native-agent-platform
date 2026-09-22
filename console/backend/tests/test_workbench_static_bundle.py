@@ -10,7 +10,11 @@ def test_runtime_assets_are_pinned_and_mode_mismatch_fails_closed(tmp_path):
     profile = source / "workbench-build-profile.json"
     profile.write_text(
         json.dumps(
-            {"schemaVersion": "workbench-build-profile.v1", "draftAssistance": True}
+            {
+                "schemaVersion": "workbench-build-profile.v1",
+                "draftAssistance": True,
+                "trustedWorkbenchRoutes": True,
+            }
         )
     )
     (source / "index.html").write_text("assisted original")
@@ -23,6 +27,17 @@ def test_runtime_assets_are_pinned_and_mode_mismatch_fails_closed(tmp_path):
     profile.write_text(
         json.dumps(
             {"schemaVersion": "workbench-build-profile.v1", "draftAssistance": False}
+        )
+    )
+    with pytest.raises(ValueError, match="MODE_MISMATCH"):
+        pin_frontend(source, tmp_path / "runtime", assistance_required=True)
+    profile.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "workbench-build-profile.v1",
+                "draftAssistance": True,
+                "trustedWorkbenchRoutes": False,
+            }
         )
     )
     with pytest.raises(ValueError, match="MODE_MISMATCH"):

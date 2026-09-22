@@ -9,7 +9,11 @@ from pathlib import Path
 def pin_frontend(source: Path, destination: Path, *, assistance_required: bool):
     profile = json.loads((source / "workbench-build-profile.json").read_text())
     if profile.get("schemaVersion") != "workbench-build-profile.v1" or (
-        assistance_required and profile.get("draftAssistance") is not True
+        assistance_required
+        and (
+            profile.get("draftAssistance") is not True
+            or profile.get("trustedWorkbenchRoutes") is not True
+        )
     ):
         raise ValueError("WORKBENCH_FRONTEND_MODE_MISMATCH")
     if not (source / "index.html").is_file():

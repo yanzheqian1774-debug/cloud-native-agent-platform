@@ -8,6 +8,7 @@ export default defineConfig({
       this.emitFile({ type: "asset", fileName: "workbench-build-profile.json", source: JSON.stringify({
         schemaVersion: "workbench-build-profile.v1",
         draftAssistance: process.env.VITE_PROBLEM_DRAFT_ASSISTANCE === "enabled",
+        trustedWorkbenchRoutes: process.env.VITE_SUPPLIER_QUALITY_DEMO_MODE === "live",
       }) });
     },
   }],
