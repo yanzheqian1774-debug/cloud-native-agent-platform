@@ -86,6 +86,8 @@ def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
         from agent_console.knowledge_ingestion import ingest_text
         from agent_console.prepared_resource_bundle import resource_content
 
+        if synthetic_skill == "delivery":
+            from agent_console.delivery_resource_bundle import resource_content
         bundle = resource_content()
         ops = bundle["skill"]["operations"]
         chunks, source_digest = ingest_text(

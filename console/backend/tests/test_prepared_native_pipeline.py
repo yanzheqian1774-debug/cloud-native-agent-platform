@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from agent_console.authority_contracts import (
     AuthenticationSource,
     AuthorityScope,
@@ -59,8 +60,9 @@ class FixtureKubernetes:
         self.tasks[name]["status"] = status
 
 
+@pytest.mark.parametrize("case", ["cost", "delivery"])
 def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
-    repository, tmp_path
+    repository, tmp_path, case
 ):
     baseline = PostgresExecutionAuthorityRepository(
         repository.pool.conninfo,
@@ -78,7 +80,7 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
             "criteria": target.criteria.model_copy(update={"digest": digest}),
         }
     )
-    p = seed(repository, synthetic_skill=True, evidence_ready=False, target=target)
+    p = seed(repository, synthetic_skill=case, evidence_ready=False, target=target)
     seed_criteria(repository, p)
     scope = ScopeIdentity(p.namespace, p.security_domain)
     principal = SimpleNamespace(
@@ -161,12 +163,21 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                     p,
                 )
 
+        from agent_console.synthetic_delivery_skill import (
+            SyntheticDeliverySkillExecutor,
+        )
+
+        executor = (
+            SyntheticDeliverySkillExecutor()
+            if case == "delivery"
+            else SyntheticCostSkillExecutor()
+        )
         skills = compose_governed_skill_invocation(
             repository.pool.conninfo,
             MIGRATIONS,
             None,
             FixedReadOnlyPolicyAuthority(POLICY),
-            SkillExecutorRegistry((SyntheticCostSkillExecutor(),)),
+            SkillExecutorRegistry((executor,)),
         )
         caller = PreparedNativeSkillCaller(
             native.pool, skills, lambda *_: "fixture-skill-authority"
@@ -283,6 +294,35 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 snapshot["criteriaSet"]["digest"] == p.semantics.target.criteria.digest
             )
             assert snapshot["runState"] == "SUCCEEDED"
+            if case == "delivery":
+                from agent_console.delivery_evaluation import CHECKS, evaluate
+                from agent_console.resource_use_domain import canonical_digest
+
+                source, report = review.delivery_evidence(p, snapshot)
+                for check in CHECKS:
+                    criterion = {
+                        "criterion_type": "DETERMINISTIC_BOOLEAN",
+                        "measurement": {"expected": True},
+                        "evaluator_type": "SYNTHETIC_DELIVERY",
+                        "evaluator_version": "1",
+                        "required_evidence_kinds": [
+                            "NATIVE_EXECUTION_ARTIFACT",
+                            "PUBLISHED_SYNTHETIC_SOURCE",
+                        ],
+                        "applicability": {
+                            "check": check,
+                            "sourceContentDigest": canonical_digest(source),
+                        },
+                    }
+                    assert (
+                        evaluate(
+                            criterion,
+                            source,
+                            report,
+                            p.source_snapshot.model_dump(mode="json"),
+                        )[0]
+                        == "SATISFIED"
+                    )
         # Reopening the PG adapter also must not queue another effect.
         reopened = PostgresExecutionAuthorityRepository(
             repository.pool.conninfo,

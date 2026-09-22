@@ -34,6 +34,9 @@ def ensure_aggregate(authority, kind, value):
 
 
 def assemble(authority, bundle, employee, semantics):
+    case = bundle.get("case", "cost")
+    if case not in ("cost", "delivery"):
+        raise ValueError("RESOURCE_CASE_UNSUPPORTED")
     scope = ScopeIdentity(bundle["namespace"], bundle["securityDomain"])
     assembly = DigitalEmployeeProductAssembly(
         None, PostgresDigitalEmployeeRepository(authority)
@@ -84,7 +87,7 @@ def assemble(authority, bundle, employee, semantics):
                 employeeDefinitionId=definition["employeeDefinitionId"],
                 employeeDefinitionRevisionId=definition["employeeDefinitionRevisionId"],
                 commandId=stable_id("s5-324-instantiate", seed, role),
-                workspaceReference="isolated-synthetic-cost-324",
+                workspaceReference=f"isolated-synthetic-{case}-324",
                 policyReferences=["ISOLATED_SYNTHETIC_READ_ONLY"],
             ),
         )
@@ -119,7 +122,7 @@ def assemble(authority, bundle, employee, semantics):
                 "agent_definition_id": refs["agent"].resource_id,
                 "agent_digest": refs["agent"].digest,
                 "runtime_instance_id": runtime_id,
-                "kubernetes_agent_name": "s5-324-synthetic-cost",
+                "kubernetes_agent_name": f"s5-324-synthetic-{case}",
             },
         ),
     )

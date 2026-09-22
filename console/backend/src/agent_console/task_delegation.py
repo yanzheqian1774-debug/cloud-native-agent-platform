@@ -1049,7 +1049,7 @@ def lock_grant_delegations(connection, context, grant):
 
 
 def record_created_object(
-    connection, context, owner, result, *, draft_invocation_id=None
+    connection, context, owner, result, *, draft_invocation_id=None, problem_id=None
 ):
     """Owner-side binding, in the creation transaction, never a client task label.
 
@@ -1063,6 +1063,11 @@ def record_created_object(
         connection, context, result, draft_invocation_id
     ):
         return result
+    if owner == "SUCCESS_CRITERION" and problem_id:
+        from .context_call_admission import bind_criterion
+
+        if bind_criterion(connection, context, result, problem_id):
+            return result
     if not available(connection):
         return result
     row = connection.execute(

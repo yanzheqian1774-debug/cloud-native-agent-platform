@@ -523,3 +523,67 @@ def bind_problem(c, context, result, invocation_id):
         ),
     )
     return True
+
+
+def bind_criterion(c, context, result, problem_id):
+    """Bind a newly created criterion to its explicit case; grant checks precede this.
+
+    Call admission is not CRUD authority. Current exact Problem READ and Criterion
+    CREATE/READ are required by the BFF; an expired model window is never extended.
+    The original 323 path is unchanged when the Problem is not a D324 context case.
+    """
+    if not available(c):
+        return False
+    row = c.execute(
+        "SELECT o.context_id,o.invocation_id,r.subject_id FROM "
+        "authorization_admin.context_call_objects o JOIN "
+        "authorization_admin.context_call_requests r USING(context_id) "
+        "WHERE o.tenant_id=%s AND o.security_domain=%s "
+        "AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s",
+        (context.scope.tenant_id, context.scope.security_domain, problem_id),
+    ).fetchone()
+    if row is None:
+        return False
+    revision = result["revision"]
+    if (
+        row["subject_id"] != context.principal_id
+        or revision["created_by"] != context.principal_id
+    ):
+        raise AuthorityError("CONTEXT_ADMISSION_CRITERION_TARGET_DENIED")
+    lock(c, row["context_id"])
+    if revision.get("predecessor_revision_id"):
+        previous = c.execute(
+            "SELECT context_id FROM authorization_admin.context_call_objects "
+            "WHERE tenant_id=%s AND security_domain=%s "
+            "AND owner='SUCCESS_CRITERION' AND resource_id=%s",
+            (
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                revision["predecessor_revision_id"],
+            ),
+        ).fetchone()
+        if previous is None or previous["context_id"] != row["context_id"]:
+            raise AuthorityError("CONTEXT_ADMISSION_CRITERION_TARGET_DENIED")
+    for identity in (revision["success_criterion_id"], revision["revision_id"]):
+        inserted = c.execute(
+            "INSERT INTO authorization_admin.context_call_objects "
+            "VALUES(%s,%s,'SUCCESS_CRITERION',%s,%s,%s) "
+            "ON CONFLICT DO NOTHING RETURNING context_id",
+            (
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                identity,
+                row["context_id"],
+                row["invocation_id"],
+            ),
+        ).fetchone()
+        if inserted is None:
+            previous = c.execute(
+                "SELECT context_id FROM authorization_admin.context_call_objects "
+                "WHERE tenant_id=%s AND security_domain=%s "
+                "AND owner='SUCCESS_CRITERION' AND resource_id=%s",
+                (context.scope.tenant_id, context.scope.security_domain, identity),
+            ).fetchone()
+            if previous is None or previous["context_id"] != row["context_id"]:
+                raise AuthorityError("CONTEXT_ADMISSION_CRITERION_TARGET_DENIED")
+    return True

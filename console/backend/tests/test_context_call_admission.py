@@ -311,3 +311,62 @@ def test_original_guard_stays_expired_and_new_admission_cannot_adopt_old(env):
             "SELECT expires_at<clock_timestamp() AS expired "
             "FROM authorization_admin.task_delegations"
         ).fetchone()["expired"]
+
+
+def test_explicit_case_criterion_does_not_revive_old_delegation(env):
+    from agent_console.context_call_admission import bind_criterion
+    from agent_console.task_delegation import record_created_object
+
+    e = env
+    e.admission.prepare(e.business, e.invocation)
+    # No model admission or old delegation renewal: this is an owner-binding test.
+    with e.repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO authorization_admin.context_call_objects VALUES "
+            "('s5-323-demo','isolated-real-demo','BUSINESS_PROBLEM','new-problem',%s,%s)",
+            (e.invocation.context_id, e.invocation.invocation_id),
+        )
+        result = {
+            "revision": {
+                "success_criterion_id": "criterion-new",
+                "revision_id": "criterion-new:1",
+                "created_by": e.business.principal_id,
+                "predecessor_revision_id": None,
+            }
+        }
+        assert (
+            record_created_object(
+                c, e.business, "SUCCESS_CRITERION", result, problem_id="new-problem"
+            )
+            == result
+        )
+        assert bind_criterion(c, e.business, result, "new-problem")
+        assert (
+            c.execute(
+                "SELECT count(*) AS n FROM authorization_admin.context_call_objects "
+                "WHERE owner='SUCCESS_CRITERION'"
+            ).fetchone()["n"]
+            == 2
+        )
+        with pytest.raises(AuthorityError, match="TARGET_DENIED"):
+            bind_criterion(c, e.reviewer, result, "new-problem")
+        with pytest.raises(AuthorityError, match="TARGET_DENIED"):
+            bind_criterion(
+                c,
+                e.business,
+                {
+                    "revision": {
+                        **result["revision"],
+                        "revision_id": "old:2",
+                        "predecessor_revision_id": "old:1",
+                    }
+                },
+                "new-problem",
+            )
+        assert (
+            c.execute(
+                "SELECT count(*) AS n "
+                "FROM authorization_admin.task_delegation_resources"
+            ).fetchone()["n"]
+            == 0
+        )

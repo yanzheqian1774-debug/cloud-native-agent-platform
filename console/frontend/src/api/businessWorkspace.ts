@@ -90,7 +90,7 @@ export function reviseBusinessProblem(csrfToken:string,problemId:string,input:{p
   return write<{revision:BusinessProblemRevision}>(`/problems/${encodeURIComponent(problemId)}/revisions`,csrfToken,input);
 }
 
-export function writeCriterion(csrfToken:string,input:{successCriterionId?:string;predecessorRevisionId?:string;expectedVersion?:number;criterionType:"HUMAN_EVALUATED";measurement:{rubric:string};requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:Record<string,unknown>;idempotencyKey:string}){
+export function writeCriterion(csrfToken:string,input:{problemId?:string;successCriterionId?:string;predecessorRevisionId?:string;expectedVersion?:number;criterionType:"HUMAN_EVALUATED";measurement:{rubric:string};requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:Record<string,unknown>;idempotencyKey:string}){
   return write<{revision:CriterionRevision}>("/success-criteria",csrfToken,input);
 }
 

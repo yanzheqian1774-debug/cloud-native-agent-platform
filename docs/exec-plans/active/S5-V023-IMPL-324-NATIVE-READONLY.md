@@ -224,3 +224,9 @@ D324-5 候选 make check 通过：2121 passed / 364 skipped（含未配置独立
 实施进度：新增 `synthetic_delivery_skill.py` 与正式资源包，支持严格日期/剩余量、排除、分单位、稳定排序、异常和来源链；Native模式需显式选择 synthetic-delivery-v1，旧成本模式保持。资源准备/Employee脚本增加有界delivery案例，复用相同Native配置，保留旧成本对象。资源owner PostgreSQL验证覆盖幂等、原子回滚及两案例隔离。当前v3两条精确授权待独立本人，尚未真实调用该turn；不得将草稿资源或测试认定执行完成。场景级授权、范围内自动准入仅登记后续，不在324实现。
 
 2026-09-22第3轮独立Grant已正式批准并复用，真实回复DRAFT_READY（估算USD0.029072）。供应商交付问题已通过正常入口创建DRAFT，并纠正具体演示日期的来源归属；尚不构成目标/标准确认。当前必要权限与真实对象、链接预检、资源范围提示集中登记于闭环矩阵及本机next-human-steps.md。后续在实际准入后继续标准、原调用来源后补、资源校验/本人审核、规划及Native。已完成模型调用不重跑；原history/UNKNOWN保护继续有效。
+
+### 交付标准评价与绑定补齐（G1，2026-09-22）
+
+在已批准同案闭环范围内，补齐交付案例的确定性标准评价：继续使用ARCH-264现有Evaluation/Outcome owner、精确Criteria/evaluator版本、授权终态产物与Knowledge修订；仅对固定合成来源的快照、逾期排除、剩余量/单位、排序、订单证据和异常六项作SATISFIED/NOT_SATISFIED/UNKNOWN判断。未知evaluator、缺少来源/终态报告或证据不充分保持UNKNOWN；不将模型自述作为测量，不更改Human业务解决门禁。保留旧Human标准UNKNOWN行为与历史结果，新增evaluator身份与快照绑定；无新持久基础设施或迁移。交付绑定脚本去除旧成本名称的误导，保持默认成本兼容。先用变异产物验证判定，再对隔离PG验证授权、幂等与精确绑定；实际验收仍必须来自Native运行。
+
+实际入口发现并保留一次标准创建失败：workbench-request-4044fa965fa38815f7a69689 / TASK_CONTINUITY_INACTIVE。根因是WRITE_CRITERION创建后无当前问题关联，record_created_object退回旧323委托；不是Grant未签发。沿已批准D324-5的同案正常确认流程补齐BFF可选problemId，额外要求该问题精确READ，owner事务内仅绑定已登记的新context；旧标准或跨主体不能挪用，原323路径/guard不变。独立的模型准入窗口不作为标准CRUD授权，也不因此续签；标准CRUD继续核验当前账号及精确Grant。无迁移、无新授权机制。前端仅传递当前问题ID；实读锁定R30/P02，布局不改。

@@ -220,12 +220,90 @@ class PreparedResultReview:
             + ([] if uses else ["RESOURCE_USE_SNAPSHOT_MISSING"]),
         }
 
+    def delivery_evidence(self, p, snapshot):
+        from .execution_domain import ScopeIdentity
+        from .prepared_execution_resources import published
+        from .workbench_prepared_resources import reference
+
+        self.require(
+            "KNOWLEDGE",
+            "READ_RESOURCE",
+            reference(
+                "knowledge",
+                p.source_snapshot.resource_id,
+                p.source_snapshot.revision_id,
+            ),
+        )
+        content = published(
+            self.connection,
+            ScopeIdentity(p.namespace, p.security_domain),
+            "KNOWLEDGE",
+            p.source_snapshot,
+        )
+        documents = content.get("documents", [])
+        source = None
+        if len(documents) == 1 and len(documents[0].get("chunks", [])) == 1:
+            raw = documents[0]["chunks"][0]["content"]
+            if (
+                hashlib.sha256(raw.encode()).hexdigest()
+                == documents[0]["contentDigest"]
+            ):
+                source = json.loads(raw)
+        _, progress = PreparedExecutionStore(self.connection).read(
+            p.namespace, p.security_domain, p.run_id, lock=True
+        )
+        report_tasks = {
+            t.task_id for t in p.semantics.tasks if t.operation == "RENDER_REPORT"
+        }
+        current = {
+            identity
+            for task in progress.tasks
+            if task.task_id in report_tasks and task.state == "SUCCEEDED"
+            for identity in task.output_artifact_ids
+        }
+        candidates = [a for a in snapshot["artifacts"] if a["artifact_id"] in current]
+        report = None
+        if len(candidates) == 1 and snapshot["resourceUseSnapshots"]:
+            item = candidates[0]
+            uses = self.connection.execute(
+                "SELECT resource_use_id FROM resource_use.uses "
+                "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s "
+                "AND attempt_id=%s AND resource_kind='SKILL'",
+                (p.namespace, p.security_domain, p.run_id, item["attempt_id"]),
+            ).fetchall()
+            evidenced = {
+                u["resource_use_id"]
+                for u in snapshot["resourceUseSnapshots"]
+                if u["record"].get("effective_state") == "SUCCEEDED"
+            }
+            if len(uses) != 1 or uses[0]["resource_use_id"] not in evidenced:
+                return source, None
+            row = self.connection.execute(
+                "SELECT content FROM execution_authority.run_artifacts "
+                "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s AND artifact_id=%s",
+                (p.namespace, p.security_domain, p.run_id, item["artifact_id"]),
+            ).fetchone()
+            if (
+                row
+                and hashlib.sha256(row["content"].encode()).hexdigest()
+                == item["digest"]
+            ):
+                report = json.loads(row["content"])
+        return source, report
+
     def evaluate(self, p, command_key):
         self.require("EVALUATION", "EVALUATE", "evaluation:prepared:" + p.digest)
         snapshot = self.snapshot(p)
+        delivery = any(
+            c["evaluator_type"] == "SYNTHETIC_DELIVERY" for c in snapshot["criteria"]
+        )
+        source, report = (
+            self.delivery_evidence(p, snapshot) if delivery else (None, None)
+        )
+        evaluator = "prepared-synthetic-delivery-evidence.v1" if delivery else EVALUATOR
         digest = canonical_digest(snapshot)
         snapshot_id = stable_id("terminal-snapshot", p.run_id, digest)
-        evaluation_id = stable_id("criteria-evaluation", snapshot_id, EVALUATOR)
+        evaluation_id = stable_id("criteria-evaluation", snapshot_id, evaluator)
         key = (p.namespace, p.security_domain)
         existing = self.connection.execute(
             "SELECT record FROM product_outcome.outcomes WHERE namespace=%s AND security_domain=%s AND evaluation_id=%s",
@@ -260,6 +338,26 @@ class PreparedResultReview:
                 }
                 for c in snapshot["criteria"]
             ]
+            if delivery:
+                from .delivery_evaluation import evaluate
+
+                for criterion, result in zip(
+                    snapshot["criteria"], results, strict=True
+                ):
+                    if criterion["evaluator_type"] == "SYNTHETIC_DELIVERY":
+                        result["result"], result["reason"] = evaluate(
+                            criterion,
+                            source,
+                            report,
+                            p.source_snapshot.model_dump(mode="json"),
+                        )
+                        result["check"] = criterion["applicability"].get("check")
+                        result["measurementSourceDigest"] = (
+                            canonical_digest(source) if source else None
+                        )
+                        result["measurementReportDigest"] = (
+                            canonical_digest(report) if report else None
+                        )
             self.connection.execute(
                 "INSERT INTO success_criteria_evaluation.snapshots "
                 "(namespace,security_domain,snapshot_id,workflow_run_id,digest,record) VALUES (%s,%s,%s,%s,%s,%s)",
@@ -270,16 +368,16 @@ class PreparedResultReview:
                 "(namespace,security_domain,job_id,snapshot_id,evaluator_version,state) VALUES (%s,%s,%s,%s,%s,'COMPLETED')",
                 (
                     *key,
-                    stable_id("evaluation-job", snapshot_id, EVALUATOR),
+                    stable_id("evaluation-job", snapshot_id, evaluator),
                     snapshot_id,
-                    EVALUATOR,
+                    evaluator,
                 ),
             )
             evaluation = {
                 "evaluationId": evaluation_id,
                 "snapshotId": snapshot_id,
                 "snapshotDigest": digest,
-                "evaluator": EVALUATOR,
+                "evaluator": evaluator,
                 "results": results,
                 "limitations": snapshot["limitations"],
             }
