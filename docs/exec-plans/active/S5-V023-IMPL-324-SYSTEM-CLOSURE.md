@@ -41,3 +41,7 @@ Employee精确读取已有owner聚合版本，BFF projection遗漏。增量返�
 新增浏览器测试首次失败是测试在异步POST到达前读取数组、随后错误地定位status角色；错误快照已显示正式409冲突正文，版本7已实际发送。改为等待请求观察和精确可见冲突正文，不改超时、不弱化CAS断言。修正后该项通过；另外三项生命周期测试已通过。
 
 前端功能与视觉分开：本轮lint/build通过，尚未完成更新后真实服务的同视口对照；不以TEST_ADAPTER浏览器测试作为视觉接受或实际业务执行。旧运行后端尚未投影新字段，兼容前端将明确拒绝准备命令而不是猜测版本。
+
+### 最终候选CI发现的真实owner缺口
+
+0f4ed09 的 PostgreSQL Business Problem and Plan Entry 在两项Employee精确读取/撤销测试失败，KeyError aggregateVersion。根因是普通owner.read已有字段，但read_revision_for_workbench独立SQL投影没有；初始单元替身人工提供该字段，未覆盖真实SQL路径。已在同一授权事务/FOR SHARE内选择definition.aggregate_version并返回，不新增授权、不读取其他修订；真实PG两项回归通过，继续核查相邻授权路径。保留失败job106698749023；不得以重跑掩盖。
