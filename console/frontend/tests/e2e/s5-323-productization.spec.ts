@@ -102,7 +102,9 @@ test('long persisted technical context is disclosed without displacing the plan'
  const avatar=await message.locator('.px-avatar').boundingBox();
  const content=await message.locator('.px-user-content').boundingBox();
  expect(avatar).toBeTruthy();expect(content).toBeTruthy();
- expect(Math.abs(content!.x-(avatar!.x+avatar!.width+12))).toBeLessThan(2);
+ // 324 explicitly supersedes the old left-user reference: preserve the exact gap,
+ // with the user avatar on the right. Long-content and zero-write checks remain.
+ expect(Math.abs(avatar!.x-(content!.x+content!.width+12))).toBeLessThan(2);
  expect(await disclosure.evaluate(e=>e.parentElement?.tagName)).toBe('DIV');
  await disclosure.locator('summary').click();
  await expect(disclosure.locator('p')).toHaveText(original);

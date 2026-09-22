@@ -91,6 +91,12 @@ class PlanningCallAdmission(ContextCallAdmission):
                 if row["record"]["configuration"] != self.configuration:
                     raise AuthorityError("CONTEXT_ADMISSION_CONFIGURATION_MISMATCH")
                 return self._projection(c, row, previous["record"])
+            if c.execute(
+                "SELECT 1 FROM authorization_admin.planning_call_allowances "
+                "WHERE tenant_id=%s AND security_domain=%s AND ledger_id=%s",
+                (*scope, self.configuration["ledger_id"]),
+            ).fetchone() or request_row(c, record["target"]["suggestion_context_id"]):
+                raise AuthorityError("PLANNING_SINGLE_ALLOWANCE_ALREADY_BOUND")
             original = c.execute(
                 "SELECT d.record->'planning' AS config FROM "
                 "authorization_admin.task_delegations d "

@@ -57,7 +57,8 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
   }
   const state = busy ? "处理中 · 正在生成与核验" : unresolved ? "请求待核实 · 只读恢复" : result?.admission ? (result.admission.ready?"准入已核验 · 等待显式继续":"等待精确规划准入 · 尚未派发") : result?.result.technical_status === "OUTCOME_UNKNOWN" ? "结果未知 · 原记录保留" : result?.result.technical_status === "FAILED" ? "调用已知失败" : result?.result.kind === "INVALID" ? "校验未通过 · 已停止" : result?.result.kind === "NEEDS_CLARIFICATION" ? "需要补充信息" : result?.result.proposal ? "建议已保存 · 等待确认" : source ? "可提出方案修订" : "等待显式生成";
   useEffect(()=>{onStatus?.(state)},[state,onStatus]);
-  const blocked = disabled || busy || unresolved || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
+  const singleCallUsed = result?.invocation.bounded_new_calls === 1 && !result.admission;
+  const blocked = disabled || busy || unresolved || singleCallUsed || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
   return <ConversationFrame startAtTop newMessageKey={`${source?.proposal.revision ?? 0}:${result?.invocation.target.invocation_id ?? ""}`} composer={<section className="planning-composer" aria-label="持续规划对话">    <details><summary>规划方式：{policy.mode === "FREE" ? "自由规划" : policy.mode === "TEMPLATE_ASSISTED" ? "模板辅助" : "强约束流程"} · 查看或调整</summary><label>规划方式<select aria-label="规划方式" value={policy.mode} disabled={busy || unresolved || !!result} onChange={e => {const mode=e.target.value as PlanningPolicy["mode"];setPolicy({...free, mode, template: mode === "FREE" ? null : "procurement-overdue.v1"});}}><option value="FREE">自由规划 · 不固定阶段和任务数</option><option value="TEMPLATE_ASSISTED">采购模板辅助 · 可调整结构</option><option value="STRICT_WORKFLOW">采购强约束 · 三阶段五项职责</option></select></label>
     <p>校验显式操作、输入输出依赖和标准引用覆盖；不能穷尽自然语言冲突，需要人工核对业务含义。</p></details>
     <p className="planning-action-boundary">对话补充仅用于新建议，不修改已确认标准。<Link to={`/work?problem=${encodeURIComponent(problem)}`}>正式修订目标与标准 →</Link> 计划确认请使用方案卡片中的独立按钮。</p>
@@ -70,6 +71,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     {result?.invocation.request?.answers.map((text,index)=><UserMessage key={index} occurredAt={result.invocation.submitted_at}>{text}</UserMessage>)}
     {result?.invocation.submitted_at && <p>消息提交时间：{formatTime(result.invocation.submitted_at)}</p>}
     {result?.result.questions?.length ? <section><h2>需要补充的信息</h2>{result.result.questions.map(q=><SystemMessage key={q} occurredAt={result.result.generated_at}><p style={{whiteSpace:"pre-wrap"}}>{q}</p>{clarificationChoices(q).map(option=><button type="button" key={option.label} disabled={blocked} onClick={()=>setAnswer(option.answer)}>{option.label}</button>)}</SystemMessage>)}</section> : null}
+    {singleCallUsed && !result?.result.proposal && <p role="status">本次精确规划的一次调用已使用，原回复与问题保留；不能自动或普通重试追加调用。请先核对结果及正式修正路径。</p>}
     {result?.result.technical_status === "OUTCOME_UNKNOWN" && <p role="status">结果未知；保留原调用与预留，只读恢复，不自动再次调用。</p>}
     {result?.result.technical_status === "FAILED" && <p role="alert">失败阶段回执：{result.result.reason ?? "PLANNING_PROVIDER_FAILED"}。没有创建建议、批准或执行。</p>}
     {result?.result.proposal && <a href={`/work/planning/${result.result.proposal.proposal_id}?revision=${result.result.proposal.revision}`}>打开已持久化的建议</a>}

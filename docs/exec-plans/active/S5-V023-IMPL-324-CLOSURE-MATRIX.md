@@ -1,12 +1,12 @@
 # 324 同案完整主线验收矩阵
 
-原 Session / 分支 / PR #186；本表为原计划附属验收矩阵，不替代 Plan v2。2026-09-22 本轮现场：HEAD/运行 64d5eb4，CI 10/12，五文件未提交修复完整保留。两 context AUTHORIZATION_PENDING，七 Grant PENDING，独立 context 决定零、新模型预留零。
+原 Session / 分支 / PR #186；本表为原计划附属验收矩阵，不替代 Plan v2。初始断点（历史）：HEAD/运行 64d5eb4，CI 10/12，五文件修复已在后继提交保留。当前运行d896bb6，0038已迁移；该候选CI11/12，浏览器一项失败正在修复。两 context AUTHORIZATION_PENDING，七 Grant PENDING，独立 context 决定零、新模型预留零。
 
 ## 内部诊断 A：合成新问题到真实 AI 与恢复
 
 |步骤/状态|前置/正式对象|实际入口|可复用证据|未验证项/阻塞/责任|
 |---|---|---|---|---|
-|A1 固定账号曾实际登录；本轮受 TLS 阻断|demo324 → human:demo323-requester，s5-323-demo/isolated-real-demo，代次5；账号与会话分离|https://127.0.0.1:19436/api/workbench/v1/login|actual-account-identity-live.png、D324-4 PG记录；本轮服务进程32594|续期证书实际握手核对；浏览器信任仅本人处理，Codex不得绕过；先完成其余技术预检|
+|A1 固定账号实际登录/返回/退出通过；TLS已恢复|demo324 → human:demo323-requester，s5-323-demo/isolated-real-demo，代次5；账号与会话分离|https://127.0.0.1:19436/api/workbench/v1/login|actual-account-identity-live.png、D324-4 PG记录；当前运行d896bb6，服务进程27209|新证书本人已信任、代理新窗口已读回登录页；业务账号HTTPS真实303/返回/刷新/退出已核验，零业务写入|
 |A2 两条请求已落库、未派发|用户07:36 context 668f2fc674e0a88ddebb2020594c4652 / invocation e2dd245b7ddc93a5299b245bc470649b；预检01:12 context 0477d775cd85ee477a22fe465dc42419 / invocation 5d66b44e407f6c34c3c0346f5baad139|/work?invocation=draft-invocation%3Ae2dd245b7ddc93a5299b245bc470649b|本轮只读PG；两个原对象分开保存|原标签正文副本未确认；服务端只HMAC/元数据。Codex保护原页，不能伪造正文或替换摘要|
 |A3 必要审批未完成|用户草稿8fa548…、模型6d6033…及精确context；预检申请仅历史参考|原 entry-recovery/human-operations-v2.md 的 exact returnTo 链接|两context零决定、七Grant仍PENDING；本人独立会话|Codex先修状态一致性及对象直达；正文可续接后才交付短期模型准入，缺正文先只读授权再正式关联后继|
 |A4 真实AI回复/补问 未验证|A3当前有效+原HMAC匹配或明确后继，原模型/共享预算、UNKNOWN保留|业务原卡片显式继续调用|受控HTTPS/边界测试仅工程证据|本人签发后由Codex实际调用；不能将fixture或等待授权写成真实AI成功|

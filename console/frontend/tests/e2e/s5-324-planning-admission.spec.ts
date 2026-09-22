@@ -8,7 +8,7 @@ test('324 precise planning preparation survives refresh and explicit continuatio
   if(route.request().method()==='POST')writes.push(path);
   if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:demo323-requester',tenantId:'s5-323-demo',securityDomain:'isolated-real-demo'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
   if(path.includes('/planning-input/'))return route.fulfill({json:{result:{target:{},title:'合成供应商问题',description:'核查交付与质量数据范围；缺失证据单列，不能虚构企业结论。'.repeat(6)}}});
-  if(path.endsWith('/continue')){calls++;return route.fulfill({json:{result:{...value(),admission:undefined,result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['样本的统计日期是什么？']}}}})}
+  if(path.endsWith('/continue')){calls++;return route.fulfill({json:{result:{...value(),invocation:{...value().invocation,bounded_new_calls:1},admission:undefined,result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['样本的统计日期是什么？']}}}})}
   if(path.includes('/planning-v2/requests/')||path.endsWith('/planning-v2/invocations'))return route.fulfill({json:{result:value()}});
   return route.fulfill({json:{result:{}}});
  });
@@ -29,6 +29,8 @@ test('324 precise planning preparation survives refresh and explicit continuatio
  await proceed.scrollIntoViewIfNeeded();await expect(proceed).toBeInViewport();
  await page.screenshot({path:info.outputPath('planning-ready-125-equivalent.png')});
  await proceed.click();await expect(page.getByText('样本的统计日期是什么？',{exact:true})).toBeVisible();
+ await expect(page.getByText('本次精确规划的一次调用已使用，原回复与问题保留；不能自动或普通重试追加调用。请先核对结果及正式修正路径。')).toBeVisible();
+ await expect(page.getByLabel('持续规划对话').getByRole('button',{name:'提交规划补充'})).toBeDisabled();
  expect(calls).toBe(1);expect(writes).toEqual(['/api/workbench/v1/planning-v2/requests/existing%3A324/continue']);
 });
 
