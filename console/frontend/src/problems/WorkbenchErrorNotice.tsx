@@ -53,6 +53,7 @@ export function WorkbenchErrorNotice({error,operation,mutation=false,onRetry,ret
   return <section className="px-workbench-error" role="alert" aria-live="assertive">
     <strong>{copy.title}</strong>
     <p>{copy.detail}</p>
+    {known&&operation==="恢复工作区"&&error.reasonCode==="AUTHORIZATION_NOT_FOUND"&&<p>当前业务工作区读取未获授权。如果你来处理独立审批，请<a href="/authorization-admin">进入独立授权审批页</a>并核对原申请编号；无需申请全部业务读取权限。</p>}
     {visibleDiagnostic&&known&&error.requestId&&<p>诊断编号：<code>{error.requestId}</code> <button type="button" onClick={()=>{void navigator.clipboard.writeText(JSON.stringify({operation,status:error.status,reasonCode:error.reasonCode,diagnosticId:error.requestId})).then(()=>setCopyState("诊断信息已复制"),()=>setCopyState("复制未完成，请选中诊断编号复制"))}}>复制诊断信息</button></p>}
     {copyState&&<p role="status">{copyState}</p>}
     {known&&operation.includes("AI")&&(error.status===403||error.reasonCode==="DRAFT_AUTHORIZATION_UNAVAILABLE")&&<a href="/authorization-admin">查看授权申请入口</a>}

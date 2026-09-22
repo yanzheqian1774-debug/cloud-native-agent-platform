@@ -1,0 +1,32 @@
+{
+  "atlas": "R35",
+  "scope": "既有业务页面语义修正，不替换324已绑基线",
+  "pages": [
+    {
+      "page": "P02",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/P02.png",
+      "sha256": "e7945a4a38fa0fb893e5b9664403c35ce041a1fb20571bb9da694362d60fae4b",
+      "readThisTurn": true
+    },
+    {
+      "page": "IAM03",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/IAM03.png",
+      "sha256": "897507461cc8f7d7f7a10073dfbff6ea6939be273750e766d0f93e017e3f9e2e",
+      "readThisTurn": true
+    },
+    {
+      "page": "IAM07",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/IAM07.png",
+      "sha256": "3df530f13c66b04aebbe56b1af7ce5513551e37052b6266480dc3a653d389dd7",
+      "readThisTurn": true
+    },
+    {
+      "page": "IAM01",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R35/pages/IAM01.png",
+      "sha256": "4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7",
+      "readThisTurn": true,
+      "implementation": "Login entry label only; existing account form unchanged"
+    }
+  ],
+  "contextSpecificReference": "MISSING; IAM07 only task-delegation layout reference"
+}

@@ -157,3 +157,17 @@ D324-5 候选 make check 通过：2121 passed / 364 skipped（含未配置独立
 额外前端静态扫描 94 passed / 4 failed：旧导航/数字员工文本断言与当前源不符（业务问题、Agent Definition、未显示可信身份）。相关两源文件和两测试文件经 git diff 3379f9f HEAD 确认均未变化，登记为既有跟进，未扩展本批页面文案改造。最终 CI、构建模式定向回归和正常提交另记。
 
 兼容修正定向结果：手动构建 23 passed、AI 专用构建 5 passed，均零 skipped；前端旧契约 12 passed、lint/build、Ruff/format check 通过。全部保留原业务与诊断断言；正常提交门禁与最终 CI 继续核验。
+
+### 审批入口与正文恢复修正（G1，2026-09-22）
+
+截图诊断 workbench-request-eedff341de02d04b33daa95b 为审批主体在业务新建页的 404 / AUTHORIZATION_NOT_FOUND；现存日志未匹配精确 ID，不能补造关联。现存后续日志证实审批账号登录 303 后 GET /problems 被拒绝；源路径 listBusinessProblems 要求 BUSINESS_PROBLEM/LIST/business-problem:collection，不是精确 Grant 对象不存在。修正操作包为携带 returnTo 的精确审批登录链接，审批页仅走原授权管理读取，不授予审批人业务列表权限。
+
+发现实际已有第二个新 context 668f2fc674e0a88ddebb2020594c4652（用户后续入口于 23:36 UTC 形成），与代理前次合成 context 分开保留，不挪用申请。当前可访问旧业务标签未保留；服务端仅 HMAC 与元数据，正文包含随机消息 ID，不能凭自然语言猜造。先补正文缺失读回及正式后继入口，未获得精确原正文不得重交原 invocation。不会自动创建后继。
+
+实施：授权查询使用 GET，与显式原正文重交分离；在内存正文可用时显示预览及单独调用按钮，无正文时仅展示读取原事实和填写关联后继。URL 保存 invocation 定位，刷新/登录返回只读，不持久化原文到浏览器存储，不改 owner/Grant/预算/原摘要。审批精确 query 同页变化重新绑定并清空旧决定对象；登录返回与五 Grant/context 覆盖 fixture 独立会话测试。实际审批账号仍不由代理登录或代签。签发后优先原新问题 AI 回复/补问，再接资源—Native 主链。
+
+已实读 R35 VERSION、README、index 目录和 PAGE-CONTRACT，以及 P02/IAM03/IAM07 业务图；继续既定蓝白、系统左/用户右及输入区。IAM07 为任务委托参考，不能据图将 context 扩为场景授权；当前专用 context 视觉仍缺精确设计。验证覆盖只读查询零 POST、正文缺失禁用重交、精确后继关系、查询参数/身份切换和登录返回；分别报告截图与功能证据。
+
+修正定向验证：辅助入口 14 passed，手动入口/执行展示 17 passed，旧前端契约 12 passed；六条精确登录返回及两个 Cookie 容器在隔离 PG 1 passed。原 PG 环境条件装配失配已归回原测试模块，专用 CI 仍执行该用例。26 张受保护表的原始行全部保持；实际两 context 都 AUTHORIZATION_PENDING，独立决定 0、新模型预留 0，七条 Grant PENDING。操作包 v2 明确区分用户 07:36 与代理 01:12 对象；本人签发与原标签正文事实待处理。视觉对照、已知差异及未通过的整体视觉验收见 sep22/entry-recovery，不宣称真实执行完成。
+
+最终 make check：2121 passed / 365 skipped / 1 warning，177.85 秒。新增 PG 用例在原专用数据库套件中定向实际执行 1 passed（5.61 秒）；默认环境跳过与原模块一致。原 deadline 失败证据保持，未更改阈值。正常提交与候选 CI 另记。

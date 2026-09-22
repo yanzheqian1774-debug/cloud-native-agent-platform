@@ -552,3 +552,76 @@ def test_account_activation_refuses_missing_extension(setup, monkeypatch):
         )
     assert touched == []
     assert repo.active_generation()[0] == 1
+
+
+def test_six_exact_login_returns_keep_business_and_reviewer_sessions_separate(setup):
+    import html
+    import re
+    from urllib.parse import urlencode
+
+    from agent_console.workbench_bff import WorkbenchBffPolicy, create_workbench_bff
+    from fastapi.testclient import TestClient
+
+    _, _, service, reader = setup
+    app = create_workbench_bff(
+        service, object(), WorkbenchBffPolicy("127.0.0.1", "https://127.0.0.1")
+    )
+    paths = [
+        "/authorization-admin?" + urlencode({"request": "grant-request:" + kind})
+        for kind in ("resource", "employee", "plan", "draft", "model")
+    ] + ["/authorization-admin?context=draft-context%3Aoriginal"]
+
+    def sign_in(client, username, destination):
+        response = client.get(
+            "/api/workbench/v1/login", params={"returnTo": destination}
+        )
+        if destination.startswith("/authorization-admin"):
+            assert "独立授权审批 · 保留原对象链接" in response.text
+        nonce = re.search(r'name="loginNonce" value="([^"]+)"', response.text)[1]
+        returned = html.unescape(
+            re.search(r'name="returnTo" value="([^"]+)"', response.text)[1]
+        )
+        assert returned == destination
+        response = client.post(
+            "/api/workbench/v1/session",
+            data={
+                "loginNonce": nonce,
+                "username": username,
+                "password": PASSWORD,
+                "returnTo": returned,
+            },
+            headers={"origin": "https://127.0.0.1", "accept": "text/html"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert response.headers["location"] == destination
+
+    with (
+        TestClient(app, base_url="https://127.0.0.1") as business,
+        TestClient(app, base_url="https://127.0.0.1") as reviewer,
+    ):
+        sign_in(business, "demo324", "/work?invocation=draft-invocation%3Aoriginal")
+        for destination in paths:
+            sign_in(reviewer, "reviewer324", destination)
+            assert (
+                business.get("/api/workbench/v1/session").json()["principal"][
+                    "principalId"
+                ]
+                == "human:demo323-requester"
+            )
+            assert (
+                reviewer.get("/api/workbench/v1/session").json()["principal"][
+                    "principalId"
+                ]
+                == "human:demo323-approver"
+            )
+        _, context = service.authenticate_session(
+            reviewer.cookies.get("__Host-workbench_session")
+        )
+        assert not reader.has_current_grant(
+            context,
+            ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
+            now=service.clock(),
+            generation=1,
+            recovery_epoch=1,
+        )

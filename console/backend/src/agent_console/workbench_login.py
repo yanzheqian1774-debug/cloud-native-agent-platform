@@ -77,6 +77,11 @@ def login_document(nonce, destination, *, error=False, accounts=False, request_i
             "<br>诊断编号：" + html.escape(request_id) + '</p><p class="entry-note">',
             1,
         )
+    if urlsplit(safe_return(destination)).path == "/authorization-admin":
+        template = template.replace(
+            "当前入口：本地隔离测试环境" if accounts else "当前入口：可信问题工作台",
+            "当前入口：独立授权审批 · 保留原对象链接",
+        ).replace("登录并返回工作台", "登录并返回原审批对象")
     return template.replace("{{nonce}}", html.escape(nonce, quote=True)).replace(
         "{{return}}", html.escape(safe_return(destination), quote=True)
     )
