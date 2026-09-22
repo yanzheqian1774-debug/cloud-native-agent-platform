@@ -71,3 +71,17 @@ Codex：最终候选/CI与运行一致、前后端装配、精确路由/returnTo
 D324-6已获本人批准，进入有界追加一次的实现与验证；此前“待D324-6决定”已解除，不重复申请。证书信任由本人处理，新窗口登录页可打开（用户回执）；代理实际入口复核通过；业务登录、返回、刷新及退出均已验证，零业务重发。4be343e CI 12/12成功。具体规划对象尚未形成，独立签发仍不预造；真实AI、Native、产物评价与Human验收仍未完成。
 
 最终工程补充：单次额度已绑定时拒绝新的准备请求，原请求幂等读回保留；一次调用耗尽后页面禁止普通追加调用。相邻浏览器8项、独立PG7项通过。最终候选/CI/运行回执见本机 context-admission-v1/d6-final-runtime.json 与 final-candidate-ci.json；本表上方 d896bb6/11项成功为明确的历史检查点。真实理解至Human验收仍待正式对象及独立决定，不以工程通过替代。
+
+### 供应商交付同案续接（2026-09-22 13:45 +08:00）
+
+以上“真实理解未完成”为历史断点。本案沿原 context `draft-context:668f2fc674e0a88ddebb2020594c4652` 正式关联续接；原正文不可用事实及原记录保留。
+
+|节点|当前正式事实|下一步/边界|
+|---|---|---|
+|真实理解与补问|v2 invocation `draft-invocation:ce88d2d069a92e419bc74a862a090871` SUCCEEDED / NEEDS_CLARIFICATION；实际 kimi-k3 回复，1044输入/434输出 token，估算结算USD0.017032，worker REAPED|估算不是供应商账单对账；GET仅保留元数据，回复正文另有本机交付证据，不宣称服务端完整对话恢复|
+|用户补充|本人明确只做供应商交付及时性；固定合成订单，日期采用演示2026-09-20；余量、排除、分单位、排序和异常规则已写入原context第3轮|v3 invocation `draft-invocation:42123c4c0b1c35b6797606b3edfd629f` AUTHORIZATION_PENDING；原v2权限不继承|
+|精确权限|v3草稿申请 `grant-request-12c427f35edab8726687ac83003a0b57`，模型申请 `grant-request-2089260d1845c1c1fbb491afb449ba5a`；实际入口/返回/正文/关联预检通过；原context ACTIVE|独立本人签发后重新核验全部当前性再派发；不得因登录或旧批准自动调用|
+|交付资源|独立交付Skill、合成采购订单Knowledge、交付职责Agent已由正常owner创建DRAFT；原Native运行配置精确复用；交付Employee DRAFT|尚非已发布、准入通过或实际调用；成本技能不充当交付技能。精确ID/摘要见本机same-case-delivery-turn-v3/resources.json及employee.json|
+|目标/标准/计划至结果|尚未形成正式已确认Problem/Criteria/Plan/Run及产物、评价、Human决定|等待本轮真实理解结果后顺序续接，不预造后续审批对象|
+
+两种资源条件仍未取得完整执行场景证据。本轮代码增加固定快照确定性分析及显式Native装配模式；测试/资源草稿不等于真实Native执行、标准通过或Human接受。资源数量与任务数量分开，六种operation能力不要求生成六任务。原323成本资料/历史仍供回归，未替代本案对象。

@@ -61,8 +61,25 @@ OWNERS = (
 )
 
 
-def prepare(connection, services, namespace, security_domain, *, write=False):
-    content = resource_content()
+def prepare(
+    connection, services, namespace, security_domain, *, write=False, case="cost"
+):
+    names = dict(NAMES)
+    if case == "delivery":
+        from agent_console.delivery_resource_bundle import (
+            resource_content as delivery_content,
+        )
+
+        content = delivery_content()
+        names.update(
+            skill="S5-324 合成供应商交付只读技能",
+            knowledge="S5-324 合成采购订单快照",
+            agent="S5-324 供应商交付及时性职责",
+        )
+    elif case == "cost":
+        content = resource_content()
+    else:
+        raise ValueError("RESOURCE_CASE_UNSUPPORTED")
     if write:
         connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
@@ -76,14 +93,14 @@ def prepare(connection, services, namespace, security_domain, *, write=False):
         found = connection.execute(
             f"SELECT record FROM {table} WHERE namespace=%s AND security_domain=%s "
             "AND record->>'name'=%s" + (" AND kind='skill'" if kind == "skill" else ""),
-            (namespace, security_domain, NAMES[kind]),
+            (namespace, security_domain, names[kind]),
         ).fetchall()
         if len(found) > 1:
             raise ValueError("RESOURCE_DRAFT_AMBIGUOUS")
         record = found[0]["record"] if found else None
         if record is None and write:
             args = (scope, "skill", ACTOR) if kind == "skill" else (scope, ACTOR)
-            record = service.create(*args, NAMES[kind], content[kind])
+            record = service.create(*args, names[kind], content[kind])
             if kind == "knowledge":
                 record = record["knowledge"]
         if record is None:
@@ -128,6 +145,7 @@ def prepare(connection, services, namespace, security_domain, *, write=False):
         )
     return {
         "session": "S5-V023-IMPL-324",
+        "case": case,
         "namespace": namespace,
         "securityDomain": security_domain,
         "resources": result,
@@ -141,6 +159,7 @@ def main():
     parser.add_argument("--runtime-file", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prepare", action="store_true")
+    parser.add_argument("--case", choices=("cost", "delivery"), default="cost")
     args = parser.parse_args()
     runtime = json.loads(args.runtime_file.read_text())
     database_url = runtime["databaseUrl"]
@@ -169,6 +188,7 @@ def main():
                 "s5-323-demo",
                 "isolated-real-demo",
                 write=args.prepare,
+                case=args.case,
             )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")

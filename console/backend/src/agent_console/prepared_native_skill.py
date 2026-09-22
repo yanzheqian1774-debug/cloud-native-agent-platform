@@ -45,8 +45,23 @@ def input_snapshot(connection, command):
         if artifact is None:
             raise ExecutionPreparationError("PREPARED_DEPENDENCY_OUTPUT_REQUIRED")
         dependencies[dependency] = json.loads(artifact["content"])
+    participant = next(t for t in p.participants if t.task_id == task.task_id)
+    from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+
+    delivery = SyntheticDeliverySkillExecutor.revision
+    is_delivery = (
+        participant.executor_id,
+        participant.executor_revision,
+        participant.executor_digest,
+    ) == (
+        delivery.executor_id,
+        delivery.executor_revision,
+        delivery.configuration_digest,
+    )
     result = {
-        "schemaVersion": "synthetic-cost-input.v1",
+        "schemaVersion": "synthetic-delivery-input.v1"
+        if is_delivery
+        else "synthetic-cost-input.v1",
         "synthetic": True,
         "sourceSnapshot": p.source_snapshot.model_dump(mode="json"),
         "dependencies": dependencies,

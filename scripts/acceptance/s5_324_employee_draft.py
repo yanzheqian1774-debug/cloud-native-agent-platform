@@ -23,6 +23,10 @@ ACTOR = "agent:s5-324-resource-preparer"
 
 def prepare(authority, resources):
     scope = ScopeIdentity(resources["namespace"], resources["securityDomain"])
+    case = resources.get("case", "cost")
+    if case not in ("cost", "delivery"):
+        raise ValueError("RESOURCE_CASE_UNSUPPORTED")
+    role = ROLE if case == "cost" else "S5-324 合成供应商交付核验员"
     members = [
         {
             "kind": {
@@ -47,7 +51,7 @@ def prepare(authority, resources):
             "SELECT definition_id,revision_id,record "
             "FROM digital_employee_definition.revisions WHERE namespace=%s "
             "AND security_domain=%s AND record->>'role'=%s",
-            (scope.namespace, scope.security_domain, ROLE),
+            (scope.namespace, scope.security_domain, role),
         ).fetchall()
         if len({r["definition_id"] for r in rows}) > 1:
             raise ValueError("EMPLOYEE_DRAFT_AMBIGUOUS")
@@ -67,14 +71,22 @@ def prepare(authority, resources):
                 CreateEmployeeDefinition(
                     employeeDefinitionId="employee-definition:" + str(uuid4()),
                     employeeDefinitionRevisionId="employee-revision:" + str(uuid4()),
-                    role=ROLE,
+                    role=role,
                     responsibilities=[
-                        "按批准的六任务依赖处理固定合成资料",
+                        (
+                            "按批准的六任务依赖处理固定合成资料"
+                            if case == "cost"
+                            else "按确认计划处理固定合成采购订单、核验交付及时性"
+                        ),
                         "只读分析并保留来源、产物、限制及人工决定",
                     ],
                     members=members,
                     expectedVersion=0,
-                    commandId="s5-324-engineering-employee-draft-v1",
+                    commandId=(
+                        "s5-324-engineering-employee-draft-v1"
+                        if case == "cost"
+                        else "s5-324-delivery-employee-draft-v1"
+                    ),
                 ),
             )
         actual = {

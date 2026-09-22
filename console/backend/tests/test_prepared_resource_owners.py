@@ -197,6 +197,19 @@ def test_resource_draft_preparation_is_atomic_and_resume_does_not_recreate(
             module.prepare(c, services, "fixture324", "isolated", write=True) == first
         )
         assert module.prepare(c, services, "fixture324", "isolated") == first
+        delivery = module.prepare(
+            c, services, "fixture324", "isolated", write=True, case="delivery"
+        )
+        assert delivery == module.prepare(
+            c, services, "fixture324", "isolated", write=True, case="delivery"
+        )
+        old = {r["kind"]: r for r in first["resources"]}
+        new = {r["kind"]: r for r in delivery["resources"]}
+        assert old["runtime"] == new["runtime"]
+        for kind in ("skill", "knowledge", "agent"):
+            assert old[kind]["identity"] != new[kind]["identity"]
+            assert old[kind]["digest"] != new[kind]["digest"]
+        assert module.prepare(c, services, "fixture324", "isolated") == first
 
 
 def test_prepared_employee_members_require_separate_exact_owner_reads():

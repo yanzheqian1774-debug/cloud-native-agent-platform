@@ -212,3 +212,13 @@ D324-5 候选 make check 通过：2121 passed / 364 skipped（含未配置独立
 正常提交及推送完成；0038已在完整PG备份后应用，运行writer27209；账号密码/代次未轮换。新规划配置已恢复原30秒并逐字段匹配原批准摘要，七条申请仍PENDING、context决定/新planning preparation/allowance/新模型预留均0。业务真实HTTPS登录303返回07:36精确对象，HTML/刷新200、退出204及退出后401；对象读取404/DRAFT_ASSISTANCE_NOT_FOUND，经PG存在性与read_grant源码确认是当前READ Grant未签发的保护性拒绝，不是对象丢失或路由404。context元数据GET200；未使用实际reviewer。26保护表原行全部保留。
 
 候选CI11成功/1浏览器失败，远端只留98passed/1failed及BROWSER_DIAGNOSTIC_GAP，不能补造具体场景。对应本轮右侧用户消息变更，本地精确复现旧productization用例仍断言头像在正文左侧（误差360.828125）。依据用户明确“用户右、助手左、旧图冲突不照搬”的新验收，改为反向12px精确间距断言，保留长内容/折叠/零写入全部检查；不是删除或放松断言。后继正常门禁和CI继续核验。
+
+## 同案供应商交付及时性资源增量（G1，2026-09-22）
+
+本人明确选择交付及时性，限定合成订单、固定快照/判定日、剩余数量分单位、最长逾期天数及订单数排序、异常单列。真实理解turn v2已SUCCEEDED/NEEDS_CLARIFICATION，沿原context补充turn v3；新精确Grant不继承旧invocation。原成本资源与Plan仅回归用途，不能替代本案。
+
+实施：在既有Skill executor接口新增有界纯计算交付技能和明确合成快照；复用既有资源owner准备新Skill/Knowledge/Agent草稿，兼容复用Native profile候选。Native composition显式选择交付模式，按精确参与executor选择输入schema，保持旧成本模式、权限交集、同Run重试/取消/UNKNOWN和原子产物限额。无新增API/持久设施/生命周期语义或权限机制。固定演示判定日2026-09-20；不读取企业台账，不执行采购付款或生产写入。
+
+验证：取消/已交清/部分交付、等于判定日、跨单位、缺日期、重复ID/数量矛盾、稳定排序及固定日期；实际资源Schema与executor绑定；Native装配和旧成本兼容。测试与真实执行分开，最终实际目标/Criteria/Plan形成后再精确绑定，标准评价与Human结果分别记录。资源准备不代表发布或执行准入，正式本人步骤待对象与预检完成后集中交付。
+
+实施进度：新增 `synthetic_delivery_skill.py` 与正式资源包，支持严格日期/剩余量、排除、分单位、稳定排序、异常和来源链；Native模式需显式选择 synthetic-delivery-v1，旧成本模式保持。资源准备/Employee脚本增加有界delivery案例，复用相同Native配置，保留旧成本对象。资源owner PostgreSQL验证覆盖幂等、原子回滚及两案例隔离。当前v3两条精确授权待独立本人，尚未真实调用该turn；不得将草稿资源或测试认定执行完成。场景级授权、范围内自动准入仅登记后续，不在324实现。

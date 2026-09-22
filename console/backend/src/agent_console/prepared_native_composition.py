@@ -33,13 +33,30 @@ POLICY = SideEffectPolicy(
 )
 
 
-def compose(pool, database_url, migrations, reader, generation, authorization_check):
+def compose(
+    pool,
+    database_url,
+    migrations,
+    reader,
+    generation,
+    authorization_check,
+    *,
+    mode="synthetic-cost-v1",
+):
+    if mode == "synthetic-delivery-v1":
+        from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+
+        executor = SyntheticDeliverySkillExecutor()
+    elif mode == "synthetic-cost-v1":
+        executor = SyntheticCostSkillExecutor()
+    else:
+        raise ValueError("PREPARED_SKILL_CONFIGURATION_INVALID")
     composition = compose_governed_skill_invocation(
         database_url,
         migrations,
         None,
         FixedReadOnlyPolicyAuthority(POLICY),
-        SkillExecutorRegistry((SyntheticCostSkillExecutor(),)),
+        SkillExecutorRegistry((executor,)),
     )
 
     def authorize(connection, command):
