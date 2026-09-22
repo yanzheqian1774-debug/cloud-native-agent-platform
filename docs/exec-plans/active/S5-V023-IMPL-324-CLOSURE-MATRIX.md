@@ -63,3 +63,5 @@ Codex：最终候选/CI与运行一致、前后端装配、精确路由/returnTo
 
 
 本轮追加只读核验：实际PG policies/reservations聚合为理解5/12次、规划19/8次，两个上限均USD10。D324-5第4项允许需要规划时使用精确planning范围，但当前理解装配不能自动视为planning准入，且历史次数超限不能绕过。规划替代路径及精确装配适用性仍在核对；不提前要求本人签发无法通过预算门禁的调用。
+
+明确阻断：源码确认正常新Plan依赖governed invocation，原budget policy不可原地修改；D324-6最小有界次数修订已在原决定包标记PROPOSED，未批准不实施。本轮没有增加权限机制、金额或数据范围。只读本地Kind入口127.0.0.1:55088的s5-323-demo namespace存在且Active，暂无Pod；这仅是基础环境证据，不能作为Native运行成功。Employee原两次CREATE事实完整，尚无VALIDATE/APPROVE/PUBLISH正式事实。

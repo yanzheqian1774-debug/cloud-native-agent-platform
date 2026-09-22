@@ -140,3 +140,15 @@ artifact采用已有PG/Evidence owner：每Task至多16个产物、每产物256K
 ### D324-5 Human 决定追加（2026-09-22）
 
 用户对原决定包的精确答复为：“批准 D324-5 的有界追加机制”。上述四项机制及边界正式接受；D324-1/2/3/4 继续有效。此记录是架构决定，不是具体 context 的调用准入、资源发布或 Native 执行批准。实际对象形成后仍由独立本人签发；原账本、上限、历史、UNKNOWN 及 323 guard 不变。
+
+## D324-6：同案新计划的历史累计次数差异（PROPOSED，未批准、未实施）
+
+用户最新验收要求同一新问题贯通真实理解、目标/标准、计划和实际执行，旧成本Plan只能回归。只读PG核验原planning ledger `ledger:s5-323-real-planning:original-window` 已有19条reservation，原call_cap=8、total_cost_cap_microusd=10000000；理解账本5/12。原19次为既有历史，不能因超过8而删除、重置或套用323连续开发例外。
+
+具体冲突：D324-5要求原上限不变，而新问题尚无正式proposal/Plan；现有正常新建计划依赖governed planning invocation。窄后继入口要求既有同案Plan与来源proposal，不能移用旧成本Plan。预算owner在dispatch时以全部reservation计数，20>8必然拒绝；`migrate_and_configure`拒绝改变原policy，返回PROVIDER_BUDGET_PROFILE_CONFLICT。不是登录、Grant审批或等待时序能解除的问题。
+
+最小建议（等待Human决定）：在原预算owner增加追加式、精确新324 planning对象适用的次数修订记录，保留原policy=8及所有历史，以累计20次为本次有效计数上限，即当前19次之后最多新增1次。仍使用原模型/价格及USD10总额上限，累计全部结算与UNKNOWN预留，任何一项不足即拒绝。记录只适用于实际形成、随后由独立本人签发的本次新planning对象；对象尚未形成时本决定仅授权实施，绝不预签调用。不得令旧323调用继承该次数修订，不改旧guard，不返回可绕过金额上限的continuous-development例外；调用UNKNOWN即停，不能自动追加第二次。
+
+受影响组件：原budget owner的有效次数投影、context精确planning范围及其独立决定绑定、追加持久记录/迁移和读回展示。现有额度/账本不覆盖；旧writer不能误读新增记录，需明确兼容门禁和停writer回退，不删除新旧历史。这是D324-5“原上限不变”的实质增量，G2未接受前不得编码或签发。
+
+替代：①保持全部原限制，则本次新问题只能推进已获准的理解阶段，不能宣称完整同案验收；②另建完整手工规划来源/入口需要新的产品与契约范围，不是现成可用替代，不建议本轮扩展；③复用旧成本Plan冒充本案、清账本或直接更新policy均不采用。建议仅审阅上述1次有界追加；它不改变USD总上限、不替代精确Grant、资源审核、执行准入或Human验收，也不保证一次模型输出必定满足标准。
