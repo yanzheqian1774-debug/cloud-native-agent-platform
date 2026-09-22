@@ -67,6 +67,14 @@ def assemble(authority, bundle, employee, semantics):
         profile = published(c, scope, "RUNTIME", refs["runtime"])
         if profile["provider"] != "NATIVE_KUBERNETES":
             raise ValueError("NATIVE_PROFILE_REQUIRED")
+    if case == "delivery":
+        from agent_console.prepared_delivery_contract import validate_delivery_mapping
+
+        validate_delivery_mapping(semantics, skill["operations"])
+    else:
+        available = {operation["name"] for operation in skill["operations"]}
+        if any(task["operation"] not in available for task in semantics["tasks"]):
+            raise ValueError("PREPARED_OPERATION_UNAVAILABLE")
     seed = canonical_digest(
         {
             "scope": [scope.namespace, scope.security_domain],
@@ -202,7 +210,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     for key in ("runtime", "resources", "employee", "output"):
         p.add_argument("--" + key, type=Path, required=True)
+    p.add_argument("--plan-id", required=True)
+    p.add_argument("--plan-version", type=int, required=True)
+    p.add_argument("--plan-digest", required=True)
     args = p.parse_args()
+    if args.plan_version < 1 or len(args.plan_digest) != 64:
+        p.error("An exact existing Plan revision and SHA256 are required")
     runtime = json.loads(args.runtime.read_text())
     authority = PostgresExecutionAuthorityRepository(
         runtime["databaseUrl"],
@@ -216,19 +229,16 @@ def main():
             row = c.execute(
                 "SELECT record,digest FROM workflow_planning.plans "
                 "WHERE namespace=%s AND security_domain=%s "
-                "AND plan_id=%s AND version=2",
+                "AND plan_id=%s AND version=%s",
                 (
                     bundle["namespace"],
                     bundle["securityDomain"],
-                    "5ad74afd-a6bf-4b04-b395-34d18d01c3b6",
+                    args.plan_id,
+                    args.plan_version,
                 ),
             ).fetchone()
-            if (
-                row is None
-                or row["digest"]
-                != "a789015b006cecc053dc5297529edf80fa430411253aa13e869c210292623492"
-            ):
-                raise ValueError("ORIGINAL_PLAN_V2_MISMATCH")
+            if row is None or row["digest"] != args.plan_digest:
+                raise ValueError("EXACT_PLAN_REVISION_MISMATCH")
         result = assemble(
             authority,
             bundle,

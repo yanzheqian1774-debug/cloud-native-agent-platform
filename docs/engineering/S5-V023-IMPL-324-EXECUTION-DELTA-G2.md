@@ -156,3 +156,33 @@ artifact采用已有PG/Evidence owner：每Task至多16个产物、每产物256K
 ### D324-6 Human 决定追加（2026-09-22，ACCEPTED）
 
 用户对上述精确差异明确答复：“批准 D324-6 有界追加一次”。保留前述 PROPOSED 文本作为申请历史，本追加将决定状态改为 ACCEPTED、实现状态为待实施。仅本次实际新324规划对象可经独立本人签发使用累计20次上限；原policy=8、USD10上限、全部历史结算与UNKNOWN预留及323 guard不变。不得自动增加第二次；本决定不是具体调用准入。
+
+## D324-7 — 任务范围授权与配置修订衔接（PROPOSED，未实施）
+
+依据2026-09-22系统性续接要求。不是已批准D1–D6的重复申请；也不是新的模型调用许可。原D6唯一追加已耗用，本次UNKNOWN与USD0.688128预留保持。
+
+### 已证实缺口
+
+1. 324固定账号与短期session已分开，但对象Grant仍各自一小时；对象增长要逐项申请。新context仅认原323配置摘要，不承接323独立timeout revision。此前为匹配原摘要，stage脚本明确将55改回previous_read_seconds=30；并非worker忽略55。实际POST直连api.moonshot.cn，无环境代理；read30、outer total60、cleanup2。WAIT_HEADERS在30.735秒失败，无HTTP响应、response id或usage。
+2. Kimi公开Responses文档标明store=false/background=false/previous_response_id=null；官方文档索引未提供单条Responses结果/用量检索接口。不能套用OpenAI GET responses接口，更不能以余额或无日志判定零费用。来源：https://platform.kimi.com/docs/api/responses ，https://platform.kimi.com/docs/llms.txt 。供应商账户后台或支持人员是否能按时间核查仍未知。
+3. Native准备仍含旧成本Plan硬编码/成本专属边界；隔离验证也需要真实Plan确认、发布与执行权限。不能把已有fixture审批/ExactTestAuthority移植为正式准入。技术环境与计划规格可自主准备，正式决定由本人。
+
+### 建议的最小统一机制
+
+- **基础角色**：requester只能访问本人任务/已授予范围的导航与对象；reviewer只看审批事项及必要脱敏依据。角色不含模型调用、发布、执行、成果接受；不授予审批人业务全局LIST。
+- **任务范围授权修订**：由独立本人批准不可变revision，绑定324任务、主体/账号修订、组织、安全域、根问题/context、用途、合成数据边界、精确模型与配置修订、有效期、调用次数、金额及Native只读权限上限。申请人不得签发自己的revision。
+- **范围内对象自动衔接**：仅由正式owner在创建事务中追加可验证血缘边；同一task/root/scope/principal且符合已批准phase/type/bounds的对象可根据任务授权产生逐次授权决定，无需人为逐ID签Grant。不得仅依据客户端taskId、URL、同namespace、相似名称或旧对象ID继承。已有对象权限不自动扩大；迁移为显式关联且保留原Grant记录。
+- **每次效应前重验**：账号启用、task revision有效/未撤销、scope/phase/resource exact revision、预算累计/UNKNOWN、执行资源发布及Skill身份；停用/撤销/过期立即阻止新效应。会话恢复只恢复身份，不续期task authorization。历史READ按独立当前读取权限处理，不隐式复活执行权。
+- **正式业务决定仍分开**：资源审核发布、Plan确认、独立Native准入、Human成果接受保留原记录和责任。操作清单可集中展示已形成对象；不预签未形成Run，不将模型/发布资格当作执行批准。
+- **配置选择**：追加可审查的task配置revision；既有55秒候选可作为本次候选（connect5/read55/total60/cleanup2），离线传递通过后由本人纳入有效task revision。保留原30秒配置及其调用证据，不改旧delegation摘要。配置变化不能重置次数/费用，也不能保证供应商将在55秒内响应。
+- **UNKNOWN恢复**：原invocation终态不修改；有供应商可核实结果则走附加证据/结算机制。无法核实仍保留UNKNOWN及最坏预留。新调用必须关联原未知对象及明确恢复理由，并在有效task revision的剩余额度内；登录、查询、正文补交不触发新调用。
+- **额度未批准部分**：当前累计20，原USD10上限、全部历史与预留不变。本决定机制本身不增加次数。若本人选择继续一次真实规划恢复，须在同一任务授权修订中明确最多新增1次/累计21，而不是再给未知原调用重试权；该次数差异目前未批准、未实施。可拒绝该部分而先完成隔离Native建设。
+- **隔离Native线**：独立namespace/security domain、无真实模型的明确合成计划，仅用于执行能力验证。通过相同Plan/Preparation/Run/Task/Skill/Evidence契约。独立审核确认与准入仍须本人；不复制原案例的Approval/Grant到验证环境，不替代同案验收。
+
+### 影响、兼容与替代
+
+影响local account读取、task authorization/context对象血缘、budget guard、BFF与Native效应前授权检查、操作清单。新增持久记录仍在现有PostgreSQL，无新基础设施；不改Kubernetes CRD、Task/Run状态语义。323保留原guard，D1–D6历史不回写；旧路径兼容但不成为新任务的默认入口。
+
+备选：继续原精确Grant逐对象机制可不改架构，但无法满足用户本次减少技术对象审批的目标；直接扩权限/延长旧Grant/复活委托不采用。推荐上述有界任务revision与owner血缘机制，先完成契约和拒绝测试，再实装。回退关闭新任务revision入口，不删除历史；已有记录仍只读可审计。
+
+Human需决定的边界：是否接受此机制；是否采用55秒配置候选；是否允许有明确关联的新恢复调用最多1次（累计21，金额不变）。未决定前仅暂停对应授权机制/真实调用，C及Native契约准备继续。

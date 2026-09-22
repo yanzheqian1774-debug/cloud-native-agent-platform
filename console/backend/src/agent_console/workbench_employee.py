@@ -94,6 +94,7 @@ class EmployeeDefinitionOwnerAdapter:
             employeeDefinitionId=revision["definitionId"],
             employeeDefinitionRevisionId=revision["revisionId"],
             employeeDefinitionDigest=value["digest"],
+            aggregateVersion=value["aggregateVersion"],
             role=revision["role"],
             responsibilities=list(revision["responsibilities"]),
             members=[

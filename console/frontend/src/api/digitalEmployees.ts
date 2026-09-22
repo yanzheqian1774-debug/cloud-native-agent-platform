@@ -27,6 +27,7 @@ export type EmployeeDefinition = EmployeeDefinitionSummary & {
   responsibilities: string[];
   members: EmployeeMember[];
   lifecycleState?: EmployeeLifecycleState;
+  aggregateVersion?: number;
 };
 
 export type WorkbenchSession = {

@@ -41,6 +41,14 @@ def published(connection, scope, kind, ref):
 
 def validate_resources(connection, scope, preparation, participant):
     skill = published(connection, scope, "SKILL", participant.skill.reference)
+    from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+
+    if participant.executor_id == SyntheticDeliverySkillExecutor.revision.executor_id:
+        from .prepared_delivery_contract import validate_delivery_mapping
+
+        validate_delivery_mapping(
+            preparation.semantics.model_dump(mode="json"), skill.get("operations", [])
+        )
     operation = next(
         (
             o
