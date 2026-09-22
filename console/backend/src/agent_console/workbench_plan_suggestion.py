@@ -11,6 +11,7 @@ from .plan_suggestion_domain import PlanningConflict, PlanningError, ProposalRev
 from .plan_suggestion_postgres import PostgresPlanningRepository
 from .plan_suggestion_resources import EmployeePlanningReader, PlanningResourceResolver
 from .planning_contracts import validation_report
+from .synthetic_validation_plan import SyntheticValidationRequest
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_business_problem import OwnerPrincipal
 from .workbench_owner_authorization import WorkbenchOwnerError
@@ -51,6 +52,10 @@ class PlanningOwnerAdapter:
         app = PlanningApplication(repo, self.application.problems, call.authority)
         identity = call.path.get("proposal_id", call.path.get("problem_id"))
         try:
+            if call.operation == "PREPARE_SYNTHETIC_VALIDATION_PLAN":
+                return app.prepare_synthetic_validation(
+                    principal, SyntheticValidationRequest.model_validate(call.payload)
+                )
             if call.operation == "READ_PLANNING_INPUT_V2":
                 return app.current_input(principal, identity, call.connection)
             if call.operation == "PREPARE_COST_EXECUTION_REVISION":
@@ -148,6 +153,22 @@ def planning_operations(application, employees=None):
             lambda ctx, path, payload, query: (
                 ExactGrant(
                     "BUSINESS_PROBLEM", "READ", f"business-problem:{path['problem_id']}"
+                ),
+            ),
+            handler,
+        ),
+        WorkbenchOperation(
+            "PREPARE_SYNTHETIC_VALIDATION_PLAN",
+            "POST",
+            f"{PREFIX}/planning-v2/synthetic-validation",
+            SyntheticValidationRequest,
+            None,
+            lambda ctx, path, payload, query: (
+                ExactGrant(
+                    "PLAN",
+                    "PREPARE",
+                    "plan:prepare:"
+                    + payload["semantics"]["target"]["problem"]["resource_id"],
                 ),
             ),
             handler,

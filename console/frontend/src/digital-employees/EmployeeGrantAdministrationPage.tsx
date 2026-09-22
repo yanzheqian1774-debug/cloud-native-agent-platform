@@ -1,3 +1,4 @@
+import {BoundedTaskPanel} from "./BoundedTaskPanel";
 import {ContextAdmissionPanel} from "./ContextAdmissionPanel";
 import {TaskDelegationPanel} from "./TaskDelegationPanel";
 import { useEffect, useRef, useState } from "react";
@@ -104,6 +105,7 @@ export function AuthorizationAdministrationPage() {
     }
   }
 
+  if (session && params.get("task")) return <main className="px-page employee-grant-admin px-admin-page"><BoundedTaskPanel key={params.get("task")!} identity={params.get("task")!} session={session}/></main>;
   return <main className="px-page employee-grant-admin px-admin-page">
     <header className="px-page-title"><div><p>授权管理 <small>精确权限 · 独立审批</small></p><h1>授权申请决定</h1><span>只处理申请人提供的精确申请编号；展示内容来自正式申请响应，不把 URL、query 或 purpose 当作授权依据。</span></div><a href={returnPath}>返回{problemRequest ? "业务工作台" : "数字员工"}</a></header>
     {!session && <section className="employee-command-state failed"><strong>管理员需独立登录</strong><span>{error ?? "正在读取管理员会话……"}</span><a className="px-primary-button" href={`/api/workbench/v1/login?returnTo=${encodeURIComponent("/authorization-admin"+window.location.search)}`}>登录授权管理工作台</a></section>}

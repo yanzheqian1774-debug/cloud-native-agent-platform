@@ -89,6 +89,8 @@ class PlanningApplication:
 
     def save_suggestion(self, principal, proposal):
         # This entry is called by the governed invocation owner, never model HTTP.
+        if proposal.origin is not None or proposal.invocation_id is None:
+            raise PlanningError("PLANNING_GOVERNED_SOURCE_REQUIRED")
         self.require(principal, "PREPARE", proposal.proposal_id)
         scope = self.scope(principal)
         with self.repository.transaction(
@@ -97,7 +99,41 @@ class PlanningApplication:
             self.validate_target(
                 principal, proposal.semantics.target, cursor.connection
             )
-            return self.repository.add_proposal(cursor, scope, proposal)
+            saved = self.repository.add_proposal(cursor, scope, proposal)
+            from .bounded_task_authorization import bind_plan
+
+            bind_plan(cursor.connection, scope, principal.principal_id, saved)
+            return saved
+
+    def prepare_synthetic_validation(self, principal, request):
+        """D324-7 A8: explicit owner proposal; no invocation, approval or Run."""
+        from .synthetic_validation_plan import make_proposal
+
+        proposal = make_proposal(principal, request)
+        self.authority.require(
+            principal,
+            "PLAN",
+            "PREPARE",
+            "plan:prepare:" + proposal.semantics.target.problem.resource_id,
+        )
+        scope = self.scope(principal)
+        with self.repository.transaction(
+            scope, proposal.proposal_id, authorized=True
+        ) as cursor:
+            self.validate_target(
+                principal, proposal.semantics.target, cursor.connection
+            )
+            saved = self.repository.add_proposal(cursor, scope, proposal)
+            from .bounded_task_authorization import bind_plan
+
+            bind_plan(cursor.connection, scope, principal.principal_id, saved)
+            return {
+                "proposal": saved.model_dump(mode="json"),
+                "digest": saved.digest,
+                "confirmation_required": True,
+                "independent_admission_required": True,
+                "execution_status": "NOT_STARTED",
+            }
 
     def prepare_cost_execution_revision(self, principal, plan_id, request):
         from .cost_execution_revision import execution_successor

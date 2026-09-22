@@ -103,7 +103,8 @@ def execution_successor(
         proposal_id=source.proposal_id,
         revision=source.revision + 1,
         predecessor_digest=source.digest,
-        invocation_id="execution-revision:" + request.digest,
+        invocation_id=None if source.origin else "execution-revision:" + request.digest,
+        origin=source.origin,
         semantics=semantics,
     )
     changes = [

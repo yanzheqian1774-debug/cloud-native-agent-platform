@@ -241,6 +241,7 @@ def build_workbench_composition(
             )
         delegation_routes = ()
         task_binding = None
+        delegation = planning_admission = None
         if (
             draft_assistance is not None
             and planning_invocations is not None
@@ -322,6 +323,20 @@ def build_workbench_composition(
                 draft_assistance.authorization.context_admission = admission
                 draft_assistance.budget.context_admission = admission
                 delegation_routes += (install_context_call_admission(admission),)
+
+        roots_path = os.environ.get("BOUNDED_TASK_AUTHORIZATION_ROOTS")
+        if roots_path:
+            from .bounded_task_bootstrap import install_task_authorization
+            from .task_delegation import TaskDelegationService
+
+            if delegation is None:
+                delegation = TaskDelegationService(foundation.grants, {})
+                delegation.migrate()
+            delegation_routes += (
+                install_task_authorization(
+                    roots_path, delegation, planning_admission, planning_invocations
+                ),
+            )
 
         application = create_workbench_bff(
             foundation.sessions,

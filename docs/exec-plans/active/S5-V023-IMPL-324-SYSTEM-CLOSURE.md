@@ -55,3 +55,23 @@ Employee精确读取已有owner聚合版本，BFF projection遗漏。增量返�
 ### 实际页面发现的相邻入口缺陷及G1实施增量
 
 真实Chrome登录前URL含完整Employee ID/revision/section，提交后却到/work；safe_return仅允许work/authorization，故加入本批实际只读页面的精确白名单（不放行api/外站/路径逃逸）。另运行脚本直接挂载共享dist，普通测试构建将VITE_PROBLEM_DRAFT_ASSISTANCE清除后实际页面退化手工模式。为构建生成非秘密模式清单，serve校验模型装配需要assistance=enabled，并按内容摘要复制固定前端包，测试build不再改变运行资产。无新业务权限或模型调用；验证清单不匹配拒绝、源dist后续修改不影响固定包、真实登录返回及截图。
+
+## D324-7 A/B批准后的实施增量（2026-09-22，原计划续接）
+
+A与B分别ACCEPTED。先实现可审查的授权契约与追加持久记录，再接正式owner及入口，不将批准文本转成实际签名。
+
+1. 任务授权owner：精确root/scope/subject/account revision、阶段动作、资源/config摘要、8小时上限、显式续期及撤销；派生血缘同scope。正式owner创建绑定，客户端不能认领任意对象。
+2. 预算/config：追加次数修订，原8及D6=20保留，D7=21只适用精确后继；共用reservation事务和全部历史金额。签发值/运行值在效应前相等，60秒总期限含读取，2秒仅清理。
+3. Native：正常计划owner新增明确无模型合成来源；确认前无Run，原AI proposal摘要兼容。隔离root/scope独立，不继承原案例Grant或发布决定。
+4. 拒绝测试：跨scope/root、过期/撤销/账号版本、来源冒充、配置漂移、未知结果重发、并发次数/金额与旧摘要兼容。迁移先在隔离PG验证，再正式运行装配。
+5. 实际对象只通过正式入口准备；完成入口预检后集中提供独立本人操作。真实规划/Native分别报告，未形成实际产物不得报告执行完成。
+
+### D7第一组实施证据与仍待接线
+
+A/B分别已登记ACCEPTED。追加0039任务授权、0040精确规划后继；原policy=8、D6=20、D7=21按适用对象选择累计上限，不相加。统一预算owner保留全部预留。任务root/scope/账号修订、有效期、撤销及配置漂移拒绝；撤销后继不回退旧任务窗口。合成proposal显式origin且invocation为空；旧proposal JSON/digest不变。已有实际资源不重新发布。
+
+真实PG已通过任务签发/撤销/账号变更/跨scope/幂等、D7第21次并发幂等、原金额上限及终态拒绝；9项最新针对性验证见本机s5-324-d7-final-authority-tests.log，29项相邻PG见s5-324-d7-pg-adjacent.log。真实账本只读仍20次、USD5.956372计费及预留；配置55候选f592f2e2b55fce9c64b9b3d1fd7a919f21e452991859b9b572d1649170e73ca6仅暂存，尚未切换实际运行/签发/调用。
+
+新审核页按IAM07局部映射，实现精确task链接、显式独立签发、4小时窗口、状态查询/撤销。浏览器视图测试1项通过，刷新零重签、长正文可达；初始测试漏session schemaVersion，未放松产品校验，保留失败。正常make check已通过（2170 passed，384按专用环境条件跳过）；新增PG已在专用PG运行并纳入既有CI PG job。新增PG首次普通门禁漏环境条件、测试pool清理调用错误均已修正，未改变断言/超时。
+
+待办：真实服务升级/入口预检；正式task对象创建及独立本人签发；精确规划后继创建后模型准入。Native隔离root/scope尚需独立环境和正式owner资源准备，不将合成规格当作Run。实际同视口截图和Native执行/产物/评价均尚未完成。

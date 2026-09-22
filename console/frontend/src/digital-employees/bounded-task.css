@@ -1,0 +1,14 @@
+.bounded-task { color: #23385c; }
+.bounded-task-columns { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: 18px; margin-top: 20px; }
+.bounded-task-columns section { border: 1px solid #d5e3f8; border-radius: 10px; background: #fff; padding: 20px; margin-bottom: 16px; overflow-wrap: anywhere; }
+.bounded-task-columns h3 { margin: 0 0 16px; color: #162b51; }
+.bounded-task-columns dl { display: grid; grid-template-columns: 125px minmax(0,1fr); gap: 12px; }
+.bounded-task-columns dd { margin: 0; }
+.bounded-task-columns dt { color: #607594; }
+.bounded-task-columns li { margin-bottom: 12px; }
+.bounded-task-columns pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.bounded-task-columns > details { grid-column: 1 / -1; min-width: 0; }
+.bounded-task-columns button { margin-top: 16px; }
+.bounded-task-columns label { display: flex; gap: 8px; align-items: start; }
+.bounded-task-columns input[type="checkbox"] { width: auto; }
+@media(max-width: 1050px) { .bounded-task-columns { grid-template-columns: minmax(0, 1fr); } }

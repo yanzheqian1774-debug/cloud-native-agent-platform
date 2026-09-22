@@ -53,6 +53,11 @@ class PlanningCallAdmission(ContextCallAdmission):
         """Persist the actual generated object before signing or invocation claim."""
         scope = (context.scope.tenant_id, context.scope.security_domain)
         with self.repository.connection_scope() as c:
+            from .task_planning_successor import prepare
+
+            successor = prepare(self, c, context, request, record)
+            if successor is not None:
+                return successor
             source = c.execute(
                 "SELECT context_id FROM authorization_admin.context_call_objects "
                 "WHERE tenant_id=%s AND security_domain=%s AND "
@@ -177,7 +182,7 @@ class PlanningCallAdmission(ContextCallAdmission):
                 "context_id": row["context_id"],
                 "ready": ready,
                 "maximum_new_calls": 1,
-                "cumulative_call_cap": 20,
+                "cumulative_call_cap": row["record"].get("cumulative_call_cap", 20),
             },
         }
 
@@ -199,6 +204,10 @@ class PlanningCallAdmission(ContextCallAdmission):
             return self._projection(c, request_row(c, row["context_id"]), row["record"])
 
     def before_approve(self, c, row):
+        from .task_planning_successor import require_task
+
+        if require_task(c, row, getattr(self, "actual_configuration", {})):
+            return
         scope = (
             row["tenant_id"],
             row["security_domain"],
@@ -244,6 +253,9 @@ def guarded_row(c, budget, invocation):
     if row is None:
         return None
     active(c, row, getattr(budget, "delegation_configuration", None))
+    from .task_planning_successor import require_task
+
+    require_task(c, row, getattr(budget, "task_actual_configuration", {}))
     lock(c, row["context_id"])
     actual = c.execute(
         "SELECT actor_id,record FROM workflow_planning.invocations "
@@ -303,6 +315,11 @@ def effective_cap(c, budget, invocation, original):
     row = guarded_row(c, budget, invocation)
     if row is None:
         return original
+    from .task_planning_successor import cap
+
+    successor_cap = cap(c, row, budget, original)
+    if successor_cap is not None:
+        return successor_cap
     allowance = c.execute(
         "SELECT cumulative_call_cap FROM authorization_admin.planning_call_allowances "
         "WHERE tenant_id=%s AND security_domain=%s AND ledger_id=%s AND context_id=%s",

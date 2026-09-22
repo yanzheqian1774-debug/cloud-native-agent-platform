@@ -116,7 +116,22 @@ class PostgresPlanningInvocations:
             if validate:
                 validate(cursor.connection)
             if proposal:
+                if (
+                    proposal.origin is not None
+                    or proposal.invocation_id != invocation_id
+                ):
+                    raise PlanningConflict("PLANNING_GOVERNED_SOURCE_REQUIRED")
                 self.planning.add_proposal(cursor, scope, proposal)
+                from .bounded_task_authorization import bind_plan
+
+                actor = cursor.execute(
+                    "SELECT actor_id FROM workflow_planning.invocations "
+                    "WHERE namespace=%s "
+                    "AND security_domain=%s AND invocation_id=%s",
+                    (scope.namespace, scope.security_domain, invocation_id),
+                ).fetchone()
+                if actor:
+                    bind_plan(cursor.connection, scope, actor["actor_id"], proposal)
             inserted = cursor.execute(
                 "INSERT INTO workflow_planning.invocation_results VALUES (%s,%s,%s,%s) "
                 "ON CONFLICT DO NOTHING RETURNING invocation_id",
