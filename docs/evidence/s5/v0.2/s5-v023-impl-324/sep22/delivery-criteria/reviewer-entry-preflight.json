@@ -1,0 +1,8 @@
+{
+  "route": "/authorization-admin?request=grant-request-d8889231715e2ad1bc916ed35c17b13a",
+  "observedUI": "当前登录已失效",
+  "returnToPreserved": true,
+  "reviewerLoginByAgent": false,
+  "decisionByAgent": false,
+  "approvalBodyRead": false
+}

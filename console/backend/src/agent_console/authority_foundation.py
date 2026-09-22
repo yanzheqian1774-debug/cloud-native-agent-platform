@@ -154,6 +154,12 @@ class AuthorityGenerationController:
         now: datetime,
     ) -> AuthorityReadiness:
         current = self.barrier.snapshot
+        if candidate.local_accounts and isinstance(
+            self.repository, PostgresAuthorityRepository
+        ):
+            from .local_accounts import verify_schema
+
+            verify_schema(self.repository)
         same_published_candidate = (
             candidate.generation == current.generation
             and candidate.digest == current.digest
@@ -206,7 +212,15 @@ class AuthorityGenerationController:
         candidate_credentials = {
             item.credential_id: item for item in candidate.credentials
         }
-        removed_credentials = set(current_credentials) - set(candidate_credentials)
+        old_accounts = {a.credential_id: a for a in current.local_accounts}
+        new_accounts = {a.credential_id: a for a in candidate.local_accounts}
+        if any(
+            k in new_accounts and new_accounts[k] != a for k, a in old_accounts.items()
+        ):
+            raise AuthorityError("LOCAL_ACCOUNT_BINDING_IMMUTABLE")
+        removed_credentials = (
+            set(current_credentials) - set(candidate_credentials)
+        ) | (set(old_accounts) - set(new_accounts))
         if not removed_credentials <= set(candidate.credential_revocation_tombstones):
             raise AuthorityError("AUTHORITY_REVOCATION_TOMBSTONE_MISSING")
         removed_static_grants = {
@@ -421,6 +435,10 @@ def initialize_authority_generation(
         )
         control.replace(pending)
         identity = (generation.generation, generation.digest, recovery_epoch)
+        if generation.local_accounts:
+            from .local_accounts import verify_schema
+
+            verify_schema(repository)
         active = repository.active_generation()
         if active is None:
             repository.activate_generation(
@@ -474,6 +492,10 @@ def build_authority_foundation(
             repository.verify_existing_schema()
         else:
             repository.migrate()
+        if generation.local_accounts:
+            from .local_accounts import verify_schema
+
+            verify_schema(repository)
         active = repository.active_generation()
         if active is None or active[:2] != (generation.generation, generation.digest):
             raise AuthorityError("AUTHORITY_RECOVERY_REQUIRED")

@@ -1,0 +1,43 @@
+{
+  "session": "S5-V023-IMPL-324",
+  "tls": "VERIFIED_WITH_EXISTING_LOCAL_CERTIFICATE",
+  "independentIssuerReadOnly": true,
+  "checks": [
+    {
+      "requestId": "grant-request-048bc8a3051e77383a1ef9fd11010844",
+      "httpStatus": 200,
+      "state": "PENDING",
+      "reasonCode": null
+    },
+    {
+      "requestId": "grant-request-b2447ead173fe891b7df923fed4551e5",
+      "httpStatus": 200,
+      "state": "PENDING",
+      "reasonCode": null
+    },
+    {
+      "requestId": "grant-request-366a7309c01ced50e54ac4b967b1c9f4",
+      "httpStatus": 200,
+      "state": "PENDING",
+      "reasonCode": null
+    },
+    {
+      "path": "/healthz",
+      "httpStatus": 200
+    },
+    {
+      "path": "/authorization-admin",
+      "httpStatus": 200
+    },
+    {
+      "path": "/work",
+      "httpStatus": 200
+    },
+    {
+      "path": "/digital-employees",
+      "httpStatus": 200
+    }
+  ],
+  "decisionsSubmitted": 0,
+  "nativeDispatches": 0
+}

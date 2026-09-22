@@ -1,0 +1,75 @@
+{
+  "at": "2026-09-22T07:26:46.276864+00:00",
+  "restorations": [
+    {
+      "name": "problem-read",
+      "requestId": "grant-request-dc561ff26fa8c3a3c588748da43f6bed",
+      "state": "PENDING",
+      "expiredRequests": [
+        "grant-request-3a63db92f28aabb65a78089b07373b45"
+      ],
+      "expiredAt": [
+        "2026-09-22T07:20:17.987000+00:00"
+      ],
+      "scopeChanged": false,
+      "resourceBundleOnlyDeliveryAndRuntime": false
+    },
+    {
+      "name": "criteria-workspace",
+      "requestId": "grant-request-57a9494feea357c1f5a87891a3bf1b0b",
+      "state": "PENDING",
+      "expiredRequests": [
+        "grant-request-8716804ff93de3cc2327529e6ceb6418"
+      ],
+      "expiredAt": [
+        "2026-09-22T07:20:27.974000+00:00"
+      ],
+      "scopeChanged": false,
+      "resourceBundleOnlyDeliveryAndRuntime": false
+    },
+    {
+      "name": "problem-confirmation",
+      "requestId": "grant-request-8ab42117795e3ac91eb5e3635571e3de",
+      "state": "PENDING",
+      "expiredRequests": [
+        "grant-request-2cf0dd5ef075723144ece2bcd707e530"
+      ],
+      "expiredAt": [
+        "2026-09-22T07:20:37.904000+00:00"
+      ],
+      "scopeChanged": false,
+      "resourceBundleOnlyDeliveryAndRuntime": false
+    },
+    {
+      "name": "delivery-resource-review",
+      "requestId": "grant-request-7a618535a12a1da4a111b9615123b945",
+      "state": "PENDING",
+      "expiredRequests": [
+        "grant-request-b6e7f8cc2ace45259ca981443590fbb4",
+        "grant-request-048bc8a3051e77383a1ef9fd11010844"
+      ],
+      "expiredAt": [
+        "2026-09-22T07:23:17.395000+00:00",
+        "2026-09-22T07:20:53.641000+00:00"
+      ],
+      "scopeChanged": false,
+      "resourceBundleOnlyDeliveryAndRuntime": true
+    },
+    {
+      "name": "delivery-employee",
+      "requestId": "grant-request-498af611c20b01ad1b85988a664521ed",
+      "state": "PENDING",
+      "expiredRequests": [
+        "grant-request-5cdaece0e918da13989e5eb6e4b96d49"
+      ],
+      "expiredAt": [
+        "2026-09-22T07:20:48.220000+00:00"
+      ],
+      "scopeChanged": false,
+      "resourceBundleOnlyDeliveryAndRuntime": false
+    }
+  ],
+  "originalRecordsUnchanged": true,
+  "linkType": "audit manifest plus stable restoration request key; no new renewal authority",
+  "pendingCriteriaRequestReused": "grant-request-d8889231715e2ad1bc916ed35c17b13a"
+}

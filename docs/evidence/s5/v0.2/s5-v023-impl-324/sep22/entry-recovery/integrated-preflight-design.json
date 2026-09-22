@@ -1,0 +1,30 @@
+{
+  "version": "R30",
+  "status": "REFERENCE_READ_NOT_VISUAL_ACCEPTANCE",
+  "pages": [
+    {
+      "route": "/work",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/P02.png",
+      "sha256": "e7945a4a38fa0fb893e5b9664403c35ce041a1fb20571bb9da694362d60fae4b",
+      "visuallyRead": true
+    },
+    {
+      "route": "/work login recovery",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/IAM03.png",
+      "sha256": "897507461cc8f7d7f7a10073dfbff6ea6939be273750e766d0f93e017e3f9e2e",
+      "visuallyRead": true
+    },
+    {
+      "route": "/authorization-admin",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/IAM07.png",
+      "sha256": "3df530f13c66b04aebbe56b1af7ce5513551e37052b6266480dc3a653d389dd7",
+      "visuallyRead": true
+    }
+  ],
+  "differences": [
+    "P02旧图用户消息在左；按本任务明确要求用户右/助手左",
+    "IAM07任务委托图仅用信息层次，实际为精确Grant，不增加场景授权",
+    "缺精确context审批专图，不能声称整页视觉接受",
+    "运行服务仍64d5eb4；本轮截图为受控fixture工程证据，非实际闭环"
+  ]
+}

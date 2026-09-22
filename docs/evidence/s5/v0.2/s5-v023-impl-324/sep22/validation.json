@@ -1,0 +1,59 @@
+{
+  "targetedBrowser": {
+    "passed": 3,
+    "source": "fixture",
+    "covers": [
+      "session-expiry-exact-return",
+      "zero-business-replay",
+      "partial-publication-preserved",
+      "long-Chinese",
+      "1536x1024",
+      "125-percent-equivalent-viewport"
+    ]
+  },
+  "frontendLint": "PASS",
+  "frontendLiveBuild": "PASS",
+  "visualAcceptance": "NOT_GRANTED",
+  "actualNativeExecution": "NOT_STARTED",
+  "migrationChange": "0037 applied; checksum in actual-entry-readback.json",
+  "protectedHistoryTablesUnchanged": 26,
+  "d3245PostgresTests": {
+    "passed": 5,
+    "scope": "isolated databases, no actual signatures or provider traffic"
+  },
+  "d3245BrowserTests": {
+    "passed": 5,
+    "scope": "fixtures; distinct from actual entry"
+  },
+  "makeCheck": {
+    "passed": 2121,
+    "skipped": 364,
+    "seconds": 158.03
+  },
+  "actualNewEntry": "201 AUTHORIZATION_PENDING; context and two exact requests created; zero provider reservation/dispatch",
+  "actualContextReview": "business account readback; self-sign button disabled",
+  "historyComparison": "26 protected original table row sets retained unchanged; new append-only context rows allowed",
+  "actualViewport": {
+    "width": 1536,
+    "height": 1024,
+    "scrollWidth": 1536
+  },
+  "actual125Percent": "NOT_VERIFIED: browser override did not change the target tab; fixture 125% test passed separately",
+  "ciCompatibilityCorrection": {
+    "sourceCandidate": "d3c5e07",
+    "manualBuildBrowser": {
+      "passed": 23,
+      "skipped": 0
+    },
+    "assistedBuildBrowser": {
+      "passed": 5,
+      "skipped": 0
+    },
+    "frontendContractTests": {
+      "passed": 12
+    },
+    "assertionsWeakened": false,
+    "inheritedBroadStaticFailures": 4,
+    "ci": "PENDING_FINAL_CANDIDATE"
+  }
+}

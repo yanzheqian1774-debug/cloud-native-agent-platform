@@ -306,6 +306,10 @@ class PostgresResourceUseRepository:
             WHERE a.namespace=%s AND a.security_domain=%s AND a.attempt_id=%s""",
             (*self._scope(binding.scope), binding.attempt_id),
         ).fetchone()
+        if row is None:
+            from .prepared_execution_lineage import resource_lineage
+
+            row = resource_lineage(connection, binding.scope, binding.attempt_id)
         expected = {
             "task_run_id": binding.task_run_id,
             "predecessor_attempt_id": binding.predecessor_attempt_id,

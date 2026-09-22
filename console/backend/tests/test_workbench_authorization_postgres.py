@@ -1287,6 +1287,7 @@ def test_employee_exact_read_uses_authorization_transaction_and_revocation(
         assert result["employeeDefinitionRevisionId"] == first.revision_id
         assert first.digest == result["employeeDefinitionDigest"]
         assert result["publicationState"] == "PUBLISHED"
+        assert result["aggregateVersion"] == 2
         assert second.revision_id not in repr(result)
         assert "predecessor" not in repr(result).lower()
         assert "facts" not in repr(result).lower()

@@ -1,0 +1,49 @@
+{
+  "session": "S5-V023-IMPL-324",
+  "namespace": "s5-323-demo",
+  "securityDomain": "isolated-real-demo",
+  "resources": [
+    {
+      "kind": "skill",
+      "identity": "skill-definition:451512ee-fedd-47fe-a470-3cc32fccf0b9",
+      "revisionId": "skill-revision:3eb2de74-58cf-4cb1-b89d-e0fb0c560d61",
+      "digest": "46439b12b1586caaf3badc1b9176a308faa4bfafecee8c6fb2191f6780611870",
+      "state": "DRAFT",
+      "aggregateVersion": 1,
+      "target": "skill-invocation:prepared-resource:skill-definition:451512ee-fedd-47fe-a470-3cc32fccf0b9:skill-revision:3eb2de74-58cf-4cb1-b89d-e0fb0c560d61",
+      "queryReference": "skill|skill-definition:451512ee-fedd-47fe-a470-3cc32fccf0b9|skill-revision:3eb2de74-58cf-4cb1-b89d-e0fb0c560d61"
+    },
+    {
+      "kind": "runtime",
+      "identity": "runtime-profile:58de00f7-00b8-4536-8660-b6dfafd06ea0",
+      "revisionId": "runtime-profile-revision:f0065dba-6b71-470d-aa23-cc94cd53f5d6",
+      "digest": "sha256:690ad6bbd29bad083d26d49b72181402fa451fcd23457a7231debdc1f87791de",
+      "state": "DRAFT",
+      "aggregateVersion": 1,
+      "target": "runtime-profile:prepared-resource:runtime-profile:58de00f7-00b8-4536-8660-b6dfafd06ea0:runtime-profile-revision:f0065dba-6b71-470d-aa23-cc94cd53f5d6",
+      "queryReference": "runtime|runtime-profile:58de00f7-00b8-4536-8660-b6dfafd06ea0|runtime-profile-revision:f0065dba-6b71-470d-aa23-cc94cd53f5d6"
+    },
+    {
+      "kind": "knowledge",
+      "identity": "knowledge:c588c392-017b-495b-9580-3f06f8d358fd",
+      "revisionId": "knowledge-revision:f11197ab-6e23-4528-95f1-0f1dfe0e046b",
+      "digest": "00f32faf014181762492be4e5a23b6c97e80be28d2d083c42da1d94f30858834",
+      "state": "DRAFT",
+      "aggregateVersion": 1,
+      "target": "knowledge:prepared-resource:knowledge:c588c392-017b-495b-9580-3f06f8d358fd:knowledge-revision:f11197ab-6e23-4528-95f1-0f1dfe0e046b",
+      "queryReference": "knowledge|knowledge:c588c392-017b-495b-9580-3f06f8d358fd|knowledge-revision:f11197ab-6e23-4528-95f1-0f1dfe0e046b"
+    },
+    {
+      "kind": "agent",
+      "identity": "agent-definition:c2b74a7b-6af4-4efb-8afb-46a6ed7e2eb2",
+      "revisionId": "agent-revision:51a65c3f-f5a4-4d36-a88d-77834251b5da",
+      "digest": "91c8564f6a2d4a0e90af3cadbe44145dba04321abdb2afec966fafa0a186fc66",
+      "state": "DRAFT",
+      "aggregateVersion": 1,
+      "target": "agent:prepared-resource:agent-definition:c2b74a7b-6af4-4efb-8afb-46a6ed7e2eb2:agent-revision:51a65c3f-f5a4-4d36-a88d-77834251b5da",
+      "queryReference": "agent|agent-definition:c2b74a7b-6af4-4efb-8afb-46a6ed7e2eb2|agent-revision:51a65c3f-f5a4-4d36-a88d-77834251b5da"
+    }
+  ],
+  "publishedByThisCommand": false,
+  "executionStarted": false
+}

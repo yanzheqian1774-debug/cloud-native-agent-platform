@@ -188,6 +188,19 @@ class PostgresSkillInvocationRepository:
             WHERE a.namespace=%s AND a.security_domain=%s AND a.attempt_id=%s""",
             (*self._scope(request.scope), request.attempt_id),
         ).fetchone()
+        from .prepared_execution_lineage import prepared_attempt
+
+        participant = prepared_attempt(connection, request.scope, request.attempt_id)
+        if participant is not None and lineage is not None:
+            lineage["assignment_id"] = participant["assignment_id"]
+            native = connection.execute(
+                "SELECT 1 FROM execution_authority.native_dispatch_commands "
+                "WHERE namespace=%s AND security_domain=%s AND attempt_id=%s "
+                "AND state='EFFECT_STARTED' AND kubernetes_task_uid IS NOT NULL",
+                (*self._scope(request.scope), request.attempt_id),
+            ).fetchone()
+            if native is None:
+                raise SkillInvocationError("PREPARED_NATIVE_EFFECT_REQUIRED")
         if (
             lineage is None
             or lineage["assignment_id"] != request.assignment_id
@@ -557,6 +570,24 @@ class PostgresSkillInvocationRepository:
                     error_code = "SKILL_OUTPUT_SCHEMA_MISMATCH"
                     output = None
                     output_digest = None
+            if state is InvocationState.SUCCEEDED:
+                from .execution_preparation import ExecutionPreparationError
+                from .prepared_execution_observations import store_skill_output
+
+                try:
+                    store_skill_output(connection, request, output)
+                except ExecutionPreparationError as exc:
+                    if str(exc) not in {
+                        "ARTIFACT_SIZE_OR_DIGEST_INVALID",
+                        "ARTIFACT_HISTORY_CAPACITY_EXCEEDED",
+                    }:
+                        raise
+                    state, error_code, output, output_digest = (
+                        InvocationState.FAILED,
+                        str(exc),
+                        None,
+                        None,
+                    )
             evidence = self._evidence(
                 request,
                 state,

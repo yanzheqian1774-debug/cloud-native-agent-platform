@@ -1,0 +1,23 @@
+{
+  "registrationUnique": true,
+  "arch323RegistryUnchanged": true,
+  "designFileHashesVerified": 14,
+  "jsonAndLocalLinksValid": true,
+  "planV2MatchesClosure": true,
+  "productCodeChanged": false,
+  "productTestsRun": true,
+  "candidateCIRun": false,
+  "commitHookFirstAttempt": {
+    "passed": 2097,
+    "skipped": 331,
+    "failed": 1,
+    "failedTest": "console/backend/tests/test_kimi_responses_draft_adapter.py::test_worker_exits_on_parent_channel_loss_during_https_body",
+    "durationSeconds": 189.3
+  },
+  "targetedReproduction": {
+    "passed": 1,
+    "durationSeconds": 2.44,
+    "codeChanged": false,
+    "conclusion": "failure not reproduced; complete commit gate retry required"
+  }
+}

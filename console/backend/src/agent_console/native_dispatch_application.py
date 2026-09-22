@@ -98,7 +98,9 @@ class NativeDispatchApplication:
             command_id=self._command_id(request),
             scope=request.scope,
             attempt_id=request.attempt_id,
-            assignment_id=identity.assignment.assignment_id,
+            assignment_id=self.repository.dispatch_assignment(
+                request.scope, request.attempt_id, identity.assignment.assignment_id
+            ),
             approved_plan_revision_id=(identity.workflow_run.approved_plan_revision_id),
             approved_plan_digest=request.approved_plan_digest,
             placement_id=request.placement_id,

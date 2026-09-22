@@ -1,0 +1,94 @@
+{
+  "observedAt": "2026-09-21T14:26:54.090187+00:00",
+  "activeGeneration": {
+    "singleton": true,
+    "generation": 4,
+    "generation_digest": "578a8ff722d03ceaecc4dd8c5fb68304d5f8ef79c93bb7c3102880575d06848c",
+    "recovery_epoch": 1,
+    "activated_by": "operator:s5-324-identity-recovery-v1",
+    "activated_at": "2026-09-21 13:57:34.120792+00:00"
+  },
+  "priorSessionMetadata": [],
+  "originalRequests": [
+    {
+      "request_id": "grant-request-048bc8a3051e77383a1ef9fd11010844",
+      "state": "PENDING",
+      "aggregate_version": 1
+    },
+    {
+      "request_id": "grant-request-366a7309c01ced50e54ac4b967b1c9f4",
+      "state": "PENDING",
+      "aggregate_version": 1
+    },
+    {
+      "request_id": "grant-request-b2447ead173fe891b7df923fed4551e5",
+      "state": "PENDING",
+      "aggregate_version": 1
+    }
+  ],
+  "credentialParsing": {
+    "fileHasSurroundingWhitespace": false,
+    "digestMatchesActiveGeneration": true,
+    "expiresAt": "2026-09-21T21:57:23.891782+00:00",
+    "currentlyValid": true
+  },
+  "checks": [
+    {
+      "step": "fresh_nonce_exact_subject_credential",
+      "status": 303,
+      "location": "/work?problem=59a1d736-96d5-5060-8ae3-293d82b4b74b",
+      "cookie": {
+        "present": true,
+        "secure": true,
+        "httpOnly": true,
+        "sameSiteStrict": true,
+        "hostPrefix": true
+      }
+    },
+    {
+      "step": "session_readback",
+      "status": 200,
+      "principal": {
+        "principalId": "human:demo323-requester",
+        "tenantId": "s5-323-demo",
+        "securityDomain": "isolated-real-demo"
+      },
+      "csrfPresent": true
+    },
+    {
+      "step": "redirect_target",
+      "status": 200
+    },
+    {
+      "step": "missing_csrf_rejected",
+      "status": 403,
+      "error": {
+        "reasonCode": "CSRF_VALIDATION_FAILED",
+        "requestId": "workbench-request-d18ca4fa699a66fa28561b8c"
+      }
+    },
+    {
+      "step": "valid_csrf_logout",
+      "status": 204
+    },
+    {
+      "step": "used_nonce_rejected",
+      "status": 401,
+      "error": {
+        "reasonCode": "AUTHENTICATION_REQUIRED",
+        "requestId": "workbench-request-4011d4688aadbdab3fa2a709"
+      }
+    }
+  ],
+  "issuerCredentialUsed": false,
+  "businessCommands": 0,
+  "historicalFailureAttribution": "UNRESOLVED: original failing POST and reason were not retained; access logging disabled and HTML handler coalesces AuthorityError. Controlled current subject login succeeded; this does not prove the earlier browser failure cause.",
+  "postDiagnosticAuthorityPreservation": {
+    "grant_requests": true,
+    "grant_request_members": true,
+    "grant_decisions": true,
+    "grants": true,
+    "effective_grants": true,
+    "task_identity_continuities": true
+  }
+}

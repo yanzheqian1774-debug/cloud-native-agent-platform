@@ -76,9 +76,9 @@ def test_kimi_formal_https_usage_and_request(kimi_network):
         ("oversized", "FAILED", None),
     ],
 )
-def test_kimi_invalid_outputs(kimi_network, mode, status, kind):
+def test_kimi_invalid_outputs(kimi_network, mode, status, kind, record_property):
     boundary.test_local_https_outputs_and_metering_are_independent(
-        kimi_network, mode, status, kind
+        kimi_network, mode, status, kind, record_property
     )
 
 
@@ -89,8 +89,10 @@ def test_kimi_deadlines(kimi_network, mode, record_property):
     )
 
 
-def test_kimi_cancel(kimi_network):
-    boundary.test_client_cancellation_reaps_and_persists_unknown(kimi_network)
+def test_kimi_cancel(kimi_network, record_property):
+    boundary.test_client_cancellation_reaps_and_persists_unknown(
+        kimi_network, record_property
+    )
 
 
 def test_kimi_denial(kimi_network, monkeypatch):

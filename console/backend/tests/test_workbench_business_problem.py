@@ -142,3 +142,29 @@ def test_create_denial_stops_before_repository_write() -> None:
             "business-problem:collection",
         )
     ]
+
+
+def test_explicit_criterion_case_requires_exact_problem_read_before_owner():
+    from agent_console.workbench_business_problem import (
+        CreateCaseCriterion,
+        _criterion_write,
+    )
+
+    payload = CreateCaseCriterion.model_validate(
+        {
+            "problemId": "exact-problem",
+            "criterionType": "DETERMINISTIC_BOOLEAN",
+            "measurement": {"expected": True},
+            "requiredEvidenceKinds": [],
+            "evaluatorType": "SYNTHETIC_DELIVERY",
+            "evaluatorVersion": "1",
+            "idempotencyKey": "new-criterion",
+        }
+    ).model_dump()
+    grants = _criterion_write(None, {}, payload, {})
+    assert any(
+        g.owner == "BUSINESS_PROBLEM"
+        and g.action == "READ"
+        and g.exact_resource == "business-problem:exact-problem"
+        for g in grants
+    )

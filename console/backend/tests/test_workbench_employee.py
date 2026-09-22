@@ -91,6 +91,7 @@ def test_employee_owner_uses_caller_connection_and_discloses_one_revision() -> N
             )
             return {
                 "digest": "d" * 64,
+                "aggregateVersion": 7,
                 "revision": {
                     "schemaVersion": "digital-employee-composition.v1",
                     "namespace": "tenant-a",
@@ -122,6 +123,7 @@ def test_employee_owner_uses_caller_connection_and_discloses_one_revision() -> N
         "employeeDefinitionId": "employee-definition:quality",
         "employeeDefinitionRevisionId": "employee-revision:v1",
         "employeeDefinitionDigest": "d" * 64,
+        "aggregateVersion": 7,
         "role": "Quality owner",
         "responsibilities": ["Review quality"],
         "members": [

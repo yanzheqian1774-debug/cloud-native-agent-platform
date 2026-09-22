@@ -101,3 +101,34 @@ def test_unreapable_worker_is_observable_not_success(monkeypatch):
         boundary.supervise(ResultJob(), config(total=0.05))
     assert raised.value.diagnostic["reason"] == "CLEANUP_FAILURE"
     assert not raised.value.diagnostic["reaped"]
+
+
+def test_external_cancel_consumed_by_disconnect_probe_is_still_propagated():
+    """A disconnect CancelScope can consume delivery, but not cancel intent."""
+    import asyncio
+    import threading
+    from contextlib import suppress
+
+    from agent_console.responses_deadline import CANCEL, cancellable_request
+
+    persisted = threading.Event()
+
+    class Request:
+        async def is_disconnected(self):
+            asyncio.current_task().cancel()
+            # Simulate the probe consuming cancellation delivery.
+            with suppress(asyncio.CancelledError):
+                await asyncio.sleep(0)
+            return False
+
+    def action():
+        cancelled = CANCEL.get().wait(0.5)
+        persisted.set()
+        return cancelled
+
+    async def exercise():
+        with pytest.raises(asyncio.CancelledError):
+            await cancellable_request(Request(), action)
+        assert persisted.is_set()
+
+    asyncio.run(exercise())

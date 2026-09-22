@@ -929,6 +929,13 @@ def grant_condition(connection, credential_id=None):
 
 def guard_budget(connection, budget, invocation, quote):
     """Atomic admission in the original budget transaction; unknowns stay held."""
+    from .context_call_admission import guard
+    from .planning_call_admission import guard as planning_guard
+
+    if planning_guard(connection, budget, invocation, quote):
+        return False
+    if guard(connection, budget, invocation, quote):
+        return False  # New admissions never bypass the original ledger limits.
     if not available(connection):
         return
     link = connection.execute(
@@ -1042,7 +1049,7 @@ def lock_grant_delegations(connection, context, grant):
 
 
 def record_created_object(
-    connection, context, owner, result, *, draft_invocation_id=None
+    connection, context, owner, result, *, draft_invocation_id=None, problem_id=None
 ):
     """Owner-side binding, in the creation transaction, never a client task label.
 
@@ -1050,6 +1057,17 @@ def record_created_object(
     Objects created by that subject in this scope belong to that task. Existing
     objects cannot be adopted and task IDs cannot be swapped by a request body.
     """
+    from .context_call_admission import bind_problem
+
+    if owner == "BUSINESS_PROBLEM" and bind_problem(
+        connection, context, result, draft_invocation_id
+    ):
+        return result
+    if owner == "SUCCESS_CRITERION" and problem_id:
+        from .context_call_admission import bind_criterion
+
+        if bind_criterion(connection, context, result, problem_id):
+            return result
     if not available(connection):
         return result
     row = connection.execute(

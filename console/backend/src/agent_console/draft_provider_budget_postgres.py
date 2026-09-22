@@ -162,6 +162,18 @@ class PostgresProviderCallBudget:
             guard_budget(connection, self, invocation, quote)
             yield
 
+    @contextmanager
+    def dispatch_context_guard(self, context, invocation, quote):
+        """D324-5 additionally pins current session and exact Grants at dispatch."""
+        from .task_delegation import guard_budget
+
+        with self._connection() as connection:
+            admission = getattr(self, "context_admission", None)
+            if admission is not None:
+                admission.require_dispatch_grants(connection, context, invocation)
+            guard_budget(connection, self, invocation, quote)
+            yield
+
     def reserve(
         self,
         operation_id: str,
@@ -232,8 +244,13 @@ class PostgresProviderCallBudget:
                     "AND r.ledger_id=%s",
                     scope,
                 ).fetchone()
+                from .planning_call_admission import effective_cap
+
+                call_cap = effective_cap(
+                    connection, self, invocation, policy["call_cap"]
+                )
                 if not continuous_development and (
-                    totals["calls"] + 1 > policy["call_cap"]
+                    totals["calls"] + 1 > call_cap
                     or totals["cost"] + quote.worst_case_cost_microusd
                     > policy["total_cost_cap_microusd"]
                 ):

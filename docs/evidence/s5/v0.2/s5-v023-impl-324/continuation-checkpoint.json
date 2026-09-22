@@ -1,0 +1,113 @@
+{
+  "session": "S5-V023-IMPL-324",
+  "observedAt": "2026-09-21T12:42:36.294393+00:00",
+  "baseCommit": "a103b991bef299ec48d2076a0b4fac9ed8ca09c0",
+  "pullRequest": 186,
+  "status": "IMPLEMENTED_BOUNDARY_PENDING_HUMAN_AND_ACTUAL_EXECUTION",
+  "validation": {
+    "focusedPostgres": {
+      "passed": 32,
+      "skipped": 0,
+      "junit": "/tmp/s5-324-current-pg.xml"
+    },
+    "artifactEvaluationFollowup": {
+      "passed": 2,
+      "skipped": 0,
+      "junit": "/tmp/s5-324-evaluation-pg.xml",
+      "retainedFailure": "Test variable target shadowed by Evidence adapter; corrected final digest reference, all assertions retained"
+    },
+    "browserFixture": {
+      "passed": 2,
+      "notActualExecution": true,
+      "output": "/tmp/s5-324-execution-browser-v4"
+    },
+    "priorContinuationMakeCheck": {
+      "passed": 2118,
+      "skipped": 344,
+      "warning": 1,
+      "log": "/tmp/s5-324-continuation-check-v2.log",
+      "finalCandidateGate": "PENDING"
+    },
+    "normalCommitGate": {
+      "ruffLint": "PASS",
+      "ruffFormat": "PASS",
+      "pytest": "PASS",
+      "log": "/tmp/s5-324-continuation-commit.log",
+      "exactTestCount": "Not emitted by successful pre-commit hook; do not reuse earlier counts"
+    },
+    "frontend": {
+      "lint": "PASS",
+      "liveBuild": "PASS",
+      "warning": "existing chunk above 500 kB"
+    },
+    "evidenceCommitFirstGate": {
+      "status": "FAILED",
+      "passed": 2117,
+      "skipped": 348,
+      "failed": 2,
+      "warning": 1,
+      "log": "/tmp/s5-324-evidence-commit.log",
+      "tests": [
+        "test_local_https_outputs_and_metering_are_independent[invalid-json-FAILED-None]",
+        "test_client_cancellation_reaps_and_persists_unknown"
+      ],
+      "oneDiagnosticReproduction": "2 passed; deadline-continuation-diagnostic.json",
+      "inference": "Cold spawned PREPARE consumes 0.733-0.775 s of fixed 1 s total; original failed run lacked receipt diagnostics, so exact original stage is unproven",
+      "change": "Add receipt diagnostics only; no deadline, assertion, skip or runtime behavior changes"
+    },
+    "evidenceCommitSecondGate": {
+      "status": "FAILED",
+      "passed": 2115,
+      "skipped": 348,
+      "failed": 4,
+      "log": "/tmp/s5-324-evidence-commit-v2.log",
+      "cause": "Diagnostic record_property parameter omitted by four Kimi test reuse callers; parameter forwarding corrected",
+      "targetedFollowup": "4 passed, 23 deselected; unchanged assertions/timeouts"
+    },
+    "implementationCandidateCI": {
+      "commit": "778f6392b8100f0f90fc17fabc9b52d1ab849320",
+      "passed": 11,
+      "failed": 1,
+      "failureRun": 35601449012,
+      "failureStage": "existing Run native HTTPS mock-provider journeys",
+      "prepared324BackendAndBrowserStages": "PASS",
+      "diagnosis": "artifact retrieval pending; no blind workflow rerun"
+    }
+  },
+  "migrationSha256": {
+    "0033_prepared_execution.sql": "e79c215834199ba397cdf17f69cc1a56459d35e50bf98e3fc957b51979ac7012",
+    "0035_prepared_result_review.sql": "925449485a1141b8dccd7e1f80bcd8dcc475009ce2f9fb8c81563aaeacd69eca",
+    "0034_prepared_execution_binding.sql": "a05d93e4492cd7cd4cc414a0b3795d3fd54dd604eb81f2654f3ac2605848544f"
+  },
+  "retainedFailures": [
+    "Earlier Kimi SEND deadline and Responses READ_BODY deadline, unchanged tests",
+    "Initial core compatibility allowlist rejected new explicit owner consumers; exact approved consumers registered",
+    "Skill schema const-only unsupported: immutable Skill and Employee successor drafts",
+    "Evidence PG writer not active: normal explicit empty source import/cutover, readiness fails before Run",
+    "Pipeline fixture baseline migration ledger absent: normal baseline migration",
+    "Pipeline evaluation test variable shadowing: corrected reference, assertions retained",
+    "Initial server missing gateway PYTHONPATH; stopped failed launch",
+    "Npm invoked from root once: ENOENT, rerun in console/frontend"
+  ],
+  "actual": {
+    "run": 0,
+    "taskRun": 0,
+    "attempt": 0,
+    "artifact": 0,
+    "evaluation": 0,
+    "humanDecision": 0,
+    "resourcePublication": "PENDING_HUMAN",
+    "grantRequests": 3,
+    "grantDecisions": 0,
+    "nativeCompositionPreflight": "PASS_WITHOUT_RUN_ONCE"
+  },
+  "limitations": [
+    "Actual Kubernetes Native dispatch and resulting evidence not yet executed",
+    "Original exact Human planning rubric cannot establish synthetic business success",
+    "Reference binding and fixture screenshots are not Human visual acceptance",
+    "Full source PR integration and OpenClaw execution remain outside this bounded Native resource path"
+  ],
+  "noReadyMergeDeploymentOrSessionClosure": true,
+  "implementationCommit": "778f6392b8100f0f90fc17fabc9b52d1ab849320",
+  "historyPreservation": "26 protected tables unchanged against retained full backup; continuation-final-preservation.json"
+}

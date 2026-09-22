@@ -1,0 +1,69 @@
+{
+  "provider_receipts": [
+    {
+      "record": {
+        "pricing": {
+          "unit": "MICROUSD_PER_MILLION_TOKENS",
+          "currency": "USD",
+          "ledger_id": "ledger:s5-323-real-planning:original-window",
+          "input_price": 8000000,
+          "output_price": 20000000,
+          "classification": "TOKEN_COST_ESTIMATE_NOT_PROVIDER_INVOICE",
+          "profile_digest": "7e75e7573f6b797eb406c99b63abf6c6fa2bfac8421d256142037b4c21397c0c",
+          "cached_input_policy": "INCLUDED_AT_STANDARD_INPUT_RATE_NO_ADDITION",
+          "calculation_version": "draft-provider-budget.v1.ceil-separate-totals",
+          "profile_revision_id": "profile-revision:s5-323-real-planning:1",
+          "price_version_digest": "bed49522baa91a826c1c1655ff2f8ad286f3af73320468555c9154338662b898"
+        },
+        "deadline": {
+          "stage": "WAIT_HEADERS",
+          "reaped": true,
+          "reason": "TRANSPORT_FAILURE",
+          "worker_pid": 65415,
+          "stage_seconds": {
+            "CONNECT": 0.3677704590081703,
+            "PREPARE": 0.3619464999937918,
+            "CREDENTIAL": 0.3671425420034211,
+            "SEND_REQUEST": 0.7257206249923911,
+            "WAIT_HEADERS": 0.7262080420041457
+          },
+          "kill_requested": false,
+          "cleanup_seconds": 0.004505457996856421,
+          "decision_seconds": 30.734561084012967,
+          "exception_category": "TIMEOUT"
+        },
+        "measurement": {},
+        "invocation_id": "f078a876-eef8-4cb5-ae69-83bf6cfccd42",
+        "target_digest": "9933038d0d58b732bff905bd790c90cb2f1105e0a40ca5577c7e86ea16246abe",
+        "reservation_id": "provider-budget-reservation:5a26a3ad19597a9adf1cb506090b6ccb924990f1951318c4c058cd23cb35ea1d",
+        "schema_version": "planning-provider-receipt.v1"
+      }
+    }
+  ],
+  "invocation_results": [
+    {
+      "record": {
+        "kind": null,
+        "reason": "PROVIDER_OUTCOME_UNKNOWN",
+        "technical_status": "OUTCOME_UNKNOWN",
+        "validation_diagnostic": null
+      }
+    }
+  ],
+  "reservation": [
+    {
+      "invocation_id": "f078a876-eef8-4cb5-ae69-83bf6cfccd42",
+      "reservation_id": "provider-budget-reservation:5a26a3ad19597a9adf1cb506090b6ccb924990f1951318c4c058cd23cb35ea1d",
+      "worst_case_cost_microusd": 688128,
+      "created_at": "2026-09-22 08:18:33.957970+00:00"
+    }
+  ],
+  "settlement": [],
+  "context_id": "88be41bf-ea20-47c4-89c7-b11b349f99c6",
+  "budget_after": {
+    "calls": 20,
+    "charged_or_reserved_microusd": 5956372
+  },
+  "worker_process_absent": true,
+  "readback_same_terminal": true
+}

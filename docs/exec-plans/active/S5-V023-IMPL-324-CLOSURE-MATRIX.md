@@ -1,0 +1,143 @@
+# 324 同案完整主线验收矩阵
+
+原 Session / 分支 / PR #186；本表为原计划附属验收矩阵，不替代 Plan v2。初始断点（历史）：HEAD/运行 64d5eb4，CI 10/12，五文件修复已在后继提交保留。当前运行d896bb6，0038已迁移；该候选CI11/12，浏览器一项失败正在修复。两 context AUTHORIZATION_PENDING，七 Grant PENDING，独立 context 决定零、新模型预留零。
+
+## 内部诊断 A：合成新问题到真实 AI 与恢复
+
+|步骤/状态|前置/正式对象|实际入口|可复用证据|未验证项/阻塞/责任|
+|---|---|---|---|---|
+|A1 固定账号实际登录/返回/退出通过；TLS已恢复|demo324 → human:demo323-requester，s5-323-demo/isolated-real-demo，代次5；账号与会话分离|https://127.0.0.1:19436/api/workbench/v1/login|actual-account-identity-live.png、D324-4 PG记录；当前运行d896bb6，服务进程27209|新证书本人已信任、代理新窗口已读回登录页；业务账号HTTPS真实303/返回/刷新/退出已核验，零业务写入|
+|A2 两条请求已落库、未派发|用户07:36 context 668f2fc674e0a88ddebb2020594c4652 / invocation e2dd245b7ddc93a5299b245bc470649b；预检01:12 context 0477d775cd85ee477a22fe465dc42419 / invocation 5d66b44e407f6c34c3c0346f5baad139|/work?invocation=draft-invocation%3Ae2dd245b7ddc93a5299b245bc470649b|本轮只读PG；两个原对象分开保存|原标签正文副本未确认；服务端只HMAC/元数据。Codex保护原页，不能伪造正文或替换摘要|
+|A3 必要审批未完成|用户草稿8fa548…、模型6d6033…及精确context；预检申请仅历史参考|原 entry-recovery/human-operations-v2.md 的 exact returnTo 链接|两context零决定、七Grant仍PENDING；本人独立会话|Codex先修状态一致性及对象直达；正文可续接后才交付短期模型准入，缺正文先只读授权再正式关联后继|
+|A4 真实AI回复/补问 未验证|A3当前有效+原HMAC匹配或明确后继，原模型/共享预算、UNKNOWN保留|业务原卡片显式继续调用|受控HTTPS/边界测试仅工程证据|本人签发后由Codex实际调用；不能将fixture或等待授权写成真实AI成功|
+|A5 补充/纠正/刷新恢复 未验证|实际AI结果、精确parent/turn/version；零自动重发|/work 原对象链接|14项入口fixture、原幂等与持久化证据复用|实测回复后补问、刷新与重新登录读回；正文不保存的限制明确展示，不能假装恢复原文|
+
+## 内部诊断 B：原成本计划回归与执行诊断
+
+|步骤/状态|前置/正式对象|实际入口|可复用证据|未验证项/阻塞/责任|
+|---|---|---|---|---|
+|B1 Plan v2/Approval 已存在、保护|plan 5ad74afd-a6bf-4b04-b395-34d18d01c3b6；精确原版本与Approval见baseline-readback.json|原成本案例 /work → 规划|323闭合记录、26保护表原行读回|不重新理解/规划；323保持CLOSED|
+|B2 四资源DRAFT已准备，本轮只读核验仍DRAFT|Skill451512… rev6c45c0…；Runtime58de00… revf0065d…；Knowledgec588c3… revf11197…；Agentc2b74a… rev51a65c…（全ID/摘要见prepared-resource-drafts.v2.json）|资源审核页 exact queryReference；原资源Grant048bc8…|既有资源准备和Schema/绑定证据|本轮原owner只读入口已核验四项DRAFT；本人审核发布在有效Grant后执行，Codex补技术校验，匹配不算就绪|
+|B3 Employee DRAFT已准备|employee-definition:0486f684-a417-494d-847a-401727158ca4 / rev7c6e26e7-3f20-4685-8bef-1816682af5cf；Grantb2447e…|/digital-employees 原Definition|prepared-employee-draft.v2.json|B2资源可用后技术验证、本人审核/发布；不得将Grant决定当生命周期审核|
+|B4 窄后继与确认 未完成|原准备Grant366a73…；仅合成来源映射、执行边界和精确资源变化|原成本案例正式执行修订入口|已实现正常后继入口、受控保留历史测试|B2/B3满足后Codex形成实际后继；由本人正常确认实际版本，不预造编号|
+|B5 独立Native准入 未形成|B4精确批准和已装配执行对象|正式执行准入页|原Native装配/预检，非实际执行证据|对象形成后本人独立签发；不预签Run|
+|B6 Native/Task/Attempt实际运行 未开始|B5、精确参与身份/Skill owner/DAG|执行页，精确Run|重试/取消/原子限额/UNKNOWN测试复用|Codex实际派发、产物持久读回、重启恢复，禁止替身当实际运行|
+|B7 Criteria评价/Human结果 未开始|真实产物、精确Criteria修订及证据|产物/评价/结果决定页|owner接线受控验证复用|Codex按标准评价；本人正式结果决定；执行成功、标准通过、问题解决分开|
+
+## 统一预检与停止条件
+
+Codex：最终候选/CI与运行一致、前后端装配、精确路由/returnTo、证书握手、账号当前性/权限范围、正文副本事实、资源状态、100%/125%操作可达性、历史保护。需要本人之后才能验证：真实独立会话登录、实际签发/审核、后续Run准入、结果决定。
+
+历史共同阻塞（已在本轮解除）：取消探测吞掉外部取消的问题已由确定性失败复现定位并修复；审批/正文状态及滚动修复已有入口回归证据；本人信任新证书后实际浏览器TLS登录通过。当前前置是最终候选CI与运行核对、原07:36正文副本确认及实际对象的独立签发。新能力/非阻断视觉优化登记下一批：完整协同中心、全局菜单、企业助手、场景自动准入；R36仅参考。
+
+矩阵状态只能由实际记录/可复用有效证据更新。下述同案主线及两种资源条件均未实际贯通，不提出324收口评审、不Ready/merge/关闭。
+
+
+## 最终验收口径修订（2026-09-22，用户明确修正）
+
+上述 A/B 仅为内部诊断和复用证据索引，不构成交付边界。最终证据必须贯通同一问题；原成本 Plan v2 仅供回归和执行诊断，不能冒充新问题的计划。优先续接用户07:36对象；原正文不可恢复时使用明确关联的正式后继，保留原摘要和失败事实。尚未形成的 Problem、Criteria、Plan、Run 不预填 ID。
+
+|同案主线节点|当前状态/正式关联|前置与入口|证据缺口及下一步|
+|---|---|---|---|
+|登录、提出合成问题|固定业务主体已建立；用户07:36 context/invocation 已形成|原登录返回精确 /work 对象；先完成证书及路由预检|保留原对象，核实正文可用性；不混用01:12预检|
+|真实理解、补问/纠正|AUTHORIZATION_PENDING，无实际模型响应|当前有效的精确草稿、模型、context权限及正文|完成必要独立签发后显式派发；后续回合沿实际turn关联，不自动重发|
+|目标与验收标准|本新问题尚未形成已确认记录|真实理解后按正常确认入口|记录真实Problem及精确Criteria修订；不能借用323标准证明本案通过|
+|形成并确认计划|本新问题尚无实际Plan|同一Problem/Criteria，原模型与累计预算限制|先核验现行规划准入和剩余额度；不复制旧Plan冒充、不重置历史、不重新生成已有有效内容|
+|资源与权限核验|原资源草稿可复用候选，未证明本案绑定|精确修订/Schema/权限/任务映射|分别覆盖下述两种资源条件；发布不等于执行准入|
+|Native执行与过程|本案无Run/Task/Attempt|本案已确认Plan、资源绑定及正式执行准入|实际派发、依赖/异常/重试状态及事件证据；fixture仅支持工程验证|
+|产物与标准评价|本案无实际产物或评价|Run/Attempt来源、精确Criteria、持久产物|产物打开与PG读回、逐项通过/未通过/证据不足；刷新及重启一致|
+|Human成果验收|未形成待验收对象|实际产物与评价可审查|本人正式接受/不接受；不接受关联修正路径，不自动关闭问题|
+
+### 两种资源条件的完整场景证据
+
+|条件|判定与推进规则|必须独立保留的场景证据|当前结论|
+|---|---|---|---|
+|① 已发布可用且权限有效|读取精确资源修订、当前授权和依赖；已满足规则的节点直接推进，不新增审批|同案主线各节点ID、资源/权限核验时间与依据、无多余申请、实际执行/评价/Human结果及恢复证据|未验证；不能将资源匹配或历史批准视为当前有效|
+|② 存在资源或权限缺口|保留同案补问、目标、标准、计划，完成实际必要申请/审核/发布后回到原对象|缺口快照、必要正式决定、返回链接及前后对象关联不丢失、续接后的实际执行/评价/Human结果|未验证；当前入口准入与资源草稿缺口已记录，尚未贯通|
+
+两种条件可共享基础验证及有效对象，但须各自具备可追溯的完整场景证据；不为了演示撤销有效权限、重建申请或重复生成全部规划。执行完成、标准通过、Human接受、问题关闭分别记账；本轮没有自动关闭权限。
+
+### 必要范围差异核查（尚非新增授权请求）
+
+既有D324-5实施记录将新问题范围记为正常Problem草稿确认，旧成本案例独立执行；本次用户明确修改为同案全链路，取代该验收分段。必须检查已接受决定对新问题规划/执行的实际适用范围。已知原规划账本曾为19/8，不能据旧记录直接断言当前准入可用，也不能绕过原预算/次数guard。Codex先只读核对现行规则、正式对象及账本，集中报告确实无法兼容的必要差异；其他入口、布局、门禁、资源预检继续，不因此重启任务或预先申请泛化权限。
+
+
+本轮追加只读核验：实际PG policies/reservations聚合为理解5/12次、规划19/8次，两个上限均USD10。D324-5第4项允许需要规划时使用精确planning范围，但当前理解装配不能自动视为planning准入，且历史次数超限不能绕过。规划替代路径及精确装配适用性仍在核对；不提前要求本人签发无法通过预算门禁的调用。
+
+历史阻断：源码确认正常新Plan依赖governed invocation，原budget policy不可原地修改；D324-6当时以PROPOSED报告，现已批准并实施追加式一次限额，原policy未修改。本轮没有增加权限机制、金额或数据范围。只读本地Kind入口127.0.0.1:55088的s5-323-demo namespace存在且Active，暂无Pod；这仅是基础环境证据，不能作为Native运行成功。Employee原两次CREATE事实完整，尚无VALIDATE/APPROVE/PUBLISH正式事实。
+
+### 当前断点更新（2026-09-22）
+
+D324-6已获本人批准，进入有界追加一次的实现与验证；此前“待D324-6决定”已解除，不重复申请。证书信任由本人处理，新窗口登录页可打开（用户回执）；代理实际入口复核通过；业务登录、返回、刷新及退出均已验证，零业务重发。4be343e CI 12/12成功。具体规划对象尚未形成，独立签发仍不预造；真实AI、Native、产物评价与Human验收仍未完成。
+
+最终工程补充：单次额度已绑定时拒绝新的准备请求，原请求幂等读回保留；一次调用耗尽后页面禁止普通追加调用。相邻浏览器8项、独立PG7项通过。最终候选/CI/运行回执见本机 context-admission-v1/d6-final-runtime.json 与 final-candidate-ci.json；本表上方 d896bb6/11项成功为明确的历史检查点。真实理解至Human验收仍待正式对象及独立决定，不以工程通过替代。
+
+### 供应商交付同案续接（2026-09-22 13:45 +08:00）
+
+以上“真实理解未完成”为历史断点。本案沿原 context `draft-context:668f2fc674e0a88ddebb2020594c4652` 正式关联续接；原正文不可用事实及原记录保留。
+
+|节点|当前正式事实|下一步/边界|
+|---|---|---|
+|真实理解与补问|v2 invocation `draft-invocation:ce88d2d069a92e419bc74a862a090871` SUCCEEDED / NEEDS_CLARIFICATION；实际 kimi-k3 回复，1044输入/434输出 token，估算结算USD0.017032，worker REAPED|估算不是供应商账单对账；GET仅保留元数据，回复正文另有本机交付证据，不宣称服务端完整对话恢复|
+|用户补充|本人明确只做供应商交付及时性；固定合成订单，日期采用演示2026-09-20；余量、排除、分单位、排序和异常规则已写入原context第3轮|v3 invocation `draft-invocation:42123c4c0b1c35b6797606b3edfd629f` AUTHORIZATION_PENDING；原v2权限不继承|
+|精确权限|v3草稿申请 `grant-request-12c427f35edab8726687ac83003a0b57`，模型申请 `grant-request-2089260d1845c1c1fbb491afb449ba5a`；实际入口/返回/正文/关联预检通过；原context ACTIVE|独立本人签发后重新核验全部当前性再派发；不得因登录或旧批准自动调用|
+|交付资源|独立交付Skill、合成采购订单Knowledge、交付职责Agent已由正常owner创建DRAFT；原Native运行配置精确复用；交付Employee DRAFT|尚非已发布、准入通过或实际调用；成本技能不充当交付技能。精确ID/摘要见本机same-case-delivery-turn-v3/resources.json及employee.json|
+|目标/标准/计划至结果|尚未形成正式已确认Problem/Criteria/Plan/Run及产物、评价、Human决定|等待本轮真实理解结果后顺序续接，不预造后续审批对象|
+
+两种资源条件仍未取得完整执行场景证据。本轮代码增加固定快照确定性分析及显式Native装配模式；测试/资源草稿不等于真实Native执行、标准通过或Human接受。资源数量与任务数量分开，六种operation能力不要求生成六任务。原323成本资料/历史仍供回归，未替代本案对象。
+
+### 第3轮真实回复与问题草稿（2026-09-22 14:12 +08:00）
+
+本人已独立签发第3轮两条精确Grant；代理读回APPROVED、有效context及readiness后以原幂等键/正文派发一次。`draft-invocation:42123c4c0b1c35b6797606b3edfd629f` 于06:03:30 UTC返回SUCCEEDED / DRAFT_READY，kimi-k3，1534输入/840输出（总2374）token，24815ms，worker REAPED，估算结算USD0.029072。模型证据 `model-evidence:d2e4b82e0e2f14821d54d1919b18b4ffdb4543cf80d338f028d90f2c904e8564`；重新登录和两次GET保持版本/账本一致，零重发。GET不恢复正文，实际回复保存在本机证据包，不伪造恢复。
+
+正式草稿问题 `5fe6a7c9-3f92-5a09-bd91-bf3380109087`，修订`:1`，摘要 `28b64a5cd0f6aefc1e08d251a5830820fcc31dfc8e9a304beb167c38a5c72bf2`。正常CREATE请求携带原draftInvocationId；未激活、规划或执行。模型错误称具体2026-09-20日期为用户指定，编辑稿已纠正为本演示固定日期，原模型输出未改写。独立problem-link接口的后补记录仍须本案读取权限到位后核对，不能将CREATE关联推断为该后补已完成。
+
+当前集中权限申请（均PENDING，入口/返回及正式对象已预检）：
+- 本案读取：`grant-request-3a63db92f28aabb65a78089b07373b45`；读取前404/AUTHORIZATION_NOT_FOUND为已知权限拒绝。
+- 标准工作区：`grant-request-8716804ff93de3cc2327529e6ceb6418`；复用已有静态CREATE标准权限，只补READ及本案标准集CREATE/READ。
+- 问题状态操作资格：`grant-request-2cf0dd5ef075723144ece2bcd707e530`；不自动激活或关闭。
+- 三项新交付资源：`grant-request-b6e7f8cc2ace45259ca981443590fbb4`；不混用成本Skill。
+- 新交付Employee：`grant-request-5cdaece0e918da13989e5eb6e4b96d49`；仅已存在修订、生命周期资格及精确成员读取，审核/发布仍另留正式记录。
+- 原运行配置申请 `grant-request-048bc8a3051e77383a1ef9fd11010844` 仍PENDING，直接复用。原包同时含旧成本资源审核权限，已在操作包披露；本轮不使用或要求发布旧成本资源，不静默签发。
+
+操作包及实际回复/持久读回：本机 `context-admission-v1/same-case-delivery-turn-v3/` 的 `next-human-steps.md`、`access-preflight.json`、`real-call-response.json`、`real-persistent-readback.json`。目标/标准确认、规划、资源发布、Native及产物评价/Human结果均尚未完成。具体Criteria尚未形成，后续须补齐本案精确评价证据，不能将现有未知评价回退视为标准通过。
+
+工程候选4a1fe07本地门禁与CI12/12通过，5项checkout精确HEAD、7项临时merge同tree；实际服务80207一致。本轮仅运行正式业务流程及记录证据，无代码、前端或迁移变更，无新视觉接受结论。
+
+### 六项准入完成后的实际标准修复（2026-09-22 15:00 +08:00）
+
+此前六条PENDING均已由本人签发，现正式读回APPROVED；不重复申请。原第3轮真实回复复用，problem-link后补成功，原context/Problem修订保持。新标准创建最先遇到404/TASK_CONTINUITY_INACTIVE，诊断workbench-request-4044fa965fa38815f7a69689；已证明owner事务回滚（0标准、0幂等claim），保留失败原请求。修复明确传递problemId，要求当前Problem精确READ；不使用/复活旧323委托或延长模型窗口。
+
+|同案节点|正式对象/状态|已验证|当前必要步骤|
+|---|---|---|---|
+|登录→真实理解→补充|原context v3 SUCCEEDED，Problem 5fe6a7c9-3f92-5a09-bd91-bf3380109087 DRAFT|真实kimi回复、来源后补、重登读取零重发|复用；不再次调用|
+|目标与标准|6个正式DETERMINISTIC_BOOLEAN修订已创建，精确摘要/原context PostgreSQL核验|固定来源、逾期排除、剩余量分单位、排序、明细证据、异常；未形成标准集|实际修订READ申请d8889231715e2ad1bc916ed35c17b13a待独立签发；随后Codex关联集合，再本人确认目标|
+|资源条件②：存在缺口|交付Skill/合成Knowledge/交付Agent及复用Runtime均DRAFT，权限已满足|四项正式读取200；业务浏览器可到达审核按钮，刷新0业务写入|本人审核发布4项；不是执行准入|
+|Employee|同案交付Employee DRAFT，资格已获准|精确成员/修订已保留|资源发布后Codex技术校验，再本人审核发布|
+|规划/准备/执行|尚无本案正式Plan/Prepared/Run|独立确定性评价与授权产物读取工程测试；Native管线仍为fake Kubernetes测试|标准/目标确认后按D324-6实际规划对象准入，之后才准备真实Native|
+|产物/评价/Human|无本案实际Native产物或评价/成果决定|6类篡改检查已覆盖，未当作实际验收|真实执行后持久读回、标准评价、本人决定|
+|资源条件①：已就绪|尚未满足正式发布和执行权限|可复用已签Grant；不要求再次批准|资源就绪后记录同案续接、无重复审批；两种完整场景均未完成|
+
+候选1848f66正常make check（2149通过，376环境跳过）、提交门禁、前端lint/build通过；标准浏览器10项及精确关联断言通过。专用PG：绑定/权限10项、两种Native装配2项、结果评价14项；均非真实Native证据。随后实际页面发现无旧continuation时侧栏误写尚未申请，最小修复为“查看权限已核验”，不推断执行授权。副作用零写入、TLS正常；缩放覆盖为1229×819等效视口，不冒称原生125%截图。参考与实际见 delivery-criteria/visual-comparison.html，视觉最终接受未完成。
+
+26张历史表保护核验全部未变；323 CLOSED、原Plan/Approval、七条UNKNOWN及USD4.816896预留不变。本阶段无迁移（仍0038），无账号轮换。兼容回退仅停writer并退到兼容0038的已验证候选，保留新增标准、关联、审批及评价历史，不删记录；回退后不能继续本次标准新建修复路径。CI以最终候选实时回执为准；PR #186仍Draft，尚不具备整体合并就绪结论。
+
+### 最后重启复核：Grant一小时窗口已到期（2026-09-22 15:30 +08:00）
+
+上节六条APPROVED是不可变审批事实，不表示现在仍有效。最终重启读资源404/AUTHORIZATION_NOT_FOUND（workbench-request-41e10db99cc7d2eb665f6b7d）；PG证明原Grant在北京时间15:20:17–15:23:17到期。固定账号登录正常，配置摘要/generation5未变，不是会话代次或代码丢失Grant。原15:00左右的浏览器成功证据仍保留为有效窗口内观察，不冒称当前可发布。
+
+按既有requestability和正式POST追加五组到期恢复申请：dc561ff26fa8c3a3c588748da43f6bed（问题READ）、57a9494feea357c1f5a87891a3bf1b0b（标准工作区）、8ab42117795e3ac91eb5e3635571e3de（问题状态操作）、7a618535a12a1da4a111b9615123b945（四项交付资源）、498af611c20b01ad1b85988a664521ed（Employee）。完整ID均加grant-request-前缀。旧申请与决定/到期时间保留；恢复请求键含旧requestId，审计manifest关联，未引入新renewal authority。资源恢复合并原Runtime精确项、排除旧成本资源；没有扩大范围。六项新标准READ的d8889231715e2ad1bc916ed35c17b13a仍用原PENDING记录，不重建。
+
+已向本人提供同一操作流程：reviewer324签发上述5项恢复及1项原标准读取，然后独立demo324在一小时内本人审核发布四项资源。先前审批会话已失效的实际浏览器结果与returnTo保留已记录；代理未登录reviewer。实际恢复后访问/发布只能在本人完成后核验，不代签、不延长旧Grant。代码6ccda93正常门禁、前端检查、浏览器断言及CI12/12通过并运行；本追加仅证据文档，候选CI另行核验。
+
+当前停在真实外部依赖：独立签发/本人发布，非等待Codex写代码。后续同案标准集关联、目标确认、Employee验证与审核、规划/执行准入、Native与评价仍连续推进。不得认为工程/准备完成等于324完成。后续产品化记录：让审批有效期与有界操作流程适配、显示当前Grant有效性；本轮没有改变既有一小时UI或八小时服务端上限，也未实现场景级自动准入。
+
+### 同案实际规划调用：结果未知阻断（2026-09-22 16:19 +08:00）
+
+本人已完成四项资源发布、Employee批准发布及Problem确认：Employee PUBLISHED，Problem 5fe6a7c9-3f92-5a09-bd91-bf3380109087 ACTIVE/version3，Criteria set 2c0493e0-ab56-550e-94e1-32140957bc93含原六项修订。规划PREPARE/READ及原规划模型INVOKE_MODEL两项Grant正式APPROVED，D324-6实际context独立准入ACTIVE。
+
+正式preflight200/dispatch_count0后，context 88be41bf-ea20-47c4-89c7-b11b349f99c6、invocation f078a876-eef8-4cb5-ae69-83bf6cfccd42通过原请求continue派发一次。实际结果OUTCOME_UNKNOWN / PROVIDER_OUTCOME_UNKNOWN；无Plan产出。PG receipt显示SEND_REQUEST后WAIT_HEADERS阶段TIMEOUT，decision_seconds30.734561，未取得响应头/usage；worker65415已回收且进程不在。此为真实供应商请求结果未知，不是早期测试断言失败或用户取消；不能据此认定供应商未处理/零费用。
+
+D324-6新增一次已使用，累计20次。新增未结算预留USD0.688128；账本结算与预留合计USD5.956372，原USD10上限不变。原323七条UNKNOWN及USD4.816896预留保持；本次另增一条UNKNOWN，不混入旧七条。刷新式GET仍读回同一终态，无重发。未延长timeout、未释放预留、未复活终态，也未创建替代调用。
+
+证据：sep22/delivery-criteria/planning-real-outcome.json；本机同案目录保留请求、签发、一次派发标记、真实响应、PG及恢复读回。资源就绪已满足，规划未成功使后续Plan确认/Native/产物/标准评价/Human成果决定阻断。既有计划或fixture不能替代同案结果。下一步需供应商侧可核实结果/用量及正式恢复依据；现有一次额度不允许再次尝试，不预先申请未经诊断的追加调用。本轮无新代码/迁移，PR仍Draft，324不具备收口或合并就绪结论。
