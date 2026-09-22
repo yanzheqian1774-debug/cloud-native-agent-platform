@@ -930,7 +930,10 @@ def grant_condition(connection, credential_id=None):
 def guard_budget(connection, budget, invocation, quote):
     """Atomic admission in the original budget transaction; unknowns stay held."""
     from .context_call_admission import guard
+    from .planning_call_admission import guard as planning_guard
 
+    if planning_guard(connection, budget, invocation, quote):
+        return False
     if guard(connection, budget, invocation, quote):
         return False  # New admissions never bypass the original ledger limits.
     if not available(connection):

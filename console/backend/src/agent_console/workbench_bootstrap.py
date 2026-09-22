@@ -303,6 +303,22 @@ def build_workbench_composition(
                     delegation, configurations["understanding"]
                 )
                 admission.migrate()
+                from .planning_call_admission import (
+                    BoundPlanningAdmission,
+                    PlanningCallAdmission,
+                )
+
+                planning_admission = PlanningCallAdmission(
+                    delegation, configurations["planning"]
+                )
+                planning_admission.migrate()
+                admission.planning = planning_admission
+                planning_invocations = replace(
+                    planning_invocations,
+                    exact_admission_factory=lambda context: BoundPlanningAdmission(
+                        planning_admission, context
+                    ),
+                )
                 draft_assistance.authorization.context_admission = admission
                 draft_assistance.budget.context_admission = admission
                 delegation_routes += (install_context_call_admission(admission),)

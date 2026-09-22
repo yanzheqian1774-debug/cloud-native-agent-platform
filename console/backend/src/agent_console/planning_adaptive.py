@@ -120,6 +120,9 @@ def run(service, principal, request, limits, clock=monotonic):
             CANCEL.reset(token)
         chain.append(result)
         outcome = result["result"]
+        if result["invocation"].get("bounded_new_calls") == 1:
+            stop = "EXACT_SINGLE_CALL_BOUNDARY"
+            break
         if (
             outcome["technical_status"] != "SUCCEEDED"
             or outcome.get("kind") != "INVALID"

@@ -59,11 +59,13 @@ class PlanningSuggestionService:
         identity_factory=lambda: str(uuid4()),
         adaptive_limits=None,
         prepare_admission=None,
+        exact_admission=None,
     ):
         from .planning_adaptive import AdaptiveLimits
 
         self.adaptive_limits = adaptive_limits or AdaptiveLimits()
         self.prepare_admission = prepare_admission
+        self.exact_admission = exact_admission
         self.application = application
         self.invocations = invocations
         self.profile = profile
@@ -274,6 +276,15 @@ class PlanningSuggestionService:
             record["policy_digest"] = policy_digest(diagnostic_layer)
             record["diagnostic_layer"] = diagnostic_layer
             record["call_path"] = "S5_323_DEVELOPMENT_DIAGNOSTIC"
+        if self.exact_admission is not None:
+            prepared = self.exact_admission.prepare(request, record)
+            if prepared is not None:
+                if not prepared["admission"]["ready"]:
+                    return prepared
+                record = prepared["invocation"]
+                target = PlanningInvocationTarget.model_validate(record["target"])
+                invocation_id = target.invocation_id
+                context_id = target.suggestion_context_id
         if request.output_language and self.prepare_admission:
             self.prepare_admission(request)
         persisted, claimed = self.invocations.claim(
@@ -321,7 +332,12 @@ class PlanningSuggestionService:
             from contextlib import nullcontext
 
             guard = getattr(self.budget, "dispatch_guard", None)
-            with guard(identity, self.quote) if guard else nullcontext():
+            exact_guard = (
+                self.exact_admission.dispatch_guard(record)
+                if self.exact_admission is not None
+                else nullcontext()
+            )
+            with exact_guard, guard(identity, self.quote) if guard else nullcontext():
                 provider_entered = True
                 raw = self.provider.suggest(
                     request, resolved, self.profile, business_context

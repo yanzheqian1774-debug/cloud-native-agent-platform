@@ -39,12 +39,23 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       setUnresolved(true); setParams(next, {replace: true});
       const value = await planningRequest<Invocation>("planning-v2/invocations", body);
       setResult(value); setUnresolved(false); setAnswer("");
-      next.delete("request"); next.set("invocation", value.invocation.target.invocation_id); setParams(next, {replace: true});
+      if (!value.admission) {next.delete("request"); next.set("invocation", value.invocation.target.invocation_id); setParams(next, {replace: true});}
       if (value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
     } catch(e) {setError(e instanceof Error ? e.message : "请求结果未确认");}
     finally {flight.current = false; setBusy(false);}
   }
-  const state = busy ? "处理中 · 正在生成与核验" : unresolved ? "请求待核实 · 只读恢复" : result?.result.technical_status === "OUTCOME_UNKNOWN" ? "结果未知 · 原记录保留" : result?.result.technical_status === "FAILED" ? "调用已知失败" : result?.result.kind === "INVALID" ? "校验未通过 · 已停止" : result?.result.kind === "NEEDS_CLARIFICATION" ? "需要补充信息" : result?.result.proposal ? "建议已保存 · 等待确认" : source ? "可提出方案修订" : "等待显式生成";
+  async function preparedAction(continueCall=false) {
+    if (!requestKey || flight.current) return;
+    flight.current=true;setBusy(true);setError("");
+    try {
+      const path=`planning-v2/requests/${encodeURIComponent(requestKey)}`;
+      const value=await planningRequest<Invocation>(continueCall?`${path}/continue`:path,continueCall?{}:undefined);
+      setResult(value);setUnresolved(false);
+      if(value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
+    } catch(e) {setError(e instanceof Error?e.message:"状态尚未核实，原请求保留。");}
+    finally {flight.current=false;setBusy(false);}
+  }
+  const state = busy ? "处理中 · 正在生成与核验" : unresolved ? "请求待核实 · 只读恢复" : result?.admission ? (result.admission.ready?"准入已核验 · 等待显式继续":"等待精确规划准入 · 尚未派发") : result?.result.technical_status === "OUTCOME_UNKNOWN" ? "结果未知 · 原记录保留" : result?.result.technical_status === "FAILED" ? "调用已知失败" : result?.result.kind === "INVALID" ? "校验未通过 · 已停止" : result?.result.kind === "NEEDS_CLARIFICATION" ? "需要补充信息" : result?.result.proposal ? "建议已保存 · 等待确认" : source ? "可提出方案修订" : "等待显式生成";
   useEffect(()=>{onStatus?.(state)},[state,onStatus]);
   const blocked = disabled || busy || unresolved || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
   return <ConversationFrame startAtTop newMessageKey={`${source?.proposal.revision ?? 0}:${result?.invocation.target.invocation_id ?? ""}`} composer={<section className="planning-composer" aria-label="持续规划对话">    <details><summary>规划方式：{policy.mode === "FREE" ? "自由规划" : policy.mode === "TEMPLATE_ASSISTED" ? "模板辅助" : "强约束流程"} · 查看或调整</summary><label>规划方式<select aria-label="规划方式" value={policy.mode} disabled={busy || unresolved || !!result} onChange={e => {const mode=e.target.value as PlanningPolicy["mode"];setPolicy({...free, mode, template: mode === "FREE" ? null : "procurement-overdue.v1"});}}><option value="FREE">自由规划 · 不固定阶段和任务数</option><option value="TEMPLATE_ASSISTED">采购模板辅助 · 可调整结构</option><option value="STRICT_WORKFLOW">采购强约束 · 三阶段五项职责</option></select></label>
@@ -54,6 +65,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     {!source && (!result || result.result.technical_status !== "SUCCEEDED") && <button type="button" disabled={blocked} onClick={()=>void generate()}>依据已确认目标生成建议</button>}
 </section>}>
     {children}
+    {result?.admission && <section className="planning-card" aria-label="精确规划调用准入"><h2>{result.admission.ready?"等待继续":"等待独立规划准入"}</h2><p>本案目标、标准与规划请求已保存，尚未派发。仅本次最多一次，历史累计上限 {result.admission.cumulative_call_cap} 次；原金额上限与 UNKNOWN 预留保持。登录、刷新和签发不会自动调用。</p>{result.admission.reasonCode&&<p role="alert">当前精确业务权限或会话条件未满足：{result.admission.reasonCode}。有效的独立决定仍保留，请先核对当前权限。</p>}<Link to={`/authorization-admin?context=${encodeURIComponent(result.admission.context_id)}`}>查看本次精确调用准入</Link><button disabled={busy} onClick={()=>void preparedAction()}>查看授权状态</button><button disabled={busy||!result.admission.ready} onClick={()=>void preparedAction(true)}>继续本次规划调用</button></section>}
     <p role="status" className="planning-dialogue-status">{state}</p>
     {result?.invocation.request?.answers.map((text,index)=><UserMessage key={index} occurredAt={result.invocation.submitted_at}>{text}</UserMessage>)}
     {result?.invocation.submitted_at && <p>消息提交时间：{formatTime(result.invocation.submitted_at)}</p>}

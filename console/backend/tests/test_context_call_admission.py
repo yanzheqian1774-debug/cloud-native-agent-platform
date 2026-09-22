@@ -63,7 +63,18 @@ def env(setup):
             "('old','S5-V023-ARCH-323','s5-323-demo','isolated-real-demo',"
             "'human:demo323-requester','old-context','human:demo323-approver',1,1,"
             "now()-interval '2 days',now()-interval '1 day','old','old',%s)",
-            (Jsonb({"understanding": limits}),),
+            (
+                Jsonb(
+                    {
+                        "understanding": limits,
+                        "planning": {
+                            **limits,
+                            "ledger_id": "planning-original",
+                            "calls": 8,
+                        },
+                    }
+                ),
+            ),
         )
         c.execute(
             "INSERT INTO authorization_admin.task_delegation_control "

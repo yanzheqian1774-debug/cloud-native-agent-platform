@@ -163,6 +163,7 @@ class PostgresAuthorityRepository:
             (31, "0031_task_timeout_revision.sql", "task-timeout-revision-v1"),
             (32, "0032_task_identity_continuity.sql", "task-identity-continuity-v1"),
             (37, "0037_context_call_admission.sql", "context-call-admission-v1"),
+            (38, "0038_planning_call_allowance.sql", "planning-call-allowance-v1"),
         ):
             path = self.migration_path.parent / name
             if not path.is_file():

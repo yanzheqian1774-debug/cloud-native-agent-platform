@@ -71,7 +71,7 @@ jobs:
 
       - name: Run authority I1 PostgreSQL acceptance with zero skips
         run: |
-          result="$(uv run pytest -q console/backend/tests/test_authority_foundation_postgres.py console/backend/tests/test_local_accounts_postgres.py console/backend/tests/test_context_call_admission.py -r s)"
+          result="$(uv run pytest -q console/backend/tests/test_authority_foundation_postgres.py console/backend/tests/test_local_accounts_postgres.py console/backend/tests/test_context_call_admission.py console/backend/tests/test_planning_call_admission.py -r s)"
           echo "$result"
           if echo "$result" | grep -Eq '(^|[[:space:]])skipped([[:space:]]|$)'; then
             exit 1

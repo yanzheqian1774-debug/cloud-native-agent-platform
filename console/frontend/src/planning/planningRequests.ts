@@ -1,7 +1,7 @@
 import {readWorkbenchSession} from "../api/businessWorkspace";
 import type {Proposal} from "./api";
 export type PlanningInput = {target: Record<string, unknown>; title: string; description: string};
-export type Invocation = {adaptive?: {stop_reason: string; limits: {maximum_attempts: number; total_seconds:number}; attempts: {invocation_id:string;kind:string|null}[]};invocation: {target: {invocation_id: string}; request?: {answers: string[]}; submitted_at?: string}; result: {technical_status: string; reason?: string; kind: string | null; questions?: string[]; proposal?: Proposal | null; generated_at?: string}; facts_status: string};
+export type Invocation = {admission?: {context_id:string;ready:boolean;reasonCode?:string;maximum_new_calls:number;cumulative_call_cap:number};adaptive?: {stop_reason: string; limits: {maximum_attempts: number; total_seconds:number}; attempts: {invocation_id:string;kind:string|null}[]};invocation: {target: {invocation_id: string}; request?: {answers: string[]}; submitted_at?: string}; result: {technical_status: string; reason?: string; kind: string | null; questions?: string[]; proposal?: Proposal | null; generated_at?: string}; facts_status: string};
 export async function planningRequest<T>(path: string, body?: object): Promise<T> {
   const session = await readWorkbenchSession();
   const response = await fetch(`/api/workbench/v1/${path}`, {method: body ? "POST" : "GET", credentials: "same-origin", headers: {"Content-Type": "application/json", "X-CSRF-Token": session.csrfToken}, ...(body ? {body: JSON.stringify(body)} : {})});

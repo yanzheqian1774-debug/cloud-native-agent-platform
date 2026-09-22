@@ -111,6 +111,7 @@ class ContextCallAdmission:
         self.delegation = delegation
         self.repository = delegation.repository
         self.configuration = configuration
+        self.planning = None
 
     def require_dispatch_grants(self, c, context, invocation):
         if request_row(c, invocation.context_id) is None:
@@ -261,6 +262,11 @@ class ContextCallAdmission:
             return True
 
     def read(self, context, context_id):
+        if self.planning is not None:
+            with self.repository.connection_scope() as c:
+                row = request_row(c, context_id)
+            if row and row["record"].get("phase") == "planning":
+                return self.planning.read(context, context_id)
         with self.repository.connection_scope() as c:
             row = request_row(c, context_id)
             if not row or (row["tenant_id"], row["security_domain"]) != (
@@ -297,6 +303,11 @@ class ContextCallAdmission:
             }
 
     def approve(self, context, context_id, spec):
+        if self.planning is not None:
+            with self.repository.connection_scope() as c:
+                row = request_row(c, context_id)
+            if row and row["record"].get("phase") == "planning":
+                return self.planning.approve(context, context_id, spec)
         self.delegation._admin(context)
         payload = spec.model_dump(mode="json")
         with self.repository.connection_scope() as c:
@@ -335,6 +346,9 @@ class ContextCallAdmission:
                 or account != {"status": "ENABLED", "revision": row["account_revision"]}
             ):
                 raise AuthorityError("CONTEXT_ADMISSION_INVALID")
+            hook = getattr(self, "before_approve", None)
+            if hook is not None:
+                hook(c, row)
             prior = latest(c, context_id)
             record = {
                 **payload,
@@ -366,7 +380,9 @@ class ContextCallAdmission:
                 event_type="CONTEXT_CALL_ADMISSION",
                 actor_id=context.principal_id,
                 outcome="APPROVED",
-                reason="D324_5_SYNTHETIC_CONTEXT",
+                reason="D324_6_EXACT_PLANNING"
+                if row["record"].get("phase") == "planning"
+                else "D324_5_SYNTHETIC_CONTEXT",
                 occurred_at=now,
                 scope=context.scope,
                 subject_id=context_id,
@@ -376,6 +392,11 @@ class ContextCallAdmission:
             return latest(c, context_id)
 
     def revoke(self, context, context_id, admission_id):
+        if self.planning is not None:
+            with self.repository.connection_scope() as c:
+                row = request_row(c, context_id)
+            if row and row["record"].get("phase") == "planning":
+                return self.planning.revoke(context, context_id, admission_id)
         self.delegation._admin(context)
         with self.repository.connection_scope() as c:
             self.delegation._admin(context, c)
