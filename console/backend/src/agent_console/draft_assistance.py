@@ -1352,6 +1352,13 @@ class DraftAssistanceService:
             synthetic=self.transport.synthetic,
         )
 
+    def read_readiness(self, context, invocation_id):
+        invocation = self.read(context, invocation_id).invocation
+        project = getattr(self.authorization, "read_readiness", None)
+        if project is None:
+            raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
+        return project(context, invocation)
+
     def read_usage(self, context, invocation_id):
         from .provider_usage import authorize, projection
 

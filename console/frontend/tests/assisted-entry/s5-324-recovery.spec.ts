@@ -9,6 +9,7 @@ test('324 authorization GET never resubmits and retained content dispatch needs 
   if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal,session:{},csrfToken:'fixture'}});
   if(path.includes('/grant-requests/'))return route.fulfill({json:{state:'APPROVED',requestId:decodeURIComponent(path.split('/').at(-1)!),aggregateVersion:2,requestedActions:['READ']}});
   if(path.includes('/context-admissions/'))return route.fulfill({json:{status:'ACTIVE'}});
+  if(path.endsWith('/readiness'))return route.fulfill({json:{result:{invocationId:invocation.invocationId,contextId:invocation.contextId,checkedAt:'2026-09-22T00:00:00Z',permissionsCurrent:true,checks:{draft:true,model:true,context:true},dispatchRevalidationRequired:true}}});
   if(path.endsWith('/resubmit')){resubmits++;expect(request.postDataJSON().content).toBe(sent);expect(request.postDataJSON().idempotencyKey).toBe(retainedKey);return route.fulfill({json:{result:invocation}})}
   if(path.endsWith('/invocations')){begins++;sent=request.postDataJSON().content;retainedKey=request.postDataJSON().idempotencyKey;return route.fulfill({status:201,json:{result:invocation}})}
   return route.fulfill({json:{result:{problems:[]}}});
@@ -18,8 +19,14 @@ test('324 authorization GET never resubmits and retained content dispatch needs 
  await page.getByRole('button',{name:'发送',exact:true}).click();
  const resume=page.getByRole('button',{name:'使用已保留正文继续 AI 调用'});
  await expect(resume).toBeEnabled();expect(resubmits).toBe(0);await expect(page).toHaveURL(/invocation=draft-invocation/);
- await page.getByRole('button',{name:'查看授权状态（只读）'}).click();await expect(resume).toBeEnabled();expect(begins).toBe(1);expect(resubmits).toBe(0);
+ await page.getByRole('button',{name:'查看授权状态（只读）'}).click();await expect(page.getByRole('heading',{name:'授权已核验，等待继续'})).toBeVisible();await expect(resume).toBeEnabled();expect(begins).toBe(1);expect(resubmits).toBe(0);
  for(const scale of [1,1.25]){await page.setViewportSize({width:Math.floor(1536/scale),height:Math.floor(1024/scale)});await expect(page.getByRole('button',{name:'发送',exact:true})).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await page.screenshot({path:info.outputPath(`pending-content-${scale}.png`)})}
+ await resume.scrollIntoViewIfNeeded();
+ const actionBox=await resume.boundingBox(),composerBox=await page.locator('.px-composer').boundingBox(),streamBox=await page.locator('.px-message-stream').boundingBox();
+ expect(actionBox).not.toBeNull();expect(composerBox).not.toBeNull();expect(streamBox).not.toBeNull();
+ expect(actionBox!.y).toBeGreaterThanOrEqual(streamBox!.y-1);
+ expect(actionBox!.y+actionBox!.height).toBeLessThanOrEqual(composerBox!.y+1);
+ await page.screenshot({path:info.outputPath('reachable-action-1.25.png')});
  await resume.click();expect(resubmits).toBe(1);
  await page.reload();expect(resubmits).toBe(1);expect(begins).toBe(1);await expect(page.getByRole('button',{name:'读取原调用事实（只读）'})).toBeVisible();await expect(resume).toHaveCount(0);
 });

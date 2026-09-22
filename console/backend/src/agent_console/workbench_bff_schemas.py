@@ -68,6 +68,8 @@ class WorkbenchGrantRequestStatus(StrictWorkbenchModel):
     submittedAt: datetime
     purpose: str
     requestedActions: tuple[str, ...]
+    applicant: WorkbenchPrincipal
+    requestedGrants: tuple[WorkbenchExactGrant, ...]
 
 
 class WorkbenchGrantDecisionCommand(StrictWorkbenchModel):

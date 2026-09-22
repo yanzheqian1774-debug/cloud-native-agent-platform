@@ -63,6 +63,8 @@ export function resubmitDraftAssistance(csrfToken:string,invocationId:string,inp
 }
 
 export function readDraftAssistance(invocationId:string){return read<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}`)}
+export type DraftReadiness={invocationId:string;contextId:string;checkedAt:string;permissionsCurrent:boolean;checks:{draft:boolean;model:boolean;context:boolean};dispatchRevalidationRequired:true};
+export function readDraftReadiness(invocationId:string){return read<DraftReadiness>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/readiness`)}
 export async function readDraftContextAdmission(contextId:string){return decode<{status:string;reasonCode:string|null}>(await fetch(`${PREFIX}/authorization/context-admissions/${encodeURIComponent(contextId)}`,{credentials:"same-origin",headers:{Accept:"application/json"}}))}
 export function observeDraftAssistance(csrfToken:string,invocationId:string){return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/observe`,csrfToken,{})}
 export function cancelDraftAssistance(csrfToken:string,invocationId:string){return write<DraftAssistanceResult>(`/draft-assistance/invocations/${encodeURIComponent(invocationId)}/cancel`,csrfToken,{})}

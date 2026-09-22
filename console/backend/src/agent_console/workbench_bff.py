@@ -476,6 +476,19 @@ def create_workbench_bff(
             state=request.status.value,
             aggregateVersion=request.aggregate_version,
             submittedAt=request.created_at,
+            applicant=WorkbenchPrincipal(
+                principalId=request.subject_principal_id,
+                tenantId=request.scope.tenant_id,
+                securityDomain=request.scope.security_domain,
+            ),
+            requestedGrants=tuple(
+                {
+                    "owner": member.owner,
+                    "action": member.action,
+                    "resource": member.exact_resource,
+                }
+                for member in request.members
+            ),
             purpose=request.purpose,
             requestedActions=tuple(
                 dict.fromkeys(member.action for member in request.members)

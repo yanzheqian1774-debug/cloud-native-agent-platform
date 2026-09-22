@@ -198,6 +198,17 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                     content={"reasonCode": exc.reason_code},
                 )
 
+        @app.get(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/readiness")
+        def readiness(invocation_id: str, request: Request):
+            _, context = authenticate(request)
+            try:
+                return {"result": service.read_readiness(context, invocation_id)}
+            except DraftAssistanceError as exc:
+                return JSONResponse(
+                    status_code=_status(exc.reason_code),
+                    content={"reasonCode": exc.reason_code},
+                )
+
         @app.get(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/usage")
         def usage(invocation_id: str, request: Request):
             from .authority_contracts import AuthorityError

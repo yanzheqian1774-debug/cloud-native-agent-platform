@@ -248,6 +248,32 @@ class GrantAdministrationDraftAuthorization:
     ) -> bool:
         return self._check(context, invocation, read_grant(invocation))
 
+    def read_readiness(
+        self, context: TrustedRequestContext, invocation: DraftInvocation
+    ) -> dict:
+        """Project current permissions; never submit requests or admit dispatch."""
+        if not self.can_read(context, invocation):
+            raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
+        checks = {
+            "draft": self._check(context, invocation, request_grant(invocation)),
+            "model": self._check(context, invocation, model_grant(invocation)),
+        }
+        context_ready = self.context_admission is None
+        if self.context_admission is not None:
+            try:
+                context_ready = self.context_admission.ready(context, invocation)
+            except AuthorityError:
+                context_ready = False
+        checks["context"] = context_ready
+        return {
+            "invocationId": invocation.invocation_id,
+            "contextId": invocation.context_id,
+            "checkedAt": self.clock().isoformat(),
+            "permissionsCurrent": all(checks.values()),
+            "checks": checks,
+            "dispatchRevalidationRequired": True,
+        }
+
     def can_cancel(
         self, context: TrustedRequestContext, invocation: DraftInvocation
     ) -> bool:

@@ -30,7 +30,7 @@ async function login(context: BrowserContext, credential: string): Promise<Page>
 }
 
 async function technicalValue(card: Locator, label: string): Promise<string> {
-  const details = card.locator("details");
+  const details = card.locator("details").filter({ has: card.page().getByText("技术事实", { exact: true }) });
   if (!(await details.getAttribute("open"))) await details.locator("summary").click();
   const value = await details.locator("dt", { hasText: label })
     .locator("xpath=following-sibling::dd[1]").textContent();

@@ -471,6 +471,8 @@ def test_exact_request_inspect_and_administrator_decision_are_minimal() -> None:
         "submittedAt",
         "purpose",
         "requestedActions",
+        "applicant",
+        "requestedGrants",
     }
 
     admin, grants = build_authorization_client("human:admin")

@@ -78,6 +78,8 @@ export type GrantRequestStatus = {
     | "CONTINUE_PROBLEM_READ"
     | "WORKBENCH_SUCCESS_CRITERIA";
   requestedActions: string[];
+  applicant?: {principalId:string;tenantId:string;securityDomain:string};
+  requestedGrants?: {owner:string;action:string;resource:string}[];
 };
 
 export type GrantDecisionResult = {
