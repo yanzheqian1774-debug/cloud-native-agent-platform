@@ -131,3 +131,13 @@ D324-6已获本人批准，进入有界追加一次的实现与验证；此前�
 已向本人提供同一操作流程：reviewer324签发上述5项恢复及1项原标准读取，然后独立demo324在一小时内本人审核发布四项资源。先前审批会话已失效的实际浏览器结果与returnTo保留已记录；代理未登录reviewer。实际恢复后访问/发布只能在本人完成后核验，不代签、不延长旧Grant。代码6ccda93正常门禁、前端检查、浏览器断言及CI12/12通过并运行；本追加仅证据文档，候选CI另行核验。
 
 当前停在真实外部依赖：独立签发/本人发布，非等待Codex写代码。后续同案标准集关联、目标确认、Employee验证与审核、规划/执行准入、Native与评价仍连续推进。不得认为工程/准备完成等于324完成。后续产品化记录：让审批有效期与有界操作流程适配、显示当前Grant有效性；本轮没有改变既有一小时UI或八小时服务端上限，也未实现场景级自动准入。
+
+### 同案实际规划调用：结果未知阻断（2026-09-22 16:19 +08:00）
+
+本人已完成四项资源发布、Employee批准发布及Problem确认：Employee PUBLISHED，Problem 5fe6a7c9-3f92-5a09-bd91-bf3380109087 ACTIVE/version3，Criteria set 2c0493e0-ab56-550e-94e1-32140957bc93含原六项修订。规划PREPARE/READ及原规划模型INVOKE_MODEL两项Grant正式APPROVED，D324-6实际context独立准入ACTIVE。
+
+正式preflight200/dispatch_count0后，context 88be41bf-ea20-47c4-89c7-b11b349f99c6、invocation f078a876-eef8-4cb5-ae69-83bf6cfccd42通过原请求continue派发一次。实际结果OUTCOME_UNKNOWN / PROVIDER_OUTCOME_UNKNOWN；无Plan产出。PG receipt显示SEND_REQUEST后WAIT_HEADERS阶段TIMEOUT，decision_seconds30.734561，未取得响应头/usage；worker65415已回收且进程不在。此为真实供应商请求结果未知，不是早期测试断言失败或用户取消；不能据此认定供应商未处理/零费用。
+
+D324-6新增一次已使用，累计20次。新增未结算预留USD0.688128；账本结算与预留合计USD5.956372，原USD10上限不变。原323七条UNKNOWN及USD4.816896预留保持；本次另增一条UNKNOWN，不混入旧七条。刷新式GET仍读回同一终态，无重发。未延长timeout、未释放预留、未复活终态，也未创建替代调用。
+
+证据：sep22/delivery-criteria/planning-real-outcome.json；本机同案目录保留请求、签发、一次派发标记、真实响应、PG及恢复读回。资源就绪已满足，规划未成功使后续Plan确认/Native/产物/标准评价/Human成果决定阻断。既有计划或fixture不能替代同案结果。下一步需供应商侧可核实结果/用量及正式恢复依据；现有一次额度不允许再次尝试，不预先申请未经诊断的追加调用。本轮无新代码/迁移，PR仍Draft，324不具备收口或合并就绪结论。

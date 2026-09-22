@@ -1,0 +1,38 @@
+[
+  {
+    "test": "test_local_https_outputs_and_metering_are_independent[valid-SUCCEEDED-NEEDS_CLARIFICATION]",
+    "properties": [
+      {
+        "name": "deadline",
+        "value": "{'reason': 'RESULT_ACCEPTED', 'stage': 'VALIDATE_RESPONSE', 'stage_seconds': {'PREPARE': 0.33034099999349564, 'CREDENTIAL': 0.3325070829887409, 'CONNECT': 0.33456337498500943, 'SEND_REQUEST': 0.3541612919943873, 'WAIT_HEADERS': 0.3542830419901293, 'READ_BODY': 0.35549583297688514, 'CLOSE': 0.355511125002522, 'VALIDATE_RESPONSE': 0.35551475000102073}, 'decision_seconds': 0.3572767500008922, 'cleanup_seconds': 0.0025668749876786023, 'worker_pid': 71691, 'reaped': True, 'kill_requested': False}"
+      }
+    ]
+  },
+  {
+    "test": "test_local_https_outputs_and_metering_are_independent[invalid-json-FAILED-None]",
+    "properties": [
+      {
+        "name": "deadline",
+        "value": "{'reason': 'RESULT_ACCEPTED', 'stage': 'VALIDATE_RESPONSE', 'stage_seconds': {'PREPARE': 0.36452491700765677, 'CREDENTIAL': 0.36692324999603443, 'CONNECT': 0.3708776670100633, 'SEND_REQUEST': 0.39536266698269174, 'WAIT_HEADERS': 0.3956504169909749, 'READ_BODY': 0.39741445798426867, 'CLOSE': 0.3975095420028083, 'VALIDATE_RESPONSE': 0.3975159999972675}, 'decision_seconds': 0.39843066700268537, 'cleanup_seconds': 0.002314249984920025, 'worker_pid': 71702, 'reaped': True, 'kill_requested': False}"
+      }
+    ]
+  },
+  {
+    "test": "test_local_https_outputs_and_metering_are_independent[invalid-inner-SUCCEEDED-INVALID]",
+    "properties": [
+      {
+        "name": "deadline",
+        "value": "{'reason': 'RESULT_ACCEPTED', 'stage': 'VALIDATE_RESPONSE', 'stage_seconds': {'PREPARE': 0.47223083398421295, 'CREDENTIAL': 0.4748037089884747, 'CONNECT': 0.47645279197604395, 'SEND_REQUEST': 0.4980907919816673, 'WAIT_HEADERS': 0.49812808400020003, 'READ_BODY': 0.5000589169794694, 'CLOSE': 0.500096042000223, 'VALIDATE_RESPONSE': 0.5001028339902405}, 'decision_seconds': 0.5060469589952845, 'cleanup_seconds': 0.001777915982529521, 'worker_pid': 71704, 'reaped': True, 'kill_requested': False}"
+      }
+    ]
+  },
+  {
+    "test": "test_local_https_outputs_and_metering_are_independent[oversized-FAILED-None]",
+    "properties": [
+      {
+        "name": "deadline",
+        "value": "{'reason': 'RESULT_ACCEPTED', 'stage': 'VALIDATE_RESPONSE', 'stage_seconds': {'PREPARE': 0.39597108302405104, 'CREDENTIAL': 0.39837129099760205, 'CONNECT': 0.40015170801780187, 'SEND_REQUEST': 0.4193967080209404, 'WAIT_HEADERS': 0.4194118330196943, 'READ_BODY': 0.42547195800580084, 'CLOSE': 0.42549041600432247, 'VALIDATE_RESPONSE': 0.42555466599878855}, 'decision_seconds': 0.42628729101852514, 'cleanup_seconds': 0.002200374990934506, 'worker_pid': 71752, 'reaped': True, 'kill_requested': False}"
+      }
+    ]
+  }
+]
