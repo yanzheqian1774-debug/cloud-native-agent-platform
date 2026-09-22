@@ -85,3 +85,21 @@ D324-6已获本人批准，进入有界追加一次的实现与验证；此前�
 |目标/标准/计划至结果|尚未形成正式已确认Problem/Criteria/Plan/Run及产物、评价、Human决定|等待本轮真实理解结果后顺序续接，不预造后续审批对象|
 
 两种资源条件仍未取得完整执行场景证据。本轮代码增加固定快照确定性分析及显式Native装配模式；测试/资源草稿不等于真实Native执行、标准通过或Human接受。资源数量与任务数量分开，六种operation能力不要求生成六任务。原323成本资料/历史仍供回归，未替代本案对象。
+
+### 第3轮真实回复与问题草稿（2026-09-22 14:12 +08:00）
+
+本人已独立签发第3轮两条精确Grant；代理读回APPROVED、有效context及readiness后以原幂等键/正文派发一次。`draft-invocation:42123c4c0b1c35b6797606b3edfd629f` 于06:03:30 UTC返回SUCCEEDED / DRAFT_READY，kimi-k3，1534输入/840输出（总2374）token，24815ms，worker REAPED，估算结算USD0.029072。模型证据 `model-evidence:d2e4b82e0e2f14821d54d1919b18b4ffdb4543cf80d338f028d90f2c904e8564`；重新登录和两次GET保持版本/账本一致，零重发。GET不恢复正文，实际回复保存在本机证据包，不伪造恢复。
+
+正式草稿问题 `5fe6a7c9-3f92-5a09-bd91-bf3380109087`，修订`:1`，摘要 `28b64a5cd0f6aefc1e08d251a5830820fcc31dfc8e9a304beb167c38a5c72bf2`。正常CREATE请求携带原draftInvocationId；未激活、规划或执行。模型错误称具体2026-09-20日期为用户指定，编辑稿已纠正为本演示固定日期，原模型输出未改写。独立problem-link接口的后补记录仍须本案读取权限到位后核对，不能将CREATE关联推断为该后补已完成。
+
+当前集中权限申请（均PENDING，入口/返回及正式对象已预检）：
+- 本案读取：`grant-request-3a63db92f28aabb65a78089b07373b45`；读取前404/AUTHORIZATION_NOT_FOUND为已知权限拒绝。
+- 标准工作区：`grant-request-8716804ff93de3cc2327529e6ceb6418`；复用已有静态CREATE标准权限，只补READ及本案标准集CREATE/READ。
+- 问题状态操作资格：`grant-request-2cf0dd5ef075723144ece2bcd707e530`；不自动激活或关闭。
+- 三项新交付资源：`grant-request-b6e7f8cc2ace45259ca981443590fbb4`；不混用成本Skill。
+- 新交付Employee：`grant-request-5cdaece0e918da13989e5eb6e4b96d49`；仅已存在修订、生命周期资格及精确成员读取，审核/发布仍另留正式记录。
+- 原运行配置申请 `grant-request-048bc8a3051e77383a1ef9fd11010844` 仍PENDING，直接复用。原包同时含旧成本资源审核权限，已在操作包披露；本轮不使用或要求发布旧成本资源，不静默签发。
+
+操作包及实际回复/持久读回：本机 `context-admission-v1/same-case-delivery-turn-v3/` 的 `next-human-steps.md`、`access-preflight.json`、`real-call-response.json`、`real-persistent-readback.json`。目标/标准确认、规划、资源发布、Native及产物评价/Human结果均尚未完成。具体Criteria尚未形成，后续须补齐本案精确评价证据，不能将现有未知评价回退视为标准通过。
+
+工程候选4a1fe07本地门禁与CI12/12通过，5项checkout精确HEAD、7项临时merge同tree；实际服务80207一致。本轮仅运行正式业务流程及记录证据，无代码、前端或迁移变更，无新视觉接受结论。
