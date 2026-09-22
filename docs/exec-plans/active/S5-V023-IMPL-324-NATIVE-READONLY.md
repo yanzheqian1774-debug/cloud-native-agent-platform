@@ -232,3 +232,5 @@ D324-5 候选 make check 通过：2121 passed / 364 skipped（含未配置独立
 实际入口发现并保留一次标准创建失败：workbench-request-4044fa965fa38815f7a69689 / TASK_CONTINUITY_INACTIVE。根因是WRITE_CRITERION创建后无当前问题关联，record_created_object退回旧323委托；不是Grant未签发。沿已批准D324-5的同案正常确认流程补齐BFF可选problemId，额外要求该问题精确READ，owner事务内仅绑定已登记的新context；旧标准或跨主体不能挪用，原323路径/guard不变。独立的模型准入窗口不作为标准CRUD授权，也不因此续签；标准CRUD继续核验当前账号及精确Grant。无迁移、无新授权机制。前端仅传递当前问题ID；实读锁定R30/P02，布局不改。
 
 - 2026-09-22 实际资源页面预检发现侧栏在 exact GET 已成功、未携带旧 continuation 时仍写“尚未申请”。G1 最小修复：以本次服务端读取成功显示“查看权限已核验”，不推断申请批准或执行准入；沿用 R30/P02，无布局变更。
+
+2026-09-22最终重启发现已签Grant一小时窗口到期；见闭环矩阵最后追加与grant-expiry-readback。按现有正式机制登记到期恢复申请，原记录不改。未改变权限有效期、账号或模型额度，未实现自动续签。
