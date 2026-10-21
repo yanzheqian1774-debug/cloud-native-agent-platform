@@ -6,10 +6,17 @@ import type {DraftTurn,ProblemDraft} from "./problemConversationModel";
 export function ConversationFrame({children,composer,newMessageKey,startAtTop=false}:{children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
   const initial=useRef(true);
   const stream=useRef<HTMLDivElement>(null),nearBottom=useRef(true),[showNew,setShowNew]=useState(false);
-  function scrollToLatest(){stream.current?.scrollTo({top:stream.current.scrollHeight,behavior:"smooth"});setShowNew(false)}
+  function latestTop(node:HTMLDivElement){
+    const latest=node.querySelector<HTMLElement>(".px-message:last-child");
+    // A tall reply starts at its heading, not at its footer. Only this stream scrolls.
+    return latest&&latest.offsetHeight>node.clientHeight
+      ? node.scrollTop+latest.getBoundingClientRect().top-node.getBoundingClientRect().top
+      : node.scrollHeight;
+  }
+  function scrollToLatest(){const node=stream.current;if(node)node.scrollTo({top:latestTop(node),behavior:"smooth"});setShowNew(false)}
   useEffect(()=>{
     if(initial.current){initial.current=false;if(startAtTop){stream.current?.scrollTo({top:0});return;}}
-    if(nearBottom.current){stream.current?.scrollTo({top:stream.current.scrollHeight});setShowNew(false)}
+    if(nearBottom.current){const node=stream.current;if(node)node.scrollTo({top:latestTop(node)});setShowNew(false)}
     else setShowNew(true);
   },[newMessageKey,startAtTop]);
   return <section className="px-conversation" aria-label="业务问题对话">

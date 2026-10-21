@@ -1,0 +1,25 @@
+1c18b940278dac8f300e7a6e23c109cab52a09c9
+100644 6d520369e59ccd6dd9dc86bdfacee2e9c466183b 1	console/backend/src/agent_console/authority_configuration.py
+100644 122f63f86d825f43e9eb1c3de546a33be3a6626b 2	console/backend/src/agent_console/authority_configuration.py
+100644 e95f19f9124a22b9339b92e835d562bbac677631 3	console/backend/src/agent_console/authority_configuration.py
+100644 7c63befb65dccc1d116927559d75e76645a590dc 1	console/backend/src/agent_console/authority_postgres.py
+100644 a3366687b07f8c3ba9adc7f22fdd3fe1344400a9 2	console/backend/src/agent_console/authority_postgres.py
+100644 e0fc2a64f730f6384f0e5fa3a543085360851631 3	console/backend/src/agent_console/authority_postgres.py
+100644 37b91c5b43cf74357ea9d4348b3448e771c2a8c5 2	console/backend/src/agent_console/model_governance_authorization.py
+100644 4c6ce5f169cc9135e90faa2578badec06f9ef3d9 3	console/backend/src/agent_console/model_governance_authorization.py
+100644 2cdf1466bdab2d10d8743e2f228b7c8377bf0dc7 1	tests/test_s5_impl_072_isolated_browser_harness.py
+100644 4fb1a868bcdf4b112ca9c666ef3a47a40c574d9a 2	tests/test_s5_impl_072_isolated_browser_harness.py
+100644 3e38217edbcee2a52a67d0ae3b2adcc044aea1c5 3	tests/test_s5_impl_072_isolated_browser_harness.py
+
+Auto-merging console/backend/src/agent_console/authority_configuration.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_configuration.py
+Auto-merging console/backend/src/agent_console/authority_contracts.py
+Auto-merging console/backend/src/agent_console/authority_postgres.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_postgres.py
+Auto-merging console/backend/src/agent_console/grant_administration_application.py
+Auto-merging console/backend/src/agent_console/model_governance_authorization.py
+CONFLICT (add/add): Merge conflict in console/backend/src/agent_console/model_governance_authorization.py
+Auto-merging console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
+Auto-merging scripts/acceptance/isolated_browser_harness.py
+Auto-merging tests/test_s5_impl_072_isolated_browser_harness.py
+CONFLICT (content): Merge conflict in tests/test_s5_impl_072_isolated_browser_harness.py

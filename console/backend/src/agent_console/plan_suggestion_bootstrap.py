@@ -23,6 +23,7 @@ class PlanningInvocationDependencies:
     identity_factory: object = lambda: str(uuid4())
     adaptive_limits: object = None
     admission_factory: object = None
+    exact_admission_factory: object = None
 
     def bind(self, application, authorization):
         invocations = PostgresPlanningInvocations(application.repository)
@@ -48,6 +49,9 @@ class PlanningInvocationDependencies:
                 prepare_resources=self.prepare_resources,
                 identity_factory=self.identity_factory,
                 adaptive_limits=self.adaptive_limits,
+                exact_admission=self.exact_admission_factory(context)
+                if self.exact_admission_factory
+                else None,
                 prepare_admission=self.admission_factory(context)
                 if self.admission_factory
                 else None,

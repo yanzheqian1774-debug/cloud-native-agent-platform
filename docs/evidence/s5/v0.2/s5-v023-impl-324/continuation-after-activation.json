@@ -1,0 +1,40 @@
+{
+  "observedAt": "2026-09-21T12:09:35.594390+00:00",
+  "protectedTableDigests": {
+    "business_problem_authority.problems": "40a1fdf36c05b79f82e7b914f491e7b484cfb31a4b9bc4d425a74a446479987c",
+    "business_problem_authority.problem_revisions": "b6da34a66e5af5b8684abd4ab17ebf556b4c35d106c27bf18c14a0d4dff2cb89",
+    "business_problem_authority.criteria": "d0b1d421cb6ad24822641e486bff8f46dd680184ac9ef03210b47a7ea589b0e3",
+    "business_problem_authority.criteria_sets": "a2272c83a0bfab6eb5d0f9cbdc56b6996f0101bcf4c3947766975bac85eae924",
+    "business_problem_authority.criteria_set_members": "180a769ecee98c819a8c965c0d2f667011fb881dcdd0d38a147bba296fbc21b6",
+    "workflow_planning.plans": "87a47f78f3506483e0f62a6b383361dc93a715b14717ba2168c8f17377f03004",
+    "workflow_planning.approvals": "6e06ed4280d0ae2a2f99582c32b0a4feb109c682ac16e99356688c69566d5248",
+    "workflow_planning.invocations": "fecafbb85fafa8cf7ca3778882dda21c20b532977d0c5f857a9f13f96bb502aa",
+    "workflow_planning.invocation_results": "319d2ffb110430da5553c86bb44cb63a2904c88bcd3320809a47bd46de0b70c8",
+    "workflow_planning.provider_receipts": "6414d98762ea59088628f96b6e092054a78aa073f698d8fb275f289d4e0f0cb5",
+    "draft_provider_budget.reservations": "64a674666dad74ee65f89a4ecb59a345a2d008e8ff7fa42ef2af618ca88344f7",
+    "draft_provider_budget.settlements": "de5af988b2327b8728e8a9829e792d23d9ba39ce815549e1e468c90a3f101fe3",
+    "authorization_admin.task_delegations": "7c049300b949167b3f9f92b1ad94b67b7781ea33b8c9e0af14e13b220db9230b",
+    "authorization_admin.task_development_revisions": "875910e2f68e4a1062eec61b13731ef01af0a74be92918ffbce236375788b35a",
+    "authorization_admin.task_cases": "e5b3ccd182c698bb7d0f781feb122a4d4b5a48f24f9f15371e4fcf00ca4a72d1",
+    "authorization_admin.task_case_problems": "27f57512fabb735fc02a2ccd8df8c0124e3eac43393b6677ff17c68066a87b71",
+    "execution_authority.assignments": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "execution_authority.workflow_runs": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "execution_authority.task_runs": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "execution_authority.attempts": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "authorization_admin.task_delegation_control": "01c9c16b2c24bed63b4afa2c087cdee4759eb2d068b9adcb6f1cf21454ea08fa",
+    "authorization_admin.task_delegation_revocations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "authorization_admin.task_development_stops": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "authorization_admin.task_timeout_revisions": "f6b9973f531be8c43345c8f44e3803475768c9aa7264d9c881718503442a7c4c",
+    "authorization_admin.task_delegation_ledgers": "a8949a8a67bdedae8f5bff3a52a75976449527cedb3d9c364f797d12fabccaae",
+    "authorization_admin.grant_revocation_facts": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "baselineMismatchTables": [],
+  "executionCounts": {
+    "workflow_runs": 0,
+    "task_runs": 0,
+    "attempts": 0
+  },
+  "readOnly": true,
+  "resourceDrafts": 4,
+  "authorityGeneration": 3
+}

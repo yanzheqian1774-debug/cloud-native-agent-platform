@@ -44,6 +44,11 @@ class LinkDraftProblem(BaseModel):
 
 
 def _status(reason: str) -> int:
+    if (
+        reason.startswith("CONTEXT_ADMISSION_")
+        or reason == "DRAFT_AUTHORIZATION_UNAVAILABLE"
+    ):
+        return 403
     if reason in {
         "IDEMPOTENCY_PAYLOAD_MISMATCH",
         "IDEMPOTENCY_REPLAY_UNVERIFIABLE",
@@ -187,6 +192,17 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
             _, context = authenticate(request)
             try:
                 return _payload(service.read(context, invocation_id))
+            except DraftAssistanceError as exc:
+                return JSONResponse(
+                    status_code=_status(exc.reason_code),
+                    content={"reasonCode": exc.reason_code},
+                )
+
+        @app.get(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/readiness")
+        def readiness(invocation_id: str, request: Request):
+            _, context = authenticate(request)
+            try:
+                return {"result": service.read_readiness(context, invocation_id)}
             except DraftAssistanceError as exc:
                 return JSONResponse(
                     status_code=_status(exc.reason_code),

@@ -1,0 +1,26 @@
+{
+  "references": {
+    "P05": {
+      "route": "/work/plan",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/P05.png",
+      "sha256": "22c3b2962204d97c29079a68c5753908ebc5b85e3e7c5a66746050151ee31cf5",
+      "version": "R30",
+      "read": true
+    },
+    "IAM07": {
+      "route": "/authorization-admin?context=...",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/IAM07.png",
+      "sha256": "3df530f13c66b04aebbe56b1af7ce5513551e37052b6266480dc3a653d389dd7",
+      "version": "R30",
+      "read": true
+    }
+  },
+  "evidenceKind": "CONTROLLED_BROWSER_NOT_REAL_CALL_OR_HUMAN_ACCEPTANCE",
+  "viewport": "1536x1024; 125% equivalent CSS viewport 1229x819, not actual browser zoom",
+  "differences": [
+    "P05 planning-admission stage has no plan yet: no invented task table/resource counts",
+    "User right and assistant left per explicit task, overriding old image left user",
+    "IAM07 target is task delegation; precise planning admission uses existing single-column panel, no scenario-wide delegation",
+    "Legacy approval navigation and header at narrow viewport differ from reference; overall visual acceptance not claimed"
+  ]
+}

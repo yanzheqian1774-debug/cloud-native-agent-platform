@@ -89,6 +89,8 @@ class PlanningApplication:
 
     def save_suggestion(self, principal, proposal):
         # This entry is called by the governed invocation owner, never model HTTP.
+        if proposal.origin is not None or proposal.invocation_id is None:
+            raise PlanningError("PLANNING_GOVERNED_SOURCE_REQUIRED")
         self.require(principal, "PREPARE", proposal.proposal_id)
         scope = self.scope(principal)
         with self.repository.transaction(
@@ -97,7 +99,69 @@ class PlanningApplication:
             self.validate_target(
                 principal, proposal.semantics.target, cursor.connection
             )
-            return self.repository.add_proposal(cursor, scope, proposal)
+            saved = self.repository.add_proposal(cursor, scope, proposal)
+            from .bounded_task_authorization import bind_plan
+
+            bind_plan(cursor.connection, scope, principal.principal_id, saved)
+            return saved
+
+    def prepare_synthetic_validation(self, principal, request):
+        """D324-7 A8: explicit owner proposal; no invocation, approval or Run."""
+        from .synthetic_validation_plan import make_proposal
+
+        proposal = make_proposal(principal, request)
+        self.authority.require(
+            principal,
+            "PLAN",
+            "PREPARE",
+            "plan:prepare:" + proposal.semantics.target.problem.resource_id,
+        )
+        scope = self.scope(principal)
+        with self.repository.transaction(
+            scope, proposal.proposal_id, authorized=True
+        ) as cursor:
+            self.validate_target(
+                principal, proposal.semantics.target, cursor.connection
+            )
+            saved = self.repository.add_proposal(cursor, scope, proposal)
+            from .bounded_task_authorization import bind_plan
+
+            bind_plan(cursor.connection, scope, principal.principal_id, saved)
+            return {
+                "proposal": saved.model_dump(mode="json"),
+                "digest": saved.digest,
+                "confirmation_required": True,
+                "independent_admission_required": True,
+                "execution_status": "NOT_STARTED",
+            }
+
+    def prepare_cost_execution_revision(self, principal, plan_id, request):
+        from .cost_execution_revision import execution_successor
+        from .plan_suggestion_domain import ConfirmedPlanRevision
+
+        self.require(principal, "READ", plan_id)
+        self.require(principal, "PREPARE", plan_id)
+        scope = self.scope(principal)
+        with self.repository.transaction(scope, plan_id, authorized=True) as cursor:
+            result = self.repository.read_plan(
+                cursor, scope, plan_id, request.plan_version
+            )
+            plan = ConfirmedPlanRevision.model_validate(result["plan"])
+            self.validate_target(principal, plan.semantics.target, cursor.connection)
+            source = self.repository.proposal(
+                cursor, scope, plan.source_proposal_id, plan.source_proposal_revision
+            )
+            successor, changes = execution_successor(plan, source, request)
+            self.repository.add_proposal(cursor, scope, successor)
+            return {
+                "proposal": successor.model_dump(mode="json"),
+                "digest": successor.digest,
+                "source_plan_digest": plan.digest,
+                "changes": changes,
+                "execution_status": "NOT_STARTED",
+                "confirmation_required": True,
+                "independent_admission_required": True,
+            }
 
     def confirm(
         self, principal, proposal_id, revision, digest, *, expected_plan_version, key

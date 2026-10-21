@@ -39,3 +39,24 @@ def display_translation(proposal):
         "semantics": semantics,
         "metadata": {**record, "translation_digest": digest},
     }
+
+
+def prepared_task_translation(preparation):
+    """Reuse reviewed task translations only when the entire original graph matches."""
+    tasks = [t.model_dump(mode="json") for t in preparation.semantics.tasks]
+    if (
+        preparation.plan_id != "5ad74afd-a6bf-4b04-b395-34d18d01c3b6"
+        or canonical_digest(tasks)
+        != "bde18ccd785749a7ff80be49a97fde5356f2aefd173d31cae85c152831a5e7f8"
+    ):
+        return None
+    record = json.loads(
+        Path(__file__).with_name("cost_plan_translation.json").read_text()
+    )
+    digest = record.pop("translation_digest")
+    if canonical_digest(record) != digest:
+        raise ValueError("PLAN_TRANSLATION_INTEGRITY_INVALID")
+    for i, task in enumerate(tasks):
+        for field in ("title", "responsibility"):
+            task[field] = record["fields"][f"tasks/{i}/{field}"]
+    return {"tasks": tasks, "translationDigest": digest, "source": record["source"]}

@@ -669,3 +669,41 @@ def test_formal_authorization_bootstrap_requests_exact_read_and_cancel_grants() 
         f"draft-assistance:invocation:{invocation.invocation_id}"
     }
     assert pending.model_authorization_request_id is None
+
+
+def test_current_readiness_is_read_only_and_rechecks_revocation():
+    service, *_ = build(authorization_state=AuthorizationState.PENDING)
+    invocation = service.begin(
+        context(), key="readiness-key", content="合成供应商问题"
+    ).invocation
+    allowed = {READ, REQUEST, "INVOKE_MODEL"}
+    calls = []
+
+    def execute(_context, grants, **kwargs):
+        from agent_console.authority_contracts import AuthorityError
+
+        calls.extend(grant.action for grant in grants)
+        if any(grant.action not in allowed for grant in grants):
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+        return (object(),)
+
+    adapter = GrantAdministrationDraftAuthorization(
+        SimpleNamespace(), SimpleNamespace(execute=execute), clock=lambda: NOW
+    )
+    adapter.context_admission = SimpleNamespace(ready=lambda *_: True)
+    first = adapter.read_readiness(context(), invocation)
+    assert first["permissionsCurrent"] is True
+    assert first["dispatchRevalidationRequired"] is True
+    allowed.remove("INVOKE_MODEL")
+    second = adapter.read_readiness(context(), invocation)
+    assert second["permissionsCurrent"] is False
+    assert second["checks"] == {"draft": True, "model": False, "context": True}
+    adapter.context_admission = SimpleNamespace(ready=lambda *_: False)
+    assert adapter.read_readiness(context(), invocation)["checks"]["context"] is False
+    allowed.remove(READ)
+    calls.clear()
+    with pytest.raises(DraftAssistanceError, match="DRAFT_ASSISTANCE_NOT_FOUND"):
+        adapter.read_readiness(context(), invocation)
+    assert calls == [READ]
+    # No submit_request/resolve/admit methods exist on the doubles: a query
+    # cannot create an application, revive a grant, or dispatch a provider call.

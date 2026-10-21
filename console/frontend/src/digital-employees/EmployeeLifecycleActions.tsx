@@ -47,7 +47,6 @@ export function EmployeeLifecycleActions({
   onReadback: (definition: EmployeeDefinition, result: EmployeeCommandResult) => void;
 }) {
   const [latest, setLatest] = useState(initialResult);
-  const [expectedVersion, setExpectedVersion] = useState(initialResult ? String(initialResult.aggregateVersion) : "");
   const [frozen, setFrozen] = useState<FrozenLifecycle | null>(null);
   const [busy, setBusy] = useState(false);
   const [unknown, setUnknown] = useState(false);
@@ -65,8 +64,7 @@ export function EmployeeLifecycleActions({
   }, []);
 
   async function prepare(action: Action) {
-    const version = Number(expectedVersion);
-    if (!Number.isInteger(version) || version < 1 || lifecycle !== requiredState[action] || inFlight.current) return;
+    if (lifecycle !== requiredState[action] || inFlight.current) return;
     inFlight.current = true;
     const turn = ++generation.current;
     activeRequest.current?.abort();
@@ -78,9 +76,21 @@ export function EmployeeLifecycleActions({
     try {
       const session = await getWorkbenchSession(controller.signal);
       if (turn !== generation.current) return;
+      const current = await getEmployeeDefinition(item.employeeDefinitionId, item.employeeDefinitionRevisionId, controller.signal);
+      const checkedSession = await getWorkbenchSession(controller.signal);
+      if (turn !== generation.current) return;
+      if (workbenchPrincipalKey(session) !== workbenchPrincipalKey(checkedSession)) throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED", 409);
+      if (!Number.isInteger(current.aggregateVersion) || (current.aggregateVersion ?? 0) < 1) {
+        setMessage("当前服务未提供可核验版本，暂不能提交。请联系管理员更新服务后重新查询。");
+        return;
+      }
+      if (current.lifecycleState !== requiredState[action] || current.employeeDefinitionDigest !== item.employeeDefinitionDigest) {
+        setMessage("对象状态或修订已变化，请刷新详情后核对当前可操作事项；本次未提交。");
+        return;
+      }
       const command: EmployeeLifecycleCommand = Object.freeze({
-        employeeDefinitionDigest: item.employeeDefinitionDigest.replace(/^sha256:/, ""),
-        expectedVersion: version,
+        employeeDefinitionDigest: current.employeeDefinitionDigest.replace(/^sha256:/, ""),
+        expectedVersion: current.aggregateVersion!,
         commandId: `employee-${action.toLowerCase()}:${crypto.randomUUID()}`,
       });
       setFrozen({ action, command, principalKey: workbenchPrincipalKey(session) });
@@ -119,7 +129,6 @@ export function EmployeeLifecycleActions({
       );
       if (turn !== generation.current) return;
       setLatest(result);
-      setExpectedVersion(String(result.aggregateVersion));
       setFrozen(null);
       setUnknown(false);
       setNeedsAuthorization(false);
@@ -155,8 +164,8 @@ export function EmployeeLifecycleActions({
 
   return <section className="employee-lifecycle" aria-labelledby="employee-lifecycle-title">
     <header className="employee-section-heading"><div><h3 id="employee-lifecycle-title">生命周期操作</h3><p>校验、批准和发布是独立操作；每次提交都会重新核对当前访问权限。</p></div><span className={`employee-capability-state ${lifecycle ? "available" : "warning"}`}><i />{lifecycle ? `当前状态 · ${lifecycleLabel[lifecycle]}` : "部分实现 · 正式详情接口未提供状态"}</span></header>
-    <label className="employee-version-input">期望聚合版本<input type="number" min="1" step="1" value={expectedVersion} onChange={event => { setExpectedVersion(event.target.value); setFrozen(null); }} /><small>{latest ? "来源：最近一次正式命令结果" : "当前详情不披露聚合版本，请使用权威命令结果。"}</small></label>
-    <div className="employee-lifecycle-flow">{(["VALIDATE", "APPROVE", "PUBLISH"] as const).map(action => <button type="button" key={action} disabled={busy || Boolean(frozen) || lifecycle !== requiredState[action] || !Number.isInteger(Number(expectedVersion)) || Number(expectedVersion) < 1} onClick={() => void prepare(action)}><span>{actionLabel[action]}</span><small>需要当前操作权限与成员读取权限</small></button>)}</div>
+    <p className="employee-honesty-note">系统在准备操作时核对最新状态与版本；确认前不会提交业务命令。</p>
+    <div className="employee-lifecycle-flow">{(["VALIDATE", "APPROVE", "PUBLISH"] as const).map(action => <button type="button" key={action} disabled={busy || Boolean(frozen) || lifecycle !== requiredState[action]} onClick={() => void prepare(action)}><span>{actionLabel[action]}</span><small>需要当前操作权限与成员读取权限</small></button>)}</div>
     {!lifecycle && <p className="employee-honesty-note">当前 exact 详情响应没有生命周期字段，无法仅凭“未发布”判断阶段。获得正式状态后才能启用操作。</p>}
     {frozen && <div className="employee-command-confirmation"><span className="employee-confirmation-state">等待用户明确确认</span><h4>{actionLabel[frozen.action]} · {item.role}</h4><p>将对所选修订 <code>{item.employeeDefinitionRevisionId}</code> 使用版本 {frozen.command.expectedVersion}。</p><details><summary>查看冻结 commandId 与摘要</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionDigest}</code></details><div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>取消</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认提交"}</button></div></div>}
     {needsAuthorization && frozen && <EmployeeAuthorizationRequest

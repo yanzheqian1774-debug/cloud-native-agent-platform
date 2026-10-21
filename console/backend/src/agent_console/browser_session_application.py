@@ -136,7 +136,9 @@ class BrowserSessionService:
     def create_session(self, login_nonce: str, credential: str) -> SessionSecret:
         now = self.clock()
         if not self.repository.consume_login_nonce(self._digest(login_nonce), now=now):
-            raise AuthorityError("AUTHENTICATION_REQUIRED")
+            error = AuthorityError("AUTHENTICATION_REQUIRED")
+            error.diagnostic_reason = "LOGIN_NONCE_INVALID"
+            raise error
         principal = self.authenticator.authenticate(credential, now=now)
         value = self.token_factory()
         session_id = SessionId(f"session-{self.token_factory()}")
@@ -156,6 +158,30 @@ class BrowserSessionService:
         )
         self.repository.create_session(session, self._digest(value))
         return SessionSecret(session_id, value, expires_at)
+
+    @property
+    def accounts_enabled(self) -> bool:
+        return bool(self.authenticator.generation.local_accounts)
+
+    def create_account_session(
+        self, login_nonce: str, username: str, password: str
+    ) -> SessionSecret:
+        from .local_accounts import login
+
+        if not self.authenticator.generation.local_accounts:
+            raise AuthorityError("AUTHENTICATION_REQUIRED")
+        if not self.repository.consume_login_nonce(
+            self._digest(login_nonce), now=self.clock()
+        ):
+            error = AuthorityError("AUTHENTICATION_REQUIRED")
+            error.diagnostic_reason = "LOGIN_NONCE_INVALID"
+            raise error
+        from psycopg import Error as PsycopgError
+
+        try:
+            return login(self, username, password)
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
     def authenticate_session(
         self, value: str
@@ -178,6 +204,19 @@ class BrowserSessionService:
         )
 
     def _credential_is_current(self, session: BrowserSession, *, now: datetime) -> bool:
+        from .local_accounts import account_binding_current
+
+        account = self.authenticator.generation.account_by_id(
+            session.principal.credential_id
+        )
+        if account is not None:
+            return (
+                account_binding_current(self.authenticator.generation, account)
+                and account.principal_id == session.principal.principal_id
+                and account.scope == session.principal.scope
+                and now < session.absolute_expires_at
+                and session.generation <= self.authenticator.generation.generation
+            )
         current = self.authenticator.generation.credential_by_id(
             session.principal.credential_id
         )

@@ -1,0 +1,157 @@
+{
+  "version": "R30",
+  "root": "/Users/tristan/Downloads/Resource-Management-PC-R30",
+  "pages": [
+    {
+      "pageId": "P08",
+      "route": "/work",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/P08.png",
+      "sha256": "d3e305af349a8f92e3f993dc9ba5482a5e2dd2cf161088243743958e8f8b660f",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "候选解释、能力条件、右栏缺口；不将匹配视为授权"
+    },
+    {
+      "pageId": "D07",
+      "route": "/digital-employees",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/D07.png",
+      "sha256": "da1517837f59cf01f2ff03fb699a2ccbd529829385492a995d8596c01c05a102",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "角色/实例Tab、实例状态与运行分开"
+    },
+    {
+      "pageId": "D09",
+      "route": "/digital-employees",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/D09.png",
+      "sha256": "08d6061f8a4395f9dacd0467dacd1bc36bf61cd533326170cf545f892ffe89a5",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "Definition、Instance、Assignment、Placement分离"
+    },
+    {
+      "pageId": "W06",
+      "route": "/workflow-definitions",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/W06.png",
+      "sha256": "db90e367ffc483f02a225e5a969ca6a31230c018db0f487ecf41e0ed94fc6a26",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "输入输出schema和依赖映射，仅条件适用，不作为执行前置"
+    },
+    {
+      "pageId": "R04",
+      "route": "/runtime",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/R04.png",
+      "sha256": "369a4aae5fe3b8b6172146a06b8c9848b1af1f167d911c6a396de65cc23fb4d0",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "保存分配不启动；准入缺项"
+    },
+    {
+      "pageId": "O08",
+      "route": "/runtime",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/O08.png",
+      "sha256": "67846469961375d4a3cc806c0f239b38980645d415bab2895d74f44c5ec65b20",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "Plan/Run/Task/Attempt/Evidence空态；仅借用追踪结构，不宣称OpenClaw执行"
+    },
+    {
+      "pageId": "H05",
+      "route": "/work",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/H05.png",
+      "sha256": "18372bbd4048ae249b0831a875b693e1a98d3adb67491f2d38f8ca996011d62e",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "执行进度、输入/输出/事件和暂停请求等待ack"
+    },
+    {
+      "pageId": "H06",
+      "route": "/work",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/H06.png",
+      "sha256": "c690783e7cfe345c8ef1c1f9a73b660bb09347a16687d51b412280acb788e81d",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "成果、标准、证据和Human决定分离；拒绝追加"
+    },
+    {
+      "pageId": "S04",
+      "route": "/skills",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/S04.png",
+      "sha256": "885004011133abdac2c2642e6f996ab6ccf30335e8817df37cb1bc9cc4d01fe5",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "输入输出、中文schema说明、精确依赖"
+    },
+    {
+      "pageId": "S05",
+      "route": "/skills",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/S05.png",
+      "sha256": "c3ec5f6013b36e2aa98dbf4d6318114ac2a98075d738623178004c50441591ab",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "依赖版本与用途、缺口，不归属于员工"
+    },
+    {
+      "pageId": "S06",
+      "route": "/skills",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/S06.png",
+      "sha256": "5e547523f921f1cefe37a2fc3754cd9585128f2fcf2d0fae6a10e815ae15475b",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "只读、缺失UNKNOWN、草稿不运行"
+    },
+    {
+      "pageId": "M07",
+      "route": "/mcp",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/M07.png",
+      "sha256": "6200f96bff449b71b856048ebc7a98bd7a20c12cf3cd7faf8fa9e6ee9a0fea11",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "工具输入输出schema、只读性质、版本/调用示例"
+    },
+    {
+      "pageId": "K05",
+      "route": "/knowledge",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/K05.png",
+      "sha256": "f5f0fea4b9b151c8c3f36cf1a524f73920ebf9d811f0ffed63272e073698e379",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "原文预览、来源版本、元数据、不可改写原文"
+    },
+    {
+      "pageId": "K09",
+      "route": "/knowledge",
+      "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/K09.png",
+      "sha256": "2cf540bfa8026c6e9e485d18fb16b6ed77fe60d8e361cb7587657f45df5c590f",
+      "manifestMatches": true,
+      "visuallyRead": true,
+      "status": "REFERENCE_ONLY_NOT_VISUAL_ACCEPTANCE",
+      "scope": "来源定位、页码/段落/引用版本、无法定位提示"
+    }
+  ],
+  "contract": {
+    "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/PAGE-CONTRACT.md",
+    "sha256": "9e45593b54f3440647c22c7e4d17e4a8f3c2a263a72bfca8c7374a3e1cb05f47"
+  },
+  "differences": [
+    "H05/H06旧导航与P08分组导航不一致；保留当前公共框架，仅对主链必要组件使用图内结构",
+    "O08是OpenClaw设计，Native仅复用信息层次，不更换Runtime身份",
+    "W06/H05/O08示例五Task不得覆盖真实四阶段六Task",
+    "无单一图完整覆盖对话式六Task执行闭环；相关页面不得宣称视觉已验收",
+    "R24 P06/IAM01局部接受及IAM03非阻断结论保留"
+  ]
+}

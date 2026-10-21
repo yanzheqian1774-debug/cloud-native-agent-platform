@@ -8,3 +8,12 @@
 @media(min-width:701px){.journey-shell .px-workspace .px-conversation{height:clamp(380px,calc(100svh - 390px),800px)}.journey-shell .px-workspace .px-problem-switcher{margin:0 0 8px;padding:6px 12px}.journey-shell .px-workspace .px-problem-switcher>summary{font-size:12px}.journey-shell .px-workspace .px-message-stream{padding-bottom:20px}.journey-shell .px-workspace .px-composer{flex-shrink:0}}
 @media(min-width:1101px){.journey-shell .px-workspace{position:relative}.journey-shell .px-workspace>.px-page-title{padding-right:240px}.journey-shell .px-workspace .px-problem-switcher{position:absolute;right:30px;top:18px;width:220px;z-index:6;margin:0;background:white}.journey-shell .px-workspace .px-problem-switcher[open]{width:min(440px,50%);max-height:60vh;overflow:auto;box-shadow:0 12px 32px #153b7420}.journey-shell .px-workspace .px-conversation{height:calc(100svh - 306px);min-height:430px}}
 @media(max-width:700px){.journey-shell .px-workspace{padding:14px 0 calc(61px + env(safe-area-inset-bottom))}.journey-shell .px-workspace>.journey-steps{padding:4px 12px}}
+
+/* Keep the composer inside the bounded workspace, including browser zoom.
+   Earlier journey heights must not impose a 430px minimum on a smaller grid. */
+@media(min-width:1000px) and (min-height:650px){
+ .journey-shell .px-workspace .px-conversation{height:100%;min-height:0;grid-template-rows:minmax(0,1fr) auto}
+ .journey-shell .px-workspace .px-task-summary-panel{height:100%;max-height:none;align-content:start}
+ .journey-shell .px-workspace .px-task-summary-content{align-content:start}
+ .journey-shell .px-workspace .px-message-stream{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+}

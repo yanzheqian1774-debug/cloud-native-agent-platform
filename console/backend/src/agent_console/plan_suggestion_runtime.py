@@ -396,7 +396,7 @@ class PlanningBudget:
         )
         return self.owner.reserve(key, normalized, quote)
 
-    def dispatch_guard(self, identity, quote):
+    def dispatch_guard(self, identity, quote, *, connection=None):
         normalized = SimpleNamespace(
             scope=DraftScope(identity.scope.namespace, identity.scope.security_domain),
             invocation_id=identity.invocation_id,
@@ -405,6 +405,8 @@ class PlanningBudget:
         from contextlib import nullcontext
 
         guard = getattr(self.owner, "dispatch_guard", None)
+        if connection is not None and guard is not None:
+            return guard(normalized, quote, connection=connection)
         return guard(normalized, quote) if guard else nullcontext()
 
     def require_diagnostic(self, principal, request):

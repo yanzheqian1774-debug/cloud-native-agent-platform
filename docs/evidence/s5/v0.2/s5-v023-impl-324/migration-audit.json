@@ -1,0 +1,34 @@
+[
+  {
+    "pr": 170,
+    "file": "console/backend/migrations/0020_business_problem_creator_receipt.sql",
+    "sourceSha256": "0d6d0551531c84254e970f11eecb2b7b6b52b8112d1974ee020833e9ab62aec7",
+    "mainSha256": "0d6d0551531c84254e970f11eecb2b7b6b52b8112d1974ee020833e9ab62aec7",
+    "sameBytes": true,
+    "appliedBy324": false
+  },
+  {
+    "pr": 169,
+    "file": "console/backend/migrations/0021_openclaw_runtime_binding.sql",
+    "sourceSha256": "7fcd4ff8adf61c48831dec4d90cc28aacb738f35d5eb8a9d6572ff4286268e69",
+    "mainSha256": null,
+    "sameBytes": false,
+    "appliedBy324": false
+  },
+  {
+    "pr": 164,
+    "file": "console/backend/migrations/0020_business_problem_creator_receipt.sql",
+    "sourceSha256": "0d6d0551531c84254e970f11eecb2b7b6b52b8112d1974ee020833e9ab62aec7",
+    "mainSha256": "0d6d0551531c84254e970f11eecb2b7b6b52b8112d1974ee020833e9ab62aec7",
+    "sameBytes": true,
+    "appliedBy324": false
+  },
+  {
+    "pr": 163,
+    "file": "console/backend/migrations/0019_model_governance.sql",
+    "sourceSha256": "ba66d5783ab38b19e464ebf13ab489014edb94b1fb938fcf2ea03c65224a7cfd",
+    "mainSha256": "ba66d5783ab38b19e464ebf13ab489014edb94b1fb938fcf2ea03c65224a7cfd",
+    "sameBytes": true,
+    "appliedBy324": false
+  }
+]

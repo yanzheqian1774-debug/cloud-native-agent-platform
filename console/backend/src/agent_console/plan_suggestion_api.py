@@ -97,6 +97,10 @@ def install_planning_invocations(
                     request_key,
                 )
                 if identity is None:
+                    if service.exact_admission is not None:
+                        prepared = service.exact_admission.recover(request_key)
+                        if prepared is not None:
+                            return prepared
                     raise PlanningError("PLANNING_NOT_FOUND")
                 from .planning_adaptive import recovery
 
@@ -105,6 +109,32 @@ def install_planning_invocations(
                 )
 
             return invoke(request, recover)
+
+        @app.post(f"{PREFIX}/planning-v2/requests/{{request_key}}/continue")
+        async def continue_prepared(request: Request, request_key: str):
+            from .responses_deadline import cancellable_request
+
+            def resume(service, principal):
+                if service.exact_admission is None:
+                    raise PlanningError("PLANNING_NOT_FOUND")
+                prepared = service.exact_admission.recover(request_key)
+                if prepared is None:
+                    raise PlanningError("PLANNING_NOT_FOUND")
+                document = prepared["invocation"].get("request", {})
+                body = PlanningRequest.model_validate(
+                    {
+                        key: value
+                        for key, value in document.items()
+                        if key in PlanningRequest.model_fields
+                    }
+                )
+                return (
+                    service.begin_adaptive(principal, body)
+                    if body.output_language
+                    else service.begin(principal, body)
+                )
+
+            return await cancellable_request(request, lambda: invoke(request, resume))
 
         @app.post(f"{PREFIX}/planning-v2/preflight")
         def preflight(request: Request, body: PlanningRequest):

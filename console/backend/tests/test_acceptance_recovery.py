@@ -126,7 +126,7 @@ def test_existing_schema_validation_executes_no_ddl(tmp_path, valid):
 
 @pytest.mark.parametrize("active", [(1, "a" * 64, 1), None, (2, "b" * 64, 2)])
 def test_existing_foundation_never_migrates_or_activates(monkeypatch, tmp_path, active):
-    generation = SimpleNamespace(generation=1, digest="a" * 64)
+    generation = SimpleNamespace(generation=1, digest="a" * 64, local_accounts=())
     monkeypatch.setattr(
         authority.StaticAuthorityLoader, "load", lambda *a, **k: generation
     )

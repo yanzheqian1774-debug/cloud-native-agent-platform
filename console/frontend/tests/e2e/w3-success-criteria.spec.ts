@@ -3,7 +3,7 @@ import type {CriteriaSetRevision,CriterionRevision} from "../../src/api/business
 
 const problem={scope:{namespace:"tenant-a",security_domain:"quality"},business_problem_id:"problem:w3-1",revision_id:"problem-revision:w3-1:1",revision:1,predecessor_revision_id:null,title:"供应商交付恢复",description:"关键零部件延期影响客户交付。",owner_id:"human:owner",created_by:"human:owner",created_at:"2026-09-14T00:20:00Z",digest:"c".repeat(64)};
 const envelope=(result:unknown)=>({schemaVersion:"workbench-operation.v1",result,continuationIds:[]});
-type CriterionPayload={successCriterionId?:string;predecessorRevisionId?:string;expectedVersion?:number;criterionType:string;measurement:Record<string,unknown>;requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:Record<string,unknown>;idempotencyKey:string};
+type CriterionPayload={problemId?:string;successCriterionId?:string;predecessorRevisionId?:string;expectedVersion?:number;criterionType:string;measurement:Record<string,unknown>;requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:Record<string,unknown>;idempotencyKey:string};
 type SetPayload={problemRevisionId:string;predecessorSetRevisionId?:string;orderedCriterionRevisionIds:string[];expectedVersion:number;idempotencyKey:string};
 type GrantPayload={purpose:string;requestedGrants:{owner:string;action:string;resource:string}[]};
 type State={lifecycle?:string;activationWrites?:unknown[];denyActivation?:boolean;loseActivation?:boolean;aggregateVersion:number;criteria:CriterionRevision[];sets:CriteriaSetRevision[];criterionWrites:CriterionPayload[];setWrites:SetPayload[];grantWrites?:GrantPayload[];grantState?:"PENDING"|"APPROVED"|"REJECTED";principalId?:string;denyCriterion?:boolean;denySet?:boolean;staleSet?:boolean;unknownCriterionOnce?:boolean;unknownSetOnce?:boolean;holdCriterion?:boolean;continueCriterion?:()=>void;holdSet?:boolean;continueSet?:()=>void};
@@ -54,13 +54,14 @@ async function draftCriterion(page:import("@playwright/test").Page,text:string){
 
 test("confirm is the write gate and official readback survives refresh and revision",async({page},testInfo)=>{
   const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[]};await installRoutes(page,state);await page.goto("/work?problem=problem%3Aw3-1");
+  await expect(page.locator(".px-task-summary-panel")).toContainText("查看权限已核验");await expect(page.locator(".px-task-summary-panel")).not.toContainText("尚未申请");
   const card=await draftCriterion(page,"客户确认未来三批均能按承诺日期交付。");expect(state.criterionWrites).toHaveLength(0);
   await card.getByRole("button",{name:"修改原文"}).click();await page.getByLabel("修改成功标准原文").fill("业务负责人确认未来三批均能按承诺日期交付。");await page.getByRole("button",{name:"采用标准原文"}).click();
   const confirm=card.getByRole("button",{name:"确认并保存"});await confirm.evaluate((button:HTMLButtonElement)=>{button.click();button.click()});await expect(card).toContainText("已保存并完成正式关联");
   expect(state.criterionWrites).toHaveLength(1);expect(state.criterionWrites[0]).toMatchObject({criterionType:"HUMAN_EVALUATED",measurement:{rubric:"业务负责人确认未来三批均能按承诺日期交付。"},requiredEvidenceKinds:[],evaluatorType:"HUMAN",evaluatorVersion:"v1",applicability:{}});expect(state.setWrites).toHaveLength(1);expect(state.setWrites[0]).toMatchObject({problemRevisionId:problem.revision_id,orderedCriterionRevisionIds:["criterion-revision:w3:1"],expectedVersion:1});
   await page.reload();const history=page.getByLabel("已保存成功标准");await expect(history).toContainText("业务负责人确认未来三批均能按承诺日期交付。");await expect(history).toContainText("Criteria Set 修订 1");
   await history.getByRole("button",{name:"修订此标准"}).click();await page.getByLabel("修改成功标准原文").fill("业务负责人确认未来五批均能按承诺日期交付。");await page.getByRole("button",{name:"采用标准原文"}).click();await page.getByRole("button",{name:"确认并保存"}).click();await expect(page.getByLabel("成功标准待确认卡片")).toContainText("已保存并完成正式关联");
-  expect(state.criterionWrites[1]).toMatchObject({successCriterionId:"criterion:w3-1",predecessorRevisionId:"criterion-revision:w3:1",expectedVersion:1,measurement:{rubric:"业务负责人确认未来五批均能按承诺日期交付。"}});expect(state.setWrites[1]).toMatchObject({predecessorSetRevisionId:"set:w3:1",orderedCriterionRevisionIds:["criterion-revision:w3:2"],expectedVersion:2});
+  expect(state.criterionWrites[1]).toMatchObject({problemId:problem.business_problem_id,successCriterionId:"criterion:w3-1",predecessorRevisionId:"criterion-revision:w3:1",expectedVersion:1,measurement:{rubric:"业务负责人确认未来五批均能按承诺日期交付。"}});expect(state.setWrites[1]).toMatchObject({predecessorSetRevisionId:"set:w3:1",orderedCriterionRevisionIds:["criterion-revision:w3:2"],expectedVersion:2});
   await page.screenshot({path:testInfo.outputPath("w3-saved-revised-1440.png"),fullPage:true});
 });
 

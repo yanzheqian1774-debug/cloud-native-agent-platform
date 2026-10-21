@@ -68,6 +68,8 @@ class WorkbenchGrantRequestStatus(StrictWorkbenchModel):
     submittedAt: datetime
     purpose: str
     requestedActions: tuple[str, ...]
+    applicant: WorkbenchPrincipal
+    requestedGrants: tuple[WorkbenchExactGrant, ...]
 
 
 class WorkbenchGrantDecisionCommand(StrictWorkbenchModel):
@@ -199,6 +201,7 @@ class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     employeeDefinitionId: str
     employeeDefinitionRevisionId: str
     employeeDefinitionDigest: str
+    aggregateVersion: int = Field(ge=1)
     role: str
     responsibilities: tuple[str, ...]
     members: tuple[WorkbenchEmployeeMember, ...]

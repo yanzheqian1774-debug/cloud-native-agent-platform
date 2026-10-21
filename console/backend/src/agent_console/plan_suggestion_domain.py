@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from .business_problem_domain import canonical_digest
 from .planning_contracts import (
@@ -163,12 +163,42 @@ VersionedSemantics = Annotated[
 ]
 
 
+class SyntheticValidationOrigin(Immutable):
+    kind: Literal["HUMAN_SYNTHETIC_VALIDATION"] = "HUMAN_SYNTHETIC_VALIDATION"
+    task_id: Literal["S5-V023-IMPL-324"] = "S5-V023-IMPL-324"
+    namespace: Literal["s5-324-native-capability"]
+    security_domain: Literal["isolated-native-validation"]
+    root: ExactReference
+    source_snapshot: ExactReference
+    mapping_digest: Digest
+    prepared_by: Identity
+
+
 class ProposalRevision(Immutable):
     proposal_id: Identity
     revision: int = Field(ge=1)
     predecessor_digest: Digest | None
-    invocation_id: Identity
+    invocation_id: Identity | None
     semantics: VersionedSemantics
+    origin: SyntheticValidationOrigin | None = None
+
+    @model_validator(mode="after")
+    def validate_origin(self):
+        if (self.origin is None) != (self.invocation_id is not None):
+            raise ValueError("PLANNING_ORIGIN_INVOCATION_CONFLICT")
+        if (
+            self.origin is not None
+            and self.origin.root != self.semantics.target.problem
+        ):
+            raise ValueError("PLANNING_ORIGIN_ROOT_MISMATCH")
+        return self
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_record(self, handler):
+        record = handler(self)
+        if self.origin is None:
+            record.pop("origin", None)
+        return record
 
     @property
     def digest(self):

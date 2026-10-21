@@ -227,6 +227,11 @@ async def cancellable_request(request, action):
             await asyncio.sleep(0.025)
             if await request.is_disconnected():
                 signal.set()
+            # Starlette's disconnect CancelScope may consume delivery of an
+            # external cancellation. Preserve that caller intent and still wait
+            # for the owner thread to persist UNKNOWN before propagating it.
+            if asyncio.current_task().cancelling():
+                raise asyncio.CancelledError
         return await task
     except asyncio.CancelledError:
         signal.set()
