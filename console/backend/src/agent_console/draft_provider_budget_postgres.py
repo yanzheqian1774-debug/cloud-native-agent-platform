@@ -154,11 +154,15 @@ class PostgresProviderCallBudget:
             raise DraftAssistanceError("PROVIDER_BUDGET_STORAGE_UNAVAILABLE") from exc
 
     @contextmanager
-    def dispatch_guard(self, invocation, quote):
+    def dispatch_guard(self, invocation, quote, *, connection=None):
         """Pin admission; revocation does not cancel an admitted call."""
+        from contextlib import nullcontext
+
         from .task_delegation import guard_budget
 
-        with self._connection() as connection:
+        with (
+            nullcontext(connection) if connection is not None else self._connection()
+        ) as connection:
             guard_budget(connection, self, invocation, quote)
             yield
 

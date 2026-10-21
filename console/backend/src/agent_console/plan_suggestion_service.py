@@ -337,11 +337,21 @@ class PlanningSuggestionService:
                 if self.exact_admission is not None
                 else nullcontext()
             )
-            with exact_guard, guard(identity, self.quote) if guard else nullcontext():
-                provider_entered = True
-                raw = self.provider.suggest(
-                    request, resolved, self.profile, business_context
+            with exact_guard as admission_connection:
+                # Reuse the authorization transaction: a queued revocation writer
+                # must not split nested readers across competing connections.
+                budget_guard = (
+                    guard(identity, self.quote, connection=admission_connection)
+                    if guard and admission_connection is not None
+                    else guard(identity, self.quote)
+                    if guard
+                    else nullcontext()
                 )
+                with budget_guard:
+                    provider_entered = True
+                    raw = self.provider.suggest(
+                        request, resolved, self.profile, business_context
+                    )
         except AuthorityError:
             result = {
                 "technical_status": "OUTCOME_UNKNOWN" if provider_entered else "FAILED",

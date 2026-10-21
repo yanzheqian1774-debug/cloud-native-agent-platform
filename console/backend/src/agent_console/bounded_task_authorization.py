@@ -23,16 +23,18 @@ def available(c):
     )
 
 
-def task_lock(c, request_id):
-    c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,39))", (request_id,))
+def task_lock(c, request_id, *, shared=False):
+    function = "pg_advisory_xact_lock_shared" if shared else "pg_advisory_xact_lock"
+    c.execute(f"SELECT {function}(hashtextextended(%s,39))", (request_id,))
 
 
-def latest_root_decision(c, row):
+def latest_root_decision(c, row, *, shared=False):
     task_lock(
         c,
         digest(
             [row[k] for k in ("tenant_id", "security_domain", "subject_id", "root_id")]
         ),
+        shared=shared,
     )
     return c.execute(
         "SELECT d.* FROM authorization_admin.bounded_task_decisions d "
@@ -46,7 +48,9 @@ def latest_root_decision(c, row):
 
 
 def current(c, row):
-    decision = latest_root_decision(c, row)
+    # Nested dispatch guards use separate connections. Readers must coexist;
+    # signature and revocation still take the exclusive root lock.
+    decision = latest_root_decision(c, row, shared=True)
     if decision and decision["request_id"] != row["request_id"]:
         raise AuthorityError("TASK_AUTHORIZATION_SUPERSEDED")
     account = c.execute(

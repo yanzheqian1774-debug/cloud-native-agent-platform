@@ -363,7 +363,7 @@ class BoundPlanningAdmission:
                     raise AuthorityError("CONTEXT_ADMISSION_ACCOUNT_INACTIVE")
                 row = request_row(c, record["target"]["suggestion_context_id"])
                 if row is None:
-                    yield
+                    yield c
                     return
                 if (row["subject_id"], row["tenant_id"], row["security_domain"]) != (
                     self.context.principal_id,
@@ -394,6 +394,6 @@ class BoundPlanningAdmission:
                     )
                 ):
                     raise AuthorityError("CONTEXT_ADMISSION_GRANTS_REQUIRED")
-                yield
+                yield c
 
         return guarded()

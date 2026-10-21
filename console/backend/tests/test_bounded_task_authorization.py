@@ -155,6 +155,33 @@ def signature(row, key="signature"):
     not os.environ.get("AUTHORITY_I1_TEST_DATABASE_URL"),
     reason="exclusive PostgreSQL required",
 )
+def test_nested_dispatch_readers_coexist_but_signature_writer_waits(task_env):
+    import psycopg
+    from agent_console.bounded_task_authorization import current, latest_root_decision
+
+    e = task_env
+    row = e.tasks.prepare(e.business, e.task_spec)
+    e.tasks.approve(e.reviewer, row["request_id"], signature(row))
+    with e.repo.connection_scope() as outer:
+        current(outer, row)
+        with e.repo.connection_scope() as inner:
+            inner.execute("SET LOCAL lock_timeout='500ms'")
+            current(inner, row)
+        with (
+            pytest.raises(psycopg.errors.LockNotAvailable),
+            e.repo.connection_scope() as writer,
+        ):
+            writer.execute("SET LOCAL lock_timeout='100ms'")
+            latest_root_decision(writer, row)
+    with e.repo.connection_scope() as writer:
+        writer.execute("SET LOCAL lock_timeout='500ms'")
+        latest_root_decision(writer, row)
+
+
+@pytest.mark.skipif(
+    not os.environ.get("AUTHORITY_I1_TEST_DATABASE_URL"),
+    reason="exclusive PostgreSQL required",
+)
 def test_independent_signature_current_reads_revoke_and_immutable_history(task_env):
     e = task_env
     row = e.tasks.prepare(e.business, e.task_spec)
@@ -254,3 +281,44 @@ def test_revoked_successor_does_not_revive_previous_window(task_env):
         )
         is None
     )
+
+
+@pytest.mark.skipif(
+    not os.environ.get("AUTHORITY_I1_TEST_DATABASE_URL"),
+    reason="exclusive PostgreSQL required",
+)
+def test_queued_writer_does_not_block_reentrant_same_transaction(task_env):
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from agent_console.bounded_task_authorization import current, latest_root_decision
+
+    e = task_env
+    row = e.tasks.prepare(e.business, e.task_spec)
+    e.tasks.approve(e.reviewer, row["request_id"], signature(row))
+    ready, pid = Event(), []
+
+    def writer():
+        with e.repo.connection_scope() as c:
+            c.execute("SET LOCAL lock_timeout='3s'")
+            pid.append(c.execute("SELECT pg_backend_pid() pid").fetchone()["pid"])
+            ready.set()
+            latest_root_decision(c, row)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with e.repo.connection_scope() as reader:
+            current(reader, row)
+            future = pool.submit(writer)
+            assert ready.wait(1)
+            end = time.monotonic() + 2
+            while not reader.execute(
+                "SELECT 1 FROM pg_locks WHERE pid=%s AND NOT granted", (pid[0],)
+            ).fetchone():
+                assert time.monotonic() < end, "writer did not queue"
+                ready.wait(0.001)
+            assert not future.done()
+            reader.execute("SET LOCAL lock_timeout='300ms'")
+            current(reader, row)
+            assert not future.done()
+        future.result(timeout=2)

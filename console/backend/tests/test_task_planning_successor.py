@@ -170,3 +170,61 @@ def test_original_amount_cap_still_counts_unknowns(successor):
     quote = ProviderBudgetQuote(100, 500, 10000000 + 500)
     with pytest.raises(DraftAssistanceError, match="PROVIDER_BUDGET_EXHAUSTED"):
         e.budget.reserve("new", inv, quote)
+
+
+@pytest.mark.parametrize("abort", [False, True])
+def test_shared_transaction_budget_guard_releases_before_revocation(successor, abort):
+    from agent_console.bounded_task_authorization import current
+
+    e = successor
+    new = prepared(e, "guard-release")
+    sign(e, new)
+    inv = claim(e, new)
+    quote = ProviderBudgetQuote(100, 500, 600)
+    reservation = e.budget.reserve("guard-release", inv, quote)
+    with e.repo.connection_scope() as c:
+        row = c.execute(
+            "SELECT * FROM authorization_admin.bounded_task_requests"
+        ).fetchone()
+    decision = e.tasks.read(e.business, row["request_id"])["decision"]
+
+    class Aborted(Exception):
+        pass
+
+    def dispatch():
+        with e.repo.connection_scope() as c:
+            c.execute("SET LOCAL lock_timeout='500ms'")
+            current(c, row)
+            with e.budget.dispatch_guard(inv, quote, connection=c):
+                if abort:
+                    raise Aborted
+
+    if abort:
+        with pytest.raises(Aborted):
+            dispatch()
+    else:
+        dispatch()
+    e.tasks.revoke(e.reviewer, row["request_id"], decision["decision_id"])
+    with pytest.raises(AuthorityError), e.budget.dispatch_guard(inv, quote):
+        pytest.fail("revoked task must not dispatch")
+    with e.repo.connection_scope() as c:
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM draft_provider_budget.reservations"
+            ).fetchone()["n"]
+            == 21
+        )
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM draft_provider_budget.settlements"
+            ).fetchone()["n"]
+            == 0
+        )
+        assert (
+            c.execute(
+                "SELECT reservation_id FROM draft_provider_budget.reservations "
+                "WHERE invocation_id=%s",
+                (inv.invocation_id,),
+            ).fetchone()["reservation_id"]
+            == reservation
+        )
