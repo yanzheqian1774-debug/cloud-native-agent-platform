@@ -272,6 +272,18 @@ export function ProblemWorkspacePage(){
 
   if(loading)return <main className="px-page"><section className="px-state" role="status"><span className="px-spinner"/><strong>正在恢复可信业务工作区</strong></section></main>;
   if(loginRequired)return <main className="px-page"><section className="px-state"><h1>需要登录可信工作台</h1><p>请重新登录。身份只来自受保护的浏览器会话，不接受页面提供的身份信息。</p><a className="px-primary-button" href={`/api/workbench/v1/login?returnTo=${encodeURIComponent("/work"+(params.size?"?"+params.toString():""))}`}>登录可信工作台</a></section>{failure&&<WorkbenchErrorNotice {...failure}/>}</main>;
+  if(selectedId && !canonical && !selected && !authorization.continuation && !authorization.request &&
+    failure?.operation==="恢复工作区" && failure.error instanceof WorkbenchRequestError &&
+    (failure.error.status===403 || failure.error.reasonCode==="AUTHORIZATION_NOT_FOUND")){
+    const returnTo="/work?"+new URLSearchParams({problem:selectedId});
+    return <main className="px-page px-workspace"><section className="px-inline-card">
+      <h1>当前账号无法查看此问题</h1>
+      <p>当前工作区未能读取问题，暂时无法发送补充。请使用有查看权限的业务账号打开原问题。</p>
+      <WorkbenchErrorNotice {...failure}/>
+      <a className="px-primary-button" href={`/api/workbench/v1/login?returnTo=${encodeURIComponent(returnTo)}`}>使用业务账号登录并返回原问题</a>
+      <p><a href="/work?panel=existing">选择其他业务问题</a></p>
+    </section></main>;
+  }
   return <main className="px-page px-workspace"><header className="px-page-title"><div><p>问题工作台 <small>理解与确认</small></p><h1>{selected?"问题详情":selectedId?(canonical?"问题已创建":"查看问题"):turn?.phase==="UNKNOWN"?"确认原创建结果":turn?.phase==="SUBMITTING"?"正在创建问题":turn&&turn.phase!=="CANCELLED"?"核对并确认问题":visibleAssistance?.result.resultKind==="NEEDS_CLARIFICATION"?"补充关键理解":"新建对话"}</h1><span>{selected?"已读回正式记录。查看下方当前状态，选择实际可执行的下一步。":selectedId?(canonical?"创建事实已保留；查看详情需要独立授权。":"仅在获得查看权限并读取成功后展示问题详情。"):assistanceEnabled?"通过受治理的 AI 补问形成可编辑草稿；只有你确认后才会创建正式业务问题。":"通过连续对话形成可编辑草稿；只有你确认后才会创建正式业务问题。"}</span></div></header>
     <details className="px-problem-switcher" open={params.get("panel")==="existing" || undefined}><summary>业务问题与新建入口</summary><button type="button" disabled={busy||!selectedId||turn?.phase==="UNKNOWN"} onClick={()=>{setAssistance(null);startNew()}}>＋ 新建对话</button><nav aria-label="业务问题列表">{[...problems].reverse().map(problem=><button type="button" disabled={busy||turn?.phase==="UNKNOWN"} className={selectedId===problem.business_problem_id?"selected":""} key={problem.business_problem_id} onClick={()=>void select(problem.business_problem_id)}><strong>{problem.title}</strong><small>修订 {problem.revision} · {readable(problem.created_at)}</small></button>)}</nav></details>
     {recoveryInvocation&&!assistance&&<section className="px-inline-card" aria-label="恢复原 AI 调用"><h2>读取原 AI 调用</h2><p>链接只定位原 invocation，不含原文或权限。请先只读核对；登录和刷新不会重交正文或新建申请。</p><code>{recoveryInvocation}</code><p><button type="button" disabled={!session||recoveryBusy} onClick={()=>void readOriginalAssistance()}>读取原调用事实（只读）</button></p>{recoveryError!==null&&<WorkbenchErrorNotice error={recoveryError} operation="观察 AI 原调用"/>}</section>}

@@ -164,6 +164,20 @@ for (const canRead of [true,false]) test(`home retains the selected problem with
   expect(state.writes).toHaveLength(0);
 });
 
+test('invisible problem offers account recovery instead of sending', async ({page}) => {
+  const state = await setup(page);
+  await page.route('**/api/workbench/v1/problems',route=>route.fulfill({
+    status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}
+  }));
+  await page.goto('/work?problem=problem%3A321');
+  await expect(page.getByRole('heading',{name:'当前账号无法查看此问题'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'发送',exact:true})).toHaveCount(0);
+  const login = new URL(await page.getByRole('link',{name:'使用业务账号登录并返回原问题'}).getAttribute('href')!,page.url());
+  expect(login.searchParams.get('returnTo')).toBe('/work?problem=problem%3A321');
+  await expect(page.getByRole('link',{name:'进入独立授权审批页'})).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+});
+
 test('planning task opens its resource requirement and returns to the same problem', async ({page}) => {
   const state = await planning(page);
   const task = page.locator('.planning-task').nth(1);
