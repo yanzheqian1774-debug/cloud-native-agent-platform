@@ -17,7 +17,7 @@ for (const kind of ["skill", "mcp"] as const) {
     await page.route("**/api/internal/v0.2.2/resources/**", async route => {
       if (route.request().method() !== "GET") mutations.push(route.request().method());
       const path=new URL(route.request().url()).pathname;
-      await route.fulfill({json:path.endsWith(`/fixture-${kind}`) ? {resource,productProjection:{},technicalProjection:{}} : path.endsWith(`/${kind}`) ? [resource] : []});
+      await route.fulfill({json:path.endsWith(`/fixture-${kind}`) ? {resource,productProjection:{},technicalProjection:{resourceId:resource.resourceId,namespace:"synthetic",securityDomain:"isolated",aggregateVersion:2,publishedRevisionId:resource.publishedRevisionId,revisionDigests:resource.revisions.map(({revisionId,digest,state})=>({revisionId,digest,state})),limitations:["SYNTHETIC_INTERFACE_TEST"]}} : path.endsWith(`/${kind}`) ? [resource] : []});
     });
     await page.setViewportSize({width:1536,height:1024});
     await page.goto(`/${kind === "skill" ? "skills" : "mcp"}?resourceId=fixture-${kind}`);
@@ -30,6 +30,12 @@ for (const kind of ["skill", "mcp"] as const) {
     } else {
       await expect(details.getByText("当前发现契约未提供输出 Schema",{exact:false})).toBeVisible();
     }
+    const productTab=page.getByRole("tab",{name:"Product View",exact:true});
+    await productTab.focus();await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab",{name:"Technical View",exact:true})).toBeFocused();
+    await expect(page.getByRole("tabpanel")).toContainText(resource.resourceId);
+    await page.keyboard.press("Home");await expect(productTab).toBeFocused();
+    await expect(details).toBeVisible();
     await details.locator("summary").first().focus();
     await page.keyboard.press("Enter");
     await expect(details.locator("details").first()).toHaveAttribute("open","");

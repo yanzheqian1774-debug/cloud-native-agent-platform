@@ -51,6 +51,7 @@ import { getProductTraceability, type ProductAssemblyError, type TraceabilityDTO
 import { EvidenceCenterPage } from "./evidence/EvidenceCenterPage";
 import { OutcomeCenterPage } from "./outcomes/OutcomeCenterPage";
 import { AgentCenterPage, ApplicationMarketPage, HelpCenterPage, ModelCenterPage, OperationsCenterPage, PermissionCenterPage, SecurityCenterPage, SettingsPage, UsageCenterPage } from "./administration/PlatformSupportPages";
+import "./styles/workspace-system.css";
 
 let cancelPendingEvidenceFocus: (() => void) | null = null;
 

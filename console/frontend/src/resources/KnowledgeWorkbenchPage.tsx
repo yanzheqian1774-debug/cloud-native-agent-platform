@@ -1,3 +1,4 @@
+import {PageHeader} from "../components/WorkspacePrimitives";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -181,7 +182,7 @@ function KnowledgeWorkbench({refresh}:{refresh:()=>void}) {
   const visible = items.filter(item=>`${item.name} ${item.knowledgeId} ${item.lifecycleState}`.toLowerCase().includes(filter.toLowerCase()));
 
   return <main className="agent-workbench knowledge-workbench">
-    <header><p className="eyebrow">企业 Knowledge 资源工作台</p><h1>知识中心</h1><p>管理知识来源、不可变修订、检索与引用。生命周期由后端持有。</p></header>
+    <PageHeader eyebrow="能力资源 / 知识" title="知识中心" description="管理知识来源、不可变修订、检索与引用。生命周期由后端持有。"/>
     {state==="LOADING"&&<p role="status">正在读取授权知识资源…</p>}
     {state==="SAVING"&&<p role="status">正在提交，请勿重复操作…</p>}
     {notice&&<div role="status" className="notice">{notice}<button onClick={()=>setNotice("")}>关闭提示</button></div>}
@@ -189,8 +190,8 @@ function KnowledgeWorkbench({refresh}:{refresh:()=>void}) {
     {fieldError&&<p role="alert">{fieldError}</p>}
     {recovery&&<section role="alert" aria-label="Guided conflict recovery"><h2>版本已更新，请明确恢复输入</h2><p>尝试版本 {recovery.attemptedVersion}；权威版本 {recovery.authoritativeVersion}。正文仍保留在当前输入框，未自动重放操作。</p><button onClick={()=>{setRecovery(null);setError(null);}}>核对后保留输入</button><button onClick={()=>{setSuccessorContent("");setRecovery(null);setError(null);}}>丢弃保留输入</button></section>}
     <section className="agent-dashboard" aria-label="Knowledge quality dashboard"><article><strong>{dashboard?.authorizedKnowledgeCount ?? "—"}</strong><span>授权知识包</span></article><article><strong>{dashboard?.activeSnapshotCount ?? "—"}</strong><span>生效索引快照</span></article><article><strong>{dashboard?.authority ?? "尚未读取"}</strong><span>后端权威来源</span></article></section>
-    <div className="agent-layout"><aside><div className="agent-list-heading"><h2 ref={listHeading} tabIndex={-1}>知识包列表</h2><button ref={createTrigger} disabled={busy} onClick={()=>{setFieldError("");createDialog.current?.showModal();}}>创建知识源</button></div><label>筛选知识包<input type="search" value={filter} onChange={e=>navigate({q:e.target.value},true)}/></label>
-      {!visible.length&&state==="READY"?<p>没有符合条件的授权知识包。</p>:<ul className="agent-list">{visible.map(item=><li key={item.knowledgeId}><button disabled={state==="SAVING"} aria-pressed={id===item.knowledgeId} onClick={()=>navigate({resourceId:item.knowledgeId,revisionId:"",digest:"",view:"product",returnFocus:""})}><strong>{item.name}</strong><span>{status(item.lifecycleState)} · v{item.aggregateVersion}</span></button></li>)}</ul>}
+    <div className="agent-layout"><aside><div className="agent-list-heading"><h2 ref={listHeading} tabIndex={-1}>知识包列表</h2><button ref={createTrigger} disabled={busy||Boolean(error)||state!=="READY"} onClick={()=>{setFieldError("");createDialog.current?.showModal();}}>创建知识源</button></div><label>筛选知识包<input type="search" value={filter} onChange={e=>navigate({q:e.target.value},true)}/></label>
+      {!visible.length&&state==="READY"&&!error?<p>没有符合条件的授权知识包。</p>:<ul className="agent-list">{visible.map(item=><li key={item.knowledgeId}><button disabled={state==="SAVING"} aria-pressed={id===item.knowledgeId} onClick={()=>navigate({resourceId:item.knowledgeId,revisionId:"",digest:"",view:"product",returnFocus:""})}><strong>{item.name}</strong><span>{status(item.lifecycleState)} · v{item.aggregateVersion}</span></button></li>)}</ul>}
     </aside><section className="agent-detail">{!value?<><h2>选择知识包</h2><p>选择后查看来源、修订、检索记录和生命周期操作。</p>{operationResult!=null&&<pre>{JSON.stringify(operationResult,null,2)}</pre>}</>:<>
       <header><p>{status(value.lifecycleState)} · {value.archived?"已归档":"活动记录"}</p><h2 ref={detailHeading} tabIndex={-1}>{value.name}</h2><span className="technical-value">{value.knowledgeId}</span><p>聚合版本 {value.aggregateVersion}</p><button disabled={busy} onClick={()=>{navigate({resourceId:"",revisionId:"",digest:"",returnFocus:"list"});}}>返回筛选列表</button></header>
       {needsRecovery&&<p role="alert">RECOVERY_REQUIRED：跨存储操作尚未证明完成，不能声称可用或已清除。</p>}

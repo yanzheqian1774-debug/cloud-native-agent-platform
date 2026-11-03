@@ -83,11 +83,16 @@ test("keeps unsupported actions disabled and preserves real navigation", async (
 test("keeps all support pages reachable from the mobile navigation", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dashboard");
-  const navigation = page.getByRole("navigation", { name: "移动端产品导航" });
-  for (const [, heading] of pages) await expect(navigation.getByRole("link", { name: heading })).toBeVisible();
-  await navigation.getByRole("link", { name: "帮助中心" }).focus();
-  await expect(navigation.getByRole("link", { name: "帮助中心" })).toBeFocused();
-  expect(await navigation.getByRole("link", { name: "帮助中心" }).evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+  await page.locator(".px-mobile-menu > summary").click();
+  const navigation = page.getByRole("navigation", { name: "移动端全部产品导航" });
+  await navigation.locator("summary").filter({hasText:"管理与技术"}).click();
+  for (const [route] of pages) await expect(navigation.locator(`a[href="${route}"]`)).toBeVisible();
+  const help=navigation.getByRole("link", { name: "帮助中心" });
+  await help.focus();await expect(help).toBeFocused();
+  expect(await help.evaluate(element=>getComputedStyle(element).outlineStyle)).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading",{name:"帮助中心",exact:true})).toBeVisible();
+  await expect(page.locator(".px-mobile-menu")).not.toHaveAttribute("open","");
 });
 
 test("keeps all nineteen primary surfaces responsive and restores heading focus", async ({ page }) => {
@@ -105,6 +110,7 @@ test("keeps all nineteen primary surfaces responsive and restores heading focus"
 
 for (const journey of journeys) test(`navigates the repeatable ${journey.launch} journey with browser history`, async ({ page }) => {
   await page.goto("/dashboard");
+  await page.locator(".px-demo-menu > summary").click();
   await page.getByRole("navigation", { name: "可重复演示路径" }).getByRole("link", { name: journey.launch, exact: true }).click();
   const rail = page.getByRole("navigation", { name: journey.name });
   for (let index = 0; index < journey.steps.length; index += 1) {
