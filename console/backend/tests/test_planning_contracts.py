@@ -111,3 +111,21 @@ def test_legacy_has_no_new_policy_fields():
     assert legacy.schema_version == "planning.v2"
     assert "policy" not in legacy.model_dump()
     assert "operation" not in legacy.tasks[0].model_dump()
+
+
+def test_employee_reference_and_report_multi_parent_kinds_remain_strict():
+    """Observed real-output failure must be repaired by generator, not coercion."""
+    from copy import deepcopy
+
+    value = modern(("READ_DATA", "SUMMARIZE", "RENDER_REPORT"))
+    value["tasks"][-1]["depends_on"] = ["node-0", "node-1"]
+    value["tasks"][-1]["input_kinds"] = ["SOURCE_SNAPSHOT", "SUMMARY"]
+    assert FlexiblePlanSemantics.model_validate(value)
+    wrong_employee = deepcopy(value)
+    wrong_employee["tasks"][0]["employee_requirement_id"] = "undeclared-role-name"
+    with pytest.raises(ValidationError, match="PLAN_REFERENCE_INVALID"):
+        FlexiblePlanSemantics.model_validate(wrong_employee)
+    wrong_edge = deepcopy(value)
+    wrong_edge["tasks"][-1]["input_kinds"] = ["SUMMARY"]
+    with pytest.raises(ValidationError, match="PLANNING_OPERATION_INPUT_CONFLICT"):
+        FlexiblePlanSemantics.model_validate(wrong_edge)

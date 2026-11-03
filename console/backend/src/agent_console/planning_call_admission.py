@@ -183,6 +183,15 @@ class PlanningCallAdmission(ContextCallAdmission):
                 "ready": ready,
                 "maximum_new_calls": 1,
                 "cumulative_call_cap": row["record"].get("cumulative_call_cap", 20),
+                **(
+                    {
+                        "total_cost_cap_microusd": row["record"][
+                            "total_cost_cap_microusd"
+                        ]
+                    }
+                    if row["record"].get("development_revision")
+                    else {}
+                ),
             },
         }
 
@@ -328,6 +337,20 @@ def effective_cap(c, budget, invocation, original):
     if allowance is None or original != 8:
         raise AuthorityError("PLANNING_EXACT_ADMISSION_REQUIRED")
     return allowance["cumulative_call_cap"]
+
+
+def effective_cost_cap(c, budget, invocation, original):
+    row = guarded_row(c, budget, invocation)
+    if row is None:
+        return original
+    from .development_planning_recovery import limits
+
+    development = limits(c, row, budget, 8)
+    if development is None:
+        return original
+    if original != 10000000:
+        raise AuthorityError("DEVELOPMENT_PLANNING_REVISION_MISMATCH")
+    return development[1]
 
 
 class BoundPlanningAdmission:

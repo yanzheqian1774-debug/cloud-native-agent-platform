@@ -170,6 +170,11 @@ class PostgresAuthorityRepository:
                 "bounded-task-authorization-v1",
             ),
             (40, "0040_task_planning_successor.sql", "bounded-task-authorization-v1"),
+            (
+                41,
+                "0041_development_planning_recovery.sql",
+                "bounded-task-authorization-v1",
+            ),
         ):
             path = self.migration_path.parent / name
             if not path.is_file():

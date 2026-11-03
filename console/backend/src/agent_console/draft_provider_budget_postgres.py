@@ -248,15 +248,17 @@ class PostgresProviderCallBudget:
                     "AND r.ledger_id=%s",
                     scope,
                 ).fetchone()
-                from .planning_call_admission import effective_cap
+                from .planning_call_admission import effective_cap, effective_cost_cap
 
                 call_cap = effective_cap(
                     connection, self, invocation, policy["call_cap"]
                 )
+                cost_cap = effective_cost_cap(
+                    connection, self, invocation, policy["total_cost_cap_microusd"]
+                )
                 if not continuous_development and (
                     totals["calls"] + 1 > call_cap
-                    or totals["cost"] + quote.worst_case_cost_microusd
-                    > policy["total_cost_cap_microusd"]
+                    or totals["cost"] + quote.worst_case_cost_microusd > cost_cap
                 ):
                     raise DraftAssistanceError("PROVIDER_BUDGET_EXHAUSTED")
                 connection.execute(

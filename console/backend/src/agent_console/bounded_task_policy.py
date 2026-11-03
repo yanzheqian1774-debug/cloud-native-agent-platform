@@ -44,6 +44,15 @@ class ConfigurationRevision(Immutable):
     total_cost_cap_microusd: Literal[10000000] = 10000000
 
 
+class DevelopmentPlanningRevision(Immutable):
+    """D8 is a new signed revision, never a widening of ConfigurationRevision."""
+
+    revision_id: Identity
+    cumulative_call_cap: Literal[100] = 100
+    total_cost_cap_microusd: Literal[50000000] = 50000000
+    recovery_observation_ids: tuple[Identity, ...] = Field(min_length=1, max_length=16)
+
+
 class TaskAuthorizationRequest(Immutable):
     task_id: Literal["S5-V023-IMPL-324"] = "S5-V023-IMPL-324"
     purpose: Literal["SAME_CASE_DELIVERY", "ISOLATED_NATIVE_VALIDATION"]
@@ -55,9 +64,18 @@ class TaskAuthorizationRequest(Immutable):
     derived_permissions: tuple[DerivedPermission, ...] = ()
     configuration: ConfigurationRevision | None = None
     recovery_invocation_id: Identity | None = None
+    development_revision: DevelopmentPlanningRevision | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def bounded_purpose(self):
+        if self.development_revision is not None and (
+            self.purpose != "SAME_CASE_DELIVERY"
+            or self.configuration is None
+            or self.recovery_invocation_id is None
+        ):
+            raise ValueError("DEVELOPMENT_PLANNING_REQUIRES_EXACT_RECOVERY")
         if self.purpose == "ISOLATED_NATIVE_VALIDATION" and (
             self.configuration is not None or self.recovery_invocation_id is not None
         ):

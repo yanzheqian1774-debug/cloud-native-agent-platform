@@ -135,6 +135,11 @@ class PlanningResponsesProvider:
 
     def _suggest_once(self, request, profile, business_context):
         invocation_id = business_context["planning_context"]["invocation_id"]
+        policy_echo = (
+            {"planning_policy": request.policy.model_dump(mode="json")}
+            if request.policy is not None
+            else {}
+        )
         document = {
             "model": self.configuration.native_model_id,
             "instructions": ZH_INSTRUCTIONS
@@ -150,6 +155,7 @@ class PlanningResponsesProvider:
                                 {
                                     "target": request.target.model_dump(mode="json"),
                                     "answers": request.answers,
+                                    **policy_echo,
                                     "context": business_context,
                                 }
                             ).decode(),
@@ -310,6 +316,12 @@ class PlanningResponsesProvider:
                 and parsed.semantics.policy != request.policy
             ):
                 validation = diagnostic(text, "POLICY_MISMATCH")
+                validation["mismatched_fields"] = [
+                    name
+                    for name in type(request.policy).model_fields
+                    if getattr(parsed.semantics.policy, name)
+                    != getattr(request.policy, name)
+                ]
         if validation is not None:
             return {
                 "text": None,

@@ -80,3 +80,8 @@ def test_exact_target_and_policy_mismatch_are_distinct(formal, monkeypatch, phas
     ]
     assert receipt["validation_diagnostic"]["phase"] == phase
     assert receipt["validation_diagnostic"]["issues"] == []
+    if phase == "POLICY_MISMATCH":
+        assert receipt["validation_diagnostic"]["mismatched_fields"] == [
+            "mode",
+            "template",
+        ]

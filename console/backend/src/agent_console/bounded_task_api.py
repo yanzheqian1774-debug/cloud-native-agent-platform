@@ -6,6 +6,12 @@ from .bounded_task_policy import TaskAuthorizationRequest, TaskSignature
 
 
 def install_bounded_task_routes(service):
+    from .development_planning_recovery import (
+        RecoveryObservation,
+        observe,
+        read_observation,
+    )
+
     def install(app, authenticate, require_csrf, policy):
         prefix = "/api/workbench/v1/authorization/tasks"
 
@@ -14,6 +20,17 @@ def install_bounded_task_routes(service):
             session, context = authenticate(request)
             require_csrf(request, session)
             return service.prepare(context, spec)
+
+        @app.post(prefix + "/recovery-observations")
+        def observe_recovery(request: Request, spec: RecoveryObservation):
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            return observe(service, context, spec)
+
+        @app.get(prefix + "/recovery-observations/{identity}")
+        def read_recovery(request: Request, identity: str):
+            _, context = authenticate(request)
+            return read_observation(service, context, identity)
 
         @app.get(prefix + "/{identity}")
         def read(request: Request, identity: str):

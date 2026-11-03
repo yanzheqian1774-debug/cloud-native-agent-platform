@@ -34,6 +34,10 @@ def prepare(service, c, context, request, record):
     require_configuration(
         spec.configuration, service.actual_configuration, cleanup_seconds=2
     )
+    if spec.development_revision is not None:
+        from .development_planning_recovery import prepare as prepare_development
+
+        return prepare_development(service, c, context, request, record, row, spec)
     scope = (row["tenant_id"], row["security_domain"])
     lock(c, "d7-planning:" + spec.configuration.ledger_id)
     prior = c.execute(
@@ -144,6 +148,11 @@ def require_task(c, row, actual):
 def cap(c, row, budget, original):
     if not row["record"].get("task_request_id"):
         return None
+    from .development_planning_recovery import limits
+
+    development = limits(c, row, budget, original)
+    if development is not None:
+        return development[0]
     require_task(c, row, getattr(budget, "task_actual_configuration", {}))
     extension = c.execute(
         "SELECT cumulative_call_cap FROM authorization_admin.task_planning_successors "

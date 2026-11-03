@@ -64,3 +64,62 @@ test('324 expired session preserves exact return object and re-entry never repla
  await expect(page.locator('#problem-composer')).toHaveValue('');
  expect(writes).toBe(0);
 });
+
+for(const mismatch of ['identity','revision','digest','version'])test(`324 resource batch rejects ${mismatch} and never publishes`,async({page})=>{
+ let writes=0;
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-resources/'))return route.fulfill({json:{result:{kind:'skill',identity:mismatch==='identity'?'other':'fixture-skill',name:'测试技能',aggregateVersion:mismatch==='version'?0:1,revision:{revisionId:mismatch==='revision'?'other':'fixture-revision',digest:mismatch==='digest'?'invalid':'a'.repeat(64),state:'DRAFT',content:{}},publishedRevisionId:null}}});
+  const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?${new URLSearchParams({problem:problem.business_problem_id,resource:'skill|fixture-skill|fixture-revision'})}`);
+ const panel=page.getByRole('region',{name:'本次执行必要资源审核'});
+ await expect(panel.getByRole('alert')).toContainText(mismatch==='identity'||mismatch==='revision'?'RESOURCE_REFERENCE_MISMATCH':'RESOURCE_RECORD_INVALID');
+ await expect(panel.getByRole('button',{name:/审核并发布待处理/})).toHaveCount(0);expect(writes).toBe(0);
+});
+
+test('324 failed resource refresh withdraws stale publication controls',async({page})=>{
+ let unavailable=false,writes=0;
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-resources/'))return route.fulfill(unavailable?{status:503,json:{reasonCode:'STORAGE_UNAVAILABLE'}}:{json:{result:{kind:'skill',identity:'fixture-skill',name:'测试技能',aggregateVersion:1,revision:{revisionId:'fixture-revision',digest:'a'.repeat(64),state:'DRAFT',content:{}},publishedRevisionId:null}}});
+  const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?${new URLSearchParams({problem:problem.business_problem_id,resource:'skill|fixture-skill|fixture-revision'})}`);const panel=page.getByRole('region',{name:'本次执行必要资源审核'});
+ await expect(panel.getByRole('button',{name:'审核并发布待处理的 1 项资源'})).toBeVisible();
+ await panel.getByRole('textbox',{name:'审核依据与限制'}).fill('测试');await panel.getByRole('checkbox').check();unavailable=true;
+ await panel.getByRole('button',{name:'刷新资源状态'}).click();await expect(panel.getByRole('alert')).toBeVisible();await expect(panel.getByRole('button',{name:/审核并发布待处理/})).toHaveCount(0);
+ unavailable=false;await panel.getByRole('button',{name:'刷新资源状态'}).click();await expect(panel.getByRole('checkbox')).not.toBeChecked();expect(writes).toBe(0);
+});
+
+test('324 changed resource version requires a new review without publishing',async({page})=>{
+ let version=1,writes=0;
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-resources/'))return route.fulfill({json:{result:{kind:'skill',identity:'fixture-skill',name:'测试技能',aggregateVersion:version,revision:{revisionId:'fixture-revision',digest:'a'.repeat(64),state:'DRAFT',content:{}},publishedRevisionId:null}}});
+  const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?${new URLSearchParams({problem:problem.business_problem_id,resource:'skill|fixture-skill|fixture-revision'})}`);const panel=page.getByRole('region',{name:'本次执行必要资源审核'});
+ await panel.getByRole('textbox',{name:'审核依据与限制'}).fill('测试旧版本');await panel.getByRole('checkbox').check();version=2;
+ await panel.getByRole('button',{name:'审核并发布待处理的 1 项资源'}).click();await expect(panel.getByRole('alert')).toContainText('RESOURCE_REVIEW_CHANGED_READ_AGAIN');await expect(panel.getByRole('checkbox')).not.toBeChecked();expect(writes).toBe(0);
+});
+
+test('324 new composer input during publication stops remaining resource writes',async({page})=>{
+ let writes=0;let release!:()=>void;let started!:()=>void;
+ const firstStarted=new Promise<void>(r=>{started=r}),gate=new Promise<void>(r=>{release=r});
+ const resources=['skill','runtime'].map(kind=>({kind,identity:`fixture-${kind}`,name:'测试资源',aggregateVersion:1,revision:{revisionId:'fixture-revision',digest:'a'.repeat(64),state:'DRAFT',content:{}},publishedRevisionId:null as string|null}));
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-resources/')){const r=resources.find(r=>path.includes('/'+r.kind+'/'))!;if(route.request().method()==='POST'){writes++;started();await gate;r.publishedRevisionId=r.revision.revisionId;r.revision.state='PUBLISHED';return route.fulfill({json:{result:{state:'PUBLISHED'}}})}return route.fulfill({json:{result:r}})}
+  const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ const q=new URLSearchParams({problem:problem.business_problem_id});resources.forEach(r=>q.append('resource',`${r.kind}|${r.identity}|fixture-revision`));await page.goto('/work?'+q);
+ const panel=page.getByRole('region',{name:'本次执行必要资源审核'});await panel.getByRole('textbox',{name:'审核依据与限制'}).fill('测试批量发布');await panel.getByRole('checkbox').check();await panel.getByRole('button',{name:'审核并发布待处理的 2 项资源'}).click();await firstStarted;
+ await page.locator('#problem-composer').fill('新的业务补充，不得继续原批次。');release();await expect(panel.getByRole('alert')).toContainText('RESOURCE_REVIEW_CONTEXT_CHANGED');await expect(panel.getByRole('button',{name:/审核并发布待处理/})).toHaveCount(0);await expect(page.locator('#problem-composer')).toHaveValue('新的业务补充，不得继续原批次。');
+ expect(writes).toBe(1);await page.locator('#problem-composer').fill('');await panel.getByRole('button',{name:'刷新资源状态'}).click();await expect(panel.getByRole('checkbox')).not.toBeChecked();expect(writes).toBe(1);
+});

@@ -92,6 +92,7 @@ class BoundedTaskAuthorization:
         for version, name in (
             (39, "0039_bounded_task_authorization.sql"),
             (40, "0040_task_planning_successor.sql"),
+            (41, "0041_development_planning_recovery.sql"),
         ):
             self._migrate(version, name)
 
@@ -176,16 +177,22 @@ class BoundedTaskAuthorization:
 
                 actual = getattr(self, "actual_configuration", {})
                 require_configuration(spec.configuration, actual, cleanup_seconds=2)
-                validate_recovery(
-                    c,
-                    spec,
-                    scope,
-                    {
-                        k: v
-                        for k, v in actual.items()
-                        if k not in {"connect_seconds", "read_seconds", "total_seconds"}
-                    },
-                )
+                if spec.development_revision is not None:
+                    from .development_planning_recovery import validate_followup
+
+                    validate_followup(c, spec, scope, context.principal_id)
+                else:
+                    validate_recovery(
+                        c,
+                        spec,
+                        scope,
+                        {
+                            k: v
+                            for k, v in actual.items()
+                            if k
+                            not in {"connect_seconds", "read_seconds", "total_seconds"}
+                        },
+                    )
             self._validate_targets(c, context, spec)
             key = (*scope, context.principal_id, spec.idempotency_key)
             task_lock(c, digest(key))
