@@ -38,7 +38,9 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       const next = new URLSearchParams(params); next.set("request", body.idempotency_key); next.delete("invocation");
       setUnresolved(true); setParams(next, {replace: true});
       const value = await planningRequest<Invocation>("planning-v2/invocations", body);
-      setResult(value); setUnresolved(false); setAnswer("");
+      setResult(value); setUnresolved(false);
+      // Clear only the submitted draft. A late response must preserve newer input.
+      setAnswer(current => current === answer ? "" : current);
       if (!value.admission) {next.delete("request"); next.set("invocation", value.invocation.target.invocation_id); setParams(next, {replace: true});}
       if (value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
     } catch(e) {setError(e instanceof Error ? e.message : "请求结果未确认");}
