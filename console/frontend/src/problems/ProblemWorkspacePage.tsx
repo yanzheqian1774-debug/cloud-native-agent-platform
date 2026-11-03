@@ -295,7 +295,7 @@ export function ProblemWorkspacePage(){
           ["售后质量","哪些车型的重复维修增加了？请按故障类型核对。"],
           ["费用分析","分析本季度费用变化，单独列出缺少分摊依据的项目。"],
         ].map(([label,prompt])=><button key={label} type="button" disabled={busy||Boolean(composer.trim())} onClick={()=>{changeComposer(prompt);document.getElementById("problem-composer")?.focus()}}>{label}<span aria-hidden="true"> ↗</span></button>)}</div>
-        <small>选择示例后可编辑，点击发送才会提交。{assistanceEnabled?"":"当前为手工草稿模式。"}</small></section></SystemMessage>}
+        <small>选择示例后可编辑，点击发送才会提交。{assistanceEnabled?"确认前不会创建问题，也不会启动任务或准备资源。":"当前为手工草稿模式。本页不会自动调用数字员工、Agent、Skill、知识库、附件或模型。"}</small></section></SystemMessage>}
       {visibleAssistance?.result.submittedAt&&<SystemMessage><p>本轮消息提交时间：<time dateTime={visibleAssistance.result.submittedAt}>{formatTime(visibleAssistance.result.submittedAt)}</time>（服务端记录）</p></SystemMessage>}
       {(turn?.phase!=="CREATED")&&(turn||visibleAssistance)&&<UserMessage>{turn?.originalText??visibleAssistance?.originalText}</UserMessage>}
       {supplements.map(item=><Fragment key={item.id}><UserMessage>{item.text}</UserMessage>{!item.assisted&&<SystemMessage><section className="px-inline-card px-supplement-card" role="status"><span className="px-eyebrow">{item.assisted?"AI 补问回复":"页内补充"}</span><h2>{item.assisted?"已形成新的辅助轮次":"已保留，尚未采用"}</h2><p>{item.assisted?"正文只在本次受控请求和当前页面内存中使用；服务端仅保留恢复与审计所需的非正文记录。":"这段内容仅保留在当前页面，尚未修改正式问题，也不会自动发送给管理员。刷新、离开或切换可信上下文可能丢失。"}</p>{selected&&selected.sets.length===0&&(!criterionTurn||criterionTurn.phase==="CANCELLED"||criterionTurn.phase==="SAVED")&&<button type="button" onClick={()=>startCriterion(item.text)}>明确采用为成功标准</button>}</section></SystemMessage>}</Fragment>)}
