@@ -16,3 +16,19 @@
 .delivery-artifact>h4{margin:20px 0 8px}
 .delivery-artifact p,.delivery-artifact li{line-height:1.7;overflow-wrap:anywhere}
 .delivery-artifact code{overflow-wrap:anywhere}
+
+.prepared-complete .prepared-columns{grid-template-columns:minmax(0,1fr)}
+.prepared-complete .prepared-milestones,.prepared-complete>.prepared-progress{display:none}
+.delivery-result-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.delivery-result-kpis>div{padding:14px 12px;border-radius:7px;background:#f1f7ff;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.delivery-result-kpis strong{font-size:24px;font-weight:500;color:#0866ff}
+.delivery-result-kpis span{font-size:12px}
+.px-execution-context{display:grid;gap:14px}
+.px-execution-context>section{padding:16px;border:1px solid #d8e5fb;border-radius:9px;background:#fff}
+.px-execution-context h3{font-size:17px;line-height:1.5;margin:8px 0}
+.px-execution-context p{font-size:13px;line-height:1.7;color:#536783;overflow-wrap:anywhere}
+.execution-source-context{margin-top:16px;font-size:13px}
+@container(max-width:500px){.delivery-result-kpis{gap:6px}.delivery-result-kpis>div{padding:10px 8px;gap:4px;display:grid}.delivery-result-kpis strong{font-size:20px}}
+
+.delivery-result-kpis strong{color:#0876ff}
+.prepared-criterion-mark{display:inline-block;width:20px;height:20px;vertical-align:middle;margin-right:6px;flex-shrink:0}

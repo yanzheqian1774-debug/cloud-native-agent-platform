@@ -5,3 +5,5 @@ export async function preparedRequest<T>(digest:string,action?:string,csrf?:stri
  const response=await fetch(`/api/workbench/v1/prepared-executions/${encodeURIComponent(digest)}${action?`/${action}`:""}`,{method:action?"POST":"GET",credentials:"same-origin",headers:action?{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":csrf??""}:{Accept:"application/json"},...(action?{body:JSON.stringify(payload)}:{})});
  const body=await response.json().catch(()=>null);if(response.status===401)window.dispatchEvent(new Event("workbench-session-expired"));if(!response.ok)throw new WorkbenchRequestError(body?.reasonCode??"WORKBENCH_UNAVAILABLE",response.status,body?.requestId);return body.result as T;
 }
+
+export type ExecutionPhaseProjection={digest:string;problemId:string;state:string;taskCount?:number;completedCount?:number;artifactCount?:number;criterionCount?:number;satisfiedCount?:number;planVersion?:number;confirmationId?:string|null};

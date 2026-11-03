@@ -63,3 +63,9 @@ state, withdraw it on failed read, and render criterion descriptions from the
 existing applicability.description (Human rubric remains first choice). No new
 facts or acceptances are inferred. Evaluation names use the owner-supplied check;
 unknown checks retain numbered standards and exact details.
+
+Result-page composition follows P06.3/P06.4: show persisted report/KPIs in the main
+column, collapse completed execution detail, and use the side summary for exact
+run/criteria/decision status with original problem context still expandable.
+Every displayed count comes from the accepted execution GET or authorized report;
+failed reads withdraw the projection. No new commands, stores or inferred success.

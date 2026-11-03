@@ -72,3 +72,6 @@
 .planning-recovery-card dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .planning-recovery-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 @media(max-width:700px){.planning-recovery-card dl{grid-template-columns:1fr}.planning-recovery-card dt{font-weight:600}}
+
+/* V2.59 P04/P06: completed stages use the prototype success color. */
+.journey-steps li.is-complete>span{background:#07966e;box-shadow:0 0 0 4px #e6f8ee}
