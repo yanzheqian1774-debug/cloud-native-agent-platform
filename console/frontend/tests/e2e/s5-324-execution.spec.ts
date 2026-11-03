@@ -20,7 +20,7 @@ test('324 real-data panel separates binding from admission and reload sends no m
  for(const scale of [1,1.25]){await page.setViewportSize({width:Math.floor(1536/scale),height:Math.floor(1024/scale)});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();const send=page.locator('.px-composer button[type="submit"]');await expect(send).toBeInViewport()}
  await page.reload();await expect(panel).toBeAttached();expect(writes).toBe(0);
  state.executionStarted=true;state.admission.state='ADMITTED';state.progress={state:'SUCCEEDED',version:18,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))};state.outcome={outcomeId:'fixture-outcome',version:1,evaluationDigest:'e'.repeat(64),businessResolution:'UNDETERMINED',confirmationId:null,evaluation:{evaluationId:'fixture-evaluation',results:[{criterionRevisionId:'fixture-criterion',criterionDigest:'f'.repeat(64),result:'UNKNOWN',reason:'HUMAN_REVIEW_REQUIRED',artifactIds:['fixture-artifact']}]}};state.artifacts=[{artifact_id:'fixture-artifact',task_id:'t6-report',digest:'1'.repeat(64),bytes:500,created_at:'2026-09-21T01:00:00Z',contentAccess:'AUTHORIZED',content:'明确标注的合成页面产物，不是实际执行证据。'.repeat(20)}];
- await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel).toContainText('业务结果：尚无法确定');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeDisabled();await panel.getByRole('textbox',{name:'验收意见'}).fill('视图测试意见');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeEnabled();expect(writes).toBe(0);await panel.getByRole('heading',{name:'标准评价与人工决定'}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('H06-undetermined-fixture.png')});
+ await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(page.getByRole('heading',{name:'成果已交付',exact:true})).toBeVisible();await expect(page.getByRole('list',{name:'当前阶段'}).locator('[aria-current=step]')).toContainText('验收结果');await expect(panel).toContainText('业务结果：尚无法确定');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeDisabled();await panel.getByRole('textbox',{name:'验收意见'}).fill('视图测试意见');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeEnabled();expect(writes).toBe(0);await panel.getByRole('heading',{name:'标准评价与人工决定'}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('H06-undetermined-fixture.png')});
 });
 
 test('324 resource review preserves partial publication and reload never repeats Human commands',async({page},info)=>{
@@ -143,7 +143,7 @@ test('324 authorized delivery report renders unit-separated quantities, anomalie
 });
 
 for(const mode of ['digest-mismatch','failed-refresh'])test(`324 execution ${mode} withdraws command controls and GET recovery never starts`,async({page})=>{
- let unavailable=false,writes=0;const state=view();
+ let unavailable=false,writes=0;const state=view();if(mode==='failed-refresh'){state.executionStarted=true;state.progress={state:'SUCCEEDED',version:18,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))}}
  await page.route('**/api/workbench/v1/**',async route=>{
   const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
   if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
@@ -152,6 +152,6 @@ for(const mode of ['digest-mismatch','failed-refresh'])test(`324 execution ${mod
  });
  await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});
  if(mode==='digest-mismatch'){await expect(panel.getByRole('alert')).toContainText('EXECUTION_DIGEST_MISMATCH')}
- else{await expect(panel.getByRole('button',{name:'启动本次只读执行'})).toBeAttached();unavailable=true;await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel.getByRole('alert')).toBeVisible()}
+ else{await expect(page.getByRole('heading',{name:'成果已交付',exact:true})).toBeVisible();unavailable=true;await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel.getByRole('alert')).toBeVisible();await expect(page.getByRole('heading',{name:'执行进度',exact:true})).toBeVisible()}
  await expect(panel.getByRole('button',{name:'启动本次只读执行'})).toHaveCount(0);expect(writes).toBe(0);await panel.getByRole('button',{name:'刷新正式状态'}).click();expect(writes).toBe(0);
 });

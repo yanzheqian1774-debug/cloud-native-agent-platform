@@ -55,3 +55,11 @@ Stage03 read recovery also withdraws stale execution actions after a failed GET
 and binds every displayed response to exact session/problem/digest. Wrong digest,
 problem switch and failed post-command readback must leave only explicit GET
 recovery; no command is replayed. This uses existing endpoints and immutable facts.
+
+Actual page review exposed stale stage framing: a succeeded Run still highlighted
+execution instead of result review, and deterministic criteria displayed repeated
+machine enums. Derive the page title/step only from accepted exact execution GET
+state, withdraw it on failed read, and render criterion descriptions from the
+existing applicability.description (Human rubric remains first choice). No new
+facts or acceptances are inferred. Evaluation names use the owner-supplied check;
+unknown checks retain numbered standards and exact details.
