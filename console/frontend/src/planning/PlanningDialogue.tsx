@@ -18,9 +18,14 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
   const [error, setError] = useState("");
   const [unresolved, setUnresolved] = useState(false);
   const flight = useRef(false);
+  const receivedInvocation = useRef<string | null>(null);
   const requestKey = params.get("request"), invocationId = params.get("invocation");
   useEffect(() => {
     let active = true;
+    // The POST already supplied this record. Resolving our own URL update would
+    // briefly disable the composer again just as the next answer is being typed.
+    if (invocationId && !requestKey && receivedInvocation.current === invocationId) return;
+    receivedInvocation.current = null;
     if (flight.current || (!requestKey && !invocationId)) return;
     setUnresolved(true);
     const path = requestKey ? `requests/${encodeURIComponent(requestKey)}` : `invocations/${encodeURIComponent(invocationId!)}`;
@@ -41,7 +46,14 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       setResult(value); setUnresolved(false);
       // Clear only the submitted draft. A late response must preserve newer input.
       setAnswer(current => current === answer ? "" : current);
-      if (!value.admission) {next.delete("request"); next.set("invocation", value.invocation.target.invocation_id); setParams(next, {replace: true});}
+      if (!value.admission) {
+        receivedInvocation.current =
+          value.result.technical_status === "SUCCEEDED" && value.result.kind === "NEEDS_CLARIFICATION"
+            ? value.invocation.target.invocation_id : null;
+        next.delete("request");
+        next.set("invocation", value.invocation.target.invocation_id);
+        setParams(next, {replace: true});
+      }
       if (value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
     } catch(e) {setError(e instanceof Error ? e.message : "请求结果未确认");}
     finally {flight.current = false; setBusy(false);}

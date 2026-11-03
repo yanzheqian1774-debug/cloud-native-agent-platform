@@ -190,7 +190,7 @@ test('planning task opens its resource requirement and returns to the same probl
 });
 
 test('V323 missing planning configuration is explicit and clarification retains answers',async({page})=>{
-  const requests:Record<string,unknown>[]=[];let missing=true;
+  const requests:Record<string,unknown>[]=[];const reads:string[]=[];let missing=true;
   const value=(id:string)=>({invocation:{target:{invocation_id:id},request:requests[Number(id.split(':').at(-1))-1]},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['请补充统计日期或口径']},facts_status:'RECORDED'});
   await page.route('**/api/workbench/v1/**',async route=>{
     const path=new URL(route.request().url()).pathname;
@@ -201,7 +201,11 @@ test('V323 missing planning configuration is explicit and clarification retains 
       if(missing)return route.fulfill({status:503,json:{reasonCode:'PLANNING_NOT_CONFIGURED'}});
       requests.push(route.request().postDataJSON());return route.fulfill({json:{result:value(`clarification:${requests.length}`)}});
     }
-    if(path.includes('/planning-v2/invocations/'))return route.fulfill({json:{result:value(decodeURIComponent(path.split('/').at(-1)!))}});
+    if(path.includes('/planning-v2/invocations/')){
+      const id=decodeURIComponent(path.split('/').at(-1)!);
+      reads.push(id);
+      return route.fulfill({json:{result:value(id)}});
+    }
     return route.fulfill({json:{result:{}}});
   });
   await page.goto('/work/plan?problem=test:323');
@@ -212,8 +216,12 @@ test('V323 missing planning configuration is explicit and clarification retains 
   await page.getByLabel('补充信息或提出方案修改').fill('2026-09-18');
   await page.getByRole('button',{name:'提交规划补充'}).click();
   await expect(page.getByLabel('补充信息或提出方案修改')).toHaveValue('');
+  await expect(page).toHaveURL(/invocation=clarification%3A2/);
+  expect(reads).toEqual([]);
   await page.reload();
   await expect(page.getByText('2026-09-18',{exact:true})).toBeVisible();
+  expect(reads).toEqual(['clarification:2']);
+  expect(requests).toHaveLength(2);
   await page.getByLabel('补充信息或提出方案修改').fill('纠正：仅公司A，不含已取消订单');
   await page.getByRole('button',{name:'提交规划补充'}).click();
   await expect.poll(()=>requests.length).toBe(3);
