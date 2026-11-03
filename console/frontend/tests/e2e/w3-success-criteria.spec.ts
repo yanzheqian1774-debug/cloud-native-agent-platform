@@ -119,3 +119,48 @@ for(const mode of ["normal","denied","lost","stale"] as const){
     await page.screenshot({path:info.outputPath(`323-after-confirm-${mode}.png`),fullPage:true});
   });
 }
+
+for(const mode of ["normal","already-active","activation-denied","activation-unknown","set-denied","set-unknown","criterion-denied"] as const){
+ test(`save-and-plan composes existing durable steps and stops on ${mode}`,async({page},info)=>{
+  const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[],denyActivation:mode==="activation-denied",loseActivation:mode==="activation-unknown",denySet:mode==="set-denied",unknownSetOnce:mode==="set-unknown",denyCriterion:mode==="criterion-denied",lifecycle:mode==="already-active"?"ACTIVE":"DRAFT"};
+  await installRoutes(page,state);const planningWrites:string[]=[];
+  await page.route("**/api/workbench/v1/planning-v2/**",route=>{if(route.request().method()!=="GET")planningWrites.push(route.request().url());return route.fulfill({status:404,json:{reasonCode:"NOT_AVAILABLE_IN_SYNTHETIC_TEST"}})});
+  await page.goto("/work?problem=problem%3Aw3-1");const card=await draftCriterion(page,"隔离合成报告须有明确来源与人工验收依据。");
+  await page.setViewportSize({width:1536,height:1100});await page.screenshot({path:info.outputPath(`P04-save-and-plan-${mode}-before-mock.png`)});
+  await card.getByRole("button",{name:"保存并规划",exact:true}).evaluate((button:HTMLButtonElement)=>{button.click();button.click()});
+  if(mode==="normal"||mode==="already-active"){
+   await expect(page).toHaveURL(/\/work\/plan\?problem=problem%3Aw3-1$/);
+   expect(state.lifecycle).toBe("ACTIVE");expect(state.activationWrites??[]).toHaveLength(mode==="normal"?1:0);
+   await page.reload();expect(state.activationWrites??[]).toHaveLength(mode==="normal"?1:0);
+  }else{
+   await expect(page).toHaveURL(/\/work\?problem=problem%3Aw3-1$/);
+   if(mode==="set-denied"||mode==="set-unknown"||mode==="criterion-denied"){
+    await expect(card).toContainText(mode==="set-denied"?"关联未完成":mode==="set-unknown"?"结果未知":"标准未保存");expect(state.activationWrites??[]).toHaveLength(0);expect(state.sets).toHaveLength(0);
+   }else{
+    await expect(card).toContainText("已保存并完成正式关联");await expect(page.getByText("标准已保存并关联；规划接续尚未确认。",{exact:false})).toBeVisible();expect(state.activationWrites).toHaveLength(1);expect(state.sets).toHaveLength(1);
+    if(mode==="activation-unknown"){
+     await page.getByLabel("问题与完成标准确认").getByRole("button",{name:"刷新确认状态",exact:true}).click();
+     await expect(page.getByRole("link",{name:"制定建议计划",exact:true})).toBeVisible();expect(state.activationWrites).toHaveLength(1);
+    }
+   }
+  }
+  expect(state.criterionWrites).toHaveLength(1);expect(state.setWrites).toHaveLength(mode==="criterion-denied"?0:1);expect(planningWrites).toEqual([]);
+  await page.screenshot({path:info.outputPath(`P04-save-and-plan-${mode}-after-mock.png`)});
+ });
+}
+
+test("save-and-plan retains newer composer input and pauses continuation",async({page})=>{
+ const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[],holdSet:true};await installRoutes(page,state);await page.goto("/work?problem=problem%3Aw3-1");const card=await draftCriterion(page,"负责人核验隔离合成报告。");
+ await card.getByRole("button",{name:"保存并规划",exact:true}).click();await expect.poll(()=>state.setWrites.length).toBe(1);
+ const composer=page.getByRole("textbox",{name:"补充或纠正正式目标",exact:true});await composer.fill("新的补充尚未采用，保存完成也应保留。");state.continueSet?.();
+ await expect(card).toContainText("已保存并完成正式关联");await expect(composer).toHaveValue("新的补充尚未采用，保存完成也应保留。");expect(state.activationWrites??[]).toHaveLength(0);await expect(page).toHaveURL(/\/work\?problem=problem%3Aw3-1$/);
+});
+
+test("save-and-plan action remains reachable at native, zoom-equivalent and mobile sizes",async({page},info)=>{
+ const state:State={aggregateVersion:1,criteria:[],sets:[],criterionWrites:[],setWrites:[]};await installRoutes(page,state);await page.goto("/work?problem=problem%3Aw3-1");const card=await draftCriterion(page,"核对合成资料、原问题和完成标准后进入规划。");
+ for(const size of [{width:1536,height:1100},{width:1229,height:880},{width:390,height:844}]){
+  await page.setViewportSize(size);const action=card.getByRole("button",{name:"保存并规划",exact:true});await action.scrollIntoViewIfNeeded();await action.focus();await expect(action).toBeFocused();await expect(action).toBeInViewport();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath(`P04-save-and-plan-mock-${size.width}.png`)});
+ }
+ expect(state.criterionWrites).toEqual([]);expect(state.activationWrites??[]).toEqual([]);
+});

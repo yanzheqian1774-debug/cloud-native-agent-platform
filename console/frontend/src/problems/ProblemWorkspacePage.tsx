@@ -1,10 +1,11 @@
+import {enterSavedPlanningTarget} from "./enterSavedPlanningTarget";
 import {PreparedResourceReviewPanel} from "./PreparedResourceReviewPanel";
 import {PreparedExecutionPanel} from "./PreparedExecutionPanel";
 import {ProblemPlanningGate} from "./ProblemPlanningGate";
 import {JourneySteps} from "../journey/JourneySteps";
 import {formatTime} from "../journey/formatTime";
 import {Fragment,useCallback,useEffect,useLayoutEffect,useRef,useState} from "react";
-import {useSearchParams} from "react-router-dom";
+import {useNavigate,useSearchParams} from "react-router-dom";
 import {
   WorkbenchRequestError,beginDraftAssistance,cancelDraftAssistance,createBusinessProblem,inspectGrantRequest,linkDraftAssistanceProblem,listBusinessProblems,newIdempotencyKey,observeDraftAssistance,rejectDraftAssistance,resubmitDraftAssistance,
   readDraftAssistance,readBusinessProblem,readCriteriaSets,readProblemCriteria,readWorkbenchSession,reviseBusinessProblem,
@@ -45,7 +46,8 @@ const uncertain=(error:unknown)=>!(error instanceof WorkbenchRequestError)||erro
 
 export function ProblemWorkspacePage(){
   const assistanceEnabled=import.meta.env.VITE_PROBLEM_DRAFT_ASSISTANCE==="enabled";
-  const [params,setParams]=useSearchParams();
+  const [params,setParams]=useSearchParams(),navigate=useNavigate();
+  const continuationInputEpoch=useRef(0);
   const [session,setSession]=useState<WorkbenchSession|null>(null),[problems,setProblems]=useState<BusinessProblemRevision[]>([]),[workspace,setWorkspace]=useState<Workspace|null>(null);
   const [createdRevision,setCreatedRevision]=useState<BusinessProblemRevision|null>(null),[authorization,setAuthorization]=useState<AuthorizationState>({});
   const [recordDraft,setRecordDraft]=useState<RecordDraft>(EMPTY_RECORD),[recordSaved,setRecordSaved]=useState<RecordDraft>(EMPTY_RECORD),[recordEditing,setRecordEditing]=useState(false);
@@ -90,6 +92,7 @@ export function ProblemWorkspacePage(){
   },[session,setParams]);
 
   function changeComposer(value:string){
+    continuationInputEpoch.current+=1;
     inputValue.current=value;
     if(assistanceEnabled&&!selectedId)advanceRevision();
     setComposer(value);
@@ -241,8 +244,10 @@ export function ProblemWorkspacePage(){
     if(!criteriaAuthorization?.request||busy)return;const token=epoch.current;setBusy(true);setFailure(null);let resume=false;
     try{const request=await inspectGrantRequest(criteriaAuthorization.request.requestId);if(token!==epoch.current)return;setCriteriaAuthorization({...criteriaAuthorization,request});if(request.state==="APPROVED"){resume=true;setBusy(false);if(criteriaAuthorization.stage==="WORKSPACE"&&selectedId){await loadWorkspace(selectedId);setCriteriaAuthorization(null)}else await saveCriterion(true)}}catch(error){if(token===epoch.current)setFailure({error,operation:"刷新成功标准权限"})}finally{if(token===epoch.current&&!resume)setBusy(false)}
   }
-  async function saveCriterion(recover=false){
+  async function saveCriterion(recover=false,enterPlanning=false){
     if(!session||!selected||!criterionTurn||criterionTurn.draft.kind!=="HUMAN_EVALUATED"||mutationFlight.current)return;
+    if(enterPlanning&&(recordDirty||recordEditing||draftDirty||supplementDirty||Boolean(pendingProblemLink)))return;
+    const inputEpoch=continuationInputEpoch.current;
     const token=epoch.current,currentSession=sessionKey(session),current=selected.detail.revisions.find(item=>item.revision_id===selected.detail.problem.current_revision_id)??latest(selected.detail.revisions);if(!current||criterionTurn.problemId!==selected.detail.problem.business_problem_id)return;
     let pending=criterionTurn.pending;if(!recover){
       if(criterionTurn.problemRevisionId!==current.revision_id){setCriterionTurn({...criterionTurn,phase:"CONFLICT"});setFailure({error:new WorkbenchRequestError("BUSINESS_PROBLEM_CONFLICT",409),operation:"保存成功标准",mutation:true});return}
@@ -256,8 +261,17 @@ export function ProblemWorkspacePage(){
       const members=criterionTurn.baseSet?[...criterionTurn.baseSet.orderedCriterionRevisionIds]:[];
       if(criterionTurn.source){const index=members.indexOf(criterionTurn.source.revisionId);if(index<0)throw new WorkbenchRequestError("CRITERIA_SET_PREDECESSOR_MISMATCH",409);members[index]=criterionRevisionId}else members.push(criterionRevisionId);
       const setPayload=pending.setPayload??{problemRevisionId:pending.problemRevisionId,...(criterionTurn.baseSet?{predecessorSetRevisionId:criterionTurn.baseSet.setRevisionId}:{}),orderedCriterionRevisionIds:members,expectedVersion:pending.expectedProblemVersion};pending={...pending,setPayload};setCriterionTurn(value=>value?{...value,phase:"SAVING_SET",pending}:value);
-      try{await writeCriteriaSet(session.csrfToken,criterionTurn.problemId,{...setPayload,idempotencyKey:pending.setKey})}catch(error){if(token===epoch.current){const phase=error instanceof WorkbenchRequestError&&error.status===409?"CONFLICT":uncertain(error)?"UNKNOWN_SET":"SET_FAILED";setCriterionTurn(value=>value?{...value,phase,pending}:value);if(!(error instanceof WorkbenchRequestError&&error.status===403))setCriteriaAuthorization(null);setFailure({error,operation:"保存成功标准",mutation:true})}return}
-      if(token!==epoch.current||sessionKey(sessionRef.current??session)!==currentSession)return;setCriteriaAuthorization(null);setCriterionTurn(value=>value?{...value,phase:"SAVED",pending}:value);try{await loadWorkspace(criterionTurn.problemId)}catch(error){if(token===epoch.current)setFailure({error,operation:"恢复工作区"})}
+      let savedSet:CriteriaSetRevision;
+      try{const saved=await writeCriteriaSet(session.csrfToken,criterionTurn.problemId,{...setPayload,idempotencyKey:pending.setKey});savedSet=saved.revision}catch(error){if(token===epoch.current){const phase=error instanceof WorkbenchRequestError&&error.status===409?"CONFLICT":uncertain(error)?"UNKNOWN_SET":"SET_FAILED";setCriterionTurn(value=>value?{...value,phase,pending}:value);if(!(error instanceof WorkbenchRequestError&&error.status===403))setCriteriaAuthorization(null);setFailure({error,operation:"保存成功标准",mutation:true})}return}
+      if(token!==epoch.current||sessionKey(sessionRef.current??session)!==currentSession)return;setCriteriaAuthorization(null);setCriterionTurn(value=>value?{...value,phase:"SAVED",pending}:value);
+      if(enterPlanning){
+        const isCurrent=()=>token===epoch.current&&sessionKey(sessionRef.current??session)===currentSession&&continuationInputEpoch.current===inputEpoch;
+        if(!isCurrent()){setContextNotice("标准已保存并关联；新的输入仍保留，规划接续已暂停。请先核对新输入。");return}
+        try{
+          const destination=await enterSavedPlanningTarget({problemId:criterionTurn.problemId,problemRevisionId:pending.problemRevisionId,savedSet,csrfToken:session.csrfToken,idempotencyKey:operationKey("save-and-enter-planning",{problem:criterionTurn.problemId,set:savedSet.set_revision_id}),isCurrent});
+          if(isCurrent()){completeOperation("save-and-enter-planning");navigate(destination)}
+        }catch(error){if(token===epoch.current){setFailure({error,operation:"确认问题与完成标准",mutation:true});setContextNotice("标准已保存并关联；规划接续尚未确认。请读取原状态，不会自动重发或重建标准。")}}
+      }else{try{await loadWorkspace(criterionTurn.problemId)}catch(error){if(token===epoch.current)setFailure({error,operation:"恢复工作区"})}}
     }finally{mutationFlight.current=false;setBusy(false)}
   }
   async function restartCriterionAfterConflict(){if(!selectedId||!criterionTurn)return;const text=criterionTurn.draft.text;setBusy(true);setFailure(null);setCriteriaAuthorization(null);try{await loadWorkspace(selectedId);setCriterionTurn(null);setComposer(text);setComposerTarget("SUPPLEMENT")}catch(error){setFailure({error,operation:"恢复工作区"})}finally{setBusy(false)}}
@@ -307,7 +321,7 @@ export function ProblemWorkspacePage(){
       {selected&&<SystemMessage><FormalProblemCard detail={selected.detail} draft={recordDraft} editing={recordEditing} composerEditing={composerTarget==="FORMAL"} busy={busy} dirty={recordDirty} titleError={titleError} descriptionError={descriptionError} onChange={setRecordDraft} onEdit={startFormalEdit} onEditWithComposer={startFormalComposerEdit} onCancel={cancelFormalEdit} onSave={()=>void saveProblem()}/>{failure?.operation==="保存业务问题"&&<WorkbenchErrorNotice {...failure} onRetry={()=>void saveProblem()} retryLabel="重新提交正式修订"/>}</SystemMessage>}
       {selected&&selected.criteriaReadable&&selected.sets.length>0&&<SystemMessage><SavedCriteriaHistory sets={selected.sets} criteria={selected.criteria} busy={busy||Boolean(criterionTurn&&!["DRAFT","EDITING","CANCELLED","SAVED"].includes(criterionTurn.phase))} pendingText={composerTarget==="SUPPLEMENT"?composer:""} onCreateFrom={base=>startCriterion(composer,base)} onRevise={reviseCriterion}/></SystemMessage>}
       {selected&&!selected.criteriaReadable&&<SystemMessage><CriteriaWorkspaceAuthorization authorization={criteriaAuthorization?.stage==="WORKSPACE"?criteriaAuthorization:null} busy={busy} onRequest={()=>void requestCriteriaWorkspaceAccess()} onRefresh={()=>void refreshCriteriaAccess()}/>{criteriaFailure&&<WorkbenchErrorNotice {...criteriaFailure}/>}</SystemMessage>}
-      {selected&&selected.criteriaReadable&&(criterionTurn&&criterionTurn.problemId===selectedId||selected.sets.length===0)&&<SystemMessage>{criterionTurn&&criterionTurn.problemId===selectedId?<><SuccessCriterionCard turn={criterionTurn} busy={busy} composerEditing={composerTarget==="CRITERION_EDIT"} authorization={criteriaAuthorization?.stage==="WORKSPACE"?null:criteriaAuthorization} onConfirm={()=>void saveCriterion()} onRecover={()=>void saveCriterion(true)} onRequestAuthorization={()=>void requestCriteriaAccess()} onRefreshAuthorization={()=>void refreshCriteriaAccess()} onRestartAfterConflict={()=>void restartCriterionAfterConflict()} onEdit={editCriterion} onCancel={cancelCriterion} onChange={updateCriterion}/>{failure&&["保存成功标准","申请成功标准权限","刷新成功标准权限"].includes(failure.operation)&&<WorkbenchErrorNotice {...failure}/>}</>:<section className="px-inline-card px-boundary-card"><span className="px-eyebrow">下一步</span><h2>为当前问题定义成功标准</h2><p>请说明达到什么结果才算解决。发送后先确认原文和人工验收类型，确认后才调用正式接口。</p><button type="button" className="px-primary-button" disabled={busy||composerTarget!=="SUPPLEMENT"} onClick={()=>startCriterion()}>定义成功标准</button></section>}</SystemMessage>}
+      {selected&&selected.criteriaReadable&&(criterionTurn&&criterionTurn.problemId===selectedId||selected.sets.length===0)&&<SystemMessage>{criterionTurn&&criterionTurn.problemId===selectedId?<><SuccessCriterionCard turn={criterionTurn} busy={busy} composerEditing={composerTarget==="CRITERION_EDIT"} authorization={criteriaAuthorization?.stage==="WORKSPACE"?null:criteriaAuthorization} onConfirm={()=>void saveCriterion()} onPlan={()=>void saveCriterion(false,true)} planBlocked={recordDirty||recordEditing||draftDirty||supplementDirty||Boolean(pendingProblemLink)} onRecover={()=>void saveCriterion(true)} onRequestAuthorization={()=>void requestCriteriaAccess()} onRefreshAuthorization={()=>void refreshCriteriaAccess()} onRestartAfterConflict={()=>void restartCriterionAfterConflict()} onEdit={editCriterion} onCancel={cancelCriterion} onChange={updateCriterion}/>{failure&&["保存成功标准","申请成功标准权限","刷新成功标准权限"].includes(failure.operation)&&<WorkbenchErrorNotice {...failure}/>}</>:<section className="px-inline-card px-boundary-card"><span className="px-eyebrow">下一步</span><h2>为当前问题定义成功标准</h2><p>请说明达到什么结果才算解决。发送后先确认原文和人工验收类型，确认后才调用正式接口。</p><button type="button" className="px-primary-button" disabled={busy||composerTarget!=="SUPPLEMENT"} onClick={()=>startCriterion()}>定义成功标准</button></section>}</SystemMessage>}
       {selected&&session&&params.has("resource")&&<SystemMessage><PreparedResourceReviewPanel key={`${sessionKey(session)}:${params.getAll("resource").join(",")}`} targets={params.getAll("resource").slice(0,4)} csrfToken={session.csrfToken} contextKey={sessionKey(session)} blocked={busy||recordDirty||recordEditing||Boolean(composer.trim())} onBusy={setBusy}/></SystemMessage>}
       {selected&&session&&params.get("execution")&&<SystemMessage><PreparedExecutionPanel key={`${sessionKey(session)}:${params.get("execution")}`} digest={params.get("execution")!} problemId={selected.detail.problem.business_problem_id} csrfToken={session.csrfToken} contextKey={sessionKey(session)} blocked={busy||recordDirty||recordEditing||Boolean(composer.trim())} onBusy={setBusy}/></SystemMessage>}
       {selected&&session&&<SystemMessage><ProblemPlanningGate key={`${sessionKey(session)}:${selectedId}`} snapshot={selected} csrfToken={session.csrfToken} contextKey={sessionKey(session)} editingKey={JSON.stringify([recordDraft,composer,criterionTurn?.version,supplements])} blocked={busy||recordDirty||recordEditing||criterionDirty||Boolean(composer.trim())||supplements.some(item=>!item.assisted)||Boolean(pendingProblemLink)} onBusy={setBusy} onRefresh={()=>loadWorkspace(selected.detail.problem.business_problem_id)}/></SystemMessage>}

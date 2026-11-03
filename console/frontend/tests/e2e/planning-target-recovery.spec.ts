@@ -37,13 +37,14 @@ test("switching problem immediately withdraws prior target and rejects a delayed
  const switchTo=async(id:string)=>page.evaluate(id=>{history.pushState({idx:1},"",`/work/plan?problem=${id}`);window.dispatchEvent(new PopStateEvent("popstate",{state:history.state}))},id);
  await switchTo("case-B");await expect(page.getByLabel("当前已确认目标")).toHaveCount(0);
  await expect(page.getByRole("button",{name:"依据已确认目标生成建议",exact:true})).toBeDisabled();
- await switchTo("case-C");await expect(page.getByLabel("当前已确认目标")).toContainText("case-C");release();
+ await switchTo("case-C");await expect(page.getByLabel("当前已确认目标")).toContainText("case-C");const late=page.waitForResponse(r=>r.url().endsWith("/planning-input/case-B"));release();await (await late).finished();await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
  await expect(page.getByLabel("当前已确认目标")).not.toContainText("case-B");expect(writes).toEqual([]);
 });
 
 test("missing problem offers source navigation and never reads an empty target",async({page})=>{
  const targetReads:string[]=[];
  await page.route("**/api/**",route=>{if(route.request().url().includes("planning-input"))targetReads.push(route.request().url());return route.fulfill({status:404,json:{}})});
+ await page.route("**/api/workbench/v1/session",route=>route.fulfill({json:session}));
  await page.goto("/work/plan");await expect(page.getByRole("heading",{name:"请先选择业务问题",exact:true})).toBeVisible();
  await expect(page.getByRole("link",{name:"返回问题工作台",exact:true})).toHaveAttribute("href","/work");
  await expect(page.getByRole("button",{name:"依据已确认目标生成建议",exact:true})).toBeDisabled();expect(targetReads).toEqual([]);

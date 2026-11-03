@@ -67,3 +67,8 @@
 
 .planning-gap-action { margin:10px 0; padding:10px 14px; background:#fff8eb; border-left:3px solid #c78a2f; border-radius:5px; color:#694d26 }
 .planning-gap-action p { margin:4px 0 }
+.planning-recovery-card header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.planning-recovery-card dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:8px 12px;font-size:12px}
+.planning-recovery-card dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.planning-recovery-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+@media(max-width:700px){.planning-recovery-card dl{grid-template-columns:1fr}.planning-recovery-card dt{font-weight:600}}

@@ -1,10 +1,11 @@
-import {useEffect, useRef, useState, type ReactNode} from "react";
+import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from "react";
 import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import {ConversationFrame, ConversationComposer, SystemMessage, UserMessage} from "../problems/ProblemConversation";
 import {clarificationChoices} from "./clarificationChoices";
 import {formatTime} from "../journey/formatTime";
 import type {PlanningPolicy, ProposalRead} from "./api";
 
+import {PlanningRecoveryCard} from "./PlanningRecoveryCard";
 import {planningRequest, type PlanningInput, type Invocation} from "./planningRequests";
 const free: PlanningPolicy = {schema_version: "planning-policy.v2", mode: "FREE", template: null, required_operations: [], prohibited_operations: [], business_acceptance_as_task: false};
 
@@ -13,37 +14,52 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
   const navigate = useNavigate();
   const [answer, setAnswer] = useState("");
   const [policy, setPolicy] = useState<PlanningPolicy>(source?.proposal.semantics.policy ?? free);
-  const [result, setResult] = useState<Invocation | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [response, setResponse] = useState<{key:string;value:Invocation} | null>(null);
+  const [busy, setBusy] = useState(false),[reading,setReading]=useState(false);
   const [error, setError] = useState("");
-  const [unresolved, setUnresolved] = useState(false);
+  const [unresolvedState, setUnresolved] = useState(false);
   const flight = useRef(false);
   const receivedInvocation = useRef<string | null>(null);
   const requestKey = params.get("request"), invocationId = params.get("invocation");
+  const recordKey=requestKey?`request:${requestKey}`:invocationId?`invocation:${invocationId}`:"";
+  const unresolved=Boolean(recordKey)&&unresolvedState;
+  const locator=`${problem}\u0000${recordKey}`;
+  const latestLocator=useRef<string|null>(locator),inFlightRequest=useRef<string|null>(null);
+  useLayoutEffect(()=>{latestLocator.current=locator;return()=>{latestLocator.current=null}},[locator]);
+  const readResult=response?.key===recordKey?response.value:null;
+  const actualProblem=readResult?.invocation.target.problem?.problem?.resource_id;
+  const mismatched=Boolean(actualProblem&&actualProblem!==problem);
+  const result=mismatched?null:readResult;
+  const waitingForRecord=Boolean(recordKey)&&response?.key!==recordKey;
   useEffect(() => {
     let active = true;
     // The POST already supplied this record. Resolving our own URL update would
     // briefly disable the composer again just as the next answer is being typed.
     if (invocationId && !requestKey && receivedInvocation.current === invocationId) return;
     receivedInvocation.current = null;
-    if (flight.current || (!requestKey && !invocationId)) return;
+    if (!requestKey && !invocationId) return;
+    if (flight.current&&inFlightRequest.current===recordKey) return;
     setUnresolved(true);
     const path = requestKey ? `requests/${encodeURIComponent(requestKey)}` : `invocations/${encodeURIComponent(invocationId!)}`;
-    planningRequest<Invocation>(`planning-v2/${path}`).then(value => {if (active) {setResult(value); setUnresolved(false);}}).catch(e => {if (active) setError(`${e.message}；保留原请求，尚未读回结果，不会重发。`);});
+    planningRequest<Invocation>(`planning-v2/${path}`).then(value => {if (active) {setResponse({key:recordKey,value}); setUnresolved(false);}}).catch(e => {if (active) setError(`${e.message}；保留原请求，尚未读回结果，不会重发。`);});
     return () => {active = false;};
-  }, [requestKey, invocationId]);
+  }, [requestKey, invocationId,recordKey]);
   async function generate() {
-    if (flight.current || unresolved || disabled) return;
+    if (flight.current || blocked) return;
     flight.current = true; setBusy(true); setError(""); onStatus?.("处理中 · 正在生成与核验");
     try {
       const input = await planningRequest<PlanningInput>(`planning-input/${encodeURIComponent(problem)}`);
+      if(latestLocator.current!==locator)return;
       const prior = result?.invocation.request?.answers ?? [];
       const body = {target: input.target, policy, output_language: "zh-CN", answers: [...prior, ...(answer.trim() ? [answer.trim()] : [])], idempotency_key: crypto.randomUUID(), ...(source ? {source_proposal: {resource_id: source.proposal.proposal_id, revision_id: String(source.proposal.revision), digest: source.digest}} : {}), ...(result ? {predecessor_invocation_id: result.invocation.target.invocation_id} : {})};
       await planningRequest("planning-v2/preflight", body);
+      if(latestLocator.current!==locator)return;
+      inFlightRequest.current=`request:${body.idempotency_key}`;
       const next = new URLSearchParams(params); next.set("request", body.idempotency_key); next.delete("invocation");
       setUnresolved(true); setParams(next, {replace: true});
       const value = await planningRequest<Invocation>("planning-v2/invocations", body);
-      setResult(value); setUnresolved(false);
+      if(latestLocator.current!==locator&&latestLocator.current!==`${problem}\u0000request:${body.idempotency_key}`)return;
+      setResponse({key:value.admission?`request:${body.idempotency_key}`:`invocation:${value.invocation.target.invocation_id}`,value}); setUnresolved(false);
       // Clear only the submitted draft. A late response must preserve newer input.
       setAnswer(current => current === answer ? "" : current);
       if (!value.admission) {
@@ -56,23 +72,24 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       }
       if (value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
     } catch(e) {setError(e instanceof Error ? e.message : "请求结果未确认");}
-    finally {flight.current = false; setBusy(false);}
+    finally {flight.current = false; inFlightRequest.current=null;setBusy(false);}
   }
   async function preparedAction(continueCall=false) {
-    if (!requestKey || flight.current || (continueCall && disabled)) return;
-    flight.current=true;setBusy(true);setError("");
+    if ((!requestKey&&!invocationId) || flight.current || (continueCall && (!requestKey||disabled||mismatched||waitingForRecord||unresolved||!result?.admission?.ready))) return;
+    flight.current=true;setBusy(true);setReading(!continueCall);setError("");
     try {
-      const path=`planning-v2/requests/${encodeURIComponent(requestKey)}`;
+      const path=requestKey?`planning-v2/requests/${encodeURIComponent(requestKey)}`:`planning-v2/invocations/${encodeURIComponent(invocationId!)}`;
       const value=await planningRequest<Invocation>(continueCall?`${path}/continue`:path,continueCall?{}:undefined);
-      setResult(value);setUnresolved(false);
+      if(latestLocator.current!==locator)return;
+      setResponse({key:recordKey,value});setUnresolved(false);
       if(value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
     } catch(e) {setError(e instanceof Error?e.message:"状态尚未核实，原请求保留。");}
-    finally {flight.current=false;setBusy(false);}
+    finally {flight.current=false;setBusy(false);setReading(false);}
   }
-  const state = busy ? "处理中 · 正在生成与核验" : unresolved ? "请求待核实 · 只读恢复" : result?.admission ? (result.admission.ready?"准入已核验 · 等待显式继续":"等待精确规划准入 · 尚未派发") : result?.result.technical_status === "OUTCOME_UNKNOWN" ? "结果未知 · 原记录保留" : result?.result.technical_status === "FAILED" ? "调用已知失败" : result?.result.kind === "INVALID" ? "校验未通过 · 已停止" : result?.result.kind === "NEEDS_CLARIFICATION" ? "需要补充信息" : result?.result.proposal ? "建议已保存 · 等待确认" : source ? "可提出方案修订" : "等待显式生成";
+  const state = busy ? (reading?"只读恢复 · 正在读取原记录":"处理中 · 正在生成与核验") : mismatched?"原调用与当前问题不一致 · 已停用写入":waitingForRecord||unresolved ? "请求待核实 · 只读恢复" : result?.admission ? (result.admission.ready?"准入已核验 · 等待显式继续":"等待精确规划准入 · 尚未派发") : result?.result.technical_status === "OUTCOME_UNKNOWN" ? "结果未知 · 原记录保留" : result?.result.technical_status === "FAILED" ? "调用已知失败" : result?.result.kind === "INVALID" ? "校验未通过 · 已停止" : result?.result.kind === "NEEDS_CLARIFICATION" ? "需要补充信息" : result?.result.proposal ? "建议已保存 · 等待确认" : source ? "可提出方案修订" : "等待显式生成";
   useEffect(()=>{onStatus?.(state)},[state,onStatus]);
   const singleCallUsed = result?.invocation.bounded_new_calls === 1 && !result.admission;
-  const blocked = disabled || busy || unresolved || singleCallUsed || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
+  const blocked = disabled || busy || unresolved || waitingForRecord || mismatched || singleCallUsed || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
   return <ConversationFrame startAtTop newMessageKey={`${source?.proposal.revision ?? 0}:${result?.invocation.target.invocation_id ?? ""}`} composer={<section className="planning-composer" aria-label="持续规划对话">    <details><summary>规划方式：{policy.mode === "FREE" ? "自由规划" : policy.mode === "TEMPLATE_ASSISTED" ? "模板辅助" : "强约束流程"} · 查看或调整</summary><label>规划方式<select aria-label="规划方式" value={policy.mode} disabled={busy || unresolved || !!result} onChange={e => {const mode=e.target.value as PlanningPolicy["mode"];setPolicy({...free, mode, template: mode === "FREE" ? null : "procurement-overdue.v1"});}}><option value="FREE">自由规划 · 不固定阶段和任务数</option><option value="TEMPLATE_ASSISTED">采购模板辅助 · 可调整结构</option><option value="STRICT_WORKFLOW">采购强约束 · 三阶段五项职责</option></select></label>
     <p>校验显式操作、输入输出依赖和标准引用覆盖；不能穷尽自然语言冲突，需要人工核对业务含义。</p></details>
     <p className="planning-action-boundary">对话补充仅用于新建议，不修改已确认标准。<Link to={`/work?problem=${encodeURIComponent(problem)}`}>正式修订目标与标准 →</Link> 计划确认请使用方案卡片中的独立按钮。</p>
@@ -80,7 +97,8 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     {!source && (!result || result.result.technical_status !== "SUCCEEDED") && <button type="button" disabled={blocked} onClick={()=>void generate()}>依据已确认目标生成建议</button>}
 </section>}>
     {children}
-    {result?.admission && <section className="planning-card" aria-label="精确规划调用准入"><h2>{result.admission.ready?"等待继续":"等待独立规划准入"}</h2><p>本案目标、标准与规划请求已保存，尚未派发。仅本次最多一次，历史累计上限 {result.admission.cumulative_call_cap} 次；原金额上限与 UNKNOWN 预留保持。登录、刷新和签发不会自动调用。</p>{result.admission.reasonCode&&<p role="alert">当前精确业务权限或会话条件未满足：{result.admission.reasonCode}。有效的独立决定仍保留，请先核对当前权限。</p>}<Link to={`/authorization-admin?context=${encodeURIComponent(result.admission.context_id)}`}>查看本次精确调用准入</Link><button disabled={busy} onClick={()=>void preparedAction()}>查看授权状态</button><button disabled={disabled||busy||!result.admission.ready} onClick={()=>void preparedAction(true)}>继续本次规划调用</button></section>}
+    {(mismatched||waitingForRecord||unresolved||Boolean(error)||result?.result.technical_status==="OUTCOME_UNKNOWN"||result?.result.technical_status==="FAILED")&&recordKey&&<PlanningRecoveryCard invocationId={readResult?.invocation.target.invocation_id??invocationId} requestKey={requestKey} status={mismatched?"MISMATCH":waitingForRecord||unresolved?"UNREAD":result?.result.technical_status??"UNREAD"} reason={result?.result.reason} busy={busy||unresolved&&!error} onRead={()=>void preparedAction()} sourceProblem={problem}/>}
+    {result?.admission && <section className="planning-card" aria-label="精确规划调用准入"><h2>{result.admission.ready?"等待继续":"等待独立规划准入"}</h2><p>本案目标、标准与规划请求已保存，尚未派发。仅本次最多一次，历史累计上限 {result.admission.cumulative_call_cap} 次；原金额上限与 UNKNOWN 预留保持。登录、刷新和签发不会自动调用。</p>{result.admission.reasonCode&&<p role="alert">当前精确业务权限或会话条件未满足：{result.admission.reasonCode}。有效的独立决定仍保留，请先核对当前权限。</p>}<Link to={`/authorization-admin?context=${encodeURIComponent(result.admission.context_id)}`}>查看本次精确调用准入</Link><button disabled={busy} onClick={()=>void preparedAction()}>查看授权状态</button><button disabled={disabled||busy||unresolved||waitingForRecord||mismatched||!result.admission.ready} onClick={()=>void preparedAction(true)}>继续本次规划调用</button></section>}
     <p role="status" className="planning-dialogue-status">{state}</p>
     {result?.invocation.request?.answers.map((text,index)=><UserMessage key={index} occurredAt={result.invocation.submitted_at}>{text}</UserMessage>)}
     {result?.invocation.submitted_at && <p>消息提交时间：{formatTime(result.invocation.submitted_at)}</p>}
