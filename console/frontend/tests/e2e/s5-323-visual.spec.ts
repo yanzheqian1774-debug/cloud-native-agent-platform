@@ -57,10 +57,10 @@ test('V323 same-case problem clarification correction create and readback',async
  });
  await page.route('**/problem-link',route=>route.fulfill({json:{result:{contextId:'context:321',turnId:'turn:3',turnVersion:3,invocationId:'inv:3',state:'SUCCEEDED',resultKind:'DRAFT_READY',transport:'SYNTHETIC',contentDisposition:'CONTENT_NOT_RETAINED'}}}));
  async function shot(name:string,target?:string){if(target)await page.locator(target).evaluate(node=>{(node.closest('.px-message')??node).scrollIntoView({block:'start',behavior:'instant'});window.scrollTo(0,0)});await page.screenshot({path:info.outputPath(name+'.png')});}
- await shot('01-problem-input');await send(page,initial);await expect(page.getByLabel('AI 问题理解与草稿辅助')).toContainText('等待补充信息');await shot('02-ai-clarification','#draft-assistance-message');
+ await shot('01-problem-input');await page.getByRole('button',{name:/采购交付/}).click();await expect(page.locator('#problem-composer')).toHaveValue(/延期交付/);expect(state.requests).toHaveLength(0);await send(page,initial);await expect(page.getByLabel('AI 问题理解与草稿辅助')).toContainText('等待补充信息');await shot('02-ai-clarification','#draft-assistance-message');
  await page.getByRole('button',{name:'回答补问',exact:true}).click();await expect(page.locator('#problem-composer')).toBeFocused();
  await send(page,supplement);await ready(page);await send(page,'纠正：改为所有供应商；缺失日期和来源冲突单列，其余保持。');await ready(page);
- const card=page.getByLabel('问题草稿卡片');await expect(card).toContainText(corrected);await shot('03-corrected-confirm','#draft-problem-message');
+ const card=page.getByLabel('问题草稿卡片');await expect(card.getByLabel('本轮口径核对')).toContainText(supplement);await expect(card.getByLabel('本轮口径核对')).toContainText(corrected);await shot('03-corrected-confirm','#draft-problem-message');
  await confirm(page).click();await expect(page.getByRole('heading',{name:'业务问题已创建',exact:true})).toBeVisible();await shot('04-created','#created-problem-message');
  await authorizeRead(page,state);await shot('05-readback','#formal-problem-message');await page.reload();await expect(page.getByRole('heading',{name:'问题详情已读取',exact:true})).toBeVisible();await shot('06-refreshed','#formal-problem-message');
  expect(state.writes).toHaveLength(1);expect(state.writes[0].description).toBe(corrected);

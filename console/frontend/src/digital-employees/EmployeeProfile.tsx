@@ -100,6 +100,12 @@ export function EmployeeProfile({ item, agent, agentState, section }: { item: Em
   return <section className="employee-capability-profile" aria-labelledby="employee-capability-title">
     <header><div><p className="eyebrow">当前 Employee · 精确修订已读取</p><h3 id="employee-capability-title">职责与能力</h3></div></header>
     <section className="employee-current-responsibilities" aria-labelledby="employee-current-responsibilities-title"><h4 id="employee-current-responsibilities-title">当前员工职责</h4><p>来源：当前 Employee exact revision。</p><ul>{item.responsibilities.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul></section>
+    <section className="assembly-bindings" aria-label="能力装配清单"><h4>能力装配清单</h4><p>按当前角色修订核对资源类别和版本。未引用的类别按职责需要选用。</p>
+      <table><thead><tr><th>资源类别</th><th>成员与精确版本</th><th>引用状态</th></tr></thead><tbody>{(Object.keys(kindLabel) as EmployeeMember["kind"][]).map(kind=>{
+        const members=item.members.filter(member=>member.kind===kind);
+        return <tr key={kind}><th scope="row">{kindLabel[kind]}</th><td>{members.length ? members.map(member=><div key={member.resourceId+":"+member.revisionId}><Link to={exactCatalogLink(member)}>{member.resourceId}</Link><small>{member.revisionId}</small></div>) : "—"}</td><td>{members.length?"已引用":"未引用"}</td></tr>;
+      })}</tbody></table>
+    </section>
     <section className="employee-bound-agent-section" aria-labelledby="employee-bound-agent-title"><header><div><p className="eyebrow">已绑定成员 · 不是候选发现</p><h4 id="employee-bound-agent-title">已绑定 Agent 的职责与能力</h4></div>{agentExact && <span className="binding-status verified">Agent 精确修订已核对</span>}</header>
     <p>Agent 候选只在创建流程中出现。这里展示 Agent 自身正式披露的信息，不作为员工职责的替代；绑定也不表示已分配、已放置或已运行。</p>
     {agentState === "LOADING" && <p role="status">正在独立读取已绑定 Agent 修订……</p>}

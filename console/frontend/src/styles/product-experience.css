@@ -170,3 +170,9 @@
 .px-workspace .px-composer{padding:8px 12px}.px-workspace .px-composer textarea{min-height:36px;padding:4px 0}.px-workspace .px-composer-footer>span{font-size:11px}.px-workspace .px-composer-footer button{white-space:nowrap}
 .px-workspace :is(p,dd,li,small,blockquote){overflow-wrap:anywhere}
 .px-identity-scope{display:block;max-width:190px;font-size:11px;overflow-wrap:anywhere;color:#627493}.px-session-expired{max-width:760px;margin:12vh auto;padding:40px;border:1px solid #d8e5fb;border-radius:14px;background:white;color:#193761}.px-session-expired h1{font-size:28px}.px-session-expired p{line-height:1.8}.px-session-expired a{display:inline-block;padding:12px 20px;border-radius:8px;background:#0866ff;color:white}
+
+.conversation-examples { display:flex;flex-wrap:wrap;gap:8px;margin-block:12px }
+.conversation-examples button { background:white;color:#215189;border:1px solid #c5d6eb;border-radius:7px;padding:7px 12px;cursor:pointer }
+.conversation-examples button:disabled { opacity:.55;cursor:default }
+.conversation-changes { background:#f2f7ff;border-left:3px solid #3274bd;border-radius:6px;padding:12px }
+.conversation-changes h3 { margin:0 0 8px }.conversation-changes div { display:grid;grid-template-columns:3rem 1fr;gap:4px 8px;padding:6px 0;overflow-wrap:anywhere }.conversation-changes strong {grid-column:1/-1}
