@@ -21,3 +21,21 @@ publication, delayed context/input change stops remaining commands, partial
 publication and reload preserve facts without replay. Run focused browser tests,
 frontend lint/build and repository baseline checks. Screenshots are mock-interface
 engineering evidence, not whole-page or original-case acceptance.
+
+## G1 generated-proposal planning scope checkpoint
+
+A real validated AI proposal and confirmed Plan exposed a prerequisite gap:
+the existing execution successor requires exact canonical PLANNING_ONLY and
+READ_ONLY_PLANNING owner boundary markers, whereas the provider emits ordinary
+business prose. Keep that existing gate and every old Plan unchanged.
+
+For newly generated modern proposals only, append those two canonical restrictive
+markers as platform-owned policy before creating the proposal/its digest and
+before confirmation. Preserve every model task, dependency, criterion, policy,
+resource reference and business fact; reject duplicate markers, declared execution
+scope, or overflow rather than dropping content. Record provider output digest
+separately from policy-bounded proposal digest. No grant, approval, Assignment,
+Run, new endpoint or lifecycle change. Legacy planning.v2 retains old behavior.
+Tests cover absence/presence/duplicates, graph/data preservation, read-only scope,
+existing execution-successor gate and real-service composition. A fresh formally
+admitted call may create a new candidate; never rewrite the already confirmed Plan.

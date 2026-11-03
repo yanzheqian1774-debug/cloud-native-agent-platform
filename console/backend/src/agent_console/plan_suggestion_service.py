@@ -491,12 +491,14 @@ class PlanningSuggestionService:
                     raise ValueError("PLANNING_OUTPUT_TARGET_MISMATCH")
                 if request.policy and parsed.semantics.policy != request.policy:
                     raise ValueError("PLANNING_OUTPUT_POLICY_MISMATCH")
+                from .planning_scope import restrict_to_planning
+
                 proposal = ProposalRevision(
                     proposal_id=context_id,
                     revision=source.revision + 1 if source else 1,
                     predecessor_digest=source.digest if source else None,
                     invocation_id=invocation_id,
-                    semantics=parsed.semantics,
+                    semantics=restrict_to_planning(parsed.semantics),
                 )
             result = {
                 "technical_status": "SUCCEEDED",
@@ -509,6 +511,8 @@ class PlanningSuggestionService:
             if request.policy:
                 from .planning_contracts import validation_report
 
+                if proposal is not None:
+                    result["owner_scope"] = "READ_ONLY_PLANNING_V1"
                 result["generated_at"] = datetime.now(UTC).isoformat()
                 result["validation"] = (
                     validation_report(parsed.semantics) if parsed.semantics else None
