@@ -33,7 +33,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     return () => {active = false;};
   }, [requestKey, invocationId]);
   async function generate() {
-    if (flight.current || unresolved) return;
+    if (flight.current || unresolved || disabled) return;
     flight.current = true; setBusy(true); setError(""); onStatus?.("处理中 · 正在生成与核验");
     try {
       const input = await planningRequest<PlanningInput>(`planning-input/${encodeURIComponent(problem)}`);
@@ -59,7 +59,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     finally {flight.current = false; setBusy(false);}
   }
   async function preparedAction(continueCall=false) {
-    if (!requestKey || flight.current) return;
+    if (!requestKey || flight.current || (continueCall && disabled)) return;
     flight.current=true;setBusy(true);setError("");
     try {
       const path=`planning-v2/requests/${encodeURIComponent(requestKey)}`;
@@ -80,7 +80,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     {!source && (!result || result.result.technical_status !== "SUCCEEDED") && <button type="button" disabled={blocked} onClick={()=>void generate()}>依据已确认目标生成建议</button>}
 </section>}>
     {children}
-    {result?.admission && <section className="planning-card" aria-label="精确规划调用准入"><h2>{result.admission.ready?"等待继续":"等待独立规划准入"}</h2><p>本案目标、标准与规划请求已保存，尚未派发。仅本次最多一次，历史累计上限 {result.admission.cumulative_call_cap} 次；原金额上限与 UNKNOWN 预留保持。登录、刷新和签发不会自动调用。</p>{result.admission.reasonCode&&<p role="alert">当前精确业务权限或会话条件未满足：{result.admission.reasonCode}。有效的独立决定仍保留，请先核对当前权限。</p>}<Link to={`/authorization-admin?context=${encodeURIComponent(result.admission.context_id)}`}>查看本次精确调用准入</Link><button disabled={busy} onClick={()=>void preparedAction()}>查看授权状态</button><button disabled={busy||!result.admission.ready} onClick={()=>void preparedAction(true)}>继续本次规划调用</button></section>}
+    {result?.admission && <section className="planning-card" aria-label="精确规划调用准入"><h2>{result.admission.ready?"等待继续":"等待独立规划准入"}</h2><p>本案目标、标准与规划请求已保存，尚未派发。仅本次最多一次，历史累计上限 {result.admission.cumulative_call_cap} 次；原金额上限与 UNKNOWN 预留保持。登录、刷新和签发不会自动调用。</p>{result.admission.reasonCode&&<p role="alert">当前精确业务权限或会话条件未满足：{result.admission.reasonCode}。有效的独立决定仍保留，请先核对当前权限。</p>}<Link to={`/authorization-admin?context=${encodeURIComponent(result.admission.context_id)}`}>查看本次精确调用准入</Link><button disabled={busy} onClick={()=>void preparedAction()}>查看授权状态</button><button disabled={disabled||busy||!result.admission.ready} onClick={()=>void preparedAction(true)}>继续本次规划调用</button></section>}
     <p role="status" className="planning-dialogue-status">{state}</p>
     {result?.invocation.request?.answers.map((text,index)=><UserMessage key={index} occurredAt={result.invocation.submitted_at}>{text}</UserMessage>)}
     {result?.invocation.submitted_at && <p>消息提交时间：{formatTime(result.invocation.submitted_at)}</p>}
