@@ -1,0 +1,8 @@
+{
+  "state": "POSTGRES_ACTIVE",
+  "writer": "POSTGRES",
+  "sourceProvenance": "NEW_324_EMPTY_INITIAL_SOURCE_NOT_HISTORICAL_323_BACKUP",
+  "sourceDigest": "6a5c327316cc2509ca72b55b76d1e5808c47e95c0792557a5ba116d6b926f850",
+  "highWater": 0,
+  "verification": "CUTOVER_VERIFIED"
+}

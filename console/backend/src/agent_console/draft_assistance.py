@@ -1086,7 +1086,15 @@ class DraftAssistanceService:
             from contextlib import nullcontext
 
             guard = getattr(self.budget, "dispatch_guard", None)
-            with guard(invocation, prepared.quote) if guard else nullcontext():
+            context_guard = getattr(self.budget, "dispatch_context_guard", None)
+            boundary = (
+                context_guard(context, invocation, prepared.quote)
+                if context_guard
+                else guard(invocation, prepared.quote)
+                if guard
+                else nullcontext()
+            )
+            with boundary:
                 provider_entered = True
                 observation = self.transport.dispatch(
                     invocation_id=invocation.invocation_id,
@@ -1343,6 +1351,13 @@ class DraftAssistanceService:
             invocation_id,
             synthetic=self.transport.synthetic,
         )
+
+    def read_readiness(self, context, invocation_id):
+        invocation = self.read(context, invocation_id).invocation
+        project = getattr(self.authorization, "read_readiness", None)
+        if project is None:
+            raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
+        return project(context, invocation)
 
     def read_usage(self, context, invocation_id):
         from .provider_usage import authorize, projection

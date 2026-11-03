@@ -1,0 +1,72 @@
+{
+  "observedAt": "2026-09-21T15:23:28.836771+00:00",
+  "phase": "before-restart",
+  "expiredOriginalBootstrapStatus": 401,
+  "accountLoginStatus": 303,
+  "sessionReadbackStatus": 200,
+  "principal": {
+    "principalId": "human:demo323-requester",
+    "tenantId": "s5-323-demo",
+    "securityDomain": "isolated-real-demo"
+  },
+  "location": "/work?problem=59a1d736-96d5-5060-8ae3-293d82b4b74b",
+  "cookieFlagsVerified": true,
+  "issuerLogin": false,
+  "businessCommands": 0,
+  "protectedAuthorityTables": {
+    "grant_requests": true,
+    "grant_request_members": true,
+    "grant_decisions": true,
+    "grants": true,
+    "effective_grants": true,
+    "task_identity_continuities": true
+  },
+  "accounts": [
+    {
+      "username": "demo324",
+      "principal_id": "human:demo323-requester",
+      "tenant_id": "s5-323-demo",
+      "security_domain": "isolated-real-demo",
+      "status": "ENABLED",
+      "revision": 1
+    },
+    {
+      "username": "reviewer324",
+      "principal_id": "human:demo323-approver",
+      "tenant_id": "s5-323-demo",
+      "security_domain": "isolated-real-demo",
+      "status": "ENABLED",
+      "revision": 1
+    }
+  ],
+  "implementationCandidate": "561a8968590f94fdc655882e70cbda479c7bc452",
+  "runtimeConfiguration": "local-accounts-v1/active/runtime.json",
+  "authorityGeneration": 5,
+  "reviewerLoginVerifiedByAgent": false,
+  "nativeExecutionComplete": false,
+  "restartReadback": "PENDING_FINAL_CANDIDATE_RESTART",
+  "browserObserved": [
+    "username/password form",
+    "show/hide password",
+    "demo324 login",
+    "original case returnTo",
+    "current original principal and isolated environment",
+    "refresh",
+    "logout",
+    "Chinese invalid-password error with diagnostic ID",
+    "successful resubmission from error page"
+  ],
+  "visualReference": "IAM01 / R30 4f8fe71b7cd00779df1fa49c7cffa1c22a56c6631878ff5af8a161c4d9891ac7",
+  "humanVisualAcceptance": false,
+  "preservedFailures": [
+    "original login failure cause unresolved; prior POST not retained",
+    "first normal commit: 3 legacy identity fixture fields + existing endpoint-before-cancel failure; preserved logs",
+    "initial migration path points to old worktree; failed before DDL; no accounts created until corrected",
+    "first local frontend build omitted live route flag; corrected explicit live build; not Native evidence"
+  ],
+  "screenshots": {
+    "actual-account-login-1536.png": "5a799352288634f06365d067982e21dba8e3976237ca88ef4be45a455766c663",
+    "actual-account-login-error.png": "4e967eaca16bda478563f896a02f9835c84a6468377f81cea40df4709d5948b0",
+    "actual-account-identity-live.png": "26fe56111798f21bb016bc56835173bcafa5904a9680df95829440b1d9ab6167"
+  }
+}

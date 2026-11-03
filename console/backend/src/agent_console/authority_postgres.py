@@ -149,6 +149,10 @@ class PostgresAuthorityRepository:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
     def _valid_delegation_extension(self, schema, rows):
+        if schema == "browser_identity":
+            from .local_accounts import schema_record
+
+            return rows == [schema_record(self)]
         if schema != "authorization_admin":
             return False
         expected = []
@@ -158,6 +162,14 @@ class PostgresAuthorityRepository:
             (30, "0030_task_cases.sql", "task-cases-v1"),
             (31, "0031_task_timeout_revision.sql", "task-timeout-revision-v1"),
             (32, "0032_task_identity_continuity.sql", "task-identity-continuity-v1"),
+            (37, "0037_context_call_admission.sql", "context-call-admission-v1"),
+            (38, "0038_planning_call_allowance.sql", "planning-call-allowance-v1"),
+            (
+                39,
+                "0039_bounded_task_authorization.sql",
+                "bounded-task-authorization-v1",
+            ),
+            (40, "0040_task_planning_successor.sql", "bounded-task-authorization-v1"),
         ):
             path = self.migration_path.parent / name
             if not path.is_file():
@@ -324,6 +336,10 @@ class PostgresAuthorityRepository:
     ) -> BrowserSession | None:
         try:
             with self.connection_scope() as connection:
+                from .local_accounts import current_session_account
+
+                if not current_session_account(connection, secret_digest=secret_digest):
+                    return None
                 row = connection.execute(
                     "SELECT s.* FROM browser_identity.sessions s "
                     "LEFT JOIN browser_identity.session_revocation_facts r "
@@ -356,6 +372,12 @@ class PostgresAuthorityRepository:
     ) -> bool:
         try:
             with self.connection_scope() as connection:
+                from .local_accounts import current_session_account
+
+                if not current_session_account(
+                    connection, session_id=current_session_id
+                ):
+                    return False
                 row = connection.execute(
                     "SELECT s.session_id FROM browser_identity.sessions s "
                     "LEFT JOIN browser_identity.session_revocation_facts r "
@@ -368,6 +390,11 @@ class PostgresAuthorityRepository:
                 if row is None:
                     return False
                 self._insert_session(connection, replacement, replacement_secret_digest)
+                if replacement.principal.credential_id.startswith("local-account:"):
+                    connection.execute(
+                        "INSERT INTO browser_identity.local_account_sessions SELECT %s,account_id,account_revision FROM browser_identity.local_account_sessions WHERE session_id=%s",
+                        (replacement.session_id, current_session_id),
+                    )
                 connection.execute(
                     "UPDATE browser_identity.sessions SET rotated_to_session_id=%s "
                     "WHERE session_id=%s",
@@ -506,6 +533,12 @@ class PostgresAuthorityRepository:
         lock_clause = " FOR SHARE OF s" if lock_session else ""
         if context.authentication_source.value == "SERVICE_CREDENTIAL":
             return CredentialId(context.session_id_or_service_credential_id)
+        from .local_accounts import current_session_account
+
+        if not current_session_account(
+            connection, session_id=context.session_id_or_service_credential_id
+        ):
+            return None
         row = connection.execute(
             "SELECT s.credential_id FROM browser_identity.sessions s "
             "LEFT JOIN browser_identity.session_revocation_facts r "
@@ -613,7 +646,10 @@ class PostgresAuthorityRepository:
                 recovery_epoch=recovery_epoch,
             )
             if state is not DynamicAuthorizationState.ALLOWED:
-                return credential_id, None
+                task = self._bounded_task_decision(
+                    current, context, grant, credential_id, state
+                )
+                return credential_id, task
             from .task_delegation import grant_condition
 
             row = current.execute(
@@ -707,6 +743,14 @@ class PostgresAuthorityRepository:
                 )
                 for grant in grants
             )
+            states = tuple(
+                DynamicAuthorizationState.ALLOWED
+                if self._bounded_task_decision(
+                    current, context, grant, credential_id, state
+                )
+                else state
+                for grant, state in zip(grants, states, strict=True)
+            )
             return credential_id, states
 
         try:
@@ -716,6 +760,33 @@ class PostgresAuthorityRepository:
                 return read(owned, lock_for_owner=False)
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def _bounded_task_decision(self, connection, context, grant, credential_id, state):
+        if (
+            not getattr(self, "bounded_task_authorization_enabled", False)
+            or credential_id is None
+            or state
+            in {
+                DynamicAuthorizationState.ALLOWED,
+                DynamicAuthorizationState.REVOKED,
+                DynamicAuthorizationState.UNAVAILABLE,
+            }
+        ):
+            return None
+        from .bounded_task_authorization import exact_decision
+
+        row = exact_decision(connection, context, grant)
+        if not row:
+            return None
+        return CurrentExactGrantDecision(
+            decision_id=row["decision_id"],
+            context=context,
+            grant=grant,
+            policy_generation=row["generation"],
+            policy_version="D324-7-A",
+            issued_at=row["created_at"],
+            expires_at=row["expires_at"],
+        )
 
     @staticmethod
     def _lock_dynamic_grants(

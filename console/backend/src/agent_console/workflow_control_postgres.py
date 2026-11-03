@@ -164,13 +164,13 @@ class PostgresWorkflowControlRepository:
                 ).fetchone()
                 if prior is None:
                     raise WorkflowControlError(f"MIGRATION_{version - 1:04d}_REQUIRED")
-                connection.execute(self.migration_path.read_text())
                 row = connection.execute(
                     "SELECT checksum,adapter FROM execution_authority.schema_migrations WHERE version=%s",
                     (version,),
                 ).fetchone()
                 expected = {"checksum": self.migration_checksum, "adapter": ADAPTER}
                 if row is None:
+                    connection.execute(self.migration_path.read_text())
                     connection.execute(
                         "INSERT INTO execution_authority.schema_migrations(version,checksum,adapter) VALUES (%s,%s,%s)",
                         (version, self.migration_checksum, ADAPTER),

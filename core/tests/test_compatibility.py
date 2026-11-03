@@ -41,6 +41,10 @@ def test_rollback_limits_core_consumers_to_exact_authorized_paths():
         "gateway/tests/test_capability_gateway.py",
     }
     authorized_console_imports = {
+        # Accepted D324-1/2: root invariant + exact Task/Native placement adapters.
+        "console/backend/src/agent_console/prepared_execution_application.py",
+        "console/backend/src/agent_console/prepared_native_coordinator.py",
+        "console/backend/tests/test_prepared_native_pipeline.py",
         "console/backend/src/agent_console/app.py",
         "console/backend/src/agent_console/execution_domain.py",
         "console/backend/src/agent_console/execution_evidence_import.py",

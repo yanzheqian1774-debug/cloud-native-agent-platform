@@ -29,7 +29,7 @@ async function login(context: BrowserContext, credential: string): Promise<Page>
 }
 
 async function technicalValue(card: Locator, label: string): Promise<string> {
-  const details = card.locator("details");
+  const details = card.locator("details").filter({ has: card.page().getByText("技术事实", { exact: true }) });
   if (!(await details.getAttribute("open"))) await details.locator("summary").click();
   const value = await details.locator("dt", { hasText: label })
     .locator("xpath=following-sibling::dd[1]").textContent();
@@ -57,11 +57,11 @@ async function authorizeDraft(applicant: Page, administrator: Page): Promise<Loc
   await expect(card).toContainText("AUTHORIZATION_PENDING");
   await approve(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   await expect.poll(() => technicalValue(card, "模型授权申请")).not.toBe("尚未提交");
   await approve(administrator, await technicalValue(card, "模型授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   return card;
 }
 
@@ -116,7 +116,7 @@ test("S5-320 authorization denial has zero Kimi mock dispatch", async ({ browser
   const before = await providerDispatches(request);
   await deny(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   const denial = card.locator("xpath=ancestor::article[1]").getByRole("alert");
   await expect(denial).toContainText("DRAFT_ASSISTANCE_NOT_FOUND");
   expect(await providerDispatches(request)).toBe(before);
@@ -178,7 +178,7 @@ test("S5-320 formal budget refusal blocks product dispatch on the same ledger", 
   const after = await providerDispatches(request);
   expect(before).toBe(10);
   expect(after).toBe(before);
-  await refusal.getByRole("button", { name: "继续原辅助调用", exact: true }).click();
+  await refusal.getByRole("button", { name: "使用原正文重试调用", exact: true }).click();
   await expect(applicant.getByText("PROVIDER_BUDGET_DENIED", { exact: true })).toBeVisible();
   await expect(applicant.getByLabel("问题草稿卡片")).toHaveCount(0);
   expect(await providerDispatches(request)).toBe(after);

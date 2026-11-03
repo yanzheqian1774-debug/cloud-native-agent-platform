@@ -1271,3 +1271,67 @@ def test_non2xx_safe_diagnostic_crosses_worker_without_extra_dispatch(
     assert diagnostic["retry_after"]["missing"]
     assert diagnostic["error"]["code"]["missing"]
     assert "fake-kimi-provider-key-320" not in json.dumps(diagnostic)
+
+
+@pytest.mark.parametrize("read_seconds", [30, 55])
+def test_planning_read_limit_reaches_socket_without_environment_proxy(
+    kimi_mock, monkeypatch, read_seconds
+):
+    """324 config diagnosis: configured read deadline survives to WAIT_HEADERS."""
+    from agent_console import kimi_responses_draft_adapter as adapter
+
+    server, cert, tmp_path = kimi_mock
+    configuration = replace(
+        _configuration(server, cert, _credential_file(tmp_path)),
+        connect_timeout_seconds=5,
+        read_timeout_seconds=read_seconds,
+        total_timeout_seconds=60,
+    )
+    profile = replace(_profile(), total_timeout_seconds=60)
+    transport = KimiResponsesDraftTransport(configuration)
+    observed = {}
+
+    class Connection:
+        def __init__(self, host, port, *, timeout, context):
+            observed.update(host=host, port=port, connect=timeout)
+            self.sock = self
+
+        def connect(self):
+            pass
+
+        def settimeout(self, value):
+            observed["read"] = value
+
+        def request(self, method, path, *, body, headers):
+            observed["method"] = method
+
+        def getresponse(self):
+            raise TimeoutError("controlled WAIT_HEADERS; no network sent")
+
+        def close(self):
+            observed["closed"] = True
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://must-not-be-used.invalid:9")
+    monkeypatch.setattr(adapter.http.client, "HTTPSConnection", Connection)
+    stages = []
+    with pytest.raises(DraftAssistanceError, match="TRANSPORT_AMBIGUOUS"):
+        transport.exchange(
+            invocation_id="isolated-configuration-check",
+            request=transport.prepare(
+                invocation_id="isolated-configuration-check",
+                content="synthetic configuration test",
+                profile=profile,
+            ),
+            credential=_resolver(configuration).resolve(profile, "config-test"),
+            progress=stages.append,
+        )
+    assert observed == {
+        "host": "127.0.0.1",
+        "port": server.server_port,
+        "connect": 5,
+        "read": read_seconds,
+        "method": "POST",
+        "closed": True,
+    }
+    assert stages[-1] == "WAIT_HEADERS"
+    assert _KimiHandler.requests == []

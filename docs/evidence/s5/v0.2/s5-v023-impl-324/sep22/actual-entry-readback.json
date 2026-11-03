@@ -1,0 +1,99 @@
+{
+  "observedAt": "2026-09-21T17:15:04.885184+00:00",
+  "contextRequests": [
+    {
+      "context_id": "draft-context:0477d775cd85ee477a22fe465dc42419",
+      "tenant_id": "s5-323-demo",
+      "security_domain": "isolated-real-demo",
+      "subject_id": "human:demo323-requester",
+      "account_id": "local-account:demo324",
+      "account_revision": 1,
+      "first_invocation_id": "draft-invocation:5d66b44e407f6c34c3c0346f5baad139",
+      "record": {
+        "phase": "understanding",
+        "task_id": "S5-V023-IMPL-324",
+        "tenant_id": "s5-323-demo",
+        "account_id": "local-account:demo324",
+        "context_id": "draft-context:0477d775cd85ee477a22fe465dc42419",
+        "subject_id": "human:demo323-requester",
+        "configuration": {
+          "calls": 12,
+          "ledger_id": "ledger:s5-323-real-understanding:original-window",
+          "input_tokens": 65536,
+          "model_target": "model:s5-323-real-understanding:model-revision:s5-323-real-understanding:1:c5dbbc3f7156fe08bd2f5ba1d6a460744dd70a28dd6717ef182e39bd68410800",
+          "cost_microusd": 10000000,
+          "output_tokens": 8192,
+          "profile_digest": "82e81c25086826a7269c8f1f41c44c8f1e3b02a56a132db13b45ad2ded0fe68d",
+          "profile_revision_id": "profile-revision:s5-323-real-understanding:1",
+          "configuration_digest": "80e9c70f3cca1120128e7140e5ad2b76b66b1df605ad3faa3ff107cd6944787d"
+        },
+        "synthetic_only": true,
+        "security_domain": "isolated-real-demo",
+        "account_revision": 1,
+        "first_invocation_id": "draft-invocation:5d66b44e407f6c34c3c0346f5baad139"
+      },
+      "digest": "4bb3668fe3df4391d4de8b2454531513f8f050faccf6c65419b82179efc75bf5",
+      "created_at": "2026-09-21 17:12:56.634366+00:00"
+    }
+  ],
+  "contextDecisions": 0,
+  "invocations": [
+    {
+      "invocationId": "draft-invocation:5d66b44e407f6c34c3c0346f5baad139",
+      "state": "AUTHORIZATION_PENDING",
+      "contextId": "draft-context:0477d775cd85ee477a22fe465dc42419",
+      "createdAt": "2026-09-21T17:12:56.605238+00:00",
+      "profileRevisionId": "profile-revision:s5-323-real-understanding:1",
+      "authorization": {
+        "state": "PENDING",
+        "modelVersion": 1,
+        "requestVersion": 1,
+        "modelDecisionId": null,
+        "requestDecisionId": "",
+        "modelAuthorizationRequestId": "grant-request-59c08d23163426bdd1efcd2934ffb56f",
+        "requestAuthorizationRequestId": "grant-request-907a9386901269b8a69bd62d13ee157c"
+      },
+      "budgetReservationId": null,
+      "resourceUseId": null
+    }
+  ],
+  "grantRequests": [
+    {
+      "request_id": "grant-request-048bc8a3051e77383a1ef9fd11010844",
+      "state": "PENDING",
+      "purpose": "S5_324_RESOURCE_REVIEW",
+      "subject_principal_id": "human:demo323-requester"
+    },
+    {
+      "request_id": "grant-request-b2447ead173fe891b7df923fed4551e5",
+      "state": "PENDING",
+      "purpose": "WORKBENCH_EMPLOYEE_LIFECYCLE",
+      "subject_principal_id": "human:demo323-requester"
+    },
+    {
+      "request_id": "grant-request-366a7309c01ced50e54ac4b967b1c9f4",
+      "state": "PENDING",
+      "purpose": "S5_324_NATIVE_READONLY",
+      "subject_principal_id": "human:demo323-requester"
+    },
+    {
+      "request_id": "grant-request-907a9386901269b8a69bd62d13ee157c",
+      "state": "PENDING",
+      "purpose": "PROBLEM_DRAFT_ASSISTANCE",
+      "subject_principal_id": "human:demo323-requester"
+    },
+    {
+      "request_id": "grant-request-59c08d23163426bdd1efcd2934ffb56f",
+      "state": "PENDING",
+      "purpose": "PROBLEM_DRAFT_MODEL_INVOKE",
+      "subject_principal_id": "human:demo323-requester"
+    }
+  ],
+  "newProviderReservations": 0,
+  "migration": {
+    "version": 37,
+    "adapter": "context-call-admission-v1",
+    "checksum": "b9880beb6e238805d83f6b5859119a41efb38dc6beba213e7cbef44ea390b554",
+    "applied_at": "2026-09-21 17:10:55.160386+00:00"
+  }
+}

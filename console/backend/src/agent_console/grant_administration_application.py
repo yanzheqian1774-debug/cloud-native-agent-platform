@@ -278,6 +278,11 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             and (credential.credential_id, grant)
             not in self.generation.static_grant_revocation_tombstones
             and (
+                getattr(credential, "grant_source_id", credential.credential_id),
+                grant,
+            )
+            not in self.generation.static_grant_revocation_tombstones
+            and (
                 any(
                     item.grant == grant
                     and (
@@ -304,17 +309,26 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             else GrantSource.SERVICE_ONLY
         )
         credential = (
-            self.generation.credential_by_id(credential_id)
+            (
+                self.generation.credential_by_id(credential_id)
+                or self.generation.account_by_id(credential_id)
+            )
             if credential_id is not None
             else None
         )
         if (
             credential is None
             or credential.scope != context.scope
+            or credential.principal_id != context.principal_id
             or credential.authentication_source is not expected_source
             or credential.credential_id
             in self.generation.credential_revocation_tombstones
-            or now >= credential.expires_at
+            or (hasattr(credential, "expires_at") and now >= credential.expires_at)
+            or (
+                hasattr(credential, "grant_source_id")
+                and credential.grant_source_id
+                in self.generation.credential_revocation_tombstones
+            )
         ):
             return None, expected_source
         return credential, expected_source
@@ -343,8 +357,12 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         credential, _ = self._current_credential(context, credential_id, now=now)
         if credential is None or decision is None:
             return None
-        if (credential.credential_id, grant) in (
-            self.generation.static_grant_revocation_tombstones
+        if any(
+            (identity, grant) in self.generation.static_grant_revocation_tombstones
+            for identity in (
+                credential.credential_id,
+                getattr(credential, "grant_source_id", credential.credential_id),
+            )
         ):
             return None
         return decision

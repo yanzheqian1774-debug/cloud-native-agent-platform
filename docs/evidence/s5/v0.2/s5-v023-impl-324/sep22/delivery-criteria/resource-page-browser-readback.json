@@ -1,0 +1,15 @@
+{
+  "actualBrowser": true,
+  "strictTLS": true,
+  "role": "demo324",
+  "viewport": [
+    1536,
+    1024
+  ],
+  "zoomEquivalent": [
+    1229,
+    819
+  ],
+  "writesAfterLogin": [],
+  "readOnly": true
+}

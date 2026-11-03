@@ -264,3 +264,16 @@ def test_loop_deadline_combines_disconnect_without_clearing_parent():
 def test_loop_cannot_advertise_less_than_supervisor_cleanup_bound():
     with pytest.raises(ValueError, match="PLANNING_LOOP_LIMIT_INVALID"):
         AdaptiveLimits(cleanup_seconds=0)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/digital-employees", "/skills", "/knowledge", "/agents", "/runtime-profiles"],
+)
+def test_resource_return_preserves_exact_query_without_allowing_api(path):
+    destination = (
+        path + "?employeeDefinitionId=employee%3Aa"
+        "&employeeDefinitionRevisionId=revision%3Ab&section=overview"
+    )
+    assert safe_return(destination) == destination
+    assert safe_return(path + "/../api") == "/work"

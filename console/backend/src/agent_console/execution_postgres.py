@@ -127,6 +127,19 @@ class PostgresExecutionAuthorityRepository:
         except Exception as exc:
             raise ExecutionStorageUnavailable("EXECUTION_STORAGE_UNAVAILABLE") from exc
 
+    def for_transaction(self, connection):
+        """Bind existing owner ports to a caller's authorized atomic transaction."""
+        from contextlib import nullcontext
+        from copy import copy
+
+        class BoundPool:
+            def connection(self):
+                return nullcontext(connection)
+
+        bound = copy(self)
+        bound.pool = BoundPool()
+        return bound
+
     @property
     def migration_checksum(self) -> str:
         return hashlib.sha256(self.migration_path.read_bytes()).hexdigest()
@@ -289,6 +302,13 @@ class PostgresExecutionAuthorityRepository:
             ),
         )
 
+    def dispatch_assignment(self, scope, attempt_id, fallback):
+        from .prepared_execution_lineage import prepared_attempt
+
+        with self.pool.connection() as connection:
+            row = prepared_attempt(connection, scope, attempt_id)
+            return fallback if row is None else AssignmentId(row["assignment_id"])
+
     def enqueue(self, command: NativeDispatchCommand) -> AppendDisposition:
         payload = json.loads(canonical_bytes(command))["payload"]
 
@@ -320,6 +340,10 @@ class PostgresExecutionAuthorityRepository:
                     str(command.placement_id),
                 ),
             ).fetchone()
+            if exact is None:
+                from .prepared_execution_lineage import native_binding
+
+                exact = native_binding(connection, command)
             expected = {
                 "decision": "PLACED",
                 "placement_digest": command.placement_digest,
@@ -424,10 +448,25 @@ class PostgresExecutionAuthorityRepository:
         lease = now + timedelta(seconds=lease_seconds)
 
         def operation(connection):
+            has_stops = (
+                connection.execute(
+                    "SELECT to_regclass('execution_authority.prepared_stop_receipts') AS t"
+                ).fetchone()["t"]
+                is not None
+            )
+            stop_filter = (
+                "AND NOT EXISTS (SELECT 1 FROM execution_authority.prepared_stop_receipts s "
+                "WHERE s.namespace=n.namespace AND s.security_domain=n.security_domain "
+                "AND s.command_id=n.command_id) "
+                if has_stops
+                else ""
+            )
             row = connection.execute(
                 "WITH candidate AS (SELECT namespace,security_domain,command_id FROM "
-                "execution_authority.native_dispatch_commands WHERE state='QUEUED' "
-                "OR (state='CLAIMED' AND lease_expires_at<=%s) ORDER BY queued_at,command_id "
+                "execution_authority.native_dispatch_commands n WHERE (state='QUEUED' "
+                "OR (state='CLAIMED' AND lease_expires_at<=%s)) "
+                + stop_filter
+                + "ORDER BY queued_at,command_id "
                 "FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE "
                 "execution_authority.native_dispatch_commands c SET state='CLAIMED',"
                 "claim_generation=c.claim_generation+1,fencing_token=%s,worker_id=%s,"
@@ -502,6 +541,20 @@ class PostgresExecutionAuthorityRepository:
             raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_STALE")
         return row
 
+    def stop_prepared_before_effect(self, claim):
+        """Native owner acknowledgement: cancellation won before effect permission."""
+        if not claim.command.authorization_resource.startswith(
+            "governed-execution:prepared:"
+        ):
+            return False
+        from .prepared_execution_cancellation import stop_before_effect
+
+        return self._transaction(
+            lambda connection: stop_before_effect(
+                connection, claim, self._locked_claim(connection, claim)
+            )
+        )
+
     def permit_effect(
         self,
         claim: NativeDispatchClaim,
@@ -556,6 +609,10 @@ class PostgresExecutionAuthorityRepository:
                     str(command.command_id),
                 ),
             ).fetchone()
+            if exact is None:
+                from .prepared_execution_lineage import native_binding
+
+                exact = native_binding(connection, command)
             expected = {
                 "decision": "PLACED",
                 "placement_digest": command.placement_digest,
@@ -595,6 +652,9 @@ class PostgresExecutionAuthorityRepository:
                     str(command.attempt_id),
                 ),
             )
+            from .prepared_execution_observations import apply_native
+
+            apply_native(connection, command)
             self._dispatch_fact(
                 connection,
                 command,
@@ -701,6 +761,9 @@ class PostgresExecutionAuthorityRepository:
                     str(command.attempt_id),
                 ),
             )
+            from .prepared_execution_observations import apply_native
+
+            apply_native(connection, command, observation)
             self._dispatch_fact(
                 connection,
                 command,
@@ -730,8 +793,8 @@ class PostgresExecutionAuthorityRepository:
                     "SELECT checksum,adapter FROM execution_authority.schema_migrations WHERE version=8"
                 ).fetchone()
                 newer = connection.execute(
-                    "SELECT 1 FROM execution_authority.schema_migrations WHERE version>8 LIMIT 1"
-                ).fetchone()
+                    "SELECT version,checksum,adapter FROM execution_authority.schema_migrations WHERE version>8 ORDER BY version"
+                ).fetchall()
                 columns = {
                     (item["table_name"], item["column_name"])
                     for item in connection.execute(
@@ -748,9 +811,11 @@ class PostgresExecutionAuthorityRepository:
                 relationship_foreign_keys = connection.execute(
                     "SELECT COUNT(*) AS count FROM information_schema.table_constraints WHERE constraint_schema='execution_authority' AND constraint_type='FOREIGN KEY' AND table_name IN ('workflow_runs','interventions','outcomes')"
                 ).fetchone()["count"]
+                from .prepared_execution_schema import compatible_versions
+
                 if (
                     row != {"checksum": self.migration_checksum, "adapter": ADAPTER}
-                    or newer
+                    or (newer and not compatible_versions(newer))
                     or not required_columns <= columns
                     or relationship_foreign_keys < 6
                 ):

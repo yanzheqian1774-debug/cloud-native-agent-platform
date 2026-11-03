@@ -1,0 +1,148 @@
+ea727c4a00d6f396c2d7542c61dc42abdf60a199
+100644 1a0b6f04df58ce371df3aadca3e54e3c0230bbde 1	console/backend/src/agent_console/app.py
+100644 8d8750aa6a96216758094fa6c68c4d417b2946ac 2	console/backend/src/agent_console/app.py
+100644 218affe5073ed859cc39c926ecb3904f2fbb419a 3	console/backend/src/agent_console/app.py
+100644 2def25b7db6f30b5f79bfdaf29c96e12cf05aa00 1	console/backend/src/agent_console/authority_contracts.py
+100644 18fa520a46ad747eeda03733c4c68b712b116855 2	console/backend/src/agent_console/authority_contracts.py
+100644 3e9a94f9f863f2cd610af9e83b5eab0600c6ac7f 3	console/backend/src/agent_console/authority_contracts.py
+100644 7c63befb65dccc1d116927559d75e76645a590dc 1	console/backend/src/agent_console/authority_postgres.py
+100644 a3366687b07f8c3ba9adc7f22fdd3fe1344400a9 2	console/backend/src/agent_console/authority_postgres.py
+100644 570214d5ecd3c8e7d9d1c5f0d09e5d76338a5c91 3	console/backend/src/agent_console/authority_postgres.py
+100644 63fa95b8812634a90f945ea9d63eed027df25be2 1	console/backend/src/agent_console/business_problem_application.py
+100644 bdd2f219d545bbcafd5b2e92fd958cfc4b6d6f9f 2	console/backend/src/agent_console/business_problem_application.py
+100644 044b9d79879be453c4e0b6de372917bd6801e8ed 3	console/backend/src/agent_console/business_problem_application.py
+100644 f02ce9b4f4e0041164124307a84a36f4b8b7a263 1	console/backend/src/agent_console/business_problem_postgres.py
+100644 084dff2042f066c87d9d13254d115e259d832947 2	console/backend/src/agent_console/business_problem_postgres.py
+100644 e0f3ead8a434595849e5358d614b59d877b45c6c 3	console/backend/src/agent_console/business_problem_postgres.py
+100644 f1cf444003af6ffe257031131b7e063318b16bf2 1	console/backend/src/agent_console/grant_administration_application.py
+100644 5b63733b51a39e82cfd9e30fd0c081825ff55fab 2	console/backend/src/agent_console/grant_administration_application.py
+100644 f0d367bd16f0820f26eea822b25f24eb984564ea 3	console/backend/src/agent_console/grant_administration_application.py
+100644 ed9a4cb9a7d154be941ac301cba54bb7794af35c 2	console/backend/src/agent_console/workbench_bff.py
+100644 cb4cbec9f0ee4e97a6bce8def1f3cea7a727018b 3	console/backend/src/agent_console/workbench_bff.py
+100644 53c73394a7104a95c12f32c42fe229f2381d3a4f 2	console/backend/src/agent_console/workbench_bff_schemas.py
+100644 50c5d4345d372bf64c759082c2b140e018422dbf 3	console/backend/src/agent_console/workbench_bff_schemas.py
+100644 0613442099751a7ce227f572c39abee2158a2f0b 2	console/backend/src/agent_console/workbench_bootstrap.py
+100644 691bf171fd885404c72a40f8ab006eea262c444b 3	console/backend/src/agent_console/workbench_bootstrap.py
+100644 785d5408ed35646740ae42c07118f564fa24d2ad 2	console/backend/src/agent_console/workbench_business_problem.py
+100644 59ba67d63b9201658d7bb40abbb79a0332e7422f 3	console/backend/src/agent_console/workbench_business_problem.py
+100644 24a4f1889fbc7b4c731f1d1a8ece79c7f47b869f 2	console/backend/src/agent_console/workbench_grant_targets.py
+100644 b37d33b0cb62453faa5da2cfae7981c9910f2541 3	console/backend/src/agent_console/workbench_grant_targets.py
+100644 7eb13b98d18632d520d4a1ecf21a25df042d88bf 2	console/backend/tests/test_workbench_bff.py
+100644 b9bd665a029b1f75283c70af71c9280dce1fe537 3	console/backend/tests/test_workbench_bff.py
+100644 8405f1aee9fa1cce417ecef56163ccd735a87080 2	console/backend/tests/test_workbench_creator_continuation_postgres.py
+100644 9cb90cc2379b1f4791d9a159923094679577ebb9 3	console/backend/tests/test_workbench_creator_continuation_postgres.py
+100644 06d539a2d14996f62904afa13fe4f753c6004a33 1	console/frontend/playwright.config.ts
+100644 2dbaa9a0c8748be3484b59f29c229574f4cc64f1 2	console/frontend/playwright.config.ts
+100644 b546b98ddbf1157cf21fc2d884b13c7b3338992f 3	console/frontend/playwright.config.ts
+100644 357e87a448485642b66bc53fccf86be76bfba323 1	console/frontend/src/App.tsx
+100644 a35b04219f2eb0c2d17788cf0bdea6c211ee4007 2	console/frontend/src/App.tsx
+100644 564d6de7f3ddf4aba0d3873047990cf5c45a2ba9 3	console/frontend/src/App.tsx
+100644 44181dc0f16253b2e55054bb1e254c7801ffe199 2	console/frontend/src/api/businessWorkspace.ts
+100644 3d8944798297222f1d91a28d80985939b1930463 3	console/frontend/src/api/businessWorkspace.ts
+100644 f69fea64fa29969421a4587a9ddaab6290d0ccf3 1	console/frontend/src/components/ConsoleShell.tsx
+100644 15ffb466596a55b3e5a053c6e72209457fc70e64 2	console/frontend/src/components/ConsoleShell.tsx
+100644 654a1e6d5256f39ee40dea8459d394475ed1f9df 3	console/frontend/src/components/ConsoleShell.tsx
+100644 2652a9acd40b62db55011218baac2e37d2c58eb5 2	console/frontend/src/problems/ProblemConversation.tsx
+100644 4ae03e4157de5d317cd8e0c31096f0a458460da5 3	console/frontend/src/problems/ProblemConversation.tsx
+100644 82ffe1a26526818dd3c9c6b467b77858df970232 2	console/frontend/src/problems/ProblemTaskSummary.tsx
+100644 f26127b92ffbef82dbebff16638eb213a45300ae 3	console/frontend/src/problems/ProblemTaskSummary.tsx
+100644 ce8054f0538988ca54c312c609e8b3b512202952 1	console/frontend/src/problems/ProblemWorkspacePage.tsx
+100644 cab9e73abdbdeb479f6dba188e0829713d08f34f 2	console/frontend/src/problems/ProblemWorkspacePage.tsx
+100644 183b6b7773c1697d4b43ad3292e5a810b2cab809 3	console/frontend/src/problems/ProblemWorkspacePage.tsx
+100644 5b6fbe5b58ad4cd135b4a2bc0e32af4beffa0ae4 2	console/frontend/src/problems/SuccessCriterionCard.tsx
+100644 dd7c2f104ace256b14911b66964a2023c5d820d1 3	console/frontend/src/problems/SuccessCriterionCard.tsx
+100644 3e7595e3bfb8be322c70ffd90dd8ae8f1ef22c09 2	console/frontend/src/problems/WorkbenchErrorNotice.tsx
+100644 278296c72532ec9a207aaf1407ac2ff86d94ff30 3	console/frontend/src/problems/WorkbenchErrorNotice.tsx
+100644 791473dffd81bfa4424d1c8a8f1577dd60b617d4 2	console/frontend/src/problems/problemConversationModel.ts
+100644 5b1c3bdcbac47aaf304dce50b519f819c1a19d73 3	console/frontend/src/problems/problemConversationModel.ts
+100644 07b16d21a275acf5f4db97a844c957fe43220f8e 1	console/frontend/src/styles/product-experience.css
+100644 b06a31eae224677cffee6a4d56f0bfbd58ac3abb 2	console/frontend/src/styles/product-experience.css
+100644 1f019196c3456b5cc4cb0d57b48c6ac14f6b42fb 3	console/frontend/src/styles/product-experience.css
+100644 42fcf641a514d13da1b57086cc9bcd5426b8b948 1	console/frontend/tests/e2e/platform-support-surfaces.spec.ts
+100644 719e20272f0976fab32539651f0207d61d595b3c 2	console/frontend/tests/e2e/platform-support-surfaces.spec.ts
+100644 accaca229ec7639726b65d3fcdfdf9ebb55cb2f5 3	console/frontend/tests/e2e/platform-support-surfaces.spec.ts
+100644 055e44b44232181fe3be0d56412a4a8993d1cad3 2	console/frontend/tests/e2e/w2a-honest-shell.spec.ts
+100644 8d35c23813768fd30bab3dff31d97856a37a0ca6 3	console/frontend/tests/e2e/w2a-honest-shell.spec.ts
+100644 4b54598abfb4a82b793c112c01eb30752f80a68c 2	console/frontend/tests/e2e/w3-native-https-live.spec.ts
+100644 4c72de30c379bf08e4e153d4fed08eb34aae4e1d 3	console/frontend/tests/e2e/w3-native-https-live.spec.ts
+100644 4e646e3f96ef352b8e1d92d50a5e3029f4308f99 2	console/frontend/tests/e2e/w3-success-criteria-live.spec.ts
+100644 cb228ac6eef4bbb08e641a45e0a3569f14920d43 3	console/frontend/tests/e2e/w3-success-criteria-live.spec.ts
+100644 0e60eed2dbfa3f8974c1496fff5d61229942c46f 2	console/frontend/tests/e2e/w3-success-criteria.spec.ts
+100644 09b4643c64f4229e383df0e35163672894d9b746 3	console/frontend/tests/e2e/w3-success-criteria.spec.ts
+100644 c22c48ff53080c8bb2548ff8f80bbcbb1269e51e 1	console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
+100644 6aea8648045d7c39831d2e60209334205ad3e8c0 2	console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
+100644 10bbc51ec32fa9388aef3612b55b4a78364c93ae 3	console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
+100644 4954c78e72e5d1a81997d98023b02259d05e0691 2	console/frontend/tests/test_s5_v023_impl_299_business_workspace.py
+100644 e09d1c12163797ad8112f30912dda9345d93991f 3	console/frontend/tests/test_s5_v023_impl_299_business_workspace.py
+100644 cd6faab725337a8f4f1d06429a299917927cb058 1	scripts/acceptance/isolated_browser_harness.py
+100644 dca9e140b54e2dc73d5af18d3102a13e20b559f9 2	scripts/acceptance/isolated_browser_harness.py
+100644 1da3de00cffc34c8f2e48e2e7f8e83bb4404186e 3	scripts/acceptance/isolated_browser_harness.py
+
+Auto-merging console/backend/src/agent_console/app.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/app.py
+Auto-merging console/backend/src/agent_console/authority_contracts.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_contracts.py
+Auto-merging console/backend/src/agent_console/authority_postgres.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/authority_postgres.py
+Auto-merging console/backend/src/agent_console/business_problem_application.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/business_problem_application.py
+Auto-merging console/backend/src/agent_console/business_problem_bootstrap.py
+Auto-merging console/backend/src/agent_console/business_problem_postgres.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/business_problem_postgres.py
+Auto-merging console/backend/src/agent_console/grant_administration_application.py
+CONFLICT (content): Merge conflict in console/backend/src/agent_console/grant_administration_application.py
+Auto-merging console/backend/src/agent_console/workbench_bff.py
+CONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_bff.py
+Auto-merging console/backend/src/agent_console/workbench_bff_schemas.py
+CONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_bff_schemas.py
+Auto-merging console/backend/src/agent_console/workbench_bootstrap.py
+CONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_bootstrap.py
+Auto-merging console/backend/src/agent_console/workbench_business_problem.py
+CONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_business_problem.py
+Auto-merging console/backend/src/agent_console/workbench_grant_targets.py
+CONFLICT (add/add): Merge conflict in console/backend/src/agent_console/workbench_grant_targets.py
+Auto-merging console/backend/tests/test_workbench_bff.py
+CONFLICT (add/add): Merge conflict in console/backend/tests/test_workbench_bff.py
+Auto-merging console/backend/tests/test_workbench_creator_continuation_postgres.py
+CONFLICT (add/add): Merge conflict in console/backend/tests/test_workbench_creator_continuation_postgres.py
+Auto-merging console/frontend/playwright.config.ts
+CONFLICT (content): Merge conflict in console/frontend/playwright.config.ts
+Auto-merging console/frontend/src/App.tsx
+CONFLICT (content): Merge conflict in console/frontend/src/App.tsx
+Auto-merging console/frontend/src/api/businessWorkspace.ts
+CONFLICT (add/add): Merge conflict in console/frontend/src/api/businessWorkspace.ts
+Auto-merging console/frontend/src/components/ConsoleShell.tsx
+CONFLICT (content): Merge conflict in console/frontend/src/components/ConsoleShell.tsx
+Auto-merging console/frontend/src/problems/ProblemConversation.tsx
+CONFLICT (add/add): Merge conflict in console/frontend/src/problems/ProblemConversation.tsx
+Auto-merging console/frontend/src/problems/ProblemTaskSummary.tsx
+CONFLICT (add/add): Merge conflict in console/frontend/src/problems/ProblemTaskSummary.tsx
+Auto-merging console/frontend/src/problems/ProblemWorkspacePage.tsx
+CONFLICT (content): Merge conflict in console/frontend/src/problems/ProblemWorkspacePage.tsx
+Auto-merging console/frontend/src/problems/SuccessCriterionCard.tsx
+CONFLICT (add/add): Merge conflict in console/frontend/src/problems/SuccessCriterionCard.tsx
+Auto-merging console/frontend/src/problems/WorkbenchErrorNotice.tsx
+CONFLICT (add/add): Merge conflict in console/frontend/src/problems/WorkbenchErrorNotice.tsx
+Auto-merging console/frontend/src/problems/problemConversationModel.ts
+CONFLICT (add/add): Merge conflict in console/frontend/src/problems/problemConversationModel.ts
+Auto-merging console/frontend/src/styles/product-experience.css
+CONFLICT (content): Merge conflict in console/frontend/src/styles/product-experience.css
+Auto-merging console/frontend/src/styles/resource-management.css
+Auto-merging console/frontend/tests/e2e/platform-support-surfaces.spec.ts
+CONFLICT (content): Merge conflict in console/frontend/tests/e2e/platform-support-surfaces.spec.ts
+Auto-merging console/frontend/tests/e2e/w2a-honest-shell.spec.ts
+CONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w2a-honest-shell.spec.ts
+Auto-merging console/frontend/tests/e2e/w3-native-https-live.spec.ts
+CONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w3-native-https-live.spec.ts
+Auto-merging console/frontend/tests/e2e/w3-success-criteria-live.spec.ts
+CONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w3-success-criteria-live.spec.ts
+Auto-merging console/frontend/tests/e2e/w3-success-criteria.spec.ts
+CONFLICT (add/add): Merge conflict in console/frontend/tests/e2e/w3-success-criteria.spec.ts
+Auto-merging console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
+CONFLICT (content): Merge conflict in console/frontend/tests/e2e/wave-3b-product-technical-evidence.spec.ts
+Auto-merging console/frontend/tests/test_s5_v023_impl_299_business_workspace.py
+CONFLICT (add/add): Merge conflict in console/frontend/tests/test_s5_v023_impl_299_business_workspace.py
+Auto-merging console/frontend/tests/test_v023_product_experience.py
+Auto-merging scripts/acceptance/isolated_browser_harness.py
+CONFLICT (content): Merge conflict in scripts/acceptance/isolated_browser_harness.py
+Auto-merging tests/test_s5_impl_072_isolated_browser_harness.py

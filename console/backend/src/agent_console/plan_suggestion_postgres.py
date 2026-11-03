@@ -86,6 +86,11 @@ class PostgresPlanningRepository:
         return ProposalRevision.model_validate(row["record"])
 
     def add_proposal(self, cursor, scope, proposal):
+        if proposal.origin is not None and self._scope(scope) != (
+            proposal.origin.namespace,
+            proposal.origin.security_domain,
+        ):
+            raise PlanningError("SYNTHETIC_PLAN_SCOPE_DENIED")
         row = cursor.execute(
             "SELECT record FROM workflow_planning.proposals "
             "WHERE namespace=%s AND security_domain=%s AND proposal_id=%s "

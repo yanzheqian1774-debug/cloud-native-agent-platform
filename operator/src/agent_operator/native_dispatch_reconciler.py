@@ -72,10 +72,13 @@ class NativeDispatchAssembly:
     worker: NativeDispatchWorker
     execution_repository: object
     authority_repository: object
+    prepared_skill_composition: object | None = None
 
     def close(self) -> None:
         self.execution_repository.pool.close()
         self.authority_repository.close()
+        if self.prepared_skill_composition is not None:
+            self.prepared_skill_composition.close()
 
 
 class KubernetesNativeTaskPort:
@@ -209,6 +212,43 @@ class HttpNativeTransport:
         )
 
 
+class ManagedSkillNativeTransport:
+    supports_prepared_execution = True
+
+    def __init__(self, caller):
+        self.caller = caller
+        self.legacy = HttpNativeTransport()
+
+    def invoke(self, command):
+        if not command.authorization_resource.startswith(
+            "governed-execution:prepared:"
+        ):
+            return self.legacy.invoke(command)
+        try:
+            state, output = self.caller.invoke(command)
+        except Exception as exc:
+            from agent_console.execution_preparation import ExecutionPreparationError
+
+            if (
+                isinstance(exc, ExecutionPreparationError)
+                and str(exc) == "PREPARED_CANCEL_REQUESTED_BEFORE_SKILL"
+            ):
+                raise TaskExecutionError(
+                    "PreparedCancellationStopped",
+                    "取消请求已核验; 尚未调用 Skill",
+                    False,
+                ) from exc
+            # No inferred stop after an incomplete owner transaction/readback.
+            raise TaskExecutionError(
+                "ExecutionOutcomeUnknown", "受管执行结果待核验", False
+            ) from exc
+        if state == "SUCCEEDED":
+            return output
+        if state == "FAILED":
+            raise TaskExecutionError("ManagedSkillFailed", "受管 Skill 执行失败", False)
+        raise TaskExecutionError("ExecutionOutcomeUnknown", "受管执行结果待核验", False)
+
+
 class NativeDispatchWorker:
     def __init__(
         self,
@@ -221,6 +261,7 @@ class NativeDispatchWorker:
         worker_id: str,
         task_prefix: str = "native-dispatch",
         checkpoint: Callable[[str], None] = lambda _name: None,
+        prepare_ready: Callable[[], None] | None = None,
     ) -> None:
         if not re.fullmatch(r"[a-z0-9](?:[-a-z0-9]{0,28}[a-z0-9])?", task_prefix):
             raise NativeDispatchWorkerError("NATIVE_DISPATCH_TASK_PREFIX_INVALID")
@@ -232,6 +273,7 @@ class NativeDispatchWorker:
         self.worker_id = worker_id
         self.task_prefix = task_prefix
         self.checkpoint = checkpoint
+        self.prepare_ready = prepare_ready
 
     def task_name(self, command: NativeDispatchCommand) -> str:
         suffix = hashlib.sha256(str(command.command_id).encode()).hexdigest()[:32]
@@ -240,6 +282,8 @@ class NativeDispatchWorker:
     def run_once(self) -> DispatchRunResult:
         claim = self.repository.resume_effect_started(self.worker_id)
         if claim is None:
+            if self.prepare_ready is not None:
+                self.prepare_ready()
             claim = self.repository.claim_next(self.worker_id)
         if claim is None:
             return DispatchRunResult("IDLE", None)
@@ -248,6 +292,13 @@ class NativeDispatchWorker:
 
     def run_claim(self, claim: NativeDispatchClaim) -> DispatchRunResult:
         command = claim.command
+        if command.authorization_resource.startswith(
+            "governed-execution:prepared:"
+        ) and not getattr(self.transport, "supports_prepared_execution", False):
+            raise NativeDispatchWorkerError("PREPARED_MANAGED_SKILL_TRANSPORT_REQUIRED")
+        stop = getattr(self.repository, "stop_prepared_before_effect", None)
+        if stop is not None and stop(claim):
+            return DispatchRunResult("CANCELLED", str(command.command_id))
         task_name = self.task_name(command)
         permission = self.repository.permit_effect(
             claim, task_name, self.authorization_check
@@ -409,7 +460,6 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
     from agent_console.authority_contracts import (
         AuthenticationSource,
         AuthorityScope,
-        ExactGrant,
         TrustedRequestContext,
     )
     from agent_console.authority_postgres import PostgresAuthorityRepository
@@ -447,6 +497,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
     execution = PostgresExecutionAuthorityRepository(
         database_url, migration_path=Path(execution_migration)
     )
+    prepared_composition = None
     try:
         authority.migrate()
         active = authority.active_generation()
@@ -480,20 +531,20 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 AuthenticationSource(command.authentication_source),
                 generation.policy_version,
             )
-            grant = ExactGrant(
-                command.authorization_owner,
-                command.authorization_action,
-                command.authorization_resource,
+            from agent_console.prepared_execution_lineage import dispatch_grants
+
+            grants = dispatch_grants(connection, command)
+            return all(
+                reader.has_current_grants(
+                    context,
+                    grants,
+                    now=datetime.now(UTC),
+                    generation=command.authority_generation.value,
+                    recovery_epoch=command.recovery_epoch.value,
+                    connection=connection,
+                    configure_transaction=False,
+                )
             )
-            return reader.has_current_grants(
-                context,
-                (grant,),
-                now=datetime.now(UTC),
-                generation=command.authority_generation.value,
-                recovery_epoch=command.recovery_epoch.value,
-                connection=connection,
-                configure_transaction=False,
-            )[0]
 
         completion_service = ExecutionCompletionService(
             execution, PostgresExecutionCompletionWriter(execution)
@@ -565,17 +616,49 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 )
             )
 
+        transport = HttpNativeTransport()
+        ready_driver = None
+        prepared_mode = os.environ.get("NATIVE_DISPATCH_PREPARED_SKILL", "")
+        if prepared_mode:
+            if prepared_mode not in {"synthetic-cost-v1", "synthetic-delivery-v1"}:
+                raise NativeDispatchWorkerError("PREPARED_SKILL_CONFIGURATION_INVALID")
+            from agent_console.prepared_native_composition import compose
+
+            caller, prepared_composition = compose(
+                execution.pool,
+                database_url,
+                Path(execution_migration).parent,
+                reader,
+                generation,
+                authorization_check,
+                mode=prepared_mode,
+            )
+            transport = ManagedSkillNativeTransport(caller)
+            from agent_console.prepared_native_composition import (
+                owner_authority_factory,
+            )
+            from agent_console.prepared_native_coordinator import PreparedReadyDriver
+
+            ready_driver = PreparedReadyDriver(
+                execution,
+                owner_authority_factory(reader, generation, authorization_check),
+            )
         worker = NativeDispatchWorker(
             execution,
             KubernetesNativeTaskPort(),
-            HttpNativeTransport(),
+            transport,
             authorization_check,
             complete,
             worker_id=worker_id,
             task_prefix=task_prefix,
+            prepare_ready=ready_driver.tick if ready_driver else None,
         )
-        return NativeDispatchAssembly(worker, execution, authority)
+        return NativeDispatchAssembly(
+            worker, execution, authority, prepared_composition
+        )
     except Exception:
         execution.pool.close()
         authority.close()
+        if prepared_composition is not None:
+            prepared_composition.close()
         raise

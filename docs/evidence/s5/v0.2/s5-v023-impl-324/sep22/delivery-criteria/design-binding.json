@@ -1,0 +1,11 @@
+{
+  "at": "2026-09-22T07:17:30.715058+00:00",
+  "baseline": "R30/P02",
+  "file": "/Users/tristan/Downloads/Resource-Management-PC-R30/pages/P02.png",
+  "sha256": "e7945a4a38fa0fb893e5b9664403c35ce041a1fb20571bb9da694362d60fae4b",
+  "route": "/work?problem=5fe6a7c9-3f92-5a09-bd91-bf3380109087&resource=exact",
+  "readBeforeImplementation": true,
+  "change": "explicit case binding and exact GET permission wording, no layout redesign",
+  "visualAcceptance": "not claimed; live resource state differs from reference mockup",
+  "zoom": "1229x819 CSS viewport approximates 125% of1536x1024, not native browser zoom"
+}

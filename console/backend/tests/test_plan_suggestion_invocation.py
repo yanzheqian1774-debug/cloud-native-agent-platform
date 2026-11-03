@@ -20,7 +20,16 @@ from test_plan_suggestion_v2 import proposal, repository  # noqa: F401
 
 @pytest.mark.parametrize(
     "outcome",
-    ["valid", "clarification", "invalid", "unknown", "denied", "budget", "input"],
+    [
+        "valid",
+        "clarification",
+        "invalid",
+        "unknown",
+        "denied",
+        "budget",
+        "input",
+        "admission",
+    ],
 )
 @pytest.mark.parametrize("modern_policy", [False, True])
 def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_policy):  # noqa: F811
@@ -150,6 +159,36 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
             assert replay["result"]["technical_status"] == "OUTCOME_UNKNOWN"
             assert provider.calls == 0
         return
+    if outcome == "admission":
+        from contextlib import nullcontext
+
+        class ExactAdmission:
+            ready = False
+            record = None
+
+            def prepare(self, request, record):
+                self.record = self.record or record
+                return {
+                    "invocation": self.record,
+                    "result": {
+                        "technical_status": "AUTHORIZATION_PENDING",
+                        "kind": None,
+                    },
+                    "admission": {"ready": self.ready},
+                }
+
+            def dispatch_guard(self, record):
+                return nullcontext()
+
+        service.exact_admission = ExactAdmission()
+        pending = service.begin(principal, request)
+        assert pending["result"]["technical_status"] == "AUTHORIZATION_PENDING"
+        assert service.begin(principal, request) == pending
+        assert (
+            invocations.find_request(scope, principal.principal_id, "same-key") is None
+        )
+        assert provider.calls == 0
+        service.exact_admission.ready = True
     result = service.begin(principal, request)
     assert service.begin(principal, request) == result
     assert provider.calls == 1
@@ -177,6 +216,7 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
     assert target["source_proposal"] is None
     expected = {
         "valid": "VALID_SUGGESTION",
+        "admission": "VALID_SUGGESTION",
         "clarification": "NEEDS_CLARIFICATION",
         "invalid": "INVALID",
         "unknown": None,

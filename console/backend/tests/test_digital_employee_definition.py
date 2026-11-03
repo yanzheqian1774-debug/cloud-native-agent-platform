@@ -144,7 +144,7 @@ class Connection:
 def test_workbench_repository_read_is_exact_minimal_and_digest_checked() -> None:
     value = revision()
     connection = Connection(
-        {"record": value.record, "digest": value.digest},
+        {"record": value.record, "digest": value.digest, "aggregate_version": 3},
         (
             {
                 "action": "CREATE",
@@ -167,10 +167,13 @@ def test_workbench_repository_read_is_exact_minimal_and_digest_checked() -> None
         "digest": value.digest,
         "lifecycleState": "DRAFT",
         "publicationState": "NOT_PUBLISHED",
+        "aggregateVersion": 3,
     }
     assert len(connection.calls) == 2
     statement, parameters = connection.calls[0]
     assert "digital_employee_definition.revisions" in statement
+    assert "d.aggregate_version" in statement
+    assert "FOR SHARE OF d" in statement
     assert "digital_employee_definition.facts" not in statement
     assert parameters == (
         value.scope.namespace,

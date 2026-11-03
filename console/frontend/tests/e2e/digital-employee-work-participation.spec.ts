@@ -10,6 +10,7 @@ const employeeSummary = {
 };
 const employee = {
   ...employeeSummary,
+  aggregateVersion: 1,
   resourceKind: "DIGITAL_EMPLOYEE_DEFINITION",
   responsibilities: ["审查供应商质量工作"],
   members: [
@@ -560,7 +561,7 @@ test("TEST_ADAPTER lifecycle authority includes exact Employee and Agent reads",
   });
   await page.goto("/digital-employees");
   await page.getByRole("button", { name: /供应商质量负责人/ }).click();
-  await page.getByLabel("期望聚合版本").fill("1");
+  await expect(page.getByLabel("期望聚合版本")).toHaveCount(0);
   await page.getByRole("button", { name: /校验修订/ }).click();
   await page.getByRole("button", { name: "确认提交" }).click();
   await page.getByRole("button", { name: "提交正式权限申请" }).click();
@@ -632,7 +633,7 @@ test("TEST_ADAPTER late CREATE response cannot update an abandoned panel", async
   await expect(page.getByRole("button", { name: /供应商质量负责人/ })).toBeVisible();
 });
 
-test("TEST_ADAPTER lifecycle command requires explicit version and confirmation", async ({ page }) => {
+test("TEST_ADAPTER lifecycle command reads server version and requires confirmation", async ({ page }) => {
   const actions: string[] = [];
   await installAdapter(page, {
     onDefinition: async route => route.fulfill({ json: envelope({ ...employee, publicationState: "NOT_PUBLISHED", lifecycleState: "DRAFT" }) }),
@@ -652,8 +653,8 @@ test("TEST_ADAPTER lifecycle command requires explicit version and confirmation"
   await page.goto("/digital-employees");
   await page.getByRole("button", { name: /供应商质量负责人/ }).click();
   await expect(page.getByRole("heading", { name: "生命周期操作" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /校验修订/ })).toBeDisabled();
-  await page.getByLabel("期望聚合版本").fill("1");
+  await expect(page.getByRole("button", { name: /校验修订/ })).toBeEnabled();
+  await expect(page.getByLabel("期望聚合版本")).toHaveCount(0);
   await page.getByRole("button", { name: /校验修订/ }).click();
   await expect(page.getByText("等待用户明确确认")).toBeVisible();
   await page.getByRole("button", { name: "确认提交" }).click();
@@ -824,4 +825,44 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   expect(await roleInput.evaluate(element => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
   await page.keyboard.press("Tab");
   await expect(page.getByLabel(/职责清单/)).toBeFocused();
+});
+
+test("TEST_ADAPTER lifecycle freezes the latest server version without manual input", async ({ page }) => {
+  const versions: number[] = [];
+  let reads = 0;
+  await installAdapter(page, {
+    onDefinition: async route => {
+      reads += 1;
+      return route.fulfill({ json: envelope({ ...employee, aggregateVersion: reads === 1 ? 1 : 7, publicationState: "NOT_PUBLISHED", lifecycleState: "DRAFT" }) });
+    },
+    onLifecycle: async route => {
+      versions.push(route.request().postDataJSON().expectedVersion);
+      return route.fulfill({ status: 409, json: { reasonCode: "EMPLOYEE_VERSION_CONFLICT" } });
+    },
+  });
+  await page.goto("/digital-employees");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
+  await page.getByRole("button", { name: /校验修订/ }).click();
+  await expect(page.getByText("等待用户明确确认")).toBeVisible();
+  expect(versions).toEqual([]);
+  await expect(page.getByLabel("期望聚合版本")).toHaveCount(0);
+  await page.getByRole("button", { name: "确认提交" }).click();
+  await expect.poll(() => versions).toEqual([7]);
+  await expect(page.getByText("CAS、摘要、转换或成员当前资格冲突：EMPLOYEE_VERSION_CONFLICT", { exact: true })).toBeVisible();
+  await page.reload();
+  expect(versions).toEqual([7]);
+});
+
+test("TEST_ADAPTER lifecycle refuses missing authoritative version", async ({ page }) => {
+  let writes = 0;
+  await installAdapter(page, {
+    onDefinition: async route => route.fulfill({ json: envelope({ ...employee, aggregateVersion: undefined, publicationState: "NOT_PUBLISHED", lifecycleState: "DRAFT" }) }),
+    onLifecycle: async route => { writes += 1; await route.fulfill({ status: 500 }); },
+  });
+  await page.goto("/digital-employees");
+  await page.getByRole("button", { name: /供应商质量负责人/ }).click();
+  await page.getByRole("button", { name: /校验修订/ }).click();
+  await expect(page.getByText("当前服务未提供可核验版本", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "确认提交" })).toHaveCount(0);
+  expect(writes).toBe(0);
 });

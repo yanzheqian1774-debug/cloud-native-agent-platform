@@ -679,6 +679,9 @@ class PostgresExecutionCompletionWriter:
                     ),
                 )
                 self._checkpoint("attempt_terminal")
+                from .prepared_execution_observations import apply_native
+
+                apply_native(connection, claim.command, observation)
             cutover = connection.execute(
                 "SELECT state,authoritative_writer FROM "
                 "execution_authority.evidence_cutover WHERE singleton=true FOR UPDATE"

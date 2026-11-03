@@ -30,7 +30,7 @@ async function login(context: BrowserContext, credential: string): Promise<Page>
 }
 
 async function technicalValue(card: Locator, label: string): Promise<string> {
-  const details = card.locator("details");
+  const details = card.locator("details").filter({ has: card.page().getByText("技术事实", { exact: true }) });
   if (!(await details.getAttribute("open"))) await details.locator("summary").click();
   const value = await details.locator("dt", { hasText: label })
     .locator("xpath=following-sibling::dd[1]").textContent();
@@ -58,11 +58,11 @@ async function authorizeDraft(applicant: Page, administrator: Page): Promise<Loc
   await expect(card).toContainText("AUTHORIZATION_PENDING");
   await approve(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   await expect.poll(() => technicalValue(card, "模型授权申请")).not.toBe("尚未提交");
   await approve(administrator, await technicalValue(card, "模型授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   return card;
 }
 
@@ -132,7 +132,7 @@ test("S5-319 shows authorization denial without a provider call", async ({ brows
   const callsBeforeDenial = await providerCalls(request);
   await deny(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   const denial = card.locator("xpath=ancestor::article[1]").getByRole("alert");
   await expect(denial).toHaveCount(1);
   await expect(denial).toContainText("无法打开该内容");
@@ -154,11 +154,11 @@ test("S5-319 keeps nonterminal foreground calls observable and cancellation unco
   const card = applicant.getByLabel("AI 问题理解与草稿辅助");
   await approve(administrator, await technicalValue(card, "辅助授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   await expect.poll(() => technicalValue(card, "模型授权申请")).not.toBe("尚未提交");
   await approve(administrator, await technicalValue(card, "模型授权申请"));
   await applicant.bringToFront();
-  await card.getByRole("button", { name: "重交正文并刷新授权", exact: true }).click();
+  await card.getByRole("button", { name: "使用已保留正文继续 AI 调用", exact: true }).click();
   await expect(card).toContainText("调用结果尚不确定");
   await expect(card).toContainText("PROVIDER_FOREGROUND_NONTERMINAL");
   const callsAfterDispatch = await providerCalls(request);

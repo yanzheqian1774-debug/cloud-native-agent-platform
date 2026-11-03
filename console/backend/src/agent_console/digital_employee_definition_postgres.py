@@ -361,7 +361,8 @@ class PostgresEmployeeDefinitionRepository:
             identifier(revision_id),
         )
         row = connection.execute(
-            "SELECT r.record,r.digest FROM digital_employee_definition.revisions r "
+            "SELECT r.record,r.digest,d.aggregate_version "
+            "FROM digital_employee_definition.revisions r "
             "JOIN digital_employee_definition.definitions d "
             "USING(namespace,security_domain,definition_id) "
             "WHERE r.namespace=%s AND r.security_domain=%s "
@@ -402,6 +403,7 @@ class PostgresEmployeeDefinitionRepository:
             "revision": row["record"],
             "digest": row["digest"],
             "lifecycleState": _lifecycle_state([str(fact["action"]) for fact in facts]),
+            "aggregateVersion": row["aggregate_version"],
             "publicationState": (
                 "PUBLISHED" if publication == "PUBLISH" else "NOT_PUBLISHED"
             ),

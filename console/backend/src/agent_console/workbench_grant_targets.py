@@ -86,7 +86,7 @@ class WorkbenchGrantTargetValidator:
                     grant.action,
                     grant.exact_resource,
                 )
-            if grant.owner == "AGENT":
+            if grant.owner == "AGENT" and grant.action in {"LIST", "READ"}:
                 if self.agents is None:
                     return False
                 return self.agents.is_known_grant_target_for_workbench(

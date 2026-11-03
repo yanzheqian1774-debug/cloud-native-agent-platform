@@ -1,0 +1,17 @@
+{
+  "observedAt": "2026-09-21T12:44:40.082575+00:00",
+  "workerComposition": "PASS",
+  "transport": "ManagedSkillNativeTransport",
+  "kubernetesContext": "kind-s5-v023-rel-317-r2",
+  "privateContextPinned": true,
+  "counts": {
+    "workflow_runs": 0,
+    "attempts": 0,
+    "native_dispatch_commands": 0
+  },
+  "workerRunOnceCalled": false,
+  "dispatches": 0,
+  "limitations": [
+    "Namespace must be provisioned before admitted execution; no Task has been created."
+  ]
+}

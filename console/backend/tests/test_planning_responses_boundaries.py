@@ -243,13 +243,16 @@ def test_actual_local_https_deadline_reaps_and_replay_never_retries(
         ("oversized", "FAILED", None),
     ],
 )
-def test_local_https_outputs_and_metering_are_independent(network, mode, status, kind):
+def test_local_https_outputs_and_metering_are_independent(
+    network, mode, status, kind, record_property
+):
     network.endpoint.mode = mode
     response = send(network.client)
     value = result(response)
-    assert value["technical_status"] == status
-    assert value["kind"] == kind
     saved = receipt(network, response)
+    record_property("deadline", saved["deadline"])
+    assert value["technical_status"] == status, saved["deadline"]
+    assert value["kind"] == kind
     assert saved["deadline"]["reaped"]
     assert not value.get("proposal")
     assert network.endpoint.requests == 1
@@ -269,7 +272,7 @@ def test_permission_denial_starts_no_worker_and_zero_network(network, monkeypatc
     assert network.endpoint.requests == 0
 
 
-def test_client_cancellation_reaps_and_persists_unknown(network):
+def test_client_cancellation_reaps_and_persists_unknown(network, record_property):
     network.endpoint.mode = "cancel"
 
     async def exercise():
@@ -284,7 +287,19 @@ def test_client_cancellation_reaps_and_persists_unknown(network):
                     headers={"x-csrf-token": "test-csrf"},
                 )
             )
-            assert await asyncio.to_thread(network.endpoint.accepted.wait, 3)
+            reached = await asyncio.to_thread(network.endpoint.accepted.wait, 3)
+            record_property("endpoint_reached_before_cancel", reached)
+            record_property("before_cancel_task_done", task.done())
+            if task.done() and not task.cancelled() and task.exception() is None:
+                record_property(
+                    "deadline_before_cancel",
+                    receipt(network, task.result())["deadline"],
+                )
+            assert reached, (
+                receipt(network, task.result())["deadline"]
+                if task.done() and not task.cancelled() and task.exception() is None
+                else "endpoint not reached before cancellation"
+            )
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task

@@ -52,6 +52,10 @@ class CreateCaseBusinessProblem(CreateBusinessProblem):
     draftInvocationId: str | None = Field(default=None, min_length=1, max_length=200)
 
 
+class CreateCaseCriterion(CreateCriterionRevision):
+    problemId: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 @dataclass(frozen=True, slots=True)
 class OwnerPrincipal:
     principal_id: str
@@ -136,12 +140,22 @@ class BusinessProblemOwnerAdapter:
             if call.operation == "WRITE_CRITERION":
                 result = service.criterion(
                     principal,
-                    CreateCriterionRevision.model_validate(call.payload),
+                    CreateCriterionRevision.model_validate(
+                        {k: v for k, v in call.payload.items() if k != "problemId"}
+                    ),
                     connection=call.connection,
                 )
                 return (
                     self.task_binding(
-                        call.connection, call.context, "SUCCESS_CRITERION", result
+                        call.connection,
+                        call.context,
+                        "SUCCESS_CRITERION",
+                        result,
+                        **(
+                            {"problem_id": call.payload["problemId"]}
+                            if call.payload.get("problemId")
+                            else {}
+                        ),
                     )
                     if self.task_binding
                     else result
@@ -265,6 +279,10 @@ def _criterion_write(context, path, payload, query):
                 "READ",
                 criterion_revision_resource(str(payload["predecessorRevisionId"])),
             )
+        )
+    if payload.get("problemId"):
+        values.append(
+            _grant("BUSINESS_PROBLEM", "READ", problem_resource(payload["problemId"]))
         )
     return tuple(values)
 
@@ -397,7 +415,7 @@ def business_problem_operations(
             "WRITE_CRITERION",
             "POST",
             f"{PREFIX}/success-criteria",
-            CreateCriterionRevision,
+            CreateCaseCriterion,
             None,
             _criterion_write,
             handler,
