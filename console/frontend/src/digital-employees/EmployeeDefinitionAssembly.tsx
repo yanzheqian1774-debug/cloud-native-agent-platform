@@ -70,15 +70,12 @@ export function EmployeeDefinitionAssembly({
 
   const selectedAgent = agents.find(agent => `${agent.definitionId}\u0000${agent.revisionId}` === agentIdentity);
   const responsibilityList = responsibilities.split("\n").map(value => value.trim()).filter(Boolean);
-  const valid = Boolean(
-    definitionId.trim()
-    && revisionId.trim()
-    && role.trim()
-    && responsibilityList.length >= 1
-    && responsibilityList.length <= 32
-    && selectedAgent?.enabled
-    && !selectedAgent?.archived,
-  );
+  const readiness = [
+    { label: "角色与职责", ready: Boolean(role.trim()) && responsibilityList.length >= 1 && responsibilityList.length <= 32 },
+    { label: "可用 Agent 版本", ready: Boolean(selectedAgent?.enabled && !selectedAgent.archived) },
+    { label: "定义与修订标识", ready: Boolean(definitionId.trim() && revisionId.trim()) },
+  ];
+  const valid = readiness.every(item => item.ready);
 
   async function prepare() {
     if (!valid || !selectedAgent || inFlight.current) return;
@@ -183,24 +180,24 @@ export function EmployeeDefinitionAssembly({
 
   return <section className="employee-assembly" aria-labelledby="employee-create-title">
     <header className="employee-section-heading">
-      <div><p className="eyebrow">首批单 Agent 装配</p><h2 id="employee-create-title">创建数字员工定义</h2><p>先定义员工角色与职责，再选择一个正式 Agent 候选完成装配。</p></div>
+      <div><p className="eyebrow">角色管理 / 能力装配</p><h2 id="employee-create-title">创建数字员工定义</h2><p>填写角色职责，选择承担职责的 Agent 版本，核对后保存为员工草稿。</p></div>
       <span className="employee-capability-state available"><i />正式权限申请与恢复已接通</span>
     </header>
 
-    <div className="employee-assembly-grid">
+    <div className="assembly-workspace"><div className="employee-assembly-grid">
       <div className="employee-form-card">
-        <h3>1. 业务定义</h3>
-        <label>职责角色<input value={role} maxLength={200} onChange={event => setRole(event.target.value)} placeholder="例如：供应商质量负责人" /></label>
-        <label>职责清单（每行一项，1–32 项）<textarea value={responsibilities} onChange={event => setResponsibilities(event.target.value)} placeholder="审查供应商质量异常&#10;协调整改与复核" /></label>
+        <h3>01 · 角色与职责</h3>
+        <label>职责角色<input disabled={Boolean(frozen)||busy} value={role} maxLength={200} onChange={event => setRole(event.target.value)} placeholder="例如：供应商质量负责人" /></label>
+        <label>职责清单（每行一项，1–32 项）<textarea disabled={Boolean(frozen)||busy} value={responsibilities} onChange={event => setResponsibilities(event.target.value)} placeholder="审查供应商质量异常&#10;协调整改与复核" /></label>
         <details><summary>高级设置 · 技术身份需配置（2 项必填）</summary>
           <p className="employee-identity-requirement">正式 CREATE 契约要求两个技术 ID，当前没有已批准的自动生成规则。首次创建不需要前驱修订，聚合版本固定从 0 开始。</p>
-          <label>Employee Definition ID<input value={definitionId} onChange={event => setDefinitionId(event.target.value)} placeholder="employee:quality-lead" /></label>
-          <label>Revision ID<input value={revisionId} onChange={event => setRevisionId(event.target.value)} placeholder="employee-revision:quality-lead:1" /></label>
+          <label>Employee Definition ID<input disabled={Boolean(frozen)||busy} value={definitionId} onChange={event => setDefinitionId(event.target.value)} placeholder="employee:quality-lead" /></label>
+          <label>Revision ID<input disabled={Boolean(frozen)||busy} value={revisionId} onChange={event => setRevisionId(event.target.value)} placeholder="employee-revision:quality-lead:1" /></label>
         </details>
       </div>
 
       <div className="employee-form-card">
-        <h3>2. 选择一个正式 Agent 候选</h3>
+        <h3>02 · 装配执行能力</h3>
         <p>这里显示可用于创建的候选；它们不同于员工详情中的已绑定成员。选择候选不会授予详情读取权限。</p>
         {agentError && <p role="alert" className="employee-inline-error">{agentError}</p>}
         <div className="employee-agent-options">{agents.map(agent => { const identity = `${agent.definitionId}\u0000${agent.revisionId}`; const selectable = agent.enabled && !agent.archived; const chosen = agentIdentity === identity; return <label key={identity} className={chosen ? "selected" : ""}>
@@ -212,6 +209,14 @@ export function EmployeeDefinitionAssembly({
       </div>
     </div>
 
+    <aside className="assembly-preview" aria-label="装配预览">
+      <span className="px-eyebrow">装配预览</span><h3>{role.trim() || "待定义角色"}</h3>
+      <h4>职责边界</h4>{responsibilityList.length ? <ul>{responsibilityList.map((d,i)=><li key={i}>{d}</li>)}</ul> : <p>填写这位员工负责的业务事项。</p>}
+      <h4>执行成员</h4><p>{selectedAgent?.name ?? "请选择 Agent"}</p>{selectedAgent && <code>{selectedAgent.revisionId}</code>}
+      <h4>创建前核对</h4><ul>{readiness.map(({ ready, label }) =>
+        <li key={label}><b className={ready ? "ready" : ""}>{ready ? "已填写" : "待补齐"}</b> {label}</li>
+      )}</ul>
+    </aside></div>
     {!frozen && <div className="employee-form-actions"><span>{valid ? "输入已满足前端校验；正式 owner 仍会再次校验。" : "请填写业务定义、选择一个可用 Agent，并在高级设置中配置契约要求的技术 ID。"}</span><button type="button" className="px-primary-button" disabled={!valid || busy} onClick={() => void prepare()}>检查并进入确认</button></div>}
 
     {frozen && <section className="employee-command-confirmation" aria-label="创建命令确认">

@@ -682,3 +682,17 @@
   .employee-management .employee-pagination span { font-size: .65rem; }
   .employee-management .employee-assembly { padding-bottom: 2rem; }
 }
+
+.employee-management .assembly-workspace { display:grid; grid-template-columns:minmax(0,2fr) minmax(230px,1fr); gap:16px; align-items:start; margin-block:16px }
+.employee-management .assembly-workspace .employee-assembly-grid { grid-template-columns:1fr; margin:0 }
+.assembly-preview { position:sticky; top:12px; padding:18px; background:#f3f7ff; border:1px solid #ceddf1; border-radius:12px; overflow-wrap:anywhere }
+.assembly-preview h3,.assembly-preview h4,.assembly-bindings h4 { margin:6px 0 }
+.assembly-preview h4 { border-top:1px solid #d6e2f1; padding-top:12px; margin-top:14px }
+.assembly-preview p,.assembly-preview ul { margin:6px 0; font-size:14px }
+.assembly-preview ul { padding-left:18px }
+.assembly-preview b { color:#835707 }.assembly-preview .ready { color:#22634c }
+.assembly-bindings { padding:15px; border:1px solid #d6e2f1; border-radius:10px; background:white }
+.assembly-bindings table { width:100%; border-collapse:collapse; font-size:14px; overflow-wrap:anywhere }
+.assembly-bindings th,.assembly-bindings td { text-align:left; padding:8px; border-bottom:1px solid #e3eaf4 }
+.assembly-bindings thead { background:#eff5fd }.assembly-bindings small { display:block; color:#52677f }
+@media(max-width:850px){.employee-management .assembly-workspace{grid-template-columns:1fr}.assembly-preview{position:static}}

@@ -393,6 +393,8 @@ async function fillCreateForm(page: Page) {
   await page.getByText("高级设置 · 技术身份需配置").click();
   await page.getByLabel("Employee Definition ID").fill("employee:new-quality");
   await page.getByLabel("Revision ID", { exact: true }).fill("employee-revision:new-quality:1");
+  await expect(page.getByLabel("装配预览")).toContainText("供应商质量负责人");
+  await expect(page.getByLabel("装配预览")).toContainText("协调整改与复核");
   await page.getByRole("button", { name: "检查并进入确认" }).click();
   await expect(page.getByLabel("创建命令确认")).toBeVisible();
 }
@@ -712,6 +714,8 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.screenshot({ path: testInfo.outputPath("desktop-detail-test-adapter.png") });
   await page.getByRole("button", { name: "职责与能力", exact: true }).click();
   await expect(page.getByRole("heading", { name: "职责与能力", exact: true })).toBeVisible();
+  await expect(page.getByLabel("能力装配清单").locator("tbody tr")).toHaveCount(6);
+  await page.screenshot({path:test.info().outputPath("employee-bindings.png")});
   await expect(page.getByRole("heading", { name: "当前员工职责" })).toBeVisible();
   await expect(page.getByText("核对业务异常并形成可追溯结论")).toBeVisible();
   await expect(page.getByRole("heading", { name: "已绑定 Agent 的职责与能力" })).toBeVisible();

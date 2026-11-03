@@ -32,7 +32,7 @@ type CreatePayload={title:string;description:string;ownerId:string;draftInvocati
 type PendingCreate={payload:CreatePayload;key:string;turnId:string;version:number;epoch:number};
 type PendingProblemLink={invocationId:string;problemId:string;problemRevisionId:string;problemDigest:string;contextKey:string};
 type Supplement={id:string;text:string;assisted?:boolean};
-type ActiveAssistance={uiRevision:number;messages:UserFactMessage[];result:DraftAssistanceResult;key:string;content:string;originalText:string;contextKey:string};
+type ActiveAssistance={previousUnderstanding?:DraftAssistanceResult["understanding"];uiRevision:number;messages:UserFactMessage[];result:DraftAssistanceResult;key:string;content:string;originalText:string;contextKey:string};
 const EMPTY_RECORD:RecordDraft={title:"",description:""};
 const latest=<T extends {revision:number}>(values:T[])=>[...values].sort((a,b)=>b.revision-a.revision)[0];
 const readable=formatTime;
@@ -97,7 +97,7 @@ export function ProblemWorkspacePage(){
   function applyAssistance(next:ActiveAssistance){
     setAssistance(next);const result=next.result;
     if(next.uiRevision!==uiRevision.current)return;
-    if(result.resultKind==="DRAFT_READY"&&result.draft){setTurn({id:result.invocationId,originalText:next.originalText,draft:result.draft,understanding:result.understanding,version:next.uiRevision,phase:"DRAFT",source:result.transport==="SYNTHETIC"?"AI_SYNTHETIC":"AI_PROVIDER"});setComposerTarget("SUPPLEMENT")}
+    if(result.resultKind==="DRAFT_READY"&&result.draft){setTurn({id:result.invocationId,originalText:next.originalText,draft:result.draft,understanding:result.understanding,previousUnderstanding:next.previousUnderstanding,version:next.uiRevision,phase:"DRAFT",source:result.transport==="SYNTHETIC"?"AI_SYNTHETIC":"AI_PROVIDER"});setComposerTarget("SUPPLEMENT")}
     else if(result.resultKind==="NEEDS_CLARIFICATION"){setTurn(null);setComposerTarget("SUPPLEMENT")}
     if(inputValue.current.trim()===next.messages.at(-1)?.text){inputValue.current="";setComposer("")}
   }
@@ -119,7 +119,7 @@ export function ProblemWorkspacePage(){
     catch(error){setContextNotice(error instanceof Error?error.message:"当前问题内容过长。");return}
     const key=newIdempotencyKey("draft-assistance");assistanceFlight.current=true;setBusy(true);setFailure(null);setContextNotice("");
     userMessages.current=messages;
-    try{const result=await beginDraftAssistance(session.csrfToken,{idempotencyKey:key,content,...(previous?{parentContextId:previous.result.contextId,parentTurnId:previous.result.turnId,expectedParentVersion:previous.result.turnVersion,predecessorInvocationId:previous.result.invocationId}:{})});if(token!==epoch.current||sessionKey(sessionRef.current??session)!==currentSession)return;applyAssistance({result,key,content,uiRevision:revision,messages,originalText:previous?.originalText||value,contextKey:currentSession});setSuccessorMode(false);setParams(current=>{current.set("invocation",result.invocationId);return current},{replace:true})}
+    try{const result=await beginDraftAssistance(session.csrfToken,{idempotencyKey:key,content,...(previous?{parentContextId:previous.result.contextId,parentTurnId:previous.result.turnId,expectedParentVersion:previous.result.turnVersion,predecessorInvocationId:previous.result.invocationId}:{})});if(token!==epoch.current||sessionKey(sessionRef.current??session)!==currentSession)return;applyAssistance({result,key,content,previousUnderstanding:previous ? turn?.understanding ?? previous.result.understanding : null,uiRevision:revision,messages,originalText:previous?.originalText||value,contextKey:currentSession});setSuccessorMode(false);setParams(current=>{current.set("invocation",result.invocationId);return current},{replace:true})}
     catch(error){if(token===epoch.current)setFailure({error,operation:"请求 AI 草稿辅助",mutation:true})}finally{assistanceFlight.current=false;if(token===epoch.current)setBusy(false)}
   }
   async function refreshAssistance(){if(!session||!assistance||!assistance.content||!assistance.key||busy)return;const token=epoch.current;setBusy(true);setFailure(null);try{const result=await resubmitDraftAssistance(session.csrfToken,assistance.result.invocationId,{idempotencyKey:assistance.key,content:assistance.content});if(token===epoch.current)applyAssistance({...assistance,result})}catch(error){if(token===epoch.current)setFailure({error,operation:"刷新 AI 草稿辅助",mutation:true})}finally{if(token===epoch.current)setBusy(false)}}
@@ -289,7 +289,13 @@ export function ProblemWorkspacePage(){
     {recoveryInvocation&&!assistance&&<section className="px-inline-card" aria-label="恢复原 AI 调用"><h2>读取原 AI 调用</h2><p>链接只定位原 invocation，不含原文或权限。请先只读核对；登录和刷新不会重交正文或新建申请。</p><code>{recoveryInvocation}</code><p><button type="button" disabled={!session||recoveryBusy} onClick={()=>void readOriginalAssistance()}>读取原调用事实（只读）</button></p>{recoveryError!==null&&<WorkbenchErrorNotice error={recoveryError} operation="观察 AI 原调用"/>}</section>}
     <JourneySteps current={params.get("execution")&&selected?4:selectedId||turn?2:1} executionAvailable={Boolean(params.get("execution")&&selected)}/><div className="px-workspace-body"><ConversationFrame newMessageKey={messageKey} composer={<ConversationComposer value={composer} onChange={changeComposer} sendBlocked={assistanceEnabled&&!selectedId&&(busy||assistanceNeedsRecovery)} onSend={sendComposer} onCancelEdit={cancelComposerEdit} disabled={busy&&composerTarget!=="SUPPLEMENT"&&!assistanceEnabled} assisted={assistanceEnabled&&!selectedId} contextLabel={canonical?.title} mode={composerTarget==="SUPPLEMENT"&&selected?"FORMAL_SUPPLEMENT":composerTarget==="DRAFT"?"DRAFT_REPLACE":composerTarget==="FORMAL"?"FORMAL_REPLACE":composerTarget==="CRITERION_EDIT"?"CRITERION_REPLACE":composerTarget}/> }>
       {contextNotice&&<SystemMessage><section className="px-inline-card px-context-card" role="status"><span className="px-eyebrow">上下文已隔离</span><h2>请在当前可信会话重新开始</h2><p>{contextNotice}</p></section></SystemMessage>}
-      {!turn&&!visibleAssistance&&!selectedId&&<SystemMessage><section className="px-welcome"><h2>你希望解决什么问题？</h2><p>{assistanceEnabled?"先说清你希望解决的问题。需要补充时会在这里询问，你可以继续纠正，最后核对并确认创建。":"直接描述即可。发送后核对可修改草稿，只有你确认后才会正式创建问题。"}</p><p>{assistanceEnabled?"辅助来源会清晰标识；确认前不会创建问题，也不会启动任务或准备资源。":"本页不会自动调用数字员工、Agent、Skill、知识库、附件或模型。"}</p></section></SystemMessage>}
+      {!turn&&!visibleAssistance&&!selectedId&&<SystemMessage><section className="px-welcome"><span className="px-eyebrow">业务问题工作台</span><h2>你希望解决什么问题？</h2><p>先说业务目标，随后在对话里补充口径、核对理解，再确认创建。</p>
+        <div className="conversation-examples" aria-label="问题示例">{[
+          ["采购交付","梳理本月延期交付的供应商，列出受影响的订单。"],
+          ["售后质量","哪些车型的重复维修增加了？请按故障类型核对。"],
+          ["费用分析","分析本季度费用变化，单独列出缺少分摊依据的项目。"],
+        ].map(([label,prompt])=><button key={label} type="button" disabled={busy||Boolean(composer.trim())} onClick={()=>{changeComposer(prompt);document.getElementById("problem-composer")?.focus()}}>{label}<span aria-hidden="true"> ↗</span></button>)}</div>
+        <small>选择示例后可编辑，点击发送才会提交。{assistanceEnabled?"确认前不会创建问题，也不会启动任务或准备资源。":"当前为手工草稿模式。本页不会自动调用数字员工、Agent、Skill、知识库、附件或模型。"}</small></section></SystemMessage>}
       {visibleAssistance?.result.submittedAt&&<SystemMessage><p>本轮消息提交时间：<time dateTime={visibleAssistance.result.submittedAt}>{formatTime(visibleAssistance.result.submittedAt)}</time>（服务端记录）</p></SystemMessage>}
       {(turn?.phase!=="CREATED")&&(turn||visibleAssistance)&&<UserMessage>{turn?.originalText??visibleAssistance?.originalText}</UserMessage>}
       {supplements.map(item=><Fragment key={item.id}><UserMessage>{item.text}</UserMessage>{!item.assisted&&<SystemMessage><section className="px-inline-card px-supplement-card" role="status"><span className="px-eyebrow">{item.assisted?"AI 补问回复":"页内补充"}</span><h2>{item.assisted?"已形成新的辅助轮次":"已保留，尚未采用"}</h2><p>{item.assisted?"正文只在本次受控请求和当前页面内存中使用；服务端仅保留恢复与审计所需的非正文记录。":"这段内容仅保留在当前页面，尚未修改正式问题，也不会自动发送给管理员。刷新、离开或切换可信上下文可能丢失。"}</p>{selected&&selected.sets.length===0&&(!criterionTurn||criterionTurn.phase==="CANCELLED"||criterionTurn.phase==="SAVED")&&<button type="button" onClick={()=>startCriterion(item.text)}>明确采用为成功标准</button>}</section></SystemMessage>}</Fragment>)}

@@ -1,6 +1,6 @@
 import {Fragment,useEffect,useRef,useState,type FormEvent,type KeyboardEvent,type ReactNode} from "react";
 import {formatTime} from "../journey/formatTime";
-import {sourceLabels,understandingDisplay,isUnstructuredStatement} from "./problemUnderstandingModel";
+import {fieldLabels,sourceLabels,understandingDisplay,isUnstructuredStatement} from "./problemUnderstandingModel";
 import type {DraftTurn,ProblemDraft} from "./problemConversationModel";
 
 export function ConversationFrame({children,composer,newMessageKey,startAtTop=false}:{children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
@@ -71,12 +71,22 @@ export function DraftCard({turn,busy,confirmBlocked=false,composerEditing,onConf
     event.preventDefault();event.stopPropagation();
     if(!event.repeat&&!event.nativeEvent.isComposing&&event.keyCode!==229&&!composing.current&&!confirmBlocked&&!busy){onConfirm()}
   }
+  const previous = turn.previousUnderstanding;
+  const fields = [...new Set([...(previous ?? []), ...(turn.understanding ?? [])].map(item=>item.field))];
+  const changes = previous && turn.understanding ? fields.flatMap(field=>{
+    const before = previous.filter(item=>item.field===field);
+    const after = turn.understanding!.filter(item=>item.field===field);
+    if(before.length===after.length && before.every((item,i)=>item.value===after[i].value && item.source===after[i].source))return [];
+    return [{field,before,after}];
+  }) : [];
+  const facts = turn.understanding && <dl className="px-understanding-facts" aria-label="当前问题理解">{turn.understanding.map((item,index)=><Fragment key={`${item.field}-${index}`}><dt>{understandingDisplay(item,turn.draft.description).label}</dt><dd><span>{understandingDisplay(item,turn.draft.description).value}</span>{!isUnstructuredStatement(item,turn.draft.description)&&item.source!=="UNKNOWN"&&item.value!==sourceLabels[item.source]&&<small className={`px-fact-source is-${item.source.toLowerCase()}`}>{sourceLabels[item.source]}</small>}</dd></Fragment>)}</dl>;
   return <section id="draft-problem-message" tabIndex={-1} className={`px-inline-card px-draft-card is-${turn.phase.toLowerCase()}`} aria-label="问题草稿卡片">
     <header><div><span className="px-eyebrow">{turn.phase==="CREATED"?"已提交草稿（历史）":"问题草稿（尚未创建）"}</span><h2>{turn.phase==="CREATED"?turn.draft.title:"确认后才会正式创建"}</h2></div><span role="status" aria-live="polite" className={`px-status ${turn.phase==="CREATED"?"success":turn.phase==="UNKNOWN"?"danger":"warning"}`}>{turn.phase==="CREATED"?"已用于创建":status}</span></header>
     {turn.phase==="CREATED"?<details><summary>展开已确认内容</summary><p>{turn.draft.description}</p><small>草稿版本 {turn.version} 已提交；旧确认和更新操作已经失效。</small></details>:<>
       <p className="px-truth-note">{turn.source==="AI_PROVIDER"?"草稿来自已授权的真实 AI 服务；仍需人工编辑或确认。":turn.source==="AI_SYNTHETIC"?"草稿来自明确标识的模拟辅助生成；没有调用真实 AI 服务。":"手工草稿模式：描述保留原文，名称可修改。"}</p>
-      {editable?<><label className="px-field" htmlFor={`draft-title-${turn.id}`}><span>建议名称（可选修改）</span><input id={`draft-title-${turn.id}`} maxLength={200} value={turn.draft.title} disabled={busy} onChange={event=>onChange({...turn.draft,title:event.target.value})}/></label><label className="px-field" htmlFor={`draft-description-${turn.id}`}><span>完整描述</span><textarea id={`draft-description-${turn.id}`} maxLength={2_000} value={turn.draft.description} disabled={busy} onChange={event=>onChange({...turn.draft,description:event.target.value})}/></label></>:<details open><summary>查看当前草稿</summary><h3>{turn.draft.title}</h3>{!turn.understanding?.some(item=>isUnstructuredStatement(item,turn.draft.description))&&<p>{turn.draft.description}</p>}</details>}
-      {turn.understanding&&<dl className="px-understanding-facts" aria-label="当前问题理解">{turn.understanding.map((item,index)=><Fragment key={`${item.field}-${index}`}><dt>{understandingDisplay(item,turn.draft.description).label}</dt><dd><span>{understandingDisplay(item,turn.draft.description).value}</span>{!isUnstructuredStatement(item,turn.draft.description)&&item.source!=="UNKNOWN"&&item.value!==sourceLabels[item.source]&&<small className={`px-fact-source is-${item.source.toLowerCase()}`}>{sourceLabels[item.source]}</small>}</dd></Fragment>)}</dl>}
+      {previous && turn.understanding && !editable && <section className="conversation-changes" aria-label="本轮口径核对"><h3>本轮口径核对</h3>{changes.length ? changes.map(({field,before,after})=><div key={field}><strong>{after.some(item=>isUnstructuredStatement(item,turn.draft.description)) ? "你提供的信息" : fieldLabels[field]}</strong><small>上轮</small><span>{before.map(item=>item.value).join("、") || "未列出"}</span><small>本轮</small><span>{after.map(item=>item.value).join("、") || "本轮未列出"}</span></div>) : <p>本轮列出的口径与上次一致。</p>}</section>}
+      {editable?<><label className="px-field" htmlFor={`draft-title-${turn.id}`}><span>建议名称（可选修改）</span><input id={`draft-title-${turn.id}`} maxLength={200} value={turn.draft.title} disabled={busy} onChange={event=>onChange({...turn.draft,title:event.target.value})}/></label><label className="px-field" htmlFor={`draft-description-${turn.id}`}><span>完整描述</span><textarea id={`draft-description-${turn.id}`} maxLength={2_000} value={turn.draft.description} disabled={busy} onChange={event=>onChange({...turn.draft,description:event.target.value})}/></label></>:<details key={previous ? "revised" : "initial"} open={previous ? undefined : true}><summary>{previous ? "查看完整草稿与当前口径" : "查看当前草稿"}</summary><h3>{turn.draft.title}</h3>{!turn.understanding?.some(item=>isUnstructuredStatement(item,turn.draft.description))&&<p>{turn.draft.description}</p>}{previous && facts}</details>}
+      {(!previous || editable) && facts}
       <small>{turn.understanding?.some(item=>item.source==="UNKNOWN")&&<>“尚未单独整理”不代表你未提供。<br/></>}草稿版本 {turn.version}。未提交草稿只保存在当前页面，刷新或离开可能丢失。</small>
       {composerEditing&&<p className="px-mode-note">正在底部输入框完整替换描述；采用或取消前，卡片确认操作不可用。</p>}
     </>}
