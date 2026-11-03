@@ -39,3 +39,19 @@ Run, new endpoint or lifecycle change. Legacy planning.v2 retains old behavior.
 Tests cover absence/presence/duplicates, graph/data preservation, read-only scope,
 existing execution-successor gate and real-service composition. A fresh formally
 admitted call may create a new candidate; never rewrite the already confirmed Plan.
+
+## G1 read-only delivery artifact presentation
+
+The real Native run produced three durable artifacts and six satisfied original
+criteria. Present authorized synthetic-delivery report content as supplier ranking,
+unit-separated remaining quantities, anomalies and explicit source/limitations.
+Use only existing authorized artifact bytes; no new fetch, aggregate, mutation,
+evaluation or business-resolution inference. Retain exact raw bytes in a details
+view. Unsupported/invalid payloads keep the existing raw display. Test this exact
+captured synthetic artifact and ordinary text fallback with GET-only reload;
+verify responsive overflow and bind actual page screenshots to source/deployment.
+
+Stage03 read recovery also withdraws stale execution actions after a failed GET
+and binds every displayed response to exact session/problem/digest. Wrong digest,
+problem switch and failed post-command readback must leave only explicit GET
+recovery; no command is replayed. This uses existing endpoints and immutable facts.

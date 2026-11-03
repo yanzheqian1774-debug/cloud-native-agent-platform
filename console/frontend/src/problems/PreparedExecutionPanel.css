@@ -3,3 +3,16 @@
 .prepared-execution{container-type:inline-size}@container(max-width:700px){.prepared-columns{grid-template-columns:1fr}}
 
 .prepared-resource-card{border:1px solid #dce5f2;border-radius:10px;background:#fff;padding:16px}.prepared-resource-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:revert}.prepared-resource-card>summary strong{font-size:15px;line-height:1.6}.prepared-state{flex-shrink:0;border-radius:6px;padding:3px 9px;background:#fff4df;color:#8c5205;font-size:12px}.prepared-state.published{background:#e5f8ed;color:#147548}.prepared-resource-content{border-top:1px solid #e4ecf7;margin-top:16px;padding-top:4px}.prepared-resource-content h3{font-size:16px}.prepared-resource-content p{color:#536783;line-height:1.7}.prepared-resource-content section{min-width:0}.prepared-resource-content .capability-schema-grid{grid-template-columns:1fr}.prepared-resource-content .capability-schema-scroll{max-width:100%}.prepared-resource-content code{overflow-wrap:anywhere}@container(max-width:500px){.prepared-resource-card>summary{align-items:flex-start;flex-direction:column}.prepared-execution dl{grid-template-columns:1fr}.prepared-execution dt{font-weight:600}}
+
+.delivery-artifact{min-width:0;margin-top:16px;color:var(--text-primary,#172b4d)}
+.delivery-artifact header h4{margin:12px 0 6px;font-size:16px}
+.delivery-report-table{max-width:100%;overflow-x:auto;border:1px solid var(--border-color,#dbe3ef);border-radius:8px}
+.delivery-report-table table{width:100%;border-collapse:collapse;white-space:nowrap}
+.delivery-report-table caption{text-align:left;padding:12px;font-weight:600}
+.delivery-report-table th,.delivery-report-table td{padding:10px 12px;text-align:left;border-top:1px solid var(--border-color,#dbe3ef)}
+.delivery-report-table th{background:var(--surface-secondary,#f5f8fc);font-weight:500}
+.delivery-report-table button{color:var(--color-primary,#0866ff);border:0;background:transparent;padding:0;text-decoration:underline;cursor:pointer}
+.delivery-quantity{display:block}
+.delivery-artifact>h4{margin:20px 0 8px}
+.delivery-artifact p,.delivery-artifact li{line-height:1.7;overflow-wrap:anywhere}
+.delivery-artifact code{overflow-wrap:anywhere}

@@ -123,3 +123,35 @@ test('324 new composer input during publication stops remaining resource writes'
  await page.locator('#problem-composer').fill('新的业务补充，不得继续原批次。');release();await expect(panel.getByRole('alert')).toContainText('RESOURCE_REVIEW_CONTEXT_CHANGED');await expect(panel.getByRole('button',{name:/审核并发布待处理/})).toHaveCount(0);await expect(page.locator('#problem-composer')).toHaveValue('新的业务补充，不得继续原批次。');
  expect(writes).toBe(1);await page.locator('#problem-composer').fill('');await panel.getByRole('button',{name:'刷新资源状态'}).click();await expect(panel.getByRole('checkbox')).not.toBeChecked();expect(writes).toBe(1);
 });
+
+test('324 authorized delivery report renders unit-separated quantities, anomalies and source without writes',async({page},info)=>{
+ const report=readFileSync(new URL('./fixtures/delivery-report324.json',import.meta.url),'utf8');let writes=0;const state=view();
+ state.executionStarted=true;state.progress={state:'SUCCEEDED',version:18,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))};
+ state.artifacts=[{artifact_id:'fixture-delivery-report',task_id:state.preparation.semantics.tasks.at(-1)!.task_id,digest:'1'.repeat(64),bytes:report.length,created_at:'2026-11-03T17:00:00Z',contentAccess:'AUTHORIZED',content:report}];
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});const reportView=panel.getByRole('region',{name:'供应商交付报告'});
+ await panel.locator('.prepared-columns>section').first().locator('details').first().locator('summary').first().click();
+ await expect(reportView).toContainText('60 件');await expect(reportView).toContainText('15 箱');await expect(reportView).not.toContainText('75 件');await expect(reportView).toContainText('承诺日期缺失或无效');await expect(reportView).toContainText('数量缺失或相互矛盾');
+ await reportView.getByRole('button',{name:'SYN-A',exact:true}).click();await expect(reportView.getByRole('status')).toContainText('最长逾期10天');
+ for(const size of [{width:1536,height:1100},{width:1229,height:880},{width:390,height:844}]){await page.setViewportSize(size);await reportView.scrollIntoViewIfNeeded();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await page.screenshot({path:info.outputPath(`delivery-report-${size.width}.png`)});}
+ await reportView.getByText('来源版本与原始产物',{exact:true}).click();await expect(reportView.locator('pre')).toContainText('synthetic-delivery-output.v1');expect(writes).toBe(0);
+ await page.reload();await expect(panel).toBeAttached();expect(writes).toBe(0);
+});
+
+for(const mode of ['digest-mismatch','failed-refresh'])test(`324 execution ${mode} withdraws command controls and GET recovery never starts`,async({page})=>{
+ let unavailable=false,writes=0;const state=view();
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-executions/'))return route.fulfill(unavailable?{status:503,json:{reasonCode:'STORAGE_UNAVAILABLE'}}:{json:{result:mode==='digest-mismatch'?{...state,digest:'wrong-digest'}:state}});
+  const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});
+ if(mode==='digest-mismatch'){await expect(panel.getByRole('alert')).toContainText('EXECUTION_DIGEST_MISMATCH')}
+ else{await expect(panel.getByRole('button',{name:'启动本次只读执行'})).toBeAttached();unavailable=true;await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel.getByRole('alert')).toBeVisible()}
+ await expect(panel.getByRole('button',{name:'启动本次只读执行'})).toHaveCount(0);expect(writes).toBe(0);await panel.getByRole('button',{name:'刷新正式状态'}).click();expect(writes).toBe(0);
+});
