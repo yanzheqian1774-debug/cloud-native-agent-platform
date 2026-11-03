@@ -5,7 +5,7 @@ import {listProblems,type ProblemPlan} from "../api/problemPlanning";
 
 type HomeData={dashboard:ProductDashboard|null;employees:DigitalEmployeeTemplate[]|null;problems:ProblemPlan[]|null;attention:AttentionItem[]|null};
 const kinds:Record<string,[string,string]>={AGENT:["数字员工定义","A"],SKILL:["技能","S"],MCP:["MCP 与工具","M"],KNOWLEDGE:["知识","K"],WORKFLOW:["工作流","W"],RUNTIME_PROFILE:["运行配置","R"]};
-const entries=[["/work","问","提出业务问题","进入可信工作台创建问题并申请精确读取"],["/problems","旧","旧规划演示","查看独立的 v0.2.1 规划来源"],["/digital-employees","员","数字员工","查看已配置的定义模板"],["/catalog","能","能力资源","查找 Skill、MCP 和工作流"],["/knowledge","知","知识","检查知识来源和引用"],["/runtime-profiles","运","运行环境","查看 Runtime Profile"]];
+const entries=[["/work","问","提出业务问题","进入可信工作台创建问题并申请精确读取"],["/work?panel=existing","续","继续已有业务问题","从当前身份可读取的问题中选择，接续目标、标准与规划"],["/problems","旧","旧规划演示","查看独立的 v0.2.1 规划来源"],["/digital-employees","员","数字员工","查看已配置的定义模板"],["/catalog","能","能力资源","查找 Skill、MCP 和工作流"],["/knowledge","知","知识","检查知识来源和引用"],["/runtime-profiles","运","运行环境","查看 Runtime Profile"]];
 function WorkStatus({problem}:{problem:ProblemPlan}){if(problem.approval)return <span className="px-status success">计划已批准</span>;if(problem.status.includes("FAIL"))return <span className="px-status danger">执行失败</span>;return <span className="px-status warning">等待人工处理</span>}
 
 export function ProductDashboardPage(){

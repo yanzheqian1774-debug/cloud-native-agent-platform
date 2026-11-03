@@ -146,8 +146,51 @@ test('V323 formal planning errors are visible and do not create or execute',asyn
   expect(writes).toEqual(['/api/workbench/v1/planning-v2/preflight','/api/workbench/v1/planning-v2/invocations']);
 });
 
+for (const canRead of [true,false]) test(`home retains the selected problem with exact read ${canRead?'granted':'denied'}`, async ({page}) => {
+  const state = await setup(page);
+  state.readApproved = canRead;
+  state.created = {business_problem_id:'problem:321',revision_id:'revision:321',revision:1,title:'供应商交付分析',description:'核对延期订单',created_at:'2026-09-17T00:00:00Z'};
+  await page.goto('/dashboard');
+  await page.getByRole('link',{name:/继续已有业务问题/}).click();
+  await page.getByRole('button',{name:/供应商交付分析/}).click();
+  await expect(page).toHaveURL(/problem=problem%3A321/);
+  await page.reload();
+  const detail = page.getByRole('heading',{name:'问题详情已读取',exact:true});
+  if (canRead) await expect(detail).toBeVisible();
+  else {
+    await expect(page.getByRole('alert')).toContainText('无法完成恢复工作区');
+    await expect(detail).toHaveCount(0);
+  }
+  expect(state.writes).toHaveLength(0);
+});
+
+test('invisible problem offers account recovery instead of sending', async ({page}) => {
+  const state = await setup(page);
+  await page.route('**/api/workbench/v1/problems',route=>route.fulfill({
+    status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}
+  }));
+  await page.goto('/work?problem=problem%3A321');
+  await expect(page.getByRole('heading',{name:'当前账号无法查看此问题'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'发送',exact:true})).toHaveCount(0);
+  const login = new URL(await page.getByRole('link',{name:'使用业务账号登录并返回原问题'}).getAttribute('href')!,page.url());
+  expect(login.searchParams.get('returnTo')).toBe('/work?problem=problem%3A321');
+  await expect(page.getByRole('link',{name:'进入独立授权审批页'})).toBeVisible();
+  expect(state.writes).toHaveLength(0);
+});
+
+test('planning task opens its resource requirement and returns to the same problem', async ({page}) => {
+  const state = await planning(page);
+  const task = page.locator('.planning-task').nth(1);
+  await task.locator('summary').first().click();
+  const resource = procurement.requirements.find(r=>r.requirement_id===procurement.tasks[1].requirement_ids[0])!;
+  await task.getByRole('link',{name:resource.name,exact:true}).click();
+  await expect(page.locator('.planning-resource[open]').getByText(resource.purpose,{exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'返回问题',exact:true})).toHaveAttribute('href',`/work?problem=${encodeURIComponent(procurement.target.problem.resource_id)}`);
+  expect(state.commands).toHaveLength(0);
+});
+
 test('V323 missing planning configuration is explicit and clarification retains answers',async({page})=>{
-  const requests:Record<string,unknown>[]=[];let missing=true;
+  const requests:Record<string,unknown>[]=[];const reads:string[]=[];let missing=true;
   const value=(id:string)=>({invocation:{target:{invocation_id:id},request:requests[Number(id.split(':').at(-1))-1]},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['请补充统计日期或口径']},facts_status:'RECORDED'});
   await page.route('**/api/workbench/v1/**',async route=>{
     const path=new URL(route.request().url()).pathname;
@@ -158,7 +201,11 @@ test('V323 missing planning configuration is explicit and clarification retains 
       if(missing)return route.fulfill({status:503,json:{reasonCode:'PLANNING_NOT_CONFIGURED'}});
       requests.push(route.request().postDataJSON());return route.fulfill({json:{result:value(`clarification:${requests.length}`)}});
     }
-    if(path.includes('/planning-v2/invocations/'))return route.fulfill({json:{result:value(decodeURIComponent(path.split('/').at(-1)!))}});
+    if(path.includes('/planning-v2/invocations/')){
+      const id=decodeURIComponent(path.split('/').at(-1)!);
+      reads.push(id);
+      return route.fulfill({json:{result:value(id)}});
+    }
     return route.fulfill({json:{result:{}}});
   });
   await page.goto('/work/plan?problem=test:323');
@@ -169,8 +216,12 @@ test('V323 missing planning configuration is explicit and clarification retains 
   await page.getByLabel('补充信息或提出方案修改').fill('2026-09-18');
   await page.getByRole('button',{name:'提交规划补充'}).click();
   await expect(page.getByLabel('补充信息或提出方案修改')).toHaveValue('');
+  await expect(page).toHaveURL(/invocation=clarification%3A2/);
+  expect(reads).toEqual([]);
   await page.reload();
   await expect(page.getByText('2026-09-18',{exact:true})).toBeVisible();
+  expect(reads).toEqual(['clarification:2']);
+  expect(requests).toHaveLength(2);
   await page.getByLabel('补充信息或提出方案修改').fill('纠正：仅公司A，不含已取消订单');
   await page.getByRole('button',{name:'提交规划补充'}).click();
   await expect.poll(()=>requests.length).toBe(3);
