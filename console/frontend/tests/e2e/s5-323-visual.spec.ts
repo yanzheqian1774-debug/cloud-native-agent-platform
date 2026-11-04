@@ -45,7 +45,7 @@ import {procurement} from "./fixtures/planning323";
 
 // Identical case and actions can be captured against the retained pre-visual build.
 test('V323 same-case problem clarification correction create and readback',async({page},info)=>{
- await page.setViewportSize({width:1500,height:1050});
+ await page.setViewportSize({width:1536,height:1056});
  const initial='请整理截至今天仍未交付的延期采购订单，给我清单和供应商摘要。';
  const supplement='2026年9月17日10:00，323五行合成采购样本；只看A供应商，不修改订单、不发送通知。';
  const corrected='2026年9月17日10:00，323五行合成采购样本；所有供应商，缺失日期和来源冲突单列，不修改订单、不发送通知。';
@@ -83,8 +83,8 @@ async function planning(page:Page){
  await page.goto('/work/planning/proposal%3A323-visual?revision=1');await expect(page.locator('.planning-task')).toHaveCount(5);return {commands,history,snapshot};
 }
 
-for(const width of [1500,1366])test(`V323 planning layout and interactions ${width}`,async({page},info)=>{
- await page.setViewportSize({width,height:width===1500?1050:768});const state=await planning(page);
+for(const width of [1536,1500,1366])test(`V323 planning layout and interactions ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:width>=1500?1056:768});const state=await planning(page);
  await expect(page.locator('.planning-stage-row')).toHaveCount(3);
  for(const [index,task] of (await page.locator('.planning-task').all()).entries()){await task.locator(':scope > summary').click();await expect(task).toContainText(procurement.tasks[index].responsibility);await expect(task.locator('xpath=ancestor::tr')).toContainText(procurement.requirements.find(r=>r.requirement_id===procurement.tasks[index].employee_requirement_id)!.name);await task.locator(':scope > summary').click();}
  if(width===1500){await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();await page.locator('.planning-goal').scrollIntoViewIfNeeded();await expect(page.locator('.planning-goal')).toBeInViewport({ratio:1});await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();await page.getByRole('button',{name:'确认计划',exact:true}).scrollIntoViewIfNeeded();await expect(page.getByRole('button',{name:'确认计划',exact:true})).toBeInViewport({ratio:1});await expect(page.getByLabel('补充信息或提出方案修改')).toBeInViewport();}

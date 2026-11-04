@@ -48,17 +48,19 @@ def validate_approved_preparation(connection, preparation):
     from .cost_execution_revision import (
         DELIVERY_SYNTHETIC_ONLY,
         EXECUTION_ONLY,
+        SALES_SYNTHETIC_ONLY,
         SYNTHETIC_ONLY,
     )
+    from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 
-    delivery = [
-        t.executor_id == SyntheticDeliverySkillExecutor.revision.executor_id
-        for t in p.participants
-    ]
-    if any(delivery) and not all(delivery):
+    executors = {t.executor_id for t in p.participants}
+    if len(executors) != 1:
         raise ExecutionPreparationError("PREPARED_EXECUTION_CASE_MIXED")
-    boundary = DELIVERY_SYNTHETIC_ONLY if all(delivery) else SYNTHETIC_ONLY
+    boundary = {
+        SyntheticDeliverySkillExecutor.revision.executor_id: DELIVERY_SYNTHETIC_ONLY,
+        SalesDiagnosticSkillExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,
+    }.get(next(iter(executors)), SYNTHETIC_ONLY)
 
     if (
         EXECUTION_ONLY not in plan.semantics.business_rules

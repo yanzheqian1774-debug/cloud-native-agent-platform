@@ -60,7 +60,7 @@ class FixtureKubernetes:
         self.tasks[name]["status"] = status
 
 
-@pytest.mark.parametrize("case", ["cost", "delivery"])
+@pytest.mark.parametrize("case", ["cost", "delivery", "sales"])
 def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
     repository, tmp_path, case
 ):
@@ -163,12 +163,15 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                     p,
                 )
 
+        from agent_console.sales_diagnostic_skill import SalesDiagnosticSkillExecutor
         from agent_console.synthetic_delivery_skill import (
             SyntheticDeliverySkillExecutor,
         )
 
         executor = (
-            SyntheticDeliverySkillExecutor()
+            SalesDiagnosticSkillExecutor()
+            if case == "sales"
+            else SyntheticDeliverySkillExecutor()
             if case == "delivery"
             else SyntheticCostSkillExecutor()
         )
@@ -259,11 +262,11 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 prepare_ready=queue,
             )
 
-        for _ in range(6):
+        for _ in range(len(p.participants)):
             result = worker().run_once()  # fresh worker, same durable owner state
             assert result.state == "SUCCEEDED", caller_errors
         assert worker().run_once().state == "IDLE"
-        assert len(kubernetes.tasks) == 6
+        assert len(kubernetes.tasks) == len(p.participants)
         with native.pool.connection() as c:
             _, progress = PreparedExecutionStore(c).read(
                 p.namespace, p.security_domain, p.run_id
@@ -273,37 +276,40 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 "SELECT task_id,content,digest FROM execution_authority.run_artifacts "
                 "ORDER BY task_id"
             ).fetchall()
-            assert len(artifacts) == 6
+            assert len(artifacts) == len(p.participants)
             assert "UNDETERMINED" in artifacts[-1]["content"]
-            assert (
-                c.execute(
-                    "SELECT count(*) AS n FROM execution_authority.attempts"
-                ).fetchone()["n"]
-                == 6
-            )
+            assert c.execute(
+                "SELECT count(*) AS n FROM execution_authority.attempts"
+            ).fetchone()["n"] == len(p.participants)
         with native.pool.connection() as c, c.transaction():
             review = PreparedResultReview(c, principal, ReviewAuthority())
             evaluated = review.evaluate(p, "fixture-six-task-evaluation")
             assert evaluated["businessResolution"] == "UNDETERMINED"
-            assert len(evaluated["evaluation"]["results"][0]["artifactIds"]) == 6
+            assert len(evaluated["evaluation"]["results"][0]["artifactIds"]) == len(
+                p.participants
+            )
             snapshot = c.execute(
                 "SELECT record FROM success_criteria_evaluation.snapshots"
             ).fetchone()["record"]
-            assert len(snapshot["resourceUseSnapshots"]) == 6
+            assert len(snapshot["resourceUseSnapshots"]) == len(p.participants)
             assert (
                 snapshot["criteriaSet"]["digest"] == p.semantics.target.criteria.digest
             )
             assert snapshot["runState"] == "SUCCEEDED"
-            if case == "delivery":
+            if case in {"delivery", "sales"}:
                 from agent_console.delivery_evaluation import CHECKS, evaluate
                 from agent_console.resource_use_domain import canonical_digest
 
+                if case == "sales":
+                    from agent_console.sales_evaluation import CHECKS, evaluate
                 source, report = review.delivery_evidence(p, snapshot)
                 for check in CHECKS:
                     criterion = {
                         "criterion_type": "DETERMINISTIC_BOOLEAN",
                         "measurement": {"expected": True},
-                        "evaluator_type": "SYNTHETIC_DELIVERY",
+                        "evaluator_type": "SYNTHETIC_SALES"
+                        if case == "sales"
+                        else "SYNTHETIC_DELIVERY",
                         "evaluator_version": "1",
                         "required_evidence_kinds": [
                             "NATIVE_EXECUTION_ARTIFACT",
@@ -337,3 +343,37 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
         if skills is not None:
             skills.close()
         native.pool.close()
+
+
+@pytest.mark.parametrize("case", ["cost", "delivery", "sales"])
+def test_case_lineage_rejects_mixed_executors_and_borrowed_boundary(repository, case):
+    from agent_console.execution_preparation import ExecutionPreparationError
+    from agent_console.prepared_execution_lineage import validate_approved_preparation
+    from agent_console.sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+
+    p = seed(repository, synthetic_skill=case)
+    foreign = (
+        SyntheticCostSkillExecutor.revision.executor_id
+        if case == "sales"
+        else SalesDiagnosticSkillExecutor.revision.executor_id
+    )
+    mixed = p.model_copy(
+        update={
+            "participants": (
+                p.participants[0].model_copy(update={"executor_id": foreign}),
+                *p.participants[1:],
+            )
+        }
+    )
+    borrowed = p.model_copy(
+        update={
+            "participants": tuple(
+                t.model_copy(update={"executor_id": foreign}) for t in p.participants
+            )
+        }
+    )
+    with repository.pool.connection() as c:
+        with pytest.raises(ExecutionPreparationError, match="CASE_MIXED"):
+            validate_approved_preparation(c, mixed)
+        with pytest.raises(ExecutionPreparationError, match="SUCCESSOR_REQUIRED"):
+            validate_approved_preparation(c, borrowed)

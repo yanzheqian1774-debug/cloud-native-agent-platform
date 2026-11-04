@@ -2,11 +2,13 @@
 """Explicit synthetic owner fixtures, never imported by runtime or acceptance setup."""
 
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from agent_console.cost_execution_revision import (
     DELIVERY_SYNTHETIC_ONLY,
     EXECUTION_ONLY,
+    SALES_SYNTHETIC_ONLY,
     SYNTHETIC_ONLY,
 )
 from agent_console.digital_employee_definition import (
@@ -54,6 +56,38 @@ def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
         p = p.model_copy(
             update={"semantics": p.semantics.model_copy(update={"target": target})}
         )
+    if synthetic_skill == "sales":
+        tasks = tuple(
+            t
+            for t in p.semantics.tasks
+            if t.operation
+            in {"READ_DATA", "VALIDATE_DATA", "SUMMARIZE", "RENDER_REPORT"}
+        )
+        summary = next(t for t in tasks if t.operation == "SUMMARIZE")
+        tasks = tuple(
+            t.model_copy(
+                update={"depends_on": (summary.task_id,), "input_kinds": ("SUMMARY",)}
+            )
+            if t.operation == "RENDER_REPORT"
+            else t
+            for t in tasks
+        )
+        ids = {t.task_id for t in tasks}
+        stages = tuple(
+            stage.model_copy(
+                update={"task_ids": tuple(i for i in stage.task_ids if i in ids)}
+            )
+            for stage in p.semantics.stages
+            if any(i in ids for i in stage.task_ids)
+        )
+        p = p.model_copy(
+            update={
+                "semantics": p.semantics.model_copy(
+                    update={"tasks": tasks, "stages": stages}
+                ),
+                "participants": tuple(t for t in p.participants if t.task_id in ids),
+            }
+        )
     scope = ScopeIdentity(p.namespace, p.security_domain)
     key = (p.namespace, p.security_domain)
     ops = [
@@ -89,7 +123,23 @@ def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
 
         if synthetic_skill == "delivery":
             from agent_console.delivery_resource_bundle import resource_content
-        bundle = resource_content()
+        if synthetic_skill == "sales":
+            from agent_console.sales_resource_bundle import (
+                resource_content as sales_content,
+            )
+            from agent_console.sales_resource_bundle import (
+                source_document,
+            )
+
+            source = source_document(
+                (
+                    Path(__file__).parents[3]
+                    / "examples/sales-diagnostic/synthetic-sales.csv"
+                ).read_bytes()
+            )
+            bundle = sales_content(source)
+        else:
+            bundle = resource_content()
         ops = bundle["skill"]["operations"]
         chunks, source_digest = ingest_text(
             "fixture-source", bundle["knowledge"]["content"]
@@ -283,6 +333,8 @@ def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
             "boundaries": (
                 DELIVERY_SYNTHETIC_ONLY
                 if synthetic_skill == "delivery"
+                else SALES_SYNTHETIC_ONLY
+                if synthetic_skill == "sales"
                 else SYNTHETIC_ONLY,
                 f"执行准备映射SHA256：{p.mapping_digest}；fixture",
             ),

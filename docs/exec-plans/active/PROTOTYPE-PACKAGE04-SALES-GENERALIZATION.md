@@ -78,3 +78,34 @@ attempt will bound graph size to at most four tasks to reduce nonstreaming
 response volume while retaining all five original criteria and FREE policy.
 Any further unknown is retained and investigated; the call cap is not an automatic
 retry queue. Visual/read-only resource and independent evaluator work continues.
+
+## Inline sales drill-down refinement
+
+Expose the existing report's dimension sourceRows and verified embedded source
+rows as inline expandable table details (period, sales, cost, return, source line),
+without new fetches, persistence or calls. Retain per-currency boundaries and
+cancellation exclusions; a missing source row is shown as unavailable, never
+invented. Browser coverage verifies keyboard/click expansion, close, dimension
+switch, narrow containment and zero writes. Capture canonical1536px page/state
+views in addition to existing zoom/narrow evidence; record this as a user-approved
+reading refinement rather than an original prototype business-data match.
+
+Planning reading closeout also exposes actual clarification/revision progress and
+exact target basis in the right rail. Only durable input, proposal history and
+actual adaptive attempt status may be summarized; never claim a project document
+was read, a bill obtained or a resource prepared without corresponding facts.
+Capture P12 clarification and P13 successor states on one synthetic cost case,
+retaining prior approval and missing bills; do not mix that case into supplier
+execution evidence. Functional fixtures remain clearly separate from live flows.
+
+## Live sales lineage correction
+
+The first formal execution preparation failed closed: the existing approval
+lineage still selected only cost/delivery boundary text. Complete D9's sales
+registration at that same owner by requiring a homogeneous executor case and
+its exact SALES_SYNTHETIC_ONLY successor; preserve cost/delivery guards and
+reject mixed case participants. No authority bypass or new state. Extend the
+existing disposable-PG managed Native pipeline to sales, including actual source
+inputs, persisted artifacts, resource use, restart/no-redispatch and independent
+sales report checks. Install checked source before resuming the already confirmed
+sales execution revision; the failed preparation created no Run.

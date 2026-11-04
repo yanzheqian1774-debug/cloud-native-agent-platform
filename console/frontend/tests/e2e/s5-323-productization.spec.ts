@@ -130,3 +130,28 @@ for (const changed of [false, true]) {
   expect(writes).toBe(0);
  });
 }
+
+test('P12 comparison clarification and P13 revision preserve the same cost case and prior approval',async({page},info)=>{
+ const first=structuredClone(proposal);first.proposal_id='cost-reading-fixture';first.semantics.title='星河客服成本优化（合成界面验证）';
+ for(const [path,text] of Object.entries(translation.fields)){const keys=path.split('/');let node=first.semantics as unknown as Record<string,unknown>;for(const key of keys.slice(0,-1))node=node[key] as Record<string,unknown>;node[keys.at(-1)!]=text;}
+ const next=structuredClone(first);next.revision=2;next.semantics.title='星河客服成本优化 · 方案修订';next.semantics.business_rules=['主报告仅统计模型费用，算力费用单列附录。','预算8,000元，排除试验项目。','有效请求数与实际账单尚缺，不能估算单位成本或节约金额。'];
+ const prior={plan:{plan_id:first.proposal_id,version:1,source_proposal_revision:1,semantics:first.semantics},digest:'prior-cost-approval',approval:{approval_decision_id:'prior-cost-decision',decided_at:'2026-09-20T02:00:00Z'},execution_status:'NOT_STARTED'};
+ const old=JSON.stringify(prior);let calls=0;const posts:string[]=[];const conversation:unknown[]=[];
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')posts.push(path);
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:cost-fixture',tenantId:'synthetic-cost',securityDomain:'isolated'},session:{},csrfToken:'fixture'}});
+  if(path.includes('/planning-input/'))return route.fulfill({json:{result:{target:first.semantics.target,title:first.semantics.title,description:'已保存目标：下月预算8,000元，排除试验项目；主报告比较模型费用，算力费用单列附录。有效请求数与实际账单尚缺。'}}});
+  if(path.endsWith('/preflight'))return route.fulfill({json:{result:{status:'EXPLICIT_CONSTRAINTS_VALID'}}});
+  if(path.endsWith('/invocations')){
+   calls++;const request=route.request().postDataJSON(),invocation_id='cost-fixture-'+calls;
+   const result=calls===1?{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['本轮仅需选择比较口径，预算与排除范围沿用。\nA. 按有效业务请求比较\nB. 按会话比较\nC. 我来说明']}:{technical_status:'SUCCEEDED',kind:'VALID_SUGGESTION',proposal:next};
+   conversation.push({invocation_id,request,submitted_at:'2026-09-20T02:33:00Z',questions:[]});
+   return route.fulfill({json:{result:{invocation:{target:{invocation_id,problem:{problem:first.semantics.target.problem}},request},result}}});
+  }
+  const revision=Number(new URL(route.request().url()).searchParams.get('version')??1);
+  return route.fulfill({json:{result:path.endsWith('/history')?{proposals:[first,...(calls===2?[next]:[])],plans:[prior],conversation}:{proposal:revision===2?next:first,digest:'cost-fixture-digest',snapshot:null,generated_at:'2026-09-20T02:34:00Z'}}});
+ });
+ await page.setViewportSize({width:1536,height:1056});await page.goto('/work/plan?problem='+encodeURIComponent(first.semantics.target.problem.resource_id));await page.getByRole('button',{name:'依据已确认目标生成建议',exact:true}).click();await expect(page.getByRole('heading',{name:'需要补充的信息'})).toBeVisible();await expect(page.getByLabel('当前已确认目标')).toContainText('8,000元');await page.screenshot({path:info.outputPath('P12-comparison-clarification-1536.png')});
+ await page.getByRole('button',{name:'A. 按有效业务请求比较',exact:true}).click();expect(calls).toBe(1);await page.getByRole('button',{name:'提交规划补充',exact:true}).click();await expect(page).toHaveURL(/revision=2/);await expect(page.getByRole('heading',{name:'本次修订影响'})).toBeVisible();await expect(page.locator('.planning-goal')).toContainText('不能估算单位成本');await expect(page.locator('.planning-confirm')).toContainText('确认仅保存当前计划');await page.screenshot({path:info.outputPath('P13-cost-successor-1536.png')});
+ expect(JSON.stringify(prior)).toBe(old);expect(calls).toBe(2);expect(posts.filter(p=>p.endsWith('/confirm'))).toHaveLength(0);await page.reload();expect(calls).toBe(2);await expect(page.getByRole('heading',{name:'本次修订影响'})).toBeVisible();
+});

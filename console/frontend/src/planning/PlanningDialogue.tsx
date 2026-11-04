@@ -102,13 +102,13 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     <p role="status" className="planning-dialogue-status">{state}</p>
     {result?.invocation.request?.answers.map((text,index)=><UserMessage key={index} occurredAt={result.invocation.submitted_at}>{text}</UserMessage>)}
     {result?.invocation.submitted_at && <p>消息提交时间：{formatTime(result.invocation.submitted_at)}</p>}
-    {result?.result.questions?.length ? <section><h2>需要补充的信息</h2>{result.result.questions.map(q=><SystemMessage key={q} occurredAt={result.result.generated_at}><p style={{whiteSpace:"pre-wrap"}}>{q}</p>{clarificationChoices(q).map(option=><button type="button" key={option.label} disabled={blocked} onClick={()=>setAnswer(option.answer)}>{option.label}</button>)}</SystemMessage>)}</section> : null}
+    {result?.result.questions?.length ? <section><h2>需要补充的信息</h2>{result.result.questions.map(q=><SystemMessage label="数字员工" key={q} occurredAt={result.result.generated_at}><p style={{whiteSpace:"pre-wrap"}}>{q}</p>{clarificationChoices(q).map(option=><button type="button" key={option.label} disabled={blocked} onClick={()=>setAnswer(option.answer)}>{option.label}</button>)}</SystemMessage>)}</section> : null}
     {singleCallUsed && !result?.result.proposal && <p role="status">本次精确规划的一次调用已使用，原回复与问题保留；不能自动或普通重试追加调用。请先核对结果及正式修正路径。</p>}
     {result?.result.technical_status === "OUTCOME_UNKNOWN" && <p role="status">结果未知；保留原调用与预留，只读恢复，不自动再次调用。</p>}
     {result?.result.technical_status === "FAILED" && <p role="alert">失败阶段回执：{result.result.reason ?? "PLANNING_PROVIDER_FAILED"}。没有创建建议、批准或执行。</p>}
     {result?.result.proposal && <a href={`/work/planning/${result.result.proposal.proposal_id}?revision=${result.result.proposal.revision}`}>打开已持久化的建议</a>}
     {error && <p role="alert">{error}</p>}
     {result?.result.kind === "INVALID" && <section className="planning-card" role="alert"><h2>方案尚未通过校验</h2><p>{result.adaptive?.stop_reason === "NO_PROGRESS" ? "同类错误重复且没有进展，已停止自动修正。" : "本轮有界修正已停止；没有创建可确认方案。"}</p><p>原始目标、尝试及计量保留。请查看定位信息或修改目标后再开始新一轮。</p></section>}
-    {result?.adaptive && <details className="planning-card"><summary>本轮核对与修正 · {result.adaptive.attempts.length} 次尝试</summary><p>服务端上限 {result.adaptive.limits.maximum_attempts} 次 / {result.adaptive.limits.total_seconds} 秒。成功后仍需确认，不启动执行。</p>{result.adaptive.attempts.map((a,index)=><p key={a.invocation_id}>尝试 {index+1}：{a.kind === "INVALID" ? "校验未通过" : a.kind === "VALID_SUGGESTION" ? "建议已保存" : "查看原尝试状态"}<code>{a.invocation_id}</code></p>)}</details>}
+    {result?.adaptive && <section className="planning-card" aria-label="本轮核对与修正"><h2>本轮核对与修正 · {result.adaptive.attempts.length} 次尝试</h2><p>服务端上限 {result.adaptive.limits.maximum_attempts} 次 / {result.adaptive.limits.total_seconds} 秒。成功后仍需确认，不启动执行。</p>{result.adaptive.attempts.map((a,index)=><div key={a.invocation_id}>尝试 {index+1}：{a.kind === "INVALID" ? "校验未通过" : a.kind === "VALID_SUGGESTION" ? "建议已保存" : "查看原尝试状态"}<details className="journey-technical"><summary>查看本次记录</summary><code>{a.invocation_id}</code></details></div>)}</section>}
   </ConversationFrame>;
 }
