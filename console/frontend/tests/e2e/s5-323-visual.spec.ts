@@ -118,8 +118,9 @@ test('V323 history and unknown resources never imply readiness or silently confi
 test('V323 grouped navigation keeps destinations and stays outside workflow pages',async({page})=>{
  await planning(page);await page.locator('.px-sidebar').getByText('管理与技术',{exact:true}).click();
  await expect(page.locator('.px-sidebar').getByRole('link',{name:'问题审核与修订',exact:true})).toHaveAttribute('href','/problems');
- await page.locator('.px-sidebar').getByText('平台支撑',{exact:true}).click();await expect(page.locator('.px-sidebar').getByRole('link',{name:'系统设置',exact:true})).toHaveAttribute('href','/settings');
- await page.locator('.px-primary-nav').getByRole('link',{name:'工作流',exact:true}).click();await expect(page.locator('.journey-shell')).toHaveCount(0);
+ // V2.59's grouped sidebar replaces the earlier platform-support/primary rail.
+ await expect(page.locator('.px-sidebar').getByRole('link',{name:'设置',exact:true})).toHaveAttribute('href','/settings');
+ await page.locator('.px-sidebar').locator('summary').filter({hasText:'能力资源'}).click();await page.locator('.px-business-nav').getByRole('link',{name:'工作流',exact:true}).click();await expect(page.locator('.journey-shell')).toHaveCount(0);
 });
 
 test('V323 formal planning errors are visible and do not create or execute',async({page})=>{

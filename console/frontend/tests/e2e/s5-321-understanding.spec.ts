@@ -237,7 +237,8 @@ test('V322 answer focus, correction order and readable confirmation preserve exp
   const card=page.getByLabel('问题草稿卡片');
   expect(await page.getByText(correction,{exact:true}).evaluate(node=>Boolean(node.compareDocumentPosition(document.getElementById('draft-problem-message')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   expect(await card.locator('.px-understanding-facts').evaluate(node=>parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(14);
-  expect(await page.locator('.px-search>span').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('nowrap');
+  await expect(page.locator('.px-search')).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'新会话',exact:true})).toHaveCSS('white-space','nowrap');
   await expect(card).toContainText(state.outputs[1]);expect(state.writes).toHaveLength(0);
 });
 

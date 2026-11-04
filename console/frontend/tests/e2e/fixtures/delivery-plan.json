@@ -1,0 +1,202 @@
+{
+  "semantics": {
+    "schema_version": "planning.v3",
+    "scenario": "OVERDUE_PURCHASE_ORDERS",
+    "target": {
+      "problem": {
+        "resource_id": "fixture-problem",
+        "revision_id": "fixture-revision",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "criteria": {
+        "resource_id": "fixture-problem",
+        "revision_id": "fixture-criteria-set",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "criterion_revision_ids": [
+        "fixture-criterion-1",
+        "fixture-criterion-2",
+        "fixture-criterion-3",
+        "fixture-criterion-4",
+        "fixture-criterion-5",
+        "fixture-criterion-6"
+      ],
+      "expected_problem_version": 3
+    },
+    "title": "隔离合成供应商交付案例（视图测试）",
+    "business_rules": [
+      "固定快照及判定日期2026-09-20为演示固定值，不得随刷新改变",
+      "承诺日期严格早于判定日且未交数量大于零判定为逾期",
+      "排除已取消和全部交付订单",
+      "部分交付按剩余量计算，分计量单位处理，不跨单位汇总",
+      "排序按最长逾期天数降序，再按逾期订单数降序，同分按供应商编号稳定排序（仅演示规则）",
+      "每家供应商必须关联订单明细、计算依据及排序理由",
+      "缺日期和数量矛盾等异常单列，列出缺口及核查建议，不猜补",
+      "本计划仅为声明性覆盖，不代表验收已成功",
+      "本轮只规划与确认，不创建Assignment、Run或TaskRun，不执行业务或调整配置；人工业务验收在执行产物之后，不作为任务。"
+    ],
+    "boundaries": [
+      "仅使用隔离环境中标识的合成采购订单数据，不读取真实企业数据",
+      "只读分析，不执行采购、付款或任何生产业务变更",
+      "不推断真实损失、不猜补缺失日期或数量矛盾数据；无证据的问题或结论标注证据不足",
+      "Human最终业务验收不编为自动执行任务",
+      "不使用成本技能，不做成本或综合筛查",
+      "仅进行只读数据采集与分析规划，不执行任何业务操作。"
+    ],
+    "effect": "READ_ONLY",
+    "stages": [
+      {
+        "stage_id": "stage-read",
+        "title": "读取固定合成数据快照",
+        "task_ids": [
+          "task-read-data"
+        ]
+      },
+      {
+        "stage_id": "stage-summary",
+        "title": "交付逾期汇总分析",
+        "task_ids": [
+          "task-summarize-delivery"
+        ]
+      },
+      {
+        "stage_id": "stage-report",
+        "title": "渲染完整交付报告",
+        "task_ids": [
+          "task-render-report"
+        ]
+      }
+    ],
+    "tasks": [
+      {
+        "task_id": "task-read-data",
+        "title": "读取固定合成采购订单快照",
+        "responsibility": "只读读取隔离环境中固定标识的合成采购订单快照，不读取真实企业数据，不修改任何数据",
+        "employee_requirement_id": "req-employee-analyst",
+        "depends_on": [],
+        "inputs": [
+          "固定合成采购订单快照（sourceContentDigest=5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d）",
+          "判定日期2026-09-20"
+        ],
+        "outputs": [
+          "固定合成采购订单源快照，快照与判定日期保持不变"
+        ],
+        "requirement_ids": [
+          "req-employee-analyst",
+          "req-knowledge-snapshot"
+        ],
+        "criterion_revision_ids": [
+          "fixture-criterion-1"
+        ],
+        "operation": "READ_DATA",
+        "input_kinds": [
+          "CONTEXT"
+        ],
+        "output_kind": "SOURCE_SNAPSHOT"
+      },
+      {
+        "task_id": "task-summarize-delivery",
+        "title": "交付逾期汇总分析",
+        "responsibility": "调用已发布交付专用Skill，仅依赖读取任务的快照产物，按逾期规则、单位处理和排序规则生成供应商逾期汇总，异常单列不猜补",
+        "employee_requirement_id": "req-employee-analyst",
+        "depends_on": [
+          "task-read-data"
+        ],
+        "inputs": [
+          "固定合成采购订单源快照",
+          "判定日期2026-09-20"
+        ],
+        "outputs": [
+          "交付逾期汇总：判定日期、排除清单、分单位逾期数量、供应商排名、明细来源、异常记录与建议核查事项"
+        ],
+        "requirement_ids": [
+          "req-employee-analyst",
+          "req-skill-delivery"
+        ],
+        "criterion_revision_ids": [
+          "fixture-criterion-2",
+          "fixture-criterion-3",
+          "fixture-criterion-4",
+          "fixture-criterion-5",
+          "fixture-criterion-6"
+        ],
+        "operation": "SUMMARIZE",
+        "input_kinds": [
+          "SOURCE_SNAPSHOT"
+        ],
+        "output_kind": "SUMMARY"
+      },
+      {
+        "task_id": "task-render-report",
+        "title": "渲染完整交付报告",
+        "responsibility": "仅依赖汇总任务的产物渲染完整交付报告，覆盖原六项标准及限制，不新增推断结论，不含Human最终验收步骤",
+        "employee_requirement_id": "req-employee-analyst",
+        "depends_on": [
+          "task-summarize-delivery"
+        ],
+        "inputs": [
+          "交付逾期汇总产物"
+        ],
+        "outputs": [
+          "完整交付报告：逾期供应商优先级清单、每家订单明细及计算依据和排序理由、数据缺口与异常记录、建议核查事项，覆盖原六项标准及限制"
+        ],
+        "requirement_ids": [
+          "req-employee-analyst"
+        ],
+        "criterion_revision_ids": [
+          "fixture-criterion-1",
+          "fixture-criterion-2",
+          "fixture-criterion-3",
+          "fixture-criterion-4",
+          "fixture-criterion-5",
+          "fixture-criterion-6"
+        ],
+        "operation": "RENDER_REPORT",
+        "input_kinds": [
+          "SUMMARY"
+        ],
+        "output_kind": "REPORT"
+      }
+    ],
+    "requirements": [
+      {
+        "requirement_id": "req-employee-analyst",
+        "kind": "EMPLOYEE",
+        "name": "供应链分析人员",
+        "purpose": "负责执行合成采购订单数据的读取、逾期汇总与报告渲染",
+        "required": true,
+        "selected": null,
+        "operation": "执行只读读取、汇总与报告渲染操作",
+        "preparation": "确认该人员具备隔离合成环境的只读访问权限"
+      },
+      {
+        "requirement_id": "req-skill-delivery",
+        "kind": "SKILL",
+        "name": "已发布交付专用Skill",
+        "purpose": "提供交付逾期汇总能力，产出日期、排除、分单位数量、排名、明细来源、异常和建议核查",
+        "required": true,
+        "selected": null,
+        "operation": "SUMMARIZE",
+        "preparation": "确认Skill已发布且仅指向固定合成数据源"
+      },
+      {
+        "requirement_id": "req-knowledge-snapshot",
+        "kind": "KNOWLEDGE",
+        "name": "固定合成采购订单快照",
+        "purpose": "提供固定合成采购订单数据源（sourceContentDigest=5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d）",
+        "required": true,
+        "selected": null,
+        "operation": "READ_DATA",
+        "preparation": "确认快照已发布且digest与判定日期2026-09-20固定"
+      }
+    ],
+    "policy": {
+      "schema_version": "planning-policy.v2",
+      "mode": "FREE",
+      "template": null,
+      "required_operations": [],
+      "prohibited_operations": [],
+      "business_acceptance_as_task": false
+    }
+  }
+}

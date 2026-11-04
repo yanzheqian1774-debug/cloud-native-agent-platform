@@ -32,3 +32,10 @@
 
 .delivery-result-kpis strong{color:#0876ff}
 .prepared-criterion-mark{display:inline-block;width:20px;height:20px;vertical-align:middle;margin-right:6px;flex-shrink:0}
+
+.delivery-file-actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 8px}
+.delivery-file-actions button{display:inline-flex;align-items:center;gap:8px;border:1px solid #dce5f2;border-radius:8px;background:#fff;color:#245ac0;padding:10px 14px;font:inherit;font-size:13px;cursor:pointer}
+.delivery-file-actions button:hover{background:#f1f7ff;border-color:#0866ff}
+.delivery-file-actions button:focus-visible{outline:2px solid #0866ff;outline-offset:3px}
+.delivery-artifact small{color:#536783;line-height:1.7}
+.delivery-artifact [aria-label="订单明细检索"]{scroll-margin:16px}

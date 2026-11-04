@@ -11,13 +11,11 @@ const resources: Entry[] = [
 const advanced: Entry[] = [
   {to:"/runtime-profiles",label:"运行环境",icon:"runtime"},
   {to:"/evidence",label:"证据记录",icon:"record"},
-  {to:"/outcomes",label:"业务结果",icon:"outcome"},
   {to:"/authorization-admin",label:"独立授权审批",icon:"shield"},
   {to:"/problems",label:"问题审核与修订",icon:"problem"},
   {to:"/agents",label:"智能体定义",icon:"agent"},
   {to:"/catalog",label:"资源统一目录",icon:"resource"},
   {to:"/relationships",label:"对象关系",icon:"relationships"},
-  {to:"/attention",label:"系统与治理",icon:"attention"},
   {to:"/applications",label:"应用市场",icon:"applications"},
   {to:"/agent-center",label:"Agent Center",icon:"agent"},
   {to:"/permissions",label:"权限中心",icon:"shield"},
@@ -40,8 +38,9 @@ export function BusinessNavigation({mobile=false}:{mobile?:boolean}) {
       <EntryLink entry={{to:"/dashboard",label:"首页",icon:"home"}}/>
       <details key={`work-${workActive}`} open={workActive}>
         <summary className={workActive?"active":""}><NavigationIcon name="problem"/><span>问题工作台</span></summary>
-        <NavLink to="/work" end>我的会话</NavLink><NavLink to="/tasks">我的任务</NavLink>
+        <NavLink to="/work" end><NavigationIcon name="conversation"/>我的会话</NavLink><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
       </details>
+      <EntryLink entry={{to:"/workflow-definitions",label:"业务能力与流程",icon:"relationships"}}/>
     </section>
     <section><h2>人员与资源</h2><EntryLink entry={{to:"/digital-employees",label:"数字员工",icon:"employee"}}/>
       <details key={`resources-${resourceActive}`} open={resourceActive}>

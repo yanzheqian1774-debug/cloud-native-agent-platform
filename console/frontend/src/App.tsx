@@ -52,6 +52,7 @@ import { EvidenceCenterPage } from "./evidence/EvidenceCenterPage";
 import { OutcomeCenterPage } from "./outcomes/OutcomeCenterPage";
 import { AgentCenterPage, ApplicationMarketPage, HelpCenterPage, ModelCenterPage, OperationsCenterPage, PermissionCenterPage, SecurityCenterPage, SettingsPage, UsageCenterPage } from "./administration/PlatformSupportPages";
 import "./styles/workspace-system.css";
+import "./styles/prototype-frame.css";
 
 let cancelPendingEvidenceFocus: (() => void) | null = null;
 

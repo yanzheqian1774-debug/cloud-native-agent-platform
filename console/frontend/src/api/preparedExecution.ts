@@ -6,4 +6,4 @@ export async function preparedRequest<T>(digest:string,action?:string,csrf?:stri
  const body=await response.json().catch(()=>null);if(response.status===401)window.dispatchEvent(new Event("workbench-session-expired"));if(!response.ok)throw new WorkbenchRequestError(body?.reasonCode??"WORKBENCH_UNAVAILABLE",response.status,body?.requestId);return body.result as T;
 }
 
-export type ExecutionPhaseProjection={digest:string;problemId:string;state:string;taskCount?:number;completedCount?:number;artifactCount?:number;criterionCount?:number;satisfiedCount?:number;planVersion?:number;confirmationId?:string|null};
+export type ExecutionPhaseProjection={digest:string;problemId:string;state:string;taskCount?:number;completedCount?:number;artifactCount?:number;criterionCount?:number;satisfiedCount?:number;planVersion?:number;planId?:string;sourceSnapshot?:Ref;events?:ExecutionView["events"];lastArtifactAt?:string;confirmationId?:string|null};

@@ -11,6 +11,7 @@ test("grouped navigation exposes active resource, all technical routes and mobil
  await expect(navigation.locator('a[href="/skills"]')).toHaveAttribute("aria-current","page");
  await expect(navigation.getByRole("link",{name:"MCP 服务"})).toBeVisible();
  await expect(navigation.locator("summary").filter({hasText:"问题工作台"})).not.toHaveClass(/active/);
+ const work=navigation.locator("summary").filter({hasText:"问题工作台"});await work.focus();await page.keyboard.press("Enter");
  const advanced=navigation.locator("summary").filter({hasText:"管理与技术"});await advanced.focus();await page.keyboard.press("Enter");
  for(const route of ["runtime-profiles","evidence","outcomes","authorization-admin","agents","catalog","relationships","attention","applications","agent-center","permissions","security","models","help"])await expect(navigation.locator(`a[href="/${route}"]`)).toBeVisible();
  await navigation.locator('a[href="/evidence"]').click();

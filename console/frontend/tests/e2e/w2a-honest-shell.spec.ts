@@ -84,7 +84,7 @@ test("uses only current session identity and keeps legacy planning out of truste
   await page.goto("/dashboard");
   await expect(page.getByLabel("当前可信身份 human:applicant")).toBeVisible();
   await expect(page.getByText("审核人员", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("全局搜索（暂未接线）")).toBeDisabled();
+  await expect(page.getByLabel("全局搜索（暂未接线）")).toHaveCount(0);
   await expect(page.getByText("⌘ K", { exact: true })).toHaveCount(0);
   await expect(page.locator(".px-notification")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "待处理事项", exact: true })).toBeVisible();

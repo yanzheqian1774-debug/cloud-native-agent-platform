@@ -82,7 +82,7 @@ test('login presentation uses official nonce form and expiry hides business cont
  await page.screenshot({path:info.outputPath('IAM03-expired-1536x1024.png')});
 });
 
-test('long persisted technical context is disclosed without displacing the plan',async({page})=>{
+test('long persisted technical context is disclosed without displacing the plan',async({page},info)=>{
  const original='保留8,000元预算与账单缺口。 Technical identifiers remain exact. '.repeat(8);
  let writes=0;
  await page.route('**/api/workbench/v1/**',async route=>{
@@ -96,6 +96,7 @@ test('long persisted technical context is disclosed without displacing the plan'
  await page.goto(`/work/planning/${proposal.proposal_id}?revision=1`);
  const disclosure=page.locator('.planning-saved-context');
  await expect(disclosure).not.toHaveAttribute('open','');
+ await page.screenshot({path:info.outputPath('planning-long-context-first-screen-fixture.png')});
  await expect(page.getByRole('heading',{name:/建议方案/})).toBeInViewport();
  await expect(disclosure.locator('p')).toBeHidden();
  const message=page.locator('.planning-conversation-history .px-user-message');
