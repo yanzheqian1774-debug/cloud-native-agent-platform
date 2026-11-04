@@ -16,6 +16,8 @@ from agent_console.runtime_profile_repository import (
     RuntimeProfileScope,
 )
 
+from .resource_policy_contract import reviewed_state
+
 
 class RuntimeProfileFailure(RuntimeError):
     def __init__(self, reason: str, status: int = 422):
@@ -120,7 +122,18 @@ class RuntimeProfileService:
         record["lifecycleState"] = "VALIDATED"
         return self._replace(record, expected, "DRAFT_VALIDATED", actor, draft)
 
-    def review(self, scope, rid, actor, expected, digest, decision, reason):
+    def review(
+        self,
+        scope,
+        rid,
+        actor,
+        expected,
+        digest,
+        decision,
+        reason,
+        *,
+        policy_basis=None,
+    ):
         record = self._load(scope, rid)
         self._expected(record, expected)
         draft = self._draft(record)
@@ -139,10 +152,12 @@ class RuntimeProfileService:
             "reason": reason.strip(),
             "reviewedAt": _now(),
         }
+        if policy_basis is not None:
+            review["policyBasis"] = policy_basis.record(actor)
         record["reviews"].append(review)
-        draft["state"] = "HUMAN_REVIEWED"
-        record["lifecycleState"] = "HUMAN_REVIEWED"
-        return self._replace(record, expected, "HUMAN_REVIEWED", actor, review)
+        draft["state"] = reviewed_state(review)
+        record["lifecycleState"] = reviewed_state(review)
+        return self._replace(record, expected, reviewed_state(review), actor, review)
 
     def publish(self, scope, rid, actor, expected, digest, review_id):
         record = self._load(scope, rid)
@@ -155,7 +170,7 @@ class RuntimeProfileService:
             not review
             or review["digest"] != digest
             or draft["digest"] != digest
-            or draft["state"] != "HUMAN_REVIEWED"
+            or draft["state"] != reviewed_state(review)
         ):
             raise RuntimeProfileFailure("EXACT_REVIEW_REQUIRED", 409)
         draft["state"] = "PUBLISHED"

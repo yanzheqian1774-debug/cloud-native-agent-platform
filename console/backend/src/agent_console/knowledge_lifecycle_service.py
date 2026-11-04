@@ -206,13 +206,19 @@ class KnowledgeLifecycleService:
         actor: str,
         expected_version: int,
         digest: str,
+        *,
+        policy_basis=None,
     ) -> dict[str, Any]:
         def mutate(record: dict[str, Any], fact: dict[str, Any]) -> None:
             draft = self._draft(record)
             if draft["state"] != "VALIDATED" or draft["digest"] != digest:
                 raise KnowledgeLifecycleFailure("EXACT_DIGEST_REQUIRED")
-            draft["state"] = "HUMAN_REVIEWED"
-            record["lifecycleState"] = "HUMAN_REVIEWED"
+            basis = policy_basis.record(actor) if policy_basis is not None else None
+            if basis is not None:
+                draft["policyBasis"] = basis
+                fact["policyBasis"] = basis
+            draft["state"] = "POLICY_REVIEWED" if basis else "HUMAN_REVIEWED"
+            record["lifecycleState"] = draft["state"]
             fact.update(
                 revisionId=draft["revisionId"], digest=digest, decision="APPROVE"
             )
@@ -222,7 +228,7 @@ class KnowledgeLifecycleService:
             knowledge_id,
             actor,
             expected_version,
-            "KNOWLEDGE_HUMAN_REVIEWED",
+            "KNOWLEDGE_POLICY_REVIEWED" if policy_basis else "KNOWLEDGE_HUMAN_REVIEWED",
             mutate,
         )
 
@@ -236,7 +242,11 @@ class KnowledgeLifecycleService:
     ) -> dict[str, Any]:
         def mutate(record: dict[str, Any], fact: dict[str, Any]) -> None:
             draft = self._draft(record)
-            if draft["state"] != "HUMAN_REVIEWED" or draft["digest"] != digest:
+            if (
+                draft["state"]
+                != ("POLICY_REVIEWED" if draft.get("policyBasis") else "HUMAN_REVIEWED")
+                or draft["digest"] != digest
+            ):
                 raise KnowledgeLifecycleFailure("EXACT_REVIEW_REQUIRED")
             draft["state"] = "PUBLISHED"
             record["publishedRevisionId"] = draft["revisionId"]

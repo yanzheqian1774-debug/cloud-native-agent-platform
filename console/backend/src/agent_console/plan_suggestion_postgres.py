@@ -173,6 +173,7 @@ class PostgresPlanningRepository:
         authority_basis,
         before_commit=None,
         validate_current=None,
+        approval_kind="BUSINESS_APPROVAL",
     ):
         persisted = self.proposal(
             cursor, scope, proposal.proposal_id, proposal.revision
@@ -240,7 +241,7 @@ class PostgresPlanningRepository:
                 "APPROVE",
                 actor,
                 authority_basis,
-                "BUSINESS_APPROVAL",
+                approval_kind,
                 canonical_digest([decision_id, plan.digest, actor, authority_basis]),
                 now,
             )

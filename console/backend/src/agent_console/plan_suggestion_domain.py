@@ -184,13 +184,35 @@ class SourceChangeOrigin(Immutable):
     prepared_by: Identity
 
 
+class PolicySourceChangeOrigin(SourceChangeOrigin):
+    kind: Literal["POLICY_SOURCE_CHANGE"] = "POLICY_SOURCE_CHANGE"
+    policy_basis: dict
+
+
+class PolicyResourcePreparationOrigin(Immutable):
+    kind: Literal["POLICY_RESOURCE_PREPARATION"] = "POLICY_RESOURCE_PREPARATION"
+    namespace: Identity
+    security_domain: Identity
+    root: ExactReference
+    source_snapshot: ExactReference
+    predecessor_plan: ExactReference
+    prepared_by: Identity
+    policy_basis: dict
+
+
 class ProposalRevision(Immutable):
     proposal_id: Identity
     revision: int = Field(ge=1)
     predecessor_digest: Digest | None
     invocation_id: Identity | None
     semantics: VersionedSemantics
-    origin: SyntheticValidationOrigin | SourceChangeOrigin | None = None
+    origin: (
+        SyntheticValidationOrigin
+        | SourceChangeOrigin
+        | PolicySourceChangeOrigin
+        | PolicyResourcePreparationOrigin
+        | None
+    ) = None
 
     @model_validator(mode="after")
     def validate_origin(self):

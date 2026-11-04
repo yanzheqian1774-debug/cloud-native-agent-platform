@@ -48,6 +48,7 @@ def _grant(action):
 class PlanningOwnerAdapter:
     application: PlanningApplication
     employees: object = None
+    resource_automation: object = None
 
     def __call__(self, call):
         principal = OwnerPrincipal(
@@ -183,6 +184,12 @@ class PlanningOwnerAdapter:
                         approved["execution_summary"] = execution_summary(
                             call.connection, principal, call.authority, approved["plan"]
                         )
+                    if self.resource_automation:
+                        history["resourceAutomation"] = (
+                            self.resource_automation.capability(
+                                call.context, proposal.semantics.target.problem
+                            )
+                        )
                     return history
                 version = (
                     call.payload["version"]
@@ -240,8 +247,8 @@ class PlanningOwnerAdapter:
             raise WorkbenchOwnerError(str(exc), 404) from exc
 
 
-def planning_operations(application, employees=None):
-    handler = PlanningOwnerAdapter(application, employees)
+def planning_operations(application, employees=None, *, resource_automation=None):
+    handler = PlanningOwnerAdapter(application, employees, resource_automation)
     path = f"{PREFIX}/planning-v2/{{proposal_id}}"
     from .planning_source_change import SourceChangeRequest
 

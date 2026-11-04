@@ -20,6 +20,8 @@ from agent_console.agent_definition_repository import (
 )
 from agent_console.definition_authority import RoleDescriptor, canonical_digest
 
+from .resource_policy_contract import reviewed_state
+
 
 class AgentDefinitionFailure(RuntimeError):
     def __init__(self, reason: str, status: int = 422) -> None:
@@ -207,6 +209,8 @@ class AgentDefinitionService:
         digest: str,
         decision: str,
         reason: str,
+        *,
+        policy_basis=None,
     ) -> dict[str, Any]:
         record = self._load(scope, definition_id)
         self._expected(record, expected)
@@ -232,10 +236,12 @@ class AgentDefinitionService:
             "reason": reason.strip(),
             "reviewedAt": _now(),
         }
+        if policy_basis is not None:
+            review["policyBasis"] = policy_basis.record(actor)
         record["reviews"].append(review)
-        draft["state"] = "HUMAN_REVIEWED"
-        record["lifecycleState"] = "HUMAN_REVIEWED"
-        return self._replace(record, expected, "HUMAN_REVIEWED", actor, review)
+        draft["state"] = reviewed_state(review)
+        record["lifecycleState"] = reviewed_state(review)
+        return self._replace(record, expected, reviewed_state(review), actor, review)
 
     def publish(
         self,
@@ -256,7 +262,7 @@ class AgentDefinitionService:
             review is None
             or review["digest"] != digest
             or draft["digest"] != digest
-            or draft["state"] != "HUMAN_REVIEWED"
+            or draft["state"] != reviewed_state(review)
         ):
             raise AgentDefinitionFailure("EXACT_REVIEW_REQUIRED", 409)
         draft["state"] = "PUBLISHED"

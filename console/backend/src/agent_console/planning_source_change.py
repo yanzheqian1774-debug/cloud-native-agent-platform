@@ -24,6 +24,7 @@ from .plan_suggestion_domain import (
     Immutable,
     PlanningConflict,
     PlanningError,
+    PolicySourceChangeOrigin,
     ProblemTarget,
     ProposalRevision,
     SourceChangeOrigin,
@@ -222,14 +223,25 @@ def preview(app, principal, c, identity, request):
     }
 
 
-def prepare(app, principal, identity, request):
-    if not principal.principal_id.startswith("human:") or not request.reason.strip():
+def prepare(app, principal, identity, request, *, policy_basis=None):
+    if (
+        policy_basis is None and not principal.principal_id.startswith("human:")
+    ) or not request.reason.strip():
         raise PlanningError("SOURCE_CHANGE_HUMAN_REASON_REQUIRED")
     app.require(principal, "READ", identity)
     app.require(principal, "PREPARE", identity)
+    actor = policy_basis.issuer if policy_basis is not None else principal.principal_id
+    if policy_basis is not None:
+        policy_basis.record(actor)
+        if policy_basis.subject != principal.principal_id:
+            raise PlanningError("SOURCE_CHANGE_POLICY_SUBJECT_MISMATCH")
     scope = app.scope(principal)
     payload = {"proposal_id": identity, **request.model_dump(mode="json")}
-    payload_digest = canonical_digest(payload)
+    payload_digest = (
+        canonical_digest([payload, policy_basis.record(actor)])
+        if policy_basis
+        else canonical_digest(payload)
+    )
     with app.repository.transaction(scope, identity, authorized=True) as cursor:
         c = cursor.connection
         c.execute(
@@ -240,7 +252,7 @@ def prepare(app, principal, identity, request):
                         "source-change",
                         scope.namespace,
                         scope.security_domain,
-                        principal.principal_id,
+                        actor,
                         request.idempotency_key,
                     ]
                 ),
@@ -251,7 +263,7 @@ def prepare(app, principal, identity, request):
             (
                 scope.namespace,
                 scope.security_domain,
-                principal.principal_id,
+                actor,
                 request.idempotency_key,
             ),
         ).fetchone()
@@ -265,11 +277,17 @@ def prepare(app, principal, identity, request):
             source_content(c, scope, app.authority, principal, request.new_source)
             return read(app, principal, c, identity, prior["record"]["requestId"])
         plan, evidence = preview(app, principal, c, identity, request)
+        if policy_basis is not None and (
+            evidence["contentChanged"]
+            or request.new_target
+            or request.criterion_revision_map
+        ):
+            raise PlanningConflict("POLICY_SOURCE_CHANGE_BUSINESS_DECISION_REQUIRED")
         request_id = stable_id(
             "planning-source-change",
             scope.namespace,
             scope.security_domain,
-            principal.principal_id,
+            actor,
             payload_digest,
         )
         successor = None
@@ -317,20 +335,27 @@ def prepare(app, principal, identity, request):
                 revision=head.revision + 1,
                 predecessor_digest=head.digest,
                 invocation_id=None,
-                origin=SourceChangeOrigin(
+                origin=(
+                    PolicySourceChangeOrigin if policy_basis else SourceChangeOrigin
+                )(
                     namespace=scope.namespace,
                     security_domain=scope.security_domain,
                     root=plan.semantics.target.problem,
                     source_snapshot=request.new_source,
                     request_id=request_id,
-                    prepared_by=principal.principal_id,
+                    prepared_by=actor,
+                    **(
+                        {"policy_basis": policy_basis.record(actor)}
+                        if policy_basis
+                        else {}
+                    ),
                 ),
                 semantics=FlexiblePlanSemantics.model_validate(semantics),
             )
             app.repository.add_proposal(cursor, scope, successor)
         record = {
             "requestId": request_id,
-            "actor": principal.principal_id,
+            "actor": actor,
             "createdAt": datetime.now(UTC).isoformat(),
             "request": payload,
             "evidence": evidence,
@@ -341,7 +366,16 @@ def prepare(app, principal, identity, request):
                 "version": plan.version,
                 "digest": plan.digest,
             },
-            "confirmationRequired": bool(successor),
+            "confirmationRequired": bool(successor) and policy_basis is None,
+            **(
+                {
+                    "subjectActor": principal.principal_id,
+                    "policyBasis": policy_basis.record(actor),
+                    "confirmationMode": "POLICY_OWNER_TRANSACTION",
+                }
+                if policy_basis
+                else {}
+            ),
             "executionStarted": False,
         }
         c.execute(
@@ -350,7 +384,7 @@ def prepare(app, principal, identity, request):
                 scope.namespace,
                 scope.security_domain,
                 request_id,
-                principal.principal_id,
+                actor,
                 request.idempotency_key,
                 payload_digest,
                 Jsonb(record),
@@ -363,7 +397,11 @@ def prepare(app, principal, identity, request):
 
 def read(app, principal, c, identity, request_id, *, by_key=False):
     app.require(principal, "READ", identity)
-    clause = "actor_id=%s AND request_key=%s" if by_key else "request_id=%s"
+    clause = (
+        "(actor_id=%s OR record->>'subjectActor'=%s) AND request_key=%s"
+        if by_key
+        else "request_id=%s"
+    )
     row = c.execute(
         "SELECT record FROM workflow_planning.source_changes WHERE namespace=%s AND security_domain=%s AND proposal_id=%s AND "
         + clause,
@@ -371,7 +409,11 @@ def read(app, principal, c, identity, request_id, *, by_key=False):
             principal.tenant_id,
             principal.security_domain,
             identity,
-            *([principal.principal_id, request_id] if by_key else [request_id]),
+            *(
+                [principal.principal_id, principal.principal_id, request_id]
+                if by_key
+                else [request_id]
+            ),
         ),
     ).fetchone()
     if not row:

@@ -19,18 +19,21 @@ from .workbench_owner_authorization import WorkbenchOwnerError
 
 OWNERS = {
     "skill": "SKILL",
+    "mcp": "SKILL",
     "agent": "AGENT",
     "runtime": "RUNTIME_PROFILE",
     "knowledge": "KNOWLEDGE",
 }
 PREFIXES = {
     "skill": "skill-invocation:",
+    "mcp": "skill-invocation:prepared-mcp:",
     "agent": "agent:",
     "runtime": "runtime-profile:",
     "knowledge": "knowledge:",
 }
 TABLES = {
     "skill": ("skill_mcp_resource.resources", "resource_id"),
+    "mcp": ("skill_mcp_resource.resources", "resource_id"),
     "agent": ("agent_definition.definitions", "definition_id"),
     "runtime": ("runtime_profile.profiles", "runtime_profile_id"),
     "knowledge": ("knowledge_operation.knowledge", "knowledge_id"),
@@ -83,6 +86,42 @@ class PreparedResourceOwner:
         self.services = services
 
     def __call__(self, call):
+        return self._handle(call)
+
+    def publish_policy(self, call, proof):
+        # Only the server-owned coordinator calls this port after authenticating
+        # the policy issuer and committing its exact POLICY grant in this UoW.
+        proof.record(proof.issuer)
+        if proof.subject != call.context.principal_id:
+            raise WorkbenchOwnerError("RESOURCE_POLICY_SUBJECT_MISMATCH", 403)
+        kind, identity, revision = (
+            call.path[k] for k in ("kind", "identity", "revision")
+        )
+        row = call.connection.execute(
+            "SELECT d.approved,d.issuer_principal_id,d.basis_type FROM "
+            "authorization_admin.grant_decisions d WHERE d.decision_id=%s AND EXISTS("
+            "SELECT 1 FROM authorization_admin.grants g WHERE g.decision_id=d.decision_id "
+            "AND g.subject_principal_id=%s AND g.tenant_id=%s AND g.security_domain=%s "
+            "AND g.owner=%s AND g.action='REVIEW_PUBLISH_RESOURCE' AND g.exact_resource=%s "
+            "AND g.not_before<=clock_timestamp() AND g.expires_at>clock_timestamp())",
+            (
+                proof.decision_id,
+                proof.subject,
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+                OWNERS[kind],
+                reference(kind, identity, revision),
+            ),
+        ).fetchone()
+        if row != {
+            "approved": True,
+            "issuer_principal_id": proof.issuer,
+            "basis_type": "POLICY",
+        }:
+            raise WorkbenchOwnerError("RESOURCE_POLICY_DECISION_INVALID", 403)
+        return self._handle(call, proof)
+
+    def _handle(self, call, proof=None):
         kind, identity, revision = (
             call.path[k] for k in ("kind", "identity", "revision")
         )
@@ -98,7 +137,9 @@ class PreparedResourceOwner:
         )
         actor = principal.principal_id
         key = (scope.namespace, scope.security_domain)
-        repo_args = (scope, "skill", identity) if kind == "skill" else (scope, identity)
+        repo_args = (
+            (scope, kind, identity) if kind in {"skill", "mcp"} else (scope, identity)
+        )
         if call.operation == "READ_PREPARED_RESOURCE":
             record = service.repository.get(*repo_args)
             exact = next(
@@ -114,8 +155,18 @@ class PreparedResourceOwner:
                 "revision": exact,
                 "publishedRevisionId": record.get("publishedRevisionId"),
             }
-        if not actor.startswith("human:") or not call.payload["reason"].strip():
+        if (proof is None and not actor.startswith("human:")) or not call.payload[
+            "reason"
+        ].strip():
             raise WorkbenchOwnerError("HUMAN_RESOURCE_REVIEW_REQUIRED", 403)
+        call.authority.require(
+            principal,
+            OWNERS[kind],
+            "REVIEW_PUBLISH_RESOURCE",
+            reference(kind, identity, revision),
+        )
+        if proof is not None:
+            actor = proof.issuer
         call.authority.require(
             principal,
             OWNERS[kind],
@@ -128,6 +179,7 @@ class PreparedResourceOwner:
                 "identity": identity,
                 "revision": revision,
                 "payload": dict(call.payload),
+                **({"policyBasis": proof.record(actor)} if proof else {}),
             }
         )
         command_key = call.payload["idempotencyKey"]
@@ -158,11 +210,21 @@ class PreparedResourceOwner:
             record = service.repository.get(*repo_args)
         version = record["aggregateVersion"]
         if kind == "knowledge":
-            service.review(*args, version, exact["digest"])
+            service.review(
+                *args,
+                version,
+                exact["digest"],
+                **({"policy_basis": proof} if proof else {}),
+            )
             service.publish(*args, version + 1, exact["digest"])
         else:
             service.review(
-                *args, version, exact["digest"], "APPROVE", call.payload["reason"]
+                *args,
+                version,
+                exact["digest"],
+                "APPROVE",
+                call.payload["reason"],
+                **({"policy_basis": proof} if proof else {}),
             )
             reviewed = service.repository.get(*repo_args)
             service.publish(
@@ -178,6 +240,7 @@ class PreparedResourceOwner:
             "aggregateVersion": record["aggregateVersion"],
             "actor": actor,
             "reason": call.payload["reason"],
+            **({"policyBasis": proof.record(actor)} if proof else {}),
         }
         call.connection.execute(
             "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES (%s,%s,%s,%s,%s,%s)",
@@ -203,7 +266,7 @@ class PreparedResourceTargets:
                 connection.execute(
                     f"SELECT 1 FROM {table} t CROSS JOIN LATERAL jsonb_array_elements(t.record->'revisions') r WHERE namespace=%s AND security_domain=%s "
                     f"AND %s || {col} || ':' || (r->>'revisionId')=%s"
-                    + (" AND kind='skill'" if kind == "skill" else ""),
+                    + (f" AND kind='{kind}'" if kind in {"skill", "mcp"} else ""),
                     (
                         context.scope.tenant_id,
                         context.scope.security_domain,

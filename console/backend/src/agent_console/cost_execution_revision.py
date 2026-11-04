@@ -12,6 +12,7 @@ from .plan_suggestion_domain import (
     FlexiblePlanSemantics,
     Immutable,
     PlanningConflict,
+    PolicyResourcePreparationOrigin,
     ProposalRevision,
     SourceChangeOrigin,
 )
@@ -77,7 +78,7 @@ def execution_successor(
         raise PlanningConflict("EXECUTION_REVISION_SOURCE_MISMATCH")
     old = plan.semantics
     if (
-        isinstance(source.origin, SourceChangeOrigin)
+        isinstance(source.origin, (SourceChangeOrigin, PolicyResourcePreparationOrigin))
         and source.origin.source_snapshot != request.source_snapshot
     ):
         raise PlanningConflict("EXECUTION_REVISION_SOURCE_CHANGE_MISMATCH")
@@ -106,7 +107,9 @@ def execution_successor(
         else text
         for text in old.boundaries
         if not (
-            isinstance(source.origin, SourceChangeOrigin)
+            isinstance(
+                source.origin, (SourceChangeOrigin, PolicyResourcePreparationOrigin)
+            )
             and text.startswith("隔离合成来源：")
         )
     ] + [

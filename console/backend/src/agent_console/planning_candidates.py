@@ -11,7 +11,7 @@ from .workbench_prepared_resources import reference
 # Fixed owner relations; request input never becomes a SQL identifier.
 OWNERS = {
     "SKILL": ("skill_mcp_resource.resources", "resource_id", "SKILL", "skill"),
-    "MCP": ("skill_mcp_resource.resources", "resource_id", "MCP", "mcp"),
+    "MCP": ("skill_mcp_resource.resources", "resource_id", "SKILL", "mcp"),
     "KNOWLEDGE": (
         "knowledge_operation.knowledge",
         "knowledge_id",
@@ -41,7 +41,7 @@ def require_read(authority, principal, kind, ref):
             "READ",
             f"employee:{ref.resource_id}:{ref.revision_id}",
         )
-    elif kind in {"SKILL", "KNOWLEDGE", "RUNTIME", "AGENT"}:
+    elif kind in {"SKILL", "MCP", "KNOWLEDGE", "RUNTIME", "AGENT"}:
         owner, action, target = (
             OWNERS[kind][2],
             "READ_RESOURCE",
@@ -243,7 +243,15 @@ def declaration(c, scope, authority, principal, kind, content, operations):
 
 def discover(c, scope, authority, principal, proposal, requirement):
     kind = requirement.kind
-    if kind not in {"EMPLOYEE", "SKILL", "KNOWLEDGE", "RUNTIME", "AGENT", "WORKFLOW"}:
+    if kind not in {
+        "EMPLOYEE",
+        "SKILL",
+        "MCP",
+        "KNOWLEDGE",
+        "RUNTIME",
+        "AGENT",
+        "WORKFLOW",
+    }:
         return {
             "requirementId": requirement.requirement_id,
             "kind": kind,

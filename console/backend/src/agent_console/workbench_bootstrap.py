@@ -167,6 +167,11 @@ def build_workbench_composition(
     )
 
     if prepared_resource_services:
+        prepared_resource_services = dict(prepared_resource_services)
+        if "skill" in prepared_resource_services:
+            prepared_resource_services.setdefault(
+                "mcp", prepared_resource_services["skill"]
+            )
         if prepared_execution_coordinator is None:
             raise AuthorityError("PREPARED_EXECUTION_DISABLED")
         for service in prepared_resource_services.values():
@@ -347,12 +352,44 @@ def build_workbench_composition(
 
                 task_binding = bind_created_object(task_binding, creation)
 
+        resource_automation = None
+        resource_automation_routes = ()
+        automation_path = os.environ.get("RESOURCE_PREPARATION_POLICY")
+        if automation_path:
+            if planning is None or not prepared_resource_services:
+                raise AuthorityError("RESOURCE_POLICY_DEPENDENCIES_REQUIRED")
+            from .resource_automation import (
+                ResourceAutomation,
+            )
+            from .resource_automation import (
+                migrate as migrate_automation,
+            )
+            from .resource_automation import (
+                operations as resource_automation_operations,
+            )
+            from .resource_automation_policy import AutomationPolicy
+
+            policy = AutomationPolicy.load(automation_path)
+            resource_automation = ResourceAutomation(
+                policy,
+                foundation.grants,
+                planning,
+                prepared_resource_services,
+                employee_definitions,
+            )
+            with foundation.repository.connection_scope() as c:
+                migrate_automation(c)
+            resource_automation_routes = resource_automation_operations(
+                resource_automation
+            )
+
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
             WorkbenchBffPolicy(allowed_host, allowed_origin),
             grant_administration=foundation.grants,
             operations=(
+                *resource_automation_routes,
                 *(
                     prepared_resource_operations(prepared_resource_services)
                     if prepared_resource_services
@@ -364,7 +401,11 @@ def build_workbench_composition(
                     else ()
                 ),
                 *(
-                    planning_operations(planning, employee_definitions)
+                    planning_operations(
+                        planning,
+                        employee_definitions,
+                        resource_automation=resource_automation,
+                    )
                     if planning is not None
                     else ()
                 ),

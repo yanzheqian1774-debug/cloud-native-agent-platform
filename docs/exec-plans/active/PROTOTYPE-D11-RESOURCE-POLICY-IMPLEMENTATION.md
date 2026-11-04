@@ -1,0 +1,94 @@
+# D11 implementation: same-owner automatic resource preparation
+
+Authority: user explicitly accepted D11 on 2026-11-04. This G1 implementation
+plan realizes the accepted policy publication/provenance compatibility change.
+No new database/runtime/authorization authority or CRD. Preserve all original
+Plan/Run/artifact/UNKNOWN/ledger facts and old Human routes/serialization.
+
+Components: existing grant administration service and static SERVICE_ONLY
+credential verifier; workbench composition; prepared resource bridge and four
+lifecycle services; Skill/MCP exact target registry; planning provenance and
+confirmation; existing employee definition assembly; Console progressive status.
+
+Policy is server configuration, disabled unless explicitly installed. Bind a
+real service credential to one policy version/digest and tenant/domain, expiry,
+allowed business problem root/subject and source-content commitments. Browser
+supplies only the authorized Plan version/key, never policy identity/permissions.
+Derive exact resource references from the approved Plan and selected employee's
+members. Reject unknown/changed target, out-of-scope data and unsupported executors.
+Use normal grant requests with the requesting user as subject and real independent
+service issuer with POLICY basis, current TTL/revocation/generation checks. Grant
+repository uses the same owner transaction, no synthetic reviewer or Human token.
+
+Internal verified policy review port retains Human review unchanged. Add truthful
+POLICY_REVIEWED facts with policy/grant evidence; failed technical validation is
+not published. Knowledge source integrity/schema/data scope, Skill executor/config/
+I/O/READ_ONLY policy, Agent bindings and actual Native runtime readiness checked.
+MCP has distinct exact targets under the existing SKILL owner, without endpoint
+access inferred from Skill permission; unsupported connector credentials remain gaps.
+
+Add immutable resource-preparation receipts under the existing execution owner
+migration ledger, not its frozen version gate. Same-transaction request key,
+current Plan/root lock, per-member savepoints and append-only result/notifications:
+partial success persists without replaying published members; retries use exact
+current revisions and retain failed history. GET rechecks Plan/data/resource access.
+Truthful POLICY_SOURCE_CHANGE provenance is additive; same-meaning changes can
+be policy-confirmed only within approved work scope. Changed content-bound standards
+stay blocked; no silent metric/period/goal changes and no Human outcome delegation.
+
+Assembly reuses employee definition owner/member checks and exact grants, publishing
+only after all necessary resources pass. Definitions/assembly readiness are distinct
+from instances, execution admission and actual invocation; no automatic rerun of an
+old completed Run. Continuous UI auto-starts preparation only for a current approved
+Plan under enabled policy, recovers original request via GET, hides technical IDs
+in disclosures and keeps professional legacy tools available as optional details.
+
+Validation: disposable PG owner/grant tests for existing/new/expanded/batch,
+negative scope/data/expiry/revocation/schema/executor/runtime, failed-validation
+no-publication, partial batch, concurrent/idempotent/lost response/restart; old
+Human contracts/hash unchanged. Browser automatic flow with zero approval clicks,
+no copied IDs/manual polling; real product-path POLICY decision and resource facts,
+actual runtime probe, before/after operation counts without inventing baselines.
+Activation only after tests, fresh private backup, zero in-flight Native/model
+workers, controlled old-writer stop and one new writer. Regress supplier/sales GET
+and UNKNOWN/aggregate100/USD50 before and after. Repository checks and frontend
+lint/build, fixed source/bundle evidence; independently state visuals/business limits.
+
+## Engineering checkpoint before ontology integration (not runtime acceptance)
+
+Implemented: real SERVICE_ONLY verifier plus existing POLICY grant requests/
+decisions, exact Plan/work/source scope, immutable per-request resource receipts,
+normal resource validation/review/publication with POLICY_REVIEWED evidence,
+selected employee's existing owner validation/publication/assembly; MCP metadata
+READ uses a distinct exact SKILL-owned target. Same-content source changes use
+POLICY_SOURCE_CHANGE and real policy confirmation. Optional professional role
+selection produces POLICY_RESOURCE_PREPARATION, retaining original goal/standards/
+task graph and every previous Plan. No fake model/Human origin. Automatic Console
+preparation and GET recovery update the existing planning-resource snapshot;
+professional configuration stays optional. Runtime namespace credential probe is
+real when enabled; tests label its isolated replacement explicitly.
+
+This checkpoint does NOT claim activated policy, four real browser flows, created
+instances, automatic Run/admission/dispatch, arbitrary resources/code generation,
+MCP endpoint readiness, full J03/J04/J06 or package visual acceptance. Present
+receipt instancesCreated/newRuns/executionStarted fields reflect this boundary.
+Continue implementation/product validation after the fixed technical integration
+checkpoint; do not stop at this engineering result or ask the user to reauthorize.
+No active service has been switched or business case replayed during coding.
+
+Evidence under workspace work/: d11-checkpoint-owners.log (54 real isolated PG
+owner/authorization/native/compatibility checks); d11-policy-final-pg.log (18
+policy cases including existing/new/expanded/batch, denial/expiry/revocation/
+partial/concurrent/recovery, source and role provenance); d11-assisted-checkpoint.log
+(75 assisted fixture browser checks). Full Python run initially had two host Git
+shim/Xcode-license errors (2213 pass/450 skip); the exact two tests pass with the
+bundled Git on PATH, without test/source changes. Repository ruff and formatting
+checks pass. The `make` launcher is itself Xcode-gated, so its exact three checks
+were run directly. Frontend lint/build and commit hooks are recorded separately.
+
+Following this commit: integrate fixed ontology candidate a23d01898117f68060fbe62fe18a5a3413641e3b
+in a controlled candidate; re-evaluate origin union, schema/checksum/writer gates
+and exact binding/source/executor contracts, run combined tests, then complete
+D11 real product paths/continuous preparation and controlled idle single-writer
+activation. Do not borrow historical ontology PASS. New ontology/product experience
+waits for the prototype task's frozen page/state baseline; real-data B stays off.

@@ -5,6 +5,8 @@ import * as api from "./api";
 import "./planning.css";
 import { JourneySteps } from "../journey/JourneySteps";
 import { formatTime } from "../journey/formatTime";
+import {ResourceRoleChoice} from "./ResourceRoleChoice";
+import {ResourcePreparation} from "./ResourcePreparation";
 import {PlanningCandidates} from "./PlanningCandidates";
 import {PlanningSourceChange} from "./PlanningSourceChange";
 import {PlanningDialogue} from "./PlanningDialogue";
@@ -18,6 +20,7 @@ export function PlanningPage() {
   const [params, setParams] = useSearchParams();
   const requested = Number(params.get("revision")) || null;
   const [view, setView] = useState<{ data: api.ProposalRead; history: api.History } | null>(null);
+  const [expert,setExpert]=useState(false);
   const [original, setOriginal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -98,8 +101,15 @@ export function PlanningPage() {
       </section>
       {previous && <section className="planning-card"><h2>本次修订影响</h2><p>任务声明变化：{changedTasks.map(id=>plan.tasks.find(t=>t.task_id===id)?.title ?? `已移除 ${id}`).join("、") || "无"}</p><p>成功标准版本：{criteriaChanged ? "已变化，需要按新标准核对全部任务" : "保持原已确认版本"}。此比较展示持久化字段差异，不替代业务语义复核。</p></section>}
       <div className="planning-confirm" aria-live="polite">{approved ? <><h2>计划已确认{missing.length&&!hasExecution ? "，资源待准备" : ""}，{executionText}</h2><p>计划版本 {approved.plan.version} · 确认时间：{formatTime(approved.approval.decided_at)}</p><details className="journey-technical"><summary>查看持久化确认关联</summary><dl><dt>计划</dt><dd>{approved.plan.plan_id}</dd><dt>批准</dt><dd>{approved.approval.approval_decision_id}</dd><dt>摘要</dt><dd><code>{approved.digest}</code></dd></dl></details></> : <><p>确认仅保存当前计划。{missing.length ? `仍有 ${missing.length} 项必要资源待准备或核实。` : ""}</p><button type="button" disabled={busy || data.proposal.revision !== latest} onClick={() => void act("confirm")}>{busy ? "正在保存…" : "确认计划"}</button></>}{error && <p role="alert">{error}。可重试原操作或刷新读回；不会自动再次生成建议。</p>}</div>
+      {approved&&<ResourcePreparation key={proposalId+':'+approved.plan.version+':'+approved.digest} id={proposalId} approved={approved} policyStamp={history.resourceAutomation?.policyStamp} onPrepared={snapshot=>setView(current=>current&&snapshot.proposal_digest===current.data.digest?{...current,data:{...current.data,snapshot}}:current)} enabled={Boolean(history.resourceAutomation?.enabled)&&data.proposal.revision===latest&&!hasExecution}/>}
+      {history.resourceAutomation?.enabled?<details className="planning-card" onToggle={e=>setExpert(e.currentTarget.open)}><summary>查看候选、专业配置与来源变更</summary>{expert&&<>
+      {approved&&<ResourceRoleChoice id={proposalId} revision={data.proposal.revision} approved={approved}/>}
       <PlanningCandidates id={proposalId} revision={data.proposal.revision} digest={data.digest} disabled={data.proposal.revision!==latest} onSuggest={text=>setSuggestion({key:crypto.randomUUID(),text})} onSourceChange={()=>{const node=document.getElementById('planning-source-change');if(node instanceof HTMLDetailsElement){node.open=true;node.scrollIntoView({block:'start'})}}}/>
-      <PlanningSourceChange key={proposalId+':'+data.proposal.revision} id={proposalId} revision={data.proposal.revision} approved={[...history.plans].sort((a,b)=>b.plan.version-a.plan.version)[0]} disabled={data.proposal.revision!==latest}/>
+      <PlanningSourceChange key={proposalId+':'+data.proposal.revision} id={proposalId} revision={data.proposal.revision} approved={[...history.plans].sort((a,b)=>b.plan.version-a.plan.version)[0]} disabled={data.proposal.revision!==latest} automatic={Boolean(history.resourceAutomation?.enabled)}/>
+      </>}</details>:<>
+      <PlanningCandidates id={proposalId} revision={data.proposal.revision} digest={data.digest} disabled={data.proposal.revision!==latest} onSuggest={text=>setSuggestion({key:crypto.randomUUID(),text})} onSourceChange={()=>{const node=document.getElementById('planning-source-change');if(node instanceof HTMLDetailsElement){node.open=true;node.scrollIntoView({block:'start'})}}}/>
+      <PlanningSourceChange key={proposalId+':'+data.proposal.revision} id={proposalId} revision={data.proposal.revision} approved={[...history.plans].sort((a,b)=>b.plan.version-a.plan.version)[0]} disabled={data.proposal.revision!==latest} automatic={Boolean(history.resourceAutomation?.enabled)}/>
+      </>}
       <section className="planning-card planning-resources"><h2 id="planning-resource-summary"><span aria-hidden="true">◇</span> 资源需求与缺口</h2><p>共享资源只准备一次，可供多个任务复用。匹配不代表已调用。</p>{kinds.map(kind => <section className="planning-resource-group" key={kind}><h3>{resourceKinds[kind] ?? kind}<small>{plan.requirements.filter(r => r.kind === kind).length} 项</small></h3>{plan.requirements.filter(r => r.kind === kind).map(r => <details id={`requirement-${r.requirement_id}`} className="planning-resource" key={r.requirement_id}><summary><strong>{r.name}</strong><span>{resourceBadge(r)}<small>{r.required ? "必要" : "可选"}</small></span></summary><p>{r.purpose}</p><p>准备说明：{r.preparation}</p>
         {r.required && status(r)!=="MATCHED" && <div className="planning-gap-action"><strong>待处理 · {labels[status(r)] ?? "待核实"}</strong><p>{status(r)==="UNREADABLE"?"请资源负责人核对当前账号的读取范围。":status(r)==="VERSION_MISMATCH"?"请资源负责人核对计划引用的修订与当前版本。":status(r)==="MISSING"?"请资源负责人按本项用途准备所需能力。":"请先刷新资源状态，再核对可用性与版本。"}</p><small>此项影响下列任务的执行准备，当前计划仍可核对。</small></div>}<p>输入输出兼容与运行条件：{data.snapshot?.observations.find(o=>o.requirement_id===r.requirement_id)?.io_status === "DECLARED" ? "已有声明，仍需运行前核验" : "尚未核验"}；精确版本可读不代表执行就绪。</p><p>用于：{plan.tasks.filter(t => t.employee_requirement_id === r.requirement_id || t.requirement_ids.includes(r.requirement_id)).map(t => t.title).join("、") || "可选增强，不影响当前必要任务"}</p>{r.selected && <details className="journey-technical"><summary>准确版本与技术引用</summary><dl><dt>资源</dt><dd>{r.selected.resource_id}</dd><dt>修订</dt><dd>{r.selected.revision_id}</dd><dt>摘要</dt><dd><code>{r.selected.digest}</code></dd></dl></details>}</details>)}</section>)}</section>
       </SystemMessage>

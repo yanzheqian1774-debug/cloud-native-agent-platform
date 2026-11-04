@@ -9,7 +9,7 @@ export default defineConfig({
  testMatch:assisted?[
   '**/s5-321-understanding.spec.ts','**/s5-323-visual.spec.ts',
   '**/s5-323-dialogue.spec.ts','**/s5-323-productization.spec.ts',
-  '**/planning-candidates-source-change.spec.ts','**/planning-target-recovery.spec.ts','**/planning-readonly-recovery.spec.ts',
+  '**/resource-automation.spec.ts','**/planning-candidates-source-change.spec.ts','**/planning-target-recovery.spec.ts','**/planning-readonly-recovery.spec.ts',
  ]:[
   '**/w3-success-criteria.spec.ts','**/s5-324-execution.spec.ts',
   '**/prototype-shared-workspace.spec.ts','**/w2a-honest-shell.spec.ts',

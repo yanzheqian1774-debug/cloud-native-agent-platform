@@ -1,0 +1,253 @@
+# ruff: noqa: E501, RUF001 -- Explicit immutable provenance and bound owner SQL.
+"""Policy-only resource selection; business target/standards/task graph unchanged."""
+
+from dataclasses import replace
+
+from psycopg.types.json import Jsonb
+
+from .authority_contracts import AuthorityError, ExactGrant
+from .cost_execution_revision import (
+    DELIVERY_SYNTHETIC_ONLY,
+    EXECUTION_ONLY,
+    PLANNING_ONLY,
+    READ_ONLY_PLANNING,
+    SALES_SYNTHETIC_ONLY,
+    SYNTHETIC_ONLY,
+)
+from .plan_suggestion_domain import (
+    ConfirmedPlanRevision,
+    ExactReference,
+    FlexiblePlanSemantics,
+    PolicyResourcePreparationOrigin,
+    ProposalRevision,
+)
+from .planning_contracts import validation_report
+from .planning_source_change import SourceChangeRequest, approved_source
+from .resource_automation import SelectEmployeeResources
+from .resource_use_domain import canonical_digest
+from .workbench_business_problem import OwnerPrincipal
+from .workbench_owner_authorization import WorkbenchOwnerError
+from .workbench_prepared_resources import reference
+
+
+def select_employee(automation, call):
+    request = SelectEmployeeResources.model_validate(call.payload)
+    app = automation.bound_app(call)
+    principal = OwnerPrincipal(
+        call.context.principal_id,
+        call.context.scope.tenant_id,
+        call.context.scope.security_domain,
+    )
+    scope = app.scope(principal)
+    identity = call.path["proposal_id"]
+    issuer = automation.authenticate(call.context)
+    with app.repository.transaction(scope, identity, authorized=True) as cur:
+        c = cur.connection
+        baseline = app.repository.read_plan(cur, scope, identity, request.version)
+        old = ConfirmedPlanRevision.model_validate(baseline["plan"])
+        if baseline["digest"] != request.digest:
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
+        work = automation.policy.work(
+            call.context, old.semantics.target.problem, automation.grants.clock()
+        )
+        payload_digest = canonical_digest(
+            [request.model_dump(mode="json"), automation.policy.digest]
+        )
+        replay = c.execute(
+            "SELECT record,payload_digest FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
+            (
+                scope.namespace,
+                scope.security_domain,
+                principal.principal_id,
+                request.idempotencyKey,
+            ),
+        ).fetchone()
+        if replay:
+            if replay["payload_digest"] != payload_digest:
+                raise WorkbenchOwnerError("RESOURCE_SELECTION_KEY_CONFLICT", 409)
+            automation.recheck(call, replay["record"]["preflight"])
+            return replay["record"]
+        head = c.execute(
+            "SELECT max(revision) revision FROM workflow_planning.proposals WHERE namespace=%s AND security_domain=%s AND proposal_id=%s",
+            (scope.namespace, scope.security_domain, identity),
+        ).fetchone()["revision"]
+        if (
+            head != request.expectedProposalRevision
+            or old.source_proposal_revision != head
+        ):
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_STALE", 409)
+        probe = old.semantics.model_dump(mode="json")
+        for r in probe["requirements"]:
+            if r["kind"] == "EMPLOYEE":
+                r["selected"] = request.employee.model_dump(mode="json")
+        prospective = old.model_copy(
+            update={"semantics": FlexiblePlanSemantics.model_validate(probe)}
+        )
+        refs, employee = automation.derive(
+            call, prospective, "selection:" + request.idempotencyKey, work, issuer
+        )
+        if not employee:
+            raise AuthorityError("RESOURCE_EMPLOYEE_COMMITMENT_REQUIRED")
+        # One source remains explicit. Same-content alias change uses D10's
+        # immutable source owner record and truthful POLICY_SOURCE_CHANGE first.
+        selected_sources = [
+            r
+            for k, r in refs
+            if k == "knowledge"
+            and r
+            in [
+                ExactReference(
+                    resource_id=m["resource_id"],
+                    revision_id=m["revision_id"],
+                    digest=m["digest"],
+                )
+                for m in employee[1]["revision"]["members"]
+                if m["kind"] == "KNOWLEDGE"
+            ]
+        ]
+        current_source = approved_source(old.semantics)
+        source_change = None
+        if len(selected_sources) == 1 and selected_sources[0] != current_source:
+            change = SourceChangeRequest(
+                plan_version=old.version,
+                plan_digest=baseline["digest"],
+                expected_proposal_revision=head,
+                old_source=current_source,
+                new_source=selected_sources[0],
+                reason="Same-business resource assembly selects an authorized same-content source; retain all previous versions",
+                idempotency_key="resource-source:" + request.idempotencyKey,
+            )
+            source_call = replace(call, payload=change.model_dump(mode="json"))
+            source_change = automation.source_change(source_call)
+            baseline = source_change["policyConfirmation"]
+            old = ConfirmedPlanRevision.model_validate(baseline["plan"])
+            head = old.source_proposal_revision
+        elif len(selected_sources) != 1:
+            raise AuthorityError("RESOURCE_PRIMARY_SOURCE_COMMITMENT_REQUIRED")
+        source_reads = [
+            ExactGrant(
+                "KNOWLEDGE",
+                "READ_RESOURCE",
+                reference("knowledge", r.resource_id, r.revision_id),
+            )
+            for r in selected_sources
+        ]
+        actions = [
+            ExactGrant("PLAN", a, "plan:v2:" + identity)
+            for a in ("READ", "PREPARE", "APPROVE")
+        ]
+        t = old.semantics.target
+        actions += source_reads
+        actions += [
+            ExactGrant(
+                "BUSINESS_PROBLEM", "READ", "business-problem:" + t.problem.resource_id
+            ),
+            ExactGrant(
+                "SUCCESS_CRITERIA_SET",
+                "READ",
+                "success-criteria-set:" + t.problem.resource_id,
+            ),
+        ]
+        actions += [
+            ExactGrant("SUCCESS_CRITERION", "READ", "success-criterion:revision:" + r)
+            for r in t.criterion_revision_ids
+        ]
+        proof = automation.decide(
+            call, actions, "selection:" + request.idempotencyKey, work, issuer
+        )
+        automation.proof_grants(call, actions)
+        app.validate_target(principal, t, c)
+        semantics = old.semantics.model_dump(mode="json")
+        semantics["business_rules"] = [
+            PLANNING_ONLY if s == EXECUTION_ONLY else s
+            for s in semantics["business_rules"]
+        ]
+        if PLANNING_ONLY not in semantics["business_rules"]:
+            semantics["business_rules"].append(PLANNING_ONLY)
+        semantics["boundaries"] = [
+            s
+            for s in semantics["boundaries"]
+            if not s.startswith("执行准备映射SHA256：")
+            and s
+            not in {
+                DELIVERY_SYNTHETIC_ONLY,
+                SALES_SYNTHETIC_ONLY,
+                SYNTHETIC_ONLY,
+                READ_ONLY_PLANNING,
+            }
+        ] + [READ_ONLY_PLANNING]
+        for r in semantics["requirements"]:
+            if r["kind"] == "EMPLOYEE":
+                r["selected"] = request.employee.model_dump(mode="json")
+        successor = ProposalRevision(
+            proposal_id=identity,
+            revision=head + 1,
+            predecessor_digest=app.repository.proposal(
+                cur, scope, identity, head
+            ).digest,
+            invocation_id=None,
+            semantics=FlexiblePlanSemantics.model_validate(semantics),
+            origin=PolicyResourcePreparationOrigin(
+                namespace=scope.namespace,
+                security_domain=scope.security_domain,
+                root=t.problem,
+                source_snapshot=approved_source(old.semantics),
+                predecessor_plan=ExactReference(
+                    resource_id=old.plan_id,
+                    revision_id=str(old.version),
+                    digest=baseline["digest"],
+                ),
+                prepared_by=issuer.principal_id,
+                policy_basis=proof.record(issuer.principal_id),
+            ),
+        )
+        validation_report(successor.semantics)
+        app.repository.add_proposal(cur, scope, successor)
+        confirmed = app.repository.confirmation(
+            cur,
+            scope,
+            successor,
+            actor=issuer.principal_id,
+            key="policy-selection-confirm:" + request.idempotencyKey,
+            expected_plan_version=old.version,
+            authority_basis="POLICY:" + proof.decision_id + ":" + proof.policy_digest,
+            approval_kind="RESOURCE_POLICY_APPROVAL",
+        )
+        # Exact source scope is rechecked before replay; no readable data content
+        # or sensitive non-approved metadata is copied into this command receipt.
+        preflight = {
+            "resources": [
+                {
+                    "kind": "knowledge",
+                    "state": "READY",
+                    "reference": r.model_dump(mode="json"),
+                }
+                for r in selected_sources
+            ],
+            "employeeReference": request.employee.model_dump(mode="json"),
+        }
+        result = {
+            "proposal": successor.model_dump(mode="json"),
+            "digest": successor.digest,
+            "confirmation": confirmed,
+            "sourceChangeRequestId": source_change["requestId"]
+            if source_change
+            else None,
+            "policyBasis": proof.record(issuer.principal_id),
+            "preflight": preflight,
+            "modelCalls": 0,
+            "newRuns": 0,
+            "executionStarted": False,
+        }
+        c.execute(
+            "INSERT INTO execution_authority.resource_policy_plan_commands VALUES(%s,%s,%s,%s,%s,%s)",
+            (
+                scope.namespace,
+                scope.security_domain,
+                principal.principal_id,
+                request.idempotencyKey,
+                payload_digest,
+                Jsonb(result),
+            ),
+        )
+        return result
