@@ -266,7 +266,7 @@ class PostgresEmployeeDefinitionRepository:
     ) -> bool:
         """Validate Employee collection, aggregate, or revision identity only."""
         if exact_resource == "employee:collection":
-            return action == "CREATE"
+            return action in {"CREATE", "LIST"}
         try:
             if action in {"VALIDATE", "APPROVE", "PUBLISH"}:
                 row = connection.execute(

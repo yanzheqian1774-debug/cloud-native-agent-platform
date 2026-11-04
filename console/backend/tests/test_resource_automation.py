@@ -1072,3 +1072,11 @@ def test_assembly_cannot_report_ready_for_a_different_selected_definition(automa
                 ).fetchone()["n"]
                 == before
             )
+
+
+def test_employee_list_entry_target_matches_registered_read_only_collection_route():
+    check = PostgresEmployeeDefinitionRepository.is_known_grant_target_for_workbench
+    assert check(None, None, "LIST", "employee:collection")
+    assert check(None, None, "CREATE", "employee:collection")
+    for action in ("READ", "APPROVE", "PUBLISH", "DELETE"):
+        assert not check(None, None, action, "employee:collection")

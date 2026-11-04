@@ -42,7 +42,7 @@ function OntologySalesContent() {
   }, [identity, revision, digest]);
   useEffect(() => { let active = true; if (digest) preparedRequest<ExecutionView>(digest).then(v => { if (active) {
       setView(checkedView(v, identity, revision));
-    } }).catch(e => { if (active) setMessage(ontologyError(e)); }); return () => { active = false; }; }, [digest]);
+    } }).catch(e => { if (active) setMessage(ontologyError(e)); }); return () => { active = false; }; }, [digest, identity, revision]);
   async function action(kind: string) {
     setBusy(true); setMessage("");
     try {
