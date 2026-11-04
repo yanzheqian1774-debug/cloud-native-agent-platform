@@ -885,3 +885,190 @@ def test_out_of_scope_member_is_rejected_before_granting_employee_metadata_acces
             ).fetchone()["n"]
             == 0
         )
+
+
+@pytest.mark.parametrize("operation", ["prepare", "source", "selection"])
+def test_generic_policy_preserves_ontology_binding_before_any_mutation(
+    automation, operation
+):
+    from agent_console.plan_suggestion_domain import (
+        OntologyPlanOrigin,
+        ProposalRevision,
+    )
+    from agent_console.planning_source_change import SourceChangeRequest
+    from agent_console.workbench_owner_authorization import WorkbenchOwnerError
+    from test_plan_suggestion_v2 import confirm
+
+    a = automation
+    with a.repository.transaction(a.e.scope, a.e.p.plan_id, authorized=True) as cur:
+        previous = a.repository.proposal(
+            cur, a.e.scope, a.e.p.plan_id, a.e.p.plan_version
+        )
+        proposal = ProposalRevision(
+            proposal_id=previous.proposal_id,
+            revision=previous.revision + 1,
+            predecessor_digest=previous.digest,
+            invocation_id=None,
+            semantics=previous.semantics,
+            origin=OntologyPlanOrigin(
+                namespace=a.e.scope.namespace,
+                security_domain=a.e.scope.security_domain,
+                root=previous.semantics.target.problem,
+                source_snapshot=a.refs["knowledge"],
+                ontology=a.refs["knowledge"],
+                mapping_digest="b" * 64,
+                prepared_by=a.subject.principal_id,
+                request_key="ontology-binding-boundary-test",
+            ),
+        )
+        a.repository.add_proposal(cur, a.e.scope, proposal)
+    confirmed = confirm(
+        a.repository,
+        a.e.scope,
+        proposal,
+        "ontology-boundary-confirm",
+        expected=a.e.p.plan_version,
+    )
+    plan = confirmed["plan"]
+    with a.authority.pool.connection() as c:
+        before = c.execute(
+            "SELECT count(*) n FROM authorization_admin.grant_decisions"
+        ).fetchone()["n"]
+    if operation == "prepare":
+
+        def invoke():
+            return a.run(version=plan["version"])
+    else:
+        if operation == "source":
+            payload = SourceChangeRequest(
+                plan_version=plan["version"],
+                plan_digest=confirmed["digest"],
+                expected_proposal_revision=proposal.revision,
+                old_source=a.refs["knowledge"],
+                new_source=a.refs["knowledge"],
+                reason="same content must not strip semantic binding",
+                idempotency_key="blocked-ontology-source",
+            ).model_dump(mode="json")
+        else:
+            payload = {
+                "version": plan["version"],
+                "digest": confirmed["digest"],
+                "expectedProposalRevision": proposal.revision,
+                "employee": next(
+                    r.selected
+                    for r in proposal.semantics.requirements
+                    if r.kind == "EMPLOYEE"
+                ).model_dump(mode="json"),
+                "idempotencyKey": "blocked-ontology-selection",
+            }
+
+        def invoke():
+            with a.repository.pool.connection() as c, c.transaction():
+                call = AuthorizedOwnerCall(
+                    "ONTOLOGY_BOUNDARY_TEST",
+                    a.subject,
+                    c,
+                    payload,
+                    {"proposal_id": a.e.p.plan_id},
+                    {},
+                    (),
+                    AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ()),
+                    1,
+                    1,
+                )
+                return (
+                    a.automation.source_change
+                    if operation == "source"
+                    else a.automation.select_employee
+                )(call)
+
+    with pytest.raises(
+        WorkbenchOwnerError, match="RESOURCE_POLICY_ONTOLOGY_BINDING_REQUIRED"
+    ):
+        invoke()
+    with a.authority.pool.connection() as c:
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM authorization_admin.grant_decisions"
+            ).fetchone()["n"]
+            == before
+        )
+    with a.repository.pool.connection() as c:
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM execution_authority.resource_automation"
+            ).fetchone()["n"]
+            == 0
+        )
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM execution_authority.workflow_runs"
+            ).fetchone()["n"]
+            == 0
+        )
+        assert (
+            a.repository.proposal(
+                c.cursor(), a.e.scope, proposal.proposal_id, proposal.revision
+            ).digest
+            == proposal.digest
+        )
+
+
+def test_assembly_cannot_report_ready_for_a_different_selected_definition(automation):
+    from agent_console.authority_contracts import AuthorityError
+    from agent_console.plan_suggestion_domain import ConfirmedPlanRevision
+    from agent_console.workbench_business_problem import OwnerPrincipal
+
+    a = automation
+    with a.repository.pool.connection() as c, c.transaction():
+        call = AuthorizedOwnerCall(
+            "ASSEMBLY_BOUNDARY_TEST",
+            a.subject,
+            c,
+            {},
+            {"proposal_id": a.e.p.plan_id},
+            {},
+            (),
+            AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ()),
+            1,
+            1,
+        )
+        app = a.automation.bound_app(call)
+        principal = OwnerPrincipal(
+            a.subject.principal_id, a.e.scope.namespace, a.e.scope.security_domain
+        )
+        scope = app.scope(principal)
+        with app.repository.transaction(scope, a.e.p.plan_id, authorized=True) as cur:
+            plan = ConfirmedPlanRevision.model_validate(
+                app.repository.read_plan(cur, scope, a.e.p.plan_id, a.e.p.plan_version)[
+                    "plan"
+                ]
+            )
+            work = a.policy.work(
+                a.subject, plan.semantics.target.problem, a.automation.grants.clock()
+            )
+            issuer = a.automation.authenticate(a.subject)
+            refs, employee = a.automation.derive(
+                call, plan, "assembly-boundary", work, issuer
+            )
+            before = c.execute(
+                "SELECT count(*) n FROM digital_employee_definition.definitions"
+            ).fetchone()["n"]
+            with pytest.raises(
+                AuthorityError, match="RESOURCE_EMPLOYEE_SUCCESSOR_SELECTION_REQUIRED"
+            ):
+                a.automation.assemble(
+                    call,
+                    plan,
+                    [(kind, ref) for kind, ref in refs if kind != "knowledge"],
+                    employee,
+                    "assembly-boundary",
+                    work,
+                    issuer,
+                )
+            assert (
+                c.execute(
+                    "SELECT count(*) n FROM digital_employee_definition.definitions"
+                ).fetchone()["n"]
+                == before
+            )

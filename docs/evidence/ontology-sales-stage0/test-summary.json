@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "ontology-stage0-test-evidence.v1",
+  "candidate": "9df4c7fe95278fd85246abe3645ae7dfc244b485",
+  "tree": "8f9afe54ddcf1558734b1c71ae89782d9ad7509b",
+  "testFiles": [
+    "console/backend/tests/test_sales_generalization.py",
+    "console/backend/tests/test_prepared_execution_binding.py",
+    "console/backend/tests/test_execution_preparation.py",
+    "console/backend/tests/test_skill_mcp_repository.py",
+    "console/backend/tests/test_governed_execution_authorization.py"
+  ],
+  "initialRun": {
+    "passed": 47,
+    "skipped": 7,
+    "reason": "Dedicated PostgreSQL not configured",
+    "log": "baseline-tests.log"
+  },
+  "finalRun": {
+    "passed": 54,
+    "skipped": 0,
+    "failed": 0,
+    "durationSeconds": 5.71,
+    "log": "baseline-tests-postgresql.log"
+  },
+  "environment": {
+    "python": "Shared existing virtualenv interpreter; tested modules loaded from this isolated worktree via repository pytest configuration",
+    "database": "Dedicated disposable postgres:15-alpine, tmpfs data, loopback ephemeral port, no shared database modifications",
+    "container": "ontology-stage0-baseline-pg",
+    "containerStopped": true,
+    "containerRemoved": true
+  },
+  "scope": "Current baseline regression only; NOT evidence that ontology features exist",
+  "newAcceptanceCases": {
+    "count": 30,
+    "status": "NOT_RUN; pending architecture decision and implementation"
+  }
+}

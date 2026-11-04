@@ -5,7 +5,7 @@ import {formatTime} from '../journey/formatTime';
 import * as api from './api';
 
 const kinds:Record<string,string>={agent:'职责',runtime:'运行配置',skill:'技能',knowledge:'资料来源',mcp:'连接工具'};
-const gaps:Record<string,string>={RESOURCE_SOURCE_OUTSIDE_WORK_SCOPE:'资料来源超出本次已授权范围',MCP_CREDENTIAL_AND_TOOL_VALIDATION_REQUIRED:'连接工具的凭据与操作尚未验证',NATIVE_RUNTIME_OR_CREDENTIAL_UNAVAILABLE:'运行环境或凭据暂不可用',RESOURCE_EXECUTOR_SOURCE_MISMATCH:'技能的数据契约与本次来源不匹配',RESOURCE_EXECUTOR_SCHEMA_MISMATCH:'技能输入输出契约不匹配',RESOURCE_PERMISSION_REVOKED:'本次必要权限已撤销',RESOURCE_TASK_OPERATION_GAPS:'必要操作仍有缺口',RESOURCE_VALIDATION_FAILED:'资源技术验证未通过',RESOURCE_EMPLOYEE_PUBLICATION_INCOMPLETE:'角色装配尚未发布完成'};
+const gaps:Record<string,string>={RESOURCE_EMPLOYEE_SUCCESSOR_SELECTION_REQUIRED:'角色成员与当前方案不一致，需要核对后继方案',RESOURCE_POLICY_ONTOLOGY_BINDING_REQUIRED:'本体语义绑定尚未完成自动准备核验',RESOURCE_SOURCE_OUTSIDE_WORK_SCOPE:'资料来源超出本次已授权范围',MCP_CREDENTIAL_AND_TOOL_VALIDATION_REQUIRED:'连接工具的凭据与操作尚未验证',NATIVE_RUNTIME_OR_CREDENTIAL_UNAVAILABLE:'运行环境或凭据暂不可用',RESOURCE_EXECUTOR_SOURCE_MISMATCH:'技能的数据契约与本次来源不匹配',RESOURCE_EXECUTOR_SCHEMA_MISMATCH:'技能输入输出契约不匹配',RESOURCE_PERMISSION_REVOKED:'本次必要权限已撤销',RESOURCE_TASK_OPERATION_GAPS:'必要操作仍有缺口',RESOURCE_VALIDATION_FAILED:'资源技术验证未通过',RESOURCE_EMPLOYEE_PUBLICATION_INCOMPLETE:'角色装配尚未发布完成'};
 function message(reason?:string){return reason?gaps[reason]??'本次准备未通过核验，平台已保留缺口与原有结果':'仍有必要准备项待核验'}
 
 export function ResourcePreparation({id,approved,enabled,onPrepared,policyStamp=""}:{id:string;approved:api.Confirmation;enabled:boolean;policyStamp?:string;onPrepared?:(snapshot:api.Snapshot)=>void}){

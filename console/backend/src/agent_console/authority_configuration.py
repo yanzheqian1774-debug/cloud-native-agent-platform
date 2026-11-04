@@ -21,6 +21,20 @@ SCHEMA_VERSION = "static-authority-generation.v1"
 RUNTIME_SCHEMA_VERSION = "authority-foundation-runtime.v1"
 
 OWNER_ACTIONS: dict[str, frozenset[str]] = {
+    "BUSINESS_ONTOLOGY": frozenset(
+        {
+            "CREATE",
+            "LIST",
+            "READ",
+            "REVISE",
+            "VALIDATE",
+            "TEST",
+            "REVIEW",
+            "PUBLISH",
+            "DEPRECATE",
+            "USE",
+        }
+    ),
     "BUSINESS_PROBLEM": frozenset({"CREATE", "LIST", "READ", "REVISE", "TRANSITION"}),
     "SUCCESS_CRITERION": frozenset({"CREATE", "READ", "REVISE"}),
     "SUCCESS_CRITERIA_SET": frozenset({"CREATE", "READ", "REVISE"}),
@@ -65,6 +79,7 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
 }
 
 OWNER_RESOURCE_PREFIXES = {
+    "BUSINESS_ONTOLOGY": "business-ontology:",
     "BUSINESS_PROBLEM": "business-problem:",
     "SUCCESS_CRITERION": "success-criterion:",
     "SUCCESS_CRITERIA_SET": "success-criteria-set:",

@@ -200,6 +200,18 @@ class PolicyResourcePreparationOrigin(Immutable):
     policy_basis: dict
 
 
+class OntologyPlanOrigin(Immutable):
+    kind: Literal["HUMAN_ONTOLOGY_SYNTHETIC"] = "HUMAN_ONTOLOGY_SYNTHETIC"
+    namespace: Identity
+    security_domain: Identity
+    root: ExactReference
+    source_snapshot: ExactReference
+    ontology: ExactReference
+    mapping_digest: Digest
+    prepared_by: Identity
+    request_key: Identity
+
+
 class ProposalRevision(Immutable):
     proposal_id: Identity
     revision: int = Field(ge=1)
@@ -208,6 +220,7 @@ class ProposalRevision(Immutable):
     semantics: VersionedSemantics
     origin: (
         SyntheticValidationOrigin
+        | OntologyPlanOrigin
         | SourceChangeOrigin
         | PolicySourceChangeOrigin
         | PolicyResourcePreparationOrigin

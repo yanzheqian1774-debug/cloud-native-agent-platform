@@ -1,0 +1,17 @@
+{
+  "identical": true,
+  "compared": [
+    "all three run progress records",
+    "three per-run owner counts",
+    "native command states/counts",
+    "pinned ontology refs"
+  ],
+  "before": "readback-before.json",
+  "after": "readback-after.json",
+  "originalUnknownPreserved": true,
+  "successfulRuns": 2,
+  "skillInvocations": 6,
+  "artifacts": 6,
+  "resourceUses": 6,
+  "refreshNewInvocations": 0
+}

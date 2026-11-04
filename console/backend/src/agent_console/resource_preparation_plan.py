@@ -24,6 +24,7 @@ from .plan_suggestion_domain import (
 from .planning_contracts import validation_report
 from .planning_source_change import SourceChangeRequest, approved_source
 from .resource_automation import SelectEmployeeResources
+from .resource_policy_lineage import require_supported_lineage
 from .resource_use_domain import canonical_digest
 from .workbench_business_problem import OwnerPrincipal
 from .workbench_owner_authorization import WorkbenchOwnerError
@@ -45,6 +46,7 @@ def select_employee(automation, call):
         c = cur.connection
         baseline = app.repository.read_plan(cur, scope, identity, request.version)
         old = ConfirmedPlanRevision.model_validate(baseline["plan"])
+        require_supported_lineage(app, cur, scope, old)
         if baseline["digest"] != request.digest:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
         work = automation.policy.work(

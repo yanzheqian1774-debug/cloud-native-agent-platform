@@ -92,3 +92,32 @@ and exact binding/source/executor contracts, run combined tests, then complete
 D11 real product paths/continuous preparation and controlled idle single-writer
 activation. Do not borrow historical ontology PASS. New ontology/product experience
 waits for the prototype task's frozen page/state baseline; real-data B stays off.
+
+## Fixed ontology integration compatibility checkpoint
+
+Integrated fixed ontology source a23d01898117f68060fbe62fe18a5a3413641e3b
+following D11 checkpoint 3cff9de3fd734e21974484eeb219ad647820635f.
+Both origin families and both composition routes remain present. Ontology
+migration 44 uses business_ontology.schema_migrations; D11 migration 44 uses
+execution_authority.resource_policy_migrations. Execution binding 45 retains
+its exact checksum gate. Neither frozen historical migration was rewritten.
+The other ontology service uses a distinct database/port 57389 and remains
+untouched; current supplier/sales service uses port 64330.
+
+Generic policy commands explicitly reject an ontology-origin Plan before any
+grant/publication/mutation until a full binding-aware policy adapter exists.
+Normal ontology paths still require exact source/mapping/bindingDigest,
+criterion applicability and independent BUSINESS_ONTOLOGY USE; no downgrade to
+legacy sales execution. A selected employee composition mismatch cannot create
+an unselected definition and report READY: it requires a successor selection.
+Four new disposable-PG checks verify these preservation boundaries. This is an
+explicit compatibility limitation, not acceptance of ontology automation or
+real-data B (still unapproved/disabled).
+
+Fresh combined validation: 2236 Python checks passed, 467 environment-dependent
+checks skipped; relevant disposable-PG owner suite 75 passed, with the additional
+four lineage/assembly checks separately passed. Ruff/check-format both pass.
+Assisted-entry browser suite 14 passed; resource-automation browser suite and
+final build are recorded separately. Historical ontology logs are not used as
+combined validation evidence. Runtime policy activation and real business
+product flows remain distinct subsequent gates.

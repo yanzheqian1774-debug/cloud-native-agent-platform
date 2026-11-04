@@ -63,6 +63,16 @@ class PreparedExecutionApplication:
 
     def validate(self, p, *, task_id=None):
         decision = self.authorize(p)  # Before all target/resource readbacks.
+        binding = getattr(p, "business_semantics", None)
+        if binding is not None:
+            from .ontology_service import resource
+
+            self.authority.require(
+                self.principal,
+                "BUSINESS_ONTOLOGY",
+                "USE",
+                resource(binding.ontology.resource_id, binding.ontology.revision_id),
+            )
         require_evidence_writer(self.connection)
         validate_approved_preparation(self.connection, p)
         self.validate_root(p)
@@ -171,6 +181,9 @@ class PreparedExecutionApplication:
                 ),
             )
             progress = self.store.attach(p)
+            from .ontology_execution import attach_binding
+
+            attach_binding(conn, p)
             for participant in p.participants:
                 task = TaskRunIdentity(
                     TaskRunId(task_run_id(p, participant.task_id)), run.workflow_run_id

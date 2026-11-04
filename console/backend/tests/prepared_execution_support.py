@@ -63,7 +63,7 @@ def seed(
         p = p.model_copy(
             update={"semantics": p.semantics.model_copy(update={"target": target})}
         )
-    if synthetic_skill == "sales":
+    if synthetic_skill in {"sales", "ontology"}:
         tasks = tuple(
             t
             for t in p.semantics.tasks
@@ -130,7 +130,7 @@ def seed(
 
         if synthetic_skill == "delivery":
             from agent_console.delivery_resource_bundle import resource_content
-        if synthetic_skill == "sales":
+        if synthetic_skill in {"sales", "ontology"}:
             from agent_console.sales_resource_bundle import (
                 resource_content as sales_content,
             )
@@ -147,6 +147,22 @@ def seed(
             bundle = sales_content(source)
         else:
             bundle = resource_content()
+        if synthetic_skill == "ontology":
+            from agent_console.sales_ontology_executor import SalesOntologyExecutor
+
+            revision = SalesOntologyExecutor.revision
+            for operation in bundle["skill"]["operations"]:
+                operation.update(
+                    executorId=revision.executor_id,
+                    executorRevision=revision.executor_revision,
+                    executorConfigurationDigest=revision.configuration_digest,
+                )
+                operation["inputSchema"]["properties"]["schemaVersion"]["enum"] = [
+                    "ontology-sales-input.v1"
+                ]
+                operation["outputSchema"]["properties"]["schemaVersion"]["enum"] = [
+                    "ontology-sales-output.v1"
+                ]
         ops = bundle["skill"]["operations"]
         chunks, source_digest = ingest_text(
             "fixture-source", bundle["knowledge"]["content"]
@@ -341,7 +357,7 @@ def seed(
                 DELIVERY_SYNTHETIC_ONLY
                 if synthetic_skill == "delivery"
                 else SALES_SYNTHETIC_ONLY
-                if synthetic_skill == "sales"
+                if synthetic_skill in {"sales", "ontology"}
                 else SYNTHETIC_ONLY,
                 f"执行准备映射SHA256：{p.mapping_digest}；fixture",
             ),

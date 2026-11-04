@@ -180,11 +180,38 @@ def build_workbench_composition(
                 != authority_database
             ):
                 raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    ontology_enabled = os.environ.get("BUSINESS_ONTOLOGY_ENABLED") == "1"
+    ontology_operations = ()
+    ontology_targets = ()
+    if ontology_enabled:
+        from .ontology_api import operations as build_ontology_operations
+        from .ontology_authorization import OntologyPlanTargets, OntologyTargets
+        from .ontology_postgres import migrate as migrate_ontology
+
+        with (
+            business_problems.problems.pool.connection() as connection,
+            connection.transaction(),
+        ):
+            migrate_ontology(connection)
+            if prepared_execution_coordinator is not None:
+                from .ontology_execution import migrate as migrate_semantic_binding
+
+                migrate_semantic_binding(connection)
+        ontology_operations = build_ontology_operations(planning)
+        ontology_targets = (
+            OntologyPlanTargets(
+                json.loads(os.environ.get("BUSINESS_ONTOLOGY_PLAN_TARGETS", "[]"))
+            ),
+            OntologyTargets(
+                json.loads(os.environ.get("BUSINESS_ONTOLOGY_CREATION_TARGETS", "[]"))
+            ),
+        )
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
-        additional=((PreparedResourceTargets(),) if prepared_resource_services else ())
+        additional=ontology_targets
+        + ((PreparedResourceTargets(),) if prepared_resource_services else ())
         + (
             (PreparedExecutionGrantTargets(),)
             if prepared_execution_coordinator is not None
@@ -390,6 +417,7 @@ def build_workbench_composition(
             grant_administration=foundation.grants,
             operations=(
                 *resource_automation_routes,
+                *ontology_operations,
                 *(
                     prepared_resource_operations(prepared_resource_services)
                     if prepared_resource_services

@@ -40,6 +40,15 @@ def published(connection, scope, kind, ref):
 
 
 def validate_resources(connection, scope, preparation, participant):
+    from .ontology_execution import validate_semantics
+
+    if (
+        participant.executor_id == "ontology-sales-readonly"
+        and getattr(preparation, "business_semantics", None) is None
+    ):
+        raise ExecutionPreparationError("ONTOLOGY_PREPARATION_V2_REQUIRED")
+
+    validate_semantics(connection, scope, preparation, participant)
     skill = published(connection, scope, "SKILL", participant.skill.reference)
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 
@@ -85,7 +94,7 @@ def validate_resources(connection, scope, preparation, participant):
 def resource_read_grants(preparation, participant):
     from .authority_contracts import ExactGrant
 
-    return (
+    grants = (
         ExactGrant(
             "KNOWLEDGE",
             "READ_RESOURCE",
@@ -103,3 +112,15 @@ def resource_read_grants(preparation, participant):
             + participant.profile.revision_id,
         ),
     )
+    binding = getattr(preparation, "business_semantics", None)
+    if binding is not None:
+        from .ontology_service import resource
+
+        grants += (
+            ExactGrant(
+                "BUSINESS_ONTOLOGY",
+                "USE",
+                resource(binding.ontology.resource_id, binding.ontology.revision_id),
+            ),
+        )
+    return grants

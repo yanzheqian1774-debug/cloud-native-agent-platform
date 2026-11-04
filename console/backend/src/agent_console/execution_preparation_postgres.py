@@ -20,6 +20,7 @@ from .execution_preparation import (
     initial_progress,
     transition,
 )
+from .ontology_execution import parse_preparation
 from .resource_use_domain import canonical_digest
 
 
@@ -99,7 +100,7 @@ class PreparedExecutionStore:
             if row is None:
                 raise ExecutionPreparationError("PREPARED_RUN_NOT_FOUND")
             return (
-                ExecutionPreparation.model_validate(row["preparation"]),
+                parse_preparation(row["preparation"]),
                 RunProgress.model_validate(row["progress"]),
             )
 

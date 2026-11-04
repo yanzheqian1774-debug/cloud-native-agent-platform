@@ -298,13 +298,16 @@ class PreparedResultReview:
             c["evaluator_type"] == "SYNTHETIC_DELIVERY" for c in snapshot["criteria"]
         )
         sales = any(
-            c["evaluator_type"] == "SYNTHETIC_SALES" for c in snapshot["criteria"]
+            c["evaluator_type"] in {"SYNTHETIC_SALES", "SYNTHETIC_ONTOLOGY_SALES"}
+            for c in snapshot["criteria"]
         )
         source, report = (
             self.delivery_evidence(p, snapshot) if delivery or sales else (None, None)
         )
         evaluator = (
-            "prepared-synthetic-sales-evidence.v1"
+            "prepared-ontology-sales-evidence.v1"
+            if getattr(p, "business_semantics", None) is not None
+            else "prepared-synthetic-sales-evidence.v1"
             if sales
             else "prepared-synthetic-delivery-evidence.v1"
             if delivery
@@ -387,6 +390,40 @@ class PreparedResultReview:
                         result["measurementReportDigest"] = (
                             canonical_digest(report) if report else None
                         )
+            if getattr(p, "business_semantics", None) is not None:
+                from .execution_domain import ScopeIdentity
+                from .ontology_execution import published_content
+                from .ontology_sales_evaluation import evaluate as evaluate_ontology
+                from .ontology_service import resource
+
+                binding = p.business_semantics
+                self.require(
+                    "BUSINESS_ONTOLOGY",
+                    "READ",
+                    resource(
+                        binding.ontology.resource_id, binding.ontology.revision_id
+                    ),
+                )
+                content = published_content(
+                    self.connection,
+                    ScopeIdentity(p.namespace, p.security_domain),
+                    binding,
+                    current=False,
+                )
+                for criterion, result in zip(
+                    snapshot["criteria"], results, strict=True
+                ):
+                    if criterion["evaluator_type"] == "SYNTHETIC_ONTOLOGY_SALES":
+                        result["result"], result["reason"] = evaluate_ontology(
+                            criterion,
+                            source,
+                            report,
+                            p,
+                            content.model_dump(mode="json"),
+                        )
+                        result["check"] = criterion["applicability"].get("check")
+                        result["bindingDigest"] = binding.digest
+
             self.connection.execute(
                 "INSERT INTO success_criteria_evaluation.snapshots "
                 "(namespace,security_domain,snapshot_id,workflow_run_id,digest,record) VALUES (%s,%s,%s,%s,%s,%s)",

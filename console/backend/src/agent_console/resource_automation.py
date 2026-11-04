@@ -24,6 +24,7 @@ from .plan_suggestion_postgres import PostgresPlanningRepository
 from .planning_source_change import approved_source
 from .resource_automation_validation import validate
 from .resource_policy_contract import PolicyReview
+from .resource_policy_lineage import require_supported_lineage
 from .resource_use_domain import canonical_digest
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_business_problem import OwnerPrincipal
@@ -228,6 +229,7 @@ class ResourceAutomation:
                     "plan"
                 ]
             )
+            require_supported_lineage(app, cur, scope, plan)
             work = self.policy.work(
                 call.context, plan.semantics.target.problem, self.grants.clock()
             )
@@ -323,6 +325,7 @@ class ResourceAutomation:
             c = cur.connection
             confirmed = app.repository.read_plan(cur, scope, identity, version)
             plan = ConfirmedPlanRevision.model_validate(confirmed["plan"])
+            require_supported_lineage(app, cur, scope, plan)
             work = self.policy.work(
                 call.context, plan.semantics.target.problem, self.grants.clock()
             )
@@ -810,6 +813,11 @@ class ResourceAutomation:
                 "instancesCreated": 0,
                 "executionAdmitted": False,
             }
+        if employee:
+            # A new definition must first be selected in an explicit successor
+            # Plan. Do not report readiness for a different role than the one
+            # committed by the current Plan.
+            raise AuthorityError("RESOURCE_EMPLOYEE_SUCCESSOR_SELECTION_REQUIRED")
         if not {
             MemberKind.AGENT,
             MemberKind.RUNTIME_PROFILE,
