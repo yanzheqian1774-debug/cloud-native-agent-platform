@@ -24,9 +24,13 @@ ACTOR = "agent:s5-324-resource-preparer"
 def prepare(authority, resources):
     scope = ScopeIdentity(resources["namespace"], resources["securityDomain"])
     case = resources.get("case", "cost")
-    if case not in ("cost", "delivery"):
+    if case not in ("cost", "delivery", "sales"):
         raise ValueError("RESOURCE_CASE_UNSUPPORTED")
-    role = ROLE if case == "cost" else "S5-324 合成供应商交付核验员"
+    role = {
+        "cost": ROLE,
+        "delivery": "S5-324 合成供应商交付核验员",
+        "sales": "S5-324 合成销售诊断核验员",
+    }[case]
     members = [
         {
             "kind": {
@@ -76,6 +80,8 @@ def prepare(authority, resources):
                         (
                             "按批准的六任务依赖处理固定合成资料"
                             if case == "cost"
+                            else "按确认计划处理固定合成销售CSV、核对币种与两期变化"
+                            if case == "sales"
                             else "按确认计划处理固定合成采购订单、核验交付及时性"
                         ),
                         "只读分析并保留来源、产物、限制及人工决定",
@@ -85,7 +91,7 @@ def prepare(authority, resources):
                     commandId=(
                         "s5-324-engineering-employee-draft-v1"
                         if case == "cost"
-                        else "s5-324-delivery-employee-draft-v1"
+                        else f"s5-324-{case}-employee-draft-v1"
                     ),
                 ),
             )

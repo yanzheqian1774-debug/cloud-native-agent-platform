@@ -53,9 +53,20 @@ class DevelopmentPlanningRevision(Immutable):
     recovery_observation_ids: tuple[Identity, ...] = Field(min_length=1, max_length=16)
 
 
+class InitialCaseRevision(Immutable):
+    """D9 fresh case authority; no recovery evidence or inherited supplier grant."""
+
+    revision_id: Identity
+    criteria_set: ExactReference
+    cumulative_call_cap: Literal[100] = 100
+    total_cost_cap_microusd: Literal[50000000] = 50000000
+
+
 class TaskAuthorizationRequest(Immutable):
     task_id: Literal["S5-V023-IMPL-324"] = "S5-V023-IMPL-324"
-    purpose: Literal["SAME_CASE_DELIVERY", "ISOLATED_NATIVE_VALIDATION"]
+    purpose: Literal[
+        "SAME_CASE_DELIVERY", "ISOLATED_NATIVE_VALIDATION", "SALES_DIAGNOSTIC"
+    ]
     root: ExactReference
     source_snapshot: ExactReference
     determination_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
@@ -68,8 +79,23 @@ class TaskAuthorizationRequest(Immutable):
         default=None, exclude_if=lambda value: value is None
     )
 
+    initial_case_revision: InitialCaseRevision | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
     @model_validator(mode="after")
     def bounded_purpose(self):
+        if self.purpose == "SALES_DIAGNOSTIC":
+            if (
+                self.initial_case_revision is None
+                or self.configuration is None
+                or self.recovery_invocation_id is not None
+                or self.development_revision is not None
+            ):
+                raise ValueError("INITIAL_CASE_EXACT_CONFIGURATION_REQUIRED")
+            return self
+        if self.initial_case_revision is not None:
+            raise ValueError("INITIAL_CASE_PURPOSE_REQUIRED")
         if self.development_revision is not None and (
             self.purpose != "SAME_CASE_DELIVERY"
             or self.configuration is None
@@ -106,6 +132,7 @@ class TaskSignature(Immutable):
 
 def require_scope(purpose, scope):
     expected = {
+        "SALES_DIAGNOSTIC": ("s5-323-demo", "isolated-real-demo"),
         "SAME_CASE_DELIVERY": ("s5-323-demo", "isolated-real-demo"),
         "ISOLATED_NATIVE_VALIDATION": (
             "s5-324-native-capability",

@@ -338,6 +338,15 @@ def build_workbench_composition(
                 ),
             )
 
+        if delegation is not None and task_binding is not None:
+            creation = getattr(
+                delegation.repository, "initial_case_creation_bindings", ()
+            )
+            if creation:
+                from .initial_case_creation import bind_created_object
+
+                task_binding = bind_created_object(task_binding, creation)
+
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,

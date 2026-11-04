@@ -36,8 +36,14 @@ DELIVERY_SYNTHETIC_ONLY = (
 )
 
 
+SALES_SYNTHETIC_ONLY = (
+    "仅对本次固定合成销售快照进行两期只读诊断；按币种分别核算不含税净销售额与毛利，"
+    "变化贡献不代表因果或真实销售改善；禁止业务写入。"
+)
+
+
 class CostExecutionRevisionRequest(Immutable):
-    case: Literal["cost", "delivery"] = "cost"
+    case: Literal["cost", "delivery", "sales"] = "cost"
     plan_version: int = Field(ge=1)
     plan_digest: Digest
     source_snapshot: ExactReference
@@ -83,7 +89,13 @@ def execution_successor(
         EXECUTION_ONLY if text == PLANNING_ONLY else text for text in old.business_rules
     ]
     record["boundaries"] = [
-        (DELIVERY_SYNTHETIC_ONLY if request.case == "delivery" else SYNTHETIC_ONLY)
+        (
+            SALES_SYNTHETIC_ONLY
+            if request.case == "sales"
+            else DELIVERY_SYNTHETIC_ONLY
+            if request.case == "delivery"
+            else SYNTHETIC_ONLY
+        )
         if text == READ_ONLY_PLANNING
         else text
         for text in old.boundaries

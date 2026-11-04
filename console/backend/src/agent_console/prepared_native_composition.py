@@ -43,7 +43,11 @@ def compose(
     *,
     mode="synthetic-cost-v1",
 ):
-    if mode == "synthetic-delivery-v1":
+    if mode == "sales-diagnostic-v1":
+        from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+
+        executor = SalesDiagnosticSkillExecutor()
+    elif mode == "synthetic-delivery-v1":
         from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 
         executor = SyntheticDeliverySkillExecutor()

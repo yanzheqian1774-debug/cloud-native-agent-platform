@@ -62,10 +62,30 @@ OWNERS = (
 
 
 def prepare(
-    connection, services, namespace, security_domain, *, write=False, case="cost"
+    connection,
+    services,
+    namespace,
+    security_domain,
+    *,
+    write=False,
+    case="cost",
+    sales_source=None,
 ):
     names = dict(NAMES)
-    if case == "delivery":
+    if case == "sales":
+        from agent_console.sales_resource_bundle import (
+            resource_content as sales_content,
+        )
+
+        if sales_source is None:
+            raise ValueError("SALES_SOURCE_REQUIRED")
+        content = sales_content(sales_source)
+        names.update(
+            skill="S5-324 合成销售诊断只读技能",
+            knowledge="S5-324 合成销售两期CSV快照",
+            agent="S5-324 销售变化诊断职责",
+        )
+    elif case == "delivery":
         from agent_console.delivery_resource_bundle import (
             resource_content as delivery_content,
         )
@@ -159,8 +179,16 @@ def main():
     parser.add_argument("--runtime-file", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prepare", action="store_true")
-    parser.add_argument("--case", choices=("cost", "delivery"), default="cost")
+    parser.add_argument("--case", choices=("cost", "delivery", "sales"), default="cost")
+    parser.add_argument("--sales-csv", type=Path)
     args = parser.parse_args()
+    sales_source = None
+    if args.case == "sales":
+        if args.sales_csv is None:
+            parser.error("--sales-csv is required for sales")
+        from agent_console.sales_resource_bundle import source_document
+
+        sales_source = source_document(args.sales_csv.read_bytes())
     runtime = json.loads(args.runtime_file.read_text())
     database_url = runtime["databaseUrl"]
     with ExitStack() as stack:
@@ -189,6 +217,7 @@ def main():
                 "isolated-real-demo",
                 write=args.prepare,
                 case=args.case,
+                sales_source=sales_source,
             )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")

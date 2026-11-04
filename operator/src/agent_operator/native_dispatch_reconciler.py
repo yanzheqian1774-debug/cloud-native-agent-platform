@@ -620,7 +620,11 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
         ready_driver = None
         prepared_mode = os.environ.get("NATIVE_DISPATCH_PREPARED_SKILL", "")
         if prepared_mode:
-            if prepared_mode not in {"synthetic-cost-v1", "synthetic-delivery-v1"}:
+            if prepared_mode not in {
+                "synthetic-cost-v1",
+                "synthetic-delivery-v1",
+                "sales-diagnostic-v1",
+            }:
                 raise NativeDispatchWorkerError("PREPARED_SKILL_CONFIGURATION_INVALID")
             from agent_console.prepared_native_composition import compose
 

@@ -58,8 +58,18 @@ def input_snapshot(connection, command):
         delivery.executor_revision,
         delivery.configuration_digest,
     )
+    from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+
+    sales = SalesDiagnosticSkillExecutor.revision
+    is_sales = (
+        participant.executor_id,
+        participant.executor_revision,
+        participant.executor_digest,
+    ) == (sales.executor_id, sales.executor_revision, sales.configuration_digest)
     result = {
-        "schemaVersion": "synthetic-delivery-input.v1"
+        "schemaVersion": "sales-diagnostic-input.v1"
+        if is_sales
+        else "synthetic-delivery-input.v1"
         if is_delivery
         else "synthetic-cost-input.v1",
         "synthetic": True,

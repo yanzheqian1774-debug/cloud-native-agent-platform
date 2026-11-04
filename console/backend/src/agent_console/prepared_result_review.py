@@ -297,10 +297,19 @@ class PreparedResultReview:
         delivery = any(
             c["evaluator_type"] == "SYNTHETIC_DELIVERY" for c in snapshot["criteria"]
         )
-        source, report = (
-            self.delivery_evidence(p, snapshot) if delivery else (None, None)
+        sales = any(
+            c["evaluator_type"] == "SYNTHETIC_SALES" for c in snapshot["criteria"]
         )
-        evaluator = "prepared-synthetic-delivery-evidence.v1" if delivery else EVALUATOR
+        source, report = (
+            self.delivery_evidence(p, snapshot) if delivery or sales else (None, None)
+        )
+        evaluator = (
+            "prepared-synthetic-sales-evidence.v1"
+            if sales
+            else "prepared-synthetic-delivery-evidence.v1"
+            if delivery
+            else EVALUATOR
+        )
         digest = canonical_digest(snapshot)
         snapshot_id = stable_id("terminal-snapshot", p.run_id, digest)
         evaluation_id = stable_id("criteria-evaluation", snapshot_id, evaluator)
@@ -345,6 +354,26 @@ class PreparedResultReview:
                     snapshot["criteria"], results, strict=True
                 ):
                     if criterion["evaluator_type"] == "SYNTHETIC_DELIVERY":
+                        result["result"], result["reason"] = evaluate(
+                            criterion,
+                            source,
+                            report,
+                            p.source_snapshot.model_dump(mode="json"),
+                        )
+                        result["check"] = criterion["applicability"].get("check")
+                        result["measurementSourceDigest"] = (
+                            canonical_digest(source) if source else None
+                        )
+                        result["measurementReportDigest"] = (
+                            canonical_digest(report) if report else None
+                        )
+            if sales:
+                from .sales_evaluation import evaluate
+
+                for criterion, result in zip(
+                    snapshot["criteria"], results, strict=True
+                ):
+                    if criterion["evaluator_type"] == "SYNTHETIC_SALES":
                         result["result"], result["reason"] = evaluate(
                             criterion,
                             source,

@@ -35,7 +35,7 @@ def ensure_aggregate(authority, kind, value):
 
 def assemble(authority, bundle, employee, semantics):
     case = bundle.get("case", "cost")
-    if case not in ("cost", "delivery"):
+    if case not in ("cost", "delivery", "sales"):
         raise ValueError("RESOURCE_CASE_UNSUPPORTED")
     scope = ScopeIdentity(bundle["namespace"], bundle["securityDomain"])
     assembly = DigitalEmployeeProductAssembly(
@@ -71,6 +71,13 @@ def assemble(authority, bundle, employee, semantics):
         from agent_console.prepared_delivery_contract import validate_delivery_mapping
 
         validate_delivery_mapping(semantics, skill["operations"])
+    elif case == "sales":
+        from agent_console.prepared_readonly_contract import validate_mapping
+        from agent_console.sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+
+        validate_mapping(
+            semantics, skill["operations"], SalesDiagnosticSkillExecutor.revision
+        )
     else:
         available = {operation["name"] for operation in skill["operations"]}
         if any(task["operation"] not in available for task in semantics["tasks"]):
@@ -187,6 +194,22 @@ def assemble(authority, bundle, employee, semantics):
                 runtime_generation=1,
                 profile=refs["runtime"],
             ).model_dump(mode="json")
+        )
+    if case == "sales":
+        from agent_console.readonly_resource_assembly import check_readonly_assembly
+        from agent_console.sales_diagnostic_skill import (
+            OPERATIONS,
+            SalesDiagnosticSkillExecutor,
+        )
+        from agent_console.skill_executor import SkillExecutorRegistry
+
+        check_readonly_assembly(
+            tuple(TaskParticipation.model_validate(p) for p in participants),
+            registry=SkillExecutorRegistry((SalesDiagnosticSkillExecutor(),)),
+            allowed_references=tuple(
+                ref.model_dump(mode="json") for ref in (*refs.values(), employee_ref)
+            ),
+            operations=OPERATIONS,
         )
     mapping = {
         "namespace": scope.namespace,

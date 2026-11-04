@@ -93,6 +93,7 @@ class BoundedTaskAuthorization:
             (39, "0039_bounded_task_authorization.sql"),
             (40, "0040_task_planning_successor.sql"),
             (41, "0041_development_planning_recovery.sql"),
+            (42, "0042_initial_case_authorization.sql"),
         ):
             self._migrate(version, name)
 
@@ -137,9 +138,10 @@ class BoundedTaskAuthorization:
 
         scope = (context.scope.tenant_id, context.scope.security_domain)
         require_scope(spec.purpose, scope)
-        if self.root_bindings.get((spec.purpose, *scope)) != spec.root.model_dump(
-            mode="json"
-        ):
+        root_key = (spec.purpose, *scope)
+        if spec.initial_case_revision is not None:
+            root_key = (*root_key, spec.root.resource_id)
+        if self.root_bindings.get(root_key) != spec.root.model_dump(mode="json"):
             raise AuthorityError("TASK_AUTHORIZATION_ROOT_DENIED")
         with self.repository.connection_scope() as c:
             valid_session = current_session_account(
@@ -177,7 +179,11 @@ class BoundedTaskAuthorization:
 
                 actual = getattr(self, "actual_configuration", {})
                 require_configuration(spec.configuration, actual, cleanup_seconds=2)
-                if spec.development_revision is not None:
+                if spec.initial_case_revision is not None:
+                    from .initial_case_authorization import validate_initial_case
+
+                    validate_initial_case(c, spec, scope)
+                elif spec.development_revision is not None:
                     from .development_planning_recovery import validate_followup
 
                     validate_followup(c, spec, scope, context.principal_id)

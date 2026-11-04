@@ -142,6 +142,10 @@ def require_task(c, row, actual):
     current(c, task)
     spec = TaskAuthorizationRequest.model_validate(task["record"])
     require_configuration(spec.configuration, actual, cleanup_seconds=2)
+    if spec.initial_case_revision is not None:
+        from .initial_case_authorization import require_link
+
+        require_link(c, row, task, spec)
     return True
 
 
@@ -149,8 +153,11 @@ def cap(c, row, budget, original):
     if not row["record"].get("task_request_id"):
         return None
     from .development_planning_recovery import limits
+    from .initial_case_authorization import limits as initial_limits
 
-    development = limits(c, row, budget, original)
+    development = initial_limits(c, row, budget, original)
+    if development is None:
+        development = limits(c, row, budget, original)
     if development is not None:
         return development[0]
     require_task(c, row, getattr(budget, "task_actual_configuration", {}))
