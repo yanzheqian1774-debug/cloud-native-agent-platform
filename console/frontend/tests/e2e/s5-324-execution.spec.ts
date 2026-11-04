@@ -222,3 +222,13 @@ test('B1 automatic read stops on exact access loss and withdraws stale execution
  const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(panel.getByRole('alert')).toContainText('AUTHORIZATION_NOT_FOUND',{timeout:10000});
  await expect(panel.getByRole('button',{name:'申请取消'})).toHaveCount(0);const last=reads;await page.waitForTimeout(3000);expect(reads).toBe(last);expect(writes).toBe(0);
 });
+
+test('automatic continuation keeps reading after terminal execution until independent evaluation arrives without an evaluate click',async({page})=>{
+ let reads=0,writes=0;const state=view();state.executionStarted=true;state.admission={state:'ADMITTED',reason:null};state.progress={state:'SUCCEEDED',version:9,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))};state.automation={kind:'READONLY_CONTINUATION',evaluation:'AUTOMATIC',authorizationExpiresAt:'2099-01-01T00:00:00Z'};
+ await page.route('**/api/workbench/v1/**',async route=>{const req=route.request(),path=new URL(req.url()).pathname;if(req.method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-executions/')){reads++;const outcome:ExecutionView['outcome']=reads<3?null:{outcomeId:'fixture-auto-outcome',version:1,evaluationDigest:'e'.repeat(64),businessResolution:'UNDETERMINED',confirmationId:null,evaluation:{evaluationId:'fixture-auto-evaluation',results:[{criterionRevisionId:'fixture-criterion',criterionDigest:'f'.repeat(64),result:'SATISFIED',reason:'FIXTURE_ONLY',artifactIds:[]}]}};return route.fulfill({json:{result:{...state,outcome}}})}
+  const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(panel.getByText('执行已结束，标准评价结果将自动读回。',{exact:true})).toBeVisible();await expect.poll(()=>reads,{timeout:15000}).toBeGreaterThanOrEqual(3);await expect(panel.getByText('执行已结束，标准评价结果将自动读回。',{exact:true})).toHaveCount(0);await expect(panel.getByRole('button',{name:'按标准形成评价',exact:true})).toHaveCount(0);expect(writes).toBe(0);
+});

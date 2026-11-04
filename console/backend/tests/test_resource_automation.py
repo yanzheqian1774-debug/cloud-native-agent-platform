@@ -47,10 +47,19 @@ from test_prepared_resource_owners import services  # noqa: F401
 MIGRATIONS = Path(__file__).parents[1] / "migrations"
 
 
+def continuation_targets():
+    from agent_console.workbench_prepared_execution import PreparedExecutionGrantTargets
+
+    return (PreparedExecutionGrantTargets(),)
+
+
 @pytest.fixture
 def automation(repository, case, services, tmp_path, request):
     e = case
     mode = getattr(request, "param", "existing")
+    continuation = isinstance(mode, dict) and mode.get("continuation", False)
+    if isinstance(mode, dict):
+        mode = mode["resources"]
     from agent_console.plan_suggestion_domain import ExactReference, ProposalRevision
     from agent_console.sales_resource_bundle import resource_content
     from agent_console.workbench_prepared_resources import PreparedResourceOwner
@@ -308,6 +317,37 @@ def automation(repository, case, services, tmp_path, request):
         ),
         frozenset(),
     )
+    if continuation:
+        from dataclasses import replace
+
+        from agent_console.authority_configuration import OWNER_RESOURCE_PREFIXES
+
+        extra = [(r.owner, r.action) for r in gen.requestability]
+        extra += [
+            ("INSTANCE", "CREATE"),
+            ("ASSIGNMENT", "CREATE"),
+            ("EXECUTION", "START"),
+            ("EXECUTION", "READ"),
+            ("SKILL", "INVOKE_SKILL"),
+            ("EVALUATION", "EVALUATE"),
+            ("EVALUATION", "READ"),
+            ("HUMAN_CONFIRMATION", "READ"),
+            ("EVIDENCE", "READ_REFERENCE"),
+            ("RESOURCE_USE", "READ"),
+        ]
+        gen = replace(
+            gen,
+            requestability=gen.requestability
+            + tuple(
+                RequestabilityRule(
+                    owner,
+                    action,
+                    OWNER_RESOURCE_PREFIXES[owner],
+                    "READONLY_WORK_EXECUTION",
+                )
+                for owner, action in sorted(set(extra))
+            ),
+        )
     authority.activate_generation(
         1,
         gen.digest,
@@ -322,7 +362,11 @@ def automation(repository, case, services, tmp_path, request):
         e.app.problems,
         services["agent"].repository,
         employees,
-        additional=(PreparedResourceTargets(), PlanningGrantTargetValidator()),
+        additional=(
+            PreparedResourceTargets(),
+            PlanningGrantTargetValidator(),
+            *continuation_targets(),
+        ),
     )
     grants = GrantAdministrationService(
         authority,

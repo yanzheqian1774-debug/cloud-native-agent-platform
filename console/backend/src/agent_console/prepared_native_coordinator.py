@@ -137,9 +137,10 @@ class PreparedNativeCoordinator:
 class PreparedReadyDriver:
     """Restart-safe ready discovery; UNKNOWN/retry-wait never becomes new work."""
 
-    def __init__(self, repository, authority_factory):
+    def __init__(self, repository, authority_factory, *, eligible_dispatches=None):
         self.repository = repository
         self.authority_factory = authority_factory
+        self.eligible_dispatches = eligible_dispatches
         self.coordinator = PreparedNativeCoordinator(repository)
 
     def tick(self):
@@ -147,6 +148,23 @@ class PreparedReadyDriver:
 
         from .authority_contracts import AuthorityError
 
+        eligible = (
+            self.eligible_dispatches() if self.eligible_dispatches is not None else None
+        )
+        if eligible is not None and not eligible:
+            return
+        eligibility_filter = ""
+        eligibility_params = ()
+        if eligible is not None:
+            eligibility_filter = (
+                "AND EXISTS (SELECT 1 FROM unnest(%s::text[],%s::text[],%s::text[]) "
+                "eligible(ns,domain,resource) WHERE eligible.ns=b.namespace "
+                "AND eligible.domain=b.security_domain "
+                "AND eligible.resource=c.payload->>'authorization_resource') "
+            )
+            eligibility_params = tuple(
+                list(values) for values in zip(*eligible, strict=True)
+            )
         with self.repository.pool.connection() as connection:
             rows = connection.execute(
                 "SELECT DISTINCT ON (b.namespace,b.security_domain,b.workflow_run_id) "
@@ -164,10 +182,22 @@ class PreparedReadyDriver:
                 "AND s.workflow_run_id=p.workflow_run_id "
                 "WHERE s.record->>'state' IN ('PENDING','RUNNING') "
                 "AND s.record->'tasks' @> '[{\"state\":\"READY\"}]'::jsonb "
-                "ORDER BY b.namespace,b.security_domain,b.workflow_run_id,c.queued_at LIMIT 32"
+                + eligibility_filter
+                + "ORDER BY b.namespace,b.security_domain,b.workflow_run_id,c.queued_at LIMIT 32",
+                eligibility_params,
             ).fetchall()
         for row in rows:
             command = self.repository._dispatch_command(row["payload"])
+            if (
+                eligible is not None
+                and (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    command.authorization_resource,
+                )
+                not in eligible
+            ):
+                continue
             try:
                 with (
                     self.repository.pool.connection() as connection,

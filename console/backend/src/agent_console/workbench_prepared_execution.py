@@ -365,7 +365,25 @@ class PreparedExecutionOwner:
         ).fetchall()
         from .planning_translation import prepared_task_translation
 
+        automation = call.connection.execute(
+            "SELECT result->>'authorizationExpiresAt' expires FROM execution_authority.prepared_resource_commands "
+            "WHERE namespace=%s AND security_domain=%s AND actor_id=%s "
+            "AND result->>'schemaVersion'='readonly-continuation.v1' "
+            "AND result->>'preparationDigest'=%s LIMIT 1",
+            (p.namespace, p.security_domain, app.principal.principal_id, p.digest),
+        ).fetchone()
         return {
+            **(
+                {
+                    "automation": {
+                        "kind": "READONLY_CONTINUATION",
+                        "evaluation": "AUTOMATIC",
+                        "authorizationExpiresAt": automation["expires"],
+                    }
+                }
+                if automation
+                else {}
+            ),
             "taskTranslation": prepared_task_translation(p),
             "preparation": p.model_dump(mode="json"),
             "digest": p.digest,

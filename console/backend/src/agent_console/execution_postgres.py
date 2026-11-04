@@ -440,12 +440,32 @@ class PostgresExecutionAuthorityRepository:
         *,
         now: datetime | None = None,
         lease_seconds: int = 30,
+        eligible_dispatches: tuple[tuple[str, str, str], ...] | None = None,
     ) -> NativeDispatchClaim | None:
         now = (now or datetime.now(UTC)).astimezone(UTC)
         if not worker_id or not 1 <= lease_seconds <= 300:
             raise ExecutionConflict("NATIVE_DISPATCH_CLAIM_INVALID")
         token = secrets.token_hex(32)
         lease = now + timedelta(seconds=lease_seconds)
+        eligibility_filter = ""
+        eligibility_params = ()
+        if eligible_dispatches is not None:
+            if not eligible_dispatches:
+                return None
+            if len(eligible_dispatches) > 128 or any(
+                len(x) != 3 or not all(isinstance(v, str) and v for v in x)
+                for x in eligible_dispatches
+            ):
+                raise ExecutionConflict("NATIVE_DISPATCH_ELIGIBILITY_INVALID")
+            eligibility_filter = (
+                "AND EXISTS (SELECT 1 FROM unnest(%s::text[],%s::text[],%s::text[]) "
+                "eligible(ns,domain,resource) WHERE eligible.ns=n.namespace "
+                "AND eligible.domain=n.security_domain "
+                "AND eligible.resource=n.payload->>'authorization_resource') "
+            )
+            eligibility_params = tuple(
+                list(values) for values in zip(*eligible_dispatches, strict=True)
+            )
 
         def operation(connection):
             has_stops = (
@@ -466,6 +486,7 @@ class PostgresExecutionAuthorityRepository:
                 "execution_authority.native_dispatch_commands n WHERE (state='QUEUED' "
                 "OR (state='CLAIMED' AND lease_expires_at<=%s)) "
                 + stop_filter
+                + eligibility_filter
                 + "ORDER BY queued_at,command_id "
                 "FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE "
                 "execution_authority.native_dispatch_commands c SET state='CLAIMED',"
@@ -473,7 +494,7 @@ class PostgresExecutionAuthorityRepository:
                 "lease_expires_at=%s,updated_at=%s FROM candidate x WHERE "
                 "c.namespace=x.namespace AND c.security_domain=x.security_domain "
                 "AND c.command_id=x.command_id RETURNING c.payload,c.claim_generation",
-                (now, token, worker_id, lease, now),
+                (now, *eligibility_params, token, worker_id, lease, now),
             ).fetchone()
             if row is None:
                 return None

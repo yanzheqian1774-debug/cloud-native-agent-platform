@@ -27,11 +27,19 @@ _native_dispatch_thread: Thread | None = None
 
 
 def _run_native_dispatch(logger: Any, interval: float) -> None:
-    if _native_dispatch_assembly is None:
-        return
-    while not _native_dispatch_stop.is_set():
+    if _native_dispatch_assembly is not None:
+        run_native_worker(
+            _native_dispatch_assembly, _native_dispatch_stop, logger, interval
+        )
+
+
+def run_native_worker(assembly, stop, logger: Any, interval: float) -> None:
+    while not stop.is_set():
         try:
-            result = _native_dispatch_assembly.worker.run_once()
+            result = assembly.worker.run_once()
+            after_tick = getattr(assembly, "after_tick", None)
+            if after_tick is not None:
+                after_tick()
             if result.state != "IDLE":
                 logger.info(
                     "Native dispatch reconciliation: state=%s command=%s",
@@ -40,7 +48,7 @@ def _run_native_dispatch(logger: Any, interval: float) -> None:
                 )
         except Exception:
             logger.exception("Native dispatch reconciliation failed")
-        _native_dispatch_stop.wait(interval)
+        stop.wait(interval)
 
 
 @kopf.on.startup()

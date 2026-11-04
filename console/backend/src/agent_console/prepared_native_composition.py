@@ -55,16 +55,26 @@ def compose(
         from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 
         executor = SyntheticDeliverySkillExecutor()
-    elif mode == "synthetic-cost-v1":
+    elif mode in {"synthetic-cost-v1", "registered-readonly-v1"}:
         executor = SyntheticCostSkillExecutor()
     else:
         raise ValueError("PREPARED_SKILL_CONFIGURATION_INVALID")
+    executors = (executor,)
+    if mode == "registered-readonly-v1":
+        from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+        from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+
+        executors = (
+            SyntheticCostSkillExecutor(),
+            SalesDiagnosticSkillExecutor(),
+            SyntheticDeliverySkillExecutor(),
+        )
     composition = compose_governed_skill_invocation(
         database_url,
         migrations,
         None,
         FixedReadOnlyPolicyAuthority(POLICY),
-        SkillExecutorRegistry((executor,)),
+        SkillExecutorRegistry(executors),
     )
 
     def authorize(connection, command):

@@ -410,6 +410,33 @@ def build_workbench_composition(
                 resource_automation
             )
 
+        continuation_routes = ()
+        continuation_path = os.environ.get("READONLY_CONTINUATION_POLICY")
+        if continuation_path:
+            if resource_automation is None or prepared_execution_coordinator is None:
+                raise AuthorityError("READONLY_CONTINUATION_DEPENDENCIES_REQUIRED")
+            from .readonly_continuation import ReadonlyContinuation
+            from .readonly_continuation import operations as continuation_operations
+            from .readonly_continuation_policy import ReadonlyContinuationPolicy
+
+            continuation = ReadonlyContinuation(
+                resource_automation,
+                ReadonlyContinuationPolicy.load(continuation_path),
+                prepared_execution_coordinator,
+            )
+            resource_automation.continuation = continuation
+            continuation_routes = continuation_operations(continuation)
+
+        directory_routes = ()
+        if prepared_resource_services:
+            from .workbench_resource_directory import operations as directory_operations
+
+            directory_routes = directory_operations(
+                prepared_resource_services,
+                WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                workflows,
+            )
+
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -417,6 +444,8 @@ def build_workbench_composition(
             grant_administration=foundation.grants,
             operations=(
                 *resource_automation_routes,
+                *continuation_routes,
+                *directory_routes,
                 *ontology_operations,
                 *(
                     prepared_resource_operations(prepared_resource_services)

@@ -121,3 +121,51 @@ Assisted-entry browser suite 14 passed; resource-automation browser suite and
 final build are recorded separately. Historical ontology logs are not used as
 combined validation evidence. Runtime policy activation and real business
 product flows remain distinct subsequent gates.
+
+## Activated resource-preparation substage, 2026-11-04
+
+Fixed integrated source 754a7ee46d4a08a69443d7aaee945df3f01a30f9 is
+installed from a private git archive plus pinned assisted frontend, bundle
+4f91bf0c89ea0e83f954d1de409be24907e74fd16bf27e6187ddf0bcf0938556.
+Existing authority controller activated generation 6 with a real SERVICE_ONLY
+policy credential and exact scope GRANT_ADMIN DECIDE; old credentials/accounts,
+data boundaries, actual execution rights and 100/USD50 budget were preserved.
+Fresh private backup and zero Native pending commands preceded old-writer exit;
+only the new fixed-source writer runs on the business DB. The separate ontology
+host/DB remains untouched; BUSINESS_ONTOLOGY_ENABLED stays off on the main host.
+
+Four real signed-in browser paths: existing resources Plan5, new Skill Plan11,
+expanded Skill Plan12, batch resources Plan9. Zero per-resource Human approval
+clicks/manual refresh/provider calls/new Runs, actual Native credential probe,
+POLICY decisions and publication facts independently read back. Batch Knowledge
+is policy-published by the same-content source change before assembly reuses it.
+Each path uses one optional professional role selection. Test drafts/roles were
+created explicitly through existing owners; initial entry/draft-creation access
+and historical READ renewals used existing independent test accounts, separately
+recorded and not counted as resource-policy automation. No Human account reviewed
+or published these automatic resources. Original tasks/goal/criteria retained.
+
+The initial actual path exposed a registered Employee LIST route/requestability
+whose owner target validator recognized only CREATE; repaired with exact LIST
+collection support, no grant bypass. Its six real PG command checks pass. One
+loaded-host deadline test failed at STARTUP before reaching its requested phase;
+unchanged deadline/assertions pass isolated and in the subsequent complete commit
+hook. Earlier new/expanded captures were pre-navigation views and are excluded;
+accepted screenshots explicitly bind the target response and Plan revision.
+12 preparation receipts and six selection commands remain, including entry
+preparations/earlier capture attempts; no history was deleted. Old Skill receipt
+GET after a successor publication returns409 and withdraws stale readiness.
+
+Authenticated GET regression: original supplier, original sales, D10 source-change
+Run have identical progress/artifacts/outcome/resourceUses (6/5/5 SATISFIED).
+11 original invocation/receipt/budget/execution history table hashes unchanged.
+31 cumulative calls, ten unsettled, 8,088,532 microUSD charged plus conservative
+reserve; original UNKNOWN/result absence preserved, no retry or new Run. Human
+business outcomes remain UNDETERMINED with original supplier limits confirmation.
+
+User-facing evidence: outputs/第四包D11资源自动准备阶段成果/
+01-D11阶段成果与原型实际对照.html and stage CSV/JSON/images/manifest.
+This is verification of the resource-preparation substage, not J03 continuous
+execution, full J04/J06, package03/04, all92 pages or business acceptance. Blank
+resource generation, instances/admission/worker/evaluation continuity, complete
+MCP endpoint credentials and grouped pages continue in the existing B2/B3 plan.

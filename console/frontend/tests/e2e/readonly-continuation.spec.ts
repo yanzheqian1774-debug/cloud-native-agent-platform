@@ -1,0 +1,15 @@
+import {expect,test,type Page} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+const semantics=JSON.parse(readFileSync(new URL('./fixtures/source-change-plan.json',import.meta.url),'utf8'));
+const id='readonly-continuation-case',digest='b'.repeat(64),executionDigest='c'.repeat(64),principal={principalId:'human:continuation-fixture',tenantId:'continuation-fixture',securityDomain:'isolated'};
+async function setup(page:Page,lost=false){let posts=0,gets=0,saved=false;const writes:string[]=[];
+ const continued={receipt:{sourcePlanId:id,sourcePlanVersion:2,sourcePlanDigest:digest,subject:principal.principalId,preparationDigest:executionDigest,executionStarted:true,instancesCreated:2},execution:{digest:executionDigest,preparation:{semantics}}};
+ await page.route('**/api/workbench/v1/**',async route=>{const r=route.request(),u=new URL(r.url()),path=u.pathname;if(r.method()!=='GET')writes.push(path);
+  if(path.endsWith('/session'))return route.fulfill({json:{principal,session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.endsWith('/readonly-continuation')){if(r.method()==='POST'){posts++;expect(r.postDataJSON()).toEqual({version:2});saved=true;if(lost)return route.fulfill({status:503,json:{reasonCode:'LOST_AFTER_COMMIT_FIXTURE'}})}else gets++;return route.fulfill(saved?{json:{result:continued}}:{status:404,json:{reasonCode:'READONLY_CONTINUATION_NOT_FOUND'}})}
+  if(path.endsWith('/resource-preparation')){const key=r.method()==='POST'?r.postDataJSON().idempotencyKey:u.searchParams.get('key');return route.fulfill({json:{result:{requestKey:key,planId:id,planVersion:2,planDigest:digest,subject:principal.principalId,state:'READY',policy:{actor:'service:resource-preparation-policy'},resources:[],assembly:{state:'ASSEMBLED'},createdAt:'2026-11-04T10:00:00Z',executionStarted:false}}})}
+  if(path.endsWith('/history'))return route.fulfill({json:{result:{resourceAutomation:{enabled:true,policyVersion:'1',readonlyContinuationEnabled:true},proposals:[{proposal_id:id,revision:2,semantics}],plans:[{plan:{plan_id:id,version:2,source_proposal_revision:2,semantics},digest,approval:{approval_decision_id:'fixture-plan-approval',decided_at:'2026-11-04T10:00:00Z'},execution_status:'NOT_STARTED'}]}}});
+  if(path==='/api/workbench/v1/planning-v2/'+id)return route.fulfill({json:{result:{proposal:{proposal_id:id,revision:2,semantics},digest,snapshot:null,validation:{status:'DECLARED_CONTRACT_VALID'}}}});
+  return route.fulfill({status:404,json:{reasonCode:'FIXTURE_NOT_FOUND'}});
+ });return()=>({posts,gets,writes})}
+for(const lost of [false,true])test(`readonly continuation ${lost?'recovers a lost response by GET':'starts after resource preparation'} with no intermediate approval`,async({page})=>{const counts=await setup(page,lost);await page.goto('/work/planning/'+id+'?revision=2');await expect(page).toHaveURL(new RegExp('execution='+executionDigest),{timeout:15000});expect(counts().posts).toBe(1);if(lost)expect(counts().gets).toBeGreaterThan(0);expect(counts().writes.every(p=>p.endsWith('/resource-preparation')||p.endsWith('/readonly-continuation'))).toBeTruthy()});

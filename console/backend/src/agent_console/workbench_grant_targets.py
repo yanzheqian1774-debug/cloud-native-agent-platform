@@ -64,6 +64,25 @@ class WorkbenchGrantTargetValidator:
         if connection is None:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE")
         try:
+            if grant.owner == "INSTANCE" and grant.action == "CREATE":
+                return grant.exact_resource == "instance:collection"
+            if grant.owner == "ASSIGNMENT" and grant.action == "CREATE":
+                prefix = "assignment:instance:"
+                if not grant.exact_resource.startswith(prefix):
+                    return False
+                return (
+                    connection.execute(
+                        "SELECT 1 FROM execution_authority.digital_employee_instances "
+                        "WHERE namespace=%s AND security_domain=%s "
+                        "AND digital_employee_instance_id=%s",
+                        (
+                            context.scope.tenant_id,
+                            context.scope.security_domain,
+                            grant.exact_resource[len(prefix) :],
+                        ),
+                    ).fetchone()
+                    is not None
+                )
             if grant.owner in {"SUCCESS_CRITERION", "SUCCESS_CRITERIA_SET"} or (
                 grant.owner == "BUSINESS_PROBLEM"
                 and grant.action in {"READ", "REVISE", "TRANSITION"}

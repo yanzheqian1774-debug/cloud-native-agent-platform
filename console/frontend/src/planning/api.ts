@@ -10,7 +10,7 @@ export type Snapshot = {proposal_digest?:string; preparation_contract?: string; 
 export type ProposalRead = { display_translation?: {semantics: Semantics; metadata: {source_digest: string; translation_digest: string; translation_version: number; source: string; created_at: string; review_status: string}} | null; proposal: Proposal; digest: string; snapshot: Snapshot | null; generated_at?: string | null; validation?: { status: string; natural_language_coverage: string } };
 export type Confirmation = { execution_summary?:{state:string;basis:string}; plan: { plan_id: string; version: number; source_proposal_revision: number; semantics: Semantics }; digest: string; approval: { approval_decision_id: string; decided_at: string }; execution_status: "NOT_STARTED" };
 export type Conversation = { invocation_id: string; request: {answers: string[]}; submitted_at: string; generated_at?: string; questions?: string[]; kind?: string };
-export type History = { resourceAutomation?:{enabled:boolean;policyVersion?:string;policyStamp?:string}; conversation?: Conversation[]; proposals: Proposal[]; plans: Confirmation[] };
+export type History = { resourceAutomation?:{enabled:boolean;policyVersion?:string;policyStamp?:string;readonlyContinuationEnabled?:boolean}; conversation?: Conversation[]; proposals: Proposal[]; plans: Confirmation[] };
 
 async function request<T>(path: string, csrf?: string, body?: object): Promise<T> {
   const response = await fetch(`/api/workbench/v1/planning-v2/${path}`, {
@@ -49,3 +49,7 @@ export const automaticSourceChange=(id:string,spec:SourceChangeSpec,csrf:string)
 export type EmployeeOption={employeeDefinitionId:string;employeeDefinitionRevisionId:string;employeeDefinitionDigest:string;role:string;publicationState:string};
 export async function resourceEmployeeOptions(){const response=await fetch('/api/workbench/v1/employees?pageSize=100',{credentials:'same-origin',headers:{Accept:'application/json'}});const body=await response.json();if(!response.ok)throw new WorkbenchRequestError(body.reasonCode??'EMPLOYEE_LIST_UNAVAILABLE',response.status);return body.result as {items:EmployeeOption[];nextCursor:string|null}}
 export const selectEmployeeResources=(id:string,approved:Confirmation,revision:number,employee:ExactRef,key:string,csrf:string)=>request<{confirmation:Confirmation;sourceChangeRequestId:string|null;executionStarted:false}>(`${encodeURIComponent(id)}/resource-selection`,csrf,{version:approved.plan.version,digest:approved.digest,expectedProposalRevision:revision,employee,idempotencyKey:key});
+
+export type ReadonlyContinuation={receipt:{sourcePlanId:string;sourcePlanVersion:number;sourcePlanDigest:string;subject:string;preparationDigest:string;executionStarted:boolean;instancesCreated:number};execution:import('../api/preparedExecution').ExecutionView};
+export const continueReadonlyWork=(id:string,version:number,csrf:string)=>request<ReadonlyContinuation>(`${encodeURIComponent(id)}/readonly-continuation`,csrf,{version});
+export const readReadonlyContinuation=(id:string,version:number)=>request<ReadonlyContinuation>(`${encodeURIComponent(id)}/readonly-continuation?version=${version}`);

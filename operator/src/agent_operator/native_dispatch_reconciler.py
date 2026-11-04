@@ -73,6 +73,7 @@ class NativeDispatchAssembly:
     execution_repository: object
     authority_repository: object
     prepared_skill_composition: object | None = None
+    after_tick: Callable[[], object] | None = None
 
     def close(self) -> None:
         self.execution_repository.pool.close()
@@ -624,6 +625,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 "synthetic-cost-v1",
                 "synthetic-delivery-v1",
                 "sales-diagnostic-v1",
+                "registered-readonly-v1",
             }:
                 raise NativeDispatchWorkerError("PREPARED_SKILL_CONFIGURATION_INVALID")
             from agent_console.prepared_native_composition import compose
@@ -647,8 +649,27 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 execution,
                 owner_authority_factory(reader, generation, authorization_check),
             )
+        after_tick = None
+        dispatch_repository = execution
+        continuation_path = os.environ.get("NATIVE_DISPATCH_CONTINUATION_POLICY")
+        if continuation_path:
+            if ready_driver is None:
+                raise NativeDispatchWorkerError("CONTINUATION_MANAGED_SKILL_REQUIRED")
+            from agent_console.readonly_continuation_worker import (
+                ContinuationDispatchRepository,
+                ContinuationWork,
+            )
+
+            work = ContinuationWork.load(
+                execution,
+                continuation_path,
+                owner_authority_factory(reader, generation, authorization_check),
+            )
+            dispatch_repository = ContinuationDispatchRepository(execution, work)
+            ready_driver.eligible_dispatches = work.dispatches
+            after_tick = work.evaluate_terminal
         worker = NativeDispatchWorker(
-            execution,
+            dispatch_repository,
             KubernetesNativeTaskPort(),
             transport,
             authorization_check,
@@ -658,7 +679,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
             prepare_ready=ready_driver.tick if ready_driver else None,
         )
         return NativeDispatchAssembly(
-            worker, execution, authority, prepared_composition
+            worker, execution, authority, prepared_composition, after_tick
         )
     except Exception:
         execution.pool.close()

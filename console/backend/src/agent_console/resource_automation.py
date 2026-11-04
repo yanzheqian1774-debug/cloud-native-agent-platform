@@ -110,7 +110,9 @@ class ResourceAutomation:
     def authenticate(self, context):
         return self.policy.authenticate(self.grants, context)
 
-    def decide(self, call, members, key, work, issuer):
+    def decide(
+        self, call, members, key, work, issuer, *, purpose="RESOURCE_PREPARATION"
+    ):
         members = tuple(
             sorted(set(members), key=lambda g: (g.owner, g.action, g.exact_resource))
         )
@@ -126,7 +128,7 @@ class ResourceAutomation:
         request = grants.submit_request(
             call.context,
             GrantRequestCommand(
-                "RESOURCE_PREPARATION",
+                purpose,
                 members,
                 "d11-request:"
                 + canonical_digest([key, [vars_grant(g) for g in members]]),
@@ -193,6 +195,15 @@ class ResourceAutomation:
         except (AuthorityError, OSError, ValueError):
             return {"enabled": False}
         return {
+            **(
+                {
+                    "readonlyContinuationEnabled": self.continuation.capability(
+                        context, root
+                    )
+                }
+                if getattr(self, "continuation", None) is not None and root is not None
+                else {}
+            ),
             "enabled": True,
             "policyVersion": self.policy.policyVersion,
             "policyStamp": canonical_digest(

@@ -8,7 +8,7 @@ const kinds:Record<string,string>={agent:'职责',runtime:'运行配置',skill:'
 const gaps:Record<string,string>={RESOURCE_EMPLOYEE_SUCCESSOR_SELECTION_REQUIRED:'角色成员与当前方案不一致，需要核对后继方案',RESOURCE_POLICY_ONTOLOGY_BINDING_REQUIRED:'本体语义绑定尚未完成自动准备核验',RESOURCE_SOURCE_OUTSIDE_WORK_SCOPE:'资料来源超出本次已授权范围',MCP_CREDENTIAL_AND_TOOL_VALIDATION_REQUIRED:'连接工具的凭据与操作尚未验证',NATIVE_RUNTIME_OR_CREDENTIAL_UNAVAILABLE:'运行环境或凭据暂不可用',RESOURCE_EXECUTOR_SOURCE_MISMATCH:'技能的数据契约与本次来源不匹配',RESOURCE_EXECUTOR_SCHEMA_MISMATCH:'技能输入输出契约不匹配',RESOURCE_PERMISSION_REVOKED:'本次必要权限已撤销',RESOURCE_TASK_OPERATION_GAPS:'必要操作仍有缺口',RESOURCE_VALIDATION_FAILED:'资源技术验证未通过',RESOURCE_EMPLOYEE_PUBLICATION_INCOMPLETE:'角色装配尚未发布完成'};
 function message(reason?:string){return reason?gaps[reason]??'本次准备未通过核验，平台已保留缺口与原有结果':'仍有必要准备项待核验'}
 
-export function ResourcePreparation({id,approved,enabled,onPrepared,policyStamp=""}:{id:string;approved:api.Confirmation;enabled:boolean;policyStamp?:string;onPrepared?:(snapshot:api.Snapshot)=>void}){
+export function ResourcePreparation({id,approved,enabled,onPrepared,onReady,policyStamp=""}:{id:string;approved:api.Confirmation;enabled:boolean;policyStamp?:string;onPrepared?:(snapshot:api.Snapshot)=>void;onReady?:()=>void}){
  const report=useRef(onPrepared);useLayoutEffect(()=>{report.current=onPrepared},[onPrepared]);
  const identity=JSON.stringify([id,approved.plan.version,approved.digest,policyStamp]);
  const [loaded,setLoaded]=useState<{identity:string;value:api.ResourcePreparation}|null>(null);
@@ -17,6 +17,7 @@ export function ResourcePreparation({id,approved,enabled,onPrepared,policyStamp=
  const locator=useRef<{identity:string;key:string;subject:string;scope:string}|null>(null),epoch=useRef(0),flight=useRef(false);
  const value=loaded?.identity===identity?loaded.value:null;
  const error=issue?.identity===identity?issue.text:null;
+ const ready=useRef(onReady);useLayoutEffect(()=>{ready.current=onReady},[onReady]);useEffect(()=>{if(value?.state==='READY')ready.current?.()},[value]);
  function verify(result:api.ResourcePreparation,subject:string){if(result.planId!==id||result.planVersion!==approved.plan.version||result.planDigest!==approved.digest||result.subject!==subject)throw new Error('RESOURCE_PREPARATION_CONTEXT_MISMATCH')}
  useEffect(()=>{
   if(!enabled)return;

@@ -73,3 +73,7 @@ status:
 
 console-e2e:
 	./scripts/e2e/console-real-workflow.sh
+
+.PHONY: resource-management-e2e
+resource-management-e2e:
+	cd console/frontend && npm run test:resource-management
