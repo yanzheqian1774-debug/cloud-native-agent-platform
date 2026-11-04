@@ -428,9 +428,19 @@ def build_workbench_composition(
             continuation_routes = continuation_operations(continuation)
 
         directory_routes = ()
+        directory_installers = ()
         if prepared_resource_services:
+            from .workbench_resource_directory import install_directory
             from .workbench_resource_directory import operations as directory_operations
 
+            directory_installers = (
+                install_directory(
+                    prepared_resource_services,
+                    WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    authorizer,
+                    workflows,
+                ),
+            )
             directory_routes = directory_operations(
                 prepared_resource_services,
                 WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
@@ -490,7 +500,8 @@ def build_workbench_composition(
             **(
                 {
                     "route_installers": (
-                        delegation_routes
+                        directory_installers
+                        + delegation_routes
                         + (
                             (install_draft_assistance_routes(draft_assistance),)
                             if draft_assistance is not None
@@ -512,7 +523,9 @@ def build_workbench_composition(
                         )
                     )
                 }
-                if draft_assistance is not None or planning_v2_enabled
+                if directory_installers
+                or draft_assistance is not None
+                or planning_v2_enabled
                 else {}
             ),
         )

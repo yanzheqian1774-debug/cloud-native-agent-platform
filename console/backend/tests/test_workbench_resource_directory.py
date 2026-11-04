@@ -98,3 +98,72 @@ def test_directory_cursor_cannot_cross_filters_or_subject_and_get_has_no_new_wor
             ).fetchone()["n"]
             == 0
         )
+
+
+def test_directory_real_bff_boundary_keeps_exact_reads_and_nonempty_command_contract(
+    automation,
+):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    from agent_console.authority_contracts import AuthorityError
+    from agent_console.workbench_bff import WorkbenchBffPolicy, create_workbench_bff
+    from agent_console.workbench_resource_directory import install_directory, operations
+    from fastapi.testclient import TestClient
+    from test_workbench_bff import SessionStub
+
+    a = automation
+    a.adapter.controller.protected_request = lambda: nullcontext(
+        SimpleNamespace(generation=1)
+    )
+    sessions = SessionStub()
+    sessions.context = a.subject
+    services = {**a.services, "mcp": a.services["skill"]}
+    cursors = WorkbenchCursorCodec(b"x" * 32)
+    app = create_workbench_bff(
+        sessions,
+        a.adapter,
+        WorkbenchBffPolicy("workbench.example", "https://workbench.example"),
+        operations=operations(services, cursors),
+        route_installers=(install_directory(services, cursors, a.adapter),),
+    )
+    with TestClient(app, base_url="https://workbench.example") as client:
+        assert client.get("/api/workbench/v1/resource-directory").status_code == 401
+        client.cookies.set("__Host-workbench_session", sessions.secret)
+        empty = client.get("/api/workbench/v1/resource-directory")
+        assert empty.status_code == 200
+        assert empty.json()["result"]["items"] == []
+        a.run()
+        response = client.get("/api/workbench/v1/resource-directory")
+        assert response.status_code == 200
+        assert len(response.json()["result"]["items"]) == 4
+        assert (
+            client.get("/api/workbench/v1/resource-directory?kind=mcp").json()[
+                "result"
+            ]["items"]
+            == []
+        )
+        assert (
+            client.get(
+                "/api/workbench/v1/resource-directory?kind=skill&kind=mcp"
+            ).status_code
+            == 422
+        )
+        assert (
+            client.get(
+                "/api/workbench/v1/resource-directory", headers={"X-Tenant-ID": "other"}
+            ).status_code
+            == 400
+        )
+        sessions.logged_out = True
+        assert client.get("/api/workbench/v1/resource-directory").status_code == 401
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+        a.adapter.execute(
+            a.subject,
+            (),
+            operation="ANY_COMMAND",
+            payload={},
+            path={},
+            query={},
+            handler=lambda call: {},
+        )

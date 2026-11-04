@@ -272,15 +272,6 @@ def operations(services, cursors, workflows=None):
     handler = ResourceDirectory(services, cursors, workflows)
     return (
         WorkbenchOperation(
-            "READ_RESOURCE_DIRECTORY",
-            "GET",
-            PREFIX + "/resource-directory",
-            None,
-            DirectoryQuery,
-            lambda *args: (),
-            handler,
-        ),
-        WorkbenchOperation(
             "READ_DIRECTORY_RESOURCE",
             "GET",
             PREFIX + "/resource-directory/{kind}/{identity}/{revision}",
@@ -292,3 +283,64 @@ def operations(services, cursors, workflows=None):
             handler,
         ),
     )
+
+
+def install_directory(services, cursors, authorizer, workflows=None):
+    """Authenticated filtered collection; every visible row requires exact READ.
+
+    No collection owner/action is invented and the normal nonempty-grant command
+    adapter stays unchanged. Empty results expose no unauthorized resource facts.
+    """
+    from fastapi import Request
+    from pydantic import ValidationError
+
+    from .workbench_bff import WorkbenchBoundaryError
+    from .workbench_owner_authorization import (
+        AuthorizedOwnerAuthority,
+        AuthorizedOwnerCall,
+    )
+
+    handler = ResourceDirectory(services, cursors, workflows)
+
+    def install(app, authenticate, require_csrf, policy):
+        @app.get(PREFIX + "/resource-directory")
+        def directory(request: Request):
+            items = request.query_params.multi_items()
+            if len(items) != len({key for key, _ in items}):
+                raise WorkbenchBoundaryError("REQUEST_INVALID", 422)
+            try:
+                query = DirectoryQuery.model_validate(dict(items)).model_dump(
+                    mode="json", exclude_none=True
+                )
+            except ValidationError as exc:
+                raise WorkbenchBoundaryError("REQUEST_INVALID", 422) from exc
+            with (
+                authorizer.controller.protected_request() as generation,
+                authorizer.repository.connection_scope() as connection,
+            ):
+                # Authenticate under the same generation barrier as the filtered
+                # read. Row READ checks additionally lock current credentials and
+                # grants on this transaction before any version is returned.
+                _, context = authenticate(request)
+                connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                authority = AuthorizedOwnerAuthority(
+                    authorizer, context, connection, generation.generation, ()
+                )
+                return {
+                    "result": handler(
+                        AuthorizedOwnerCall(
+                            operation="READ_RESOURCE_DIRECTORY",
+                            context=context,
+                            connection=connection,
+                            payload={},
+                            path={},
+                            query=query,
+                            decisions=(),
+                            authority=authority,
+                            policy_generation=generation.generation,
+                            recovery_epoch=authorizer.controller.readiness.recovery_epoch,
+                        )
+                    )
+                }
+
+    return install

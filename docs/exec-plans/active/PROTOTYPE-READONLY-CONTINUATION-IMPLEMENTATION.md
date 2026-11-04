@@ -96,3 +96,24 @@ redirect. Four browser checks cover normal start, lost response, reload after
 head advance, and readable history with no second command. Professional role
 selection labels disclose authorized read-only continuation. Executed planning
 rows no longer falsely claim "not executed" when aggregate execution is known.
+
+Actual fixed-source validation checkpoint: sales source Plan12 -> independent
+execution Plan13 completed3 tasks/3 artifacts/5 SATISFIED criteria; supplier
+source Plan3 -> independent execution Plan4 completed3/3/6. Both were driven by
+the product page and the persistent standard Native worker, without intermediate
+start/evaluate clicks or developer ticks. Sales deliberately dropped a real
+successful POST response; GET recovered the committed command. Reload created
+zero new commands. Three original historical executions retained exact progress,
+artifacts, outcome and resource uses. A16-table append-only audit retained every
+original row, with two new Runs and zero model/budget writes.
+
+Live G1 page verification caught a missing BFF integration guard: the new directory
+list had an empty initial grant list, correctly rejected by the normal command
+adapter. Repair the new directory's wiring through the existing authenticated
+read-route installer: generation-pinned current session, filtered exact per-row
+READ checks in the caller transaction, no new collection grant/owner, no changes
+to normal commands' nonempty-grant requirement. Detail routes remain normal exact
+READ operations. Add actual HTTP-boundary PostgreSQL regression covering logged
+out, zero readable resources, exact readable rows, MCP empty state, invalid query,
+identity-header rejection and unchanged nonempty command guard. This is a G1
+implementation repair, not a new public grant or frozen contract change.
