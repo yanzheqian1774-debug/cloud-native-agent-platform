@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from agent_console.authority_contracts import (
     AuthenticationSource,
+    AuthorityError,
     AuthorityScope,
     TrustedRequestContext,
 )
@@ -20,6 +21,7 @@ from agent_console.execution_application import (
 from agent_console.execution_domain import ScopeIdentity, VersionedAggregate
 from agent_console.execution_postgres import PostgresExecutionAuthorityRepository
 from agent_console.execution_preparation_postgres import PreparedExecutionStore
+from agent_console.planning_execution_projection import execution_summary
 from agent_console.prepared_execution_application import PreparedExecutionApplication
 from agent_console.prepared_native_composition import POLICY
 from agent_console.prepared_native_coordinator import PreparedNativeCoordinator
@@ -34,6 +36,7 @@ from agent_operator.native_dispatch_reconciler import (
     NativeDispatchWorker,
 )
 from prepared_execution_support import ExactTestAuthority, seed
+from psycopg.types.json import Jsonb
 from test_execution_preparation import preparation
 from test_plan_suggestion_v2 import repository  # noqa: F401
 from test_prepared_result_review import ReviewAuthority, seed_criteria
@@ -146,8 +149,46 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 },
             ),
         )
+
+        class ReadAuthority:
+            denied = False
+
+            def require(self, actor, owner, action, resource):
+                assert actor is principal
+                assert (owner, action, resource) == (
+                    "EXECUTION",
+                    "READ",
+                    "governed-execution:prepared:" + p.digest,
+                )
+                if self.denied:
+                    raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+
+        read_authority = ReadAuthority()
+        plan_key = {"plan_id": p.plan_id, "version": p.plan_version}
         with native.pool.connection() as c, c.transaction():
+            assert (
+                execution_summary(c, principal, read_authority, plan_key)["state"]
+                == "NOT_STARTED"
+            )
+            c.execute(
+                "INSERT INTO execution_authority.prepared_candidates "
+                "(namespace,security_domain,digest,plan_id,plan_version,"
+                "record,prepared_by) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    p.namespace,
+                    p.security_domain,
+                    p.digest,
+                    p.plan_id,
+                    p.plan_version,
+                    Jsonb(p.model_dump(mode="json")),
+                    principal.principal_id,
+                ),
+            )
             PreparedExecutionApplication(c, principal, authority).start(p, "start")
+            assert execution_summary(c, principal, read_authority, plan_key)[
+                "state"
+            ] in {"PENDING", "RUNNING"}
         coordinator = PreparedNativeCoordinator(native)
 
         def queue():
@@ -272,6 +313,25 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 p.namespace, p.security_domain, p.run_id
             )
             assert progress.state == "SUCCEEDED"
+            assert (
+                execution_summary(c, principal, read_authority, plan_key)["state"]
+                == "SUCCEEDED"
+            )
+            read_authority.denied = True
+            assert execution_summary(c, principal, read_authority, plan_key) == {
+                "state": "UNKNOWN",
+                "basis": "EXECUTION_STATE_NOT_READABLE",
+            }
+            read_authority.denied = False
+            assert (
+                execution_summary(
+                    c,
+                    principal,
+                    read_authority,
+                    {**plan_key, "version": p.plan_version + 1},
+                )["state"]
+                == "NOT_STARTED"
+            )
             artifacts = c.execute(
                 "SELECT task_id,content,digest FROM execution_authority.run_artifacts "
                 "ORDER BY task_id"

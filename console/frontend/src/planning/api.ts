@@ -8,7 +8,7 @@ export type Semantics = { schema_version?: string; policy?: PlanningPolicy; titl
 export type Proposal = { proposal_id: string; revision: number; invocation_id?: string; semantics: Semantics };
 export type Snapshot = { preparation_contract?: string; execution_eligible?: false; checked_at: string; observations: { requirement_id: string; status: string; reason: string; exact_reference?: ExactRef|null; publication_checked?: boolean; permission_checked?: boolean; io_status?: string; availability_status?: string; discovery_status?: string }[] };
 export type ProposalRead = { display_translation?: {semantics: Semantics; metadata: {source_digest: string; translation_digest: string; translation_version: number; source: string; created_at: string; review_status: string}} | null; proposal: Proposal; digest: string; snapshot: Snapshot | null; generated_at?: string | null; validation?: { status: string; natural_language_coverage: string } };
-export type Confirmation = { plan: { plan_id: string; version: number; source_proposal_revision: number; semantics: Semantics }; digest: string; approval: { approval_decision_id: string; decided_at: string }; execution_status: "NOT_STARTED" };
+export type Confirmation = { execution_summary?:{state:string;basis:string}; plan: { plan_id: string; version: number; source_proposal_revision: number; semantics: Semantics }; digest: string; approval: { approval_decision_id: string; decided_at: string }; execution_status: "NOT_STARTED" };
 export type Conversation = { invocation_id: string; request: {answers: string[]}; submitted_at: string; generated_at?: string; questions?: string[]; kind?: string };
 export type History = { conversation?: Conversation[]; proposals: Proposal[]; plans: Confirmation[] };
 

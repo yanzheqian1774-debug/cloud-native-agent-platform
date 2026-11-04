@@ -192,3 +192,33 @@ test('running same-case view shows real progress states and refresh remains GET 
  await page.route('**/api/workbench/v1/**',async route=>{const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:3,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}})});
  await page.setViewportSize({width:1536,height:1056});await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(page.getByRole('heading',{name:'执行进度',exact:true})).toBeVisible();await expect(panel).toContainText('执行进度 1/3');await expect(panel).toContainText('运行中');await expect(page.getByRole('list',{name:'当前阶段'}).locator('[aria-current=step]')).toContainText('执行');await expect(panel).not.toContainText('执行准入存在缺口');await page.locator('.px-message-stream').evaluate(node=>node.scrollTop=0);await page.screenshot({path:info.outputPath('P06.2-running-first-screen-fixture-1536.png')});await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel).toContainText('执行进度 1/3');expect(writes).toBe(0);
 });
+
+test('B1 active execution updates automatically and terminal state stops GET without commands',async({page})=>{
+ let reads=0,writes=0;const state=view();state.executionStarted=true;state.admission.state='ADMITTED';state.progress={state:'RUNNING',version:2,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'RUNNING',attempt_ordinal:1,reason:null}))};
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-executions/'))reads++;
+  const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);
+ const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(panel).toContainText('运行中');
+ await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'))});const hiddenReads=reads;await page.waitForTimeout(3000);expect(reads).toBe(hiddenReads);
+ state.progress.state='SUCCEEDED';state.progress.tasks.forEach(t=>t.state='SUCCEEDED');state.progress.version=3;
+ await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'))});
+ await expect(page.getByRole('heading',{name:'成果已交付',exact:true})).toBeVisible({timeout:10000});
+ const completedReads=reads;await page.waitForTimeout(3000);expect(reads).toBe(completedReads);expect(writes).toBe(0);
+});
+
+test('B1 automatic read stops on exact access loss and withdraws stale execution',async({page})=>{
+ let reads=0,writes=0;const state=view();state.executionStarted=true;state.admission.state='ADMITTED';state.progress={state:'RUNNING',version:2,cancellation_request_id:null,tasks:[]};
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(path.includes('/prepared-executions/')&&++reads>1)return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
+  const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);
+ const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(panel.getByRole('alert')).toContainText('AUTHORIZATION_NOT_FOUND',{timeout:10000});
+ await expect(panel.getByRole('button',{name:'申请取消'})).toHaveCount(0);const last=reads;await page.waitForTimeout(3000);expect(reads).toBe(last);expect(writes).toBe(0);
+});

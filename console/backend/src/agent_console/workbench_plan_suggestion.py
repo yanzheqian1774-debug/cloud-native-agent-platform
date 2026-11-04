@@ -177,6 +177,12 @@ class PlanningOwnerAdapter:
                         "executionReady": False,
                     }
                 if call.operation == "READ_PLAN_HISTORY_V2":
+                    from .planning_execution_projection import execution_summary
+
+                    for approved in history["plans"]:
+                        approved["execution_summary"] = execution_summary(
+                            call.connection, principal, call.authority, approved["plan"]
+                        )
                     return history
                 version = (
                     call.payload["version"]
