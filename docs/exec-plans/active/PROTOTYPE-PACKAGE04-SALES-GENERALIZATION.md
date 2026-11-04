@@ -109,3 +109,7 @@ existing disposable-PG managed Native pipeline to sales, including actual source
 inputs, persisted artifacts, resource use, restart/no-redispatch and independent
 sales report checks. Install checked source before resuming the already confirmed
 sales execution revision; the failed preparation created no Run.
+
+Final paired-image review found the pre-creation sidebar saying “确认目标” while
+the journey correctly remained at step1. Keep that sidebar at “理解问题” until
+formal problem creation; assert both views in the same correction scenario.

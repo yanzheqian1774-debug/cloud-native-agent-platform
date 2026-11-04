@@ -41,7 +41,7 @@ function SummaryContent({expandedDescription=false,description="",understanding,
   const unorganized=understanding?.filter(item=>item.source==="UNKNOWN")??[];
   const RequestContainer=exact?"details":"section";
   if(!revision)return <div className="px-task-summary-content">
-    <section><span className="px-eyebrow">当前阶段 · {understanding?.length&&!clarification?"确认目标":"理解问题"}</span><h3>{clarification?"等待你补充":understanding?.length?"核对你提供的信息":"从你的问题开始"}</h3>{understanding?.length?<><p>{organized.length?`当前卡片单独列出 ${organized.length} 项内容，请对照原文核对来源。`:"当前保留你提供的信息，尚未形成单独整理的字段。"}</p>{unorganized.length>0&&<p className="px-summary-open-items">尚未单独整理：{[...new Set(unorganized.map(item=>fieldLabels[item.field]))].join("、")}。这不代表你未提供，不据此判断原文缺少信息。</p>}</>:<p>{clarification?"在左侧回答补问，也可以直接说明要修正的内容。":"描述希望解决的问题，补齐关键信息后，再核对当前卡片。"}</p>}</section>
+    <section><span className="px-eyebrow">当前阶段 · 理解问题</span><h3>{clarification?"等待你补充":understanding?.length?"核对你提供的信息":"从你的问题开始"}</h3>{understanding?.length?<><p>{organized.length?`当前卡片单独列出 ${organized.length} 项内容，请对照原文核对来源。`:"当前保留你提供的信息，尚未形成单独整理的字段。"}</p>{unorganized.length>0&&<p className="px-summary-open-items">尚未单独整理：{[...new Set(unorganized.map(item=>fieldLabels[item.field]))].join("、")}。这不代表你未提供，不据此判断原文缺少信息。</p>}</>:<p>{clarification?"在左侧回答补问，也可以直接说明要修正的内容。":"描述希望解决的问题，补齐关键信息后，再核对当前卡片。"}</p>}</section>
     <section><span className="px-eyebrow">需要你处理</span><p>{clarification?"回答补问后更新理解；现在尚未创建正式问题。":"在对话中补充或修正内容，核对卡片后确认创建。未提交内容仅保留在本页。"}</p></section>
   </div>;
   return <div className="px-task-summary-content">
