@@ -86,3 +86,13 @@ exact one-Run replay/GET and unrelated Native claim exclusion. A generic full
 frontend invocation needs the repository-owned isolated backend harness and
 stops without CONSOLE_BACKEND_URL; it is not counted as passed. Source checks,
 full backend commit checks, fixed activation and actual two-case runs follow.
+
+Recovery follow-up: a committed continuation creates a newer execution Plan, so
+reloading its original planning URL must still recover the original submitted
+command via GET rather than depend on the latest-revision prepare gate. The
+client's pending marker enables this historical-source recovery, and is removed
+after successful readback so explicit historical browsing does not force a
+redirect. Four browser checks cover normal start, lost response, reload after
+head advance, and readable history with no second command. Professional role
+selection labels disclose authorized read-only continuation. Executed planning
+rows no longer falsely claim "not executed" when aggregate execution is known.
