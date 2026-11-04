@@ -175,7 +175,9 @@ class PlanningApplication:
             if proposal.digest != digest:
                 raise PlanningConflict("PROPOSAL_DIGEST_CONFLICT")
             from .planning_contracts import validation_report
+            from .planning_source_change import validate_confirmation
 
+            validate_confirmation(self, principal, cursor.connection, proposal)
             validation_report(proposal.semantics)
             self.validate_target(
                 principal, proposal.semantics.target, cursor.connection, current=False

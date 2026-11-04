@@ -49,7 +49,14 @@ class ExactTestAuthority:
         return SimpleNamespace(decision_id="test-only-authority")
 
 
-def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
+def seed(
+    repo,
+    *,
+    target=None,
+    synthetic_skill=False,
+    evidence_ready=True,
+    source_boundary=False,
+):
     upgrade(repo)
     p = preparation()
     if target is not None:
@@ -340,6 +347,15 @@ def seed(repo, *, target=None, synthetic_skill=False, evidence_ready=True):
             ),
         }
     )
+    if source_boundary:
+        semantics = semantics.model_copy(
+            update={
+                "boundaries": (
+                    *semantics.boundaries,
+                    f"隔离合成来源：{p.source_snapshot.resource_id}；修订：{p.source_snapshot.revision_id}；SHA256：{p.source_snapshot.digest}",
+                )
+            }
+        )
     proposal = ProposalRevision(
         proposal_id="prepared-plan",
         revision=1,

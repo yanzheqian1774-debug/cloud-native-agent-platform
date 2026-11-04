@@ -3,16 +3,16 @@ import type {CriteriaSetRevision,CriterionRevision,ExactGrantRequest,GrantReques
 import type {CriteriaSetBase,SuccessCriterionDraft,SuccessCriterionTurn} from "./successCriteriaModel";
 
 type CriteriaAuthorization={stage:"WORKSPACE"|"CRITERION"|"SET";requestKey:string;grants:ExactGrantRequest[];request?:GrantRequestStatus}|null;
-type Props={turn:SuccessCriterionTurn;busy:boolean;composerEditing:boolean;authorization:CriteriaAuthorization;onConfirm:()=>void;onPlan?:()=>void;planBlocked?:boolean;onRecover:()=>void;onRequestAuthorization:()=>void;onRefreshAuthorization:()=>void;onRestartAfterConflict:()=>void;onEdit:()=>void;onCancel:()=>void;onChange:(draft:SuccessCriterionDraft)=>void};
+type Props={savedCriteria?:CriterionRevision[];turn:SuccessCriterionTurn;busy:boolean;composerEditing:boolean;authorization:CriteriaAuthorization;onConfirm:()=>void;onPlan?:()=>void;planBlocked?:boolean;onRecover:()=>void;onRequestAuthorization:()=>void;onRefreshAuthorization:()=>void;onRestartAfterConflict:()=>void;onEdit:()=>void;onCancel:()=>void;onChange:(draft:SuccessCriterionDraft)=>void};
 
-export function SuccessCriterionCard({turn,busy,composerEditing,authorization,onConfirm,onPlan,planBlocked=false,onRecover,onRequestAuthorization,onRefreshAuthorization,onRestartAfterConflict,onEdit,onCancel,onChange}:Props){
+export function SuccessCriterionCard({savedCriteria=[],turn,busy,composerEditing,authorization,onConfirm,onPlan,planBlocked=false,onRecover,onRequestAuthorization,onRefreshAuthorization,onRestartAfterConflict,onEdit,onCancel,onChange}:Props){
   const active=turn.phase==="DRAFT"||turn.phase==="EDITING",saving=turn.phase==="SAVING_CRITERION"||turn.phase==="SAVING_SET",unknown=turn.phase==="UNKNOWN_CRITERION"||turn.phase==="UNKNOWN_SET",saved=turn.phase==="SAVED";
   const status=active?"待确认":saving?"正在保存":unknown?"结果未知":turn.phase==="CRITERION_FAILED"?"标准未保存":turn.phase==="SET_FAILED"?"关联未完成":turn.phase==="CONFLICT"?"版本冲突":saved?"已保存":"已取消";
   return <section id="draft-success-criterion-message" tabIndex={-1} className={`px-inline-card px-criterion-card is-${turn.phase.toLowerCase()}`} aria-label="成功标准待确认卡片">
     <header><div><span className="px-eyebrow">{saved?"正式成功标准":"成功标准草稿"}</span><h2>{saved?"已保存并完成正式关联":turn.source?"修订已选中的成功标准":"怎样才算解决？"}</h2></div><span className={`px-status ${saved?"success":turn.phase==="CANCELLED"?"neutral":turn.phase==="CONFLICT"||unknown?"danger":"warning"}`}>{status}</span></header>
     {turn.phase==="CANCELLED"?<p>已取消本地成功标准草稿，没有调用正式保存接口。</p>:<>
       <p className="px-truth-note">以下内容保留你的原文。系统没有补写阈值、期限、数据或目标，也没有用关键词推断标准类型。</p>
-      <blockquote>{turn.draft.text}</blockquote>
+      {active&&(turn.source||turn.baseSet)?<section className="px-criterion-comparison" aria-label="已保存标准与本次变化"><section><header><h3>已保存标准</h3><span className="px-status success">v{turn.baseSet?.revision??turn.source?.revision}</span></header>{savedCriteria.filter(c=>turn.source?c.revision_id===turn.source.revisionId:turn.baseSet?.orderedCriterionRevisionIds.includes(c.revision_id)).map(c=><p key={c.revision_id}>{criterionSummary(c)}</p>)}<small>正式版本保留，不因编辑草稿改变。</small></section><section><header><h3>待保存变更</h3><span className="px-status warning">草稿</span></header><blockquote>{turn.draft.text}</blockquote><small>核对后单独保存，成功后才进入规划。</small></section></section>:<blockquote>{turn.draft.text}</blockquote>}
       <fieldset disabled={busy||!active||composerEditing}>
         <legend>由你明确选择标准类型</legend>
         <label><input type="radio" name={`criterion-kind-${turn.id}`} checked={turn.draft.kind==="HUMAN_EVALUATED"} onChange={()=>onChange({...turn.draft,kind:"HUMAN_EVALUATED"})}/> 人工验收标准</label>

@@ -174,13 +174,23 @@ class SyntheticValidationOrigin(Immutable):
     prepared_by: Identity
 
 
+class SourceChangeOrigin(Immutable):
+    kind: Literal["HUMAN_SOURCE_CHANGE"] = "HUMAN_SOURCE_CHANGE"
+    namespace: Identity
+    security_domain: Identity
+    root: ExactReference
+    source_snapshot: ExactReference
+    request_id: Identity
+    prepared_by: Identity
+
+
 class ProposalRevision(Immutable):
     proposal_id: Identity
     revision: int = Field(ge=1)
     predecessor_digest: Digest | None
     invocation_id: Identity | None
     semantics: VersionedSemantics
-    origin: SyntheticValidationOrigin | None = None
+    origin: SyntheticValidationOrigin | SourceChangeOrigin | None = None
 
     @model_validator(mode="after")
     def validate_origin(self):

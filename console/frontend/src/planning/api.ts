@@ -26,3 +26,17 @@ export const history = (id: string) => request<History>(`${encodeURIComponent(id
 export const proposal = (id: string, revision: number) => request<ProposalRead>(`${encodeURIComponent(id)}?version=${revision}`);
 export const refresh = (id: string, revision: number, csrf: string) => request<{ snapshot: Snapshot }>(`${encodeURIComponent(id)}/resources`, csrf, { version: revision });
 export const confirm = (id: string, revision: number, digest: string, expectedPlanVersion: number, csrf: string, idempotencyKey: string) => request<Confirmation>(`${encodeURIComponent(id)}/confirm`, csrf, { version: revision, digest, expectedPlanVersion, idempotencyKey });
+
+export type Candidate={name:string;reference:ExactRef;selected:boolean;publication:'PUBLISHED';permission:'READABLE';assessment:{status:string;missingOperations:string[];declaredOperations?:string[];sourceSchemas:string[];configuration:Record<string,unknown>;executionReady:false}};
+export type CandidateGroup={requirementId:string;kind:string;state:string;candidates:Candidate[];executionReady:false};
+export type CandidatesRead={proposalDigest:string;proposalRevision:number;groups:CandidateGroup[];executionReady:false};
+export type SourceChangeSpec={plan_version:number;plan_digest:string;expected_proposal_revision:number;old_source:ExactRef;new_source:ExactRef;reason:string;idempotency_key:string;new_target?:Semantics['target']&{criterion_revision_ids:string[];expected_problem_version:number};criterion_revision_map?:Record<string,string>};
+export type SourceChangeEvidence={state:string;before:{name:string;reference:ExactRef;contentDigest:string};after:{name:string;reference:ExactRef;contentDigest:string};schema:string;contentChanged:boolean;criterionImpacts:{criterionRevisionId:string;reason:string}[];executionReady:false};
+export type SourceChangeRead={previousPlan:{planId:string;version:number;digest:string};requestId:string;actor:string;createdAt:string;request:SourceChangeSpec&{proposal_id:string};evidence:SourceChangeEvidence;proposal:Proposal|null;digest:string|null;confirmationRequired:boolean;executionStarted:false};
+export const candidates=(id:string,revision:number,kind?:string)=>request<CandidatesRead>(`${encodeURIComponent(id)}/candidates?version=${revision}${kind?`&kind=${encodeURIComponent(kind)}`:''}`);
+export const previewSourceChange=(id:string,spec:SourceChangeSpec,csrf:string)=>request<SourceChangeEvidence>(`${encodeURIComponent(id)}/source-change-preview`,csrf,spec);
+export const prepareSourceChange=(id:string,spec:SourceChangeSpec,csrf:string)=>request<SourceChangeRead>(`${encodeURIComponent(id)}/source-changes`,csrf,spec);
+export const sourceChange=(id:string,key:string)=>request<SourceChangeRead>(`${encodeURIComponent(id)}/source-changes/by-key/${encodeURIComponent(key)}`);
+
+export type SourceChangeTarget={target:NonNullable<SourceChangeSpec['new_target']>;criterionRevisionMap:Record<string,string>;criteria:{revision:number;check:string|null;revisionId:string}[]};
+export const sourceChangeTarget=(id:string,version:number)=>request<SourceChangeTarget>(`${encodeURIComponent(id)}/source-change-target?version=${version}`);

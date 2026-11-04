@@ -13,6 +13,7 @@ from .plan_suggestion_domain import (
     Immutable,
     PlanningConflict,
     ProposalRevision,
+    SourceChangeOrigin,
 )
 from .resource_use_domain import canonical_digest
 
@@ -76,6 +77,11 @@ def execution_successor(
         raise PlanningConflict("EXECUTION_REVISION_SOURCE_MISMATCH")
     old = plan.semantics
     if (
+        isinstance(source.origin, SourceChangeOrigin)
+        and source.origin.source_snapshot != request.source_snapshot
+    ):
+        raise PlanningConflict("EXECUTION_REVISION_SOURCE_CHANGE_MISMATCH")
+    if (
         old.business_rules.count(PLANNING_ONLY) != 1
         or old.boundaries.count(READ_ONLY_PLANNING) != 1
     ):
@@ -99,6 +105,10 @@ def execution_successor(
         if text == READ_ONLY_PLANNING
         else text
         for text in old.boundaries
+        if not (
+            isinstance(source.origin, SourceChangeOrigin)
+            and text.startswith("隔离合成来源：")
+        )
     ] + [
         f"隔离合成来源：{request.source_snapshot.resource_id}；"
         f"修订：{request.source_snapshot.revision_id}；"

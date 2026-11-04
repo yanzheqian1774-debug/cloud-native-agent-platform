@@ -50,6 +50,27 @@ class PostgresPlanningRepository:
                 (checksum,),
             )
 
+        extra = Path(__file__).parents[2] / "migrations/0043_planning_source_change.sql"
+        checksum = hashlib.sha256(extra.read_bytes()).hexdigest()
+        with self.pool.connection() as conn, conn.transaction():
+            conn.execute("SELECT pg_advisory_xact_lock(3230043)")
+            prior = conn.execute(
+                "SELECT checksum FROM workflow_planning.schema_migrations "
+                "WHERE version=43"
+            ).fetchone()
+            if (
+                prior
+                and (prior["checksum"] if isinstance(prior, dict) else prior[0])
+                != checksum
+            ):
+                raise PlanningConflict("PLANNING_MIGRATION_CHECKSUM")
+            conn.execute(extra.read_text())
+            conn.execute(
+                "INSERT INTO workflow_planning.schema_migrations VALUES(43,%s) "
+                "ON CONFLICT DO NOTHING",
+                (checksum,),
+            )
+
     @staticmethod
     def _scope(scope):
         return scope.namespace, scope.security_domain

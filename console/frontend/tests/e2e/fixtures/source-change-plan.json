@@ -1,0 +1,180 @@
+{
+  "schema_version": "planning.v3",
+  "scenario": "GENERAL_READ_ONLY",
+  "target": {
+    "problem": {
+      "resource_id": "00038bf9-c5d1-551e-bab2-b1360cbf50be",
+      "revision_id": "00038bf9-c5d1-551e-bab2-b1360cbf50be:1",
+      "digest": "43d674442ee63a9e9caa386f3caae8c237f7144032c0bf074aa7000696964a6d"
+    },
+    "criteria": {
+      "resource_id": "00038bf9-c5d1-551e-bab2-b1360cbf50be",
+      "revision_id": "31dcd8ae-e091-589b-ac99-fe42cd3bc060",
+      "digest": "247623544dbd1cca95b0f3a66c95ea43bda73b41d94bf3516c9bc7460e86632b"
+    },
+    "criterion_revision_ids": [
+      "8e051853-6e3a-5a17-b770-cf7fe606e7d6",
+      "6d882840-c2f0-5ff3-a1ed-b85705dad612",
+      "4ae2ce8e-0229-5e03-8c2b-49cb9e520632",
+      "6b6459d3-6107-5a2b-b8af-c643b3efd58c",
+      "4675547f-a05b-5441-b5f5-9858b190df6c"
+    ],
+    "expected_problem_version": 3
+  },
+  "title": "销售诊断来源变更（合成界面验证）",
+  "business_rules": [
+    "仅使用已发布的固定合成销售CSV快照（来源摘要 8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391），比较2026-08与2026-09的不含税净销售额与毛利。",
+    "按各币种分别核算总额，不进行任何换汇或跨币种合并。",
+    "退货金额冲减对应期间净销售额与毛利；取消订单明确排除并记录排除口径。",
+    "零基期（基期值为零）的变化率标记为不适用并保留原因，不生成虚假增长率。",
+    "按区域、渠道、产品拆解变化贡献，并与同币种总额核对一致，保留关联来源行。",
+    "分析任务不直接读取原始快照，只消费其直接前序任务的产物。",
+    "禁止任何业务写入；不补造缺失数据；不作因果断言、真实企业情况断言或未来销售改善断言。",
+    "本次仅在隔离环境以明确标注的合成资料执行只读任务；允许创建本执行修订对应的Assignment、单Run及TaskRun，禁止外部写入、生产操作及配置调整；人工业务验收在执行产物之后，不作为任务。"
+  ],
+  "boundaries": [
+    "本计划仅覆盖对已发布固定合成CSV的只读诊断分析，数据为合成数据，结论不代表真实企业经营状况。",
+    "如快照中字段或期间数据缺失，仅如实记录缺口，不推测、不补造任何数值。",
+    "所有金额均按原始币种呈现，不隐含任何汇率换算或跨币种汇总。",
+    "诊断结论仅为对两期数据的观察性描述，不构成因果证明、责任归因或改善承诺。",
+    "分析所用的数据来源、版本与适用限制在产物中完整保留，便于追溯与人工复核。",
+    "仅对本次固定合成销售快照进行两期只读诊断；按币种分别核算不含税净销售额与毛利，变化贡献不代表因果或真实销售改善；禁止业务写入。",
+    "隔离合成来源：fixture-old-source；修订：1；SHA256：aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "执行准备映射SHA256：ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff；合成界面夹具"
+  ],
+  "effect": "READ_ONLY",
+  "stages": [
+    {
+      "stage_id": "stage-read",
+      "title": "读取固定来源快照",
+      "task_ids": [
+        "task-read-source"
+      ]
+    },
+    {
+      "stage_id": "stage-summarize",
+      "title": "两期口径汇总与贡献拆解",
+      "task_ids": [
+        "task-summarize-diagnosis"
+      ]
+    },
+    {
+      "stage_id": "stage-report",
+      "title": "生成诊断报告",
+      "task_ids": [
+        "task-render-report"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "task-read-source",
+      "title": "读取固定合成销售CSV快照",
+      "responsibility": "从已发布的固定来源快照中读取2026-08与2026-09两期销售明细，保留来源行标识、数据版本与适用限制，形成后续汇总唯一可用的快照产物。",
+      "employee_requirement_id": "req-employee-analyst",
+      "depends_on": [],
+      "inputs": [
+        "已发布的固定合成销售CSV及其来源摘要与版本信息",
+        "两期口径说明：2026-08 与 2026-09，不含税净销售额与毛利"
+      ],
+      "outputs": [
+        "固定来源快照产物：两期销售明细、来源行标识、数据版本与适用限制说明"
+      ],
+      "requirement_ids": [
+        "req-employee-analyst"
+      ],
+      "criterion_revision_ids": [
+        "8e051853-6e3a-5a17-b770-cf7fe606e7d6"
+      ],
+      "operation": "READ_DATA",
+      "input_kinds": [
+        "CONTEXT"
+      ],
+      "output_kind": "SOURCE_SNAPSHOT"
+    },
+    {
+      "task_id": "task-summarize-diagnosis",
+      "title": "汇总两期对比并按维度拆解变化贡献",
+      "responsibility": "基于读取任务的快照产物完成口径校验，按币种分别核算不含税净销售额与毛利的两期变化；执行退货冲减、取消订单排除；零基期变化率标记为不适用并保留原因；按区域、渠道、产品拆解变化贡献并与同币种总额核对，保留关联来源行与限制说明。",
+      "employee_requirement_id": "req-employee-analyst",
+      "depends_on": [
+        "task-read-source"
+      ],
+      "inputs": [
+        "读取任务的快照产物：两期销售明细、来源行与版本信息",
+        "诊断口径规则：退货冲减、取消订单排除、零基期变化率不适用、按币种核算不换汇"
+      ],
+      "outputs": [
+        "汇总产物：分币种两期总额与变化、区域渠道产品贡献拆解、异常与排除口径、来源行关联及适用限制"
+      ],
+      "requirement_ids": [
+        "req-employee-analyst"
+      ],
+      "criterion_revision_ids": [
+        "6d882840-c2f0-5ff3-a1ed-b85705dad612",
+        "4ae2ce8e-0229-5e03-8c2b-49cb9e520632",
+        "6b6459d3-6107-5a2b-b8af-c643b3efd58c"
+      ],
+      "operation": "SUMMARIZE",
+      "input_kinds": [
+        "SOURCE_SNAPSHOT"
+      ],
+      "output_kind": "SUMMARY"
+    },
+    {
+      "task_id": "task-render-report",
+      "title": "生成销售变化诊断报告",
+      "responsibility": "基于汇总产物生成只读诊断报告，覆盖来源可追溯、分币种总额核对、维度贡献一致性、异常排除口径与结论边界全部五项标准；明确标注数据为固定合成数据，仅作观察性诊断，不宣称因果或真实销售改善。",
+      "employee_requirement_id": "req-employee-analyst",
+      "depends_on": [
+        "task-summarize-diagnosis"
+      ],
+      "inputs": [
+        "汇总任务的产物：分币种对比、贡献拆解、异常说明与限制",
+        "报告边界要求：仅合成数据的观察性诊断，不作因果或改善断言"
+      ],
+      "outputs": [
+        "诊断报告产物：覆盖五项验收标准的中文报告，含来源、版本、异常与适用限制"
+      ],
+      "requirement_ids": [
+        "req-employee-analyst"
+      ],
+      "criterion_revision_ids": [
+        "8e051853-6e3a-5a17-b770-cf7fe606e7d6",
+        "6d882840-c2f0-5ff3-a1ed-b85705dad612",
+        "4ae2ce8e-0229-5e03-8c2b-49cb9e520632",
+        "6b6459d3-6107-5a2b-b8af-c643b3efd58c",
+        "4675547f-a05b-5441-b5f5-9858b190df6c"
+      ],
+      "operation": "RENDER_REPORT",
+      "input_kinds": [
+        "SUMMARY"
+      ],
+      "output_kind": "REPORT"
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "req-employee-analyst",
+      "kind": "EMPLOYEE",
+      "name": "销售数据诊断分析师",
+      "purpose": "负责读取固定合成CSV快照、完成分币种两期汇总与维度贡献拆解、生成覆盖全部验收标准的只读诊断报告。",
+      "required": true,
+      "selected": {
+        "resource_id": "employee-definition:50232ba3-32cc-459c-9f46-9fc6ed7a9a8b",
+        "revision_id": "employee-revision:48852bbf-4aa3-4c3e-b547-a5607e814cdb",
+        "digest": "e37432aa4a6a0761b4f2448c739f63ae68dcffc71b346195e5345f56516e892d"
+      },
+      "operation": null,
+      "preparation": "需熟悉不含税净销售额与毛利口径、退货冲减与取消订单排除规则、零基期变化率处理及来源行追溯要求。"
+    }
+  ],
+  "policy": {
+    "schema_version": "planning-policy.v2",
+    "mode": "FREE",
+    "template": null,
+    "required_operations": [],
+    "prohibited_operations": [],
+    "business_acceptance_as_task": false
+  }
+}

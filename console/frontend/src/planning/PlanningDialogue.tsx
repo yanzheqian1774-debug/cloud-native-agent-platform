@@ -9,7 +9,7 @@ import {PlanningRecoveryCard} from "./PlanningRecoveryCard";
 import {planningRequest, type PlanningInput, type Invocation} from "./planningRequests";
 const free: PlanningPolicy = {schema_version: "planning-policy.v2", mode: "FREE", template: null, required_operations: [], prohibited_operations: [], business_acceptance_as_task: false};
 
-export function PlanningDialogue({problem, source, disabled=false, children, onStatus}: {problem: string; source?: ProposalRead; disabled?: boolean; children?: ReactNode; onStatus?: (value:string)=>void}) {
+export function PlanningDialogue({problem, source, disabled=false, children, onStatus, suggestion}: {problem: string; source?: ProposalRead; disabled?: boolean; children?: ReactNode; onStatus?: (value:string)=>void; suggestion?:{key:string;text:string}}) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [answer, setAnswer] = useState("");
@@ -20,6 +20,8 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
   const [unresolvedState, setUnresolved] = useState(false);
   const flight = useRef(false);
   const receivedInvocation = useRef<string | null>(null);
+  const consumedSuggestion=useRef<string|null>(null);
+  useEffect(()=>{if(suggestion&&consumedSuggestion.current!==suggestion.key){consumedSuggestion.current=suggestion.key;setAnswer(current=>{const next=current.trim()?current+'\n'+suggestion.text:suggestion.text;if(next.length>500){setError('候选建议与已有输入超过500字，已保留原输入，请整理后再提交。');return current}return next})}},[suggestion]);
   const requestKey = params.get("request"), invocationId = params.get("invocation");
   const recordKey=requestKey?`request:${requestKey}`:invocationId?`invocation:${invocationId}`:"";
   const unresolved=Boolean(recordKey)&&unresolvedState;

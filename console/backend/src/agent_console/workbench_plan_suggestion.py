@@ -1,6 +1,8 @@
 """Typed planning v2 operations on the existing trusted transactional BFF."""
 
 from dataclasses import dataclass
+from types import SimpleNamespace
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +22,13 @@ from .workbench_owner_authorization import WorkbenchOwnerError
 class Version(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=1)
+
+
+class CandidateQuery(Version):
+    kind: (
+        Literal["EMPLOYEE", "SKILL", "MCP", "KNOWLEDGE", "WORKFLOW", "RUNTIME", "AGENT"]
+        | None
+    ) = None
 
 
 class ConfirmSuggestion(Version):
@@ -64,6 +73,45 @@ class PlanningOwnerAdapter:
                     identity,
                     CostExecutionRevisionRequest.model_validate(call.payload),
                 )
+            if call.operation == "READ_SOURCE_CHANGE_CURRENT_TARGET":
+                from .planning_source_change import current_target
+
+                return current_target(
+                    app, principal, call.connection, identity, call.query["version"]
+                )
+            if call.operation in {
+                "PREVIEW_PLAN_SOURCE_CHANGE",
+                "PREPARE_PLAN_SOURCE_CHANGE",
+            }:
+                from .planning_source_change import (
+                    SourceChangeRequest,
+                    prepare,
+                    preview,
+                )
+
+                spec = SourceChangeRequest.model_validate(call.payload)
+                if call.operation == "PREPARE_PLAN_SOURCE_CHANGE":
+                    return prepare(app, principal, identity, spec)
+                app.require(principal, "READ", identity)
+                with repo.transaction(app.scope(principal), identity, authorized=True):
+                    _, evidence = preview(
+                        app, principal, call.connection, identity, spec
+                    )
+                    return evidence
+            if call.operation in {
+                "READ_PLAN_SOURCE_CHANGE",
+                "RECOVER_PLAN_SOURCE_CHANGE",
+            }:
+                from .planning_source_change import read
+
+                return read(
+                    app,
+                    principal,
+                    call.connection,
+                    identity,
+                    call.path.get("request_id", call.path.get("request_key")),
+                    by_key=call.operation == "RECOVER_PLAN_SOURCE_CHANGE",
+                )
             if call.operation == "CONFIRM_PLAN_V2":
                 body = ConfirmSuggestion.model_validate(call.payload)
                 return app.confirm(
@@ -88,6 +136,46 @@ class PlanningOwnerAdapter:
                         call.connection,
                         current=False,
                     )
+                if call.operation == "READ_PLAN_CANDIDATES":
+                    from .planning_candidates import discover
+
+                    query = CandidateQuery.model_validate(call.query)
+                    proposal = repo.proposal(cursor, scope, identity, query.version)
+                    if proposal.revision != max(
+                        p["revision"] for p in history["proposals"]
+                    ):
+                        raise PlanningConflict("CANDIDATE_PROPOSAL_STALE")
+                    app.validate_target(
+                        principal, proposal.semantics.target, call.connection
+                    )
+                    requirements = (
+                        [
+                            SimpleNamespace(
+                                kind=query.kind,
+                                requirement_id="catalog:" + query.kind,
+                                selected=None,
+                            )
+                        ]
+                        if query.kind
+                        else proposal.semantics.requirements
+                    )
+                    groups = [
+                        discover(
+                            call.connection,
+                            scope,
+                            call.authority,
+                            principal,
+                            proposal,
+                            r,
+                        )
+                        for r in requirements
+                    ]
+                    return {
+                        "proposalDigest": proposal.digest,
+                        "proposalRevision": proposal.revision,
+                        "groups": groups,
+                        "executionReady": False,
+                    }
                 if call.operation == "READ_PLAN_HISTORY_V2":
                     return history
                 version = (
@@ -101,6 +189,12 @@ class PlanningOwnerAdapter:
                     if self.employees is not None:
                         readers["EMPLOYEE"] = EmployeePlanningReader(
                             self.employees, call.authority, app.scope, call.connection
+                        )
+                    from .planning_candidates import ExactPlanningOwnerReader
+
+                    for kind in ("SKILL", "KNOWLEDGE", "WORKFLOW"):
+                        readers[kind] = ExactPlanningOwnerReader(
+                            call.connection, scope, call.authority, kind
                         )
                     snapshot = PlanningResourceResolver(readers).resolve(
                         principal, proposal
@@ -143,7 +237,63 @@ class PlanningOwnerAdapter:
 def planning_operations(application, employees=None):
     handler = PlanningOwnerAdapter(application, employees)
     path = f"{PREFIX}/planning-v2/{{proposal_id}}"
+    from .planning_source_change import SourceChangeRequest
+
     return (
+        WorkbenchOperation(
+            "READ_SOURCE_CHANGE_CURRENT_TARGET",
+            "GET",
+            path + "/source-change-target",
+            None,
+            Version,
+            _grant("READ"),
+            handler,
+        ),
+        WorkbenchOperation(
+            "RECOVER_PLAN_SOURCE_CHANGE",
+            "GET",
+            path + "/source-changes/by-key/{request_key}",
+            None,
+            None,
+            _grant("READ"),
+            handler,
+        ),
+        WorkbenchOperation(
+            "READ_PLAN_CANDIDATES",
+            "GET",
+            path + "/candidates",
+            None,
+            CandidateQuery,
+            _grant("READ"),
+            handler,
+        ),
+        WorkbenchOperation(
+            "PREVIEW_PLAN_SOURCE_CHANGE",
+            "POST",
+            path + "/source-change-preview",
+            SourceChangeRequest,
+            None,
+            _grant("READ"),
+            handler,
+        ),
+        WorkbenchOperation(
+            "PREPARE_PLAN_SOURCE_CHANGE",
+            "POST",
+            path + "/source-changes",
+            SourceChangeRequest,
+            None,
+            _grant("PREPARE"),
+            handler,
+        ),
+        WorkbenchOperation(
+            "READ_PLAN_SOURCE_CHANGE",
+            "GET",
+            path + "/source-changes/{request_id}",
+            None,
+            None,
+            _grant("READ"),
+            handler,
+        ),
         WorkbenchOperation(
             "READ_PLANNING_INPUT_V2",
             "GET",
