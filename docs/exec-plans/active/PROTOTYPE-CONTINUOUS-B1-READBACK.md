@@ -39,3 +39,9 @@ hook, and the test requires automatic readback rather than a manual click.
 A later CSS wrapper error hid the completed-run fallback; corrected before install.
 These are B1 readback/clarity changes, not J03/J04/J06 acceptance. D11 remains
 PROPOSED; no fake policy identity or default automated publication is active.
+
+Authenticated readback on installed 551d628 found the old resource snapshot could
+still add “resources pending” beside an execution-owner SUCCEEDED fact. Follow-up
+keeps the historical snapshot visible as planning-time evidence and removes it
+from current execution blockers; completed/current execution facts take priority.
+A focused browser regression covers this case without issuing any POST.
