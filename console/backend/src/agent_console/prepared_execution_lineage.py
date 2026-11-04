@@ -1,7 +1,8 @@
 # ruff: noqa: RUF001 -- Exact approved Chinese boundary text.
 """D324 exact source-owner and Task participant readbacks; no approval projection."""
 
-from .execution_preparation import ExecutionPreparation, ExecutionPreparationError
+from .execution_preparation import ExecutionPreparationError
+from .ontology_execution import parse_preparation
 from .plan_suggestion_domain import ConfirmedPlanRevision
 
 
@@ -52,6 +53,7 @@ def validate_approved_preparation(connection, preparation):
         SYNTHETIC_ONLY,
     )
     from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+    from .sales_ontology_executor import SalesOntologyExecutor
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 
     executors = {t.executor_id for t in p.participants}
@@ -60,6 +62,7 @@ def validate_approved_preparation(connection, preparation):
     boundary = {
         SyntheticDeliverySkillExecutor.revision.executor_id: DELIVERY_SYNTHETIC_ONLY,
         SalesDiagnosticSkillExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,
+        SalesOntologyExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,
     }.get(next(iter(executors)), SYNTHETIC_ONLY)
 
     if (
@@ -106,7 +109,7 @@ def resource_lineage(connection, scope, attempt_id):
     row = prepared_attempt(connection, scope, attempt_id)
     if row is None:
         return None
-    p = ExecutionPreparation.model_validate(row["preparation"])
+    p = parse_preparation(row["preparation"])
     approved = validate_approved_preparation(connection, p)
     participant = row["participant"]
     lineage = connection.execute(
@@ -316,7 +319,7 @@ def dispatch_grants(connection, command):
     row = prepared_attempt(connection, command.scope, command.attempt_id)
     if row is None:
         return (original,)
-    p = ExecutionPreparation.model_validate(row["preparation"])
+    p = parse_preparation(row["preparation"])
     required = ExactGrant(
         "EXECUTION", "START", "governed-execution:prepared:" + p.digest
     )

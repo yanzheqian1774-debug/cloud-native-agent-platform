@@ -1,0 +1,53 @@
+{
+  "originalRun": "workflow-run:944e55ce371f8132fa48755c7a7d242600d7bbe31eece5e2ff4938a94895678b",
+  "originalPreparation": "944e55ce371f8132fa48755c7a7d242600d7bbe31eece5e2ff4938a94895678b",
+  "originalState": {
+    "state": "RECOVERY_REQUIRED",
+    "tasks": [
+      {
+        "state": "UNKNOWN",
+        "reason": "EFFECT_OUTCOME_UNKNOWN",
+        "task_id": "read",
+        "attempt_id": "prepared-attempt:d298595c6adcf496defc043d5dd0054b75e808b659fcfd29ca888b6bbdb54f53",
+        "stop_evidence": null,
+        "attempt_ordinal": 1,
+        "output_artifact_ids": []
+      },
+      {
+        "state": "WAITING",
+        "reason": null,
+        "task_id": "summary",
+        "attempt_id": null,
+        "stop_evidence": null,
+        "attempt_ordinal": 0,
+        "output_artifact_ids": []
+      },
+      {
+        "state": "WAITING",
+        "reason": null,
+        "task_id": "report",
+        "attempt_id": null,
+        "stop_evidence": null,
+        "attempt_ordinal": 0,
+        "output_artifact_ids": []
+      }
+    ],
+    "version": 4,
+    "cancellation_request_id": null
+  },
+  "diagnosisDigest": "37c7476ab299c409fdb81f3c3b342cfaa4ccd852f96b18d3abedbe44294840e3",
+  "successorPlan": "ontology-sales-plan-r1b",
+  "newRootInstance": "ontology-successor-root",
+  "newTaskInstances": [
+    "ontology-successor-read",
+    "ontology-successor-summary",
+    "ontology-successor-report"
+  ],
+  "newAgentInstances": [
+    "agent-ontology-successor-read",
+    "agent-ontology-successor-summary",
+    "agent-ontology-successor-report"
+  ],
+  "originalMutations": 0,
+  "executionStarted": false
+}

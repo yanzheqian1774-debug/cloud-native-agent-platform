@@ -1,0 +1,109 @@
+{
+  "checks": [
+    "Browser created exact draft through session/CSRF and PostgreSQL owner",
+    "Author self-review rejected",
+    "Separate reviewer approved exact revision",
+    "Published digest stable after reload; mobile has no horizontal overflow"
+  ],
+  "screenshots": [
+    "01-draft-1440.png",
+    "02-self-review-denied-1440.png",
+    "03-published-1440.png",
+    "04-published-390.png"
+  ],
+  "grantRequests": [
+    {
+      "actor": "author",
+      "requestId": "grant-request-3a4b6e50f2e9f1fe5ec9f7b732198020",
+      "decisionId": "grant-decision-be2dca049ab452a73730e26534241324",
+      "state": "APPROVED"
+    },
+    {
+      "actor": "reviewer",
+      "requestId": "grant-request-1662280c5215c9df9add86e162c2233b",
+      "decisionId": "grant-decision-84e9158b91674970f0834e160d1e349a",
+      "state": "APPROVED"
+    }
+  ],
+  "published": {
+    "ontology_id": "sales-diagnosis",
+    "revision_id": "r1",
+    "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f",
+    "version": 5,
+    "state": "PUBLISH",
+    "facts": [
+      {
+        "action": "CREATE",
+        "actor": "human:ontology-dev-author",
+        "result": {
+          "state": "CREATE",
+          "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f",
+          "version": 1,
+          "ontology_id": "sales-diagnosis",
+          "revision_id": "r1"
+        },
+        "ordinal": 1
+      },
+      {
+        "action": "VALIDATE",
+        "actor": "human:ontology-dev-author",
+        "result": {
+          "state": "VALIDATE",
+          "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f",
+          "version": 2,
+          "ontology_id": "sales-diagnosis",
+          "revision_id": "r1"
+        },
+        "ordinal": 2
+      },
+      {
+        "action": "TEST",
+        "actor": "human:ontology-dev-author",
+        "result": {
+          "state": "TEST",
+          "checks": [
+            {
+              "metric": "net_sales",
+              "result_digest": "80b2d5d186a13c0d8e3d437fa81064f8d5842fd84f5b4a07cb24cf06e9b785f3",
+              "source_digest": "8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391"
+            },
+            {
+              "metric": "gross_profit",
+              "result_digest": "341f991e51256458c9e5f0311f7e6ebede13cdf43ead6a70740032951269253b",
+              "source_digest": "8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391"
+            }
+          ],
+          "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f",
+          "version": 3,
+          "ontology_id": "sales-diagnosis",
+          "revision_id": "r1"
+        },
+        "ordinal": 3
+      },
+      {
+        "action": "REVIEW",
+        "actor": "human:ontology-dev-reviewer",
+        "result": {
+          "state": "REVIEW",
+          "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f",
+          "version": 4,
+          "ontology_id": "sales-diagnosis",
+          "revision_id": "r1"
+        },
+        "ordinal": 4
+      },
+      {
+        "action": "PUBLISH",
+        "actor": "human:ontology-dev-author",
+        "result": {
+          "state": "PUBLISH",
+          "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f",
+          "version": 5,
+          "ontology_id": "sales-diagnosis",
+          "revision_id": "r1"
+        },
+        "ordinal": 5
+      }
+    ]
+  }
+}

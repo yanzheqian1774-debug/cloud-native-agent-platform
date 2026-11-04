@@ -1,0 +1,74 @@
+{
+  "workerResults": [
+    {
+      "state": "SUCCEEDED",
+      "command_id": "native-dispatch:3f7134c22d06e0ce60c4e2ae4b7941d1a02e8ab14b548b7f028904cd95d1b399"
+    },
+    {
+      "state": "SUCCEEDED",
+      "command_id": "native-dispatch:b2c0023bee1d6ad07c9e34116a489cb9e58fad65199e7870a5a1855a5a5102ee"
+    },
+    {
+      "state": "SUCCEEDED",
+      "command_id": "native-dispatch:5bdbc8c915179cab40d6f6b3b32d407d2aebd5521e5824ca85f39fec19df9d37"
+    },
+    {
+      "state": "IDLE",
+      "command_id": null
+    }
+  ],
+  "kubernetesContext": "kind-s5-v023-rel-317-r2",
+  "namespace": "ontology-sales-20261104",
+  "tasks": [
+    {
+      "name": "ontology-sales-18367256357d85f74b2b0f59ff0ff144",
+      "uid": "03f89887-0af6-40d7-a23d-96527c4aa822",
+      "phase": "Succeeded",
+      "attempt": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9"
+    },
+    {
+      "name": "ontology-sales-7faa92082e9c74742d24b53d8d7722ca",
+      "uid": "62b03dc5-704e-48b7-8912-94eb89ef2d49",
+      "phase": "Succeeded",
+      "attempt": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610"
+    },
+    {
+      "name": "ontology-sales-809d4b47ed3efe93735f263639018560",
+      "uid": "32243d7d-d079-4195-8a8b-01638fcc0e8d",
+      "phase": "Succeeded",
+      "attempt": "prepared-attempt:de3cf731b102811ad7be4b87bea5a413344e053744f5a5e097f5b885dfa6216d"
+    },
+    {
+      "name": "ontology-sales-961e208ad2ee67f5bf2c4d6c6d922a37",
+      "uid": "e253d38d-dbb8-4b7e-b337-c38ebdbdd165",
+      "phase": "Running",
+      "attempt": "prepared-attempt:d298595c6adcf496defc043d5dd0054b75e808b659fcfd29ca888b6bbdb54f53"
+    },
+    {
+      "name": "ontology-sales-975a32f04e2c1069275b983693777ebc",
+      "uid": "9ab7d306-0039-4c74-879f-7e55543052bc",
+      "phase": "Succeeded",
+      "attempt": "prepared-attempt:f1f149c5006e6bae1a27655a1d641d01e7ac4d98c0cec008df6470d565b46c39"
+    },
+    {
+      "name": "ontology-sales-c304303cad03f5bf9e5e93a53ba3f66a",
+      "uid": "e2d40547-fbb6-4cc5-ba29-5495db2e8205",
+      "phase": "Succeeded",
+      "attempt": "prepared-attempt:09e1ecf8e10f774cfb4a1a052f055d65047d114edac05b17fcdc410bda808cb7"
+    },
+    {
+      "name": "ontology-sales-e200bb5f3a90a1cd4e27569f4e8003d9",
+      "uid": "765c0cce-e659-440e-b641-60eb44aea6d9",
+      "phase": "Succeeded",
+      "attempt": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075"
+    }
+  ],
+  "modelCalls": 0,
+  "source": "actual Kubernetes Task API and existing Native/Skill owners",
+  "sourceFiles": {
+    "console/backend/src/agent_console/sales_ontology_executor.py": "04039882a2f0fd68fa8123a77b426857b06af51d7f955548dc58e78ea1e0ae8e",
+    "console/backend/src/agent_console/ontology_query.py": "35d28a8dc13adca12b0b8e142201e0df9e32c3bdcb92d986728ddf276e461341",
+    "console/backend/src/agent_console/ontology_execution.py": "72ff811c7722ffbe30de5d5faec116b00048fb4d419dd7f96a522fa771b0afb5",
+    "console/backend/src/agent_console/prepared_native_composition.py": "e2e545ed36db5bb68d09a1faa7cd75fb6137b4879672e5051fb0782841c3c886"
+  }
+}

@@ -2,8 +2,9 @@
 
 import json
 
-from .execution_preparation import ExecutionPreparation, ExecutionPreparationError
+from .execution_preparation import ExecutionPreparationError
 from .execution_preparation_postgres import PreparedExecutionStore
+from .ontology_execution import parse_preparation
 from .prepared_execution_lineage import prepared_attempt
 from .prepared_execution_resources import published
 from .prepared_skill_invocation import build_request
@@ -14,7 +15,7 @@ def input_snapshot(connection, command):
     row = prepared_attempt(connection, command.scope, command.attempt_id)
     if row is None:
         raise ExecutionPreparationError("PREPARED_ATTEMPT_REQUIRED")
-    p = ExecutionPreparation.model_validate(row["preparation"])
+    p = parse_preparation(row["preparation"])
     _, progress = PreparedExecutionStore(connection).read(
         p.namespace, p.security_domain, p.run_id, lock=True
     )
@@ -76,6 +77,16 @@ def input_snapshot(connection, command):
         "sourceSnapshot": p.source_snapshot.model_dump(mode="json"),
         "dependencies": dependencies,
     }
+    binding = getattr(p, "business_semantics", None)
+    if binding is not None:
+        from .ontology_execution import published_content
+
+        ontology = published_content(connection, command.scope, binding)
+        result.update(
+            schemaVersion="ontology-sales-input.v1",
+            ontologyContent=ontology.model_dump(mode="json"),
+            businessSemantics=binding.model_dump(mode="json"),
+        )
     if task.operation == "READ_DATA":
         knowledge = published(connection, command.scope, "KNOWLEDGE", p.source_snapshot)
         documents = knowledge.get("documents", [])

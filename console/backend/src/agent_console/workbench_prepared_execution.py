@@ -2,11 +2,12 @@
 """Prepared execution operations on the existing authenticated owner transaction."""
 
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 from .authority_contracts import AuthorityError, ExactGrant
 from .execution_preparation import ExecutionPreparation, ExecutionPreparationError
 from .execution_preparation_postgres import PreparedExecutionStore
+from .ontology_execution import OntologyExecutionPreparation, parse_preparation
 from .prepared_execution_application import PreparedExecutionApplication
 from .prepared_execution_lineage import (
     validate_approved_preparation,
@@ -17,6 +18,12 @@ from .prepared_result_review import PreparedResultReview
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_business_problem import OwnerPrincipal
 from .workbench_owner_authorization import WorkbenchOwnerError
+
+
+class PreparationCommand(
+    RootModel[ExecutionPreparation | OntologyExecutionPreparation]
+):
+    pass
 
 
 class StartPrepared(BaseModel):
@@ -61,7 +68,7 @@ def candidate(connection, scope, digest):
     ).fetchone()
     if row is None:
         raise ExecutionPreparationError("PREPARED_EXECUTION_NOT_FOUND")
-    p = ExecutionPreparation.model_validate(row["record"])
+    p = parse_preparation(row["record"])
     if p.digest != digest:
         raise ExecutionPreparationError("PREPARED_EXECUTION_DIGEST_MISMATCH")
     return p
@@ -80,7 +87,7 @@ class PreparedExecutionOwner:
         app = PreparedExecutionApplication(call.connection, principal, call.authority)
         try:
             if call.operation == "PREPARE_NATIVE_EXECUTION":
-                p = ExecutionPreparation.model_validate(call.payload)
+                p = parse_preparation(call.payload)
                 if (p.namespace, p.security_domain, p.plan_id) != (
                     principal.tenant_id,
                     principal.security_domain,
@@ -489,7 +496,7 @@ def prepared_execution_operations(coordinator=None):
             "PREPARE_NATIVE_EXECUTION",
             "POST",
             PREFIX + "/planning-v2/{plan_id}/prepared-executions",
-            ExecutionPreparation,
+            PreparationCommand,
             None,
             lambda ctx, path, payload, query: (
                 ExactGrant("PLAN", "PREPARE", "plan:v2:" + path["plan_id"]),

@@ -1,0 +1,12 @@
+{
+  "baselineCommit": "9df4c7fe95278fd85246abe3645ae7dfc244b485",
+  "baselineTree": "8f9afe54ddcf1558734b1c71ae89782d9ad7509b",
+  "archiveFilesVerified": 1626,
+  "archiveSha256": "d956988091010cb8510a04be14075d107431ba8128ad5b00ae1e92925e4bce4d",
+  "newDocumentLocalLinksVerified": 10,
+  "baselineTestResult": "54 passed, 0 skipped, 0 failed",
+  "newOntologyAcceptanceCases": "30 specified; NOT_RUN",
+  "architectureDecision": "PROPOSED / PENDING_HUMAN_DECISION",
+  "productCodeModified": false,
+  "sharedDatabaseTouched": false
+}

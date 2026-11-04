@@ -18,6 +18,7 @@ from .authority_contracts import ExactGrant
 from .execution_preparation import ExecutionPreparationError
 from .execution_preparation_postgres import PreparedExecutionStore
 from .native_dispatch_application import NativeDispatchApplication, QueueNativeDispatch
+from .ontology_execution import parse_preparation
 from .prepared_execution_application import PreparedExecutionApplication, start_resource
 from .resource_use_domain import stable_id
 from .workbench_business_problem import OwnerPrincipal
@@ -145,7 +146,6 @@ class PreparedReadyDriver:
         from types import SimpleNamespace
 
         from .authority_contracts import AuthorityError
-        from .execution_preparation import ExecutionPreparation
 
         with self.repository.pool.connection() as connection:
             rows = connection.execute(
@@ -182,7 +182,7 @@ class PreparedReadyDriver:
                             policy_generation=command.authority_generation.value,
                             recovery_epoch=command.recovery_epoch.value,
                         ),
-                        ExecutionPreparation.model_validate(row["record"]),
+                        parse_preparation(row["record"]),
                     )
             except (AuthorityError, ExecutionPreparationError):
                 # Remains READY with no new Attempt/effect; current readiness is exposed by owner UI.

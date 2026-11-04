@@ -1,0 +1,8 @@
+{
+  "reason": "initial installer omitted migration13 owner metadata; no domain facts existed",
+  "schemaOnlyDumpParity": true,
+  "schemaSha256": "34dcfa8b9101d57bf6566cc032c3ff633d56375ae3c0e31b27e8660ebb22982d",
+  "migrationChecksum": "26a82c3cf5f10df4e23c968ab2a842c6794f7f3bf46883a51ad102da65e29c1f",
+  "action": "completed exact initial install receipt after parity and empty-domain verification",
+  "scope": "owned isolated database; all completed source/Skill/ontology/grants preserved"
+}

@@ -1,0 +1,43 @@
+{
+  "finalSourceSha256": "fbe250327cc73637c740bcb2daf00939b41c8db4f9229a91a7678637b7aa7b3d",
+  "checks": [
+    {
+      "commandId": "native-dispatch:3f7134c22d06e0ce60c4e2ae4b7941d1a02e8ab14b548b7f028904cd95d1b399",
+      "stateUnchanged": "SUCCEEDED",
+      "authorization": "prepared-skill-authorization:f8dd0a56039b907cd3b5248d6a99b4efbd193f49c821e96f825c19b4c1bd1571"
+    },
+    {
+      "commandId": "native-dispatch:5b6b4f892758ffdefcd30a0f6ea7b33a451ed7363b8f06f10d47bb28eca6718a",
+      "stateUnchanged": "SUCCEEDED",
+      "authorization": "prepared-skill-authorization:74639c7d6f31eda3a8969e074f8318e3b0e5125ba1b8ccfdc0641509a6c58ebc"
+    },
+    {
+      "commandId": "native-dispatch:5bdbc8c915179cab40d6f6b3b32d407d2aebd5521e5824ca85f39fec19df9d37",
+      "stateUnchanged": "SUCCEEDED",
+      "authorization": "prepared-skill-authorization:932c138b3e7bd6d25dad1c934bd787f684e7a6e591c6b447673a73826641a351"
+    },
+    {
+      "commandId": "native-dispatch:b2c0023bee1d6ad07c9e34116a489cb9e58fad65199e7870a5a1855a5a5102ee",
+      "stateUnchanged": "SUCCEEDED",
+      "authorization": "prepared-skill-authorization:99bd81e21039cc1a50457eac01ebd7917d9b44054c2dcf77c135da16d95b2022"
+    },
+    {
+      "commandId": "native-dispatch:c699a39ce0ee2a5c3500ac8b6a5839ef6adaaf86990de166a92c64a0afa6119f",
+      "stateUnchanged": "SUCCEEDED",
+      "authorization": "prepared-skill-authorization:3d17f4fbdc2a31fd44a17a59763664285fe82c84162b21628406a875f65c69f3"
+    },
+    {
+      "commandId": "native-dispatch:f131f68336a4f81b22c12089376f7dd5afad73ff4cb009f36d26a969d7983693",
+      "stateUnchanged": "SUCCEEDED",
+      "authorization": "prepared-skill-authorization:fa84bb3838786b5d8f5680bb5fdeae52685ef9e00800327c207615648bbcd667"
+    },
+    {
+      "commandId": "native-dispatch:fd5f804def8d7572a9b5a77ca20299bb31e0639be19b08e1ff522e8436725442",
+      "stateUnchanged": "UNKNOWN",
+      "authorization": "AuthorityError:AUTHORIZATION_NOT_FOUND"
+    }
+  ],
+  "invocationPerformed": false,
+  "claimsOrDispatchesPerformed": false,
+  "purpose": "Final all-grants check against actual production authority reader, existing exact command identities"
+}

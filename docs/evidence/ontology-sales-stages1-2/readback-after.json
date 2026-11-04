@@ -1,0 +1,168 @@
+{
+  "original": {
+    "run": "workflow-run:944e55ce371f8132fa48755c7a7d242600d7bbe31eece5e2ff4938a94895678b",
+    "digest": "944e55ce371f8132fa48755c7a7d242600d7bbe31eece5e2ff4938a94895678b",
+    "ontology": {
+      "resource_id": "sales-diagnosis",
+      "revision_id": "r1",
+      "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f"
+    },
+    "progress": {
+      "state": "RECOVERY_REQUIRED",
+      "tasks": [
+        {
+          "state": "UNKNOWN",
+          "reason": "EFFECT_OUTCOME_UNKNOWN",
+          "task_id": "read",
+          "attempt_id": "prepared-attempt:d298595c6adcf496defc043d5dd0054b75e808b659fcfd29ca888b6bbdb54f53",
+          "stop_evidence": null,
+          "attempt_ordinal": 1,
+          "output_artifact_ids": []
+        },
+        {
+          "state": "WAITING",
+          "reason": null,
+          "task_id": "summary",
+          "attempt_id": null,
+          "stop_evidence": null,
+          "attempt_ordinal": 0,
+          "output_artifact_ids": []
+        },
+        {
+          "state": "WAITING",
+          "reason": null,
+          "task_id": "report",
+          "attempt_id": null,
+          "stop_evidence": null,
+          "attempt_ordinal": 0,
+          "output_artifact_ids": []
+        }
+      ],
+      "version": 4,
+      "cancellation_request_id": null
+    },
+    "counts": {
+      "skill_invocation.invocations": 0,
+      "execution_authority.run_artifacts": 0,
+      "resource_use.uses": 0
+    }
+  },
+  "r1b": {
+    "run": "workflow-run:db529aef1d45435f7a31c01215a4d154ca216ddd6c44694bc652b37bf4519013",
+    "digest": "db529aef1d45435f7a31c01215a4d154ca216ddd6c44694bc652b37bf4519013",
+    "ontology": {
+      "resource_id": "sales-diagnosis",
+      "revision_id": "r1",
+      "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f"
+    },
+    "progress": {
+      "state": "SUCCEEDED",
+      "tasks": [
+        {
+          "state": "SUCCEEDED",
+          "reason": null,
+          "task_id": "read",
+          "attempt_id": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+          "stop_evidence": "native-terminal:151bb407ac2b7281fc6a51ae6956a0fe2a05d08c1c857efec857b909fec8e8c9",
+          "attempt_ordinal": 1,
+          "output_artifact_ids": [
+            "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6"
+          ]
+        },
+        {
+          "state": "SUCCEEDED",
+          "reason": null,
+          "task_id": "summary",
+          "attempt_id": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+          "stop_evidence": "native-terminal:d2659d53afc7df49f9a8249c084416a64fa97fd755e29e59171360ac944a26b6",
+          "attempt_ordinal": 1,
+          "output_artifact_ids": [
+            "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9"
+          ]
+        },
+        {
+          "state": "SUCCEEDED",
+          "reason": null,
+          "task_id": "report",
+          "attempt_id": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+          "stop_evidence": "native-terminal:80d2e2ea1bd9dc458cae3630731a4e06c02018d3ec0dc67873097f09b2a91c7c",
+          "attempt_ordinal": 1,
+          "output_artifact_ids": [
+            "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+          ]
+        }
+      ],
+      "version": 10,
+      "cancellation_request_id": null
+    },
+    "counts": {
+      "skill_invocation.invocations": 3,
+      "execution_authority.run_artifacts": 3,
+      "resource_use.uses": 3
+    }
+  },
+  "r2": {
+    "run": "workflow-run:8931936a4cfd01e8050b140861a357e411be0a87ad2f8c0172b6259535832f71",
+    "digest": "8931936a4cfd01e8050b140861a357e411be0a87ad2f8c0172b6259535832f71",
+    "ontology": {
+      "resource_id": "sales-diagnosis",
+      "revision_id": "r2",
+      "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082"
+    },
+    "progress": {
+      "state": "SUCCEEDED",
+      "tasks": [
+        {
+          "state": "SUCCEEDED",
+          "reason": null,
+          "task_id": "read",
+          "attempt_id": "prepared-attempt:09e1ecf8e10f774cfb4a1a052f055d65047d114edac05b17fcdc410bda808cb7",
+          "stop_evidence": "native-terminal:a49adf02b85cc0baaee60554c30ab656d92ddf70ce18e5f21e1c25cc729dd1fe",
+          "attempt_ordinal": 1,
+          "output_artifact_ids": [
+            "native-skill-artifact:075840a4447e8e5e968569d67f4b85ef40125e3c8322b04c9388716e5bb2adb7"
+          ]
+        },
+        {
+          "state": "SUCCEEDED",
+          "reason": null,
+          "task_id": "summary",
+          "attempt_id": "prepared-attempt:f1f149c5006e6bae1a27655a1d641d01e7ac4d98c0cec008df6470d565b46c39",
+          "stop_evidence": "native-terminal:56b4490335e6a19dae26a3379b7b991e0ed369388333693c512037f7681669f8",
+          "attempt_ordinal": 1,
+          "output_artifact_ids": [
+            "native-skill-artifact:c7ea5fb1474efa1025b56080613f7cecd72951c0cb9fd84243ed04c84d376e3e"
+          ]
+        },
+        {
+          "state": "SUCCEEDED",
+          "reason": null,
+          "task_id": "report",
+          "attempt_id": "prepared-attempt:de3cf731b102811ad7be4b87bea5a413344e053744f5a5e097f5b885dfa6216d",
+          "stop_evidence": "native-terminal:51be2e3219d12a520f6c120c8f10aed5f356a4aa5f33238dc60a4ad5527d23d8",
+          "attempt_ordinal": 1,
+          "output_artifact_ids": [
+            "native-skill-artifact:426ecf54e0816c401ad491398ccefef118c689698bd2e25b4a5a59b415cfaf6b"
+          ]
+        }
+      ],
+      "version": 10,
+      "cancellation_request_id": null
+    },
+    "counts": {
+      "skill_invocation.invocations": 3,
+      "execution_authority.run_artifacts": 3,
+      "resource_use.uses": 3
+    }
+  },
+  "nativeCommands": [
+    {
+      "state": "SUCCEEDED",
+      "n": 6
+    },
+    {
+      "state": "UNKNOWN",
+      "n": 1
+    }
+  ]
+}

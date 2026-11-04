@@ -1,0 +1,365 @@
+{
+  "namespace": "ontology-sales-20261104",
+  "security_domain": "isolated",
+  "ontology_id": "sales-diagnosis",
+  "revision_id": "r2",
+  "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082",
+  "author": "human:ontology-dev-author",
+  "predecessor": "r1",
+  "content": {
+    "name": "销售诊断业务定义 · 不含退货销售发生额",
+    "rules": {
+      "claim": "OBSERVATIONAL_NOT_CAUSAL",
+      "max_rows": 10000,
+      "included_kinds": [
+        "SALE"
+      ],
+      "currency_policy": "SEPARATE_NO_IMPLICIT_FX",
+      "excluded_statuses": [
+        "CANCELLED"
+      ]
+    },
+    "actions": [
+      {
+        "skill": {
+          "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac",
+          "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+          "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4"
+        },
+        "operation": "READ_DATA",
+        "executor_id": "ontology-sales-readonly",
+        "side_effect": "READ_ONLY",
+        "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+        "executor_revision": "1"
+      },
+      {
+        "skill": {
+          "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac",
+          "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+          "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4"
+        },
+        "operation": "VALIDATE_DATA",
+        "executor_id": "ontology-sales-readonly",
+        "side_effect": "READ_ONLY",
+        "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+        "executor_revision": "1"
+      },
+      {
+        "skill": {
+          "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac",
+          "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+          "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4"
+        },
+        "operation": "SUMMARIZE",
+        "executor_id": "ontology-sales-readonly",
+        "side_effect": "READ_ONLY",
+        "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+        "executor_revision": "1"
+      },
+      {
+        "skill": {
+          "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac",
+          "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+          "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4"
+        },
+        "operation": "RENDER_REPORT",
+        "executor_id": "ontology-sales-readonly",
+        "side_effect": "READ_ONLY",
+        "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+        "executor_revision": "1"
+      }
+    ],
+    "metrics": [
+      {
+        "code": "net_sales",
+        "name": "不含税净销售额",
+        "unit": "SOURCE_CURRENCY_2DP",
+        "grain": [
+          "rowId"
+        ],
+        "aliases": [
+          "销售额"
+        ],
+        "dimensions": [
+          "region",
+          "channel",
+          "product"
+        ],
+        "expression": {
+          "op": "SUM",
+          "field": "netSales",
+          "operands": []
+        },
+        "time_field": "period",
+        "object_code": "sales_record"
+      },
+      {
+        "code": "gross_profit",
+        "name": "毛利额",
+        "unit": "SOURCE_CURRENCY_2DP",
+        "grain": [
+          "rowId"
+        ],
+        "aliases": [],
+        "dimensions": [
+          "region",
+          "channel",
+          "product"
+        ],
+        "expression": {
+          "op": "SUBTRACT",
+          "field": null,
+          "operands": [
+            {
+              "op": "SUM",
+              "field": "netSales",
+              "operands": []
+            },
+            {
+              "op": "SUM",
+              "field": "cost",
+              "operands": []
+            }
+          ]
+        },
+        "time_field": "period",
+        "object_code": "sales_record"
+      }
+    ],
+    "objects": [
+      {
+        "code": "sales_record",
+        "properties": [
+          {
+            "code": "rowId",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "period",
+            "kind": "PERIOD",
+            "required": true
+          },
+          {
+            "code": "region",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "channel",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "product",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "currency",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "kind",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "status",
+            "kind": "TEXT",
+            "required": true
+          },
+          {
+            "code": "netSales",
+            "kind": "MONEY",
+            "required": true
+          },
+          {
+            "code": "cost",
+            "kind": "MONEY",
+            "required": true
+          }
+        ],
+        "identity_fields": [
+          "rowId"
+        ]
+      },
+      {
+        "code": "region",
+        "properties": [
+          {
+            "code": "region",
+            "kind": "TEXT",
+            "required": true
+          }
+        ],
+        "identity_fields": [
+          "region"
+        ]
+      },
+      {
+        "code": "channel",
+        "properties": [
+          {
+            "code": "channel",
+            "kind": "TEXT",
+            "required": true
+          }
+        ],
+        "identity_fields": [
+          "channel"
+        ]
+      },
+      {
+        "code": "product",
+        "properties": [
+          {
+            "code": "product",
+            "kind": "TEXT",
+            "required": true
+          }
+        ],
+        "identity_fields": [
+          "product"
+        ]
+      }
+    ],
+    "mappings": [
+      {
+        "code": "sales_csv",
+        "fields": {
+          "cost": "cost",
+          "kind": "kind",
+          "rowId": "rowId",
+          "period": "period",
+          "region": "region",
+          "status": "status",
+          "channel": "channel",
+          "product": "product",
+          "currency": "currency",
+          "netSales": "netSales"
+        },
+        "source": {
+          "digest": "e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583",
+          "resource_id": "knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05",
+          "revision_id": "knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020"
+        },
+        "object_code": "sales_record",
+        "source_digest": "8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391",
+        "source_schema": "sales-diagnostic-source.v1",
+        "identity_scope": "SOURCE_SNAPSHOT"
+      }
+    ],
+    "relations": [
+      {
+        "code": "sales_to_region",
+        "source_key": "region",
+        "target_key": "region",
+        "cardinality": "MANY_TO_ONE",
+        "source_object": "sales_record",
+        "target_object": "region",
+        "missing_reference_policy": "REJECT"
+      },
+      {
+        "code": "sales_to_channel",
+        "source_key": "channel",
+        "target_key": "channel",
+        "cardinality": "MANY_TO_ONE",
+        "source_object": "sales_record",
+        "target_object": "channel",
+        "missing_reference_policy": "REJECT"
+      },
+      {
+        "code": "sales_to_product",
+        "source_key": "product",
+        "target_key": "product",
+        "cardinality": "MANY_TO_ONE",
+        "source_object": "sales_record",
+        "target_object": "product",
+        "missing_reference_policy": "REJECT"
+      }
+    ],
+    "synthetic": true,
+    "data_owner": "销售数据负责人",
+    "business_owner": "销售分析负责人",
+    "schema_version": "business-ontology.v1"
+  },
+  "version": 10,
+  "head_revision": "r2",
+  "facts": [
+    {
+      "action": "REVISE",
+      "actor": "human:ontology-dev-author",
+      "result": {
+        "state": "REVISE",
+        "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082",
+        "version": 6,
+        "ontology_id": "sales-diagnosis",
+        "revision_id": "r2"
+      },
+      "ordinal": 6
+    },
+    {
+      "action": "VALIDATE",
+      "actor": "human:ontology-dev-author",
+      "result": {
+        "state": "VALIDATE",
+        "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082",
+        "version": 7,
+        "ontology_id": "sales-diagnosis",
+        "revision_id": "r2"
+      },
+      "ordinal": 7
+    },
+    {
+      "action": "TEST",
+      "actor": "human:ontology-dev-author",
+      "result": {
+        "state": "TEST",
+        "checks": [
+          {
+            "metric": "net_sales",
+            "result_digest": "9ff46b900b1c388727cbac6fe28e06fe362dcdb5d0fedde381d3628dbc847847",
+            "source_digest": "8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391"
+          },
+          {
+            "metric": "gross_profit",
+            "result_digest": "155368a4c1702989042b7b873969bbb6df8010da4cd966860f7812d400fe1d69",
+            "source_digest": "8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391"
+          }
+        ],
+        "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082",
+        "version": 8,
+        "ontology_id": "sales-diagnosis",
+        "revision_id": "r2"
+      },
+      "ordinal": 8
+    },
+    {
+      "action": "REVIEW",
+      "actor": "human:ontology-dev-reviewer",
+      "result": {
+        "state": "REVIEW",
+        "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082",
+        "version": 9,
+        "ontology_id": "sales-diagnosis",
+        "revision_id": "r2"
+      },
+      "ordinal": 9
+    },
+    {
+      "action": "PUBLISH",
+      "actor": "human:ontology-dev-author",
+      "result": {
+        "state": "PUBLISH",
+        "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082",
+        "version": 10,
+        "ontology_id": "sales-diagnosis",
+        "revision_id": "r2"
+      },
+      "ordinal": 10
+    }
+  ],
+  "state": "PUBLISH"
+}

@@ -1,0 +1,38 @@
+{
+  "serverRestarted": true,
+  "requests": "GET and login/session only; no execution commands",
+  "evidence": [
+    {
+      "label": "r1b",
+      "digest": "db529aef1d45435f7a31c01215a4d154ca216ddd6c44694bc652b37bf4519013",
+      "ontology": {
+        "resource_id": "sales-diagnosis",
+        "revision_id": "r1",
+        "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f"
+      },
+      "checks": [
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED"
+      ]
+    },
+    {
+      "label": "r2",
+      "digest": "8931936a4cfd01e8050b140861a357e411be0a87ad2f8c0172b6259535832f71",
+      "ontology": {
+        "resource_id": "sales-diagnosis",
+        "revision_id": "r2",
+        "digest": "3de044ccb162ccb898bf1a152abfbb6a16d4308d36bc4d6e1bfe9b5104722082"
+      },
+      "checks": [
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED"
+      ]
+    }
+  ]
+}

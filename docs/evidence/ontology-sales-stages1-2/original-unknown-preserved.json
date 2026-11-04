@@ -1,0 +1,39 @@
+{
+  "state": {
+    "state": "RECOVERY_REQUIRED",
+    "tasks": [
+      {
+        "state": "UNKNOWN",
+        "reason": "EFFECT_OUTCOME_UNKNOWN",
+        "task_id": "read",
+        "attempt_id": "prepared-attempt:d298595c6adcf496defc043d5dd0054b75e808b659fcfd29ca888b6bbdb54f53",
+        "stop_evidence": null,
+        "attempt_ordinal": 1,
+        "output_artifact_ids": []
+      },
+      {
+        "state": "WAITING",
+        "reason": null,
+        "task_id": "summary",
+        "attempt_id": null,
+        "stop_evidence": null,
+        "attempt_ordinal": 0,
+        "output_artifact_ids": []
+      },
+      {
+        "state": "WAITING",
+        "reason": null,
+        "task_id": "report",
+        "attempt_id": null,
+        "stop_evidence": null,
+        "attempt_ordinal": 0,
+        "output_artifact_ids": []
+      }
+    ],
+    "version": 4,
+    "cancellation_request_id": null
+  },
+  "knownFailure": "TypeError during authorization decision digest: local ontology resource function shadowed Skill resource string",
+  "failureBoundary": "before Skill service invocation; observed zero invocation/resource-use/artifact rows",
+  "recovery": "preserve original UNKNOWN and Task; new distinct instances/assignments/Agent instances, new Plan and exact grants only"
+}

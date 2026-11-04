@@ -1,6 +1,6 @@
 """Build the existing Skill owner's exact request from a prepared Task binding."""
 
-from .execution_preparation import ExecutionPreparation
+from .ontology_execution import parse_preparation
 from .prepared_execution_lineage import prepared_attempt
 from .prepared_execution_resources import validate_resources
 from .resource_use_domain import (
@@ -23,7 +23,7 @@ def build_request(connection, scope, attempt_id, authorization_decision_id):
     row = prepared_attempt(connection, scope, attempt_id)
     if row is None:
         raise SkillInvocationError("PREPARED_SKILL_ATTEMPT_NOT_FOUND")
-    p = ExecutionPreparation.model_validate(row["preparation"])
+    p = parse_preparation(row["preparation"])
     t = next(t for t in p.participants if t.task_id == row["task_id"])
     operation = validate_resources(connection, scope, p, t)
     skill, employee = t.skill.reference, t.definition

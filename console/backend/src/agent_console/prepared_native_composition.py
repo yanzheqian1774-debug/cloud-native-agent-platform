@@ -9,7 +9,7 @@ from .authority_contracts import (
     ExactGrant,
     TrustedRequestContext,
 )
-from .execution_preparation import ExecutionPreparation
+from .ontology_execution import parse_preparation
 from .prepared_execution_lineage import prepared_attempt
 from .prepared_native_skill import PreparedNativeSkillCaller
 from .resource_use_domain import canonical_digest
@@ -43,7 +43,11 @@ def compose(
     *,
     mode="synthetic-cost-v1",
 ):
-    if mode == "sales-diagnostic-v1":
+    if mode == "ontology-sales-v1":
+        from .sales_ontology_executor import SalesOntologyExecutor
+
+        executor = SalesOntologyExecutor()
+    elif mode == "sales-diagnostic-v1":
         from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
 
         executor = SalesDiagnosticSkillExecutor()
@@ -69,7 +73,7 @@ def compose(
         row = prepared_attempt(connection, command.scope, command.attempt_id)
         if row is None:
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")
-        p = ExecutionPreparation.model_validate(row["preparation"])
+        p = parse_preparation(row["preparation"])
         resource = (
             f"skill-invocation:prepared:{p.digest}:"
             f"{row['task_id']}:{row['attempt_ordinal']}"
@@ -82,15 +86,31 @@ def compose(
             AuthenticationSource(command.authentication_source),
             generation.policy_version,
         )
-        if not reader.has_current_grants(
-            context,
-            (grant,),
-            now=datetime.now(UTC),
-            generation=command.authority_generation.value,
-            recovery_epoch=command.recovery_epoch.value,
-            connection=connection,
-            configure_transaction=False,
-        )[0]:
+        grants = (grant,)
+        binding = getattr(p, "business_semantics", None)
+        if binding is not None:
+            from .ontology_service import resource as ontology_resource
+
+            grants += (
+                ExactGrant(
+                    "BUSINESS_ONTOLOGY",
+                    "USE",
+                    ontology_resource(
+                        binding.ontology.resource_id, binding.ontology.revision_id
+                    ),
+                ),
+            )
+        if not all(
+            reader.has_current_grants(
+                context,
+                grants,
+                now=datetime.now(UTC),
+                generation=command.authority_generation.value,
+                recovery_epoch=command.recovery_epoch.value,
+                connection=connection,
+                configure_transaction=False,
+            )
+        ):
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")
         return "prepared-skill-authorization:" + canonical_digest(
             {

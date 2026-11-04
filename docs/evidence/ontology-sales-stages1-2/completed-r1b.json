@@ -1,0 +1,764 @@
+{
+  "digest": "db529aef1d45435f7a31c01215a4d154ca216ddd6c44694bc652b37bf4519013",
+  "value": {
+    "taskTranslation": null,
+    "preparation": {
+      "schema_version": "execution-preparation.v2",
+      "namespace": "ontology-sales-20261104",
+      "security_domain": "isolated",
+      "plan_id": "ontology-sales-plan-r1b",
+      "plan_version": 1,
+      "plan_digest": "b6d2b2ab35631709e24eda09345e74955e3b50ee9c4c727609f439a86edb7ebd",
+      "approval_id": "ddafe04a-b4b9-4a7d-9b81-b63b4e0dcdec",
+      "root_assignment_id": "assignment-ontology-successor-root",
+      "root_instance_id": "ontology-successor-root",
+      "semantics": {
+        "schema_version": "planning.v3",
+        "scenario": "GENERAL_READ_ONLY",
+        "target": {
+          "problem": {
+            "resource_id": "ontology-sales-case-r1",
+            "revision_id": "ontology-sales-problem-r1",
+            "digest": "8897db86dccb9c16eb08e3e88405e22ce867e6c4f840af7d18b320cddebf09a0"
+          },
+          "criteria": {
+            "resource_id": "ontology-sales-case-r1",
+            "revision_id": "ontology-sales-criteria-r1",
+            "digest": "8204d08bfa5984c24ad5a8e5ace82edfd76d72e5db71040a9589b3eb65808ff2"
+          },
+          "criterion_revision_ids": [
+            "ontology-sales-source-r1",
+            "ontology-sales-totals-r1",
+            "ontology-sales-contributions-r1",
+            "ontology-sales-exceptions-r1",
+            "ontology-sales-claim_boundary-r1"
+          ],
+          "expected_problem_version": 3
+        },
+        "title": "销售本体两期只读核对",
+        "business_rules": [
+          "本次仅在隔离环境以明确标注的合成资料执行只读任务；允许创建本执行修订对应的Assignment、单Run及TaskRun，禁止外部写入、生产操作及配置调整；人工业务验收在执行产物之后，不作为任务。"
+        ],
+        "boundaries": [
+          "仅对本次固定合成销售快照进行两期只读诊断；按币种分别核算不含税净销售额与毛利，变化贡献不代表因果或真实销售改善；禁止业务写入。",
+          "独立研发后继；原运行workflow-run:944e55ce371f8132fa48755c7a7d242600d7bbe31eece5e2ff4938a94895678b保持UNKNOWN，不重放、不清除。",
+          "调用前失败诊断SHA256：37c7476ab299c409fdb81f3c3b342cfaa4ccd852f96b18d3abedbe44294840e3；本次仍需新方案确认与独立执行授权。",
+          "执行准备映射SHA256：55fba075de54c7cde2c587e9d74fd4f4f00f8238cbbd9cc966cc6152ed494adc；本体版本与口径已固定，仍需独立执行准入。"
+        ],
+        "effect": "READ_ONLY",
+        "stages": [
+          {
+            "stage_id": "sales",
+            "title": "销售本体诊断",
+            "task_ids": [
+              "read",
+              "summary",
+              "report"
+            ]
+          }
+        ],
+        "tasks": [
+          {
+            "task_id": "read",
+            "title": "读取固定来源",
+            "responsibility": "按已发布本体只读核对",
+            "employee_requirement_id": "employee",
+            "depends_on": [],
+            "inputs": [
+              "固定销售快照"
+            ],
+            "outputs": [
+              "销售分析证据"
+            ],
+            "requirement_ids": [
+              "source",
+              "skill"
+            ],
+            "criterion_revision_ids": [
+              "ontology-sales-source-r1",
+              "ontology-sales-totals-r1",
+              "ontology-sales-contributions-r1",
+              "ontology-sales-exceptions-r1",
+              "ontology-sales-claim_boundary-r1"
+            ],
+            "operation": "READ_DATA",
+            "input_kinds": [
+              "CONTEXT"
+            ],
+            "output_kind": "SOURCE_SNAPSHOT"
+          },
+          {
+            "task_id": "summary",
+            "title": "核对指标与贡献",
+            "responsibility": "按已发布本体只读核对",
+            "employee_requirement_id": "employee",
+            "depends_on": [
+              "read"
+            ],
+            "inputs": [
+              "固定销售快照"
+            ],
+            "outputs": [
+              "销售分析证据"
+            ],
+            "requirement_ids": [
+              "source",
+              "skill"
+            ],
+            "criterion_revision_ids": [
+              "ontology-sales-source-r1",
+              "ontology-sales-totals-r1",
+              "ontology-sales-contributions-r1",
+              "ontology-sales-exceptions-r1",
+              "ontology-sales-claim_boundary-r1"
+            ],
+            "operation": "SUMMARIZE",
+            "input_kinds": [
+              "SOURCE_SNAPSHOT"
+            ],
+            "output_kind": "SUMMARY"
+          },
+          {
+            "task_id": "report",
+            "title": "生成可追溯结果",
+            "responsibility": "按已发布本体只读核对",
+            "employee_requirement_id": "employee",
+            "depends_on": [
+              "summary"
+            ],
+            "inputs": [
+              "固定销售快照"
+            ],
+            "outputs": [
+              "销售分析证据"
+            ],
+            "requirement_ids": [
+              "source",
+              "skill"
+            ],
+            "criterion_revision_ids": [
+              "ontology-sales-source-r1",
+              "ontology-sales-totals-r1",
+              "ontology-sales-contributions-r1",
+              "ontology-sales-exceptions-r1",
+              "ontology-sales-claim_boundary-r1"
+            ],
+            "operation": "RENDER_REPORT",
+            "input_kinds": [
+              "SUMMARY"
+            ],
+            "output_kind": "REPORT"
+          }
+        ],
+        "requirements": [
+          {
+            "requirement_id": "employee",
+            "kind": "EMPLOYEE",
+            "name": "销售分析职责",
+            "purpose": "销售分析职责",
+            "required": true,
+            "selected": {
+              "resource_id": "ontology-sales-employee",
+              "revision_id": "r1",
+              "digest": "702adc3ca3af3b1f7f64335c0613985f696ad5136c0cd97f978e6e4c14b9e071"
+            },
+            "operation": null,
+            "preparation": "精确发布修订已选择"
+          },
+          {
+            "requirement_id": "source",
+            "kind": "KNOWLEDGE",
+            "name": "固定合成销售来源",
+            "purpose": "固定合成销售来源",
+            "required": true,
+            "selected": {
+              "resource_id": "knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05",
+              "revision_id": "knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020",
+              "digest": "e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583"
+            },
+            "operation": null,
+            "preparation": "精确发布修订已选择"
+          },
+          {
+            "requirement_id": "skill",
+            "kind": "SKILL",
+            "name": "本体销售只读计算",
+            "purpose": "本体销售只读计算",
+            "required": true,
+            "selected": {
+              "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+              "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4",
+              "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac"
+            },
+            "operation": null,
+            "preparation": "精确发布修订已选择"
+          }
+        ],
+        "policy": {
+          "schema_version": "planning-policy.v2",
+          "mode": "FREE",
+          "template": null,
+          "required_operations": [],
+          "prohibited_operations": [],
+          "business_acceptance_as_task": false
+        }
+      },
+      "participants": [
+        {
+          "task_id": "read",
+          "assignment_id": "assignment-ontology-successor-read",
+          "instance_id": "ontology-successor-read",
+          "definition": {
+            "resource_id": "ontology-sales-employee",
+            "revision_id": "r1",
+            "digest": "702adc3ca3af3b1f7f64335c0613985f696ad5136c0cd97f978e6e4c14b9e071"
+          },
+          "skill": {
+            "kind": "SKILL",
+            "reference": {
+              "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+              "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4",
+              "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac"
+            },
+            "owner_observation": "published-exact-resource",
+            "input_schema_digest": "dbb68212f3e9e8e9904359270ca89e4d580517031fd78daa8a0c3c7692ae1ba6",
+            "output_schema_digest": "dcc9b474667a3bef4aa00e9a211cb863828e1b3faeb996f64f9dc30c49c8135f",
+            "operation": "READ_DATA"
+          },
+          "resources": [],
+          "executor_id": "ontology-sales-readonly",
+          "executor_revision": "1",
+          "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+          "agent_instance_id": "agent-ontology-successor-read",
+          "runtime_instance_id": "ontology-managed-runtime",
+          "runtime_generation": 1,
+          "profile": {
+            "resource_id": "runtime-profile:fb55a6e2-3c33-492d-855b-3daa935c8a08",
+            "revision_id": "runtime-profile-revision:7062f44c-a52f-4670-b1a7-ee636327fbee",
+            "digest": "9f6725d9283bc3612566ab8584676b8d3ff4a52f0f8bc0e3a3759cdf1936f238"
+          },
+          "max_attempts": 1
+        },
+        {
+          "task_id": "summary",
+          "assignment_id": "assignment-ontology-successor-summary",
+          "instance_id": "ontology-successor-summary",
+          "definition": {
+            "resource_id": "ontology-sales-employee",
+            "revision_id": "r1",
+            "digest": "702adc3ca3af3b1f7f64335c0613985f696ad5136c0cd97f978e6e4c14b9e071"
+          },
+          "skill": {
+            "kind": "SKILL",
+            "reference": {
+              "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+              "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4",
+              "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac"
+            },
+            "owner_observation": "published-exact-resource",
+            "input_schema_digest": "dbb68212f3e9e8e9904359270ca89e4d580517031fd78daa8a0c3c7692ae1ba6",
+            "output_schema_digest": "dcc9b474667a3bef4aa00e9a211cb863828e1b3faeb996f64f9dc30c49c8135f",
+            "operation": "SUMMARIZE"
+          },
+          "resources": [],
+          "executor_id": "ontology-sales-readonly",
+          "executor_revision": "1",
+          "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+          "agent_instance_id": "agent-ontology-successor-summary",
+          "runtime_instance_id": "ontology-managed-runtime",
+          "runtime_generation": 1,
+          "profile": {
+            "resource_id": "runtime-profile:fb55a6e2-3c33-492d-855b-3daa935c8a08",
+            "revision_id": "runtime-profile-revision:7062f44c-a52f-4670-b1a7-ee636327fbee",
+            "digest": "9f6725d9283bc3612566ab8584676b8d3ff4a52f0f8bc0e3a3759cdf1936f238"
+          },
+          "max_attempts": 1
+        },
+        {
+          "task_id": "report",
+          "assignment_id": "assignment-ontology-successor-report",
+          "instance_id": "ontology-successor-report",
+          "definition": {
+            "resource_id": "ontology-sales-employee",
+            "revision_id": "r1",
+            "digest": "702adc3ca3af3b1f7f64335c0613985f696ad5136c0cd97f978e6e4c14b9e071"
+          },
+          "skill": {
+            "kind": "SKILL",
+            "reference": {
+              "resource_id": "skill-definition:e1c9968d-f7b3-4471-a06b-a347f6982a65",
+              "revision_id": "skill-revision:66d1dc43-0c23-4c94-be66-97f7db1a4ea4",
+              "digest": "c05b64870893df72e062989cef036b9d4d7e8da842bf2dd963bb98590dc65aac"
+            },
+            "owner_observation": "published-exact-resource",
+            "input_schema_digest": "dbb68212f3e9e8e9904359270ca89e4d580517031fd78daa8a0c3c7692ae1ba6",
+            "output_schema_digest": "dcc9b474667a3bef4aa00e9a211cb863828e1b3faeb996f64f9dc30c49c8135f",
+            "operation": "RENDER_REPORT"
+          },
+          "resources": [],
+          "executor_id": "ontology-sales-readonly",
+          "executor_revision": "1",
+          "executor_digest": "a32aad75c8a3b412246b28f0ecd8a8ccdff5c8b55eacf668f15264d446e446a0",
+          "agent_instance_id": "agent-ontology-successor-report",
+          "runtime_instance_id": "ontology-managed-runtime",
+          "runtime_generation": 1,
+          "profile": {
+            "resource_id": "runtime-profile:fb55a6e2-3c33-492d-855b-3daa935c8a08",
+            "revision_id": "runtime-profile-revision:7062f44c-a52f-4670-b1a7-ee636327fbee",
+            "digest": "9f6725d9283bc3612566ab8584676b8d3ff4a52f0f8bc0e3a3759cdf1936f238"
+          },
+          "max_attempts": 1
+        }
+      ],
+      "source_snapshot": {
+        "resource_id": "knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05",
+        "revision_id": "knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020",
+        "digest": "e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583"
+      },
+      "synthetic": true,
+      "execution_boundary": "ISOLATED_SYNTHETIC_READ_ONLY",
+      "business_semantics": {
+        "schema_version": "business-semantics-binding.v1",
+        "ontology": {
+          "resource_id": "sales-diagnosis",
+          "revision_id": "r1",
+          "digest": "deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f"
+        },
+        "mapping_code": "sales_csv",
+        "source": {
+          "resource_id": "knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05",
+          "revision_id": "knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020",
+          "digest": "e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583"
+        },
+        "queries": [
+          {
+            "metric": "net_sales",
+            "dimensions": [],
+            "filters": {}
+          },
+          {
+            "metric": "gross_profit",
+            "dimensions": [],
+            "filters": {}
+          },
+          {
+            "metric": "net_sales",
+            "dimensions": [
+              "region"
+            ],
+            "filters": {}
+          },
+          {
+            "metric": "net_sales",
+            "dimensions": [
+              "channel"
+            ],
+            "filters": {}
+          },
+          {
+            "metric": "net_sales",
+            "dimensions": [
+              "product"
+            ],
+            "filters": {}
+          }
+        ]
+      }
+    },
+    "digest": "db529aef1d45435f7a31c01215a4d154ca216ddd6c44694bc652b37bf4519013",
+    "progress": {
+      "version": 10,
+      "state": "SUCCEEDED",
+      "cancellation_request_id": null,
+      "tasks": [
+        {
+          "task_id": "read",
+          "state": "SUCCEEDED",
+          "attempt_ordinal": 1,
+          "attempt_id": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+          "stop_evidence": "native-terminal:151bb407ac2b7281fc6a51ae6956a0fe2a05d08c1c857efec857b909fec8e8c9",
+          "output_artifact_ids": [
+            "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6"
+          ],
+          "reason": null
+        },
+        {
+          "task_id": "summary",
+          "state": "SUCCEEDED",
+          "attempt_ordinal": 1,
+          "attempt_id": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+          "stop_evidence": "native-terminal:d2659d53afc7df49f9a8249c084416a64fa97fd755e29e59171360ac944a26b6",
+          "output_artifact_ids": [
+            "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9"
+          ],
+          "reason": null
+        },
+        {
+          "task_id": "report",
+          "state": "SUCCEEDED",
+          "attempt_ordinal": 1,
+          "attempt_id": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+          "stop_evidence": "native-terminal:80d2e2ea1bd9dc458cae3630731a4e06c02018d3ec0dc67873097f09b2a91c7c",
+          "output_artifact_ids": [
+            "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+          ],
+          "reason": null
+        }
+      ]
+    },
+    "artifacts": [
+      {
+        "artifact_id": "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6",
+        "task_id": "read",
+        "attempt_id": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+        "digest": "5d30085f74d39dbd12f7c528f70b6d545afa70398553dd499b975836c3a7e566",
+        "bytes": 9949,
+        "created_at": "2026-11-04T06:28:09.817871Z",
+        "contentAccess": "AUTHORIZED",
+        "content": "{\"binding\":{\"mapping_code\":\"sales_csv\",\"ontology\":{\"digest\":\"deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f\",\"resource_id\":\"sales-diagnosis\",\"revision_id\":\"r1\"},\"queries\":[{\"dimensions\":[],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[],\"filters\":{},\"metric\":\"gross_profit\"},{\"dimensions\":[\"region\"],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[\"channel\"],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[\"product\"],\"filters\":{},\"metric\":\"net_sales\"}],\"schema_version\":\"business-semantics-binding.v1\",\"source\":{\"digest\":\"e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583\",\"resource_id\":\"knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05\",\"revision_id\":\"knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020\"}},\"bindingDigest\":\"a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf\",\"businessConclusion\":\"UNDETERMINED\",\"operation\":\"READ_DATA\",\"reports\":[{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"1000.00\",\"changeRate\":\"-0.2\",\"currency\":\"CNY\",\"current\":\"800.00\",\"delta\":\"-200.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\",\"S02\"],\"2026-09\":[\"S03\",\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"gross_profit\",\"metricName\":\"毛利额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[],\"filters\":{},\"metric\":\"gross_profit\"},\"rows\":[{\"baseline\":\"400.00\",\"changeRate\":\"-0.4\",\"currency\":\"CNY\",\"current\":\"240.00\",\"delta\":\"-160.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\",\"S02\"],\"2026-09\":[\"S03\",\"S04\",\"S05\"]}},{\"baseline\":\"40.00\",\"changeRate\":\"0.05\",\"currency\":\"EUR\",\"current\":\"42.00\",\"delta\":\"2.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"40.00\",\"delta\":\"40.00\",\"dimensions\":{},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"region\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"region\":\"North\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"region\":\"South\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"region\":\"Europe\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"region\":\"Japan\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"channel\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"channel\":\"Direct\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"channel\":\"Online\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"channel\":\"Partner\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"channel\":\"Partner\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"product\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"product\":\"A\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"product\":\"B\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"product\":\"C\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"product\":\"D\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"}],\"schemaVersion\":\"ontology-sales-output.v1\",\"source\":{\"metric\":\"RECOGNIZED_NET_SALES_EXCLUDING_TAX\",\"periods\":[\"2026-08\",\"2026-09\"],\"provenance\":\"MANUALLY_CONSTRUCTED_SYNTHETIC_NOT_ENTERPRISE_DATA\",\"schemaVersion\":\"sales-diagnostic-source.v1\",\"snapshot\":{\"columnMapping\":{\"channel\":\"channel\",\"cost\":\"cost\",\"currency\":\"currency\",\"kind\":\"kind\",\"netSales\":\"netSales\",\"period\":\"period\",\"product\":\"product\",\"region\":\"region\",\"rowId\":\"rowId\",\"status\":\"status\"},\"format\":\"CSV_UTF8\",\"rows\":[{\"sourceLine\":2,\"values\":{\"channel\":\"Online\",\"cost\":\"360\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"600\",\"period\":\"2026-08\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S01\",\"status\":\"POSTED\"}},{\"sourceLine\":3,\"values\":{\"channel\":\"Direct\",\"cost\":\"240\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"400\",\"period\":\"2026-08\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S02\",\"status\":\"POSTED\"}},{\"sourceLine\":4,\"values\":{\"channel\":\"Online\",\"cost\":\"280\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"400\",\"period\":\"2026-09\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S03\",\"status\":\"POSTED\"}},{\"sourceLine\":5,\"values\":{\"channel\":\"Direct\",\"cost\":\"310\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"450\",\"period\":\"2026-09\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S04\",\"status\":\"POSTED\"}},{\"sourceLine\":6,\"values\":{\"channel\":\"Direct\",\"cost\":\"-30\",\"currency\":\"CNY\",\"kind\":\"RETURN\",\"netSales\":\"-50\",\"period\":\"2026-09\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S05\",\"status\":\"POSTED\"}},{\"sourceLine\":7,\"values\":{\"channel\":\"Partner\",\"cost\":\"60\",\"currency\":\"EUR\",\"kind\":\"SALE\",\"netSales\":\"100\",\"period\":\"2026-08\",\"product\":\"C\",\"region\":\"Europe\",\"rowId\":\"S06\",\"status\":\"POSTED\"}},{\"sourceLine\":8,\"values\":{\"channel\":\"Partner\",\"cost\":\"78\",\"currency\":\"EUR\",\"kind\":\"SALE\",\"netSales\":\"120\",\"period\":\"2026-09\",\"product\":\"C\",\"region\":\"Europe\",\"rowId\":\"S07\",\"status\":\"POSTED\"}},{\"sourceLine\":9,\"values\":{\"channel\":\"Partner\",\"cost\":\"60\",\"currency\":\"JPY\",\"kind\":\"SALE\",\"netSales\":\"100\",\"period\":\"2026-09\",\"product\":\"D\",\"region\":\"Japan\",\"rowId\":\"S08\",\"status\":\"POSTED\"}},{\"sourceLine\":10,\"values\":{\"channel\":\"Online\",\"cost\":\"100\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"9999\",\"period\":\"2026-09\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S09\",\"status\":\"CANCELLED\"}}],\"schemaVersion\":\"tabular-snapshot.v1\",\"snapshotDigest\":\"4c2cac92af4cfae146f03734c0b30e264a19ec2cf40ccca92aee609616948d42\",\"sourceBytesSha256\":\"c42df522496e66fadbf95f816849134f790c785e3b18a6655e141941d67906d6\",\"sourceId\":\"synthetic-sales-v1\"},\"synthetic\":true},\"sourceSnapshot\":{\"digest\":\"e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583\",\"resource_id\":\"knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05\",\"revision_id\":\"knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020\"},\"synthetic\":true}"
+      },
+      {
+        "artifact_id": "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9",
+        "task_id": "summary",
+        "attempt_id": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+        "digest": "030fe792f2612fee45063c15f5fc15a7df7acbeaedd286d67e08af1c21329732",
+        "bytes": 9949,
+        "created_at": "2026-11-04T06:28:10.303494Z",
+        "contentAccess": "AUTHORIZED",
+        "content": "{\"binding\":{\"mapping_code\":\"sales_csv\",\"ontology\":{\"digest\":\"deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f\",\"resource_id\":\"sales-diagnosis\",\"revision_id\":\"r1\"},\"queries\":[{\"dimensions\":[],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[],\"filters\":{},\"metric\":\"gross_profit\"},{\"dimensions\":[\"region\"],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[\"channel\"],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[\"product\"],\"filters\":{},\"metric\":\"net_sales\"}],\"schema_version\":\"business-semantics-binding.v1\",\"source\":{\"digest\":\"e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583\",\"resource_id\":\"knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05\",\"revision_id\":\"knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020\"}},\"bindingDigest\":\"a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf\",\"businessConclusion\":\"UNDETERMINED\",\"operation\":\"SUMMARIZE\",\"reports\":[{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"1000.00\",\"changeRate\":\"-0.2\",\"currency\":\"CNY\",\"current\":\"800.00\",\"delta\":\"-200.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\",\"S02\"],\"2026-09\":[\"S03\",\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"gross_profit\",\"metricName\":\"毛利额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[],\"filters\":{},\"metric\":\"gross_profit\"},\"rows\":[{\"baseline\":\"400.00\",\"changeRate\":\"-0.4\",\"currency\":\"CNY\",\"current\":\"240.00\",\"delta\":\"-160.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\",\"S02\"],\"2026-09\":[\"S03\",\"S04\",\"S05\"]}},{\"baseline\":\"40.00\",\"changeRate\":\"0.05\",\"currency\":\"EUR\",\"current\":\"42.00\",\"delta\":\"2.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"40.00\",\"delta\":\"40.00\",\"dimensions\":{},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"region\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"region\":\"North\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"region\":\"South\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"region\":\"Europe\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"region\":\"Japan\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"channel\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"channel\":\"Direct\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"channel\":\"Online\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"channel\":\"Partner\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"channel\":\"Partner\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"product\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"product\":\"A\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"product\":\"B\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"product\":\"C\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"product\":\"D\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"}],\"schemaVersion\":\"ontology-sales-output.v1\",\"source\":{\"metric\":\"RECOGNIZED_NET_SALES_EXCLUDING_TAX\",\"periods\":[\"2026-08\",\"2026-09\"],\"provenance\":\"MANUALLY_CONSTRUCTED_SYNTHETIC_NOT_ENTERPRISE_DATA\",\"schemaVersion\":\"sales-diagnostic-source.v1\",\"snapshot\":{\"columnMapping\":{\"channel\":\"channel\",\"cost\":\"cost\",\"currency\":\"currency\",\"kind\":\"kind\",\"netSales\":\"netSales\",\"period\":\"period\",\"product\":\"product\",\"region\":\"region\",\"rowId\":\"rowId\",\"status\":\"status\"},\"format\":\"CSV_UTF8\",\"rows\":[{\"sourceLine\":2,\"values\":{\"channel\":\"Online\",\"cost\":\"360\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"600\",\"period\":\"2026-08\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S01\",\"status\":\"POSTED\"}},{\"sourceLine\":3,\"values\":{\"channel\":\"Direct\",\"cost\":\"240\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"400\",\"period\":\"2026-08\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S02\",\"status\":\"POSTED\"}},{\"sourceLine\":4,\"values\":{\"channel\":\"Online\",\"cost\":\"280\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"400\",\"period\":\"2026-09\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S03\",\"status\":\"POSTED\"}},{\"sourceLine\":5,\"values\":{\"channel\":\"Direct\",\"cost\":\"310\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"450\",\"period\":\"2026-09\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S04\",\"status\":\"POSTED\"}},{\"sourceLine\":6,\"values\":{\"channel\":\"Direct\",\"cost\":\"-30\",\"currency\":\"CNY\",\"kind\":\"RETURN\",\"netSales\":\"-50\",\"period\":\"2026-09\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S05\",\"status\":\"POSTED\"}},{\"sourceLine\":7,\"values\":{\"channel\":\"Partner\",\"cost\":\"60\",\"currency\":\"EUR\",\"kind\":\"SALE\",\"netSales\":\"100\",\"period\":\"2026-08\",\"product\":\"C\",\"region\":\"Europe\",\"rowId\":\"S06\",\"status\":\"POSTED\"}},{\"sourceLine\":8,\"values\":{\"channel\":\"Partner\",\"cost\":\"78\",\"currency\":\"EUR\",\"kind\":\"SALE\",\"netSales\":\"120\",\"period\":\"2026-09\",\"product\":\"C\",\"region\":\"Europe\",\"rowId\":\"S07\",\"status\":\"POSTED\"}},{\"sourceLine\":9,\"values\":{\"channel\":\"Partner\",\"cost\":\"60\",\"currency\":\"JPY\",\"kind\":\"SALE\",\"netSales\":\"100\",\"period\":\"2026-09\",\"product\":\"D\",\"region\":\"Japan\",\"rowId\":\"S08\",\"status\":\"POSTED\"}},{\"sourceLine\":10,\"values\":{\"channel\":\"Online\",\"cost\":\"100\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"9999\",\"period\":\"2026-09\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S09\",\"status\":\"CANCELLED\"}}],\"schemaVersion\":\"tabular-snapshot.v1\",\"snapshotDigest\":\"4c2cac92af4cfae146f03734c0b30e264a19ec2cf40ccca92aee609616948d42\",\"sourceBytesSha256\":\"c42df522496e66fadbf95f816849134f790c785e3b18a6655e141941d67906d6\",\"sourceId\":\"synthetic-sales-v1\"},\"synthetic\":true},\"sourceSnapshot\":{\"digest\":\"e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583\",\"resource_id\":\"knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05\",\"revision_id\":\"knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020\"},\"synthetic\":true}"
+      },
+      {
+        "artifact_id": "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8",
+        "task_id": "report",
+        "attempt_id": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+        "digest": "20943c64af761e238a6aa26794c6598969b11f72b00fc38a9ce822df90e4ea85",
+        "bytes": 9953,
+        "created_at": "2026-11-04T06:28:10.667116Z",
+        "contentAccess": "AUTHORIZED",
+        "content": "{\"binding\":{\"mapping_code\":\"sales_csv\",\"ontology\":{\"digest\":\"deb32bf4a1210424122b66ceac24006cc490fb67d0694f46642ab39e6611bc0f\",\"resource_id\":\"sales-diagnosis\",\"revision_id\":\"r1\"},\"queries\":[{\"dimensions\":[],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[],\"filters\":{},\"metric\":\"gross_profit\"},{\"dimensions\":[\"region\"],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[\"channel\"],\"filters\":{},\"metric\":\"net_sales\"},{\"dimensions\":[\"product\"],\"filters\":{},\"metric\":\"net_sales\"}],\"schema_version\":\"business-semantics-binding.v1\",\"source\":{\"digest\":\"e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583\",\"resource_id\":\"knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05\",\"revision_id\":\"knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020\"}},\"bindingDigest\":\"a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf\",\"businessConclusion\":\"UNDETERMINED\",\"operation\":\"RENDER_REPORT\",\"reports\":[{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"1000.00\",\"changeRate\":\"-0.2\",\"currency\":\"CNY\",\"current\":\"800.00\",\"delta\":\"-200.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\",\"S02\"],\"2026-09\":[\"S03\",\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"gross_profit\",\"metricName\":\"毛利额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[],\"filters\":{},\"metric\":\"gross_profit\"},\"rows\":[{\"baseline\":\"400.00\",\"changeRate\":\"-0.4\",\"currency\":\"CNY\",\"current\":\"240.00\",\"delta\":\"-160.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\",\"S02\"],\"2026-09\":[\"S03\",\"S04\",\"S05\"]}},{\"baseline\":\"40.00\",\"changeRate\":\"0.05\",\"currency\":\"EUR\",\"current\":\"42.00\",\"delta\":\"2.00\",\"dimensions\":{},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"40.00\",\"delta\":\"40.00\",\"dimensions\":{},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"region\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"region\":\"North\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"region\":\"South\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"region\":\"Europe\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"region\":\"Japan\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"channel\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"channel\":\"Direct\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"channel\":\"Online\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"channel\":\"Partner\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"channel\":\"Partner\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"},{\"businessConclusion\":\"UNDETERMINED\",\"excludedRows\":[{\"reason\":\"CANCELLED\",\"rowId\":\"S09\",\"sourceLine\":10}],\"limitations\":[\"SYNTHETIC_ONLY\",\"NO_CROSS_CURRENCY_SUM\",\"OBSERVATIONAL_NOT_CAUSAL\",\"NO_SALES_IMPROVEMENT_PROVEN\"],\"metric\":\"net_sales\",\"metricName\":\"不含税净销售额\",\"periods\":[\"2026-08\",\"2026-09\"],\"query\":{\"dimensions\":[\"product\"],\"filters\":{},\"metric\":\"net_sales\"},\"rows\":[{\"baseline\":\"600.00\",\"changeRate\":\"-0.3333333333333333333333333333\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"-200.00\",\"dimensions\":{\"product\":\"A\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S01\"],\"2026-09\":[\"S03\"]}},{\"baseline\":\"400.00\",\"changeRate\":\"0\",\"currency\":\"CNY\",\"current\":\"400.00\",\"delta\":\"0.00\",\"dimensions\":{\"product\":\"B\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S02\"],\"2026-09\":[\"S04\",\"S05\"]}},{\"baseline\":\"100.00\",\"changeRate\":\"0.2\",\"currency\":\"EUR\",\"current\":\"120.00\",\"delta\":\"20.00\",\"dimensions\":{\"product\":\"C\"},\"rateReason\":null,\"sourceRows\":{\"2026-08\":[\"S06\"],\"2026-09\":[\"S07\"]}},{\"baseline\":\"0.00\",\"changeRate\":null,\"currency\":\"JPY\",\"current\":\"100.00\",\"delta\":\"100.00\",\"dimensions\":{\"product\":\"D\"},\"rateReason\":\"BASELINE_ZERO\",\"sourceRows\":{\"2026-08\":[],\"2026-09\":[\"S08\"]}}],\"schemaVersion\":\"ontology-sales-output.v1\",\"sourceDigest\":\"8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391\",\"synthetic\":true,\"unit\":\"SOURCE_CURRENCY_2DP\"}],\"schemaVersion\":\"ontology-sales-output.v1\",\"source\":{\"metric\":\"RECOGNIZED_NET_SALES_EXCLUDING_TAX\",\"periods\":[\"2026-08\",\"2026-09\"],\"provenance\":\"MANUALLY_CONSTRUCTED_SYNTHETIC_NOT_ENTERPRISE_DATA\",\"schemaVersion\":\"sales-diagnostic-source.v1\",\"snapshot\":{\"columnMapping\":{\"channel\":\"channel\",\"cost\":\"cost\",\"currency\":\"currency\",\"kind\":\"kind\",\"netSales\":\"netSales\",\"period\":\"period\",\"product\":\"product\",\"region\":\"region\",\"rowId\":\"rowId\",\"status\":\"status\"},\"format\":\"CSV_UTF8\",\"rows\":[{\"sourceLine\":2,\"values\":{\"channel\":\"Online\",\"cost\":\"360\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"600\",\"period\":\"2026-08\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S01\",\"status\":\"POSTED\"}},{\"sourceLine\":3,\"values\":{\"channel\":\"Direct\",\"cost\":\"240\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"400\",\"period\":\"2026-08\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S02\",\"status\":\"POSTED\"}},{\"sourceLine\":4,\"values\":{\"channel\":\"Online\",\"cost\":\"280\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"400\",\"period\":\"2026-09\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S03\",\"status\":\"POSTED\"}},{\"sourceLine\":5,\"values\":{\"channel\":\"Direct\",\"cost\":\"310\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"450\",\"period\":\"2026-09\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S04\",\"status\":\"POSTED\"}},{\"sourceLine\":6,\"values\":{\"channel\":\"Direct\",\"cost\":\"-30\",\"currency\":\"CNY\",\"kind\":\"RETURN\",\"netSales\":\"-50\",\"period\":\"2026-09\",\"product\":\"B\",\"region\":\"South\",\"rowId\":\"S05\",\"status\":\"POSTED\"}},{\"sourceLine\":7,\"values\":{\"channel\":\"Partner\",\"cost\":\"60\",\"currency\":\"EUR\",\"kind\":\"SALE\",\"netSales\":\"100\",\"period\":\"2026-08\",\"product\":\"C\",\"region\":\"Europe\",\"rowId\":\"S06\",\"status\":\"POSTED\"}},{\"sourceLine\":8,\"values\":{\"channel\":\"Partner\",\"cost\":\"78\",\"currency\":\"EUR\",\"kind\":\"SALE\",\"netSales\":\"120\",\"period\":\"2026-09\",\"product\":\"C\",\"region\":\"Europe\",\"rowId\":\"S07\",\"status\":\"POSTED\"}},{\"sourceLine\":9,\"values\":{\"channel\":\"Partner\",\"cost\":\"60\",\"currency\":\"JPY\",\"kind\":\"SALE\",\"netSales\":\"100\",\"period\":\"2026-09\",\"product\":\"D\",\"region\":\"Japan\",\"rowId\":\"S08\",\"status\":\"POSTED\"}},{\"sourceLine\":10,\"values\":{\"channel\":\"Online\",\"cost\":\"100\",\"currency\":\"CNY\",\"kind\":\"SALE\",\"netSales\":\"9999\",\"period\":\"2026-09\",\"product\":\"A\",\"region\":\"North\",\"rowId\":\"S09\",\"status\":\"CANCELLED\"}}],\"schemaVersion\":\"tabular-snapshot.v1\",\"snapshotDigest\":\"4c2cac92af4cfae146f03734c0b30e264a19ec2cf40ccca92aee609616948d42\",\"sourceBytesSha256\":\"c42df522496e66fadbf95f816849134f790c785e3b18a6655e141941d67906d6\",\"sourceId\":\"synthetic-sales-v1\"},\"synthetic\":true},\"sourceSnapshot\":{\"digest\":\"e85a25329f02222c081f27f46c01d88bbce6fed4112ca22d2a5cfc0acf699583\",\"resource_id\":\"knowledge:804dd964-0a9e-43a2-8654-2cc275e05b05\",\"revision_id\":\"knowledge-revision:59829b0f-24b2-4718-9734-e8c36e0c9020\"},\"synthetic\":true}"
+      }
+    ],
+    "outcome": {
+      "runId": "workflow-run:db529aef1d45435f7a31c01215a4d154ca216ddd6c44694bc652b37bf4519013",
+      "version": 1,
+      "outcomeId": "business-outcome:2b06cecd9b0f31eabcdfa913b3d37d8cd99077a33d86dcfe329863a993ca8424",
+      "evaluation": {
+        "results": [
+          {
+            "check": "source",
+            "reason": "ONTOLOGY_SALES_INDEPENDENT_CHECK_PASSED",
+            "result": "SATISFIED",
+            "artifactIds": [
+              "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9",
+              "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6",
+              "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+            ],
+            "bindingDigest": "a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf",
+            "criterionDigest": "2b00fe213f0ef9c904c3047c921cacc2753ac81325e7aac353c3ac6837a10a41",
+            "criterionRevisionId": "ontology-sales-source-r1"
+          },
+          {
+            "check": "totals",
+            "reason": "ONTOLOGY_SALES_INDEPENDENT_CHECK_PASSED",
+            "result": "SATISFIED",
+            "artifactIds": [
+              "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9",
+              "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6",
+              "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+            ],
+            "bindingDigest": "a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf",
+            "criterionDigest": "f3980662610a6a52f4032bf1a69de4129661db58261d39374be73af4dae38fcc",
+            "criterionRevisionId": "ontology-sales-totals-r1"
+          },
+          {
+            "check": "contributions",
+            "reason": "ONTOLOGY_SALES_INDEPENDENT_CHECK_PASSED",
+            "result": "SATISFIED",
+            "artifactIds": [
+              "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9",
+              "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6",
+              "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+            ],
+            "bindingDigest": "a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf",
+            "criterionDigest": "26cea098b21048923bdd83cea8b0ba382c638458b59d4c17438103ac75c3c56d",
+            "criterionRevisionId": "ontology-sales-contributions-r1"
+          },
+          {
+            "check": "exceptions",
+            "reason": "ONTOLOGY_SALES_INDEPENDENT_CHECK_PASSED",
+            "result": "SATISFIED",
+            "artifactIds": [
+              "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9",
+              "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6",
+              "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+            ],
+            "bindingDigest": "a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf",
+            "criterionDigest": "10eb407ba850ae0c1e316a9174ec5b3459f4dd02d7260c0b7413a438e3e0db13",
+            "criterionRevisionId": "ontology-sales-exceptions-r1"
+          },
+          {
+            "check": "claim_boundary",
+            "reason": "ONTOLOGY_SALES_INDEPENDENT_CHECK_PASSED",
+            "result": "SATISFIED",
+            "artifactIds": [
+              "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9",
+              "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6",
+              "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+            ],
+            "bindingDigest": "a60194975bbaf018181803806c82d02f4551bb7fb9b94d1baa4ce65cbb6f12cf",
+            "criterionDigest": "e47a629a221484d736c7b58bc1595223109d0ed844217a56942501bcb52b7cd5",
+            "criterionRevisionId": "ontology-sales-claim_boundary-r1"
+          }
+        ],
+        "evaluator": "prepared-ontology-sales-evidence.v1",
+        "snapshotId": "terminal-snapshot:ba1a3bc59946cba168094e03775b9428f0158dbeec31cbd2fc12a9249ce957fe",
+        "limitations": [
+          "SYNTHETIC_ONLY",
+          "REAL_BUSINESS_OUTCOME_UNPROVEN"
+        ],
+        "evaluationId": "criteria-evaluation:4b050a5695078c04414eb993bbd3ecba5cd6731210c5156adcb227fb0b1f5589",
+        "snapshotDigest": "218cdabff1914adb1e38023ca34e375b4033d3841147e8d2b024bdcc96578e87"
+      },
+      "predecessorId": null,
+      "confirmationId": null,
+      "evaluationDigest": "0d712130f60a437da931f0c3c3c2b09c4a70d6d59178ce2e5dc7b3b2fb2407bf",
+      "businessResolution": "UNDETERMINED",
+      "technicalSuccessNotBusinessSuccess": true
+    },
+    "admission": {
+      "state": "ADMITTED",
+      "reason": null
+    },
+    "resourceUses": [
+      {
+        "resourceUseId": "resource-use:e2d520cac43b24d7053ba8e77f411ae7eb3bca97d220e426670455768a949f94",
+        "snapshot": {
+          "digest": "e38f9675eb4f60bb01352c9454efb2aebf9c2cafdf9ca1fc040efeb556a99388",
+          "fact_ids": [
+            "resource-use-fact:6136517f6409fd21bb7a629c5b838d5ced5af1ad024664f22c033098580929ed",
+            "resource-use-fact:b75800dd11e22c386541597c7a7d76a7c02598dd683ca6724d79b7da3ef0cb42",
+            "resource-use-fact:57e09233b45b9bcee376c7215d3733f4573bd147db9e284bc5d19efd2e534ee0",
+            "resource-use-fact:0e1af981c682d51df72ace5da92cf7265598eecfae58890c22287ea98bd8b180",
+            "resource-use-fact:cc244efbfa9ae0313f875ff202e03038a7cc307f7f4a0ff382b3a38b98dc0c07"
+          ],
+          "conflicts": [],
+          "created_at": "2026-11-04T06:28:09.840794+00:00",
+          "high_water": 5,
+          "snapshot_id": "resource-use-snapshot:9a630c162c26b3e328d9ea51c810ca0c2c6e11e5a7a470700f928e7e7950aa5d",
+          "effective_state": "SUCCEEDED",
+          "measurement_ids": [
+            "resource-measurement:113c13d2d35d5c817c487f5816b9438cba12b5339ce925d1c5f578146d545129",
+            "resource-measurement:121dd3f3a8413fcdf2fe99a511855cd7e615ccdb89b5cb42cac208cbe166d346",
+            "resource-measurement:c40503ea0f0f170292a8226ca4a87ef32c63be36ffb0e944439207dfaedd2b44"
+          ],
+          "reducer_version": "resource-use-reducer.v1",
+          "resource_use_id": "resource-use:e2d520cac43b24d7053ba8e77f411ae7eb3bca97d220e426670455768a949f94",
+          "limitation_codes": [
+            "TECHNICAL_SUCCESS_NOT_BUSINESS_SUCCESS"
+          ],
+          "evidence_references": [
+            "skill-invocation-evidence:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6"
+          ]
+        },
+        "state": "SUCCEEDED"
+      },
+      {
+        "resourceUseId": "resource-use:a006ee52b8316e19d0988c29487c69310581047143319140174253d5274392dd",
+        "snapshot": {
+          "digest": "de6e834fd17e783059cfc07f66750d899b0ae9150d4f39c07c50d61247f151d7",
+          "fact_ids": [
+            "resource-use-fact:cf5d266eeb89a4d002c82aa7bb8cdc91d403bba6b0bab1eeac3af4508fdfc171",
+            "resource-use-fact:2f38284c3f3d1f1b430e2ae532d42dba81e3a06ad9521a3f8c9a04ceb147646e",
+            "resource-use-fact:8c03898544eed163148957c33f6ad1075978f3ec9d0170456e1c1b7a86bf6e90",
+            "resource-use-fact:1c863eb168e35b8b890771bc3def85d1ba89c05aaf770586a33f73dcd8aa8c60",
+            "resource-use-fact:38ac4479f1670ac50bc36b71c3829b7598ef685c1fb4f3b70cf2256aecb88f1a"
+          ],
+          "conflicts": [],
+          "created_at": "2026-11-04T06:28:10.321253+00:00",
+          "high_water": 5,
+          "snapshot_id": "resource-use-snapshot:4a35adbb7c3df6deda1f8bc554fff0163f2160d715e1b60655f6ab652c73dd17",
+          "effective_state": "SUCCEEDED",
+          "measurement_ids": [
+            "resource-measurement:3a062094d2c4f86c17e08fc6190f3c66ea2d3609544fc1cb270e5bea4fa37220",
+            "resource-measurement:c34b7dbd35aa45f4e1aab0da2501478e29408d584013b76e45c6d0ac42574b9a",
+            "resource-measurement:e9dbcc8dbf6c3915dfd7da49fb4a4c0b3add648551b435fa774b5b7c30601bd1"
+          ],
+          "reducer_version": "resource-use-reducer.v1",
+          "resource_use_id": "resource-use:a006ee52b8316e19d0988c29487c69310581047143319140174253d5274392dd",
+          "limitation_codes": [
+            "TECHNICAL_SUCCESS_NOT_BUSINESS_SUCCESS"
+          ],
+          "evidence_references": [
+            "skill-invocation-evidence:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9"
+          ]
+        },
+        "state": "SUCCEEDED"
+      },
+      {
+        "resourceUseId": "resource-use:d5f06c8b3a2f49740a18510e1149d84b453fd571631cbc454ac6120f994dff62",
+        "snapshot": {
+          "digest": "56cda26146db9c79938e4b6b6dd2abac1a63edcee5e2a6bcb6a18e4fd39e9757",
+          "fact_ids": [
+            "resource-use-fact:7d2cb80af2adce51ddd93de76a3b1391da734a4d68a880edea6817a3400a3358",
+            "resource-use-fact:cc597c9695a664bebd534a63502da16153d9b24fce302d31b510bf98aeb3e879",
+            "resource-use-fact:13e6f2577bde9e6007184643edd4664c4462d7ff0680f7cb39b82c88bab3c57e",
+            "resource-use-fact:ea0bc035b5f1b7516d4b1a7a7961d9df7bf07e1933d84e8142b5be225ffbb2d1",
+            "resource-use-fact:0584bcaced59af438da543dc743e0767e9328576144f9244c57ae2a4e26756fb"
+          ],
+          "conflicts": [],
+          "created_at": "2026-11-04T06:28:10.677639+00:00",
+          "high_water": 5,
+          "snapshot_id": "resource-use-snapshot:e1c398bdc393a896acf23970117b13c699fc2ccff0450d50af9a69a8222b3401",
+          "effective_state": "SUCCEEDED",
+          "measurement_ids": [
+            "resource-measurement:16cd05343b9a8598abf6f3d144fd069467709769997f2248bc6314b2e64870dc",
+            "resource-measurement:c87b83971f7b1982db0e2dff412e99958dca326b9fa02c5c1a28d1b7e03edab6",
+            "resource-measurement:dc14637d54a73237aa1a1fb386681cc176db355541a009bf98cfd656aeacceec"
+          ],
+          "reducer_version": "resource-use-reducer.v1",
+          "resource_use_id": "resource-use:d5f06c8b3a2f49740a18510e1149d84b453fd571631cbc454ac6120f994dff62",
+          "limitation_codes": [
+            "TECHNICAL_SUCCESS_NOT_BUSINESS_SUCCESS"
+          ],
+          "evidence_references": [
+            "skill-invocation-evidence:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+          ]
+        },
+        "state": "SUCCEEDED"
+      }
+    ],
+    "events": [
+      {
+        "version": 2,
+        "record": {
+          "action": "QUEUE",
+          "task_id": "read",
+          "attempt_id": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+          "evidence_id": "queue:prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+          "artifact_ids": []
+        },
+        "created_at": "2026-11-04T06:26:16.030219Z"
+      },
+      {
+        "version": 3,
+        "record": {
+          "action": "STARTED",
+          "task_id": "read",
+          "attempt_id": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+          "evidence_id": "native-start:native-dispatch:c699a39ce0ee2a5c3500ac8b6a5839ef6adaaf86990de166a92c64a0afa6119f",
+          "artifact_ids": []
+        },
+        "created_at": "2026-11-04T06:28:09.623712Z"
+      },
+      {
+        "version": 4,
+        "record": {
+          "action": "SUCCEEDED",
+          "task_id": "read",
+          "attempt_id": "prepared-attempt:fc28d19b980d35311c0feb7ce49f67ddb2dce34aed19dbd633ce20928d157075",
+          "evidence_id": "native-terminal:151bb407ac2b7281fc6a51ae6956a0fe2a05d08c1c857efec857b909fec8e8c9",
+          "artifact_ids": [
+            "native-skill-artifact:674dc911262cb552f7d3e42969ab3b083c2d17f130bffce985da160c59a9c3b6"
+          ]
+        },
+        "created_at": "2026-11-04T06:28:09.888715Z"
+      },
+      {
+        "version": 5,
+        "record": {
+          "action": "QUEUE",
+          "task_id": "summary",
+          "attempt_id": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+          "evidence_id": "queue:prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+          "artifact_ids": []
+        },
+        "created_at": "2026-11-04T06:28:10.018801Z"
+      },
+      {
+        "version": 6,
+        "record": {
+          "action": "STARTED",
+          "task_id": "summary",
+          "attempt_id": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+          "evidence_id": "native-start:native-dispatch:5b6b4f892758ffdefcd30a0f6ea7b33a451ed7363b8f06f10d47bb28eca6718a",
+          "artifact_ids": []
+        },
+        "created_at": "2026-11-04T06:28:10.161184Z"
+      },
+      {
+        "version": 7,
+        "record": {
+          "action": "SUCCEEDED",
+          "task_id": "summary",
+          "attempt_id": "prepared-attempt:1cfc938442fa42547b7d1c467aea3fad3320365ccb591b23b229f3b1957fc610",
+          "evidence_id": "native-terminal:d2659d53afc7df49f9a8249c084416a64fa97fd755e29e59171360ac944a26b6",
+          "artifact_ids": [
+            "native-skill-artifact:517772d06a21fed6ce15fee592c409d74660fc20db5cf06403cb15cceb6499f9"
+          ]
+        },
+        "created_at": "2026-11-04T06:28:10.365606Z"
+      },
+      {
+        "version": 8,
+        "record": {
+          "action": "QUEUE",
+          "task_id": "report",
+          "attempt_id": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+          "evidence_id": "queue:prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+          "artifact_ids": []
+        },
+        "created_at": "2026-11-04T06:28:10.482057Z"
+      },
+      {
+        "version": 9,
+        "record": {
+          "action": "STARTED",
+          "task_id": "report",
+          "attempt_id": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+          "evidence_id": "native-start:native-dispatch:f131f68336a4f81b22c12089376f7dd5afad73ff4cb009f36d26a969d7983693",
+          "artifact_ids": []
+        },
+        "created_at": "2026-11-04T06:28:10.585155Z"
+      },
+      {
+        "version": 10,
+        "record": {
+          "action": "SUCCEEDED",
+          "task_id": "report",
+          "attempt_id": "prepared-attempt:930651d49f5ac3e0c7b95fa2399e9630185007812cf8032c568408e1c72904a9",
+          "evidence_id": "native-terminal:80d2e2ea1bd9dc458cae3630731a4e06c02018d3ec0dc67873097f09b2a91c7c",
+          "artifact_ids": [
+            "native-skill-artifact:bc89e61da3801023412a25c46fd049cce0399da2dfa4306803127d2dec90a7a8"
+          ]
+        },
+        "created_at": "2026-11-04T06:28:10.699636Z"
+      }
+    ],
+    "executionStarted": true,
+    "technicalSuccessNotBusinessSuccess": true
+  },
+  "viewports": [
+    {
+      "width": 1440,
+      "scroll": 1440,
+      "viewport": 1440
+    },
+    {
+      "width": 1229,
+      "scroll": 1229,
+      "viewport": 1229
+    },
+    {
+      "width": 390,
+      "scroll": 390,
+      "viewport": 390
+    }
+  ],
+  "browserErrors": [],
+  "assertions": {
+    "tasksSucceeded": 3,
+    "independentChecksSatisfied": 5,
+    "sourceRows": 9,
+    "totalCny": "800.00"
+  }
+}

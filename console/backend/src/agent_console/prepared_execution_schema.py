@@ -27,7 +27,9 @@ def migrate(connection):
     ).fetchall()
     expected = expected_version()
     if newer:
-        if newer != [expected]:
+        from .ontology_execution import version_record
+
+        if newer not in ([expected], [expected, version_record()]):
             raise ExecutionPreparationError("PREPARATION_BINDING_SCHEMA_INCOMPATIBLE")
         return
     connection.execute(PATH.read_text())
@@ -40,7 +42,9 @@ def migrate(connection):
 
 def compatible_versions(rows):
     """The v34 writer accepts only exact known prerequisite revisions."""
-    if not rows or rows[-1] != expected_version():
+    from .ontology_execution import version_record
+
+    if not rows or rows[-1] not in (expected_version(), version_record()):
         return False
     from .workflow_control_postgres import ADAPTER as workflow_adapter
 
@@ -54,5 +58,8 @@ def compatible_versions(rows):
         }
         for version in (9, 10, 11)
     ]
-    known = {item["version"]: item for item in [*expected, expected_version()]}
+    known = {
+        item["version"]: item
+        for item in [*expected, expected_version(), version_record()]
+    }
     return all(item == known.get(item["version"]) for item in rows)

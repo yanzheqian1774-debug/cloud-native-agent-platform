@@ -1,0 +1,14 @@
+{
+  "authorizationDigestAfterFix": "PASS",
+  "exactSkillRequestBuild": "PASS",
+  "invocationPerformed": false,
+  "counts": {
+    "skill_invocation.invocations": 0,
+    "execution_authority.run_artifacts": 0,
+    "resource_use.uses": 0
+  },
+  "originalCommandState": "UNKNOWN",
+  "originalRunState": "RECOVERY_REQUIRED",
+  "diagnosis": "authorization decision serialization failed before invoking Skill; string target now remains a string",
+  "newRunRequired": true
+}
