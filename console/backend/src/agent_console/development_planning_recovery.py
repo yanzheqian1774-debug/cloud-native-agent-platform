@@ -67,9 +67,12 @@ def observe(service, context, spec):
     scope = (context.scope.tenant_id, context.scope.security_domain)
     if scope != SCOPE or context.principal_id != SUBJECT:
         raise AuthorityError("DEVELOPMENT_RECOVERY_SCOPE_DENIED")
-    if service.root_bindings.get(
-        ("SAME_CASE_DELIVERY", *scope)
-    ) != spec.root.model_dump(mode="json"):
+    root = spec.root.model_dump(mode="json")
+    legacy_root = service.root_bindings.get(("SAME_CASE_DELIVERY", *scope))
+    sales_root = service.root_bindings.get(
+        ("SALES_DIAGNOSTIC", *scope, spec.root.resource_id)
+    )
+    if root not in (legacy_root, sales_root):
         raise AuthorityError("DEVELOPMENT_RECOVERY_TARGET_DENIED")
     from .local_accounts import current_session_account
 

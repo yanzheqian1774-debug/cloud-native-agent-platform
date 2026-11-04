@@ -19,18 +19,9 @@ def validate_initial_case(c, spec, scope):
     ).fetchone()
     if policy != {"call_cap": 8, "total_cost_cap_microusd": 10000000}:
         raise AuthorityError("INITIAL_CASE_LEDGER_DENIED")
-    # A successor is not an initial-case bypass around a previously unknown call.
-    unknown = c.execute(
-        "SELECT 1 FROM workflow_planning.invocations i LEFT JOIN "
-        "workflow_planning.invocation_results r "
-        "USING(namespace,security_domain,invocation_id) "
-        "WHERE i.namespace=%s AND i.security_domain=%s "
-        "AND i.record->'target'->'problem'->'problem'->>'resource_id'=%s "
-        "AND (r.record IS NULL OR r.record->>'technical_status'='OUTCOME_UNKNOWN')",
-        (*scope, spec.root.resource_id),
-    ).fetchone()
-    if unknown:
-        raise AuthorityError("INITIAL_CASE_RECOVERY_REQUIRED")
+    from .initial_case_recovery import require_recovery_evidence
+
+    require_recovery_evidence(c, spec, scope)
 
 
 def prepare(service, c, context, request, record):

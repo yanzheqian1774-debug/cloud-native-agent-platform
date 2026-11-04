@@ -49,3 +49,32 @@ files, exports and exact provenance remain supplementary. This is an authorized
 presentation refinement to P06.3; preserve the full header, right-rail grouping,
 result/file/review hierarchy and read-only behavior. Record the departure from
 the original file-only first screen instead of claiming pixel identity.
+
+## D9 evidence-based recovery implementation
+
+The approved D9 explicitly requires preservation of UNKNOWN reservations and
+evidence-based recovery through independent fresh-call signing. The first sales
+call is now UNKNOWN: WAIT_HEADERS/TIMEOUT, worker reaped, no usage measurement.
+It is not replayable. Implement D9's recovery precondition behind the existing
+owners, observation store and exact configured sales-root allowlist: optional
+observation references on a new signed case revision; legacy serialization stays
+byte-compatible when absent. No new datastore, migration, lifecycle, provider,
+price, timeout or budget policy is introduced; original D8 roots/records remain.
+
+Every unresolved invocation of this sales root must have its own immutable
+LOCAL_ONLY observation, committed to that invocation's actual durable receipt.
+The receipt must establish local worker reaping, not supplier outcome or usage.
+The observation must match root/revision, subject, invocation and the original
+ledger's D9 call lineage. Supplier observations cannot qualify. Missing receipts,
+partial coverage, mismatched commitments, duplicate IDs, unreaped workers or
+unreserved/unlinked calls fail closed. One independently signed new task still
+admits one new invocation and counts all historical reservations under100/USD50.
+No old result, receipt, reservation or settlement is updated or released.
+
+Before installation test these failures, legacy record identities and old D8
+compatibility on an exclusive disposable database, then preserve a fresh backup,
+stop the old writer and install the checked source. A subsequent fresh diagnostic
+attempt will bound graph size to at most four tasks to reduce nonstreaming
+response volume while retaining all five original criteria and FREE policy.
+Any further unknown is retained and investigated; the call cap is not an automatic
+retry queue. Visual/read-only resource and independent evaluator work continues.

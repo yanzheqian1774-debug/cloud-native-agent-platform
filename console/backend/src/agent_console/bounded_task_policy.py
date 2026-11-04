@@ -54,10 +54,13 @@ class DevelopmentPlanningRevision(Immutable):
 
 
 class InitialCaseRevision(Immutable):
-    """D9 fresh case authority; no recovery evidence or inherited supplier grant."""
+    """D9 exact case authority with independently signed local evidence."""
 
     revision_id: Identity
     criteria_set: ExactReference
+    recovery_observation_ids: tuple[Identity, ...] = Field(
+        default=(), max_length=16, exclude_if=lambda value: not value
+    )
     cumulative_call_cap: Literal[100] = 100
     total_cost_cap_microusd: Literal[50000000] = 50000000
 
