@@ -80,7 +80,7 @@ export function PlanningPage() {
   const kinds = [...new Set(plan.requirements.map(r => r.kind))];
   const resourceBadge = (r: api.Requirement) => <span className={`planning-badge is-${status(r).toLowerCase()}`}>{labels[status(r)] ?? "待核实"}</span>;
   return <section className="planning-page journey-page">
-    <section className="planning-journey-heading"><header className="planning-heading"><div><p>问题工作台 <span aria-hidden="true">›</span> 制定方案</p><h1>{plan.title}</h1></div><Link className="journey-secondary" to={`/work?problem=${encodeURIComponent(plan.target.problem.resource_id)}`}>返回问题</Link></header><JourneySteps current={3}/></section>
+    <section className="planning-journey-heading"><header className="planning-heading"><div><p>问题工作台 <span aria-hidden="true">›</span> 制定方案</p><h1>{plan.title}</h1></div><Link className="journey-secondary" to={`/work?problem=${encodeURIComponent(plan.target.problem.resource_id)}`}>返回问题</Link></header><JourneySteps current={executionState==='SUCCEEDED'?5:hasExecution?4:3} executionAvailable={hasExecution}/></section>
     <div className="planning-layout"><main>
       {translation && <details className="planning-translation"><summary>中文译文（原方案未修改） · <button type="button" onClick={e=>{e.preventDefault();setOriginal(!original)}}>{original ? "显示中文译文" : "查看原文"}</button></summary><p>{translation.metadata.source} · 译文版本 {translation.metadata.translation_version} · {formatTime(translation.metadata.created_at)}</p><p>{translation.metadata.review_status}。不改变原确认。</p><code>来源 {translation.metadata.source_digest} · 译文 {translation.metadata.translation_digest}</code></details>}
       <p className="journey-guidance"><span aria-hidden="true">✦</span> {approved ? "计划确认已持久化。可继续提出修改，后继建议需要重新确认；旧批准保留。" : "先核对目标与方案，再确认计划。资源缺口会保留，确认不会启动执行。"}</p>
@@ -92,7 +92,7 @@ export function PlanningPage() {
         </Fragment>) : <p className="journey-muted">当前读回未提供历史对话；仅展示已保存的方案和批准，不补造消息。</p>}
       </section>
       <SystemMessage label="持久方案记录" occurredAt={data.generated_at ?? undefined}>
-      <p className="planning-fact-summary">{approved ? "当前方案已确认，旧批准保留。" : "建议已保存，等待你核对并显式确认。"} {missing.length} 项必要资源待准备或核实；{hasExecution?"本版本已有执行记录，可返回问题查看。":"当前尚未开始执行。"}</p>
+      <p className="planning-fact-summary">{approved ? "当前方案已确认，旧批准保留。" : "建议已保存，等待你核对并显式确认。"} {hasExecution?"保留规划时的资源依据；本版本已有执行记录，可返回问题查看。":`${missing.length} 项必要资源待准备或核实；当前尚未开始执行。`}</p>
       <details className="planning-card planning-goal" open={!approved}><summary><h2><NavigationIcon name="target"/> 目标与完成标准 <small>{plan.business_rules.length}条 · 展开核对</small></h2></summary><ul tabIndex={0} aria-label="目标与完成标准条目">{plan.business_rules.map(rule => <li key={rule}>{rule}</li>)}</ul><details className="journey-technical"><summary>问题与标准的准确版本</summary><dl><dt>问题</dt><dd>{plan.target.problem.revision_id}</dd><dt>成功标准</dt><dd>{plan.target.criteria.revision_id}</dd></dl></details></details>
       <section className="planning-card planning-proposal"><h2><NavigationIcon name="flow"/> 建议方案 <small>v{data.proposal.revision} · {plan.stages.length}阶段 / {plan.tasks.length}任务</small></h2>
         <table className="planning-task-table"><thead><tr><th scope="col">序号</th><th scope="col">任务名称与职责</th><th scope="col">前置任务</th><th scope="col">角色（定义）</th><th scope="col">预期输出</th><th scope="col">状态</th></tr></thead>
