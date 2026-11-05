@@ -78,6 +78,7 @@ class ManagementPolicy(BaseModel):
 class ManagementCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal[
+        "batch-import",
         "create",
         "import",
         "edit",
@@ -98,6 +99,8 @@ class ManagementCommand(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     content: ResourceContent | None = None
     manifest: dict | None = None
+    manifests: list[dict] | None = Field(default=None, min_length=1, max_length=100)
+    previewDigest: str | None = Field(default=None, pattern="^[a-f0-9]{64}$")
     snapshotId: str | None = None
     toolNames: list[str] = Field(default_factory=list, max_length=128)
 
@@ -185,13 +188,18 @@ class ResourceManagement:
         if old:
             if old["digest"] != digest:
                 raise WorkbenchOwnerError("RESOURCE_COMMAND_CONFLICT", 409)
-            call.authority.require(
-                OwnerPrincipal(call.context.principal_id, ns, domain),
-                "SKILL",
-                "MANAGE_RESOURCE",
-                target(kind, old["result"]["identity"]),
-            )
+            for identity in old["result"].get(
+                "identities", [old["result"].get("identity")]
+            ):
+                call.authority.require(
+                    OwnerPrincipal(call.context.principal_id, ns, domain),
+                    "SKILL",
+                    "MANAGE_RESOURCE",
+                    target(kind, identity),
+                )
             return old["result"]
+        if command.action == "batch-import":
+            return self.import_batch(call, command, key, digest, issuer, work)
         service = bind_service(self.services[kind], call.connection)
         scope = service.scope(ns, domain)
         actor = call.context.principal_id
@@ -397,6 +405,89 @@ class ResourceManagement:
         )
         return result
 
+    def import_preview(self, call, manifests):
+        from .resource_import import preview_manifests
+
+        kind = call.path["kind"]
+        principal = OwnerPrincipal(
+            call.context.principal_id,
+            call.context.scope.tenant_id,
+            call.context.scope.security_domain,
+        )
+        names = []
+        for record in bind_service(
+            self.services[kind], call.connection
+        ).repository.list(
+            self.services[kind].scope(principal.tenant_id, principal.security_domain),
+            kind,
+        ):
+            # Older seeded records may omit authoring metadata. They cannot
+            # contribute an authorized duplicate-name warning.
+            if not record.get("resourceId") or not record.get("name"):
+                continue
+            try:
+                call.authority.require(
+                    principal,
+                    "SKILL",
+                    "MANAGE_RESOURCE",
+                    target(kind, record["resourceId"]),
+                )
+            except AuthorityError:
+                continue
+            names.append(record["name"])
+        return preview_manifests(manifests, kind, names)
+
+    def import_batch(self, call, command, key, digest, issuer, work):
+        from dataclasses import replace
+
+        from .resource_import import preview_manifests
+
+        kind = call.path["kind"]
+        preview = preview_manifests(command.manifests, kind)
+        if not preview["ready"] or preview["previewDigest"] != command.previewDigest:
+            raise WorkbenchOwnerError("IMPORT_PREVIEW_INVALID_OR_CHANGED", 409)
+        receipts = []
+        for ordinal, manifest in enumerate(preview["manifests"]):
+            receipts.append(
+                self.handle(
+                    replace(
+                        call,
+                        payload={
+                            "action": "import",
+                            "commandKey": "batch-item:"
+                            + canonical_digest([key, ordinal]),
+                            "manifest": manifest,
+                        },
+                    )
+                )
+            )
+        result = {
+            "schemaVersion": "resource-management-batch-receipt.v1",
+            "action": "batch-import",
+            "kind": kind,
+            "commandKey": command.commandKey,
+            "previewDigest": preview["previewDigest"],
+            "identities": [r["identity"] for r in receipts],
+            "resources": [r["resource"] for r in receipts],
+            "importedRows": len(receipts),
+            "policyIssuer": issuer.principal_id,
+            "executionStarted": False,
+            "modelCalls": 0,
+            "credentialMaterial": "NOT_INCLUDED",
+        }
+        call.connection.execute(
+            "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES(%s,%s,%s,%s,%s,%s)",
+            (
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+                call.context.principal_id,
+                key,
+                digest,
+                Jsonb(result),
+            ),
+        )
+        return result
+
     @staticmethod
     def safe_content(kind, content):
         import json
@@ -527,6 +618,38 @@ def install_management(manager, authorizer):
 
             return run(request, kind, read)
 
+        @app.post(root + "/import-preview")
+        async def preview(request: Request, kind: Literal["skill", "mcp"]):
+            from urllib.parse import unquote
+
+            from .resource_import import MAX_FILE, decode_file
+
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            manager.scope(context, kind)
+            if (
+                request.headers.get("content-type", "").split(";")[0]
+                != "application/octet-stream"
+            ):
+                raise WorkbenchBoundaryError("IMPORT_CONTENT_TYPE_INVALID", 422)
+            filename = unquote(request.headers.get("x-import-filename", ""))
+            if (
+                not filename
+                or len(filename) > 200
+                or "/" in filename
+                or "\\" in filename
+            ):
+                raise WorkbenchBoundaryError("IMPORT_FILENAME_INVALID", 422)
+            raw = bytearray()
+            async for chunk in request.stream():
+                raw.extend(chunk)
+                if len(raw) > MAX_FILE:
+                    raise WorkbenchBoundaryError("IMPORT_FILE_SIZE_INVALID", 413)
+            manifests = decode_file(filename, bytes(raw), kind)
+            return run(
+                request, kind, lambda call: manager.import_preview(call, manifests)
+            )
+
         @app.post(root + "/commands")
         def command(
             request: Request, kind: Literal["skill", "mcp"], body: ManagementCommand
@@ -561,20 +684,26 @@ def install_management(manager, authorizer):
                 if (
                     not row
                     or row["result"].get("schemaVersion")
-                    != "resource-management-receipt.v1"
+                    not in {
+                        "resource-management-receipt.v1",
+                        "resource-management-batch-receipt.v1",
+                    }
                     or row["result"]["kind"] != kind
                 ):
                     raise WorkbenchOwnerError("RESOURCE_COMMAND_NOT_FOUND", 404)
-                call.authority.require(
-                    OwnerPrincipal(
-                        call.context.principal_id,
-                        call.context.scope.tenant_id,
-                        call.context.scope.security_domain,
-                    ),
-                    "SKILL",
-                    "MANAGE_RESOURCE",
-                    target(kind, row["result"]["identity"]),
-                )
+                for identity in row["result"].get(
+                    "identities", [row["result"].get("identity")]
+                ):
+                    call.authority.require(
+                        OwnerPrincipal(
+                            call.context.principal_id,
+                            call.context.scope.tenant_id,
+                            call.context.scope.security_domain,
+                        ),
+                        "SKILL",
+                        "MANAGE_RESOURCE",
+                        target(kind, identity),
+                    )
                 return row["result"]
 
             return run(request, kind, read)

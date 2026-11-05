@@ -429,11 +429,15 @@ class SkillMcpService:
         invocation = {
             "invocationId": _id("capability-test"),
             "bindingId": binding_id,
+            "reasonCode": "DECLARATION_CHECK_ONLY_NO_EXECUTOR",
+            "actualExecution": False,
             "actor": actor,
-            "status": "SUCCEEDED",
+            "status": "NOT_EXECUTED",
             "result": {
                 "capability": binding["capability"],
-                "echo": copy.deepcopy(inputs),
+                "inputDigest": canonical_digest(
+                    redact(inputs), domain="declaration-input-v1"
+                ),
             },
             "evidence": {"redacted": True, "credentialMaterial": "NOT_RECORDED"},
             "invokedAt": _now(),
@@ -446,7 +450,7 @@ class SkillMcpService:
             actor,
             {
                 "invocationId": invocation["invocationId"],
-                "status": "SUCCEEDED",
+                "status": "NOT_EXECUTED",
                 "redacted": True,
             },
         )
@@ -497,14 +501,19 @@ class SkillMcpService:
         )
         required = revision["content"].get("inputSchema", {}).get("required", [])
         missing = [key for key in required if key not in test["input"]]
-        status = "FAILED" if missing else "PASSED"
+        status = "FAILED" if missing else "NOT_EXECUTED"
         result = {
             "resultId": _id("skill-test-result"),
             "testId": test_id,
             "revisionId": revision["revisionId"],
             "revisionDigest": revision["digest"],
             "status": status,
-            "actual": {} if missing else copy.deepcopy(test["expected"]),
+            "actual": None,
+            "actualExecution": False,
+            "verificationLevel": "INPUT_CONTRACT_ONLY",
+            "reasonCode": "INPUT_REQUIRED_FIELDS_MISSING"
+            if missing
+            else "SKILL_TEST_EXECUTOR_NOT_CONFIGURED",
             "errors": [f"required:{key}" for key in missing],
             "recordedAt": _now(),
         }

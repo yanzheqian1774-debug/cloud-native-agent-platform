@@ -129,6 +129,7 @@ class WorkbenchBffPolicy:
     allowed_host: str
     allowed_origin: str
     maximum_body_bytes: int = 128 * 1024
+    route_body_limits: tuple[tuple[str, int], ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -213,7 +214,9 @@ def create_workbench_bff(
             content_length = request.headers.get("content-length")
             if content_length is not None:
                 try:
-                    too_large = int(content_length) > policy.maximum_body_bytes
+                    too_large = int(content_length) > dict(
+                        policy.route_body_limits
+                    ).get(request.url.path, policy.maximum_body_bytes)
                 except ValueError:
                     too_large = True
                 if too_large:

@@ -136,3 +136,18 @@ J03保持OPEN：缺失资源自动生成、实例、准入、Native持续运行�
 第三包逐页视觉、P08/P10独立缺口以及第四包原85+ONT7项保持OPEN，不因局部表格、
 本体技术整合或四个资源样本改为通过。下一阶段按原统一计划继续G1完整目录／Skill／
 MCP与必要模型／运行引用，同时补齐J03连续衔接；随后G2→G3→G4，真实数据B不启用。
+
+
+## 2026-11-05 functional-completeness checkpoint
+
+User asks for holistic package03/04 closure. The new
+PROTOTYPE-PACKAGE03-04-COMPLETENESS.md and output40-unit inventory preserve
+J01-J12 and85+ONT7 scope. Both packages remain OPEN; backend presence and
+scoped supplier/sales evidence do not establish ordinary-goal completion.
+Implemented in this checkpoint: truthful declaration-only Skill checks and
+bounded atomic CSV/XLSX/JSON draft batch import with preview and GET recovery.
+IsolatedPG15 tests and frontend7 tests passed; frontend lint/build passed.
+Actual fixed-source installation and real product batch path remain outstanding;
+no new Run/model invocation or old UNKNOWN retry. Next gates: real Skill test
+and publication evidence, version/impact and existing-resource authorization,
+resource groups, ordinary-goal continuity, config-only breadth, full visuals.

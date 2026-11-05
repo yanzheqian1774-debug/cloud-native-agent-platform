@@ -35,6 +35,8 @@ def test_publication_does_not_authorize_bounded_invocation() -> None:
         {"supplier": "redacted"},
     )
     assert (
-        result["invocation"]["status"] == "SUCCEEDED"
+        result["invocation"]["status"] == "NOT_EXECUTED"
+        and result["invocation"]["actualExecution"] is False
+        and result["invocation"]["reasonCode"] == "DECLARATION_CHECK_ONLY_NO_EXECUTOR"
         and result["invocation"]["evidence"]["redacted"]
     )

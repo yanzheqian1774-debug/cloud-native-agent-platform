@@ -473,7 +473,21 @@ def build_workbench_composition(
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
-            WorkbenchBffPolicy(allowed_host, allowed_origin),
+            WorkbenchBffPolicy(
+                allowed_host,
+                allowed_origin,
+                route_body_limits=tuple(
+                    (
+                        "/api/workbench/v1/resource-management/"
+                        + kind
+                        + "/import-preview",
+                        10 * 1024 * 1024,
+                    )
+                    for kind in ("skill", "mcp")
+                )
+                if management_path
+                else (),
+            ),
             grant_administration=foundation.grants,
             operations=(
                 *resource_automation_routes,
