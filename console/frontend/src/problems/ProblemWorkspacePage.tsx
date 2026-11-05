@@ -1,3 +1,4 @@
+import {conversationScope,readConversationView,writeConversationView,conversationUrl} from "./conversationViewState";
 import type {ExecutionPhaseProjection} from "../api/preparedExecution";
 import {enterSavedPlanningTarget} from "./enterSavedPlanningTarget";
 import {PreparedResourceReviewPanel} from "./PreparedResourceReviewPanel";
@@ -48,7 +49,7 @@ const uncertain=(error:unknown)=>!(error instanceof WorkbenchRequestError)||erro
 export function ProblemWorkspacePage(){
   const assistanceEnabled=import.meta.env.VITE_PROBLEM_DRAFT_ASSISTANCE==="enabled";
   const [params,setParams]=useSearchParams(),navigate=useNavigate();
-  const continuationInputEpoch=useRef(0);
+  const continuationInputEpoch=useRef(0),createdRoute=useRef<string|null>(null);
   const [session,setSession]=useState<WorkbenchSession|null>(null),[problems,setProblems]=useState<BusinessProblemRevision[]>([]),[workspace,setWorkspace]=useState<Workspace|null>(null);
   const [reportQuery,setReportQuery]=useState<{problemId:string;digest:string;contextKey:string;value:string}|null>(null);
   const [executionStatus,setExecutionStatus]=useState<ExecutionPhaseProjection|null>(null);
@@ -65,7 +66,7 @@ export function ProblemWorkspacePage(){
   const [renderRevision,setRenderRevision]=useState(1);
   useLayoutEffect(()=>{turnRef.current=turn},[turn]);
   function advanceRevision(){const next=++uiRevision.current;setRenderRevision(next);return next;}
-  const epoch=useRef(0),loadSequence=useRef(0),idempotency=useRef<Record<string,{fingerprint:string;key:string}>>({}),mutationFlight=useRef(false),sessionRef=useRef<WorkbenchSession|null>(null),initialProblem=useRef(params.get("problem")),initialRequest=useRef(params.get("request")),selectedId=params.get("problem");
+  const epoch=useRef(0),loadSequence=useRef(0),idempotency=useRef<Record<string,{fingerprint:string;key:string}>>({}),mutationFlight=useRef(false),sessionRef=useRef<WorkbenchSession|null>(null),selectedId=params.get("problem");
   const executionComplete=Boolean(selectedId&&params.get("execution")===executionStatus?.digest&&selectedId===executionStatus?.problemId&&executionStatus?.state==="SUCCEEDED");
   const recordDirty=JSON.stringify(recordDraft)!==JSON.stringify(recordSaved),draftDirty=turn!==null&&turn.phase!=="CANCELLED"&&turn.phase!=="CREATED",criterionDirty=criterionTurn!==null&&criterionTurn.phase!=="CANCELLED"&&criterionTurn.phase!=="SAVED",supplementDirty=supplements.length>0||Boolean(composer.trim());
 
@@ -83,17 +84,53 @@ export function ProblemWorkspacePage(){
   useEffect(()=>{let active=true;(async()=>{try{
     const current=await readWorkbenchSession();if(!active)return;sessionRef.current=current;setSession(current);
     const listed=await listBusinessProblems();if(!active)return;setProblems(listed.problems);
-    const problemId=initialProblem.current;if(!problemId)return;
-    setCreatedRevision(listed.problems.find(item=>item.business_problem_id===problemId)??null);setComposerTarget("SUPPLEMENT");
-    const currentContext=sessionKey(current),stored=storedAuthorization(problemId,currentContext),requestedId=initialRequest.current,boundRequestId=requestedId&&(requestedId===stored.request?.requestId||requestedId===stored.continuation?.requestId)?requestedId:stored.request?.requestId;setAuthorization(stored);
-    if(requestedId&&!boundRequestId)setContextNotice("链接中的申请编号不属于当前会话与问题，已忽略该授权状态。");
-    if(boundRequestId)await recoverRequest(problemId,boundRequestId);else if(!stored.continuation)await loadWorkspace(problemId);
   }catch(error){if(active){setLoginRequired(error instanceof WorkbenchRequestError&&error.status===401);setFailure({error,operation:"恢复工作区"})}}finally{if(active)setLoading(false)}})();return()=>{active=false;epoch.current+=1}},[loadWorkspace,recoverRequest]);
   useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(recordDirty||draftDirty||criterionDirty||supplementDirty){event.preventDefault();event.returnValue=""}};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn)},[criterionDirty,draftDirty,recordDirty,supplementDirty]);
   useEffect(()=>{if(!session)return;let active=true,controller:AbortController|null=null;
     const refresh=()=>{controller?.abort();controller=new AbortController();readWorkbenchSession(controller.signal).then(next=>{if(!active)return;const previous=sessionRef.current;if(previous&&sessionKey(previous)!==sessionKey(next)){epoch.current+=1;advanceRevision();userMessages.current=[];inputValue.current="";setAssistance(null);idempotency.current={};setParams({});setProblems([]);setWorkspace(null);setCreatedRevision(null);setAuthorization({});setRecordDraft(EMPTY_RECORD);setRecordSaved(EMPTY_RECORD);setRecordEditing(false);setTurn(null);setCriterionTurn(null);setCriteriaAuthorization(null);setPendingCreate(null);setPendingProblemLink(null);setComposer("");setComposerTarget("NEW");setSupplements([]);setSupplementReturn("");setCriterionReturn("");setFailure(null);setCriteriaFailure(null);if(!mutationFlight.current)setBusy(false);setContextNotice("可信身份或安全范围已经变化。原草稿、消息、授权接续、页内补充和在途响应已隔离，请在当前上下文重新开始。")}sessionRef.current=next;setSession(next);setLoginRequired(false)}).catch(error=>{if(active&&error?.name!=="AbortError"&&error instanceof WorkbenchRequestError&&error.status===401){epoch.current+=1;advanceRevision();userMessages.current=[];inputValue.current="";setAssistance(null);setProblems([]);setWorkspace(null);setCreatedRevision(null);setAuthorization({});setRecordDraft(EMPTY_RECORD);setRecordSaved(EMPTY_RECORD);setRecordEditing(false);setTurn(null);setCriterionTurn(null);setCriteriaAuthorization(null);setPendingCreate(null);setPendingProblemLink(null);setComposer("");setComposerTarget("NEW");setSupplements([]);setSupplementReturn("");setCriterionReturn("");setFailure(null);setCriteriaFailure(null);if(!mutationFlight.current)setBusy(false);setLoginRequired(true)}})};
     const visible=()=>{if(document.visibilityState==="visible")refresh()};document.addEventListener("visibilitychange",visible);window.addEventListener("focus",refresh);return()=>{active=false;controller?.abort();document.removeEventListener("visibilitychange",visible);window.removeEventListener("focus",refresh)};
   },[session,setParams]);
+
+  const viewScope=session?conversationScope(session):"";
+  const viewId=selectedId??`new:${params.get("draft")??"default"}`;
+  const viewSnapshot={composer,composerTarget,turn,assistance,recordDraft,recordSaved,recordEditing,criterionTurn,criterionReturn,criteriaAuthorization,supplements,supplementReturn,pendingCreate,pendingProblemLink,renderRevision,userMessages:[] as UserFactMessage[],idempotency:{} as typeof idempotency.current,url:`/work${params.size?"?"+params.toString():""}`};
+  const viewLatest=useRef(viewSnapshot),viewCache=useRef(new Map<string,typeof viewSnapshot>());
+  // Route changes, including browser history, share one read-only restoration path.
+  useLayoutEffect(()=>{
+    if(!viewScope||loading)return;
+    const cache=viewCache.current,cacheKey=viewScope+":"+viewId,cached=cache.get(cacheKey),stored=readConversationView(viewScope,viewId);
+    if(createdRoute.current===selectedId&&selectedId){createdRoute.current=null;return()=>{const snapshot=viewLatest.current;cache.set(cacheKey,snapshot);writeConversationView(viewScope,viewId,{composer:snapshot.composer,url:snapshot.url});epoch.current+=1;loadSequence.current+=1}}
+    const token=++epoch.current;
+    let active=true;
+    queueMicrotask(()=>{if(!active)return;
+    loadSequence.current+=1;continuationInputEpoch.current+=1;advanceRevision();
+    setWorkspace(null);setExecutionStatus(null);setCreatedRevision(null);setFailure(null);setCriteriaFailure(null);setContextNotice("");setSubmitted(false);setAuthorization({});setReportQuery(null);
+    setComposer(cached?.composer??stored.composer??"");inputValue.current=cached?.composer??stored.composer??"";
+    setComposerTarget(cached?.composerTarget??(selectedId?"SUPPLEMENT":"NEW"));
+    setTurn(cached?.turn?.phase==="SUBMITTING"?{...cached.turn,phase:"UNKNOWN"}:cached?.turn??null);setAssistance(cached?.assistance??null);setRecordDraft(cached?.recordDraft??EMPTY_RECORD);setRecordSaved(cached?.recordSaved??EMPTY_RECORD);setRecordEditing(cached?.recordEditing??false);
+    setCriterionTurn(cached?.criterionTurn??null);setCriterionReturn(cached?.criterionReturn??"");setCriteriaAuthorization(cached?.criteriaAuthorization??null);setSupplements(cached?.supplements??[]);setSupplementReturn(cached?.supplementReturn??"");
+    setPendingCreate(cached?.pendingCreate?{...cached.pendingCreate,epoch:token}:null);setPendingProblemLink(cached?.pendingProblemLink??null);userMessages.current=cached?.userMessages??[];idempotency.current=cached?.idempotency??{};
+    if(cached){uiRevision.current=cached.renderRevision;setRenderRevision(cached.renderRevision)}
+    if(selectedId){
+      const auth=storedAuthorization(selectedId,sessionKey(sessionRef.current!)),requestedId=new URLSearchParams(window.location.search).get("request"),boundRequestId=requestedId&&(requestedId===auth.request?.requestId||requestedId===auth.continuation?.requestId)?requestedId:auth.request?.requestId;setAuthorization(auth);setBusy(true);
+      if(requestedId&&!boundRequestId)setContextNotice("链接中的申请编号不属于当前会话与问题，已忽略该授权状态。");
+      const load=async()=>{try{if(boundRequestId)await recoverRequest(selectedId,boundRequestId,token);else if(!auth.continuation)await loadWorkspace(selectedId);
+        if(token===epoch.current&&cached?.recordEditing){setRecordDraft(cached.recordDraft);setRecordSaved(cached.recordSaved);setRecordEditing(true)}
+      }catch(error){if(token===epoch.current)setFailure({error,operation:"打开业务问题"})}finally{if(token===epoch.current)setBusy(false)}};void load();
+    }else setBusy(false);
+    });
+    return()=>{active=false;const snapshot=viewLatest.current;cache.set(cacheKey,snapshot);writeConversationView(viewScope,viewId,{composer:snapshot.composer,url:snapshot.url});epoch.current+=1;loadSequence.current+=1};
+  },[viewScope,viewId,loading,selectedId,loadWorkspace,recoverRequest]);
+  useLayoutEffect(()=>{viewLatest.current={...viewSnapshot,userMessages:userMessages.current,idempotency:idempotency.current}});
+  useEffect(()=>{if(!viewScope||loading)return;writeConversationView(viewScope,viewId,{composer,url:`/work${params.size?"?"+params.toString():""}`})},[composer,viewScope,viewId,loading,params]);
+
+  useEffect(()=>{
+    if(!viewScope||loading)return;
+    const rail=document.querySelector<HTMLElement>(".px-workspace .px-task-summary");if(!rail)return;
+    rail.scrollTop=readConversationView(viewScope,viewId).railScroll??0;
+    const save=()=>writeConversationView(viewScope,viewId,{railScroll:rail.scrollTop});
+    rail.addEventListener("scroll",save);return()=>rail.removeEventListener("scroll",save);
+  },[viewScope,viewId,loading,workspace]);
 
   function changeComposer(value:string){
     continuationInputEpoch.current+=1;
@@ -172,7 +209,7 @@ export function ProblemWorkspacePage(){
   function editTurnWithComposer(){if(!turn)return;setTurn({...turn,phase:"DRAFT"});setSupplementReturn(composer);setComposer(turn.draft.description);setComposerTarget("DRAFT")}
   function cancelComposerEdit(){if(composerTarget==="FORMAL")setRecordEditing(true);setComposer(composerTarget==="CRITERION"||composerTarget==="CRITERION_EDIT"?criterionReturn:supplementReturn);setCriterionReturn("");setSupplementReturn("");setComposerTarget("SUPPLEMENT")}
   async function cancelTurn(){if(!turn)return;if(assistance&&turn.source!=="MANUAL"){await rejectAssistance();return}setTurn({...turn,phase:"CANCELLED"});setPendingCreate(null);completeOperation("create-problem");setComposerTarget("NEW");setFailure(null)}
-  async function select(problemId:string){if((recordDirty||draftDirty||criterionDirty||supplementDirty)&&!window.confirm("当前页面有未保存修改或页内补充。确定放弃并切换吗？"))return;advanceRevision();userMessages.current=[];inputValue.current="";setAssistance(null);const token=++epoch.current,currentContext=session?sessionKey(session):"",stored=currentContext?storedAuthorization(problemId,currentContext):{};setParams({problem:problemId});setBusy(true);setFailure(null);setCriteriaFailure(null);setContextNotice("");setWorkspace(null);setCreatedRevision(problems.find(item=>item.business_problem_id===problemId)??null);setAuthorization(stored);setTurn(null);setCriterionTurn(null);setCriteriaAuthorization(null);setPendingCreate(null);setPendingProblemLink(null);setComposer("");setComposerTarget("SUPPLEMENT");setSupplements([]);setSupplementReturn("");setCriterionReturn("");try{if(stored.request)await recoverRequest(problemId,stored.request.requestId,token);else if(!stored.continuation)await loadWorkspace(problemId)}catch(error){if(token===epoch.current)setFailure({error,operation:"打开业务问题"})}finally{if(token===epoch.current)setBusy(false)}}
+  function select(problemId:string){if(!busy&&session)navigate(conversationUrl(conversationScope(session),problemId))}
   async function create(recover=false){
     if(!session||!turn||turnRef.current!==turn||mutationFlight.current||assistanceFlight.current||(recover&&(!pendingCreate||turn.phase!=="UNKNOWN"))||(!recover&&(!["DRAFT","FAILED"].includes(turn.phase)||composerTarget!=="SUPPLEMENT"||!turn.draft.title.trim()||!turn.draft.description.trim()||turn.draft.title.length>200||turn.draft.description.length>2000||(assistanceEnabled&&(Boolean(inputValue.current.trim())||turn.version!==uiRevision.current)))))return;
     const token=epoch.current,currentSession=sessionKey(session);
@@ -185,7 +222,7 @@ export function ProblemWorkspacePage(){
       const created=await createBusinessProblem(session.csrfToken,{...command.payload,idempotencyKey:command.key});
       if(token!==epoch.current||sessionKey(sessionRef.current??session)!==currentSession)return;
       completeOperation("create-problem");const problemId=created.revision.business_problem_id,next:AuthorizationState={continuation:created.creatorContinuation};
-      setPendingCreate(null);setTurn(current=>current&&current.id===command.turnId?{...current,draft:{title:command.payload.title,description:command.payload.description},phase:"CREATED"}:current);setCreatedRevision(created.revision);setAuthorization(next);persistAuthorization(problemId,currentSession,next);setParams({problem:problemId});
+      setPendingCreate(null);setTurn(current=>current&&current.id===command.turnId?{...current,draft:{title:command.payload.title,description:command.payload.description},phase:"CREATED"}:current);setCreatedRevision(created.revision);setAuthorization(next);persistAuthorization(problemId,currentSession,next);createdRoute.current=problemId;setParams({problem:problemId});
       try{await reloadList(token)}catch(error){if(token===epoch.current)setFailure({error,operation:"恢复工作区"})}
       if(created.creatorContinuation.requestId){try{await recoverRequest(problemId,created.creatorContinuation.requestId,token);if(token===epoch.current)setParams({problem:problemId,request:created.creatorContinuation.requestId})}catch(error){if(token===epoch.current)setFailure({error,operation:"恢复授权状态"})}}
       if(assistance&&turn.source!=="MANUAL"&&assistance.result.invocationId===command.turnId){const pending={invocationId:assistance.result.invocationId,problemId,problemRevisionId:created.revision.revision_id,problemDigest:created.revision.digest,contextKey:currentSession};setPendingProblemLink(pending);try{const linked=await linkDraftAssistanceProblem(session.csrfToken,pending.invocationId,{problemId:pending.problemId,problemRevisionId:pending.problemRevisionId,problemDigest:pending.problemDigest});if(token===epoch.current){setAssistance({...assistance,result:linked});setPendingProblemLink(null)}}catch(error){if(token===epoch.current)setFailure({error,operation:"补记草稿来源",mutation:true})}}
@@ -207,7 +244,8 @@ export function ProblemWorkspacePage(){
   function startFormalEdit(){if(composerTarget!=="SUPPLEMENT")return;setRecordEditing(true)}
   function startFormalComposerEdit(){setRecordEditing(false);setSupplementReturn(composer);setComposer(recordDraft.description);setComposerTarget("FORMAL")}
   function cancelFormalEdit(){setRecordDraft(recordSaved);setRecordEditing(false);setFailure(null);setSubmitted(false)}
-  function startNew(){if((recordDirty||draftDirty||criterionDirty||supplementDirty)&&!window.confirm("放弃未保存内容和页内补充并新建？"))return;epoch.current+=1;advanceRevision();userMessages.current=[];inputValue.current="";setAssistance(null);idempotency.current={};setParams({});setWorkspace(null);setCreatedRevision(null);setAuthorization({});setRecordDraft(EMPTY_RECORD);setRecordSaved(EMPTY_RECORD);setRecordEditing(false);setTurn(null);setCriterionTurn(null);setCriteriaAuthorization(null);setPendingCreate(null);setPendingProblemLink(null);setComposer("");setComposerTarget("NEW");setSupplements([]);setSupplementReturn("");setCriterionReturn("");setFailure(null);setCriteriaFailure(null);setContextNotice("");setSubmitted(false)}
+  function startNew(){if(!busy)navigate("/work?draft="+crypto.randomUUID())}
+
 
   function startCriterion(text="",baseSet?:CriteriaSetBase){if(!selectedId||!canonical||composerTarget!=="SUPPLEMENT"||criterionTurn&&criterionTurn.phase!=="CANCELLED"&&criterionTurn.phase!=="SAVED")return;setCriteriaAuthorization(null);setCriterionReturn(text&&text===composer?"":composer);setComposer(text);setCriterionTurn(baseSet?createSuccessCriterionTurn(selectedId,canonical.revision_id,"",baseSet):null);setComposerTarget("CRITERION")}
   function reviseCriterion(baseSet:CriteriaSetBase,criterion:CriterionRevision){if(!selectedId||!canonical||composerTarget!=="SUPPLEMENT")return;const text=String(criterion.measurement.rubric??"");setCriteriaAuthorization(null);setCriterionReturn(composer);setComposer(text);setCriterionTurn(createSuccessCriterionTurn(selectedId,canonical.revision_id,text,baseSet,{successCriterionId:criterion.success_criterion_id,revisionId:criterion.revision_id,revision:criterion.revision}));setComposerTarget("CRITERION_EDIT")}
@@ -282,7 +320,7 @@ export function ProblemWorkspacePage(){
   async function restartCriterionAfterConflict(){if(!selectedId||!criterionTurn)return;const text=criterionTurn.draft.text;setBusy(true);setFailure(null);setCriteriaAuthorization(null);try{await loadWorkspace(selectedId);setCriterionTurn(null);setComposer(text);setComposerTarget("SUPPLEMENT")}catch(error){setFailure({error,operation:"恢复工作区"})}finally{setBusy(false)}}
 
   const selected=workspace?.detail.problem.business_problem_id===selectedId?workspace:null;
-  const canonical=selected?.detail.revisions.find(item=>item.revision_id===selected.detail.problem.current_revision_id)??createdRevision??problems.find(item=>item.business_problem_id===selectedId);
+  const canonical=selected?.detail.revisions.find(item=>item.revision_id===selected.detail.problem.current_revision_id)??(createdRevision?.business_problem_id===selectedId?createdRevision:null)??problems.find(item=>item.business_problem_id===selectedId);
   const visibleAssistance=assistance&&session&&assistance.contextKey===sessionKey(session)&&(!selectedId||Boolean(turn))?assistance:null;
   const titleError=submitted&&!recordDraft.title.trim()?"请输入问题名称。":recordDraft.title.length>200?"问题名称不能超过 200 个字符。":"";
   const descriptionError=submitted&&!recordDraft.description.trim()?"请输入问题描述。":recordDraft.description.length>2_000?"问题描述不能超过 2000 个字符。":"";
@@ -303,10 +341,10 @@ export function ProblemWorkspacePage(){
       <p><a href="/work?panel=existing">选择其他业务问题</a></p>
     </section></main>;
   }
-  return <main className={`px-page px-workspace${params.get("execution")?" has-execution":""}`}><section className="px-journey-heading"><header className="px-page-title"><div><p>问题工作台{canonical&&<> › {canonical.title}</>}<small>理解与确认</small></p><h1>{selected?(params.has("execution")?(executionComplete?"成果已交付":"执行进度"):"问题详情"):selectedId?(canonical?"问题已创建":"查看问题"):turn?.phase==="UNKNOWN"?"确认原创建结果":turn?.phase==="SUBMITTING"?"正在创建问题":turn&&turn.phase!=="CANCELLED"?"核对并确认问题":visibleAssistance?.result.resultKind==="NEEDS_CLARIFICATION"?"补充关键理解":"新建对话"}</h1><span>{selected?(params.has("execution")?(executionComplete?"执行已完成。先查看交付结果，再核对成功标准与证据，作出验收决定。":"核对当前执行状态、任务分工与产物；刷新不会重新启动执行。"):"已读回正式记录。查看下方当前状态，选择实际可执行的下一步。"):selectedId?(canonical?"创建事实已保留；查看详情需要独立授权。":"仅在获得查看权限并读取成功后展示问题详情。"):assistanceEnabled?"通过受治理的 AI 补问形成可编辑草稿；只有你确认后才会创建正式业务问题。":"通过连续对话形成可编辑草稿；只有你确认后才会创建正式业务问题。"}</span></div></header>
+  return <main aria-busy={busy} className={`px-page px-workspace${params.get("execution")?" has-execution":""}`}><section className="px-journey-heading"><header className="px-page-title"><div><p>我的会话<small>理解与确认</small></p><h1>{selected?(params.has("execution")?(executionComplete?"成果已交付":"执行进度"):canonical?.title??"会话"):selectedId?(canonical?"问题已创建":"查看问题"):turn?.phase==="UNKNOWN"?"确认原创建结果":turn?.phase==="SUBMITTING"?"正在创建问题":turn&&turn.phase!=="CANCELLED"?"核对并确认问题":visibleAssistance?.result.resultKind==="NEEDS_CLARIFICATION"?"补充关键理解":"新建对话"}</h1><span>{selected?(params.has("execution")?(executionComplete?"执行已完成。先查看交付结果，再核对成功标准与证据，作出验收决定。":"核对当前执行状态、任务分工与产物；刷新不会重新启动执行。"):"已读回正式记录。查看下方当前状态，选择实际可执行的下一步。"):selectedId?(canonical?"创建事实已保留；查看详情需要独立授权。":"仅在获得查看权限并读取成功后展示问题详情。"):assistanceEnabled?"通过受治理的 AI 补问形成可编辑草稿；只有你确认后才会创建正式业务问题。":"通过连续对话形成可编辑草稿；只有你确认后才会创建正式业务问题。"}</span></div></header>
     <details className="px-problem-switcher" open={params.get("panel")==="existing" || undefined}><summary>业务问题与新建入口</summary><button type="button" disabled={busy||!selectedId||turn?.phase==="UNKNOWN"} onClick={()=>{setAssistance(null);startNew()}}>＋ 新建对话</button><nav aria-label="业务问题列表">{[...problems].reverse().map(problem=><button type="button" disabled={busy||turn?.phase==="UNKNOWN"} className={selectedId===problem.business_problem_id?"selected":""} key={problem.business_problem_id} onClick={()=>void select(problem.business_problem_id)}><strong>{problem.title}</strong><small>修订 {problem.revision} · {readable(problem.created_at)}</small></button>)}</nav></details>    <JourneySteps current={params.get("execution")&&selected?(executionComplete?5:4):selectedId?2:1} executionAvailable={Boolean(params.get("execution")&&selected)}/></section>
     {recoveryInvocation&&!assistance&&<section className="px-inline-card" aria-label="恢复原 AI 调用"><h2>读取原 AI 调用</h2><p>链接只定位原 invocation，不含原文或权限。请先只读核对；登录和刷新不会重交正文或新建申请。</p><code>{recoveryInvocation}</code><p><button type="button" disabled={!session||recoveryBusy} onClick={()=>void readOriginalAssistance()}>读取原调用事实（只读）</button></p>{recoveryError!==null&&<WorkbenchErrorNotice error={recoveryError} operation="观察 AI 原调用"/>}</section>}
-    <div className="px-workspace-body"><ConversationFrame newMessageKey={messageKey} composer={<ConversationComposer value={composer} onChange={changeComposer} sendBlocked={assistanceEnabled&&!selectedId&&(busy||assistanceNeedsRecovery)} onSend={sendComposer} onCancelEdit={cancelComposerEdit} disabled={busy&&composerTarget!=="SUPPLEMENT"&&!assistanceEnabled} assisted={assistanceEnabled&&!selectedId} contextLabel={canonical?.title} mode={composerTarget==="SUPPLEMENT"&&executionComplete?"RESULT_SEARCH":composerTarget==="SUPPLEMENT"&&selected?"FORMAL_SUPPLEMENT":composerTarget==="DRAFT"?"DRAFT_REPLACE":composerTarget==="FORMAL"?"FORMAL_REPLACE":composerTarget==="CRITERION_EDIT"?"CRITERION_REPLACE":composerTarget}/> }>
+    <div className="px-workspace-body"><ConversationFrame viewScope={viewScope} viewId={viewId} newMessageKey={messageKey} composer={<ConversationComposer value={composer} onChange={changeComposer} sendBlocked={assistanceEnabled&&!selectedId&&(busy||assistanceNeedsRecovery)} onSend={sendComposer} onCancelEdit={cancelComposerEdit} disabled={busy&&composerTarget!=="SUPPLEMENT"&&!assistanceEnabled} assisted={assistanceEnabled&&!selectedId} contextLabel={canonical?.title} mode={composerTarget==="SUPPLEMENT"&&executionComplete?"RESULT_SEARCH":composerTarget==="SUPPLEMENT"&&selected?"FORMAL_SUPPLEMENT":composerTarget==="DRAFT"?"DRAFT_REPLACE":composerTarget==="FORMAL"?"FORMAL_REPLACE":composerTarget==="CRITERION_EDIT"?"CRITERION_REPLACE":composerTarget}/> }>
       {params.get("execution")?<details className="px-conversation-history"><summary>问题、标准与历史消息</summary>      {contextNotice&&<SystemMessage><section className="px-inline-card px-context-card" role="status"><span className="px-eyebrow">上下文已隔离</span><h2>请在当前可信会话重新开始</h2><p>{contextNotice}</p></section></SystemMessage>}
       {!turn&&!visibleAssistance&&!selectedId&&<SystemMessage><section className="px-welcome"><span className="px-eyebrow">业务问题工作台</span><h2>你希望解决什么问题？</h2><p>先说业务目标，随后在对话里补充口径、核对理解，再确认创建。</p>
         <div className="conversation-examples" aria-label="问题示例">{[

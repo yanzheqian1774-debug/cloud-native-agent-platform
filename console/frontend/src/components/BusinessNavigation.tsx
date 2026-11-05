@@ -1,3 +1,4 @@
+import {ConversationList} from "../problems/ConversationList";
 import { NavLink, useLocation } from "react-router-dom";
 import { NavigationIcon, type NavigationIconName } from "./NavigationIcon";
 
@@ -38,7 +39,7 @@ export function BusinessNavigation({mobile=false}:{mobile?:boolean}) {
       <EntryLink entry={{to:"/dashboard",label:"首页",icon:"home"}}/>
       <details key={`work-${workActive}`} open={workActive}>
         <summary className={workActive?"active":""}><NavigationIcon name="problem"/><span>问题工作台</span></summary>
-        <NavLink to="/work" end><NavigationIcon name="conversation"/>我的会话</NavLink><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
+        <ConversationList/><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
       </details>
       <EntryLink entry={{to:"/workflow-definitions",label:"业务能力与流程",icon:"relationships"}}/>
     </section>

@@ -467,12 +467,10 @@ test("TEST_ADAPTER 503 keeps the frozen CREATE command in UNKNOWN", async ({ pag
 });
 
 test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async ({ page }) => {
-  let sessionReads = 0;
   let switched = false;
   let creates = 0;
   await installAdapter(page, {
     onSession: async route => {
-      sessionReads += 1;
       // ConsoleShell performs one trusted-session read for its identity display
       // before the create flow freezes its own principal key.
       if (!switched) return route.fulfill({ json: {
@@ -497,11 +495,9 @@ test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async (
   await expect(page.getByRole("alert")).toContainText("可信会话已切换；原命令未发送");
   expect(creates).toBe(0);
 
-  sessionReads = 0;
   switched = false;
   await page.reload();
   await fillCreateForm(page);
-  sessionReads = 1;
   await page.route("**/api/workbench/v1/session", route => route.fulfill({ status: 401, json: { reasonCode: "AUTHENTICATION_REQUIRED" } }));
   await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert")).toContainText("可信会话已失效");

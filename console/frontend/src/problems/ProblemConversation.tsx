@@ -1,11 +1,24 @@
-import {Fragment,useEffect,useRef,useState,type FormEvent,type KeyboardEvent,type ReactNode} from "react";
+import {readConversationView,writeConversationView} from "./conversationViewState";
+import {Fragment,useLayoutEffect,useEffect,useRef,useState,type FormEvent,type KeyboardEvent,type ReactNode} from "react";
 import {formatTime} from "../journey/formatTime";
 import {fieldLabels,sourceLabels,understandingDisplay,isUnstructuredStatement} from "./problemUnderstandingModel";
 import type {DraftTurn,ProblemDraft} from "./problemConversationModel";
 
-export function ConversationFrame({children,composer,newMessageKey,startAtTop=false}:{children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
+export function ConversationFrame({children,composer,newMessageKey,startAtTop=false,viewScope,viewId}:{viewScope?:string;viewId?:string;children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
   const initial=useRef(true);
   const stream=useRef<HTMLDivElement>(null),nearBottom=useRef(true),[showNew,setShowNew]=useState(false);
+  const restoring=useRef(false);
+  useLayoutEffect(()=>{
+    if(!viewScope||!viewId)return;
+    const node=stream.current;if(!node)return;
+    const saved=readConversationView(viewScope,viewId).scrollTop;
+    restoring.current=saved!==undefined;nearBottom.current=saved===undefined;
+    const restore=()=>{if(saved!==undefined)node.scrollTop=saved};restore();
+    const observer=new ResizeObserver(restore);observer.observe(node);for(const child of node.children)observer.observe(child);
+    const changes=new MutationObserver(restore);changes.observe(node,{subtree:true,childList:true});
+    const timer=window.setTimeout(()=>{observer.disconnect();changes.disconnect();restoring.current=false},1200);
+    return()=>{window.clearTimeout(timer);observer.disconnect();changes.disconnect()};
+  },[viewScope,viewId]);
   function latestTop(node:HTMLDivElement){
     const latest=node.querySelector<HTMLElement>(".px-message:last-child");
     // A tall reply starts at its heading, not at its footer. Only this stream scrolls.
@@ -15,12 +28,13 @@ export function ConversationFrame({children,composer,newMessageKey,startAtTop=fa
   }
   function scrollToLatest(){const node=stream.current;if(node)node.scrollTo({top:latestTop(node),behavior:"smooth"});setShowNew(false)}
   useEffect(()=>{
+    if(restoring.current)return;
     if(initial.current){initial.current=false;if(startAtTop){stream.current?.scrollTo({top:0});return;}}
     if(nearBottom.current){const node=stream.current;if(node)node.scrollTo({top:latestTop(node)});setShowNew(false)}
     else setShowNew(true);
   },[newMessageKey,startAtTop]);
   return <section className="px-conversation" aria-label="业务问题对话">
-    <div className="px-message-stream" ref={stream} onScroll={event=>{const node=event.currentTarget;nearBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<72;if(nearBottom.current)setShowNew(false)}}>
+    <div className="px-message-stream" ref={stream} onScroll={event=>{const node=event.currentTarget;if(viewScope&&viewId&&!restoring.current)writeConversationView(viewScope,viewId,{scrollTop:node.scrollTop});nearBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<72;if(nearBottom.current)setShowNew(false)}}>
       {children}
     </div>
     {showNew&&<button className="px-new-message" type="button" onClick={scrollToLatest}>有新消息，回到最新</button>}
