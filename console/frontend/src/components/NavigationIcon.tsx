@@ -4,9 +4,10 @@ export type NavigationIconName =
   | "home" | "problem" | "employee" | "flow" | "knowledge" | "resource"
   | "record" | "manage" | "runtime" | "outcome" | "shield" | "agent"
   | "relationships" | "attention" | "applications" | "operations"
-  | "model" | "usage" | "help" | "conversation" | "target" | "clock";
+  | "model" | "usage" | "help" | "conversation" | "target" | "clock" | "calendar";
 
 const paths: Record<NavigationIconName, ReactNode> = {
+  calendar: <><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 2v5M16 2v5M4 10h16M8 14h2M14 14h2M8 18h2M14 18h2"/></>,
   clock: <><path d="M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0M12 5v8l5 2" /></>,
   target: <><path d="M22 12a10 10 0 1 1-6-9M17 12a5 5 0 1 1-5-5M12 12l10-10M17 2h5v5" /></>,
   conversation: <><path d="M3 4h18v13H9l-5 4v-4H3z" /></>,
