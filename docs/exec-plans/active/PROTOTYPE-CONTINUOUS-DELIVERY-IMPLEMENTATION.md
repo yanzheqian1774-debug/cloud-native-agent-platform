@@ -151,3 +151,41 @@ Actual fixed-source installation and real product batch path remain outstanding;
 no new Run/model invocation or old UNKNOWN retry. Next gates: real Skill test
 and publication evidence, version/impact and existing-resource authorization,
 resource groups, ordinary-goal continuity, config-only breadth, full visuals.
+
+## 2026-11-05 trusted resource verification milestone
+
+Batch source0a1bf9c was installed idle and verified on the authenticated product
+path: invalid CSV blocks all writes, explicit subset re-preview imports one draft,
+XLSX imports two independent drafts, formulas reject, one actually committed lost
+response recovers by GET without duplicate POST. Original attempt that failed TLS
+was looked up as404 before starting a new command, never blindly retried.
+
+Sourceab432a9 (backend2afc929) then verified12 actual isolated local deterministic
+Skill tests on the authenticated product path: sales5 and supplier6 declared
+operations pass, one deliberately impossible expected output fails with genuine
+actual output. Both definitions pass the new exact-current-version checked
+publication path through the independent existing policy issuer. A sales successor
+and description edit invalidate all6 old test records and block checked publication;
+the published old revision remains identical. A page key collision discovered by
+actual denial testing was fixed and tested across repeated denied publication.
+No business Run, model call, old UNKNOWN replay or budget expansion occurred.
+
+Fresh16-table planning/execution/outcome/budget audit shows0 new rows and all
+original rows unchanged; ledger31 calls/10 unsettled/USD8.088532 charged+reserved,
+cap100/USD50 unchanged, pendingNative0. Five historical supplier/sales/source-change
+and continuation Runs match progress/artifacts/outcome/resourceUses exactly.
+The original7 resources match the earlier full backup including DB timestamps;
+the previous4 authoring resources match exact latest owner receipts. Their DB
+metadata timestamps were not separately captured in that older receipt evidence.
+A fresh correct runtime-database backup precedes the real Skill test execution.
+
+Readability follow-up exposes actual supplier/sales tables and local order drilldown
+before the test authoring form; current9 frontend resource tests pass, lint/build
+pass. Installing/capturing that final UI version is a separate evidence gate.
+
+Scope remains bounded: local registered synthetic executors only; unsupported
+schemas/executors/side effects never pass. Legacy configuration publication stays
+compatible and explicitly does not mean tested execution. General external Skill
+execution, D11 auto-preparation integration with test cases, full dependency and
+cross-consumer semantic impact, complete resource groups, ordinary-goal flow and
+full92-row visual acceptance remain OPEN. This checkpoint does not close03/04.
