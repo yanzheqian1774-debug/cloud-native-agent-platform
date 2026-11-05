@@ -48,6 +48,9 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "EXECUTION": frozenset({"START", "READ", "CANCEL", "RETRY"}),
     "SKILL": frozenset(
         {
+            "CREATE_RESOURCE",
+            "MANAGE_RESOURCE",
+            "CONNECT_MCP",
             "INVOKE_SKILL",
             "READ_SKILL_INVOCATION",
             "READ_RESOURCE",

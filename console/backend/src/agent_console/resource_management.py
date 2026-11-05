@@ -1,0 +1,563 @@
+# ruff: noqa: E501 -- Parameterized owner SQL.
+"""Trusted authoring adapter; existing Skill/MCP owner, current exact policy grants."""
+
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Literal
+
+from psycopg.types.json import Jsonb
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from .authority_contracts import AuthorityError, ExactGrant
+from .resource_automation import ResourceAutomation
+from .resource_automation_policy import AutomationPolicy
+from .resource_use_domain import canonical_digest
+from .skill_mcp_schemas import ResourceContent
+from .skill_mcp_service import SkillMcpFailure
+from .workbench_business_problem import OwnerPrincipal
+from .workbench_owner_authorization import (
+    AuthorizedOwnerAuthority,
+    AuthorizedOwnerCall,
+    WorkbenchOwnerError,
+)
+from .workbench_prepared_resources import bind_service, reference
+
+
+def target(kind, identity):
+    if kind not in {"skill", "mcp"}:
+        raise WorkbenchOwnerError("RESOURCE_KIND_INVALID", 422)
+    return "skill-invocation:resource-management:" + kind + ":" + identity
+
+
+class ManagementScope(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    namespace: str
+    securityDomain: str
+    subject: str
+    kinds: tuple[Literal["skill", "mcp"], ...]
+    expiresAt: datetime
+
+
+class ManagementPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    schemaVersion: Literal["resource-management-policy.v1"] = (
+        "resource-management-policy.v1"
+    )
+    enabled: bool = False
+    policyId: str
+    policyVersion: str
+    issuer: str
+    credentialPath: Path
+    workScopes: tuple[ManagementScope, ...]
+    grantTTLSeconds: int = Field(default=3600, ge=60, le=3600)
+
+    @property
+    def digest(self):
+        return canonical_digest(self.model_dump(mode="json"))
+
+    def authenticate(self, grants, subject):
+        return AutomationPolicy.authenticate(self, grants, subject)
+
+    def work(self, subject, kind, now):
+        matches = [
+            w
+            for w in self.workScopes
+            if w.namespace == subject.scope.tenant_id
+            and w.securityDomain == subject.scope.security_domain
+            and w.subject == subject.principal_id
+            and kind in w.kinds
+            and w.expiresAt.tzinfo
+            and w.expiresAt > now
+        ]
+        if len(matches) != 1:
+            raise AuthorityError("RESOURCE_MANAGEMENT_SCOPE_DENIED")
+        return matches[0]
+
+
+class ManagementCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal[
+        "create",
+        "import",
+        "edit",
+        "successor",
+        "validate",
+        "publish",
+        "health",
+        "discover",
+        "select-tools",
+        "disable",
+        "enable",
+        "deprecate",
+        "access",
+    ]
+    commandKey: str = Field(min_length=8, max_length=120)
+    identity: str | None = None
+    expectedVersion: int | None = Field(default=None, ge=1)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    content: ResourceContent | None = None
+    manifest: dict | None = None
+    snapshotId: str | None = None
+    toolNames: list[str] = Field(default_factory=list, max_length=128)
+
+
+class ManagementTargets:
+    def is_known_exact_target(self, context, grant, *, connection=None):
+        if (
+            connection is None
+            or grant.owner != "SKILL"
+            or grant.action not in {"CREATE_RESOURCE", "MANAGE_RESOURCE", "CONNECT_MCP"}
+        ):
+            return False
+        for kind in ["skill", "mcp"]:
+            if grant.action == "CREATE_RESOURCE":
+                if grant.exact_resource == target(kind, "collection"):
+                    return True
+                continue
+            if grant.action == "CONNECT_MCP" and kind != "mcp":
+                continue
+            if connection.execute(
+                "SELECT 1 FROM skill_mcp_resource.resources WHERE namespace=%s AND security_domain=%s AND kind=%s AND %s || resource_id=%s",
+                (
+                    context.scope.tenant_id,
+                    context.scope.security_domain,
+                    kind,
+                    target(kind, ""),
+                    grant.exact_resource,
+                ),
+            ).fetchone():
+                return True
+        return False
+
+
+class ResourceManagement:
+    def __init__(self, services, policy, grants):
+        self.services, self.policy, self.grants = services, policy, grants
+        self.automation = SimpleNamespace(policy=policy, grants=grants)
+
+    def authorize(self, call, members, key, work, issuer):
+        return ResourceAutomation.decide(
+            self.automation,
+            call,
+            members,
+            key,
+            work,
+            issuer,
+            purpose="RESOURCE_MANAGEMENT",
+        )
+
+    def scope(self, context, kind):
+        issuer = self.policy.authenticate(self.grants, context)
+        work = self.policy.work(context, kind, self.grants.clock())
+        return issuer, work
+
+    def owned(self, call, kind, identity):
+        return (
+            call.connection.execute(
+                "SELECT 1 FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'identity'=%s AND result->>'action' IN ('create','import')",
+                (
+                    call.context.scope.tenant_id,
+                    call.context.scope.security_domain,
+                    call.context.principal_id,
+                    kind,
+                    identity,
+                ),
+            ).fetchone()
+            is not None
+        )
+
+    def handle(self, call):
+        kind = call.path["kind"]
+        issuer, work = self.scope(call.context, kind)
+        command = ManagementCommand.model_validate(call.payload)
+        key = "resource-management:" + command.commandKey
+        digest = canonical_digest([kind, call.payload])
+        ns, domain = call.context.scope.tenant_id, call.context.scope.security_domain
+        call.connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+            (canonical_digest([ns, domain, call.context.principal_id, key]),),
+        )
+        old = call.connection.execute(
+            "SELECT digest,result FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND command_key=%s",
+            (ns, domain, call.context.principal_id, key),
+        ).fetchone()
+        if old:
+            if old["digest"] != digest:
+                raise WorkbenchOwnerError("RESOURCE_COMMAND_CONFLICT", 409)
+            call.authority.require(
+                OwnerPrincipal(call.context.principal_id, ns, domain),
+                "SKILL",
+                "MANAGE_RESOURCE",
+                target(kind, old["result"]["identity"]),
+            )
+            return old["result"]
+        service = bind_service(self.services[kind], call.connection)
+        scope = service.scope(ns, domain)
+        actor = call.context.principal_id
+        identity = command.identity
+        action = (
+            "CREATE_RESOURCE"
+            if command.action in {"create", "import"}
+            else "CONNECT_MCP"
+            if command.action in {"health", "discover", "select-tools"}
+            else "MANAGE_RESOURCE"
+        )
+        if action != "CREATE_RESOURCE" and (
+            not identity or not self.owned(call, kind, identity)
+        ):
+            raise WorkbenchOwnerError("RESOURCE_MANAGEMENT_NOT_FOUND", 404)
+        if action == "CONNECT_MCP" and kind != "mcp":
+            raise WorkbenchOwnerError("MCP_ONLY", 422)
+        g = ExactGrant(
+            "SKILL",
+            action,
+            target(kind, "collection" if action == "CREATE_RESOURCE" else identity),
+        )
+        proof = self.authorize(call, [g], key + ":authorize", work, issuer)
+        principal = OwnerPrincipal(actor, ns, domain)
+        call.authority.require(principal, g.owner, g.action, g.exact_resource)
+        content = None
+        if command.content is not None:
+            content = command.content.model_dump(exclude_unset=True)
+        if command.action == "import":
+            m = command.manifest
+            if (
+                not m
+                or set(m)
+                - {
+                    "manifestVersion",
+                    "kind",
+                    "name",
+                    "content",
+                    "sourceRevisionId",
+                    "sourceDigest",
+                    "credentialMaterial",
+                }
+                or m.get("manifestVersion") != "skill-mcp-workbench/v1"
+                or m.get("kind") != kind
+                or m.get("credentialMaterial", "NOT_INCLUDED") != "NOT_INCLUDED"
+            ):
+                raise WorkbenchOwnerError("MANIFEST_BOUNDARY_INVALID", 422)
+            try:
+                content = ResourceContent.model_validate(m.get("content")).model_dump(
+                    exclude_unset=True
+                )
+            except ValidationError as exc:
+                raise WorkbenchOwnerError("MANIFEST_CONTENT_INVALID", 422) from exc
+            name = command.name or m.get("name")
+            if not isinstance(name, str) or not name.strip() or len(name) > 120:
+                raise WorkbenchOwnerError("MANIFEST_NAME_INVALID", 422)
+        else:
+            name = command.name
+        if content is not None:
+            self.safe_content(kind, content)
+        try:
+            if command.action in {"create", "import"}:
+                if not name or not content:
+                    raise WorkbenchOwnerError("RESOURCE_CONTENT_REQUIRED", 422)
+                record = service.create(scope, kind, actor, name, content)
+                identity = record["resourceId"]
+            else:
+                record = service.repository.get(scope, kind, identity)
+                if command.expectedVersion != record["aggregateVersion"]:
+                    raise WorkbenchOwnerError("RESOURCE_VERSION_STALE", 409)
+                args = (scope, kind, identity, actor, command.expectedVersion)
+                if command.action == "edit":
+                    service.edit(*args, content or {})
+                elif command.action == "successor":
+                    service.successor(*args)
+                elif command.action == "validate":
+                    service.validate(*args)
+                elif command.action == "publish":
+                    if not record["currentDraftRevisionId"]:
+                        raise WorkbenchOwnerError("RESOURCE_DRAFT_REQUIRED", 409)
+                    from dataclasses import replace
+
+                    from .workbench_prepared_resources import PreparedResourceOwner
+
+                    revision = next(
+                        r
+                        for r in record["revisions"]
+                        if r["revisionId"] == record["currentDraftRevisionId"]
+                    )
+                    members = [
+                        ExactGrant(
+                            "SKILL",
+                            a,
+                            reference(kind, identity, revision["revisionId"]),
+                        )
+                        for a in ["READ_RESOURCE", "REVIEW_PUBLISH_RESOURCE"]
+                    ]
+                    review = self.authorize(
+                        call, members, key + ":publish", work, issuer
+                    )
+                    PreparedResourceOwner(self.services).publish_policy(
+                        replace(
+                            call,
+                            path={
+                                "kind": kind,
+                                "identity": identity,
+                                "revision": revision["revisionId"],
+                            },
+                            payload={
+                                "expectedVersion": command.expectedVersion,
+                                "digest": revision["digest"],
+                                "reason": "按已授权资源策略核验并发布",
+                                "idempotencyKey": key,
+                            },
+                        ),
+                        review,
+                    )
+                elif command.action in {"health", "discover"}:
+                    revision = next(
+                        r
+                        for r in record["revisions"]
+                        if r["revisionId"]
+                        == (
+                            record["currentDraftRevisionId"]
+                            or record["publishedRevisionId"]
+                        )
+                    )
+                    if revision["content"].get("secretReference"):
+                        raise WorkbenchOwnerError(
+                            "MCP_CREDENTIAL_RESOLVER_UNAVAILABLE", 422
+                        )
+                    getattr(service, command.action)(
+                        scope, identity, actor, command.expectedVersion, 2
+                    )
+                elif command.action == "select-tools":
+                    if (
+                        not command.toolNames
+                        or not record["discoverySnapshots"]
+                        or command.snapshotId
+                        != record["discoverySnapshots"][-1]["snapshotId"]
+                    ):
+                        raise WorkbenchOwnerError("LATEST_DISCOVERY_REQUIRED", 409)
+                    service.select_tools(
+                        scope,
+                        identity,
+                        actor,
+                        command.expectedVersion,
+                        command.snapshotId,
+                        command.toolNames,
+                        "配置人员明确选择已发现工具",
+                    )
+                elif command.action in {"disable", "enable", "deprecate"}:
+                    service.lifecycle(*args, command.action.upper(), "资源配置操作")
+                elif command.action != "access":
+                    raise WorkbenchOwnerError("RESOURCE_ACTION_UNSUPPORTED", 422)
+                record = service.repository.get(scope, kind, identity)
+        except SkillMcpFailure as exc:
+            raise WorkbenchOwnerError(exc.reason, exc.status) from exc
+        members = [ExactGrant("SKILL", "MANAGE_RESOURCE", target(kind, identity))]
+        members += [
+            ExactGrant(
+                "SKILL", "READ_RESOURCE", reference(kind, identity, r["revisionId"])
+            )
+            for r in record["revisions"]
+        ]
+        self.authorize(call, members, key + ":result-access", work, issuer)
+        result = {
+            "schemaVersion": "resource-management-receipt.v1",
+            "kind": kind,
+            "identity": identity,
+            "action": command.action,
+            "commandKey": command.commandKey,
+            "aggregateVersion": record["aggregateVersion"],
+            "policyIssuer": issuer.principal_id,
+            "policyDecisionId": proof.decision_id,
+            "resource": record,
+            "executionStarted": False,
+            "modelCalls": 0,
+            "credentialMaterial": "NOT_INCLUDED",
+        }
+        call.connection.execute(
+            "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES(%s,%s,%s,%s,%s,%s)",
+            (ns, domain, actor, key, digest, Jsonb(result)),
+        )
+        return result
+
+    @staticmethod
+    def safe_content(kind, content):
+        import json
+        from urllib.parse import urlsplit
+
+        if kind == "mcp":
+            endpoint = content.get("endpoint", "")
+            p = urlsplit(endpoint)
+            if p.username or p.password or p.query or p.fragment:
+                raise WorkbenchOwnerError("MCP_ENDPOINT_CREDENTIALS_DENIED", 422)
+            from .skill_mcp_transport import (
+                McpTransportFailure,
+                StreamableHttpMcpClient,
+            )
+
+            try:
+                StreamableHttpMcpClient(endpoint)
+            except McpTransportFailure as exc:
+                raise WorkbenchOwnerError(str(exc), 422) from exc
+
+        def visit(value):
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    if k.lower() in {
+                        "authorization",
+                        "password",
+                        "token",
+                        "api_key",
+                        "apikey",
+                        "cookie",
+                        "secret",
+                    }:
+                        raise WorkbenchOwnerError("RESOURCE_INLINE_SECRET_DENIED", 422)
+                    visit(v)
+            elif isinstance(value, list):
+                for v in value:
+                    visit(v)
+
+        visit(content)
+        if len(json.dumps(content)) > 200000:
+            raise WorkbenchOwnerError("RESOURCE_CONTENT_TOO_LARGE", 422)
+
+
+def install_management(manager, authorizer):
+    from fastapi import Request
+
+    from .workbench_bff import PREFIX, WorkbenchBoundaryError
+
+    def install(app, authenticate, require_csrf, policy):
+        def run(request, kind, operation):
+            if request.query_params:
+                raise WorkbenchBoundaryError("REQUEST_INVALID", 422)
+            with (
+                authorizer.controller.protected_request() as generation,
+                authorizer.repository.connection_scope() as connection,
+            ):
+                session, context = authenticate(request)
+                if request.method != "GET":
+                    require_csrf(request, session)
+                manager.scope(context, kind)
+                connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                authority = AuthorizedOwnerAuthority(
+                    authorizer, context, connection, generation.generation, ()
+                )
+                call = AuthorizedOwnerCall(
+                    "RESOURCE_MANAGEMENT",
+                    context,
+                    connection,
+                    {},
+                    {"kind": kind},
+                    {},
+                    (),
+                    authority,
+                    generation.generation,
+                    authorizer.controller.readiness.recovery_epoch,
+                )
+                try:
+                    return {"result": operation(call)}
+                except SkillMcpFailure as exc:
+                    raise WorkbenchOwnerError(exc.reason, exc.status) from exc
+
+        root = PREFIX + "/resource-management/{kind}"
+
+        @app.get(root)
+        def directory(request: Request, kind: Literal["skill", "mcp"]):
+            def read(call):
+                rows = call.connection.execute(
+                    "SELECT DISTINCT result->>'identity' identity FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'action' IN ('create','import') ORDER BY identity LIMIT 200",
+                    (
+                        call.context.scope.tenant_id,
+                        call.context.scope.security_domain,
+                        call.context.principal_id,
+                        kind,
+                    ),
+                ).fetchall()
+                service = bind_service(manager.services[kind], call.connection)
+                scope = service.scope(
+                    call.context.scope.tenant_id, call.context.scope.security_domain
+                )
+                principal = OwnerPrincipal(
+                    call.context.principal_id, scope.namespace, scope.security_domain
+                )
+                items = []
+                for row in rows:
+                    try:
+                        call.authority.require(
+                            principal,
+                            "SKILL",
+                            "MANAGE_RESOURCE",
+                            target(kind, row["identity"]),
+                        )
+                    except AuthorityError:
+                        continue
+                    items.append(service.repository.get(scope, kind, row["identity"]))
+                return {
+                    "kind": kind,
+                    "items": items,
+                    "subject": call.context.principal_id,
+                    "scope": {
+                        "tenantId": scope.namespace,
+                        "securityDomain": scope.security_domain,
+                    },
+                    "enabled": True,
+                    "credentialSupport": "REFERENCE_ONLY_NO_RESOLVER",
+                    "connectionBoundary": "LOOPBACK_NO_AUTH",
+                    "executionStarted": False,
+                }
+
+            return run(request, kind, read)
+
+        @app.post(root + "/commands")
+        def command(
+            request: Request, kind: Literal["skill", "mcp"], body: ManagementCommand
+        ):
+            from dataclasses import replace
+
+            return run(
+                request,
+                kind,
+                lambda call: manager.handle(
+                    replace(
+                        call,
+                        payload=body.model_dump(
+                            mode="json", exclude_none=True, exclude_unset=True
+                        ),
+                    )
+                ),
+            )
+
+        @app.get(root + "/commands/{key}")
+        def receipt(request: Request, kind: Literal["skill", "mcp"], key: str):
+            def read(call):
+                row = call.connection.execute(
+                    "SELECT result FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND command_key=%s",
+                    (
+                        call.context.scope.tenant_id,
+                        call.context.scope.security_domain,
+                        call.context.principal_id,
+                        "resource-management:" + key,
+                    ),
+                ).fetchone()
+                if (
+                    not row
+                    or row["result"].get("schemaVersion")
+                    != "resource-management-receipt.v1"
+                    or row["result"]["kind"] != kind
+                ):
+                    raise WorkbenchOwnerError("RESOURCE_COMMAND_NOT_FOUND", 404)
+                call.authority.require(
+                    OwnerPrincipal(
+                        call.context.principal_id,
+                        call.context.scope.tenant_id,
+                        call.context.scope.security_domain,
+                    ),
+                    "SKILL",
+                    "MANAGE_RESOURCE",
+                    target(kind, row["result"]["identity"]),
+                )
+                return row["result"]
+
+            return run(request, kind, read)
+
+    return install

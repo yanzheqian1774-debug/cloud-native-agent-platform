@@ -206,11 +206,14 @@ def build_workbench_composition(
                 json.loads(os.environ.get("BUSINESS_ONTOLOGY_CREATION_TARGETS", "[]"))
             ),
         )
+    from .resource_management import ManagementTargets
+
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
-        additional=ontology_targets
+        additional=(ManagementTargets(),)
+        + ontology_targets
         + ((PreparedResourceTargets(),) if prepared_resource_services else ())
         + (
             (PreparedExecutionGrantTargets(),)
@@ -445,6 +448,26 @@ def build_workbench_composition(
                 prepared_resource_services,
                 WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
                 workflows,
+            )
+
+        management_path = os.environ.get("RESOURCE_MANAGEMENT_POLICY")
+        if management_path and prepared_resource_services:
+            from .resource_management import (
+                ManagementPolicy,
+                ResourceManagement,
+                install_management,
+            )
+
+            management_policy = ManagementPolicy.model_validate_json(
+                Path(management_path).read_text()
+            )
+            directory_installers += (
+                install_management(
+                    ResourceManagement(
+                        prepared_resource_services, management_policy, foundation.grants
+                    ),
+                    authorizer,
+                ),
             )
 
         application = create_workbench_bff(
