@@ -197,6 +197,21 @@ def declaration(c, scope, authority, principal, kind, content, operations):
             ]
         }
     elif kind == "KNOWLEDGE":
+        # Expose only known source-family metadata after the caller's exact
+        # owner READ; never send document text to the candidate chooser.
+        import json
+
+        for document in content.get("documents", []):
+            for chunk in document.get("chunks", []):
+                try:
+                    source = json.loads(chunk.get("content", ""))
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(source, dict) and source.get("schemaVersion") in {
+                    "sales-diagnostic-source.v1",
+                    "synthetic-delivery-source.v1",
+                }:
+                    schemas.add(source["schemaVersion"])
         configuration = {
             "documents": [
                 {

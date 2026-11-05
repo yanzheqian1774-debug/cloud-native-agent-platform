@@ -668,3 +668,45 @@ def test_source_change_records_cannot_be_updated_or_deleted(repository, case):
             ):
                 c.execute(sql)
         assert read(e.app, e.principal, c, e.p.plan_id, r["requestId"]) == r
+
+
+def test_knowledge_source_family_is_read_authorized_metadata_without_document_body(
+    repository, case
+):
+    e = case
+    requirement = SimpleNamespace(
+        kind="KNOWLEDGE",
+        requirement_id="source-family-check",
+        selected=e.p.source_snapshot,
+    )
+    with repository.pool.connection() as c:
+        result = discover(
+            c,
+            e.scope,
+            e.authority,
+            e.principal,
+            SimpleNamespace(semantics=e.p.semantics),
+            requirement,
+        )
+        assert result["candidates"]
+        assert all(
+            row["assessment"]["sourceSchemas"] == ["sales-diagnostic-source.v1"]
+            for row in result["candidates"]
+        )
+        assert all(
+            isinstance(d["chunks"], int) and "content" not in d
+            for row in result["candidates"]
+            for d in row["assessment"]["configuration"]["documents"]
+        )
+        e.authority.denied = "KNOWLEDGE"
+        assert (
+            discover(
+                c,
+                e.scope,
+                e.authority,
+                e.principal,
+                SimpleNamespace(semantics=e.p.semantics),
+                requirement,
+            )["candidates"]
+            == []
+        )
