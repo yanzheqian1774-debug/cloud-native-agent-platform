@@ -159,3 +159,69 @@ def test_cross_scope_and_mixed_exact_members_never_create_instances(ready_inputs
         with pytest.raises(ValueError, match="EXACT_EMPLOYEE_MEMBER_MAPPING_REQUIRED"):
             invoke(f, c, bundle=bad)
         assert counts(c) == before
+
+
+def test_task_local_binding_splits_operations_without_changing_employee(ready_inputs):
+    import copy
+
+    from agent_console.plan_suggestion_domain import (
+        ExactReference,
+        FlexiblePlanSemantics,
+    )
+    from agent_console.sales_resource_bundle import resource_content
+    from agent_console.task_member_binding import bind_steps, resource_groups
+
+    a = ready_inputs.a
+    content = resource_content(a.e.source)["skill"]
+    read = {
+        **content,
+        "operations": [x for x in content["operations"] if x["name"] == "READ_DATA"],
+    }
+    rest = {
+        **content,
+        "operations": [x for x in content["operations"] if x["name"] != "READ_DATA"],
+    }
+    first = ExactReference(
+        resource_id="skill:read", revision_id="read:1", digest="a" * 64
+    )
+    second = ExactReference(
+        resource_id="skill:rest", revision_id="rest:1", digest="b" * 64
+    )
+    result = bind_steps(
+        a.e.p.semantics,
+        [(first, read), (second, rest)],
+        source_schema="sales-diagnostic-source.v1",
+        case="sales",
+    )
+    for task in a.e.p.semantics.tasks:
+        assert result[task.task_id]["reference"] == (
+            first if task.operation == "READ_DATA" else second
+        )
+    body = a.e.p.semantics.model_dump(mode="json")
+    body["requirements"].append(
+        {
+            "requirement_id": "foreign",
+            "kind": "SKILL",
+            "name": "Outside member",
+            "purpose": "must not substitute",
+            "required": True,
+            "selected": {
+                "resource_id": "skill:foreign",
+                "revision_id": "foreign:1",
+                "digest": "c" * 64,
+            },
+            "preparation": "Existing member required",
+        }
+    )
+    body["tasks"][0]["requirement_ids"].append("foreign")
+    with pytest.raises(ValueError, match="TASK_MEMBER_OPERATION_UNAVAILABLE"):
+        bind_steps(
+            FlexiblePlanSemantics.model_validate(body),
+            [(first, read), (second, rest)],
+            source_schema="sales-diagnostic-source.v1",
+            case="sales",
+        )
+    with pytest.raises(ValueError, match="TASK_MEMBER_DUPLICATE_RESOURCE"):
+        resource_groups(
+            [*ready_inputs.bundle["resources"], ready_inputs.bundle["resources"][0]]
+        )

@@ -1057,9 +1057,19 @@ def operations(automation):
         CoverageRequest,
         ProblemResourceCoverage,
     )
+    from .question_activity_input import QuestionActivityInput, QuestionActivityRequest
 
     coverage = ProblemResourceCoverage(automation)
     return (
+        WorkbenchOperation(
+            "PREPARE_QUESTION_ACTIVITY_INPUT",
+            "POST",
+            PREFIX + "/question-activity-input",
+            QuestionActivityRequest,
+            None,
+            lambda *args: (),
+            QuestionActivityInput(automation),
+        ),
         WorkbenchOperation(
             "READ_PROBLEM_RESOURCE_COVERAGE",
             "GET",

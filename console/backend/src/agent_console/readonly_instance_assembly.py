@@ -93,27 +93,19 @@ def _assemble(
         != employee["employeeDefinitionDigest"]
     ):
         raise ValueError("PUBLISHED_EXACT_EMPLOYEE_REQUIRED")
-    refs = {
-        r["kind"]: ExactReference(
-            resource_id=r["identity"],
-            revision_id=r["revisionId"],
-            digest=r["digest"].removeprefix("sha256:"),
-        )
-        for r in bundle["resources"]
-    }
-    if (
-        set(refs) != {"agent", "skill", "knowledge", "runtime"}
-        or len(bundle["resources"]) != 4
-    ):
-        raise ValueError("EXACT_READONLY_COMPOSITION_REQUIRED")
+    from .task_member_binding import bind_steps, resource_groups
+
+    groups = resource_groups(bundle["resources"])
+    refs = {kind: values[0] for kind, values in groups.items()}
     from .workbench_prepared_resources import OWNERS, reference
 
-    for kind, ref in refs.items():
-        authorize(
-            OWNERS[kind],
-            "READ_RESOURCE",
-            reference(kind, ref.resource_id, ref.revision_id),
-        )
+    for kind, values in groups.items():
+        for ref in values:
+            authorize(
+                OWNERS[kind],
+                "READ_RESOURCE",
+                reference(kind, ref.resource_id, ref.revision_id),
+            )
     authorize(
         "AGENT",
         "READ",
@@ -145,12 +137,13 @@ def _assemble(
                 ref.revision_id,
                 ref.digest,
             )
-            for kind, ref in refs.items()
+            for kind, values in groups.items()
+            for ref in values
         }
         if expected != actual:
             raise ValueError("EXACT_EMPLOYEE_MEMBER_MAPPING_REQUIRED")
         assembly.employee_definitions.validate_members(c, revision)
-        skill = published(c, scope, "SKILL", refs["skill"])
+        skills = [(ref, published(c, scope, "SKILL", ref)) for ref in groups["skill"]]
         source_content = published(c, scope, "KNOWLEDGE", refs["knowledge"])
         from .plan_suggestion_domain import FlexiblePlanSemantics
         from .planning_source_change import approved_source
@@ -180,23 +173,25 @@ def _assemble(
         profile = published(c, scope, "RUNTIME", refs["runtime"])
         if profile["provider"] != "NATIVE_KUBERNETES":
             raise ValueError("NATIVE_PROFILE_REQUIRED")
-    if case == "delivery":
-        from agent_console.prepared_delivery_contract import validate_delivery_mapping
-
-        validate_delivery_mapping(semantics, skill["operations"])
-    elif case == "sales":
-        from agent_console.prepared_readonly_contract import validate_mapping
-        from agent_console.sales_diagnostic_skill import SalesDiagnosticSkillExecutor
-
-        validate_mapping(
-            semantics, skill["operations"], SalesDiagnosticSkillExecutor.revision
-        )
+    bindings = bind_steps(
+        FlexiblePlanSemantics.model_validate(semantics),
+        skills,
+        source_schema=expected_schema,
+        case=case,
+    )
     seed = canonical_digest(
         {
             "scope": [scope.namespace, scope.security_domain],
             "planDigest": plan_digest,
             "employee": definition["employeeDefinitionDigest"],
-            "resources": {k: v.model_dump(mode="json") for k, v in refs.items()},
+            "resources": (
+                {k: v.model_dump(mode="json") for k, v in refs.items()}
+                if all(len(values) == 1 for values in groups.values())
+                else {
+                    k: [v.model_dump(mode="json") for v in values]
+                    for k, values in groups.items()
+                }
+            ),
         }
     )
     instance_ids = {
@@ -281,13 +276,12 @@ def _assemble(
     )
     participants = []
     for task in semantics["tasks"]:
-        operation = next(
-            o for o in skill["operations"] if o["name"] == task["operation"]
-        )
+        selected = bindings[task["task_id"]]
+        operation = selected["operation"]
         binding = ResourceBinding(
             kind="SKILL",
-            reference=refs["skill"],
-            owner_observation="published:" + refs["skill"].revision_id,
+            reference=selected["reference"],
+            owner_observation="published:" + selected["reference"].revision_id,
             input_schema_digest=canonical_digest(operation["inputSchema"]),
             output_schema_digest=canonical_digest(operation["outputSchema"]),
             operation=task["operation"],
@@ -299,6 +293,18 @@ def _assemble(
                 instance_id=instance_ids["analyst"],
                 definition=employee_ref,
                 skill=binding,
+                resources=(
+                    ResourceBinding(
+                        kind="KNOWLEDGE",
+                        reference=refs["knowledge"],
+                        owner_observation="published:" + refs["knowledge"].revision_id,
+                        input_schema_digest=canonical_digest(
+                            {"sourceSchema": expected_schema}
+                        ),
+                        output_schema_digest=canonical_digest(source_content),
+                        operation="READ_RESOURCE",
+                    ),
+                ),
                 executor_id=operation["executorId"],
                 executor_revision=operation["executorRevision"],
                 executor_digest=operation["executorConfigurationDigest"],
@@ -321,7 +327,11 @@ def _assemble(
             tuple(TaskParticipation.model_validate(p) for p in participants),
             registry=SkillExecutorRegistry((SalesDiagnosticSkillExecutor(),)),
             allowed_references=tuple(
-                ref.model_dump(mode="json") for ref in (*refs.values(), employee_ref)
+                ref.model_dump(mode="json")
+                for ref in (
+                    *[v for values in groups.values() for v in values],
+                    employee_ref,
+                )
             ),
             operations=OPERATIONS,
         )
@@ -338,6 +348,22 @@ def _assemble(
     return {
         "mapping": mapping,
         "mappingDigest": canonical_digest(mapping),
+        "stepBindings": [
+            {
+                "taskId": task["task_id"],
+                "operation": task["operation"],
+                "inputs": task["inputs"],
+                "outputs": task["outputs"],
+                "dependsOn": task["depends_on"],
+                "criterionRevisionIds": task["criterion_revision_ids"],
+                "skill": bindings[task["task_id"]]["reference"].model_dump(mode="json"),
+                "selectionBasis": bindings[task["task_id"]]["basis"],
+                "source": refs["knowledge"].model_dump(mode="json"),
+                "runtime": refs["runtime"].model_dump(mode="json"),
+                "employeeUnchanged": True,
+            }
+            for task in semantics["tasks"]
+        ],
         "employee": employee_ref.model_dump(mode="json"),
         "executionStarted": False,
     }

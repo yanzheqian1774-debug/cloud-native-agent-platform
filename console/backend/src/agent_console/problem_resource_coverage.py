@@ -78,7 +78,9 @@ def assess(semantics, members, contents, work, runtime):
     for m in members:
         grouped.setdefault(KINDS[m["kind"]], []).append(m)
     expected = {"agent", "skill", "knowledge", "runtime"}
-    if set(grouped) != expected or any(len(v) != 1 for v in grouped.values()):
+    if set(grouped) != expected or any(
+        len(grouped[k]) != 1 for k in ("agent", "knowledge", "runtime")
+    ):
         raise ValueError("READONLY_COMPOSITION_MAPPING_UNSUPPORTED")
     refs = {
         k: ExactReference(
@@ -93,44 +95,45 @@ def assess(semantics, members, contents, work, runtime):
     for requirement in semantics.requirements:
         if requirement.kind != "EMPLOYEE" and requirement.required:
             key = requirement.kind.lower()
-            if not requirement.selected or refs.get(key) != requirement.selected:
+            if not requirement.selected or not any(
+                ExactReference(
+                    resource_id=m["resource_id"],
+                    revision_id=m["revision_id"],
+                    digest=m["digest"].removeprefix("sha256:"),
+                )
+                == requirement.selected
+                for m in grouped.get(key, [])
+            ):
                 raise ValueError("EXPLICIT_REQUIREMENT_MAPPING_MISMATCH")
     source = validate("knowledge", contents["knowledge"], work)
     schema = source["sourceSchema"]
-    for kind in ("agent", "runtime", "skill"):
+    for kind in ("agent", "runtime"):
         validate(kind, contents[kind], work, expected_source_schema=schema)
-    from .prepared_readonly_contract import validate_mapping
-    from .resource_automation_validation import EXECUTORS, SCHEMAS
+    from .task_member_binding import bind_steps
 
-    matches = [
-        executor
-        for executor, prefix in SCHEMAS.items()
-        if schema == prefix + "-source.v1"
-    ]
-    if len(matches) != 1:
+    skills = contents.get("_skills", [(refs["skill"], contents["skill"])])
+    case = {
+        "sales-diagnostic-source.v1": "sales",
+        "synthetic-delivery-source.v1": "delivery",
+    }.get(schema)
+    if case is None:
         raise ValueError("BUSINESS_RULE_FAMILY_UNSUPPORTED")
-    operations = contents["skill"]["operations"]
-    from .skill_invocation_domain import ExecutorRevision
-
-    op = operations[0]
-    expected_revision = ExecutorRevision(
-        op["executorId"], op["executorRevision"], op["executorConfigurationDigest"]
-    )
-    EXECUTORS.resolve(expected_revision)
-    if schema == "synthetic-delivery-source.v1":
-        from .prepared_delivery_contract import validate_delivery_mapping
-
-        validate_delivery_mapping(semantics.model_dump(mode="json"), operations)
-    else:
-        validate_mapping(
-            semantics.model_dump(mode="json"), operations, expected_revision
-        )
+    bindings = bind_steps(semantics, skills, source_schema=schema, case=case)
     if runtime.get("status") != "PASSED":
         raise ValueError("LIVE_RUNTIME_NOT_AVAILABLE")
     return {
         "sourceSchema": schema,
         "sourceContentDigest": source["sourceContentDigest"],
         "operations": sorted({t.operation for t in semantics.tasks}),
+        "stepBindings": [
+            {
+                "taskId": task_id,
+                "skill": value["reference"].model_dump(mode="json"),
+                "operation": value["operation"]["name"],
+                "basis": value["basis"],
+            }
+            for task_id, value in bindings.items()
+        ],
         "exactMembers": len(members),
         "runtime": "LIVE_PROBE_PASSED",
         "actualTests": "REQUIRED_IN_RESOURCE_PREPARATION",
@@ -173,7 +176,7 @@ def coverage(automation, call, plan):
         try:
             definition, name = read_published(c, scope, "EMPLOYEE", ref)
             item.update(name=name, publication="PUBLISHED")
-            contents = {}
+            contents = {"_skills": []}
             visible = []
             for m in definition["members"]:
                 kind = "RUNTIME" if m["kind"] == "RUNTIME_PROFILE" else m["kind"]
@@ -185,6 +188,8 @@ def coverage(automation, call, plan):
                 require_read(call.authority, p, kind, exact)
                 content, member_name = read_published(c, scope, kind, exact)
                 contents[KINDS[m["kind"]]] = content
+                if kind == "SKILL":
+                    contents["_skills"].append((exact, content))
                 visible.append(
                     {
                         "kind": kind,

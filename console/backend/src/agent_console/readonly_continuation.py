@@ -196,7 +196,9 @@ class ReadonlyContinuation:
             self.automation.recheck(call, ready)
             if self.automation.runtime_probe(scope.namespace)["status"] != "PASSED":
                 raise WorkbenchOwnerError("READONLY_RUNTIME_NOT_READY", 409)
-            if len(ready["resources"]) != 4 or any(
+            if not 4 <= len(
+                ready["resources"]
+            ) <= self.automation.policy.maxResources or any(
                 r["state"] != "READY" for r in ready["resources"]
             ):
                 raise WorkbenchOwnerError(
