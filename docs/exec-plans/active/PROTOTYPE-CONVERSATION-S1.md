@@ -48,3 +48,96 @@ format checks passed. No PostgreSQL fixture was pointed at the real database.
 1280x900 evidence remains an explicit comparison, not pixel equality. Independent
 conversation history, unread service, multi-work/graph/node state and cross-device
 persistence are not supplied by this slice. UI-only local drafts are not records.
+
+## S1 continuation: actual work context (G1, 2026-11-05)
+
+Verified authority mapping:
+- The four left entries are four readable BusinessProblem revisions, not four
+  independently stored conversations. Their created_at is record time, not a
+  fabricated latest-message/unread timestamp.
+- draft_assistance.contexts/turns/invocations owns pre-Problem assistance and
+  parent-turn lineage. It is not a general message history or multi-work owner.
+- workflow_planning history exposes requests/questions only within an existing
+  suggestion_context_id/proposal lineage. It validates exact historical targets.
+- PreparedExecution GET validates its digest and target Problem. Its semantics,
+  participants, progress, artifacts and source supply existing work node facts.
+  These references can support a read-only process/detail view with no new owner.
+
+Minimal compatible mapping: one current problem projection -> exact visited
+execution preparation digest -> real task_id and artifact_id. Persist only view
+selection/scroll/return focus per authenticated principal/tenant/domain/login
+expiry + problem + preparation digest + artifact digest. Never persist an
+ExecutionView as authorization. On every mount, current authorized GET precedes
+rendering any task/selection/artifact. Invalid or foreign local refs cannot render
+another work's data. Browser back/forward/refresh only restore this view state.
+
+Changes: reusable browser-only view state; existing execution panel gets a
+read-only process tab over real tasks/dependencies and exact participant
+properties; existing artifact dialog and supplier/sales selection preserve their
+own identities and scroll; left list remembers visited exact work URL. No new
+run, no new multirun membership, no S2/S3 or dual-employee exploration.
+
+Login isolation: use session.absolute expiry returned as expiresAt (server-owned,
+fixed for each authenticated login), alongside principal/tenant/domain; idle
+expiry is rolling and must not key views. No CSRF or credentials in view storage.
+Add actual separate-login checks, not only principal-string fixtures.
+
+If durable cross-problem conversation is required, a concrete G2 candidate is a
+separate conversation/message/link domain in existing approved PostgreSQL with
+immutable message references and exact owner-authorized links, no execution
+lifecycle or permission authority. Requires decision on ownership, membership,
+retention and message-write policy; this slice does not implement or approve it.
+
+Acceptance: actual historical supplier/sales runs, distinct task/artifact
+identities; A-B-A nonzero reading/working scroll + unsent text; task property and
+artifact return focus; browser history/refresh; separate login/identity isolation;
+0 business POST/model calls after explicit login. Preserve 38/14/USD11.126748.
+
+## Concrete missing contract candidate — NOT implemented / NOT approved
+
+Current compatible identity is (login scope, Problem ID, exact preparation digest,
+task ID, artifact ID/digest). Problem revision/Plan version/Run state and artifact
+access are always read from their owners. A selected task never creates a Run.
+
+To meet durable conversation/multiple-work semantics, the proposed minimal domain
+would need conversation_id, tenant/domain, owner principal, membership revision,
+created_at and title; ordered immutable message_id/conversation_id/sequence,
+author principal, created_at and content reference; and typed link_id/message_id
+or conversation_id + target owner/type/ID/revision/digest. A link is navigation,
+not authority, and cannot write Problem, Plan, Run, approvals or resource grants.
+Read of each linked object must pass its existing exact permission; revoked or
+missing links show unavailable without falling back to other conversation data.
+Writes require explicit membership policy, idempotency and expected conversation
+revision; retention/deletion and ordering must be decided before implementation.
+
+Current APIs have no general conversation membership/message writer or durable
+multi-work link owner. Repurposing draft_assistance or deriving membership from
+accessible Problems would change semantics. Recommended decision: one narrowly
+scoped conversation domain within approved platform storage, referencing existing
+owners, no execution service. Alternative until approved: retain this explicitly
+labelled Problem projection. This is a state/ownership G2 decision under
+ARCHITECTURE_GATES.md, not a request to approve a parallel execution system.
+
+## Second-batch evidence (2026-11-06)
+
+Eight candidate-browser checks passed against actual authenticated backend:
+A-B-A exact work/task/properties/draft; nonzero work scroll 120/95px and reading
+20/20px; back/forward; exact artifact refresh (170px) and supplier selection;
+return focus; sales dimension/group restoration; wrong Problem/digest denied;
+new-login and cross-account isolation. No business POST or model invocation.
+Frontend lint and trusted-profile build passed. These are implementation evidence,
+not independent monitor acceptance. The initial test's hidden-dialog count
+expectation was corrected; its failure evidence is retained outside the repo.
+
+AC01 PARTIAL: readable Problem list/title/record time and selected identity;
+no general persistent conversation, latest-message or unread owner.
+AC02 PARTIAL: draft, actual task, right-rail owner and nonzero scroll restoration;
+no continuous message-history anchors or a conversation with three linked works.
+AC03 PARTIAL: actual execution task/properties/artifact/scroll/focus restoration;
+no multi-work membership, graphical relationship selection or business process.
+AC04 PARTIAL: first-batch empty new view/inactive drafts/collapse retained;
+second-batch refresh restores real artifact context. Long-list nonzero scroll
+is not established from only four real entries; no fabricated rows added.
+AC05 compatible projection PASS: actual exact-URL work/node/draft restore on
+back/forward with zero duplicate writes. Durable conversation scope remains open.
+Overall S1 remains PARTIAL. S2/S3 and two-employee work are not included.

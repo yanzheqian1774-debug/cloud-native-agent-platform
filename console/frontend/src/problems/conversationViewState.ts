@@ -1,5 +1,5 @@
 import type {WorkbenchSession} from "../api/businessWorkspace";
-export const conversationScope=(session:WorkbenchSession)=>JSON.stringify([session.principal.principalId,session.principal.tenantId,session.principal.securityDomain]);
+export const conversationScope=(session:WorkbenchSession)=>JSON.stringify([session.principal.principalId,session.principal.tenantId,session.principal.securityDomain,session.session.expiresAt]);
 const key=(scope:string,id:string)=>`conversation-view.v1:${scope}:${id}`;
 export type ConversationView={composer?:string;scrollTop?:number;railScroll?:number;url?:string};
 export function readConversationView(scope:string,id:string):ConversationView{
