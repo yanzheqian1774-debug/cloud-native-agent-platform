@@ -193,14 +193,19 @@ def prepare(service, c, context, request, record, task, spec):
         or service.configuration["cost_microusd"] != 10000000
     ):
         raise AuthorityError("CONTEXT_ADMISSION_CONFIGURATION_MISMATCH")
-    identity = record["target"]["suggestion_context_id"]
+    source_context = record["target"]["suggestion_context_id"]
+    identity = (
+        record["target"]["invocation_id"]
+        if getattr(request, "predecessor_invocation_id", None)
+        else source_context
+    )
     payload = dict(
         task_id=spec.task_id,
         phase="planning",
         synthetic_only=True,
         context_id=identity,
         first_invocation_id=record["target"]["invocation_id"],
-        source_context_id=identity,
+        source_context_id=source_context,
         configuration=service.configuration,
         subject_id=task["subject_id"],
         account_id=task["account_id"],

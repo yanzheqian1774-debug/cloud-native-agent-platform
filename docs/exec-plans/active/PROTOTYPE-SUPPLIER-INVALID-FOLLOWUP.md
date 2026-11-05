@@ -27,3 +27,14 @@ exact employee membership, source, instance, execution and evaluation owners.
 If no safe existing path exists, report the precise blocker, not a synthetic pass.
 Nine historical runs and every original row/reservation retained; record actual
 new call/cost counts. MultiSkill actual execution remains unproved unless used.
+
+Actual prepare found an existing D8 adapter identity collision before any call:
+planning context is intentionally retained across proposals, but its call request
+primary key cannot be reused. For explicit predecessor follow-ups only, key the
+new D8 approval object by its already unique invocation identity; retain the
+original planning context as source_context_id. Dispatch guard resolves the exact
+first_invocation_id plus tenant/domain/subject, as the budget owner already does.
+This implements the approved D8 independent signed follower, with unchanged
+schema, signature payload, effective caps and one-call bound. Existing first
+proposal identities, prior signatures and records stay unchanged. Test collision,
+unsigned denial, exact signing/reservation/replay and wrong-subject lookup.

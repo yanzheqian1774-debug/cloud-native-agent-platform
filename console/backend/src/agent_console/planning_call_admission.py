@@ -393,7 +393,18 @@ class BoundPlanningAdmission:
                     c, session_id=self.context.session_id_or_service_credential_id
                 ):
                     raise AuthorityError("CONTEXT_ADMISSION_ACCOUNT_INACTIVE")
-                row = request_row(c, record["target"]["suggestion_context_id"])
+                row = c.execute(
+                    "SELECT * FROM authorization_admin.context_call_requests "
+                    "WHERE first_invocation_id=%s AND tenant_id=%s "
+                    "AND security_domain=%s AND record->>'phase'='planning'",
+                    (
+                        record["target"]["invocation_id"],
+                        self.context.scope.tenant_id,
+                        self.context.scope.security_domain,
+                    ),
+                ).fetchone()
+                if row is None:
+                    row = request_row(c, record["target"]["suggestion_context_id"])
                 if row is None:
                     yield c
                     return

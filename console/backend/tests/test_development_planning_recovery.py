@@ -1,6 +1,7 @@
 """D8 isolated PostgreSQL continuity; never calls any supplier."""
 
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 from agent_console.authority_contracts import AuthorityError
@@ -122,6 +123,58 @@ def test_missing_terminal_followup_signed_exact_and_duplicate_safe(development):
         )
     with pytest.raises(AuthorityError, match="OUTCOME_UNKNOWN"):
         e.budget.reserve("different-key", inv, quote)
+
+
+def test_followup_keeps_planning_context_but_gets_independent_approval(development):
+    e = development
+    original_context = "ctx-d7"
+    request = SimpleNamespace(
+        idempotency_key="explicit-invalid-successor",
+        predecessor_invocation_id="inv-d7",
+        target=SimpleNamespace(problem=e.task_spec.root),
+        model_dump=lambda **kw: {
+            "idempotency_key": "explicit-invalid-successor",
+            "predecessor_invocation_id": "inv-d7",
+        },
+    )
+    record = {
+        "request": request.model_dump(),
+        "target": {
+            "invocation_id": "inv-explicit-invalid-successor",
+            "suggestion_context_id": original_context,
+            "input_commitment": "explicit-invalid-successor",
+            "problem": {"problem": e.task_spec.root.model_dump(mode="json")},
+        },
+    }
+    new = e.planning.prepare_record(e.business, request, record)
+    assert new["admission"]["context_id"] == "inv-explicit-invalid-successor"
+    assert new["invocation"]["target"]["suggestion_context_id"] == original_context
+    inv = claim(e, new)
+    with pytest.raises(AuthorityError, match="CONTEXT_ADMISSION_REQUIRED"):
+        e.budget.reserve(
+            "explicit-invalid-successor", inv, ProviderBudgetQuote(100, 500, 600)
+        )
+    sign(e, new)
+    value = e.budget.reserve(
+        "explicit-invalid-successor", inv, ProviderBudgetQuote(100, 500, 600)
+    )
+    assert value == e.budget.reserve(
+        "explicit-invalid-successor", inv, ProviderBudgetQuote(100, 500, 600)
+    )
+    again = e.planning.prepare_record(e.business, request, record)
+    assert again["admission"]["context_id"] == new["admission"]["context_id"]
+    with e.repo.connection_scope() as c:
+        rows = c.execute(
+            "SELECT context_id,record->>'source_context_id' source "
+            "FROM authorization_admin.context_call_requests "
+            "WHERE context_id IN (%s,%s) ORDER BY context_id",
+            (original_context, "inv-explicit-invalid-successor"),
+        ).fetchall()
+    assert len(rows) == 2
+    assert rows[1] == {
+        "context_id": "inv-explicit-invalid-successor",
+        "source": original_context,
+    }
 
 
 def add_history(e, count, cost):
