@@ -117,6 +117,7 @@ async function installAdapter(page: Page, options: AdapterOptions = {}) {
       if (options.onGrantRequest) return options.onGrantRequest(route);
       return route.fulfill({ status: 202, json: { requestId: "grant-request:test", state: "PENDING", aggregateVersion: 1, submittedAt: "2026-09-14T22:00:00Z", purpose: "WORKBENCH_EMPLOYEE_LIFECYCLE", requestedActions: ["CREATE"] } });
     }
+    if (path.endsWith("/resource-directory")) return route.fulfill({json:envelope({items:[],nextCursor:null,subject:"human:quality",scope:{tenantId:"tenant-a",securityDomain:"quality"}})});
     if (path.endsWith("/session")) {
       if (options.onSession) return options.onSession(route);
       return route.fulfill({ json: {
@@ -390,7 +391,7 @@ async function fillCreateForm(page: Page) {
   await page.getByLabel(/质量分析 Agent/).check();
   await page.getByLabel("职责角色").fill("供应商质量负责人");
   await page.getByLabel(/职责清单/).fill("审查供应商质量异常\n协调整改与复核");
-  await page.getByText("高级设置 · 技术身份需配置").click();
+  await page.getByText("高级设置 · 自动生成的技术身份").click();
   await page.getByLabel("Employee Definition ID").fill("employee:new-quality");
   await page.getByLabel("Revision ID", { exact: true }).fill("employee-revision:new-quality:1");
   await expect(page.getByLabel("装配预览")).toContainText("供应商质量负责人");
@@ -467,13 +468,14 @@ test("TEST_ADAPTER 503 keeps the frozen CREATE command in UNKNOWN", async ({ pag
 
 test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async ({ page }) => {
   let sessionReads = 0;
+  let switched = false;
   let creates = 0;
   await installAdapter(page, {
     onSession: async route => {
       sessionReads += 1;
       // ConsoleShell performs one trusted-session read for its identity display
       // before the create flow freezes its own principal key.
-      if (sessionReads <= 2) return route.fulfill({ json: {
+      if (!switched) return route.fulfill({ json: {
         schemaVersion: "workbench-session.v1",
         principal: { principalId: "human:quality", tenantId: "tenant-a", securityDomain: "quality" },
         session: { expiresAt: "2026-09-15T00:00:00Z", idleExpiresAt: "2026-09-14T23:00:00Z" },
@@ -490,11 +492,13 @@ test("TEST_ADAPTER principal switch and logout stop CREATE before POST", async (
   });
   await page.goto("/digital-employees");
   await fillCreateForm(page);
+  switched = true;
   await page.getByRole("button", { name: "确认创建" }).click();
   await expect(page.getByRole("alert")).toContainText("可信会话已切换；原命令未发送");
   expect(creates).toBe(0);
 
   sessionReads = 0;
+  switched = false;
   await page.reload();
   await fillCreateForm(page);
   sessionReads = 1;
@@ -700,6 +704,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/digital-employees");
   await expect(page.getByRole("heading", { name: "数字员工", exact: true })).toBeVisible();
+  await expect(page.locator(".employee-row-copy strong").first()).toBeVisible();
   const hierarchy = await page.evaluate(() => ({
     pageTitle: getComputedStyle(document.querySelector<HTMLElement>(".employee-page-title h1")!).fontSize,
     sectionTitle: getComputedStyle(document.querySelector<HTMLElement>(".employee-collection-toolbar h2")!).fontSize,
@@ -780,7 +785,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.getByRole("button", { name: "＋ 创建数字员工" }).click();
   await expect(page.getByLabel("当前加载范围")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "＋ 创建数字员工" })).toHaveCount(0);
-  await expect(page.getByText("高级设置 · 技术身份需配置（2 项必填）")).toBeVisible();
+  await expect(page.getByText("高级设置 · 自动生成的技术身份")).toBeVisible();
   await placeBadge(".employee-assembly");
   await page.screenshot({ path: testInfo.outputPath("desktop-create-test-adapter.png") });
   await fillCreateForm(page);
