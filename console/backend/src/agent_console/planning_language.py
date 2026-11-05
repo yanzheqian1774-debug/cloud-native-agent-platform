@@ -38,6 +38,15 @@ def issues(document):
         if not text:
             continue
         prose = re.sub(r"https?://\S+|`[^`]*`", "", text)
+        # Exact SHA256/UUID tokens are owner metadata, even when embedded in
+        # otherwise Chinese prose. Do not count random hex fragments as words.
+        prose = re.sub(
+            r"(?<![A-Za-z0-9])(?:[0-9a-fA-F]{64}|"
+            r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})"
+            r"(?![A-Za-z0-9])",
+            "",
+            prose,
+        )
         chinese = len(re.findall(r"[\u3400-\u9fff]", prose))
         english = re.findall(r"[A-Za-z]{2,}", prose)
         ordinary = [

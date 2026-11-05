@@ -5,6 +5,7 @@ Deterministic context routing is deliberately labelled, never passed off as a
 model's understanding. Planning's existing invocation owner forms durable tasks.
 """
 
+import json
 import re
 from types import SimpleNamespace
 
@@ -141,6 +142,7 @@ class QuestionActivityInput:
                 contexts.append(
                     {
                         **current,
+                        "_work": work,
                         "contextToken": token,
                         "source": source.model_dump(mode="json"),
                         "sourceName": name,
@@ -207,6 +209,21 @@ class QuestionActivityInput:
                 "planningRequest": None,
             }
         source = ExactReference.model_validate(selected["source"])
+        from .question_member_capabilities import observe
+
+        capabilities = observe(
+            a, call, source, selected["sourceSchema"], selected["_work"]
+        )
+        capability_answers = ()
+        if capabilities["operations"]:
+            capability_answers = (
+                "平台只读观察到的已发布员工成员候选操作（不是固定任务图、不是必须操作、不是执行授权）："
+                + json.dumps(
+                    [op["operation"] for op in capabilities["operations"]],
+                    ensure_ascii=False,
+                )
+                + "。按业务需要形成自由任务图；若需其它能力，保留真实缺口，不声称已有或就绪。",
+            )
         hint = f"本次唯一已批准只读来源：{source.resource_id}；修订：{source.revision_id}；SHA256：{source.digest}。来源族：{selected['sourceSchema']}。新方案boundaries保留：隔离合成来源：{source.resource_id}；修订：{source.revision_id}；SHA256：{source.digest}"
         planning = PlanningRequest(
             target=ProblemTarget.model_validate(selected["target"]),
@@ -214,6 +231,7 @@ class QuestionActivityInput:
                 request.question,
                 hint,
                 "围绕用户原始提问形成开放分析活动和任务I/O依赖，复用给定目标/标准/来源。不要照搬固定五步，不要求用户选资源/角色或技术ID；员工与技能候选交由平台发现。缺少必要业务事实时集中补问，不虚构事实、流程实例或效果。",
+                *capability_answers,
             ),
             policy=PlanningPolicy(),
             output_language="zh-CN",
@@ -233,6 +251,7 @@ class QuestionActivityInput:
                 "sourceContentDigest": selected["sourceContentDigest"],
                 "sourceProvenance": selected["sourceProvenance"],
                 "priorTaskGraphCopied": False,
+                "memberCapabilityObservation": capabilities,
                 "naturalLanguageGoalCoverage": "REQUIRES_GOVERNED_PLANNING_AND_SCOPE_VALIDATION",
             },
             "planningRequest": planning.model_dump(mode="json"),

@@ -82,6 +82,17 @@ def select_employee(automation, call, *, automatic_coverage=None):
         for r in probe["requirements"]:
             if r["kind"] == "EMPLOYEE":
                 r["selected"] = request.employee.model_dump(mode="json")
+        from .pending_member_requirements import read_and_resolve
+
+        prospective_semantics = FlexiblePlanSemantics.model_validate(probe)
+        if any(
+            r.kind != "EMPLOYEE" and r.required and r.selected is None
+            for r in prospective_semantics.requirements
+        ):
+            resolved, _ = read_and_resolve(
+                call, prospective_semantics, request.employee
+            )
+            probe = resolved.model_dump(mode="json")
         prospective = old.model_copy(
             update={"semantics": FlexiblePlanSemantics.model_validate(probe)}
         )
@@ -159,7 +170,7 @@ def select_employee(automation, call, *, automatic_coverage=None):
         )
         automation.proof_grants(call, actions)
         app.validate_target(principal, t, c)
-        semantics = old.semantics.model_dump(mode="json")
+        semantics = probe
         semantics["business_rules"] = [
             PLANNING_ONLY if s == EXECUTION_ONLY else s
             for s in semantics["business_rules"]

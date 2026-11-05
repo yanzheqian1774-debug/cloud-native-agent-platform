@@ -1051,6 +1051,11 @@ def vars_grant(grant):
 def operations(automation):
     path = PREFIX + "/planning-v2/{proposal_id}/resource-preparation"
     from .planning_source_change import SourceChangeRequest
+    from .policy_plan_confirmation import (
+        ConfirmPolicyPlan,
+        PolicyPlanConfirmation,
+        entry_grants,
+    )
     from .problem_resource_coverage import (
         CoverageQuery,
         CoverageRecovery,
@@ -1061,6 +1066,15 @@ def operations(automation):
 
     coverage = ProblemResourceCoverage(automation)
     return (
+        WorkbenchOperation(
+            "CONFIRM_POLICY_PLAN",
+            "POST",
+            PREFIX + "/planning-v2/{proposal_id}/confirmation/automatic",
+            ConfirmPolicyPlan,
+            None,
+            entry_grants,
+            PolicyPlanConfirmation(automation),
+        ),
         WorkbenchOperation(
             "PREPARE_QUESTION_ACTIVITY_INPUT",
             "POST",

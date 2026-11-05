@@ -92,19 +92,9 @@ def assess(semantics, members, contents, work, runtime):
     }
     if refs["knowledge"] != required_source:
         raise ValueError("APPROVED_SOURCE_EXACT_VERSION_REQUIRED")
-    for requirement in semantics.requirements:
-        if requirement.kind != "EMPLOYEE" and requirement.required:
-            key = requirement.kind.lower()
-            if not requirement.selected or not any(
-                ExactReference(
-                    resource_id=m["resource_id"],
-                    revision_id=m["revision_id"],
-                    digest=m["digest"].removeprefix("sha256:"),
-                )
-                == requirement.selected
-                for m in grouped.get(key, [])
-            ):
-                raise ValueError("EXPLICIT_REQUIREMENT_MAPPING_MISMATCH")
+    from .pending_member_requirements import resolve
+
+    semantics, requirement_bindings = resolve(semantics, members, contents)
     source = validate("knowledge", contents["knowledge"], work)
     schema = source["sourceSchema"]
     for kind in ("agent", "runtime"):
@@ -134,6 +124,7 @@ def assess(semantics, members, contents, work, runtime):
             }
             for task_id, value in bindings.items()
         ],
+        "requirementBindings": requirement_bindings,
         "exactMembers": len(members),
         "runtime": "LIVE_PROBE_PASSED",
         "actualTests": "REQUIRED_IN_RESOURCE_PREPARATION",

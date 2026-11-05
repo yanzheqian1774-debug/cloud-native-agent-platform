@@ -25,36 +25,64 @@ from test_resource_automation import automation
 @pytest.mark.parametrize(
     "automation", [{"resources": "existing", "continuation": True}], indirect=True
 )
+@pytest.mark.parametrize("pending", [False, True])
 def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_again(
     automation,
     monkeypatch,
+    tmp_path,
+    pending,
 ):
     a = automation
     assert a.run()["state"] == "READY"
-    with a.repository.pool.connection() as c, c.transaction():
-        original_call = AuthorizedOwnerCall(
-            "SELECT_POLICY_EMPLOYEE_RESOURCES",
-            a.subject,
-            c,
-            {
-                "version": a.e.p.plan_version,
-                "digest": a.e.p.plan_digest,
-                "expectedProposalRevision": a.e.p.plan_version,
-                "employee": next(
-                    r.selected
-                    for r in a.e.p.semantics.requirements
-                    if r.kind == "EMPLOYEE"
-                ).model_dump(mode="json"),
-                "idempotencyKey": "isolated-planning-only-successor",
-            },
-            {"proposal_id": a.e.p.plan_id},
-            {},
-            (),
-            AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ()),
-            1,
-            1,
+    if pending:
+        from test_policy_pending_binding import (
+            add_compatible_candidate,
+            confirm,
+            pending_proposal,
         )
-        selection = a.automation.select_employee(original_call)
+        from test_problem_resource_coverage import invoke
+
+        with a.repository.pool.connection() as c:
+            prior_definitions = c.execute(
+                "SELECT count(*) n FROM digital_employee_definition.definitions"
+            ).fetchone()["n"]
+        add_compatible_candidate(a)
+        proposal = pending_proposal(a)
+        confirmation = confirm(a, proposal)["confirmation"]
+        a.e.p = a.e.p.model_copy(
+            update={
+                "plan_version": confirmation["plan"]["version"],
+                "plan_digest": confirmation["digest"],
+                "semantics": proposal.semantics,
+            }
+        )
+        selection = invoke(a, "SELECT_PROBLEM_RESOURCES")
+    if not pending:
+        with a.repository.pool.connection() as c, c.transaction():
+            original_call = AuthorizedOwnerCall(
+                "SELECT_POLICY_EMPLOYEE_RESOURCES",
+                a.subject,
+                c,
+                {
+                    "version": a.e.p.plan_version,
+                    "digest": a.e.p.plan_digest,
+                    "expectedProposalRevision": a.e.p.plan_version,
+                    "employee": next(
+                        r.selected
+                        for r in a.e.p.semantics.requirements
+                        if r.kind == "EMPLOYEE"
+                    ).model_dump(mode="json"),
+                    "idempotencyKey": "isolated-planning-only-successor",
+                },
+                {"proposal_id": a.e.p.plan_id},
+                {},
+                (),
+                AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ()),
+                1,
+                1,
+            )
+            if not pending:
+                selection = a.automation.select_employee(original_call)
     source_version = selection["confirmation"]["plan"]["version"]
     assert (
         a.run(key="continuation-source-prep", version=source_version)["state"]
@@ -210,11 +238,28 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                 "execution_authority.native_dispatch_commands"
             ).fetchone()
             assert row["state"] == "QUEUED" and row["claim_generation"] == 0
-        assert (
-            ContinuationDispatchRepository(native, work).claim_next(
-                "isolated-continuation-worker"
+        if pending:
+            from pending_pipeline_support import drive
+
+            proof = drive(
+                a,
+                native,
+                policy,
+                tmp_path,
+                len(a.e.p.semantics.tasks),
+                expected_definitions=prior_definitions + 1,
             )
-            is not None
-        )
+            import json
+            import os
+
+            if path := os.environ.get("P0A_ENGINEERING_EVIDENCE"):
+                Path(path).write_text(json.dumps(proof, ensure_ascii=False, indent=2))
+        else:
+            assert (
+                ContinuationDispatchRepository(native, work).claim_next(
+                    "isolated-continuation-worker"
+                )
+                is not None
+            )
     finally:
         native.pool.close()
