@@ -312,10 +312,10 @@ class ResourceAutomation:
                 "executionStarted": False,
             }
 
-    def select_employee(self, call):
+    def select_employee(self, call, *, automatic_coverage=None):
         from .resource_preparation_plan import select_employee
 
-        return select_employee(self, call)
+        return select_employee(self, call, automatic_coverage=automatic_coverage)
 
     def __call__(self, call):
         app = self.bound_app(call)
@@ -1051,8 +1051,42 @@ def vars_grant(grant):
 def operations(automation):
     path = PREFIX + "/planning-v2/{proposal_id}/resource-preparation"
     from .planning_source_change import SourceChangeRequest
+    from .problem_resource_coverage import (
+        CoverageQuery,
+        CoverageRecovery,
+        CoverageRequest,
+        ProblemResourceCoverage,
+    )
 
+    coverage = ProblemResourceCoverage(automation)
     return (
+        WorkbenchOperation(
+            "READ_PROBLEM_RESOURCE_COVERAGE",
+            "GET",
+            PREFIX + "/planning-v2/{proposal_id}/resource-coverage",
+            None,
+            CoverageQuery,
+            target_grants("READ"),
+            coverage,
+        ),
+        WorkbenchOperation(
+            "SELECT_PROBLEM_RESOURCES",
+            "POST",
+            PREFIX + "/planning-v2/{proposal_id}/resource-selection/automatic",
+            CoverageRequest,
+            None,
+            target_grants("APPROVE"),
+            coverage,
+        ),
+        WorkbenchOperation(
+            "READ_PROBLEM_RESOURCE_SELECTION",
+            "GET",
+            PREFIX + "/planning-v2/{proposal_id}/resource-selection/automatic",
+            None,
+            CoverageRecovery,
+            target_grants("READ"),
+            coverage,
+        ),
         WorkbenchOperation(
             "SELECT_POLICY_EMPLOYEE_RESOURCES",
             "POST",

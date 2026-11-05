@@ -31,7 +31,7 @@ from .workbench_owner_authorization import WorkbenchOwnerError
 from .workbench_prepared_resources import reference
 
 
-def select_employee(automation, call):
+def select_employee(automation, call, *, automatic_coverage=None):
     request = SelectEmployeeResources.model_validate(call.payload)
     app = automation.bound_app(call)
     principal = OwnerPrincipal(
@@ -241,6 +241,8 @@ def select_employee(automation, call):
             "newRuns": 0,
             "executionStarted": False,
         }
+        if automatic_coverage is not None:
+            result["automaticCoverage"] = automatic_coverage
         c.execute(
             "INSERT INTO execution_authority.resource_policy_plan_commands VALUES(%s,%s,%s,%s,%s,%s)",
             (
