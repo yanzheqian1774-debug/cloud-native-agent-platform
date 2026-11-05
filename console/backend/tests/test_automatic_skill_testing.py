@@ -112,3 +112,49 @@ def test_existing_published_owner_is_unchanged_and_recovery_never_reexecutes(
     assert count > 0
     assert a.run() == result and a.run(read=True) == result and len(calls) == count
     assert service.repository.get(scope, "skill", a.refs["skill"].resource_id) == before
+
+
+def test_delivery_isolated_checks_do_not_forge_formal_native_evidence():
+    from agent_console.automatic_skill_testing import independent
+    from agent_console.delivery_evaluation import evaluate
+    from agent_console.delivery_resource_bundle import source_document
+    from agent_console.resource_use_domain import canonical_digest
+    from agent_console.synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+
+    source = source_document()
+    ref = {"resource_id": "isolated-delivery", "revision_id": "1", "digest": "a" * 64}
+    executor = SyntheticDeliverySkillExecutor()
+    inputs = {
+        "schemaVersion": "synthetic-delivery-input.v1",
+        "synthetic": True,
+        "source": source,
+        "sourceSnapshot": ref,
+    }
+    read = executor.invoke("isolated-read", "READ_DATA", inputs, 1000).output
+    report = executor.invoke(
+        "isolated-report",
+        "RENDER_REPORT",
+        {**inputs, "dependencies": {"read": read}},
+        1000,
+    ).output
+    checks = independent(source, report, ref)
+    assert len(checks) == 6 and all(x["result"] == "SATISFIED" for x in checks)
+    criterion = {
+        "evaluator_type": "SYNTHETIC_DELIVERY",
+        "evaluator_version": "1",
+        "criterion_type": "DETERMINISTIC_BOOLEAN",
+        "measurement": {"expected": True},
+        "applicability": {
+            "check": "ranking",
+            "sourceContentDigest": canonical_digest(source),
+        },
+    }
+    assert evaluate(criterion, source, report, ref) == (
+        "UNKNOWN",
+        "DELIVERY_EVIDENCE_REQUIREMENTS_UNSUPPORTED",
+    )
+    changed = deepcopy(report)
+    changed["suppliers"][0]["maxOverdueDays"] = 999
+    assert any(
+        x["result"] == "NOT_SATISFIED" for x in independent(source, changed, ref)
+    )

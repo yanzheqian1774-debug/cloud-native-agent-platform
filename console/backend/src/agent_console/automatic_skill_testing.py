@@ -19,28 +19,20 @@ def independent(source, report, reference):
             for result, reason in [evaluate_sales(check, source, report, reference)]
         ]
     if schema == "synthetic-delivery-source.v1":
-        from .delivery_evaluation import CHECKS, evaluate
+        from .delivery_evaluation import CHECKS, checks
 
+        # This is resource-level isolated computation, not a formal criterion
+        # claiming NATIVE_EXECUTION_ARTIFACT or published-source evidence kinds.
+        observed = checks(source, report, reference)
         return [
-            {"check": check, "result": result, "reason": reason}
+            {
+                "check": check,
+                "result": "SATISFIED" if observed[check] else "NOT_SATISFIED",
+                "reason": "ISOLATED_DELIVERY_COMPUTATION_MATCHED"
+                if observed[check]
+                else "ISOLATED_DELIVERY_COMPUTATION_MISMATCH",
+            }
             for check in CHECKS
-            for result, reason in [
-                evaluate(
-                    {
-                        "evaluator_type": "SYNTHETIC_DELIVERY",
-                        "evaluator_version": "1",
-                        "criterion_type": "DETERMINISTIC_BOOLEAN",
-                        "measurement": {"expected": True},
-                        "applicability": {
-                            "check": check,
-                            "sourceContentDigest": canonical_digest(source),
-                        },
-                    },
-                    source,
-                    report,
-                    reference,
-                )
-            ]
         ]
     raise AuthorityError("RESOURCE_INDEPENDENT_EVALUATOR_UNAVAILABLE")
 

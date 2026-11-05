@@ -3,15 +3,15 @@ import {readFileSync} from 'node:fs';
 const semantics=JSON.parse(readFileSync(new URL('./fixtures/source-change-plan.json',import.meta.url),'utf8'));
 const id='automatic-resource-case',digest='b'.repeat(64),subject='human:resource-fixture';
 const principal={principalId:subject,tenantId:'resource-fixture',securityDomain:'isolated'};
-async function setup(page:Page,mode:'ready'|'lost'|'partial'|'denied'|'identity'='ready'){
- let stored:Record<string,unknown>|null=null,posts=0,gets=0,sessionReads=0;const paths:string[]=[];
+async function setup(page:Page,mode:'ready'|'lost'|'partial'|'denied'|'identity'='ready',linked?:string){
+ let stored:Record<string,unknown>|null=null,posts=0,gets=0,sessionReads=0;const keys:string[]=[];const paths:string[]=[];
  const record=(key:string)=>({schemaVersion:'resource-preparation.v1',requestKey:key,planId:id,planVersion:2,planDigest:digest,subject,state:mode==='partial'?'PARTIALLY_READY':'READY',policy:{id:'isolated-policy',version:'1',digest:'d'.repeat(64),actor:'service:resource-preparation-policy'},resources:['agent','knowledge','runtime','skill'].map(kind=>({kind,reference:{resource_id:'fixture-'+kind,revision_id:'1',digest:'a'.repeat(64)},name:'隔离资源 '+kind,state:mode==='partial'&&kind==='skill'?'BLOCKED':'READY',case:'NEW',reason:kind==='skill'&&mode==='partial'?'RESOURCE_EXECUTOR_SCHEMA_MISMATCH':undefined,decisionId:'isolated-policy-decision',checks:[],publication:null})),assembly:{state:mode==='partial'?'BLOCKED':'ASSEMBLED',definition:{resource_id:'fixture-employee',revision_id:'1',digest:'c'.repeat(64)},reused:false},executionStarted:false,createdAt:'2026-11-04T06:00:00Z',nextStep:'EXISTING_EXECUTION_ADMISSION',resourceSnapshot:{proposal_digest:digest,checked_at:'2026-11-04T06:00:00Z',observations:semantics.requirements.map((r:{requirement_id:string})=>({requirement_id:r.requirement_id,status:mode==='partial'?'UNAVAILABLE':'MATCHED',reason:'ISOLATED_OWNER_STATE'}))}});
  await page.route('**/api/workbench/v1/**',async route=>{
   const req=route.request(),url=new URL(req.url()),path=url.pathname;
   if(req.method()!=='GET')paths.push(path);
   if(path.endsWith('/session')){sessionReads++;return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:mode==='identity'&&stored&&sessionReads>2?{...principal,securityDomain:'other-domain'}:principal,session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}})}
   if(path.endsWith('/resource-preparation')){
-   if(req.method()==='POST'){posts++;const body=req.postDataJSON();expect(Object.keys(body).sort()).toEqual(['idempotencyKey','version']);stored=record(body.idempotencyKey);if(mode==='lost')return route.fulfill({status:503,json:{reasonCode:'RESPONSE_LOST_AFTER_FIXTURE_COMMIT'}})}else gets++;
+   if(req.method()==='POST'){posts++;const body=req.postDataJSON();expect(Object.keys(body).sort()).toEqual(['idempotencyKey','version']);keys.push(body.idempotencyKey);stored=record(body.idempotencyKey);if(mode==='lost')return route.fulfill({status:503,json:{reasonCode:'RESPONSE_LOST_AFTER_FIXTURE_COMMIT'}})}else gets++;
    if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'RESOURCE_PERMISSION_REVOKED'}});
    return route.fulfill(stored?{json:{result:stored}}:{status:404,json:{reasonCode:'RESOURCE_PREPARATION_NOT_FOUND'}});
   }
@@ -19,8 +19,8 @@ async function setup(page:Page,mode:'ready'|'lost'|'partial'|'denied'|'identity'
   if(path===`/api/workbench/v1/planning-v2/${id}`)return route.fulfill({json:{result:{proposal:{proposal_id:id,revision:2,semantics},digest,snapshot:null,validation:{status:'DECLARED_CONTRACT_VALID'}}}});
   return route.fulfill({status:404,json:{reasonCode:'UNEXPECTED_FIXTURE_ROUTE'}});
  });
- await page.goto(`/work/planning/${id}?revision=2`);
- return {get posts(){return posts},get gets(){return gets},paths};
+ await page.goto(`/work/planning/${id}?revision=2${linked?'&resourcePreparation='+encodeURIComponent(linked):''}`);
+ return {get posts(){return posts},get gets(){return gets},keys,paths};
 }
 
 test('D11 prepares automatically, shows key resource states inline and sends no approval or invocation command',async({page},info)=>{
@@ -36,7 +36,7 @@ test('D11 response loss recovers original receipt without repeated publication o
 });
 
 test('D11 partial batch retains successful resources and exposes one grouped gap without approval controls',async({page})=>{
- const state=await setup(page,'partial');const panel=page.getByRole('region',{name:'平台自动准备资源'});await expect(panel).toContainText('部分资源已备齐');await expect(panel).toContainText('技能输入输出契约不匹配');await expect(panel.getByRole('button')).toHaveCount(0);expect(state.posts).toBe(1);
+ const state=await setup(page,'partial');const panel=page.getByRole('region',{name:'平台自动准备资源'});await expect(panel).toContainText('部分资源已备齐');await expect(panel).toContainText('技能输入输出契约不匹配');await expect(panel.getByRole('button',{name:'重新核对已知缺口',exact:true})).toBeVisible();expect(state.posts).toBe(1);
 });
 
 test('D11 denied preparation never exposes success and stops original receipt polling',async({page})=>{
@@ -45,4 +45,13 @@ test('D11 denied preparation never exposes success and stops original receipt po
 
 test('D11 account scope change withdraws a late preparation receipt',async({page})=>{
  await setup(page,'identity');const panel=page.getByRole('region',{name:'平台自动准备资源'});await expect(panel.getByRole('alert')).toBeVisible();await expect(panel.getByRole('table')).toHaveCount(0);
+});
+
+
+test('known gaps use one fresh verification key and linked history never creates absent work',async({page})=>{
+ const state=await setup(page,'partial');const panel=page.getByRole('region',{name:'平台自动准备资源'});await expect(panel).toContainText('部分资源已备齐');const first=state.keys[0];await panel.getByRole('button',{name:'重新核对已知缺口',exact:true}).click();await expect(panel).toContainText('部分资源已备齐');expect(state.posts).toBe(2);expect(state.keys[1]).not.toBe(first);expect(state.paths.every(p=>p.endsWith('/resource-preparation'))).toBe(true);await page.reload();await expect(panel).toContainText('部分资源已备齐');expect(state.posts).toBe(2);
+});
+
+test('a missing linked preparation is read only and cannot submit or execute',async({page})=>{
+ const state=await setup(page,'ready','missing-record');await expect(page.getByRole('region',{name:'平台自动准备资源'}).getByRole('alert')).toBeVisible();expect(state.posts).toBe(0);expect(state.gets).toBeGreaterThan(0);expect(state.paths).toEqual([]);
 });

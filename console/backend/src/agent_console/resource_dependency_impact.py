@@ -163,7 +163,7 @@ def project(call, kind, record):
                 "identity": row["plan_id"],
                 "revision": str(row["version"]),
                 "name": value.get("title")
-                or value.get("semantics", {}).get("objective")
+                or value.get("semantics", {}).get("title")
                 or "已确认方案",
                 "state": "CONFIRMED",
                 "references": references(

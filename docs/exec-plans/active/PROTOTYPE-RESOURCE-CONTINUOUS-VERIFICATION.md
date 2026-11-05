@@ -46,3 +46,13 @@ source and exact policy scope, no Human approval clicks, no old Run replay; old
 business facts/ledger/regression, same-viewport prototype/actual screenshots of
 changed resource pages and P08/P10, desktop/mobile errors/empty states. Whole03/04
 remain OPEN where other resource groups/ordinary goals/92states are not complete.
+
+Real supplier verification caught an adapter mismatch: the formal business
+criterion wrapper requires Native artifact evidence that isolated resource tests
+do not possess. Use its existing independent computation `checks` core for local
+resource verification; never invent Native evidence kinds. Preserve the actual
+blocked preparation/test records. Add a known-gap recheck action with a fresh
+preparation key, not replay of unknown provider/Native operations. A linked
+`resourcePreparation` locator is authenticated GET-only (404 never creates work).
+A successful explicit recheck links the new immutable record; lost responses still
+recover by GET. Existing receipts are never edited or relabelled as passing.
