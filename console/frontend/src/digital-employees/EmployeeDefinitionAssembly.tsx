@@ -8,10 +8,13 @@ import {
   type AgentDefinitionSummary,
   type EmployeeCommandResult,
   type EmployeeCreateCommand,
+  type EmployeeMember,
   type EmployeeDefinition,
   type EmployeeLifecycleState,
 } from "../api/digitalEmployees";
 import { EmployeeAuthorizationRequest } from "./EmployeeAuthorizationRequest";
+
+import {EmployeeResourcePicker} from "./EmployeeResourcePicker";
 
 type FrozenCreate = { command: EmployeeCreateCommand; principalKey: string };
 
@@ -51,6 +54,8 @@ export function EmployeeDefinitionAssembly({
   const [role, setRole] = useState("");
   const [responsibilities, setResponsibilities] = useState("");
   const [agentIdentity, setAgentIdentity] = useState("");
+  const [resourceMembers, setResourceMembers] = useState<EmployeeMember[]>([]);
+  const [resourcePrincipal, setResourcePrincipal] = useState<string|null>(null);
   const [frozen, setFrozen] = useState<FrozenCreate | null>(null);
   const [busy, setBusy] = useState(false);
   const [unknown, setUnknown] = useState(false);
@@ -89,6 +94,7 @@ export function EmployeeDefinitionAssembly({
     try {
       const session = await getWorkbenchSession(controller.signal);
       if (turn !== generation.current) return;
+      if(resourceMembers.length && resourcePrincipal!==workbenchPrincipalKey(session)){setResourceMembers([]);throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED",409)}
       const command: EmployeeCreateCommand = {
         employeeDefinitionId: definitionId.trim(),
         employeeDefinitionRevisionId: revisionId.trim(),
@@ -99,12 +105,12 @@ export function EmployeeDefinitionAssembly({
           resourceId: selectedAgent.definitionId,
           revisionId: selectedAgent.revisionId,
           digest: selectedAgent.digest,
-        }],
+        }, ...resourceMembers.map(member=>({...member}))],
         expectedVersion: 0,
         commandId: `employee-command:${crypto.randomUUID()}`,
       };
       Object.freeze(command.responsibilities);
-      Object.freeze(command.members[0]);
+      command.members.forEach(Object.freeze);
       Object.freeze(command.members);
       Object.freeze(command);
       setFrozen({ command, principalKey: workbenchPrincipalKey(session) });
@@ -207,12 +213,14 @@ export function EmployeeDefinitionAssembly({
         </label>; })}</div>
         {hasMoreAgents && <button type="button" className="employee-secondary-button" onClick={onLoadMoreAgents}>加载更多 Agent</button>}
       </div>
+      <EmployeeResourcePicker disabled={Boolean(frozen)||busy} onChange={(members,principal)=>{setResourceMembers(members);setResourcePrincipal(principal)}}/>
     </div>
 
     <aside className="assembly-preview" aria-label="装配预览">
       <span className="px-eyebrow">装配预览</span><h3>{role.trim() || "待定义角色"}</h3>
       <h4>职责边界</h4>{responsibilityList.length ? <ul>{responsibilityList.map((d,i)=><li key={i}>{d}</li>)}</ul> : <p>填写这位员工负责的业务事项。</p>}
       <h4>执行成员</h4><p>{selectedAgent?.name ?? "请选择 Agent"}</p>{selectedAgent && <code>{selectedAgent.revisionId}</code>}
+      <h4>业务资源 · {resourceMembers.length} 项</h4><ul>{resourceMembers.map(m=><li key={m.kind+":"+m.resourceId}>{m.kind} · <code>{m.revisionId}</code></li>)}</ul>
       <h4>创建前核对</h4><ul>{readiness.map(({ ready, label }) =>
         <li key={label}><b className={ready ? "ready" : ""}>{ready ? "已填写" : "待补齐"}</b> {label}</li>
       )}</ul>
@@ -223,7 +231,7 @@ export function EmployeeDefinitionAssembly({
       <span className="employee-confirmation-state">等待用户明确确认</span>
       <h3>{frozen.command.role}</h3>
       <p>{frozen.command.responsibilities.join("；")}</p>
-      <p>成员：{frozen.command.members[0].resourceId} / {frozen.command.members[0].revisionId}</p>
+      <p>组合成员：{frozen.command.members.length} 项</p><ul>{frozen.command.members.map(m=><li key={m.kind+":"+m.resourceId}>{m.kind} · {m.resourceId} / {m.revisionId}</li>)}</ul>
       <details><summary>查看冻结命令身份</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionId}</code><code>{frozen.command.employeeDefinitionRevisionId}</code></details>
       <div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认创建"}</button></div>
     </section>}

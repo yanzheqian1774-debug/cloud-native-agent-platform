@@ -752,3 +752,68 @@ def test_digital_employee_storage_error_is_fail_closed() -> None:
 
     assert raised.value.reason_code == "EXECUTION_STORAGE_UNAVAILABLE"
     assert raised.value.status_code == 503
+
+
+def test_complete_composition_schema_and_owner_invariants():
+    """Trusted projection carries the existing owner composition without relaxing it."""
+    from agent_console.digital_employee_definition import (
+        CompositionMember,
+        EmployeeDefinitionError,
+        EmployeeRevision,
+        MemberKind,
+    )
+    from agent_console.workbench_bff_schemas import WorkbenchCreateEmployeeDefinition
+    from pydantic import ValidationError
+
+    body = {
+        "employeeDefinitionId": "employee:complete",
+        "employeeDefinitionRevisionId": "employee-revision:complete:1",
+        "role": "Diagnostic owner",
+        "responsibilities": ["Verify evidence"],
+        "members": [
+            {
+                "kind": kind.value,
+                "resourceId": kind.value.lower() + ":test",
+                "revisionId": "revision:1",
+                "digest": "a" * 64,
+            }
+            for kind in MemberKind
+        ],
+        "expectedVersion": 0,
+        "commandId": "complete:create:1",
+    }
+    parsed = WorkbenchCreateEmployeeDefinition.model_validate(body)
+
+    def revision(members):
+        return EmployeeRevision(
+            ScopeIdentity("demo", "isolated"),
+            body["employeeDefinitionId"],
+            body["employeeDefinitionRevisionId"],
+            body["role"],
+            tuple(body["responsibilities"]),
+            tuple(
+                CompositionMember(
+                    MemberKind(m.kind), m.resourceId, m.revisionId, m.digest
+                )
+                for m in members
+            ),
+        )
+
+    assert len(revision(parsed.members).members) == len(MemberKind)
+    agent = next(m for m in parsed.members if m.kind == "AGENT")
+    with pytest.raises(EmployeeDefinitionError, match="PRIMARY_AGENT_CARDINALITY"):
+        revision([m for m in parsed.members if m.kind != "AGENT"])
+    with pytest.raises(EmployeeDefinitionError):
+        revision([*parsed.members, agent])
+    runtime = next(m for m in parsed.members if m.kind == "RUNTIME_PROFILE")
+    with pytest.raises(EmployeeDefinitionError):
+        revision(
+            [
+                *parsed.members,
+                runtime.model_copy(update={"resourceId": "runtime:other"}),
+            ]
+        )
+    with pytest.raises(ValidationError):
+        WorkbenchCreateEmployeeDefinition.model_validate(
+            {**body, "members": [{**body["members"][0], "kind": "SECRET"}]}
+        )

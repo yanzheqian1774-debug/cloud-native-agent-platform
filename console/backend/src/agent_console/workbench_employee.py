@@ -177,6 +177,7 @@ class EmployeeDefinitionCommandOwnerAdapter:
         for member in revision.members:
             if self.prepared_resource_reads and member.kind in {
                 MemberKind.SKILL,
+                MemberKind.MCP,
                 MemberKind.KNOWLEDGE,
                 MemberKind.RUNTIME_PROFILE,
             }:
@@ -184,6 +185,7 @@ class EmployeeDefinitionCommandOwnerAdapter:
 
                 kind = {
                     MemberKind.SKILL: "skill",
+                    MemberKind.MCP: "mcp",
                     MemberKind.KNOWLEDGE: "knowledge",
                     MemberKind.RUNTIME_PROFILE: "runtime",
                 }[member.kind]

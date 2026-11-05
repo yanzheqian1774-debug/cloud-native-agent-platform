@@ -696,3 +696,19 @@
 .assembly-bindings th,.assembly-bindings td { text-align:left; padding:8px; border-bottom:1px solid #e3eaf4 }
 .assembly-bindings thead { background:#eff5fd }.assembly-bindings small { display:block; color:#52677f }
 @media(max-width:850px){.employee-management .assembly-workspace{grid-template-columns:1fr}.assembly-preview{position:static}}
+
+/* Employee composition uses the same quiet cards and blue selection as E03. */
+.employee-management .employee-resource-picker {background:#fff;border:1px solid #d5e3ff;border-radius:9px;padding:20px;min-width:0}
+.employee-management .employee-resource-groups {display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+.employee-management .employee-resource-groups button {display:flex;gap:10px;align-items:center;border:1px solid #d5e3ff;border-radius:6px;background:#fff;color:#315786;padding:9px 12px}
+.employee-management .employee-resource-groups button[aria-pressed=true] {background:#edf5ff;color:#06f;border-color:#06f}
+.employee-management .employee-resource-groups span {background:#edf3ff;border-radius:10px;padding:0 6px;font-size:12px}
+.employee-management .employee-resource-options {display:grid;gap:8px;max-height:320px;overflow:auto}
+.employee-management .employee-resource-options label {display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #dce6fa;border-radius:7px;margin:0}
+.employee-management .employee-resource-options input {width:18px;flex:none;accent-color:#06f}
+.employee-management .employee-resource-options label:has(input:checked) {background:#f1f7ff;border-color:#06f}
+.employee-management .employee-resource-options small {display:block;overflow-wrap:anywhere;color:#617fa7;font-size:12px}
+.employee-management .employee-selected-resources {margin-top:16px;border-top:1px solid #e4edfa;padding-top:8px}
+.employee-management .employee-selected-resources>div {display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #edf2fa}
+.employee-management .employee-selected-resources button {flex:none;color:#06f;border:0;background:transparent}
+.employee-management .assembly-preview code {overflow-wrap:anywhere}

@@ -160,7 +160,7 @@ class WorkbenchEmployeeMember(StrictWorkbenchModel):
 
 
 class WorkbenchEmployeeCreateMember(StrictWorkbenchModel):
-    kind: Literal["AGENT"]
+    kind: Literal["AGENT", "WORKFLOW", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE"]
     resourceId: str = Field(min_length=1, max_length=200)
     revisionId: str = Field(min_length=1, max_length=200)
     digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
@@ -172,7 +172,7 @@ class WorkbenchCreateEmployeeDefinition(StrictWorkbenchModel):
     role: str = Field(min_length=1, max_length=200)
     responsibilities: tuple[str, ...] = Field(min_length=1, max_length=32)
     members: tuple[WorkbenchEmployeeCreateMember, ...] = Field(
-        min_length=1, max_length=1
+        min_length=1, max_length=128
     )
     predecessorEmployeeRevisionId: str | None = Field(default=None, max_length=200)
     expectedVersion: int = Field(ge=0)

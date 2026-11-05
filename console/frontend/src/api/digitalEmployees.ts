@@ -42,7 +42,7 @@ export type EmployeeCreateCommand = {
   employeeDefinitionRevisionId: string;
   role: string;
   responsibilities: string[];
-  members: [{ kind: "AGENT"; resourceId: string; revisionId: string; digest: string }];
+  members: EmployeeMember[];
   predecessorEmployeeRevisionId?: string;
   expectedVersion: number;
   commandId: string;
