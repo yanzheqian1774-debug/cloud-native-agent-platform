@@ -1,3 +1,4 @@
+import {listReadableResources} from "./resourceDirectory";
 export type EmployeeMember = {
   kind: "AGENT" | "WORKFLOW" | "SKILL" | "MCP" | "KNOWLEDGE" | "RUNTIME_PROFILE";
   resourceId: string;
@@ -355,8 +356,13 @@ function pageQuery(cursor?: string, pageSize = 50): string {
   }).toString();
 }
 
-export const listAgentDefinitions = (cursor?: string, signal?: AbortSignal) =>
-  request<WorkbenchPage<AgentDefinitionSummary>>(`${root}/agents?${pageQuery(cursor)}`, signal);
+export async function listAgentDefinitions(cursor?: string, signal?: AbortSignal):Promise<WorkbenchPage<AgentDefinitionSummary>> {
+  try{return await request<WorkbenchPage<AgentDefinitionSummary>>(`${root}/agents?${pageQuery(cursor)}`, signal)}catch(error){
+    if(!(error instanceof DigitalEmployeeRequestError)||![403,404].includes(error.status))throw error;
+    const page=await listReadableResources('agent','','PUBLISHED',cursor??null,signal);
+    return {items:page.items.filter(x=>x.enabled&&x.isCurrentPublished).map(x=>({definitionId:x.identity,revisionId:x.revisionId,digest:x.digest,name:x.name,title:'可读的已发布 Agent',enabled:x.enabled,archived:false})),nextCursor:page.nextCursor??undefined};
+  }
+}
 
 export const getAgentDefinitionRevision = (
   definitionId: string,
