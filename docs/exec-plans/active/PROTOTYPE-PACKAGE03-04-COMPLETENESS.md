@@ -48,3 +48,31 @@ Validate parser unit/security + isolatedPG atomic/idempotent batch, truthful
 legacy-test negative; frontend import preview and loss recovery; lint/build/full
 source checks. Actual UI scoped batch and old five Run/resource/model/budget audit
 only after fixed source and idle controlled install; old UNKNOWN never replayed.
+
+## 2026-11-05 bounded actual test / checked publication / impact extension (G1)
+
+Use existing Skill owner savedTests/testResults/facts, caller transaction and exact
+MANAGE_RESOURCE policy. Add management test command accepting an explicit saved
+case, operation and exact/subset comparison. Only existing deterministic local
+synthetic sales/delivery/cost implementations may be resolved by exact registered
+executor revision+configuration digest, READ_ONLY operation, bounded synthetic
+input. No network/model/dynamic code, Attempt, production invocation, new resource
+lifecycle or execution owner. This is isolated resource testing, not a business
+Run. Inputs, expected and actual remain separate; failed/missing/unsupported never
+pass. Existing declaration-only test stays NOT_EXECUTED. Results bind revision,
+digest, operation and saved-case/input/expected digests; edit or later failed
+retest invalidates evidence. Reuse current operation limits with stricter local
+caps; no caller endpoint/executor injection. New checked-publication command
+requires latest actual passing evidence for every declared operation before
+calling unchanged validation/review/publication. Existing legacy configuration
+publication remains compatible and is explicitly labelled as not an execution
+test; it cannot substitute checked-publication evidence.
+
+Read-only version projection compares exact configurations, test coverage and
+historical refs. Show only independently authorized usage facts; incomplete
+visibility must stay explicit. Never infer no usage from an empty authorized
+projection. No new DB/schema/identity/grant action; old plans/resources untouched.
+Validate genuine output vs impossible expected, valid/invalid synthetic data,
+missing/unknown executor/side effect/digest/limit failures, stale tests and failed
+retests, per-operation coverage, historical immutable revisions; actual product
+path followed by supplier/sales old-Run read-only regression and screenshot pair.

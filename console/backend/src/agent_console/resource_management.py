@@ -79,6 +79,8 @@ class ManagementCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal[
         "batch-import",
+        "test",
+        "publish-tested",
         "create",
         "import",
         "edit",
@@ -101,6 +103,11 @@ class ManagementCommand(BaseModel):
     manifest: dict | None = None
     manifests: list[dict] | None = Field(default=None, min_length=1, max_length=100)
     previewDigest: str | None = Field(default=None, pattern="^[a-f0-9]{64}$")
+    operation: str | None = Field(default=None, max_length=200)
+    testName: str | None = Field(default=None, min_length=1, max_length=120)
+    testInput: dict | None = None
+    expectedOutput: dict | None = None
+    comparison: Literal["exact", "subset"] = "exact"
     snapshotId: str | None = None
     toolNames: list[str] = Field(default_factory=list, max_length=128)
 
@@ -277,7 +284,57 @@ class ResourceManagement:
                     service.successor(*args)
                 elif command.action == "validate":
                     service.validate(*args)
-                elif command.action == "publish":
+                elif command.action == "test":
+                    if (
+                        kind != "skill"
+                        or not command.operation
+                        or not command.testName
+                        or command.testInput is None
+                        or command.expectedOutput is None
+                    ):
+                        raise WorkbenchOwnerError("TEST_CASE_REQUIRED", 422)
+                    from .skill_resource_testing import run as run_test
+
+                    self.safe_content(
+                        "skill",
+                        {
+                            "input": command.testInput,
+                            "expected": command.expectedOutput,
+                        },
+                    )
+                    run_test(
+                        service,
+                        scope,
+                        identity,
+                        actor,
+                        command.expectedVersion,
+                        operation=command.operation,
+                        name=command.testName,
+                        inputs=command.testInput,
+                        expected_output=command.expectedOutput,
+                        comparison=command.comparison,
+                    )
+                elif command.action in {"publish", "publish-tested"}:
+                    if command.action == "publish-tested":
+                        from .skill_resource_testing import coverage
+
+                        if kind != "skill":
+                            raise WorkbenchOwnerError("SKILL_ONLY", 422)
+                        candidate = next(
+                            (
+                                r
+                                for r in record["revisions"]
+                                if r["revisionId"] == record["currentDraftRevisionId"]
+                            ),
+                            None,
+                        )
+                        if (
+                            candidate is None
+                            or not coverage(record, candidate)["ready"]
+                        ):
+                            raise WorkbenchOwnerError(
+                                "CURRENT_OPERATION_TESTS_REQUIRED", 409
+                            )
                     if not record["currentDraftRevisionId"]:
                         raise WorkbenchOwnerError("RESOURCE_DRAFT_REQUIRED", 409)
                     from dataclasses import replace
@@ -399,6 +456,15 @@ class ResourceManagement:
             "modelCalls": 0,
             "credentialMaterial": "NOT_INCLUDED",
         }
+        if command.action == "publish-tested":
+            from .skill_resource_testing import coverage
+
+            published = next(
+                r
+                for r in record["revisions"]
+                if r["revisionId"] == record["publishedRevisionId"]
+            )
+            result["publicationVerification"] = coverage(record, published)
         call.connection.execute(
             "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES(%s,%s,%s,%s,%s,%s)",
             (ns, domain, actor, key, digest, Jsonb(result)),
@@ -615,6 +681,63 @@ def install_management(manager, authorizer):
                     "connectionBoundary": "LOOPBACK_NO_AUTH",
                     "executionStarted": False,
                 }
+
+            return run(request, kind, read)
+
+        @app.get(root + "/{identity}/impact")
+        def impact(request: Request, kind: Literal["skill", "mcp"], identity: str):
+            def read(call):
+                from .skill_resource_testing import version_impact
+
+                principal = OwnerPrincipal(
+                    call.context.principal_id,
+                    call.context.scope.tenant_id,
+                    call.context.scope.security_domain,
+                )
+                call.authority.require(
+                    principal, "SKILL", "MANAGE_RESOURCE", target(kind, identity)
+                )
+                if not manager.owned(call, kind, identity):
+                    raise WorkbenchOwnerError("RESOURCE_MANAGEMENT_NOT_FOUND", 404)
+                service = bind_service(manager.services[kind], call.connection)
+                record = service.repository.get(
+                    service.scope(principal.tenant_id, principal.security_domain),
+                    kind,
+                    identity,
+                )
+                for revision in record["revisions"]:
+                    call.authority.require(
+                        principal,
+                        "SKILL",
+                        "READ_RESOURCE",
+                        reference(kind, identity, revision["revisionId"]),
+                    )
+                summary = version_impact(record)
+                uses = []
+                rows = call.connection.execute(
+                    "SELECT u.resource_use_id,u.resource_revision_id,u.resource_digest,p.digest preparation_digest FROM resource_use.uses u JOIN execution_authority.run_preparations p USING(namespace,security_domain,workflow_run_id) WHERE u.namespace=%s AND u.security_domain=%s AND u.resource_id=%s AND u.resource_kind=%s ORDER BY u.resource_use_id LIMIT 201",
+                    (
+                        principal.tenant_id,
+                        principal.security_domain,
+                        identity,
+                        "SKILL" if kind == "skill" else "MCP",
+                    ),
+                ).fetchall()
+                for row in rows[:200]:
+                    try:
+                        call.authority.require(
+                            principal,
+                            "RESOURCE_USE",
+                            "READ",
+                            "resource-use:prepared:"
+                            + row["preparation_digest"]
+                            + ":"
+                            + row["resource_use_id"],
+                        )
+                    except AuthorityError:
+                        continue
+                    uses.append(dict(row))
+                return {**summary, "authorizedUses": uses, "truncated": len(rows) > 200}
 
             return run(request, kind, read)
 
