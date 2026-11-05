@@ -8,6 +8,45 @@ from test_planning_runtime import formal as formal
 from test_planning_runtime import send
 
 
+def test_foreign_criterion_reference_is_not_missing_coverage():
+    from test_planning_contracts import modern
+
+    plan = modern()
+    plan["tasks"][3]["criterion_revision_ids"] = ["foreign-criterion"]
+    text = json.dumps({"kind": "VALID_SUGGESTION", "semantics": plan})
+    with pytest.raises(ValidationError) as caught:
+        FlexiblePlanningProviderResult.model_validate_json(text)
+    value = diagnostic(text, "SCHEMA_OR_CONTRACT", caught.value)
+    assert {
+        "path": ["semantics", "tasks", 3, "criterion_revision_ids"],
+        "rule": "PLAN_REFERENCE_INVALID",
+        "type": "contract",
+    } in value["locations"]
+    assert "foreign-criterion" not in json.dumps(value)
+
+
+def test_legacy_foreign_criterion_feedback_preserves_original_receipt():
+    from copy import deepcopy
+
+    from agent_console.planning_adaptive import repair_errors
+
+    receipt = {
+        "issues": [{"path": ["semantics"], "rule": "PLAN_REFERENCE_INVALID"}],
+        "locations": [
+            {
+                "path": ["semantics", "tasks", 3, "criterion_revision_ids"],
+                "rule": "PLANNING_CRITERION_COVERAGE_MISSING",
+                "type": "contract",
+            }
+        ],
+    }
+    before = deepcopy(receipt)
+    assert repair_errors(receipt)[0]["rule"] == "PLAN_REFERENCE_INVALID"
+    assert receipt == before
+    receipt["issues"][0]["rule"] = "PLANNING_CRITERION_COVERAGE_MISSING"
+    assert repair_errors(receipt)[0]["rule"] == "PLANNING_CRITERION_COVERAGE_MISSING"
+
+
 def test_diagnostic_omits_unknown_keys_values_and_messages():
     text = json.dumps({"kind": "UNSUPPORTED", "secret-key": "private provider secret"})
     with pytest.raises(ValidationError) as caught:

@@ -42,6 +42,26 @@ def child_key(root, ordinal):
     return "planning-repair:" + canonical_digest([root, ordinal])
 
 
+def repair_errors(diagnostic):
+    """Correct the legacy foreign-criterion label without rewriting its receipt."""
+    foreign_reference = any(
+        issue.get("rule") == "PLAN_REFERENCE_INVALID"
+        for issue in diagnostic.get("issues", [])
+    )
+    errors = diagnostic.get("locations") or diagnostic.get("issues") or []
+    return [
+        {
+            **item,
+            "rule": "PLAN_REFERENCE_INVALID",
+        }
+        if foreign_reference
+        and item.get("path", [])[-1:] == ["criterion_revision_ids"]
+        and item.get("rule") == "PLANNING_CRITERION_COVERAGE_MISSING"
+        else dict(item)
+        for item in errors
+    ]
+
+
 def recovery(service, principal, root_key, first):
     """Read existing successors only; never reconstruct and dispatch a request."""
     chain = [first]
@@ -86,20 +106,46 @@ def run(service, principal, request, limits, clock=monotonic):
         scope, principal.principal_id, request.idempotency_key
     )
     config = {"version": "planning-loop.v1", **asdict(limits)}
+    initial_feedback = None
+    if request.predecessor_invocation_id is not None:
+        previous = service.read(principal, request.predecessor_invocation_id)
+        outcome = previous["result"]
+        if (
+            outcome["technical_status"] == "SUCCEEDED"
+            and outcome.get("kind") == "INVALID"
+        ):
+            diagnostic = outcome.get("validation_diagnostic") or {}
+            errors = repair_errors(diagnostic)
+            if not errors or any(
+                str(item.get("rule", "")).startswith("REPAIR_") for item in errors
+            ):
+                raise PlanningError("PLANNING_PREDECESSOR_NO_SAFE_REPAIR")
+            initial_feedback = {
+                "issues": errors,
+                "rule_version": "planning-repair.v1",
+                "source_invocation": request.predecessor_invocation_id,
+            }
+            if outcome.get("language_repair_source") is not None:
+                initial_feedback["language_repair_source"] = outcome[
+                    "language_repair_source"
+                ]
     if root:
         prior = service.read(principal, root)
         stored = prior["invocation"].get("request", {})
         # Reuse the originally admitted limits to preserve idempotency across
         # configuration updates; begin performs full input commitment checking.
         first = service.begin(
-            principal, request, loop=stored.get("adaptive_loop", config)
+            principal,
+            request,
+            repair=initial_feedback,
+            loop=stored.get("adaptive_loop", config),
         )
         return recovery(service, principal, request.idempotency_key, first)
     started = clock()
     chain = []
     seen = set()
     current = request
-    feedback = None
+    feedback = initial_feedback
     stop = "ATTEMPT_LIMIT"
     for ordinal in range(limits.maximum_attempts):
         if (
@@ -134,7 +180,7 @@ def run(service, principal, request, limits, clock=monotonic):
             )
             break
         diagnostic = outcome.get("validation_diagnostic") or {}
-        errors = diagnostic.get("locations") or diagnostic.get("issues") or []
+        errors = repair_errors(diagnostic)
         if any(item.get("rule", "").startswith("REPAIR_") for item in errors):
             stop = "PROTECTED_REPAIR_CONFLICT"
             break

@@ -63,7 +63,17 @@ def test_safe_same_object_return():
 
 
 @pytest.mark.parametrize(
-    "mode", ["repair", "reference", "repeat", "unknown", "deadline"]
+    "mode",
+    [
+        "repair",
+        "reference",
+        "external",
+        "external_unknown",
+        "external_changed",
+        "repeat",
+        "unknown",
+        "deadline",
+    ],
 )
 def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mode):  # noqa: F811
     scope = ScopeIdentity("tenant-a", "quality")
@@ -95,12 +105,17 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
         def suggest(self, request, binding, profile, context):
             self.calls += 1
             self.contexts.append(deepcopy(context))
-            if mode == "unknown":
+            if mode in {"unknown", "external_unknown"}:
                 raise TimeoutError
             output = deepcopy(semantics)
-            if mode == "reference" and self.calls == 1:
+            if (
+                mode in {"reference", "external", "external_changed"}
+                and self.calls == 1
+            ):
                 output["tasks"][0]["employee_requirement_id"] = "not-declared"
-            elif mode != "reference" and (self.calls == 1 or mode == "repeat"):
+            elif mode not in {"reference", "external", "external_changed"} and (
+                self.calls == 1 or mode == "repeat"
+            ):
                 output["tasks"][0]["title"] = (
                     "Collect billing records and usage details"
                 )
@@ -154,6 +169,42 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
         output_language="zh-CN",
         idempotency_key="adaptive-root",
     )
+    if mode in {"external", "external_unknown", "external_changed"}:
+        failed = service.begin(principal, request)
+        assert failed["result"]["kind"] == (
+            None if mode == "external_unknown" else "INVALID"
+        )
+        failed_id = failed["invocation"]["target"]["invocation_id"]
+        request = request.model_copy(
+            update={
+                "idempotency_key": "explicit-invalid-successor",
+                "predecessor_invocation_id": failed_id,
+            }
+        )
+    if mode in {"external_unknown", "external_changed"}:
+        from agent_console.plan_suggestion_domain import PlanningError
+
+        if mode == "external_changed":
+            changed_version = request.target.expected_problem_version + 1
+            request = request.model_copy(
+                update={
+                    "target": request.target.model_copy(
+                        update={"expected_problem_version": changed_version}
+                    )
+                }
+            )
+        with pytest.raises(
+            PlanningError,
+            match=(
+                "PLANNING_PREDECESSOR_NOT_TERMINAL"
+                if mode == "external_unknown"
+                else "PLANNING_PREDECESSOR_TARGET_CONFLICT"
+            ),
+        ):
+            service.begin_adaptive(principal, request)
+        assert provider.calls == 1
+        assert service.read(principal, failed_id)["result"] == failed["result"]
+        return
     if mode == "deadline":
         ticks = iter([0, 0, 150])
         result = run(
@@ -169,6 +220,7 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
             == {
                 "repair": "AWAIT_CONFIRMATION",
                 "reference": "AWAIT_CONFIRMATION",
+                "external": "AWAIT_CONFIRMATION",
                 "repeat": "NO_PROGRESS",
                 "unknown": "OUTCOME_UNKNOWN",
             }[mode]
@@ -177,7 +229,7 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
     again = service.begin_adaptive(principal, request)
     assert provider.calls == saved_calls
     assert again["result"] == result["result"]
-    if mode in {"repair", "reference"}:
+    if mode in {"repair", "reference", "external"}:
         assert provider.contexts[1]["validation_feedback"]["issues"][0]["path"] == [
             "semantics",
             "tasks",
@@ -187,9 +239,10 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
         assert result["result"]["proposal"]["semantics"][
             "target"
         ] == request.target.model_dump(mode="json")
-        assert (
-            result["invocation"]["target"]["predecessor_invocation_id"]
-            == result["adaptive"]["attempts"][0]["invocation_id"]
+        assert result["invocation"]["target"]["predecessor_invocation_id"] == (
+            failed_id
+            if mode == "external"
+            else result["adaptive"]["attempts"][0]["invocation_id"]
         )
     root = invocations.find_request(
         scope, principal.principal_id, request.idempotency_key
@@ -223,6 +276,33 @@ def test_language_repair_cannot_change_numbers_references_or_other_tasks():
     assert language_repair_issues(source, repaired, [["title"]])[0]["rule"] == (
         "REPAIR_UNRELATED_STRUCTURE_CHANGED"
     )
+
+
+def test_explicit_invalid_followup_requires_predecessor_read_authority():
+    from agent_console.authority_contracts import AuthorityError
+
+    request = PlanningRequest(
+        target=modern()["target"],
+        policy={"mode": "FREE"},
+        output_language="zh-CN",
+        idempotency_key="new-known-invalid-request",
+        predecessor_invocation_id="private-predecessor",
+    )
+
+    def denied(*args):
+        raise AuthorityError("PREDECESSOR_READ_DENIED")
+
+    def forbidden_dispatch(*args, **kwargs):
+        pytest.fail("Unreadable predecessor must never reach begin")
+
+    service = SimpleNamespace(
+        application=SimpleNamespace(scope=lambda p: "scope"),
+        invocations=SimpleNamespace(find_request=lambda *a: None),
+        read=denied,
+        begin=forbidden_dispatch,
+    )
+    with pytest.raises(AuthorityError, match="PREDECESSOR_READ_DENIED"):
+        run(service, SimpleNamespace(principal_id="subject"), request, AdaptiveLimits())
 
 
 def test_historical_translation_is_exact_and_non_authoritative():

@@ -102,7 +102,7 @@ def located_contract_issues(text):
             if not set(task.get("requirement_ids", [])) <= requirements.keys():
                 add("requirement_ids", "PLAN_REFERENCE_INVALID")
             if not set(task.get("criterion_revision_ids", [])) <= criteria:
-                add("criterion_revision_ids", "PLANNING_CRITERION_COVERAGE_MISSING")
+                add("criterion_revision_ids", "PLAN_REFERENCE_INVALID")
             deps = task.get("depends_on", [])
             if not set(deps) <= by_id.keys() or task["task_id"] in deps:
                 add("depends_on", "PLAN_REFERENCE_INVALID")
