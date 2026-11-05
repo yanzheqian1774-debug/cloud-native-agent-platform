@@ -281,6 +281,7 @@ def test_real_mcp_configuration_handshake_discovery_selection_never_calls_tools(
             expectedVersion=r["aggregateVersion"],
         )["resource"]
         assert r["healthObservations"][-1]["status"] == "HEALTHY"
+        assert r["healthObservations"][-1]["revisionId"] == r["currentDraftRevisionId"]
         r = command(
             manager,
             "discover",
@@ -312,6 +313,19 @@ def test_real_mcp_configuration_handshake_discovery_selection_never_calls_tools(
             expectedVersion=r["aggregateVersion"],
             content={**content, "secretReference": "secret-ref:isolated/reference"},
         )["resource"]
+        with pytest.raises(
+            WorkbenchOwnerError, match="CURRENT_REVISION_DISCOVERY_REQUIRED"
+        ):
+            command(
+                manager,
+                "select-tools",
+                kind="mcp",
+                key="stale-snapshot-selection",
+                identity=r["resourceId"],
+                expectedVersion=r["aggregateVersion"],
+                snapshotId=snapshot["snapshotId"],
+                toolNames=["quality.lookup"],
+            )
         with pytest.raises(WorkbenchOwnerError, match="CREDENTIAL_RESOLVER"):
             command(
                 manager,

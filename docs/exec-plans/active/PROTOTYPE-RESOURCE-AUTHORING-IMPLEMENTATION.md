@@ -34,3 +34,13 @@ fresh backup, historical supplier/sales/D10/new-continuation GET regressions, no
 old execution or UNKNOWN retry/model/budget writes. P08/P10 work is independent
 of resource write enablement and keeps exact source/criteria/version semantics.
 Record all remaining page/state differences; full package stays OPEN if incomplete.
+
+Live review correction: imported file text must retain stable accessible field
+names. Connection checks/discovery/selection additionally need exact revision
+provenance: new existing-owner observations/snapshots carry optional revisionId /
+revisionDigest; existing stored records remain unchanged. Current management UI
+shows current connection readiness only for that exact revision, preserves old
+checks as history, withdraws stale discovered tools after edits, and requires a
+fresh exact discovery before saving tools. No old facts rewritten or lifecycle
+transition semantics changed. Validate editing after healthy discovery cannot
+present old success or select old snapshot for the successor.

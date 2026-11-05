@@ -334,6 +334,25 @@ class ResourceManagement:
                         != record["discoverySnapshots"][-1]["snapshotId"]
                     ):
                         raise WorkbenchOwnerError("LATEST_DISCOVERY_REQUIRED", 409)
+                    current_revision = next(
+                        r
+                        for r in record["revisions"]
+                        if r["revisionId"]
+                        == (
+                            record["currentDraftRevisionId"]
+                            or record["publishedRevisionId"]
+                        )
+                    )
+                    latest_snapshot = record["discoverySnapshots"][-1]
+                    if (
+                        latest_snapshot.get("revisionId")
+                        != current_revision["revisionId"]
+                        or latest_snapshot.get("revisionDigest")
+                        != current_revision["digest"]
+                    ):
+                        raise WorkbenchOwnerError(
+                            "CURRENT_REVISION_DISCOVERY_REQUIRED", 409
+                        )
                     service.select_tools(
                         scope,
                         identity,

@@ -534,7 +534,12 @@ class SkillMcpService:
     ) -> dict[str, Any]:
         mcp = self._load(scope, "mcp", mcp_id)
         self._expected(mcp, expected)
+        revision = (
+            self._draft(mcp) if mcp["currentDraftRevisionId"] else self._published(mcp)
+        )
         observation = {
+            "revisionId": revision["revisionId"],
+            "revisionDigest": revision["digest"],
             "observationId": _id("mcp-health"),
             "protocolRevision": PROTOCOL_REVISION,
             "status": "HEALTHY",
@@ -580,7 +585,12 @@ class SkillMcpService:
         except McpTransportFailure as exc:
             raise SkillMcpFailure(str(exc), 422) from exc
         previous = mcp["discoverySnapshots"][-1] if mcp["discoverySnapshots"] else None
+        revision = (
+            self._draft(mcp) if mcp["currentDraftRevisionId"] else self._published(mcp)
+        )
         snapshot = {
+            "revisionId": revision["revisionId"],
+            "revisionDigest": revision["digest"],
             "snapshotId": _id("mcp-discovery"),
             "protocolRevision": PROTOCOL_REVISION,
             "catalog": redact(catalog),
@@ -635,6 +645,14 @@ class SkillMcpService:
         if not snapshot or any(name not in available for name in tool_names):
             raise SkillMcpFailure("DISCOVERED_TOOL_REQUIRED", 409)
         selection = {
+            **(
+                {
+                    "revisionId": snapshot["revisionId"],
+                    "revisionDigest": snapshot["revisionDigest"],
+                }
+                if snapshot.get("revisionId")
+                else {}
+            ),
             "selectionId": _id("mcp-tool-selection"),
             "snapshotId": snapshot_id,
             "toolNames": sorted(set(tool_names)),
