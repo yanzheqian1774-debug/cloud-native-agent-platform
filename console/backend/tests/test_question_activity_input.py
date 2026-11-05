@@ -112,3 +112,17 @@ def test_raw_question_creates_fresh_governed_request_without_predecessor_plan(
         == "BLOCKED_ACTION_OUTSIDE_READONLY_CONTEXT"
     )
     assert invoke(a, "星际飞船维修")["planningRequest"] is None
+
+
+def test_question_entry_keeps_existing_collection_authorization_gate():
+    from types import SimpleNamespace
+
+    from agent_console.resource_automation import operations
+
+    dummy = SimpleNamespace(
+        select_employee=lambda call: None, source_change=lambda call: None
+    )
+    operation = next(
+        x for x in operations(dummy) if x.name == "PREPARE_QUESTION_ACTIVITY_INPUT"
+    )
+    assert len(operation.grant_builder(None, {}, {}, {})) == 1

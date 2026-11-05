@@ -1067,7 +1067,9 @@ def operations(automation):
             PREFIX + "/question-activity-input",
             QuestionActivityRequest,
             None,
-            lambda *args: (),
+            lambda *args: (
+                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
+            ),
             QuestionActivityInput(automation),
         ),
         WorkbenchOperation(
