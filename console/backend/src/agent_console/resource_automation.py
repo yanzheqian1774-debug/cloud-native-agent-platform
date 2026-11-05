@@ -411,34 +411,64 @@ class ResourceAutomation:
                 if isinstance(exc, KeyboardInterrupt):
                     raise
             source_ref = approved_source(plan.semantics)
-            source_row = c.execute(
-                "SELECT record FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s",
-                (scope.namespace, scope.security_domain, source_ref.resource_id),
-            ).fetchone()
-            if not source_row:
-                raise AuthorityError("RESOURCE_SOURCE_EXACT_VERSION_REQUIRED")
-            source_revision = next(
-                (
-                    r
-                    for r in source_row["record"]["revisions"]
-                    if r["revisionId"] == source_ref.revision_id
-                ),
-                None,
-            )
-            if not source_revision or source_revision["digest"] != source_ref.digest:
-                raise AuthorityError("RESOURCE_SOURCE_EXACT_VERSION_REQUIRED")
-            source_check = validate("knowledge", source_revision["content"], work)
-            expected_source_schema = source_check["sourceSchema"]
+            source_failure = None
+            try:
+                source_read = [
+                    ExactGrant(
+                        "KNOWLEDGE",
+                        "READ_RESOURCE",
+                        reference(
+                            "knowledge", source_ref.resource_id, source_ref.revision_id
+                        ),
+                    )
+                ]
+                self.decide(call, source_read, key + ":test-source-read", work, issuer)
+                self.proof_grants(call, source_read)
+                source_row = c.execute(
+                    "SELECT record FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s",
+                    (scope.namespace, scope.security_domain, source_ref.resource_id),
+                ).fetchone()
+                if not source_row:
+                    raise AuthorityError("RESOURCE_SOURCE_EXACT_VERSION_REQUIRED")
+                source_revision = next(
+                    (
+                        r
+                        for r in source_row["record"]["revisions"]
+                        if r["revisionId"] == source_ref.revision_id
+                    ),
+                    None,
+                )
+                if (
+                    not source_revision
+                    or source_revision["digest"] != source_ref.digest
+                ):
+                    raise AuthorityError("RESOURCE_SOURCE_EXACT_VERSION_REQUIRED")
+                source_check = validate("knowledge", source_revision["content"], work)
+                expected_source_schema = source_check["sourceSchema"]
+            except AuthorityError as exc:
+                source_failure = str(exc)
+                source_revision = None
+                expected_source_schema = None
             results = []
             for item in refs:
                 kind, ref = item
                 try:
                     with c.transaction():
+                        if source_failure and kind in {"skill", "knowledge"}:
+                            raise AuthorityError(source_failure)
                         if runtime["status"] != "PASSED":
                             raise AuthorityError(runtime["reason"])
                         proof = self.authenticate(call.context)
                         result = self.prepare_one(
-                            call, kind, ref, key, work, proof, expected_source_schema
+                            call,
+                            kind,
+                            ref,
+                            key,
+                            work,
+                            proof,
+                            expected_source_schema,
+                            source_ref,
+                            source_revision,
                         )
                         results.append(result)
                 except Exception as exc:
@@ -646,7 +676,16 @@ class ResourceAutomation:
         ), employee
 
     def prepare_one(
-        self, call, kind, ref, key, work, issuer, expected_source_schema=None
+        self,
+        call,
+        kind,
+        ref,
+        key,
+        work,
+        issuer,
+        expected_source_schema=None,
+        source_ref=None,
+        source_revision=None,
     ):
         c = call.connection
         table, col = TABLES[kind]
@@ -708,6 +747,42 @@ class ResourceAutomation:
             call, actions, key + ":" + kind + ":" + ref.resource_id, work, issuer
         )
         self.proof_grants(call, actions)
+        actual_check = None
+        if kind == "skill":
+            from .automatic_skill_testing import verify_skill
+
+            if source_ref is None or source_revision is None:
+                raise AuthorityError("RESOURCE_EXACT_TEST_SOURCE_REQUIRED")
+            actual_check = verify_skill(
+                call,
+                self.services[kind],
+                ref,
+                source_ref,
+                source_revision,
+                proof,
+                persist=not existing,
+            )
+            if not actual_check["passed"]:
+                # A normal blocked return preserves genuine failed owner test facts.
+                return {
+                    "kind": kind,
+                    "reference": ref.model_dump(mode="json"),
+                    "name": record["name"],
+                    "state": "BLOCKED",
+                    "reason": "RESOURCE_ACTUAL_TEST_FAILED",
+                    "checks": [check, actual_check],
+                    "executionReady": False,
+                    "publication": None,
+                }
+            record = c.execute(
+                f"SELECT record FROM {table} WHERE namespace=%s AND security_domain=%s AND {col}=%s AND kind=%s",
+                (
+                    call.context.scope.tenant_id,
+                    call.context.scope.security_domain,
+                    ref.resource_id,
+                    kind,
+                ),
+            ).fetchone()["record"]
         publication = None
         if not existing:
             publication = self.resources.publish_policy(
@@ -739,7 +814,7 @@ class ResourceAutomation:
             else "EXPANDED"
             if rev.get("predecessorRevisionId")
             else "NEW",
-            "checks": [check],
+            "checks": [check, *([actual_check] if actual_check else [])],
             "decisionId": proof.decision_id,
             "publication": publication,
             "executionReady": False,

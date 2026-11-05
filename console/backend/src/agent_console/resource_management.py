@@ -712,10 +712,15 @@ def install_management(manager, authorizer):
                         "READ_RESOURCE",
                         reference(kind, identity, revision["revisionId"]),
                     )
-                summary = version_impact(record)
+                from .resource_dependency_impact import project
+
+                summary = {
+                    **version_impact(record),
+                    "dependencies": project(call, kind, record),
+                }
                 uses = []
                 rows = call.connection.execute(
-                    "SELECT u.resource_use_id,u.resource_revision_id,u.resource_digest,p.digest preparation_digest FROM resource_use.uses u JOIN execution_authority.run_preparations p USING(namespace,security_domain,workflow_run_id) WHERE u.namespace=%s AND u.security_domain=%s AND u.resource_id=%s AND u.resource_kind=%s ORDER BY u.resource_use_id LIMIT 201",
+                    "SELECT u.resource_use_id,u.resource_revision_id,u.resource_digest,p.digest preparation_digest,u.workflow_run_id,g.record->>'state' run_state FROM resource_use.uses u JOIN execution_authority.run_preparations p USING(namespace,security_domain,workflow_run_id) LEFT JOIN execution_authority.prepared_run_progress g USING(namespace,security_domain,workflow_run_id) WHERE u.namespace=%s AND u.security_domain=%s AND u.resource_id=%s AND u.resource_kind=%s ORDER BY u.resource_use_id LIMIT 201",
                     (
                         principal.tenant_id,
                         principal.security_domain,
@@ -736,7 +741,17 @@ def install_management(manager, authorizer):
                         )
                     except AuthorityError:
                         continue
-                    uses.append(dict(row))
+                    use = dict(row)
+                    try:
+                        call.authority.require(
+                            principal,
+                            "EXECUTION",
+                            "READ",
+                            "governed-execution:prepared:" + row["preparation_digest"],
+                        )
+                    except AuthorityError:
+                        use["run_state"] = None
+                    uses.append(use)
                 return {**summary, "authorizedUses": uses, "truncated": len(rows) > 200}
 
             return run(request, kind, read)

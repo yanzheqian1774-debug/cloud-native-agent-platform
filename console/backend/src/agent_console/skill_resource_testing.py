@@ -93,6 +93,10 @@ def run(
     inputs,
     expected_output,
     comparison,
+    revision_id=None,
+    persist=True,
+    verify=None,
+    verification_context=None,
 ):
     record = service._load(scope, "skill", identity)
     service._expected(record, version)
@@ -101,6 +105,12 @@ def run(
         if record["currentDraftRevisionId"]
         else service._published(record)
     )
+    if revision_id is not None:
+        revision = next(
+            (r for r in record["revisions"] if r["revisionId"] == revision_id), None
+        )
+        if revision is None:
+            raise SkillMcpFailure("TEST_EXACT_REVISION_REQUIRED", 409)
     if not expected_output:
         raise SkillMcpFailure("TEST_EXPECTATION_REQUIRED")
     case = {
@@ -208,7 +218,15 @@ def run(
             if comparison == "subset"
             else exact(expected_output, output)
         )
-        passed = observed.accepted and matches
+        independent = verify(output) if verify is not None else []
+        result["independentChecks"] = independent
+        if verification_context is not None:
+            result["verificationContext"] = verification_context
+        passed = (
+            observed.accepted
+            and matches
+            and all(x["result"] == "SATISFIED" for x in independent)
+        )
         result["status"] = "PASSED" if passed else "FAILED"
         result["reasonCode"] = (
             "ACTUAL_OUTPUT_MATCHED" if passed else "ACTUAL_OUTPUT_MISMATCH"
@@ -221,6 +239,8 @@ def run(
         )
         result["errors"] = [result["reasonCode"]]
     result["durationMs"] = round((monotonic() - started) * 1000, 3)
+    if not persist:
+        return {"testResult": result}
     record["savedTests"].append(case)
     record["testResults"].append(result)
     projected = service._replace(
