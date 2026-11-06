@@ -1,3 +1,4 @@
+import {continuationQuery} from "../api/conversationActions";
 import {useEffect,useRef,useState} from "react";
 import {readBusinessProblem,readCriteriaSets,readProblemCriteria,transitionBusinessProblem,WorkbenchRequestError,newIdempotencyKey,type BusinessProblemDetail,type CriteriaSetRevision,type CriterionRevision} from "../api/businessWorkspace";
 import {WorkbenchErrorNotice} from "./WorkbenchErrorNotice";
@@ -53,7 +54,7 @@ export function ProblemPlanningGate({snapshot,csrfToken,contextKey,blocked,editi
     {!visibleTarget&&<p role="status">请先保存关联当前问题修订的完成标准，并取得读取权限。</p>}
     {blocked&&<p>仍有未保存或未采用的内容，请先完成或清除后再确认。</p>}
     {problem.current_state==="DRAFT"&&<button type="button" className="px-primary-button" disabled={busy||blocked||!visibleTarget} onClick={()=>void confirm()}>确认问题与完成标准</button>}
-    {problem.current_state==="ACTIVE"&&visibleTarget&&!blocked&&<a className="px-primary-button" href={`/work/plan?problem=${encodeURIComponent(problem.business_problem_id)}`}>制定建议计划</a>}
+    {problem.current_state==="ACTIVE"&&visibleTarget&&!blocked&&<a className="px-primary-button" href={`/work/plan?problem=${encodeURIComponent(problem.business_problem_id)}${continuationQuery()}`}>制定建议计划</a>}
     <button type="button" disabled={busy||blocked} onClick={()=>void refresh()}>刷新确认状态</button>
     {notice&&<p role="status">{notice}</p>}
     {Boolean(error)&&<WorkbenchErrorNotice error={error} operation="确认问题与完成标准"/>}

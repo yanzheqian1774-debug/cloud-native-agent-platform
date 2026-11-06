@@ -187,3 +187,80 @@ Controlled isolated PG64335 and BFF tests:34 passed, including10 new cases for
 private scope, concurrent CAS, replay/payload collision, persistent reload,
 exact work mismatch, revoked link redaction/write rejection, session/CSRF and
 feature-off. Actual installed UI evidence follows; no full S1 acceptance claimed.
+
+## Approved continuous handling batch (G1, 2026-11-06)
+
+Authorization: sole successor of stopped writer 01a1ac3d, delegated by
+01a1aecf; user approved the same private conversation's draft/planning source
+messages, explicit action intents and original-owner receipts. Existing D1-D3
+ownership approval applies; no new execution authority. Baseline e9df4600,
+generation9, 38 calls/14 unsettled/USD11.126748, queue0 verified before edits.
+
+Implementation plan: additive migration0047 retains0046 unchanged; typed immutable
+source references and action/receipt messages within the private owner. Register
+read-only adapters over original draft/planning services and existing authorized
+Problem reads. Each source fixes exact context/turn/version or planning target,
+context/request revision and invocation; all disclosures reauthorize. Result
+content not retained is explicit, never reconstructed. Before a confirmed existing
+owner POST, record immutable intent/message/actor/time, canonical payload digest,
+owner request key, exact source/target and expected owner version. A CAS claim in
+that original route admits a single attempt; no generic dispatch endpoint or
+second executor. A lost claim response or owner response never auto-retries.
+Original response facts or authorized original GET produce success/failure/UNKNOWN
+receipts. Planning request-key GET may reconcile; absent safe query keeps UNKNOWN.
+Cross-owner writes and conversation receipts are separate transactions.
+
+Frontend carries returnConversation through draft/create/planning navigation,
+records user confirmation on the existing action button, displays typed source
+and receipt facts in the same C, and retains one original P on followups. Add
+read-current receipt recovery, never POST retry from page refresh. Wire original
+/tasks and /outcomes directories to authorized current owners without resurrecting
+legacy services. Bound logout requests and distinguish unconfirmed revocation.
+
+Validation: new isolated PostgreSQL64335 fixtures with actual owner interfaces
+and controlled providers, same C two draft turns -> one P -> same-P planning
+clarification; exact source mismatch/revocation/account isolation, CAS/key
+collision/concurrent attempt, response loss/message-write failure/restart/login.
+No real model or business calls for UI tests, no historical UNKNOWN replay.
+Frontend lint/trusted-profile build, required commit hooks, read-only historical
+row/budget audit, controlled installation, migration/checksum and feature-off
+rollback retention, 1280x900 frozen comparison. Full S1 remains PARTIAL; all six
+packages/J01-J12,100-call/USD50 caps and reservations remain outstanding as before.
+
+### Continuous batch candidate evidence (2026-11-06)
+
+Implemented migration0047: message facts and immutable intent records within the
+same private owner. Original draft/create/planning/explicit-admission-continue
+routes claim at most once before their own operations. A receipt-write failure
+does not replace the original owner response; durable known references support
+read-only recovery. Where an ID/request payload is not safely retained, UNKNOWN
+remains. Original HTTP errors alone never prove no effect. Request-key recovery
+compares the original normalized payload before adopting any result. All source
+facts reauthorize; revoked facts redact. Controlled transport is explicit.
+
+82 targeted isolated checks passed: PostgreSQL64335 plus actual draft/Problem/
+planning service paths with controlled providers, including five-intent same-C
+chain, one P, same-P clarification, explicit prepared continuation, failed and
+UNKNOWN receipts, source mismatch/revocation/other account, CSRF, CAS, concurrent
+original POST, receipt-write loss, read-only exact request recovery and payload
+collision. Full repository commit hooks remain required. No new real model calls.
+
+Controlled browser passed ten groups over real isolated owner interfaces:
+source/intent/receipt render and reload, two original draft-UI turns in same C
+with zero Problem creation, original planning-UI same C/P, legacy404 avoidance,
+read-current with no dispatch, pending GET/DELETE logout, network failure and
+actual session revocation. Initial browser run found returnConversation appended
+to the planning-input API path; corrected API path while preserving navigation.
+The failed run is retained in external evidence. Necessary header overlap found
+at1280x900 was corrected; final visual capture is recorded in the batch delivery.
+
+/tasks and/outcomes now compose currently authorized Problems and exact readable
+executions navigated by the user's private links. This is a bounded current-entry
+repair, not a new all-Task/Outcome aggregate. Missing/revoked state never means
+zero work or success. Logout waits are bounded; timeout remains unconfirmed.
+
+This closes implementation subchecks of J03/J05 only. Full J03/J05 business
+journey, J02/J06, J11 visual acceptance, S1 overall and all92 resource pages remain
+OPEN/PARTIAL. P1 immediately returns to supplier/sales capability preparation,
+assembly/admission/execution/evidence, starting with six logical requirements and
+the registered CLASSIFY_OVERDUE gap. No S2/S3 or general conversation expansion.

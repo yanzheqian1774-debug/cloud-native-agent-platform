@@ -1,3 +1,4 @@
+import {continuationQuery} from "../api/conversationActions";
 import {useEffect, useState} from "react";
 import {Link, useSearchParams} from "react-router-dom";
 import {JourneySteps} from "../journey/JourneySteps";
@@ -25,14 +26,14 @@ export function PlanningEntry() {
   },[problem,readVersion]);
   const retry=()=>{setRead({problem:"",input:null,error:""});setReadVersion(value=>value+1)};
   return <section className="planning-page journey-page px-planning-entry">
-    <section className="planning-journey-heading"><header className="planning-heading"><div><p>问题工作台 / 制定方案</p><h1>{input?.title??"读取已确认目标"}</h1></div><Link className="journey-secondary" to={problem?`/work?problem=${encodeURIComponent(problem)}`:"/work"}>{problem?"修订目标或标准":"返回问题工作台"}</Link></header><JourneySteps current={3}/></section>
+    <section className="planning-journey-heading"><header className="planning-heading"><div><p>问题工作台 / 制定方案</p><h1>{input?.title??"读取已确认目标"}</h1></div><Link className="journey-secondary" to={problem?`/work?problem=${encodeURIComponent(problem)}${continuationQuery()}`:"/work"}>{problem?"修订目标或标准":"返回问题工作台"}</Link></header><JourneySteps current={3}/></section>
     <div className="planning-layout"><main>
       {!problem?<ControlledState kind="not-found" title="请先选择业务问题" detail="从问题工作台打开已确认的问题与标准，不需要手填内部编号。"/>:
        error?<ControlledState kind="unavailable" title="已确认目标暂时无法读取" detail={error} action={<button type="button" onClick={retry}>重新读取已确认目标</button>}/>:
        !input?<ControlledState kind="loading" title="正在读取已确认目标与标准…" detail="读取完成前不能生成建议，不显示上一个问题的目标。"/>:null}
       <PlanningDialogue key={problem} problem={problem} disabled={!input} onStatus={setStage}>
-        {input&&<section className="planning-card" aria-label="当前已确认目标"><header><h2>已确认目标</h2><StatusBadge tone="info">正式读取</StatusBadge></header><p>{input.description}</p><Link to={`/work?problem=${encodeURIComponent(problem)}`}>查看原问题与成功标准</Link><details><summary>本次目标的精确来源</summary><pre>{JSON.stringify(input.target,null,2)}</pre></details><p>没有账单或来源数据时，只能规划数据准备和后续分析，不能声称已完成分析。</p></section>}
+        {input&&<section className="planning-card" aria-label="当前已确认目标"><header><h2>已确认目标</h2><StatusBadge tone="info">正式读取</StatusBadge></header><p>{input.description}</p><Link to={`/work?problem=${encodeURIComponent(problem)}${continuationQuery()}`}>查看原问题与成功标准</Link><details><summary>本次目标的精确来源</summary><pre>{JSON.stringify(input.target,null,2)}</pre></details><p>没有账单或来源数据时，只能规划数据准备和后续分析，不能声称已完成分析。</p></section>}
       </PlanningDialogue>
-    </main><aside><section className="planning-card"><h2>当前阶段</h2><p>制定方案 · {input?stage:"等待读取目标"}</p><p>问题和标准的正式修订在目标页面保存后生效。</p></section>{input&&<section className="planning-card"><h2>当前依据</h2><p>已读取本次问题与成功标准的正式版本。</p><p>补充信息用于本轮建议，已保存目标保持。</p><Link to={`/work?problem=${encodeURIComponent(problem)}`}>查看目标与来源</Link></section>}<section className="planning-card"><h2>现在需要你做什么</h2><p>{stage.includes('补充信息')?'回答左侧本轮补问，已知条件无需重复填写。':stage.includes('未知')||stage.includes('核实')?'先读回原记录，保留当前输入与调用。':stage.includes('处理中')?'正在核对本轮建议，请等待结果。':'核对已确认目标后继续规划；新建议仍需单独确认。'}</p></section><section className="planning-card"><h2>执行边界</h2><p>确认只保存计划，不启动执行。资源缺口保留，不自动发布或变更业务数据。</p></section></aside></div>
+    </main><aside><section className="planning-card"><h2>当前阶段</h2><p>制定方案 · {input?stage:"等待读取目标"}</p><p>问题和标准的正式修订在目标页面保存后生效。</p></section>{input&&<section className="planning-card"><h2>当前依据</h2><p>已读取本次问题与成功标准的正式版本。</p><p>补充信息用于本轮建议，已保存目标保持。</p><Link to={`/work?problem=${encodeURIComponent(problem)}${continuationQuery()}`}>查看目标与来源</Link></section>}<section className="planning-card"><h2>现在需要你做什么</h2><p>{stage.includes('补充信息')?'回答左侧本轮补问，已知条件无需重复填写。':stage.includes('未知')||stage.includes('核实')?'先读回原记录，保留当前输入与调用。':stage.includes('处理中')?'正在核对本轮建议，请等待结果。':'核对已确认目标后继续规划；新建议仍需单独确认。'}</p></section><section className="planning-card"><h2>执行边界</h2><p>确认只保存计划，不启动执行。资源缺口保留，不自动发布或变更业务数据。</p></section></aside></div>
   </section>;
 }

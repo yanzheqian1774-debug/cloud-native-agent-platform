@@ -671,17 +671,29 @@ def create_workbench_bff(
             grants = tuple(
                 operation.grant_builder(context, request.path_params, payload, query)
             )
-            result = authorizer.execute(
-                context,
-                grants,
-                operation=operation.name,
-                payload=payload,
-                path=request.path_params,
-                query=query,
-                handler=operation.handler,
-            )
-            if operation.post_commit_handler is not None:
-                result = operation.post_commit_handler(context, result)
+
+            def invoke_owner():
+                result = authorizer.execute(
+                    context,
+                    grants,
+                    operation=operation.name,
+                    payload=payload,
+                    path=request.path_params,
+                    query=query,
+                    handler=operation.handler,
+                )
+                if operation.post_commit_handler is not None:
+                    result = operation.post_commit_handler(context, result)
+                return result
+
+            if operation.name == "CREATE_PROBLEM":
+                from .conversation_actions import original_action
+
+                result = original_action(
+                    request, context, "CREATE_PROBLEM", payload, invoke_owner
+                )
+            else:
+                result = invoke_owner()
             return JSONResponse(
                 status_code=operation.success_status,
                 content=WorkbenchOperationResponse(result=dict(result)).model_dump(

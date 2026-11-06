@@ -143,6 +143,9 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
 def install_draft_assistance_routes(service: DraftAssistanceService):
     def install(app: FastAPI, authenticate, require_csrf, policy: WorkbenchBffPolicy):
         del policy
+        app.state.conversation_draft_reader = lambda ctx, identity: _payload(
+            service.read(ctx, identity)
+        )["result"]
 
         def invoke(action, request: Request):
             session, context = authenticate(request)
@@ -157,20 +160,42 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
 
         @app.post(f"{PREFIX}/draft-assistance/invocations", status_code=201)
         async def begin(body: BeginDraftAssistance, request: Request):
+            from .conversation_actions import original_action
+
+            def action(context):
+                return original_action(
+                    request,
+                    context,
+                    "DRAFT",
+                    body.model_dump(mode="json", exclude_none=True),
+                    lambda: _payload(
+                        service.begin(
+                            context,
+                            key=body.idempotencyKey,
+                            content=body.content,
+                            parent_context_id=body.parentContextId,
+                            parent_turn_id=body.parentTurnId,
+                            expected_parent_version=body.expectedParentVersion,
+                            predecessor_invocation_id=body.predecessorInvocationId,
+                        )
+                    ),
+                )
+
+            # Preserve the original owner error mapping and cancellation deadline.
+            def submit():
+                session, context = authenticate(request)
+                require_csrf(request, session)
+                try:
+                    return action(context)
+                except DraftAssistanceError as exc:
+                    return JSONResponse(
+                        status_code=_status(exc.reason_code),
+                        content={"reasonCode": exc.reason_code},
+                    )
+
             return await cancellable_request(
                 request,
-                lambda: invoke(
-                    lambda context: service.begin(
-                        context,
-                        key=body.idempotencyKey,
-                        content=body.content,
-                        parent_context_id=body.parentContextId,
-                        parent_turn_id=body.parentTurnId,
-                        expected_parent_version=body.expectedParentVersion,
-                        predecessor_invocation_id=body.predecessorInvocationId,
-                    ),
-                    request,
-                ),
+                submit,
             )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/resubmit")

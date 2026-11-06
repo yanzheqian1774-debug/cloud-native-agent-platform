@@ -119,7 +119,7 @@ class PrivateConversations:
             messages = c.execute(
                 "SELECT "
                 "message_id,sequence,author_id,content,focus_link_id,"
-                "disposition,created_at "
+                "disposition,created_at,request_key "
                 "FROM private_conversation.messages WHERE tenant_id=%s AND "
                 "security_domain=%s AND conversation_id=%s ORDER BY sequence",
                 scope,
@@ -130,6 +130,55 @@ class PrivateConversations:
                 "BY created_at,link_id",
                 scope,
             ).fetchall()
+            facts_reader = getattr(self, "facts_reader", None)
+            facts = (
+                c.execute(
+                    "SELECT message_id,kind,facts FROM "
+                    "private_conversation.message_facts "
+                    "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
+                    scope,
+                ).fetchall()
+                if facts_reader
+                else []
+            )
+            intents = (
+                c.execute(
+                    "SELECT intent_id,claimed_at,owner_ref FROM "
+                    "private_conversation.action_intents "
+                    "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
+                    scope,
+                ).fetchall()
+                if facts_reader
+                else []
+            )
+        by_id = {f["message_id"]: f for f in facts}
+        intent_by_id = {i["intent_id"]: i for i in intents}
+        for message in messages:
+            fact = by_id.get(message["message_id"])
+            if not fact:
+                continue
+            details = fact["facts"]
+            try:
+                for source in [
+                    details.get("source"),
+                    details.get("authorizationSource"),
+                ]:
+                    if source:
+                        facts_reader.source_read(ctx, source)
+                message["kind"] = fact["kind"]
+                message["facts"] = details
+                if fact["kind"] == "ACTION_INTENT":
+                    intent = intent_by_id[details["intentId"]]
+                    message["facts"] = {
+                        **details,
+                        "attemptState": "UNKNOWN"
+                        if intent["claimed_at"]
+                        else "NOT_SUBMITTED",
+                    }
+            except Exception:
+                message["content"] = "当前无权核验原办理记录"
+                message["kind"] = fact["kind"]
+                message["facts"] = {"readable": False}
         visible = []
         for link in links:
             try:

@@ -1,10 +1,12 @@
 """Authenticated private conversation endpoints; only existing owner READ bridges."""
 
+from typing import Any, Literal
+
 import psycopg
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agent_console.private_conversation import ConversationError, PrivateConversations
 from agent_console.workbench_bff import PREFIX
@@ -36,7 +38,94 @@ class LinkCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     idempotencyKey: str = Field(min_length=1, max_length=128)
     expectedVersion: int = Field(ge=0)
-    target: WorkTarget
+    target: WorkTarget | dict[str, Any]
+
+    @model_validator(mode="after")
+    def exact_target(self):
+        if isinstance(self.target, dict):
+            if set(self.target) == {"source"}:
+                self.target = {
+                    "source": SourceReference.model_validate(
+                        self.target["source"]
+                    ).model_dump(exclude_none=True)
+                }
+            else:
+                self.target = WorkTarget.model_validate(self.target)
+        return self
+
+
+class SourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["DRAFT", "PLANNING", "PROBLEM"]
+    invocationId: str | None = Field(default=None, min_length=1, max_length=200)
+    contextId: str | None = Field(default=None, min_length=1, max_length=200)
+    turnId: str | None = Field(default=None, min_length=1, max_length=200)
+    turnVersion: int | None = Field(default=None, ge=1)
+    requestRevision: int | None = Field(default=None, ge=1)
+    target: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def shape(self):
+        required = {
+            "DRAFT": {"kind", "invocationId", "contextId", "turnId", "turnVersion"},
+            "PLANNING": {
+                "kind",
+                "invocationId",
+                "contextId",
+                "requestRevision",
+                "target",
+            },
+            "PROBLEM": {"kind", "target"},
+        }[self.kind]
+        if {k for k, v in self.model_dump().items() if v is not None} != required:
+            raise ValueError("CONVERSATION_SOURCE_INVALID")
+        if self.kind == "PROBLEM":
+            self.target = WorkTarget.model_validate(self.target).model_dump(
+                exclude_none=True
+            )
+        elif self.kind == "PLANNING":
+            from .plan_suggestion_domain import ProblemTarget
+
+            self.target = ProblemTarget.model_validate(self.target).model_dump(
+                mode="json"
+            )
+        return self
+
+
+class SourceCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotencyKey: str = Field(min_length=1, max_length=128)
+    expectedVersion: int = Field(ge=0)
+    source: SourceReference
+
+
+class IntentCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotencyKey: str = Field(min_length=1, max_length=128)
+    expectedVersion: int = Field(ge=0)
+    messageId: str = Field(min_length=1, max_length=128)
+    action: Literal["DRAFT", "CREATE_PROBLEM", "PLANNING", "PLANNING_CONTINUE"]
+    payload: dict[str, Any]
+    source: SourceReference | None = None
+    expectedOwnerVersion: int = Field(ge=0)
+    confirmed: Literal[True]
+
+    @model_validator(mode="after")
+    def canonical_payload(self):
+        from .draft_assistance_api import BeginDraftAssistance
+        from .plan_suggestion_invocation import PlanningRequest
+        from .workbench_business_problem import CreateCaseBusinessProblem
+
+        model = {
+            "DRAFT": BeginDraftAssistance,
+            "CREATE_PROBLEM": CreateCaseBusinessProblem,
+            "PLANNING": PlanningRequest,
+            "PLANNING_CONTINUE": PlanningRequest,
+        }[self.action]
+        self.payload = model.model_validate(self.payload).model_dump(
+            mode="json", exclude_none=True
+        )
+        return self
 
 
 def install_private_conversations(
@@ -60,6 +149,13 @@ def install_private_conversations(
         return jsonable_encoder(dict(result))
 
     def resolve(ctx, target):
+        if "source" in target:
+            source = SourceReference.model_validate(target["source"]).model_dump(
+                exclude_none=True
+            )
+            facts = source_read(ctx, source)
+            return {"title": facts["title"]}
+        target = WorkTarget.model_validate(target).model_dump(exclude_none=True)
         problem = owner_read(ctx, "READ_PROBLEM", {"problem_id": target["problemId"]})
         revision = next(
             (
@@ -84,9 +180,88 @@ def install_private_conversations(
                 or ref["digest"] != target["problemDigest"]
             ):
                 raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
-        return {"title": revision["title"]}
+        return {
+            "title": revision["title"],
+            "ownerVersion": problem.get("problem", {}).get("aggregate_version", 0),
+        }
+
+    def source_read(ctx, source):
+        from .conversation_actions import reference
+
+        kind = source["kind"]
+        if kind == "PROBLEM":
+            value = resolve(ctx, source["target"])
+            return {**value, "state": "RECORDED", "receiptState": "SUCCEEDED"}
+        reader = getattr(
+            app.state,
+            "conversation_draft_reader"
+            if kind == "DRAFT"
+            else "conversation_planning_reader",
+            None,
+        )
+        if reader is None:
+            raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+        try:
+            value = reader(ctx, source["invocationId"])
+        except Exception as exc:
+            raise ConversationError("CONVERSATION_SOURCE_NOT_READABLE", 404) from exc
+        if reference(kind, value) != source:
+            raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
+        if kind == "DRAFT":
+            state, result_kind = value["state"], value.get("resultKind")
+            reason, version = value.get("reasonCode"), value["aggregateVersion"]
+            content = {"contentDisposition": "RESULT_CONTENT_NOT_RETAINED"}
+            content["transport"] = value.get("transport", "NOT_OBSERVED")
+        else:
+            result = value["result"]
+            state, result_kind = result["technical_status"], result.get("kind")
+            reason, version = result.get("reason"), source["requestRevision"]
+            # Only original-owner retained normalized questions, never a client reply.
+            content = {"questions": result.get("questions", [])}
+            content["transport"] = value["invocation"].get("transport", "NOT_OBSERVED")
+        receipt = (
+            "SUCCEEDED"
+            if state == "SUCCEEDED"
+            else "FAILED"
+            if state
+            in {
+                "FAILED",
+                "FAILED_PRE_DISPATCH",
+                "REJECTED",
+                "REJECTED_BY_USER",
+                "CANCELLATION_CONFIRMED",
+                "CANCELLED",
+                "KNOWN_FAILED",
+            }
+            else "UNKNOWN"
+        )
+        return {
+            "title": "草稿辅助来源" if kind == "DRAFT" else "规划来源",
+            "state": state,
+            "receiptState": receipt,
+            "resultKind": result_kind,
+            "reasonCode": reason,
+            "ownerVersion": version,
+            **content,
+        }
+
+    def planning_request_read(ctx, key, payload):
+        reader = getattr(app.state, "conversation_planning_request_reader", None)
+        if reader is None:
+            raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+        return reader(ctx, key, payload)
 
     service = PrivateConversations(database_url, resolve) if database_url else None
+    from .conversation_actions import ConversationActions
+
+    actions = (
+        ConversationActions(service, source_read, planning_request_read)
+        if service
+        else None
+    )
+    app.state.conversation_actions = actions
+    if service:
+        service.facts_reader = actions
 
     def invoke(request, action, write=False):
         session, ctx = authenticate(request)
@@ -142,5 +317,37 @@ def install_private_conversations(
             lambda ctx: service.mutate(
                 ctx, identity, body.model_dump(exclude_none=True), "link"
             ),
+            True,
+        )
+
+    @app.post(PREFIX + "/conversations/{identity}/sources")
+    def source(request: Request, identity: str, body: SourceCommand):
+        return safe(
+            request,
+            lambda ctx: actions.source(
+                ctx, identity, body.model_dump(exclude_none=True)
+            ),
+            True,
+        )
+
+    @app.post(PREFIX + "/conversations/{identity}/intents")
+    def intent(request: Request, identity: str, body: IntentCommand):
+        return safe(
+            request,
+            lambda ctx: actions.prepare(
+                ctx, identity, body.model_dump(exclude_none=True)
+            ),
+            True,
+        )
+
+    @app.get(PREFIX + "/conversations/{identity}/intents/{intent_id}")
+    def reconcile(request: Request, identity: str, intent_id: str):
+        return safe(request, lambda ctx: actions.reconcile(ctx, identity, intent_id))
+
+    @app.post(PREFIX + "/conversations/{identity}/intents/{intent_id}/receipt")
+    def save_receipt(request: Request, identity: str, intent_id: str):
+        return safe(
+            request,
+            lambda ctx: actions.reconcile(ctx, identity, intent_id, persist=True),
             True,
         )

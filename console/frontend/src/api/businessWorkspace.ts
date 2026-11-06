@@ -34,8 +34,8 @@ async function read<T>(path:string):Promise<T>{
   return envelope.result;
 }
 
-async function write<T>(path:string,csrfToken:string,payload:Record<string,unknown>):Promise<T>{
-  const envelope=await decode<Envelope<T>>(await fetch(`${PREFIX}${path}`,{method:"POST",credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":csrfToken},body:JSON.stringify(payload)}));
+async function write<T>(path:string,csrfToken:string,payload:Record<string,unknown>,extraHeaders:Record<string,string>={}):Promise<T>{
+  const envelope=await decode<Envelope<T>>(await fetch(`${PREFIX}${path}`,{method:"POST",credentials:"same-origin",headers:{Accept:"application/json","Content-Type":"application/json","X-CSRF-Token":csrfToken,...extraHeaders},body:JSON.stringify(payload)}));
   return envelope.result;
 }
 
@@ -50,12 +50,12 @@ export const readBusinessProblem=(problemId:string)=>read<BusinessProblemDetail>
 export const readCriteriaSets=(problemId:string)=>read<{revisions:CriteriaSetRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`);
 export const readProblemCriteria=(problemId:string)=>read<{revisions:CriterionRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria`);
 
-export function createBusinessProblem(csrfToken:string,input:{title:string;description:string;ownerId:string;idempotencyKey:string;draftInvocationId?:string}){
-  return write<{revision:BusinessProblemRevision;creatorContinuation:ProblemCreatorContinuation}>("/problems",csrfToken,input);
+export function createBusinessProblem(csrfToken:string,input:{title:string;description:string;ownerId:string;idempotencyKey:string;draftInvocationId?:string},headers:Record<string,string>={}){
+  return write<{revision:BusinessProblemRevision;creatorContinuation:ProblemCreatorContinuation}>("/problems",csrfToken,input,headers);
 }
 
-export function beginDraftAssistance(csrfToken:string,input:{idempotencyKey:string;content:string;parentContextId?:string;parentTurnId?:string;expectedParentVersion?:number;predecessorInvocationId?:string}){
-  return write<DraftAssistanceResult>("/draft-assistance/invocations",csrfToken,input);
+export function beginDraftAssistance(csrfToken:string,input:{idempotencyKey:string;content:string;parentContextId?:string;parentTurnId?:string;expectedParentVersion?:number;predecessorInvocationId?:string},headers:Record<string,string>={}){
+  return write<DraftAssistanceResult>("/draft-assistance/invocations",csrfToken,input,headers);
 }
 
 export function resubmitDraftAssistance(csrfToken:string,invocationId:string,input:{idempotencyKey:string;content:string}){
@@ -102,4 +102,10 @@ export function transitionBusinessProblem(csrfToken:string,problemId:string,inpu
   return write<{businessProblemId:string;aggregateVersion:number}>(`/problems/${encodeURIComponent(problemId)}/lifecycle`,csrfToken,input);
 }
 
-export async function logoutWorkbenchSession(){const session=await readWorkbenchSession();const response=await fetch(`${PREFIX}/session`,{method:"DELETE",credentials:"same-origin",headers:{"X-CSRF-Token":session.csrfToken,Accept:"application/json"}});if(!response.ok)await decode(response);}
+export async function logoutWorkbenchSession(){
+ let session:WorkbenchSession;
+ try{session=await readWorkbenchSession(AbortSignal.timeout(8000))}catch(error){if(error instanceof WorkbenchRequestError&&error.status===401)return;throw error}
+ const response=await fetch(`${PREFIX}/session`,{method:"DELETE",credentials:"same-origin",signal:AbortSignal.timeout(8000),headers:{"X-CSRF-Token":session.csrfToken,Accept:"application/json"}});
+ if(response.status===401)return;
+ if(!response.ok)await decode(response);
+}

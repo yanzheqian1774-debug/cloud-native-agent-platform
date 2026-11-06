@@ -1,3 +1,5 @@
+import {conversationActionHeaders,continuationQuery} from "../api/conversationActions";
+import {readWorkbenchSession} from "../api/businessWorkspace";
 import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from "react";
 import {Link, useNavigate, useSearchParams} from "react-router-dom";
 import {ConversationFrame, ConversationComposer, SystemMessage, UserMessage} from "../problems/ProblemConversation";
@@ -59,7 +61,8 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       inFlightRequest.current=`request:${body.idempotency_key}`;
       const next = new URLSearchParams(params); next.set("request", body.idempotency_key); next.delete("invocation");
       setUnresolved(true); setParams(next, {replace: true});
-      const value = await planningRequest<Invocation>("planning-v2/invocations", body);
+      const session=await readWorkbenchSession();const target=input.target as {problem:{resource_id:string;revision_id:string;digest:string};expected_problem_version:number};const headers=await conversationActionHeaders(params.get("returnConversation"),session.csrfToken,"PLANNING",body,{kind:"PROBLEM",target:{problemId:target.problem.resource_id,revisionId:target.problem.revision_id,problemDigest:target.problem.digest}},target.expected_problem_version);
+      const value = await planningRequest<Invocation>("planning-v2/invocations", body,headers);
       if(latestLocator.current!==locator&&latestLocator.current!==`${problem}\u0000request:${body.idempotency_key}`)return;
       setResponse({key:value.admission?`request:${body.idempotency_key}`:`invocation:${value.invocation.target.invocation_id}`,value}); setUnresolved(false);
       // Clear only the submitted draft. A late response must preserve newer input.
@@ -72,7 +75,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
         next.set("invocation", value.invocation.target.invocation_id);
         setParams(next, {replace: true});
       }
-      if (value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
+      if (value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}${continuationQuery()}`);
     } catch(e) {setError(e instanceof Error ? e.message : "请求结果未确认");}
     finally {flight.current = false; inFlightRequest.current=null;setBusy(false);}
   }
@@ -81,10 +84,15 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     flight.current=true;setBusy(true);setReading(!continueCall);setError("");
     try {
       const path=requestKey?`planning-v2/requests/${encodeURIComponent(requestKey)}`:`planning-v2/invocations/${encodeURIComponent(invocationId!)}`;
-      const value=await planningRequest<Invocation>(continueCall?`${path}/continue`:path,continueCall?{}:undefined);
+      let headers:Record<string,string>={};
+      if(continueCall&&params.get("returnConversation")){
+        const payload=Object.fromEntries(Object.entries(result!.invocation.request as unknown as Record<string,unknown>).filter(([k])=>["target","source_proposal","answers","idempotency_key","predecessor_invocation_id","policy","output_language"].includes(k))),target=payload.target as {problem:{resource_id:string;revision_id:string;digest:string};expected_problem_version:number};
+        const session=await readWorkbenchSession();headers=await conversationActionHeaders(params.get("returnConversation"),session.csrfToken,"PLANNING_CONTINUE",payload,{kind:"PROBLEM",target:{problemId:target.problem.resource_id,revisionId:target.problem.revision_id,problemDigest:target.problem.digest}},target.expected_problem_version);
+      }
+      const value=await planningRequest<Invocation>(continueCall?`${path}/continue`:path,continueCall?{}:undefined,headers);
       if(latestLocator.current!==locator)return;
       setResponse({key:recordKey,value});setUnresolved(false);
-      if(value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}`);
+      if(value.result.proposal) navigate(`/work/planning/${encodeURIComponent(value.result.proposal.proposal_id)}?revision=${value.result.proposal.revision}${continuationQuery()}`);
     } catch(e) {setError(e instanceof Error?e.message:"状态尚未核实，原请求保留。");}
     finally {flight.current=false;setBusy(false);setReading(false);}
   }
@@ -94,7 +102,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
   const blocked = disabled || busy || unresolved || waitingForRecord || mismatched || singleCallUsed || (!!result && (result.result.technical_status !== "SUCCEEDED" || result.result.kind !== "NEEDS_CLARIFICATION"));
   return <ConversationFrame startAtTop newMessageKey={`${source?.proposal.revision ?? 0}:${result?.invocation.target.invocation_id ?? ""}`} composer={<section className="planning-composer" aria-label="持续规划对话">    <details><summary>规划方式：{policy.mode === "FREE" ? "自由规划" : policy.mode === "TEMPLATE_ASSISTED" ? "模板辅助" : "强约束流程"} · 查看或调整</summary><label>规划方式<select aria-label="规划方式" value={policy.mode} disabled={busy || unresolved || !!result} onChange={e => {const mode=e.target.value as PlanningPolicy["mode"];setPolicy({...free, mode, template: mode === "FREE" ? null : "procurement-overdue.v1"});}}><option value="FREE">自由规划 · 不固定阶段和任务数</option><option value="TEMPLATE_ASSISTED">采购模板辅助 · 可调整结构</option><option value="STRICT_WORKFLOW">采购强约束 · 三阶段五项职责</option></select></label>
     <p>校验显式操作、输入输出依赖和标准引用覆盖；不能穷尽自然语言冲突，需要人工核对业务含义。</p></details>
-    <p className="planning-action-boundary">对话补充仅用于新建议，不修改已确认标准。<Link to={`/work?problem=${encodeURIComponent(problem)}`}>正式修订目标与标准 →</Link> 计划确认请使用方案卡片中的独立按钮。</p>
+    <p className="planning-action-boundary">对话补充仅用于新建议，不修改已确认标准。<Link to={`/work?problem=${encodeURIComponent(problem)}${continuationQuery()}`}>正式修订目标与标准 →</Link> 计划确认请使用方案卡片中的独立按钮。</p>
     <ConversationComposer value={answer} onChange={setAnswer} onSend={()=>void generate()} onCancelEdit={()=>setAnswer("")} disabled={blocked} mode="PLANNING" maxLength={500}/>
     {!source && (!result || result.result.technical_status !== "SUCCEEDED") && <button type="button" disabled={blocked} onClick={()=>void generate()}>依据已确认目标生成建议</button>}
 </section>}>

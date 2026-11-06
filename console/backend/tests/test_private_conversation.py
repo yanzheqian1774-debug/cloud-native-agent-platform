@@ -33,6 +33,12 @@ def database():
                 Path(__file__).parents[1] / "migrations/0046_private_conversation.sql"
             ).read_text()
         )
+        c.execute(
+            (
+                Path(__file__).parents[1]
+                / "migrations/0047_conversation_action_facts.sql"
+            ).read_text()
+        )
     yield dsn
     with psycopg.connect(value, autocommit=True) as c:
         c.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(name)))

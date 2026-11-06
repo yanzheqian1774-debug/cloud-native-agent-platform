@@ -18,6 +18,49 @@ def install_planning_invocations(
     service_factory, unavailable_reason="PLANNING_NOT_CONFIGURED"
 ):
     def install(app, authenticate, require_csrf, policy):
+        def reader(context, identity, by_key=False):
+            if service_factory is None:
+                raise PlanningError("PLANNING_NOT_CONFIGURED")
+            service = service_factory(context)
+            principal = OwnerPrincipal(
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+            )
+            if by_key:
+                identity = service.invocations.find_request(
+                    service.application.scope(principal),
+                    principal.principal_id,
+                    identity,
+                )
+                if identity is None:
+                    raise PlanningError("PLANNING_NOT_FOUND")
+            return service.read(principal, identity)
+
+        app.state.conversation_planning_reader = reader
+
+        def read_exact_request(context, key, expected_payload):
+            value = reader(context, key, True)
+            stored = value["invocation"].get("request")
+            if not stored:
+                raise PlanningError("PLANNING_REQUEST_PAYLOAD_NOT_RETAINED")
+            actual = PlanningRequest.model_validate(
+                {k: v for k, v in stored.items() if k in PlanningRequest.model_fields}
+            ).model_dump(mode="json", exclude_none=True)
+            if actual != expected_payload:
+                raise PlanningConflict("PLANNING_IDEMPOTENCY_CONFLICT")
+            from .planning_adaptive import recovery
+
+            service = service_factory(context)
+            principal = OwnerPrincipal(
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+            )
+            return recovery(service, principal, key, value)
+
+        app.state.conversation_planning_request_reader = read_exact_request
+
         def invoke(request, action):
             session, context = authenticate(request)
             if request.method != "GET":
@@ -46,18 +89,33 @@ def install_planning_invocations(
 
         @app.post(f"{PREFIX}/planning-v2/invocations", status_code=201)
         async def begin(request: Request, body: PlanningRequest):
+            from .conversation_actions import original_action
             from .responses_deadline import cancellable_request
+
+            def submit():
+                _, context = authenticate(request)
+                return original_action(
+                    request,
+                    context,
+                    "PLANNING",
+                    body.model_dump(mode="json", exclude_none=True),
+                    lambda: invoke(
+                        request,
+                        lambda service, principal: (
+                            service.begin_adaptive(principal, body)
+                            if body.output_language
+                            else service.begin(principal, body)
+                        ),
+                    ),
+                )
+
+            # CSRF is checked before any private intent can be claimed.
+            session, _ = authenticate(request)
+            require_csrf(request, session)
 
             return await cancellable_request(
                 request,
-                lambda: invoke(
-                    request,
-                    lambda service, principal: (
-                        service.begin_adaptive(principal, body)
-                        if body.output_language
-                        else service.begin(principal, body)
-                    ),
-                ),
+                submit,
             )
 
         @app.post(f"{PREFIX}/planning-v2/diagnostics/{'{'}layer{'}'}", status_code=201)
@@ -128,10 +186,19 @@ def install_planning_invocations(
                         if key in PlanningRequest.model_fields
                     }
                 )
-                return (
-                    service.begin_adaptive(principal, body)
-                    if body.output_language
-                    else service.begin(principal, body)
+                from .conversation_actions import original_action
+
+                _, context = authenticate(request)
+                return original_action(
+                    request,
+                    context,
+                    "PLANNING_CONTINUE",
+                    body.model_dump(mode="json", exclude_none=True),
+                    lambda: (
+                        service.begin_adaptive(principal, body)
+                        if body.output_language
+                        else service.begin(principal, body)
+                    ),
                 )
 
             return await cancellable_request(request, lambda: invoke(request, resume))

@@ -1,6 +1,7 @@
 import {WorkbenchRequestError} from './businessWorkspace';
 export type WorkLink={link_id:string;readable:boolean;title?:string;target?:{problemId:string;revisionId:string;problemDigest:string;executionDigest?:string}};
-export type PrivateMessage={message_id:string;sequence:number;content:string;focus_link_id?:string;disposition:string;created_at:string};
+export type MessageFacts={readable?:boolean;intentId?:string;action?:string;ownerRequestKey?:string;attemptState?:string;state?:string;reasonCode?:string|null;source?:import('./conversationActions').SourceReference|null;observation?:{state:string;transport?:string;resultKind?:string;reasonCode?:string;contentDisposition?:string;questions?:string[]}|null};
+export type PrivateMessage={message_id:string;sequence:number;content:string;focus_link_id?:string;disposition:string;created_at:string;request_key?:string;kind?:string;facts?:MessageFacts};
 export type PrivateConversation={conversation:{conversation_id:string;title:string;version:number;created_at:string};messages:PrivateMessage[];links:WorkLink[]};
 export async function conversationRequest<T>(path='',csrf?:string,body?:unknown):Promise<T>{
  const response=await fetch('/api/workbench/v1/conversations'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:{Accept:'application/json',...(body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf??''})},...(body===undefined?{}:{body:JSON.stringify(body)})});
