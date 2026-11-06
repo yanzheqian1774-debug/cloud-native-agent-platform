@@ -838,10 +838,13 @@ class TaskDelegationService:
 def configured_limits(profile, configuration, budget, *, planning=False):
     binding = profile.binding
     suffix = f"{binding.resource_id}:{binding.revision_id}:{binding.digest}"
+    provider = asdict(configuration)
+    if provider.get("planning_model_policy") is None:
+        provider.pop("planning_model_policy", None)  # Preserve legacy signed digests.
     return {
         "ledger_id": budget.ledger_id,
         "configuration_digest": digest(
-            {"profile": asdict(profile), "provider": asdict(configuration)}
+            {"profile": asdict(profile), "provider": provider}
         ),
         "profile_revision_id": profile.profile_revision_id,
         "profile_digest": profile.profile_digest,

@@ -199,7 +199,15 @@ def _profile(
         {"reasoningEffort"} if provider_protocol == KIMI_PROTOCOL else set()
     )
     if planning:
+        if document.get("nativeModelId") == "gpt-6.1-sol" and (
+            document.get("planningModelPolicy") != "gpt61-sol-standard-uncached-low.v1"
+        ):
+            raise DraftAssistanceError("PLANNING_PROFILE_INVALID")
         common = common | {"policyDigest", "realCallsEnabled"}
+        if "planningModelPolicy" in document:
+            if provider_protocol != OPENAI_PROTOCOL:
+                raise DraftAssistanceError("PLANNING_PROFILE_INVALID")
+            provider_fields = provider_fields | {"planningModelPolicy"}
     expected = (
         common
         if transport_kind == "SYNTHETIC"
@@ -281,7 +289,7 @@ def _profile(
         or not isinstance(tls, dict)
         or set(tls) != {"caFile"}
         or not isinstance(budget, dict)
-        or set(budget)
+        or set(budget) - ({"profilePricingRootDigest"} if planning else set())
         != {
             "ledgerId",
             "currency",
@@ -360,7 +368,9 @@ def _profile(
             OPENAI_ADAPTER_ID,
         ):
             real_configuration = OpenAIResponsesConfiguration(
-                *common_configuration, ca_file
+                *common_configuration,
+                ca_file,
+                document.get("planningModelPolicy") if planning else None,
             )
         elif adapter_tuple == (
             KIMI_PROTOCOL,
@@ -370,6 +380,15 @@ def _profile(
                 *common_configuration, document["reasoningEffort"], ca_file
             )
         else:
+            raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
+        if "profilePricingRootDigest" in budget and (
+            not planning
+            or not isinstance(budget["profilePricingRootDigest"], str)
+            or len(budget["profilePricingRootDigest"]) != 64
+            or any(
+                c not in "0123456789abcdef" for c in budget["profilePricingRootDigest"]
+            )
+        ):
             raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
         normalized_budget = {
             "ledgerId": budget["ledgerId"],
@@ -382,6 +401,10 @@ def _profile(
                 "outputPriceMicrousdPerMillionTokens"
             ],
         }
+        if "profilePricingRootDigest" in budget:
+            normalized_budget["profilePricingRootDigest"] = budget[
+                "profilePricingRootDigest"
+            ]
     except (TypeError, ValueError, PolicyValidationError) as exc:
         raise DraftAssistanceError("DRAFT_PROFILE_INVALID") from exc
     return value, pepper_path, real_configuration, normalized_budget

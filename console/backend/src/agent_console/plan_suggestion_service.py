@@ -555,13 +555,22 @@ class PlanningSuggestionService:
         receipt = self.invocations.receipt(scope, invocation_id)
         if receipt is None:
             raise unavailable()
-        if receipt["pricing"] != self.budget.pricing():
+        if receipt["pricing"] == self.budget.pricing():
+            settlement = self.budget.owner.read_settlement(receipt["reservation_id"])
+        elif hasattr(self.budget, "historical_settlement"):
+            try:
+                settlement = self.budget.historical_settlement(
+                    invocation_id, receipt, scope=scope
+                )
+            except PlanningConflict:
+                raise unavailable() from None
+        else:
             raise unavailable()
         return projection(
             receipt.get("measurement"),
             receipt["pricing"],
             receipt["reservation_id"],
-            self.budget.owner.read_settlement(receipt["reservation_id"]),
+            settlement,
             local_cleanup=receipt.get("deadline"),
         )
 
@@ -588,9 +597,15 @@ class PlanningSuggestionService:
                 from .planning_measurement import settle
 
                 # Authorization above precedes recovery of an already authorized effect.
-                if receipt["pricing"] != self.budget.pricing():
+                if receipt["pricing"] == self.budget.pricing():
+                    settle(self.budget, invocation_id, receipt)
+                elif hasattr(self.budget, "historical_settlement"):
+                    # Validate original binding; historical GET never reprices.
+                    self.budget.historical_settlement(
+                        invocation_id, receipt, scope=scope
+                    )
+                else:
                     raise PlanningConflict("PLANNING_PRICE_VERSION_CONFLICT")
-                settle(self.budget, invocation_id, receipt)
                 # PLAN READ does not grant disclosure of provider IDs or pricing.
         result["facts_status"] = self.model_use_owner.status(scope, invocation_id)
         return result

@@ -455,3 +455,19 @@ Earlier original323 raw-approval config mismatch wording is corrected by the
 offline effective_limits finding; the continuity proposal isPROPOSED only and is
 not implemented in this S04 slice. No model/diagnostic/Grant decision or UNKNOWN
 change.
+
+### 2026-11-06 GPT planning priority (in progress)
+
+Human explicitly selected platform `gpt-6.1-sol`, supplied the project key and
+kept supplier/sales comparison as the immediate objective. See
+[bounded G1 plan](PROTOTYPE-GPT61-SOL-PLANNING-MIGRATION.md). This is platform
+planning configuration, not the Codex chat model. No Kimi fallback. Later
+all-GPT direction depends on actual effectiveness; no multi-model router is in
+scope now. Metadata model GET200 is not inference/billing acceptance.
+
+Same-ledger profile pricing is append-only in existing PostgreSQL (explicit0049
+preparation), no new infrastructure, authority, lifecycle or execution bypass.
+Old policy/prices/UNKNOWN remain. Isolated tests and actual dual-case evidence
+are distinct; current candidate is not installed and both real cases NOT_RUN.
+Cross-generation accepted work remains separately checkpointed. UI-01 follows
+this core checkpoint without importing unaccepted prototype pages.

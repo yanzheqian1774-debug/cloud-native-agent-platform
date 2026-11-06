@@ -67,8 +67,18 @@ class OpenAIResponsesConfiguration:
     input_price_microusd_per_million_tokens: int
     output_price_microusd_per_million_tokens: int
     ca_file: Path | None = None
+    planning_model_policy: str | None = None
 
     def __post_init__(self) -> None:
+        if self.planning_model_policy is not None and (
+            self.planning_model_policy != "gpt61-sol-standard-uncached-low.v1"
+            or self.native_model_id != "gpt-6.1-sol"
+            or self.input_price_microusd_per_million_tokens != 2_000_000
+            or self.output_price_microusd_per_million_tokens != 10_000_000
+            or not isinstance(self.maximum_input_tokens, int)
+            or self.maximum_input_tokens >= 272_000
+        ):
+            raise DraftAssistanceError("OPENAI_RESPONSES_PROFILE_INVALID")
         if (
             not isinstance(self.execution_class, str)
             or not isinstance(self.responses_url, str)

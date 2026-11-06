@@ -91,7 +91,35 @@ def measurement(
             and (w is None or i is None or (c or 0) + w > i)
         ):
             reliable = False
+    gpt61_policy = getattr(configuration, "planning_model_policy", None) is not None
+    if gpt61_policy:
+        # Explicit caching without breakpoints must return no cache usage.
+        # An unexpected tier/counter keeps the original reserve; never invoice it.
+        detail = raw.get("input_tokens_details")
+        detail = detail if isinstance(detail, dict) else {}
+        writes = detail.get("cache_write_tokens", 0)
+        write_details = detail.get("cache_write_tokens_details", {})
+        usage["cache_write_tokens"] = _count(writes)
+        reliable = reliable and response.get("service_tier") == "default"
+        reliable = reliable and c == 0 and type(writes) is int and writes == 0
+        reliable = (
+            reliable
+            and isinstance(write_details, dict)
+            and all(
+                type(value) is int and value == 0 for value in write_details.values()
+            )
+        )
     return {
+        **(
+            {
+                "service_tier": response.get("service_tier")
+                if response.get("service_tier")
+                in {"default", "flex", "priority", "scale"}
+                else "UNKNOWN"
+            }
+            if gpt61_policy
+            else {}
+        ),
         "local_request_id": invocation_id,
         "provider_request_id": _identity(correlation)
         if correlation != f"http-200-{invocation_id}"

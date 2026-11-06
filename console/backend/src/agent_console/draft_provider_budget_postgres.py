@@ -44,6 +44,7 @@ class PostgresProviderCallBudget:
         input_price_microusd_per_million_tokens: int,
         output_price_microusd_per_million_tokens: int,
         timeout: float = 5.0,
+        profile_pricing_root_digest: str | None = None,
     ) -> None:
         if (
             not database_url
@@ -54,6 +55,13 @@ class PostgresProviderCallBudget:
             or output_price_microusd_per_million_tokens < 0
         ):
             raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
+        if profile_pricing_root_digest is not None and (
+            not isinstance(profile_pricing_root_digest, str)
+            or len(profile_pricing_root_digest) != 64
+            or any(c not in "0123456789abcdef" for c in profile_pricing_root_digest)
+        ):
+            raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
+        self.profile_pricing_root_digest = profile_pricing_root_digest
         self.migration_path = migration_path
         self.profile = profile
         self.ledger_id = ledger_id
@@ -115,6 +123,11 @@ class PostgresProviderCallBudget:
                     )
                 elif row != expected:
                     raise DraftAssistanceError("PROVIDER_BUDGET_SCHEMA_INCOMPATIBLE")
+                if self.profile_pricing_root_digest is not None:
+                    from .provider_profile_pricing import require_revision
+
+                    require_revision(connection, self)
+                    return
                 inserted = connection.execute(
                     "INSERT INTO draft_provider_budget.policies"
                     "(namespace,security_domain,ledger_id,profile_revision_id,"
@@ -236,6 +249,9 @@ class PostgresProviderCallBudget:
                         "payload_digest": payload_digest,
                     }:
                         raise DraftAssistanceError("PROVIDER_BUDGET_OPERATION_CONFLICT")
+                    from .provider_profile_pricing import require_reservation
+
+                    require_reservation(connection, self, reservation_id)
                     return reservation_id
                 totals = connection.execute(
                     "SELECT count(*) AS calls,"
@@ -278,6 +294,9 @@ class PostgresProviderCallBudget:
                         payload_digest,
                     ),
                 )
+                from .provider_profile_pricing import bind_reservation
+
+                bind_reservation(connection, self, reservation_id)
                 return reservation_id
         except DraftAssistanceError:
             raise
@@ -319,6 +338,9 @@ class PostgresProviderCallBudget:
                     or observation.output_tokens > reservation["output_token_ceiling"]
                 ):
                     return
+                from .provider_profile_pricing import require_reservation
+
+                require_reservation(connection, self, reservation_id)
                 actual_cost = self._cost(
                     observation.input_tokens, self.input_price
                 ) + self._cost(observation.output_tokens, self.output_price)
@@ -371,6 +393,9 @@ class PostgresProviderCallBudget:
 
     def read_settlement(self, reservation_id):
         with self._connection() as connection:
+            from .provider_profile_pricing import require_reservation
+
+            require_reservation(connection, self, reservation_id)
             row = connection.execute(
                 "SELECT input_tokens,output_tokens,actual_cost_microusd "
                 "FROM draft_provider_budget.settlements WHERE namespace=%s "
@@ -382,6 +407,10 @@ class PostgresProviderCallBudget:
                     reservation_id,
                 ),
             ).fetchone()
+        return self.settlement_projection(row)
+
+    @staticmethod
+    def settlement_projection(row):
         if row is None:
             return {"status": "PENDING_RECONCILIATION", "reservation_retained": True}
         return {
@@ -409,6 +438,12 @@ class PostgresProviderCallBudget:
             "cached_input_policy": "INCLUDED_AT_STANDARD_INPUT_RATE_NO_ADDITION",
             "classification": "TOKEN_COST_ESTIMATE_NOT_PROVIDER_INVOICE",
         }
+        root = getattr(owner, "profile_pricing_root_digest", None)
+        if root is not None:
+            document["root_policy_digest"] = root
+            document["cached_input_policy"] = (
+                "EXPLICIT_UNCACHED_ONLY_UNEXPECTED_CACHE_RETAINS_RESERVATION"
+            )
         return {**document, "price_version_digest": canonical_digest(document)}
 
     def close(self) -> None:

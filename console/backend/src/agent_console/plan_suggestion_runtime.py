@@ -90,10 +90,16 @@ class PlanningResponsesProvider:
         self.transport = planning_transport(configuration)
         if not hasattr(self.transport, "progress"):
             self.transport.progress = lambda _stage: None
+        from .kimi_responses_draft_adapter import KimiResponsesConfiguration
+
         self.protocol = (
             "KIMI_RESPONSES_V1"
-            if hasattr(configuration, "reasoning_effort")
+            if isinstance(configuration, KimiResponsesConfiguration)
             else "OPENAI_RESPONSES_V1"
+        )
+        self.gpt61_policy = (
+            isinstance(configuration, OpenAIResponsesConfiguration)
+            and configuration.planning_model_policy is not None
         )
         self.isolation_enabled = True
         self.cleanup_failed = False
@@ -193,6 +199,10 @@ class PlanningResponsesProvider:
         }
         if self.protocol == "KIMI_RESPONSES_V1":
             document["reasoning"] = {"effort": self.configuration.reasoning_effort}
+        if self.gpt61_policy:
+            document["reasoning"] = {"effort": "low"}
+            document["service_tier"] = "default"
+            document["prompt_cache_options"] = {"mode": "explicit", "ttl": "30m"}
         layer = business_context.get("diagnostic_layer")
         if layer is not None:
             from .planning_diagnostics import diagnostic_document
@@ -280,7 +290,7 @@ class PlanningResponsesProvider:
             if response["status"] != "completed":
                 return failed("PLANNING_PROVIDER_RESPONSE_INVALID")
             output = response["output"]
-            if self.protocol == "KIMI_RESPONSES_V1":
+            if self.protocol == "KIMI_RESPONSES_V1" or self.gpt61_policy:
                 if not isinstance(output, list) or any(
                     not isinstance(item, dict)
                     or item.get("type") not in {"reasoning", "message"}
@@ -448,6 +458,23 @@ class PlanningBudget:
 
         return PostgresProviderCallBudget.pricing(self.owner)
 
+    def historical_settlement(self, invocation_id, receipt, *, scope):
+        from .provider_profile_pricing import historical_settlement
+
+        try:
+            if (scope.namespace, scope.security_domain) != (
+                self.owner.profile.scope.namespace,
+                self.owner.profile.scope.security_domain,
+            ):
+                raise DraftAssistanceError(
+                    "PROVIDER_BUDGET_RESERVATION_PROFILE_MISMATCH"
+                )
+            return historical_settlement(self.owner, invocation_id, receipt)
+        except DraftAssistanceError:
+            from .plan_suggestion_domain import PlanningConflict
+
+            raise PlanningConflict("PLANNING_PRICE_VERSION_CONFLICT") from None
+
     def settle(self, invocation_id, reservation_id, observation):
         self.owner.record_usage(
             invocation_id + ":usage:v1", reservation_id, observation
@@ -537,6 +564,9 @@ def build_planning_runtime(
             output_price_microusd_per_million_tokens=budget_config[
                 "outputPriceMicrousdPerMillionTokens"
             ],
+        )
+        budget.profile_pricing_root_digest = budget_config.get(
+            "profilePricingRootDigest"
         )
         budget.migrate_and_configure()
         credentials = planning_credentials(configuration, profile)
