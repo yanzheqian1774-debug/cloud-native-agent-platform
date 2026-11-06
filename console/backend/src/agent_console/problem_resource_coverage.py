@@ -71,8 +71,9 @@ def assess(semantics, members, contents, work, runtime):
     from .planning_contracts import validation_report
 
     validation_report(semantics)
-    if len([r for r in semantics.requirements if r.kind == "EMPLOYEE"]) != 1:
-        raise ValueError("MULTI_ROLE_MAPPING_UNSUPPORTED")
+    roles = [r for r in semantics.requirements if r.kind == "EMPLOYEE"]
+    if not roles or len({r.selected for r in roles if r.selected is not None}) > 1:
+        raise ValueError("SINGLE_EXACT_EMPLOYEE_REQUIRED")
     required_source = approved_source(semantics)
     grouped = {}
     for m in members:

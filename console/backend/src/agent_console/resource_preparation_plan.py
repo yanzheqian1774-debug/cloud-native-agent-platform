@@ -23,6 +23,7 @@ from .plan_suggestion_domain import (
 )
 from .planning_contracts import validation_report
 from .planning_source_change import SourceChangeRequest, approved_source
+from .planning_source_reference import is_source_boundary
 from .resource_automation import SelectEmployeeResources
 from .resource_policy_lineage import require_supported_lineage
 from .resource_use_domain import canonical_digest
@@ -135,6 +136,14 @@ def select_employee(automation, call, *, automatic_coverage=None):
             baseline = source_change["policyConfirmation"]
             old = ConfirmedPlanRevision.model_validate(baseline["plan"])
             head = old.source_proposal_revision
+            probe["boundaries"] = [
+                s for s in probe["boundaries"] if not is_source_boundary(s)
+            ] + [s for s in old.semantics.boundaries if is_source_boundary(s)]
+            for r in probe["requirements"]:
+                if r["kind"] == "KNOWLEDGE" and r.get(
+                    "selected"
+                ) == current_source.model_dump(mode="json"):
+                    r["selected"] = selected_sources[0].model_dump(mode="json")
         elif len(selected_sources) != 1:
             raise AuthorityError("RESOURCE_PRIMARY_SOURCE_COMMITMENT_REQUIRED")
         source_reads = [

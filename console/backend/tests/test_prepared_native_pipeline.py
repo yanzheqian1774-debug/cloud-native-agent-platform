@@ -63,7 +63,7 @@ class FixtureKubernetes:
         self.tasks[name]["status"] = status
 
 
-@pytest.mark.parametrize("case", ["cost", "delivery", "sales"])
+@pytest.mark.parametrize("case", ["cost", "delivery", "delivery-v2", "sales"])
 def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
     repository, tmp_path, case
 ):
@@ -216,6 +216,12 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
             if case == "delivery"
             else SyntheticCostSkillExecutor()
         )
+        if case == "delivery-v2":
+            from agent_console.synthetic_delivery_skill_v2 import (
+                SyntheticDeliverySkillExecutorV2,
+            )
+
+            executor = SyntheticDeliverySkillExecutorV2()
         skills = compose_governed_skill_invocation(
             repository.pool.conninfo,
             MIGRATIONS,
@@ -356,7 +362,7 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 snapshot["criteriaSet"]["digest"] == p.semantics.target.criteria.digest
             )
             assert snapshot["runState"] == "SUCCEEDED"
-            if case in {"delivery", "sales"}:
+            if case in {"delivery", "delivery-v2", "sales"}:
                 from agent_console.delivery_evaluation import CHECKS, evaluate
                 from agent_console.resource_use_domain import canonical_digest
 

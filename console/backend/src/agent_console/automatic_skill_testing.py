@@ -56,6 +56,17 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
         r for r in record["revisions"] if r["revisionId"] == ref.revision_id
     )
     names = [x["name"] for x in revision["content"].get("operations", [])]
+    from .synthetic_delivery_skill_v2 import (
+        OPERATIONS as DELIVERY_V2_OPERATIONS,
+    )
+    from .synthetic_delivery_skill_v2 import SyntheticDeliverySkillExecutorV2
+
+    v2 = SyntheticDeliverySkillExecutorV2.revision
+    typed_delivery = all(
+        (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
+        == (v2.executor_id, v2.executor_revision, v2.configuration_digest)
+        for op in revision["content"].get("operations", [])
+    )
     if not {"READ_DATA", "RENDER_REPORT"}.issubset(names):
         raise AuthorityError("RESOURCE_TEST_REPORT_OPERATION_REQUIRED")
     ordered = [
@@ -63,17 +74,29 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
         *sorted(set(names) - {"READ_DATA", "RENDER_REPORT"}),
         "RENDER_REPORT",
     ]
+    if typed_delivery:
+        ordered = [name for name in DELIVERY_V2_OPERATIONS if name in names]
     reference = source_ref.model_dump(mode="json")
     read = None
+    outputs = {}
     tests = []
     for operation in ordered:
         record = service.repository.get(scope, "skill", ref.resource_id)
+        dependencies = {"read": read} if read else {}
+        if typed_delivery:
+            from .planning_contracts import INPUTS
+
+            dependencies = {
+                name: output
+                for name, output in outputs.items()
+                if output["outputKind"] in INPUTS[operation]
+            }
         inputs = {
             "schemaVersion": prefix + "-input.v1",
             "synthetic": True,
             "sourceSnapshot": reference,
             "source": source,
-            "dependencies": {"read": read} if read else {},
+            "dependencies": dependencies,
         }
         result = run(
             service,
@@ -136,6 +159,7 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
             }
         if operation == "READ_DATA":
             read = result["actual"]
+        outputs[operation] = result["actual"]
     record = service.repository.get(scope, "skill", ref.resource_id)
     if persist and not coverage(record, revision)["ready"]:
         return {

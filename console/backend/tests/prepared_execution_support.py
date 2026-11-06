@@ -63,6 +63,28 @@ def seed(
         p = p.model_copy(
             update={"semantics": p.semantics.model_copy(update={"target": target})}
         )
+    if synthetic_skill == "delivery-v2":
+        from delivery_v2_support import six_roles
+
+        semantics = six_roles(p.semantics)
+        p = p.model_copy(
+            update={
+                "semantics": semantics,
+                "participants": tuple(
+                    participant.model_copy(
+                        update={
+                            "task_id": task.task_id,
+                            "skill": participant.skill.model_copy(
+                                update={"operation": task.operation}
+                            ),
+                        }
+                    )
+                    for participant, task in zip(
+                        p.participants, semantics.tasks, strict=True
+                    )
+                ),
+            }
+        )
     if synthetic_skill in {"sales", "ontology"}:
         tasks = tuple(
             t
@@ -130,6 +152,8 @@ def seed(
 
         if synthetic_skill == "delivery":
             from agent_console.delivery_resource_bundle import resource_content
+        if synthetic_skill == "delivery-v2":
+            from agent_console.synthetic_delivery_skill_v2 import resource_content
         if synthetic_skill in {"sales", "ontology"}:
             from agent_console.sales_resource_bundle import (
                 resource_content as sales_content,
@@ -355,7 +379,7 @@ def seed(
             ),
             "boundaries": (
                 DELIVERY_SYNTHETIC_ONLY
-                if synthetic_skill == "delivery"
+                if synthetic_skill in {"delivery", "delivery-v2"}
                 else SALES_SYNTHETIC_ONLY
                 if synthetic_skill in {"sales", "ontology"}
                 else SYNTHETIC_ONLY,

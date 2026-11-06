@@ -593,6 +593,13 @@ class ResourceAutomation:
             return record
 
     def derive(self, call, plan, key, work, issuer):
+        selections = {
+            r.selected
+            for r in plan.semantics.requirements
+            if r.kind == "EMPLOYEE" and r.selected is not None
+        }
+        if len(selections) > 1:
+            raise WorkbenchOwnerError("SINGLE_EXACT_EMPLOYEE_REQUIRED", 409)
         refs = {}
         employee = None
         for r in plan.semantics.requirements:

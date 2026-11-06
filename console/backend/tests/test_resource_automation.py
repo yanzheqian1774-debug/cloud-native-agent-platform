@@ -58,6 +58,7 @@ def automation(repository, case, services, tmp_path, request):
     e = case
     mode = getattr(request, "param", "existing")
     continuation = isinstance(mode, dict) and mode.get("continuation", False)
+    delivery_v2 = isinstance(mode, dict) and mode.get("deliveryV2", False)
     if isinstance(mode, dict):
         mode = mode["resources"]
     from agent_console.plan_suggestion_domain import ExactReference, ProposalRevision
@@ -65,7 +66,19 @@ def automation(repository, case, services, tmp_path, request):
     from agent_console.workbench_prepared_resources import PreparedResourceOwner
     from test_plan_suggestion_v2 import confirm
 
-    contents = resource_content(e.source)
+    if delivery_v2:
+        import json
+
+        from agent_console.synthetic_delivery_skill_v2 import (
+            resource_content as delivery_content,
+        )
+        from delivery_v2_support import six_roles
+
+        contents = delivery_content()
+        e.source = json.loads(contents["knowledge"]["content"])
+        e.p = e.p.model_copy(update={"semantics": six_roles(e.p.semantics)})
+    else:
+        contents = resource_content(e.source)
     refs = {}
     pub = PreparedResourceOwner(services)
     setup_context = SimpleNamespace(

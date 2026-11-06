@@ -16,6 +16,7 @@ from .plan_suggestion_domain import (
     ProposalRevision,
     SourceChangeOrigin,
 )
+from .planning_source_reference import is_source_boundary
 from .resource_use_domain import canonical_digest
 
 PLANNING_ONLY = (
@@ -110,7 +111,7 @@ def execution_successor(
             isinstance(
                 source.origin, (SourceChangeOrigin, PolicyResourcePreparationOrigin)
             )
-            and text.startswith("隔离合成来源：")
+            and is_source_boundary(text)
         )
     ] + [
         f"隔离合成来源：{request.source_snapshot.resource_id}；"

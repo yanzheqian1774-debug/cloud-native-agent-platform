@@ -47,17 +47,15 @@ def input_snapshot(connection, command):
             raise ExecutionPreparationError("PREPARED_DEPENDENCY_OUTPUT_REQUIRED")
         dependencies[dependency] = json.loads(artifact["content"])
     participant = next(t for t in p.participants if t.task_id == task.task_id)
-    from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+    from .prepared_delivery_contract import delivery_revision
 
-    delivery = SyntheticDeliverySkillExecutor.revision
     is_delivery = (
-        participant.executor_id,
-        participant.executor_revision,
-        participant.executor_digest,
-    ) == (
-        delivery.executor_id,
-        delivery.executor_revision,
-        delivery.configuration_digest,
+        delivery_revision(
+            participant.executor_id,
+            participant.executor_revision,
+            participant.executor_digest,
+        )
+        is not None
     )
     from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
 

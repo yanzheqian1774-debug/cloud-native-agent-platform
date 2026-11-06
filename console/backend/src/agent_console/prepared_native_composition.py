@@ -63,11 +63,13 @@ def compose(
     if mode == "registered-readonly-v1":
         from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
         from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+        from .synthetic_delivery_skill_v2 import SyntheticDeliverySkillExecutorV2
 
         executors = (
             SyntheticCostSkillExecutor(),
             SalesDiagnosticSkillExecutor(),
             SyntheticDeliverySkillExecutor(),
+            SyntheticDeliverySkillExecutorV2(),
         )
     composition = compose_governed_skill_invocation(
         database_url,

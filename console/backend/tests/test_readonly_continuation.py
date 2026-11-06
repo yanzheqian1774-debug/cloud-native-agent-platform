@@ -23,7 +23,12 @@ from test_resource_automation import automation
 
 
 @pytest.mark.parametrize(
-    "automation", [{"resources": "existing", "continuation": True}], indirect=True
+    "automation",
+    [
+        {"resources": "existing", "continuation": True},
+        {"resources": "existing", "continuation": True, "deliveryV2": True},
+    ],
+    indirect=True,
 )
 @pytest.mark.parametrize("pending", [False, True])
 def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_again(
@@ -112,7 +117,9 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                     subject=a.subject.principal_id,
                     problem=a.e.p.semantics.target.problem,
                     sourceContentDigests=a.policy.workScopes[0].sourceContentDigests,
-                    case="sales",
+                    case="delivery"
+                    if a.e.source["schemaVersion"] == "synthetic-delivery-source.v1"
+                    else "sales",
                     nativeAgentName="isolated-test-sales",
                     expiresAt=a.automation.grants.clock() + timedelta(hours=1),
                 ),

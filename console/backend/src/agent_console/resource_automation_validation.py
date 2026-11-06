@@ -10,11 +10,13 @@ from .skill_executor import SkillExecutorRegistry
 from .skill_invocation_domain import ExecutorRevision
 from .synthetic_cost_skill import SyntheticCostSkillExecutor
 from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+from .synthetic_delivery_skill_v2 import SyntheticDeliverySkillExecutorV2
 
 EXECUTORS = SkillExecutorRegistry(
     (
         SalesDiagnosticSkillExecutor(),
         SyntheticDeliverySkillExecutor(),
+        SyntheticDeliverySkillExecutorV2(),
         SyntheticCostSkillExecutor(),
     )
 )
@@ -48,6 +50,36 @@ def validate(kind, content, work, *, expected_source_schema=None):
                 op["executorConfigurationDigest"],
             )
             EXECUTORS.resolve(revision)
+            if (
+                revision.executor_id
+                == SyntheticDeliverySkillExecutor.revision.executor_id
+            ):
+                from .synthetic_delivery_skill import OPERATIONS as V1_OPERATIONS
+                from .synthetic_delivery_skill_v2 import OPERATIONS as V2_OPERATIONS
+
+                allowed = (
+                    V2_OPERATIONS
+                    if revision.executor_revision == "2"
+                    else V1_OPERATIONS
+                )
+                if op["name"] not in allowed:
+                    raise AuthorityError("RESOURCE_EXECUTOR_OPERATION_UNAVAILABLE")
+                if revision.executor_revision == "2":
+                    from .planning_contracts import OUTPUTS
+
+                    output = op.get("outputSchema", {})
+                    for key, value in (
+                        ("operation", op["name"]),
+                        ("outputKind", OUTPUTS[op["name"]]),
+                        ("executorRevision", "2"),
+                        ("executorConfigurationDigest", revision.configuration_digest),
+                    ):
+                        if key not in output.get("required", []) or output.get(
+                            "properties", {}
+                        ).get(key, {}).get("enum") != [value]:
+                            raise AuthorityError(
+                                "RESOURCE_EXECUTOR_TYPED_SCHEMA_MISMATCH"
+                            )
             prefix = SCHEMAS[revision.executor_id]
             if (
                 expected_source_schema

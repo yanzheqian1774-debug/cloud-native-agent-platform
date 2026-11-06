@@ -30,6 +30,7 @@ from .plan_suggestion_domain import (
     SourceChangeOrigin,
 )
 from .planning_candidates import read_published, require_read
+from .planning_source_reference import approved_source, is_source_boundary
 from .resource_use_domain import canonical_digest, stable_id
 
 
@@ -63,22 +64,6 @@ def source_content(c, scope, authority, principal, ref, *, historical=False):
     if not isinstance(source, dict) or source.get("synthetic") is not True:
         raise PlanningError("SOURCE_CHANGE_SYNTHETIC_SNAPSHOT_REQUIRED")
     return source, name, documents[0]["contentDigest"]
-
-
-def approved_source(semantics):
-    prefix = "隔离合成来源："
-    lines = [text for text in semantics.boundaries if text.startswith(prefix)]
-    if len(lines) != 1:
-        raise PlanningConflict("SOURCE_CHANGE_EXACT_OLD_SOURCE_REQUIRED")
-    try:
-        identity, revision, digest = lines[0][len(prefix) :].split("；")
-        return ExactReference(
-            resource_id=identity,
-            revision_id=revision.removeprefix("修订："),
-            digest=digest.removeprefix("SHA256："),
-        )
-    except ValueError as exc:
-        raise PlanningConflict("SOURCE_CHANGE_OLD_SOURCE_INVALID") from exc
 
 
 def validate_data(source):
@@ -305,7 +290,8 @@ def prepare(app, principal, identity, request, *, policy_basis=None):
             semantics["boundaries"] = [
                 text
                 for text in semantics["boundaries"]
-                if not text.startswith(("隔离合成来源：", "执行准备映射SHA256："))
+                if not is_source_boundary(text)
+                and not text.startswith("执行准备映射SHA256：")
                 and text
                 not in {
                     DELIVERY_SYNTHETIC_ONLY,
