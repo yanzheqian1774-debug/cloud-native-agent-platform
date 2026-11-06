@@ -16,3 +16,33 @@ test('ambiguous or absent operations cannot fabricate an exact contract',async({
 test('pattern properties and non-object alternatives are partial, not falsely incompatible',async({page})=>{await setup(page,resource([{...op,inputSchema:{type:'object',required:['id'],patternProperties:{'^id$':{type:'string'}},additionalProperties:false},outputSchema:{type:['object','string'],required:['id'],additionalProperties:false}}]));await page.goto(url);await expect(page.getByText('含 patternProperties，字段表未完整解释；请核对原始契约。',{exact:true})).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);await expect(page.getByText('根类型：对象 / 文本；不接受未声明字段',{exact:true})).toBeVisible()});
 
 test('absent operations cannot fabricate a contract',async({page})=>{await setup(page,resource([]));await page.goto(url);await expect(page.getByText('当前修订未声明操作，不能从能力名称推断输入输出。',{exact:true})).toBeVisible()});
+
+test('required membership is scoped to the containing optional object and list item',async({page})=>{
+ const writes=await setup(page,resource([{...op,inputSchema:{
+  type:'object',properties:{
+   optional:{type:'object',required:['child'],properties:{child:{type:'string'}}},
+   lines:{type:'array',items:{type:'object',required:['id'],properties:{id:{type:'string'}}}}
+  }
+ }}]));
+ await page.goto(url);const input=page.getByRole('region',{name:'输入参数',exact:true});
+ await expect(input.getByRole('columnheader',{name:'对象内必填'})).toBeVisible();
+ await expect(input).toContainText('父对象可省略时，子字段不会使父对象变成必填');
+ await expect(input.getByRole('row').filter({hasText:'/optional/child'})).toContainText('是');
+ await expect(input.getByRole('row').filter({hasText:'/lines/*/id'})).toContainText('是');
+ await expect(page.getByText('候选兼容类型与任务实际依赖',{exact:true})).toBeVisible();
+ await page.getByText('候选兼容类型与任务实际依赖',{exact:true}).click();
+ await expect(page.getByRole('tabpanel',{name:'输入输出'})).toContainText('此页不读取或推断任何计划的实际依赖');expect(writes).toEqual([])
+});
+
+for(const mode of ['stale','malformed'])test(`version impact ${mode} cannot appear as this exact revision or empty uses`,async({page})=>{const writes=await setup(page);await page.route('**/api/workbench/v1/resource-management/skill/**/impact',route=>route.fulfill({json:{result:mode==='malformed'?{}:{current:{revisionId:'revision:foreign',digest:'f'.repeat(64)},previousPublished:null,changes:[],testCoverage:{ready:false,checks:[]},olderTestsNotCurrent:0,authorizedUses:[],truncated:false,dependencies:{incoming:[{kind:'EMPLOYEE',identity:'wrong',revision:'9',name:'不属于当前修订的关联'}],outgoing:[],limitations:[],unresolvedDeclarations:[]}}}}));await page.goto(url);await expect(page.getByRole('alert')).toContainText(mode==='stale'?'当前查看修订与影响依据不一致':'版本与影响信息暂不可读');await expect(page.getByText('不属于当前修订的关联',{exact:true})).toHaveCount(0);await expect(page.getByText('暂无可读关联记录。',{exact:true})).toHaveCount(0);expect(writes).toEqual([])});
+
+test('long exact schema remains keyboard reachable beyond the bounded field table',async({page})=>{const properties=Object.fromEntries(Array.from({length:100},(_,i)=>['field'+i,{type:'string',description:'已声明说明'.repeat(25),const:i===99?'完整契约尾字段':'value'+i}]));const writes=await setup(page,resource([{...op,inputSchema:{type:'object',properties}}]));await page.goto(url);const input=page.getByRole('region',{name:'输入参数',exact:true});await expect(input).toContainText('字段表最多展示80项');await input.getByText('输入参数原始 JSON 与完整约束',{exact:true}).click();const raw=input.locator('pre');await raw.focus();await expect(raw).toBeFocused();await page.keyboard.press('End');await expect.poll(()=>raw.evaluate(e=>e.scrollTop+e.clientHeight>=e.scrollHeight-2)).toBeTruthy();await expect(raw).toContainText('完整契约尾字段');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();expect(writes).toEqual([])});
+
+test('impact loading empty denial and explicit recovery remain honest GET states',async({page})=>{
+ const writes=await setup(page);let release!:()=>void;const held=new Promise<void>(r=>release=r);let state='loading',requests=0;
+ const empty={current:{revisionId:'revision:current',digest},previousPublished:null,changes:[],testCoverage:{ready:false,checks:[]},olderTestsNotCurrent:1,authorizedUses:[],truncated:false,dependencies:{incoming:[],outgoing:[],limitations:['仅当前可读范围'],unresolvedDeclarations:[]}};
+ await page.route('**/api/workbench/v1/resource-management/skill/**/impact',async route=>{requests++;if(state==='loading')await held;return state==='denied'?route.fulfill({status:403,json:{reasonCode:'DENIED'}}):route.fulfill({json:{result:empty}})});
+ await page.goto(url);await expect(page.getByText('正在读取准确版本、定义依赖与授权使用事实…',{exact:true})).toBeVisible();await expect(page.getByText('暂无可读关联记录。',{exact:true})).toHaveCount(0);state='empty';release();await expect(page.getByText('暂无可读关联记录。',{exact:true})).toHaveCount(5);await expect(page.getByText('新版本须由引用方明确选择；不会自动改派或重跑。权限或扫描限制下，空列表不代表无影响。',{exact:true})).toBeVisible();
+ state='denied';await page.getByRole('button',{name:'核对版本与影响',exact:true}).click();await expect(page.getByRole('alert')).toContainText('版本与影响信息暂不可读');await expect(page.getByText('暂无可读关联记录。',{exact:true})).toHaveCount(0);
+ state='empty';await page.getByRole('button',{name:'核对版本与影响',exact:true}).click();await expect(page.getByText('暂无可读关联记录。',{exact:true})).toHaveCount(5);expect(requests).toBe(3);expect(writes).toEqual([])
+});

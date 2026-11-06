@@ -437,3 +437,21 @@ retains authorization and never settles. No new approval/continue/model authorit
 installation and actual pending-request audit follow. Historical reservations and
 ledger41/16/USD12.598116 stay intact. R2 usage is first READ. Whole business/S04/
 J11/92-row/six-package acceptance remains OPEN for orchestrator combined review.
+
+### S04/J11 finite meaning/state closeout · 2026-11-06
+
+PROTOTYPE-S04-FINITE-STATE-CLOSEOUT.md deduplicates prior exact-operation/raw-schema/
+selection/current-test/partial-impact evidence. Correct only required membership
+inside its object (not globally forcing optional parents), candidate-compatible
+classes versus actual task dependencies wording, and stale/malformed impact
+receipts. Preserve the raw schema, types and authority. Long raw content already
+passed keyboard reach before the fix, so no layout rewrite.57 resource browser
+checks passed after3 controlled reproductions. Actual installed3ced914 GETs settle
+to directory200 without the original Skill; no access/renewal POST or protected
+body read. Actual normal-state revalidation staysOPEN; controlled results cannot
+close it or wholeS04/J11/92row/six-package acceptance. Only metadata preservation
+audit is permitted for this slice; old full-row hashes remain historical evidence.
+Earlier original323 raw-approval config mismatch wording is corrected by the
+offline effective_limits finding; the continuity proposal isPROPOSED only and is
+not implemented in this S04 slice. No model/diagnostic/Grant decision or UNKNOWN
+change.
