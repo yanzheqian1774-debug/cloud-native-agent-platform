@@ -401,3 +401,26 @@ access action请求原策略重新核验本账号原创建资源的管理及修�
 恢复末段身份竞态及卸载守卫。完整提交检查、固定安装及实际原资源恢复/同屏对照仍依次执行；
 上述工程通过不抵扣双场景业务接受、完整S1/J11/92行或六包。最新实际结果检查点见本chat
 outputs/P1自动旅程真实出口与最小修正/05-销售单次研发与诊断边界.html。
+
+### S04 finite readable-contract slice · 2026-11-06
+
+Under PROTOTYPE-S04-READABLE-CONTRACTS.md, replace empty resource-level {} defaults
+with selected-operation input/output field declarations, types, required facts,
+exact schema source paths, bounds and descriptions. Missing meanings/mappings
+remain undeclared; raw JSON is progressive disclosure. Only simple certain
+contradictions are highlighted; patterns/references/unions stay partial. Exact
+resource/published revision/executor/test facts and existing impact READ remain
+separate from execution readiness and business acceptance.1280x900 is the primary
+comparison.35 resource browser checks and32 isolated policy/management checks
+passed; fixed commit/full hooks/actual installation evidence follow. No backend,
+resource, test, publication, employee or model-config change is introduced.
+
+The authority audit identifies an actionable next slice: original exact READ
+request/state UI can use WORKBENCH_PLANNING and PROVIDER_USAGE_REVIEW, continuing
+to the existing independent grant decision owner. It is not service auto-renewal;
+SKILL access and resource preparation must not substitute. New salesR2 usage READ
+was never granted, so it cannot be labelled a renewal. Original323 diagnostic
+continuity/configuration remain ineligible; no diagnostic permission is created.
+Current preserved ledger41calls/16unsettled/USD12.598116, no new sampling/replay.
+First stable supplier/sales acceptance, whole S04/J11/92-row/six-package acceptance
+remain independently OPEN pending actual slice evidence and remaining gates.
