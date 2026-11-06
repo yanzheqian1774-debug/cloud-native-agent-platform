@@ -64,9 +64,14 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       const key='continuous-confirm:'+value.invocation.target.invocation_id;
       const marker='continuous-confirm:'+JSON.stringify([principal,proposal.proposal_id,digest]);
       const matches=(c:Confirmation)=>c.plan.plan_id===proposal.proposal_id&&c.plan.source_proposal_revision===proposal.revision&&c.plan.source_proposal_digest===digest&&JSON.stringify(c.plan.semantics)===JSON.stringify(proposal.semantics);
-      let confirmed:Confirmation|undefined;
-      try{confirmed=(await history(proposal.proposal_id)).plans.find(matches)}catch(e){if(!(e&&typeof e==='object'&&'status'in e&&[403,404].includes(Number(e.status))))throw e;}
+      let confirmed:Confirmation|undefined,savedHistory:Awaited<ReturnType<typeof history>>|undefined;
+      try{savedHistory=await history(proposal.proposal_id);confirmed=savedHistory.plans.find(matches)}catch(e){if(!(e&&typeof e==='object'&&'status'in e&&[403,404].includes(Number(e.status))))throw e;}
       if(!currentView())return;
+      if(JSON.stringify((await readWorkbenchSession()).principal)!==principal)throw Error('登录身份已变化，原请求保留，请重新读取。');
+      if(savedHistory?.proposals.some(p=>p.revision>proposal.revision)){
+        navigate(`/work/planning/${encodeURIComponent(proposal.proposal_id)}?revision=${proposal.revision}${continuationQuery()}`);
+        return;
+      }
       if(!confirmed){
         if(sessionStorage.getItem(marker))throw Error('尚未读回原确认记录，保留原请求，不会再次提交。');
         if(JSON.stringify((await readWorkbenchSession()).principal)!==principal)throw Error('登录身份已变化，已停止确认。');
@@ -96,7 +101,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
       if(!source&&!result&&continuous){
         if(!input.resourceAutomation?.enabled||!input.resourceAutomation.readonlyContinuationEnabled)throw Error('当前办理范围或资格未通过核验，未开始规划或执行。');
         const question=(answer.trim()||input.title+'：'+input.description).slice(0,500);
-        const activity=await planningRequest<ActivityInput>('question-activity-input',{question,idempotencyKey:body.idempotency_key,...(chosenContext&&contextChoice?.question===question?{contextToken:chosenContext}:{})});
+        const activity=await planningRequest<ActivityInput>('question-activity-input',{question,problemId:problem,idempotencyKey:body.idempotency_key,...(chosenContext&&contextChoice?.question===question?{contextToken:chosenContext}:{})});
         if(latestLocator.current!==locator)return;
         if(activity.state==='NEEDS_BUSINESS_CONTEXT_CLARIFICATION'){setContextChoice({question,choices:activity.choices??[],selected:''});return;}
         if(activity.state!=='ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING'||!activity.planningRequest)throw Error(activity.state==='BLOCKED_ACTION_OUTSIDE_READONLY_CONTEXT'?'本次请求包含已授权只读分析之外的行动，未开始执行。':activity.state==='BLOCKED_PROCESS_CONTEXT_NOT_AVAILABLE'?'尚未取得业务流程实例，不能虚构当前活动。':'当前未取得可读、已授权的业务来源，未开始规划或执行。');
@@ -177,7 +182,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     {singleCallUsed && !result?.result.proposal && <p role="status">本次精确规划的一次调用已使用，原回复与问题保留；不能自动或普通重试追加调用。请先核对结果及正式修正路径。</p>}
     {result?.result.technical_status === "OUTCOME_UNKNOWN" && <p role="status">结果未知；保留原调用与预留，只读恢复，不自动再次调用。</p>}
     {result?.result.technical_status === "FAILED" && <p role="alert">失败阶段回执：{result.result.reason ?? "PLANNING_PROVIDER_FAILED"}。没有创建建议、批准或执行。</p>}
-    {result?.result.proposal && <a href={`/work/planning/${result.result.proposal.proposal_id}?revision=${result.result.proposal.revision}`}>打开已持久化的建议</a>}
+    {result?.result.proposal && <section><Link to={`/work/planning/${encodeURIComponent(result.result.proposal.proposal_id)}?revision=${result.result.proposal.revision}${continuationQuery()}`}>打开已持久化的建议</Link>{!source&&result.result.technical_status==='SUCCEEDED'&&result.result.kind==='VALID_SUGGESTION'&&<><p>可沿这份已保存方案继续核对确认与资源准备，不再请求模型生成。已有后继或执行时只打开原记录。</p><button disabled={disabled||busy||unresolved||waitingForRecord||mismatched} onClick={()=>void (async()=>{if(flight.current)return;flight.current=true;setBusy(true);setError('');try{const session=await readWorkbenchSession();await openProposal(result,true,[locator],JSON.stringify(session.principal))}catch(e){setError(e instanceof Error?e.message:'原方案接续尚未核实')}finally{flight.current=false;setBusy(false)}})()}>按已保存方案继续办理</button></>}</section>}
     {error && <p role="alert">{error}</p>}
     {result?.result.kind === "INVALID" && <section className="planning-card" role="alert"><h2>方案尚未通过校验</h2><p>{result.adaptive?.stop_reason === "NO_PROGRESS" ? "同类错误重复且没有进展，已停止自动修正。" : "本轮有界修正已停止；没有创建可确认方案。"}</p><p>原始目标、尝试及计量保留。请查看定位信息或修改目标后再开始新一轮。</p></section>}
     {result?.adaptive && <section className="planning-card" aria-label="本轮核对与修正"><h2>本轮核对与修正 · {result.adaptive.attempts.length} 次尝试</h2><p>服务端上限 {result.adaptive.limits.maximum_attempts} 次 / {result.adaptive.limits.total_seconds} 秒。成功后仍需确认，不启动执行。</p>{result.adaptive.attempts.map((a,index)=><div key={a.invocation_id}>尝试 {index+1}：{a.kind === "INVALID" ? "校验未通过" : a.kind === "VALID_SUGGESTION" ? "建议已保存" : "查看原尝试状态"}<details className="journey-technical"><summary>查看本次记录</summary><code>{a.invocation_id}</code></details></div>)}</section>}

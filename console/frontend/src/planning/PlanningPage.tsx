@@ -13,6 +13,7 @@ import {hasContinuous,journeyScope,rememberContinuous} from "./continuousJourney
 import {AutomaticResourceSelection} from "./AutomaticResourceSelection";
 import {PlanningResourceSummary} from "./PlanningResourceSummary";
 import {NavigationIcon} from "../components/NavigationIcon";
+import {needsResourceSelection} from './planningResourceNeed';
 import {PlanningCandidates} from "./PlanningCandidates";
 import {PlanningSourceChange} from "./PlanningSourceChange";
 import {PlanningDialogue} from "./PlanningDialogue";
@@ -59,7 +60,8 @@ export function PlanningPage() {
   const matched = plan.requirements.filter(r => status(r) === "MATCHED").length;
   const latest = Math.max(...history.proposals.map(p => p.revision));
   const continuous=Boolean(approved&&hasContinuous(scope,proposalId,approved.digest));
-  const needsSelection=Boolean(approved&&history.resourceAutomation?.enabled&&approved.plan.semantics.requirements.some(r=>r.required&&!r.selected));
+  const needsSelection=Boolean(approved&&history.resourceAutomation?.enabled&&needsResourceSelection(approved.plan.semantics));
+  const recordedExecutions=history.plans.flatMap(p=>(p.execution_summary?.executions??[]).filter(e=>e.state!=='NOT_STARTED').map(e=>({...e,revision:p.plan.source_proposal_revision})));
   async function act(kind: "confirm" | "refresh") {
     if (busy) return;
     const token = epoch.current;
@@ -90,6 +92,7 @@ export function PlanningPage() {
   return <section className="planning-page journey-page">
     <section className="planning-journey-heading"><header className="planning-heading"><div><p>问题工作台 <span aria-hidden="true">›</span> 制定方案</p><h1>{plan.title}</h1></div><Link className="journey-secondary" to={`/work?problem=${encodeURIComponent(plan.target.problem.resource_id)}${continuationQuery()}`}>返回问题</Link></header><JourneySteps current={executionState==='SUCCEEDED'?5:hasExecution?4:3} executionAvailable={hasExecution}/></section>
     <div className="planning-layout"><main>
+      {recordedExecutions.length>0&&<section className="planning-card" aria-label="同一方案已保存的执行与成果"><h2>查看原执行与成果</h2><p>以下入口来自当前权限核实的正式执行记录。打开、刷新或返回会话只读取同一Run，不重新生成方案或启动任务。</p>{recordedExecutions.map(e=><p key={e.digest}><Link to={`/work?problem=${encodeURIComponent(plan.target.problem.resource_id)}&execution=${encodeURIComponent(e.digest)}${continuationQuery()}`}>查看方案 v{e.planVersion} 的原执行与成果</Link><span> · {({SUCCEEDED:'执行已完成',RUNNING:'正在执行',PENDING:'任务已排队',FAILED:'执行失败',CANCELLED:'执行已取消'} as Record<string,string>)[e.state]??'执行状态待核查'}</span></p>)}</section>}
       {translation && <details className="planning-translation"><summary>中文译文（原方案未修改） · <button type="button" onClick={e=>{e.preventDefault();setOriginal(!original)}}>{original ? "显示中文译文" : "查看原文"}</button></summary><p>{translation.metadata.source} · 译文版本 {translation.metadata.translation_version} · {formatTime(translation.metadata.created_at)}</p><p>{translation.metadata.review_status}。不改变原确认。</p><code>来源 {translation.metadata.source_digest} · 译文 {translation.metadata.translation_digest}</code></details>}
       <p className="journey-guidance"><span aria-hidden="true">✦</span> {approved ? "计划确认已持久化。可继续提出修改，后继建议需要重新确认；旧批准保留。" : "先核对目标与方案，再确认计划。资源缺口会保留，确认不会启动执行。"}</p>
       <PlanningDialogue key={`${proposalId}:${data.proposal.revision}`} problem={plan.target.problem.resource_id} source={data} disabled={data.proposal.revision !== latest} suggestion={suggestion}>
@@ -113,7 +116,7 @@ export function PlanningPage() {
       </section>
       {previous && <section className="planning-card"><h2>本次修订影响</h2><p>任务声明变化：{changedTasks.map(id=>plan.tasks.find(t=>t.task_id===id)?.title ?? `已移除 ${id}`).join("、") || "无"}</p><p>成功标准版本：{criteriaChanged ? "已变化，需要按新标准核对全部任务" : "保持原已确认版本"}。此比较展示持久化字段差异，不替代业务语义复核。</p></section>}
       <div className="planning-confirm" aria-live="polite">{approved ? <><h2>计划已确认{missing.length&&!hasExecution ? "，资源待准备" : ""}，{executionText}</h2><p>计划版本 {approved.plan.version} · 确认时间：{formatTime(approved.approval.decided_at)}</p><details className="journey-technical"><summary>查看持久化确认关联</summary><dl><dt>计划</dt><dd>{approved.plan.plan_id}</dd><dt>批准</dt><dd>{approved.approval.approval_decision_id}</dd><dt>摘要</dt><dd><code>{approved.digest}</code></dd></dl></details></> : <><p>确认仅保存当前计划。{missing.length ? `仍有 ${missing.length} 项必要资源待准备或核实。` : ""}</p><button type="button" disabled={busy || data.proposal.revision !== latest} onClick={() => void act("confirm")}>{busy ? "正在保存…" : "确认计划"}</button></>}{error && <p role="alert">{error}。可重试原操作或刷新读回；不会自动再次生成建议。</p>}</div>
-      {approved&&history.resourceAutomation?.enabled&&!hasExecution&&!continuous&&<section className="planning-card"><p>当前仅查看已保存计划。明确继续后，平台才会在现有权限内匹配资源并接续只读执行。</p><button disabled={busy||data.proposal.revision!==latest} onClick={()=>void (async()=>{const session=await readWorkbenchSession();if(journeyScope(session)!==scope)throw Error('登录身份已变化，请重新读取。');rememberContinuous(scope,proposalId,approved.digest);setIntentVersion(v=>v+1)})().catch(e=>setError(String(e.message)))}>按当前计划继续办理</button></section>}
+      {approved&&history.resourceAutomation?.enabled&&!hasExecution&&!continuous&&data.proposal.revision===latest&&<section className="planning-card"><p>当前仅查看已保存计划。明确继续后，平台才会在现有权限内匹配资源并接续只读执行。</p><button disabled={busy} onClick={()=>void (async()=>{const session=await readWorkbenchSession();if(journeyScope(session)!==scope)throw Error('登录身份已变化，请重新读取。');rememberContinuous(scope,proposalId,approved.digest);setIntentVersion(v=>v+1)})().catch(e=>setError(String(e.message)))}>按当前计划继续办理</button></section>}
       {approved&&<AutomaticResourceSelection key={'selection:'+approved.digest} expectedScope={scope} id={proposalId} approved={approved} enabled={continuous&&needsSelection&&data.proposal.revision===latest&&!hasExecution}/>}
       {approved&&<ResourcePreparation key={proposalId+':'+approved.plan.version+':'+approved.digest} expectedScope={scope} id={proposalId} approved={approved} onReady={()=>setReadyPlanDigest(approved.digest)} policyStamp={history.resourceAutomation?.policyStamp} onPrepared={snapshot=>setView(current=>current&&snapshot.proposal_digest===current.data.digest?{...current,data:{...current.data,snapshot}}:current)} enabled={(continuous||Boolean(params.get('resourcePreparation')))&&Boolean(history.resourceAutomation?.enabled)&&!needsSelection&&data.proposal.revision===latest&&!hasExecution}/>}
       {approved&&history.resourceAutomation?.readonlyContinuationEnabled&&<ReadonlyContinuation key={approved.digest} expectedScope={scope} id={proposalId} approved={approved} allowStart={continuous&&!needsSelection&&readyPlanDigest===approved.digest&&data.proposal.revision===latest&&!hasExecution}/>}

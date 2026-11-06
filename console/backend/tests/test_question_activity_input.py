@@ -41,15 +41,46 @@ def test_question_routes_only_unambiguous_readable_context_and_one_business_choi
         )
 
 
-def invoke(a, question):
+def invoke(
+    a,
+    question,
+    *,
+    problem_id=None,
+    deny_plan=None,
+    extra_plan_reads=(),
+    context_token=None,
+):
     with a.repository.pool.connection() as c, c.transaction():
         authority = AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ())
+        original = authority
+
+        class ScopedFixtureRead:
+            def require(self, principal, owner, action, resource):
+                from agent_console.authority_contracts import AuthorityError
+
+                if owner == "PLAN" and action == "READ":
+                    if resource == deny_plan:
+                        raise AuthorityError("ISOLATED_PLAN_READ_DENIED")
+                    if resource in extra_plan_reads:
+                        return None
+                return original.require(principal, owner, action, resource)
+
+        authority = ScopedFixtureRead()
         return QuestionActivityInput(a.automation)(
             AuthorizedOwnerCall(
                 "PREPARE_QUESTION_ACTIVITY_INPUT",
                 a.subject,
                 c,
-                {"question": question, "idempotencyKey": "fresh-question-test"},
+                {
+                    "question": question,
+                    "idempotencyKey": "fresh-question-test",
+                    **({"problemId": problem_id} if problem_id is not None else {}),
+                    **(
+                        {"contextToken": context_token}
+                        if context_token is not None
+                        else {}
+                    ),
+                },
                 {},
                 {},
                 (),
@@ -126,3 +157,116 @@ def test_question_entry_keeps_existing_collection_authorization_gate():
         x for x in operations(dummy) if x.name == "PREPARE_QUESTION_ACTIVITY_INPUT"
     )
     assert len(operation.grant_builder(None, {}, {}, {})) == 1
+
+
+def test_current_problem_never_routes_to_a_readable_sibling_or_hidden_context(
+    automation,
+):
+    a = automation
+    a.run()
+    root = a.e.p.semantics.target.problem.resource_id
+    ready = invoke(a, "分析", problem_id=root)
+    assert ready["state"] == "ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING"
+    assert ready["planningRequest"]["target"]["problem"]["resource_id"] == root
+    assert ready["contextRouting"] == "EXPLICIT_CURRENT_PROBLEM_REAUTHORIZED"
+    with pytest.raises(WorkbenchOwnerError, match="STALE_OR_UNREADABLE"):
+        invoke(a, "分析", problem_id=root, context_token="f" * 64)
+    for result in (
+        invoke(a, "销售固定合成分析", problem_id="unreadable-sales-problem"),
+        invoke(a, "分析", problem_id=root, deny_plan="plan:v2:" + a.e.p.plan_id),
+    ):
+        assert result["state"] == "BLOCKED_NO_READABLE_CONTEXT"
+        assert result["choices"] == [] and result["planningRequest"] is None
+        assert result["modelCalls"] == 0
+
+
+def test_source_commitment_uses_confirmation_time_not_foreign_plan_version(automation):
+    from uuid import uuid4
+
+    from agent_console.plan_suggestion_domain import ProposalRevision
+
+    a = automation
+    a.run()
+    original_id = a.e.p.plan_id
+    fresh_id = "isolated-new-plan:" + str(uuid4())
+    with a.repository.pool.connection() as c, c.transaction():
+        app = a.automation.bound_app(
+            type("Call", (), {"connection": c, "authority": a.adapter})()
+        )
+        head = c.execute(
+            "SELECT max(revision) n FROM workflow_planning.proposals "
+            "WHERE proposal_id=%s",
+            (original_id,),
+        ).fetchone()["n"]
+        for identity, versions in [
+            (original_id, (head + 1, head + 2)),
+            (fresh_id, (1,)),
+        ]:
+            with app.repository.transaction(
+                a.e.scope, identity, authorized=True
+            ) as cur:
+                original = app.repository.proposal(cur, a.e.scope, original_id, head)
+                for revision in versions:
+                    previous = (
+                        app.repository.proposal(cur, a.e.scope, identity, revision - 1)
+                        if revision > 1
+                        else None
+                    )
+                    proposal = ProposalRevision(
+                        proposal_id=identity,
+                        revision=revision,
+                        predecessor_digest=previous.digest if previous else None,
+                        invocation_id="isolated-source-ordering-only",
+                        semantics=original.semantics,
+                    )
+                    app.repository.add_proposal(cur, a.e.scope, proposal)
+                    app.repository.confirmation(
+                        cur,
+                        a.e.scope,
+                        proposal,
+                        actor="human:isolated",
+                        key=identity + str(revision),
+                        expected_plan_version=revision - 1,
+                        authority_basis="ISOLATED_TEST_ONLY",
+                    )
+    root = a.e.p.semantics.target.problem.resource_id
+    # Both are otherwise compatible; an older Plan's counter3 must not beat a
+    # later confirmed Plan's counter1. Latest unreadable must not fall back.
+    ready = invoke(
+        a, "分析", problem_id=root, extra_plan_reads=("plan:v2:" + fresh_id,)
+    )
+    assert ready["activityRequirement"]["sourceProvenance"]["planId"] == fresh_id
+    assert ready["activityRequirement"]["sourceProvenance"]["version"] == 1
+    blocked = invoke(a, "分析", problem_id=root, deny_plan="plan:v2:" + fresh_id)
+    assert blocked["state"] == "BLOCKED_NO_READABLE_CONTEXT"
+    with a.repository.pool.connection() as c, c.transaction():
+        app = a.automation.bound_app(
+            type("Call", (), {"connection": c, "authority": a.adapter})()
+        )
+        with app.repository.transaction(a.e.scope, fresh_id, authorized=True) as cur:
+            previous = app.repository.proposal(cur, a.e.scope, fresh_id, 1)
+            expected = previous.semantics.target.expected_problem_version + 1
+            target = previous.semantics.target.model_copy(
+                update={"expected_problem_version": expected}
+            )
+            changed = ProposalRevision(
+                proposal_id=fresh_id,
+                revision=2,
+                predecessor_digest=previous.digest,
+                invocation_id="isolated-stale-target-only",
+                semantics=previous.semantics.model_copy(update={"target": target}),
+            )
+            app.repository.add_proposal(cur, a.e.scope, changed)
+            app.repository.confirmation(
+                cur,
+                a.e.scope,
+                changed,
+                actor="human:isolated",
+                key="stale-target",
+                expected_plan_version=1,
+                authority_basis="ISOLATED_TEST_ONLY",
+            )
+    stale = invoke(
+        a, "分析", problem_id=root, extra_plan_reads=("plan:v2:" + fresh_id,)
+    )
+    assert stale["state"] == "BLOCKED_NO_READABLE_CONTEXT"

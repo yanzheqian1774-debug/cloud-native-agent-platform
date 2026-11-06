@@ -24,7 +24,7 @@ def execution_summary(c, principal, authority, plan):
             "state": "NOT_STARTED",
             "basis": "NO_PREPARED_CANDIDATE_FOR_PLAN_VERSION",
         }
-    states = []
+    states, executions = [], []
     for row in rows:
         try:
             authority.require(
@@ -46,6 +46,13 @@ def execution_summary(c, principal, authority, plan):
             ),
         ).fetchone()
         states.append(progress["state"] if progress else "NOT_STARTED")
+        executions.append(
+            {
+                "digest": row["digest"],
+                "state": states[-1],
+                "planVersion": plan["version"],
+            }
+        )
     state = (
         states[0]
         if len(set(states)) == 1
@@ -53,4 +60,8 @@ def execution_summary(c, principal, authority, plan):
         if any(s in {"PENDING", "RUNNING"} for s in states)
         else "MULTIPLE_STATES"
     )
-    return {"state": state, "basis": "AUTHORIZED_EXECUTION_OWNER_READBACK"}
+    return {
+        "state": state,
+        "basis": "AUTHORIZED_EXECUTION_OWNER_READBACK",
+        "executions": sorted(executions, key=lambda x: x["digest"]),
+    }

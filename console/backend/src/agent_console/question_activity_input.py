@@ -12,7 +12,12 @@ from types import SimpleNamespace
 from pydantic import BaseModel, ConfigDict, Field
 
 from .authority_contracts import AuthorityError
-from .plan_suggestion_domain import ExactReference, PlanningError, ProblemTarget
+from .plan_suggestion_domain import (
+    ExactReference,
+    Identity,
+    PlanningError,
+    ProblemTarget,
+)
 from .plan_suggestion_invocation import PlanningRequest
 from .planning_candidates import read_published, require_read
 from .planning_contracts import PlanningPolicy
@@ -28,6 +33,7 @@ class QuestionActivityRequest(BaseModel):
     question: str = Field(min_length=2, max_length=500)
     idempotencyKey: str = Field(min_length=1, max_length=120)
     contextToken: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    problemId: Identity | None = None
 
 
 def member_contract_answers(operations):
@@ -132,6 +138,11 @@ class QuestionActivityInput:
                 p.principal_id,
             ) or work.expiresAt <= now:
                 continue
+            if (
+                request.problemId is not None
+                and work.problem.resource_id != request.problemId
+            ):
+                continue
             try:
                 current = app.current_input(
                     p, work.problem.resource_id, call.connection
@@ -141,16 +152,20 @@ class QuestionActivityInput:
                     continue
                 # Read only the prior source commitment, not tasks/stages/goal.
                 rows = call.connection.execute(
-                    "SELECT plan_id,version,record->'semantics'->'boundaries' boundaries "
-                    "FROM workflow_planning.plans WHERE namespace=%s AND security_domain=%s "
-                    "AND record->'semantics'->'target'->'problem'->>'resource_id'=%s "
-                    "ORDER BY version DESC LIMIT 1",
+                    "SELECT p.plan_id,p.version,p.record->'semantics'->'boundaries' boundaries, "
+                    "p.record->'semantics'->'target' target FROM workflow_planning.plans p "
+                    "JOIN workflow_planning.approvals a USING(namespace,security_domain,plan_id,version) "
+                    "WHERE p.namespace=%s AND p.security_domain=%s "
+                    "AND p.record->'semantics'->'target'->'problem'->>'resource_id'=%s "
+                    "ORDER BY (a.record->>'decided_at')::timestamptz DESC,p.plan_id,p.version DESC LIMIT 1",
                     (scope.namespace, scope.security_domain, work.problem.resource_id),
                 ).fetchall()
                 if not rows:
                     continue
                 row = rows[0]
                 call.authority.require(p, "PLAN", "READ", "plan:v2:" + row["plan_id"])
+                if ProblemTarget.model_validate(row["target"]) != target:
+                    continue
                 source = approved_source(SimpleNamespace(boundaries=row["boundaries"]))
                 require_read(call.authority, p, "KNOWLEDGE", source)
                 content, name = read_published(
@@ -210,14 +225,19 @@ class QuestionActivityInput:
                 "planningRequest": None,
                 "executionStarted": False,
             }
-        selected, choices = route_question(
-            request.question, contexts, request.contextToken
-        )
+        if request.problemId is not None and request.contextToken is None:
+            selected, choices = (contexts[0], []) if len(contexts) == 1 else (None, [])
+        else:
+            selected, choices = route_question(
+                request.question, contexts, request.contextToken
+            )
         base = {
             "schemaVersion": "question-activity-input.v1",
             "originalQuestion": request.question,
             "questionDigest": canonical_digest(request.question),
-            "contextRouting": "DETERMINISTIC_AUTHORIZED_TITLE_OVERLAP_NOT_MODEL_UNDERSTANDING",
+            "contextRouting": "EXPLICIT_CURRENT_PROBLEM_REAUTHORIZED"
+            if request.problemId is not None
+            else "DETERMINISTIC_AUTHORIZED_TITLE_OVERLAP_NOT_MODEL_UNDERSTANDING",
             "formalBusinessProcess": None,
             "newResourceOrEmployeeCreated": False,
             "executionStarted": False,

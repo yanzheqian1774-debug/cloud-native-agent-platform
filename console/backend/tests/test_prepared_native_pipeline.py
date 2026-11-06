@@ -323,6 +323,15 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 execution_summary(c, principal, read_authority, plan_key)["state"]
                 == "SUCCEEDED"
             )
+            assert execution_summary(c, principal, read_authority, plan_key)[
+                "executions"
+            ] == [
+                {
+                    "digest": p.digest,
+                    "state": "SUCCEEDED",
+                    "planVersion": p.plan_version,
+                }
+            ]
             read_authority.denied = True
             assert execution_summary(c, principal, read_authority, plan_key) == {
                 "state": "UNKNOWN",
