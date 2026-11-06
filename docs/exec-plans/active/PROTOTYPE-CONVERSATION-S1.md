@@ -141,3 +141,49 @@ is not established from only four real entries; no fabricated rows added.
 AC05 compatible projection PASS: actual exact-URL work/node/draft restore on
 back/forward with zero duplicate writes. Durable conversation scope remains open.
 Overall S1 remains PARTIAL. S2/S3 and two-employee work are not included.
+
+## Approved persistent slice (2026-11-06)
+
+User approval relayed by monitor chat 01a1aa5c-194c-7530-b4f7-f20450693703
+accepts contract v0.1 D1-D3: existing PostgreSQL private conversation/message/link
+records, preserving original execution and permission authorities. D4 is an
+estimate. This is the human G2 decision for this narrow state owner, not a change
+to Problem/Plan/Run lifecycle or a second executor. Single writer verified at
+1607f85; no tracked changes, queue0,38 calls/14 unsettled/USD11.126748 unchanged.
+
+Implementation: additive schema and private owner checks; trusted BFF session and
+CSRF; version CAS, idempotent create/append/link, immutable messages, exact
+existing-owner read authorization for work refs; feature flag default off.
+Console conversation list/history with existing work drilldown and browser-only
+drafts/positions; clear supported followup routes and ambiguity; no automatic
+Problem/model/Run creation from append. Old projection remains available with
+flag off. Migration rollback disables feature and retains records.
+
+Validation: isolated PostgreSQL64335 integration for concurrency/idempotency/
+private scope/foreign refs, BFF auth/CSRF/flag; frontend checks; controlled actual
+conversation records with old work READ only, reload/new login/A-B-A/drilldown,
+0 new model calls/business owner writes and unchanged old authority table audit.
+No historical replay. Deliver exact commit/install/checkpoint and frozen diff.
+
+### First implementation boundary and rollback
+
+PRIVATE_CONVERSATIONS_ENABLED=true enables BFF routes; otherwise writes fail
+closed and UI retains legacy work entry. Apply migration0046 explicitly with
+scripts/acceptance/private_conversation_migrate.py --apply, using existing DB
+via CONVERSATION_DATABASE_URL. The checksum ledger rejects changed migration.
+Rollback disables the flag and restores code; never DROP private records or
+roll back business facts. No historic Problem-to-conversation auto-import.
+
+First slice stores private user messages with server routing hints and exact
+Problem/optional prepared execution links. It is not a model response service.
+Messages with focus refer to existing work; ambiguity stays recorded until the
+user selects a work. Clear independent-goal language is a review hint, never a
+CREATE_PROBLEM command. Existing-work actions navigate the original owner UI;
+new goals still require that owner's confirmation. Draft/planning source-message
+projection and durable action-intent/owner-receipt message types are not enabled
+in this first slice; no hidden dispatcher or new execution authority exists.
+
+Controlled isolated PG64335 and BFF tests:34 passed, including10 new cases for
+private scope, concurrent CAS, replay/payload collision, persistent reload,
+exact work mismatch, revoked link redaction/write rejection, session/CSRF and
+feature-off. Actual installed UI evidence follows; no full S1 acceptance claimed.

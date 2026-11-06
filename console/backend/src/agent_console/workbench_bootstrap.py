@@ -488,6 +488,11 @@ def build_workbench_composition(
                 if management_path
                 else (),
             ),
+            **(
+                {"conversation_database_url": owner_database_url}
+                if os.environ.get("PRIVATE_CONVERSATIONS_ENABLED") == "true"
+                else {}
+            ),
             grant_administration=foundation.grants,
             operations=(
                 *resource_automation_routes,

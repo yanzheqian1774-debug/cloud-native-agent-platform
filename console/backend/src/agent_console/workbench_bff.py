@@ -188,6 +188,7 @@ def create_workbench_bff(
     operations: Sequence[WorkbenchOperation] = (),
     grant_administration: GrantAdministrationService | None = None,
     route_installers: Sequence[WorkbenchRouteInstaller] = (),
+    conversation_database_url: str = "",
 ) -> FastAPI:
     """Build the public route set from an explicit, duplicate-free registry."""
 
@@ -698,6 +699,17 @@ def create_workbench_bff(
             methods=[operation.method],
             name=operation.name,
         )
+
+    from agent_console.private_conversation_api import install_private_conversations
+
+    install_private_conversations(
+        app,
+        authenticate,
+        require_csrf,
+        authorizer,
+        operations,
+        conversation_database_url,
+    )
 
     for install in route_installers:
         install(app, authenticate, require_csrf, policy)
