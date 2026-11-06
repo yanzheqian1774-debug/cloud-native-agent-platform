@@ -205,6 +205,75 @@ def test_denied_foreign_resource_and_inline_secrets_rollback(manager):
         )
 
 
+def test_access_without_version_is_policy_checked_and_does_not_mutate_resource(manager):
+    a, m = manager
+    original = command(manager, "create", name="原资源恢复", content=CONTENT)[
+        "resource"
+    ]
+    identity = original["resourceId"]
+    recovered = command(manager, "access", identity=identity)
+    assert recovered["resource"] == original
+    assert recovered["executionStarted"] is False
+    assert command(manager, "access", identity=identity) == recovered
+    with pytest.raises(WorkbenchOwnerError, match="STALE"):
+        command(
+            manager,
+            "access",
+            key="explicit-stale-access",
+            identity=identity,
+            expectedVersion=999,
+        )
+    with pytest.raises(WorkbenchOwnerError, match="STALE"):
+        command(manager, "edit", identity=identity, content=CONTENT)
+    with pytest.raises(WorkbenchOwnerError, match="NOT_FOUND"):
+        command(
+            manager,
+            "access",
+            key="foreign-access-key",
+            identity=a.refs["skill"].resource_id,
+        )
+    m.policy = m.policy.model_copy(update={"enabled": False})
+    with pytest.raises(AuthorityError, match="RESOURCE_POLICY_DISABLED"):
+        command(manager, "access", key="disabled-access-key", identity=identity)
+    with a.repository.pool.connection() as c:
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM execution_authority.workflow_runs"
+            ).fetchone()["n"]
+            == 0
+        )
+
+
+@pytest.mark.parametrize("revoked_action", ["MANAGE_RESOURCE", "READ_RESOURCE"])
+def test_access_cannot_regrant_dynamic_revocation(manager, revoked_action):
+    from agent_console.authority_contracts import GrantId
+    from agent_console.grant_administration_application import GrantRevocationCommand
+    from agent_console.resource_management import target
+    from agent_console.workbench_prepared_resources import reference
+
+    a, m = manager
+    resource = command(manager, "create", name="撤权保留", content=CONTENT)["resource"]
+    identity = resource["resourceId"]
+    exact = (
+        target("skill", identity)
+        if revoked_action == "MANAGE_RESOURCE"
+        else reference("skill", identity, resource["revisions"][0]["revisionId"])
+    )
+    with a.repository.pool.connection() as c:
+        grant = c.execute(
+            "SELECT grant_id FROM authorization_admin.grants WHERE owner='SKILL' AND action=%s AND exact_resource=%s",
+            (revoked_action, exact),
+        ).fetchone()["grant_id"]
+    m.grants.revoke_grant(
+        a.subject,
+        GrantRevocationCommand(
+            GrantId(grant), "USER_REQUESTED", "original-resource-revoked", True
+        ),
+    )
+    with pytest.raises(AuthorityError, match="RESOURCE_PERMISSION_REVOKED"):
+        command(manager, "access", key="revoked-access-key", identity=identity)
+
+
 def test_http_session_csrf_receipt_and_cross_scope(manager):
     from fastapi.testclient import TestClient
     from test_workbench_bff import SessionStub

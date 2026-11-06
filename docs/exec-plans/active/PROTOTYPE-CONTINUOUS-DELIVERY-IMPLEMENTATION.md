@@ -376,3 +376,28 @@ with honest remote uncertainty and same-C return. No model/timeout/budget change
 invalid-output normalization, old-call retry or automatic new research call.
 Targeted52 backend/51 browser checks passed; final gate and actual installed UI
 verification remain pending. J01-J12 and overall stable dual-case acceptance OPEN.
+
+## P1真实出口后续定位与原资源恢复 · 2026-11-06
+
+21aa固定修正后仅做一次有明确依据的新销售研发调用：完整已授权I/O事实是否能使新自由图
+满足原输入契约。新任务/上下文/请求独立签署；4a9034ad在WAIT_HEADERS55.6869秒后
+OUTCOME_UNKNOWN，本地已回收、远端结果/计量未知。未得到方案，不能评价字段修正效果。
+40/15/USD11.909988→41/16/USD12.598116含新增0.688128预留；旧22表所有原行保留，
+Plan/Run0。停止同条件抽样，未做供应商第二次研发。原323最小诊断委托连续性仍gen2且过期，
+当前gen10/配置不符；GET预检成功不等于active，未调用探针，未用324签署替代。Kimi请求、
+low/8192、5/55/60、额度不变，未凭WAIT_HEADERS现象引入SSE。新失败页实际只读恢复
+验证状态GET/刷新/同C返回通过，回执拒权如实显示；业务写0、新调用/Run/结算0。
+
+继续原资源组G1必要页而不等待模型抽样：实际原v2Skill深链因当前管理目录不返回该资源，
+静默退回目录。新增有限G1计划PROTOTYPE-P1-OWNED-RESOURCE-RECOVERY.md；显式调用已有
+access action请求原策略重新核验本账号原创建资源的管理及修订READ权限，非只读操作。
+仅该不修改资源的action可省略未知aggregateVersion；提供旧版本仍拒绝，其他动作仍原版本
+检查。owned/current policy/动态撤权/精确授权owner完整复用。普通GET/刷新/登录不POST；
+绑定账号/范围/路径/资源及活跃代次，核验回执action/kind/identity/key/无执行，原key GET恢复。
+只在整条读回与目录核验完成后显示详情，避免身份切换后显示旧账号资源。
+
+工程阶段：管理后端9项通过，自动准备既有23项通过；资源前端28项通过（包含加载、拒绝、
+错回执、身份变化、最终目录读取竞态、离页前防派发和丢响应恢复）。独立只读评审发现并修复
+恢复末段身份竞态及卸载守卫。完整提交检查、固定安装及实际原资源恢复/同屏对照仍依次执行；
+上述工程通过不抵扣双场景业务接受、完整S1/J11/92行或六包。最新实际结果检查点见本chat
+outputs/P1自动旅程真实出口与最小修正/05-销售单次研发与诊断边界.html。

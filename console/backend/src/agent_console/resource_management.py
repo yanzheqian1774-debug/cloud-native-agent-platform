@@ -275,7 +275,13 @@ class ResourceManagement:
                 identity = record["resourceId"]
             else:
                 record = service.repository.get(scope, kind, identity)
-                if command.expectedVersion != record["aggregateVersion"]:
+                # Access does not mutate the resource. A caller whose exact
+                # management grant expired cannot read its aggregate version;
+                # ownership and the current policy were checked above. Explicit
+                # versions and every mutating action keep optimistic locking.
+                if command.expectedVersion != record["aggregateVersion"] and (
+                    command.action != "access" or command.expectedVersion is not None
+                ):
                     raise WorkbenchOwnerError("RESOURCE_VERSION_STALE", 409)
                 args = (scope, kind, identity, actor, command.expectedVersion)
                 if command.action == "edit":
