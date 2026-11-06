@@ -34,6 +34,18 @@ if TYPE_CHECKING:
     from .plan_suggestion_bootstrap import PlanningInvocationDependencies
 
 
+def project_business_context(target, policy_echo, business_context):
+    """Deduplicate equal transport facts without changing original observations."""
+    projected = dict(business_context)
+    if projected.get("target") == target:
+        projected.pop("target")
+    if policy_echo and projected.get("planning_policy") == policy_echo.get(
+        "planning_policy"
+    ):
+        projected.pop("planning_policy")
+    return projected
+
+
 def planning_transport(configuration):
     from .kimi_responses_draft_adapter import (
         KimiResponsesConfiguration,
@@ -140,6 +152,10 @@ class PlanningResponsesProvider:
             if request.policy is not None
             else {}
         )
+        target = request.target.model_dump(mode="json")
+        transmitted_context = project_business_context(
+            target, policy_echo, business_context
+        )
         document = {
             "model": self.configuration.native_model_id,
             "instructions": ZH_INSTRUCTIONS
@@ -153,10 +169,10 @@ class PlanningResponsesProvider:
                             "type": "input_text",
                             "text": canonical_bytes(
                                 {
-                                    "target": request.target.model_dump(mode="json"),
+                                    "target": target,
                                     "answers": request.answers,
                                     **policy_echo,
-                                    "context": business_context,
+                                    "context": transmitted_context,
                                 }
                             ).decode(),
                         }

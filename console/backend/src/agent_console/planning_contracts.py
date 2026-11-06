@@ -48,6 +48,23 @@ INPUTS = {
 }
 
 
+def input_conflict(operation, incoming, produced, has_dependencies):
+    """Same finite acceptance predicate for validation and sanitized diagnostics."""
+    if operation == "READ_DATA":
+        return (
+            None
+            if incoming == {"CONTEXT"} and not has_dependencies
+            else "READ_ROOT_MISMATCH"
+        )
+    if not produced:
+        return "EMPTY_PRODUCER_SET"
+    if incoming != produced:
+        return "DECLARED_PRODUCER_SET_MISMATCH"
+    if not incoming & INPUTS[operation]:
+        return "NO_COMPATIBLE_INPUT_KIND"
+    return None
+
+
 class PlanningPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_version: Literal["planning-policy.v2"] = "planning-policy.v2"
@@ -93,15 +110,7 @@ def validate_semantics(plan):
             raise ValueError("PLANNING_OPERATION_OUTPUT_CONFLICT")
         incoming = set(task.input_kinds)
         produced = {tasks[dep].output_kind for dep in task.depends_on}
-        if task.operation == "READ_DATA":
-            valid = incoming == {"CONTEXT"} and not task.depends_on
-        else:
-            valid = (
-                bool(produced)
-                and incoming == produced
-                and bool(incoming & INPUTS[task.operation])
-            )
-        if not valid:
+        if input_conflict(task.operation, incoming, produced, bool(task.depends_on)):
             raise ValueError("PLANNING_OPERATION_INPUT_CONFLICT")
     if policy.mode == "STRICT_WORKFLOW":
         # Compare typed responsibilities and exact producer/consumer links, not

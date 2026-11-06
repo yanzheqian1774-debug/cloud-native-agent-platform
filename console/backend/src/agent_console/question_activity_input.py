@@ -30,6 +30,31 @@ class QuestionActivityRequest(BaseModel):
     contextToken: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
 
+def member_contract_answers(operations):
+    """Preserve complete observed I/O entries within Planning's Text boundary."""
+    prefix = (
+        "可读成员I/O候选(op,至少一种兼容输入,输出；非固定图、非必须操作、非执行授权)："
+    )
+    chunks, current = [], []
+    for operation in operations:
+        row = [
+            operation["operation"],
+            operation["inputKinds"],
+            operation["outputKind"],
+        ]
+        candidate = [*current, row]
+        if len(prefix + json.dumps(candidate, separators=(",", ":"))) > 500:
+            chunks.append(prefix + json.dumps(current, separators=(",", ":")))
+            current = [row]
+        else:
+            current = candidate
+    if current:
+        chunks.append(prefix + json.dumps(current, separators=(",", ":")))
+    if any(len(chunk) > 500 for chunk in chunks):
+        raise WorkbenchOwnerError("QUESTION_MEMBER_CONTRACT_TOO_LARGE", 422)
+    return tuple(chunks)
+
+
 STOP = {
     "分析",
     "数据",
@@ -214,23 +239,14 @@ class QuestionActivityInput:
         capabilities = observe(
             a, call, source, selected["sourceSchema"], selected["_work"]
         )
-        capability_answers = ()
-        if capabilities["operations"]:
-            capability_answers = (
-                "平台只读观察到的已发布员工成员候选操作（不是固定任务图、不是必须操作、不是执行授权）："
-                + json.dumps(
-                    [op["operation"] for op in capabilities["operations"]],
-                    ensure_ascii=False,
-                )
-                + "。按业务需要形成自由任务图；若需其它能力，保留真实缺口，不声称已有或就绪。",
-            )
-        hint = f"本次唯一已批准只读来源：{source.resource_id}；修订：{source.revision_id}；SHA256：{source.digest}。来源族：{selected['sourceSchema']}。新方案boundaries保留：隔离合成来源：{source.resource_id}；修订：{source.revision_id}；SHA256：{source.digest}"
+        capability_answers = member_contract_answers(capabilities["operations"])
+        hint = f"唯一批准的只读来源，来源族：{selected['sourceSchema']}。将下一行原样保留为boundaries中的一条：\n隔离合成来源：{source.resource_id}；修订：{source.revision_id}；SHA256：{source.digest}"
         planning = PlanningRequest(
             target=ProblemTarget.model_validate(selected["target"]),
             answers=(
                 request.question,
                 hint,
-                "围绕用户原始提问形成开放分析活动和任务I/O依赖，复用给定目标/标准/来源。不要照搬固定五步，不要求用户选资源/角色或技术ID；员工与技能候选交由平台发现。缺少必要业务事实时集中补问，不虚构事实、流程实例或效果。",
+                "按原始提问、已确认目标/标准/来源形成FREE任务图，不固定步骤或数量，不要求用户选资源/角色/技术ID。业务字段用短标题、单句职责和简短I/O；技术引用只放对应字段，同样覆盖可复用逻辑角色。每个非READ任务的input_kinds集合必须等于全部depends_on任务的output_kind去重集合，且至少含该操作的一种兼容输入；候选表中的兼容集合不是本任务的实际输入。READ仅CONTEXT且无依赖。若需其它能力保留缺口，不声称就绪；缺业务事实时集中补问，不虚构事实、流程实例或效果。",
                 *capability_answers,
             ),
             policy=PlanningPolicy(),

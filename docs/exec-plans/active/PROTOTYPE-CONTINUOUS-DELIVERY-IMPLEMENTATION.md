@@ -354,3 +354,25 @@ remain unchanged before installation. No P1 overall acceptance, J01-J12 closure,
 S1 completion,92-row matrix reclassification or J07 configuration-only credit is
 claimed by this code slice. Two fresh real product journeys and their evidence
 remain next; no successor chat is created or required for routine continuation.
+
+
+### 2026-11-06 actual natural-question failures and finite corrective candidate
+
+Installed18a0fcd reached two new exact independently signed real calls: supplier
+644f66ec OUTCOME_UNKNOWN atWAIT_HEADERS55.79s (measurement absent); sales7ca051ef
+SUCCEEDED/INVALID atsemantics.tasks[3].input_kinds under the existing input-flow
+contract. Neither created a proposal, Plan or Run.38/14/USD11.126748 became
+40/15/USD11.909988 including reservations. All prior rows in22 audited tables
+remain hash-identical, including the old8e15232e UNKNOWN and its reservation.
+These failures do not receive credit from controlled browser checks or the earlier
+c989 six-role execution. Same-C and exact failed-request links are in the sole
+writer's `outputs/P1自动旅程真实出口与最小修正` checkpoint.
+
+`PROTOTYPE-P1-FAILURE-EVIDENCE-COMPACTION.md` defines the bounded next slice:
+remove only equal duplicate model input facts, retain already-authorized member
+I/O metadata within500-character answer boundaries, preserve strict rejection,
+append only finite diagnostic subconditions, and show authorized local receipts
+with honest remote uncertainty and same-C return. No model/timeout/budget change,
+invalid-output normalization, old-call retry or automatic new research call.
+Targeted52 backend/51 browser checks passed; final gate and actual installed UI
+verification remain pending. J01-J12 and overall stable dual-case acceptance OPEN.

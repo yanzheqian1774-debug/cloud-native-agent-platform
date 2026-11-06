@@ -71,7 +71,7 @@ def located_contract_issues(text):
     """Locate finite graph violations without disclosing arbitrary provider values."""
     import json
 
-    from .planning_contracts import INPUTS, OUTPUTS
+    from .planning_contracts import INPUTS, OUTPUTS, input_conflict
 
     try:
         plan = json.loads(text).get("semantics") or {}
@@ -114,17 +114,18 @@ def located_contract_issues(text):
                 add("output_kind", "PLANNING_OPERATION_OUTPUT_CONFLICT")
             incoming = set(task.get("input_kinds", []))
             produced = {by_id[dep].get("output_kind") for dep in deps}
-            valid = (
-                (not deps and incoming == {"CONTEXT"})
-                if operation == "READ_DATA"
-                else (
-                    bool(produced)
-                    and incoming == produced
-                    and bool(incoming & INPUTS[operation])
-                )
-            )
-            if not valid:
+            conflict = input_conflict(operation, incoming, produced, bool(deps))
+            if conflict:
                 add("input_kinds", "PLANNING_OPERATION_INPUT_CONFLICT")
+                known = {"CONTEXT", *OUTPUTS.values()}
+                found[-1]["contractFacts"] = {
+                    "subcondition": conflict,
+                    "operation": operation,
+                    "declaredInputKinds": sorted(incoming & known),
+                    "dependencyOutputKinds": sorted(produced & known),
+                    "compatibleInputKinds": sorted(INPUTS[operation]),
+                    "hasUnknownValue": bool((incoming | produced) - known),
+                }
         return found[:16]
     except (ValueError, TypeError, KeyError, AttributeError):
         return []
