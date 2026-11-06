@@ -81,3 +81,11 @@ immutable revision and was corrected to append from the actual head; the guard
 was not weakened. Full mandatory checks and actual installed read-only proof are
 still required. The frozen product-path matrix and conservative dimension-profit
 gap report stay distinct from an implementation or business-acceptance claim.
+
+30ace35 was installed and both real saved-record journeys passed without business
+writes, inference or new Runs. Screenshot review exposed an ambiguous historical
+sidebar saying not started without qualifying its version. Bounded G0 followup
+labels the historical version and its resource snapshot explicitly, while keeping
+the separately authorized successor execution link. It does not assign successor
+success to the old version or change any stored state. Repeat required checks and
+same-Run read proof; retain the initial installed checkpoint evidence.
