@@ -565,7 +565,7 @@ class PlanningSuggestionService:
             local_cleanup=receipt.get("deadline"),
         )
 
-    def read(self, principal, invocation_id):
+    def read(self, principal, invocation_id, *, settle_receipt=True):
         app = self.application
         scope = app.scope(principal)
         result = self.invocations.read(scope, invocation_id, principal.principal_id)
@@ -582,7 +582,7 @@ class PlanningSuggestionService:
             app.validate_target(
                 principal, target.problem, cursor.connection, current=False
             )
-        if hasattr(self.invocations, "receipt"):
+        if settle_receipt and hasattr(self.invocations, "receipt"):
             receipt = self.invocations.receipt(scope, invocation_id)
             if receipt is not None:
                 from .planning_measurement import settle

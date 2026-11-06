@@ -1,3 +1,4 @@
+import {findReadRequestMarker} from './readRequestMarker';
 import {conversationActionHeaders,continuationQuery} from "../api/conversationActions";
 import {readWorkbenchSession} from "../api/businessWorkspace";
 import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from "react";
@@ -47,9 +48,9 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     if (flight.current&&inFlightRequest.current===recordKey) return;
     setUnresolved(true);
     const path = requestKey ? `requests/${encodeURIComponent(requestKey)}` : `invocations/${encodeURIComponent(invocationId!)}`;
-    (async()=>{const before=await readWorkbenchSession();const value=await planningRequest<Invocation>(`planning-v2/${path}`);if(JSON.stringify((await readWorkbenchSession()).principal)!==JSON.stringify(before.principal))throw Error("登录身份已变化，原记录需重新读取。");return value})().then(value => {if (active) {setResponse({key:recordKey,value}); setUnresolved(false);}}).catch(e => {if (active) setError(`${e.message}；保留原请求，尚未读回结果，不会重发。`);});
+    (async()=>{const before=await readWorkbenchSession();const access=findReadRequestMarker(before.principal,requestKey,invocationId);if(access){if(access.problemId!==problem)throw Error('原 READ 申请定位与页面尚未核实，不读取原调用。');if(!requestKey&&active)setParams(previous=>{const next=new URLSearchParams(previous);next.set('request',access.requestKey);return next},{replace:true});throw Error('已保留准确 READ 申请，仅核对申请状态；原调用需另行点击只读读取。');}const value=await planningRequest<Invocation>(`planning-v2/${path}`);if(JSON.stringify((await readWorkbenchSession()).principal)!==JSON.stringify(before.principal))throw Error("登录身份已变化，原记录需重新读取。");return value})().then(value => {if (active) {setResponse({key:recordKey,value}); setUnresolved(false);}}).catch(e => {if (active) setError(`${e.message}；保留原请求，尚未读回结果，不会重发。`);});
     return () => {active = false;};
-  }, [requestKey, invocationId,recordKey]);
+  }, [requestKey, invocationId,recordKey,problem,setParams]);
   async function openProposal(value:Invocation,continuous:boolean,acceptedLocators=[locator],expectedPrincipal?:string){
     const currentView=()=>latestLocator.current!==null&&acceptedLocators.includes(latestLocator.current);
     if(!currentView())return;
@@ -137,7 +138,9 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
     try {
       const originalSession=await readWorkbenchSession();
       if(latestLocator.current!==locator)return;
-      const path=requestKey?`planning-v2/requests/${encodeURIComponent(requestKey)}`:`planning-v2/invocations/${encodeURIComponent(invocationId!)}`;
+      const access=findReadRequestMarker(originalSession.principal,requestKey,invocationId);
+      if(access&&access.problemId!==problem)throw Error('原 READ 申请定位与页面尚未核实，不读取原调用。');
+      const path=!continueCall&&access?`planning-v2/requests/${encodeURIComponent(access.requestKey)}/read-only`:requestKey?`planning-v2/requests/${encodeURIComponent(requestKey)}`:`planning-v2/invocations/${encodeURIComponent(invocationId!)}`;
       let headers:Record<string,string>={};
       if(continueCall&&params.get("returnConversation")){
         const payload=Object.fromEntries(Object.entries(result!.invocation.request as unknown as Record<string,unknown>).filter(([k])=>["target","source_proposal","answers","idempotency_key","predecessor_invocation_id","policy","output_language"].includes(k))),target=payload.target as {problem:{resource_id:string;revision_id:string;digest:string};expected_problem_version:number};

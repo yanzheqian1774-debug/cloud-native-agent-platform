@@ -1,5 +1,6 @@
 import {Link} from "react-router-dom";
 import {continuationQuery} from "../api/conversationActions";
+import {ExactReadRequest} from "./ExactReadRequest";
 import {PlanningCallEvidence} from "./PlanningCallEvidence";
 import {StatusBadge} from "../components/WorkspacePrimitives";
 
@@ -17,6 +18,7 @@ export function PlanningRecoveryCard({invocationId,requestKey,status,reason,busy
   {remoteRecoveryUnavailable&&<p>当前Kimi接入不提供远端观察或取消；重新读取不会取回远端输出，也不会取消远端调用。</p>}
   {invalid&&<details><summary>查看原校验定位</summary>{diagnostic?.locations?.length?diagnostic.locations.slice(0,16).map((item,index)=><p key={index}>{item.path[0]==='semantics'&&item.path[1]==='tasks'&&typeof item.path[2]==='number'?`第 ${item.path[2]+1} 项任务：`:'方案声明：'}{item.rule==='PLANNING_OPERATION_INPUT_CONFLICT'?'输入依赖契约未通过':'原契约校验未通过'}。{({EMPTY_PRODUCER_SET:'尚无实际输入生产者。',DECLARED_PRODUCER_SET_MISMATCH:'声明的输入类型集合与全部直接依赖输出集合不相等。',NO_COMPATIBLE_INPUT_KIND:'实际输入中没有该操作可消费的类型。',READ_ROOT_MISMATCH:'读取任务的根依赖或输入类型不符。'} as Record<string,string>)[item.contractFacts?.subcondition??'']??'具体子条件未记录，不能从原文摘要补造。'}</p>):<p>原记录未提供更细定位，不能补造无效输出原文。</p>}</details>}
   {invocationId&&status!=='MISMATCH'&&<PlanningCallEvidence key={invocationId} invocationId={invocationId}/>}
+  {requestKey&&status!=='MISMATCH'&&<ExactReadRequest key={requestKey+'|'+sourceProblem} requestKey={requestKey} problemId={sourceProblem} invocationId={invocationId}/>}
   <div className="planning-recovery-actions"><button type="button" disabled={busy} onClick={onRead}>{busy?"正在读取原记录…":"读取原调用状态（不重试）"}</button><Link to={`/work?problem=${encodeURIComponent(sourceProblem)}${continuationQuery()}`}>返回原问题与标准</Link></div>
  </section>;
 }

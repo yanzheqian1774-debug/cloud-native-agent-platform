@@ -977,6 +977,87 @@ class PostgresAuthorityRepository:
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
+    def recover_read_request(self, context, key):
+        """Read own original submit claim across epochs; never replay a command."""
+        try:
+            with self.connection_scope() as connection:
+                rows = connection.execute(
+                    "SELECT DISTINCT result_id FROM authorization_admin.idempotency_claims "
+                    "WHERE tenant_id=%s AND security_domain=%s AND actor_id=%s "
+                    "AND idempotency_key=%s AND result_kind='GRANT_REQUEST' "
+                    "AND command_type ~ '^SUBMIT_GRANT_REQUEST:RECOVERY_EPOCH:[1-9][0-9]*$'",
+                    (
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        context.principal_id,
+                        key,
+                    ),
+                ).fetchall()
+                if len(rows) != 1:
+                    raise AuthorityError(
+                        "READ_REQUEST_AMBIGUOUS" if rows else "GRANT_REQUEST_NOT_FOUND"
+                    )
+                request = self._request(connection, rows[0]["result_id"])
+                if (
+                    request.subject_principal_id != context.principal_id
+                    or request.scope != context.scope
+                ):
+                    raise AuthorityError("GRANT_REQUEST_NOT_FOUND")
+                return request
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def exact_read_history(self, context, members):
+        try:
+            with self.connection_scope() as connection:
+                result = []
+                for member in members:
+                    row = connection.execute(
+                        "SELECT count(*) n,max(expires_at) expires_at FROM authorization_admin.grants "
+                        "WHERE subject_principal_id=%s AND tenant_id=%s AND security_domain=%s "
+                        "AND owner=%s AND action=%s AND exact_resource=%s",
+                        (
+                            context.principal_id,
+                            context.scope.tenant_id,
+                            context.scope.security_domain,
+                            member.owner,
+                            member.action,
+                            member.exact_resource,
+                        ),
+                    ).fetchone()
+                    result.append(
+                        {
+                            "previouslyGranted": row["n"] > 0,
+                            "previousExpiry": row["expires_at"],
+                        }
+                    )
+                return result
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
+    def read_request_decision(self, request_id):
+        try:
+            with self.connection_scope() as connection:
+                row = connection.execute(
+                    "SELECT d.created_at,d.reason_category,min(g.not_before) not_before,max(g.expires_at) expires_at "
+                    "FROM authorization_admin.grant_decisions d LEFT JOIN authorization_admin.grants g "
+                    "ON g.decision_id=d.decision_id WHERE d.request_id=%s "
+                    "GROUP BY d.created_at,d.reason_category",
+                    (request_id,),
+                ).fetchone()
+                return (
+                    None
+                    if row is None
+                    else {
+                        "decidedAt": row["created_at"],
+                        "reasonCategory": row["reason_category"],
+                        "notBefore": row["not_before"],
+                        "expiresAt": row["expires_at"],
+                    }
+                )
+        except PsycopgError as exc:
+            raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
+
     def inspect_grant_subject(self, grant_id: GrantId) -> tuple[str, AuthorityScope]:
         try:
             with self.connection_scope() as connection:

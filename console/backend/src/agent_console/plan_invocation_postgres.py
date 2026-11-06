@@ -13,6 +13,41 @@ class PostgresPlanningInvocations:
     def __init__(self, planning: PostgresPlanningRepository):
         self.planning = planning
 
+    def read_access_metadata(self, scope, actor, request_key):
+        """Own durable failed-call identifiers, never the read/settlement path."""
+        with self.planning.transaction(scope, request_key, authorized=True) as cursor:
+            row = cursor.execute(
+                "SELECT i.invocation_id,i.record,r.record AS result "
+                "FROM workflow_planning.invocations i "
+                "JOIN workflow_planning.invocation_results r "
+                "USING(namespace,security_domain,invocation_id) "
+                "WHERE i.namespace=%s AND i.security_domain=%s "
+                "AND i.actor_id=%s AND i.request_key=%s",
+                (scope.namespace, scope.security_domain, actor, request_key),
+            ).fetchone()
+            if row is None or not (
+                row["result"].get("technical_status") == "OUTCOME_UNKNOWN"
+                or (
+                    row["result"].get("technical_status") == "SUCCEEDED"
+                    and row["result"].get("kind") == "INVALID"
+                )
+            ):
+                raise PlanningError("PLANNING_READ_TARGET_NOT_FOUND")
+            problem = (
+                row["record"]
+                .get("target", {})
+                .get("problem", {})
+                .get("problem", {})
+                .get("resource_id")
+            )
+            if not isinstance(problem, str) or not problem:
+                raise PlanningError("PLANNING_READ_TARGET_NOT_FOUND")
+            return {
+                "requestKey": request_key,
+                "invocationId": row["invocation_id"],
+                "problemId": problem,
+            }
+
     def has_usage_target(self, connection, scope, identity, *, measurement):
         """Validate persisted invocation, kind and receipt without dispatch."""
         row = connection.execute(

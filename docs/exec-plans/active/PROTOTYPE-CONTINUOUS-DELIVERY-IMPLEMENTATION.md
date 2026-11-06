@@ -424,3 +424,16 @@ continuity/configuration remain ineligible; no diagnostic permission is created.
 Current preserved ledger41calls/16unsettled/USD12.598116, no new sampling/replay.
 First stable supplier/sales acceptance, whole S04/J11/92-row/six-package acceptance
 remain independently OPEN pending actual slice evidence and remaining gates.
+
+### Exact original READ request/status finite slice · 2026-11-06
+
+PROTOTYPE-EXACT-READ-RECOVERY.md implements original durable-failure metadata,
+exact PLAN/READ and usage READ/READ_MEASUREMENT requests via existing grant owner,
+and own original-idempotency-key status GET without replay. Cross-tab Web Locks,
+identity/view guards and conservative markers preserve one request. Marker-aware
+startup suppresses automatic original reads; explicit request read-only endpoint
+retains authorization and never settles. No new approval/continue/model authority.
+42 isolated backend and52 browser checks passed; mandatory full hooks, immutable
+installation and actual pending-request audit follow. Historical reservations and
+ledger41/16/USD12.598116 stay intact. R2 usage is first READ. Whole business/S04/
+J11/92-row/six-package acceptance remains OPEN for orchestrator combined review.

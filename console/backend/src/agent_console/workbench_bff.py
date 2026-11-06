@@ -502,6 +502,37 @@ def create_workbench_bff(
     if grant_administration is not None:
 
         @app.get(
+            f"{PREFIX}/authorization/planning-read-targets/{{planning_request_key}}"
+        )
+        def planning_read_targets(planning_request_key: str, request: Request):
+            _, context = authenticate(request)
+            reader = getattr(app.state, "planning_read_access_metadata", None)
+            if reader is None:
+                raise WorkbenchBoundaryError("READ_RECOVERY_UNAVAILABLE", 503)
+            from .plan_suggestion_domain import PlanningError
+            from .read_access_recovery import read_targets
+
+            try:
+                metadata = reader(context, planning_request_key)
+            except (AuthorityError, PlanningError, ValueError) as exc:
+                raise WorkbenchBoundaryError("READ_TARGET_NOT_FOUND", 404) from exc
+            return {"result": read_targets(grant_administration, context, metadata)}
+
+        @app.get(f"{PREFIX}/authorization/grant-request-keys/{{request_key}}")
+        def recover_read_request(request_key: str, request: Request):
+            _, context = authenticate(request)
+            from .read_access_recovery import recover_request
+
+            try:
+                return {
+                    "result": recover_request(
+                        grant_administration, context, request_key
+                    )
+                }
+            except AuthorityError as exc:
+                raise WorkbenchBoundaryError(exc.reason_code, 404) from exc
+
+        @app.get(
             f"{PREFIX}/authorization/continuations",
             response_model=WorkbenchContinuationInbox,
         )

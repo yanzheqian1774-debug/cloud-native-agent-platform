@@ -39,6 +39,21 @@ def install_planning_invocations(
 
         app.state.conversation_planning_reader = reader
 
+        def read_access_metadata(context, key):
+            if service_factory is None or not key or len(key) > 200:
+                raise PlanningError("PLANNING_READ_TARGET_NOT_FOUND")
+            service = service_factory(context)
+            principal = OwnerPrincipal(
+                context.principal_id,
+                context.scope.tenant_id,
+                context.scope.security_domain,
+            )
+            return service.invocations.read_access_metadata(
+                service.application.scope(principal), principal.principal_id, key
+            )
+
+        app.state.planning_read_access_metadata = read_access_metadata
+
         def read_exact_request(context, key, expected_payload):
             value = reader(context, key, True)
             stored = value["invocation"].get("request")
@@ -167,6 +182,22 @@ def install_planning_invocations(
                 )
 
             return invoke(request, recover)
+
+        @app.get(f"{PREFIX}/planning-v2/requests/{{request_key}}/read-only")
+        def read_original_failure(request: Request, request_key: str):
+            def read(service, principal):
+                metadata = service.invocations.read_access_metadata(
+                    service.application.scope(principal),
+                    principal.principal_id,
+                    request_key,
+                )
+                # Original owner READ and exact target checks, without settlement,
+                # continuation, adaptive recovery or provider observation.
+                return service.read(
+                    principal, metadata["invocationId"], settle_receipt=False
+                )
+
+            return invoke(request, read)
 
         @app.post(f"{PREFIX}/planning-v2/requests/{{request_key}}/continue")
         async def continue_prepared(request: Request, request_key: str):
