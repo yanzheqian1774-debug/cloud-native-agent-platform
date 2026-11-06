@@ -471,3 +471,66 @@ Old policy/prices/UNKNOWN remain. Isolated tests and actual dual-case evidence
 are distinct; current candidate is not installed and both real cases NOT_RUN.
 Cross-generation accepted work remains separately checkpointed. UI-01 follows
 this core checkpoint without importing unaccepted prototype pages.
+
+### UI-01 first bounded installation batch — 2026-11-07
+
+Parent installed checkpoint: `ab02c01f9ef9e4a9e52d34f70335c4c2ac8add9f`;
+frontend bundle `0ef50b8eef9e1161d2c6c06c90475bdbe9247eb92dcd8bae64408c16dad782bd`.
+The same-conversation successor is installed and verified, with zero new model
+calls/Runs and Human business acceptance OPEN. This supersedes only the stale
+in-progress installation status above, not its historical evidence.
+
+Gate G1 (existing Console/navigation cross-module behavior), plan reviewed
+against current frontend/API owners before implementation. No endpoint,
+contract, database, lifecycle, permission owner or execution change.
+
+Fixed design input: `supplier-unified-r3b`, not the later keyboard variant.
+Independent evidence: `platform-review-continuation-2/outputs/新交互独立验收与分批交付.txt`.
+Only its 1280×720 right-detail independent scroll/boundary containment,
+return-to-original-conversation draft retention and Skill/MCP SVG type/color
+subset is approved for this batch. Source manifest self-status remains PENDING;
+partial independent evidence does not accept the whole prototype.
+
+Implementation: reuse current authorization-scoped resource-directory GETs for
+exact Skill/MCP revisions, with a bounded resource list and separate detail
+scroll area; add an explicit detail entry while preserving inline expansion.
+Carry an original conversation locator through Skill/MCP navigation and expose
+its return link; drafts stay in existing principal/conversation view storage.
+Map SVG paths and semantic blue/teal colors, without U3 state or sample objects.
+Apply the same type rendering to existing managed details. Detail references
+must match current scope, identity, revision and digest; late/denied responses
+must withdraw detail. Navigation locators confer no authority.
+
+Actual preflight: demo324 has two readable existing Skill revisions, zero
+readable MCP revisions and zero own managed resources (GET200). Verify actual
+Skill paths and existing draft restoration; MCP behavior can only have isolated
+coverage until a real readable MCP exists. Do not create objects or acquire
+permissions to manufacture this evidence. Report that gap explicitly.
+
+Frontend composition: preserve deployed `3ced914` frontend plus the explicit
+ab02 planning overlay, then only this batch's files. SkillInputOutput.tsx/.css
+and ResourceVersionImpact.tsx must remain byte-identical to 3ced914. No S04,
+P01/P02 or guide installation. Freeze source/design hashes and protected-row
+digests before coding; commit only scoped changes after lint/build, meaningful
+resource/draft/scroll browser checks and mandatory repository hooks. Install
+the frozen composition on generation11 without configuration/credential/lease
+changes, then verify real GET-only browser paths at1280×720 and audit rows and
+budget again. No new inference, confirmation/preparation, Run or business POST.
+
+Risks/remaining scope: no claim for left long-list, narrow outer layout,
+full1280×900 visual parity, all-keyboard/abnormal independent acceptance, whole
+UI-01, business acceptance or stability. Preserve all old UNKNOWN/reservations,
+five PENDING READ requests, original two cases and artifact bytes. Report each
+batch's design identity, before/after commits, composition, actual path,
+evidence and gaps; without installation evidence label NOT INSTALLED.
+
+UI-01 validation addendum (G0 test-fixture repair): the mandatory run returned
+2631 passed /257 skipped and one pre-existing time-sensitive test failed before
+revision setup: its500 ms original approval window elapsed while PostgreSQL
+approval took about2.46 seconds. Focused unchanged reproduction passed. Replace
+that fixture's wall-clock wait with an explicit after-expiry clock-query wrapper
+over its isolated real database connection, preserving immutable rows and
+production source/guards. Add a negative control that expiry without a revision
+is still denied and check authorization after revocation as well. Run both
+delegation/development modules and all mandatory hooks again. This is not a
+production lease extension, test skip, weaker assertion or current-data repair.

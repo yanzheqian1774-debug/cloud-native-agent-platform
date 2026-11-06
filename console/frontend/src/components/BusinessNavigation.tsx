@@ -1,11 +1,12 @@
 import {ConversationList} from "../problems/ConversationList";
 import { NavLink, useLocation } from "react-router-dom";
+import {resourceNavigationUrl} from "../resources/resourceNavigationContext";
 import { NavigationIcon, type NavigationIconName } from "./NavigationIcon";
 
 type Entry = { to: string; label: string; icon: NavigationIconName };
 const resources: Entry[] = [
-  {to:"/skills",label:"技能",icon:"resource"},
-  {to:"/mcp",label:"MCP 服务",icon:"resource"},
+  {to:"/skills",label:"技能",icon:"skill"},
+  {to:"/mcp",label:"MCP 服务",icon:"mcp"},
   {to:"/knowledge",label:"知识",icon:"knowledge"},
   {to:"/workflow-definitions",label:"工作流",icon:"flow"},
 ];
@@ -25,7 +26,8 @@ const advanced: Entry[] = [
   {to:"/help",label:"帮助中心",icon:"help"},
 ];
 function EntryLink({entry}:{entry:Entry}) {
-  return <NavLink to={entry.to} aria-label={entry.to==="/attention"?"Attention":undefined}>
+  const {search}=useLocation();
+  return <NavLink to={resourceNavigationUrl(entry.to,search)} data-resource-kind={entry.icon==="skill"||entry.icon==="mcp"?entry.icon:undefined} aria-label={entry.to==="/attention"?"Attention":undefined}>
     <NavigationIcon name={entry.icon}/><span>{entry.label}</span>
   </NavLink>;
 }
@@ -61,5 +63,6 @@ export function BusinessNavigation({mobile=false}:{mobile?:boolean}) {
   </nav>;
 }
 export function ResourceNavigation() {
-  return <nav className="px-resource-navigation" aria-label="能力资源分类">{resources.map(entry=><NavLink key={entry.to} to={entry.to}>{entry.label}</NavLink>)}</nav>;
+  const {search}=useLocation();
+  return <nav className="px-resource-navigation" aria-label="能力资源分类">{resources.map(entry=><NavLink key={entry.to} to={resourceNavigationUrl(entry.to,search)}>{entry.label}</NavLink>)}</nav>;
 }

@@ -276,22 +276,53 @@ def test_continuous_revision_replaces_original_total_caps(env):
         )
 
 
-def test_continuous_revision_outlives_old_window_but_not_revocation(env):
-    import time
+def test_continuous_revision_outlives_old_window_but_not_revocation(env, monkeypatch):
+    from contextlib import contextmanager
     from datetime import UTC, datetime, timedelta
 
     from agent_console.task_delegation import active
     from test_task_delegation import submit
 
     e = env
-    expires = datetime.now(UTC) + timedelta(seconds=0.5)
+    # Setup must not race a 500 ms wall-clock deadline under database load.
+    # Advance only this fixture's clock query; immutable rows and all real
+    # authorization/revocation queries still use the isolated PostgreSQL owner.
+    expires = datetime.now(UTC) + timedelta(minutes=1)
     e.spec = e.spec.model_copy(update={"expires_at": expires})
     d, spec = setup(e)
+    observed = expires + timedelta(seconds=1)
+
+    class AfterExpiry:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        def execute(self, query, *args, **kwargs):
+            if query == "SELECT clock_timestamp() AS now":
+                return NS(fetchone=lambda: {"now": observed})
+            return self.connection.execute(query, *args, **kwargs)
+
+    # Negative control proves that the same later instant enforces expiry.
+    with (
+        e.service.repository.connection_scope() as c,
+        pytest.raises(AuthorityError, match="INACTIVE"),
+    ):
+        active(AfterExpiry(c), d)
     revise(e.service, e.contexts["approver"], d, spec)
-    while datetime.now(UTC) < expires:
-        time.sleep(min(0.01, (expires - datetime.now(UTC)).total_seconds()))
+    original_scope = e.service.repository.connection_scope
+
+    @contextmanager
+    def after_expiry(*args, **kwargs):
+        with original_scope(*args, **kwargs) as c:
+            yield AfterExpiry(c)
+
+    monkeypatch.setattr(e.service.repository, "connection_scope", after_expiry)
     with e.service.repository.connection_scope() as c:
-        assert active(c, d)[0]["expires_at"] == expires
+        row, now = active(c, d)
+        assert row["expires_at"] == expires
+        assert now == observed and now > expires
     request = submit(e)
     assert e.service.authorize(e.contexts["reader"], d, request.request_id)
     e.service.revoke(e.contexts["approver"], d)
@@ -300,6 +331,8 @@ def test_continuous_revision_outlives_old_window_but_not_revocation(env):
         pytest.raises(AuthorityError, match="INACTIVE"),
     ):
         active(c, d)
+    with pytest.raises(AuthorityError, match="INACTIVE"):
+        e.service.authorize(e.contexts["reader"], d, request.request_id)
 
 
 def test_revision_http_csrf_independent_signature(env):
