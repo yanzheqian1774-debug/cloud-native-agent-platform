@@ -30,6 +30,9 @@ def safe_return(value):
                 "/knowledge",
                 "/agents",
                 "/runtime-profiles",
+                "/tasks",
+                "/outcomes",
+                "/attention",
             }
             or path.startswith("/work/")
         )

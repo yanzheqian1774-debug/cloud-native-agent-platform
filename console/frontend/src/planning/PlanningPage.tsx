@@ -9,6 +9,8 @@ import { formatTime } from "../journey/formatTime";
 import {ReadonlyContinuation} from "./ReadonlyContinuation";
 import {ResourceRoleChoice} from "./ResourceRoleChoice";
 import {ResourcePreparation} from "./ResourcePreparation";
+import {hasContinuous,journeyScope,rememberContinuous} from "./continuousJourney";
+import {AutomaticResourceSelection} from "./AutomaticResourceSelection";
 import {PlanningResourceSummary} from "./PlanningResourceSummary";
 import {NavigationIcon} from "../components/NavigationIcon";
 import {PlanningCandidates} from "./PlanningCandidates";
@@ -23,7 +25,8 @@ export function PlanningPage() {
   const { proposalId = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const requested = Number(params.get("revision")) || null;
-  const [view, setView] = useState<{ data: api.ProposalRead; history: api.History } | null>(null);
+  const [view, setView] = useState<{ data: api.ProposalRead; history: api.History;scope:string } | null>(null);
+  const [,setIntentVersion]=useState(0);
   const [expert,setExpert]=useState(false);
   const [readyPlanDigest,setReadyPlanDigest]=useState("");
   const [original, setOriginal] = useState(false);
@@ -34,15 +37,16 @@ export function PlanningPage() {
   const command = useRef<{ target: string; key: string } | null>(null);
   useEffect(() => {
     const token = ++epoch.current;
-    Promise.all([api.history(proposalId), readWorkbenchSession()]).then(async ([history]) => {
+    Promise.all([api.history(proposalId), readWorkbenchSession()]).then(async ([history,session]) => {
       const version = requested ?? Math.max(...history.proposals.map(p => p.revision));
       const data = await api.proposal(proposalId, version);
-      if (token === epoch.current) { setView({ data, history }); setError(""); setBusy(false); }
+      if(journeyScope(await readWorkbenchSession())!==journeyScope(session))throw Error('登录身份已变化，请重新读取当前方案。');
+      if (token === epoch.current) { setView({ data, history,scope:journeyScope(session) }); setError(""); setBusy(false); }
     }).catch(e => { if (token === epoch.current) setError(String(e.message)); });
     return () => { epoch.current = token + 1; };
   }, [proposalId, requested]);
   if (!view || view.data.proposal.proposal_id !== proposalId || (requested && view.data.proposal.revision !== requested)) return <section className="planning-page"><h1>读取计划</h1><p role="status">{error || "正在读取持久化的建议与批准…"}</p><Link to="/work">返回问题工作台</Link></section>;
-  const { data, history } = view;
+  const { data, history,scope } = view;
   const translation = data.display_translation;
   const plan = !original && translation ? translation.semantics : data.proposal.semantics;
   const approved = history.plans.find(p => p.plan.source_proposal_revision === data.proposal.revision);
@@ -54,21 +58,24 @@ export function PlanningPage() {
   const missing = plan.requirements.filter(r => r.required && status(r) !== "MATCHED");
   const matched = plan.requirements.filter(r => status(r) === "MATCHED").length;
   const latest = Math.max(...history.proposals.map(p => p.revision));
+  const continuous=Boolean(approved&&hasContinuous(scope,proposalId,approved.digest));
+  const needsSelection=Boolean(approved&&history.resourceAutomation?.enabled&&approved.plan.semantics.requirements.some(r=>r.required&&!r.selected));
   async function act(kind: "confirm" | "refresh") {
     if (busy) return;
     const token = epoch.current;
     setBusy(true); setError("");
     try {
       const session = await readWorkbenchSession();
+      if(journeyScope(session)!==scope||token!==epoch.current)throw Error('当前方案或登录身份已变化，请重新读取。');
       if (kind === "refresh") {
         const result = await api.refresh(proposalId, data.proposal.revision, session.csrfToken);
-        if (epoch.current === token) setView({ data: { ...data, snapshot: result.snapshot }, history });
+        if (epoch.current === token) setView({ data: { ...data, snapshot: result.snapshot }, history,scope:scope });
       } else {
         const target = `${proposalId}:${data.proposal.revision}:${data.digest}`;
         if (command.current?.target !== target) command.current = { target, key: crypto.randomUUID() };
         await api.confirm(proposalId, data.proposal.revision, data.digest, Math.max(0, ...history.plans.map(p => p.plan.version)), session.csrfToken, command.current.key);
         const fresh = await api.history(proposalId);
-        if (epoch.current === token) setView({ data, history: fresh });
+        if (epoch.current === token) setView({ data, history: fresh,scope:scope });
       }
     } catch (e) { if (epoch.current === token) setError(e instanceof Error ? e.message : "读取失败，请重试原操作"); }
     finally { if (epoch.current === token) setBusy(false); }
@@ -106,8 +113,10 @@ export function PlanningPage() {
       </section>
       {previous && <section className="planning-card"><h2>本次修订影响</h2><p>任务声明变化：{changedTasks.map(id=>plan.tasks.find(t=>t.task_id===id)?.title ?? `已移除 ${id}`).join("、") || "无"}</p><p>成功标准版本：{criteriaChanged ? "已变化，需要按新标准核对全部任务" : "保持原已确认版本"}。此比较展示持久化字段差异，不替代业务语义复核。</p></section>}
       <div className="planning-confirm" aria-live="polite">{approved ? <><h2>计划已确认{missing.length&&!hasExecution ? "，资源待准备" : ""}，{executionText}</h2><p>计划版本 {approved.plan.version} · 确认时间：{formatTime(approved.approval.decided_at)}</p><details className="journey-technical"><summary>查看持久化确认关联</summary><dl><dt>计划</dt><dd>{approved.plan.plan_id}</dd><dt>批准</dt><dd>{approved.approval.approval_decision_id}</dd><dt>摘要</dt><dd><code>{approved.digest}</code></dd></dl></details></> : <><p>确认仅保存当前计划。{missing.length ? `仍有 ${missing.length} 项必要资源待准备或核实。` : ""}</p><button type="button" disabled={busy || data.proposal.revision !== latest} onClick={() => void act("confirm")}>{busy ? "正在保存…" : "确认计划"}</button></>}{error && <p role="alert">{error}。可重试原操作或刷新读回；不会自动再次生成建议。</p>}</div>
-      {approved&&<ResourcePreparation key={proposalId+':'+approved.plan.version+':'+approved.digest} id={proposalId} approved={approved} onReady={()=>setReadyPlanDigest(approved.digest)} policyStamp={history.resourceAutomation?.policyStamp} onPrepared={snapshot=>setView(current=>current&&snapshot.proposal_digest===current.data.digest?{...current,data:{...current.data,snapshot}}:current)} enabled={Boolean(history.resourceAutomation?.enabled)&&data.proposal.revision===latest&&!hasExecution}/>}
-      {approved&&history.resourceAutomation?.readonlyContinuationEnabled&&<ReadonlyContinuation key={approved.digest} id={proposalId} approved={approved} allowStart={readyPlanDigest===approved.digest&&data.proposal.revision===latest&&!hasExecution}/>}
+      {approved&&history.resourceAutomation?.enabled&&!hasExecution&&!continuous&&<section className="planning-card"><p>当前仅查看已保存计划。明确继续后，平台才会在现有权限内匹配资源并接续只读执行。</p><button disabled={busy||data.proposal.revision!==latest} onClick={()=>void (async()=>{const session=await readWorkbenchSession();if(journeyScope(session)!==scope)throw Error('登录身份已变化，请重新读取。');rememberContinuous(scope,proposalId,approved.digest);setIntentVersion(v=>v+1)})().catch(e=>setError(String(e.message)))}>按当前计划继续办理</button></section>}
+      {approved&&<AutomaticResourceSelection key={'selection:'+approved.digest} expectedScope={scope} id={proposalId} approved={approved} enabled={continuous&&needsSelection&&data.proposal.revision===latest&&!hasExecution}/>}
+      {approved&&<ResourcePreparation key={proposalId+':'+approved.plan.version+':'+approved.digest} expectedScope={scope} id={proposalId} approved={approved} onReady={()=>setReadyPlanDigest(approved.digest)} policyStamp={history.resourceAutomation?.policyStamp} onPrepared={snapshot=>setView(current=>current&&snapshot.proposal_digest===current.data.digest?{...current,data:{...current.data,snapshot}}:current)} enabled={(continuous||Boolean(params.get('resourcePreparation')))&&Boolean(history.resourceAutomation?.enabled)&&!needsSelection&&data.proposal.revision===latest&&!hasExecution}/>}
+      {approved&&history.resourceAutomation?.readonlyContinuationEnabled&&<ReadonlyContinuation key={approved.digest} expectedScope={scope} id={proposalId} approved={approved} allowStart={continuous&&!needsSelection&&readyPlanDigest===approved.digest&&data.proposal.revision===latest&&!hasExecution}/>}
       <PlanningResourceSummary requirements={plan.requirements} status={status} executed={hasExecution}/>
       <PlanningSourceChange key={proposalId+':'+data.proposal.revision} id={proposalId} revision={data.proposal.revision} approved={[...history.plans].sort((a,b)=>b.plan.version-a.plan.version)[0]} disabled={data.proposal.revision!==latest} automatic={Boolean(history.resourceAutomation?.enabled)}/>
       {history.resourceAutomation?.enabled?<details className="planning-card" onToggle={e=>setExpert(e.currentTarget.open)}><summary>查看候选、专业配置与来源变更</summary>{expert&&<>

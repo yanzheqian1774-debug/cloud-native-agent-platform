@@ -348,7 +348,16 @@ def test_loop_cannot_advertise_less_than_supervisor_cleanup_bound():
 
 @pytest.mark.parametrize(
     "path",
-    ["/digital-employees", "/skills", "/knowledge", "/agents", "/runtime-profiles"],
+    [
+        "/digital-employees",
+        "/skills",
+        "/knowledge",
+        "/agents",
+        "/runtime-profiles",
+        "/tasks",
+        "/outcomes",
+        "/attention",
+    ],
 )
 def test_resource_return_preserves_exact_query_without_allowing_api(path):
     destination = (
@@ -357,3 +366,11 @@ def test_resource_return_preserves_exact_query_without_allowing_api(path):
     )
     assert safe_return(destination) == destination
     assert safe_return(path + "/../api") == "/work"
+
+
+@pytest.mark.parametrize("path", ["/tasks", "/outcomes", "/attention"])
+def test_finite_directory_return_keeps_query_and_fragment(path):
+    value = path + "?problem=exact%3A1&view=original#evidence"
+    assert safe_return(value) == value
+    for suffix in ("/%2e%2e/api", "%5cevil", "/%2f%2fevil.test", "/%0a"):
+        assert safe_return(path + suffix) == "/work"

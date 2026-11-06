@@ -67,7 +67,15 @@ class PlanningOwnerAdapter:
                     principal, SyntheticValidationRequest.model_validate(call.payload)
                 )
             if call.operation == "READ_PLANNING_INPUT_V2":
-                return app.current_input(principal, identity, call.connection)
+                value = app.current_input(principal, identity, call.connection)
+                if self.resource_automation:
+                    from .plan_suggestion_domain import ExactReference
+
+                    value["resourceAutomation"] = self.resource_automation.capability(
+                        call.context,
+                        ExactReference.model_validate(value["target"]["problem"]),
+                    )
+                return value
             if call.operation == "PREPARE_COST_EXECUTION_REVISION":
                 return app.prepare_cost_execution_revision(
                     principal,

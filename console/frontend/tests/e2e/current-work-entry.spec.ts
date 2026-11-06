@@ -1,0 +1,24 @@
+import {expect,test} from '@playwright/test';
+const principal={principalId:'human:current-work',tenantId:'fixture',securityDomain:'isolated'};
+const session={principal,session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'};
+for(const incomplete of [false,true])test(`attention reads current owners and states its ${incomplete?'incomplete':'bounded'} scope`,async({page})=>{const requests:string[]=[];
+ await page.route('**/api/**',async route=>{const r=route.request(),path=new URL(r.url()).pathname;requests.push(r.method()+' '+path);
+  if(path.endsWith('/session'))return route.fulfill({json:session});
+  if(path.endsWith('/problems'))return route.fulfill({json:{result:{problems:[{business_problem_id:'p',title:'合成待处理验证'}]}}});
+  if(path.endsWith('/conversations'))return route.fulfill(incomplete?{status:503,json:{reasonCode:'READ_INCOMPLETE_FIXTURE'}}:{json:{result:{items:[{conversation_id:'c'}]}}});
+  if(path.endsWith('/conversations/c'))return route.fulfill({json:{result:{conversation:{conversation_id:'c',version:1},messages:[],links:[{link_id:'l',readable:true,target:{problemId:'p',executionDigest:'execution'}}]}}});
+  if(path.endsWith('/prepared-executions/execution'))return route.fulfill({json:{result:{digest:'execution',preparation:{semantics:{title:'仅合成数据结果',target:{problem:{resource_id:'p'}}}},progress:{state:'SUCCEEDED',tasks:[]},outcome:{businessResolution:'UNDETERMINED',confirmationId:null}}}});
+  return route.fulfill({status:404,json:{reasonCode:'UNEXPECTED_FIXTURE'}});
+ });await page.goto('/attention');await expect(page.getByRole('heading',{name:'核对当前工作的待处理事项',exact:true})).toBeVisible();
+ if(incomplete)await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();else await expect(page.getByText('业务结果尚未判定，请核对交付证据与完成标准。',{exact:true})).toBeVisible();
+ expect(requests.every(r=>r.startsWith('GET '))).toBe(true);expect(requests.some(r=>r.includes('product/attention'))).toBe(false);
+});
+test('verified logout clears identity and keeps the exact login return link',async({page})=>{let deleted=false;
+ await page.route('**/api/**',route=>route.fulfill({status:404,json:{reasonCode:'ISOLATED_UNUSED_ROUTE'}}));
+ await page.route('**/api/workbench/v1/session',route=>{if(route.request().method()==='DELETE'){deleted=true;return route.fulfill({status:204})}return route.fulfill(deleted?{status:401,json:{reasonCode:'SESSION_INVALID'}}:{json:session})});
+ await page.goto('/tasks');await page.locator('.px-identity-menu>summary').click();await page.getByRole('button',{name:'退出登录',exact:true}).evaluate(button=>(button as HTMLButtonElement).click());await expect.poll(()=>page.evaluate(()=>document.querySelector('main h1')?.textContent)).toBe('已退出登录');expect(await page.evaluate(()=>document.body.textContent?.includes('正在退出'))).toBe(false);expect(await page.evaluate(()=>document.querySelectorAll('.px-header-identity').length)).toBe(0);expect(deleted).toBe(true);await expect(page.getByRole('link',{name:'重新登录并读回',exact:true})).toHaveAttribute('href','/api/workbench/v1/login?returnTo=%2Ftasks');await expect(page).toHaveURL(/\/tasks$/);
+});
+test('failed logout retains uncertainty and offers a fresh explicit check',async({page})=>{
+ await page.route('**/api/**',route=>route.fulfill({status:404,json:{reasonCode:'ISOLATED_UNUSED_ROUTE'}}));
+ await page.route('**/api/workbench/v1/session',route=>route.fulfill(route.request().method()==='DELETE'?{status:503,json:{reasonCode:'UNKNOWN_FIXTURE'}}:{json:session}));await page.goto('/tasks');await page.locator('.px-identity-menu>summary').click();await page.getByRole('button',{name:'退出登录',exact:true}).click();await expect(page.getByText('退出尚未核实，当前登录可能仍有效。请重新核查后退出',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'退出登录',exact:true})).toBeEnabled();await expect(page.getByRole('heading',{name:'已退出登录',exact:true})).toHaveCount(0);
+});

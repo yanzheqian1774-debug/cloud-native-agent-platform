@@ -334,3 +334,23 @@ typed CLASSIFY、版本匹配及真实资源测试链；同一精确员工可承
 后续会话策略已按统筹更新：保留本会话连续推进，维护增量检查点不自动切换。
 未知余量、批次完成或历史长不作为新会话依据；仅有可验证容量/继续失败警告，或压缩后
 仍反复丢失关键状态/阻断时记录证据交统筹判断，不自行创建继任。
+
+
+### 2026-11-06 P1 bounded continuous-journey candidate
+
+The same sole writer continues under `PROTOTYPE-P1-AUTOMATIC-JOURNEY.md`.
+Explicit natural questions use the existing authorized context owner, model
+admission, policy confirmation, automatic resource selection, resource preparation
+and readonly continuation. Ordinary GET/history and ordinary confirmation cannot
+start that chain. Existing specialized confirmation stays with its original owner.
+Return-to-conversation and an exact execution link use the existing private link
+owner, with link uncertainty separate from actual execution results. Finite tasks,
+outcomes and attention login returns are preserved; attention is a limited
+current-owner read projection, not a new approval inbox. Verified logout stays on
+an explicit logged-out view with a login link retaining the original destination.
+
+The original38-call/14-unsettled/USD11.126748 budget and all old UNKNOWN records
+remain unchanged before installation. No P1 overall acceptance, J01-J12 closure,
+S1 completion,92-row matrix reclassification or J07 configuration-only credit is
+claimed by this code slice. Two fresh real product journeys and their evidence
+remain next; no successor chat is created or required for routine continuation.

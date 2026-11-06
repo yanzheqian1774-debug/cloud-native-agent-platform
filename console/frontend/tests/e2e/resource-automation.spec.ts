@@ -20,6 +20,7 @@ async function setup(page:Page,mode:'ready'|'lost'|'partial'|'denied'|'identity'
   return route.fulfill({status:404,json:{reasonCode:'UNEXPECTED_FIXTURE_ROUTE'}});
  });
  await page.goto(`/work/planning/${id}?revision=2${linked?'&resourcePreparation='+encodeURIComponent(linked):''}`);
+ if(!linked)await page.getByRole('button',{name:'按当前计划继续办理',exact:true}).click();
  return {get posts(){return posts},get gets(){return gets},keys,paths};
 }
 

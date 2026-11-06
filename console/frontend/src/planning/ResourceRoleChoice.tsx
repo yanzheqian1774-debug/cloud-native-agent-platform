@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {readWorkbenchSession} from '../api/businessWorkspace';
+import {continuationQuery} from '../api/conversationActions';
 import * as api from './api';
 /** Optional professional role selection; never a prerequisite for ordinary preparation. */
 export function ResourceRoleChoice({id,revision,approved,continueWork=false}:{id:string;revision:number;approved:api.Confirmation;continueWork?:boolean}){
@@ -8,7 +9,7 @@ export function ResourceRoleChoice({id,revision,approved,continueWork=false}:{id
  const [options,setOptions]=useState<api.EmployeeOption[]>([]),[chosen,setChosen]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  useEffect(()=>{const token=++epoch.current;api.resourceEmployeeOptions().then(v=>{if(token===epoch.current)setOptions(v.items)}).catch(e=>{if(token===epoch.current)setError(String(e.message))});return()=>{if(epoch.current===token)epoch.current=token+1}},[id,revision]);
  async function apply(){const selected=options.find(v=>v.employeeDefinitionId+'|'+v.employeeDefinitionRevisionId===chosen);if(!selected||busy)return;setBusy(true);setError('');const token=epoch.current;
-  try{const session=await readWorkbenchSession();const ref={resource_id:selected.employeeDefinitionId,revision_id:selected.employeeDefinitionRevisionId,digest:selected.employeeDefinitionDigest};const storage='policy-role:'+JSON.stringify([session.principal.principalId,id,approved.digest,ref]);let key=sessionStorage.getItem(storage);if(!key){key=crypto.randomUUID();sessionStorage.setItem(storage,key)}const result=await api.selectEmployeeResources(id,approved,revision,ref,key,session.csrfToken);if(token===epoch.current)navigate(`/work/planning/${encodeURIComponent(id)}?revision=${result.confirmation.plan.source_proposal_revision}`)}
+  try{const session=await readWorkbenchSession();const ref={resource_id:selected.employeeDefinitionId,revision_id:selected.employeeDefinitionRevisionId,digest:selected.employeeDefinitionDigest};const storage='policy-role:'+JSON.stringify([session.principal.principalId,id,approved.digest,ref]);let key=sessionStorage.getItem(storage);if(!key){key=crypto.randomUUID();sessionStorage.setItem(storage,key)}const result=await api.selectEmployeeResources(id,approved,revision,ref,key,session.csrfToken);if(token===epoch.current)navigate(`/work/planning/${encodeURIComponent(id)}?revision=${result.confirmation.plan.source_proposal_revision}${continuationQuery()}`)}
   catch(e){if(token===epoch.current)setError(e instanceof Error?e.message:'角色变更尚未读回；原请求和历史保留')}
   finally{if(token===epoch.current)setBusy(false)}
  }

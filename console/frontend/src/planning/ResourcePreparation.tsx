@@ -9,7 +9,7 @@ const kinds:Record<string,string>={agent:'职责',runtime:'运行配置',skill:'
 const gaps:Record<string,string>={RESOURCE_ACTUAL_TEST_FAILED:'实际输出或独立业务核对未通过，未发布且未继续装配',RESOURCE_INDEPENDENT_EVALUATOR_UNAVAILABLE:'尚无适用的独立核对规则，保留缺口',RESOURCE_TEST_REPORT_OPERATION_REQUIRED:'缺少完整报告操作，尚不能形成独立核对依据',RESOURCE_EMPLOYEE_SUCCESSOR_SELECTION_REQUIRED:'角色成员与当前方案不一致，需要核对后继方案',RESOURCE_POLICY_ONTOLOGY_BINDING_REQUIRED:'本体语义绑定尚未完成自动准备核验',RESOURCE_SOURCE_OUTSIDE_WORK_SCOPE:'资料来源超出本次已授权范围',MCP_CREDENTIAL_AND_TOOL_VALIDATION_REQUIRED:'连接工具的凭据与操作尚未验证',NATIVE_RUNTIME_OR_CREDENTIAL_UNAVAILABLE:'运行环境或凭据暂不可用',RESOURCE_EXECUTOR_SOURCE_MISMATCH:'技能的数据契约与本次来源不匹配',RESOURCE_EXECUTOR_SCHEMA_MISMATCH:'技能输入输出契约不匹配',RESOURCE_PERMISSION_REVOKED:'本次必要权限已撤销',RESOURCE_TASK_OPERATION_GAPS:'必要操作仍有缺口',RESOURCE_VALIDATION_FAILED:'资源技术验证未通过',RESOURCE_EMPLOYEE_PUBLICATION_INCOMPLETE:'角色装配尚未发布完成'};
 function message(reason?:string){return reason?gaps[reason]??'本次准备未通过核验，平台已保留缺口与原有结果':'仍有必要准备项待核验'}
 
-export function ResourcePreparation({id,approved,enabled,onPrepared,onReady,policyStamp=""}:{id:string;approved:api.Confirmation;enabled:boolean;policyStamp?:string;onPrepared?:(snapshot:api.Snapshot)=>void;onReady?:()=>void}){
+export function ResourcePreparation({id,approved,enabled,onPrepared,onReady,policyStamp="",expectedScope}:{id:string;approved:api.Confirmation;enabled:boolean;expectedScope:string;policyStamp?:string;onPrepared?:(snapshot:api.Snapshot)=>void;onReady?:()=>void}){
  const [params,setParams]=useSearchParams(),linkedKey=params.get('resourcePreparation');
  const report=useRef(onPrepared);useLayoutEffect(()=>{report.current=onPrepared},[onPrepared]);
  const identity=JSON.stringify([id,approved.plan.version,approved.digest,policyStamp]);
@@ -28,7 +28,7 @@ export function ResourcePreparation({id,approved,enabled,onPrepared,onReady,poli
    setPending(true);
    try{
     const session=await readWorkbenchSession();if(!active)return;
-    const p=session.principal;
+    const p=session.principal;if(JSON.stringify(p)!==expectedScope)throw Error('RESOURCE_PREPARATION_IDENTITY_CHANGED');
     const storage='resource-preparation:'+JSON.stringify([p.principalId,p.tenantId,p.securityDomain,identity]);
     const saved=linkedKey??sessionStorage.getItem(storage),key=saved??crypto.randomUUID();
     sessionStorage.setItem(storage,key);locator.current={identity,key,subject:p.principalId,scope:JSON.stringify([p.tenantId,p.securityDomain])};
@@ -48,7 +48,7 @@ export function ResourcePreparation({id,approved,enabled,onPrepared,onReady,poli
   void prepare();return()=>{active=false;if(epoch.current===token)epoch.current=token+1};
  // The immutable Plan digest binds the effect; refreshed parent objects do not resend.
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[identity,enabled,linkedKey]);
+ },[identity,enabled,linkedKey,expectedScope]);
  useAutomaticReadback({identity,enabled:enabled&&pending&&!value,read:async()=>{
   const saved=locator.current;if(!saved||saved.identity!==identity||flight.current)return false;
   flight.current=true;const token=epoch.current;
@@ -60,6 +60,7 @@ export function ResourcePreparation({id,approved,enabled,onPrepared,onReady,poli
   if(flight.current||pending||!value||value.state==='READY')return;
   const token=epoch.current;flight.current=true;setPending(true);setLoaded(null);setIssue(null);
   try{const session=await readWorkbenchSession(),p=session.principal;
+   if(JSON.stringify(p)!==expectedScope||token!==epoch.current)throw Error('RESOURCE_PREPARATION_IDENTITY_CHANGED');
    const storage='resource-preparation:'+JSON.stringify([p.principalId,p.tenantId,p.securityDomain,identity]),key=crypto.randomUUID();
    sessionStorage.setItem(storage,key);locator.current={identity,key,subject:p.principalId,scope:JSON.stringify([p.tenantId,p.securityDomain])};
    const result=await api.prepareResources(id,approved.plan.version,key,session.csrfToken);verify(result,p.principalId);
