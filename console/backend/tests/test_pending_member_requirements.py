@@ -69,3 +69,47 @@ def test_pending_resolution_does_not_mutate_input_or_weaken_task_membership():
     assert doc == before and sem.requirements[-1].selected is None
     assert value.requirements[-1].selected == ref
     assert bindings[-1]["basis"] == "SYSTEM_EXACT_MEMBER_CONTRACT"
+
+
+def test_referenced_optional_resolves_without_changing_flags_or_tasks():
+    doc, member, ref, content = sample()
+    doc["requirements"][-1]["required"] = False
+    before = deepcopy(doc)
+    sem = FlexiblePlanSemantics.model_validate(doc)
+    value, bindings = resolve(sem, [member], {"_skills": [(ref, content)]})
+    assert doc == before and sem.requirements[-1].selected is None
+    assert value.requirements[-1].required is False
+    assert value.requirements[-1].selected == ref
+    assert value.tasks == sem.tasks
+    assert bindings[-1]["basis"] == "SYSTEM_EXACT_MEMBER_CONTRACT"
+
+
+def test_unreferenced_optional_remains_unselected():
+    doc, member, ref, content = sample()
+    doc["requirements"][-1]["required"] = False
+    for task in doc["tasks"]:
+        task["requirement_ids"] = []
+    sem = FlexiblePlanSemantics.model_validate(doc)
+    value, bindings = resolve(sem, [member], {"_skills": [(ref, content)]})
+    assert value.requirements[-1].selected is None
+    assert bindings == []
+
+
+@pytest.mark.parametrize("failure", ["missing", "ambiguous", "operation_gap"])
+def test_referenced_optional_cannot_bypass_exact_member_contract(failure):
+    doc, member, ref, content = sample()
+    doc["requirements"][-1]["required"] = False
+    members = [member]
+    contents = {"_skills": [(ref, content)]}
+    reason = "UNAVAILABLE"
+    if failure == "missing":
+        members = []
+    elif failure == "operation_gap":
+        contents = {"_skills": [(ref, {"operations": [{"name": "READ_DATA"}]})]}
+    else:
+        other = ref.model_copy(update={"resource_id": "skill:second"})
+        members.append({"kind": "SKILL", **other.model_dump()})
+        contents["_skills"].append((other, content))
+        reason = "AMBIGUOUS"
+    with pytest.raises(ValueError, match=reason):
+        resolve(FlexiblePlanSemantics.model_validate(doc), members, contents)

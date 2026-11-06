@@ -86,8 +86,15 @@ def select_employee(automation, call, *, automatic_coverage=None):
         from .pending_member_requirements import read_and_resolve
 
         prospective_semantics = FlexiblePlanSemantics.model_validate(probe)
+        referenced = {
+            identity
+            for task in prospective_semantics.tasks
+            for identity in task.requirement_ids
+        }
         if any(
-            r.kind != "EMPLOYEE" and r.required and r.selected is None
+            r.kind != "EMPLOYEE"
+            and (r.required or r.requirement_id in referenced)
+            and r.selected is None
             for r in prospective_semantics.requirements
         ):
             resolved, _ = read_and_resolve(

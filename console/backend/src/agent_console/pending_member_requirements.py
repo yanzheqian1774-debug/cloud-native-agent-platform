@@ -16,6 +16,9 @@ def resolve(semantics, members, contents):
     skills = dict(contents.get("_skills", []))
     result = semantics.model_dump(mode="json")
     bindings = []
+    referenced = {
+        identity for task in semantics.tasks for identity in task.requirement_ids
+    }
     for requirement, encoded in zip(
         semantics.requirements, result["requirements"], strict=True
     ):
@@ -26,7 +29,7 @@ def resolve(semantics, members, contents):
             if requirement.selected not in options:
                 raise ValueError("EXPLICIT_REQUIREMENT_MAPPING_MISMATCH")
             chosen = requirement.selected
-        elif not requirement.required:
+        elif not requirement.required and requirement.requirement_id not in referenced:
             continue
         else:
             if requirement.kind == "SKILL":

@@ -30,7 +30,7 @@ from test_resource_automation import automation
     ],
     indirect=True,
 )
-@pytest.mark.parametrize("pending", [False, True])
+@pytest.mark.parametrize("pending", [False, True, "referenced_optional"])
 def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_again(
     automation,
     monkeypatch,
@@ -52,7 +52,9 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                 "SELECT count(*) n FROM digital_employee_definition.definitions"
             ).fetchone()["n"]
         add_compatible_candidate(a)
-        proposal = pending_proposal(a)
+        proposal = pending_proposal(
+            a, referenced_optional=pending == "referenced_optional"
+        )
         confirmation = confirm(a, proposal)["confirmation"]
         a.e.p = a.e.p.model_copy(
             update={

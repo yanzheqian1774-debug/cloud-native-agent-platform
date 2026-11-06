@@ -16,7 +16,7 @@ from test_problem_resource_coverage import invoke
 from test_resource_automation import automation
 
 
-def pending_proposal(a, *, stale_criteria=False):
+def pending_proposal(a, *, stale_criteria=False, referenced_optional=False):
     with a.repository.pool.connection() as c, c.transaction():
         app = a.automation.bound_app(
             type("Call", (), {"connection": c, "authority": a.adapter})()
@@ -37,7 +37,7 @@ def pending_proposal(a, *, stale_criteria=False):
             prototype.update(
                 requirement_id="pending-skill",
                 kind="SKILL",
-                required=True,
+                required=not referenced_optional,
                 selected=None,
             )
             doc["requirements"].append(prototype)

@@ -79,3 +79,36 @@ The named GPT v1 Standard/uncached price policy pins2/10USD rates and a short-in
 bound below272000 tokens. Zero, legacy Kimi/older rates or a long-input bound are
 configuration errors; a future pricing/model change requires an explicit revision.
 Historical reads are additionally scope-bound and work in READ ONLY transactions.
+
+## Actual two-call checkpoint and bounded execution fix
+
+Backend47ed257 was installed with the existing frontend bundle and independently
+signed development-test D8/D9 records. One fresh supplier call and one fresh sales
+call returned exact gpt-6.1-sol, completed and VALID_SUGGESTION, each with five
+typed tasks. Decision times29.64/30.52s; estimates USD0.035894/0.035926. No timeout,
+retry or Kimi fallback. Same ledger now43 calls,16 old unsettled reservations and
+USD12.669936 including retained reserves. Invoice and stability are unverified.
+
+Execution remains OPEN: supplier preparation READY, but the strict execution
+owner rejected PREPARED_SKILL_SELECTION_MISMATCH. The generated Skill is optional
+yet referenced by tasks. The internal resolver skipped optional unselected refs;
+selection therefore failed to persist its otherwise unique exact member binding.
+Sales additionally lacks current member READ and source-alias reconciliation.
+
+G0 followup: resolve optional declarations only when actually referenced by a
+task, using the same authorized published member/operation filters as required
+declarations. Selection invokes this resolver for those references. Preserve
+required flags, tasks, raw model proposal, exact READ, ambiguity rejection and
+prepared execution lineage. Unreferenced optional resources stay unselected.
+No model sampling, new endpoint, schema, provider or authority change. Test exact
+resolution, missing/ambiguous/operation-gap negatives, and actual isolated owner
+selection -> Native execution, including replay. Mandatory checks precede a
+frozen backend-only install and fresh policy successors over the two saved GPT
+proposals. No replay of the rejected command or any historical UNKNOWN.
+
+Referenced-optional targeted run:18 passed, including isolated selection, Native
+queue/execution and replay. The first complete followup run:2625 passed,257
+skipped,5 failures in unchanged short-deadline Kimi/cancellation tests (startup,
+endpoint-readiness or IPC phase before the intended test phase). Preserve these
+records and recheck unchanged failures; full mandatory checks must pass before
+the candidate is installed. No deadline or assertion is weakened.
