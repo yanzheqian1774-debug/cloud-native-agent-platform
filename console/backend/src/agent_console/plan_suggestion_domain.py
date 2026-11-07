@@ -212,6 +212,18 @@ class OntologyPlanOrigin(Immutable):
     request_key: Identity
 
 
+class HumanResourceSupplementOrigin(Immutable):
+    kind: Literal["HUMAN_RESOURCE_SUPPLEMENT"] = "HUMAN_RESOURCE_SUPPLEMENT"
+    namespace: Identity
+    security_domain: Identity
+    root: ExactReference
+    source_snapshot: ExactReference
+    predecessor_plan: ExactReference
+    prepared_by: Identity
+    request_key: Identity
+    reason: Text
+
+
 class ProposalRevision(Immutable):
     proposal_id: Identity
     revision: int = Field(ge=1)
@@ -224,6 +236,7 @@ class ProposalRevision(Immutable):
         | SourceChangeOrigin
         | PolicySourceChangeOrigin
         | PolicyResourcePreparationOrigin
+        | HumanResourceSupplementOrigin
         | None
     ) = None
 

@@ -178,6 +178,11 @@ class PlanningApplication:
             from .planning_source_change import validate_confirmation
 
             validate_confirmation(self, principal, cursor.connection, proposal)
+            from .planning_sales_supplement import (
+                validate_confirmation as validate_supplement,
+            )
+
+            validate_supplement(self, principal, cursor.connection, proposal)
             validation_report(proposal.semantics)
             self.validate_target(
                 principal, proposal.semantics.target, cursor.connection, current=False

@@ -89,6 +89,7 @@ def build_workbench_composition(
     prepared_execution_coordinator=None,
     prepared_resource_services=None,
     sales_v2_candidate: bool = False,
+    sales_supplement_candidate: bool = False,
     planning_invocations: PlanningInvocationDependencies | None = None,
     planning_unavailable_reason: str = "PLANNING_NOT_CONFIGURED",
     managed_closeables: tuple[object, ...] = (),
@@ -472,6 +473,19 @@ def build_workbench_composition(
                 ),
             )
 
+        sales_supplement_routes = ()
+        if sales_supplement_candidate:
+            from .sales_supplement_composition import (
+                operations as supplement_operations,
+            )
+
+            sales_supplement_routes = supplement_operations(
+                planning,
+                prepared_resource_services,
+                enabled=True,
+                sales_v2_candidate=sales_v2_candidate,
+            )
+
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -497,6 +511,7 @@ def build_workbench_composition(
             ),
             grant_administration=foundation.grants,
             operations=(
+                *sales_supplement_routes,
                 *resource_automation_routes,
                 *continuation_routes,
                 *directory_routes,
