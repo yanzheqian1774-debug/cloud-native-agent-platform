@@ -125,7 +125,10 @@ def build_workbench_composition(
         )
         planning_repository.migrate()
         planning = PlanningApplication(
-            planning_repository, business_problems.problems, None
+            planning_repository,
+            business_problems.problems,
+            None,
+            sales_supplement_candidate=sales_supplement_candidate,
         )
     from .workbench_prepared_execution import (
         PreparedExecutionGrantTargets,
@@ -473,18 +476,14 @@ def build_workbench_composition(
                 ),
             )
 
-        sales_supplement_routes = ()
-        if sales_supplement_candidate:
-            from .sales_supplement_composition import (
-                operations as supplement_operations,
-            )
+        from .sales_supplement_composition import operations as supplement_operations
 
-            sales_supplement_routes = supplement_operations(
-                planning,
-                prepared_resource_services,
-                enabled=True,
-                sales_v2_candidate=sales_v2_candidate,
-            )
+        sales_supplement_routes = supplement_operations(
+            planning,
+            prepared_resource_services,
+            enabled=sales_supplement_candidate,
+            sales_v2_candidate=sales_v2_candidate,
+        )
 
         application = create_workbench_bff(
             foundation.sessions,

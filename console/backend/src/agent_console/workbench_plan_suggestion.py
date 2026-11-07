@@ -59,7 +59,12 @@ class PlanningOwnerAdapter:
         repo = PostgresPlanningRepository(
             self.application.repository.pool, call.connection
         )
-        app = PlanningApplication(repo, self.application.problems, call.authority)
+        app = PlanningApplication(
+            repo,
+            self.application.problems,
+            call.authority,
+            sales_supplement_candidate=self.application.sales_supplement_candidate,
+        )
         identity = call.path.get("proposal_id", call.path.get("problem_id"))
         try:
             if call.operation == "PREPARE_SYNTHETIC_VALIDATION_PLAN":

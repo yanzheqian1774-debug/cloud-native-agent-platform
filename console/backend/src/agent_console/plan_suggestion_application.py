@@ -7,14 +7,21 @@ from .business_problem_authorization import (
 )
 from .business_problem_domain import BusinessProblemState
 from .execution_domain import ScopeIdentity
-from .plan_suggestion_domain import PlanningConflict, PlanningError
+from .plan_suggestion_domain import (
+    HumanResourceSupplementOrigin,
+    PlanningConflict,
+    PlanningError,
+)
 
 
 class PlanningApplication:
-    def __init__(self, repository, problems, authority):
+    def __init__(
+        self, repository, problems, authority, *, sales_supplement_candidate=False
+    ):
         self.repository = repository
         self.problems = problems
         self.authority = authority
+        self.sales_supplement_candidate = sales_supplement_candidate
 
     @staticmethod
     def scope(principal):
@@ -174,6 +181,11 @@ class PlanningApplication:
             proposal = self.repository.proposal(cursor, scope, proposal_id, revision)
             if proposal.digest != digest:
                 raise PlanningConflict("PROPOSAL_DIGEST_CONFLICT")
+            if (
+                isinstance(proposal.origin, HumanResourceSupplementOrigin)
+                and not self.sales_supplement_candidate
+            ):
+                raise PlanningConflict("SALES_SUPPLEMENT_WRITES_DISABLED")
             from .planning_contracts import validation_report
             from .planning_source_change import validate_confirmation
 

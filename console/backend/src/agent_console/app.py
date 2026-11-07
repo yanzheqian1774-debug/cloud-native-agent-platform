@@ -1945,6 +1945,9 @@ def _configure_workbench() -> None:
     planning_path = os.environ.get("PLANNING_RUNTIME_FILE", "")
     prepared_knowledge_pool = None
     try:
+        from agent_console.sales_supplement_runtime import SalesSupplementFeatures
+
+        sales_features = SalesSupplementFeatures.from_environment(os.environ)
         if planning_path and os.environ.get("PLANNING_V2_ENABLED") == "true":
             try:
                 planning_runtime = build_planning_runtime(
@@ -2007,6 +2010,8 @@ def _configure_workbench() -> None:
             planning_unavailable_reason=planning_unavailable,
             prepared_execution_coordinator=prepared_coordinator,
             prepared_resource_services=prepared_resource_services,
+            sales_v2_candidate=sales_features.sales_v2,
+            sales_supplement_candidate=sales_features.supplement,
             agent_definitions=_agent_definition_service.repository,
             employee_definitions=_digital_employee_assembly.employee_definitions,
             digital_employees=_digital_employee_assembly.repository,

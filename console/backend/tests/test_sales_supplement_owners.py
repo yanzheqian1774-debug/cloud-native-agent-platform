@@ -68,7 +68,7 @@ class ExactFixtureAuthority:
         return SimpleNamespace(decision_id="explicit-isolated-exact-grant-fixture")
 
 
-def owner_call(a, handler, operation, payload, path, acl, context=None):
+def owner_call(a, handler, operation, payload, path, acl, context=None, query=None):
     with a.repository.pool.connection() as c, c.transaction():
         return handler(
             SimpleNamespace(
@@ -77,7 +77,7 @@ def owner_call(a, handler, operation, payload, path, acl, context=None):
                 operation=operation,
                 payload=payload,
                 path=path,
-                query={},
+                query=query or {},
                 authority=acl,
             )
         )
@@ -98,6 +98,7 @@ class ExactFixtureBffAuthorizer:
             values["path"],
             self.acl,
             context,
+            query=values["query"],
         )
 
 
@@ -642,6 +643,8 @@ def test_same_case_supplement_real_receipt_confirmation_and_old_hashes(
             s.acl,
         )
     a.e.app.authority = s.acl
+    # The successor defaults Human supplement confirmation closed as well.
+    a.e.app.sales_supplement_candidate = True
     with pytest.raises(AuthorityError):
         a.e.app.confirm(
             a.e.principal,
