@@ -9,10 +9,12 @@ import {PreparedExecutionPanel} from './PreparedExecutionPanel';
 import {ProblemWorkspacePage} from './ProblemWorkspacePage';
 import {formatTime} from '../journey/formatTime';
 import './PrivateConversation.css';
+import {ResourceExecutionReadback} from '../resources/ResourceExecutionReadback';
 
 export function ConversationEntry(){
  const loc=useLocation(),params=new URLSearchParams(loc.search),[enabled,setEnabled]=useState<boolean|null>(null),[error,setError]=useState('');
  useEffect(()=>{let live=true;conversationRequest<{enabled:boolean}>('/capabilities').then(r=>{if(live)setEnabled(r.enabled)}).catch(e=>{if(live)setError(String(e))});return()=>{live=false}},[]);
+ if(params.has('resourceRead'))return <ResourceExecutionReadback key={params.get('resourceRead')!} contextId={params.get('resourceRead')!}/>;
  if(params.has('problem')||params.has('legacy'))return <ProblemWorkspacePage/>;
  if(error)return <main><p role="alert">会话入口读取失败，请重新登录后重试。{error}</p></main>;
  if(enabled===null)return <p role="status">正在读取会话入口…</p>;
