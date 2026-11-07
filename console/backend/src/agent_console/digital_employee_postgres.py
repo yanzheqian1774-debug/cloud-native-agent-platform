@@ -197,6 +197,69 @@ class PostgresDigitalEmployeeRepository:
             scope, instance_id, row["aggregate_version"], row["record"]
         )
 
+    def instance_ids_for_definition_for_workbench(
+        self,
+        connection,
+        scope,
+        definition_id,
+        revision_id,
+        digest,
+        *,
+        after,
+        limit,
+        authorized,
+    ):
+        if not authorized:
+            raise DigitalEmployeeError("INSTANCE_NOT_FOUND")
+        if not isinstance(limit, int) or not 1 <= limit <= 201:
+            raise DigitalEmployeeError("INVALID_PAGE_SIZE")
+        rows = connection.execute(
+            "SELECT i.digital_employee_instance_id FROM "
+            "execution_authority.digital_employee_instances i JOIN "
+            "digital_employee_definition.instance_bindings b ON "
+            "i.namespace=b.namespace AND i.security_domain=b.security_domain "
+            "AND i.digital_employee_instance_id=b.digital_employee_instance_id "
+            "WHERE i.namespace=%s AND i.security_domain=%s "
+            "AND b.definition_id=%s AND b.revision_id=%s AND b.digest=%s "
+            'AND (%s::text IS NULL OR i.digital_employee_instance_id COLLATE "C">%s) '
+            'ORDER BY i.digital_employee_instance_id COLLATE "C" LIMIT %s',
+            (
+                scope.namespace,
+                scope.security_domain,
+                definition_id,
+                revision_id,
+                digest,
+                after,
+                after,
+                limit,
+            ),
+        ).fetchall()
+        return [r["digital_employee_instance_id"] for r in rows]
+
+    def assignment_ids_for_instance_for_workbench(
+        self, connection, scope, instance_id, *, after, limit, authorized
+    ):
+        if not authorized:
+            raise DigitalEmployeeError("ASSIGNMENT_NOT_FOUND")
+        if not isinstance(limit, int) or not 1 <= limit <= 201:
+            raise DigitalEmployeeError("INVALID_PAGE_SIZE")
+        rows = connection.execute(
+            "SELECT assignment_id FROM execution_authority.assignments "
+            "WHERE namespace=%s AND security_domain=%s "
+            "AND digital_employee_instance_id=%s "
+            'AND (%s::text IS NULL OR assignment_id COLLATE "C">%s) '
+            'ORDER BY assignment_id COLLATE "C" LIMIT %s',
+            (
+                scope.namespace,
+                scope.security_domain,
+                str(instance_id),
+                after,
+                after,
+                limit,
+            ),
+        ).fetchall()
+        return [r["assignment_id"] for r in rows]
+
     def replace_instance(self, value: InstanceRecord, expected_version: int) -> None:
         current = self.authority.get_aggregate(
             "digital_employee_instance", value.scope, str(value.instance_id)

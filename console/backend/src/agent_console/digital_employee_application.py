@@ -116,6 +116,30 @@ class DigitalEmployeeRepository(Protocol):
         authorized: bool,
     ) -> InstanceRecord | None: ...
 
+    def instance_ids_for_definition_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        definition_id: str,
+        revision_id: str,
+        digest: str,
+        *,
+        after: str | None,
+        limit: int,
+        authorized: bool,
+    ) -> list[str]: ...
+
+    def assignment_ids_for_instance_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        instance_id: DigitalEmployeeInstanceId,
+        *,
+        after: str | None,
+        limit: int,
+        authorized: bool,
+    ) -> list[str]: ...
+
     def replace_instance(
         self, value: InstanceRecord, expected_version: int
     ) -> None: ...

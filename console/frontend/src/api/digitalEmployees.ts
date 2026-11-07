@@ -524,3 +524,19 @@ export const getEmployeePlacement = (
       })}`,
     signal,
   );
+
+export type EmployeeRelationMode = 'history' | 'instances' | 'assignments';
+export type EmployeeRelationItem = EmployeeDefinition | EmployeeInstance | EmployeeAssignment;
+export type EmployeeRelationPage = {
+  relation: 'READ_EMPLOYEE_HISTORY' | 'READ_EMPLOYEE_INSTANCES' | 'READ_INSTANCE_ASSIGNMENTS';
+  parent: {employeeDefinitionId?:string;employeeDefinitionRevisionId?:string;employeeDefinitionDigest?:string;instanceId?:string};
+  items: EmployeeRelationItem[];
+  nextCursor: string | null;
+  visibility: 'AUTHORIZED_ONLY';
+  scanLimited: boolean;
+  executionStarted: false;
+};
+export function getEmployeeRelations(definition:EmployeeDefinitionSummary,mode:EmployeeRelationMode,instanceId:string|undefined,cursor?:string,signal?:AbortSignal){
+  const parent=mode==='assignments'?`${root}/instances/${encodeURIComponent(instanceId??'')}`:`${root}/employees/${encodeURIComponent(definition.employeeDefinitionId)}/revisions/${encodeURIComponent(definition.employeeDefinitionRevisionId)}`;
+  return request<EmployeeRelationPage>(`${parent}/${mode}?${pageQuery(cursor,25)}`,signal);
+}

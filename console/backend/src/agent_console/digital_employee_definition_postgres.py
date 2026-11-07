@@ -453,6 +453,30 @@ class PostgresEmployeeDefinitionRepository:
             for row in rows
         ]
 
+    def revision_ids_for_definition_for_workbench(
+        self, connection, scope, definition_id, *, after, limit, authorized
+    ):
+        """Bounded discovery within one definition; callers check each exact READ."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        if not isinstance(limit, int) or not 1 <= limit <= 201:
+            raise EmployeeDefinitionError("INVALID_PAGE_SIZE")
+        rows = connection.execute(
+            "SELECT revision_id FROM digital_employee_definition.revisions "
+            "WHERE namespace=%s AND security_domain=%s AND definition_id=%s "
+            'AND (%s::text IS NULL OR revision_id COLLATE "C">%s) '
+            'ORDER BY revision_id COLLATE "C" LIMIT %s',
+            (
+                scope.namespace,
+                scope.security_domain,
+                identifier(definition_id),
+                identifier(after) if after is not None else None,
+                identifier(after) if after is not None else None,
+                limit,
+            ),
+        ).fetchall()
+        return [r["revision_id"] for r in rows]
+
     def list(self, scope):
         with self.pool.connection() as conn:
             rows = conn.execute(

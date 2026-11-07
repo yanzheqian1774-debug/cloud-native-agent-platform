@@ -77,8 +77,8 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     assert composition.foundation is foundation
     assert captured["grant_administration"] is foundation.grants
     operations = captured["operations"]
-    assert len(operations) == 26
-    assert [(item.name, item.method, item.path) for item in operations[-13:]] == [
+    assert len(operations) == 29
+    assert [(item.name, item.method, item.path) for item in operations[-16:]] == [
         ("LIST_AGENTS", "GET", "/api/workbench/v1/agents"),
         (
             "READ_AGENT_REVISION",
@@ -125,6 +125,23 @@ def test_composition_registers_business_and_read_only_workflow_operations(
             "GET",
             "/api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/"
             "placements/{placement_id}",
+        ),
+        (
+            "READ_EMPLOYEE_HISTORY",
+            "GET",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/"
+            "{revision_id}/history",
+        ),
+        (
+            "READ_EMPLOYEE_INSTANCES",
+            "GET",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/"
+            "{revision_id}/instances",
+        ),
+        (
+            "READ_INSTANCE_ASSIGNMENTS",
+            "GET",
+            "/api/workbench/v1/instances/{instance_id}/assignments",
         ),
         ("LIST_WORKFLOWS", "GET", "/api/workbench/v1/workflows"),
         (
@@ -182,7 +199,7 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
 
     operations = captured["operations"]
     assert captured["grant_administration"] is foundation.grants
-    assert len(operations) == 24
+    assert len(operations) == 27
     assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
     assert any(item.name == "LIST_EMPLOYEES" for item in operations)

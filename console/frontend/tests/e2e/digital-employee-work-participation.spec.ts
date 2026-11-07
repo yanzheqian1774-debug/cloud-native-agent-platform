@@ -746,7 +746,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await expect(page.getByRole("button", { name: "实例", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "实例", exact: true }).click();
   await expect.poll(() => detailBody.evaluate(element => element.scrollTop)).toBe(0);
-  await expect(page.getByText("暂不支持按员工浏览实例列表；可使用已知实例 ID 查询。")).toBeVisible();
+  await expect(page.getByText("从上方可读列表选择实例；已知编号的精确查询保留在下方。")).toBeVisible();
   await page.getByText("使用已知实例 ID 查询", { exact: true }).click();
   await page.getByLabel("实例 ID").fill("instance:quality");
   await page.getByRole("button", { name: "读取并验证归属" }).click();
@@ -759,7 +759,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await page.screenshot({ path: testInfo.outputPath("desktop-instance-test-adapter.png") });
 
   await page.getByRole("button", { name: "工作分配", exact: true }).click();
-  await expect(page.getByText("暂不支持按员工或实例浏览工作分配列表")).toBeVisible();
+  await expect(page.getByText("从上方列表选择当前实例的工作分配；已知编号的精确查询保留在下方。")).toBeVisible();
   await page.getByText("使用已知 Assignment ID 查询", { exact: true }).click();
   await page.getByLabel("Assignment ID").fill("assignment:quality");
   await page.getByRole("button", { name: "读取并验证父链" }).click();

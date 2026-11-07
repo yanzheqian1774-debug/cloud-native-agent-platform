@@ -47,6 +47,9 @@ from agent_console.workbench_employee import (
     digital_employee_operations,
     employee_operations,
 )
+from agent_console.workbench_employee_relations import (
+    operations as employee_relation_operations,
+)
 from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
 from agent_console.workbench_owner_authorization import WorkbenchOwnerAuthorization
 from agent_console.workbench_pagination import WorkbenchCursorCodec
@@ -556,6 +559,11 @@ def build_workbench_composition(
                     prepared_resource_reads=prepared_resource_services is not None,
                 ),
                 *digital_employee_operations(digital_employees),
+                *employee_relation_operations(
+                    employee_definitions,
+                    digital_employees,
+                    WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                ),
                 *(workflow_operations(workflows) if workflows is not None else ()),
             ),
             **(
