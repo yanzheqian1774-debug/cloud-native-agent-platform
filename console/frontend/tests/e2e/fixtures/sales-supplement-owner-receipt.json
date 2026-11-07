@@ -1,0 +1,340 @@
+{
+  "schemaVersion": "planning-sales-supplement-receipt.v1",
+  "proposal": {
+    "proposal_id": "prepared-plan",
+    "revision": 4,
+    "predecessor_digest": "f81d67506a33529ee7d0415638963d0ac03f82f0120f1279661ba163e3f84d81",
+    "invocation_id": null,
+    "semantics": {
+      "schema_version": "planning.v3",
+      "scenario": "GENERAL_READ_ONLY",
+      "target": {
+        "problem": {
+          "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+          "revision_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b:1",
+          "digest": "1ed77951c7393ff4249c24678b049333619cf7d753679431ea8729e4838fefbe"
+        },
+        "criteria": {
+          "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+          "revision_id": "criteria-set:explicit-supplement",
+          "digest": "0186fe1688dd1a3e0c97aedbed9ce08f5f67fc84d11cad4439087c00563c63ad"
+        },
+        "criterion_revision_ids": [
+          "criterion-revision:supplement:source",
+          "criterion-revision:supplement:totals",
+          "criterion-revision:supplement:gross_profit_dimensions",
+          "criterion-revision:supplement:row_contributions",
+          "criterion-revision:supplement:reconciliations",
+          "criterion-revision:supplement:exceptions",
+          "criterion-revision:supplement:claim_boundary"
+        ],
+        "expected_problem_version": 4
+      },
+      "title": "星河客服（正式项目）2026-09模型与数字员工费用偏高分析规划",
+      "business_rules": [
+        "本次仅在隔离环境以明确标注的合成资料执行只读任务；允许创建本执行修订对应的Assignment、单Run及TaskRun，禁止外部写入、生产操作及配置调整；人工业务验收在执行产物之后，不作为任务。"
+      ],
+      "boundaries": [
+        "仅对本次固定合成销售快照进行两期只读诊断；按币种分别核算不含税净销售额与毛利，变化贡献不代表因果或真实销售改善；禁止业务写入。",
+        "执行准备映射SHA256：9a2518f5d8efe30b1a65fedd5604b7b946f431ca0992257c3ba11342efccac83；fixture",
+        "隔离合成来源：knowledge:b349f100-918f-4ec7-8aa6-5834f4c3d7f2；修订：knowledge-revision:b23b3bab-3ba4-413a-a65d-9fc1ff3238ca；SHA256：aeab8e8e2660905b18877dc6888dbc3edade8be715a8bd652eb17dabda15a9a9"
+      ],
+      "effect": "READ_ONLY",
+      "stages": [
+        {
+          "stage_id": "all",
+          "title": "saved synthetic plan",
+          "task_ids": [
+            "read",
+            "validate",
+            "summarize",
+            "analyze",
+            "report"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "task_id": "read",
+          "title": "read",
+          "responsibility": "Explicit synthetic fixture only",
+          "employee_requirement_id": "employee",
+          "depends_on": [],
+          "inputs": [
+            "fixture input"
+          ],
+          "outputs": [
+            "fixture output"
+          ],
+          "requirement_ids": [
+            "employee",
+            "knowledge",
+            "skill"
+          ],
+          "criterion_revision_ids": [
+            "criterion-revision:supplement:source"
+          ],
+          "operation": "READ_DATA",
+          "input_kinds": [
+            "CONTEXT"
+          ],
+          "output_kind": "SOURCE_SNAPSHOT"
+        },
+        {
+          "task_id": "validate",
+          "title": "validate",
+          "responsibility": "Explicit synthetic fixture only",
+          "employee_requirement_id": "employee",
+          "depends_on": [
+            "read"
+          ],
+          "inputs": [
+            "fixture input"
+          ],
+          "outputs": [
+            "fixture output"
+          ],
+          "requirement_ids": [
+            "employee",
+            "knowledge",
+            "skill"
+          ],
+          "criterion_revision_ids": [
+            "criterion-revision:supplement:source",
+            "criterion-revision:supplement:exceptions"
+          ],
+          "operation": "VALIDATE_DATA",
+          "input_kinds": [
+            "SOURCE_SNAPSHOT"
+          ],
+          "output_kind": "VALIDATED_DATA"
+        },
+        {
+          "task_id": "summarize",
+          "title": "summarize",
+          "responsibility": "Explicit synthetic fixture only",
+          "employee_requirement_id": "employee",
+          "depends_on": [
+            "validate"
+          ],
+          "inputs": [
+            "fixture input"
+          ],
+          "outputs": [
+            "fixture output"
+          ],
+          "requirement_ids": [
+            "employee",
+            "knowledge",
+            "skill"
+          ],
+          "criterion_revision_ids": [
+            "criterion-revision:supplement:totals",
+            "criterion-revision:supplement:reconciliations"
+          ],
+          "operation": "SUMMARIZE",
+          "input_kinds": [
+            "VALIDATED_DATA"
+          ],
+          "output_kind": "SUMMARY"
+        },
+        {
+          "task_id": "analyze",
+          "title": "analyze",
+          "responsibility": "Explicit synthetic fixture only",
+          "employee_requirement_id": "employee",
+          "depends_on": [
+            "validate",
+            "summarize"
+          ],
+          "inputs": [
+            "fixture input"
+          ],
+          "outputs": [
+            "fixture output"
+          ],
+          "requirement_ids": [
+            "employee",
+            "knowledge",
+            "skill"
+          ],
+          "criterion_revision_ids": [
+            "criterion-revision:supplement:gross_profit_dimensions",
+            "criterion-revision:supplement:row_contributions",
+            "criterion-revision:supplement:reconciliations",
+            "criterion-revision:supplement:claim_boundary"
+          ],
+          "operation": "ANALYZE_DATA",
+          "input_kinds": [
+            "VALIDATED_DATA",
+            "SUMMARY"
+          ],
+          "output_kind": "ANALYSIS"
+        },
+        {
+          "task_id": "report",
+          "title": "report",
+          "responsibility": "Explicit synthetic fixture only",
+          "employee_requirement_id": "employee",
+          "depends_on": [
+            "analyze",
+            "summarize",
+            "validate"
+          ],
+          "inputs": [
+            "fixture input"
+          ],
+          "outputs": [
+            "fixture output"
+          ],
+          "requirement_ids": [
+            "employee",
+            "knowledge",
+            "skill"
+          ],
+          "criterion_revision_ids": [
+            "criterion-revision:supplement:source",
+            "criterion-revision:supplement:totals",
+            "criterion-revision:supplement:gross_profit_dimensions",
+            "criterion-revision:supplement:row_contributions",
+            "criterion-revision:supplement:reconciliations",
+            "criterion-revision:supplement:exceptions",
+            "criterion-revision:supplement:claim_boundary"
+          ],
+          "operation": "RENDER_REPORT",
+          "input_kinds": [
+            "ANALYSIS",
+            "SUMMARY",
+            "VALIDATED_DATA"
+          ],
+          "output_kind": "REPORT"
+        }
+      ],
+      "requirements": [
+        {
+          "requirement_id": "employee",
+          "kind": "EMPLOYEE",
+          "name": "Cost analysis digital employee",
+          "purpose": "Execute read-only data collection, validation, analysis and reporting tasks",
+          "required": true,
+          "selected": {
+            "resource_id": "employee-definition:d11-setup",
+            "revision_id": "employee-revision:explicit-supplement",
+            "digest": "ba4b1e802dbabc64a1aba17360e93517dc7d8548f657c2b25fbe8e00caaa3c41"
+          },
+          "operation": null,
+          "preparation": "Provision employee with billing-data access; resource not yet available"
+        },
+        {
+          "requirement_id": "knowledge",
+          "kind": "KNOWLEDGE",
+          "name": "Cost analysis digital employee",
+          "purpose": "Execute read-only data collection, validation, analysis and reporting tasks",
+          "required": true,
+          "selected": {
+            "resource_id": "knowledge:b349f100-918f-4ec7-8aa6-5834f4c3d7f2",
+            "revision_id": "knowledge-revision:b23b3bab-3ba4-413a-a65d-9fc1ff3238ca",
+            "digest": "aeab8e8e2660905b18877dc6888dbc3edade8be715a8bd652eb17dabda15a9a9"
+          },
+          "operation": null,
+          "preparation": "Provision employee with billing-data access; resource not yet available"
+        },
+        {
+          "requirement_id": "skill",
+          "kind": "SKILL",
+          "name": "Cost analysis digital employee",
+          "purpose": "Execute read-only data collection, validation, analysis and reporting tasks",
+          "required": true,
+          "selected": {
+            "resource_id": "skill-definition:854cfab4-7a04-41ea-8765-91ba27accc25",
+            "revision_id": "skill-revision:8718c666-0363-45a6-91aa-14141aae7d31",
+            "digest": "66ea830ae39a8dce9994b42d78b099d8da56415d5efbd0989bc2c56eb12c3d7b"
+          },
+          "operation": null,
+          "preparation": "Provision employee with billing-data access; resource not yet available"
+        }
+      ],
+      "policy": {
+        "schema_version": "planning-policy.v2",
+        "mode": "FREE",
+        "template": null,
+        "required_operations": [],
+        "prohibited_operations": [],
+        "business_acceptance_as_task": false
+      }
+    },
+    "origin": {
+      "kind": "HUMAN_RESOURCE_SUPPLEMENT",
+      "namespace": "controlled-324",
+      "security_domain": "isolated",
+      "root": {
+        "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+        "revision_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b:1",
+        "digest": "1ed77951c7393ff4249c24678b049333619cf7d753679431ea8729e4838fefbe"
+      },
+      "source_snapshot": {
+        "resource_id": "knowledge:b349f100-918f-4ec7-8aa6-5834f4c3d7f2",
+        "revision_id": "knowledge-revision:b23b3bab-3ba4-413a-a65d-9fc1ff3238ca",
+        "digest": "aeab8e8e2660905b18877dc6888dbc3edade8be715a8bd652eb17dabda15a9a9"
+      },
+      "predecessor_plan": {
+        "resource_id": "prepared-plan",
+        "revision_id": "3",
+        "digest": "07f2d9050e16d0a158a20d7d5e7541accdb7ce7ccd3ff99253e82748d1e2152a"
+      },
+      "prepared_by": "human:test",
+      "request_key": "fixture-sales-supplement-key",
+      "reason": "Same fixed goal and source; explicit v2 criterion/resource receipts"
+    }
+  },
+  "digest": "c1cddaf0e1ce291a6695557b570e1a17971e5690590117d096d79e4d5ea8db0b",
+  "request": {
+    "plan_version": 3,
+    "plan_digest": "07f2d9050e16d0a158a20d7d5e7541accdb7ce7ccd3ff99253e82748d1e2152a",
+    "expected_proposal_revision": 3,
+    "source_snapshot": {
+      "resource_id": "knowledge:b349f100-918f-4ec7-8aa6-5834f4c3d7f2",
+      "revision_id": "knowledge-revision:b23b3bab-3ba4-413a-a65d-9fc1ff3238ca",
+      "digest": "aeab8e8e2660905b18877dc6888dbc3edade8be715a8bd652eb17dabda15a9a9"
+    },
+    "new_target": {
+      "problem": {
+        "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+        "revision_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b:1",
+        "digest": "1ed77951c7393ff4249c24678b049333619cf7d753679431ea8729e4838fefbe"
+      },
+      "criteria": {
+        "resource_id": "59a1d736-96d5-5060-8ae3-293d82b4b74b",
+        "revision_id": "criteria-set:explicit-supplement",
+        "digest": "0186fe1688dd1a3e0c97aedbed9ce08f5f67fc84d11cad4439087c00563c63ad"
+      },
+      "criterion_revision_ids": [
+        "criterion-revision:supplement:source",
+        "criterion-revision:supplement:totals",
+        "criterion-revision:supplement:gross_profit_dimensions",
+        "criterion-revision:supplement:row_contributions",
+        "criterion-revision:supplement:reconciliations",
+        "criterion-revision:supplement:exceptions",
+        "criterion-revision:supplement:claim_boundary"
+      ],
+      "expected_problem_version": 4
+    },
+    "employee": {
+      "resource_id": "employee-definition:d11-setup",
+      "revision_id": "employee-revision:explicit-supplement",
+      "digest": "ba4b1e802dbabc64a1aba17360e93517dc7d8548f657c2b25fbe8e00caaa3c41"
+    },
+    "skill": {
+      "resource_id": "skill-definition:854cfab4-7a04-41ea-8765-91ba27accc25",
+      "revision_id": "skill-revision:8718c666-0363-45a6-91aa-14141aae7d31",
+      "digest": "66ea830ae39a8dce9994b42d78b099d8da56415d5efbd0989bc2c56eb12c3d7b"
+    },
+    "reason": "Same fixed goal and source; explicit v2 criterion/resource receipts",
+    "idempotency_key": "fixture-sales-supplement-key"
+  },
+  "requestKey": "fixture-sales-supplement-key",
+  "confirmation_required": true,
+  "executionStarted": false,
+  "modelCalls": 0,
+  "businessAcceptance": "OPEN"
+}
