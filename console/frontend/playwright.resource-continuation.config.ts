@@ -15,7 +15,7 @@ export default defineConfig({...base,retries:0,testDir:'.',testIgnore:[],use:{..
   {name:'employee-preservation',testDir:'./tests/e2e',testMatch:['employee-relations.spec.ts','digital-employee-work-participation.spec.ts']},
   {name:'original-sales-conversation',testDir:'./tests/e2e',testMatch:'sales-scene-conversation.spec.ts'},
   {name:'exact-resource-result-return',testDir:'./tests/e2e',testMatch:['jx01-skill-return.spec.ts','jx02-resource-readback.spec.ts']},
-  {name:'legacy-resource-projection',testDir:'./tests/e2e',testMatch:'execution-resource-details.spec.ts',use:{baseURL:`http://127.0.0.1:${port+1}`}},
+  {name:'legacy-resource-projection',testDir:'./tests/e2e',testMatch:['execution-resource-details.spec.ts','definition-link-compatibility.spec.ts'],use:{baseURL:`http://127.0.0.1:${port+1}`}},
   {name:'automatic-resource-preparation',testDir:'./tests/e2e',testMatch:'resource-automation.spec.ts'},
  ],
  webServer:[{command:`npm run preview -- --host 127.0.0.1 --port ${port}`,url:`http://127.0.0.1:${port}`,reuseExistingServer:false},{command:`npm run preview -- --outDir "$CONSOLE_LEGACY_DIST" --host 127.0.0.1 --port ${port+1}`,url:`http://127.0.0.1:${port+1}`,reuseExistingServer:false}],

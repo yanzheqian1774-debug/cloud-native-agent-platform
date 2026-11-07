@@ -40,7 +40,16 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "SUCCESS_CRITERIA_SET": frozenset({"CREATE", "READ", "REVISE"}),
     "PLAN": frozenset({"PREPARE", "READ", "APPROVE"}),
     "WORKFLOW": frozenset({"CREATE", "LIST", "READ"}),
-    "AGENT": frozenset({"LIST", "READ", "READ_RESOURCE", "REVIEW_PUBLISH_RESOURCE"}),
+    "AGENT": frozenset(
+        {
+            "LIST",
+            "READ",
+            "READ_RESOURCE",
+            "REVIEW_PUBLISH_RESOURCE",
+            "CREATE_RESOURCE",
+            "MANAGE_RESOURCE",
+        }
+    ),
     "EMPLOYEE": frozenset({"CREATE", "LIST", "READ", "VALIDATE", "APPROVE", "PUBLISH"}),
     "INSTANCE": frozenset({"CREATE", "READ"}),
     "ASSIGNMENT": frozenset({"CREATE", "READ"}),
@@ -57,7 +66,14 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
             "REVIEW_PUBLISH_RESOURCE",
         }
     ),
-    "KNOWLEDGE": frozenset({"READ_RESOURCE", "REVIEW_PUBLISH_RESOURCE"}),
+    "KNOWLEDGE": frozenset(
+        {
+            "READ_RESOURCE",
+            "REVIEW_PUBLISH_RESOURCE",
+            "CREATE_RESOURCE",
+            "MANAGE_RESOURCE",
+        }
+    ),
     "RUNTIME_PROFILE": frozenset({"READ_RESOURCE", "REVIEW_PUBLISH_RESOURCE"}),
     "RESOURCE_USE": frozenset({"READ"}),
     "EVALUATION": frozenset({"EVALUATE", "READ"}),

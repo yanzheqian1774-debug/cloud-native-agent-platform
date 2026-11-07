@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "resource-definition-management-policy.v1",
+  "enabled": false,
+  "policyId": "same-owner-definition-maintenance",
+  "policyVersion": "1",
+  "issuer": "service:resource-preparation-policy",
+  "credentialPath": "/etc/agent-platform/resource-policy.credential",
+  "workScopes": [],
+  "grantTTLSeconds": 3600
+}

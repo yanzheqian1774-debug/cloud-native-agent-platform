@@ -9,10 +9,15 @@ export function safeResourceReturn(raw: string | null): string | null {
   if (!raw || raw.length > 3000) return null;
   try {
     const url = new URL(raw, window.location.origin);
-    if (url.origin !== window.location.origin || url.hash || !['/skills','/mcp'].includes(url.pathname)) return null;
+    if (url.origin !== window.location.origin || url.hash || !['/skills','/mcp','/agents','/knowledge'].includes(url.pathname)) return null;
     const p = url.searchParams;
+    if(['/agents','/knowledge'].includes(url.pathname)&&p.has('selected')){
+      const expected=url.pathname==='/agents'?'agent':'knowledge';
+      if([...p.keys()].some(k=>!['selected','resourceRevision','resourceDigest','kind','query','status'].includes(k)||p.getAll(k).length!==1)||p.get('kind')!==expected||!identity(p.get('selected'))||!identity(p.get('resourceRevision'))||!digest(p.get('resourceDigest')??'')||(p.get('query')?.length??0)>200||(p.get('status')?.length??0)>32)return null;
+      p.sort();return url.pathname+'?'+p;
+    }
     if ([...p.keys()].some(k => !['managedResource','resourceTab','query','status','kind'].includes(k) || p.getAll(k).length !== 1)
-      || (p.has('kind') && p.get('kind') !== (url.pathname === '/skills' ? 'skill' : 'mcp'))
+      || (p.has('kind') && p.get('kind') !== ({'/skills':'skill','/mcp':'mcp','/agents':'agent','/knowledge':'knowledge'}[url.pathname]))
       || !identity(p.get('managedResource')) || (p.has('resourceTab') && !tabs.has(p.get('resourceTab')!))
       || (p.get('query')?.length ?? 0) > 200 || (p.get('status')?.length ?? 0) > 32) return null;
     p.sort();

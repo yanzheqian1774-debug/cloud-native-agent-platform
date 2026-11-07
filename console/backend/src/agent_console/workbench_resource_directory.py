@@ -47,6 +47,48 @@ class ResourceDirectory:
         self.workflows = workflows
 
     def __call__(self, call):
+        if call.operation == "READ_DIRECTORY_REFERENCES":
+            kind, identity, revision = (
+                call.path[k] for k in ("kind", "identity", "revision")
+            )
+            if kind not in {"agent", "knowledge"}:
+                raise WorkbenchOwnerError("RESOURCE_DIRECTORY_NOT_FOUND", 404)
+            from .resource_dependency_impact import project
+            from .workbench_prepared_resources import bind_service
+
+            service = bind_service(self.services[kind], call.connection)
+            scope = service.scope(
+                call.context.scope.tenant_id, call.context.scope.security_domain
+            )
+            record = service.repository.get(scope, identity)
+            exact = next(
+                (r for r in record["revisions"] if r["revisionId"] == revision), None
+            )
+            if exact is None:
+                raise WorkbenchOwnerError("RESOURCE_DIRECTORY_NOT_FOUND", 404)
+            # Projection-only exact root. Never disclose adjacent revisions or
+            # substitute the aggregate's newer draft for the requested version.
+            root = {
+                **record,
+                "resourceId": identity,
+                "revisions": [exact],
+                "currentDraftRevisionId": revision
+                if exact["state"] == "DRAFT"
+                else None,
+                "publishedRevisionId": revision,
+            }
+            return {
+                "kind": kind,
+                "identity": identity,
+                "revision": revision,
+                "digest": exact["digest"],
+                "subject": call.context.principal_id,
+                "scope": {
+                    "tenantId": scope.namespace,
+                    "securityDomain": scope.security_domain,
+                },
+                "dependencies": project(call, kind, root),
+            }
         if call.operation == "READ_DIRECTORY_RESOURCE":
             if call.path["kind"] == "workflow":
                 if self.workflows is None:
@@ -274,6 +316,17 @@ class ResourceDirectory:
 def operations(services, cursors, workflows=None):
     handler = ResourceDirectory(services, cursors, workflows)
     return (
+        WorkbenchOperation(
+            "READ_DIRECTORY_REFERENCES",
+            "GET",
+            PREFIX + "/resource-directory/{kind}/{identity}/{revision}/references",
+            None,
+            None,
+            lambda ctx, path, payload, query: (
+                target(path["kind"], path["identity"], path["revision"]),
+            ),
+            handler,
+        ),
         WorkbenchOperation(
             "READ_DIRECTORY_RESOURCE",
             "GET",

@@ -203,3 +203,97 @@ old revision/consumer after a successor. Ruff check and703-file format check pas
 Normal commit hooks/full suite and exact source/bundle freeze follow. This remains
 author evidence. No new source was installed, and no independent acceptance or
 actual complete seven-standard work/result closure is inferred.
+
+
+## Knowledge and Agent maintenance/reference continuation — G1
+
+2026-11-08: coordinator reviewed the resource stage and requests this complete
+path under standing whole-project authority. Freeze 57, 6f67 and 0c93 unchanged.
+Keep the same functionality inventory; no new package number. Existing authoring
+G1 pattern and DECISION_STATUS permit additive internal owner action entries;
+this does not change authentication, frozen Contracts or lifecycle meaning.
+
+Implement a separate strict, disabled-by-default definition-maintenance policy
+and environment setting. Old Skill/MCP policies cannot implicitly enable these
+kinds. AGENT and KNOWLEDGE each receive CREATE_RESOURCE collection and exact
+MANAGE_RESOURCE actions on their own original owner. Existing POLICY issuer,
+finite exact grants, creator command receipt, original caller transaction and
+idempotent command ledger remain authoritative. No SKILL/READ-to-write reuse.
+
+Use distinct typed Agent content and Knowledge source/successor inputs. Reuse
+original services for create/edit or successor/validate/checked policy publish.
+Knowledge has no draft-edit owner operation: preserve that boundary, expose
+successor only after publication; never overwrite a historical draft. Agent
+binding validation requires current exact reads and resolves supported original
+owners on the same caller transaction. Unsupported references fail explicitly.
+Neither browsing nor publication invokes indexing, retrieval, models or Runs.
+Index/retrieval continues only through the existing explicit original owner /
+ResourceUse attempt recovery path; no new ad-hoc index action is introduced.
+
+Console: retain existing pages/visual framework. In the trusted build show
+current-account readable versions plus creator-owned maintenance, source text /
+Agent roles and typed bindings; legacy page behavior remains available in its
+existing profile. Persist typed command intent before POST, pin actor/view,
+recover UNKNOWN by GET original key only, verify receipt and fresh directory,
+withdraw on revocation/session/navigation. Exact references link to Knowledge /
+Agent saved version, Employee member and back. Saved-result navigation uses
+only the existing read-only viewer, with exact Knowledge source or Agent's exact
+saved Employee-member chain; it cannot enter auto-continuation/Plan execution.
+
+Validation: disposable real owner/SQL and BFF session/CSRF/owner-scoping tests;
+create/publish/successor/reference, failed validation, unknown/reload/no duplicate,
+CAS and original record protection; current exact binding authority; absent
+policy/expired/revoked/foreign identity. Browser complete maintenance/reference /
+result-return at1280/390 plus all inherited employee, resource, sales and supplier
+read regressions. Lint/build, normal full hooks and accurate source/bundle freeze.
+Author fixtures, actual installed persistence and independent acceptance remain
+separate. New combination is not installed until independently accepted; Native
+stays off. Provide normal original login/exact READ recovery and installation
+conditions without credentials or substituted business signatures.
+
+
+### Definition continuation author checkpoint
+
+Current source: 27 disposable SQL/BFF/owner cases passed, including strict old/new
+policy separation, exact per-owner grants, atomic result-grant rollback, revoked
+rights not regranted, current binding digest/version validation, immutable old
+revisions and typed Employee draft references. The explicit disposable Employee
+CREATE/READ fixture is not original-account IAM/product acceptance. Browser:
+173 passed, zero skipped/flaky; Knowledge/Agent create/Agent edit, publication,
+exact Employee/reference return, saved result/read-only return, successor pinning,
+lost-response reload/original-key-only recovery, mismatched receipt, actor change,
+revocation, unavailable service, unknown saved intent and explicit access recovery.
+Both 1280 and390 layouts were checked. Lint and both compatible/trusted production
+builds passed. Full normal commit hooks follow; counts not inferred in advance.
+
+All operations this phase used disposable SQL or explicit browser fixtures, not
+new installed Knowledge/Agent records or business executions. Original 4f1/576,
+Native-stopped state and original business records stay. Separate real acceptance
+requires exact descendant review, finite original session/READ restoration and
+operator configuration. Original login/recovery/install conditions are supplied
+without passwords, cookies, signatures or implicit extension of old policy kinds.
+Knowledge original owner has successor-after-publication, not a draft-edit
+operation; indexing/retrieval/quality/import/purge remain on their existing
+separate owner paths and are not accepted by this maintenance/readback stage.
+
+Legacy resource-profile regression keeps the original Agent/Knowledge Employee
+member destinations; new exact destinations are only used by the trusted
+resource-directory profile. Existing legacy API behavior remains unchanged.
+
+Final review removes unrelated tool/connection prompts and empty capability
+sections from Knowledge details, preserves the Skill/MCP reader text, and auto
+fills Knowledge source/document identifiers. Policy-service expiry withdraws
+old definition data while retaining a current user session; actor changes also
+withdraw forms. One additional browser case verifies expiry after a loaded view.
+
+Original Knowledge pack/ingestion ValueError validation codes return a definite
+422 with rollback, while authority failures and CAS/lifecycle status retain
+their original codes. Editable inputs remain, and only an explicit corrected
+save uses a new command key. Empty text, oversize paragraph and invalid source
+provenance have real disposable SQL negative checks, not only UI fixtures.
+
+Snapshot binding additionally requires the active FRESH index snapshot to match
+the exact current Knowledge revision and digest. A real owner test with an
+explicit fake-index fixture accepts the current snapshot, rejects reusing that
+old snapshot after successor publication, and proves publishing never starts
+indexing. This is not a real Qdrant retrieval acceptance claim.

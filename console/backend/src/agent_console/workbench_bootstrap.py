@@ -214,13 +214,14 @@ def build_workbench_composition(
                 json.loads(os.environ.get("BUSINESS_ONTOLOGY_CREATION_TARGETS", "[]"))
             ),
         )
+    from .resource_definition_management import DefinitionTargets
     from .resource_management import ManagementTargets
 
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
-        additional=(ManagementTargets(),)
+        additional=(ManagementTargets(), DefinitionTargets())
         + ontology_targets
         + ((PreparedResourceTargets(),) if prepared_resource_services else ())
         + (
@@ -457,6 +458,30 @@ def build_workbench_composition(
                 prepared_resource_services,
                 WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
                 workflows,
+            )
+
+        definition_path = os.environ.get("RESOURCE_DEFINITION_MANAGEMENT_POLICY")
+        if definition_path:
+            if not prepared_resource_services or not all(
+                k in prepared_resource_services for k in ("agent", "knowledge")
+            ):
+                raise AuthorityError("DEFINITION_MANAGEMENT_DEPENDENCIES_REQUIRED")
+            from .resource_definition_management import (
+                DefinitionManagement,
+                DefinitionPolicy,
+                install_definitions,
+            )
+
+            definition_policy = DefinitionPolicy.model_validate_json(
+                Path(definition_path).read_text()
+            )
+            directory_installers += (
+                install_definitions(
+                    DefinitionManagement(
+                        prepared_resource_services, definition_policy, foundation.grants
+                    ),
+                    authorizer,
+                ),
             )
 
         management_path = os.environ.get("RESOURCE_MANAGEMENT_POLICY")
