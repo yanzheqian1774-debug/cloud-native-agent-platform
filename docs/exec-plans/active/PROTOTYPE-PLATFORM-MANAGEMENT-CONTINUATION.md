@@ -384,3 +384,24 @@ Preserve legacy link shape. Reuse current page layout. Run frontend lint and bot
 build profiles, complete inherited browser regressions and normal repository
 checks. Real installed evidence remains the old source-navigation failure; an
 author-verified descendant is not installation or actual UI acceptance.
+
+
+## Original conversation mobile title — G0 bounded display correction
+
+After the accepted475 complete default-off install, ordinary original-account
+sales and supplier result→exact source body→original conversation/draft return
+both passed on the actual service. At390 the conversation header measured1603px
+for a390px viewport: flex align-items:start leaves the nowrap long title at its
+intrinsic width. Preserve475 and all prior source/evidence. In this isolated
+successor, constrain only the mobile conversation header to its parent width,
+wrap the full saved title including unbroken filenames, and put its existing
+return link in normal flow. Desktop rendering and all owners, routes, grants,
+records, publications, execution flags and dependencies remain unchanged.
+
+The two long-title sales/supplier browser cases must first reproduce the
+baseline failure, then verify390/1280 page/header bounds, exact source navigation,
+return to original result and unchanged unsent draft, with zero non-GET fixture
+requests. Run existing source-return and resource/employee browser regression,
+frontend lint/build, and normal repository checks. Author verification and
+actual installed verification are distinct; this display correction does not
+claim new gross-profit output, enterprise tool calls or project completion.

@@ -3,3 +3,9 @@
 
 .private-system{margin:12px 10% 0 0;color:#637796;font-size:12px}.private-system p{display:none}.private-action-record button{margin:6px 8px 6px 0}.private-action-record a{display:inline-block;margin:8px 12px 8px 0}.private-heading>a{font-size:12px}
 .px-shell.journey-shell .private-conversation>.private-heading{position:relative;box-sizing:border-box;height:90px}.private-heading>p:nth-of-type(2){display:none}.private-heading>a{position:absolute;right:24px;top:42px;line-height:20px}.private-heading h1{max-width:calc(100% - 230px)}
+
+@media(max-width:700px){
+ .px-shell.journey-shell .private-conversation>.private-heading{width:100%;height:auto}
+ .private-heading h1{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+ .private-heading>a{position:static;display:inline-block;margin-top:4px}
+}

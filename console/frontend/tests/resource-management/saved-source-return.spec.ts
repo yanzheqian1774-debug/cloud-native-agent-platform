@@ -9,3 +9,15 @@ for(const kind of ['sales','supplier','v2'])test('saved '+kind+' source pins exa
 test('saved artifact dialog uses the same exact source href',async({page})=>{const {state}=await fixture(page);await open(page);await page.locator('[data-artifact-id="source-report"]').click();const dialog=page.getByRole('dialog',{name:'成果文件详情'});await expect(dialog).toBeVisible();await dialog.getByText('任务、产物与来源依据',{exact:true}).click();expect(await dialog.getByRole('link',{name:'查看精确来源'}).getAttribute('href')).toBe(await page.getByRole('link',{name:'查看来源版本',exact:true}).getAttribute('href'));expect(state.writes).toEqual([])});
 test('invalid saved source has no trusted navigation link',async({page})=>{const {state}=await fixture(page,'sales',true);await open(page);await expect(page.getByRole('link',{name:'查看来源版本',exact:true})).toHaveCount(0);await expect(page.getByText('来源版本依据尚未完整读回',{exact:true})).toBeVisible();expect(state.sourceCalls).toEqual([]);expect(state.writes).toEqual([])});
 test('lost exact source read cannot show a later revision or old source body',async({page})=>{const {state}=await fixture(page);await open(page);state.denied=true;await page.getByRole('link',{name:'查看来源版本',exact:true}).click();await expect(page.getByRole('alert').first()).toBeVisible();await expect(page.getByText('只读核对的原始来源正文',{exact:true})).toHaveCount(0);await expect(page.getByRole('link',{name:'返回原会话',exact:true})).toBeVisible();expect(state.writes).toEqual([]);expect(state.oldKnowledgeCalls).toEqual([])});
+
+for(const kind of ['sales','supplier'])test('long original '+kind+' title fits mobile result and source return',async({page},info)=>{
+ const title='请比较已授权固定合成销售CSV中2026-08与2026-09的销售变化，逐项核对来源，并保留原会话上下文。'+ 'SourceFile202608202609'.repeat(4);
+ const {state}=await fixture(page,kind,false,title);await open(page);
+ for(const width of [1280,390]){
+  await page.setViewportSize({width,height:900});await expect(page.locator('.private-heading h1')).toHaveText(title);
+  const bounds=await page.locator('.private-heading').evaluate(n=>({left:n.getBoundingClientRect().left,right:n.getBoundingClientRect().right}));expect(bounds.left).toBeGreaterThanOrEqual(0);expect(bounds.right).toBeLessThanOrEqual(width);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  await page.screenshot({path:info.outputPath('long-'+kind+'-result-'+width+'.png')});
+ }
+ await page.getByRole('link',{name:'查看来源版本',exact:true}).click();await expect(page.getByRole('region',{name:'知识正文与来源'})).toBeVisible();await page.getByRole('link',{name:'返回原会话',exact:true}).click();await expect(page.locator('#private-input')).toHaveValue('保留原会话未发送草稿');await expect(page.locator('.private-work .px-delivery-summary')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);expect(state.writes).toEqual([]);
+});
