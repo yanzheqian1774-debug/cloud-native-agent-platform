@@ -134,7 +134,10 @@ class ResourceDirectory:
                         )
                     except AuthorityError:
                         continue
-                    if args.query.casefold() not in record["name"].casefold():
+                    if (
+                        args.query.casefold()
+                        not in (record["name"] + " " + identity).casefold()
+                    ):
                         continue
                     if args.status and r["state"] != args.status:
                         continue

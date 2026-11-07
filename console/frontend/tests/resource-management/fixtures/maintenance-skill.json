@@ -1,0 +1,691 @@
+{
+  "capabilities": [
+    "READ_DATA",
+    "VALIDATE_DATA",
+    "SUMMARIZE",
+    "ANALYZE_DATA",
+    "RENDER_REPORT"
+  ],
+  "operations": [
+    {
+      "name": "READ_DATA",
+      "ioLimits": {
+        "policyId": "sales-diagnostic-bounds",
+        "timeoutMs": 10000,
+        "maxInputBytes": 524288,
+        "maxProperties": 4096,
+        "maxObjectDepth": 16,
+        "maxOutputBytes": 262144,
+        "policyRevision": "1"
+      },
+      "executorId": "sales-diagnostic-readonly",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "sourceSnapshot",
+          "dependencies"
+        ],
+        "properties": {
+          "source": {
+            "type": "object"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "dependencies": {
+            "type": "object"
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-input.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "operation",
+          "sourceSnapshot",
+          "limitations"
+        ],
+        "properties": {
+          "operation": {
+            "enum": [
+              "READ_DATA",
+              "VALIDATE_DATA",
+              "SUMMARIZE",
+              "ANALYZE_DATA",
+              "RECOMMEND",
+              "RENDER_REPORT"
+            ],
+            "type": "string"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-output.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "sideEffectClass": "READ_ONLY",
+      "executorRevision": "1",
+      "sideEffectPolicy": {
+        "policyId": "synthetic-cost-readonly",
+        "policyDigest": "6256c52f6e0ceb3d5fa00af98c60338f55aa660a9024e6ac0b885ac6ba9f24ad",
+        "policyRevision": "1"
+      },
+      "executorConfigurationDigest": "bfc18309ba640a9ee74a13053a8eeef95df909cf6ed68d78619aa368df9a6302"
+    },
+    {
+      "name": "VALIDATE_DATA",
+      "ioLimits": {
+        "policyId": "sales-diagnostic-bounds",
+        "timeoutMs": 10000,
+        "maxInputBytes": 524288,
+        "maxProperties": 4096,
+        "maxObjectDepth": 16,
+        "maxOutputBytes": 262144,
+        "policyRevision": "1"
+      },
+      "executorId": "sales-diagnostic-readonly",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "sourceSnapshot",
+          "dependencies"
+        ],
+        "properties": {
+          "source": {
+            "type": "object"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "dependencies": {
+            "type": "object"
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-input.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "operation",
+          "sourceSnapshot",
+          "limitations"
+        ],
+        "properties": {
+          "operation": {
+            "enum": [
+              "READ_DATA",
+              "VALIDATE_DATA",
+              "SUMMARIZE",
+              "ANALYZE_DATA",
+              "RECOMMEND",
+              "RENDER_REPORT"
+            ],
+            "type": "string"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-output.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "sideEffectClass": "READ_ONLY",
+      "executorRevision": "1",
+      "sideEffectPolicy": {
+        "policyId": "synthetic-cost-readonly",
+        "policyDigest": "6256c52f6e0ceb3d5fa00af98c60338f55aa660a9024e6ac0b885ac6ba9f24ad",
+        "policyRevision": "1"
+      },
+      "executorConfigurationDigest": "bfc18309ba640a9ee74a13053a8eeef95df909cf6ed68d78619aa368df9a6302"
+    },
+    {
+      "name": "SUMMARIZE",
+      "ioLimits": {
+        "policyId": "sales-diagnostic-bounds",
+        "timeoutMs": 10000,
+        "maxInputBytes": 524288,
+        "maxProperties": 4096,
+        "maxObjectDepth": 16,
+        "maxOutputBytes": 262144,
+        "policyRevision": "1"
+      },
+      "executorId": "sales-diagnostic-readonly",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "sourceSnapshot",
+          "dependencies"
+        ],
+        "properties": {
+          "source": {
+            "type": "object"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "dependencies": {
+            "type": "object"
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-input.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "operation",
+          "sourceSnapshot",
+          "limitations"
+        ],
+        "properties": {
+          "operation": {
+            "enum": [
+              "READ_DATA",
+              "VALIDATE_DATA",
+              "SUMMARIZE",
+              "ANALYZE_DATA",
+              "RECOMMEND",
+              "RENDER_REPORT"
+            ],
+            "type": "string"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-output.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "sideEffectClass": "READ_ONLY",
+      "executorRevision": "1",
+      "sideEffectPolicy": {
+        "policyId": "synthetic-cost-readonly",
+        "policyDigest": "6256c52f6e0ceb3d5fa00af98c60338f55aa660a9024e6ac0b885ac6ba9f24ad",
+        "policyRevision": "1"
+      },
+      "executorConfigurationDigest": "bfc18309ba640a9ee74a13053a8eeef95df909cf6ed68d78619aa368df9a6302"
+    },
+    {
+      "name": "ANALYZE_DATA",
+      "ioLimits": {
+        "policyId": "sales-diagnostic-bounds",
+        "timeoutMs": 10000,
+        "maxInputBytes": 524288,
+        "maxProperties": 4096,
+        "maxObjectDepth": 16,
+        "maxOutputBytes": 262144,
+        "policyRevision": "1"
+      },
+      "executorId": "sales-diagnostic-readonly",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "sourceSnapshot",
+          "dependencies"
+        ],
+        "properties": {
+          "source": {
+            "type": "object"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "dependencies": {
+            "type": "object"
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-input.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "operation",
+          "sourceSnapshot",
+          "limitations"
+        ],
+        "properties": {
+          "operation": {
+            "enum": [
+              "READ_DATA",
+              "VALIDATE_DATA",
+              "SUMMARIZE",
+              "ANALYZE_DATA",
+              "RECOMMEND",
+              "RENDER_REPORT"
+            ],
+            "type": "string"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-output.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "sideEffectClass": "READ_ONLY",
+      "executorRevision": "1",
+      "sideEffectPolicy": {
+        "policyId": "synthetic-cost-readonly",
+        "policyDigest": "6256c52f6e0ceb3d5fa00af98c60338f55aa660a9024e6ac0b885ac6ba9f24ad",
+        "policyRevision": "1"
+      },
+      "executorConfigurationDigest": "bfc18309ba640a9ee74a13053a8eeef95df909cf6ed68d78619aa368df9a6302"
+    },
+    {
+      "name": "RENDER_REPORT",
+      "ioLimits": {
+        "policyId": "sales-diagnostic-bounds",
+        "timeoutMs": 10000,
+        "maxInputBytes": 524288,
+        "maxProperties": 4096,
+        "maxObjectDepth": 16,
+        "maxOutputBytes": 262144,
+        "policyRevision": "1"
+      },
+      "executorId": "sales-diagnostic-readonly",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "sourceSnapshot",
+          "dependencies"
+        ],
+        "properties": {
+          "source": {
+            "type": "object"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "dependencies": {
+            "type": "object"
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-input.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "synthetic",
+          "operation",
+          "sourceSnapshot",
+          "limitations"
+        ],
+        "properties": {
+          "operation": {
+            "enum": [
+              "READ_DATA",
+              "VALIDATE_DATA",
+              "SUMMARIZE",
+              "ANALYZE_DATA",
+              "RECOMMEND",
+              "RENDER_REPORT"
+            ],
+            "type": "string"
+          },
+          "synthetic": {
+            "enum": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaVersion": {
+            "enum": [
+              "sales-diagnostic-output.v1"
+            ],
+            "type": "string"
+          },
+          "sourceSnapshot": {
+            "type": "object",
+            "required": [
+              "resource_id",
+              "revision_id",
+              "digest"
+            ],
+            "properties": {
+              "digest": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "resource_id": {
+                "type": "string"
+              },
+              "revision_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "sideEffectClass": "READ_ONLY",
+      "executorRevision": "1",
+      "sideEffectPolicy": {
+        "policyId": "synthetic-cost-readonly",
+        "policyDigest": "6256c52f6e0ceb3d5fa00af98c60338f55aa660a9024e6ac0b885ac6ba9f24ad",
+        "policyRevision": "1"
+      },
+      "executorConfigurationDigest": "bfc18309ba640a9ee74a13053a8eeef95df909cf6ed68d78619aa368df9a6302"
+    }
+  ],
+  "sideEffect": "READ",
+  "inputSchema": {},
+  "outputSchema": {},
+  "errorPolicy": {},
+  "idempotency": "IDEMPOTENT",
+  "timeoutSeconds": 5,
+  "permissions": [],
+  "dependencies": [],
+  "description": "界面回放使用的已登记合成销售技能契约",
+  "instructions": "此契约用于页面旅程验证，实际业务验收另记。"
+}

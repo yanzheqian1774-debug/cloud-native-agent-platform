@@ -1,0 +1,264 @@
+import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+const plan = JSON.parse(readFileSync(new URL('../e2e/fixtures/delivery-plan.json', import.meta.url), 'utf8'));
+const skillContent = JSON.parse(readFileSync(new URL('./fixtures/maintenance-skill.json', import.meta.url), 'utf8'));
+const reportText = readFileSync(new URL('../e2e/fixtures/sales-report.json', import.meta.url), 'utf8'), source = JSON.parse(reportText).sourceSnapshot;
+const principal = { principalId: 'human:maintenance-fixture', tenantId: 'maintenance-fixture', securityDomain: 'isolated' }, scope = { tenantId: principal.tenantId, securityDomain: principal.securityDomain };
+const envelope=(result:unknown)=>({schemaVersion:'workbench-operation.v1',result,continuationIds:[]});
+const operations = ['READ_DATA', 'VALIDATE_DATA', 'SUMMARIZE', 'ANALYZE_DATA', 'RENDER_REPORT'];
+const skillId = 'skill-definition:maintenance', employeeId = 'employee-definition:consumer', runDigest = 'c'.repeat(64), problem = 'maintenance-problem';
+const initial = () => ({ resourceId: skillId, kind: 'skill', name: '资源维护完整路径核验', aggregateVersion: 1, lifecycleState: 'DRAFT', enabled: true, archived: false, currentDraftRevisionId: 'revision:1' as string | null, publishedRevisionId: null as string | null, revisions: [{ revisionId: 'revision:1', predecessorRevisionId: null as string | null, digest: 'a'.repeat(64), state: 'DRAFT', content: { ...structuredClone(skillContent), description: '维护原用途' }, createdAt: '2026-11-08T00:00:00Z' }], testResults: [] as Record<string, unknown>[], savedTests: [], reviews: [], relationships: [], bindings: [], invocations: [], discoverySnapshots: [], toolSelections: [], healthObservations: [], driftRecords: [], limitations: [] });
+async function fixture(page: Page, seed = false) {
+    const state = { resource: initial(), created: seed, otherIdentity: false, revoked: false, receiptReadable: true, loseNext: false, override: {} as Record<string, unknown>, posts: [] as Record<string, unknown>[], gets: [] as string[], receipt: null as Record<string, unknown> | null, hold: false, release: () => { } };
+    const session = () => ({ principal: { ...principal, ...(state.otherIdentity ? { principalId: 'human:other' } : {}) }, session: { expiresAt: '2099-01-01', idleExpiresAt: '2099-01-01' }, csrfToken: 'fixture-csrf' });
+    const published = () => state.resource.revisions.find(r => r.revisionId === state.resource.publishedRevisionId);
+    const item = () => { const r = published()!; return { kind: 'skill', identity: skillId, revisionId: r.revisionId, digest: r.digest, name: state.resource.name, state: 'PUBLISHED', enabled: true, isCurrentPublished: true, isCurrentDraft: false, createdAt: r.createdAt, executionReady: false }; };
+    const employee = () => ({ resourceKind: 'DIGITAL_EMPLOYEE_DEFINITION', employeeDefinitionId: employeeId, employeeDefinitionRevisionId: 'employee-revision:consumer', employeeDefinitionDigest: 'd'.repeat(64), role: '准确资源引用员工', responsibilities: ['核对所引用版本'], publicationState: 'PUBLISHED', lifecycleState: 'PUBLISHED', aggregateVersion: 4, members: [{ kind: 'AGENT', resourceId: 'agent:consumer', revisionId: 'agent-revision:1', digest: 'e'.repeat(64) }, { kind: 'SKILL', resourceId: skillId, revisionId: 'revision:1', digest: published()?.digest ?? 'b'.repeat(64) }] });
+    await page.route('**/api/workbench/v1/**', async (route) => {
+        const req = route.request(), url = new URL(req.url()), path = url.pathname;
+        if (req.method() === 'GET')
+            state.gets.push(path);
+        if (path.endsWith('/session'))
+            return route.fulfill({ json: session() });
+        if (path.endsWith('/resource-management/skill'))
+            return route.fulfill({ json: { result: { subject: session().principal.principalId, scope, items: state.created && !state.revoked ? [state.resource] : [] } } });
+        if (path.endsWith('/resource-management/skill/commands')) {
+            const body = req.postDataJSON();
+            state.posts.push(body);
+            expect(req.headers()['x-csrf-token']).toBe('fixture-csrf');
+            const r = state.resource;
+            if (body.action === 'create') {
+                state.created = true;
+                r.name = body.name;
+                r.revisions[0].content = body.content;
+            }
+            if (body.action === 'edit') {
+                r.revisions.at(-1)!.content = body.content;
+                r.revisions.at(-1)!.digest = 'b'.repeat(64);
+            }
+            if (body.action === 'test')
+                r.testResults.push({ resultId: 'test:' + state.posts.length, revisionId: r.currentDraftRevisionId, revisionDigest: r.revisions.at(-1)!.digest, operation: body.operation, caseName: body.testName, status: body.expectedOutput.operation === body.operation ? 'PASSED' : 'FAILED', reasonCode: 'FIXTURE_EXECUTOR_COMPARISON', actualExecution: true, verificationLevel: 'ISOLATED_SYNTHETIC_EXECUTOR', actual: { ...JSON.parse(reportText), operation: body.operation } });
+            if (body.action === 'publish-tested') {
+                const checks = new Map<string, Record<string, unknown>>();
+                for (const t of r.testResults)
+                    if (t.revisionId === r.currentDraftRevisionId)
+                        checks.set(String(t.operation), t);
+                if (!operations.every(op => checks.get(op)?.status === 'PASSED'))
+                    return route.fulfill({ status: 409, json: { reasonCode: 'CURRENT_OPERATION_TESTS_REQUIRED' } });
+                r.revisions.at(-1)!.state = 'PUBLISHED';
+                r.publishedRevisionId = r.currentDraftRevisionId;
+                r.currentDraftRevisionId = null;
+                r.lifecycleState = 'PUBLISHED';
+            }
+            if (body.action === 'successor') {
+                r.currentDraftRevisionId = 'revision:2';
+                r.revisions.push({ ...structuredClone(r.revisions[0]), revisionId: 'revision:2', predecessorRevisionId: 'revision:1', digest: 'f'.repeat(64), state: 'DRAFT' });
+                r.lifecycleState = 'DRAFT';
+            }
+            r.aggregateVersion++;
+            state.receipt = { schemaVersion: 'resource-management-receipt.v1', kind: 'skill', action: body.action, identity: skillId, commandKey: body.commandKey, aggregateVersion: r.aggregateVersion, resource: structuredClone(r), executionStarted: false, modelCalls: 0, credentialMaterial: 'NOT_INCLUDED', ...(body.action === 'publish-tested' ? { publicationVerification: { ready: true } } : {}), ...state.override };
+            if (state.hold)
+                await new Promise<void>(resolve => { state.release = resolve; });
+            if (state.loseNext) {
+                state.loseNext = false;
+                return route.abort('failed');
+            }
+            return route.fulfill({ json: { result: state.receipt } });
+        }
+        if (path.includes('/resource-management/skill/commands/')) {
+            if (!state.receiptReadable) return route.fulfill({status:503,json:{reasonCode:'RECEIPT_UNAVAILABLE'}});
+            return state.receipt?.commandKey===decodeURIComponent(path.split('/').at(-1)!) ? route.fulfill({json:{result:state.receipt}}) : route.fulfill({status:404,json:{reasonCode:'COMMAND_NOT_FOUND'}});
+        }
+        if (path.endsWith('/impact'))
+            return route.fulfill({ json: { result: { current: { revisionId: state.resource.currentDraftRevisionId ?? state.resource.publishedRevisionId, digest: state.resource.revisions.at(-1)!.digest }, previousPublished: state.resource.currentDraftRevisionId && published() ? {revisionId:published()!.revisionId,digest:published()!.digest} : null, changes: [], testCoverage: { ready: false, checks: [] }, olderTestsNotCurrent: state.resource.testResults.filter(t => t.revisionId !== (state.resource.currentDraftRevisionId ?? state.resource.publishedRevisionId)).length, authorizedUses: [], truncated: false, dependencies: { incoming: published() ? [{ kind: 'EMPLOYEE', identity: employeeId, revision: 'employee-revision:consumer', name: '准确资源引用员工', state: 'SAVED_REVISION', distance: 1, versionRelation: state.resource.currentDraftRevisionId ? 'OTHER_VERSION' : 'CURRENT_VERSION', targetRevision: 'revision:1' }] : [], outgoing: [], limitations: [], unresolvedDeclarations: [] } } } });
+        if (path.endsWith('/resource-directory'))
+            return route.fulfill({ json: { result: { subject: principal.principalId, scope, items: published() ? [item()] : [], nextCursor: null, executionAuthority: 'NONE' } } });
+        if (path.includes('/resource-directory/skill/'))
+            return route.fulfill({ json: { result: { ...item(), subject: principal.principalId, scope, revision: { ...published(), content: published()!.content }, usage: [{ digest: runDigest, title: '已保存的同版本核对结果', planVersion: 4, state: 'SUCCEEDED', problemId: problem }] } } });
+        if (path.endsWith('/employees'))
+            return route.fulfill({ json: envelope({items:[employee()]}) });
+        if (path.includes('/employees/'))
+            return route.fulfill({ json: envelope(employee()) });
+        if (path.includes('/agents/'))
+            return route.fulfill({ json: envelope({definitionId:'agent:consumer',revisionId:'agent-revision:1',digest:'e'.repeat(64),name:'引用员工Agent',role:{title:'核对员',duties:['核对来源'],businessPurpose:'核对',capabilities:['READ_DATA']}}) });
+        if (path.includes('/prepared-executions/')) {
+            const ref = { resource_id: skillId, revision_id: 'revision:1', digest: published()!.digest };
+            return route.fulfill({ json: { result: { digest: runDigest, executionStarted: true, preparation: { plan_id: 'maintenance-plan', plan_version: 4, plan_digest: '9'.repeat(64), approval_id: 'fixture-only', source_snapshot: source, semantics: { ...plan.semantics, title: '已保存的同版本核对结果', target: { problem: { resource_id: problem, revision_id: '1', digest: '8'.repeat(64) } } }, participants: plan.semantics.tasks.map((t: {
+                                task_id: string;
+                                operation: string;
+                            }) => ({ task_id: t.task_id, instance_id: 'fixture-instance', assignment_id: 'fixture-assignment', definition: ref, skill: { reference: ref, operation: t.operation }, profile: ref })) }, progress: { state: 'SUCCEEDED', version: 10, cancellation_request_id: null, tasks: plan.semantics.tasks.map((t: {
+                                task_id: string;
+                            }) => ({ task_id: t.task_id, state: 'SUCCEEDED', attempt_ordinal: 1, reason: null })) }, admission: { state: 'NOT_ADMITTED', reason: 'READ_ONLY_FIXTURE' }, resourceUses: [], artifacts: [{ artifact_id: 'saved-report', task_id: plan.semantics.tasks.at(-1).task_id, digest: '7'.repeat(64), bytes: reportText.length, created_at: '2026-11-08', contentAccess: 'AUTHORIZED', content: reportText }], events: [], outcome: null } } });
+        }
+        return route.fulfill({ status: 404, json: { reasonCode: 'FIXTURE_ROUTE_NOT_DEFINED' } });
+    });
+    return state;
+}
+async function create(page: Page) { await page.getByRole('button', { name: '新建Skill', exact: true }).click(); await page.getByLabel('名称', { exact: true }).fill('资源维护完整路径核验'); await page.getByLabel('用途说明', { exact: true }).fill('维护原用途'); await page.getByLabel('能力名称', { exact: true }).fill('READ_DATA'); await page.getByLabel('办理说明', { exact: true }).fill('核对来源'); await page.getByText('高级配置与输入输出契约', { exact: true }).click(); await page.getByLabel('配置对象', { exact: true }).fill(JSON.stringify(skillContent)); await page.getByRole('button', { name: '保存草稿', exact: true }).click(); }
+async function openTestForm(page:Page){
+ await page.getByRole('tab',{name:'测试',exact:true}).click();
+ await expect(page.getByRole('tabpanel',{name:'测试',exact:true})).toBeVisible();
+ const details=page.getByRole('region',{name:'技能真实测试'}).locator('details').filter({has:page.getByText('填写或修改测试用例',{exact:true})});
+ if(await details.getAttribute('open')===null)await details.locator('summary').click();
+ await expect(page.getByLabel('测试名称',{exact:true})).toBeVisible();
+}
+async function runTest(page:Page,operation='READ_DATA',pass=true){
+ await openTestForm(page);
+ await page.getByLabel('测试名称',{exact:true}).fill('覆盖核验');
+ await page.getByLabel('测试操作',{exact:true}).selectOption(operation);
+ await page.getByLabel('测试输入数据',{exact:true}).fill(JSON.stringify({schemaVersion:'sales-diagnostic-input.v1',synthetic:true,sourceSnapshot:source,source:JSON.parse(reportText).source,dependencies:operation==='READ_DATA'?{}:{read:{...JSON.parse(reportText),operation:'READ_DATA'}}}));
+ await page.getByLabel('测试预期结果',{exact:true}).fill(JSON.stringify({schemaVersion:'sales-diagnostic-output.v1',operation:pass?operation:'INTENTIONALLY_WRONG_EXPECTATION'}));
+ await Promise.all([page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/resource-management/skill/commands')&&r.request().postDataJSON().action==='test'),page.getByRole('button',{name:'运行真实测试',exact:true}).click()]);
+ await expect(page.getByRole('region',{name:'技能真实测试'})).toContainText(pass?'测试通过':'测试未通过');
+ await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);
+}
+test('maintenance draft edit failed test checked publication exact employee and saved result return form one journey', async ({ page }, info) => {
+    const state = await fixture(page);
+    await page.goto('/skills');
+    await create(page);
+    await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText('维护原用途');
+    await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
+    await page.getByLabel('用途说明', { exact: true }).fill('保留操作契约的新用途');
+    await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+    await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText('保留操作契约的新用途');
+    await runTest(page, 'READ_DATA', false);
+    await page.getByRole('tab', { name: '发布检查', exact: true }).click();
+    await expect(page.getByRole('tabpanel',{name:'发布检查',exact:true})).toBeVisible();
+    await page.getByRole('tabpanel',{name:'发布检查',exact:true}).getByRole('button', { name: '验证全部操作后发布', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('所有操作均需真实测试通过');
+    expect(state.resource.publishedRevisionId).toBeNull();
+    for (const operation of operations)
+        await runTest(page, operation);
+    await page.getByRole('tab', { name: '发布检查', exact: true }).click();
+    await expect(page.getByRole('tabpanel',{name:'发布检查',exact:true})).toBeVisible();
+    await page.getByRole('tabpanel',{name:'发布检查',exact:true}).getByRole('button', { name: '验证全部操作后发布', exact: true }).click();
+    await expect(page.getByRole('link', { name: '查看发布版本与使用记录' })).toBeVisible();
+    const beforeRead = state.posts.length;
+    await page.getByRole('tab', { name: '使用追溯', exact: true }).click();
+    await page.getByRole('link', { name: '查看引用员工' }).click();
+    await expect(page.getByRole('heading', { name: '准确资源引用员工', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '返回资源维护', exact: false })).toBeVisible();
+    const member = page.getByRole('table').getByRole('link').filter({ hasText: skillId });
+    await expect(member).toHaveAttribute('href', new RegExp('resourceRevision=revision%3A1'));
+    await page.getByRole('link', { name: '返回资源维护', exact: false }).click();
+    await expect(page.getByRole('tab', { name: '使用追溯', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('link', { name: '查看发布版本与使用记录' }).click();
+    await page.getByRole('button', { name: '已保存的同版本核对结果', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '已有执行的只读核对', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: '销售诊断关键数据' })).toBeVisible();
+    await page.getByRole('link', { name: '返回同一准确资源', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '资源维护完整路径核验', exact: true })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('resourceRevision')).toBe('revision:1');
+    expect(state.posts).toHaveLength(beforeRead);
+    await page.getByRole('link', { name: '返回资源目录', exact: true }).click();
+    await page.locator('.rm-resource-list button').filter({ hasText: '资源维护完整路径核验' }).click();
+    await page.getByRole('button', { name: '创建后继草稿', exact: true }).click();
+    await expect.poll(() => state.resource.currentDraftRevisionId).toBe('revision:2');
+    const pinned = await page.getByRole('link', { name: '查看发布版本与使用记录' }).getAttribute('href');
+    expect(new URL(pinned!, page.url()).searchParams.get('resourceRevision')).toBe('revision:1');
+    await page.getByRole('tab', { name: '版本', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '版本历史', exact: true })).toBeVisible();
+    await expect(page.getByText('上一发布 → 当前修订', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '查看引用员工', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '核对版本与影响', exact: true })).toBeEnabled();
+    for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.screenshot({ path: info.outputPath('resource-maintenance-journey-' + width + '.png') });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    }
+    expect(state.posts.every(p => typeof p.commandKey === 'string' && !('actor' in p) && !('tenant' in p))).toBe(true);
+});
+for (const action of ['edit', 'test', 'publish-tested'])
+    test('lost ' + action + ' response reload recovers only its original typed key', async ({ page }) => {
+        const state = await fixture(page, true);
+        state.resource.testResults = operations.map(operation => ({ resultId: 'old-' + operation, revisionId: 'revision:1', revisionDigest: 'a'.repeat(64), operation, caseName: '覆盖核验', status: 'PASSED', actualExecution: true, verificationLevel: 'ISOLATED_SYNTHETIC_EXECUTOR', actual: { pass: true } }));
+        state.loseNext = true;
+        state.receiptReadable = false;
+        await page.goto('/skills?managedResource=' + encodeURIComponent(skillId));
+        await expect(page.getByRole('region', { name: '当前资源配置' })).toBeVisible();
+        if (action === 'edit') {
+            await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
+            await page.getByLabel('用途说明', { exact: true }).fill('响应丢失后的正式内容');
+            await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+        }
+        if (action === 'test') {
+            await openTestForm(page);
+            await page.getByLabel('测试预期结果', { exact: true }).fill(JSON.stringify({ operation: 'READ_DATA' }));
+            await page.getByLabel('测试输入数据', { exact: true }).fill(JSON.stringify({ schemaVersion: 'sales-diagnostic-input.v1', synthetic: true, sourceSnapshot: source, source: JSON.parse(reportText).source, dependencies: {} }));
+            await page.getByRole('button', { name: '运行真实测试', exact: true }).click();
+        }
+        if (action === 'publish-tested') {
+            await page.getByRole('tab', { name: '发布检查', exact: true }).click();
+            await expect(page.getByRole('tabpanel',{name:'发布检查',exact:true})).toBeVisible();
+    await page.getByRole('tabpanel',{name:'发布检查',exact:true}).getByRole('button', { name: '验证全部操作后发布', exact: true }).click();
+        }
+        await expect(page.getByRole('button', { name: '读取原操作结果', exact: true })).toBeEnabled();
+        const key = state.posts[0].commandKey;
+        await page.reload();
+        state.receiptReadable = true;
+        await page.getByRole('button', { name: '读取原操作结果', exact: true }).click();
+        await expect(page.getByText('已读回原操作及当前正式记录，没有再次提交。', { exact: true })).toBeVisible();
+        expect(state.posts).toHaveLength(1);
+        expect(state.gets.filter(p => p.includes('/commands/')).every(p => p.endsWith(String(key)))).toBe(true);
+    });
+for (const [field, value] of [['action', 'access'], ['kind', 'mcp'], ['commandKey', 'unrelated'], ['identity', 'skill:other'], ['aggregateVersion', 999], ['executionStarted', true], ['modelCalls', 1]])
+    test('ordinary maintenance rejects mismatched ' + field + ' receipt and retains original key', async ({ page }) => {
+        const state = await fixture(page);
+        state.override = { [String(field)]: value };
+        await page.goto('/skills');
+        await create(page);
+        await expect(page.getByRole('alert')).toContainText('操作回执与原请求不一致');
+        await expect(page.getByRole('button', { name: '读取原操作结果', exact: true })).toBeVisible();
+        await expect(page.getByRole('region', { name: '当前资源配置' })).toHaveCount(0);
+        expect(state.posts).toHaveLength(1);
+    });
+test('account change before ordinary create sends no command and withdraws old view', async ({ page }) => { const state = await fixture(page); await page.goto('/skills'); await page.getByRole('button', { name: '新建Skill', exact: true }).click(); state.otherIdentity = true; await page.getByLabel('名称', { exact: true }).fill('不可跨账号创建'); await page.getByLabel('用途说明', { exact: true }).fill('核验'); await page.getByLabel('能力名称', { exact: true }).fill('READ_DATA'); await page.getByLabel('办理说明', { exact: true }).fill('核验'); await page.getByRole('button', { name: '保存草稿', exact: true }).click(); await expect(page.getByRole('region', { name: '资源配置状态' })).toContainText('当前未就绪'); expect(state.posts).toEqual([]); });
+test('unsafe resource return cannot create an external or unrelated navigation link', async ({ page }) => { await fixture(page, true); await page.goto('/employees?employeeDefinitionId=' + employeeId + '&employeeDefinitionRevisionId=employee-revision%3Aconsumer&detail=1&section=capabilities&resourceBack=' + encodeURIComponent('https://foreign.invalid/skills?managedResource=x')); await expect(page.getByRole('heading', { name: '准确资源引用员工', exact: true })).toBeVisible(); await expect(page.getByRole('link', { name: '返回资源维护', exact: false })).toHaveCount(0); });
+test('leaving after ordinary POST retains original intent and cannot restore detail in another view', async ({ page }) => {
+    const state = await fixture(page);
+    state.hold = true;
+    await page.goto('/skills');
+    await create(page);
+    await expect.poll(() => state.posts.length).toBe(1);
+    const key = state.posts[0].commandKey;
+    await page.evaluate(() => { history.pushState({}, '', '/catalog'); window.dispatchEvent(new PopStateEvent('popstate')); });
+    state.hold = false;
+    state.release();
+    await expect(page.getByRole('region', { name: '当前资源配置' })).toHaveCount(0);
+    await page.goto('/skills');
+    await page.getByRole('button', { name: '读取原操作结果', exact: true }).click();
+    await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText(state.resource.name);
+    expect(state.posts).toHaveLength(1);
+    expect(state.posts[0].commandKey).toBe(key);
+});
+test('fresh directory revocation withdraws a successful ordinary command result and never regrants', async ({ page }) => {
+    const state = await fixture(page, true);
+    await page.goto('/skills?managedResource=' + encodeURIComponent(skillId));
+    await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
+    await page.getByLabel('用途说明', { exact: true }).fill('正式编辑结果');
+    state.revoked = true;
+    await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('当前配置尚未获准读回');
+    await expect(page.getByRole('region', { name: '当前资源配置' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '读取原操作结果', exact: true })).toBeVisible();
+    expect(state.posts).toHaveLength(1);
+});
+test('legacy unknown ordinary key without binding is preserved and never replaced by create', async ({ page }) => {
+    const state = await fixture(page);
+    const marker = 'resource-management:' + principal.principalId + ':' + principal.tenantId + ':' + principal.securityDomain + ':skill';
+    await page.addInitScript(({ marker }) => sessionStorage.setItem(marker, 'original-legacy-key'), { marker });
+    await page.goto('/skills');
+    await page.getByRole('button', { name: '读取原操作结果', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('原操作的核对依据尚未恢复');
+    expect(await page.evaluate(marker => sessionStorage.getItem(marker), marker)).toBe('original-legacy-key');
+    expect(state.posts).toEqual([]);
+    await expect(page.getByRole('button', { name: '新建Skill', exact: true })).toBeDisabled();
+});
+
+test('late maintenance completion preserves the tab chosen while the command was running',async({page})=>{
+ const state=await fixture(page,true);state.hold=true;await page.goto('/skills?managedResource='+encodeURIComponent(skillId));await page.getByRole('button',{name:'编辑草稿',exact:true}).click();await page.getByLabel('用途说明',{exact:true}).fill('保留当前页面位置');await page.getByRole('button',{name:'保存草稿',exact:true}).click();await expect.poll(()=>state.posts.length).toBe(1);await page.getByRole('tab',{name:'发布检查',exact:true}).click();state.hold=false;state.release();await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);await expect(page.getByRole('tab',{name:'发布检查',exact:true})).toHaveAttribute('aria-selected','true');expect(new URL(page.url()).searchParams.get('resourceTab')).toBe('发布检查');expect(state.posts).toHaveLength(1);
+});
+
+test('expired policy service cannot invalidate a still-authenticated user session',async({page})=>{
+ await fixture(page);await page.addInitScript(()=>window.addEventListener('workbench-session-expired',()=>sessionStorage.setItem('unexpected-session-expiry','yes')));await page.route('**/api/workbench/v1/resource-management/skill',r=>r.fulfill({status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}));await page.goto('/skills');await expect(page.getByRole('region',{name:'资源配置状态'})).toContainText('当前未就绪');expect(await page.evaluate(()=>sessionStorage.getItem('unexpected-session-expiry'))).toBeNull();await expect(page.getByRole('link',{name:'描述新的业务需求',exact:true})).toBeVisible();
+});

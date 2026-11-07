@@ -8,17 +8,15 @@ import {ResourceDetailView} from './ResourceDetailView';
 import {useSearchParams} from 'react-router-dom';
 import {ResourceBatchImport} from './ResourceBatchImport';
 type Kind='skill'|'mcp';
-type Receipt={identity:string;commandKey:string;resource:SkillMcpResource;executionStarted:false;action?:string;kind?:Kind};
-type AccessIntent={commandKey:string;identity:string;principal:string;kind:Kind};
-function verifyAccess(result:Receipt,intent:AccessIntent){if(result.executionStarted!==false||result.action!=='access'||result.kind!==intent.kind||result.identity!==intent.identity||result.commandKey!==intent.commandKey||result.resource?.resourceId!==intent.identity||result.resource?.kind!==intent.kind)throw Error('RESOURCE_ACCESS_RECEIPT_MISMATCH')}
+import {decodeManagementIntent,verifyManagementReceipt,verifyManagedResource,type ManagementCommandIntent,type ManagementReceipt} from './managementCommandState';
 type Directory={subject:string;scope:{tenantId:string;securityDomain:string};items:SkillMcpResource[]};
 const stateNames:Record<string,string>={DRAFT:'草稿',VALIDATED:'验证通过',POLICY_REVIEWED:'策略核验通过',PUBLISHED:'已发布',DEPRECATED:'已弃用'};
 class ManagementError extends Error{status:number;constructor(reason:string,status:number){super(reason);this.status=status}}
-async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch('/api/workbench/v1/resource-management/'+path,{credentials:'same-origin',...init});const body=await response.json().catch(()=>null);if(response.status===401)window.dispatchEvent(new Event('workbench-session-expired'));if(!response.ok)throw new ManagementError(body?.reasonCode??'RESOURCE_MANAGEMENT_UNAVAILABLE',response.status);if(!body?.result)throw new ManagementError('RESOURCE_RESPONSE_UNKNOWN',503);return body.result}
+async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch('/api/workbench/v1/resource-management/'+path,{credentials:'same-origin',...init});const body=await response.json().catch(()=>null);if(response.status===401){const currentUser=await readWorkbenchSession().then(()=>true,()=>false);if(currentUser)throw new ManagementError('RESOURCE_POLICY_SERVICE_UNAVAILABLE',401)}if(!response.ok)throw new ManagementError(body?.reasonCode??'RESOURCE_MANAGEMENT_UNAVAILABLE',response.status);if(!body?.result)throw new ManagementError('RESOURCE_RESPONSE_UNKNOWN',503);return body.result}
 function sameScope(session:WorkbenchSession,d:Directory){return d.subject===session.principal.principalId&&d.scope.tenantId===session.principal.tenantId&&d.scope.securityDomain===session.principal.securityDomain}
 export function ResourceManagement({kind,onChanged,onDetailChange}:{kind:Kind;onChanged:()=>void;onDetailChange?:(open:boolean)=>void}){
  const [params,setParams]=useSearchParams(),requestedResource=params.get('managedResource');
- const accessIntent=useRef<AccessIntent|null>(null),accessScope=useRef<string|null>(null),view=useRef({active:false,epoch:0});
+ const commandIntent=useRef<ManagementCommandIntent|null>(null),writeFlight=useRef(false),accessScope=useRef<string|null>(null),view=useRef({active:false,epoch:0});
  const [items,setItems]=useState<SkillMcpResource[]>([]),[selected,setSelected]=useState<SkillMcpResource|null>(null),[mode,setMode]=useState<'create'|'edit'|'import'|null>(null),[name,setName]=useState(''),[description,setDescription]=useState(''),[capabilities,setCapabilities]=useState(''),[instructions,setInstructions]=useState(''),[endpoint,setEndpoint]=useState(''),[secretRef,setSecretRef]=useState(''),[advanced,setAdvanced]=useState('{}'),[manifest,setManifest]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[available,setAvailable]=useState(false),[loaded,setLoaded]=useState(false),[tools,setTools]=useState<string[]>([]),[pendingKey,setPendingKey]=useState<string|null>(null);
  useEffect(()=>{onDetailChange?.(!!selected)},[selected,onDetailChange]);
  async function read(expectedPrincipal?:string,assertCurrent=()=>{}){
@@ -29,56 +27,110 @@ export function ResourceManagement({kind,onChanged,onDetailChange}:{kind:Kind;on
   setItems(value.items);setAvailable(true);return value;
  }
  function guard(identity?:string){const epoch=view.current.epoch,path=location.pathname;return()=>{if(!view.current.active||view.current.epoch!==epoch||location.pathname!==path||(identity!==undefined&&new URLSearchParams(location.search).get('managedResource')!==identity))throw Error('RESOURCE_ACCESS_CONTEXT_CHANGED')}}
- useEffect(()=>{const lifecycle=view.current;lifecycle.active=true;lifecycle.epoch++;let live=true;let pinned:string|null=null;readWorkbenchSession().then(async session=>{const value=await request<Directory>(kind);const after=await readWorkbenchSession();if(live&&JSON.stringify(session.principal)===JSON.stringify(after.principal)&&sameScope(after,value)){pinned=JSON.stringify(after.principal);accessScope.current=pinned;setItems(value.items);setAvailable(true);const restore=value.items.find(x=>x.resourceId===new URLSearchParams(location.search).get('managedResource'));if(restore)setSelected(restore);const key=sessionStorage.getItem('resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind);if(key){setPendingKey(key);const saved=sessionStorage.getItem('resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind+':access-intent');if(saved){try{const intent=JSON.parse(saved) as AccessIntent;if(intent.commandKey===key&&intent.principal===pinned&&intent.kind===kind)accessIntent.current=intent;else throw Error()}catch{setError('原访问请求依据尚未核实；保留原命令，不重新申请。')}}}}}).catch(()=>{if(live)setAvailable(false)}).finally(()=>{if(live)setLoaded(true)});const withdraw=()=>{lifecycle.epoch++;accessScope.current=null;accessIntent.current=null;setItems([]);setSelected(null);setAvailable(false);setMode(null)};const focus=()=>{void readWorkbenchSession().then(s=>{if(live&&pinned&&JSON.stringify(s.principal)!==pinned)withdraw()}).catch(()=>{if(live)withdraw()})};window.addEventListener('focus',focus);window.addEventListener('workbench-session-expired',withdraw);return()=>{live=false;lifecycle.active=false;lifecycle.epoch++;accessScope.current=null;window.removeEventListener('focus',focus);window.removeEventListener('workbench-session-expired',withdraw)}},[kind]);
+ useEffect(() => {
+  const lifecycle=view.current; lifecycle.active=true; lifecycle.epoch++;
+  let live=true, pinned:string|null=null;
+  readWorkbenchSession().then(async session => {
+   const value=await request<Directory>(kind),after=await readWorkbenchSession();
+   if(!live || JSON.stringify(session.principal)!==JSON.stringify(after.principal) || !sameScope(after,value))return;
+   pinned=JSON.stringify(after.principal); accessScope.current=pinned;
+   const marker='resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind;
+   const key=sessionStorage.getItem(marker);
+   if(key){
+    setPendingKey(key);
+    try{
+     let saved=sessionStorage.getItem(marker+':intent');
+     // Preserve the original access command created by the previous Console.
+     if(!saved && key.startsWith('resource-access:')){
+      const old=JSON.parse(sessionStorage.getItem(marker+':access-intent')??'null');
+      if(old?.commandKey!==key || old.principal!==pinned || old.kind!==kind)throw Error();
+      saved=JSON.stringify({version:1,commandKey:key,action:'access',kind,principal:pinned,identity:old.identity,viewResource:old.identity});
+     }
+     commandIntent.current=decodeManagementIntent(saved,key,kind,pinned);
+    }catch{commandIntent.current=null;setError('原操作的核对依据尚未恢复；保留原命令，不重新提交。')}
+   }
+   setItems(value.items);setAvailable(true);
+   const restore=value.items.find(x=>x.resourceId===new URLSearchParams(location.search).get('managedResource'));
+   if(restore)setSelected(restore);
+  }).catch(()=>{if(live)setAvailable(false)}).finally(()=>{if(live)setLoaded(true)});
+  const withdraw=()=>{lifecycle.epoch++;accessScope.current=null;commandIntent.current=null;setItems([]);setSelected(null);setAvailable(false);setMode(null)};
+  const focus=()=>{void readWorkbenchSession().then(s=>{if(live&&pinned&&JSON.stringify(s.principal)!==pinned)withdraw()}).catch(()=>{if(live)withdraw()})};
+  window.addEventListener('focus',focus);window.addEventListener('workbench-session-expired',withdraw);
+  return()=>{live=false;lifecycle.active=false;lifecycle.epoch++;accessScope.current=null;window.removeEventListener('focus',focus);window.removeEventListener('workbench-session-expired',withdraw)};
+ },[kind]);
  function form(resource?:SkillMcpResource){setError('');setMessage('');setTools([]);if(resource){const revision=resource.revisions.find(r=>r.revisionId===resource.currentDraftRevisionId);if(!revision)return;const c=revision.content;setMode('edit');setName(resource.name);setDescription(c.description);setCapabilities(c.capabilities.join('、'));setInstructions(c.instructions??'');setEndpoint(c.endpoint??'');setSecretRef(c.secretReference??'');setAdvanced(JSON.stringify(c,null,2));setSelected(resource)}else{setMode('create');setName('');setDescription('');setCapabilities('');setInstructions('');setEndpoint('');setSecretRef('');setAdvanced('{}');setSelected(null)}}
+ function intentGuard(intent:ManagementCommandIntent){
+  const assertMounted=guard();
+  return()=>{assertMounted();if(new URLSearchParams(location.search).get('managedResource')!==intent.viewResource)throw Error('RESOURCE_ACCESS_CONTEXT_CHANGED')};
+ }
+ function clearPending(marker:string){
+  sessionStorage.removeItem(marker);sessionStorage.removeItem(marker+':intent');sessionStorage.removeItem(marker+':access-intent');
+  commandIntent.current=null;setPendingKey(null);
+ }
+ async function applyReceipt(value:unknown,intent:ManagementCommandIntent,assertCurrent:()=>void){
+  let result:ManagementReceipt;try{result=verifyManagementReceipt(value,intent)}catch(reason){if(intent.action==='access')throw Error('RESOURCE_ACCESS_RECEIPT_MISMATCH',{cause:reason});throw reason}assertCurrent();
+  const fresh=await read(intent.principal,assertCurrent);assertCurrent();
+  const current=fresh.items.find(x=>x.resourceId===result.identity);
+  if(!current){setSelected(null);throw Error('RESOURCE_RESULT_NOT_CURRENTLY_READABLE')}
+  try{verifyManagedResource(current)}catch(reason){setSelected(null);throw reason}
+  if(current.kind!==intent.kind || current.aggregateVersion<result.aggregateVersion)throw Error('RESOURCE_COMMAND_RECEIPT_MISMATCH');
+  setSelected(current);
+  if(new URLSearchParams(location.search).get('managedResource')!==result.identity){
+   const next=new URLSearchParams(location.search);next.set('managedResource',result.identity);setParams(next,{replace:true});
+  }
+  setMode(null);setTools([]);onChanged();
+ }
  async function submit(action:string,extra:Record<string,unknown>={},resource=selected){
-  if(busy||pendingKey)return;
-  const assertCurrent=guard(action==='access'?String(extra.identity):undefined);
-  setBusy(true);setError('');setMessage('');let marker='';
+  if(writeFlight.current||busy||pendingKey)return;
+  writeFlight.current=true;const assertMounted=guard();setBusy(true);setError('');setMessage('');let marker='';
   try{
-   assertCurrent();const session=await readWorkbenchSession();assertCurrent();
-   if(action==='access'&&JSON.stringify(session.principal)!==accessScope.current)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
+   assertMounted();const session=await readWorkbenchSession();assertMounted();
+   const principal=JSON.stringify(session.principal);
+   if(principal!==accessScope.current)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
    if(action==='access'&&extra.identity!==requestedResource)throw Error('RESOURCE_ACCESS_CONTEXT_CHANGED');
    marker='resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind;
    const commandKey=(action==='access'?'resource-access:':'')+crypto.randomUUID();
-   sessionStorage.setItem(marker,commandKey);setPendingKey(commandKey);
-   accessIntent.current=action==='access'?{commandKey,identity:String(extra.identity),principal:JSON.stringify(session.principal),kind}:null;
-   if(accessIntent.current)sessionStorage.setItem(marker+':access-intent',JSON.stringify(accessIntent.current));else sessionStorage.removeItem(marker+':access-intent');
-   let result:Receipt;
-   try{result=await request<Receipt>(kind+'/commands',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({action,commandKey,...(resource?{identity:resource.resourceId,expectedVersion:resource.aggregateVersion}:{}),...extra})})}
-   catch(reason){assertCurrent();try{result=await request<Receipt>(kind+'/commands/'+encodeURIComponent(commandKey))}catch{throw reason}}
+   const intent:ManagementCommandIntent={version:1,commandKey,action,kind,principal,viewResource:new URLSearchParams(location.search).get('managedResource'),
+    ...(resource?{identity:resource.resourceId,expectedVersion:resource.aggregateVersion}:{}),...(action==='access'?{identity:String(extra.identity)}:{})};
+   decodeManagementIntent(JSON.stringify(intent),commandKey,kind,principal);
+   // Store the complete binding before POST. Never replace an unresolved key.
+   if(sessionStorage.getItem(marker))throw Error('RESOURCE_COMMAND_STILL_PENDING');
+   sessionStorage.setItem(marker+':intent',JSON.stringify(intent));sessionStorage.setItem(marker,commandKey);
+   commandIntent.current=intent;setPendingKey(commandKey);const assertCurrent=intentGuard(intent);
+   let result:unknown;
+   try{result=await request<ManagementReceipt>(kind+'/commands',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify({action,commandKey,...(resource?{identity:resource.resourceId,expectedVersion:resource.aggregateVersion}:{}),...extra})})}
+   catch(reason){assertCurrent();try{result=await request<ManagementReceipt>(kind+'/commands/'+encodeURIComponent(commandKey))}catch{throw reason}}
    assertCurrent();const after=await readWorkbenchSession();assertCurrent();
-   if(JSON.stringify(session.principal)!==JSON.stringify(after.principal))throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
-   if(action==='access'){const intent=accessIntent.current;if(!intent)throw Error('RESOURCE_ACCESS_CONTEXT_CHANGED');verifyAccess(result,intent)}
-   sessionStorage.removeItem(marker+':access-intent');accessIntent.current=null;sessionStorage.removeItem(marker);setPendingKey(null);
-   setSelected(result.resource);setParams(previous=>{const next=new URLSearchParams(previous);next.set('managedResource',result.identity);return next},{replace:true});
-   setItems(old=>[...old.filter(x=>x.resourceId!==result.identity),result.resource]);setMode(null);setTools([]);setMessage('已保存并读回正式记录。资源配置不会启动业务执行。');onChanged();
+   if(principal!==JSON.stringify(after.principal))throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
+   await applyReceipt(result,intent,assertCurrent);clearPending(marker);
+   setMessage('已保存并读回当前正式记录。资源配置不会启动业务执行。');
   }catch(reason){
    if(!view.current.active)return;
    const text=reason instanceof Error?reason.message:'RESOURCE_MANAGEMENT_UNAVAILABLE';setError(text);
-   if(text==='RESOURCE_DIRECTORY_IDENTITY_CHANGED'){setSelected(null);setItems([]);setAvailable(false);accessScope.current=null}
-   if(reason instanceof ManagementError&&reason.status>=400&&reason.status<500){if(marker){sessionStorage.removeItem(marker);sessionStorage.removeItem(marker+':access-intent')}accessIntent.current=null;setPendingKey(null)}
-  }finally{if(view.current.active)setBusy(false)}
+   if(text==='RESOURCE_DIRECTORY_IDENTITY_CHANGED'||text==='RESOURCE_POLICY_SERVICE_UNAVAILABLE'){setSelected(null);setItems([]);setAvailable(false);accessScope.current=null}
+   if(reason instanceof ManagementError&&reason.status>=400&&reason.status<500&&marker)clearPending(marker);
+  }finally{writeFlight.current=false;if(view.current.active)setBusy(false)}
  }
  async function recover(){
-  if(!pendingKey||busy)return;
-  const intent=accessIntent.current,assertCurrent=guard(intent?.identity);setBusy(true);
+  if(!pendingKey||busy||writeFlight.current)return;
+  const intent=commandIntent.current;
+  if(!intent){setError('原操作的核对依据尚未恢复；保留原命令，不重新提交。');return}
+  const assertCurrent=intentGuard(intent);writeFlight.current=true;setBusy(true);
   try{
-   assertCurrent();const session=await readWorkbenchSession();assertCurrent();const principal=JSON.stringify(session.principal);
-   if(pendingKey.startsWith('resource-access:')&&!intent)throw Error('RESOURCE_ACCESS_CONTEXT_CHANGED');
-   if(intent&&intent.principal!==principal)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
-   const result=await request<Receipt>(kind+'/commands/'+encodeURIComponent(pendingKey));assertCurrent();
-   const after=await readWorkbenchSession();assertCurrent();if(principal!==JSON.stringify(after.principal))throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
-   if(intent)verifyAccess(result,intent);
-   await read(principal,assertCurrent);assertCurrent();
-   setSelected(result.resource);setParams(previous=>{const next=new URLSearchParams(previous);next.set('managedResource',result.identity);return next},{replace:true});
-   const marker='resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind;
-   sessionStorage.removeItem(marker);sessionStorage.removeItem(marker+':access-intent');accessIntent.current=null;setPendingKey(null);setError('');setMode(null);setMessage('已读回原命令结果，没有再次提交。');onChanged();
+   assertCurrent();const session=await readWorkbenchSession();assertCurrent();
+   if(JSON.stringify(session.principal)!==intent.principal)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
+   const result=await request<ManagementReceipt>(kind+'/commands/'+encodeURIComponent(pendingKey));assertCurrent();
+   const after=await readWorkbenchSession();assertCurrent();
+   if(JSON.stringify(after.principal)!==intent.principal)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
+   await applyReceipt(result,intent,assertCurrent);
+   clearPending('resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind);
+   setError('');setMessage('已读回原操作及当前正式记录，没有再次提交。');
   }catch(reason){
    if(!view.current.active)return;
-   setSelected(null);if(reason instanceof Error&&reason.message==='RESOURCE_DIRECTORY_IDENTITY_CHANGED'){setItems([]);setAvailable(false);accessScope.current=null}
-   setError('尚未确认原命令结果。原记录保留，不自动重试；可稍后再次读取。');
-  }finally{if(view.current.active)setBusy(false)}
+   setSelected(null);
+   if(reason instanceof Error&&reason.message==='RESOURCE_DIRECTORY_IDENTITY_CHANGED'){setItems([]);setAvailable(false);accessScope.current=null}
+   setError('尚未确认原操作与当前访问范围。原记录保留，不自动重试；可稍后再次读取。');
+  }finally{writeFlight.current=false;if(view.current.active)setBusy(false)}
  }
  function save(){try{if(mode==='import'){const value=JSON.parse(manifest);void submit('import',{manifest:value},null);return}const extra=JSON.parse(advanced);if(!extra||typeof extra!=='object'||Array.isArray(extra))throw Error();const content:ResourceContent={...extra,description,capabilities:capabilities.split(/[、,，\n]/).map(v=>v.trim()).filter(Boolean),sideEffect:extra.sideEffect??'READ',...(kind==='skill'?{instructions}:{endpoint,secretReference:secretRef||null})};void submit(mode==='edit'?'edit':'create',{name,content},mode==='edit'?selected:null)}catch{setError('请输入有效的配置对象或导入清单。')}}
  const revision=selected?.revisions.find(r=>r.revisionId===(selected.currentDraftRevisionId??selected.publishedRevisionId)),savedSnapshot=selected?.discoverySnapshots.at(-1),snapshot=savedSnapshot?.revisionId===revision?.revisionId&&savedSnapshot?.revisionDigest===revision?.digest?savedSnapshot:undefined,currentHealth=selected?.healthObservations.filter(o=>o.revisionId===revision?.revisionId&&o.revisionDigest===revision?.digest).at(-1);
@@ -89,7 +141,7 @@ export function ResourceManagement({kind,onChanged,onDetailChange}:{kind:Kind;on
  return <section className={'resource-management'+(selected?' rd-detail-mode':'')} aria-label={kind==='skill'?'技能创建与配置':'MCP连接创建与配置'}><header hidden={!!selected}><div><h2>{kind==='skill'?'技能创建与配置':'MCP连接配置'}</h2><p>保存草稿、核验发布和实际使用分别记录，历史版本继续保留。</p></div><div className="rm-actions"><button disabled={busy||!!pendingKey} onClick={()=>form()}><NavigationIcon name="resource"/>{kind==='skill'?'新建Skill':'新建MCP连接'}</button><button disabled={busy||!!pendingKey} onClick={()=>{setMode('import');setSelected(null);setManifest('');setError('')}}>导入配置</button></div></header>
  {!selected&&requestedResource&&!mode&&<section aria-label="原资源访问恢复" className="rm-pending"><h3>原资源详情尚未恢复</h3><p>当前目录未返回这个链接对应的可管理资源，不能据此认定原资源已删除。</p><p>可核对本账号创建的原资源访问资格。符合当前策略范围时，会重新授权管理原资源并读取其版本；此请求不修改配置或启动执行。</p><button disabled={busy||!!pendingKey} onClick={()=>void submit('access',{identity:requestedResource},null)}>核对原资源访问资格</button></section>}
  {!selected&&<ResourceBatchImport kind={kind} onImported={()=>{void read();onChanged()}}/>}
- {message&&<p role="status" className="rm-success">{message}</p>}{error&&<div role="alert" className="rm-error"><p>{error.includes('CREDENTIAL_RESOLVER')?'凭据引用已保留，但当前未安装凭据解析能力，不能进行认证连接测试。':error==='RESOURCE_ACCESS_CONTEXT_CHANGED'?'账号、范围或原资源链接已变化；请核对原页面后再请求访问资格。':error==='RESOURCE_ACCESS_RECEIPT_MISMATCH'?'访问回执与原请求不一致；保留原命令，不恢复为可管理资源。':error==='RESOURCE_MANAGEMENT_NOT_FOUND'?'当前未取得这个原资源的管理资格；请核对原账号与链接。':error==='RESOURCE_POLICY_DISABLED'||error==='RESOURCE_POLICY_WORK_SCOPE_DENIED'?'当前策略未允许恢复管理资格；原资源与使用记录保留。':error.includes('CURRENT_OPERATION_TESTS_REQUIRED')?'当前准确版本的所有操作均需真实测试通过，才可验证后发布。':error.includes('STALE')?'配置已发生变化，请重新读取后核对。':error.includes('SECRET')||error.includes('CREDENTIALS_DENIED')?'配置不能包含明文凭据，请使用凭据引用。':error.includes('DESTINATION')?'当前只支持本机隔离连接，目标地址未获准。':error}</p></div>}{pendingKey&&<div className="rm-pending"><p>正在确认原命令结果，不会自动再次提交。</p><button disabled={busy} onClick={()=>void recover()}>读取原操作结果</button></div>}
+ {message&&<p role="status" className="rm-success">{message}</p>}{error&&<div role="alert" className="rm-error"><p>{error.includes('CREDENTIAL_RESOLVER')?'凭据引用已保留，但当前未安装凭据解析能力，不能进行认证连接测试。':error==='RESOURCE_ACCESS_CONTEXT_CHANGED'?'账号、范围或原资源链接已变化；请核对原页面后再请求访问资格。':error==='RESOURCE_ACCESS_RECEIPT_MISMATCH'?'访问回执与原请求不一致；保留原命令，不恢复为可管理资源。':error==='RESOURCE_MANAGEMENT_NOT_FOUND'?'当前未取得这个原资源的管理资格；请核对原账号与链接。':error==='RESOURCE_POLICY_DISABLED'||error==='RESOURCE_POLICY_WORK_SCOPE_DENIED'?'当前策略未允许恢复管理资格；原资源与使用记录保留。':error.includes('RESOURCE_POLICY_SERVICE_UNAVAILABLE')?'资源维护服务当前不可用，原配置保留；请稍后重新进入。':error.includes('RESOURCE_RESULT_NOT_CURRENTLY_READABLE')?'原操作已返回，但当前配置尚未获准读回；保留原操作记录，不重复提交。':error.includes('RESOURCE_COMMAND_RECEIPT_MISMATCH')?'操作回执与原请求不一致，保留原操作记录，请核对后再读取。':error.includes('CURRENT_OPERATION_TESTS_REQUIRED')?'当前准确版本的所有操作均需真实测试通过，才可验证后发布。':error.includes('STALE')?'配置已发生变化，请重新读取后核对。':error.includes('SECRET')||error.includes('CREDENTIALS_DENIED')?'配置不能包含明文凭据，请使用凭据引用。':error.includes('DESTINATION')?'当前只支持本机隔离连接，目标地址未获准。':error}</p></div>}{pendingKey&&<div className="rm-pending"><p>正在确认原命令结果，不会自动再次提交。</p><button disabled={busy} onClick={()=>void recover()}>读取原操作结果</button></div>}
  {mode!=='edit'&&editor}
 
  {!selected&&items.length>0&&<div className="rm-owned"><h3>本账号创建的配置</h3><div className="rm-resource-list">{items.map(item=><button key={item.resourceId} aria-pressed={false} onClick={()=>{setSelected(item);setMode(null);setTools([]);setError('');setParams(previous=>{const next=new URLSearchParams(previous);next.set('managedResource',item.resourceId);return next},{replace:true})}}><strong>{item.name}</strong><span>{stateNames[item.lifecycleState]??item.lifecycleState} · {item.revisions.length}个修订</span></button>)}</div></div>}

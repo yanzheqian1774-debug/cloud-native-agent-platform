@@ -64,6 +64,19 @@ def test_directory_filters_unreadable_inputs_and_paginates_only_readable_exact_v
     assert act(a, handler, {"query": "unreadable-other-name"})["items"] == []
 
 
+def test_exact_identity_drilldown_search_keeps_per_revision_read_authority(automation):
+    a = automation
+    handler = ResourceDirectory(a.services, WorkbenchCursorCodec(b"x" * 32))
+    known = a.refs["skill"].resource_id
+    assert act(a, handler, {"kind": "skill", "query": known})["items"] == []
+    a.run()
+    all_items = act(a, handler, {"kind": "skill"})["items"]
+    assert len(all_items) == 1
+    by_identity = act(a, handler, {"kind": "skill", "query": known})
+    assert by_identity["items"] == all_items
+    assert act(a, handler, {"query": "foreign-resource-identity"})["items"] == []
+
+
 def test_directory_cursor_cannot_cross_filters_or_subject_and_get_has_no_new_work(
     automation,
 ):

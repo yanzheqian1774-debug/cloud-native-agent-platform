@@ -87,3 +87,119 @@ must allow only the attributable new authorization records, never rewrite old
 records. Actual Skill/MCP management currently encounters an expired policy
 service credential/work scope; follow the existing operator recovery authority
 for a successor configuration before further real resource maintenance.
+
+## Resource maintenance through exact references — next G1 continuation
+
+2026-11-08, coordinator continuation under the user's whole-project authority.
+Keep 57 and 6f67 frozen; their independent acceptance remains coordinator-owned.
+Continue in one separate descendant worktree, one writer, no new package number.
+The actual accepted 4f1/576 platform now uses the formal generation12 service
+credential successor. Skill/MCP management GET and both original conversations
+read200. This is an operational prerequisite, not maintenance acceptance.
+
+Inspected existing management authorizer/owner/receipt, Skill operation testing,
+policy publication, Employee assembly/picker, dependency projection and resource
+execution readback. Existing owners already support draft/edit, bounded synthetic
+tests, policy publication and exact Employee member references. Remaining Console
+gaps include command recovery for ordinary maintenance actions (only access has
+complete saved intent), exact published-version handoff and resource/employee
+navigation. Resource/work use must continue through the existing read-only
+resource execution viewer, never the auto-continuation Plan entry merely to view.
+
+Affected components: ResourceManagement pending command/recovery, new private
+typed command-intent validation helper; exact published directory handoff;
+ResourceVersionImpact Employee drill-down; Employee member exact Skill/MCP links
+and a finite internal resource return link. Reuse current routes and receipts.
+Do not add endpoint/action/grant kinds, change owner or frozen Contract/lifecycle,
+add infrastructure, or expand MCP runtime invocation/authentication support.
+No G2 condition identified for this bounded Console continuation.
+
+Persist action/kind/exact target/expected version/principal and view binding
+before POST for every ordinary command. Validate the existing owner receipt and
+resource identity before displaying it. A lost/uncertain response only reads the
+original key; identity, navigation, reload and late responses cannot retarget or
+resubmit the command. Preserve older access recovery, and retain legacy unknown
+keys lacking provable intent without inventing a replacement request. Session
+loss withdraws old data. Viewing references/returning never grants, publishes,
+selects a newer version or dispatches execution.
+
+Exact published handoff reads that published revision/digest, even if a newer
+draft exists. Employee links use existing exact revision reads. Existing business
+question flow remains the main entry; maintenance and references are drill-down.
+Do not insert manual assembly or resource selection into the ordinary journey.
+
+Validation: existing resource access and maintenance browser regressions plus
+complete Skill draft/edit/test-fail/test-pass/publish/reference/read-only result
+journey, MCP health/discovery/selection/publication boundary, response loss and
+reload, mismatched receipts, actor/navigation races, old-version retention,
+revocation and 1280/390 layouts. Use existing real disposable owner/SQL tests for
+policy/test/publication/composition evidence; separate fixture checks from actual
+original-account writes/publications/reference records. Real accepted-source
+operations may proceed using existing owners under standing authorization;
+unaccepted new source/combinations stay offline. Preserve original sales/supplier
+objects and old unresolved grants, all historical UNKNOWN and provider budget.
+No new model call or business Run merely for acceptance/demo. Run lint/build,
+required normal commit hooks, exact composition freeze and same functionality
+inventory update, then continue remaining dependencies.
+
+Actual read preparation exposed a related existing directory defect: query only
+matches the display name, while Employee links pass a resource identity. An exact
+identity query therefore returns an empty list even with current READ. Extend the
+existing adapter's query match to name OR resource identity, after its unchanged
+per-version authority check. No route/schema/permission change or broader scan.
+Add disposable SQL regressions for exact identity, names, unreadable identities
+and preserved cursor binding. This is part of the same reference-path G1 scope.
+
+## Actual maintenance/reference and failure-recovery checkpoint
+
+On the existing accepted 4f1/576 installation with generation12, the original
+requester completed two labelled verification resources through the supported
+management HTTP owners. Skill: edit, one failing real isolated test, blocked
+publication, five corrected operation passes, independently checked saved report,
+checked publication, successor and blocked inheritance of old tests. MCP: an
+explicit ephemeral anonymous loopback fixture, actual initialize/discovery/tool
+selection, configuration publication, successor, blocked unresolved credential
+reference and rejected prior-revision discovery. This is not enterprise credential
+resolution or tools/call support; no business tool invocation is claimed.
+
+The existing product Employee creation form then saved one DRAFT via its real
+201 response, with the exact existing Agent plus these Skill/MCP published
+revision/digest pairs. Fresh exact owner GET and both resource impact projections
+matched the stored member references. No Employee approval/publication, business
+Run, Native startup or model call occurred. Verification resources were disabled
+again after the finite selection window. Original business objects were retained.
+Audit: all old rows in 40 core protected tables and six Employee tables preserved;
+24 successful resource commands, two separate server publication receipts, 50
+service-policy decisions and three user-delegated original reviewer decisions.
+122 new exact dynamic grants are attributable; they are not execution authority.
+The admin grant flow is disclosed separately, not labelled zero-Human business
+approval. Provider43 / unsettled16 / microUSD12669936 remain unchanged.
+
+Console recovery also distinguishes an expired resource-policy service from a
+still-current user session, so a management401 cannot log the user out. Existing
+session endpoint failure still withdraws the view. Same-resource command completion
+does not navigate again or overwrite a newer selected tab. Late different-view
+results remain fenced. Legacy pending access intent is readable; ordinary unknown
+keys without provable bindings are retained without a new POST.
+
+Existing legacy resource-projection tests retain their original separate legacy
+build profile. Trusted business/maintenance/Employee/result-return tests use the
+trusted build, with no test deletion or skip to mask profile differences. The old
+Employee test adapter now responds to the inherited relation read contracts, so
+unrelated malformed relation alerts cannot race Placement assertions. Fixture
+receipts mirror the real owner fields and resolve only the requested original key.
+Actual owner evidence, disposable SQL evidence, browser fixtures, installed source
+and unaccepted next source remain separate. Work execution references/results and
+original seven-standard sales closure are still pending independent acceptance
+and actual original-route completion.
+
+Final author frontend check: lint, separate compatible legacy-resource build on
+the existing live Console router, trusted production build, and all156 browser
+checks passed with zero skips/flakes/failures. The legacy resource views disable
+resource-directory/authoring flags; this does not disable their existing router.
+Disposable SQL owner/directory/reference suite14 passed, including failed-test
+repair, checked publication, an exact persisted Employee member and preserved
+old revision/consumer after a successor. Ruff check and703-file format check pass.
+Normal commit hooks/full suite and exact source/bundle freeze follow. This remains
+author evidence. No new source was installed, and no independent acceptance or
+actual complete seven-standard work/result closure is inferred.

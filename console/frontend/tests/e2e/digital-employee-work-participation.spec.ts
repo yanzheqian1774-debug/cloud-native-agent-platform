@@ -155,6 +155,13 @@ async function installAdapter(page: Page, options: AdapterOptions = {}) {
     if (path.endsWith("/employees") && route.request().method() === "GET") {
       return route.fulfill({ json: envelope({ items: [employeeSummary], nextCursor: "employee-page-2" }) });
     }
+    const relation = path.match(/\/employees\/([^/]+)\/revisions\/([^/]+)\/(history|instances)$/);
+    if (relation) {
+      const id=decodeURIComponent(relation[1]), revision=decodeURIComponent(relation[2]);
+      return route.fulfill({json:envelope({relation:relation[3]==="history"?"READ_EMPLOYEE_HISTORY":"READ_EMPLOYEE_INSTANCES",parent:{employeeDefinitionId:id,employeeDefinitionRevisionId:revision,employeeDefinitionDigest:employee.employeeDefinitionDigest},items:relation[3]==="history"?[{...employee,employeeDefinitionId:id,employeeDefinitionRevisionId:revision}]:[],nextCursor:null,visibility:"AUTHORIZED_ONLY",scanLimited:false,executionStarted:false})});
+    }
+    const assignments = path.match(/\/instances\/([^/]+)\/assignments$/);
+    if(assignments)return route.fulfill({json:envelope({relation:"READ_INSTANCE_ASSIGNMENTS",parent:{instanceId:decodeURIComponent(assignments[1])},items:[],nextCursor:null,visibility:"AUTHORIZED_ONLY",scanLimited:false,executionStarted:false})});
     if (path.includes("/employees/") && path.includes("/revisions/")) {
       const [, id = "", revision = ""] = path.match(/\/employees\/(.+)\/revisions\/(.+)$/) ?? [];
       if (options.onDefinition) return options.onDefinition(route, decodeURIComponent(id), decodeURIComponent(revision));

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import {safeResourceReturn} from "../resources/resourceJourneyLinks";
 import {
   DigitalEmployeeRequestError,
   employeeControlledState,
@@ -408,7 +409,7 @@ export function DigitalEmployeesPage() {
     : undefined;
 
   return <main className="px-page px-center-page employee-management">
-    <header className="px-page-title employee-page-title"><div><p>数字员工 <small>Digital Employee</small></p><h1>数字员工</h1><span>从员工集合选择一个角色，查看所选修订、装配与工作关系。</span></div>{mode === "employees" && <button className="px-primary-button" onClick={() => { setMode("create"); setMobileDetailOpen(false); updateUrl({ mode: "create", detail: "" }); }}>＋ 创建数字员工</button>}</header>
+    {safeResourceReturn(params.get("resourceBack"))&&<Link className="employee-resource-return" to={safeResourceReturn(params.get("resourceBack"))!}>← 返回资源维护</Link>}<header className="px-page-title employee-page-title"><div><p>数字员工 <small>Digital Employee</small></p><h1>数字员工</h1><span>从员工集合选择一个角色，查看所选修订、装配与工作关系。</span></div>{mode === "employees" && <button className="px-primary-button" onClick={() => { setMode("create"); setMobileDetailOpen(false); updateUrl({ mode: "create", detail: "" }); }}>＋ 创建数字员工</button>}</header>
     {mode === "employees" && <section className="employee-summary-strip" aria-label="当前加载范围"><span><strong>{new Set(items.map(item => item.employeeDefinitionId)).size}</strong> 个已加载员工</span><span><strong>{items.length}</strong> 个已加载修订</span><span><strong>{publishedRevisions}</strong> 个已加载的已发布修订</span><small>仅展示当前授权范围内的本批结果；不是全局统计</small></section>}
 
     {mode === "create" ? <><button type="button" className="employee-back-button" onClick={() => { setMode("employees"); updateUrl({ mode: "employees" }); }}>← 返回员工集合</button><EmployeeDefinitionAssembly agents={agents} hasMoreAgents={Boolean(agentNextCursor)} agentError={agentError ? controlledMessage(agentError) : undefined} onLoadMoreAgents={() => void loadMoreAgents()} onReadback={applyCommandReadback} /></> : <div className={`employee-object-center ${mobileDetailOpen ? "show-mobile-detail" : ""}`}>

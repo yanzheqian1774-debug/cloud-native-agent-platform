@@ -10,6 +10,8 @@ import {
 } from "../api/digitalEmployees";
 
 type AgentReadState = "LOADING" | "READY" | "AUTHENTICATION_REQUIRED" | "DENIED" | "UNAVAILABLE";
+import {exactSkillMcpHref} from "../resources/resourceJourneyLinks";
+
 type ProfileSection = "overview" | "capabilities";
 
 export function EmployeeProfileLoader({ item, section }: { item: EmployeeDefinition; section: ProfileSection }) {
@@ -72,6 +74,7 @@ const lifecycleLabel: Record<EmployeeLifecycleState, string> = {
 };
 
 function exactCatalogLink(member: EmployeeMember) {
+  if(member.kind === "SKILL" || member.kind === "MCP") return exactSkillMcpHref(member.kind === "SKILL" ? "skill" : "mcp",member.resourceId,member.revisionId,member.digest);
   return `/catalog?${new URLSearchParams({ kind: member.kind, query: member.resourceId })}`;
 }
 
