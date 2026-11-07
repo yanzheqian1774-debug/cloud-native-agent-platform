@@ -2017,6 +2017,11 @@ def _configure_workbench() -> None:
             digital_employees=_digital_employee_assembly.repository,
             workflow_database_url=workflow_database_url,
             workflows=workflow_service,
+            model_repository=(
+                _draft_assistance_composition.model_repository
+                if _draft_assistance_composition is not None
+                else None
+            ),
             draft_assistance=(
                 _draft_assistance_composition.service
                 if _draft_assistance_composition is not None

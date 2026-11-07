@@ -297,3 +297,62 @@ the exact current Knowledge revision and digest. A real owner test with an
 explicit fake-index fixture accepts the current snapshot, rejects reusing that
 old snapshot after successor publication, and proves publishing never starts
 indexing. This is not a real Qdrant retrieval acceptance claim.
+
+
+## Current-account Model read continuity — pre-code G1, 2026-11-08
+
+Continue the same user-authorized delivery inventory from frozen d7a769fe.
+This slice replaces the trusted-profile Model static page with a bounded real
+current-account Model catalogue and exact revision detail. No Model lifecycle,
+provider invocation, price measurement, shared tenant/authentication contract,
+CRD, database or persistent infrastructure is changed. Original Model owner
+semantics and caller-transaction PostgreSQL readers already exist. This is G1,
+not G2. Inspecting metadata grants no binding/invocation/maintenance authority.
+
+Interfaces: optional existing Model repository dependency in Workbench bootstrap,
+verified same database fingerprint before authority startup. Existing draft
+assistance composition supplies its Model repository; absent owner means no
+Model routes, with the original UI profile and all existing routes preserved.
+GET /api/workbench/v1/model-directory requires MODEL_GOVERNANCE READ_MODEL
+model:catalog AND each surfaced exact revision's READ_MODEL. Signed keyset
+cursor binds principal/scope/filter/page size. GET /model-directory/{modelId}/
+revisions/{revisionId}?digest=... requires that exact immutable digest grant
+before owner lookup; no latest substitution. Read-only target lookup accepts
+only the existing READ_MODEL targets, not creator or maintenance grants.
+
+Return only safe model revision declarations and exact provider/endpoint/profile
+identities, current-revision boolean and original owner lifecycle/high-water.
+Never serialize endpoint addresses, secret references or provider configuration.
+Zero lifecycle facts means NOT_RECORDED, never inferred publication/availability.
+Catalogue permits no inference about hidden versions, complete totals or health.
+Bound reads and fail closed on storage corruption or scan limits.
+
+Frontend reuses existing resource page framing. Search/pagination and exact
+revision URL are readable without copied identifiers. A fresh session before and
+after each request must match principal/scope/session expiry and response scope.
+Focus/session-expiry/navigation/filter changes withdraw prior data and invalidate
+late responses, including load-more. Detail returns to the same filtered list;
+no arbitrary return URL, business execution, automatic indexing, or new model
+calls. Source and state visible; provider latency/price/usage remain unmeasured.
+Legacy profile keeps original ModelCenterPage.
+
+Validation: disposable PostgreSQL owner tests with exact grants, hidden/other
+scope rows, history/current successor, absent lifecycle, wrong digest denial,
+permission loss, cursor actor/filter/page-size misuse, no writes and no secret
+projection. BFF boundary regression and bootstrap optional/same-database checks.
+Browser complete list→exact detail→return/search/pagination journey at 1280 and
+390, lost access, changed identity, late responses and finite expiry; preserve
+original resource/employee/sales tests. Required lint/build and repository full
+checks; keep frozen d7 and predecessors untouched. This is author implementation
+verification, not independent acceptance or actual installed platform delivery.
+Actual install still needs accepted exact composition through original operator.
+
+
+### Model read author checkpoint
+
+72 targeted disposable SQL/BFF/bootstrap/Model authorization and preserved
+Knowledge/Agent/directory cases passed. The current-account Model UI retains
+Product Shell and existing resource styles; no dependencies, migrations or
+provider calls were added. Author browser evidence is separately frozen with
+its source hashes and composition after final verification. Real IAM, normal
+operator installation and full original-business acceptance remain distinct.

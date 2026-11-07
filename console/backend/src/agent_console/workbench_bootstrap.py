@@ -88,6 +88,7 @@ def build_workbench_composition(
     workflows: WorkflowDefinitionService | None = None,
     draft_assistance: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
+    model_repository=None,
     planning_v2_enabled: bool = False,
     prepared_execution_coordinator=None,
     prepared_resource_services=None,
@@ -111,6 +112,12 @@ def build_workbench_composition(
     if authority_database != execution_database_fingerprint(owner_database_url):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
     if authority_database != execution_database_fingerprint(agent_database_url):
+        raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
+    if (
+        model_repository is not None
+        and authority_database
+        != execution_database_fingerprint(model_repository.pool.conninfo)
+    ):
         raise AuthorityError("OWNER_TRANSACTION_UNAVAILABLE")
     workflow_enabled = bool(workflow_database_url or workflows)
     if workflow_enabled and not (workflow_database_url and workflows):
@@ -216,12 +223,18 @@ def build_workbench_composition(
         )
     from .resource_definition_management import DefinitionTargets
     from .resource_management import ManagementTargets
+    from .workbench_model_directory import ModelReadTargets
 
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
         additional=(ManagementTargets(), DefinitionTargets())
+        + (
+            (ModelReadTargets(model_repository),)
+            if model_repository is not None
+            else ()
+        )
         + ontology_targets
         + ((PreparedResourceTargets(),) if prepared_resource_services else ())
         + (
@@ -513,6 +526,8 @@ def build_workbench_composition(
             sales_v2_candidate=sales_v2_candidate,
         )
 
+        from .workbench_model_directory import operations as model_directory_operations
+
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -538,6 +553,14 @@ def build_workbench_composition(
             ),
             grant_administration=foundation.grants,
             operations=(
+                *(
+                    model_directory_operations(
+                        model_repository,
+                        WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    )
+                    if model_repository is not None
+                    else ()
+                ),
                 *sales_supplement_routes,
                 *resource_automation_routes,
                 *continuation_routes,

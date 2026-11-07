@@ -156,8 +156,9 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     )
 
 
+@pytest.mark.parametrize("model_enabled", [False, True])
 def test_composition_keeps_existing_business_routes_without_optional_workflow(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, model_enabled
 ) -> None:
     captured = {}
     foundation = SimpleNamespace(
@@ -195,11 +196,23 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
         agent_definitions=SimpleNamespace(),
         employee_definitions=SimpleNamespace(),
         digital_employees=SimpleNamespace(),
+        model_repository=(
+            SimpleNamespace(pool=SimpleNamespace(conninfo=database_url))
+            if model_enabled
+            else None
+        ),
     )
 
     operations = captured["operations"]
     assert captured["grant_administration"] is foundation.grants
-    assert len(operations) == 27
+    assert len(operations) == (29 if model_enabled else 27)
+    assert (
+        any(item.name == "LIST_MODEL_DIRECTORY" for item in operations) is model_enabled
+    )
+    assert (
+        any(item.name == "READ_MODEL_DIRECTORY_REVISION" for item in operations)
+        is model_enabled
+    )
     assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
     assert any(item.name == "LIST_EMPLOYEES" for item in operations)
@@ -367,3 +380,29 @@ def test_composition_rejects_workflow_database_outside_authorization_transaction
 
     assert not built
     assert "secret" not in str(raised.value)
+
+
+def test_model_reads_reject_repository_outside_caller_transaction(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        workbench_bootstrap,
+        "build_authority_foundation",
+        lambda *_: pytest.fail("no authority startup"),
+    )
+    database_url = "postgresql://db.example/platform"
+    with pytest.raises(AuthorityError, match="OWNER_TRANSACTION_UNAVAILABLE"):
+        workbench_bootstrap.build_workbench_composition(
+            runtime_configuration_path=runtime_file(tmp_path, database_url),
+            allowed_host="console.example",
+            allowed_origin="https://console.example",
+            owner_database_url=database_url,
+            agent_database_url=database_url,
+            business_problems=SimpleNamespace(),
+            agent_definitions=SimpleNamespace(),
+            employee_definitions=SimpleNamespace(),
+            digital_employees=SimpleNamespace(),
+            model_repository=SimpleNamespace(
+                pool=SimpleNamespace(conninfo="postgresql://db.example/other")
+            ),
+        )
