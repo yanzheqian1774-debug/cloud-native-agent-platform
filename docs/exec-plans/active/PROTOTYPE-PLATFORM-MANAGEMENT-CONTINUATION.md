@@ -356,3 +356,31 @@ Product Shell and existing resource styles; no dependencies, migrations or
 provider calls were added. Author browser evidence is separately frozen with
 its source hashes and composition after final verification. Real IAM, normal
 operator installation and full original-business acceptance remain distinct.
+
+
+## Saved result exact source navigation — bounded G1 compatibility fix
+
+Actual original-account readback, 2026-11-08, recovered both saved Runs, ten
+artifact bodies and exact source READs. The installed result source link still
+uses /knowledge?resourceId=...&revisionId=... and reaches unavailable legacy
+/internal Knowledge endpoints. Frozen43 additionally uses the trusted Knowledge
+route, whose exact selection contract is selected/resourceRevision/resourceDigest.
+This deterministic navigation mismatch affects the same requested original
+sales/supplier result-to-source-to-conversation path. Keep43 and all predecessors
+frozen while authoring this isolated descendant; no installed change.
+
+Reuse the existing exactDefinitionHref and Knowledge directory reader. In the
+trusted profile, both result-summary and artifact-dialog source links pin the
+saved source identity/revision/digest, execution digest and finite original
+conversation. Retain original legacy-profile URL compatibility. Missing or
+invalid exact source metadata produces no trusted source link. This changes no
+owner, endpoint, grant, source data, publication, lifecycle or execution behavior.
+No new dependency, database or G2 change is needed. Existing independent source
+and execution READ checks remain in the destination.
+
+Verify sales v1, supplier and sales v2 source clicks, exact source and original
+conversation/result/draft return, dialog source link and invalid-source guard.
+Preserve legacy link shape. Reuse current page layout. Run frontend lint and both
+build profiles, complete inherited browser regressions and normal repository
+checks. Real installed evidence remains the old source-navigation failure; an
+author-verified descendant is not installation or actual UI acceptance.

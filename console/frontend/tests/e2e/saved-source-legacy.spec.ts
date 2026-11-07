@@ -1,0 +1,3 @@
+import {expect,test} from '@playwright/test';
+import {fixture,open} from '../helpers/savedSourceFixture';
+test('legacy saved source link keeps original resourceId and revisionId route',async({page})=>{const {state,source}=await fixture(page);await open(page);const href=new URL((await page.getByRole('link',{name:'查看来源版本',exact:true}).getAttribute('href'))!,page.url());expect(href.pathname).toBe('/knowledge');expect(href.searchParams.get('resourceId')).toBe(source.resource_id);expect(href.searchParams.get('revisionId')).toBe(source.revision_id);expect(href.searchParams.has('selected')).toBe(false);expect(state.writes).toEqual([])});
