@@ -1,0 +1,1371 @@
+{
+  "businessConclusion": "UNDETERMINED",
+  "contractDigest": "b65eba5a15f1024efd3b80f3875e89a9dbfa39c659064f9825b276d4a0724eb2",
+  "currencyComparisons": [
+    {
+      "cost": {
+        "baseline": "600.00",
+        "current": "560.00",
+        "delta": "-40.00",
+        "rate": {
+          "status": "DEFINED",
+          "value": "-0.066666666666666666666666666666666666667"
+        }
+      },
+      "currency": "CNY",
+      "grossProfit": {
+        "baseline": "400.00",
+        "current": "240.00",
+        "delta": "-160.00",
+        "rate": {
+          "status": "DEFINED",
+          "value": "-0.4"
+        }
+      },
+      "netSales": {
+        "baseline": "1000.00",
+        "current": "800.00",
+        "delta": "-200.00",
+        "rate": {
+          "status": "DEFINED",
+          "value": "-0.2"
+        }
+      },
+      "sourceRows": [
+        {
+          "period": "2026-08",
+          "rowIds": [
+            "S01",
+            "S02"
+          ]
+        },
+        {
+          "period": "2026-09",
+          "rowIds": [
+            "S03",
+            "S04",
+            "S05"
+          ]
+        }
+      ]
+    },
+    {
+      "cost": {
+        "baseline": "60.00",
+        "current": "78.00",
+        "delta": "18.00",
+        "rate": {
+          "status": "DEFINED",
+          "value": "0.3"
+        }
+      },
+      "currency": "EUR",
+      "grossProfit": {
+        "baseline": "40.00",
+        "current": "42.00",
+        "delta": "2.00",
+        "rate": {
+          "status": "DEFINED",
+          "value": "0.05"
+        }
+      },
+      "netSales": {
+        "baseline": "100.00",
+        "current": "120.00",
+        "delta": "20.00",
+        "rate": {
+          "status": "DEFINED",
+          "value": "0.2"
+        }
+      },
+      "sourceRows": [
+        {
+          "period": "2026-08",
+          "rowIds": [
+            "S06"
+          ]
+        },
+        {
+          "period": "2026-09",
+          "rowIds": [
+            "S07"
+          ]
+        }
+      ]
+    },
+    {
+      "cost": {
+        "baseline": "0.00",
+        "current": "60.00",
+        "delta": "60.00",
+        "rate": {
+          "status": "BASELINE_ZERO"
+        }
+      },
+      "currency": "JPY",
+      "grossProfit": {
+        "baseline": "0.00",
+        "current": "40.00",
+        "delta": "40.00",
+        "rate": {
+          "status": "BASELINE_ZERO"
+        }
+      },
+      "netSales": {
+        "baseline": "0.00",
+        "current": "100.00",
+        "delta": "100.00",
+        "rate": {
+          "status": "BASELINE_ZERO"
+        }
+      },
+      "sourceRows": [
+        {
+          "period": "2026-08",
+          "rowIds": []
+        },
+        {
+          "period": "2026-09",
+          "rowIds": [
+            "S08"
+          ]
+        }
+      ]
+    }
+  ],
+  "dimensions": {
+    "channel": [
+      {
+        "cost": {
+          "baseline": "240.00",
+          "current": "280.00",
+          "delta": "40.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.16666666666666666666666666666666666667"
+          }
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "baseline": "160.00",
+          "current": "120.00",
+          "delta": "-40.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.25"
+          }
+        },
+        "netSales": {
+          "baseline": "400.00",
+          "current": "400.00",
+          "delta": "0.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S02"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S04",
+              "S05"
+            ]
+          }
+        ],
+        "value": "Direct",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "360.00",
+          "current": "280.00",
+          "delta": "-80.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.22222222222222222222222222222222222222"
+          }
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "baseline": "240.00",
+          "current": "120.00",
+          "delta": "-120.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.5"
+          }
+        },
+        "netSales": {
+          "baseline": "600.00",
+          "current": "400.00",
+          "delta": "-200.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.33333333333333333333333333333333333333"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S01"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S03"
+            ]
+          }
+        ],
+        "value": "Online",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "60.00",
+          "current": "78.00",
+          "delta": "18.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.3"
+          }
+        },
+        "currency": "EUR",
+        "grossProfit": {
+          "baseline": "40.00",
+          "current": "42.00",
+          "delta": "2.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.05"
+          }
+        },
+        "netSales": {
+          "baseline": "100.00",
+          "current": "120.00",
+          "delta": "20.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.2"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S06"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S07"
+            ]
+          }
+        ],
+        "value": "Partner",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "0.00",
+          "current": "60.00",
+          "delta": "60.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "currency": "JPY",
+        "grossProfit": {
+          "baseline": "0.00",
+          "current": "40.00",
+          "delta": "40.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "netSales": {
+          "baseline": "0.00",
+          "current": "100.00",
+          "delta": "100.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": []
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S08"
+            ]
+          }
+        ],
+        "value": "Partner",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      }
+    ],
+    "product": [
+      {
+        "cost": {
+          "baseline": "360.00",
+          "current": "280.00",
+          "delta": "-80.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.22222222222222222222222222222222222222"
+          }
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "baseline": "240.00",
+          "current": "120.00",
+          "delta": "-120.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.5"
+          }
+        },
+        "netSales": {
+          "baseline": "600.00",
+          "current": "400.00",
+          "delta": "-200.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.33333333333333333333333333333333333333"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S01"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S03"
+            ]
+          }
+        ],
+        "value": "A",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "240.00",
+          "current": "280.00",
+          "delta": "40.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.16666666666666666666666666666666666667"
+          }
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "baseline": "160.00",
+          "current": "120.00",
+          "delta": "-40.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.25"
+          }
+        },
+        "netSales": {
+          "baseline": "400.00",
+          "current": "400.00",
+          "delta": "0.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S02"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S04",
+              "S05"
+            ]
+          }
+        ],
+        "value": "B",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "60.00",
+          "current": "78.00",
+          "delta": "18.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.3"
+          }
+        },
+        "currency": "EUR",
+        "grossProfit": {
+          "baseline": "40.00",
+          "current": "42.00",
+          "delta": "2.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.05"
+          }
+        },
+        "netSales": {
+          "baseline": "100.00",
+          "current": "120.00",
+          "delta": "20.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.2"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S06"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S07"
+            ]
+          }
+        ],
+        "value": "C",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "0.00",
+          "current": "60.00",
+          "delta": "60.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "currency": "JPY",
+        "grossProfit": {
+          "baseline": "0.00",
+          "current": "40.00",
+          "delta": "40.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "netSales": {
+          "baseline": "0.00",
+          "current": "100.00",
+          "delta": "100.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": []
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S08"
+            ]
+          }
+        ],
+        "value": "D",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      }
+    ],
+    "region": [
+      {
+        "cost": {
+          "baseline": "360.00",
+          "current": "280.00",
+          "delta": "-80.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.22222222222222222222222222222222222222"
+          }
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "baseline": "240.00",
+          "current": "120.00",
+          "delta": "-120.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.5"
+          }
+        },
+        "netSales": {
+          "baseline": "600.00",
+          "current": "400.00",
+          "delta": "-200.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.33333333333333333333333333333333333333"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S01"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S03"
+            ]
+          }
+        ],
+        "value": "North",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "240.00",
+          "current": "280.00",
+          "delta": "40.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.16666666666666666666666666666666666667"
+          }
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "baseline": "160.00",
+          "current": "120.00",
+          "delta": "-40.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "-0.25"
+          }
+        },
+        "netSales": {
+          "baseline": "400.00",
+          "current": "400.00",
+          "delta": "0.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S02"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S04",
+              "S05"
+            ]
+          }
+        ],
+        "value": "South",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "60.00",
+          "current": "78.00",
+          "delta": "18.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.3"
+          }
+        },
+        "currency": "EUR",
+        "grossProfit": {
+          "baseline": "40.00",
+          "current": "42.00",
+          "delta": "2.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.05"
+          }
+        },
+        "netSales": {
+          "baseline": "100.00",
+          "current": "120.00",
+          "delta": "20.00",
+          "rate": {
+            "status": "DEFINED",
+            "value": "0.2"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": [
+              "S06"
+            ]
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S07"
+            ]
+          }
+        ],
+        "value": "Europe",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      },
+      {
+        "cost": {
+          "baseline": "0.00",
+          "current": "60.00",
+          "delta": "60.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "currency": "JPY",
+        "grossProfit": {
+          "baseline": "0.00",
+          "current": "40.00",
+          "delta": "40.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "netSales": {
+          "baseline": "0.00",
+          "current": "100.00",
+          "delta": "100.00",
+          "rate": {
+            "status": "BASELINE_ZERO"
+          }
+        },
+        "sourceRows": [
+          {
+            "period": "2026-08",
+            "rowIds": []
+          },
+          {
+            "period": "2026-09",
+            "rowIds": [
+              "S08"
+            ]
+          }
+        ],
+        "value": "Japan",
+        "valueStatus": "PROVIDED_UNVERIFIED"
+      }
+    ]
+  },
+  "excludedRows": [
+    {
+      "rawValues": {
+        "channel": "Online",
+        "cost": "100",
+        "currency": "CNY",
+        "kind": "SALE",
+        "netSales": "9999",
+        "period": "2026-09",
+        "product": "A",
+        "region": "North",
+        "rowId": "S09",
+        "status": "CANCELLED"
+      },
+      "reason": "CANCELLED",
+      "rowId": "S09",
+      "sourceLine": 10
+    }
+  ],
+  "grossProfitDefinition": "NET_SALES_MINUS_SIGNED_COST",
+  "inputIssues": [],
+  "limitations": [
+    "SYNTHETIC_ONLY",
+    "NO_CROSS_CURRENCY_SUM",
+    "DIMENSION_DECOMPOSITIONS_NOT_ADDITIVE_TO_EACH_OTHER",
+    "SOURCE_LABELS_AND_CURRENCY_CODES_NOT_CANONICALLY_VERIFIED",
+    "CANCELLED_AMOUNTS_EXCLUDED_NOT_FINANCIALLY_VALIDATED",
+    "OBSERVATIONAL_NOT_CAUSAL",
+    "NO_SALES_IMPROVEMENT_PROVEN"
+  ],
+  "metric": "RECOGNIZED_NET_SALES_EXCLUDING_TAX",
+  "operation": "RENDER_REPORT",
+  "periods": [
+    "2026-08",
+    "2026-09"
+  ],
+  "reconciliations": {
+    "channel": [
+      {
+        "cost": {
+          "currencyDelta": "-40.00",
+          "matches": true,
+          "sumGroupDelta": "-40.00"
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "currencyDelta": "-160.00",
+          "matches": true,
+          "sumGroupDelta": "-160.00"
+        },
+        "groupCount": 2,
+        "netSales": {
+          "currencyDelta": "-200.00",
+          "matches": true,
+          "sumGroupDelta": "-200.00"
+        }
+      },
+      {
+        "cost": {
+          "currencyDelta": "18.00",
+          "matches": true,
+          "sumGroupDelta": "18.00"
+        },
+        "currency": "EUR",
+        "grossProfit": {
+          "currencyDelta": "2.00",
+          "matches": true,
+          "sumGroupDelta": "2.00"
+        },
+        "groupCount": 1,
+        "netSales": {
+          "currencyDelta": "20.00",
+          "matches": true,
+          "sumGroupDelta": "20.00"
+        }
+      },
+      {
+        "cost": {
+          "currencyDelta": "60.00",
+          "matches": true,
+          "sumGroupDelta": "60.00"
+        },
+        "currency": "JPY",
+        "grossProfit": {
+          "currencyDelta": "40.00",
+          "matches": true,
+          "sumGroupDelta": "40.00"
+        },
+        "groupCount": 1,
+        "netSales": {
+          "currencyDelta": "100.00",
+          "matches": true,
+          "sumGroupDelta": "100.00"
+        }
+      }
+    ],
+    "product": [
+      {
+        "cost": {
+          "currencyDelta": "-40.00",
+          "matches": true,
+          "sumGroupDelta": "-40.00"
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "currencyDelta": "-160.00",
+          "matches": true,
+          "sumGroupDelta": "-160.00"
+        },
+        "groupCount": 2,
+        "netSales": {
+          "currencyDelta": "-200.00",
+          "matches": true,
+          "sumGroupDelta": "-200.00"
+        }
+      },
+      {
+        "cost": {
+          "currencyDelta": "18.00",
+          "matches": true,
+          "sumGroupDelta": "18.00"
+        },
+        "currency": "EUR",
+        "grossProfit": {
+          "currencyDelta": "2.00",
+          "matches": true,
+          "sumGroupDelta": "2.00"
+        },
+        "groupCount": 1,
+        "netSales": {
+          "currencyDelta": "20.00",
+          "matches": true,
+          "sumGroupDelta": "20.00"
+        }
+      },
+      {
+        "cost": {
+          "currencyDelta": "60.00",
+          "matches": true,
+          "sumGroupDelta": "60.00"
+        },
+        "currency": "JPY",
+        "grossProfit": {
+          "currencyDelta": "40.00",
+          "matches": true,
+          "sumGroupDelta": "40.00"
+        },
+        "groupCount": 1,
+        "netSales": {
+          "currencyDelta": "100.00",
+          "matches": true,
+          "sumGroupDelta": "100.00"
+        }
+      }
+    ],
+    "region": [
+      {
+        "cost": {
+          "currencyDelta": "-40.00",
+          "matches": true,
+          "sumGroupDelta": "-40.00"
+        },
+        "currency": "CNY",
+        "grossProfit": {
+          "currencyDelta": "-160.00",
+          "matches": true,
+          "sumGroupDelta": "-160.00"
+        },
+        "groupCount": 2,
+        "netSales": {
+          "currencyDelta": "-200.00",
+          "matches": true,
+          "sumGroupDelta": "-200.00"
+        }
+      },
+      {
+        "cost": {
+          "currencyDelta": "18.00",
+          "matches": true,
+          "sumGroupDelta": "18.00"
+        },
+        "currency": "EUR",
+        "grossProfit": {
+          "currencyDelta": "2.00",
+          "matches": true,
+          "sumGroupDelta": "2.00"
+        },
+        "groupCount": 1,
+        "netSales": {
+          "currencyDelta": "20.00",
+          "matches": true,
+          "sumGroupDelta": "20.00"
+        }
+      },
+      {
+        "cost": {
+          "currencyDelta": "60.00",
+          "matches": true,
+          "sumGroupDelta": "60.00"
+        },
+        "currency": "JPY",
+        "grossProfit": {
+          "currencyDelta": "40.00",
+          "matches": true,
+          "sumGroupDelta": "40.00"
+        },
+        "groupCount": 1,
+        "netSales": {
+          "currencyDelta": "100.00",
+          "matches": true,
+          "sumGroupDelta": "100.00"
+        }
+      }
+    ]
+  },
+  "rowContributions": [
+    {
+      "changeSign": -1,
+      "cost": "360.00",
+      "currency": "CNY",
+      "deltaContributions": {
+        "cost": "-360.00",
+        "grossProfit": "-240.00",
+        "netSales": "-600.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Online",
+          "sourceValueState": "PRESENT",
+          "value": "Online",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "A",
+          "sourceValueState": "PRESENT",
+          "value": "A",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "North",
+          "sourceValueState": "PRESENT",
+          "value": "North",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "240.00",
+      "kind": "SALE",
+      "netSales": "600.00",
+      "period": "2026-08",
+      "periodRole": "BASELINE",
+      "rowId": "S01",
+      "sourceLine": 2
+    },
+    {
+      "changeSign": -1,
+      "cost": "240.00",
+      "currency": "CNY",
+      "deltaContributions": {
+        "cost": "-240.00",
+        "grossProfit": "-160.00",
+        "netSales": "-400.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Direct",
+          "sourceValueState": "PRESENT",
+          "value": "Direct",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "B",
+          "sourceValueState": "PRESENT",
+          "value": "B",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "South",
+          "sourceValueState": "PRESENT",
+          "value": "South",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "160.00",
+      "kind": "SALE",
+      "netSales": "400.00",
+      "period": "2026-08",
+      "periodRole": "BASELINE",
+      "rowId": "S02",
+      "sourceLine": 3
+    },
+    {
+      "changeSign": 1,
+      "cost": "280.00",
+      "currency": "CNY",
+      "deltaContributions": {
+        "cost": "280.00",
+        "grossProfit": "120.00",
+        "netSales": "400.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Online",
+          "sourceValueState": "PRESENT",
+          "value": "Online",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "A",
+          "sourceValueState": "PRESENT",
+          "value": "A",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "North",
+          "sourceValueState": "PRESENT",
+          "value": "North",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "120.00",
+      "kind": "SALE",
+      "netSales": "400.00",
+      "period": "2026-09",
+      "periodRole": "CURRENT",
+      "rowId": "S03",
+      "sourceLine": 4
+    },
+    {
+      "changeSign": 1,
+      "cost": "310.00",
+      "currency": "CNY",
+      "deltaContributions": {
+        "cost": "310.00",
+        "grossProfit": "140.00",
+        "netSales": "450.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Direct",
+          "sourceValueState": "PRESENT",
+          "value": "Direct",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "B",
+          "sourceValueState": "PRESENT",
+          "value": "B",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "South",
+          "sourceValueState": "PRESENT",
+          "value": "South",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "140.00",
+      "kind": "SALE",
+      "netSales": "450.00",
+      "period": "2026-09",
+      "periodRole": "CURRENT",
+      "rowId": "S04",
+      "sourceLine": 5
+    },
+    {
+      "changeSign": 1,
+      "cost": "-30.00",
+      "currency": "CNY",
+      "deltaContributions": {
+        "cost": "-30.00",
+        "grossProfit": "-20.00",
+        "netSales": "-50.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Direct",
+          "sourceValueState": "PRESENT",
+          "value": "Direct",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "B",
+          "sourceValueState": "PRESENT",
+          "value": "B",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "South",
+          "sourceValueState": "PRESENT",
+          "value": "South",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "-20.00",
+      "kind": "RETURN",
+      "netSales": "-50.00",
+      "period": "2026-09",
+      "periodRole": "CURRENT",
+      "rowId": "S05",
+      "sourceLine": 6
+    },
+    {
+      "changeSign": -1,
+      "cost": "60.00",
+      "currency": "EUR",
+      "deltaContributions": {
+        "cost": "-60.00",
+        "grossProfit": "-40.00",
+        "netSales": "-100.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Partner",
+          "sourceValueState": "PRESENT",
+          "value": "Partner",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "C",
+          "sourceValueState": "PRESENT",
+          "value": "C",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "Europe",
+          "sourceValueState": "PRESENT",
+          "value": "Europe",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "40.00",
+      "kind": "SALE",
+      "netSales": "100.00",
+      "period": "2026-08",
+      "periodRole": "BASELINE",
+      "rowId": "S06",
+      "sourceLine": 7
+    },
+    {
+      "changeSign": 1,
+      "cost": "78.00",
+      "currency": "EUR",
+      "deltaContributions": {
+        "cost": "78.00",
+        "grossProfit": "42.00",
+        "netSales": "120.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Partner",
+          "sourceValueState": "PRESENT",
+          "value": "Partner",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "C",
+          "sourceValueState": "PRESENT",
+          "value": "C",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "Europe",
+          "sourceValueState": "PRESENT",
+          "value": "Europe",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "42.00",
+      "kind": "SALE",
+      "netSales": "120.00",
+      "period": "2026-09",
+      "periodRole": "CURRENT",
+      "rowId": "S07",
+      "sourceLine": 8
+    },
+    {
+      "changeSign": 1,
+      "cost": "60.00",
+      "currency": "JPY",
+      "deltaContributions": {
+        "cost": "60.00",
+        "grossProfit": "40.00",
+        "netSales": "100.00"
+      },
+      "dimensions": {
+        "channel": {
+          "rawValue": "Partner",
+          "sourceValueState": "PRESENT",
+          "value": "Partner",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "product": {
+          "rawValue": "D",
+          "sourceValueState": "PRESENT",
+          "value": "D",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        },
+        "region": {
+          "rawValue": "Japan",
+          "sourceValueState": "PRESENT",
+          "value": "Japan",
+          "valueStatus": "PROVIDED_UNVERIFIED"
+        }
+      },
+      "grossProfit": "40.00",
+      "kind": "SALE",
+      "netSales": "100.00",
+      "period": "2026-09",
+      "periodRole": "CURRENT",
+      "rowId": "S08",
+      "sourceLine": 9
+    }
+  ],
+  "schemaVersion": "sales-diagnostic-output.v2",
+  "source": {
+    "metric": "RECOGNIZED_NET_SALES_EXCLUDING_TAX",
+    "periods": [
+      "2026-08",
+      "2026-09"
+    ],
+    "provenance": "MANUALLY_CONSTRUCTED_SYNTHETIC_NOT_ENTERPRISE_DATA",
+    "schemaVersion": "sales-diagnostic-source.v1",
+    "snapshot": {
+      "columnMapping": {
+        "channel": "channel",
+        "cost": "cost",
+        "currency": "currency",
+        "kind": "kind",
+        "netSales": "netSales",
+        "period": "period",
+        "product": "product",
+        "region": "region",
+        "rowId": "rowId",
+        "status": "status"
+      },
+      "format": "CSV_UTF8",
+      "rows": [
+        {
+          "sourceLine": 2,
+          "values": {
+            "channel": "Online",
+            "cost": "360",
+            "currency": "CNY",
+            "kind": "SALE",
+            "netSales": "600",
+            "period": "2026-08",
+            "product": "A",
+            "region": "North",
+            "rowId": "S01",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 3,
+          "values": {
+            "channel": "Direct",
+            "cost": "240",
+            "currency": "CNY",
+            "kind": "SALE",
+            "netSales": "400",
+            "period": "2026-08",
+            "product": "B",
+            "region": "South",
+            "rowId": "S02",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 4,
+          "values": {
+            "channel": "Online",
+            "cost": "280",
+            "currency": "CNY",
+            "kind": "SALE",
+            "netSales": "400",
+            "period": "2026-09",
+            "product": "A",
+            "region": "North",
+            "rowId": "S03",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 5,
+          "values": {
+            "channel": "Direct",
+            "cost": "310",
+            "currency": "CNY",
+            "kind": "SALE",
+            "netSales": "450",
+            "period": "2026-09",
+            "product": "B",
+            "region": "South",
+            "rowId": "S04",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 6,
+          "values": {
+            "channel": "Direct",
+            "cost": "-30",
+            "currency": "CNY",
+            "kind": "RETURN",
+            "netSales": "-50",
+            "period": "2026-09",
+            "product": "B",
+            "region": "South",
+            "rowId": "S05",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 7,
+          "values": {
+            "channel": "Partner",
+            "cost": "60",
+            "currency": "EUR",
+            "kind": "SALE",
+            "netSales": "100",
+            "period": "2026-08",
+            "product": "C",
+            "region": "Europe",
+            "rowId": "S06",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 8,
+          "values": {
+            "channel": "Partner",
+            "cost": "78",
+            "currency": "EUR",
+            "kind": "SALE",
+            "netSales": "120",
+            "period": "2026-09",
+            "product": "C",
+            "region": "Europe",
+            "rowId": "S07",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 9,
+          "values": {
+            "channel": "Partner",
+            "cost": "60",
+            "currency": "JPY",
+            "kind": "SALE",
+            "netSales": "100",
+            "period": "2026-09",
+            "product": "D",
+            "region": "Japan",
+            "rowId": "S08",
+            "status": "POSTED"
+          }
+        },
+        {
+          "sourceLine": 10,
+          "values": {
+            "channel": "Online",
+            "cost": "100",
+            "currency": "CNY",
+            "kind": "SALE",
+            "netSales": "9999",
+            "period": "2026-09",
+            "product": "A",
+            "region": "North",
+            "rowId": "S09",
+            "status": "CANCELLED"
+          }
+        }
+      ],
+      "schemaVersion": "tabular-snapshot.v1",
+      "snapshotDigest": "4c2cac92af4cfae146f03734c0b30e264a19ec2cf40ccca92aee609616948d42",
+      "sourceBytesSha256": "c42df522496e66fadbf95f816849134f790c785e3b18a6655e141941d67906d6",
+      "sourceId": "synthetic-sales-v1"
+    },
+    "synthetic": true
+  },
+  "sourceDigest": "8e3dfeabb34cdcee26d523e8a94b46e93c5c4338c43f33ce81e2b1f1ce925391",
+  "sourceSnapshot": {
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "resource_id": "controlled",
+    "revision_id": "1"
+  },
+  "synthetic": true
+}

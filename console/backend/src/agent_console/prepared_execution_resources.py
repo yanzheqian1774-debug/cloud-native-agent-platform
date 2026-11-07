@@ -82,6 +82,14 @@ def validate_resources(connection, scope, preparation, participant):
         "READ_ONLY",
     ):
         raise ExecutionPreparationError("PREPARED_SKILL_OPERATION_MISMATCH")
+    from .sales_gross_profit_integration import is_v2, validate_operation
+
+    if is_v2(
+        participant.executor_id,
+        participant.executor_revision,
+        participant.executor_digest,
+    ):
+        validate_operation(operation, bounded=True)
     profile = published(connection, scope, "RUNTIME", participant.profile)
     if profile.get("provider") != "NATIVE_KUBERNETES":
         raise ExecutionPreparationError("PREPARED_NATIVE_PROFILE_REQUIRED")

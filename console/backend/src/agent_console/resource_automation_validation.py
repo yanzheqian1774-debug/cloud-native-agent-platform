@@ -27,7 +27,25 @@ SCHEMAS = {
 }
 
 
-def validate(kind, content, work, *, expected_source_schema=None):
+def executor_registry(*, sales_v2_candidate=False):
+    if not sales_v2_candidate:
+        return EXECUTORS
+    from .sales_gross_profit_skill import SalesGrossProfitSkillExecutor
+
+    return SkillExecutorRegistry(
+        (
+            SalesDiagnosticSkillExecutor(),
+            SyntheticDeliverySkillExecutor(),
+            SyntheticDeliverySkillExecutorV2(),
+            SyntheticCostSkillExecutor(),
+            SalesGrossProfitSkillExecutor(),
+        )
+    )
+
+
+def validate(
+    kind, content, work, *, expected_source_schema=None, sales_v2_candidate=False
+):
     if kind == "knowledge":
         digest = source_digest(content)
         if digest not in work.sourceContentDigests:
@@ -49,7 +67,16 @@ def validate(kind, content, work, *, expected_source_schema=None):
                 op["executorRevision"],
                 op["executorConfigurationDigest"],
             )
-            EXECUTORS.resolve(revision)
+            executor_registry(sales_v2_candidate=sales_v2_candidate).resolve(revision)
+            from .sales_gross_profit_integration import is_v2, validate_operation
+
+            sales_v2 = is_v2(
+                revision.executor_id,
+                revision.executor_revision,
+                revision.configuration_digest,
+            )
+            if sales_v2:
+                validate_operation(op, bounded=True)
             if (
                 revision.executor_id
                 == SyntheticDeliverySkillExecutor.revision.executor_id
@@ -97,8 +124,15 @@ def validate(kind, content, work, *, expected_source_schema=None):
             for key, suffix in (("inputSchema", "input"), ("outputSchema", "output")):
                 if op.get(key, {}).get("properties", {}).get("schemaVersion", {}).get(
                     "enum"
-                ) != [prefix + "-" + suffix + ".v1"]:
+                ) != [prefix + "-" + suffix + (".v2" if sales_v2 else ".v1")]:
                     raise AuthorityError("RESOURCE_EXECUTOR_SCHEMA_MISMATCH")
+        sales_versions = {
+            (o["executorRevision"], o["executorConfigurationDigest"])
+            for o in operations
+            if o["executorId"] == SalesDiagnosticSkillExecutor.revision.executor_id
+        }
+        if len(sales_versions) > 1:
+            raise AuthorityError("RESOURCE_SALES_EXECUTOR_REVISION_MIXED")
         return {
             "check": "REGISTERED_READ_ONLY_EXECUTOR_AND_IO",
             "operations": [op["name"] for op in operations],

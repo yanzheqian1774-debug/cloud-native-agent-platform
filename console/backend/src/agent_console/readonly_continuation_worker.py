@@ -12,16 +12,25 @@ from .workbench_business_problem import OwnerPrincipal
 
 
 class ContinuationWork:
-    def __init__(self, repository, policy, authority_factory):
+    def __init__(
+        self, repository, policy, authority_factory, *, sales_v2_candidate=False
+    ):
         self.repository, self.policy, self.authority_factory = (
             repository,
             policy,
             authority_factory,
         )
 
+        self.sales_v2_candidate = sales_v2_candidate
+
     @classmethod
-    def load(cls, repository, path, authority_factory):
-        return cls(repository, ReadonlyContinuationPolicy.load(path), authority_factory)
+    def load(cls, repository, path, authority_factory, *, sales_v2_candidate=False):
+        return cls(
+            repository,
+            ReadonlyContinuationPolicy.load(path),
+            authority_factory,
+            sales_v2_candidate=sales_v2_candidate,
+        )
 
     def receipts(self):
         if not self.policy.enabled:
@@ -116,9 +125,12 @@ class ContinuationWork:
                         principal = OwnerPrincipal(
                             context.principal_id, namespace, domain
                         )
-                        PreparedResultReview(c, principal, authority).evaluate(
-                            p, "readonly-terminal:" + p.digest
-                        )
+                        PreparedResultReview(
+                            c,
+                            principal,
+                            authority,
+                            sales_v2_candidate=self.sales_v2_candidate,
+                        ).evaluate(p, "readonly-terminal:" + p.digest)
                         counts["evaluated"] += 1
                 except (AuthorityError, ExecutionPreparationError):
                     counts["blocked"] += 1

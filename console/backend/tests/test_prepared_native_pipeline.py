@@ -63,7 +63,9 @@ class FixtureKubernetes:
         self.tasks[name]["status"] = status
 
 
-@pytest.mark.parametrize("case", ["cost", "delivery", "delivery-v2", "sales"])
+@pytest.mark.parametrize(
+    "case", ["cost", "delivery", "delivery-v2", "sales", "sales-v2-candidate"]
+)
 def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
     repository, tmp_path, case
 ):
@@ -83,8 +85,46 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
             "criteria": target.criteria.model_copy(update={"digest": digest}),
         }
     )
+    if case == "sales-v2-candidate":
+        from agent_console.sales_gross_profit_evaluation import CHECKS
+
+        target = target.model_copy(
+            update={
+                "criterion_revision_ids": target.criterion_revision_ids
+                + tuple(
+                    "fixture-gp-v2-" + k
+                    for k in CHECKS[len(target.criterion_revision_ids) :]
+                )
+            }
+        )
     p = seed(repository, synthetic_skill=case, evidence_ready=False, target=target)
     seed_criteria(repository, p)
+    if case == "sales-v2-candidate":
+        from agent_console.sales_gross_profit_evaluation import (
+            CHECKS,
+            criterion_candidate,
+        )
+
+        with repository.pool.connection() as c, c.transaction():
+            for identity, check in zip(
+                p.semantics.target.criterion_revision_ids, CHECKS, strict=True
+            ):
+                criterion = criterion_candidate(check)
+                c.execute(
+                    "UPDATE business_problem_authority.criterion_revisions "
+                    "SET criterion_type=%s,measurement=%s,required_evidence_kinds=%s,"
+                    "evaluator_type=%s,evaluator_version=%s,applicability=%s "
+                    "WHERE revision_id=%s",
+                    (
+                        criterion["criterion_type"],
+                        Jsonb(criterion["measurement"]),
+                        Jsonb(criterion["required_evidence_kinds"]),
+                        criterion["evaluator_type"],
+                        criterion["evaluator_version"],
+                        Jsonb(criterion["applicability"]),
+                        identity,
+                    ),
+                )
     scope = ScopeIdentity(p.namespace, p.security_domain)
     principal = SimpleNamespace(
         principal_id="fixture-requester",
@@ -216,6 +256,12 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
             if case == "delivery"
             else SyntheticCostSkillExecutor()
         )
+        if case == "sales-v2-candidate":
+            from agent_console.sales_gross_profit_skill import (
+                SalesGrossProfitSkillExecutor,
+            )
+
+            executor = SalesGrossProfitSkillExecutor()
         if case == "delivery-v2":
             from agent_console.synthetic_delivery_skill_v2 import (
                 SyntheticDeliverySkillExecutorV2,
@@ -230,7 +276,10 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
             SkillExecutorRegistry((executor,)),
         )
         caller = PreparedNativeSkillCaller(
-            native.pool, skills, lambda *_: "fixture-skill-authority"
+            native.pool,
+            skills,
+            lambda *_: "fixture-skill-authority",
+            sales_v2_candidate=case == "sales-v2-candidate",
         )
         caller_errors = []
         original_invoke = caller.invoke
@@ -357,7 +406,12 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 "SELECT count(*) AS n FROM execution_authority.attempts"
             ).fetchone()["n"] == len(p.participants)
         with native.pool.connection() as c, c.transaction():
-            review = PreparedResultReview(c, principal, ReviewAuthority())
+            review = PreparedResultReview(
+                c,
+                principal,
+                ReviewAuthority(),
+                sales_v2_candidate=case == "sales-v2-candidate",
+            )
             evaluated = review.evaluate(p, "fixture-six-task-evaluation")
             assert evaluated["businessResolution"] == "UNDETERMINED"
             assert len(evaluated["evaluation"]["results"][0]["artifactIds"]) == len(
@@ -371,6 +425,51 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 snapshot["criteriaSet"]["digest"] == p.semantics.target.criteria.digest
             )
             assert snapshot["runState"] == "SUCCEEDED"
+            if case == "sales-v2-candidate":
+                import json
+                import os
+
+                from agent_console.sales_gross_profit_contract import contract_document
+                from agent_console.sales_gross_profit_evaluation import CHECKS
+                from agent_console.sales_gross_profit_oracle import (
+                    check as independent_check,
+                )
+
+                assert len(evaluated["evaluation"]["results"]) == len(CHECKS)
+                assert all(
+                    r["result"] == "SATISFIED"
+                    for r in evaluated["evaluation"]["results"]
+                )
+                source, report = review.delivery_evidence(p, snapshot)
+                raw = (
+                    Path(__file__).parents[3]
+                    / "examples/sales-diagnostic/synthetic-sales.csv"
+                ).read_bytes()
+                oracle = independent_check(
+                    raw,
+                    source,
+                    p.source_snapshot.model_dump(mode="json"),
+                    contract_document(),
+                    report,
+                )
+                assert oracle["status"] == "LOCAL_MATCHED"
+                if os.environ.get("SALES_V2_ISOLATED_EVIDENCE"):
+                    destination = Path(os.environ["SALES_V2_ISOLATED_EVIDENCE"])
+                    assert destination.is_dir()
+                    data = {
+                        "boundary": (
+                            "DISPOSABLE_PG_64335_FIXTURE_KUBERNETES_"
+                            "NOT_ACTUAL_RUN_OR_ACCEPTANCE"
+                        ),
+                        "preparation": p.model_dump(mode="json"),
+                        "artifacts": artifacts,
+                        "snapshot": snapshot,
+                        "outcome": evaluated,
+                        "independent": oracle,
+                    }
+                    (destination / "native-readback.json").write_text(
+                        json.dumps(data, ensure_ascii=False, indent=2, default=str)
+                    )
             if case in {"delivery", "delivery-v2", "sales"}:
                 from agent_console.delivery_evaluation import CHECKS, evaluate
                 from agent_console.resource_use_domain import canonical_digest

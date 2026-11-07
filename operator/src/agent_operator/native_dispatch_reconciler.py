@@ -625,6 +625,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 "synthetic-cost-v1",
                 "synthetic-delivery-v1",
                 "sales-diagnostic-v1",
+                "sales-gross-profit-v2-candidate",
                 "registered-readonly-v1",
             }:
                 raise NativeDispatchWorkerError("PREPARED_SKILL_CONFIGURATION_INVALID")
@@ -664,6 +665,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 execution,
                 continuation_path,
                 owner_authority_factory(reader, generation, authorization_check),
+                sales_v2_candidate=prepared_mode == "sales-gross-profit-v2-candidate",
             )
             dispatch_repository = ContinuationDispatchRepository(execution, work)
             ready_driver.eligible_dispatches = work.dispatches

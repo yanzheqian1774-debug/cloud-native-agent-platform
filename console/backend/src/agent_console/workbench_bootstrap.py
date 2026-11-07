@@ -88,6 +88,7 @@ def build_workbench_composition(
     planning_v2_enabled: bool = False,
     prepared_execution_coordinator=None,
     prepared_resource_services=None,
+    sales_v2_candidate: bool = False,
     planning_invocations: PlanningInvocationDependencies | None = None,
     planning_unavailable_reason: str = "PLANNING_NOT_CONFIGURED",
     managed_closeables: tuple[object, ...] = (),
@@ -406,6 +407,7 @@ def build_workbench_composition(
                 planning,
                 prepared_resource_services,
                 employee_definitions,
+                sales_v2_candidate=sales_v2_candidate,
             )
             with foundation.repository.connection_scope() as c:
                 migrate_automation(c)
@@ -505,7 +507,10 @@ def build_workbench_composition(
                     else ()
                 ),
                 *(
-                    prepared_execution_operations(prepared_execution_coordinator)
+                    prepared_execution_operations(
+                        prepared_execution_coordinator,
+                        sales_v2_candidate=sales_v2_candidate,
+                    )
                     if prepared_execution_coordinator is not None
                     else ()
                 ),

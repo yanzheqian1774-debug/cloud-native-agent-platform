@@ -40,12 +40,14 @@ def migrate(connection):
 
 
 class PreparedResultReview:
-    def __init__(self, connection, principal, authority):
+    def __init__(self, connection, principal, authority, *, sales_v2_candidate=False):
         self.connection, self.principal, self.authority = (
             connection,
             principal,
             authority,
         )
+
+        self.sales_v2_candidate = sales_v2_candidate
 
     def require(self, owner, action, reference):
         return self.authority.require(self.principal, owner, action, reference)
@@ -304,8 +306,24 @@ class PreparedResultReview:
         source, report = (
             self.delivery_evidence(p, snapshot) if delivery or sales else (None, None)
         )
+        from .sales_gross_profit_integration import is_v2
+
+        sales_v2 = (
+            self.sales_v2_candidate
+            and all(
+                is_v2(t.executor_id, t.executor_revision, t.executor_digest)
+                for t in p.participants
+            )
+            and any(
+                c["evaluator_type"] == "SYNTHETIC_SALES"
+                and c["evaluator_version"] == "2"
+                for c in snapshot["criteria"]
+            )
+        )
         evaluator = (
-            "prepared-ontology-sales-evidence.v1"
+            "prepared-synthetic-sales-evidence.v2"
+            if sales_v2
+            else "prepared-ontology-sales-evidence.v1"
             if getattr(p, "business_semantics", None) is not None
             else "prepared-synthetic-sales-evidence.v1"
             if sales
@@ -377,7 +395,12 @@ class PreparedResultReview:
                     snapshot["criteria"], results, strict=True
                 ):
                     if criterion["evaluator_type"] == "SYNTHETIC_SALES":
-                        result["result"], result["reason"] = evaluate(
+                        measure = evaluate
+                        if sales_v2 and criterion["evaluator_version"] == "2":
+                            from .sales_gross_profit_evaluation import (
+                                evaluate as measure,
+                            )
+                        result["result"], result["reason"] = measure(
                             criterion,
                             source,
                             report,

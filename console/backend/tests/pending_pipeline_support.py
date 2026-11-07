@@ -28,7 +28,16 @@ from agent_operator.native_dispatch_reconciler import (
 from test_prepared_native_pipeline import FixtureKubernetes
 
 
-def drive(a, native, policy, tmp_path, task_count, *, expected_definitions):
+def drive(
+    a,
+    native,
+    policy,
+    tmp_path,
+    task_count,
+    *,
+    expected_definitions,
+    sales_v2_candidate=False,
+):
     assert native.load_checkpoint().state.value == "POSTGRES_ACTIVE"
     reader = a.automation.grants.authorization
 
@@ -53,7 +62,9 @@ def drive(a, native, policy, tmp_path, task_count, *, expected_definitions):
         )
 
     factory = owner_authority_factory(reader, a.gen, authorize)
-    work = ContinuationWork(native, policy, factory)
+    work = ContinuationWork(
+        native, policy, factory, sales_v2_candidate=sales_v2_candidate
+    )
     ready = PreparedReadyDriver(native, factory, eligible_dispatches=work.dispatches)
     caller, composition = compose(
         native.pool,
@@ -62,7 +73,9 @@ def drive(a, native, policy, tmp_path, task_count, *, expected_definitions):
         reader,
         a.gen,
         authorize,
-        mode="registered-readonly-v1",
+        mode="sales-gross-profit-v2-candidate"
+        if sales_v2_candidate
+        else "registered-readonly-v1",
     )
     completion = ExecutionCompletionService(
         native, PostgresExecutionCompletionWriter(native)
@@ -157,6 +170,78 @@ def drive(a, native, policy, tmp_path, task_count, *, expected_definitions):
                 ).fetchone()["n"],
                 "outcome": outcome,
             }
+        if sales_v2_candidate:
+            import json
+            import os
+
+            from agent_console.ontology_execution import parse_preparation
+            from agent_console.prepared_result_review import PreparedResultReview
+            from agent_console.sales_gross_profit_contract import contract_document
+            from agent_console.sales_gross_profit_oracle import check
+            from agent_console.workbench_business_problem import OwnerPrincipal
+
+            with native.pool.connection() as c:
+                p = parse_preparation(
+                    c.execute(
+                        "SELECT record FROM execution_authority.run_preparations"
+                    ).fetchone()["record"]
+                )
+                snapshot = c.execute(
+                    "SELECT record FROM success_criteria_evaluation.snapshots"
+                ).fetchone()["record"]
+                principal = OwnerPrincipal(
+                    a.subject.principal_id, p.namespace, p.security_domain
+                )
+                # Reuse the original exact source/artifact read authority.
+                command_row = c.execute(
+                    "SELECT payload FROM execution_authority.native_dispatch_commands "
+                    "ORDER BY queued_at LIMIT 1"
+                ).fetchone()
+                command = native._dispatch_command(command_row["payload"])
+                _, authority = factory(c, command)
+                review = PreparedResultReview(
+                    c, principal, authority, sales_v2_candidate=True
+                )
+                source, report = review.delivery_evidence(p, snapshot)
+                raw = (
+                    Path(__file__).parents[3]
+                    / "examples/sales-diagnostic/synthetic-sales.csv"
+                ).read_bytes()
+                oracle = check(
+                    raw,
+                    source,
+                    p.source_snapshot.model_dump(mode="json"),
+                    contract_document(),
+                    report,
+                )
+                assert oracle["status"] == "LOCAL_MATCHED"
+                assert all(
+                    r["result"] == "SATISFIED" for r in outcome["evaluation"]["results"]
+                )
+                artifacts = c.execute(
+                    "SELECT artifact_id,task_id,content,digest "
+                    "FROM execution_authority.run_artifacts ORDER BY task_id"
+                ).fetchall()
+                if destination := os.environ.get("SALES_V2_ISOLATED_EVIDENCE"):
+                    (Path(destination) / "continuation-readback.json").write_text(
+                        json.dumps(
+                            {
+                                "boundary": (
+                                    "SAME_DISPOSABLE_PG_PLAN_RESOURCE_PREPARATION_"
+                                    "TO_NATIVE_OWNER_READBACK_FIXTURE_KUBERNETES"
+                                ),
+                                "preparation": p.model_dump(mode="json"),
+                                "snapshot": snapshot,
+                                "outcome": outcome,
+                                "artifacts": artifacts,
+                                "independent": oracle,
+                                "summary": summary,
+                            },
+                            ensure_ascii=False,
+                            indent=2,
+                            default=str,
+                        )
+                    )
         assert summary["runs"] == 1
         assert summary["artifacts"] == task_count
         assert summary["employeeDefinitions"] == expected_definitions

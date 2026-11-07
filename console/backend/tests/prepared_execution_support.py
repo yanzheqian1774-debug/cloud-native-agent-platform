@@ -85,12 +85,22 @@ def seed(
                 ),
             }
         )
-    if synthetic_skill in {"sales", "ontology"}:
+    if synthetic_skill in {"sales", "sales-v2-candidate", "ontology"}:
         tasks = tuple(
             t
             for t in p.semantics.tasks
             if t.operation
-            in {"READ_DATA", "VALIDATE_DATA", "SUMMARIZE", "RENDER_REPORT"}
+            in {
+                "READ_DATA",
+                "VALIDATE_DATA",
+                "SUMMARIZE",
+                "RENDER_REPORT",
+                *(
+                    {"ANALYZE_DATA"}
+                    if synthetic_skill == "sales-v2-candidate"
+                    else set()
+                ),
+            }
         )
         summary = next(t for t in tasks if t.operation == "SUMMARIZE")
         tasks = tuple(
@@ -101,6 +111,17 @@ def seed(
             else t
             for t in tasks
         )
+        if synthetic_skill == "sales-v2-candidate":
+            tasks = tuple(
+                t.model_copy(
+                    update={
+                        "criterion_revision_ids": p.semantics.target.criterion_revision_ids
+                    }
+                )
+                if t.operation == "RENDER_REPORT"
+                else t
+                for t in tasks
+            )
         ids = {t.task_id for t in tasks}
         stages = tuple(
             stage.model_copy(
@@ -154,7 +175,7 @@ def seed(
             from agent_console.delivery_resource_bundle import resource_content
         if synthetic_skill == "delivery-v2":
             from agent_console.synthetic_delivery_skill_v2 import resource_content
-        if synthetic_skill in {"sales", "ontology"}:
+        if synthetic_skill in {"sales", "sales-v2-candidate", "ontology"}:
             from agent_console.sales_resource_bundle import (
                 resource_content as sales_content,
             )
@@ -169,6 +190,25 @@ def seed(
                 ).read_bytes()
             )
             bundle = sales_content(source)
+            if synthetic_skill == "sales-v2-candidate":
+                from agent_console.sales_gross_profit_candidate import (
+                    revision_candidate,
+                )
+                from agent_console.sales_gross_profit_integration import bounded_content
+
+                bundle["skill"] = bounded_content(
+                    revision_candidate(
+                        {
+                            "resource_id": "skill-definition:fixture-v1",
+                            "revision_id": "skill-revision:v1",
+                            "digest": "b" * 64,
+                        },
+                        bundle["skill"],
+                        1,
+                        p.source_snapshot.model_dump(mode="json"),
+                        canonical_digest(source),
+                    )["candidateContent"]
+                )
         else:
             bundle = resource_content()
         if synthetic_skill == "ontology":
@@ -381,7 +421,7 @@ def seed(
                 DELIVERY_SYNTHETIC_ONLY
                 if synthetic_skill in {"delivery", "delivery-v2"}
                 else SALES_SYNTHETIC_ONLY
-                if synthetic_skill in {"sales", "ontology"}
+                if synthetic_skill in {"sales", "sales-v2-candidate", "ontology"}
                 else SYNTHETIC_ONLY,
                 f"执行准备映射SHA256：{p.mapping_digest}；fixture",
             ),

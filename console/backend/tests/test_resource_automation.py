@@ -58,6 +58,7 @@ def automation(repository, case, services, tmp_path, request):
     e = case
     mode = getattr(request, "param", "existing")
     continuation = isinstance(mode, dict) and mode.get("continuation", False)
+    sales_v2 = isinstance(mode, dict) and mode.get("salesV2", False)
     delivery_v2 = isinstance(mode, dict) and mode.get("deliveryV2", False)
     if isinstance(mode, dict):
         mode = mode["resources"]
@@ -79,6 +80,28 @@ def automation(repository, case, services, tmp_path, request):
         e.p = e.p.model_copy(update={"semantics": six_roles(e.p.semantics)})
     else:
         contents = resource_content(e.source)
+    if sales_v2:
+        from agent_console.resource_use_domain import canonical_digest
+        from agent_console.sales_gross_profit_candidate import revision_candidate
+        from agent_console.sales_gross_profit_integration import bounded_content
+
+        contents["skill"] = bounded_content(
+            revision_candidate(
+                {
+                    "resource_id": "skill-definition:fixture-v1",
+                    "revision_id": "skill-revision:old",
+                    "digest": "b" * 64,
+                },
+                contents["skill"],
+                1,
+                {
+                    "resource_id": "fixture-source",
+                    "revision_id": "1",
+                    "digest": "c" * 64,
+                },
+                canonical_digest(e.source),
+            )["candidateContent"]
+        )
     refs = {}
     pub = PreparedResourceOwner(services)
     setup_context = SimpleNamespace(
@@ -436,6 +459,7 @@ def automation(repository, case, services, tmp_path, request):
         e.app,
         {**services, "mcp": services["skill"]},
         employees,
+        sales_v2_candidate=sales_v2,
         runtime_probe=lambda namespace: {
             "check": "ISOLATED_RUNTIME_PROBE",
             "status": "PASSED",

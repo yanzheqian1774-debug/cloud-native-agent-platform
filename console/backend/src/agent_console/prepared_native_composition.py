@@ -47,6 +47,10 @@ def compose(
         from .sales_ontology_executor import SalesOntologyExecutor
 
         executor = SalesOntologyExecutor()
+    elif mode == "sales-gross-profit-v2-candidate":
+        from .sales_gross_profit_skill import SalesGrossProfitSkillExecutor
+
+        executor = SalesGrossProfitSkillExecutor()
     elif mode == "sales-diagnostic-v1":
         from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
 
@@ -60,7 +64,7 @@ def compose(
     else:
         raise ValueError("PREPARED_SKILL_CONFIGURATION_INVALID")
     executors = (executor,)
-    if mode == "registered-readonly-v1":
+    if mode in {"registered-readonly-v1", "sales-gross-profit-v2-candidate"}:
         from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
         from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
         from .synthetic_delivery_skill_v2 import SyntheticDeliverySkillExecutorV2
@@ -71,6 +75,8 @@ def compose(
             SyntheticDeliverySkillExecutor(),
             SyntheticDeliverySkillExecutorV2(),
         )
+        if mode == "sales-gross-profit-v2-candidate":
+            executors += (executor,)
     composition = compose_governed_skill_invocation(
         database_url,
         migrations,
@@ -136,7 +142,12 @@ def compose(
             }
         )
 
-    return PreparedNativeSkillCaller(pool, composition, authorize), composition
+    return PreparedNativeSkillCaller(
+        pool,
+        composition,
+        authorize,
+        sales_v2_candidate=mode == "sales-gross-profit-v2-candidate",
+    ), composition
 
 
 def owner_authority_factory(reader, generation, authorization_check):

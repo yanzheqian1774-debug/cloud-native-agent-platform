@@ -4,7 +4,7 @@ from .plan_suggestion_domain import ExactReference
 from .resource_automation_validation import validate
 
 
-def bind_steps(semantics, skills, *, source_schema, case):
+def bind_steps(semantics, skills, *, source_schema, case, sales_v2_candidate=False):
     """skills contains only authorized, published members, never external candidates."""
     from .planning_contracts import validation_report
 
@@ -14,7 +14,13 @@ def bind_steps(semantics, skills, *, source_schema, case):
         raise ValueError("TASK_MEMBER_SKILL_REQUIRED")
     available = []
     for ref, content in skills:
-        validate("skill", content, None, expected_source_schema=source_schema)
+        validate(
+            "skill",
+            content,
+            None,
+            expected_source_schema=source_schema,
+            sales_v2_candidate=sales_v2_candidate,
+        )
         available.append((ref, content))
     result = {}
     selected_operations = []
@@ -56,11 +62,22 @@ def bind_steps(semantics, skills, *, source_schema, case):
     elif case == "sales":
         from .prepared_readonly_contract import validate_mapping
         from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
+        from .sales_gross_profit_integration import is_v2, revision
 
+        any_v2 = any(
+            is_v2(
+                op["executorId"],
+                op["executorRevision"],
+                op["executorConfigurationDigest"],
+            )
+            for op in selected_operations
+        )
         validate_mapping(
             semantics.model_dump(mode="json"),
             selected_operations,
-            SalesDiagnosticSkillExecutor.revision,
+            revision()
+            if any_v2 and sales_v2_candidate
+            else SalesDiagnosticSkillExecutor.revision,
         )
     else:
         raise ValueError("TASK_MEMBER_CASE_UNSUPPORTED")

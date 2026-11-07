@@ -10,6 +10,17 @@ from .workbench_prepared_resources import bind_service
 
 def independent(source, report, reference):
     schema = source.get("schemaVersion")
+    if (
+        schema == "sales-diagnostic-source.v1"
+        and report.get("schemaVersion") == "sales-diagnostic-output.v2"
+    ):
+        from .sales_gross_profit_evaluation import CHECKS, evaluate_sales
+
+        return [
+            {"check": check, "result": result, "reason": reason}
+            for check in CHECKS
+            for result, reason in [evaluate_sales(check, source, report, reference)]
+        ]
     if schema == "sales-diagnostic-source.v1":
         from .sales_evaluation import CHECKS, evaluate_sales
 
@@ -37,7 +48,17 @@ def independent(source, report, reference):
     raise AuthorityError("RESOURCE_INDEPENDENT_EVALUATOR_UNAVAILABLE")
 
 
-def verify_skill(call, service, ref, source_ref, source_revision, proof, *, persist):
+def verify_skill(
+    call,
+    service,
+    ref,
+    source_ref,
+    source_revision,
+    proof,
+    *,
+    persist,
+    sales_v2_candidate=False,
+):
     raw = source_revision["content"]["documents"][0]["chunks"][0]["content"]
     source = json.loads(raw)
     schema = source.get("schemaVersion")
@@ -55,6 +76,26 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
     revision = next(
         r for r in record["revisions"] if r["revisionId"] == ref.revision_id
     )
+    from .resource_automation_validation import executor_registry, validate
+
+    validate(
+        "skill",
+        revision["content"],
+        None,
+        expected_source_schema=schema,
+        sales_v2_candidate=sales_v2_candidate,
+    )
+    from .sales_gross_profit_integration import is_v2, require_source
+
+    sales_v2 = any(
+        is_v2(
+            op["executorId"], op["executorRevision"], op["executorConfigurationDigest"]
+        )
+        for op in revision["content"].get("operations", [])
+    )
+    if sales_v2:
+        require_source(source)
+    suffix = ".v2" if sales_v2 else ".v1"
     names = [x["name"] for x in revision["content"].get("operations", [])]
     from .synthetic_delivery_skill_v2 import (
         OPERATIONS as DELIVERY_V2_OPERATIONS,
@@ -92,7 +133,7 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
                 if output["outputKind"] in INPUTS[operation]
             }
         inputs = {
-            "schemaVersion": prefix + "-input.v1",
+            "schemaVersion": prefix + "-input" + suffix,
             "synthetic": True,
             "sourceSnapshot": reference,
             "source": source,
@@ -108,7 +149,7 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
             name="自动核验·" + operation,
             inputs=inputs,
             expected_output={
-                "schemaVersion": prefix + "-output.v1",
+                "schemaVersion": prefix + "-output" + suffix,
                 "synthetic": True,
                 "operation": operation,
                 "sourceSnapshot": reference,
@@ -124,6 +165,7 @@ def verify_skill(call, service, ref, source_ref, source_revision, proof, *, pers
             verify=(lambda output: independent(source, output, reference))
             if operation == "RENDER_REPORT"
             else None,
+            executor_registry=executor_registry(sales_v2_candidate=sales_v2_candidate),
             verification_context={
                 "source": reference,
                 "sourceContentDigest": canonical_digest(source),

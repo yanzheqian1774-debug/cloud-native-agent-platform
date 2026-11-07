@@ -21,7 +21,7 @@ test('324 real-data panel separates binding from admission and reload sends no m
  for(const scale of [1,1.25]){await page.setViewportSize({width:Math.floor(1536/scale),height:Math.floor(1024/scale)});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy();const send=page.locator('.px-composer button[type="submit"]');await expect(send).toBeInViewport()}
  await page.reload();await expect(panel).toBeAttached();expect(writes).toBe(0);
  state.executionStarted=true;state.admission.state='ADMITTED';state.progress={state:'SUCCEEDED',version:18,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))};state.outcome={outcomeId:'fixture-outcome',version:1,evaluationDigest:'e'.repeat(64),businessResolution:'UNDETERMINED',confirmationId:null,evaluation:{evaluationId:'fixture-evaluation',results:[{criterionRevisionId:'fixture-criterion',criterionDigest:'f'.repeat(64),result:'UNKNOWN',reason:'HUMAN_REVIEW_REQUIRED',artifactIds:['fixture-artifact']}]}};state.artifacts=[{artifact_id:'fixture-artifact',task_id:'t6-report',digest:'1'.repeat(64),bytes:500,created_at:'2026-09-21T01:00:00Z',contentAccess:'AUTHORIZED',content:'明确标注的合成页面产物，不是实际执行证据。'.repeat(20)}];
- await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(page.getByRole('heading',{name:'成果已交付',exact:true})).toBeVisible();await expect(page.getByRole('complementary',{name:'执行与交付',exact:true}).locator('.px-execution-context')).toContainText(`任务完成 ${state.preparation.semantics.tasks.length}/${state.preparation.semantics.tasks.length}`);await expect(page.getByRole('list',{name:'当前阶段'}).locator('[aria-current=step]')).toContainText('验收结果');await panel.getByRole('button',{name:'查看验收摘要'}).click();await expect(panel).toContainText('业务结果：尚无法确定');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeDisabled();await panel.getByRole('textbox',{name:'验收意见'}).fill('视图测试意见');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeEnabled();expect(writes).toBe(0);await panel.getByRole('heading',{name:'标准评价与人工决定'}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('H06-undetermined-fixture.png')});
+ await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(page.getByRole('heading',{name:'执行完成 · 待结果决定',exact:true})).toBeVisible();await expect(page.getByRole('complementary',{name:'执行与交付',exact:true}).locator('.px-execution-context')).toContainText(`任务完成 ${state.preparation.semantics.tasks.length}/${state.preparation.semantics.tasks.length}`);await expect(page.getByRole('navigation',{name:'当前作业视图'}).getByRole('button',{name:'成果与记录',exact:true})).toHaveAttribute('aria-pressed','true');await panel.getByRole('button',{name:'查看验收摘要'}).click();await expect(panel).toContainText('业务结果：尚无法确定');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeDisabled();await panel.getByRole('textbox',{name:'验收意见'}).fill('视图测试意见');await expect(panel.getByRole('button',{name:'确认限制与待解决事项'})).toBeEnabled();expect(writes).toBe(0);await panel.getByRole('heading',{name:'标准评价与人工决定'}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('H06-undetermined-fixture.png')});
 });
 
 test('324 resource review preserves partial publication and reload never repeats Human commands',async({page},info)=>{
@@ -62,7 +62,7 @@ test('324 expired session preserves exact return object and re-entry never repla
  expired=false;
  await page.goto(originalUrl);
  await expect(page.getByRole('region',{name:'Native 执行与成果验收'})).toBeAttached();
- await expect(page.locator('#problem-composer')).toHaveValue('');
+ await expect(page.locator('#problem-composer')).toHaveValue('尚未发送的中文补充，不得重新登录后自动提交。');
  expect(writes).toBe(0);
 });
 
@@ -157,7 +157,7 @@ for(const mode of ['digest-mismatch','failed-refresh'])test(`324 execution ${mod
  });
  await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});
  if(mode==='digest-mismatch'){await expect(panel.getByRole('alert')).toContainText('EXECUTION_DIGEST_MISMATCH')}
- else{await expect(page.getByRole('heading',{name:'成果已交付',exact:true})).toBeVisible();unavailable=true;await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel.getByRole('alert')).toBeVisible();await expect(page.getByRole('heading',{name:'执行进度',exact:true})).toBeVisible()}
+ else{await expect(page.getByRole('heading',{name:'执行完成 · 待结果决定',exact:true})).toBeVisible();unavailable=true;await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel.getByRole('alert')).toBeVisible();await expect(page.getByRole('heading',{name:'执行状态待读取',exact:true})).toBeVisible()}
  await expect(panel.getByRole('button',{name:'启动本次只读执行'})).toHaveCount(0);expect(writes).toBe(0);await panel.getByRole('button',{name:'刷新正式状态'}).click();expect(writes).toBe(0);
 });
 
@@ -190,7 +190,7 @@ test('mismatched report source never becomes inline business data or an openable
 test('running same-case view shows real progress states and refresh remains GET only',async({page},info)=>{
  const state=view();state.executionStarted=true;state.admission={state:'ADMITTED',reason:null};state.progress={state:'RUNNING',version:6,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map((t,i)=>({task_id:t.task_id,state:i===0?'SUCCEEDED':i===1?'RUNNING':'WAITING',attempt_ordinal:i<2?1:0,reason:null}))};let writes=0;
  await page.route('**/api/workbench/v1/**',async route=>{const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:3,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}})});
- await page.setViewportSize({width:1536,height:1056});await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(page.getByRole('heading',{name:'执行进度',exact:true})).toBeVisible();await expect(panel).toContainText('执行进度 1/3');await expect(panel).toContainText('运行中');await expect(page.getByRole('list',{name:'当前阶段'}).locator('[aria-current=step]')).toContainText('执行');await expect(panel).not.toContainText('执行准入存在缺口');await page.locator('.px-message-stream').evaluate(node=>node.scrollTop=0);await page.screenshot({path:info.outputPath('P06.2-running-first-screen-fixture-1536.png')});await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel).toContainText('执行进度 1/3');expect(writes).toBe(0);
+ await page.setViewportSize({width:1536,height:1056});await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(page.getByRole('heading',{name:'执行与产物核对',exact:true})).toBeVisible();await expect(panel).toContainText('执行进度 1/3');await expect(panel).toContainText('运行中');await expect(page.getByRole('navigation',{name:'当前作业视图'}).getByRole('button',{name:'成果与记录',exact:true})).toHaveAttribute('aria-pressed','true');await expect(panel).not.toContainText('执行准入存在缺口');await page.locator('.px-message-stream').evaluate(node=>node.scrollTop=0);await page.screenshot({path:info.outputPath('P06.2-running-first-screen-fixture-1536.png')});await panel.getByRole('button',{name:'刷新正式状态'}).click();await expect(panel).toContainText('执行进度 1/3');expect(writes).toBe(0);
 });
 
 test('B1 active execution updates automatically and terminal state stops GET without commands',async({page})=>{
@@ -206,7 +206,7 @@ test('B1 active execution updates automatically and terminal state stops GET wit
  await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'))});const hiddenReads=reads;await page.waitForTimeout(3000);expect(reads).toBe(hiddenReads);
  state.progress.state='SUCCEEDED';state.progress.tasks.forEach(t=>t.state='SUCCEEDED');state.progress.version=3;
  await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'))});
- await expect(page.getByRole('heading',{name:'成果已交付',exact:true})).toBeVisible({timeout:10000});
+ await expect(page.getByRole('heading',{name:'执行完成 · 待结果决定',exact:true})).toBeVisible({timeout:10000});
  const completedReads=reads;await page.waitForTimeout(3000);expect(reads).toBe(completedReads);expect(writes).toBe(0);
 });
 
@@ -231,4 +231,63 @@ test('automatic continuation keeps reading after terminal execution until indepe
   const result=path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[problem]}:{problem:{...problem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[problem],lifecycle:[]};return route.fulfill({json:{result}});
  });
  await page.goto(`/work?problem=${problem.business_problem_id}&execution=${state.digest}`);const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(panel.getByText('执行已结束，标准评价结果将自动读回。',{exact:true})).toBeVisible();await expect.poll(()=>reads,{timeout:15000}).toBeGreaterThanOrEqual(3);await expect(panel.getByText('执行已结束，标准评价结果将自动读回。',{exact:true})).toHaveCount(0);await expect(panel.getByRole('button',{name:'按标准形成评价',exact:true})).toHaveCount(0);expect(writes).toBe(0);
+});
+
+// Browser route replay of isolated owner readback; no live API/Kubernetes claim.
+for(const mode of ['readback','source-mismatch','wrong-contract','malformed-rate','unresolved-csv'])test(`gross profit v2 isolated reader ${mode}`,async({page},info)=>{
+ const replay=process.env.SALES_V2_REPLAY_FILE?JSON.parse(readFileSync(process.env.SALES_V2_REPLAY_FILE,'utf8')):null;
+ const persisted=replay?.artifacts.find((a:{content:string})=>JSON.parse(a.content).operation==='RENDER_REPORT');
+ const originalContent=persisted?.content??readFileSync(new URL('./fixtures/sales-gross-profit-v2-isolated.json',import.meta.url),'utf8');
+ if(persisted)expect(createHash('sha256').update(originalContent).digest('hex')).toBe(persisted.digest);
+ const report=JSON.parse(originalContent),source={...report.sourceSnapshot};
+ if(mode==='source-mismatch')report.sourceSnapshot.revision_id='other-version';
+ if(mode==='wrong-contract')report.contractDigest='0'.repeat(64);
+ if(mode==='malformed-rate')report.currencyComparisons[0].grossProfit.rate={status:'BASELINE_ZERO',value:'999'};
+ if(mode==='unresolved-csv'){
+  report.dimensions.region[0].value='';report.dimensions.region[0].valueStatus='UNRESOLVED';
+  report.dimensions.product[0].value='=1+1';
+ }
+ const content=mode==='readback'?originalContent:JSON.stringify(report),state=view();let writes=0;
+ if(replay)state.preparation={...state.preparation,...replay.preparation};
+ state.preparation.semantics.title='销售分维度毛利（隔离产物回放）';
+ state.preparation.semantics.tasks.at(-1)!.title='生成销售分维度毛利报告';
+ const displayedProblem={...problem,business_problem_id:state.preparation.semantics.target.problem.resource_id,title:state.preparation.semantics.title};
+ state.executionStarted=true;state.admission={state:'ADMITTED',reason:null};state.progress={state:'SUCCEEDED',version:18,cancellation_request_id:null,tasks:state.preparation.semantics.tasks.map(t=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))};state.preparation.source_snapshot=source;
+ state.artifacts=[{artifact_id:'isolated-gp-report-replay',task_id:state.preparation.semantics.tasks.at(-1)!.task_id,digest:createHash('sha256').update(content).digest('hex'),bytes:Buffer.byteLength(content),created_at:'2026-11-07T00:00:00Z',contentAccess:'AUTHORIZED',content}];
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;if(route.request().method()!=='GET')writes++;
+  if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:fixture',tenantId:'fixture-324',securityDomain:'isolated'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  const result=path.includes('/prepared-executions/')?state:path.endsWith('/criteria')||path.endsWith('/criteria-sets')?{revisions:[]}:path.endsWith('/problems')?{problems:[displayedProblem]}:{problem:{...displayedProblem,current_state:'ACTIVE',aggregate_version:1,current_revision_id:problem.revision_id},revisions:[displayedProblem],lifecycle:[]};return route.fulfill({json:{result}});
+ });
+ await page.goto(`/work?problem=${displayedProblem.business_problem_id}&execution=${state.digest}`);
+ if(mode==='source-mismatch'){
+  await expect(page.getByRole('alert')).toContainText('报告来源版本与本次执行不一致');
+  await expect(page.getByRole('region',{name:'销售毛利关键数据'})).toHaveCount(0);
+  await expect(page.locator('[data-artifact-id="isolated-gp-report-replay"]')).toBeDisabled();
+ }else if(mode==='wrong-contract'||mode==='malformed-rate'){
+  await expect(page.getByRole('alert')).toContainText('毛利 v2 合同或数据格式不匹配');
+  await expect(page.getByRole('region',{name:'销售毛利关键数据'})).toHaveCount(0);
+  await expect(page.locator('.px-delivery-feedback')).not.toContainText('已分别核对');
+ }else{
+  const inline=page.getByRole('region',{name:'销售毛利关键数据'});
+  await expect(inline).toContainText('-160.00');await expect(inline).toContainText('基期为零，变化率不适用');
+  if(mode==='readback'){
+   await inline.getByRole('button',{name:'North',exact:true}).click();
+   const detail=inline.getByRole('region',{name:'毛利贡献来源明细'});
+   await expect(detail).toContainText('S01');await expect(detail).toContainText('-240.00');await expect(detail).toContainText('S03');await expect(detail).toContainText('120.00');await expect(detail).not.toContainText('S09');
+   await detail.getByRole('button',{name:'收起来源明细'}).click();
+   await inline.getByRole('button',{name:'South',exact:true}).click();await expect(detail).toContainText('S05');await expect(detail).toContainText('-20.00');
+   for(const dim of ['渠道','产品']){await inline.getByRole('button',{name:dim,exact:true}).click();await expect(inline.getByRole('button',{name:dim,exact:true})).toHaveAttribute('aria-pressed','true')}
+  }else await expect(inline.getByRole('button',{name:'未解析维度',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'查看销售变化诊断报告',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'成果文件详情'}),reader=dialog.getByRole('region',{name:'销售毛利 v2 报告'});
+  await expect(reader).toContainText('三维分解不能相加');
+  const pending=page.waitForEvent('download');await reader.getByRole('button',{name:'下载分维度毛利 CSV'}).click();
+  const csv=readFileSync((await (await pending).path())!,'utf8');expect(csv).toContain('毛利变化');expect(csv).toContain('S01|S03');if(mode==='unresolved-csv')expect(csv).toContain("'=1+1");
+  const jsonPending=page.waitForEvent('download');await reader.getByRole('button',{name:'下载原始产物 JSON',exact:true}).click();expect(readFileSync((await (await jsonPending).path())!,'utf8')).toBe(content);
+  for(const size of [{width:1280,height:720},{width:390,height:844}]){await page.setViewportSize(size);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await page.screenshot({path:info.outputPath(`gross-profit-${mode}-${size.width}.png`)})}
+  await page.getByRole('button',{name:'返回成果',exact:true}).click();await page.reload();await expect(page.getByRole('region',{name:'销售毛利关键数据'})).toBeVisible();
+ }
+ expect(writes).toBe(0);
+ await info.attach('isolated-replay-boundary',{body:JSON.stringify({mode,transport:'BROWSER_ROUTE_REPLAY_NOT_LIVE_API',persistedRawSha256:persisted?.digest??'COMMITTED_FIXTURE',displayedRawSha256:createHash('sha256').update(content).digest('hex'),writes},null,2),contentType:'application/json'});
 });

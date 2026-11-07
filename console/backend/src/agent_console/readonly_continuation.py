@@ -51,7 +51,9 @@ class ReadonlyContinuation:
     def __init__(self, automation, policy, coordinator):
         self.automation, self.policy, self.coordinator = automation, policy, coordinator
         self.execution = coordinator.repository
-        self.owner = PreparedExecutionOwner(coordinator)
+        self.owner = PreparedExecutionOwner(
+            coordinator, sales_v2_candidate=automation.sales_v2_candidate
+        )
 
     def capability(self, context, root):
         return self.policy.enabled and any(
@@ -252,6 +254,7 @@ class ReadonlyContinuation:
                 authorize=authorize,
                 plan_digest=plan.digest,
                 agent_name=approved_work.nativeAgentName,
+                sales_v2_candidate=self.automation.sales_v2_candidate,
             )
             for action in ("READ", "PREPARE", "APPROVE"):
                 execution_proof = authorize("PLAN", action, "plan:v2:" + identity)

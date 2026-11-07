@@ -39,6 +39,33 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
 ):
     a = automation
     assert a.run()["state"] == "READY"
+    if a.automation.sales_v2_candidate:
+        from agent_console.sales_gross_profit_evaluation import criterion_candidate
+        from psycopg.types.json import Jsonb
+
+        checks = ["gross_profit_dimensions", "row_contributions", "reconciliations"]
+        with a.repository.pool.connection() as c, c.transaction():
+            for identity, check in zip(
+                a.e.p.semantics.target.criterion_revision_ids,
+                checks[: len(a.e.p.semantics.target.criterion_revision_ids)],
+                strict=True,
+            ):
+                criterion = criterion_candidate(check)
+                c.execute(
+                    "UPDATE business_problem_authority.criterion_revisions "
+                    "SET criterion_type=%s,measurement=%s,required_evidence_kinds=%s,"
+                    "evaluator_type=%s,evaluator_version=%s,applicability=%s "
+                    "WHERE revision_id=%s",
+                    (
+                        criterion["criterion_type"],
+                        Jsonb(criterion["measurement"]),
+                        Jsonb(criterion["required_evidence_kinds"]),
+                        criterion["evaluator_type"],
+                        criterion["evaluator_version"],
+                        Jsonb(criterion["applicability"]),
+                        identity,
+                    ),
+                )
     if pending:
         from test_policy_pending_binding import (
             add_compatible_candidate,
@@ -247,7 +274,23 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                 "execution_authority.native_dispatch_commands"
             ).fetchone()
             assert row["state"] == "QUEUED" and row["claim_generation"] == 0
-        if pending:
+        if a.automation.sales_v2_candidate:
+            from pending_pipeline_support import drive
+
+            with a.repository.pool.connection() as c:
+                definitions = c.execute(
+                    "SELECT count(*) n FROM digital_employee_definition.definitions"
+                ).fetchone()["n"]
+            drive(
+                a,
+                native,
+                policy,
+                tmp_path,
+                len(a.e.p.semantics.tasks),
+                expected_definitions=definitions,
+                sales_v2_candidate=True,
+            )
+        elif pending:
             from pending_pipeline_support import drive
 
             proof = drive(

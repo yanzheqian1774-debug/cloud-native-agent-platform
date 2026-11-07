@@ -97,6 +97,7 @@ def run(
     persist=True,
     verify=None,
     verification_context=None,
+    executor_registry=None,
 ):
     record = service._load(scope, "skill", identity)
     service._expected(record, version)
@@ -164,7 +165,7 @@ def run(
             "policyDigest": POLICY.policy_digest,
         }:
             raise SkillInvocationError("TEST_SIDE_EFFECT_DENIED")
-        executor = EXECUTORS.resolve(
+        executor = (executor_registry or EXECUTORS).resolve(
             ExecutorRevision(
                 op["executorId"],
                 op["executorRevision"],

@@ -66,7 +66,7 @@ def gap_for(reason):
     return "MAPPING"
 
 
-def assess(semantics, members, contents, work, runtime):
+def assess(semantics, members, contents, work, runtime, *, sales_v2_candidate=False):
     """Pure exact contract checks; inputs already authorized by every owner."""
     from .planning_contracts import validation_report
 
@@ -109,7 +109,31 @@ def assess(semantics, members, contents, work, runtime):
     }.get(schema)
     if case is None:
         raise ValueError("BUSINESS_RULE_FAMILY_UNSUPPORTED")
-    bindings = bind_steps(semantics, skills, source_schema=schema, case=case)
+    bindings = bind_steps(
+        semantics,
+        skills,
+        source_schema=schema,
+        case=case,
+        sales_v2_candidate=sales_v2_candidate,
+    )
+    if sales_v2_candidate:
+        import json
+
+        from .sales_gross_profit_integration import is_v2, require_source
+
+        if any(
+            is_v2(
+                v["operation"]["executorId"],
+                v["operation"]["executorRevision"],
+                v["operation"]["executorConfigurationDigest"],
+            )
+            for v in bindings.values()
+        ):
+            require_source(
+                json.loads(
+                    contents["knowledge"]["documents"][0]["chunks"][0]["content"]
+                )
+            )
     if runtime.get("status") != "PASSED":
         raise ValueError("LIVE_RUNTIME_NOT_AVAILABLE")
     return {
@@ -190,7 +214,12 @@ def coverage(automation, call, plan):
                     }
                 )
             checks = assess(
-                plan.semantics, definition["members"], contents, work, runtime
+                plan.semantics,
+                definition["members"],
+                contents,
+                work,
+                runtime,
+                sales_v2_candidate=automation.sales_v2_candidate,
             )
             item.update(
                 state="SELECTABLE_FOR_VERIFICATION",

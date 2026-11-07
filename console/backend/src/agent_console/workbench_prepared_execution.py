@@ -75,8 +75,9 @@ def candidate(connection, scope, digest):
 
 
 class PreparedExecutionOwner:
-    def __init__(self, coordinator=None):
+    def __init__(self, coordinator=None, *, sales_v2_candidate=False):
         self.coordinator = coordinator
+        self.sales_v2_candidate = sales_v2_candidate
 
     def __call__(self, call):
         principal = OwnerPrincipal(
@@ -245,7 +246,12 @@ class PreparedExecutionOwner:
                     {**call.payload, "operation": call.operation},
                     execute,
                 )
-            review = PreparedResultReview(call.connection, principal, call.authority)
+            review = PreparedResultReview(
+                call.connection,
+                principal,
+                call.authority,
+                sales_v2_candidate=self.sales_v2_candidate,
+            )
             if call.operation == "EVALUATE_PREPARED_EXECUTION":
                 return review.evaluate(p, call.payload["idempotencyKey"])
             if call.operation == "CONFIRM_PREPARED_RESULT":
@@ -352,7 +358,9 @@ class PreparedExecutionOwner:
             # Snapshot assembly enforces each exact criterion/evidence/resource read.
             if progress and progress.state in {"SUCCEEDED", "FAILED", "CANCELLED"}:
                 PreparedResultReview(
-                    call.connection, app.principal, call.authority
+                    call.connection,
+                    app.principal,
+                    call.authority,
                 ).snapshot(p)
                 row = call.connection.execute(
                     "SELECT o.record FROM product_outcome.heads h JOIN product_outcome.outcomes o USING(namespace,security_domain,outcome_id) WHERE h.namespace=%s AND h.security_domain=%s AND h.workflow_run_id=%s",
@@ -506,8 +514,8 @@ class PreparedExecutionGrantTargets:
         return False
 
 
-def prepared_execution_operations(coordinator=None):
-    handler = PreparedExecutionOwner(coordinator)
+def prepared_execution_operations(coordinator=None, *, sales_v2_candidate=False):
+    handler = PreparedExecutionOwner(coordinator, sales_v2_candidate=sales_v2_candidate)
     path = PREFIX + "/prepared-executions/{digest}"
     return (
         WorkbenchOperation(

@@ -100,12 +100,21 @@ def target_grants(action):
 
 class ResourceAutomation:
     def __init__(
-        self, policy, grants, planning, services, employees, *, runtime_probe=None
+        self,
+        policy,
+        grants,
+        planning,
+        services,
+        employees,
+        *,
+        runtime_probe=None,
+        sales_v2_candidate=False,
     ):
         self.policy, self.grants, self.planning = policy, grants, planning
         self.resources = PreparedResourceOwner(services)
         self.services, self.employees = services, employees
         self.runtime_probe = runtime_probe or policy.probe_runtime
+        self.sales_v2_candidate = sales_v2_candidate
 
     def authenticate(self, context):
         return self.policy.authenticate(self.grants, context)
@@ -725,7 +734,11 @@ class ResourceAutomation:
         ):
             raise AuthorityError("RESOURCE_EXACT_VERSION_UNAVAILABLE")
         check = validate(
-            kind, rev["content"], work, expected_source_schema=expected_source_schema
+            kind,
+            rev["content"],
+            work,
+            expected_source_schema=expected_source_schema,
+            sales_v2_candidate=self.sales_v2_candidate,
         )
         existing = (
             rev["state"] == "PUBLISHED"
@@ -768,6 +781,7 @@ class ResourceAutomation:
                 source_revision,
                 proof,
                 persist=not existing,
+                sales_v2_candidate=self.sales_v2_candidate,
             )
             if not actual_check["passed"]:
                 # A normal blocked return preserves genuine failed owner test facts.

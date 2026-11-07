@@ -39,6 +39,7 @@ def assemble(
     authorize,
     plan_digest,
     agent_name,
+    sales_v2_candidate=False,
 ):
     """Atomic DB-only preparation under exact caller grants, never a Run/effect."""
     if (bundle["namespace"], bundle["securityDomain"]) != (
@@ -58,11 +59,21 @@ def assemble(
             authorize=authorize,
             plan_digest=plan_digest,
             agent_name=agent_name,
+            sales_v2_candidate=sales_v2_candidate,
         )
 
 
 def _assemble(
-    authority, bundle, employee, semantics, *, actor, authorize, plan_digest, agent_name
+    authority,
+    bundle,
+    employee,
+    semantics,
+    *,
+    actor,
+    authorize,
+    plan_digest,
+    agent_name,
+    sales_v2_candidate=False,
 ):
     case = bundle.get("case", "cost")
     if case not in ("delivery", "sales"):
@@ -178,6 +189,7 @@ def _assemble(
         skills,
         source_schema=expected_schema,
         case=case,
+        sales_v2_candidate=sales_v2_candidate,
     )
     seed = canonical_digest(
         {
@@ -317,15 +329,20 @@ def _assemble(
         )
     if case == "sales":
         from agent_console.readonly_resource_assembly import check_readonly_assembly
-        from agent_console.sales_diagnostic_skill import (
-            OPERATIONS,
-            SalesDiagnosticSkillExecutor,
-        )
-        from agent_console.skill_executor import SkillExecutorRegistry
+        from agent_console.sales_diagnostic_skill import OPERATIONS
+
+        from .sales_gross_profit_integration import is_v2, require_source
+
+        if any(
+            is_v2(p["executor_id"], p["executor_revision"], p["executor_digest"])
+            for p in participants
+        ):
+            require_source(source)
+        from .resource_automation_validation import executor_registry
 
         check_readonly_assembly(
             tuple(TaskParticipation.model_validate(p) for p in participants),
-            registry=SkillExecutorRegistry((SalesDiagnosticSkillExecutor(),)),
+            registry=executor_registry(sales_v2_candidate=sales_v2_candidate),
             allowed_references=tuple(
                 ref.model_dump(mode="json")
                 for ref in (

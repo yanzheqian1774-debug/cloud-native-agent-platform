@@ -59,6 +59,16 @@ def validate_approved_preparation(connection, preparation):
     executors = {t.executor_id for t in p.participants}
     if len(executors) != 1:
         raise ExecutionPreparationError("PREPARED_EXECUTION_CASE_MIXED")
+    from .sales_gross_profit_integration import is_v2
+
+    if any(
+        is_v2(t.executor_id, t.executor_revision, t.executor_digest)
+        for t in p.participants
+    ) and not all(
+        is_v2(t.executor_id, t.executor_revision, t.executor_digest)
+        for t in p.participants
+    ):
+        raise ExecutionPreparationError("PREPARED_EXECUTION_CASE_MIXED")
     boundary = {
         SyntheticDeliverySkillExecutor.revision.executor_id: DELIVERY_SYNTHETIC_ONLY,
         SalesDiagnosticSkillExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,

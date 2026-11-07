@@ -11,7 +11,7 @@ from .prepared_skill_invocation import build_request
 from .skill_invocation_application import ScopedSkillInvocationAuthorization
 
 
-def input_snapshot(connection, command):
+def input_snapshot(connection, command, *, sales_v2_candidate=False):
     row = prepared_attempt(connection, command.scope, command.attempt_id)
     if row is None:
         raise ExecutionPreparationError("PREPARED_ATTEMPT_REQUIRED")
@@ -65,8 +65,19 @@ def input_snapshot(connection, command):
         participant.executor_revision,
         participant.executor_digest,
     ) == (sales.executor_id, sales.executor_revision, sales.configuration_digest)
+    from .sales_gross_profit_integration import is_v2, require_source
+
+    sales_v2 = is_v2(
+        participant.executor_id,
+        participant.executor_revision,
+        participant.executor_digest,
+    )
+    if sales_v2 and not sales_v2_candidate:
+        raise ExecutionPreparationError("SALES_V2_CANDIDATE_NOT_ENABLED")
     result = {
-        "schemaVersion": "sales-diagnostic-input.v1"
+        "schemaVersion": "sales-diagnostic-input.v2"
+        if sales_v2
+        else "sales-diagnostic-input.v1"
         if is_sales
         else "synthetic-delivery-input.v1"
         if is_delivery
@@ -85,7 +96,7 @@ def input_snapshot(connection, command):
             ontologyContent=ontology.model_dump(mode="json"),
             businessSemantics=binding.model_dump(mode="json"),
         )
-    if task.operation == "READ_DATA":
+    if task.operation == "READ_DATA" or sales_v2:
         knowledge = published(connection, command.scope, "KNOWLEDGE", p.source_snapshot)
         documents = knowledge.get("documents", [])
         if len(documents) != 1 or len(documents[0].get("chunks", [])) != 1:
@@ -99,22 +110,27 @@ def input_snapshot(connection, command):
         ):
             raise ExecutionPreparationError("PREPARED_SOURCE_DOCUMENT_CORRUPT")
         result["source"] = json.loads(content)
+        if sales_v2:
+            require_source(result["source"])
     return row, result
 
 
 class PreparedNativeSkillCaller:
     """Authorization port is composition-owned; no caller-supplied Skill request."""
 
-    def __init__(self, pool, skill_composition, authorize):
+    def __init__(self, pool, skill_composition, authorize, *, sales_v2_candidate=False):
         self.pool = pool
         self.skill = skill_composition
         self.authorize = authorize
+        self.sales_v2_candidate = sales_v2_candidate
 
     def invoke(self, command):
         with self.pool.connection() as connection, connection.transaction():
             # Recheck current admission and independent Skill authority before lookup.
             decision_id = self.authorize(connection, command)
-            row, inputs = input_snapshot(connection, command)
+            row, inputs = input_snapshot(
+                connection, command, sales_v2_candidate=self.sales_v2_candidate
+            )
             request = build_request(
                 connection, command.scope, command.attempt_id, decision_id
             )
