@@ -929,3 +929,106 @@ def test_supplement_bff_csrf_and_foreign_original_key(automation):
                 acl,
                 context,
             )
+
+
+@pytest.mark.parametrize(
+    "mode", ["published-chain", "revoked-intermediate", "changed-final-duties"]
+)
+def test_supplement_linear_employee_correction_retains_original_scope(automation, mode):
+    a = automation
+    s = prepare_supplement_fixture(a)
+    repository = PostgresEmployeeDefinitionRepository(a.repository)
+    intermediate = s.spec.employee
+    with a.repository.pool.connection() as c, c.transaction():
+        current = repository.read_revision_for_workbench(
+            c,
+            a.e.scope,
+            intermediate.resource_id,
+            intermediate.revision_id,
+            authorized=True,
+        )
+        old = EmployeeRevision.from_record(current["revision"])
+        final = replace(
+            old,
+            revision_id="employee-revision:linear-correction",
+            predecessor_revision_id=old.revision_id,
+            responsibilities=("out-of-scope duties",)
+            if mode == "changed-final-duties"
+            else old.responsibilities,
+        )
+        value = repository.create_for_workbench(
+            c,
+            final,
+            expected_version=current["aggregateVersion"],
+            decision_id="fixture-linear-correction",
+            command_id="fixture-linear-create",
+            authorized=True,
+        )
+        for action in ["VALIDATE", "APPROVE", "PUBLISH"]:
+            value = repository.decide_for_workbench(
+                c,
+                a.e.scope,
+                final.definition_id,
+                final.revision_id,
+                final.digest,
+                action,
+                expected_version=value["aggregateVersion"],
+                decision_id="fixture-linear-correction",
+                command_id="fixture-linear-" + action,
+                authorized=True,
+            )
+    spec = s.spec.model_copy(
+        update={
+            "employee": ExactReference(
+                resource_id=final.definition_id,
+                revision_id=final.revision_id,
+                digest=final.digest,
+            )
+        }
+    )
+    s.acl.allowed.add(
+        (
+            "EMPLOYEE",
+            "READ",
+            "employee:" + final.definition_id + ":" + final.revision_id,
+        )
+    )
+    if mode == "revoked-intermediate":
+        s.acl.allowed.remove(
+            (
+                "EMPLOYEE",
+                "READ",
+                "employee:" + intermediate.resource_id + ":" + intermediate.revision_id,
+            )
+        )
+    before = snapshot(a)
+
+    def submit():
+        return owner_call(
+            a,
+            s.handler,
+            "PREPARE_SALES_SUPPLEMENT",
+            spec.model_dump(mode="json"),
+            s.path,
+            s.acl,
+        )
+
+    if mode == "published-chain":
+        result = submit()
+        assert result["request"]["employee"] == spec.employee.model_dump(mode="json")
+        assert result["executionStarted"] is False and result["modelCalls"] == 0
+        with a.repository.pool.connection() as c:
+            assert (
+                repository.read_revision_for_workbench(
+                    c,
+                    a.e.scope,
+                    intermediate.resource_id,
+                    intermediate.revision_id,
+                    authorized=True,
+                )["publicationState"]
+                == "PUBLISHED"
+            )
+    else:
+        with pytest.raises((AuthorityError, WorkbenchOwnerError)):
+            submit()
+        assert snapshot(a) == before

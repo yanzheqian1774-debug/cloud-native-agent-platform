@@ -2,6 +2,8 @@ import {WorkbenchRequestError,readWorkbenchSession} from '../api/businessWorkspa
 import type {ExecutionView} from '../api/preparedExecution';
 import {artifactMatchesSource} from '../problems/artifactProvenance';
 import * as api from './api';
+import type {EmployeeDefinition} from '../api/digitalEmployees';
+import {listReadableResources} from '../api/resourceDirectory';
 
 export type SupplementTarget=api.Semantics['target']&{criterion_revision_ids:string[];expected_problem_version:number};
 export type SupplementSpec={plan_version:number;plan_digest:string;expected_proposal_revision:number;source_snapshot:api.ExactRef;new_target:SupplementTarget;employee:api.ExactRef;skill:api.ExactRef;reason:string;idempotency_key:string};
@@ -46,16 +48,48 @@ export async function inspectSupplement(view:ExecutionView):Promise<SupplementPr
  if(!equal(input.target.problem,old.plan.semantics.target.problem))gaps.push('业务目标版本已变化，请先确认本次补交是否仍沿用原目标。');
  if(equal(input.target.criteria,old.plan.semantics.target.criteria)||input.criteria.length!==checks.length||new Set(input.criteria.map(c=>c.applicability.check)).size!==checks.length||input.criteria.some(c=>!checks.includes(c.applicability.check??'')||!c.created_by.startsWith('human:')))gaps.push('等待正式完成标准补齐：需要覆盖三维毛利贡献、逐行依据与核对规则。');
  const revision=Math.max(...h.proposals.map(v=>v.revision));
- const groups=await api.candidates(p.plan_id,revision);
  const selected=(kind:string)=>old.plan.semantics.requirements.filter(r=>r.kind===kind&&r.selected).map(r=>r.selected!);
- function successor(kind:string){
-  const before=selected(kind);
-  if(before.length!==1)return null;
-  const found=groups.groups.filter(g=>g.kind===kind).flatMap(g=>g.candidates).filter(c=>c.publication==='PUBLISHED'&&c.permission==='READABLE'&&c.reference.resource_id===before[0].resource_id&&c.reference.revision_id!==before[0].revision_id);
-  const unique=[...new Map(found.map(c=>[JSON.stringify(c.reference),c.reference])).values()];
-  return unique.length===1?unique[0]:null;
+ // The predecessor legitimately targets the prior criteria set. Normal planning
+ // candidate discovery requires a current target, so read current resource owners
+ // directly here; the supplement owner still performs final exact admission.
+ const skills:api.ExactRef[]=[],employees:api.ExactRef[]=[];
+ const priorSkill=selected('SKILL'),priorEmployee=selected('EMPLOYEE');
+ if(priorSkill.length===1){
+  let cursor:string|null=null;const seen=new Set<string>();
+  do{
+   if(cursor&&seen.has(cursor)||seen.size>=20)throw Error('补交资源目录分页未核实完成。');
+   if(cursor)seen.add(cursor);
+   const page=await listReadableResources('skill',priorSkill[0].resource_id,'PUBLISHED',cursor);
+   for(const item of page.items)if(item.kind==='skill'&&item.identity===priorSkill[0].resource_id&&item.revisionId!==priorSkill[0].revision_id&&item.state==='PUBLISHED'&&item.isCurrentPublished&&item.enabled)skills.push({resource_id:item.identity,revision_id:item.revisionId,digest:item.digest});
+   cursor=page.nextCursor;
+  }while(cursor);
  }
- const skill=successor('SKILL'),employee=successor('EMPLOYEE');
+ if(priorEmployee.length===1){
+  const before=await request<EmployeeDefinition>('employees/'+encodeURIComponent(priorEmployee[0].resource_id)+'/revisions/'+encodeURIComponent(priorEmployee[0].revision_id));
+  if(before.employeeDefinitionId!==priorEmployee[0].resource_id||before.employeeDefinitionRevisionId!==priorEmployee[0].revision_id||before.employeeDefinitionDigest!==priorEmployee[0].digest)throw Error('原员工准确版本不一致。');
+  const key=(m:EmployeeDefinition['members'][number])=>JSON.stringify([m.kind,m.resourceId,m.revisionId,m.digest]);
+  const nonSkill=(value:EmployeeDefinition)=>value.members.filter(m=>m.kind!=='SKILL').map(key).sort();
+  let cursor:string|null=null;const seen=new Set<string>();
+  do{
+   if(cursor&&seen.has(cursor)||seen.size>=20)throw Error('补交员工目录分页未核实完成。');
+   if(cursor)seen.add(cursor);
+   const page:{items:api.EmployeeOption[];nextCursor?:string|null}=await request<{items:api.EmployeeOption[];nextCursor?:string|null}>('employees?'+new URLSearchParams({pageSize:'100',...(cursor?{cursor}:{})}));
+   for(const item of page.items){
+    if(item.employeeDefinitionId!==priorEmployee[0].resource_id||item.employeeDefinitionRevisionId===priorEmployee[0].revision_id||item.publicationState!=='PUBLISHED')continue;
+    // LIST is discovery only; the exact owner READ proves current access.
+    try{
+     const exact=await request<EmployeeDefinition>('employees/'+encodeURIComponent(item.employeeDefinitionId)+'/revisions/'+encodeURIComponent(item.employeeDefinitionRevisionId));
+     if(exact.employeeDefinitionId!==item.employeeDefinitionId||exact.employeeDefinitionRevisionId!==item.employeeDefinitionRevisionId||exact.employeeDefinitionDigest!==item.employeeDefinitionDigest)throw Error('补交员工准确版本不一致。');
+     const skillMembers=exact.members.filter(m=>m.kind==='SKILL');
+     const compatible=before.role===exact.role&&JSON.stringify(before.responsibilities)===JSON.stringify(exact.responsibilities)&&JSON.stringify(nonSkill(before))===JSON.stringify(nonSkill(exact))&&skillMembers.length===1&&skills.some(r=>key(skillMembers[0])===JSON.stringify(['SKILL',r.resource_id,r.revision_id,r.digest]));
+     if(exact.publicationState==='PUBLISHED'&&compatible)employees.push({resource_id:exact.employeeDefinitionId,revision_id:exact.employeeDefinitionRevisionId,digest:exact.employeeDefinitionDigest});
+    }catch(e){if(!(e instanceof WorkbenchRequestError&&[403,404].includes(e.status)))throw e;}
+   }
+   cursor=page.nextCursor??null;
+  }while(cursor);
+ }
+ function unique(refs:api.ExactRef[]){const values=[...new Map(refs.map(r=>[JSON.stringify(r),r])).values()];return values.length===1?values[0]:null}
+ const skill=unique(skills),employee=unique(employees);
  if(!skill)gaps.push('等待分维度毛利分析能力的已发布、可读取后继版本；候选不唯一时先由维护方核对。');
  if(!employee)gaps.push('等待使用该分析能力的数字员工准备完成并可读取。');
  if(gaps.length||!skill||!employee)return {state:'BLOCKED',gaps};

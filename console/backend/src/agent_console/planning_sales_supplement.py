@@ -79,6 +79,35 @@ def member_refs(employee):
     }
 
 
+def employee_descends_from(c, app, principal, original, after):
+    """Historical links prove lineage only; each remains exactly READ-authorized."""
+    scope = app.scope(principal)
+    cursor = after.get("predecessorRevisionId")
+    seen = {after["revisionId"]}
+    for _ in range(64):
+        if cursor == original.revision_id:
+            return True
+        if not cursor or cursor in seen:
+            return False
+        seen.add(cursor)
+        require_read(
+            app.authority,
+            principal,
+            "EMPLOYEE",
+            original.model_copy(update={"revision_id": cursor}),
+        )
+        try:
+            value = PostgresEmployeeDefinitionRepository.read_revision_for_workbench(
+                c, scope, original.resource_id, cursor, authorized=True
+            )
+        except EmployeeDefinitionError as exc:
+            raise PlanningError("SUPPLEMENT_EMPLOYEE_UNAVAILABLE") from exc
+        if value["publicationState"] != "PUBLISHED":
+            return False
+        cursor = value["revision"].get("predecessorRevisionId")
+    return False
+
+
 def validate_resources(c, app, principal, old, spec):
     scope = app.scope(principal)
     old_employee = [
@@ -136,7 +165,6 @@ def validate_resources(c, app, principal, old, spec):
     )
     if (
         original_member not in member_refs(before)
-        or after.get("predecessorRevisionId") != old_employee.revision_id
         or before["role"] != after["role"]
         or before["responsibilities"] != after["responsibilities"]
         or member_refs(after)
@@ -154,6 +182,8 @@ def validate_resources(c, app, principal, old, spec):
         | {("SKILL", spec.skill.resource_id, spec.skill.revision_id, spec.skill.digest)}
     ):
         raise PlanningConflict("SUPPLEMENT_MEMBER_CHANGE_OUT_OF_SCOPE")
+    if not employee_descends_from(c, app, principal, old_employee, after):
+        raise PlanningConflict("SUPPLEMENT_EMPLOYEE_PREDECESSOR_MISMATCH")
     operations = skill.get("operations", [])
     if (
         skill.get("sideEffect") != "READ"
