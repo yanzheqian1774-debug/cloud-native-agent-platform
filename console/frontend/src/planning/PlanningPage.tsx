@@ -61,7 +61,7 @@ export function PlanningPage() {
   const latest = Math.max(...history.proposals.map(p => p.revision));
   const viewingHistorical=data.proposal.revision<latest;
   const continuous=Boolean(approved&&hasContinuous(scope,proposalId,approved.digest));
-  const needsSelection=Boolean(approved&&history.resourceAutomation?.enabled&&needsResourceSelection(approved.plan.semantics));
+  const needsSelection=Boolean(approved&&history.resourceAutomation?.enabled&&needsResourceSelection(approved.plan.semantics,data.proposal.origin));
   const recordedExecutions=history.plans.flatMap(p=>(p.execution_summary?.executions??[]).filter(e=>e.state!=='NOT_STARTED').map(e=>({...e,revision:p.plan.source_proposal_revision})));
   async function act(kind: "confirm" | "refresh") {
     if (busy) return;
