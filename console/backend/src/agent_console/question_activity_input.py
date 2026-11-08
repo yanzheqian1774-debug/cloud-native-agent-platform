@@ -103,15 +103,11 @@ def route_question(question, contexts, token=None):
         ((sum(len(t) for t in words & terms(x["title"])), x) for x in contexts),
         key=lambda pair: (-pair[0], pair[1]["contextToken"]),
     )
-    if (
-        not ranked
-        or ranked[0][0] == 0
-        or (len(ranked) > 1 and ranked[0][0] == ranked[1][0])
-    ):
-        return None, [
-            {"label": x["title"], "contextToken": x["contextToken"]} for x in contexts
-        ]
-    return ranked[0][1], []
+    # Shared words rank suggestions, never establish the user's business target.
+    # Even a single visible context can belong to an unrelated new goal.
+    return None, [
+        {"label": x["title"], "contextToken": x["contextToken"]} for _, x in ranked
+    ]
 
 
 class QuestionActivityInput:
@@ -237,7 +233,9 @@ class QuestionActivityInput:
             "questionDigest": canonical_digest(request.question),
             "contextRouting": "EXPLICIT_CURRENT_PROBLEM_REAUTHORIZED"
             if request.problemId is not None
-            else "DETERMINISTIC_AUTHORIZED_TITLE_OVERLAP_NOT_MODEL_UNDERSTANDING",
+            else "EXPLICIT_CONTEXT_TOKEN_REAUTHORIZED"
+            if request.contextToken is not None
+            else "READABLE_CHOICES_REQUIRE_EXPLICIT_BUSINESS_CONTEXT",
             "formalBusinessProcess": None,
             "newResourceOrEmployeeCreated": False,
             "executionStarted": False,

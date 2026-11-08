@@ -19,13 +19,19 @@ from test_prepared_resource_owners import services
 from test_resource_automation import automation
 
 
-def test_question_routes_only_unambiguous_readable_context_and_one_business_choice():
+def test_question_ranks_readable_choices_without_implicitly_selecting_a_target():
     contexts = [
         {"title": "销售区域变化诊断", "contextToken": "a" * 64},
         {"title": "供应商逾期交付分析", "contextToken": "b" * 64},
     ]
-    assert route_question("销售哪些区域下降", contexts)[0] == contexts[0]
-    assert route_question("哪些供应商交付逾期", contexts)[0] == contexts[1]
+    selected, choices = route_question("销售哪些区域下降", contexts)
+    assert (
+        selected is None and choices[0]["contextToken"] == contexts[0]["contextToken"]
+    )
+    selected, choices = route_question("哪些供应商交付逾期", contexts)
+    assert (
+        selected is None and choices[0]["contextToken"] == contexts[1]["contextToken"]
+    )
     selected, choices = route_question("请分析情况", contexts)
     assert selected is None and len(choices) == 2
     assert route_question("请分析情况", contexts, "b" * 64)[0] == contexts[1]
@@ -116,7 +122,10 @@ def test_raw_question_creates_fresh_governed_request_without_predecessor_plan(
             "n"
         ]
     question = title + " 请列出变化与异常依据"
-    result = invoke(a, question)
+    initial = invoke(a, question)
+    assert initial["state"] == "NEEDS_BUSINESS_CONTEXT_CLARIFICATION"
+    assert initial["planningRequest"] is None and initial["modelCalls"] == 0
+    result = invoke(a, question, context_token=initial["choices"][0]["contextToken"])
     assert result["state"] == "ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING", result
     request = PlanningRequest.model_validate(result["planningRequest"])
     assert request.answers[0] == question
@@ -143,6 +152,18 @@ def test_raw_question_creates_fresh_governed_request_without_predecessor_plan(
         == "BLOCKED_ACTION_OUTSIDE_READONLY_CONTEXT"
     )
     assert invoke(a, "星际飞船维修")["planningRequest"] is None
+
+
+@pytest.mark.parametrize("single_context", [False, True])
+def test_inventory_overlap_never_selects_supplier_or_sales(single_context):
+    contexts = [
+        {"title": "供应商逾期交付分析", "contextToken": "a" * 64},
+        {"title": "销售区域变化诊断", "contextToken": "b" * 64},
+    ][: 1 if single_context else 2]
+    selected, choices = route_question(
+        "门店库存与补货诊断:采购提前期、逾期未到货、未来七天缺货风险", contexts
+    )
+    assert selected is None and len(choices) == len(contexts)
 
 
 def test_question_entry_keeps_existing_collection_authorization_gate():

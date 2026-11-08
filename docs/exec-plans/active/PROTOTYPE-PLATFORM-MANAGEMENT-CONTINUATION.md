@@ -604,3 +604,8 @@ Agent/runtime/generation, attempt, placement ID and dispatch-pinned digest; requ
 PLACEMENT READ first. Validate canonical digest and request parent coordinates.
 No writes, lease/health inference or old result changes. Test missing/mismatched
 and revoked records, full checks, reinstall and repeat the read-only actual route.
+
+
+## G1: explicit business context before planning (2026-11-08)
+
+Bounded third-case acceptance on installed 6bcebf found inventory wording routed to the supplier problem by title overlap. Stop before model dispatch; preserve the original failed response and old Runs. Change only unscoped routing: lexical overlap can order readable choices but cannot select a business target. Existing explicit problemId and reauthorized contextToken behavior remains. No new executor, schema, policy, grants, or public contract. Verify unrelated inventory wording, single-context ambiguity, explicit selection and stale tokens; preserve supplier/sales scoped regression. Normal checks, cumulative installation, then read-only retest of the same original routing request. General inventory calculation remains a separately disclosed missing capability; do not call this repair third-case business success.
