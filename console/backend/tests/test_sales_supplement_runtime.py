@@ -1,6 +1,7 @@
 # ruff: noqa: F401,F811 -- Reuse unchanged disposable UUID fixtures.
 """Actual entrypoint flags and compatible close profile; no actual runtime login."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -242,6 +243,7 @@ def test_real_bootstrap_carries_mode_to_owner_and_routes(
         "RESOURCE_PREPARATION_POLICY",
         "READONLY_CONTINUATION_POLICY",
         "RESOURCE_MANAGEMENT_POLICY",
+        "RESOURCE_DEFINITION_MANAGEMENT_POLICY",
     ):
         monkeypatch.delenv(key, raising=False)
     captured = {}
@@ -268,6 +270,39 @@ def test_real_bootstrap_carries_mode_to_owner_and_routes(
         return FastAPI()
 
     monkeypatch.setattr(workbench_bootstrap, "create_workbench_bff", capture)
+    from agent_console import resource_management
+
+    original_manager = resource_management.ResourceManagement
+
+    class CapturingManagement(original_manager):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            captured["managementOwner"] = self
+
+    monkeypatch.setattr(resource_management, "ResourceManagement", CapturingManagement)
+    management_file = tmp_path / "management-policy.json"
+    management_file.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "resource-management-policy.v1",
+                "enabled": True,
+                "policyId": "isolated-bootstrap-management",
+                "policyVersion": "1",
+                "issuer": a.policy.issuer,
+                "credentialPath": str(a.policy.credentialPath),
+                "workScopes": [
+                    {
+                        "namespace": a.subject.scope.tenant_id,
+                        "securityDomain": a.subject.scope.security_domain,
+                        "subject": a.subject.principal_id,
+                        "kinds": ["skill", "mcp"],
+                        "expiresAt": a.policy.workScopes[0].expiresAt.isoformat(),
+                    }
+                ],
+            }
+        )
+    )
+    monkeypatch.setenv("RESOURCE_MANAGEMENT_POLICY", str(management_file))
     dsn = a.repository.pool.conninfo
     workbench_bootstrap.build_workbench_composition(
         runtime_configuration_path=runtime_file(tmp_path, dsn),
@@ -294,3 +329,6 @@ def test_real_bootstrap_carries_mode_to_owner_and_routes(
     assert "READ_PREPARED_SKILL_SUCCESSOR" in routes
     assert ("PREPARE_SALES_SUPPLEMENT" in routes) is enabled
     assert ("PREPARE_PREPARED_SKILL_SUCCESSOR" in routes) is enabled
+    assert routes["READ_PREPARED_RESOURCE"].handler.skill_successor_enabled is enabled
+    assert captured["managementOwner"].prepared_handoff_enabled is enabled
+    assert captured["managementOwner"].sales_v2_candidate is enabled

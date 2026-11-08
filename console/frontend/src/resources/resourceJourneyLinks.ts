@@ -16,9 +16,10 @@ export function safeResourceReturn(raw: string | null): string | null {
       if([...p.keys()].some(k=>!['selected','resourceRevision','resourceDigest','kind','query','status'].includes(k)||p.getAll(k).length!==1)||p.get('kind')!==expected||!identity(p.get('selected'))||!identity(p.get('resourceRevision'))||!digest(p.get('resourceDigest')??'')||(p.get('query')?.length??0)>200||(p.get('status')?.length??0)>32)return null;
       p.sort();return url.pathname+'?'+p;
     }
-    if ([...p.keys()].some(k => !['managedResource','resourceTab','query','status','kind'].includes(k) || p.getAll(k).length !== 1)
+    if ([...p.keys()].some(k => !['managedResource','resourceTab','query','status','kind','returnConversation','fromExecution'].includes(k) || p.getAll(k).length !== 1)
       || (p.has('kind') && p.get('kind') !== ({'/skills':'skill','/mcp':'mcp','/agents':'agent','/knowledge':'knowledge'}[url.pathname]))
       || !identity(p.get('managedResource')) || (p.has('resourceTab') && !tabs.has(p.get('resourceTab')!))
+      || (p.has('returnConversation')&&!identity(p.get('returnConversation'))) || (p.has('fromExecution')&&!/^[a-f0-9]{64}$/.test(p.get('fromExecution')!))
       || (p.get('query')?.length ?? 0) > 200 || (p.get('status')?.length ?? 0) > 32) return null;
     p.sort();
     return url.pathname + '?' + p;
@@ -32,7 +33,7 @@ export function exactSkillMcpHref(kind: 'skill' | 'mcp', id: string, revision: s
 
 export function publishedResourceHref(resource: SkillMcpResource): string | null {
   const revision = resource.revisions.find(r => r.revisionId === resource.publishedRevisionId && r.state === 'PUBLISHED');
-  return revision ? exactSkillMcpHref(resource.kind,resource.resourceId,revision.revisionId,revision.digest) : null;
+  if(!revision)return null;const href=new URL(exactSkillMcpHref(resource.kind,resource.resourceId,revision.revisionId,revision.digest),window.location.origin),current=new URLSearchParams(window.location.search),conversation=current.get('returnConversation'),execution=current.get('fromExecution');if(identity(conversation))href.searchParams.set('returnConversation',conversation);if(execution&&/^[a-f0-9]{64}$/.test(execution))href.searchParams.set('fromExecution',execution);return href.pathname+href.search;
 }
 
 export function employeeReferenceHref(employee: {identity: string;revision: string}, resource: SkillMcpResource): string {

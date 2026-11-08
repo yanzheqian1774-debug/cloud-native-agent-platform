@@ -511,7 +511,12 @@ def build_workbench_composition(
             directory_installers += (
                 install_management(
                     ResourceManagement(
-                        prepared_resource_services, management_policy, foundation.grants
+                        prepared_resource_services,
+                        management_policy,
+                        foundation.grants,
+                        sales_v2_candidate=sales_v2_candidate,
+                        prepared_handoff_enabled=sales_supplement_candidate
+                        and sales_v2_candidate,
                     ),
                     authorizer,
                 ),
@@ -567,7 +572,11 @@ def build_workbench_composition(
                 *directory_routes,
                 *ontology_operations,
                 *(
-                    prepared_resource_operations(prepared_resource_services)
+                    prepared_resource_operations(
+                        prepared_resource_services,
+                        skill_successor_enabled=sales_supplement_candidate
+                        and sales_v2_candidate,
+                    )
                     if prepared_resource_services
                     else ()
                 ),

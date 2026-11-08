@@ -405,3 +405,70 @@ requests. Run existing source-return and resource/employee browser regression,
 frontend lint/build, and normal repository checks. Author verification and
 actual installed verification are distinct; this display correction does not
 claim new gross-profit output, enterprise tool calls or project completion.
+
+## Original prepared Skill successor to maintenance — bounded G1 closure
+
+Actual65 preserves original sales Skill aggregate4, its published revision, five
+criteria, one criteria set and four Plans. No new gross-profit result exists.
+The prepared Skill owner already creates a same-ID successor with current exact
+MANAGE/READ, predecessor digest/CAS, safe content, actor-bound receipt and key
+recovery. The maintenance owner only recognizes actor create/import receipts,
+and no frontend calls the prepared successor port. This disconnects original
+Skill successor→test/publication→Employee exact reference from the same original
+conversation supplement. Keep65 and predecessors frozen in this descendant.
+
+Final bounded implementation:
+
+- Extend the existing authorized prepared-resource READ with an optional,
+  default-false successor availability boolean. Bootstrap binds it only when
+  both existing Sales supplement flags enable the original successor POST.
+  Availability never grants management authority.
+- Add the exact Skill page's explicit successor editor. Bind current session,
+  original identity/revision/digest and aggregate version, reject inline secret
+  fields, preserve complete intent/key before POST, and use the original
+  successor GET for uncertainty/reload. Receipt actor/key/predecessor/draft/CAS
+  must match before offering a separate maintenance handoff.
+- Add adopt-prepared to the existing private management command schema, with
+  preparedCommandKey. It is default-closed and requires both existing Sales
+  flags, a genuine same-actor/scope prepared receipt, current exact MANAGE and
+  predecessor READ, current management policy/work scope, and aggregate CAS.
+  Verify immutable draft/intermediate/predecessor digests, canonical original
+  command and matching original owner lifecycle actor facts. A prepared receipt
+  alone still gives no generic ownership; retain the inherited denial test.
+- Only an explicit successful handoff writes an adopt-prepared maintenance
+  receipt. Recognize it in the existing management directory/access/impact/
+  commands after verifying original prepared and POLICY decision provenance.
+  Never manufacture create/import ownership. No MCP/foreign/seeded-resource
+  adoption. GET recovery and refresh do not adopt, re-authorize or POST.
+- Reuse the already gated bounded executor registry in resource tests when
+  sales_v2_candidate is true; default remainsfalse. Require all current exact
+  operation tests before publish-tested. Preserve normal policy publication,
+  raw test results, old revisions, consumer references and CAS.
+- Carry only finite original conversation/execution parameters through the
+  existing maintenance, Employee reference, published exact resource and saved
+  result return links. Preserve original unsent draft. Session/focus/navigation
+  changes invalidate late responses; receipt mismatch/lost read never becomes
+  a management link. Existing keys recover historical results with writes off.
+
+This changes no public route, CRD, lifecycle owner, identity role, policy scope,
+frozen public contract, database, dependency or business execution semantics.
+The private command variant and optional READ metadata are backward compatible;
+install only a complete pinned source/frontend composition. Actual activation
+and business acceptance remain separate from author verification. Service
+credential13 renewal on actual65 is a separate original-operator operation with
+unchanged subjects/sources/kinds and all execution flagsfalse, not installation
+or acceptance of this candidate.
+
+Validation: disposable PostgreSQL real prepared successor→explicit handoff→
+current exact tests→POLICY publication→same Employee successor/exact consumer;
+old revisions and member bindings unchanged, no model/businessRun. Deny absent
+handoff, bare grant, foreign actor/scope/key, corrupt digest/path/provenance,
+MCP, stale CAS, revoked grants, expired policy and closed flags without partial
+resource/grant/request writes. Verify real bootstrap flag forwarding. Browser
+390/1280 full journey through Employee, saved result and original conversation,
+with original-key recovery, reload, late identity, wrong receipt, lost current
+read and close-profile GET recovery; preserve resource/Employee/source tests.
+Reuse styles and inspect both viewports. Run frontend lint and both builds,
+relevant SQL/BFF checks and normal repository hooks. Author fixture/SQL evidence
+is never labeled actual live business acceptance. Preserve historical UNKNOWN,
+16 unsettled, original source snapshots and supplier records.

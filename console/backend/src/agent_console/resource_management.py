@@ -79,6 +79,7 @@ class ManagementCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal[
         "batch-import",
+        "adopt-prepared",
         "test",
         "publish-tested",
         "create",
@@ -103,6 +104,7 @@ class ManagementCommand(BaseModel):
     manifest: dict | None = None
     manifests: list[dict] | None = Field(default=None, min_length=1, max_length=100)
     previewDigest: str | None = Field(default=None, pattern="^[a-f0-9]{64}$")
+    preparedCommandKey: str | None = Field(default=None, min_length=8, max_length=120)
     operation: str | None = Field(default=None, max_length=200)
     testName: str | None = Field(default=None, min_length=1, max_length=120)
     testInput: dict | None = None
@@ -142,8 +144,18 @@ class ManagementTargets:
 
 
 class ResourceManagement:
-    def __init__(self, services, policy, grants):
+    def __init__(
+        self,
+        services,
+        policy,
+        grants,
+        *,
+        sales_v2_candidate=False,
+        prepared_handoff_enabled=False,
+    ):
         self.services, self.policy, self.grants = services, policy, grants
+        self.sales_v2_candidate = sales_v2_candidate
+        self.prepared_handoff_enabled = prepared_handoff_enabled
         self.automation = SimpleNamespace(policy=policy, grants=grants)
 
     def authorize(self, call, members, key, work, issuer):
@@ -163,19 +175,52 @@ class ResourceManagement:
         return issuer, work
 
     def owned(self, call, kind, identity):
-        return (
-            call.connection.execute(
-                "SELECT 1 FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'identity'=%s AND result->>'action' IN ('create','import')",
-                (
-                    call.context.scope.tenant_id,
-                    call.context.scope.security_domain,
-                    call.context.principal_id,
-                    kind,
+        rows = call.connection.execute(
+            "SELECT result FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'identity'=%s AND result->>'action' IN ('create','import','adopt-prepared') LIMIT 201",
+            (
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+                call.context.principal_id,
+                kind,
+                identity,
+            ),
+        ).fetchall()
+        if len(rows) > 200:
+            return False
+        for row in rows:
+            result = row["result"]
+            if result["action"] in {"create", "import"}:
+                return True
+            if kind == "skill":
+                from .prepared_skill_handoff import read_handoff
+
+                handoff = read_handoff(
+                    call.connection,
+                    call.context,
                     identity,
-                ),
-            ).fetchone()
-            is not None
-        )
+                    result.get("preparedCommandKey"),
+                )
+                if (
+                    handoff is not None
+                    and result.get("preparedSuccessor") == handoff["draft"]
+                    and result.get("executionStarted") is False
+                    and result.get("modelCalls") == 0
+                    and result.get("credentialMaterial") == "NOT_INCLUDED"
+                ):
+                    decision = call.connection.execute(
+                        "SELECT 1 FROM authorization_admin.grant_decisions d WHERE d.decision_id=%s AND d.approved AND d.basis_type='POLICY' AND d.issuer_principal_id=%s AND EXISTS(SELECT 1 FROM authorization_admin.grants g WHERE g.decision_id=d.decision_id AND g.subject_principal_id=%s AND g.tenant_id=%s AND g.security_domain=%s AND g.owner='SKILL' AND g.action='MANAGE_RESOURCE' AND g.exact_resource=%s)",
+                        (
+                            result.get("policyDecisionId"),
+                            result.get("policyIssuer"),
+                            call.context.principal_id,
+                            call.context.scope.tenant_id,
+                            call.context.scope.security_domain,
+                            target(kind, identity),
+                        ),
+                    ).fetchone()
+                    if decision is not None:
+                        return True
+        return False
 
     def handle(self, call):
         kind = call.path["kind"]
@@ -218,7 +263,34 @@ class ResourceManagement:
             if command.action in {"health", "discover", "select-tools"}
             else "MANAGE_RESOURCE"
         )
-        if action != "CREATE_RESOURCE" and (
+        handoff = None
+        if command.action == "adopt-prepared":
+            if not self.prepared_handoff_enabled:
+                raise WorkbenchOwnerError("PREPARED_SKILL_HANDOFF_DISABLED", 403)
+            from .prepared_skill_handoff import read_handoff
+
+            if kind != "skill" or not identity:
+                raise WorkbenchOwnerError("PREPARED_SKILL_HANDOFF_REQUIRED", 422)
+            handoff = read_handoff(
+                call.connection, call.context, identity, command.preparedCommandKey
+            )
+            if handoff is None:
+                raise WorkbenchOwnerError("PREPARED_SKILL_HANDOFF_NOT_FOUND", 404)
+            # A prepared receipt alone never self-authorizes adoption. Require
+            # the original current exact management and predecessor-read grants.
+            original = OwnerPrincipal(actor, ns, domain)
+            call.authority.require(
+                original, "SKILL", "MANAGE_RESOURCE", target(kind, identity)
+            )
+            call.authority.require(
+                original,
+                "SKILL",
+                "READ_RESOURCE",
+                reference(kind, identity, handoff["predecessor"]["revision_id"]),
+            )
+        elif command.preparedCommandKey is not None:
+            raise WorkbenchOwnerError("PREPARED_SKILL_HANDOFF_ACTION_REQUIRED", 422)
+        elif action != "CREATE_RESOURCE" and (
             not identity or not self.owned(call, kind, identity)
         ):
             raise WorkbenchOwnerError("RESOURCE_MANAGEMENT_NOT_FOUND", 404)
@@ -283,6 +355,16 @@ class ResourceManagement:
                     command.action != "access" or command.expectedVersion is not None
                 ):
                     raise WorkbenchOwnerError("RESOURCE_VERSION_STALE", 409)
+                if handoff is not None and (
+                    record["aggregateVersion"] != handoff["aggregateVersion"]
+                    or record["currentDraftRevisionId"]
+                    != handoff["draft"]["revision_id"]
+                    or record["publishedRevisionId"]
+                    != handoff["predecessor"]["revision_id"]
+                ):
+                    raise WorkbenchOwnerError(
+                        "PREPARED_SKILL_HANDOFF_TARGET_STALE", 409
+                    )
                 args = (scope, kind, identity, actor, command.expectedVersion)
                 if command.action == "edit":
                     service.edit(*args, content or {})
@@ -299,6 +381,7 @@ class ResourceManagement:
                         or command.expectedOutput is None
                     ):
                         raise WorkbenchOwnerError("TEST_CASE_REQUIRED", 422)
+                    from .resource_automation_validation import executor_registry
                     from .skill_resource_testing import run as run_test
 
                     self.safe_content(
@@ -319,6 +402,9 @@ class ResourceManagement:
                         inputs=command.testInput,
                         expected_output=command.expectedOutput,
                         comparison=command.comparison,
+                        executor_registry=executor_registry(
+                            sales_v2_candidate=self.sales_v2_candidate
+                        ),
                     )
                 elif command.action in {"publish", "publish-tested"}:
                     if command.action == "publish-tested":
@@ -435,7 +521,7 @@ class ResourceManagement:
                     )
                 elif command.action in {"disable", "enable", "deprecate"}:
                     service.lifecycle(*args, command.action.upper(), "资源配置操作")
-                elif command.action != "access":
+                elif command.action not in {"access", "adopt-prepared"}:
                     raise WorkbenchOwnerError("RESOURCE_ACTION_UNSUPPORTED", 422)
                 record = service.repository.get(scope, kind, identity)
         except SkillMcpFailure as exc:
@@ -462,6 +548,9 @@ class ResourceManagement:
             "modelCalls": 0,
             "credentialMaterial": "NOT_INCLUDED",
         }
+        if command.action == "adopt-prepared":
+            result["preparedCommandKey"] = command.preparedCommandKey
+            result["preparedSuccessor"] = handoff["draft"]
         if command.action == "publish-tested":
             from .skill_resource_testing import coverage
 
@@ -647,7 +736,7 @@ def install_management(manager, authorizer):
         def directory(request: Request, kind: Literal["skill", "mcp"]):
             def read(call):
                 rows = call.connection.execute(
-                    "SELECT DISTINCT result->>'identity' identity FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'action' IN ('create','import') ORDER BY identity LIMIT 200",
+                    "SELECT DISTINCT result->>'identity' identity FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'action' IN ('create','import','adopt-prepared') ORDER BY identity LIMIT 200",
                     (
                         call.context.scope.tenant_id,
                         call.context.scope.security_domain,
@@ -664,6 +753,10 @@ def install_management(manager, authorizer):
                 )
                 items = []
                 for row in rows:
+                    if not row["identity"] or not manager.owned(
+                        call, kind, row["identity"]
+                    ):
+                        continue
                     try:
                         call.authority.require(
                             principal,

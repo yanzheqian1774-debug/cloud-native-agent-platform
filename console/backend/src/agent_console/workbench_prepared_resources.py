@@ -82,8 +82,9 @@ def bind_service(service, connection):
 
 
 class PreparedResourceOwner:
-    def __init__(self, services):
+    def __init__(self, services, *, skill_successor_enabled=False):
         self.services = services
+        self.skill_successor_enabled = skill_successor_enabled
 
     def __call__(self, call):
         return self._handle(call)
@@ -154,6 +155,9 @@ class PreparedResourceOwner:
                 "aggregateVersion": record["aggregateVersion"],
                 "revision": exact,
                 "publishedRevisionId": record.get("publishedRevisionId"),
+                "successorPreparationEnabled": bool(
+                    kind == "skill" and self.skill_successor_enabled
+                ),
             }
         if (proof is None and not actor.startswith("human:")) or not call.payload[
             "reason"
@@ -279,9 +283,11 @@ class PreparedResourceTargets:
         return False
 
 
-def prepared_resource_operations(services):
+def prepared_resource_operations(services, *, skill_successor_enabled=False):
     path = PREFIX + "/prepared-resources/{kind}/{identity}/{revision}"
-    handler = PreparedResourceOwner(services)
+    handler = PreparedResourceOwner(
+        services, skill_successor_enabled=skill_successor_enabled
+    )
     return (
         WorkbenchOperation(
             "READ_PREPARED_RESOURCE",
