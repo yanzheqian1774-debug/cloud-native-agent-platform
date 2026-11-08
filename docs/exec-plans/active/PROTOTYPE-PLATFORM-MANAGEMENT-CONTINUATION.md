@@ -593,3 +593,14 @@ existing target validator, and prepare a separately recorded operator successor
 that adds only PLACEMENT READ requestability for the original work review. Retain
 all credentials, expirations and prior rules unchanged. No direct SQL grant or
 silent active-file overwrite; use the existing generation activation controller.
+
+## Historical Placement closure — 2026-11-08 — G1
+
+Actual source 59dcd5b proved instance lifecycle and Task observations but the old
+Placement READ adapter requires an active attempt and root-workflow assignment.
+Keep that contract intact. The task-review owner reads canonical historical
+Placement using the exact authorized saved participant, dispatch assignment,
+Agent/runtime/generation, attempt, placement ID and dispatch-pinned digest; require
+PLACEMENT READ first. Validate canonical digest and request parent coordinates.
+No writes, lease/health inference or old result changes. Test missing/mismatched
+and revoked records, full checks, reinstall and repeat the read-only actual route.

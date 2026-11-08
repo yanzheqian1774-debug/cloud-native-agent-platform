@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from urllib3.exceptions import HTTPError as KubernetesTransportError
 
 from .authority_contracts import AuthorityError
+from .execution_postgres import PlacementDecision
 from .execution_source_review import ExecutionSourceReview
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_employee import DigitalEmployeeOwnerAdapter, _assignment_read
@@ -342,17 +343,7 @@ class EmployeeExecutionTrace:
             return result
         try:
             self.require(call, "PLACEMENT", "placement:" + command["placement_id"])
-            placement = self.instances(
-                replace(
-                    call,
-                    operation="READ_EMPLOYEE_PLACEMENT",
-                    path={**path, "placement_id": command["placement_id"]},
-                    query={
-                        "attemptId": task["attemptId"],
-                        "agentInstanceId": task["agentInstanceId"],
-                    },
-                )
-            )
+            placement = self.saved_placement(call, task, command)
         except (AuthorityError, WorkbenchOwnerError):
             result["placementStatus"] = "UNAVAILABLE"
             return result
@@ -360,6 +351,51 @@ class EmployeeExecutionTrace:
             raise WorkbenchOwnerError("RUNTIME_PLACEMENT_BINDING_CHANGED", 409)
         result["placement"], result["placementStatus"] = placement, "VERIFIED"
         return result
+
+    def saved_placement(self, call, task, command):
+        # A completed dispatch has historical placement evidence, not an active
+        # lease. Do not relax the existing active Placement owner read contract.
+        row = call.connection.execute(
+            "SELECT d.canonical_record,d.digest FROM execution_authority.placement_decisions d JOIN execution_authority.placement_requests r ON r.namespace=d.namespace AND r.security_domain=d.security_domain AND r.request_id=d.request_id WHERE d.namespace=%s AND d.security_domain=%s AND d.placement_id=%s AND r.attempt_id=%s AND r.agent_instance_id=%s",
+            (
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+                command["placement_id"],
+                task["attemptId"],
+                task["agentInstanceId"],
+            ),
+        ).fetchone()
+        if row is None:
+            raise WorkbenchOwnerError("SAVED_PLACEMENT_UNAVAILABLE", 404)
+        try:
+            decision = PlacementDecision.from_mapping(row["canonical_record"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise WorkbenchOwnerError("SAVED_PLACEMENT_INVALID", 409) from error
+        if (
+            decision.digest != row["digest"]
+            or decision.digest != command["placement_digest"]
+            or str(decision.placement_id) != command["placement_id"]
+            or str(decision.runtime_instance_id) != task["runtimeInstanceId"]
+        ):
+            raise WorkbenchOwnerError("SAVED_PLACEMENT_BINDING_CHANGED", 409)
+        return {
+            "placementId": str(decision.placement_id),
+            "requestId": str(decision.request_id),
+            "decision": decision.decision.value,
+            "runtimeInstanceId": str(decision.runtime_instance_id),
+            "policyVersion": decision.policy_version,
+            "compatibilityFacts": decision.compatibility_facts,
+            "limitationCodes": decision.limitation_codes,
+            "decidedAt": decision.decided_at,
+            "digest": decision.digest,
+            "binding": {
+                "instanceId": task["instanceId"],
+                "assignmentId": task["assignmentId"],
+                "attemptId": task["attemptId"],
+                "agentInstanceId": task["agentInstanceId"],
+            },
+            "evidenceKind": "SAVED_DISPATCH_PLACEMENT",
+        }
 
     def observe(self, call, view, task):
         if (
@@ -390,7 +426,7 @@ class EmployeeExecutionTrace:
 
     def dispatch(self, call, task):
         command = call.connection.execute(
-            "SELECT namespace,command_id,attempt_id,assignment_id,agent_name,agent_instance_id,runtime_instance_id,runtime_generation,placement_id,kubernetes_task_name,kubernetes_task_uid FROM execution_authority.native_dispatch_commands WHERE namespace=%s AND security_domain=%s AND attempt_id=%s",
+            "SELECT namespace,command_id,attempt_id,assignment_id,agent_name,agent_instance_id,runtime_instance_id,runtime_generation,placement_id,placement_digest,kubernetes_task_name,kubernetes_task_uid FROM execution_authority.native_dispatch_commands WHERE namespace=%s AND security_domain=%s AND attempt_id=%s",
             (
                 call.context.scope.tenant_id,
                 call.context.scope.security_domain,

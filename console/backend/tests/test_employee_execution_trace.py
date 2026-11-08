@@ -381,7 +381,23 @@ def test_runtime_detail_uses_exact_owner_placement_and_never_infers_health(trace
         }
 
     trace.handler.require = require
-    trace.handler.instances = placement
+    from dataclasses import replace
+
+    trace.handler.saved_placement = lambda call, task, command: placement(
+        replace(
+            call,
+            operation="READ_EMPLOYEE_PLACEMENT",
+            path={
+                "instance_id": task["instanceId"],
+                "assignment_id": task["assignmentId"],
+                "placement_id": command["placement_id"],
+            },
+            query={
+                "attemptId": task["attemptId"],
+                "agentInstanceId": task["agentInstanceId"],
+            },
+        )
+    )
     if mode == "wrong-runtime":
         with pytest.raises(WorkbenchOwnerError, match="PLACEMENT_BINDING_CHANGED"):
             trace.call("READ_EXECUTION_RUNTIME_DETAIL")
@@ -442,3 +458,77 @@ def test_placement_read_target_requires_same_scope_and_never_grants(trace):
     with pytest.raises(AuthorityError, match="AUTHORITY_STORAGE_UNAVAILABLE"):
         v.is_known_exact_target(context, exact)
     assert len(calls) == 3
+
+
+@pytest.mark.parametrize(
+    "mode", ["valid", "missing", "canonical", "dispatch-digest", "runtime"]
+)
+def test_saved_completed_placement_is_canonical_and_bound_without_active_lease(mode):
+    from agent_console.execution_postgres import (
+        PlacementDecision,
+        PlacementDecisionKind,
+        PlacementId,
+        PlacementRequestId,
+        RuntimeInstanceId,
+    )
+
+    value = PlacementDecision.create(
+        placement_id=PlacementId("placement:saved"),
+        request_id=PlacementRequestId("request:saved"),
+        decision=PlacementDecisionKind.PLACED,
+        runtime_instance_id=RuntimeInstanceId("runtime:saved"),
+        policy_version="policy:saved",
+        compatibility_facts=(),
+        limitation_codes=(),
+        decided_at=datetime.now(UTC),
+    )
+    record = {**value.canonical_payload, "digest": value.digest}
+    if mode == "canonical":
+        record["policy_version"] = "tampered"
+    queries = []
+
+    class Connection:
+        def execute(self, sql, args):
+            assert "active" not in sql.lower()
+            assert args == (
+                "tenant",
+                "domain",
+                "placement:saved",
+                "attempt:saved",
+                "agent:saved",
+            )
+            queries.append(sql)
+            return SimpleNamespace(
+                fetchone=lambda: (
+                    None
+                    if mode == "missing"
+                    else {"canonical_record": record, "digest": value.digest}
+                )
+            )
+
+    call = SimpleNamespace(
+        connection=Connection(),
+        context=SimpleNamespace(
+            scope=SimpleNamespace(tenant_id="tenant", security_domain="domain")
+        ),
+    )
+    task = {
+        "instanceId": "instance:saved",
+        "assignmentId": "assignment:saved",
+        "attemptId": "attempt:saved",
+        "agentInstanceId": "agent:saved",
+        "runtimeInstanceId": "foreign" if mode == "runtime" else "runtime:saved",
+    }
+    command = {
+        "placement_id": "placement:saved",
+        "placement_digest": "0" * 64 if mode == "dispatch-digest" else value.digest,
+    }
+    if mode != "valid":
+        with pytest.raises(WorkbenchOwnerError):
+            EmployeeExecutionTrace.saved_placement(None, call, task, command)
+    else:
+        result = EmployeeExecutionTrace.saved_placement(None, call, task, command)
+        assert result["evidenceKind"] == "SAVED_DISPATCH_PLACEMENT"
+        assert result["digest"] == value.digest
+        assert result["binding"]["assignmentId"] == "assignment:saved"
+    assert len(queries) == 1
