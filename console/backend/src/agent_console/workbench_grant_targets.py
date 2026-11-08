@@ -83,6 +83,35 @@ class WorkbenchGrantTargetValidator:
                     ).fetchone()
                     is not None
                 )
+            if grant.action == "READ" and grant.owner in {"INSTANCE", "ASSIGNMENT"}:
+                # Target existence is not read authority. Requestability and the
+                # issuer still decide each grant, and read ports recheck parents.
+                table, column, prefix = {
+                    "INSTANCE": (
+                        "execution_authority.digital_employee_instances",
+                        "digital_employee_instance_id",
+                        "instance:",
+                    ),
+                    "ASSIGNMENT": (
+                        "execution_authority.assignments",
+                        "assignment_id",
+                        "assignment:",
+                    ),
+                }[grant.owner]
+                if not grant.exact_resource.startswith(prefix):
+                    return False
+                return (
+                    connection.execute(
+                        f"SELECT 1 FROM {table} WHERE namespace=%s "
+                        f"AND security_domain=%s AND {column}=%s",
+                        (
+                            context.scope.tenant_id,
+                            context.scope.security_domain,
+                            grant.exact_resource[len(prefix) :],
+                        ),
+                    ).fetchone()
+                    is not None
+                )
             if grant.owner in {"SUCCESS_CRITERION", "SUCCESS_CRITERIA_SET"} or (
                 grant.owner == "BUSINESS_PROBLEM"
                 and grant.action in {"READ", "REVISE", "TRANSITION"}

@@ -383,3 +383,42 @@ def test_scan_limit_is_explicit_and_never_leaks_hidden_cursor(relations):
         value = read(c, r.root + "/instances", pageSize=1)
         assert value["items"] == [] and value["scanLimited"]
         assert value["nextCursor"] is None and "hidden-" not in json.dumps(value)
+
+
+@pytest.mark.parametrize(
+    "owner,prefix,identity",
+    [
+        ("INSTANCE", "instance:", "instance:relations-1"),
+        ("ASSIGNMENT", "assignment:", "assignment:relations-1"),
+    ],
+)
+def test_existing_management_read_target_is_exact_scope_and_never_grants(
+    relations, owner, prefix, identity
+):
+    from agent_console.authority_contracts import AuthorityError, ExactGrant
+    from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
+
+    r = relations
+    validator = WorkbenchGrantTargetValidator(None)
+    ctx = r.a.subject
+    before = snapshot(r.a)
+    with r.a.repository.pool.connection() as c, c.transaction():
+        c.execute("SET TRANSACTION READ ONLY")
+        exact = ExactGrant(owner, "READ", prefix + identity)
+        assert validator.is_known_exact_target(ctx, exact, connection=c)
+        for bad in [
+            ExactGrant(owner, "READ", prefix + "missing"),
+            ExactGrant(owner, "READ", "wrong-prefix:" + identity),
+            ExactGrant(owner, "CREATE", prefix + identity),
+        ]:
+            assert not validator.is_known_exact_target(ctx, bad, connection=c)
+        for scope in [
+            replace(ctx.scope, tenant_id="foreign-tenant"),
+            replace(ctx.scope, security_domain="foreign-domain"),
+        ]:
+            assert not validator.is_known_exact_target(
+                replace(ctx, scope=scope), exact, connection=c
+            )
+        with pytest.raises(AuthorityError, match="AUTHORITY_STORAGE_UNAVAILABLE"):
+            validator.is_known_exact_target(ctx, exact)
+    assert snapshot(r.a) == before
