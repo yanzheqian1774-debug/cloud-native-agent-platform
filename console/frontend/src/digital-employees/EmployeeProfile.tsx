@@ -11,7 +11,7 @@ import {
 
 type AgentReadState = "LOADING" | "READY" | "AUTHENTICATION_REQUIRED" | "DENIED" | "UNAVAILABLE";
 import {exactDefinitionHref} from "../resources/definitionJourney";
-import {exactSkillMcpHref} from "../resources/resourceJourneyLinks";
+import {exactSkillMcpHref,employeeMemberHref} from "../resources/resourceJourneyLinks";
 
 type ProfileSection = "overview" | "capabilities";
 
@@ -74,9 +74,9 @@ const lifecycleLabel: Record<EmployeeLifecycleState, string> = {
   DEPRECATED: "已弃用",
 };
 
-function exactCatalogLink(member: EmployeeMember) {
-  if(member.kind === "SKILL" || member.kind === "MCP") return exactSkillMcpHref(member.kind === "SKILL" ? "skill" : "mcp",member.resourceId,member.revisionId,member.digest);
-  if(import.meta.env.VITE_RESOURCE_DIRECTORY_ENABLED === "true" && (member.kind === "AGENT" || member.kind === "KNOWLEDGE")) return exactDefinitionHref(member.kind === "AGENT" ? "agent" : "knowledge",member.resourceId,member.revisionId,member.digest.replace(/^sha256:/,""));
+function exactCatalogLink(member: EmployeeMember,item:EmployeeDefinition) {
+  if(member.kind === "SKILL" || member.kind === "MCP") return employeeMemberHref(exactSkillMcpHref(member.kind === "SKILL" ? "skill" : "mcp",member.resourceId,member.revisionId,member.digest),item);
+  if(import.meta.env.VITE_RESOURCE_DIRECTORY_ENABLED === "true" && (member.kind === "AGENT" || member.kind === "KNOWLEDGE")) return employeeMemberHref(exactDefinitionHref(member.kind === "AGENT" ? "agent" : "knowledge",member.resourceId,member.revisionId,member.digest.replace(/^sha256:/,"")),item);
   return `/catalog?${new URLSearchParams({ kind: member.kind, query: member.resourceId })}`;
 }
 
@@ -108,7 +108,7 @@ export function EmployeeProfile({ item, agent, agentState, section }: { item: Em
     <section className="assembly-bindings" aria-label="能力装配清单"><h4>能力装配清单</h4><p>按当前角色修订核对资源类别和版本。未引用的类别按职责需要选用。</p>
       <table><thead><tr><th>资源类别</th><th>成员与精确版本</th><th>引用状态</th></tr></thead><tbody>{(Object.keys(kindLabel) as EmployeeMember["kind"][]).map(kind=>{
         const members=item.members.filter(member=>member.kind===kind);
-        return <tr key={kind}><th scope="row">{kindLabel[kind]}</th><td>{members.length ? members.map(member=><div key={member.resourceId+":"+member.revisionId}><Link to={exactCatalogLink(member)}>{member.resourceId}</Link><small>{member.revisionId}</small></div>) : "—"}</td><td>{members.length?"已引用":"未引用"}</td></tr>;
+        return <tr key={kind}><th scope="row">{kindLabel[kind]}</th><td>{members.length ? members.map(member=><div key={member.resourceId+":"+member.revisionId}><Link to={exactCatalogLink(member,item)}>{member.resourceId}</Link><small>{member.revisionId}</small></div>) : "—"}</td><td>{members.length?"已引用":"未引用"}</td></tr>;
       })}</tbody></table>
     </section>
     <section className="employee-bound-agent-section" aria-labelledby="employee-bound-agent-title"><header><div><p className="eyebrow">已绑定成员 · 不是候选发现</p><h4 id="employee-bound-agent-title">已绑定 Agent 的职责与能力</h4></div>{agentExact && <span className="binding-status verified">Agent 精确修订已核对</span>}</header>
@@ -121,7 +121,7 @@ export function EmployeeProfile({ item, agent, agentState, section }: { item: Em
     </section>
     <section className="employee-runtime-reference" aria-labelledby="employee-runtime-reference-title"><div><p className="eyebrow">成员绑定中的配置引用</p><h4 id="employee-runtime-reference-title">Runtime Profile</h4></div>{runtimeProfile ? <><strong>{runtimeProfile.resourceId}</strong><span>{runtimeProfile.revisionId}</span></> : <span>当前 Employee 修订未提供 Runtime Profile 成员绑定。</span>}<p>这里只核对当前 Employee 修订披露的绑定引用；Runtime Profile exact 详情尚未接通，未核实其配置内容。</p></section>
     <details className="employee-technical-details"><summary>当前员工修订身份</summary><p>以下身份限定本页职责与成员的来源，不授予运行资格。</p><dl><dt>Employee Definition ID</dt><dd><CopyValue label="Employee Definition ID" value={item.employeeDefinitionId} /></dd><dt>Revision ID</dt><dd><CopyValue label="Revision ID" value={item.employeeDefinitionRevisionId} /></dd><dt>Digest</dt><dd><CopyValue label="Digest" value={item.employeeDefinitionDigest} /></dd></dl></details>
-    <details className="employee-technical-details"><summary>成员技术身份与摘要</summary><ul className="px-binding-list employee-member-list">{item.members.map(member => <li key={`${member.kind}:${member.resourceId}:${member.revisionId}`}><span><code>{member.kind}</code> · {kindLabel[member.kind]}</span><strong>{member.resourceId}</strong><small>{member.revisionId}</small><details><summary>摘要与目录</summary><CopyValue label={`${kindLabel[member.kind]}摘要`} value={member.digest} /><Link to={exactCatalogLink(member)}>在资源目录核对</Link></details></li>)}</ul></details>
+    <details className="employee-technical-details"><summary>成员技术身份与摘要</summary><ul className="px-binding-list employee-member-list">{item.members.map(member => <li key={`${member.kind}:${member.resourceId}:${member.revisionId}`}><span><code>{member.kind}</code> · {kindLabel[member.kind]}</span><strong>{member.resourceId}</strong><small>{member.revisionId}</small><details><summary>摘要与目录</summary><CopyValue label={`${kindLabel[member.kind]}摘要`} value={member.digest} /><Link to={exactCatalogLink(member,item)}>在资源目录核对</Link></details></li>)}</ul></details>
     <p className="employee-disclosure">查看员工列表的权限不包含已绑定 Agent 的详情权限。Agent 名称与目的仍归 Agent Definition 所有，不成为员工名称或职责权威。</p>
   </section>;
 }

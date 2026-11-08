@@ -1,5 +1,6 @@
 import type {WorkbenchSession} from '../api/businessWorkspace';
 import type {Ref} from '../api/preparedExecution';
+import {employeeReturnContext,employeeReturnKeys} from './resourceJourneyLinks';
 
 export type ResourceReadContext={
  version:1;href:string;referenceKind?:'skill'|'knowledge'|'agent';reference:Ref;execution:{digest:string;problemId:string};
@@ -18,13 +19,14 @@ const latestKey=(s:WorkbenchSession,href:string)=>'resource-read-latest.v1:'+res
 export function exactResourceHref(href:string,reference:Ref,kind:'skill'|'knowledge'|'agent'='skill'):string{
  const url=new URL(href,window.location.origin);
  if(url.origin!==window.location.origin||url.hash||!(kind==='skill'?['/skills','/catalog']:kind==='knowledge'?['/knowledge','/catalog']:['/agents','/catalog']).includes(url.pathname))throw Error('RESOURCE_RETURN_UNSAFE');
- const params=url.searchParams,allowed=['selected','resourceRevision','resourceDigest','fromExecution','returnConversation','query','status','kind','resourceContext'];
+ const params=url.searchParams,allowed=['selected','resourceRevision','resourceDigest','fromExecution','returnConversation','query','status','kind','resourceContext',...employeeReturnKeys];
  if(Array.from(params.keys()).some(k=>!allowed.includes(k)||params.getAll(k).length!==1))throw Error('RESOURCE_RETURN_UNSAFE');
  if(params.get('selected')!==reference.resource_id||params.get('resourceRevision')!==reference.revision_id||!digest(reference.digest)||!identity(reference.resource_id)||!identity(reference.revision_id))throw Error('RESOURCE_RETURN_VERSION_MISMATCH');
  if(params.has('resourceDigest')&&params.get('resourceDigest')!==reference.digest)throw Error('RESOURCE_RETURN_VERSION_MISMATCH');
  if(params.has('kind')&&params.get('kind')!==kind)throw Error('RESOURCE_RETURN_UNSAFE');
  if(params.has('fromExecution')&&!digest(params.get('fromExecution')))throw Error('RESOURCE_RETURN_UNSAFE');
  if((params.get('query')?.length??0)>200||(params.get('status')?.length??0)>32||(params.has('returnConversation')&&!identity(params.get('returnConversation'))))throw Error('RESOURCE_RETURN_UNSAFE');
+ employeeReturnContext(params);
  params.delete('resourceContext');params.set('resourceDigest',reference.digest);params.sort();
  return url.pathname+'?'+params;
 }

@@ -1,0 +1,88 @@
+import {expect,test,type Page} from '@playwright/test';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {fixture as maintenance,skillId,employeeId,principal,reportText,source} from '../helpers/resourceMaintenanceFixture';
+import type {EmployeeDefinition,EmployeeCreateCommand} from '../../src/api/digitalEmployees';
+const old='employee-revision:consumer',agent={kind:'AGENT' as const,resourceId:'agent:consumer',revisionId:'agent-revision:1',digest:'e'.repeat(64)};
+const envelope=(result:unknown)=>({schemaVersion:'workbench-operation.v1',result,continuationIds:[]});
+const canonical=(value:unknown):unknown=>typeof value==='string'?value.normalize('NFC'):Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:1).map(([k,v])=>[k,canonical(v)])):value;
+function ownerDigest(c:EmployeeCreateCommand){return createHash('sha256').update(JSON.stringify(canonical({schemaVersion:'digital-employee-composition.v1',namespace:principal.tenantId,securityDomain:principal.securityDomain,definitionId:c.employeeDefinitionId,revisionId:c.employeeDefinitionRevisionId,role:c.role,responsibilities:c.responsibilities,members:[...c.members].sort((a,b)=>a.kind<b.kind?-1:a.kind>b.kind?1:a.resourceId<b.resourceId?-1:1).map(m=>({kind:m.kind,resource_id:m.resourceId,revision_id:m.revisionId,digest:m.digest})),predecessorRevisionId:c.predecessorEmployeeRevisionId??null}))).digest('hex')}
+async function fixture(page:Page){
+ const state=await maintenance(page,true);state.resource.aggregateVersion=8;state.resource.publishedRevisionId='revision:2';state.resource.currentDraftRevisionId=null;state.resource.lifecycleState='PUBLISHED';state.resource.revisions[0].state='PUBLISHED';state.resource.revisions.push({...structuredClone(state.resource.revisions[0]),revisionId:'revision:2',predecessorRevisionId:'revision:1',digest:'b'.repeat(64),state:'PUBLISHED'});
+ state.resource.testResults=[{resultId:'test:old',revisionId:'revision:1',revisionDigest:'a'.repeat(64),operation:'READ_DATA',caseName:'旧维护用例',status:'PASSED',actualExecution:true,verificationLevel:'ISOLATED_SYNTHETIC_EXECUTOR',actual:{oldRevision:true}},{resultId:'test:current',revisionId:'revision:2',revisionDigest:'b'.repeat(64),operation:'READ_DATA',caseName:'新维护用例',status:'PASSED',actualExecution:true,verificationLevel:'ISOLATED_SYNTHETIC_EXECUTOR',actual:{newRevision:true}},{resultId:'test:unverified',revisionId:'unknown',revisionDigest:'0'.repeat(64),status:'PASSED',actualExecution:true}];
+ const original:EmployeeDefinition={resourceKind:'DIGITAL_EMPLOYEE_DEFINITION',employeeDefinitionId:employeeId,employeeDefinitionRevisionId:old,employeeDefinitionDigest:'d'.repeat(64),role:'准确资源引用员工',responsibilities:['维护旧修订'],publicationState:'NOT_PUBLISHED',lifecycleState:'DRAFT',aggregateVersion:1,members:[agent,{kind:'MCP',resourceId:'mcp:disabled',revisionId:'mcp-revision:old',digest:'9'.repeat(64)},{kind:'SKILL',resourceId:skillId,revisionId:'revision:1',digest:'a'.repeat(64)}]};
+ const extra={records:new Map([[old,original]]),posts:[] as {path:string;body:Record<string,unknown>}[],readable:true,loseNext:false,wrongReceipt:false,hold:false,release:()=>{}};
+ await page.route('**/api/workbench/v1/employees**',async route=>{
+  const req=route.request(),path=decodeURIComponent(new URL(req.url()).pathname),parts=path.split('/'),rev=parts[parts.indexOf('revisions')+1];
+  if(req.method()==='GET'){
+   state.gets.push(path);
+   if(path.endsWith('/employees'))return route.fulfill({json:envelope({items:[...extra.records.values()]})});
+   if(path.endsWith('/history'))return route.fulfill({json:envelope({items:[...extra.records.values()],visibility:'AUTHORIZED_ONLY',nextCursor:null,executionStarted:false})});
+   const record=extra.records.get(rev);return record&&(extra.readable||rev===old)?route.fulfill({json:envelope(record)}):route.fulfill({status:403,json:{reasonCode:'EXACT_READ_REQUIRED'}});
+  }
+  const body=req.postDataJSON();extra.posts.push({path,body});expect(req.headers()['x-csrf-token']).toBe('fixture-csrf');
+  let result:EmployeeDefinition;
+  if(path.endsWith('/employees')){
+   const command=body as EmployeeCreateCommand;expect(command.employeeDefinitionId).toBe(employeeId);expect(command.predecessorEmployeeRevisionId).toBe(old);expect(command.expectedVersion).toBe(1);
+   original.aggregateVersion=2;result={...structuredClone(original),employeeDefinitionRevisionId:command.employeeDefinitionRevisionId,employeeDefinitionDigest:ownerDigest(command),responsibilities:command.responsibilities,members:command.members,aggregateVersion:2};extra.records.set(result.employeeDefinitionRevisionId,result);
+  }else{
+   result=extra.records.get(rev)!;expect(body.employeeDefinitionDigest).toBe(result.employeeDefinitionDigest);expect(body.expectedVersion).toBe(result.aggregateVersion);
+   result.aggregateVersion!++;result.lifecycleState=path.endsWith('/validation')?'VALIDATED':path.endsWith('/approvals')?'APPROVED':'PUBLISHED';result.publicationState=result.lifecycleState==='PUBLISHED'?'PUBLISHED':'NOT_PUBLISHED';
+  }
+  if(extra.hold)await new Promise<void>(resolve=>{extra.release=resolve});
+  if(extra.loseNext){extra.loseNext=false;return route.abort('failed')}
+  return route.fulfill({json:envelope({...result,...(extra.wrongReceipt?{employeeDefinitionDigest:'0'.repeat(64)}:{})})});
+ });
+ return {state,extra,original};
+}
+const href=()=>'/employees?'+new URLSearchParams({employeeDefinitionId:employeeId,employeeDefinitionRevisionId:old,detail:'1',section:'overview'});
+async function prepare(page:Page){await page.getByRole('button',{name:'准备员工后继',exact:true}).click();await page.getByLabel('后继职责',{exact:true}).fill('维护发布后的准确资源\n保留旧记录，不启动业务运行');await page.getByRole('checkbox',{name:'保留 MCP mcp:disabled',exact:true}).uncheck();await page.getByRole('region',{name:'组合业务资源'}).getByRole('checkbox').check();await page.getByRole('button',{name:'核对后继草稿',exact:true}).click();await expect(page.getByRole('region',{name:'员工后继确认'})).toBeVisible()}
+async function save(page:Page){await page.getByRole('button',{name:'确认保存后继草稿',exact:true}).click()}
+test('same Employee successor selects current published Skill and preserves original draft through publication',async({page},info)=>{
+ const {state,extra,original}=await fixture(page);await page.goto(href());await prepare(page);await save(page);await expect.poll(()=>extra.posts.length).toBe(1);const command=extra.posts[0].body as EmployeeCreateCommand;expect(command.members).toEqual([agent,{kind:'SKILL',resourceId:skillId,revisionId:'revision:2',digest:'b'.repeat(64)}]);expect(command.employeeDefinitionRevisionId).not.toBe(old);await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(command.employeeDefinitionRevisionId);
+ for(const action of ['校验修订','批准修订','发布修订']){await page.getByRole('button',{name:new RegExp('^'+action)}).click();await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'确认提交',exact:true})).toHaveCount(0)}
+ await expect.poll(()=>extra.posts.length).toBe(4);await expect.poll(()=>extra.records.get(command.employeeDefinitionRevisionId)?.lifecycleState).toBe('PUBLISHED');expect(extra.records.get(command.employeeDefinitionRevisionId)?.lifecycleState).toBe('PUBLISHED');expect(original.lifecycleState).toBe('DRAFT');expect(original.members.find(m=>m.kind==='SKILL')?.revisionId).toBe('revision:1');expect(state.posts).toEqual([]);
+ for(const width of [1280,390]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('employee-successor-'+width+'.png')})}
+});
+test('lost successor response reload recovers only its original revision via GET',async({page})=>{
+ const {extra}=await fixture(page);await page.goto(href());await prepare(page);extra.loseNext=true;extra.readable=false;await save(page);await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toBeEnabled();const rev=String(extra.posts[0].body.employeeDefinitionRevisionId);await page.reload();await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toBeEnabled();extra.readable=true;await page.getByRole('button',{name:'读取原后继修订',exact:true}).click();await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(rev);expect(extra.posts).toHaveLength(1);
+});
+test('stale aggregate or changed identity cannot create a successor',async({page})=>{
+ const {state,extra,original}=await fixture(page);await page.goto(href());await prepare(page);original.aggregateVersion=9;await save(page);await expect(page.getByRole('status').filter({hasText:'原员工版本已变化'})).toBeVisible();expect(extra.posts).toEqual([]);state.otherIdentity=true;await save(page);expect(extra.posts).toEqual([]);
+});
+test('wrong receipt and unreadable result retains UNKNOWN without resubmission',async({page})=>{
+ const {extra}=await fixture(page);await page.goto(href());await prepare(page);extra.wrongReceipt=true;extra.readable=false;await save(page);await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toBeEnabled();await page.getByRole('button',{name:'读取原后继修订',exact:true}).click();await expect(page.getByRole('button',{name:'确认保存后继草稿',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(1);
+});
+test('late response from another identity cannot replace selected Employee',async({page})=>{
+ const {state,extra}=await fixture(page);await page.goto(href());await prepare(page);extra.hold=true;await save(page);await expect.poll(()=>extra.posts.length).toBe(1);state.otherIdentity=true;extra.release();await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toBeEnabled();expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);expect(extra.posts).toHaveLength(1);
+});
+test('lost lifecycle response survives reload and reads state without replaying POST',async({page})=>{
+ const {extra}=await fixture(page);await page.goto(href());await page.getByRole('button',{name:/^校验修订/}).click();extra.loseNext=true;await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'读取原修订状态',exact:true})).toBeEnabled();await page.reload();await expect(page.getByRole('button',{name:'读取原修订状态',exact:true})).toBeEnabled();await page.getByRole('button',{name:'读取原修订状态',exact:true}).click();await expect(page.getByRole('button',{name:/^批准修订/})).toBeEnabled();expect(extra.posts).toHaveLength(1);
+});
+test('selected historical maintenance result remains separate from current publication evidence',async({page})=>{
+ const {state}=await fixture(page);await page.goto('/skills?'+new URLSearchParams({managedResource:skillId,resourceTab:'使用追溯'}));const records=page.getByRole('article',{name:'维护测试使用记录'});await expect(records.getByRole('button',{name:'查看维护测试结果',exact:true})).toHaveCount(2);await records.getByRole('row').filter({hasText:'旧维护用例'}).getByRole('button').click();await expect(page.getByRole('tab',{name:'测试',exact:true})).toHaveAttribute('aria-selected','true');await expect(page.getByText('正在查看历史修订的维护测试结果，不计入当前版本发布依据。',{exact:true})).toBeVisible();await expect(page.getByLabel('本次真实测试结果')).toContainText('旧维护用例');expect(state.posts).toEqual([]);
+});
+for(const mode of ['valid','wrong-member','external-back','duplicate-ref'])test('exact referring Employee resource return '+mode,async({page})=>{
+ const {state,original}=await fixture(page);original.members=original.members.filter(m=>m.kind!=='MCP');original.members.find(m=>m.kind==='SKILL')!.revisionId='revision:2';original.members.find(m=>m.kind==='SKILL')!.digest='b'.repeat(64);if(mode==='wrong-member')original.members.find(m=>m.kind==='SKILL')!.revisionId='revision:foreign';
+ const params=new URLSearchParams({kind:'skill',query:skillId,selected:skillId,resourceRevision:'revision:2',resourceDigest:'b'.repeat(64),employeeRef:employeeId,employeeRev:old,employeeDigest:'d'.repeat(64),employeeResourceBack:'/skills?'+new URLSearchParams({managedResource:skillId,resourceTab:'使用追溯'})});if(mode==='external-back')params.set('employeeResourceBack','https://foreign.invalid/skills');if(mode==='duplicate-ref')params.append('employeeRef',employeeId);
+ await page.goto('/skills?'+params);if(mode==='valid'){await page.getByRole('link',{name:'返回引用员工',exact:true}).click();await expect(page.getByRole('heading',{name:'准确资源引用员工',exact:true})).toBeVisible();await page.getByRole('link',{name:/返回资源维护/}).click();await expect(page.getByRole('tab',{name:'使用追溯',exact:true})).toHaveAttribute('aria-selected','true')}else{await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toHaveCount(0)}expect(state.posts).toEqual([]);
+});
+
+const plan=JSON.parse(readFileSync(new URL('../e2e/fixtures/delivery-plan.json',import.meta.url),'utf8'));
+test('Employee Agent saved result and same-resource return retain exact referring Employee and maintenance tab',async({page})=>{
+ const {state,original,extra}=await fixture(page),scope={tenantId:principal.tenantId,securityDomain:principal.securityDomain};
+ const item={kind:'agent',identity:agent.resourceId,revisionId:agent.revisionId,digest:agent.digest,name:'已保存引用的Agent',enabled:true,isCurrentPublished:true,isCurrentDraft:false,state:'PUBLISHED',executionReady:false,createdAt:'2026-11-08'};
+ await page.route('**/api/workbench/v1/resource-directory**',async route=>{
+  const path=decodeURIComponent(new URL(route.request().url()).pathname),kind=new URL(route.request().url()).searchParams.get('kind');
+  if(path.endsWith('/resource-directory')&&kind==='agent')return route.fulfill({json:{result:{subject:principal.principalId,scope,items:[item],nextCursor:null,executionAuthority:'NONE'}}});
+  if(path.includes('/resource-directory/agent/'))return route.fulfill({json:{result:{...item,subject:principal.principalId,scope,revision:{revisionId:item.revisionId,digest:item.digest,state:'PUBLISHED',createdAt:'2026-11-08',content:{title:'核对原保存引用',duties:['核对来源']}},usage:[{digest:'c'.repeat(64),title:'原Agent已保存结果',planVersion:4,state:'SUCCEEDED',problemId:'maintenance-problem'}]}}});
+  return route.fallback();
+ });
+ await page.route('**/api/workbench/v1/prepared-executions/**',route=>{
+  const ref={resource_id:employeeId,revision_id:old,digest:original.employeeDefinitionDigest},skill={resource_id:skillId,revision_id:'revision:1',digest:'a'.repeat(64)};
+  return route.fulfill({json:{result:{digest:'c'.repeat(64),executionStarted:true,preparation:{plan_id:'maintenance-plan',plan_version:4,plan_digest:'9'.repeat(64),approval_id:'fixture-only',source_snapshot:source,semantics:{...plan.semantics,title:'原Agent已保存结果',target:{problem:{resource_id:'maintenance-problem',revision_id:'1',digest:'8'.repeat(64)}}},participants:plan.semantics.tasks.map((t:{task_id:string;operation:string})=>({task_id:t.task_id,instance_id:'fixture-instance',assignment_id:'fixture-assignment',definition:ref,skill:{reference:skill,operation:t.operation},profile:ref}))},progress:{state:'SUCCEEDED',version:10,cancellation_request_id:null,tasks:plan.semantics.tasks.map((t:{task_id:string})=>({task_id:t.task_id,state:'SUCCEEDED',attempt_ordinal:1,reason:null}))},admission:{state:'NOT_ADMITTED',reason:'READ_ONLY_FIXTURE'},resourceUses:[],artifacts:[{artifact_id:'saved-report',task_id:plan.semantics.tasks.at(-1).task_id,digest:'7'.repeat(64),bytes:reportText.length,created_at:'2026-11-08',contentAccess:'AUTHORIZED',content:reportText}],events:[],outcome:null}}});
+ });
+ await page.goto(href()+'&resourceBack='+encodeURIComponent('/skills?'+new URLSearchParams({managedResource:skillId,resourceTab:'使用追溯'})));
+ await page.getByRole('button',{name:'职责与能力',exact:true}).click();await page.getByRole('table').getByRole('link').filter({hasText:agent.resourceId}).click();await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'原Agent已保存结果',exact:true}).click();await expect(page.getByRole('region',{name:'销售诊断关键数据'})).toBeVisible();await page.reload();await page.getByRole('link',{name:'返回同一准确资源',exact:true}).click();await page.getByRole('link',{name:'返回引用员工',exact:true}).click();await page.getByRole('link',{name:/返回资源维护/}).click();await expect(page.getByRole('tab',{name:'使用追溯',exact:true})).toHaveAttribute('aria-selected','true');expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
+});

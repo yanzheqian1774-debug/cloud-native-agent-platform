@@ -4,6 +4,7 @@ import {readWorkbenchSession,type WorkbenchSession} from '../api/businessWorkspa
 import {readDirectoryResource,type DirectoryDetail,type DirectoryItem,type DirectoryPage} from '../api/resourceDirectory';
 import {DefinitionReferenceView,DefinitionContentView} from './DefinitionContentView';
 import {PreparedSkillSuccessorPanel} from './PreparedSkillSuccessorPanel';
+import {EmployeeResourceReturn} from './EmployeeResourceReturn';
 import {NavigationIcon} from '../components/NavigationIcon';
 import {findResourceReadContext,resourceReadScope,saveResourceReadContext,type ResourceReadContext} from './resourceReadContext';
 
@@ -67,6 +68,7 @@ function ExactResourceDetail({item,expectedScope,conversation,sourceExecution}:{
  if(!detail)return <p role="status">正在核对准确版本与读取资格…</p>;
  const c=detail.revision!.content,isSkill=item.kind==='skill';
  return <article ref={article} className="resource-readonly-detail" data-resource-kind={item.kind}>
+  <EmployeeResourceReturn item={item}/>
   <header><TypeMark kind={item.kind as 'skill'|'mcp'|'knowledge'|'agent'}/><h1>{detail.name}</h1>{(isSkill||item.kind==='mcp')?<p>{text(c.description,'当前版本未提供用途说明。')}</p>:item.kind==='agent'?<p>{text(c.businessPurpose,'未提供业务用途')}</p>:null}<span className="resource-version-state" data-state={item.state}>{item.state==='PUBLISHED'?'已发布':item.state==='DRAFT'?'草稿':item.state}</span></header>
   {isSkill?<section aria-label="当前可读范围"><h2>当前可读范围</h2><p className="resource-detail-boundary">这里只读展示当前授权版本。发布、连接测试、工具发现、工具调用及业务执行分别核对，历史权限或历史成功不代表当前可执行。</p><p>读取身份和范围已与当前会话核对；本页可读不授予管理、维护、发布或使用权限。</p></section>:(item.kind==='mcp'?<p className="resource-detail-boundary">这里只读展示当前授权版本。发布、连接测试、工具发现、工具调用及业务执行分别核对，历史权限或历史成功不代表当前可执行。</p>:<p className="resource-detail-boundary">这里只查看保存的{item.kind==='knowledge'?'知识正文与出处':'Agent职责和绑定'}。已有员工与工作保留原版本；查看和发布不会自动启动{item.kind==='knowledge'?'索引、检索或业务执行':'实例或业务执行'}。</p>)}
   {isSkill&&<section aria-label="固定版本"><h2>固定版本</h2><dl><dt>资源</dt><dd>{item.identity}</dd><dt>修订</dt><dd>{item.revisionId}</dd><dt>内容摘要</dt><dd>{item.digest}</dd></dl><p>固定查看此修订；详情缺失或摘要不符时不替换为最新版本。</p></section>}

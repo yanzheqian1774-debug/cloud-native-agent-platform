@@ -42,3 +42,17 @@ export function employeeReferenceHref(employee: {identity: string;revision: stri
   if (back && new URL(back,window.location.origin).searchParams.get('managedResource') === resource.resourceId) p.set('resourceBack',back);
   return '/employees?' + p;
 }
+
+export const employeeReturnKeys=['employeeRef','employeeRev','employeeDigest','employeeResourceBack'];
+export function employeeReturnContext(params:URLSearchParams){
+ if(!employeeReturnKeys.some(k=>params.has(k)))return null;
+ if(employeeReturnKeys.some(k=>params.getAll(k).length>1)||!identity(params.get('employeeRef'))||!identity(params.get('employeeRev'))||!/^[a-f0-9]{64}$/.test(params.get('employeeDigest')??''))throw Error('EMPLOYEE_RETURN_UNSAFE');
+ const raw=params.get('employeeResourceBack'),back=raw?safeResourceReturn(raw):null;if(raw&&!back)throw Error('EMPLOYEE_RETURN_UNSAFE');
+ return {id:params.get('employeeRef')!,revision:params.get('employeeRev')!,digest:params.get('employeeDigest')!,back};
+}
+export function employeeMemberHref(href:string,item:{employeeDefinitionId:string;employeeDefinitionRevisionId:string;employeeDefinitionDigest:string}){
+ const u=new URL(href,window.location.origin);if(u.origin!==window.location.origin||!['/skills','/mcp','/knowledge','/agents'].includes(u.pathname))return href;
+ u.searchParams.set('employeeRef',item.employeeDefinitionId);u.searchParams.set('employeeRev',item.employeeDefinitionRevisionId);u.searchParams.set('employeeDigest',item.employeeDefinitionDigest);
+ const back=safeResourceReturn(new URLSearchParams(window.location.search).get('resourceBack'));if(back)u.searchParams.set('employeeResourceBack',back);
+ employeeReturnContext(u.searchParams);return u.pathname+'?'+u.searchParams;
+}
