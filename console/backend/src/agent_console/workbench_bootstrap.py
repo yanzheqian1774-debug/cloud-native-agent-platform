@@ -527,6 +527,20 @@ def build_workbench_composition(
                 ),
             )
 
+        source_review_routes = ()
+        if os.environ.get("EXECUTION_SOURCE_REVIEW_ENABLED") == "true":
+            from .execution_source_review import ReviewPolicy
+            from .execution_source_review import operations as source_review_operations
+
+            if not prepared_resource_services or prepared_execution_coordinator is None:
+                raise AuthorityError("SOURCE_REVIEW_DEPENDENCIES_REQUIRED")
+            source_review_routes = source_review_operations(
+                prepared_resource_services,
+                prepared_execution_coordinator,
+                ReviewPolicy.load(os.environ.get("EXECUTION_SOURCE_REVIEW_POLICY")),
+                sales_v2_candidate=sales_v2_candidate,
+            )
+
         from .sales_supplement_composition import operations as supplement_operations
 
         sales_supplement_routes = supplement_operations(
@@ -572,6 +586,7 @@ def build_workbench_composition(
                     else ()
                 ),
                 *sales_supplement_routes,
+                *source_review_routes,
                 *resource_automation_routes,
                 *continuation_routes,
                 *directory_routes,
