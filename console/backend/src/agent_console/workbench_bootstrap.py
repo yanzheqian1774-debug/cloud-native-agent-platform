@@ -541,6 +541,20 @@ def build_workbench_composition(
                 sales_v2_candidate=sales_v2_candidate,
             )
 
+        runtime_trace_routes = ()
+        if os.environ.get("EMPLOYEE_EXECUTION_TRACE_ENABLED") == "true":
+            from .employee_execution_trace import ObservationConfiguration
+            from .employee_execution_trace import operations as trace_operations
+
+            runtime_trace_routes = trace_operations(
+                digital_employees,
+                prepared_execution_coordinator,
+                configuration=ObservationConfiguration.load(
+                    os.environ["EXECUTION_RUNTIME_OBSERVATION_CONFIGURATION"]
+                ),
+                sales_v2_candidate=sales_v2_candidate,
+            )
+
         from .sales_supplement_composition import operations as supplement_operations
 
         sales_supplement_routes = supplement_operations(
@@ -587,6 +601,7 @@ def build_workbench_composition(
                 ),
                 *sales_supplement_routes,
                 *source_review_routes,
+                *runtime_trace_routes,
                 *resource_automation_routes,
                 *continuation_routes,
                 *directory_routes,

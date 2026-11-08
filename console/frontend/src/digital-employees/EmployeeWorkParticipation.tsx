@@ -47,12 +47,14 @@ export function EmployeeWorkParticipation({
   instance,
   assignment,
   initialCoordinates,
+  executionTraceAvailable = false,
   onCoordinates,
 }: {
   definition: EmployeeDefinition | null;
   instance: EmployeeInstance | null;
   assignment: EmployeeAssignment | null;
   initialCoordinates?: Partial<ExactPlacementCoordinates>;
+  executionTraceAvailable?: boolean;
   onCoordinates: (coordinates: ExactPlacementCoordinates) => void;
 }) {
   const [coordinates, setCoordinates] = useState<ExactPlacementCoordinates>({ ...emptyCoordinates, ...initialCoordinates });
@@ -134,7 +136,7 @@ export function EmployeeWorkParticipation({
       <Fact label="Placement" value={placement ? `${placementDecisionLabel(placement.decision)} · ${placement.placementId}` : "尚未读取"} state={placement ? "known" : "unknown"} />
     </div></section>
 
-    <section className="employee-unavailable-summary" aria-labelledby="employee-work-unavailable-title"><span className="employee-capability-state partial"><i />部分实现</span><div><h4 id="employee-work-unavailable-title">执行、证据与结果尚未接通</h4><p>Execution、Evidence 与 Outcome 没有本页可用的正式读取端口；当前已核实的 Assignment 或 Placement 不代表已经执行或已有业务结果。</p></div></section>
+    {executionTraceAvailable?<section className="employee-unavailable-summary"><div><h4>放置记录与任务结果分别核对</h4><p>本区只核对指定放置及其父链。任务参与、结果和运行观测以上方任务参与区的正式读取为准；放置成功不等于任务成功或业务完成。</p></div></section>:(<section className="employee-unavailable-summary" aria-labelledby="employee-work-unavailable-title"><span className="employee-capability-state partial"><i />部分实现</span><div><h4 id="employee-work-unavailable-title">执行、证据与结果尚未接通</h4><p>Execution、Evidence 与 Outcome 没有本页可用的正式读取端口；当前已核实的 Assignment 或 Placement 不代表已经执行或已有业务结果。</p></div></section>)}
 
     {error && <div role="alert" className="qto-alert"><strong>{error.kind}</strong><span>{error.kind === "authentication required" ? "需要可信 Workbench session。" : hiddenError ? "资源不可用或当前访问未获授权。" : error.code}</span></div>}
 

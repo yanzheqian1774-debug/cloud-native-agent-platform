@@ -173,6 +173,7 @@ async function installAdapter(page: Page, options: AdapterOptions = {}) {
     if (path.includes("/agents/") && path.includes("/revisions/")) {
       return route.fulfill({ json: envelope(agent) });
     }
+    if (path.endsWith("/executions")) return route.fulfill({status:404,json:{reasonCode:"NO_EXECUTION_LINK_PORT_IN_THIS_PLACEMENT_FIXTURE"}});
     if (path.includes("/placements/")) {
       if (options.onPlacement) return options.onPlacement(route);
       return route.fulfill({ json: envelope(placement) });
@@ -212,7 +213,7 @@ test("TEST_ADAPTER uses trusted BFF reads and restores the exact work chain at 3
   await page.goto(`/digital-employees?${query}`);
   await expect(page.getByLabel("Placement 权威详情")).toContainText("runtime-instance:quality");
   await expect(page.getByLabel("分别核实的工作对象")).toContainText("placement:quality");
-  await expect(page.getByText("执行、证据与结果尚未接通")).toBeVisible();
+  await expect(page.getByText("放置记录与任务结果分别核对")).toBeVisible();
   await expect(page.getByText("不推导在线状态")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.reload();
@@ -281,7 +282,7 @@ test("TEST_ADAPTER rejects a Placement response with mismatched parent coordinat
     agentInstanceId: "agent-instance:quality",
   });
   await page.goto(`/digital-employees?${query}`);
-  await expect(page.getByRole("alert")).toContainText("PLACEMENT_BINDING_IDENTITY_MISMATCH");
+  await expect(page.locator(".employee-work-participation").getByRole("alert")).toContainText("PLACEMENT_BINDING_IDENTITY_MISMATCH");
   await expect(page.getByLabel("Placement 权威详情")).toHaveCount(0);
 });
 
@@ -773,6 +774,7 @@ test("TEST_ADAPTER captures labeled desktop and 390x844 visual evidence", async 
   await expect(page.getByRole("heading", { name: "当前查询的实例与工作分配" })).toBeVisible();
   await expect(page.locator(".employee-read-result")).toContainText("assignment:quality");
   await expect(page.locator(".employee-read-result")).toContainText("instance:quality");
+  await page.getByText("查询准确放置记录（技术详情）", {exact:true}).click();
   await page.getByText("技术操作：按精确坐标读取 Placement").click();
   await page.getByLabel("Placement ID").fill("placement:quality");
   await page.getByLabel("Attempt ID").fill("attempt:quality");
