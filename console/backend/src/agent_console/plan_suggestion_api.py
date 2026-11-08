@@ -35,7 +35,8 @@ def install_planning_invocations(
                 )
                 if identity is None:
                     raise PlanningError("PLANNING_NOT_FOUND")
-            return service.read(principal, identity)
+            # Conversation projection must not settle an original model receipt.
+            return service.read(principal, identity, settle_receipt=False)
 
         app.state.conversation_planning_reader = reader
 
