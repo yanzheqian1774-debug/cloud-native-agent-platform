@@ -279,6 +279,55 @@ def test_real_source_mcp_check_original_key_and_no_run_write(review):
     assert len(r.service.repository.get(r.scope, "mcp", r.identity)["invocations"]) == 1
 
 
+def test_review_recovers_durable_locator_without_new_invocation(review):
+    r = review
+    assert r.call("READ_EXECUTION_SOURCE_REVIEW")["mcp"]["existingCheck"] is None
+    receipt = r.call("VERIFY_EXECUTION_SOURCE", r.body)
+    before = snapshot(r.a)
+    status = r.call("READ_EXECUTION_SOURCE_REVIEW")
+    locator = status["mcp"]["existingCheck"]
+    assert locator["idempotencyKey"] == receipt["requestKey"]
+    assert locator["source"] == r.body["source"]
+    assert locator["mcp"] == r.body["mcp"]
+    assert r.call("READ_EXECUTION_SOURCE_CHECK") == receipt
+    assert snapshot(r.a) == before
+    assert len(r.service.repository.get(r.scope, "mcp", r.identity)["invocations"]) == 1
+    r.denied.add("SKILL")
+    assert r.call("READ_EXECUTION_SOURCE_REVIEW")["mcp"]["available"] is False
+
+
+@pytest.mark.parametrize("mismatch", ["actor", "execution", "source", "mcp"])
+def test_durable_locator_does_not_select_other_scope_or_reference(review, mismatch):
+    r = review
+    receipt = r.call("VERIFY_EXECUTION_SOURCE", r.body)
+    foreign = deepcopy(receipt)
+    foreign["requestKey"] = "different-existing-key"
+    foreign["createdAt"] = "2099-01-01T00:00:00Z"
+    actor = r.a.subject.principal_id
+    if mismatch == "actor":
+        actor = "human:other"
+        foreign["subject"] = actor
+    elif mismatch == "execution":
+        foreign["executionDigest"] = "f" * 64
+    else:
+        foreign[mismatch]["digest"] = "f" * 64
+    with r.a.repository.pool.connection() as c, c.transaction():
+        c.execute(
+            "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES(%s,%s,%s,%s,%s,%s::jsonb)",
+            (
+                r.scope.namespace,
+                r.scope.security_domain,
+                actor,
+                "execution-source-check:" + foreign["requestKey"],
+                "f" * 64,
+                json.dumps(foreign),
+            ),
+        )
+    status = r.call("READ_EXECUTION_SOURCE_REVIEW")
+    assert status["mcp"]["existingCheck"]["idempotencyKey"] == receipt["requestKey"]
+    assert len(r.service.repository.get(r.scope, "mcp", r.identity)["invocations"]) == 1
+
+
 @pytest.mark.parametrize(
     "bad", ["source", "mcp", "version", "foreign", "permission", "disabled", "expired"]
 )

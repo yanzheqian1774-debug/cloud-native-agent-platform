@@ -250,6 +250,42 @@ class ExecutionSourceReview:
             else None
         )
 
+    def existing_check(self, call, view, binding, version):
+        """Locate a durable receipt only after current exact MCP authorization."""
+        row = call.connection.execute(
+            "SELECT command_key,result FROM execution_authority.prepared_resource_commands "
+            "WHERE namespace=%s AND security_domain=%s AND actor_id=%s "
+            "AND command_key LIKE %s AND result->>'schemaVersion'=%s "
+            "AND result->>'executionDigest'=%s AND result->'source'=%s "
+            "AND result->'mcp'=%s ORDER BY result->>'createdAt' DESC,command_key DESC LIMIT 1",
+            (
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+                call.context.principal_id,
+                LEDGER + "%",
+                SCHEMA,
+                view["digest"],
+                Jsonb(binding.source.model_dump(mode="json")),
+                Jsonb(binding.mcp.model_dump(mode="json")),
+            ),
+        ).fetchone()
+        if row is None:
+            return None
+        receipt = row["result"]
+        if (
+            receipt.get("subject") != call.context.principal_id
+            or receipt.get("phase") != "POST_RESULT_SOURCE_VERIFICATION"
+            or receipt.get("originalRunChanged") is not False
+            or row["command_key"] != LEDGER + receipt.get("requestKey", "")
+        ):
+            raise WorkbenchOwnerError("SOURCE_CHECK_RECEIPT_MISMATCH", 409)
+        return Check(
+            idempotencyKey=receipt["requestKey"],
+            source=binding.source,
+            mcp=binding.mcp,
+            expectedVersion=version,
+        ).model_dump(mode="json")
+
     def review(self, call, view):
         _, record, _ = self.source(call, view)
         p = self.principal(call)
@@ -329,6 +365,9 @@ class ExecutionSourceReview:
                     "endpoint": revision["content"]["endpoint"],
                     "toolName": binding.toolName,
                     "expectedVersion": r["aggregateVersion"],
+                    "existingCheck": self.existing_check(
+                        call, view, binding, r["aggregateVersion"]
+                    ),
                     "phase": "POST_RESULT_SOURCE_VERIFICATION",
                 }
             except (AuthorityError, WorkbenchOwnerError):
