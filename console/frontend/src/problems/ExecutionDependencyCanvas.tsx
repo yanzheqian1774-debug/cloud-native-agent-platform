@@ -1,0 +1,26 @@
+import {useId,useState} from 'react';
+import type {ExecutionView} from '../api/preparedExecution';
+import './ExecutionDependencyCanvas.css';
+type Task=ExecutionView['preparation']['semantics']['tasks'][number];
+const labels:Record<string,string>={SUCCEEDED:'已完成',RUNNING:'执行中',QUEUED:'已排队',PENDING:'待执行',WAITING:'等待前序任务',NOT_STARTED:'尚未启动',FAILED:'失败',FINAL_FAILED:'失败',UNKNOWN:'结果待核实',OUTCOME_UNKNOWN:'结果待核实',RECOVERY_REQUIRED:'需要核查',SKIPPED:'已跳过',RETRY_WAIT:'等待重试决定',CANCELLED:'已取消'};
+function graph(tasks:Task[]){
+ if(!tasks.length)return {reason:'当前没有已读回的任务。'};
+ if(tasks.length>80||tasks.some(t=>!Array.isArray(t.depends_on))||tasks.reduce((n,t)=>n+t.depends_on.length,0)>240)return {reason:'任务或依赖超出画布核对范围，或依赖内容未核实。请使用原任务明细。'};
+ const byId=new Map(tasks.map(t=>[t.task_id,t]));
+ if(byId.size!==tasks.length||tasks.some(t=>!t.task_id||new Set(t.depends_on).size!==t.depends_on.length||t.depends_on.some(id=>!byId.has(id))))return {reason:'任务身份或前序依赖不完整，暂不生成连线。请核对原计划。'};
+ const pending=new Set(byId.keys()),level=new Map<string,number>();
+ while(pending.size){let changed=false;for(const id of pending){const deps=byId.get(id)!.depends_on;if(deps.every(d=>level.has(d))){level.set(id,deps.length?Math.max(...deps.map(d=>level.get(d)!))+1:0);pending.delete(id);changed=true}}if(!changed)return {reason:'当前依赖包含循环，暂不生成连线。请核对原计划。'}}
+ const skipCount=tasks.reduce((n,t)=>n+t.depends_on.filter(d=>level.get(t.task_id)!-level.get(d)!>1).length,0),top=32+skipCount*24;
+ const rows=new Map<number,number>(),positions=new Map<string,{x:number;y:number}>();
+ for(const t of tasks){const l=level.get(t.task_id)!,r=rows.get(l)??0;rows.set(l,r+1);positions.set(t.task_id,{x:24+l*244,y:top+r*142})}
+ return {positions,width:(Math.max(...level.values())+1)*244+24,height:Math.max(1,...rows.values())*142+48+skipCount*24};
+}
+export function ExecutionDependencyCanvas({view,selected,onSelect}:{view:ExecutionView;selected?:string|null;onSelect?:(id:string)=>void}){
+ const [local,setLocal]=useState<string|null>(null),[zoom,setZoom]=useState(1),marker=useId().replace(/:/g,'');
+ const tasks=view.preparation.semantics.tasks,g=graph(tasks),chosen=onSelect?selected:local,task=tasks.find(t=>t.task_id===chosen);
+ const phase=(id:string)=>view.progress?.tasks.find(t=>t.task_id===id)?.state??(view.executionStarted?'UNKNOWN':'NOT_STARTED');
+ let lane=0;
+ const name=(id:string)=>tasks.find(t=>t.task_id===id)?.title??'前序待核实';
+ if(!g.positions)return <section className="execution-dependency-canvas" aria-label="任务依赖画布"><h3>任务依赖画布</h3><p role="status">{g.reason}</p><p>保留原任务记录；本页不会修改依赖或重新执行。</p></section>;
+ return <section className="execution-dependency-canvas" aria-label="任务依赖画布"><header><div><h3>任务依赖画布</h3><p>连线来自原计划的前序依赖，节点状态来自当前已读取的正式记录。选择节点只查看。</p></div><div className="dependency-tools"><button type="button" aria-label="缩小任务画布" disabled={zoom<=.5} onClick={()=>setZoom(z=>Math.max(.5,z-.25))}>−</button><span aria-live="polite">{Math.round(zoom*100)}%</span><button type="button" aria-label="放大任务画布" disabled={zoom>=1.5} onClick={()=>setZoom(z=>Math.min(1.5,z+.25))}>＋</button><button type="button" onClick={()=>setZoom(1)}>重置画布比例</button></div></header><div className="dependency-scroll" tabIndex={0} role="group" aria-label="可滚动任务依赖图"><div className="dependency-surface" style={{width:g.width!*zoom,height:g.height!*zoom}}><div className="dependency-coordinate" style={{width:g.width,height:g.height,transform:`scale(${zoom})`}}><svg width={g.width} height={g.height} aria-hidden="true"><defs><marker id={marker} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/></marker></defs>{tasks.flatMap(t=>t.depends_on.map(d=>{const from=g.positions!.get(d)!,to=g.positions!.get(t.task_id)!,x=from.x+196,y=from.y+56,tx=to.x,ty=to.y+56,skip=tx-from.x>244,ly=skip?24+lane++*24:0;return <path key={d+'>'+t.task_id} data-dependency-from={d} data-dependency-to={t.task_id} data-dependency-route={skip?'separate-lane':'adjacent'} className={chosen===d||chosen===t.task_id?'dependency-edge selected':'dependency-edge'} d={skip?`M${x} ${y} L${x+24} ${y} L${x+24} ${ly} L${tx-24} ${ly} L${tx-24} ${ty} L${tx} ${ty}`:`M${x} ${y} C${x+28} ${y},${tx-28} ${ty},${tx} ${ty}`} markerEnd={`url(#${marker})`}/>}))}</svg><nav aria-label="作业任务节点">{tasks.map(t=>{const p=g.positions!.get(t.task_id)!,s=phase(t.task_id);return <button key={t.task_id} type="button" className="dependency-node work-node" data-task-id={t.task_id} data-state={s} style={{left:p.x,top:p.y}} aria-pressed={chosen===t.task_id} aria-label={t.title+'，'+(labels[s]??'状态待核实')+'，前序：'+(t.depends_on.map(name).join('、')||'无')} onClick={()=>onSelect?onSelect(t.task_id):setLocal(t.task_id)}><strong>{t.title}</strong><small>{labels[s]??'状态待核实'}</small><span>前序 {t.depends_on.length} 项</span></button>})}</nav></div></div></div>{!onSelect&&<article className="dependency-selection" aria-label="画布所选任务">{task?<><h4>{task.title}</h4><p>{task.responsibility}</p><p>正式状态：{labels[phase(task.task_id)]??'状态待核实'} · 前序：{task.depends_on.map(name).join('、')||'无'}</p><p>本节点已保存成果 {view.artifacts.filter(a=>a.task_id===task.task_id).length} 项，其中正文可读 {view.artifacts.filter(a=>a.task_id===task.task_id&&a.contentAccess==='AUTHORIZED').length} 项。完整正文可在原会话核对。</p></>:<p>选择节点查看职责、前序依赖和当前记录。</p>}</article>}</section>;
+}
