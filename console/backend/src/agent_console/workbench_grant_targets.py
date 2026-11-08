@@ -83,7 +83,11 @@ class WorkbenchGrantTargetValidator:
                     ).fetchone()
                     is not None
                 )
-            if grant.action == "READ" and grant.owner in {"INSTANCE", "ASSIGNMENT"}:
+            if grant.action == "READ" and grant.owner in {
+                "INSTANCE",
+                "ASSIGNMENT",
+                "PLACEMENT",
+            }:
                 # Target existence is not read authority. Requestability and the
                 # issuer still decide each grant, and read ports recheck parents.
                 table, column, prefix = {
@@ -96,6 +100,11 @@ class WorkbenchGrantTargetValidator:
                         "execution_authority.assignments",
                         "assignment_id",
                         "assignment:",
+                    ),
+                    "PLACEMENT": (
+                        "execution_authority.placement_decisions",
+                        "placement_id",
+                        "placement:",
                     ),
                 }[grant.owner]
                 if not grant.exact_resource.startswith(prefix):

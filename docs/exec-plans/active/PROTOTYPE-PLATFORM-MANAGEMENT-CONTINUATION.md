@@ -562,3 +562,34 @@ Effect-image continuation: original workflow canvas calls for readable task depe
 Keep existing definition builder and owner APIs untouched: current builder uses separate internal endpoints and is not a trusted business authoring journey. This batch is saved execution visualization, not a claim that the original editable Workflow Definition canvas is complete. Keep original shell and layout references. Provide accessible node controls and dependency descriptions, responsive canvas scrolling/zoom/reset, selection details and keyboard use. Current identity, stale snapshot withdrawal and canonical parent checks remain owned by existing callers. No separate cached execution object.
 
 Verify branched/unordered/isolated DAG edges, cycles/missing/duplicate IDs, uncertain states, zoom/selection/keyboard/mobile and zero mutation through browser fixtures, preserve original resource/operations/result regressions and standard frontend lint/both builds/full normal commit checks. Freeze full cumulative source and unchanged runtime closure. Install only after idle-owner and backup checks; actual original sales/supplier GET-only dependency traversal, same artifacts/result and no Run/model delta. Reference original workflow SVG and real before/after; separate original authoring canvas and full visual acceptance gaps.
+
+## Employee instance operation detail — 2026-11-08 — G1
+
+Scope: connect the selected existing assignment/task to authoritative instance and
+assignment lifecycle, exact dispatch Placement, saved outcome and current Task
+observation, preserving the original conversation return. Reuse existing owner
+READ adapters and authorization transactions. Add one GET runtime-detail per task;
+no new lifecycle semantics, CRD, provider health inference, dispatch or model call.
+Instance transition commands remain outside this read composition: the domain has
+transitions but the trusted product write adapter is not yet assembled.
+
+Components: employee_execution_trace, EmployeeExecutionTrace, isolated owner and
+browser tests. Placement coordinates derive exclusively from the saved exact
+attempt dispatch; validate assignment/agent/runtime/generation and canonical
+Placement runtime. Require exact PLACEMENT READ before exposing it. Missing or
+unauthorized Placement remains unavailable, never inferred from successful Task.
+Lifecycle and placement are distinct from task success and provider health.
+
+Validation: isolated PostgreSQL owner checks including denied/mismatched Placement,
+frontend identity/expiry/race and mobile checks, existing trace regression, lint,
+build and normal repository checks. Install only a frozen validated composition;
+actual GET-only original-work traversal must preserve all old Run/artifact/budget
+facts. Effect-image comparison and unified entry keep lifecycle writes and absent
+Pod health explicitly pending; no whole-project acceptance claim.
+
+Inspection found the existing PLACEMENT READ contract lacked a scoped known-target
+validator and requestability in the installed operator generation. Complete the
+existing target validator, and prepare a separately recorded operator successor
+that adds only PLACEMENT READ requestability for the original work review. Retain
+all credentials, expirations and prior rules unchanged. No direct SQL grant or
+silent active-file overwrite; use the existing generation activation controller.

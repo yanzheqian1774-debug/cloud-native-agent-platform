@@ -272,7 +272,9 @@ class EmployeeExecutionTrace:
                 {
                     "taskId": actor["task_id"],
                     "title": task["title"],
-                    "state": state.get("state", "NOT_STARTED"),
+                    "state": state.get(
+                        "state", "UNKNOWN" if view.get("progress") else "NOT_STARTED"
+                    ),
                     "attemptId": state.get("attempt_id"),
                     "instanceId": actor["instance_id"],
                     "assignmentId": actor["assignment_id"],
@@ -300,6 +302,63 @@ class EmployeeExecutionTrace:
             if not task:
                 raise WorkbenchOwnerError("RUNTIME_TASK_UNAVAILABLE", 404)
             result["observation"] = self.observe(call, view, task)
+        if call.operation == "READ_EXECUTION_RUNTIME_DETAIL":
+            task = next((t for t in tasks if t["taskId"] == call.path["task_id"]), None)
+            if not task:
+                raise WorkbenchOwnerError("RUNTIME_TASK_UNAVAILABLE", 404)
+            result["detail"] = self.detail(call, task)
+        return result
+
+    def detail(self, call, task):
+        path = {
+            "instance_id": task["instanceId"],
+            "assignment_id": task["assignmentId"],
+        }
+        instance = self.instances(
+            replace(call, operation="READ_EMPLOYEE_INSTANCE", path=path)
+        )
+        assignment = self.instances(
+            replace(call, operation="READ_EMPLOYEE_ASSIGNMENT", path=path)
+        )
+        result = {
+            "taskId": task["taskId"],
+            "instance": instance,
+            "assignment": assignment,
+            "placement": None,
+            "placementStatus": "NOT_DISPATCHED",
+            "observedAt": datetime.now(UTC).isoformat(),
+            "freshUntil": datetime.fromtimestamp(
+                datetime.now(UTC).timestamp() + 30, UTC
+            ).isoformat(),
+            "providerHealth": "NOT_OBSERVED",
+            "executionStarted": False,
+        }
+        if not task["attemptId"]:
+            return result
+        try:
+            command = self.dispatch(call, task)
+        except WorkbenchOwnerError:
+            result["placementStatus"] = "BINDING_UNAVAILABLE"
+            return result
+        try:
+            self.require(call, "PLACEMENT", "placement:" + command["placement_id"])
+            placement = self.instances(
+                replace(
+                    call,
+                    operation="READ_EMPLOYEE_PLACEMENT",
+                    path={**path, "placement_id": command["placement_id"]},
+                    query={
+                        "attemptId": task["attemptId"],
+                        "agentInstanceId": task["agentInstanceId"],
+                    },
+                )
+            )
+        except (AuthorityError, WorkbenchOwnerError):
+            result["placementStatus"] = "UNAVAILABLE"
+            return result
+        if placement["runtimeInstanceId"] != task["runtimeInstanceId"]:
+            raise WorkbenchOwnerError("RUNTIME_PLACEMENT_BINDING_CHANGED", 409)
+        result["placement"], result["placementStatus"] = placement, "VERIFIED"
         return result
 
     def observe(self, call, view, task):
@@ -311,6 +370,25 @@ class EmployeeExecutionTrace:
             raise WorkbenchOwnerError("RUNTIME_OBSERVATION_SCOPE_REQUIRED", 403)
         if not task["attemptId"]:
             raise WorkbenchOwnerError("RUNTIME_TASK_NOT_DISPATCHED", 409)
+        command = self.dispatch(call, task)
+        try:
+            return correlated_task(command, self.observer.read(command))
+        except ApiException as e:
+            raise WorkbenchOwnerError(
+                "RUNTIME_TASK_UNAVAILABLE"
+                if e.status == 404
+                else "RUNTIME_OBSERVATION_UNAVAILABLE",
+                404 if e.status == 404 else 503,
+            ) from e
+        except (
+            OSError,
+            TimeoutError,
+            KubernetesTransportError,
+            config.ConfigException,
+        ) as e:
+            raise WorkbenchOwnerError("RUNTIME_OBSERVATION_UNAVAILABLE", 503) from e
+
+    def dispatch(self, call, task):
         command = call.connection.execute(
             "SELECT namespace,command_id,attempt_id,assignment_id,agent_name,agent_instance_id,runtime_instance_id,runtime_generation,placement_id,kubernetes_task_name,kubernetes_task_uid FROM execution_authority.native_dispatch_commands WHERE namespace=%s AND security_domain=%s AND attempt_id=%s",
             (
@@ -334,22 +412,7 @@ class EmployeeExecutionTrace:
             or not command["kubernetes_task_uid"]
         ):
             raise WorkbenchOwnerError("RUNTIME_DISPATCH_BINDING_UNAVAILABLE", 409)
-        try:
-            return correlated_task(command, self.observer.read(command))
-        except ApiException as e:
-            raise WorkbenchOwnerError(
-                "RUNTIME_TASK_UNAVAILABLE"
-                if e.status == 404
-                else "RUNTIME_OBSERVATION_UNAVAILABLE",
-                404 if e.status == 404 else 503,
-            ) from e
-        except (
-            OSError,
-            TimeoutError,
-            KubernetesTransportError,
-            config.ConfigException,
-        ) as e:
-            raise WorkbenchOwnerError("RUNTIME_OBSERVATION_UNAVAILABLE", 503) from e
+        return command
 
     def __call__(self, call):
         return (
@@ -384,6 +447,15 @@ def operations(
             "READ_EXECUTION_RUNTIME_REVIEW",
             "GET",
             path + "/runtime-review",
+            None,
+            None,
+            grant("READ"),
+            owner,
+        ),
+        WorkbenchOperation(
+            "READ_EXECUTION_RUNTIME_DETAIL",
+            "GET",
+            path + "/runtime-details/{task_id}",
             None,
             None,
             grant("READ"),

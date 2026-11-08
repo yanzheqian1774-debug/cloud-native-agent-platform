@@ -331,3 +331,114 @@ def test_deleting_task_retains_history_but_does_not_report_current_success():
     assert result["phase"] == "Deleting"
     assert result["providerHealth"] == "NOT_OBSERVED"
     assert result["executionStarted"] is False
+
+
+def test_runtime_detail_reads_actual_lifecycle_without_dispatch(trace):
+    detail = trace.call("READ_EXECUTION_RUNTIME_DETAIL")["detail"]
+    assert detail["instance"]["lifecycle"] == "ENABLED"
+    assert detail["assignment"]["lifecycle"] == "ACTIVE"
+    assert detail["placement"] is None
+    assert detail["placementStatus"] == "NOT_DISPATCHED"
+    assert detail["providerHealth"] == "NOT_OBSERVED"
+    assert detail["executionStarted"] is False
+
+
+@pytest.mark.parametrize("mode", ["verified", "denied", "missing", "wrong-runtime"])
+def test_runtime_detail_uses_exact_owner_placement_and_never_infers_health(trace, mode):
+    trace.view["progress"]["tasks"][0]["attempt_id"] = "attempt:isolated"
+    calls = []
+    real_owner = trace.handler.instances
+    trace.handler.dispatch = lambda *_: {"placement_id": "placement:isolated"}
+    original_require = trace.handler.require
+
+    def require(call, owner, resource):
+        if owner == "PLACEMENT":
+            calls.append((owner, resource))
+            if mode == "denied":
+                raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+            return
+        return original_require(call, owner, resource)
+
+    def placement(call):
+        if call.operation != "READ_EMPLOYEE_PLACEMENT":
+            return real_owner(call)
+        calls.append((call.path, call.query))
+        assert call.path == {
+            "instance_id": "instance:relations-1",
+            "assignment_id": "assignment:relations-1",
+            "placement_id": "placement:isolated",
+        }
+        assert call.query == {
+            "attemptId": "attempt:isolated",
+            "agentInstanceId": "agent:isolated",
+        }
+        if mode == "missing":
+            raise WorkbenchOwnerError("PLACEMENT_NOT_FOUND", 404)
+        return {
+            "runtimeInstanceId": "runtime:foreign"
+            if mode == "wrong-runtime"
+            else "runtime:isolated"
+        }
+
+    trace.handler.require = require
+    trace.handler.instances = placement
+    if mode == "wrong-runtime":
+        with pytest.raises(WorkbenchOwnerError, match="PLACEMENT_BINDING_CHANGED"):
+            trace.call("READ_EXECUTION_RUNTIME_DETAIL")
+    else:
+        detail = trace.call("READ_EXECUTION_RUNTIME_DETAIL")["detail"]
+        assert detail["placementStatus"] == (
+            "VERIFIED" if mode == "verified" else "UNAVAILABLE"
+        )
+        assert detail["providerHealth"] == "NOT_OBSERVED"
+    assert calls[0] == ("PLACEMENT", "placement:placement:isolated")
+    assert len(calls) == (1 if mode == "denied" else 2)
+
+
+def test_started_execution_missing_task_state_is_unknown(trace):
+    trace.view["progress"]["tasks"] = []
+    assert trace.call("READ_EXECUTION_RUNTIME_REVIEW")["tasks"][0]["state"] == "UNKNOWN"
+
+
+def test_placement_read_target_requires_same_scope_and_never_grants(trace):
+    from agent_console.authority_contracts import ExactGrant
+    from agent_console.workbench_grant_targets import WorkbenchGrantTargetValidator
+
+    calls = []
+
+    class Connection:
+        def execute(self, sql, params):
+            calls.append((sql, params))
+            assert "execution_authority.placement_decisions" in sql
+            return SimpleNamespace(
+                fetchone=lambda: (
+                    {"exists": 1}
+                    if params
+                    == (
+                        trace.r.a.subject.scope.tenant_id,
+                        trace.r.a.subject.scope.security_domain,
+                        "placement:fixture",
+                    )
+                    else None
+                )
+            )
+
+    v = WorkbenchGrantTargetValidator(None)
+    context = trace.r.a.subject
+    exact = ExactGrant("PLACEMENT", "READ", "placement:placement:fixture")
+    assert v.is_known_exact_target(context, exact, connection=Connection())
+    assert not v.is_known_exact_target(
+        context,
+        ExactGrant("PLACEMENT", "READ", "placement:missing"),
+        connection=Connection(),
+    )
+    from dataclasses import replace
+
+    assert not v.is_known_exact_target(
+        replace(context, scope=replace(context.scope, tenant_id="foreign")),
+        exact,
+        connection=Connection(),
+    )
+    with pytest.raises(AuthorityError, match="AUTHORITY_STORAGE_UNAVAILABLE"):
+        v.is_known_exact_target(context, exact)
+    assert len(calls) == 3
