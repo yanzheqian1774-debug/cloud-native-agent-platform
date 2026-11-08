@@ -22,7 +22,25 @@ class InitialCaseCreation(Immutable):
     source_content_digest: Digest
 
 
-def bind_created_object(legacy, bindings):
+def _exact_supplement_criterion(revision, expected):
+    from .resource_use_domain import canonical_digest
+    from .sales_gross_profit_evaluation import CHECKS, criterion_candidate
+    from .sales_gross_profit_integration import SOURCE_DIGEST
+
+    check = revision.get("applicability", {}).get("check")
+    return (
+        expected.source_content_digest == SOURCE_DIGEST
+        and check in CHECKS
+        and revision.get("revision") == 1
+        and revision.get("predecessor_revision_id") is None
+        and canonical_digest(
+            {key: revision.get(key) for key in criterion_candidate(check)}
+        )
+        == canonical_digest(criterion_candidate(check))
+    )
+
+
+def bind_created_object(legacy, bindings, *, sales_supplement_enabled=False):
     def bind(connection, context, owner, result, **kwargs):
         revision = result["revision"]
         root = (
@@ -58,6 +76,10 @@ def bind_created_object(legacy, bindings):
         elif owner == "SUCCESS_CRITERION":
             from .sales_evaluation import CHECKS
 
+            if sales_supplement_enabled and _exact_supplement_criterion(
+                revision, expected
+            ):
+                return result
             if (
                 revision["evaluator_type"] != "SYNTHETIC_SALES"
                 or revision["evaluator_version"] != "1"

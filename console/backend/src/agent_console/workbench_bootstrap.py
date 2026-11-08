@@ -402,7 +402,12 @@ def build_workbench_composition(
             if creation:
                 from .initial_case_creation import bind_created_object
 
-                task_binding = bind_created_object(task_binding, creation)
+                task_binding = bind_created_object(
+                    task_binding,
+                    creation,
+                    sales_supplement_enabled=sales_supplement_candidate
+                    and sales_v2_candidate,
+                )
 
         resource_automation = None
         resource_automation_routes = ()

@@ -472,3 +472,16 @@ Reuse styles and inspect both viewports. Run frontend lint and both builds,
 relevant SQL/BFF checks and normal repository hooks. Author fixture/SQL evidence
 is never labeled actual live business acceptance. Preserve historical UNKNOWN,
 16 unsettled, original source snapshots and supplier records.
+
+
+## G1 continuation — exact original sales supplement criterion binding (2026-11-08)
+
+Actual original-source65 dependency submission exposed `INITIAL_CASE_CRITERION_DENIED`: the BFF calls the unchanged initial-case creation wrapper after the criterion owner, and the wrapper admits only the historical five evaluator-v1 criteria. Original key recovery confirms transaction rollback and no new criterion. Two lawful issuer decisions created four exact dependency grants; no resource, Employee, Plan, model or Run was created.
+
+Scope: preserve existing initial v1 creation and delegation fallback. Behind BOTH existing Sales candidate flags, admit only the existing seven `criterion_candidate` v2 contracts with the same configured original subject/tenant/domain/root and exact source digest. Match every criterion contract field, not merely evaluatorVersion or check name. This is the original initial-case wrapper calling its original owner after current exact authorization; no new grant, owner, public route/contract, schema, persistence, authentication architecture or cross-plane authority.
+
+Components: initial_case_creation.py, workbench_bootstrap.py; focused binding tests and disposable PostgreSQL BFF regression exercising the actual post-owner wrapper so a denied contract proves whole-transaction rollback and original-key recovery. Test default-off, either-flag-off forwarding, all seven exact criteria, mutated measurement/source/contract/evaluator/evidence/kind/actor, unchanged v1 and legacy fallback, original-key same-ID recovery; do not replay actual failed POST or UNKNOWN while offline.
+
+Validation: focused pytest and lint/format; integrated disposable SQL/BFF regression with exact current grants and real post-owner binding; normal full repository checks and focused diff/status. Source8e63 remains frozen, successor source/frontend must be composed together and accepted before actual activation. Existing frontend bundle unchanged and full hashes must remain pinned.
+
+Business journey: ordinary sales users express the existing goal and meaningful constraints in the original conversation. Resource draft/adoption/testing/publication and exact Employee maintenance belong to the governance drill-down. Maintainer intervention here is an implementation dependency, not a request for the sales user to operate technical buttons. Final business and maintenance paths must be presented separately with reasons for each intervention; author replay is not actual acceptance.
