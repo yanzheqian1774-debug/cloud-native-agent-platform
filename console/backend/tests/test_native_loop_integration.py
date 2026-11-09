@@ -95,3 +95,34 @@ def test_decision_contract_only_exposes_bound_tools_and_evidence():
     assert [
         c["properties"]["tool"]["enum"][0] for c in choices if "tool" in c["properties"]
     ] == [t.name for t in library.tools]
+
+
+def test_live_successor_has_a_complete_typed_read_validate_analyze_report_path():
+    from agent_console.native_loop_resource_bundle import resource_content
+    from agent_console.native_loop_skill import (
+        NativeLoopSkillExecutor,
+        NativeValidatedLoopSkillExecutor,
+        executor_revision,
+    )
+    from agent_console.planning_contracts import INPUTS, OUTPUTS
+
+    source = {
+        "schemaVersion": "tabular-diagnostic-source.v1",
+        "synthetic": True,
+        "mapping": {
+            "identity": "id",
+            "value": "value",
+            "upperBound": "limit",
+            "unit": "unit",
+            "dimensions": ["service"],
+        },
+        "rows": [{"id": "1", "value": "2", "limit": "1", "unit": "ms", "service": "a"}],
+    }
+    operations = resource_content(source)["skill"]["operations"]
+    assert executor_revision(operations) == NativeValidatedLoopSkillExecutor.revision
+    assert NativeLoopSkillExecutor.revision.executor_revision == "2"
+    previous = "CONTEXT"
+    for operation in operations:
+        assert previous in INPUTS[operation["name"]]
+        previous = OUTPUTS[operation["name"]]
+    assert previous == "REPORT"

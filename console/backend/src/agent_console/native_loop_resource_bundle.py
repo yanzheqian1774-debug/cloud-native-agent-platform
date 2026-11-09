@@ -1,13 +1,18 @@
 # ruff: noqa: RUF001 -- Business resource descriptions.
 """Distinct v2 draft bundle; model execution needs explicit Native composition."""
 
-from .native_loop_skill import CONFIGURATION, NativeLoopSkillExecutor
+from .native_loop_skill import (
+    VALIDATED_CONFIGURATION as CONFIGURATION,
+)
+from .native_loop_skill import (
+    NativeValidatedLoopSkillExecutor,
+)
 from .tabular_resource_bundle import resource_content as tabular_content
 
 
 def resource_content(source):
     bundle = tabular_content(source)
-    revision = NativeLoopSkillExecutor.revision
+    revision = NativeValidatedLoopSkillExecutor.revision
     skill = bundle["skill"]
     skill["description"] = (
         "真实模型根据只读工具结果决定下一步，核对异常原始行并独立复算。"

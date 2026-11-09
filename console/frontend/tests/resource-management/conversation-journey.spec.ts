@@ -83,3 +83,16 @@ for(const reason of ['READONLY_CONTINUATION_VALIDATION_FAILED','NETWORK_UNKNOWN'
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'EXECUTE',pending:'execute',error:'Error: '+reason,messages:[{id:'user:q',text:prompt}],log:[]}};
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(reason==='READONLY_CONTINUATION_VALIDATION_FAILED'?1:0);expect(s.modelCalls).toBe(0);
 });
+
+test('empty source dates use the full source scope without sending an empty time range',async({page})=>{
+ const s=await fixture(page);s.journal={version:2,state:{key:'latency',question:'看看响应异常',phase:'CLARIFY',messages:[{id:'user:q',text:'看看响应异常'}],sources:[{source:{resource_id:'latency',revision_id:'1',digest:'d'.repeat(64)},name:'响应资料',label:'响应资料',periods:[],sourceSchema:'tabular-diagnostic-source.v1',synthetic:true}],log:[]}};
+ await page.goto('/work?conversation=new');await page.getByRole('button',{name:'使用现有响应资料'}).click();await expect.poll(()=>s.modelCalls).toBe(1);expect(s.messages[0].content).toContain('分析范围为该资料包含的全部记录');expect(s.messages[0].content).not.toContain('时间范围为。');
+});
+
+test('known exhausted coverage can recheck new capabilities without replaying model or execution',async({page})=>{
+ const s=await fixture(page);let selections=0;
+ s.journal={version:10,state:{key:'k',question:prompt,cycle:2,phase:'SELECT_RESOURCES',pending:'select-resources',error:'Error: 现有能力仍不能完成该方案，已保留资料与方案缺口。',messages:[{id:'user:q',text:prompt}],log:[],confirmation:{digest:'c'.repeat(64),plan:{plan_id:'p',version:3,semantics:{requirements:[{kind:'EMPLOYEE',selected:null}]}}}}};
+ await page.route('**/planning-v2/p/resource-coverage?version=3',route=>route.fulfill({json:{result:{planId:'p',planVersion:3,planDigest:'c'.repeat(64),subject:'human:development-admin',candidates:[],state:'BLOCKED'}}}));
+ await page.route('**/planning-v2/p/resource-selection/automatic',route=>{selections++;expect(route.request().postDataJSON().idempotencyKey).toBe('k:selection:2:recheck:1');return route.fulfill({status:409,json:{reasonCode:'AUTOMATIC_SELECTION_COVERAGE_BLOCKED'}})});
+ await page.goto('/work?conversation=new');await page.getByRole('button',{name:'能力补齐后继续分析'}).click();await expect.poll(()=>selections).toBe(1);await expect(page.getByRole('button',{name:'能力补齐后继续分析'})).toBeVisible();expect(s.modelCalls).toBe(0);
+});

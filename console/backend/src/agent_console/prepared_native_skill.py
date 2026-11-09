@@ -77,7 +77,10 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
     from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 
     tabular = TabularDiagnosticSkillExecutor.revision
-    from .native_loop_skill import NativeLoopSkillExecutor
+    from .native_loop_skill import (
+        NativeLoopSkillExecutor,
+        NativeValidatedLoopSkillExecutor,
+    )
 
     is_tabular = any(
         (
@@ -86,7 +89,11 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
             participant.executor_digest,
         )
         == (v.executor_id, v.executor_revision, v.configuration_digest)
-        for v in (tabular, NativeLoopSkillExecutor.revision)
+        for v in (
+            tabular,
+            NativeLoopSkillExecutor.revision,
+            NativeValidatedLoopSkillExecutor.revision,
+        )
     )
     result = {
         "schemaVersion": "tabular-diagnostic-input.v1"

@@ -50,6 +50,20 @@ class NativeLoopSkillExecutor(TabularDiagnosticSkillExecutor):
         return SkillExecutorResult(True, output, "native-loop-skill:" + invocation_id)
 
 
+VALIDATED_CONFIGURATION = {
+    **CONFIGURATION,
+    "operations": ["READ_DATA", "VALIDATE_DATA", "ANALYZE_DATA", "RENDER_REPORT"],
+}
+
+
+class NativeValidatedLoopSkillExecutor(NativeLoopSkillExecutor):
+    """Compatible successor exposes the existing computation's typed validation."""
+
+    revision = ExecutorRevision(
+        "tabular-diagnostic-readonly", "3", canonical_digest(VALIDATED_CONFIGURATION)
+    )
+
+
 def executor_revision(operations):
     revisions = {
         (x["executorId"], x["executorRevision"], x["executorConfigurationDigest"])
@@ -58,6 +72,7 @@ def executor_revision(operations):
     for revision in (
         TabularDiagnosticSkillExecutor.revision,
         NativeLoopSkillExecutor.revision,
+        NativeValidatedLoopSkillExecutor.revision,
     ):
         if revisions == {
             (

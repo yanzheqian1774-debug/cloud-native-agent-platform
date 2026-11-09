@@ -141,7 +141,7 @@ class NativeLoopRuntime:
             if (
                 not invocation
                 or invocation["attempt_id"] != str(command.attempt_id)
-                or invocation["executor_revision"] != "2"
+                or invocation["executor_revision"] not in {"2", "3"}
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
         journal = NativeLoopJournal(self.pool, scope, invocation_id)

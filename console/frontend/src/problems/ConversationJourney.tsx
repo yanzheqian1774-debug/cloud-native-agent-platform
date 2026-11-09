@@ -8,7 +8,7 @@ import {understandingContent,appendUserMessage,type UserFactMessage} from './pro
 import {PreparedExecutionPanel} from './PreparedExecutionPanel';
 
 type Source={source:ExactRef;name:string;periods:string[];sourceSchema:string;synthetic:boolean;label?:string;completionCriteria?:string[];assessment?:{state:string;missingOperations:string[];limitations:string[]}};
-type State={resourceRetry?:number;cycle?:number;coverageFeedback?:string;expectedPlanVersion?:number;key:string;phase:string;question:string;messages:UserFactMessage[];sources?:Source[];source?:Source;draft?:DraftAssistanceResult;problem?:BusinessProblemRevision;criterion?:string;planning?:Invocation;confirmation?:Confirmation;execution?:string;error?:string;pending?:string;log:string[]};
+type State={selectionRetry?:number;resourceRetry?:number;cycle?:number;coverageFeedback?:string;expectedPlanVersion?:number;key:string;phase:string;question:string;messages:UserFactMessage[];sources?:Source[];source?:Source;draft?:DraftAssistanceResult;problem?:BusinessProblemRevision;criterion?:string;planning?:Invocation;confirmation?:Confirmation;execution?:string;error?:string;pending?:string;log:string[]};
 type Journal={version:number;state:State|null};
 const coverageFailure='Error: AUTOMATIC_SELECTION_COVERAGE_BLOCKED';
 const canRepair=(s:State)=>s.phase==='SELECT_RESOURCES'&&s.pending==='select-resources'&&s.error===coverageFailure&&(s.cycle??0)<2;
@@ -36,6 +36,14 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
    if(receipt.planId!==p.plan_id||receipt.planVersion!==p.version||receipt.planDigest!==s.confirmation!.digest||receipt.subject!==session.principal.principalId||receipt.executionStarted!==false)throw Error('RESOURCE_PREPARATION_CONTEXT_MISMATCH');
    if(!['READY','PARTIALLY_READY','BLOCKED'].includes(receipt.state))throw Error('RESOURCE_PREPARATION_OUTCOME_UNKNOWN');
    await save({...s,pending:undefined,error:undefined,phase:receipt.state==='READY'?'EXECUTE':'RESOURCES',resourceRetry:receipt.state==='READY'?s.resourceRetry:(s.resourceRetry??0)+1,log:[...s.log,'已核实上次准备结果且尚未启动执行，继续核对资源。']});setError('');
+  }catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}
+ }
+ async function recheckSelection(){
+  if(flight.current||!current.current?.state)return;flight.current=true;setBusy(true);
+  try{await verify();const s=current.current.state,p=s.confirmation!.plan;
+   const coverage=await readResourceCoverage(p.plan_id,p.version);
+   if(coverage.planId!==p.plan_id||coverage.planVersion!==p.version||coverage.planDigest!==s.confirmation!.digest||coverage.subject!==session.principal.principalId)throw Error('RESOURCE_COVERAGE_CONTEXT_MISMATCH');
+   await save({...s,pending:undefined,error:undefined,selectionRetry:(s.selectionRetry??0)+1,log:[...s.log,'已重新读取当前能力，继续核对原方案；不重发模型调用或执行任务。']});setError('');
   }catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}
  }
  async function run(){
@@ -87,7 +95,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
      s=await save({...s,phase:'RESOURCES'});
     }else{
      s=await pending(s,'select-resources');
-     try{const selected=await selectAutomaticResources(original.plan.plan_id,original,s.key+':selection:'+(s.cycle??0),session.csrfToken);
+     try{const selected=await selectAutomaticResources(original.plan.plan_id,original,s.key+':selection:'+(s.cycle??0)+(s.selectionRetry?':recheck:'+s.selectionRetry:''),session.csrfToken);
      s=await save({...s,pending:undefined,confirmation:selected.confirmation,phase:'RESOURCES'});}
      catch(e){if(String(e)!==coverageFailure)throw e;s=await repairCoverage(s);}
     }
@@ -110,11 +118,12 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  async function answer(text:string,source?:Source){if(flight.current||!state)return;flight.current=true;setBusy(true);try{await verify();const c=await conversationRequest<PrivateConversation>('/'+conversation);await conversationRequest('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':answer:'+state.messages.length,content:text});await save({...state,source:source??state.source,phase:'UNDERSTAND',pending:undefined,error:undefined,messages:appendUserMessage(state.messages,text),log:[...state.log,'已收到补充，继续理解并核对分析范围。']});setReply('')}catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}}
  if(!state)return error?<p role="alert">{error}</p>:null;
  return <section className="conversation-journey" aria-busy={busy}><h2>{execution?.progress?.state==='SUCCEEDED'?'分析结果':state.phase==='CLARIFY'?'请确认一下分析范围':'正在办理你的问题'}</h2>{state.messages.slice(1).map(m=><blockquote key={m.id}>{m.text}</blockquote>)}<ol>{state.log.map((text,i)=><li key={i}>{text}</li>)}</ol>{busy&&<p role="status">正在处理，请稍候。进度会保存在本会话。</p>}
- {state.phase==='CLARIFY'&&<div><p>{state.draft?.clarificationQuestion??(state.source?'请补充你最关注的问题，例如关注的指标、时间或对象。':'请选择本次要分析的资料范围。')}</p>{!state.source&&<><p>系统可用资料如下。测试资料不代表真实经营数据；确认后将自动分析并把结果返回这里。</p>{state.sources?.filter(source=>source.assessment?.state==='MISSING_TOOLS').map(source=><p key={source.source.digest}>“{source.label??source.name}”可读取，但缺少兼容的执行工具，暂不能自动分析。</p>)}{state.sources?.map(source=><button key={source.source.digest} disabled={busy||source.assessment?.state==='MISSING_TOOLS'} onClick={()=>void answer('使用系统现有的'+source.name+'，时间范围为'+source.periods.join('、')+'。按资料的既有口径进行只读分析，展示汇总、变化贡献和异常明细，不修改原始数据。',source)}>使用{source.periods.join('、')||'现有'}{source.label??(source.sourceSchema.startsWith('sales')?'销售':'交付')}{source.label?'':'测试资料'}</button>)}</>}<form onSubmit={e=>{e.preventDefault();void answer(reply)}}><label htmlFor="journey-reply">补充说明</label><textarea id="journey-reply" value={reply} onChange={e=>setReply(e.target.value)} maxLength={1800}/><button disabled={busy||!reply.trim()}>发送补充</button></form></div>}
+ {state.phase==='CLARIFY'&&<div><p>{state.draft?.clarificationQuestion??(state.source?'请补充你最关注的问题，例如关注的指标、时间或对象。':'请选择本次要分析的资料范围。')}</p>{!state.source&&<><p>系统可用资料如下。测试资料不代表真实经营数据；确认后将自动分析并把结果返回这里。</p>{state.sources?.filter(source=>source.assessment?.state==='MISSING_TOOLS').map(source=><p key={source.source.digest}>“{source.label??source.name}”可读取，但缺少兼容的执行工具，暂不能自动分析。</p>)}{state.sources?.map(source=><button key={source.source.digest} disabled={busy||source.assessment?.state==='MISSING_TOOLS'} onClick={()=>void answer('使用系统现有的'+source.name+(source.periods.length?'，时间范围为'+source.periods.join('、'):'，分析范围为该资料包含的全部记录')+'。按资料的既有口径进行只读分析，展示汇总、变化贡献和异常明细，不修改原始数据。',source)}>使用{source.periods.join('、')||'现有'}{source.label??(source.sourceSchema.startsWith('sales')?'销售':'交付')}{source.label?'':'测试资料'}</button>)}</>}<form onSubmit={e=>{e.preventDefault();void answer(reply)}}><label htmlFor="journey-reply">补充说明</label><textarea id="journey-reply" value={reply} onChange={e=>setReply(e.target.value)} maxLength={1800}/><button disabled={busy||!reply.trim()}>发送补充</button></form></div>}
  {state.source&&<details open><summary>本次能做什么与完成标准</summary><p>资料与已登记能力：{state.source.assessment?.state==='MISSING_TOOLS'?'尚缺执行工具':'可进入方案核验，尚不代表已经执行或解决问题'}</p><ul>{state.source.completionCriteria?.map((c,i)=><li key={i}>{c}</li>)}</ul>{state.source.assessment?.limitations.map((c,i)=><p key={i}>{c}</p>)}</details>}
  {state.draft?.draft&&<details><summary>查看已理解的目标</summary><p>{state.draft.draft.description}</p></details>}
  {(error||state.error)&&<div role="alert"><p>本次处理停在当前步骤，已有内容已保留。</p><p>{error||state.error}</p><p>不会自动重发可能已执行的请求。恢复后仍在本会话继续。</p></div>}
  {((state.phase==='PLAN'&&state.pending==='planning'&&state.error?.includes('（MODEL_AUTHORIZATION_INVALID）'))||(state.phase==='EXECUTE'&&state.pending==='execute'&&['Error: READONLY_RESOURCE_PREPARATION_REQUIRED','Error: READONLY_CONTINUATION_VALIDATION_FAILED'].includes(state.error??'')))&&<button disabled={busy} onClick={()=>{setError('');void save({...state,pending:undefined,error:undefined})}}>配置修复后继续分析</button>}
+ {state.phase==='SELECT_RESOURCES'&&state.pending==='select-resources'&&[coverageFailure,'Error: 现有能力仍不能完成该方案，已保留资料与方案缺口。'].includes(state.error??'')&&<button disabled={busy} onClick={()=>void recheckSelection()}>能力补齐后继续分析</button>}
  {state.phase==='RESOURCES'&&state.pending==='resources'&&state.error?.startsWith('Error: 分析所需能力尚未全部就绪：')&&<button disabled={busy} onClick={()=>void recheckResources()}>重新核对可用能力</button>}
  {state.pending&&!busy&&!state.error&&<p role="status">上次请求尚未核实，已保留原记录，暂不重复执行。</p>}
  {state.execution&&<><p>执行状态：{execution?.progress?.state??'正在读取'} · 已生成{execution?.artifacts.length??0}份产物</p><PreparedExecutionPanel contextKey={'journey:'+conversation} digest={state.execution} problemId={state.problem!.business_problem_id} csrfToken={session.csrfToken} blocked={false} readOnly={true} onBusy={()=>{}} supplementConversation={conversation}/></>}

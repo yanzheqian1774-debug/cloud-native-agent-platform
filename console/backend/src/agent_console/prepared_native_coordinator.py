@@ -113,9 +113,15 @@ class PreparedNativeCoordinator:
             repository.decide(
                 app.scope, request, placement, require_employee_lineage=True
             )
-            from .native_loop_skill import NativeLoopSkillExecutor
+            from .native_loop_skill import (
+                NativeLoopSkillExecutor,
+                NativeValidatedLoopSkillExecutor,
+            )
 
-            loop_revision = NativeLoopSkillExecutor.revision
+            loop_revisions = (
+                NativeLoopSkillExecutor.revision,
+                NativeValidatedLoopSkillExecutor.revision,
+            )
             native_timeout = (
                 480
                 if (
@@ -123,11 +129,10 @@ class PreparedNativeCoordinator:
                     participant.executor_revision,
                     participant.executor_digest,
                 )
-                == (
-                    loop_revision.executor_id,
-                    loop_revision.executor_revision,
-                    loop_revision.configuration_digest,
-                )
+                in {
+                    (v.executor_id, v.executor_revision, v.configuration_digest)
+                    for v in loop_revisions
+                }
                 else 30
             )
             NativeDispatchApplication(repository).queue(

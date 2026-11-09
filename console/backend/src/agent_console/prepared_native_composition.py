@@ -82,14 +82,21 @@ def compose(
             executors += (executor,)
     native_runtime = []
     if native_loop_path:
-        from .native_loop_skill import NativeLoopSkillExecutor
+        from .native_loop_skill import (
+            NativeLoopSkillExecutor,
+            NativeValidatedLoopSkillExecutor,
+        )
 
-        executors += (
-            NativeLoopSkillExecutor(
+        executors += tuple(
+            executor_type(
                 lambda identity, output, timeout: native_runtime[0].run(
                     identity, output, timeout
                 )
-            ),
+            )
+            for executor_type in (
+                NativeLoopSkillExecutor,
+                NativeValidatedLoopSkillExecutor,
+            )
         )
     composition = compose_governed_skill_invocation(
         database_url,
