@@ -45,8 +45,14 @@ SALES_SYNTHETIC_ONLY = (
 )
 
 
+TABULAR_SYNTHETIC_ONLY = (
+    "仅对已确认的合成指标快照按声明字段、单位和上限进行只读检查；"
+    "缺失数据单列，异常不证明原因或改善效果；禁止外部写入。"
+)
+
+
 class CostExecutionRevisionRequest(Immutable):
-    case: Literal["cost", "delivery", "sales"] = "cost"
+    case: Literal["cost", "delivery", "sales", "tabular"] = "cost"
     plan_version: int = Field(ge=1)
     plan_digest: Digest
     source_snapshot: ExactReference
@@ -98,7 +104,9 @@ def execution_successor(
     ]
     record["boundaries"] = [
         (
-            SALES_SYNTHETIC_ONLY
+            TABULAR_SYNTHETIC_ONLY
+            if request.case == "tabular"
+            else SALES_SYNTHETIC_ONLY
             if request.case == "sales"
             else DELIVERY_SYNTHETIC_ONLY
             if request.case == "delivery"

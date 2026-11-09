@@ -15,6 +15,7 @@ from .cost_execution_revision import (
     READ_ONLY_PLANNING,
     SALES_SYNTHETIC_ONLY,
     SYNTHETIC_ONLY,
+    TABULAR_SYNTHETIC_ONLY,
 )
 from .plan_suggestion_domain import (
     ConfirmedPlanRevision,
@@ -178,7 +179,9 @@ def preview(app, principal, c, identity, request):
     )
     # Schema compatibility does not change metric/period/date business meaning.
     stable = (
-        ("periods", "metric")
+        ("periods", "mapping")
+        if after["schemaVersion"] == "tabular-diagnostic-source.v1"
+        else ("periods", "metric")
         if after["schemaVersion"] == "sales-diagnostic-source.v1"
         else ("assessmentDate", "timezone")
     )
@@ -301,6 +304,7 @@ def prepare(app, principal, identity, request, *, policy_basis=None):
                     DELIVERY_SYNTHETIC_ONLY,
                     SALES_SYNTHETIC_ONLY,
                     SYNTHETIC_ONLY,
+                    TABULAR_SYNTHETIC_ONLY,
                     READ_ONLY_PLANNING,
                 }
             ]

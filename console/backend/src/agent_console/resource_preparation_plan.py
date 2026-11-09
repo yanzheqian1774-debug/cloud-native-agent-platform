@@ -13,6 +13,7 @@ from .cost_execution_revision import (
     READ_ONLY_PLANNING,
     SALES_SYNTHETIC_ONLY,
     SYNTHETIC_ONLY,
+    TABULAR_SYNTHETIC_ONLY,
 )
 from .plan_suggestion_domain import (
     ConfirmedPlanRevision,
@@ -202,6 +203,7 @@ def select_employee(automation, call, *, automatic_coverage=None):
                 DELIVERY_SYNTHETIC_ONLY,
                 SALES_SYNTHETIC_ONLY,
                 SYNTHETIC_ONLY,
+                TABULAR_SYNTHETIC_ONLY,
                 READ_ONLY_PLANNING,
             }
         ] + [READ_ONLY_PLANNING]

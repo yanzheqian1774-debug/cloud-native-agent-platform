@@ -51,10 +51,12 @@ def validate_approved_preparation(connection, preparation):
         EXECUTION_ONLY,
         SALES_SYNTHETIC_ONLY,
         SYNTHETIC_ONLY,
+        TABULAR_SYNTHETIC_ONLY,
     )
     from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
     from .sales_ontology_executor import SalesOntologyExecutor
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
+    from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 
     executors = {t.executor_id for t in p.participants}
     if len(executors) != 1:
@@ -70,6 +72,7 @@ def validate_approved_preparation(connection, preparation):
     ):
         raise ExecutionPreparationError("PREPARED_EXECUTION_CASE_MIXED")
     boundary = {
+        TabularDiagnosticSkillExecutor.revision.executor_id: TABULAR_SYNTHETIC_ONLY,
         SyntheticDeliverySkillExecutor.revision.executor_id: DELIVERY_SYNTHETIC_ONLY,
         SalesDiagnosticSkillExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,
         SalesOntologyExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,

@@ -78,3 +78,8 @@ test('resource recheck requires a matching durable no-execution receipt and uses
  });
  await page.goto('/work?conversation=new');await page.getByRole('button',{name:'重新核对可用能力'}).click();await expect.poll(()=>writes).toBe(1);await expect(page.getByText('Error: 分析所需能力尚未全部就绪：MISSING_TOOL')).toBeVisible();expect(s.modelCalls).toBe(0);
 });
+
+for(const reason of ['READONLY_CONTINUATION_VALIDATION_FAILED','NETWORK_UNKNOWN'])test('execution continuation is offered only for known validation rejection: '+reason,async({page})=>{
+ const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'EXECUTE',pending:'execute',error:'Error: '+reason,messages:[{id:'user:q',text:prompt}],log:[]}};
+ await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(reason==='READONLY_CONTINUATION_VALIDATION_FAILED'?1:0);expect(s.modelCalls).toBe(0);
+});

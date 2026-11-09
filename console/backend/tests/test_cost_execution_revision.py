@@ -173,3 +173,17 @@ def test_delivery_executor_cannot_reuse_cost_only_approval(repository, mixed):
         pytest.raises(ExecutionPreparationError, match=reason),
     ):
         validate_approved_preparation(connection, p)
+
+
+def test_tabular_execution_successor_preserves_goal_and_declares_its_own_boundary():
+    from agent_console.cost_execution_revision import TABULAR_SYNTHETIC_ONLY
+
+    plan, source, old = inputs()
+    request = CostExecutionRevisionRequest.model_validate(
+        {**old.model_dump(), "case": "tabular"}
+    )
+    successor, _ = execution_successor(plan, source, request)
+    assert TABULAR_SYNTHETIC_ONLY in successor.semantics.boundaries
+    assert SYNTHETIC_ONLY not in successor.semantics.boundaries
+    assert successor.semantics.tasks == plan.semantics.tasks
+    assert successor.semantics.target == plan.semantics.target
