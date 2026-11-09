@@ -165,13 +165,14 @@ class ReadonlyContinuation:
                     revision["content"]["documents"][0]["chunks"][0]["content"]
                 )["schemaVersion"]
                 case = {
+                    "tabular-diagnostic-source.v1": "tabular",
                     "sales-diagnostic-source.v1": "sales",
                     "synthetic-delivery-source.v1": "delivery",
                 }.get(schema)
                 candidates = {
                     w.nativeAgentName
                     for w in self.policy.works
-                    if w.case == case
+                    if (w.case == case or case == "tabular")
                     and w.namespace == scope.namespace
                     and w.securityDomain == scope.security_domain
                 }

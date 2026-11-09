@@ -104,6 +104,7 @@ def assess(semantics, members, contents, work, runtime, *, sales_v2_candidate=Fa
 
     skills = contents.get("_skills", [(refs["skill"], contents["skill"])])
     case = {
+        "tabular-diagnostic-source.v1": "tabular",
         "sales-diagnostic-source.v1": "sales",
         "synthetic-delivery-source.v1": "delivery",
     }.get(schema)

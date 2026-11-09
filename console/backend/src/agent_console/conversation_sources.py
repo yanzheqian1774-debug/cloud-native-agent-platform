@@ -48,6 +48,7 @@ def sources(automation, call, root=None):
             if raw.get("synthetic") is not True:
                 continue
             if check["sourceSchema"] not in {
+                "tabular-diagnostic-source.v1",
                 "sales-diagnostic-source.v1",
                 "synthetic-delivery-source.v1",
             }:
@@ -55,8 +56,15 @@ def sources(automation, call, root=None):
             if check["sourceContentDigest"] in seen:
                 continue
             seen.add(check["sourceContentDigest"])
+            from .conversation_capability import describe
+            from .question_member_capabilities import observe
+
+            offer = describe(
+                raw, observe(automation, call, ref, check["sourceSchema"], work)
+            )
             result.append(
                 {
+                    **offer,
                     "source": ref.model_dump(mode="json"),
                     "name": name,
                     "sourceSchema": check["sourceSchema"],

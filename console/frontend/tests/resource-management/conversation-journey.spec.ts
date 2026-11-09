@@ -48,7 +48,7 @@ test('known settled invalid understanding keeps the question and offers source c
  const s=await fixture(page);let calls=0;
  await page.route('**/draft-assistance/invocations',async route=>{calls++;const body=route.request().postDataJSON();if(calls===2)expect(body.parentContextId).toBeUndefined();return route.fulfill({json:{result:{invocationId:'failed'+calls,contextId:'context'+calls,turnId:'turn',turnVersion:1,state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',settlementStatus:'ESTIMATE_SETTLED',localWorkerState:'REAPED',resultKind:null,clarificationQuestion:null,draft:null}}})});
  await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(1);expect(s.journal.state?.draft).toMatchObject({state:'FAILED'});
- await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(1);await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>calls).toBe(2);await expect(page.getByText('请补充你最关注的问题，例如销售额或毛利的变化。')).toBeVisible();
+ await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(1);await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>calls).toBe(2);await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。')).toBeVisible();
 });
 
 test('known coverage rejection reads actual gaps and proposes one bounded successor without replaying selection',async({page})=>{
@@ -58,4 +58,12 @@ test('known coverage rejection reads actual gaps and proposes one bounded succes
  await page.route('**/question-activity-input',route=>route.fulfill({json:{result:{state:'READY',planningRequest:{target:{},answers:['original goal'],idempotency_key:route.request().postDataJSON().idempotencyKey,policy:{schema_version:'planning-policy.v2',mode:'FREE',required_operations:[],prohibited_operations:[],business_acceptance_as_task:false,template:null},output_language:'zh-CN'}}}}));
  await page.route('**/planning-v2/invocations',route=>{calls++;const body=route.request().postDataJSON();expect(body.source_proposal).toEqual({resource_id:'proposal',revision_id:'1',digest:'b'.repeat(64)});expect(body.answers.at(-1)).toContain('PENDING_MEMBER_REQUIREMENT_UNAVAILABLE');expect(body.idempotency_key).toBe('k:planning:1');return route.fulfill({status:503,json:{reasonCode:'REPAIR_TEST_STOP'}})});
  await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByText('本次处理停在当前步骤，已有内容已保留。')).toBeVisible();expect(s.journal.state?.cycle).toBe(1);expect(s.journal.state?.expectedPlanVersion).toBe(1);await page.reload();await expect(page.getByText('本次处理停在当前步骤，已有内容已保留。')).toBeVisible();expect(calls).toBe(1);
+});
+
+
+test('new-domain criteria stay in the conversation and unavailable tools remain explicit',async({page})=>{
+ const s=await fixture(page),source={source:{resource_id:'energy',revision_id:'1',digest:'d'.repeat(64)},name:'能源记录',label:'能耗测试资料',periods:[],sourceSchema:'tabular-diagnostic-source.v1',synthetic:true,completionCriteria:['按计量点和单位分别统计超限记录','缺失数据单列'],assessment:{state:'MISSING_TOOLS',missingOperations:['ANALYZE_DATA'],limitations:['只读分析']}};
+ s.journal={version:2,state:{key:'energy',question:'看看能耗哪里异常',phase:'CLARIFY',messages:[{id:'user:q',text:'看看能耗哪里异常'}],sources:[source],log:[]}};
+ await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'使用现有能耗测试资料'})).toBeDisabled();await expect(page.getByText('“能耗测试资料”可读取，但缺少兼容的执行工具，暂不能自动分析。')).toBeVisible();expect(s.modelCalls).toBe(0);
+ s.journal={version:3,state:{...s.journal.state,source,phase:'RUNNING'}};await page.reload();await expect(page.getByText('按计量点和单位分别统计超限记录')).toBeVisible();await expect(page.getByText('缺失数据单列',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);
 });

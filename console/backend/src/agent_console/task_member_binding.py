@@ -79,6 +79,15 @@ def bind_steps(semantics, skills, *, source_schema, case, sales_v2_candidate=Fal
             if any_v2 and sales_v2_candidate
             else SalesDiagnosticSkillExecutor.revision,
         )
+    elif case == "tabular":
+        from .prepared_readonly_contract import validate_mapping
+        from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
+
+        validate_mapping(
+            semantics.model_dump(mode="json"),
+            selected_operations,
+            TabularDiagnosticSkillExecutor.revision,
+        )
     else:
         raise ValueError("TASK_MEMBER_CASE_UNSUPPORTED")
     return result

@@ -68,8 +68,10 @@ def compose(
         from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
         from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
         from .synthetic_delivery_skill_v2 import SyntheticDeliverySkillExecutorV2
+        from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 
         executors = (
+            TabularDiagnosticSkillExecutor(),
             SyntheticCostSkillExecutor(),
             SalesDiagnosticSkillExecutor(),
             SyntheticDeliverySkillExecutor(),

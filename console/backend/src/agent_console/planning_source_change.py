@@ -78,6 +78,10 @@ def validate_data(source):
             from .synthetic_delivery_skill import analyze
 
             analyze(source)
+        elif source.get("schemaVersion") == "tabular-diagnostic-source.v1":
+            from .tabular_diagnostic_skill import validate_source
+
+            validate_source(source)
         else:
             raise PlanningError("SOURCE_CHANGE_SCHEMA_UNSUPPORTED")
     except SkillExecutorFailure as exc:

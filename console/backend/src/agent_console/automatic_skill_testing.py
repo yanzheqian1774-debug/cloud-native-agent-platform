@@ -45,6 +45,10 @@ def independent(source, report, reference):
             }
             for check in CHECKS
         ]
+    if schema == "tabular-diagnostic-source.v1":
+        from .tabular_evaluation import checks
+
+        return checks(source, report, reference)
     raise AuthorityError("RESOURCE_INDEPENDENT_EVALUATOR_UNAVAILABLE")
 
 
@@ -63,6 +67,7 @@ def verify_skill(
     source = json.loads(raw)
     schema = source.get("schemaVersion")
     prefix = {
+        "tabular-diagnostic-source.v1": "tabular-diagnostic",
         "sales-diagnostic-source.v1": "sales-diagnostic",
         "synthetic-delivery-source.v1": "synthetic-delivery",
     }.get(schema)

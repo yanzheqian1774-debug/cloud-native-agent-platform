@@ -11,9 +11,11 @@ from .skill_invocation_domain import ExecutorRevision
 from .synthetic_cost_skill import SyntheticCostSkillExecutor
 from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 from .synthetic_delivery_skill_v2 import SyntheticDeliverySkillExecutorV2
+from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 
 EXECUTORS = SkillExecutorRegistry(
     (
+        TabularDiagnosticSkillExecutor(),
         SalesDiagnosticSkillExecutor(),
         SyntheticDeliverySkillExecutor(),
         SyntheticDeliverySkillExecutorV2(),
@@ -21,6 +23,7 @@ EXECUTORS = SkillExecutorRegistry(
     )
 )
 SCHEMAS = {
+    TabularDiagnosticSkillExecutor.revision.executor_id: "tabular-diagnostic",
     SalesDiagnosticSkillExecutor.revision.executor_id: "sales-diagnostic",
     SyntheticDeliverySkillExecutor.revision.executor_id: "synthetic-delivery",
     SyntheticCostSkillExecutor.revision.executor_id: "synthetic-cost",
@@ -34,6 +37,7 @@ def executor_registry(*, sales_v2_candidate=False):
 
     return SkillExecutorRegistry(
         (
+            TabularDiagnosticSkillExecutor(),
             SalesDiagnosticSkillExecutor(),
             SyntheticDeliverySkillExecutor(),
             SyntheticDeliverySkillExecutorV2(),
@@ -112,6 +116,14 @@ def validate(
                             raise AuthorityError(
                                 "RESOURCE_EXECUTOR_TYPED_SCHEMA_MISMATCH"
                             )
+            if (
+                revision.executor_id
+                == TabularDiagnosticSkillExecutor.revision.executor_id
+            ):
+                from .tabular_diagnostic_skill import OPERATIONS
+
+                if op["name"] not in OPERATIONS:
+                    raise AuthorityError("RESOURCE_EXECUTOR_OPERATION_UNAVAILABLE")
             prefix = SCHEMAS[revision.executor_id]
             if (
                 expected_source_schema

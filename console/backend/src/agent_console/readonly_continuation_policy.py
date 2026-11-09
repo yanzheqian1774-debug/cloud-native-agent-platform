@@ -18,7 +18,7 @@ class ReadonlyWork(BaseModel):
     subject: str
     problem: ExactReference
     sourceContentDigests: tuple[str, ...] = Field(min_length=1, max_length=32)
-    case: Literal["delivery", "sales"]
+    case: Literal["delivery", "sales", "tabular"]
     nativeAgentName: str = Field(pattern=r"^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$")
     expiresAt: datetime
 

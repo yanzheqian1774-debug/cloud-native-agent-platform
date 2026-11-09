@@ -290,6 +290,19 @@ class QuestionActivityInput:
         capabilities = observe(
             a, call, source, selected["sourceSchema"], selected["_work"]
         )
+        required = {"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"}
+        available_operations = {op["operation"] for op in capabilities["operations"]}
+        if not required <= available_operations:
+            return {
+                **base,
+                "state": "BLOCKED_MISSING_COMPATIBLE_TOOLS",
+                "planningRequest": None,
+                "gaps": [
+                    {"kind": "TOOL", "operation": name}
+                    for name in sorted(required - available_operations)
+                ],
+                "executionReady": False,
+            }
         capability_answers = member_contract_answers(capabilities["operations"])
         hint = f"唯一批准的只读来源，来源族：{selected['sourceSchema']}。将下一行原样保留为boundaries中的一条：\n隔离合成来源：{source.resource_id}；修订：{source.revision_id}；SHA256：{source.digest}"
         planning = PlanningRequest(

@@ -74,8 +74,18 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
     )
     if sales_v2 and not sales_v2_candidate:
         raise ExecutionPreparationError("SALES_V2_CANDIDATE_NOT_ENABLED")
+    from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
+
+    tabular = TabularDiagnosticSkillExecutor.revision
+    is_tabular = (
+        participant.executor_id,
+        participant.executor_revision,
+        participant.executor_digest,
+    ) == (tabular.executor_id, tabular.executor_revision, tabular.configuration_digest)
     result = {
-        "schemaVersion": "sales-diagnostic-input.v2"
+        "schemaVersion": "tabular-diagnostic-input.v1"
+        if is_tabular
+        else "sales-diagnostic-input.v2"
         if sales_v2
         else "sales-diagnostic-input.v1"
         if is_sales
