@@ -1,3 +1,4 @@
+import type {ModelProgress} from '../api/modelStream';
 import {ConversationProgress} from './ConversationProgress';
 import {NativeLiveProgress} from './NativeLiveProgress';
 import {useEffect,useEffectEvent,useRef,useState} from 'react';
@@ -17,11 +18,12 @@ const canRepair=(s:State)=>s.phase==='SELECT_RESOURCES'&&s.pending==='select-res
 
 export function ConversationJourney({conversation,session,onActive}:{conversation:string;session:WorkbenchSession;onActive:(active:boolean)=>void}){
  const [journal,setJournal]=useState<Journal|null>(null),[busy,setBusy]=useState(false),[reply,setReply]=useState(''),[error,setError]=useState(''),[execution,setExecution]=useState<ExecutionView|null>(null);
+ const [stream,setStream]=useState<ModelProgress|null>(null);
  const current=useRef<Journal|null>(null),flight=useRef(false),alive=useRef(true);
  useEffect(()=>{alive.current=true;let live=true;conversationRequest<Journal>('/'+conversation+'/journey').then(j=>{if(live){current.current=j;setJournal(j);onActive(Boolean(j.state))}}).catch(e=>{if(live)setError(String(e))});return()=>{live=false;alive.current=false}},[conversation,onActive]);
  async function verify(){const actual=await readWorkbenchSession();if(JSON.stringify(actual.principal)!==JSON.stringify(session.principal))throw Error('登录身份已变化，请重新登录后继续。')}
  async function save(state:State){await verify();const j=await conversationRequest<Journal>('/'+conversation+'/journey',session.csrfToken,{expectedVersion:current.current!.version,state});current.current=j;if(alive.current)setJournal(j);return state}
- async function pending(s:State,name:string){return save({...s,pending:name,error:undefined})}
+ async function pending(s:State,name:string){setStream(null);return save({...s,pending:name,error:undefined})}
  async function repairCoverage(s:State){
   if((s.cycle??0)>=2)throw Error('现有能力仍不能完成该方案，已保留资料与方案缺口。');
   s=await pending(s,'coverage-repair');const p=s.confirmation!.plan;
@@ -61,7 +63,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
     }
     s=await pending(s,'understanding');const previous=s.draft?.state==='SUCCEEDED'?s.draft:undefined;
     const content=understandingContent(s.messages,s.messages.length,previous?.draft??null,previous?.understanding??null,previous?.clarificationQuestion??null);
-    const draft=await beginDraftAssistance(session.csrfToken,{idempotencyKey:s.key+':draft:'+s.messages.length,content,...(previous?{parentContextId:previous.contextId,parentTurnId:previous.turnId,expectedParentVersion:previous.turnVersion,predecessorInvocationId:previous.invocationId}:{})});
+    const draft=await beginDraftAssistance(session.csrfToken,{idempotencyKey:s.key+':draft:'+s.messages.length,content,...(previous?{parentContextId:previous.contextId,parentTurnId:previous.turnId,expectedParentVersion:previous.turnVersion,predecessorInvocationId:previous.invocationId}:{})},{},p=>{if(alive.current)setStream(previous=>p.kind==='stage'&&previous?.kind==='stream'?{...previous,stage:p.stage}:p)});
     const recoverable=draft.state==='FAILED'&&draft.reasonCode==='OUTPUT_SCHEMA_INVALID'&&draft.settlementStatus==='ESTIMATE_SETTLED'&&draft.localWorkerState==='REAPED';
     if(draft.state!=='SUCCEEDED'&&!recoverable)throw Error('问题理解尚未完成：'+(draft.reasonCode??draft.state));
     const sources=s.sources??(await planningRequest<{items:Source[]}>('conversation-sources')).items;
@@ -89,7 +91,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
     if(!routed.planningRequest)throw Error('暂不能根据所选资料开始分析：'+routed.state);
     if(s.coverageFeedback&&s.planning?.result.proposal){const old=s.planning.result.proposal;routed.planningRequest={...routed.planningRequest,source_proposal:{resource_id:old.proposal_id,revision_id:String(old.revision),digest:s.planning.result.proposal_digest!},answers:[...routed.planningRequest.answers,s.coverageFeedback]};}
     await planningRequest('planning-v2/preflight',routed.planningRequest);
-    const planning=await planningRequest<Invocation>('planning-v2/invocations',routed.planningRequest);
+    const planning=await planningRequest<Invocation>('planning-v2/invocations',routed.planningRequest,{},undefined,p=>{if(alive.current)setStream(previous=>p.kind==='stage'&&previous?.kind==='stream'?{...previous,stage:p.stage}:p)});
     if(planning.result.technical_status!=='SUCCEEDED'||!planning.result.proposal)throw Error('分析方案尚未就绪：'+(planning.result.questions?.join('；')||planning.result.reason||planning.result.kind||planning.result.technical_status));
     s=await save({...s,pending:undefined,planning,phase:'CONFIRM',log:[...s.log,'分析方案已生成，正在核对并准备执行资源。']});
    }else if(s.phase==='CONFIRM'){
@@ -124,7 +126,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  useEffect(()=>{if(!state?.execution)return;let live=true;const refresh=async()=>{try{await verifyEffect();const v=await preparedRequest<ExecutionView>(state.execution!);if(live)setExecution(v)}catch(e){if(live)setError(String(e))}};void refresh();const timer=setInterval(()=>void refresh(),3000);return()=>{live=false;clearInterval(timer)}},[state?.execution]);
  async function answer(text:string,source?:Source){if(flight.current||!state)return;flight.current=true;setBusy(true);try{await verify();const c=await conversationRequest<PrivateConversation>('/'+conversation);await conversationRequest('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':answer:'+state.messages.length,content:text});await save({...state,source:source??state.source,phase:'UNDERSTAND',pending:undefined,error:undefined,messages:appendUserMessage(state.messages,text),log:[...state.log,'已收到补充，继续理解并核对分析范围。']});setReply('')}catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}}
  if(!state)return error?<p role="alert">{error}</p>:null;
- return <section className="conversation-journey" aria-busy={busy}><h2>{execution?.progress?.state==='SUCCEEDED'?'分析结果':state.phase==='CLARIFY'?'请确认一下分析范围':['FAILED','RECOVERY_REQUIRED','CANCELLED','CANCELED','UNKNOWN'].includes(execution?.progress?.state||'')?'本次办理状态':'正在办理你的问题'}</h2>{state.messages.slice(1).map(m=><blockquote key={m.id}>{m.text}</blockquote>)}<ConversationProgress phase={state.phase} pending={state.pending} busy={busy} error={error||state.error} execution={execution} hasExecution={Boolean(state.execution)}/><details><summary>查看已完成的办理记录</summary><ol>{state.log.map((text,i)=><li key={i}>{text}</li>)}</ol></details>
+ return <section className="conversation-journey" aria-busy={busy}><h2>{execution?.progress?.state==='SUCCEEDED'?'分析结果':state.phase==='CLARIFY'?'请确认一下分析范围':['FAILED','RECOVERY_REQUIRED','CANCELLED','CANCELED','UNKNOWN'].includes(execution?.progress?.state||'')?'本次办理状态':'正在办理你的问题'}</h2>{state.messages.slice(1).map(m=><blockquote key={m.id}>{m.text}</blockquote>)}<ConversationProgress phase={state.phase} pending={state.pending} busy={busy} error={error||state.error} execution={execution} hasExecution={Boolean(state.execution)}/>{busy&&stream&&!error&&<section aria-label="模型流式输出" className="journey-progress"><strong>{stream.kind==='stream'?'模型正在返回内容':'正在连接并等待模型返回'}</strong><p role="status">{stream.kind==='stream'?`已接收 ${stream.characters??0} 个输出字符。`:'请求仍在处理中，完成后继续原任务。'}</p>{stream.preview&&<p style={{whiteSpace:'pre-wrap'}}>{stream.preview}</p>}<small>生成中的内容尚未核验，不作为执行指令或最终结论。</small></section>}<details><summary>查看已完成的办理记录</summary><ol>{state.log.map((text,i)=><li key={i}>{text}</li>)}</ol></details>
  {state.phase==='CLARIFY'&&<div><p>{state.draft?.clarificationQuestion??(state.source?'请补充你最关注的问题，例如关注的指标、时间或对象。':'请选择本次要分析的资料范围。')}</p>{!state.source&&<><p>系统可用资料如下。测试资料不代表真实经营数据；确认后将自动分析并把结果返回这里。</p>{state.sources?.filter(source=>source.assessment?.state==='MISSING_TOOLS').map(source=><p key={source.source.digest}>“{source.label??source.name}”可读取，但缺少兼容的执行工具，暂不能自动分析。</p>)}{state.sources?.map(source=><button key={source.source.digest} disabled={busy||source.assessment?.state==='MISSING_TOOLS'} onClick={()=>void answer('使用系统现有的'+source.name+(source.periods.length?'，时间范围为'+source.periods.join('、'):'，分析范围为该资料包含的全部记录')+(source.sourceSchema==='document-review-source.v1'?'。检查材料的完整性，引用原文；如适用规范不明确，请在执行中向我确认。不执行上线操作。':'。按资料的既有口径进行只读分析，展示汇总、变化贡献和异常明细，不修改原始数据。'),source)}>使用{source.periods.join('、')||'现有'}{source.label??(source.sourceSchema.startsWith('sales')?'销售':'交付')}{source.label?'':'测试资料'}</button>)}</>}<form onSubmit={e=>{e.preventDefault();void answer(reply)}}><label htmlFor="journey-reply">补充说明</label><textarea id="journey-reply" value={reply} onChange={e=>setReply(e.target.value)} maxLength={1800}/><button disabled={busy||!reply.trim()}>发送补充</button></form></div>}
  {state.source&&<details open><summary>本次能做什么与完成标准</summary><p>资料与已登记能力：{state.source.assessment?.state==='MISSING_TOOLS'?'尚缺执行工具':'可进入方案核验，尚不代表已经执行或解决问题'}</p><ul>{state.source.completionCriteria?.map((c,i)=><li key={i}>{c}</li>)}</ul>{state.source.assessment?.limitations.map((c,i)=><p key={i}>{c}</p>)}</details>}
  {state.draft?.draft&&<details><summary>查看已理解的目标</summary><p>{state.draft.draft.description}</p></details>}

@@ -193,10 +193,15 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                         content={"reasonCode": exc.reason_code},
                     )
 
-            return await cancellable_request(
-                request,
-                submit,
-            )
+            from .model_stream_api import model_response
+
+            def authorize(identity):
+                session, context = authenticate(request)
+                require_csrf(request, session)
+                if identity:
+                    service.read(context, identity)
+
+            return await model_response(request, submit, authorize)
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/resubmit")
         async def resubmit(

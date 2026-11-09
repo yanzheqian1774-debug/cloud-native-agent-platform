@@ -137,3 +137,24 @@ test('first native model shows progress with no completed steps and polling neve
  });
  await page.goto('/work?conversation=new');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('正在读取任务进展');await expect.poll(()=>reads).toBe(1);await page.waitForTimeout(1600);expect(reads).toBe(1);release();await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('等待本轮返回');completed=true;await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=true;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toBeVisible();await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=false;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toHaveCount(0);expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
 });
+
+for(const interrupted of [false,true])test('streamed understanding shows provisional text and never resends after disconnect '+interrupted,async({page})=>{
+ const s=await fixture(page);
+ await page.addInitScript(()=>{
+  const original=window.fetch;let count=0;
+  Object.assign(window,{streamCalls:()=>count});
+  window.fetch=async(input,init)=>{
+   if(String(input).endsWith('/draft-assistance/invocations')){
+    count++;const enc=new TextEncoder();let controller:ReadableStreamDefaultController<Uint8Array>;
+    const stream=new ReadableStream<Uint8Array>({start(c){controller=c;c.enqueue(enc.encode('event: progress\ndata: '+JSON.stringify({kind:'stream',characters:12,preview:'正在检查交接说明'})+'\n\n'));}});
+    Object.assign(window,{finishStream:(interrupted:boolean)=>{if(!interrupted)controller.enqueue(enc.encode('event: result\ndata: '+JSON.stringify({status:201,body:{result:{invocationId:'draft',contextId:'c',turnId:'t',turnVersion:1,state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'请确认环境',draft:null}}})+'\n\n'));controller.close();}});
+    return new Response(stream,{headers:{'Content-Type':'text/event-stream'}});
+   }return original(input,init);
+  };
+ });
+ await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();
+ await expect(page.getByLabel('模型流式输出')).toContainText('正在检查交接说明');await expect(page.getByLabel('模型流式输出')).toContainText('尚未核验');expect(s.modelCalls).toBe(0);
+ await page.evaluate(interrupted=>Reflect.get(window,'finishStream')(interrupted),interrupted);
+ if(interrupted){await expect(page.getByRole('alert')).toContainText('不会自动重发原请求');await page.reload();await expect(page.getByRole('alert')).toContainText('不会自动重发原请求');expect(s.modelCalls).toBe(0);}
+ else{await expect(page.getByText('请确认环境',{exact:true})).toBeVisible();expect(await page.evaluate(()=>Reflect.get(window,'streamCalls')())).toBe(1);}
+});

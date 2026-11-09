@@ -1,3 +1,4 @@
+import {modelResult,type ModelProgress} from './modelStream';
 import type {DraftAssistanceResult} from "./draftAssistanceTypes";
 
 const PREFIX="/api/workbench/v1";
@@ -54,7 +55,8 @@ export function createBusinessProblem(csrfToken:string,input:{title:string;descr
   return write<{revision:BusinessProblemRevision;creatorContinuation:ProblemCreatorContinuation}>("/problems",csrfToken,input,headers);
 }
 
-export function beginDraftAssistance(csrfToken:string,input:{idempotencyKey:string;content:string;parentContextId?:string;parentTurnId?:string;expectedParentVersion?:number;predecessorInvocationId?:string},headers:Record<string,string>={}){
+export function beginDraftAssistance(csrfToken:string,input:{idempotencyKey:string;content:string;parentContextId?:string;parentTurnId?:string;expectedParentVersion?:number;predecessorInvocationId?:string},headers:Record<string,string>={},progress?:(p:ModelProgress)=>void){
+  if(progress)return fetch(`${PREFIX}/draft-assistance/invocations`,{method:"POST",credentials:"same-origin",headers:{Accept:"text/event-stream","Content-Type":"application/json","X-CSRF-Token":csrfToken,...headers},body:JSON.stringify(input)}).then(r=>modelResult<DraftAssistanceResult>(r,progress));
   return write<DraftAssistanceResult>("/draft-assistance/invocations",csrfToken,input,headers);
 }
 

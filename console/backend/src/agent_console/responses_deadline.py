@@ -79,7 +79,11 @@ def _worker(channel):
         job = pickle.loads(data)  # trusted parent-only anonymous IPC
         del data
         threading.Thread(target=_watch_parent, args=(channel,), daemon=True).start()
-        result = job.run(lambda stage: _send(channel, {"stage": stage}))
+        result = job.run(
+            lambda value: _send(
+                channel, {"stream" if isinstance(value, dict) else "stage": value}
+            )
+        )
         _send(channel, {"result": result})
     except BaseException:
         with suppress(OSError):
@@ -105,6 +109,10 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
     stages = {}
     cancellation_checks = 0
     cancellation_seconds = 0.0
+    stream_metrics = {}
+    identity = getattr(job, "invocation_id", None) or getattr(
+        job, "business_context", {}
+    ).get("planning_context", {}).get("invocation_id")
 
     def cancelled():
         nonlocal cancellation_checks, cancellation_seconds
@@ -167,8 +175,25 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
                         if connect_at is not None and now >= connect_at:
                             reason = "CONNECT_DEADLINE"
                             raise TimeoutError
-                        if set(message) == {"stage"} and message["stage"] in STAGES:
+                        if set(message) == {"stream"}:
+                            from .response_stream import emit
+
+                            value = message["stream"]
+                            stream_metrics = {
+                                k: v for k, v in value.items() if k != "preview"
+                            }
+                            emit({**value, "invocationId": identity})
+                        elif set(message) == {"stage"} and message["stage"] in STAGES:
                             stage = message["stage"]
+                            from .response_stream import emit
+
+                            emit(
+                                {
+                                    "kind": "stage",
+                                    "stage": stage,
+                                    "invocationId": identity,
+                                }
+                            )
                             stages[stage] = now - started
                             if stage == "CONNECT":
                                 connect_at = now + configuration.connect_timeout_seconds
@@ -215,6 +240,7 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
         "reason": reason,
         "stage": stage,
         "stage_seconds": stages,
+        "stream": stream_metrics,
         "decision_seconds": decision - started,
         "cleanup_seconds": cleanup,
         "worker_pid": pid,

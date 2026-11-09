@@ -274,6 +274,7 @@ class OpenAIResponsesDraftTransport:
                 }
             ],
             "background": False,
+            "stream": True,
             "store": False,
             "max_output_tokens": self.configuration.maximum_output_tokens,
             "truncation": "disabled",
@@ -385,7 +386,7 @@ class OpenAIResponsesDraftTransport:
                     "Authorization": credential.authorization_value(),
                     "X-Client-Request-Id": invocation_id,
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
+                    "Accept": "text/event-stream",
                     "Connection": "close",
                 },
             )
@@ -399,8 +400,10 @@ class OpenAIResponsesDraftTransport:
                 else f"http-{response.status}-{invocation_id}"
             )
             self.progress("READ_BODY")
-            body = response.read(self.configuration.maximum_response_bytes + 1)
-        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+            from .response_stream import read_response
+
+            body = read_response(response, self.configuration, self.progress)
+        except (OSError, TimeoutError, ValueError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
             self.progress("CLOSE")

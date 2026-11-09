@@ -717,6 +717,31 @@ def create_workbench_bff(
                     result = operation.post_commit_handler(context, result)
                 return result
 
+            if operation.name == "READ_NATIVE_PROGRESS":
+                from .model_stream_api import snapshot_response, wants_stream
+
+                if wants_stream(request):
+
+                    def read_snapshot():
+                        _, fresh = authenticate(request)
+                        return {
+                            "result": dict(
+                                authorizer.execute(
+                                    fresh,
+                                    grants,
+                                    operation=operation.name,
+                                    payload=payload,
+                                    path=request.path_params,
+                                    query=query,
+                                    handler=operation.handler,
+                                )
+                            )
+                        }
+
+                    # Reject unauthorized reads before sending SSE headers.
+                    read_snapshot()
+                    return snapshot_response(read_snapshot)
+
             if operation.name == "CREATE_PROBLEM":
                 from .conversation_actions import original_action
 

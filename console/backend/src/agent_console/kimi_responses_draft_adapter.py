@@ -263,6 +263,7 @@ class KimiResponsesDraftTransport:
                 }
             ],
             "background": False,
+            "stream": True,
             "store": False,
             "max_output_tokens": self.configuration.maximum_output_tokens,
             "reasoning": {"effort": self.configuration.reasoning_effort},
@@ -421,7 +422,7 @@ class KimiResponsesDraftTransport:
                 headers={
                     "Authorization": credential.authorization_value(),
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
+                    "Accept": "text/event-stream",
                     "Connection": "close",
                 },
             )
@@ -439,8 +440,10 @@ class KimiResponsesDraftTransport:
                 "x-request-id": raw_correlation,
                 "retry-after": response.getheader("retry-after"),
             }
-            body = response.read(self.configuration.maximum_response_bytes + 1)
-        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+            from .response_stream import read_response
+
+            body = read_response(response, self.configuration, progress)
+        except (OSError, TimeoutError, ValueError, http.client.HTTPException) as exc:
             raise DraftAssistanceError("TRANSPORT_AMBIGUOUS") from exc
         finally:
             try:

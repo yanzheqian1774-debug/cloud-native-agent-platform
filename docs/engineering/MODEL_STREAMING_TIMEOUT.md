@@ -1,0 +1,15 @@
+# G1 Bounded model streaming and timeout correction
+
+Observed failure: the understanding provider connected in 0.115 s but a non-streaming HTTP response did not return headers within its configured 30 s read timeout. The request was recorded OUTCOME_UNKNOWN; preserve its identity, reservation and audit forever unless independently reconciled. This is not evidence that DNS/connection was slow, nor proof of provider-internal cause.
+
+Implement Responses SSE consumption in the existing Kimi/OpenAI transports, requesting stream=true. Bound aggregate wire bytes, text bytes, event frames, total request deadline and idle read timeout. Only response.completed yields a complete body for the existing schema validation, authorization checks and settlement. Partial text, malformed/truncated streams and late completion never trigger tools or settle usage. No automatic provider retries or protocol fallback redispatch.
+
+Provide opt-in text/event-stream responses on the existing private understanding/planning POSTs. One original_action and one owner invocation per request, with existing CAS/idempotency guards. Authenticate and CSRF-check before streaming; recheck authorization before emission. Forward ephemeral allowlisted business-facing output fields and real transport stages through bounded spawn IPC and request-local queues. Never emit private reasoning, raw JSON, credentials or provider errors. Previews are explicitly unverified, not persisted as accepted facts. Stream disconnect signals cancellation and awaits durable UNKNOWN cleanup. Lost completion remains pending; client never resends POST automatically.
+
+Use existing authorized Native progress reads for streamed execution snapshots; each snapshot reauthenticates, disconnect only stops reading, and stream reconnect never starts execution. No CRD/schema/owner/lifecycle changes or persistent dependency. Existing JSON clients remain supported.
+
+Read-timeout successor, if required: explicitly version the local understanding runtime from 30 to 55 seconds, retaining 60 second total, connect limit, same ledger/caps/model/profile, with configuration before/after hashes. No resetting budget or old unresolved records. Document exact effective runtime at installation.
+
+Validate: chunked UTF-8, delayed headers beyond former bound, heartbeats, malformed/oversized/truncated/error streams, completion before deadline, cancellation/revocation, one wire request, exact usage settlement, auth/CSRF, UI incremental updates before completion, disconnect/no duplicate POST and same-question real full-loop demonstration. Full repository hooks, targeted isolated owner tests and frontend regression. Preserve failed validation attempts and distinguish controlled transport tests from real provider evidence.
+
+Protocol reference: https://developers.openai.com/api/docs/guides/streaming-responses (output_text delta and completed events; partial output is not a completed result). Provider compatibility is proven by exact local transport tests and real configured-provider receipts, not inferred from an API shape.

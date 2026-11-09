@@ -40,6 +40,7 @@ class DeadlineMetrics:
     worker_exit_status: int | str = "UNKNOWN"
     worker_kill_requested: bool = False
     stage_seconds: dict[str, float] | None = None
+    stream: dict | None = None
 
 
 STAGES = {
@@ -88,8 +89,11 @@ def _worker(channel, configuration, invocation_id):
 
     def progress(value):
         nonlocal stage
-        stage = value
-        _send(channel, {"stage": value})
+        if isinstance(value, dict):
+            _send(channel, {"stream": value})
+        else:
+            stage = value
+            _send(channel, {"stage": value})
 
     try:
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -218,6 +222,7 @@ def _supervise(
     stage = "IPC"
     stage_started = started
     durations = {}
+    stream_metrics = {}
     category = "NONE"
     killed = False
     exit_status = "UNKNOWN"
@@ -246,7 +251,13 @@ def _supervise(
                     reason = expired
                     raise TimeoutError
                 wait_until = total_at if connected else min(total_at, connect_at)
-                events = selector.select(wait_until - now)
+                from .responses_deadline import CANCEL
+
+                cancel = CANCEL.get()
+                if cancel is not None and cancel.is_set():
+                    reason = "CANCELLED"
+                    raise OSError
+                events = selector.select(min(0.1, wait_until - now))
                 if not events:
                     continue
                 # Recheck after waking, before sending or accepting any bytes.
@@ -286,7 +297,24 @@ def _supervise(
                     if message == {"connected": True} and not connected:
                         connected = True
                         continue
+                    if set(message) == {"stream"}:
+                        from .response_stream import emit
+
+                        stream_metrics = {
+                            k: v for k, v in message["stream"].items() if k != "preview"
+                        }
+                        emit({**message["stream"], "invocationId": invocation_id})
+                        continue
                     if set(message) == {"stage"} and message["stage"] in STAGES:
+                        from .response_stream import emit
+
+                        emit(
+                            {
+                                "kind": "stage",
+                                "stage": message["stage"],
+                                "invocationId": invocation_id,
+                            }
+                        )
                         timestamp = time.monotonic()
                         durations[stage] = (
                             durations.get(stage, 0.0) + timestamp - stage_started
@@ -384,6 +412,7 @@ def _supervise(
                     exit_status,
                     killed,
                     durations,
+                    stream_metrics,
                 )
             )
         if not reaped or cleanup > CLEANUP_SECONDS:

@@ -106,7 +106,7 @@ def install_planning_invocations(
         @app.post(f"{PREFIX}/planning-v2/invocations", status_code=201)
         async def begin(request: Request, body: PlanningRequest):
             from .conversation_actions import original_action
-            from .responses_deadline import cancellable_request
+            from .model_stream_api import model_response
 
             def submit():
                 _, context = authenticate(request)
@@ -129,10 +129,13 @@ def install_planning_invocations(
             session, _ = authenticate(request)
             require_csrf(request, session)
 
-            return await cancellable_request(
-                request,
-                submit,
-            )
+            def authorize(identity):
+                session, context = authenticate(request)
+                require_csrf(request, session)
+                if identity:
+                    reader(context, identity)
+
+            return await model_response(request, submit, authorize)
 
         @app.post(f"{PREFIX}/planning-v2/diagnostics/{'{'}layer{'}'}", status_code=201)
         async def diagnose(

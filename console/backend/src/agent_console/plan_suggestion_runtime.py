@@ -186,6 +186,7 @@ class PlanningResponsesProvider:
                 }
             ],
             "background": False,
+            "stream": True,
             "store": False,
             "max_output_tokens": profile.maximum_output_tokens,
             "text": {
