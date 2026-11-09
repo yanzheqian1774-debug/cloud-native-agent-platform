@@ -519,6 +519,9 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
         execution.native_dispatch_compatibility(Path(dispatch_migration))
 
         def authorization_check(connection, command):
+            return authorization_bundle_check(connection, command, ())
+
+        def authorization_bundle_check(connection, command, additional_grants):
             control.require_ready(
                 database_fingerprint=configuration.database_fingerprint,
                 generation=generation.generation,
@@ -534,7 +537,11 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
             )
             from agent_console.prepared_execution_lineage import dispatch_grants
 
-            grants = dispatch_grants(connection, command)
+            grants = tuple(
+                dict.fromkeys(
+                    (*dispatch_grants(connection, command), *additional_grants)
+                )
+            )
             return all(
                 reader.has_current_grants(
                     context,
@@ -640,6 +647,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 authorization_check,
                 mode=prepared_mode,
                 native_loop_path=os.getenv("NATIVE_LOOP_RUNTIME_FILE"),
+                authorization_bundle_check=authorization_bundle_check,
             )
             transport = ManagedSkillNativeTransport(caller)
             from agent_console.prepared_native_composition import (

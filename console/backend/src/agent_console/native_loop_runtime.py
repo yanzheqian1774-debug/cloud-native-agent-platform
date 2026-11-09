@@ -39,8 +39,18 @@ COMMAND = ContextVar("native_loop_command", default=None)
 
 class NativeLoopRuntime:
     def __init__(
-        self, path, pool, database_url, migrations, reader, generation, authorize
+        self,
+        path,
+        pool,
+        database_url,
+        migrations,
+        reader,
+        generation,
+        authorize,
+        *,
+        authorize_current=None,
     ):
+        self.authorize_current = authorize_current
         self.config = json.loads(Path(path).read_text())
         if (
             self.config.get("purpose") != "NATIVE_TASK_DECISION_V1"
@@ -177,15 +187,19 @@ class NativeLoopRuntime:
             ):
                 return False
             with manager.pool.connection() as c:
-                manager.authorize_skill(c, command)
-                if not authorized(
-                    manager.reader,
-                    context,
-                    generation=command.authority_generation.value,
-                    recovery_epoch=command.recovery_epoch.value,
-                    connection=c,
-                ):
-                    return False
+                if manager.authorize_current is not None:
+                    if not manager.authorize_current(c, command):
+                        return False
+                else:
+                    manager.authorize_skill(c, command)
+                    if not authorized(
+                        manager.reader,
+                        context,
+                        generation=command.authority_generation.value,
+                        recovery_epoch=command.recovery_epoch.value,
+                        connection=c,
+                    ):
+                        return False
                 progress = c.execute(
                     "SELECT record FROM execution_authority.prepared_run_progress "
                     "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s",
@@ -353,7 +367,11 @@ class NativeLoopRuntime:
             ],
             {
                 **(
-                    {"domain": "DOCUMENT_REVIEW", "answerSchema": library.answer_schema}
+                    {
+                        "domain": "DOCUMENT_REVIEW",
+                        "answerSchema": library.answer_schema,
+                        "documentInventory": library.inventory(),
+                    }
                     if document_mode
                     else {}
                 ),

@@ -231,6 +231,18 @@ class NativeDocumentTools:
         ]
         self.confirmed_scope = scopes[0] if len(scopes) == 1 else None
 
+    def inventory(self):
+        """Already-loaded source metadata; not evidence of reading document lines."""
+        return {
+            "sourceSnapshot": self.reference,
+            "sourceDigest": digest(self.source),
+            "confirmedScope": self.confirmed_scope,
+            "documents": [
+                {k: d.get(k) for k in ["id", "title", "role", "scope"]}
+                for d in self.documents.values()
+            ],
+        }
+
     def invoke(self, name, args):
         self.validate(name, args)
         provenance = {
@@ -238,14 +250,7 @@ class NativeDocumentTools:
             "sourceDigest": digest(self.source),
         }
         if name == "list_documents":
-            return {
-                **provenance,
-                "confirmedScope": self.confirmed_scope,
-                "documents": [
-                    {k: d.get(k) for k in ["id", "title", "role", "scope"]}
-                    for d in self.documents.values()
-                ],
-            }
+            return self.inventory()
         if name == "read_document":
             d = self.documents[args["id"]]
             return {

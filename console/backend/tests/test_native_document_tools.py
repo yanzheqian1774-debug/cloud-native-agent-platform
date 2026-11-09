@@ -202,3 +202,15 @@ def test_resource_test_records_inventory_executor_without_claiming_model_executi
         result["verificationContext"]["nativeDecisionValidation"]
         == "NOT_RUN_REQUIRES_NATIVE_ATTEMPT"
     )
+
+
+def test_initial_inventory_is_only_metadata_and_does_not_satisfy_completion():
+    library = NativeDocumentTools(SOURCE, REFERENCE)
+    inventory = library.inventory()
+    assert inventory == library.invoke("list_documents", {})
+    assert inventory["sourceSnapshot"] == REFERENCE
+    assert inventory["confirmedScope"] is None
+    assert all(
+        set(d) == {"id", "title", "role", "scope"} for d in inventory["documents"]
+    )
+    assert not library.verify({"observations": []}, {})["passed"]

@@ -43,6 +43,7 @@ def compose(
     *,
     mode="synthetic-cost-v1",
     native_loop_path=None,
+    authorization_bundle_check=None,
 ):
     if mode == "ontology-sales-v1":
         from .sales_ontology_executor import SalesOntologyExecutor
@@ -109,9 +110,7 @@ def compose(
         SkillExecutorRegistry(executors),
     )
 
-    def authorize(connection, command):
-        if not authorization_check(connection, command):
-            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+    def skill_grants(connection, command):
         row = prepared_attempt(connection, command.scope, command.attempt_id)
         if row is None:
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")
@@ -121,13 +120,6 @@ def compose(
             f"{row['task_id']}:{row['attempt_ordinal']}"
         )
         grant = ExactGrant("SKILL", "INVOKE_SKILL", resource)
-        context = TrustedRequestContext(
-            command.principal_id,
-            AuthorityScope(command.scope.namespace, command.scope.security_domain),
-            command.credential_id,
-            AuthenticationSource(command.authentication_source),
-            generation.policy_version,
-        )
         grants = (grant,)
         binding = getattr(p, "business_semantics", None)
         if binding is not None:
@@ -142,6 +134,19 @@ def compose(
                     ),
                 ),
             )
+        return resource, grants
+
+    def authorize(connection, command):
+        if not authorization_check(connection, command):
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+        resource, grants = skill_grants(connection, command)
+        context = TrustedRequestContext(
+            command.principal_id,
+            AuthorityScope(command.scope.namespace, command.scope.security_domain),
+            command.credential_id,
+            AuthenticationSource(command.authentication_source),
+            generation.policy_version,
+        )
         if not all(
             reader.has_current_grants(
                 context,
@@ -166,6 +171,17 @@ def compose(
             }
         )
 
+    def authorize_native(connection, command):
+        from .development_administrator import GRANT, PRINCIPAL, SCOPE
+
+        if (
+            command.principal_id != PRINCIPAL
+            or (command.scope.namespace, command.scope.security_domain) != SCOPE
+        ):
+            return False
+        _, grants = skill_grants(connection, command)
+        return authorization_bundle_check(connection, command, (*grants, GRANT))
+
     if native_loop_path:
         from .native_loop_runtime import NativeLoopRuntime
 
@@ -178,6 +194,9 @@ def compose(
                 reader,
                 generation,
                 authorize,
+                authorize_current=authorize_native
+                if authorization_bundle_check
+                else None,
             )
         )
         composition.closeables = tuple(native_runtime)

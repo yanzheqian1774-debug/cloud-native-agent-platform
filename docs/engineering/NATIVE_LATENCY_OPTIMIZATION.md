@@ -16,3 +16,9 @@ Risk review: credential/predicate reuse only within the same locked/repeatable-r
 `nativeLoop.performance.authority` counts fresh authorization checks and their elapsed time. Responses receipt `deadline.cancellation_checks` and `cancellation_seconds` include the polling/acceptance checks. These times overlap with provider HTTP time and with each other; they must not be summed into an end-to-end total. `stage_seconds` are arrival offsets, not exclusive stage durations. Provider HTTP includes network and provider processing and does not isolate inference.
 
 Source-first discovery never produces a draft or approval: after selecting authorized input the model still interprets the question, and the existing planning, policy confirmation and prepared-execution owners remain authoritative. A reload with an unverified claimed request does not repeat it.
+
+## Second measured revision
+
+Native composition can supply a single fresh authority-bundle checker covering dispatch resources, Skill invocation, optional ontology and development role in the same owner transaction. Legacy compositions keep the earlier checks. Host readiness, grant locks, current session/generation, expiry, revocation and per-effect admission remain in force; no cached ALLOW.
+
+The already-loaded document inventory is included as source metadata in the model context, with its snapshot and digest. It does not count as document reading: the independent verifier still requires actual submission/policy line reads and the cited report. This avoids spending a model turn rediscovering metadata already obtained by READ_DATA.
