@@ -267,6 +267,23 @@ class GrantAdministrationDraftAuthorization:
     ) -> bool:
         return self._check(context, invocation, read_grant(invocation))
 
+    def can_read_stream(self, context, invocation):
+        """Current exact READ snapshot for ephemeral previews, not owner writes."""
+        owner = self.owner_authorization
+        try:
+            with owner.controller.protected_request() as generation:
+                return all(
+                    owner.authorization.has_current_grants(
+                        context,
+                        (read_grant(invocation),),
+                        now=self.clock(),
+                        generation=generation.generation,
+                        recovery_epoch=owner.controller.readiness.recovery_epoch,
+                    )
+                )
+        except AuthorityError:
+            return False
+
     def read_readiness(
         self, context: TrustedRequestContext, invocation: DraftInvocation
     ) -> dict:

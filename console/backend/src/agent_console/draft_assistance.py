@@ -1352,6 +1352,15 @@ class DraftAssistanceService:
             synthetic=self.transport.synthetic,
         )
 
+    def authorize_stream(self, context, invocation_id):
+        """Authorize disclosure only; never settle, admit or mutate the owner."""
+        value = self.repository.get(DraftScope.from_context(context), invocation_id)
+        check = getattr(
+            self.authorization, "can_read_stream", self.authorization.can_read
+        )
+        if value is None or not check(context, value):
+            raise DraftAssistanceError("DRAFT_ASSISTANCE_NOT_FOUND")
+
     def read_readiness(self, context, invocation_id):
         invocation = self.read(context, invocation_id).invocation
         project = getattr(self.authorization, "read_readiness", None)

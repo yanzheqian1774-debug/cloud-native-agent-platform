@@ -196,7 +196,7 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
             from .model_stream_api import model_response, stream_authorization
 
             authorize = stream_authorization(
-                request, authenticate, require_csrf, service.read
+                request, authenticate, require_csrf, service.authorize_stream
             )
 
             return await model_response(request, submit, authorize)
