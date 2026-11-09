@@ -100,8 +100,10 @@ class ConversationActions:
 
     def source(self, ctx, identity, body):
         with self.records.connect() as c:
+            self.prior(c, ctx, identity, body)
+        facts = self.source_read(ctx, body["source"])
+        with self.records.connect() as c:
             row, old = self.prior(c, ctx, identity, body)
-            facts = self.source_read(ctx, body["source"])
             if old:
                 return {"identity": old["message_id"], "replayed": True}
             message = self.insert(
@@ -117,10 +119,14 @@ class ConversationActions:
         return {"identity": message, "replayed": False}
 
     def prepare(self, ctx, identity, body):
+        # Owner readers have their own authorization transactions. Never call
+        # them while the conversation holds the current-authority lock.
+        with self.records.connect() as c:
+            self.prior(c, ctx, identity, body, "action_intents")
+        source = body.get("source")
+        facts = self.source_read(ctx, source) if source else None
         with self.records.connect() as c:
             row, old = self.prior(c, ctx, identity, body, "action_intents")
-            source = body.get("source")
-            facts = self.source_read(ctx, source) if source else None
             if old:
                 return {
                     "intentId": old["intent_id"],
@@ -264,8 +270,10 @@ class ConversationActions:
 
     def claim(self, ctx, conversation_id, intent_id, action, payload):
         with self.records.connect() as c:
+            observed = self.get(c, ctx, conversation_id, intent_id)
+        self.authorize_intent(ctx, observed)
+        with self.records.connect() as c:
             row = self.get(c, ctx, conversation_id, intent_id, True)
-            self.authorize_intent(ctx, row)
             if row["action"] != action or row["payload_digest"] != digest(payload):
                 raise ConversationError("CONVERSATION_INTENT_PAYLOAD_MISMATCH")
             if row["claimed_at"]:

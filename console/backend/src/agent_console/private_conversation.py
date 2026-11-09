@@ -210,6 +210,22 @@ class PrivateConversations:
 
     def mutate(self, ctx, identity, body, action):
         hashed = digest(body)
+        focus = body.get("focusLinkId")
+        if action == "link" or focus:
+            with self.connect() as c:
+                self.owned(c, ctx, identity)
+                target = body.get("target")
+                if focus:
+                    link = c.execute(
+                        "SELECT target FROM private_conversation.links WHERE "
+                        "tenant_id=%s AND security_domain=%s AND "
+                        "conversation_id=%s AND link_id=%s",
+                        (*self.scope(ctx), identity, focus),
+                    ).fetchone()
+                    if not link:
+                        raise ConversationError("CONVERSATION_LINK_NOT_FOUND", 404)
+                    target = link["target"]
+            self.resolve_link(ctx, target)
         with self.connect() as c:
             row = self.owned(c, ctx, identity, True)
             scope = (*self.scope(ctx), identity)
@@ -228,7 +244,6 @@ class PrivateConversations:
                 raise ConversationError("CONVERSATION_VERSION_CONFLICT")
             identity_new = str(uuid4())
             if action == "link":
-                self.resolve_link(ctx, body["target"])
                 same = c.execute(
                     "SELECT link_id FROM private_conversation.links WHERE tenant_id=%s "
                     "AND security_domain=%s AND conversation_id=%s AND target=%s",
@@ -261,7 +276,6 @@ class PrivateConversations:
                     link = next((x for x in links if x["link_id"] == focus), None)
                     if not link:
                         raise ConversationError("CONVERSATION_LINK_NOT_FOUND", 404)
-                    self.resolve_link(ctx, link["target"])
                 route = disposition(body["content"], bool(focus), len(links))
                 c.execute(
                     "INSERT INTO private_conversation.messages "

@@ -17,3 +17,13 @@ revocation, idempotent policy decisions, zero resource-approval requests, unchan
 budget policy, existing ordinary-user context regression; live same-conversation
 continuation only after confirming original request made no provider reservation.
 Planning and unseen executor completeness are separate acceptance gates.
+
+## Conversation owner-read lock correction
+
+Live continuation exposed a self-deadlock when a conversation transaction held
+current-authority locks and synchronously entered an independent owner reader.
+Source reads now run between a read-only access precheck and the write transaction;
+conversation ownership, current administrator authority, version, idempotency and
+claim checks run again at the write boundary. Source reads never dispatch owners.
+Real PostgreSQL coverage exercises source/intent/claim/link/focused-message reads
+and account disable during the external read: the later write must still be denied.
