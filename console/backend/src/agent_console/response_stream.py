@@ -60,14 +60,20 @@ def read_response(response, configuration, progress):
         response.getheader("content-type") or ""
     ):
         return response.read(limit + 1)
+    # SSE contains repeated IDs and envelope fields for every token; final-body
+    # capacity is not a wire budget. Both remain independently bounded.
+    event_limit = max(1024, getattr(configuration, "maximum_output_tokens", 8192) * 8)
+    wire_limit = min(32 * 1024 * 1024, limit * 8 + event_limit * 1024)
     data, wire, text, count, previous = [], 0, "", 0, None
     started = time.monotonic()
     last_emit = 0.0
     while True:
         line = response.readline(limit + 1)
         wire += len(line)
-        if not line or wire > limit * 8 or len(line) > limit:
-            raise OSError("RESPONSE_STREAM_INCOMPLETE_OR_OVERSIZED")
+        if not line:
+            raise OSError("RESPONSE_STREAM_INCOMPLETE")
+        if wire > wire_limit or len(line) > limit:
+            raise OSError("RESPONSE_STREAM_OVERSIZED")
         if line.strip():
             if line.startswith(b"data:"):
                 data.append(line[5:].strip())
@@ -82,6 +88,8 @@ def read_response(response, configuration, progress):
         if not isinstance(event, dict):
             raise OSError("RESPONSE_STREAM_INVALID")
         count += 1
+        if count > event_limit:
+            raise OSError("RESPONSE_STREAM_EVENT_LIMIT")
         kind = event.get("type")
         if count == 1:
             progress(

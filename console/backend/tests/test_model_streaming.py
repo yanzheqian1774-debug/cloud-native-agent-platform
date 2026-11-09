@@ -387,3 +387,64 @@ def test_revocation_after_preview_blocks_final_disclosure_without_redispatch():
         assert "event: error" in data
 
     asyncio.run(check())
+
+
+def test_token_envelopes_do_not_consume_final_body_budget():
+    final = {"status": "completed", "output": [], "usage": {"output_tokens": 6000}}
+    raw = b"".join(
+        event(
+            {"type": "response.output_text.delta", "delta": "a", "item_id": "r" * 250}
+        )
+        for _ in range(6000)
+    ) + event({"type": "response.completed", "response": final})
+    assert len(raw) > 64000 * 8
+    assert (
+        json.loads(
+            read_response(
+                response(raw),
+                NS(maximum_response_bytes=64000, maximum_output_tokens=8192),
+                lambda _: None,
+            )
+        )
+        == final
+    )
+
+
+def test_stream_event_limit_still_rejects_unbounded_empty_events():
+    raw = event({"type": "response.created"}) * 1025
+    with pytest.raises(OSError, match="EVENT_LIMIT"):
+        read_response(
+            response(raw),
+            NS(maximum_response_bytes=10000, maximum_output_tokens=1),
+            lambda _: None,
+        )
+
+
+def test_stream_identity_does_not_touch_session_but_owner_revocation_is_live():
+    from agent_console.model_stream_api import stream_authorization
+
+    authenticated, checked = [], []
+    identity = object()
+    allowed = True
+
+    def authenticate(request):
+        authenticated.append(request)
+        return "session", identity
+
+    def read(context, invocation):
+        assert context is identity
+        checked.append(invocation)
+        if not allowed:
+            raise PermissionError("revoked")
+
+    authorize = stream_authorization(
+        "request", authenticate, lambda request, session: None, read
+    )
+    authorize(None)
+    authorize("invocation")
+    authorize("invocation")
+    allowed = False
+    with pytest.raises(PermissionError):
+        authorize("invocation")
+    assert authenticated == ["request"]
+    assert checked == ["invocation"] * 3

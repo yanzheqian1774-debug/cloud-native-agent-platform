@@ -13,6 +13,27 @@ from .response_stream import SINK
 from .responses_deadline import CANCEL, cancellable_request
 
 
+def stream_authorization(request, authenticate, require_csrf, read):
+    """Reuse request identity, never authorization; each READ rechecks live grants.
+
+    Re-authentication touches the session using an exclusive lock, which waits
+    behind the dispatch guard's shared session lock until the model finishes.
+    The original owner READ checks current session/account/grants without that
+    idle-timer write. The request's cookie and CSRF headers are immutable.
+    """
+    context = None
+
+    def authorize(identity):
+        nonlocal context
+        if identity is None or context is None:
+            session, context = authenticate(request)
+            require_csrf(request, session)
+        if identity is not None:
+            read(context, identity)
+
+    return authorize
+
+
 def frame(event, value):
     return (
         "event: "

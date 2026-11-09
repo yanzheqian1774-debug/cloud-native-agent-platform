@@ -106,7 +106,7 @@ def install_planning_invocations(
         @app.post(f"{PREFIX}/planning-v2/invocations", status_code=201)
         async def begin(request: Request, body: PlanningRequest):
             from .conversation_actions import original_action
-            from .model_stream_api import model_response
+            from .model_stream_api import model_response, stream_authorization
 
             def submit():
                 _, context = authenticate(request)
@@ -129,11 +129,9 @@ def install_planning_invocations(
             session, _ = authenticate(request)
             require_csrf(request, session)
 
-            def authorize(identity):
-                session, context = authenticate(request)
-                require_csrf(request, session)
-                if identity:
-                    reader(context, identity)
+            authorize = stream_authorization(
+                request, authenticate, require_csrf, reader
+            )
 
             return await model_response(request, submit, authorize)
 

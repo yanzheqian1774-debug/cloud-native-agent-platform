@@ -193,13 +193,11 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                         content={"reasonCode": exc.reason_code},
                     )
 
-            from .model_stream_api import model_response
+            from .model_stream_api import model_response, stream_authorization
 
-            def authorize(identity):
-                session, context = authenticate(request)
-                require_csrf(request, session)
-                if identity:
-                    service.read(context, identity)
+            authorize = stream_authorization(
+                request, authenticate, require_csrf, service.read
+            )
 
             return await model_response(request, submit, authorize)
 
