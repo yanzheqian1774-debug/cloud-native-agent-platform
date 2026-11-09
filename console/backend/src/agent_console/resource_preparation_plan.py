@@ -50,7 +50,7 @@ def select_employee(automation, call, *, automatic_coverage=None):
         require_supported_lineage(app, cur, scope, old)
         if baseline["digest"] != request.digest:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
-        work = automation.policy.work(
+        work = automation.work(
             call.context, old.semantics.target.problem, automation.grants.clock()
         )
         payload_digest = canonical_digest(

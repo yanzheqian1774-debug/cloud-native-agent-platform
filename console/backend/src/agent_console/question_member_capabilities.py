@@ -61,6 +61,7 @@ def observe(automation, call, source, source_schema, work):
                         content,
                         work,
                         expected_source_schema=source_schema,
+                        sales_v2_candidate=automation.sales_v2_candidate,
                     )
                     if kind == "SKILL":
                         declared.update(

@@ -166,7 +166,7 @@ def coverage(automation, call, plan):
         call.context.principal_id, scope.namespace, scope.security_domain
     )
     automation.authenticate(call.context)
-    work = automation.policy.work(
+    work = automation.work(
         call.context, plan.semantics.target.problem, automation.grants.clock()
     )
     automation.bound_app(call).validate_target(p, plan.semantics.target, c)
@@ -346,7 +346,7 @@ class ProblemResourceCoverage:
             if call.operation == "READ_PROBLEM_RESOURCE_COVERAGE":
                 return coverage(a, call, plan)
             a.authenticate(call.context)
-            a.policy.work(call.context, plan.semantics.target.problem, a.grants.clock())
+            a.work(call.context, plan.semantics.target.problem, a.grants.clock())
             key = args.get("key", args.get("idempotencyKey"))
             old = call.connection.execute(
                 "SELECT record FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",

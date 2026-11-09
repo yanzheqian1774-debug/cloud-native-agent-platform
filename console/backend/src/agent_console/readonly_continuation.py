@@ -56,6 +56,10 @@ class ReadonlyContinuation:
         )
 
     def capability(self, context, root):
+        from .development_administrator import for_service
+
+        if self.policy.enabled and for_service(self.automation.grants, context):
+            return True
         return self.policy.enabled and any(
             (w.namespace, w.securityDomain, w.subject, w.problem)
             == (
@@ -138,12 +142,52 @@ class ReadonlyContinuation:
                 raise WorkbenchOwnerError("READONLY_WORK_SOURCE_MISMATCH", 409)
             digest = source_digest(revision["content"])
             now = self.automation.grants.clock()
-            approved_work = self.policy.work(
-                call.context, plan.semantics.target.problem, digest, now
-            )
-            resource_work = self.automation.policy.work(
-                call.context, plan.semantics.target.problem, now
-            )
+            from .development_administrator import for_call
+
+            development = for_call(call)
+            if development:
+                import json
+
+                from .readonly_continuation_policy import ReadonlyWork
+
+                schema = json.loads(
+                    revision["content"]["documents"][0]["chunks"][0]["content"]
+                )["schemaVersion"]
+                case = {
+                    "sales-diagnostic-source.v1": "sales",
+                    "synthetic-delivery-source.v1": "delivery",
+                }.get(schema)
+                candidates = {
+                    w.nativeAgentName
+                    for w in self.policy.works
+                    if w.case == case
+                    and w.namespace == scope.namespace
+                    and w.securityDomain == scope.security_domain
+                }
+                if not self.policy.enabled or len(candidates) != 1:
+                    raise WorkbenchOwnerError(
+                        "CONVERSATION_EXECUTOR_NOT_CONFIGURED", 409
+                    )
+                resource_work = self.automation.work(
+                    call.context, plan.semantics.target.problem, now
+                )
+                approved_work = ReadonlyWork(
+                    namespace=scope.namespace,
+                    securityDomain=scope.security_domain,
+                    subject=principal.principal_id,
+                    problem=plan.semantics.target.problem,
+                    sourceContentDigests=(digest,),
+                    case=case,
+                    nativeAgentName=next(iter(candidates)),
+                    expiresAt=resource_work.expiresAt,
+                )
+            else:
+                approved_work = self.policy.work(
+                    call.context, plan.semantics.target.problem, digest, now
+                )
+                resource_work = self.automation.policy.work(
+                    call.context, plan.semantics.target.problem, now
+                )
             work = resource_work.model_copy(
                 update={
                     "expiresAt": min(resource_work.expiresAt, approved_work.expiresAt)
@@ -342,6 +386,7 @@ class ReadonlyContinuation:
             )
             record = {
                 "schemaVersion": "readonly-continuation.v1",
+                "developmentJourney": development,
                 "sourcePlanId": identity,
                 "sourcePlanVersion": version,
                 "sourcePlanDigest": plan.digest,

@@ -291,3 +291,31 @@ def test_source_commitment_uses_confirmation_time_not_foreign_plan_version(autom
         a, "分析", problem_id=root, extra_plan_reads=("plan:v2:" + fresh_id,)
     )
     assert stale["state"] == "BLOCKED_NO_READABLE_CONTEXT"
+
+
+def test_source_directory_entry_uses_owner_authorization_and_hides_unavailable_sources(
+    automation,
+):
+    from contextlib import nullcontext
+
+    from agent_console.resource_automation import operations
+
+    a = automation
+    a.adapter.controller.protected_request = lambda: nullcontext(a.gen)
+    operation = next(
+        op for op in operations(a.automation) if op.name == "READ_CONVERSATION_SOURCES"
+    )
+    grants = tuple(operation.grant_builder(a.subject, {}, {}, {}))
+    assert grants
+    from agent_console.authority_contracts import AuthorityError
+
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+        a.adapter.execute(
+            a.subject,
+            grants,
+            operation=operation.name,
+            payload={},
+            path={},
+            query={},
+            handler=operation.handler,
+        )

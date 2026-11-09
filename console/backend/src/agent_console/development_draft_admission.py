@@ -18,7 +18,7 @@ def admit(service, connection, context, row):
         return False
     if (
         row["subject_id"] != context.principal_id
-        or row["record"].get("phase") != "understanding"
+        or row["record"].get("phase") not in {"understanding", "planning"}
         or not row["record"].get("development_administrator")
         or row["record"]["configuration"] != service.configuration
     ):

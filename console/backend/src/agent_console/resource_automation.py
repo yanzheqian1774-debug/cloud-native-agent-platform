@@ -1098,6 +1098,7 @@ def vars_grant(grant):
 
 def operations(automation):
     path = PREFIX + "/planning-v2/{proposal_id}/resource-preparation"
+    from .conversation_sources import ConversationSources
     from .planning_source_change import SourceChangeRequest
     from .policy_plan_confirmation import (
         ConfirmPolicyPlan,
@@ -1114,6 +1115,17 @@ def operations(automation):
 
     coverage = ProblemResourceCoverage(automation)
     return (
+        WorkbenchOperation(
+            "READ_CONVERSATION_SOURCES",
+            "GET",
+            PREFIX + "/conversation-sources",
+            None,
+            None,
+            lambda *args: (
+                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
+            ),
+            ConversationSources(automation),
+        ),
         WorkbenchOperation(
             "CONFIRM_POLICY_PLAN",
             "POST",

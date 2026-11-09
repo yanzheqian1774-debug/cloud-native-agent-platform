@@ -318,6 +318,11 @@ def install_private_conversations(
                 content={"reasonCode": "CONVERSATION_STORAGE_UNAVAILABLE"},
             )
 
+    if service:
+        from .conversation_journey import install as install_journey
+
+        install_journey(app, service, safe)
+
     @app.get(PREFIX + "/conversations/capabilities")
     def capabilities(request: Request):
         authenticate(request)

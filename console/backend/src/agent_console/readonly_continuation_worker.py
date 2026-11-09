@@ -47,6 +47,43 @@ class ContinuationWork:
             r = row["result"]
             if r.get("executionAuthorizationDigest") != self.policy.digest:
                 continue
+            if r.get("developmentJourney") is True:
+                if (
+                    r.get("subject") != "human:development-admin"
+                    or datetime.fromisoformat(r["authorizationExpiresAt"]) <= now
+                ):
+                    continue
+                with self.repository.pool.connection() as c:
+                    command = c.execute(
+                        "SELECT payload FROM execution_authority.native_dispatch_commands "
+                        "WHERE namespace=%s AND security_domain=%s AND "
+                        "payload->>'authorization_resource'=%s ORDER BY queued_at LIMIT 1",
+                        (
+                            row["namespace"],
+                            row["security_domain"],
+                            "governed-execution:prepared:" + r["preparationDigest"],
+                        ),
+                    ).fetchone()
+                    if command is None:
+                        continue
+                    try:
+                        context, authority = self.authority_factory(
+                            c, self.repository._dispatch_command(command["payload"])
+                        )
+                        authority.require(
+                            OwnerPrincipal(
+                                context.principal_id,
+                                row["namespace"],
+                                row["security_domain"],
+                            ),
+                            "EXECUTION",
+                            "READ",
+                            "governed-execution:prepared:" + r["preparationDigest"],
+                        )
+                    except AuthorityError:
+                        continue
+                eligible.append((row["namespace"], row["security_domain"], r))
+                continue
             matches = [
                 w
                 for w in self.policy.works

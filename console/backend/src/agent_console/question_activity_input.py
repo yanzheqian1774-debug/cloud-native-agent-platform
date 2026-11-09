@@ -34,6 +34,7 @@ class QuestionActivityRequest(BaseModel):
     idempotencyKey: str = Field(min_length=1, max_length=120)
     contextToken: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     problemId: Identity | None = None
+    source: ExactReference | None = None
 
 
 def member_contract_answers(operations):
@@ -193,6 +194,38 @@ class QuestionActivityInput:
                 )
             except (AuthorityError, PlanningError, ValueError):
                 continue  # No hidden context names, IDs or counts.
+        if request.source is not None and request.problemId is not None:
+            from .conversation_sources import sources
+
+            current = app.current_input(p, request.problemId, call.connection)
+            target = ProblemTarget.model_validate(current["target"])
+            available = sources(a, call, target.problem)
+            selected_source = next(
+                (
+                    x
+                    for x in available
+                    if x["source"] == request.source.model_dump(mode="json")
+                ),
+                None,
+            )
+            if selected_source is None:
+                raise WorkbenchOwnerError(
+                    "CONVERSATION_SOURCE_STALE_OR_UNREADABLE", 409
+                )
+            contexts = [
+                {
+                    **current,
+                    **selected_source,
+                    "sourceName": selected_source["name"],
+                    "_work": a.work(call.context, target.problem, now),
+                    "contextToken": canonical_digest(
+                        [current["target"], selected_source["source"]]
+                    ),
+                    "sourceProvenance": {
+                        "usage": "USER_CONFIRMED_READABLE_SOURCE_NO_HISTORICAL_PLAN"
+                    },
+                }
+            ]
         if any(
             word in request.question
             for word in ("流程实例", "当前活动", "审批到", "采购流程")

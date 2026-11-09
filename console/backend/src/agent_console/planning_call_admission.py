@@ -53,6 +53,11 @@ class PlanningCallAdmission(ContextCallAdmission):
         """Persist the actual generated object before signing or invocation claim."""
         scope = (context.scope.tenant_id, context.scope.security_domain)
         with self.repository.connection_scope() as c:
+            from .development_journey_admission import prepare as prepare_journey
+
+            journey = prepare_journey(self, c, context, request, record)
+            if journey is not None:
+                return journey
             from .initial_case_authorization import prepare as prepare_initial
 
             initial = prepare_initial(self, c, context, request, record)
@@ -330,6 +335,10 @@ def effective_cap(c, budget, invocation, original):
     row = guarded_row(c, budget, invocation)
     if row is None:
         return original
+    if row["record"].get("development_journey"):
+        from .development_journey_admission import CALL_CAP
+
+        return CALL_CAP
     from .task_planning_successor import cap
 
     successor_cap = cap(c, row, budget, original)
@@ -349,6 +358,10 @@ def effective_cost_cap(c, budget, invocation, original):
     row = guarded_row(c, budget, invocation)
     if row is None:
         return original
+    if row["record"].get("development_journey"):
+        from .development_journey_admission import COST_CAP
+
+        return COST_CAP
     from .development_planning_recovery import limits
     from .initial_case_authorization import limits as initial_limits
 

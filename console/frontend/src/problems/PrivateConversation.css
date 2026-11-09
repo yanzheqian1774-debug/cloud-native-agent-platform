@@ -9,3 +9,4 @@
  .private-heading h1{max-width:100%;white-space:normal;overflow-wrap:anywhere}
  .private-heading>a{position:static;display:inline-block;margin-top:4px}
 }
+.conversation-journey{padding:24px;background:white;border:1px solid #dce6fa;border-radius:12px;margin:20px 0}.conversation-journey li{margin:10px 0}.conversation-journey button{padding:10px 16px;margin:8px;border:1px solid #2563eb;border-radius:8px;background:#edf4ff;color:#174fa0}.conversation-journey textarea{display:block;width:100%;min-height:80px;margin:8px 0}.conversation-journey [role=alert]{padding:16px;background:#fff5e9;border-radius:8px}
