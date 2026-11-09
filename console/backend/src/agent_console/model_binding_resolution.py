@@ -8,6 +8,7 @@ connection observations, Resource Use, and Evidence are outside this boundary.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -180,15 +181,21 @@ def resolve_authorized_model_binding(
     *,
     authorizer: ModelUseAuthorizer | None,
     resolver: ExactModelResolver | None,
-    evaluation_time: datetime,
+    evaluation_time: datetime | Callable[[], datetime],
 ) -> ResolvedModelBinding:
     """Authorize first, then resolve and validate one exact Model binding."""
-    _timestamp(evaluation_time, "MODEL_AUTHORIZATION_INVALID")
+    if not callable(evaluation_time):
+        _timestamp(evaluation_time, "MODEL_AUTHORIZATION_INVALID")
     if authorizer is None:
         raise ModelBindingResolutionFailure("MODEL_AUTHORIZATION_UNAVAILABLE")
     authorization = authorizer.authorize_use(scope, subject, use)
     if authorization is None:
         raise ModelBindingResolutionFailure("MODEL_BINDING_NOT_FOUND")
+    # Live decisions may be issued during authorization; sample afterwards.
+    evaluation_time = (
+        evaluation_time() if callable(evaluation_time) else evaluation_time
+    )
+    _timestamp(evaluation_time, "MODEL_AUTHORIZATION_INVALID")
     if (
         authorization.scope != scope
         or authorization.subject != subject

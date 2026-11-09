@@ -167,7 +167,7 @@ class PlanningSuggestionService:
             use,
             authorizer=self.model_authorizer,
             resolver=self.model_resolver,
-            evaluation_time=datetime.now(UTC),
+            evaluation_time=lambda: datetime.now(UTC),
         )
         source = None
         previous_questions = []

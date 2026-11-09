@@ -34,3 +34,6 @@ video/screenshots and original owner IDs; independently check report arithmetic.
 Risks: existing model budget and static read-only work scopes; implement bounded
 role-based admission without expanding original budget silently. Source data is
 synthetic and must be labeled. Fresh work only; no historical Run replay.
+
+## Live authorization timing correction
+The live current-role decision is issued during authorization. Sample the resolution clock after that decision, preserving strict future/expiry and complete tuple checks. A known MODEL_AUTHORIZATION_INVALID rejection occurs before invocation creation/provider dispatch; permit an explicit same-conversation continuation with the identical request key. Unknown transport outcomes remain non-replayable.

@@ -25,3 +25,9 @@ test('an interrupted claimed operation is preserved and never dispatched again o
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'UNDERSTAND',pending:'understanding',messages:[{id:'q',text:prompt}],log:['已收到问题']}};
  await page.goto('/work?conversation=new');await expect(page.getByText('上次请求尚未核实，已保留原记录，暂不重复执行。')).toBeVisible();await page.reload();await expect(page.getByText('上次请求尚未核实，已保留原记录，暂不重复执行。')).toBeVisible();expect(s.modelCalls).toBe(0);
 });
+
+for(const reason of ['MODEL_AUTHORIZATION_INVALID','NETWORK_UNKNOWN'])test('only known pre-dispatch rejection offers in-conversation continuation: '+reason,async({page})=>{
+ const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'PLAN',pending:'planning',error:'Error: 规划服务未能完成此操作，请核对权限与配置（'+reason+'）',messages:[{id:'user:q',text:prompt}],log:['分析目标已保存']}};
+ await page.goto('/work?conversation=new');await expect(page.getByText('本次处理停在当前步骤，已有内容已保留。')).toBeVisible();
+ await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(reason==='MODEL_AUTHORIZATION_INVALID'?1:0);expect(s.modelCalls).toBe(0);
+});

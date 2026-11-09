@@ -283,3 +283,36 @@ def test_use_target_cannot_authorize_a_different_model_suffix() -> None:
             "model:binding:AGENT:agent:17:revision:4:"
             f"model:other:{BINDING.revision_id}:{BINDING.digest}",
         )
+
+
+def test_live_clock_is_sampled_after_current_decision_is_issued():
+    events = []
+    issued = NOW + timedelta(microseconds=1)
+
+    def clock():
+        events.append(("clock",))
+        return issued
+
+    result = resolve(
+        RecordingAuthorizer(events, authorization(issued_at=issued)),
+        RecordingResolver(events),
+        evaluation_time=clock,
+    )
+    assert result.binding == BINDING
+    assert [event[0] for event in events] == ["authorize", "clock", "resolve"]
+
+
+@pytest.mark.parametrize(
+    "instant", [NOW - timedelta(minutes=2), NOW + timedelta(minutes=2)]
+)
+def test_live_clock_still_rejects_future_and_expired_decisions(instant):
+    events = []
+    with pytest.raises(
+        ModelBindingResolutionFailure, match="MODEL_AUTHORIZATION_INVALID"
+    ):
+        resolve(
+            RecordingAuthorizer(events),
+            RecordingResolver(events),
+            evaluation_time=lambda: instant,
+        )
+    assert [event[0] for event in events] == ["authorize"]
