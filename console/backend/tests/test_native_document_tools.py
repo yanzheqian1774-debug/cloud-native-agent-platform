@@ -139,3 +139,25 @@ def test_duplicate_sections_and_wrong_role_are_rejected_and_source_is_not_mutate
     ]
     assert before == SOURCE
     validate_source(SOURCE)
+
+
+def test_every_document_operation_satisfies_published_platform_output_contract():
+    from agent_console.native_document_skill import DocumentComputationExecutor
+    from agent_console.skill_invocation_postgres import _validate_json_schema
+
+    bundle = resource_content(SOURCE)
+    executor = DocumentComputationExecutor()
+    inputs = {
+        "schemaVersion": "document-review-input.v1",
+        "synthetic": True,
+        "sourceSnapshot": REFERENCE,
+        "source": SOURCE,
+        "dependencies": {},
+    }
+    previous = None
+    for operation in bundle["skill"]["operations"]:
+        args = {**inputs, "dependencies": {"previous": previous} if previous else {}}
+        _validate_json_schema(args, operation["inputSchema"], "INVALID_INPUT")
+        previous = executor.invoke("contract", operation["name"], args, 1000).output
+        _validate_json_schema(previous, operation["outputSchema"], "INVALID_OUTPUT")
+        assert "NO_DEPLOYMENT_AUTHORITY" in previous["limitations"]

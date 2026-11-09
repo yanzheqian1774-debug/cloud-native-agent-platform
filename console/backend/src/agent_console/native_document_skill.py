@@ -54,6 +54,12 @@ class DocumentComputationExecutor:
             "sourceSnapshot": inputs["sourceSnapshot"],
             "source": source,
             "documentCount": len(docs),
+            "limitations": [
+                "SYNTHETIC_ONLY",
+                "SECTION_COMPLETENESS_ONLY",
+                "TECHNICAL_CORRECTNESS_UNVERIFIED",
+                "NO_DEPLOYMENT_AUTHORITY",
+            ],
             "businessConclusion": "UNDETERMINED",
         }
         return SkillExecutorResult(
