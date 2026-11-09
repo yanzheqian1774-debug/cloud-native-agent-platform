@@ -230,7 +230,11 @@ class ContextCallAdmission:
                 "context_id": invocation.context_id,
                 "first_invocation_id": invocation.invocation_id,
                 "subject_id": context.principal_id,
-                **({"development_administrator": True} if administrator else {}),
+                **(
+                    {"development_administrator": True, "development_call_cap": 100}
+                    if administrator
+                    else {}
+                ),
                 "account_id": account["account_id"],
                 "account_revision": account["revision"],
                 "tenant_id": SCOPE[0],
@@ -596,3 +600,24 @@ def bind_criterion(c, context, result, problem_id):
             if previous is None or previous["context_id"] != row["context_id"]:
                 raise AuthorityError("CONTEXT_ADMISSION_CRITERION_TARGET_DENIED")
     return True
+
+
+def development_call_cap(c, budget, invocation, original):
+    """D13 testing allowance on the original ledger; dollar ceiling unchanged."""
+    context_id = getattr(invocation, "context_id", None)
+    if context_id is None or not available(c):
+        return original
+    row = request_row(c, context_id)
+    if not row or row["record"].get("development_call_cap") != 100:
+        return original
+    if (
+        not row["record"].get("development_administrator")
+        or row["subject_id"] != invocation.initiating_principal_id
+        or (row["tenant_id"], row["security_domain"])
+        != (invocation.scope.namespace, invocation.scope.security_domain)
+        or row["record"]["phase"] != "understanding"
+        or row["record"]["configuration"]["ledger_id"] != budget.ledger_id
+    ):
+        raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
+    active(c, row, getattr(budget, "delegation_configuration", None))
+    return 100

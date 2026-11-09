@@ -22,13 +22,14 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
   flight.current=true;setBusy(true);setError('');let s=current.current.state;
   try{while(alive.current){await verify();
    if(s.phase==='UNDERSTAND'){
-    s=await pending(s,'understanding');const previous=s.draft;
+    s=await pending(s,'understanding');const previous=s.draft?.state==='SUCCEEDED'?s.draft:undefined;
     const content=understandingContent(s.messages,s.messages.length,previous?.draft??null,previous?.understanding??null,previous?.clarificationQuestion??null);
     const draft=await beginDraftAssistance(session.csrfToken,{idempotencyKey:s.key+':draft:'+s.messages.length,content,...(previous?{parentContextId:previous.contextId,parentTurnId:previous.turnId,expectedParentVersion:previous.turnVersion,predecessorInvocationId:previous.invocationId}:{})});
-    if(draft.state!=='SUCCEEDED')throw Error('问题理解尚未完成：'+(draft.reasonCode??draft.state));
+    const recoverable=draft.state==='FAILED'&&draft.reasonCode==='OUTPUT_SCHEMA_INVALID'&&draft.settlementStatus==='ESTIMATE_SETTLED'&&draft.localWorkerState==='REAPED';
+    if(draft.state!=='SUCCEEDED'&&!recoverable)throw Error('问题理解尚未完成：'+(draft.reasonCode??draft.state));
     const sources=s.sources??(await planningRequest<{items:Source[]}>('conversation-sources')).items;
     const next=draft.resultKind==='DRAFT_READY'&&s.source?'CREATE':'CLARIFY';
-    s=await save({...s,pending:undefined,draft,sources,phase:next,log:[...s.log,next==='CLARIFY'?'问题理解已完成，请确认下方分析范围。':'已整理分析目标，正在核对资料与范围。']});
+    s=await save({...s,pending:undefined,draft,sources,phase:next,log:[...s.log,recoverable?'目标整理暂未完成，原问题已保留。请先确认资料范围或补充关注点。':next==='CLARIFY'?'问题理解已完成，请确认下方分析范围。':'已整理分析目标，正在核对资料与范围。']});
    }else if(s.phase==='CREATE'){
     if(!s.draft?.draft||!s.source)throw Error('需要先明确分析目标和资料范围。');
     s=await pending(s,'create-problem');
@@ -85,7 +86,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  async function answer(text:string,source?:Source){if(flight.current||!state)return;flight.current=true;setBusy(true);try{await verify();const c=await conversationRequest<PrivateConversation>('/'+conversation);await conversationRequest('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':answer:'+state.messages.length,content:text});await save({...state,source:source??state.source,phase:'UNDERSTAND',pending:undefined,error:undefined,messages:appendUserMessage(state.messages,text),log:[...state.log,'已收到补充，继续理解并核对分析范围。']});setReply('')}catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}}
  if(!state)return error?<p role="alert">{error}</p>:null;
  return <section className="conversation-journey" aria-busy={busy}><h2>{execution?.progress?.state==='SUCCEEDED'?'分析结果':state.phase==='CLARIFY'?'请确认一下分析范围':'正在办理你的问题'}</h2>{state.messages.slice(1).map(m=><blockquote key={m.id}>{m.text}</blockquote>)}<ol>{state.log.map((text,i)=><li key={i}>{text}</li>)}</ol>{busy&&<p role="status">正在处理，请稍候。进度会保存在本会话。</p>}
- {state.phase==='CLARIFY'&&<div><p>{state.draft?.clarificationQuestion??'请选择本次要分析的资料范围。'}</p>{!state.source&&<><p>系统可用资料如下。测试资料不代表真实经营数据；确认后将自动分析并把结果返回这里。</p>{state.sources?.map(source=><button key={source.source.digest} disabled={busy} onClick={()=>void answer('使用系统现有的'+source.name+'，时间范围为'+source.periods.join('、')+'。按资料的既有口径进行只读分析，展示汇总、变化贡献和异常明细，不修改原始数据。',source)}>使用{source.periods.join('、')||'现有'}{source.sourceSchema.startsWith('sales')?'销售':'交付'}测试资料</button>)}</>}<form onSubmit={e=>{e.preventDefault();void answer(reply)}}><label htmlFor="journey-reply">补充说明</label><textarea id="journey-reply" value={reply} onChange={e=>setReply(e.target.value)} maxLength={1800}/><button disabled={busy||!reply.trim()}>发送补充</button></form></div>}
+ {state.phase==='CLARIFY'&&<div><p>{state.draft?.clarificationQuestion??(state.source?'请补充你最关注的问题，例如销售额或毛利的变化。':'请选择本次要分析的资料范围。')}</p>{!state.source&&<><p>系统可用资料如下。测试资料不代表真实经营数据；确认后将自动分析并把结果返回这里。</p>{state.sources?.map(source=><button key={source.source.digest} disabled={busy} onClick={()=>void answer('使用系统现有的'+source.name+'，时间范围为'+source.periods.join('、')+'。按资料的既有口径进行只读分析，展示汇总、变化贡献和异常明细，不修改原始数据。',source)}>使用{source.periods.join('、')||'现有'}{source.sourceSchema.startsWith('sales')?'销售':'交付'}测试资料</button>)}</>}<form onSubmit={e=>{e.preventDefault();void answer(reply)}}><label htmlFor="journey-reply">补充说明</label><textarea id="journey-reply" value={reply} onChange={e=>setReply(e.target.value)} maxLength={1800}/><button disabled={busy||!reply.trim()}>发送补充</button></form></div>}
  {state.draft?.draft&&<details><summary>查看已理解的目标</summary><p>{state.draft.draft.description}</p></details>}
  {(error||state.error)&&<div role="alert"><p>本次处理停在当前步骤，已有内容已保留。</p><p>{error||state.error}</p><p>不会自动重发可能已执行的请求。恢复后仍在本会话继续。</p></div>}
  {((state.phase==='PLAN'&&state.pending==='planning'&&state.error?.includes('（MODEL_AUTHORIZATION_INVALID）'))||(state.phase==='EXECUTE'&&state.pending==='execute'&&state.error==='Error: READONLY_RESOURCE_PREPARATION_REQUIRED'))&&<button disabled={busy} onClick={()=>{setError('');void save({...state,pending:undefined,error:undefined})}}>配置修复后继续分析</button>}

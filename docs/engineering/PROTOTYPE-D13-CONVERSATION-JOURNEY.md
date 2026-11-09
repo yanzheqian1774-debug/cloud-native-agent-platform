@@ -43,3 +43,7 @@ The current development-role resource preparation receipt carries the role/gener
 
 ## Automatic result readback
 Separate read-only command controls from blocked/identity state. The conversation's result panel permits automatic GET refresh while disallowing its manual execution/acceptance commands. Terminal report and progress must converge without a user refresh.
+
+## Known invalid understanding output and continued testing
+Only a FAILED / OUTPUT_SCHEMA_INVALID response with ESTIMATE_SETTLED and REAPED may return to in-conversation source/goal clarification. Preserve the failed invocation in the journal. The next user message uses a new request/context with complete user facts; no failed output is adopted and no unknown invocation is retried.
+Under the user's explicit continued-development/testing authorization, new current devadmin understanding admissions have a recorded cumulative 100-call testing allowance on the SAME original ledger. The original USD 10 understanding ceiling, all historical reservations/unknown liabilities, account/generation/revocation checks remain enforced. Existing ledger policy rows and historical admissions are not rewritten. Ordinary accounts and old unmarked admissions keep their original caps.

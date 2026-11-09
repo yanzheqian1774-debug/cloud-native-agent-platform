@@ -68,3 +68,40 @@ def test_new_admin_planning_is_exact_current_and_revocable(env, setup):
         )
     with pytest.raises(AuthorityError, match="CONTEXT_ADMISSION_REQUIRED"):
         service.prepare_record(context, request, record)
+
+
+def test_understanding_testing_cap_preserves_ledger_and_revocation(env, setup):
+    from agent_console.context_call_admission import development_call_cap
+
+    repo, _generation, sessions, _ = setup
+    _, context = sessions.authenticate_session(login(sessions, "devadmin").value)
+    draft = env.draft.begin(
+        context, key="bounded-tests", content="sales question"
+    ).invocation
+    env.admission.prepare(context, draft)
+    budget = SimpleNamespace(
+        ledger_id=env.limits["ledger_id"], delegation_configuration=env.limits
+    )
+    with repo.connection_scope() as c:
+        row = request_row(c, draft.context_id)
+        assert row["record"]["development_call_cap"] == 100
+        assert row["record"]["configuration"]["cost_microusd"] == 10000000
+        assert development_call_cap(c, budget, draft, 12) == 100
+        assert (
+            development_call_cap(c, budget, SimpleNamespace(context_id=None), 12) == 12
+        )
+        decision = c.execute(
+            "SELECT admission_id FROM authorization_admin.context_call_decisions "
+            "WHERE context_id=%s",
+            (draft.context_id,),
+        ).fetchone()
+        c.execute(
+            "INSERT INTO authorization_admin.context_call_revocations"
+            "(admission_id,actor_id) VALUES(%s,%s)",
+            (decision["admission_id"], context.principal_id),
+        )
+    with (
+        repo.connection_scope() as c,
+        pytest.raises(AuthorityError, match="CONTEXT_ADMISSION_REQUIRED"),
+    ):
+        development_call_cap(c, budget, draft, 12)

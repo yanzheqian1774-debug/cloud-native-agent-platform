@@ -46,7 +46,9 @@ def admit(service, connection, context, row):
         "actor": context.principal_id,
         "request": row["record"],
         "request_digest": row["digest"],
-        "budget_limits_unchanged": True,
+        "ledger_policy_rows_unchanged": True,
+        "development_call_cap": row["record"].get("development_call_cap"),
+        "understanding_cost_cap_unchanged": True,
         "predecessor_id": previous["admission_id"] if previous else None,
     }
     connection.execute(

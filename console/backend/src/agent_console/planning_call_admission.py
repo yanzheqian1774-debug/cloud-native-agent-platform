@@ -334,7 +334,9 @@ def guard(c, budget, invocation, quote):
 def effective_cap(c, budget, invocation, original):
     row = guarded_row(c, budget, invocation)
     if row is None:
-        return original
+        from .context_call_admission import development_call_cap
+
+        return development_call_cap(c, budget, invocation, original)
     if row["record"].get("development_journey"):
         from .development_journey_admission import CALL_CAP
 
