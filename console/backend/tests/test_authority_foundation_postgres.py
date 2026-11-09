@@ -1560,3 +1560,47 @@ def test_recovery_and_decision_follow_active_epoch_lock_order(
         repository.inspect_request(second.request_id).status
         is GrantRequestStatus.REJECTED
     )
+
+
+def test_bundle_reuses_identity_only_within_each_linearized_read(
+    repository, monkeypatch
+):
+    now = datetime.now(UTC)
+    repository.activate_generation(
+        1, "a" * 64, 1, operator_id="operator:test", revoked_credentials=(), now=now
+    )
+    browser = session(now, "bundle")
+    repository.create_session(browser, hashlib.sha256(b"bundle").hexdigest())
+    context = TrustedRequestContext(
+        "human:alice",
+        browser.principal.scope,
+        browser.session_id,
+        AuthenticationSource.BROWSER_SESSION,
+        "policy-1",
+    )
+    grants = tuple(
+        ExactGrant("BUSINESS_PROBLEM", "READ", f"business-problem:{i}")
+        for i in range(4)
+    )
+    original = repository._current_credential_id
+    reads = []
+
+    def counted(*args, **kwargs):
+        reads.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(repository, "_current_credential_id", counted)
+    first = repository.read_linearized_authorization_states(
+        context, grants, now=now, generation=1, recovery_epoch=1
+    )
+    assert first[0] == browser.principal.credential_id
+    assert len(first[1]) == 4
+    assert len(reads) == 1
+    repository.revoke_session(
+        browser.session_id, now=now, reason="test", actor_id="operator:test"
+    )
+    second = repository.read_linearized_authorization_states(
+        context, grants, now=now, generation=1, recovery_epoch=1
+    )
+    assert second[0] is None
+    assert len(reads) == 2

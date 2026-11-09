@@ -103,6 +103,20 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
     pid = None
     reaped = False
     stages = {}
+    cancellation_checks = 0
+    cancellation_seconds = 0.0
+
+    def cancelled():
+        nonlocal cancellation_checks, cancellation_seconds
+        if cancel is None:
+            return False
+        before = time.monotonic()
+        cancellation_checks += 1
+        try:
+            return cancel.is_set()
+        finally:
+            cancellation_seconds += time.monotonic() - before
+
     try:
         payload = pickle.dumps(job)
         if len(payload) > 2_000_000:
@@ -120,7 +134,7 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
                 if now >= total_at:
                     reason = "TOTAL_DEADLINE"
                     break
-                if cancel is not None and cancel.is_set():
+                if cancelled():
                     reason = "CANCELLED"
                     break
                 if connect_at is not None and now >= connect_at:
@@ -147,10 +161,8 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
                         line, _, incoming = incoming.partition(b"\n")
                         message = json.loads(line)
                         now = time.monotonic()
-                        if now >= total_at or (cancel is not None and cancel.is_set()):
-                            reason = (
-                                "TOTAL_DEADLINE" if now >= total_at else "CANCELLED"
-                            )
+                        if now >= total_at:
+                            reason = "TOTAL_DEADLINE"
                             raise TimeoutError
                         if connect_at is not None and now >= connect_at:
                             reason = "CONNECT_DEADLINE"
@@ -170,7 +182,7 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
         # JSON decode and result acceptance are also inside the parent deadline.
         if time.monotonic() >= total_at:
             reason, result = "TOTAL_DEADLINE", None
-        if cancel is not None and cancel.is_set():
+        if cancelled():
             reason, result = "CANCELLED", None
     except Exception:
         result = None
@@ -209,9 +221,11 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
         "reaped": reaped,
         "kill_requested": killed,
     }
-    if cancel is not None and cancel.is_set() and reason != "CLEANUP_FAILURE":
+    if cancelled() and reason != "CLEANUP_FAILURE":
         diagnostic["reason"] = "CANCELLED"
         result = None
+    diagnostic["cancellation_checks"] = cancellation_checks
+    diagnostic["cancellation_seconds"] = cancellation_seconds
     if result is None:
         raise ResponsesBoundaryError(diagnostic)
     return result, diagnostic

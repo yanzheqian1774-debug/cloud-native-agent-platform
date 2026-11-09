@@ -17,9 +17,9 @@ async function fixture(page:Page){
  });return state;
 }
 test('one short message starts understanding and clarification stays in the same conversation after reload',async({page})=>{
- const s=await fixture(page);await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page).toHaveURL(/conversation=new/);await expect(page.getByText('你想比较哪个时间范围的销售？',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(1);await expect(page.getByRole('link',{name:'在本会话核对目标与草稿'})).toHaveCount(0);
- await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(s.modelCalls).toBe(1);
- await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>s.modelCalls).toBe(2);await expect(page).toHaveURL(/conversation=new/);await expect(page.locator('.conversation-journey blockquote')).toContainText('项目销售样本');
+ const s=await fixture(page);await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page).toHaveURL(/conversation=new/);await expect(page.getByText('请选择本次要分析的资料范围。',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);await expect(page.getByRole('link',{name:'在本会话核对目标与草稿'})).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(s.modelCalls).toBe(0);
+ await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>s.modelCalls).toBe(1);await expect(page).toHaveURL(/conversation=new/);await expect(page.locator('.conversation-journey blockquote')).toContainText('项目销售样本');
 });
 test('an interrupted claimed operation is preserved and never dispatched again on refresh',async({page})=>{
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'UNDERSTAND',pending:'understanding',messages:[{id:'q',text:prompt}],log:['已收到问题']}};
@@ -47,8 +47,9 @@ test('conversation result panel refreshes automatically while execution commands
 test('known settled invalid understanding keeps the question and offers source clarification without automatic retry',async({page})=>{
  const s=await fixture(page);let calls=0;
  await page.route('**/draft-assistance/invocations',async route=>{calls++;const body=route.request().postDataJSON();if(calls===2)expect(body.parentContextId).toBeUndefined();return route.fulfill({json:{result:{invocationId:'failed'+calls,contextId:'context'+calls,turnId:'turn',turnVersion:1,state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',settlementStatus:'ESTIMATE_SETTLED',localWorkerState:'REAPED',resultKind:null,clarificationQuestion:null,draft:null}}})});
- await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(1);expect(s.journal.state?.draft).toMatchObject({state:'FAILED'});
- await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(1);await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>calls).toBe(2);await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。')).toBeVisible();
+ await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(0);expect(s.journal.state?.draft).toBeUndefined();
+ await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(0);await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>calls).toBe(1);await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。')).toBeVisible();
+ await page.locator('#journey-reply').fill('请检查缺失记录');await page.getByRole('button',{name:'发送补充',exact:true}).click();await expect.poll(()=>calls).toBe(2);
 });
 
 test('known coverage rejection reads actual gaps and proposes one bounded successor without replaying selection',async({page})=>{

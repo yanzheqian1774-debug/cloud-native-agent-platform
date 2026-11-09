@@ -132,3 +132,20 @@ def test_external_cancel_consumed_by_disconnect_probe_is_still_propagated():
         assert persisted.is_set()
 
     asyncio.run(exercise())
+
+
+def test_cancellation_measurement_is_recorded_without_caching_authority():
+    class Authority:
+        calls = 0
+
+        def is_set(self):
+            self.calls += 1
+            return False
+
+    authority = Authority()
+    result, diagnostic = boundary.supervise(ResultJob(), config(3), cancel=authority)
+    assert result == {"accepted": True}
+    assert diagnostic["cancellation_checks"] == authority.calls
+    assert authority.calls >= 3  # loop, acceptance and post-cleanup
+    assert diagnostic["cancellation_seconds"] >= 0
+    assert_reaped(diagnostic)

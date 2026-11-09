@@ -742,6 +742,12 @@ class PostgresAuthorityRepository:
             if lock_for_owner:
                 self._lock_dynamic_grants(current, context, grants)
                 self._authorization_grants_locked_checkpoint()
+            from .task_delegation import grant_condition
+
+            # One credential and predicate per linearized bundle; never cached
+            # across authorization calls. Exact grant locks and SQL expiry/
+            # revocation checks remain per grant.
+            delegation_predicate = grant_condition(current, credential_id)
             states = tuple(
                 self._read_dynamic_authorization_state(
                     current,
@@ -750,6 +756,7 @@ class PostgresAuthorityRepository:
                     now=now,
                     generation=generation,
                     recovery_epoch=recovery_epoch,
+                    delegation_predicate=delegation_predicate,
                 )
                 for grant in grants
             )
@@ -1795,9 +1802,17 @@ class PostgresAuthorityRepository:
         now: datetime,
         generation: int,
         recovery_epoch: int,
+        delegation_predicate: str | None = None,
     ) -> DynamicAuthorizationState:
         from .task_delegation import grant_condition
 
+        if delegation_predicate is None:
+            delegation_predicate = grant_condition(
+                connection,
+                PostgresAuthorityRepository._current_credential_id(
+                    connection, context, now=now, recovery_epoch=recovery_epoch
+                ),
+            )
         row = connection.execute(
             "SELECT a.generation,a.recovery_epoch,"
             "(SELECT max(r.revoked_at) FROM authorization_admin.grants g "
@@ -1810,14 +1825,7 @@ class PostgresAuthorityRepository:
             "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
             "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
             "AND g.exact_resource=%s AND g.not_before<=%s AND g.expires_at>%s "
-            "AND g.recovery_epoch=%s "
-            + grant_condition(
-                connection,
-                PostgresAuthorityRepository._current_credential_id(
-                    connection, context, now=now, recovery_epoch=recovery_epoch
-                ),
-            )
-            + ") AS latest_grant "
+            "AND g.recovery_epoch=%s " + delegation_predicate + ") AS latest_grant "
             "FROM authorization_admin.active_generation a WHERE a.singleton=true",
             (
                 context.principal_id,

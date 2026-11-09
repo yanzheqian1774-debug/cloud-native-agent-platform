@@ -2,6 +2,7 @@
 """Explicit Native model composition; existing authority and budget owners reused."""
 
 import json
+import time
 from contextvars import ContextVar
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -159,7 +160,17 @@ class NativeLoopRuntime:
         )
         manager = self
 
+        authority_timing = {"checks": 0, "seconds": 0.0}
+
         def current():
+            before = time.monotonic()
+            authority_timing["checks"] += 1
+            try:
+                return current_authority()
+            finally:
+                authority_timing["seconds"] += time.monotonic() - before
+
+        def current_authority():
             if (
                 datetime.now(UTC) >= manager.expiry
                 or (scope.namespace, scope.security_domain) != SCOPE
@@ -356,6 +367,10 @@ class NativeLoopRuntime:
         )
         return {
             **result,
+            "performance": {
+                "authority": authority_timing,
+                "note": "Includes supervisor cancellation checks; nested, not additive",
+            },
             "modelExecution": "REAL_PROVIDER",
             "model": asdict(profile.binding),
             "ledgerId": self.model.budget.ledger_id,

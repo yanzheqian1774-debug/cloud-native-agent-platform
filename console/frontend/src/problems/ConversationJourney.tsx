@@ -53,6 +53,11 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
   try{while(alive.current){await verify();
    if(canRepair(s)){s=await repairCoverage(s);continue;}
    if(s.phase==='UNDERSTAND'){
+    if(!s.source&&!s.sources){
+     s=await pending(s,'source-discovery');
+     const sources=(await planningRequest<{items:Source[]}>('conversation-sources')).items;
+     s=await save({...s,pending:undefined,sources,phase:'CLARIFY',log:[...s.log,'已核对可用资料，请确认本次分析范围。']});continue;
+    }
     s=await pending(s,'understanding');const previous=s.draft?.state==='SUCCEEDED'?s.draft:undefined;
     const content=understandingContent(s.messages,s.messages.length,previous?.draft??null,previous?.understanding??null,previous?.clarificationQuestion??null);
     const draft=await beginDraftAssistance(session.csrfToken,{idempotencyKey:s.key+':draft:'+s.messages.length,content,...(previous?{parentContextId:previous.contextId,parentTurnId:previous.turnId,expectedParentVersion:previous.turnVersion,predecessorInvocationId:previous.invocationId}:{})});
