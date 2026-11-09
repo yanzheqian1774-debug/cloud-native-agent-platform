@@ -47,6 +47,17 @@ def command_key(plan):
     return "readonly-continuation:" + plan.digest
 
 
+def resource_policy_digest(automation, call, development):
+    if development:
+        from .resource_policy_contract import DevelopmentAdministratorReview
+
+        # Match the current role/generation used by resource preparation.
+        return DevelopmentAdministratorReview(
+            call.context.principal_id, call.policy_generation, "0" * 64
+        ).policy_digest
+    return automation.policy.digest
+
+
 class ReadonlyContinuation:
     def __init__(self, automation, policy, coordinator):
         self.automation, self.policy, self.coordinator = automation, policy, coordinator
@@ -229,7 +240,7 @@ class ReadonlyContinuation:
                     principal.principal_id,
                     identity,
                     version,
-                    self.automation.policy.digest,
+                    resource_policy_digest(self.automation, call, development),
                 ),
             ).fetchone()
             if ready is None:

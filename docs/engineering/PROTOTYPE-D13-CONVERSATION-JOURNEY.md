@@ -37,3 +37,6 @@ synthetic and must be labeled. Fresh work only; no historical Run replay.
 
 ## Live authorization timing correction
 The live current-role decision is issued during authorization. Sample the resolution clock after that decision, preserving strict future/expiry and complete tuple checks. A known MODEL_AUTHORIZATION_INVALID rejection occurs before invocation creation/provider dispatch; permit an explicit same-conversation continuation with the identical request key. Unknown transport outcomes remain non-replayable.
+
+## Role preparation receipt matching
+The current development-role resource preparation receipt carries the role/generation digest, not the legacy service policy digest. Readonly continuation must match the same current subject and generation, with all existing source/plan/version/resource and execution checks retained. Known missing-preparation rejection happens before assembly or Run dispatch and can be continued in the same conversation.
