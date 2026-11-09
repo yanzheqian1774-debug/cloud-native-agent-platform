@@ -166,10 +166,14 @@ class ContextCallAdmission:
         with self.repository.connection_scope() as c:
             if old_context(c, invocation.context_id):
                 return False
-            if (
-                context.principal_id != SUBJECT
-                or (context.scope.tenant_id, context.scope.security_domain) != SCOPE
-            ):
+            from .development_administrator import for_service
+            from .development_draft_admission import admit
+
+            administrator = for_service(self.delegation.grants, context, c)
+            if (context.principal_id != SUBJECT and not administrator) or (
+                context.scope.tenant_id,
+                context.scope.security_domain,
+            ) != SCOPE:
                 raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
             account = c.execute(
                 "SELECT a.* FROM browser_identity.local_accounts a JOIN "
@@ -178,7 +182,7 @@ class ContextCallAdmission:
                 "AND a.status='ENABLED' FOR SHARE OF a",
                 (context.session_id_or_service_credential_id,),
             ).fetchone()
-            if not account or account["principal_id"] != SUBJECT:
+            if not account or account["principal_id"] != context.principal_id:
                 raise AuthorityError("CONTEXT_ADMISSION_ACCOUNT_INACTIVE")
             lock(c, invocation.context_id)
             row = request_row(c, invocation.context_id)
@@ -189,6 +193,8 @@ class ContextCallAdmission:
                     row["record"]["configuration"],
                 ) != (account["account_id"], account["revision"], self.configuration):
                     raise AuthorityError("CONTEXT_ADMISSION_CONFIGURATION_MISMATCH")
+                if administrator:
+                    admit(self, c, context, row)
                 return True
             original = c.execute(
                 "SELECT d.record->'understanding' AS configuration FROM "
@@ -223,7 +229,8 @@ class ContextCallAdmission:
                 "synthetic_only": True,
                 "context_id": invocation.context_id,
                 "first_invocation_id": invocation.invocation_id,
-                "subject_id": SUBJECT,
+                "subject_id": context.principal_id,
+                **({"development_administrator": True} if administrator else {}),
                 "account_id": account["account_id"],
                 "account_revision": account["revision"],
                 "tenant_id": SCOPE[0],
@@ -237,7 +244,7 @@ class ContextCallAdmission:
                 (
                     invocation.context_id,
                     *SCOPE,
-                    SUBJECT,
+                    context.principal_id,
                     account["account_id"],
                     account["revision"],
                     invocation.invocation_id,
@@ -246,6 +253,8 @@ class ContextCallAdmission:
                 ),
             )
 
+            if administrator:
+                admit(self, c, context, request_row(c, invocation.context_id))
             return True
 
     def ready(self, context, invocation):

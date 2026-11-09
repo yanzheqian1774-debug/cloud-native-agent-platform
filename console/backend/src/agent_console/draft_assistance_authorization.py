@@ -112,6 +112,25 @@ class GrantAdministrationDraftAuthorization:
                 if self.context_admission is not None
                 else False
             )
+            from .development_administrator import for_service
+
+            if for_service(self.grants, context):
+                request_decision = self._current(context, request)
+                model_decision = self._current(context, model)
+                if request_decision is None or model_decision is None:
+                    raise AuthorityError("CONTEXT_ADMISSION_GRANTS_REQUIRED")
+                ready = self.context_admission is None or self.context_admission.ready(
+                    context, invocation
+                )
+                return DraftAuthorization(
+                    AuthorizationState.ALLOWED if ready else AuthorizationState.PENDING,
+                    request_decision.decision_id,
+                    model_decision.decision_id,
+                    request_decision.decision_id,
+                    model_decision.decision_id,
+                    0,
+                    0,
+                )
             if current is None:
                 submitted = self._submit(
                     context,
