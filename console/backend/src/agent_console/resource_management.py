@@ -159,6 +159,18 @@ class ResourceManagement:
         self.automation = SimpleNamespace(policy=policy, grants=grants)
 
     def authorize(self, call, members, key, work, issuer):
+        from .development_administrator import for_call
+
+        if for_call(call):
+            from .resource_policy_contract import DevelopmentAdministratorReview
+
+            return DevelopmentAdministratorReview(
+                call.context.principal_id,
+                call.policy_generation,
+                canonical_digest(
+                    [key, [(g.owner, g.action, g.exact_resource) for g in members]]
+                ),
+            )
         return ResourceAutomation.decide(
             self.automation,
             call,
@@ -170,11 +182,19 @@ class ResourceManagement:
         )
 
     def scope(self, context, kind):
+        from .development_administrator import for_service
+
+        if for_service(self.grants, context):
+            return context, None
         issuer = self.policy.authenticate(self.grants, context)
         work = self.policy.work(context, kind, self.grants.clock())
         return issuer, work
 
     def owned(self, call, kind, identity):
+        from .development_administrator import for_call
+
+        if for_call(call):
+            return True
         rows = call.connection.execute(
             "SELECT result FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'='resource-management-receipt.v1' AND result->>'kind'=%s AND result->>'identity'=%s AND result->>'action' IN ('create','import','adopt-prepared') LIMIT 201",
             (
@@ -744,6 +764,17 @@ def install_management(manager, authorizer):
                         kind,
                     ),
                 ).fetchall()
+                from .development_administrator import for_call
+
+                if for_call(call):
+                    rows = call.connection.execute(
+                        "SELECT resource_id identity FROM skill_mcp_resource.resources WHERE namespace=%s AND security_domain=%s AND kind=%s ORDER BY resource_id",
+                        (
+                            call.context.scope.tenant_id,
+                            call.context.scope.security_domain,
+                            kind,
+                        ),
+                    ).fetchall()
                 service = bind_service(manager.services[kind], call.connection)
                 scope = service.scope(
                     call.context.scope.tenant_id, call.context.scope.security_domain

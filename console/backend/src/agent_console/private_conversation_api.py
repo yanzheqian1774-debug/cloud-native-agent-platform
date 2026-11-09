@@ -251,7 +251,24 @@ def install_private_conversations(
             raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
         return reader(ctx, key, payload)
 
-    service = PrivateConversations(database_url, resolve) if database_url else None
+    from .development_administrator import authorized
+
+    def administrator_access(connection, context):
+        if context.principal_id != "human:development-admin":
+            return False
+        return authorized(
+            authorizer.authorization,
+            context,
+            generation=authorizer.controller.readiness.generation,
+            recovery_epoch=authorizer.controller.readiness.recovery_epoch,
+            connection=connection,
+        )
+
+    service = (
+        PrivateConversations(database_url, resolve, administrator_access)
+        if database_url
+        else None
+    )
     from .conversation_actions import ConversationActions
 
     actions = (
@@ -259,6 +276,22 @@ def install_private_conversations(
         if service
         else None
     )
+
+    @app.get("/api/workbench/v1/development-administrator")
+    def read_development_administrator(request: Request):
+        _, context = authenticate(request)
+        active = administrator_access(None, context)
+        return {
+            "result": {
+                "subject": context.principal_id,
+                "enabled": active,
+                "role": "DEVELOPMENT_ADMINISTRATOR" if active else None,
+                "allConversations": active,
+                "allResources": active,
+                "resourceApprovalRequired": not active,
+            }
+        }
+
     app.state.conversation_actions = actions
     if service:
         service.facts_reader = actions

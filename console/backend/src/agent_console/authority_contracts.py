@@ -122,7 +122,7 @@ class ExactGrant:
 
 @dataclass(frozen=True, slots=True)
 class CurrentExactGrantDecision:
-    """One complete, currently effective dynamic exact-grant decision."""
+    """One complete current decision: dynamic grant or explicit D12 development role."""
 
     decision_id: str
     context: TrustedRequestContext

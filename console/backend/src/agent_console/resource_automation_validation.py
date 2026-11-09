@@ -4,7 +4,7 @@ import json
 
 from .authority_contracts import AuthorityError
 from .prepared_native_composition import POLICY
-from .resource_automation_policy import source_digest
+from .resource_automation_policy import AdministratorWorkScope, source_digest
 from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
 from .skill_executor import SkillExecutorRegistry
 from .skill_invocation_domain import ExecutorRevision
@@ -48,14 +48,19 @@ def validate(
 ):
     if kind == "knowledge":
         digest = source_digest(content)
-        if digest not in work.sourceContentDigests:
+        if (
+            not isinstance(work, AdministratorWorkScope)
+            and digest not in work.sourceContentDigests
+        ):
             raise AuthorityError("RESOURCE_SOURCE_OUTSIDE_WORK_SCOPE")
         return {
             "sourceContentDigest": digest,
             "sourceSchema": json.loads(content["documents"][0]["chunks"][0]["content"])[
                 "schemaVersion"
             ],
-            "check": "EXACT_SOURCE_SCOPE_AND_SCHEMA",
+            "check": "DEVELOPMENT_ROLE_SOURCE_AND_SCHEMA"
+            if isinstance(work, AdministratorWorkScope)
+            else "EXACT_SOURCE_SCOPE_AND_SCHEMA",
         }
     if kind == "skill":
         operations = content.get("operations", [])

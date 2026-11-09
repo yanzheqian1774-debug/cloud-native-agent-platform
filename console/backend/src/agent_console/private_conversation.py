@@ -37,8 +37,9 @@ def disposition(content, focused, link_count):
 
 
 class PrivateConversations:
-    def __init__(self, database_url, resolve_link):
+    def __init__(self, database_url, resolve_link, administrator_access=None):
         self.database_url, self.resolve_link = database_url, resolve_link
+        self.administrator_access = administrator_access or (lambda c, ctx: False)
 
     def connect(self):
         return psycopg.connect(
@@ -52,9 +53,14 @@ class PrivateConversations:
     def owned(self, c, ctx, identity, lock=False):
         row = c.execute(
             "SELECT * FROM private_conversation.conversations WHERE tenant_id=%s "
-            "AND security_domain=%s AND conversation_id=%s AND owner_id=%s"
+            "AND security_domain=%s AND conversation_id=%s AND (owner_id=%s OR %s)"
             + (" FOR UPDATE" if lock else ""),
-            (*self.scope(ctx), identity, ctx.principal_id),
+            (
+                *self.scope(ctx),
+                identity,
+                ctx.principal_id,
+                self.administrator_access(c, ctx),
+            ),
         ).fetchone()
         if not row:
             raise ConversationError("CONVERSATION_NOT_FOUND", 404)
@@ -73,9 +79,9 @@ class PrivateConversations:
             rows = c.execute(
                 "SELECT conversation_id,title,version,created_at,archived_at FROM "
                 "private_conversation.conversations WHERE tenant_id=%s AND "
-                "security_domain=%s AND owner_id=%s ORDER BY created_at "
+                "security_domain=%s AND (owner_id=%s OR %s) ORDER BY created_at "
                 "DESC,conversation_id",
-                (*self.scope(ctx), ctx.principal_id),
+                (*self.scope(ctx), ctx.principal_id, self.administrator_access(c, ctx)),
             ).fetchall()
         return {"items": rows}
 

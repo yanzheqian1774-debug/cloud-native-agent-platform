@@ -90,6 +90,31 @@ class PreparedResourceOwner:
         return self._handle(call)
 
     def publish_policy(self, call, proof):
+        from .resource_policy_contract import DevelopmentAdministratorReview
+
+        if isinstance(proof, DevelopmentAdministratorReview):
+            from .development_administrator import for_call
+
+            if not for_call(call):
+                raise WorkbenchOwnerError("DEVELOPMENT_ADMINISTRATOR_REQUIRED", 403)
+            proof = DevelopmentAdministratorReview(
+                call.context.principal_id,
+                call.policy_generation,
+                canonical_digest([dict(call.path), dict(call.payload)]),
+            )
+            from dataclasses import replace
+
+            # D12 requester and publisher are the same real actor. Keep the
+            # inner publication receipt distinct from the outer authoring receipt.
+            call = replace(
+                call,
+                payload={
+                    **call.payload,
+                    "idempotencyKey": "d12-publication:"
+                    + call.payload["idempotencyKey"],
+                },
+            )
+            return self._handle(call, proof)
         # Only the server-owned coordinator calls this port after authenticating
         # the policy issuer and committing its exact POLICY grant in this UoW.
         proof.record(proof.issuer)

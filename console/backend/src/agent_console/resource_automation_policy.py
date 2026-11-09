@@ -29,6 +29,13 @@ class WorkScope(BaseModel):
     expiresAt: datetime
 
 
+class AdministratorWorkScope(WorkScope):
+    """D12 server-created scope; never accepted by the policy configuration parser."""
+
+    sourceContentDigests: tuple[str, ...] = ()
+    allDevelopmentSources: bool = True
+
+
 class AutomationPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schemaVersion: str = "resource-preparation-policy.v1"

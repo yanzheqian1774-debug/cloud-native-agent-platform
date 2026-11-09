@@ -212,6 +212,10 @@ class DefinitionManagement(ResourceManagement):
         )
 
     def owned(self, call, kind, identity):
+        from .development_administrator import for_call
+
+        if for_call(call):
+            return True
         return (
             call.connection.execute(
                 "SELECT 1 FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND result->>'schemaVersion'=%s AND result->>'kind'=%s AND result->>'identity'=%s AND result->>'action'='create'",
@@ -268,6 +272,14 @@ class DefinitionManagement(ResourceManagement):
                 kind,
             ),
         ).fetchall()
+        from .development_administrator import for_call
+
+        if for_call(call):
+            table, column = TABLES[kind]
+            rows = call.connection.execute(
+                f"SELECT {column} identity FROM {table} WHERE namespace=%s AND security_domain=%s ORDER BY {column}",
+                (call.context.scope.tenant_id, call.context.scope.security_domain),
+            ).fetchall()
         service = bind_service(self.services[kind], call.connection)
         p = self.principal(call)
         items = []

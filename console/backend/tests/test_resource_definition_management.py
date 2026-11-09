@@ -810,3 +810,100 @@ def test_knowledge_snapshot_binding_requires_same_published_revision(definitions
             expectedVersion=1,
         )
     assert index.upserts == 1
+
+
+@pytest.mark.parametrize("kind", ["knowledge", "agent"])
+def test_d12_role_publication_uses_actual_admin_and_no_grant_queue(
+    definitions, monkeypatch, kind
+):
+    # Publication-owner integration: authentication/revocation of the role is
+    # exercised separately against real local sessions in test_development_administrator.
+    import agent_console.development_administrator as role
+
+    a, manager = definitions
+    a.subject = replace(a.subject, principal_id="human:development-admin")
+    monkeypatch.setattr(
+        role,
+        "for_service",
+        lambda service, ctx, connection=None: (
+            ctx.principal_id == "human:development-admin"
+        ),
+    )
+    monkeypatch.setattr(
+        role,
+        "for_call",
+        lambda call: call.context.principal_id == "human:development-admin",
+    )
+    monkeypatch.setattr(
+        a.adapter.authorization,
+        "has_current_grants",
+        lambda context, grants, **kwargs: tuple(True for _ in grants),
+    )
+    manager.policy = manager.policy.model_copy(
+        update={"enabled": False, "workScopes": ()}
+    )
+
+    def requests():
+        with a.authority.connection_scope() as c:
+            return c.execute(
+                "SELECT count(*) n FROM authorization_admin.grant_requests"
+            ).fetchone()["n"]
+
+    before = requests()
+    payload = {"source": SOURCE} if kind == "knowledge" else {"content": AGENT}
+    created = command(
+        (a, manager),
+        kind,
+        "create",
+        name="D12 administrator publication",
+        key="d12-" + kind + "-create",
+        **payload,
+    )
+    validated = command(
+        (a, manager),
+        kind,
+        "validate",
+        identity=created["identity"],
+        expectedVersion=created["aggregateVersion"],
+        key="d12-" + kind + "-validate",
+    )
+    published = command(
+        (a, manager),
+        kind,
+        "publish",
+        identity=created["identity"],
+        expectedVersion=validated["aggregateVersion"],
+        key="d12-" + kind + "-publish",
+    )
+    replayed = command(
+        (a, manager),
+        kind,
+        "publish",
+        identity=created["identity"],
+        expectedVersion=validated["aggregateVersion"],
+        key="d12-" + kind + "-publish",
+    )
+    assert replayed == published
+    assert requests() == before
+    assert published["policyIssuer"] == "human:development-admin"
+    record = published["resource"]
+    assert record["publishedRevisionId"] is not None
+    with a.authority.connection_scope() as c:
+        receipts = c.execute(
+            "SELECT result FROM execution_authority.prepared_resource_commands WHERE actor_id='human:development-admin' AND result ? 'policyBasis'"
+        ).fetchall()
+        assert any(
+            r["result"]["policyBasis"]["type"] == "DEVELOPMENT_ADMINISTRATOR"
+            for r in receipts
+        )
+    if kind == "knowledge":
+        with pytest.raises(WorkbenchOwnerError, match="EMPTY_SOURCE_CONTENT"):
+            command(
+                (a, manager),
+                kind,
+                "create",
+                name="Invalid D12",
+                key="d12-invalid",
+                source={**SOURCE, "content": " "},
+            )
+    assert requests() == before

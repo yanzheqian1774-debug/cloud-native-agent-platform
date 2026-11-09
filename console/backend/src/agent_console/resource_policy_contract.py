@@ -28,3 +28,50 @@ class PolicyReview:
 
 def reviewed_state(review):
     return "POLICY_REVIEWED" if review.get("policyBasis") else "HUMAN_REVIEWED"
+
+
+@dataclass(frozen=True, slots=True)
+class DevelopmentAdministratorReview:
+    """Constructed only by the role-checked internal publication entry (D12)."""
+
+    issuer: str
+    generation: int
+    command_digest: str
+
+    @property
+    def policy_id(self):
+        return "D12-development-administrator"
+
+    @property
+    def policy_version(self):
+        return str(self.generation)
+
+    @property
+    def policy_digest(self):
+        from .resource_use_domain import canonical_digest
+
+        return canonical_digest([self.policy_id, self.generation, self.issuer])
+
+    @property
+    def decision_id(self):
+        return "development-role-decision:" + self.command_digest
+
+    @property
+    def subject(self):
+        return self.issuer
+
+    def record(self, actor):
+        if (
+            actor != "human:development-admin"
+            or actor != self.issuer
+            or self.generation < 1
+            or len(self.command_digest) != 64
+        ):
+            raise ValueError("RESOURCE_ADMINISTRATOR_PROOF_INVALID")
+        return {
+            "type": "DEVELOPMENT_ADMINISTRATOR",
+            "issuer": actor,
+            "subject": actor,
+            "authorityGeneration": self.generation,
+            "commandDigest": self.command_digest,
+        }

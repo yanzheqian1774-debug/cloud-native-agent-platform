@@ -269,6 +269,15 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         credential_current = credential is not None
         if not credential_current:
             return tuple(False for _ in grants)
+        from .development_administrator import configured
+
+        if configured(self.generation, context, credential):
+            # Session/account validity and active generation were checked above.
+            # Revocation of the role is an immutable generation change, not a
+            # per-resource short-lived grant. Unavailable authority still denies.
+            return tuple(
+                state is not DynamicAuthorizationState.UNAVAILABLE for state in states
+            )
         return tuple(
             state
             not in {
@@ -355,6 +364,41 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             configure_transaction=configure_transaction,
         )
         credential, _ = self._current_credential(context, credential_id, now=now)
+        from .development_administrator import configured
+
+        if (
+            configured(self.generation, context, credential)
+            and self.has_current_grants(
+                context,
+                (grant,),
+                now=now,
+                generation=generation,
+                recovery_epoch=self.recovery_epoch,
+                connection=connection,
+                configure_transaction=connection is None,
+            )[0]
+        ):
+            # D12 role-backed decision. Its identifier explicitly names the role,
+            # not a fabricated grant-admin row. Consumers persist this reference.
+            return CurrentExactGrantDecision(
+                "development-role:"
+                + canonical_digest(
+                    [
+                        generation,
+                        self.generation.digest,
+                        context.session_id_or_service_credential_id,
+                        grant.owner,
+                        grant.action,
+                        grant.exact_resource,
+                    ]
+                ),
+                context,
+                grant,
+                generation,
+                "D12:" + self.generation.policy_version,
+                now,
+                now + timedelta(minutes=5),
+            )
         if credential is None or decision is None:
             return None
         if any(

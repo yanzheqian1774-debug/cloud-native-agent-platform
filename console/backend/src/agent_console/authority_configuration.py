@@ -202,6 +202,7 @@ class StaticAuthorityGeneration:
     )
 
     local_accounts: tuple[LocalAccountBinding, ...] = ()
+    development_administrator: bool = False
 
     def account_by_id(self, identity: CredentialId) -> LocalAccountBinding | None:
         return next(
@@ -378,7 +379,10 @@ class StaticAuthorityLoader:
         }
         if (
             not isinstance(document, dict)
-            or set(document) not in (expected_keys, expected_keys | {"localAccounts"})
+            or not expected_keys <= set(document)
+            or set(document)
+            - expected_keys
+            - {"localAccounts", "developmentAdministrator"}
             or document.get("schemaVersion") != SCHEMA_VERSION
         ):
             raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
@@ -439,6 +443,7 @@ class StaticAuthorityLoader:
             expected = {
                 "demo324": "human:demo323-requester",
                 "reviewer324": "human:demo323-approver",
+                "devadmin": "human:development-admin",
             }
             source = next(
                 (
@@ -471,6 +476,11 @@ class StaticAuthorityLoader:
             c.credential_id.startswith("local-account:") for c in credentials
         ):
             raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
+        administrator = document.get("developmentAdministrator", False)
+        if not isinstance(administrator, bool) or (
+            administrator and not any(a.username == "devadmin" for a in accounts)
+        ):
+            raise AuthorityError("AUTHORITY_CONFIGURATION_INVALID")
         return StaticAuthorityGeneration(
             generation=generation,
             digest=digest,
@@ -481,6 +491,7 @@ class StaticAuthorityLoader:
             credential_revocation_tombstones=tombstones,
             static_grant_revocation_tombstones=grant_tombstones,
             local_accounts=tuple(accounts),
+            development_administrator=administrator,
         )
 
     @staticmethod

@@ -196,3 +196,29 @@ def test_placement_exact_read_is_registered_without_other_actions() -> None:
                 ExactGrant("PLACEMENT", action, "placement:collection"),
                 allow_meta=False,
             )
+
+
+def test_development_administrator_configuration_is_explicit_and_local_only():
+    document = generation_document()
+    document["developmentAdministrator"] = True
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONFIGURATION_INVALID"):
+        StaticAuthorityLoader._parse(document, digest="a" * 64)
+    credential = document["credentials"][0]
+    credential.update(
+        principalId="human:development-admin",
+        tenantId="s5-323-demo",
+        securityDomain="isolated-real-demo",
+    )
+    document["localAccounts"] = [
+        {"username": "devadmin", "grantSourceCredentialId": credential["credentialId"]}
+    ]
+    assert StaticAuthorityLoader._parse(
+        document, digest="a" * 64
+    ).development_administrator
+    document["developmentAdministrator"] = "true"
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONFIGURATION_INVALID"):
+        StaticAuthorityLoader._parse(document, digest="a" * 64)
+    document["developmentAdministrator"] = True
+    credential["tenantId"] = "production"
+    with pytest.raises(AuthorityError, match="AUTHORITY_CONFIGURATION_INVALID"):
+        StaticAuthorityLoader._parse(document, digest="a" * 64)

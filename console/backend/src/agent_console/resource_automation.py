@@ -117,7 +117,25 @@ class ResourceAutomation:
         self.sales_v2_candidate = sales_v2_candidate
 
     def authenticate(self, context):
+        from .development_administrator import for_service
+
+        if for_service(self.grants, context):
+            return context
         return self.policy.authenticate(self.grants, context)
+
+    def work(self, context, root, now):
+        from .development_administrator import for_service
+        from .resource_automation_policy import AdministratorWorkScope
+
+        if for_service(self.grants, context):
+            return AdministratorWorkScope(
+                namespace=context.scope.tenant_id,
+                securityDomain=context.scope.security_domain,
+                subject=context.principal_id,
+                problem=root,
+                expiresAt=now + timedelta(hours=1),
+            )
+        return self.policy.work(context, root, now)
 
     def decide(
         self, call, members, key, work, issuer, *, purpose="RESOURCE_PREPARATION"
@@ -125,6 +143,15 @@ class ResourceAutomation:
         members = tuple(
             sorted(set(members), key=lambda g: (g.owner, g.action, g.exact_resource))
         )
+        from .development_administrator import for_call
+        from .resource_policy_contract import DevelopmentAdministratorReview
+
+        if for_call(call):
+            return DevelopmentAdministratorReview(
+                call.context.principal_id,
+                call.policy_generation,
+                canonical_digest([key, [vars_grant(g) for g in members]]),
+            )
         for g in members:
             if self.grants.authorization.has_dynamic_revocation(
                 call.context,
@@ -200,7 +227,7 @@ class ResourceAutomation:
         try:
             self.authenticate(context)
             if root is not None:
-                self.policy.work(context, root, self.grants.clock())
+                self.work(context, root, self.grants.clock())
         except (AuthorityError, OSError, ValueError):
             return {"enabled": False}
         return {
@@ -250,7 +277,7 @@ class ResourceAutomation:
                 ]
             )
             require_supported_lineage(app, cur, scope, plan)
-            work = self.policy.work(
+            work = self.work(
                 call.context, plan.semantics.target.problem, self.grants.clock()
             )
             # Existing publication and data-scope checks precede any new privilege.
@@ -346,7 +373,7 @@ class ResourceAutomation:
             confirmed = app.repository.read_plan(cur, scope, identity, version)
             plan = ConfirmedPlanRevision.model_validate(confirmed["plan"])
             require_supported_lineage(app, cur, scope, plan)
-            work = self.policy.work(
+            work = self.work(
                 call.context, plan.semantics.target.problem, self.grants.clock()
             )
             digest = canonical_digest(
@@ -560,9 +587,9 @@ class ResourceAutomation:
                 "planDigest": confirmed["digest"],
                 "state": state,
                 "policy": {
-                    "id": self.policy.policyId,
-                    "version": self.policy.policyVersion,
-                    "digest": self.policy.digest,
+                    "id": base_proof.policy_id,
+                    "version": base_proof.policy_version,
+                    "digest": base_proof.policy_digest,
                     "actor": issuer.principal_id,
                 },
                 "businessScopeDecision": base_proof.decision_id,
