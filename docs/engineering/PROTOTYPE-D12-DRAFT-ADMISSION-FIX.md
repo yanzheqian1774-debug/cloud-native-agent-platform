@@ -27,3 +27,12 @@ conversation ownership, current administrator authority, version, idempotency an
 claim checks run again at the write boundary. Source reads never dispatch owners.
 Real PostgreSQL coverage exercises source/intent/claim/link/focused-message reads
 and account disable during the external read: the later write must still be denied.
+
+## Delayed confirmation
+
+A successful draft may be confirmed after its five-minute admission lease expires.
+At the existing owner binding boundary, a still-current D12 administrator refreshes
+only its own draft context admission in the same transaction as Problem creation.
+The original model call is never repeated. Revoked decisions and stale account
+revisions continue to deny; ordinary callers are unchanged. This is role continuity,
+not additional budget or approval of a new provider call.

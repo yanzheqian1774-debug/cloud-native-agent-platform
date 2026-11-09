@@ -80,3 +80,34 @@ def admit(service, connection, context, row):
         recovery_epoch=grants.recovery_epoch,
     )
     return True
+
+
+def bind_created_object(service, legacy):
+    """Refresh a current role's lease atomically with linking its successful draft."""
+
+    def bind(connection, context, owner, result, **kwargs):
+        invocation_id = kwargs.get("draft_invocation_id")
+        if (
+            owner == "BUSINESS_PROBLEM"
+            and invocation_id
+            and for_service(service.delegation.grants, context, connection)
+        ):
+            row = connection.execute(
+                "SELECT r.* FROM authorization_admin.context_call_requests r "
+                "JOIN draft_assistance.invocation_versions v ON "
+                "r.context_id=v.record->>'contextId' "
+                "WHERE v.namespace=%s AND v.security_domain=%s "
+                "AND v.invocation_id=%s AND r.subject_id=%s "
+                "ORDER BY v.aggregate_version DESC LIMIT 1",
+                (
+                    context.scope.tenant_id,
+                    context.scope.security_domain,
+                    invocation_id,
+                    context.principal_id,
+                ),
+            ).fetchone()
+            if row and row["record"].get("development_administrator"):
+                admit(service, connection, context, row)
+        return legacy(connection, context, owner, result, **kwargs)
+
+    return bind

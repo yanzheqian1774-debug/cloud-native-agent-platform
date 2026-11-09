@@ -42,6 +42,35 @@ def test_admin_draft_admission_is_current_audited_and_has_no_resource_requests(
     assert state["decision"]["issuer_id"] == "policy:development-administrator:D12"
     assert state["decision"]["record"]["budget_limits_unchanged"] is True
     assert state["request"]["record"]["configuration"] == env.limits
+    from agent_console.context_call_admission import active, request_row
+    from agent_console.development_draft_admission import bind_created_object
+
+    with repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO authorization_admin.context_call_decisions "
+            "SELECT admission_id||':expired-fixture',context_id,ordinal+1,"
+            "issuer_id,subject_id,generation,recovery_epoch,"
+            "idempotency_key||':expired-fixture',payload_digest,record,"
+            "now()-interval '10 minutes',now()-interval '5 minutes' "
+            "FROM authorization_admin.context_call_decisions WHERE admission_id=%s",
+            (state["decision"]["admission_id"],),
+        )
+
+    def legacy(connection, ctx, owner, result, **kwargs):
+        active(connection, request_row(connection, invocation.context_id), env.limits)
+        return result
+
+    with repo.connection_scope() as c:
+        value = bind_created_object(env.admission, legacy)(
+            c,
+            context,
+            "BUSINESS_PROBLEM",
+            {"checked": True},
+            draft_invocation_id=invocation.invocation_id,
+        )
+        assert value == {"checked": True}
+    state = env.admission.read(context, invocation.context_id)
+    assert state["decision"]["ordinal"] == 3
     with repo.connection_scope() as c:
         assert (
             c.execute(
@@ -55,7 +84,7 @@ def test_admin_draft_admission_is_current_audited_and_has_no_resource_requests(
                 "WHERE context_id=%s",
                 (invocation.context_id,),
             ).fetchone()["n"]
-            == 1
+            == 3
         )
         c.execute(
             "INSERT INTO authorization_admin.context_call_revocations"

@@ -377,6 +377,9 @@ def build_workbench_composition(
                         planning_admission, context
                     ),
                 )
+                from .development_draft_admission import bind_created_object as bind_d12
+
+                task_binding = bind_d12(admission, task_binding)
                 draft_assistance.authorization.context_admission = admission
                 draft_assistance.budget.context_admission = admission
                 delegation_routes += (install_context_call_admission(admission),)
