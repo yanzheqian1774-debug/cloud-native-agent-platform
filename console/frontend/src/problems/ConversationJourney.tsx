@@ -2,14 +2,17 @@ import {useEffect,useEffectEvent,useRef,useState} from 'react';
 import {beginDraftAssistance,createBusinessProblem,linkDraftAssistanceProblem,readBusinessProblem,readWorkbenchSession,writeCriterion,writeCriteriaSet,transitionBusinessProblem,type WorkbenchSession,type DraftAssistanceResult,type BusinessProblemRevision} from '../api/businessWorkspace';
 import {conversationRequest,type PrivateConversation} from '../api/privateConversation';
 import {planningRequest,type Invocation,type PlanningBody} from '../planning/planningRequests';
-import {confirmPolicy,prepareResources,continueReadonlyWork,selectAutomaticResources,type ExactRef,type Confirmation} from '../planning/api';
+import {confirmPolicy,prepareResources,continueReadonlyWork,selectAutomaticResources,readResourceCoverage,type ExactRef,type Confirmation} from '../planning/api';
 import {preparedRequest,type ExecutionView} from '../api/preparedExecution';
 import {understandingContent,appendUserMessage,type UserFactMessage} from './problemUnderstandingModel';
 import {PreparedExecutionPanel} from './PreparedExecutionPanel';
 
 type Source={source:ExactRef;name:string;periods:string[];sourceSchema:string;synthetic:boolean};
-type State={key:string;phase:string;question:string;messages:UserFactMessage[];sources?:Source[];source?:Source;draft?:DraftAssistanceResult;problem?:BusinessProblemRevision;criterion?:string;planning?:Invocation;confirmation?:Confirmation;execution?:string;error?:string;pending?:string;log:string[]};
+type State={cycle?:number;coverageFeedback?:string;expectedPlanVersion?:number;key:string;phase:string;question:string;messages:UserFactMessage[];sources?:Source[];source?:Source;draft?:DraftAssistanceResult;problem?:BusinessProblemRevision;criterion?:string;planning?:Invocation;confirmation?:Confirmation;execution?:string;error?:string;pending?:string;log:string[]};
 type Journal={version:number;state:State|null};
+const coverageFailure='Error: AUTOMATIC_SELECTION_COVERAGE_BLOCKED';
+const canRepair=(s:State)=>s.phase==='SELECT_RESOURCES'&&s.pending==='select-resources'&&s.error===coverageFailure&&(s.cycle??0)<2;
+
 export function ConversationJourney({conversation,session,onActive}:{conversation:string;session:WorkbenchSession;onActive:(active:boolean)=>void}){
  const [journal,setJournal]=useState<Journal|null>(null),[busy,setBusy]=useState(false),[reply,setReply]=useState(''),[error,setError]=useState(''),[execution,setExecution]=useState<ExecutionView|null>(null);
  const current=useRef<Journal|null>(null),flight=useRef(false),alive=useRef(true);
@@ -17,10 +20,19 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  async function verify(){const actual=await readWorkbenchSession();if(JSON.stringify(actual.principal)!==JSON.stringify(session.principal))throw Error('登录身份已变化，请重新登录后继续。')}
  async function save(state:State){await verify();const j=await conversationRequest<Journal>('/'+conversation+'/journey',session.csrfToken,{expectedVersion:current.current!.version,state});current.current=j;if(alive.current)setJournal(j);return state}
  async function pending(s:State,name:string){return save({...s,pending:name,error:undefined})}
+ async function repairCoverage(s:State){
+  if((s.cycle??0)>=2)throw Error('现有能力仍不能完成该方案，已保留资料与方案缺口。');
+  s=await pending(s,'coverage-repair');const p=s.confirmation!.plan;
+  const coverage=await readResourceCoverage(p.plan_id,p.version);
+  if(coverage.planId!==p.plan_id||coverage.planVersion!==p.version||coverage.planDigest!==s.confirmation!.digest||coverage.subject!==session.principal.principalId)throw Error('RESOURCE_COVERAGE_CONTEXT_MISMATCH');
+  const reasons=[...new Set(coverage.candidates.map(c=>c.reason).filter(Boolean))].slice(0,8);
+  return save({...s,pending:undefined,error:undefined,cycle:(s.cycle??0)+1,expectedPlanVersion:p.version,phase:'PLAN',coverageFeedback:('现有资源对前版方案的实际核验未通过，原因：'+reasons.join('、')+'。请形成保留原目标、范围、标准与来源的后继方案。已发布Knowledge来源可由观察到的READ_DATA技能读取；不要为了读取该内部快照额外虚构MCP依赖。仅在真实需要外部接口时保留该缺口；不得伪称能力已具备。').slice(0,500),log:[...s.log,'正在根据实际可用能力调整方案，无需补充技术描述。']});
+ }
  async function run(){
-  if(flight.current||!current.current?.state||current.current.state.pending)return;
+  if(flight.current||!current.current?.state||(current.current.state.pending&&!canRepair(current.current.state)))return;
   flight.current=true;setBusy(true);setError('');let s=current.current.state;
   try{while(alive.current){await verify();
+   if(canRepair(s)){s=await repairCoverage(s);continue;}
    if(s.phase==='UNDERSTAND'){
     s=await pending(s,'understanding');const previous=s.draft?.state==='SUCCEEDED'?s.draft:undefined;
     const content=understandingContent(s.messages,s.messages.length,previous?.draft??null,previous?.understanding??null,previous?.clarificationQuestion??null);
@@ -48,15 +60,16 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
     s=await save({...s,pending:undefined,phase:'PLAN',log:[...s.log,'正在结合资料和可用能力制定分析方案。']});
    }else if(s.phase==='PLAN'){
     s=await pending(s,'planning');
-    const routed=await planningRequest<{state:string;planningRequest:PlanningBody|null}>('question-activity-input',{question:s.question,problemId:s.problem!.business_problem_id,source:s.source!.source,idempotencyKey:s.key+':planning'});
+    const routed=await planningRequest<{state:string;planningRequest:PlanningBody|null}>('question-activity-input',{question:s.question,problemId:s.problem!.business_problem_id,source:s.source!.source,idempotencyKey:s.key+':planning'+(s.cycle?':'+s.cycle:'')});
     if(!routed.planningRequest)throw Error('暂不能根据所选资料开始分析：'+routed.state);
+    if(s.coverageFeedback&&s.planning?.result.proposal){const old=s.planning.result.proposal;routed.planningRequest={...routed.planningRequest,source_proposal:{resource_id:old.proposal_id,revision_id:String(old.revision),digest:s.planning.result.proposal_digest!},answers:[...routed.planningRequest.answers,s.coverageFeedback]};}
     await planningRequest('planning-v2/preflight',routed.planningRequest);
     const planning=await planningRequest<Invocation>('planning-v2/invocations',routed.planningRequest);
     if(planning.result.technical_status!=='SUCCEEDED'||!planning.result.proposal)throw Error('分析方案尚未就绪：'+(planning.result.questions?.join('；')||planning.result.reason||planning.result.kind||planning.result.technical_status));
     s=await save({...s,pending:undefined,planning,phase:'CONFIRM',log:[...s.log,'分析方案已生成，正在核对并准备执行资源。']});
    }else if(s.phase==='CONFIRM'){
     s=await pending(s,'confirm');const proposal=s.planning!.result.proposal!,digest=s.planning!.result.proposal_digest!;
-    const {confirmation}=await confirmPolicy(proposal.proposal_id,proposal.revision,digest,proposal.semantics.target.problem,0,s.key+':confirm',session.csrfToken);
+    const {confirmation}=await confirmPolicy(proposal.proposal_id,proposal.revision,digest,proposal.semantics.target.problem,s.expectedPlanVersion??0,s.key+':confirm:'+(s.cycle??0),session.csrfToken);
     s=await save({...s,pending:undefined,confirmation,phase:'SELECT_RESOURCES'});
    }else if(s.phase==='SELECT_RESOURCES'){
     const original=s.confirmation!;
@@ -64,12 +77,13 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
      s=await save({...s,phase:'RESOURCES'});
     }else{
      s=await pending(s,'select-resources');
-     const selected=await selectAutomaticResources(original.plan.plan_id,original,s.key+':selection',session.csrfToken);
-     s=await save({...s,pending:undefined,confirmation:selected.confirmation,phase:'RESOURCES'});
+     try{const selected=await selectAutomaticResources(original.plan.plan_id,original,s.key+':selection:'+(s.cycle??0),session.csrfToken);
+     s=await save({...s,pending:undefined,confirmation:selected.confirmation,phase:'RESOURCES'});}
+     catch(e){if(String(e)!==coverageFailure)throw e;s=await repairCoverage(s);}
     }
    }else if(s.phase==='RESOURCES'){
     s=await pending(s,'resources');const plan=s.confirmation!.plan;
-    const ready=await prepareResources(plan.plan_id,plan.version,s.key+':resources',session.csrfToken);
+    const ready=await prepareResources(plan.plan_id,plan.version,s.key+':resources:'+(s.cycle??0),session.csrfToken);
     if(ready.state!=='READY')throw Error('分析所需能力尚未全部就绪：'+ready.resources.filter(r=>r.reason).map(r=>r.reason).join('；'));
     s=await save({...s,pending:undefined,phase:'EXECUTE',log:[...s.log,'资源核验完成，正在执行分析并生成结果。']});
    }else if(s.phase==='EXECUTE'){
@@ -81,7 +95,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  }
  const runEffect=useEffectEvent(run),verifyEffect=useEffectEvent(verify);
  const state=journal?.state;
- useEffect(()=>{if(state&&!state.pending&&!['CLARIFY','RUNNING','DONE'].includes(state.phase))void runEffect();},[state,busy]); // Each owner command is preceded by a durable CAS claim.
+ useEffect(()=>{if(state&&(!state.pending||canRepair(state))&&!['CLARIFY','RUNNING','DONE'].includes(state.phase))void runEffect();},[state,busy]); // Each owner command is preceded by a durable CAS claim.
  useEffect(()=>{if(!state?.execution)return;let live=true;const refresh=async()=>{try{await verifyEffect();const v=await preparedRequest<ExecutionView>(state.execution!);if(live)setExecution(v)}catch(e){if(live)setError(String(e))}};void refresh();const timer=setInterval(()=>void refresh(),3000);return()=>{live=false;clearInterval(timer)}},[state?.execution]);
  async function answer(text:string,source?:Source){if(flight.current||!state)return;flight.current=true;setBusy(true);try{await verify();const c=await conversationRequest<PrivateConversation>('/'+conversation);await conversationRequest('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':answer:'+state.messages.length,content:text});await save({...state,source:source??state.source,phase:'UNDERSTAND',pending:undefined,error:undefined,messages:appendUserMessage(state.messages,text),log:[...state.log,'已收到补充，继续理解并核对分析范围。']});setReply('')}catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}}
  if(!state)return error?<p role="alert">{error}</p>:null;

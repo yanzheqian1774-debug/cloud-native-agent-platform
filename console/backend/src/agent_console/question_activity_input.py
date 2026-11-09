@@ -298,6 +298,7 @@ class QuestionActivityInput:
                 request.question,
                 hint,
                 "按原始提问、已确认目标/标准/来源形成FREE任务图，不固定步骤或数量，不要求用户选资源/角色/技术ID。业务字段用短标题、单句职责和简短I/O；技术引用只放对应字段，同样覆盖可复用逻辑角色。每个非READ任务的input_kinds集合必须等于全部depends_on任务的output_kind去重集合，且至少含该操作的一种兼容输入；候选表中的兼容集合不是本任务的实际输入。READ仅CONTEXT且无依赖。若需其它能力保留缺口，不声称就绪；缺业务事实时集中补问，不虚构事实、流程实例或效果。",
+                "本次来源是平台已发布的Knowledge只读快照。已观察到的READ_DATA技能可读取该内部快照，不需要为此虚构外部MCP连接器依赖；只有确实另需外部系统数据时才提出连接能力缺口，不得用内部快照冒充外部数据。",
                 *capability_answers,
             ),
             policy=PlanningPolicy(),
