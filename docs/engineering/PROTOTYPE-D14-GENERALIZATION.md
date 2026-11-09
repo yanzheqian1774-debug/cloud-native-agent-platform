@@ -38,3 +38,9 @@ Risks: schema support is not natural-language goal coverage; declared thresholds
 are source facts, not inferred business policy; execution success is not business
 resolution. Unknown requests must not be replayed. Exact source/role checks and
 existing budgets remain mandatory. No ordinary user's grants are broadened.
+
+Native adapter admission requires an explicit developmentTabularAgentName server
+configuration, not inference from sales/delivery worker names. Absent configuration
+blocks execution. Omitted optional configuration preserves the original policy
+digest; configuring it intentionally produces a new execution policy digest.
+Completed old receipts remain historical and are never replayed under that digest.

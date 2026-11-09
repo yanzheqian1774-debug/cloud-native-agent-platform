@@ -30,6 +30,9 @@ class ReadonlyContinuationPolicy(BaseModel):
     policyVersion: str
     enabled: bool = False
     works: tuple[ReadonlyWork, ...] = Field(max_length=128)
+    developmentTabularAgentName: str | None = Field(
+        default=None, pattern=r"^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"
+    )
 
     @classmethod
     def load(cls, path):
@@ -40,7 +43,7 @@ class ReadonlyContinuationPolicy(BaseModel):
 
     @property
     def digest(self):
-        return canonical_digest(self.model_dump(mode="json"))
+        return canonical_digest(self.model_dump(mode="json", exclude_none=True))
 
     def work(self, context, root, source_digest, now):
         if not self.enabled:

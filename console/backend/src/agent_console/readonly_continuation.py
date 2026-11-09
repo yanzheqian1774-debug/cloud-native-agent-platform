@@ -172,10 +172,16 @@ class ReadonlyContinuation:
                 candidates = {
                     w.nativeAgentName
                     for w in self.policy.works
-                    if (w.case == case or case == "tabular")
+                    if w.case == case
                     and w.namespace == scope.namespace
                     and w.securityDomain == scope.security_domain
                 }
+                if case == "tabular":
+                    candidates = (
+                        {self.policy.developmentTabularAgentName}
+                        if self.policy.developmentTabularAgentName
+                        else set()
+                    )
                 if not self.policy.enabled or len(candidates) != 1:
                     raise WorkbenchOwnerError(
                         "CONVERSATION_EXECUTOR_NOT_CONFIGURED", 409

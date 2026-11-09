@@ -188,3 +188,22 @@ def test_published_operation_contracts_resolve_and_reject_foreign_schema():
     broken["operations"][0]["name"] = "SEND_EMAIL"
     with pytest.raises(AuthorityError, match="OPERATION_UNAVAILABLE"):
         validate("skill", broken, None)
+
+
+def test_optional_native_target_preserves_old_policy_digest():
+    from agent_console.readonly_continuation_policy import ReadonlyContinuationPolicy
+    from agent_console.resource_use_domain import canonical_digest
+
+    old = {
+        "schemaVersion": "readonly-work-policy.v1",
+        "policyId": "p",
+        "policyVersion": "1",
+        "enabled": True,
+        "works": [],
+    }
+    policy = ReadonlyContinuationPolicy.model_validate(old)
+    assert policy.digest == canonical_digest(old)
+    configured = policy.model_copy(
+        update={"developmentTabularAgentName": "test-tabular"}
+    )
+    assert configured.digest != policy.digest
