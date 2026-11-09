@@ -158,3 +158,38 @@ for(const interrupted of [false,true])test('streamed understanding shows provisi
  if(interrupted){await expect(page.getByRole('alert')).toContainText('不会自动重发原请求');await page.reload();await expect(page.getByRole('alert')).toContainText('不会自动重发原请求');expect(s.modelCalls).toBe(0);}
  else{await expect(page.getByText('请确认环境',{exact:true})).toBeVisible();expect(await page.evaluate(()=>Reflect.get(window,'streamCalls')())).toBe(1);}
 });
+
+async function nativeQuestionFixture(page:Page){
+ const state=await fixture(page);state.journal={version:2,state:{key:'f3',phase:'RUNNING',execution:'a'.repeat(64),problem:{business_problem_id:'p'},messages:[],log:[]}};
+ const q={invocationId:'invocation',questionKey:'q1',questionDigest:'d1',question:'请确认适用《测试环境交接规范》还是《生产环境交接规范》？',expiresAt:new Date(Date.now()+600000).toISOString(),answer:null as string|null,expired:false};
+ const calls:{answer:string;questionKey:string}[]=[];let denied=false;
+ await page.route('**/api/workbench/v1/prepared-executions/**',async route=>{
+  if(route.request().url().endsWith('/native-progress'))return denied?route.fulfill({status:403,json:{}}):route.fulfill({json:{result:{steps:[],questions:[q],modelInFlight:false}}});
+  if(route.request().method()==='POST'){calls.push(route.request().postDataJSON());await new Promise(r=>setTimeout(r,300));q.answer=calls.at(-1)!.answer;return route.fulfill({json:{result:{}}});}
+  return route.fulfill({json:{result:{digest:'a'.repeat(64),preparation:{semantics:{tasks:[]},participants:[]},progress:{state:'RUNNING',tasks:[]},artifacts:[],resourceUses:[],events:[]}}});
+ });return {q,calls,deny:()=>{denied=true}};
+}
+test('F3 fixed composer and right rail preserve exact-question draft on reload and submit once',async({page})=>{
+ const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');
+ await expect(page.locator('.f3-progress-rail').getByLabel('全流程进展')).toBeVisible();
+ await expect(page.locator('.f3-composer-dock #native-clarification-reply')).toBeVisible();
+ await expect(page.getByRole('button',{name:'生产环境交接规范',exact:true})).toHaveAttribute('aria-pressed','false');
+ await page.getByRole('button',{name:'生产环境交接规范',exact:true}).click();await page.reload();
+ await expect(page.locator('#native-clarification-reply')).toHaveValue('《生产环境交接规范》');
+ const dock=await page.locator('.f3-composer-dock').boundingBox();const stream=page.locator('.px-message-stream');await stream.evaluate(e=>e.scrollTop=e.scrollHeight);expect(await page.locator('.f3-composer-dock').boundingBox()).toEqual(dock);
+ await page.getByRole('button',{name:'提交回答并继续'}).dblclick();await expect.poll(()=>s.calls.length).toBe(1);await expect(page.getByText('你的回答：《生产环境交接规范》。已沿用原任务继续处理。')).toBeVisible();expect(s.calls[0].questionKey).toBe('q1');
+});
+test('F3 expired or replaced question does not reuse another question draft',async({page})=>{
+ const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('保留的旧回答');
+ s.q.questionKey='q2';s.q.questionDigest='d2';await expect(page.locator('#native-clarification-reply')).toHaveValue('');s.q.expired=true;
+ await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await expect(page.getByText('本次等待期限已到，原记录保留；不会自动重跑。')).toBeVisible();expect(s.calls).toHaveLength(0);
+});
+test('F3 denied current progress removes answer action without submitting',async({page})=>{
+ const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');await expect(page.locator('#native-clarification-reply')).toBeVisible();s.deny();await expect(page.getByText('最新进展无法读取，请重新核对登录与权限。')).toBeVisible({timeout:10000});await expect(page.locator('#native-clarification-reply')).toHaveCount(0);expect(s.calls).toHaveLength(0);
+});
+test('F3 new conversation draft survives return and fits a narrow viewport',async({page})=>{
+ await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/work');await page.locator('#private-input').fill('新的问题草稿');await page.reload();await expect(page.locator('#private-input')).toHaveValue('新的问题草稿');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+test('F3 narrow active conversation keeps the answer visible and progress expandable',async({page})=>{
+ await nativeQuestionFixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/work?conversation=new');await expect(page.locator('#native-clarification-reply')).toBeVisible();const box=await page.locator('#native-clarification-reply').boundingBox();if(box!.y+box!.height>=844)console.log(await page.locator('#native-clarification-reply').evaluate(node=>{const out=[];for(let e:Element|null=node;e;e=e.parentElement){const c=getComputedStyle(e);out.push({class:e.className,rect:e.getBoundingClientRect().toJSON(),display:c.display,height:c.height,minHeight:c.minHeight,flex:c.flex,overflow:c.overflow})}return out}));expect(box!.y+box!.height).toBeLessThan(844);await page.getByRole('button',{name:'展开工作进展'}).click();await expect(page.getByLabel('全流程进展')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
