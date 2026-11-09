@@ -67,3 +67,14 @@ test('new-domain criteria stay in the conversation and unavailable tools remain 
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'使用现有能耗测试资料'})).toBeDisabled();await expect(page.getByText('“能耗测试资料”可读取，但缺少兼容的执行工具，暂不能自动分析。')).toBeVisible();expect(s.modelCalls).toBe(0);
  s.journal={version:3,state:{...s.journal.state,source,phase:'RUNNING'}};await page.reload();await expect(page.getByText('按计量点和单位分别统计超限记录')).toBeVisible();await expect(page.getByText('缺失数据单列',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);
 });
+
+
+test('resource recheck requires a matching durable no-execution receipt and uses a new key',async({page})=>{
+ const s=await fixture(page);let writes=0;
+ s.journal={version:10,state:{key:'k',question:prompt,phase:'RESOURCES',pending:'resources',error:'Error: 分析所需能力尚未全部就绪：',messages:[{id:'user:q',text:prompt}],log:[],confirmation:{digest:'c'.repeat(64),plan:{plan_id:'p',version:2}}}};
+ await page.route('**/planning-v2/p/resource-preparation**',async route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{result:{planId:'p',planVersion:2,planDigest:'c'.repeat(64),subject:'human:development-admin',state:'PARTIALLY_READY',executionStarted:false}}});
+  writes++;expect(route.request().postDataJSON().idempotencyKey).toBe('k:resources:0:recheck:1');return route.fulfill({json:{result:{state:'PARTIALLY_READY',assembly:{reason:'MISSING_TOOL'},resources:[]}}});
+ });
+ await page.goto('/work?conversation=new');await page.getByRole('button',{name:'重新核对可用能力'}).click();await expect.poll(()=>writes).toBe(1);await expect(page.getByText('Error: 分析所需能力尚未全部就绪：MISSING_TOOL')).toBeVisible();expect(s.modelCalls).toBe(0);
+});

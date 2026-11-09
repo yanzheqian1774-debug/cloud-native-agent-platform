@@ -889,9 +889,13 @@ class ResourceAutomation:
         ]
         self.decide(call, member_reads, key + ":canonical-member-read", work, issuer)
         self.proof_grants(call, member_reads)
-        if employee and set(members) == set(
-            EmployeeRevision.from_record(employee[1]["revision"]).members
-        ):
+        if employee and {
+            (m.kind, m.resource_id, m.revision_id, m.digest.removeprefix("sha256:"))
+            for m in members
+        } == {
+            (m.kind, m.resource_id, m.revision_id, m.digest.removeprefix("sha256:"))
+            for m in EmployeeRevision.from_record(employee[1]["revision"]).members
+        }:
             from .digital_employee_definition_postgres import (
                 PostgresEmployeeDefinitionRepository,
             )

@@ -2,13 +2,13 @@ import {useEffect,useEffectEvent,useRef,useState} from 'react';
 import {beginDraftAssistance,createBusinessProblem,linkDraftAssistanceProblem,readBusinessProblem,readWorkbenchSession,writeCriterion,writeCriteriaSet,transitionBusinessProblem,type WorkbenchSession,type DraftAssistanceResult,type BusinessProblemRevision} from '../api/businessWorkspace';
 import {conversationRequest,type PrivateConversation} from '../api/privateConversation';
 import {planningRequest,type Invocation,type PlanningBody} from '../planning/planningRequests';
-import {confirmPolicy,prepareResources,continueReadonlyWork,selectAutomaticResources,readResourceCoverage,type ExactRef,type Confirmation} from '../planning/api';
+import {confirmPolicy,prepareResources,readResourcePreparation,continueReadonlyWork,selectAutomaticResources,readResourceCoverage,type ExactRef,type Confirmation} from '../planning/api';
 import {preparedRequest,type ExecutionView} from '../api/preparedExecution';
 import {understandingContent,appendUserMessage,type UserFactMessage} from './problemUnderstandingModel';
 import {PreparedExecutionPanel} from './PreparedExecutionPanel';
 
 type Source={source:ExactRef;name:string;periods:string[];sourceSchema:string;synthetic:boolean;label?:string;completionCriteria?:string[];assessment?:{state:string;missingOperations:string[];limitations:string[]}};
-type State={cycle?:number;coverageFeedback?:string;expectedPlanVersion?:number;key:string;phase:string;question:string;messages:UserFactMessage[];sources?:Source[];source?:Source;draft?:DraftAssistanceResult;problem?:BusinessProblemRevision;criterion?:string;planning?:Invocation;confirmation?:Confirmation;execution?:string;error?:string;pending?:string;log:string[]};
+type State={resourceRetry?:number;cycle?:number;coverageFeedback?:string;expectedPlanVersion?:number;key:string;phase:string;question:string;messages:UserFactMessage[];sources?:Source[];source?:Source;draft?:DraftAssistanceResult;problem?:BusinessProblemRevision;criterion?:string;planning?:Invocation;confirmation?:Confirmation;execution?:string;error?:string;pending?:string;log:string[]};
 type Journal={version:number;state:State|null};
 const coverageFailure='Error: AUTOMATIC_SELECTION_COVERAGE_BLOCKED';
 const canRepair=(s:State)=>s.phase==='SELECT_RESOURCES'&&s.pending==='select-resources'&&s.error===coverageFailure&&(s.cycle??0)<2;
@@ -27,6 +27,16 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
   if(coverage.planId!==p.plan_id||coverage.planVersion!==p.version||coverage.planDigest!==s.confirmation!.digest||coverage.subject!==session.principal.principalId)throw Error('RESOURCE_COVERAGE_CONTEXT_MISMATCH');
   const reasons=[...new Set(coverage.candidates.map(c=>c.reason).filter(Boolean))].slice(0,8);
   return save({...s,pending:undefined,error:undefined,cycle:(s.cycle??0)+1,expectedPlanVersion:p.version,phase:'PLAN',coverageFeedback:('现有资源对前版方案的实际核验未通过，原因：'+reasons.join('、')+'。请形成保留原目标、范围、标准与来源的后继方案。已发布Knowledge来源可由观察到的READ_DATA技能读取；不要为了读取该内部快照额外虚构MCP依赖。仅在真实需要外部接口时保留该缺口；不得伪称能力已具备。').slice(0,500),log:[...s.log,'正在根据实际可用能力调整方案，无需补充技术描述。']});
+ }
+ function resourceKey(s:State){return s.key+':resources:'+(s.cycle??0)+(s.resourceRetry?':recheck:'+s.resourceRetry:'')}
+ async function recheckResources(){
+  if(flight.current||!current.current?.state)return;flight.current=true;setBusy(true);
+  try{const s=current.current.state;await verify();const p=s.confirmation!.plan;
+   const receipt=await readResourcePreparation(p.plan_id,p.version,resourceKey(s));
+   if(receipt.planId!==p.plan_id||receipt.planVersion!==p.version||receipt.planDigest!==s.confirmation!.digest||receipt.subject!==session.principal.principalId||receipt.executionStarted!==false)throw Error('RESOURCE_PREPARATION_CONTEXT_MISMATCH');
+   if(!['READY','PARTIALLY_READY','BLOCKED'].includes(receipt.state))throw Error('RESOURCE_PREPARATION_OUTCOME_UNKNOWN');
+   await save({...s,pending:undefined,error:undefined,phase:receipt.state==='READY'?'EXECUTE':'RESOURCES',resourceRetry:receipt.state==='READY'?s.resourceRetry:(s.resourceRetry??0)+1,log:[...s.log,'已核实上次准备结果且尚未启动执行，继续核对资源。']});setError('');
+  }catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}
  }
  async function run(){
   if(flight.current||!current.current?.state||(current.current.state.pending&&!canRepair(current.current.state)))return;
@@ -83,8 +93,8 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
     }
    }else if(s.phase==='RESOURCES'){
     s=await pending(s,'resources');const plan=s.confirmation!.plan;
-    const ready=await prepareResources(plan.plan_id,plan.version,s.key+':resources:'+(s.cycle??0),session.csrfToken);
-    if(ready.state!=='READY')throw Error('分析所需能力尚未全部就绪：'+ready.resources.filter(r=>r.reason).map(r=>r.reason).join('；'));
+    const ready=await prepareResources(plan.plan_id,plan.version,resourceKey(s),session.csrfToken);
+    if(ready.state!=='READY')throw Error('分析所需能力尚未全部就绪：'+[ready.assembly?.reason,...ready.resources.map(r=>r.reason)].filter(Boolean).join('；'));
     s=await save({...s,pending:undefined,phase:'EXECUTE',log:[...s.log,'资源核验完成，正在执行分析并生成结果。']});
    }else if(s.phase==='EXECUTE'){
     s=await pending(s,'execute');const plan=s.confirmation!.plan;
@@ -105,6 +115,7 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  {state.draft?.draft&&<details><summary>查看已理解的目标</summary><p>{state.draft.draft.description}</p></details>}
  {(error||state.error)&&<div role="alert"><p>本次处理停在当前步骤，已有内容已保留。</p><p>{error||state.error}</p><p>不会自动重发可能已执行的请求。恢复后仍在本会话继续。</p></div>}
  {((state.phase==='PLAN'&&state.pending==='planning'&&state.error?.includes('（MODEL_AUTHORIZATION_INVALID）'))||(state.phase==='EXECUTE'&&state.pending==='execute'&&state.error==='Error: READONLY_RESOURCE_PREPARATION_REQUIRED'))&&<button disabled={busy} onClick={()=>{setError('');void save({...state,pending:undefined,error:undefined})}}>配置修复后继续分析</button>}
+ {state.phase==='RESOURCES'&&state.pending==='resources'&&state.error?.startsWith('Error: 分析所需能力尚未全部就绪：')&&<button disabled={busy} onClick={()=>void recheckResources()}>重新核对可用能力</button>}
  {state.pending&&!busy&&!state.error&&<p role="status">上次请求尚未核实，已保留原记录，暂不重复执行。</p>}
  {state.execution&&<><p>执行状态：{execution?.progress?.state??'正在读取'} · 已生成{execution?.artifacts.length??0}份产物</p><PreparedExecutionPanel contextKey={'journey:'+conversation} digest={state.execution} problemId={state.problem!.business_problem_id} csrfToken={session.csrfToken} blocked={false} readOnly={true} onBusy={()=>{}} supplementConversation={conversation}/></>}
  </section>;

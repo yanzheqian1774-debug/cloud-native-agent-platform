@@ -205,7 +205,9 @@ def automation(repository, case, services, tmp_path, request):
                 MemberKind("RUNTIME_PROFILE" if k == "runtime" else k.upper()),
                 r.resource_id,
                 r.revision_id,
-                "sha256:" + r.digest if k == "runtime" else r.digest,
+                "sha256:" + r.digest
+                if k == "runtime" and mode != "unprefixed-runtime"
+                else r.digest,
             )
             for k, r in refs.items()
         ),
@@ -1161,3 +1163,16 @@ def test_employee_list_entry_target_matches_registered_read_only_collection_rout
     assert check(None, None, "CREATE", "employee:collection")
     for action in ("READ", "APPROVE", "PUBLISH", "DELETE"):
         assert not check(None, None, action, "employee:collection")
+
+
+@pytest.mark.parametrize("automation", ["unprefixed-runtime"], indirect=True)
+def test_runtime_digest_representation_does_not_require_employee_successor(automation):
+    a = automation
+    result = a.run()
+    assert result["state"] == "READY"
+    assert result["assembly"]["state"] == "ASSEMBLED"
+    assert (
+        result["assembly"]["definition"]["resource_id"]
+        == "employee-definition:d11-setup"
+    )
+    assert result["newRuns"] == 0
