@@ -45,6 +45,24 @@ def test_new_admin_planning_is_exact_current_and_revocable(env, setup):
     first = service.prepare_record(context, request, record)
     assert first["admission"]["ready"] is True
     assert service.prepare_record(context, request, record) == first
+    successor_request = SimpleNamespace(
+        idempotency_key="new-planning-successor",
+        target=request.target,
+        model_dump=lambda **kw: {"idempotency_key": "new-planning-successor"},
+    )
+    successor = service.prepare_record(
+        context,
+        successor_request,
+        {
+            "target": {
+                **record["target"],
+                "invocation_id": "successor-invocation",
+                "input_commitment": "successor",
+            }
+        },
+    )
+    assert successor["admission"]["ready"] is True
+    assert successor["admission"]["context_id"] != first["admission"]["context_id"]
     with pytest.raises(AuthorityError, match="PAYLOAD_CONFLICT"):
         service.prepare_record(
             context,

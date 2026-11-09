@@ -50,3 +50,5 @@ Under the user's explicit continued-development/testing authorization, new curre
 
 ## Actual coverage feedback and bounded successor planning
 An authoritative automatic-selection coverage rejection is a known no-dispatch failure. Read current exact coverage and send its actual reason codes to a model successor of the original proposal, at most twice, preserving Problem/criteria/source and prior Plan history. Confirm the successor against the prior Plan version; command keys include the repair cycle. No missing capability is silently marked ready. Source routing clarifies that registered internal Knowledge snapshots can be read by observed READ_DATA skills without inventing an external MCP connector. Old known coverage-rejected journals can resume this same bounded path; unknown failures still cannot replay.
+
+Successor model attempts receive distinct invocation-bound admission identities, while retaining their original suggestion/proposal context. This avoids reusing a one-call admission across paid attempts and keeps each attempt independently revocable and metered.

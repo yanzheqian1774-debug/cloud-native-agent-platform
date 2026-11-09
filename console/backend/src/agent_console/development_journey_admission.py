@@ -49,7 +49,8 @@ def prepare(service, c, context, request, record):
     ).fetchone()
     if not account:
         raise AuthorityError("CONTEXT_ADMISSION_ACCOUNT_INACTIVE")
-    identity = record["target"]["suggestion_context_id"]
+    # Each paid attempt owns a distinct admission; proposal lineage stays intact.
+    identity = "development-planning:" + record["target"]["invocation_id"]
     payload = dict(
         task_id="D13-CONVERSATION-JOURNEY",
         phase="planning",
