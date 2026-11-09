@@ -107,3 +107,24 @@ def test_persisted_question_original_conversation_and_exact_answer(
         assert not interaction.progress(
             call, app, NS(**{**vars(p), "run_id": "other"})
         )["questions"]
+
+
+@pytest.mark.parametrize("terminal", [None, "SUCCEEDED", "STOPPED", "OUTCOME_UNKNOWN"])
+def test_first_model_progress_and_terminal_unknown_are_not_conflated(
+    monkeypatch, terminal
+):
+    rows = [
+        {
+            "skill_invocation_id": "inv",
+            "record_key": "inv",
+            "result": {"status": terminal} if terminal else None,
+        },
+        {"skill_invocation_id": "inv", "record_key": "inv:0:MODEL", "result": None},
+    ]
+    monkeypatch.setattr(interaction, "records", lambda *args: rows)
+    view = interaction.progress(None, None, NS(run_id="run"))
+    assert view["steps"] == view["questions"] == []
+    assert view["modelInFlight"] is (terminal is None)
+    assert (
+        rows[1]["result"] is None
+    )  # Unknown reservation/claim is not resolved or replayed.

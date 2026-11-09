@@ -94,6 +94,13 @@ def records(call, app, p):
 def progress(call, app, p):
     rows = records(call, app, p)
     steps, questions = [], []
+    terminal_invocations = {
+        r["skill_invocation_id"]
+        for r in rows
+        if r["record_key"] == r["skill_invocation_id"]
+        and (r["result"] or {}).get("status")
+        in {"SUCCEEDED", "STOPPED", "OUTCOME_UNKNOWN"}
+    }
     by_key = {(r["skill_invocation_id"], r["record_key"]): r for r in rows}
     for r in rows:
         value = r["result"] or {}
@@ -136,7 +143,10 @@ def progress(call, app, p):
         "steps": steps,
         "questions": questions,
         "modelInFlight": any(
-            r["record_key"].endswith(":MODEL") and r["result"] is None for r in rows
+            r["record_key"].endswith(":MODEL")
+            and r["result"] is None
+            and r["skill_invocation_id"] not in terminal_invocations
+            for r in rows
         ),
     }
 

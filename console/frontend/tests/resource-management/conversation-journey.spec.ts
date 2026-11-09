@@ -111,3 +111,29 @@ test('running native question survives refresh and an answer continues the exact
  await page.goto('/work?conversation=new');await expect(page.getByText('读取原文与行号',{exact:true})).toBeVisible();await expect(page.locator('#native-clarification-reply')).toBeVisible();await page.reload();await expect(page.locator('#native-clarification-reply')).toBeVisible();expect(posts).toBe(0);
  await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await page.reload();await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();expect(posts).toBe(1);expect(s.modelCalls).toBe(0);
 });
+
+test('first understanding request remains visible before the model returns without narration calls',async({page})=>{
+ const s=await fixture(page);let release!:()=>void;const gate=new Promise<void>(r=>release=r);let calls=0;
+ await page.route('**/draft-assistance/invocations',async route=>{calls++;await gate;await route.fulfill({json:{result:{invocationId:'draft',contextId:'context',turnId:'turn',turnVersion:1,state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'还需要确认范围',draft:null}}});});
+ await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();
+ await expect.poll(()=>calls).toBe(1);await expect(page.getByLabel('全流程进展')).toContainText('正在理解你的问题，等待目标整理结果。');await expect(page.getByLabel('全流程进展').locator('[aria-current=step]')).toContainText('理解问题');expect(s.modelCalls).toBe(0);release();await expect(page.getByText('还需要确认范围',{exact:true})).toBeVisible();expect(calls).toBe(1);
+});
+
+test('planning has its own visible pending state before its sole model response',async({page})=>{
+ const s=await fixture(page);const ref={resource_id:'source',revision_id:'1',digest:'a'.repeat(64)};s.journal={version:2,state:{key:'plan',phase:'PLAN',question:prompt,source:{source:ref},problem:{business_problem_id:'p'},messages:[],log:[]}};
+ let release!:()=>void;const gate=new Promise<void>(r=>release=r);let calls=0;
+ await page.route('**/question-activity-input',route=>route.fulfill({json:{result:{state:'READY',planningRequest:{target:{},answers:[]}}}}));
+ await page.route('**/planning-v2/invocations',async route=>{calls++;await gate;await route.fulfill({status:503,json:{reasonCode:'TEST_STOP'}});});
+ await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByLabel('全流程进展')).toContainText('等待方案返回');await expect(page.getByLabel('全流程进展').locator('[aria-current=step]')).toContainText('准备方案');release();await expect(page.getByLabel('全流程进展')).toContainText('当前处理已停止');expect(calls).toBe(1);expect(s.modelCalls).toBe(0);
+});
+
+test('first native model shows progress with no completed steps and polling never overlaps',async({page})=>{
+ const s=await fixture(page);const digest='a'.repeat(64);s.journal={version:2,state:{key:'run',phase:'RUNNING',execution:digest,problem:{business_problem_id:'p'},messages:[],log:[]}};
+ let release!:()=>void;const gate=new Promise<void>(r=>release=r);let reads=0,posts=0,fail=false,completed=false;
+ await page.route('**/api/workbench/v1/prepared-executions/**',async route=>{
+  if(route.request().method()!=='GET')posts++;
+  if(route.request().url().endsWith('/native-progress')){reads++;if(reads===1)await gate;if(fail)return route.fulfill({status:503,json:{}});return route.fulfill({json:{result:{steps:completed?[{id:'read',decision:{action:'TOOL',tool:'read_document'},toolState:'COMPLETED',output:{lines:[{line:1,text:'文档原文'}]}}]:[],questions:[],modelInFlight:!completed}}});}
+  return route.fulfill({json:{result:{digest,preparation:{semantics:{tasks:[]},participants:[]},progress:{state:'RUNNING',tasks:[]},artifacts:[],resourceUses:[],events:[]}}});
+ });
+ await page.goto('/work?conversation=new');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('正在读取任务进展');await expect.poll(()=>reads).toBe(1);await page.waitForTimeout(1600);expect(reads).toBe(1);release();await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('等待本轮返回');completed=true;await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=true;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toBeVisible();await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=false;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toHaveCount(0);expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
+});
