@@ -161,3 +161,44 @@ def test_every_document_operation_satisfies_published_platform_output_contract()
         previous = executor.invoke("contract", operation["name"], args, 1000).output
         _validate_json_schema(previous, operation["outputSchema"], "INVALID_OUTPUT")
         assert "NO_DEPLOYMENT_AUTHORITY" in previous["limitations"]
+
+
+def test_resource_test_records_inventory_executor_without_claiming_model_execution():
+    from agent_console.resource_automation_validation import executor_registry
+    from agent_console.skill_mcp_repository import (
+        InMemorySkillMcpRepository,
+        ResourceScope,
+    )
+    from agent_console.skill_mcp_service import SkillMcpService
+    from agent_console.skill_resource_testing import run
+
+    service = SkillMcpService(InMemorySkillMcpRepository())
+    scope = ResourceScope("test", "isolated")
+    row = service.create(
+        scope, "skill", "actor", "Document review", resource_content(SOURCE)["skill"]
+    )
+    result = run(
+        service,
+        scope,
+        row["resourceId"],
+        "actor",
+        row["aggregateVersion"],
+        operation="READ_DATA",
+        name="Inventory",
+        inputs={
+            "schemaVersion": "document-review-input.v1",
+            "synthetic": True,
+            "sourceSnapshot": REFERENCE,
+            "source": SOURCE,
+            "dependencies": {},
+        },
+        expected_output={"source": SOURCE},
+        comparison="subset",
+        executor_registry=executor_registry(sales_v2_candidate=True),
+    )["testResult"]
+    assert result["status"] == "PASSED"
+    assert result["executor"]["id"] == "document-inventory-readonly"
+    assert (
+        result["verificationContext"]["nativeDecisionValidation"]
+        == "NOT_RUN_REQUIRES_NATIVE_ATTEMPT"
+    )

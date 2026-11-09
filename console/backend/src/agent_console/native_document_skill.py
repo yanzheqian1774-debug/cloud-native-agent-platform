@@ -25,6 +25,12 @@ CONFIGURATION = {
 
 
 class DocumentComputationExecutor:
+    revision = ExecutorRevision(
+        "document-inventory-readonly",
+        "1",
+        digest({"implementation": "document-inventory.v1"}),
+    )
+
     def invoke(self, invocation_id, operation, inputs, timeout_ms):
         if operation not in OPERATIONS or inputs.get("synthetic") is not True:
             raise SkillExecutorFailure(
