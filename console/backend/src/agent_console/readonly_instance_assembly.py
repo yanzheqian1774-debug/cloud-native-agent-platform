@@ -76,7 +76,7 @@ def _assemble(
     sales_v2_candidate=False,
 ):
     case = bundle.get("case", "cost")
-    if case not in ("delivery", "sales", "tabular"):
+    if case not in ("delivery", "sales", "tabular", "document"):
         raise ValueError("RESOURCE_CASE_UNSUPPORTED")
     scope = ScopeIdentity(bundle["namespace"], bundle["securityDomain"])
     if not re.fullmatch(r"[0-9a-f]{64}", plan_digest) or not actor:
@@ -172,7 +172,9 @@ def _assemble(
 
         source_digest(source_content)
         expected_schema = (
-            "tabular-diagnostic-source.v1"
+            "document-review-source.v1"
+            if case == "document"
+            else "tabular-diagnostic-source.v1"
             if case == "tabular"
             else "sales-diagnostic-source.v1"
             if case == "sales"

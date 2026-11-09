@@ -1,0 +1,7 @@
+import {NativeLoopTrace,type NativeLoopResult} from './NativeLoopTrace';
+type Finding={section:string;status:string;requirement:{documentId:string;line:number;text:string;body:{line:number;text:string}[]};evidence:null|{documentId:string;line:number;heading:string;body:{line:number;text:string}[]}};
+export function DocumentArtifactView({content}:{content:string}){
+ let value:{nativeLoop?:NativeLoopResult;documentReview?:{scope:string;findings:Finding[];missingSections:string[];incompleteSections:string[]}};try{value=JSON.parse(content)}catch{return <p role="alert">文档检查结果暂不可读。</p>}
+ const r=value.documentReview;if(!r)return <p>文档已读取或校验，尚未形成最终检查结果。</p>;
+ return <section aria-label="文档检查结果"><h3>文档完整性检查 · {r.scope}</h3><p>缺失 {r.missingSections.length} 项，待补充 {r.incompleteSections.length} 项。检查结果不代替技术正确性核验或上线批准。</p>{r.findings.map(f=><article key={f.section}><h4>{f.section} · {f.status==='MISSING'?'未找到对应章节':f.status==='INCOMPLETE'?'内容待补充':'已提供，正确性待核验'}</h4><p>规范依据：{f.requirement.documentId} 第 {f.requirement.line} 行</p><blockquote>{f.requirement.text}{f.requirement.body.map(l=><p key={l.line}>{l.text}</p>)}</blockquote>{f.evidence?<details><summary>查看提交文档原文</summary><p>{f.evidence.documentId} 第 {f.evidence.line} 行：{f.evidence.heading}</p>{f.evidence.body.map(l=><p key={l.line}>第 {l.line} 行：{l.text}</p>)}</details>:<p>已核对完整提交文档，未找到此标题；不伪造不存在的原文。</p>}</article>)}{value.nativeLoop&&<NativeLoopTrace loop={value.nativeLoop}/>}</section>;
+}

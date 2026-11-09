@@ -96,3 +96,17 @@ test('known exhausted coverage can recheck new capabilities without replaying mo
  await page.route('**/planning-v2/p/resource-selection/automatic',route=>{selections++;expect(route.request().postDataJSON().idempotencyKey).toBe('k:selection:2:recheck:1');return route.fulfill({status:409,json:{reasonCode:'AUTOMATIC_SELECTION_COVERAGE_BLOCKED'}})});
  await page.goto('/work?conversation=new');await page.getByRole('button',{name:'能力补齐后继续分析'}).click();await expect.poll(()=>selections).toBe(1);await expect(page.getByRole('button',{name:'能力补齐后继续分析'})).toBeVisible();expect(s.modelCalls).toBe(0);
 });
+
+test('running native question survives refresh and an answer continues the exact invocation',async({page})=>{
+ const s=await fixture(page),digest='a'.repeat(64),ref={resource_id:'p',revision_id:'1',digest:'b'.repeat(64)};
+ s.journal={version:2,state:{key:'k',question:'检查交接说明',phase:'RUNNING',execution:digest,problem:{business_problem_id:'p'},messages:[{id:'user:q',text:'检查交接说明'}],log:[]}};
+ let answer:string|null=null,posts=0;
+ await page.route('**/api/workbench/v1/prepared-executions/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/native-progress'))return route.fulfill({json:{result:{steps:[{id:'one',decision:{action:'TOOL',tool:'read_document'},output:{lines:[{line:1,text:'交接说明'}]},toolState:'COMPLETED'}],questions:[{invocationId:'invocation',questionKey:'question',questionDigest:'c'.repeat(64),question:'请确认测试环境还是生产环境？',expiresAt:'2099-01-01T00:00:00Z',answer,expired:false}],modelInFlight:false}}});
+  if(path.endsWith('/native-answers')){posts++;expect(route.request().postDataJSON()).toEqual({invocationId:'invocation',questionKey:'question',questionDigest:'c'.repeat(64),conversationId:'new',answer:'生产环境'});answer='生产环境';return route.fulfill({json:{result:{accepted:true,replayed:false}}})}
+  return route.fulfill({json:{result:{digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'c'.repeat(64),approval_id:'approval',source_snapshot:ref,semantics:{title:'文档检查',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'RUNNING',version:1,tasks:[]},admission:{state:'ADMITTED',reason:null},resourceUses:[],artifacts:[],events:[],outcome:null}}});
+ });
+ await page.goto('/work?conversation=new');await expect(page.getByText('读取原文与行号',{exact:true})).toBeVisible();await expect(page.locator('#native-clarification-reply')).toBeVisible();await page.reload();await expect(page.locator('#native-clarification-reply')).toBeVisible();expect(posts).toBe(0);
+ await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await page.reload();await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();expect(posts).toBe(1);expect(s.modelCalls).toBe(0);
+});

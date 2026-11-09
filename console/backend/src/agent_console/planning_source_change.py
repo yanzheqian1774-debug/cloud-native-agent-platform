@@ -79,6 +79,10 @@ def validate_data(source):
             from .synthetic_delivery_skill import analyze
 
             analyze(source)
+        elif source.get("schemaVersion") == "document-review-source.v1":
+            from .native_document_tools import validate_source
+
+            validate_source(source)
         elif source.get("schemaVersion") == "tabular-diagnostic-source.v1":
             from .tabular_diagnostic_skill import validate_source
 
@@ -171,6 +175,8 @@ def preview(app, principal, c, identity, request):
     )
     if before.get("schemaVersion") != after.get("schemaVersion"):
         raise PlanningConflict("SOURCE_CHANGE_SCHEMA_INCOMPATIBLE")
+    if after.get("schemaVersion") == "document-review-source.v1":
+        raise PlanningConflict("DOCUMENT_SOURCE_SUCCESSOR_NOT_SUPPORTED")
     validate_data(before)
     validate_data(after)
     target = request.new_target or plan.semantics.target

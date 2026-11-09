@@ -8,6 +8,7 @@ from psycopg.types.json import Jsonb
 from .authority_contracts import AuthorityError, ExactGrant
 from .cost_execution_revision import (
     DELIVERY_SYNTHETIC_ONLY,
+    DOCUMENT_SYNTHETIC_ONLY,
     EXECUTION_ONLY,
     PLANNING_ONLY,
     READ_ONLY_PLANNING,
@@ -204,6 +205,7 @@ def select_employee(automation, call, *, automatic_coverage=None):
                 SALES_SYNTHETIC_ONLY,
                 SYNTHETIC_ONLY,
                 TABULAR_SYNTHETIC_ONLY,
+                DOCUMENT_SYNTHETIC_ONLY,
                 READ_ONLY_PLANNING,
             }
         ] + [READ_ONLY_PLANNING]

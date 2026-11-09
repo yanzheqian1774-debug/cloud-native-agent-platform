@@ -208,6 +208,7 @@ def declaration(c, scope, authority, principal, kind, content, operations):
                 except (ValueError, TypeError):
                     continue
                 if isinstance(source, dict) and source.get("schemaVersion") in {
+                    "document-review-source.v1",
                     "tabular-diagnostic-source.v1",
                     "sales-diagnostic-source.v1",
                     "synthetic-delivery-source.v1",

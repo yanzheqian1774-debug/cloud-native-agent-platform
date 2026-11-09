@@ -134,18 +134,29 @@ class NativeLoopRuntime:
             if not problem or problem["digest"] != p.semantics.target.problem.digest:
                 raise ValueError("NATIVE_LOOP_GOAL_LINEAGE_MISMATCH")
             invocation = c.execute(
-                "SELECT attempt_id,executor_revision FROM skill_invocation.invocations "
+                "SELECT attempt_id,executor_id,executor_revision FROM sk"
+                "ill_invocation.invocations "
                 "WHERE namespace=%s AND security_domain=%s AND skill_invocation_id=%s",
                 (scope.namespace, scope.security_domain, invocation_id),
             ).fetchone()
             if (
                 not invocation
                 or invocation["attempt_id"] != str(command.attempt_id)
-                or invocation["executor_revision"] not in {"2", "3"}
+                or (invocation["executor_id"], invocation["executor_revision"])
+                not in {
+                    ("tabular-diagnostic-readonly", "2"),
+                    ("tabular-diagnostic-readonly", "3"),
+                    ("native-document-review", "1"),
+                }
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
         journal = NativeLoopJournal(self.pool, scope, invocation_id)
-        library = NativeDiagnosticTools(output["source"], output["sourceSnapshot"])
+        document_mode = output["schemaVersion"] == "document-review-output.v1"
+        from .native_document_tools import NativeDocumentTools
+
+        library = (NativeDocumentTools if document_mode else NativeDiagnosticTools)(
+            output["source"], output["sourceSnapshot"]
+        )
         manager = self
 
         def current():
@@ -288,9 +299,28 @@ class NativeLoopRuntime:
             def verify(self, assembled, answer):
                 return library.verify(assembled, answer)
 
+        ports = Ports()
+        if document_mode:
+            from .native_interaction import await_answer
+
+            def clarify(question, *, key, remaining_seconds):
+                reply = await_answer(
+                    journal,
+                    question,
+                    key=key,
+                    remaining_seconds=remaining_seconds,
+                    current=current,
+                    principal=command.principal_id,
+                    run_id=p.run_id,
+                    policy_expiry=self.expiry,
+                )
+                library.record_answer(reply["answer"])
+                return reply
+
+            ports.clarify = clarify
         loop = NativeLoop(
             library.tools,
-            Ports(),
+            ports,
             journal,
             limits=Limits(
                 maximum_decisions=8,
@@ -302,9 +332,20 @@ class NativeLoopRuntime:
             invocation_id,
             problem["title"] + "\n" + problem["description"],
             [
-                "核对声明上限，检查异常和缺失的原始行，返回可独立复算的报告；不证明因果或业务改善。"
+                "根据用户确认的范围选择文档规范，逐节核对完整性，引用准确原文；不"
+                "代替上线批准。"
+                if document_mode
+                else (
+                    "核对声明上限，检查异常和缺失的原始行，返回可独立复算的报告；不证"
+                    "明因果或业务改善。"
+                )
             ],
             {
+                **(
+                    {"domain": "DOCUMENT_REVIEW", "answerSchema": library.answer_schema}
+                    if document_mode
+                    else {}
+                ),
                 "sourceSnapshot": output["sourceSnapshot"],
                 "model": asdict(profile.binding),
                 "policyDigest": self.policy_digest,

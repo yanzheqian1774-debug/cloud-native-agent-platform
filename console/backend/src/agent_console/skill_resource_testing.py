@@ -175,11 +175,20 @@ def run(
         # Exact v2 resource testing covers the deterministic operation library.
         # Real decisions require a Native Attempt and its model admission; never
         # create that authority or call a model from the resource-test endpoint.
+        from .native_document_skill import (
+            DocumentComputationExecutor,
+            NativeDocumentSkillExecutor,
+        )
         from .native_loop_skill import NativeLoopSkillExecutor
         from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 
-        if isinstance(executor, NativeLoopSkillExecutor):
-            executor = TabularDiagnosticSkillExecutor()
+        document_executor = isinstance(executor, NativeDocumentSkillExecutor)
+        if document_executor or isinstance(executor, NativeLoopSkillExecutor):
+            executor = (
+                DocumentComputationExecutor()
+                if document_executor
+                else TabularDiagnosticSkillExecutor()
+            )
             verification_context = {
                 **(verification_context or {}),
                 "nativeDecisionValidation": "NOT_RUN_REQUIRES_NATIVE_ATTEMPT",

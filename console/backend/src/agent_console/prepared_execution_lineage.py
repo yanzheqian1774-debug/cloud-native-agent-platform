@@ -48,11 +48,13 @@ def validate_approved_preparation(connection, preparation):
         raise ExecutionPreparationError("PREPARED_PLAN_APPROVAL_MISMATCH")
     from .cost_execution_revision import (
         DELIVERY_SYNTHETIC_ONLY,
+        DOCUMENT_SYNTHETIC_ONLY,
         EXECUTION_ONLY,
         SALES_SYNTHETIC_ONLY,
         SYNTHETIC_ONLY,
         TABULAR_SYNTHETIC_ONLY,
     )
+    from .native_document_skill import NativeDocumentSkillExecutor
     from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
     from .sales_ontology_executor import SalesOntologyExecutor
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
@@ -72,6 +74,7 @@ def validate_approved_preparation(connection, preparation):
     ):
         raise ExecutionPreparationError("PREPARED_EXECUTION_CASE_MIXED")
     boundary = {
+        NativeDocumentSkillExecutor.revision.executor_id: DOCUMENT_SYNTHETIC_ONLY,
         TabularDiagnosticSkillExecutor.revision.executor_id: TABULAR_SYNTHETIC_ONLY,
         SyntheticDeliverySkillExecutor.revision.executor_id: DELIVERY_SYNTHETIC_ONLY,
         SalesDiagnosticSkillExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,

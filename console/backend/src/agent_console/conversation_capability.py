@@ -6,7 +6,14 @@ def describe(source, observed):
     operations = {op["operation"] for op in observed.get("operations", [])}
     missing = sorted({"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"} - operations)
     schema = source["schemaVersion"]
-    if schema == "tabular-diagnostic-source.v1":
+    if schema == "document-review-source.v1":
+        label = source.get("title", "文档检查资料")
+        criteria = [
+            "读取已确认的原文并保留行号依据。",
+            "执行中发现规范范围不明确时，在本会话追问并沿用回答继续。",
+            "按所选规范核对缺失章节与待补充内容；章节存在不代表技术正确或获准上线。",
+        ]
+    elif schema == "tabular-diagnostic-source.v1":
         mapping = source["mapping"]
         label = source.get("title", "指标诊断资料")
         criteria = [

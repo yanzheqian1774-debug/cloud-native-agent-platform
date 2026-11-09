@@ -2,6 +2,7 @@
 
 from .cost_execution_revision import (
     DELIVERY_SYNTHETIC_ONLY,
+    DOCUMENT_SYNTHETIC_ONLY,
     EXECUTION_ONLY,
     PLANNING_ONLY,
     READ_ONLY_PLANNING,
@@ -16,7 +17,12 @@ def restrict_to_planning(semantics):
         return semantics
     if EXECUTION_ONLY in semantics.business_rules or any(
         marker in semantics.boundaries
-        for marker in (SYNTHETIC_ONLY, DELIVERY_SYNTHETIC_ONLY, TABULAR_SYNTHETIC_ONLY)
+        for marker in (
+            SYNTHETIC_ONLY,
+            DELIVERY_SYNTHETIC_ONLY,
+            TABULAR_SYNTHETIC_ONLY,
+            DOCUMENT_SYNTHETIC_ONLY,
+        )
     ):
         raise ValueError("PROVIDER_CANNOT_DECLARE_EXECUTION_SCOPE")
     document = semantics.model_dump(mode="json")

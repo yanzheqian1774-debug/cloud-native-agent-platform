@@ -45,6 +45,20 @@ def independent(source, report, reference):
             }
             for check in CHECKS
         ]
+    if schema == "document-review-source.v1":
+        from .native_document_tools import validate_source
+
+        validate_source(source)
+        return [
+            {
+                "check": "EXACT_DOCUMENT_INVENTORY_ONLY",
+                "result": "SATISFIED"
+                if report.get("source") == source
+                and report.get("sourceSnapshot") == reference
+                else "NOT_SATISFIED",
+                "reason": "MODEL_AND_INTERACTION_NOT_TESTED",
+            }
+        ]
     if schema == "tabular-diagnostic-source.v1":
         from .tabular_evaluation import checks
 
@@ -67,6 +81,7 @@ def verify_skill(
     source = json.loads(raw)
     schema = source.get("schemaVersion")
     prefix = {
+        "document-review-source.v1": "document-review",
         "tabular-diagnostic-source.v1": "tabular-diagnostic",
         "sales-diagnostic-source.v1": "sales-diagnostic",
         "synthetic-delivery-source.v1": "synthetic-delivery",

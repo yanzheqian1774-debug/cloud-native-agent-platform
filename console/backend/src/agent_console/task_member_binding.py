@@ -79,6 +79,15 @@ def bind_steps(semantics, skills, *, source_schema, case, sales_v2_candidate=Fal
             if any_v2 and sales_v2_candidate
             else SalesDiagnosticSkillExecutor.revision,
         )
+    elif case == "document":
+        from .native_document_skill import NativeDocumentSkillExecutor
+        from .prepared_readonly_contract import validate_mapping
+
+        validate_mapping(
+            semantics.model_dump(mode="json"),
+            selected_operations,
+            NativeDocumentSkillExecutor.revision,
+        )
     elif case == "tabular":
         from .native_loop_skill import executor_revision
         from .prepared_readonly_contract import validate_mapping

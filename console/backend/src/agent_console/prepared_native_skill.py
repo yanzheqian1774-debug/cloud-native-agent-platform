@@ -95,8 +95,18 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
             NativeValidatedLoopSkillExecutor.revision,
         )
     )
+    from .native_document_skill import NativeDocumentSkillExecutor
+
+    doc = NativeDocumentSkillExecutor.revision
+    is_document = (
+        participant.executor_id,
+        participant.executor_revision,
+        participant.executor_digest,
+    ) == (doc.executor_id, doc.executor_revision, doc.configuration_digest)
     result = {
-        "schemaVersion": "tabular-diagnostic-input.v1"
+        "schemaVersion": "document-review-input.v1"
+        if is_document
+        else "tabular-diagnostic-input.v1"
         if is_tabular
         else "sales-diagnostic-input.v2"
         if sales_v2

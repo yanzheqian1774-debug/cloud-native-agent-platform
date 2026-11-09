@@ -313,3 +313,76 @@ def test_boundary_terminal_write_failure_is_unknown_and_sanitized():
     assert result["reason"] == "OWNER_RECONCILIATION_REQUIRED"
     assert result["status"] == "OUTCOME_UNKNOWN"
     assert "private-dsn" not in str(result)
+
+
+def test_clarification_preserves_observations_and_allows_same_tool_after_new_input():
+    class Interactive(Ports):
+        def decide(self, context, **kwargs):
+            self.contexts.append(deepcopy(context))
+            tools = [o for o in context["observations"] if o["kind"] == "TOOL_RESULT"]
+            answers = [o for o in context["observations"] if o["kind"] == "USER_ANSWER"]
+            if tools and not answers:
+                return {"action": "CLARIFY", "question": "Which scope?"}
+            if len(tools) < 2:
+                return {
+                    "action": "TOOL",
+                    "tool": "inspect",
+                    "arguments": {"field": "latency"},
+                }
+            return {"action": "FINISH", "answer": {"evidence": ["inspect", "inspect"]}}
+
+        def clarify(self, question, **kwargs):
+            assert question == "Which scope?"
+            assert kwargs["remaining_seconds"] > 0
+            return {"question": question, "answer": "production"}
+
+    ports, journal = Interactive(False), Journal()
+    result = run(ports, journal)
+    assert result["status"] == "SUCCEEDED"
+    assert ports.calls == ["inspect", "inspect"]
+    assert result["trace"][1]["clarification"]["answer"] == "production"
+    assert (
+        len(
+            [
+                o
+                for o in ports.contexts[-1]["observations"]
+                if o["kind"] == "TOOL_RESULT"
+            ]
+        )
+        == 2
+    )
+    assert run(ports, journal) == result
+    assert ports.calls == ["inspect", "inspect"]
+
+
+def test_input_requires_its_own_current_authorization():
+    class Interactive(Ports):
+        def decide(self, *args, **kwargs):
+            return {"action": "CLARIFY", "question": "Which scope?"}
+
+        def clarify(self, *args, **kwargs):
+            raise AssertionError("must not ask after denial")
+
+    ports = Interactive()
+    ports.denied = "INPUT"
+    result = run(ports)
+    assert result["status"] == "STOPPED" and result["reason"] == "AUTHORIZATION_DENIED"
+
+
+def test_known_input_expiry_is_settled_without_replaying_model_or_question():
+    class Interactive(Ports):
+        def decide(self, *args, **kwargs):
+            return {"action": "CLARIFY", "question": "Which scope?"}
+
+        def clarify(self, *args, **kwargs):
+            raise LoopBoundaryError("NATIVE_INPUT_EXPIRED")
+
+    journal = Journal()
+    result = run(Interactive(), journal)
+    assert result["status"] == "STOPPED"
+    assert result["reason"] == "NATIVE_INPUT_EXPIRED"
+    assert journal.rows["attempt-1:0:INPUT"]["result"] == {
+        "status": "STOPPED",
+        "reason": "NATIVE_INPUT_EXPIRED",
+    }
+    assert run(Interactive(), journal) == result

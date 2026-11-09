@@ -246,6 +246,12 @@ class PreparedExecutionOwner:
                     {**call.payload, "operation": call.operation},
                     execute,
                 )
+            if call.operation in {"READ_NATIVE_PROGRESS", "ANSWER_NATIVE_QUESTION"}:
+                from .native_interaction import answer, progress
+
+                return (
+                    answer if call.operation == "ANSWER_NATIVE_QUESTION" else progress
+                )(call, app, p)
             review = PreparedResultReview(
                 call.connection,
                 principal,
@@ -515,9 +521,29 @@ class PreparedExecutionGrantTargets:
 
 
 def prepared_execution_operations(coordinator=None, *, sales_v2_candidate=False):
+    from .native_interaction import NativeAnswer
+
     handler = PreparedExecutionOwner(coordinator, sales_v2_candidate=sales_v2_candidate)
     path = PREFIX + "/prepared-executions/{digest}"
     return (
+        WorkbenchOperation(
+            "READ_NATIVE_PROGRESS",
+            "GET",
+            path + "/native-progress",
+            None,
+            None,
+            grant("READ"),
+            handler,
+        ),
+        WorkbenchOperation(
+            "ANSWER_NATIVE_QUESTION",
+            "POST",
+            path + "/native-answers",
+            NativeAnswer,
+            None,
+            grant("START"),
+            handler,
+        ),
         WorkbenchOperation(
             "PREPARE_NATIVE_EXECUTION",
             "POST",

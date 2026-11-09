@@ -240,6 +240,13 @@ class NativeLoop:
             # Even a local exception after entry is uncertain; never retry it.
             try:
                 result = invoke(key, remaining())
+            except LoopBoundaryError as exc:
+                if kind != "INPUT":
+                    raise LoopBoundaryError("EFFECT_OUTCOME_UNKNOWN") from None
+                self.journal.finish(
+                    key, request_hash, {"status": "STOPPED", "reason": str(exc)}
+                )
+                raise
             except Exception:
                 raise LoopBoundaryError("EFFECT_OUTCOME_UNKNOWN") from None
             result = snapshot(result, self.limits.maximum_observation_bytes)
@@ -285,7 +292,20 @@ class NativeLoop:
                         or len(action["question"]) > 1000
                     ):
                         raise LoopBoundaryError("INVALID_CLARIFICATION")
-                    return finish("NEEDS_INPUT", "CLARIFICATION_REQUIRED", action)
+                    clarify = getattr(self.ports, "clarify", None)
+                    if clarify is None:
+                        return finish("NEEDS_INPUT", "CLARIFICATION_REQUIRED", action)
+                    reply = effect(
+                        "INPUT",
+                        ordinal,
+                        action,
+                        lambda key, seconds, q=action["question"], fn=clarify: fn(
+                            q, key=key, remaining_seconds=seconds
+                        ),
+                    )
+                    observations.append({"kind": "USER_ANSWER", **snapshot(reply)})
+                    trace[-1]["clarification"] = snapshot(reply)
+                    continue
                 if kind == "FINISH":
                     if set(action) != {"action", "answer"} or not isinstance(
                         action["answer"], dict
@@ -329,7 +349,13 @@ class NativeLoop:
                     tool.validate(snapshot(arguments))
                 except Exception:
                     raise LoopBoundaryError("INVALID_TOOL_ARGUMENTS") from None
-                signature = digest([tool.descriptor(), arguments])
+                signature = digest(
+                    [
+                        tool.descriptor(),
+                        arguments,
+                        [o for o in observations if o["kind"] == "USER_ANSWER"],
+                    ]
+                )
                 if signature in seen:
                     return finish("STOPPED", "NO_PROGRESS")
                 seen.add(signature)

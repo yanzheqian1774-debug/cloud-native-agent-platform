@@ -165,6 +165,7 @@ class ReadonlyContinuation:
                     revision["content"]["documents"][0]["chunks"][0]["content"]
                 )["schemaVersion"]
                 case = {
+                    "document-review-source.v1": "document",
                     "tabular-diagnostic-source.v1": "tabular",
                     "sales-diagnostic-source.v1": "sales",
                     "synthetic-delivery-source.v1": "delivery",
@@ -176,7 +177,7 @@ class ReadonlyContinuation:
                     and w.namespace == scope.namespace
                     and w.securityDomain == scope.security_domain
                 }
-                if case == "tabular":
+                if case in {"tabular", "document"}:
                     candidates = (
                         {self.policy.developmentTabularAgentName}
                         if self.policy.developmentTabularAgentName

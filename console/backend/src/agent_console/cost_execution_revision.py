@@ -20,14 +20,16 @@ from .planning_source_reference import is_source_boundary
 from .resource_use_domain import canonical_digest
 
 PLANNING_ONLY = (
-    "本轮只规划与确认，不创建Assignment、Run或TaskRun，不执行业务或调整配置；"
+    "本轮只规划与确认，不创建Assignment、Run或TaskR"
+    "un，不执行业务或调整配置；"
     "人工业务验收在执行产物之后，不作为任务。"
 )
 READ_ONLY_PLANNING = "仅进行只读数据采集与分析规划，不执行任何业务操作。"
 EXECUTION_ONLY = (
     "本次仅在隔离环境以明确标注的合成资料执行只读任务；"
     "允许创建本执行修订对应的Assignment、单Run及TaskRun，"
-    "禁止外部写入、生产操作及配置调整；人工业务验收在执行产物之后，不作为任务。"
+    "禁止外部写入、生产操作及配置调整；人工业务验收在执行产物之后，不"
+    "作为任务。"
 )
 SYNTHETIC_ONLY = (
     "仅对本次固定的隔离合成资料进行只读采集与分析；"
@@ -40,7 +42,8 @@ DELIVERY_SYNTHETIC_ONLY = (
 
 
 SALES_SYNTHETIC_ONLY = (
-    "仅对本次固定合成销售快照进行两期只读诊断；按币种分别核算不含税净销售额与毛利，"
+    "仅对本次固定合成销售快照进行两期只读诊断；按币种分别核算不含税净"
+    "销售额与毛利，"
     "变化贡献不代表因果或真实销售改善；禁止业务写入。"
 )
 
@@ -51,8 +54,14 @@ TABULAR_SYNTHETIC_ONLY = (
 )
 
 
+DOCUMENT_SYNTHETIC_ONLY = (
+    "仅对已确认的合成文档快照按用户确认的规范进行只读完整性核对；原文"
+    "引用不代替技术正确性或上线批准；禁止外部写入。"
+)
+
+
 class CostExecutionRevisionRequest(Immutable):
-    case: Literal["cost", "delivery", "sales", "tabular"] = "cost"
+    case: Literal["cost", "delivery", "sales", "tabular", "document"] = "cost"
     plan_version: int = Field(ge=1)
     plan_digest: Digest
     source_snapshot: ExactReference
@@ -104,7 +113,9 @@ def execution_successor(
     ]
     record["boundaries"] = [
         (
-            TABULAR_SYNTHETIC_ONLY
+            DOCUMENT_SYNTHETIC_ONLY
+            if request.case == "document"
+            else TABULAR_SYNTHETIC_ONLY
             if request.case == "tabular"
             else SALES_SYNTHETIC_ONLY
             if request.case == "sales"

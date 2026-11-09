@@ -80,6 +80,8 @@ def compose(
         )
         if mode == "sales-gross-profit-v2-candidate":
             executors += (executor,)
+    from .native_document_skill import NativeDocumentSkillExecutor
+
     native_runtime = []
     if native_loop_path:
         from .native_loop_skill import (
@@ -94,6 +96,7 @@ def compose(
                 )
             )
             for executor_type in (
+                NativeDocumentSkillExecutor,
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )

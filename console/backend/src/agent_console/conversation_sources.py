@@ -48,6 +48,7 @@ def sources(automation, call, root=None):
             if raw.get("synthetic") is not True:
                 continue
             if check["sourceSchema"] not in {
+                "document-review-source.v1",
                 "tabular-diagnostic-source.v1",
                 "sales-diagnostic-source.v1",
                 "synthetic-delivery-source.v1",
