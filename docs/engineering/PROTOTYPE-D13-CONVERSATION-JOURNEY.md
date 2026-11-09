@@ -40,3 +40,6 @@ The live current-role decision is issued during authorization. Sample the resolu
 
 ## Role preparation receipt matching
 The current development-role resource preparation receipt carries the role/generation digest, not the legacy service policy digest. Readonly continuation must match the same current subject and generation, with all existing source/plan/version/resource and execution checks retained. Known missing-preparation rejection happens before assembly or Run dispatch and can be continued in the same conversation.
+
+## Automatic result readback
+Separate read-only command controls from blocked/identity state. The conversation's result panel permits automatic GET refresh while disallowing its manual execution/acceptance commands. Terminal report and progress must converge without a user refresh.

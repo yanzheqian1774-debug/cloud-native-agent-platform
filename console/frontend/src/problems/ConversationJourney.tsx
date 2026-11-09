@@ -90,6 +90,6 @@ export function ConversationJourney({conversation,session,onActive}:{conversatio
  {(error||state.error)&&<div role="alert"><p>本次处理停在当前步骤，已有内容已保留。</p><p>{error||state.error}</p><p>不会自动重发可能已执行的请求。恢复后仍在本会话继续。</p></div>}
  {((state.phase==='PLAN'&&state.pending==='planning'&&state.error?.includes('（MODEL_AUTHORIZATION_INVALID）'))||(state.phase==='EXECUTE'&&state.pending==='execute'&&state.error==='Error: READONLY_RESOURCE_PREPARATION_REQUIRED'))&&<button disabled={busy} onClick={()=>{setError('');void save({...state,pending:undefined,error:undefined})}}>配置修复后继续分析</button>}
  {state.pending&&!busy&&!state.error&&<p role="status">上次请求尚未核实，已保留原记录，暂不重复执行。</p>}
- {state.execution&&<><p>执行状态：{execution?.progress?.state??'正在读取'} · 已生成{execution?.artifacts.length??0}份产物</p><PreparedExecutionPanel contextKey={'journey:'+conversation} digest={state.execution} problemId={state.problem!.business_problem_id} csrfToken={session.csrfToken} blocked={true} onBusy={()=>{}} supplementConversation={conversation}/></>}
+ {state.execution&&<><p>执行状态：{execution?.progress?.state??'正在读取'} · 已生成{execution?.artifacts.length??0}份产物</p><PreparedExecutionPanel contextKey={'journey:'+conversation} digest={state.execution} problemId={state.problem!.business_problem_id} csrfToken={session.csrfToken} blocked={false} readOnly={true} onBusy={()=>{}} supplementConversation={conversation}/></>}
  </section>;
 }
