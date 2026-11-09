@@ -77,11 +77,17 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
     from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 
     tabular = TabularDiagnosticSkillExecutor.revision
-    is_tabular = (
-        participant.executor_id,
-        participant.executor_revision,
-        participant.executor_digest,
-    ) == (tabular.executor_id, tabular.executor_revision, tabular.configuration_digest)
+    from .native_loop_skill import NativeLoopSkillExecutor
+
+    is_tabular = any(
+        (
+            participant.executor_id,
+            participant.executor_revision,
+            participant.executor_digest,
+        )
+        == (v.executor_id, v.executor_revision, v.configuration_digest)
+        for v in (tabular, NativeLoopSkillExecutor.revision)
+    )
     result = {
         "schemaVersion": "tabular-diagnostic-input.v1"
         if is_tabular
@@ -150,7 +156,13 @@ class PreparedNativeSkillCaller:
             frozenset({"INVOKE_SKILL"}),
             decision_id,
         )
-        snapshot = self.skill.service(authorization).invoke(request, inputs)
+        from .native_loop_runtime import COMMAND
+
+        token = COMMAND.set(command)
+        try:
+            snapshot = self.skill.service(authorization).invoke(request, inputs)
+        finally:
+            COMMAND.reset(token)
         if snapshot.state != "SUCCEEDED":
             return snapshot.state.value, None
         with self.pool.connection() as connection:

@@ -639,6 +639,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 generation,
                 authorization_check,
                 mode=prepared_mode,
+                native_loop_path=os.getenv("NATIVE_LOOP_RUNTIME_FILE"),
             )
             transport = ManagedSkillNativeTransport(caller)
             from agent_console.prepared_native_composition import (

@@ -172,6 +172,20 @@ def run(
                 op["executorConfigurationDigest"],
             )
         )
+        # Exact v2 resource testing covers the deterministic operation library.
+        # Real decisions require a Native Attempt and its model admission; never
+        # create that authority or call a model from the resource-test endpoint.
+        from .native_loop_skill import NativeLoopSkillExecutor
+        from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
+
+        if isinstance(executor, NativeLoopSkillExecutor):
+            executor = TabularDiagnosticSkillExecutor()
+            verification_context = {
+                **(verification_context or {}),
+                "nativeDecisionValidation": "NOT_RUN_REQUIRES_NATIVE_ATTEMPT",
+                "validationScope": "READ_ONLY_OPERATION_COMPUTATION",
+            }
+            result["verificationContext"] = verification_context
         limits = op["ioLimits"]
         if inputs.get("synthetic") is not True:
             raise SkillInvocationError("TEST_SYNTHETIC_INPUT_REQUIRED")

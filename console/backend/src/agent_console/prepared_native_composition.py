@@ -42,6 +42,7 @@ def compose(
     authorization_check,
     *,
     mode="synthetic-cost-v1",
+    native_loop_path=None,
 ):
     if mode == "ontology-sales-v1":
         from .sales_ontology_executor import SalesOntologyExecutor
@@ -79,6 +80,17 @@ def compose(
         )
         if mode == "sales-gross-profit-v2-candidate":
             executors += (executor,)
+    native_runtime = []
+    if native_loop_path:
+        from .native_loop_skill import NativeLoopSkillExecutor
+
+        executors += (
+            NativeLoopSkillExecutor(
+                lambda identity, output, timeout: native_runtime[0].run(
+                    identity, output, timeout
+                )
+            ),
+        )
     composition = compose_governed_skill_invocation(
         database_url,
         migrations,
@@ -143,6 +155,22 @@ def compose(
                 "recoveryEpoch": command.recovery_epoch.value,
             }
         )
+
+    if native_loop_path:
+        from .native_loop_runtime import NativeLoopRuntime
+
+        native_runtime.append(
+            NativeLoopRuntime(
+                native_loop_path,
+                pool,
+                database_url,
+                migrations,
+                reader,
+                generation,
+                authorize,
+            )
+        )
+        composition.closeables = tuple(native_runtime)
 
     return PreparedNativeSkillCaller(
         pool,

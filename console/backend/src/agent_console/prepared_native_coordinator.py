@@ -113,6 +113,23 @@ class PreparedNativeCoordinator:
             repository.decide(
                 app.scope, request, placement, require_employee_lineage=True
             )
+            from .native_loop_skill import NativeLoopSkillExecutor
+
+            loop_revision = NativeLoopSkillExecutor.revision
+            native_timeout = (
+                480
+                if (
+                    participant.executor_id,
+                    participant.executor_revision,
+                    participant.executor_digest,
+                )
+                == (
+                    loop_revision.executor_id,
+                    loop_revision.executor_revision,
+                    loop_revision.configuration_digest,
+                )
+                else 30
+            )
             NativeDispatchApplication(repository).queue(
                 QueueNativeDispatch(
                     app.scope,
@@ -127,7 +144,7 @@ class PreparedNativeCoordinator:
                     Generation(call.recovery_epoch),
                     agent_name,
                     "prepared-task:" + p.digest + ":" + task.task_id,
-                    30,
+                    native_timeout,
                     "prepared:" + str(identity.attempt.attempt_id),
                     now,
                 )

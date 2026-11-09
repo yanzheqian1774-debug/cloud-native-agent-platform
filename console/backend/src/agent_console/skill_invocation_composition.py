@@ -22,6 +22,7 @@ class SkillInvocationComposition:
     application: GovernedAttemptSkillInvocationService
     invocation_repository: PostgresSkillInvocationRepository
     resource_use_repository: PostgresResourceUseRepository
+    closeables: tuple = ()
 
     def service(
         self, authorization: SkillInvocationAuthorization | None
@@ -35,6 +36,8 @@ class SkillInvocationComposition:
         )
 
     def close(self) -> None:
+        for value in self.closeables:
+            value.close()
         self.invocation_repository.close()
         self.resource_use_repository.close()
 

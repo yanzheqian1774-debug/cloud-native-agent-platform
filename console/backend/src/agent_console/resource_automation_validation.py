@@ -3,6 +3,7 @@
 import json
 
 from .authority_contracts import AuthorityError
+from .native_loop_skill import NativeLoopSkillExecutor
 from .prepared_native_composition import POLICY
 from .resource_automation_policy import AdministratorWorkScope, source_digest
 from .sales_diagnostic_skill import SalesDiagnosticSkillExecutor
@@ -16,6 +17,7 @@ from .tabular_diagnostic_skill import TabularDiagnosticSkillExecutor
 EXECUTORS = SkillExecutorRegistry(
     (
         TabularDiagnosticSkillExecutor(),
+        NativeLoopSkillExecutor(),
         SalesDiagnosticSkillExecutor(),
         SyntheticDeliverySkillExecutor(),
         SyntheticDeliverySkillExecutorV2(),
@@ -38,6 +40,7 @@ def executor_registry(*, sales_v2_candidate=False):
     return SkillExecutorRegistry(
         (
             TabularDiagnosticSkillExecutor(),
+            NativeLoopSkillExecutor(),
             SalesDiagnosticSkillExecutor(),
             SyntheticDeliverySkillExecutor(),
             SyntheticDeliverySkillExecutorV2(),
