@@ -15,6 +15,7 @@ from agent_console.digital_employee_definition import (
     EmployeeDefinitionService,
     EmployeeRevision,
     MemberKind,
+    ResponsibilityBinding,
 )
 from agent_console.digital_employee_definition_postgres import (
     PostgresEmployeeDefinitionRepository,
@@ -562,5 +563,59 @@ def test_existing_successor_is_definite_conflict_without_new_fact(workbench):
             ]
             == published["revision"]
         )
+    finally:
+        authority.pool.close()
+
+
+def test_responsibility_bindings_persist_in_exact_successor_without_rewriting_history():
+    authority, store = setup_authority()
+    scope = ScopeIdentity("binding-" + uuid.uuid4().hex, "quality")
+    try:
+        original, service, published = publish_employee(store, scope)
+        knowledge = CompositionMember(
+            MemberKind.KNOWLEDGE, "knowledge:binding", "knowledge:one", "b" * 64
+        )
+        successor = replace(
+            original,
+            revision_id="employee-revision:bindings",
+            predecessor_revision_id=original.revision_id,
+            members=(*original.members, knowledge),
+            responsibility_bindings=(
+                ResponsibilityBinding(original.responsibilities[0], knowledge),
+            ),
+        )
+        created = service.create(
+            successor,
+            expected_version=published["aggregateVersion"],
+            command_id="create-binding",
+        )
+        restored = service.read(scope, successor.definition_id, successor.revision_id)
+        assert restored["digest"] == successor.digest == created["digest"]
+        assert (
+            EmployeeRevision.from_record(restored["revision"]).responsibility_bindings
+            == successor.responsibility_bindings
+        )
+        assert (
+            service.read(scope, original.definition_id, original.revision_id)["digest"]
+            == original.digest
+        )
+        with pytest.raises(EmployeeDefinitionError, match="EMPLOYEE_NOT_FOUND"):
+            service.read(
+                ScopeIdentity(scope.namespace, "other"),
+                successor.definition_id,
+                successor.revision_id,
+            )
+        # A durable binding to an unavailable resource is a draft only; publication
+        # continues to require the existing exact member checks.
+        with pytest.raises(EmployeeDefinitionError):
+            service.decide(
+                scope,
+                successor.definition_id,
+                successor.revision_id,
+                successor.digest,
+                "VALIDATE",
+                expected_version=created["aggregateVersion"],
+                command_id="validate-binding",
+            )
     finally:
         authority.pool.close()

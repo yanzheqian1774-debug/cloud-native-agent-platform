@@ -17,12 +17,20 @@ class EmployeeCompositionMember(_StrictModel):
     digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
 
 
+class EmployeeResponsibilityBinding(_StrictModel):
+    responsibility: str = Field(min_length=1, max_length=500)
+    member: EmployeeCompositionMember
+
+
 class CreateEmployeeDefinition(_StrictModel):
     employeeDefinitionId: str = Field(min_length=1, max_length=200)
     employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
     role: str = Field(min_length=1, max_length=200)
     responsibilities: list[str] = Field(min_length=1, max_length=32)
     members: list[EmployeeCompositionMember] = Field(min_length=1, max_length=128)
+    responsibilityBindings: list[EmployeeResponsibilityBinding] | None = Field(
+        default=None, max_length=4096
+    )
     predecessorEmployeeRevisionId: str | None = Field(default=None, max_length=200)
     expectedVersion: int = Field(ge=0)
     commandId: str = Field(min_length=1, max_length=200)

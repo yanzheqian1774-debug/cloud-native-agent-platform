@@ -72,6 +72,12 @@ class CompositionMember:
 
 
 @dataclass(frozen=True)
+class ResponsibilityBinding:
+    responsibility: str
+    member: CompositionMember
+
+
+@dataclass(frozen=True)
 class EmployeeRevision:
     scope: ScopeIdentity
     definition_id: str
@@ -80,6 +86,8 @@ class EmployeeRevision:
     responsibilities: tuple[str, ...]
     members: tuple[CompositionMember, ...]
     predecessor_revision_id: str | None = None
+    responsibility_bindings: tuple[ResponsibilityBinding, ...] = ()
+    responsibility_bindings_explicit: bool = False
 
     def __post_init__(self):
         identifier(self.definition_id)
@@ -111,10 +119,28 @@ class EmployeeRevision:
         keys = [(m.kind, m.resource_id) for m in self.members]
         if len(keys) != len(set(keys)):
             raise EmployeeDefinitionError("DUPLICATE_COMPOSITION_MEMBER")
+        if len(self.responsibility_bindings) > 4096:
+            raise EmployeeDefinitionError("INVALID_RESPONSIBILITY_BINDING")
+        binding_keys = set()
+        for binding in self.responsibility_bindings:
+            if (
+                not isinstance(binding, ResponsibilityBinding)
+                or self.responsibilities.count(binding.responsibility) != 1
+                or binding.member not in self.members
+                or binding.member.kind
+                not in (MemberKind.SKILL, MemberKind.MCP, MemberKind.KNOWLEDGE)
+            ):
+                raise EmployeeDefinitionError("INVALID_RESPONSIBILITY_BINDING")
+            key = (binding.responsibility, binding.member)
+            if key in binding_keys:
+                raise EmployeeDefinitionError(
+                    "INVALID_DUPLICATE_RESPONSIBILITY_BINDING"
+                )
+            binding_keys.add(key)
 
     @property
     def record(self):
-        return {
+        record = {
             "schemaVersion": "digital-employee-composition.v1",
             "namespace": self.scope.namespace,
             "securityDomain": self.scope.security_domain,
@@ -128,6 +154,20 @@ class EmployeeRevision:
             ],
             "predecessorRevisionId": self.predecessor_revision_id,
         }
+        if self.responsibility_bindings:
+            record["schemaVersion"] = "digital-employee-composition.v2"
+            record["responsibilityBindings"] = [
+                asdict(binding)
+                for binding in sorted(
+                    self.responsibility_bindings,
+                    key=lambda b: (
+                        self.responsibilities.index(b.responsibility),
+                        b.member.kind,
+                        b.member.resource_id,
+                    ),
+                )
+            ]
+        return record
 
     @property
     def digest(self):
@@ -135,6 +175,23 @@ class EmployeeRevision:
 
     @classmethod
     def from_record(cls, record):
+        schema = record.get("schemaVersion")
+        if (
+            schema
+            not in (
+                "digital-employee-composition.v1",
+                "digital-employee-composition.v2",
+            )
+            or (
+                schema == "digital-employee-composition.v1"
+                and "responsibilityBindings" in record
+            )
+            or (
+                schema == "digital-employee-composition.v2"
+                and not record.get("responsibilityBindings")
+            )
+        ):
+            raise EmployeeDefinitionError("INVALID_EMPLOYEE_COMPOSITION_SCHEMA")
         return cls(
             ScopeIdentity(record["namespace"], record["securityDomain"]),
             record["definitionId"],
@@ -151,6 +208,18 @@ class EmployeeRevision:
                 for m in record["members"]
             ),
             record["predecessorRevisionId"],
+            tuple(
+                ResponsibilityBinding(
+                    binding["responsibility"],
+                    CompositionMember(
+                        MemberKind(binding["member"]["kind"]),
+                        binding["member"]["resource_id"],
+                        binding["member"]["revision_id"],
+                        binding["member"]["digest"],
+                    ),
+                )
+                for binding in record.get("responsibilityBindings", ())
+            ),
         )
 
 

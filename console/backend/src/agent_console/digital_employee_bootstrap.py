@@ -19,6 +19,7 @@ from .digital_employee_definition import (
     EmployeeRevision,
     MemberKind,
     PublishedEmployeeDefinitionAuthority,
+    ResponsibilityBinding,
     ScopedEmployeeAuthorization,
 )
 from .digital_employee_definition_postgres import PostgresEmployeeDefinitionRepository
@@ -129,6 +130,19 @@ class DigitalEmployeeProductAssembly:
                 for member in command.members
             ),
             command.predecessorEmployeeRevisionId,
+            tuple(
+                ResponsibilityBinding(
+                    b.responsibility,
+                    CompositionMember(
+                        MemberKind(b.member.kind),
+                        b.member.resourceId,
+                        b.member.revisionId,
+                        b.member.digest,
+                    ),
+                )
+                for b in (command.responsibilityBindings or ())
+            ),
+            responsibility_bindings_explicit=command.responsibilityBindings is not None,
         )
         return self.employee_definition_projection(
             service.create(
@@ -415,6 +429,18 @@ class DigitalEmployeeProductAssembly:
             "aggregateVersion": value["aggregateVersion"],
             "role": revision["role"],
             "responsibilities": list(revision["responsibilities"]),
+            "responsibilityBindings": [
+                {
+                    "responsibility": b["responsibility"],
+                    "member": {
+                        "kind": b["member"]["kind"],
+                        "resourceId": b["member"]["resource_id"],
+                        "revisionId": b["member"]["revision_id"],
+                        "digest": b["member"]["digest"],
+                    },
+                }
+                for b in revision.get("responsibilityBindings", ())
+            ],
             "members": [
                 {
                     "kind": member["kind"],

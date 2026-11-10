@@ -351,7 +351,7 @@ export function DigitalEmployeesPage() {
 
   function showSection(section: DetailSection) {
     setDetailSection(section);
-    updateUrl({ section });
+    updateUrl({ section, ...(params.get("employeeEdit")==="review"?{employeeEdit:"",employeeEditOriginId:"",employeeEditOriginRevision:""}:{}) });
     requestAnimationFrame(() => {
       if (detailScroll.current) detailScroll.current.scrollTop = 0;
     });

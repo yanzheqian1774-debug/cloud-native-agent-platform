@@ -18,6 +18,7 @@ from agent_console.digital_employee_definition import (
     EmployeeDefinitionRepository,
     EmployeeRevision,
     MemberKind,
+    ResponsibilityBinding,
 )
 from agent_console.execution_domain import ExecutionPersistenceError, ScopeIdentity
 from agent_console.execution_postgres import (
@@ -89,7 +90,7 @@ class EmployeeDefinitionOwnerAdapter:
             ) from exc
 
         revision = value["revision"]
-        return WorkbenchEmployeeRevision(
+        result = WorkbenchEmployeeRevision(
             resourceKind="DIGITAL_EMPLOYEE_DEFINITION",
             employeeDefinitionId=revision["definitionId"],
             employeeDefinitionRevisionId=revision["revisionId"],
@@ -106,9 +107,24 @@ class EmployeeDefinitionOwnerAdapter:
                 }
                 for member in revision["members"]
             ],
+            responsibilityBindings=[
+                {
+                    "responsibility": b["responsibility"],
+                    "member": {
+                        "kind": b["member"]["kind"],
+                        "resourceId": b["member"]["resource_id"],
+                        "revisionId": b["member"]["revision_id"],
+                        "digest": b["member"]["digest"],
+                    },
+                }
+                for b in revision.get("responsibilityBindings", ())
+            ],
             lifecycleState=value["lifecycleState"],
             publicationState=value["publicationState"],
         ).model_dump(mode="json")
+        if not result["responsibilityBindings"]:
+            result.pop("responsibilityBindings")
+        return result
 
 
 class EmployeeDefinitionCommandOwnerAdapter:
@@ -226,6 +242,22 @@ class EmployeeDefinitionCommandOwnerAdapter:
                         for member in call.payload["members"]
                     ),
                     call.payload.get("predecessorEmployeeRevisionId"),
+                    tuple(
+                        ResponsibilityBinding(
+                            b["responsibility"],
+                            CompositionMember(
+                                MemberKind(b["member"]["kind"]),
+                                b["member"]["resourceId"],
+                                b["member"]["revisionId"],
+                                b["member"]["digest"],
+                            ),
+                        )
+                        for b in (call.payload.get("responsibilityBindings") or ())
+                    ),
+                    responsibility_bindings_explicit=call.payload.get(
+                        "responsibilityBindings"
+                    )
+                    is not None,
                 )
                 value = self.repository.create_for_workbench(
                     call.connection,

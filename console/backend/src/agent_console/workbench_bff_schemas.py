@@ -166,6 +166,11 @@ class WorkbenchEmployeeCreateMember(StrictWorkbenchModel):
     digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")
 
 
+class WorkbenchResponsibilityBinding(StrictWorkbenchModel):
+    responsibility: str = Field(min_length=1, max_length=500)
+    member: WorkbenchEmployeeCreateMember
+
+
 class WorkbenchCreateEmployeeDefinition(StrictWorkbenchModel):
     employeeDefinitionId: str = Field(min_length=1, max_length=200)
     employeeDefinitionRevisionId: str = Field(min_length=1, max_length=200)
@@ -173,6 +178,9 @@ class WorkbenchCreateEmployeeDefinition(StrictWorkbenchModel):
     responsibilities: tuple[str, ...] = Field(min_length=1, max_length=32)
     members: tuple[WorkbenchEmployeeCreateMember, ...] = Field(
         min_length=1, max_length=128
+    )
+    responsibilityBindings: tuple[WorkbenchResponsibilityBinding, ...] | None = Field(
+        default=None, max_length=4096
     )
     predecessorEmployeeRevisionId: str | None = Field(default=None, max_length=200)
     expectedVersion: int = Field(ge=0)
@@ -205,6 +213,7 @@ class WorkbenchEmployeeRevision(StrictWorkbenchModel):
     role: str
     responsibilities: tuple[str, ...]
     members: tuple[WorkbenchEmployeeMember, ...]
+    responsibilityBindings: tuple[WorkbenchResponsibilityBinding, ...] = ()
     lifecycleState: Literal[
         "DRAFT", "VALIDATED", "APPROVED", "PUBLISHED", "REJECTED", "DEPRECATED"
     ]

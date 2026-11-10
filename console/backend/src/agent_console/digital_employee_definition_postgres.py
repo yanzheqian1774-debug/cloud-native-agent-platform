@@ -666,12 +666,20 @@ class PostgresEmployeeDefinitionRepository:
                 key,
             )
         else:
-            self._read(
+            previous = self._read(
                 connection,
                 revision.scope,
                 revision.definition_id,
                 revision.predecessor_revision_id,
             )
+            if (
+                previous["revision"].get("responsibilityBindings")
+                and not revision.responsibility_bindings
+                and not revision.responsibility_bindings_explicit
+            ):
+                raise EmployeeDefinitionError(
+                    "INVALID_RESPONSIBILITY_BINDING_CONFIRMATION_REQUIRED"
+                )
             self._require_unused_predecessor(
                 connection, key, revision.predecessor_revision_id
             )
@@ -731,12 +739,20 @@ class PostgresEmployeeDefinitionRepository:
                     key,
                 )
             else:
-                self._read(
+                previous = self._read(
                     conn,
                     revision.scope,
                     revision.definition_id,
                     revision.predecessor_revision_id,
                 )
+                if (
+                    previous["revision"].get("responsibilityBindings")
+                    and not revision.responsibility_bindings
+                    and not revision.responsibility_bindings_explicit
+                ):
+                    raise EmployeeDefinitionError(
+                        "INVALID_RESPONSIBILITY_BINDING_CONFIRMATION_REQUIRED"
+                    )
                 self._require_unused_predecessor(
                     conn, key, revision.predecessor_revision_id
                 )

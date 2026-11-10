@@ -6,6 +6,8 @@ export type EmployeeMember = {
   digest: string;
 };
 
+export type ResponsibilityBinding = {responsibility:string; member:EmployeeMember};
+
 export type PublicationState = "PUBLISHED" | "NOT_PUBLISHED";
 export type EmployeeLifecycleState =
   | "DRAFT"
@@ -26,6 +28,7 @@ export type EmployeeDefinitionSummary = {
 export type EmployeeDefinition = EmployeeDefinitionSummary & {
   resourceKind: "DIGITAL_EMPLOYEE_DEFINITION";
   responsibilities: string[];
+  responsibilityBindings?: ResponsibilityBinding[];
   members: EmployeeMember[];
   lifecycleState?: EmployeeLifecycleState;
   aggregateVersion?: number;
@@ -43,6 +46,7 @@ export type EmployeeCreateCommand = {
   employeeDefinitionRevisionId: string;
   role: string;
   responsibilities: string[];
+  responsibilityBindings?: ResponsibilityBinding[];
   members: EmployeeMember[];
   predecessorEmployeeRevisionId?: string;
   expectedVersion: number;

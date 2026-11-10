@@ -1020,3 +1020,81 @@ def test_concurrent_public_create_replays_one_employee_revision(
             (body["employeeDefinitionId"], body["employeeDefinitionId"]),
         ).fetchone()
     assert counts == (1, 1)
+
+
+def test_public_responsibility_binding_roundtrip_requires_exact_read(
+    employee_workbench,
+):
+    creator = TestClient(
+        employee_workbench.application, base_url="https://console.example"
+    )
+    csrf = login(creator, "creator-secret")
+    employee_id = "employee-definition:binding-readback"
+    body = create_body(
+        employee_workbench, command_id="create-binding", definition_id=employee_id
+    )
+    knowledge = {
+        "kind": "KNOWLEDGE",
+        "resourceId": "knowledge:binding",
+        "revisionId": "knowledge:one",
+        "digest": "b" * 64,
+    }
+    body["members"].append(knowledge)
+    body["responsibilityBindings"] = [
+        {"responsibility": body["responsibilities"][0], "member": knowledge}
+    ]
+    created = creator.post(
+        f"{PREFIX}/employees", json=body, headers=unsafe_headers(csrf)
+    )
+    assert created.status_code == 201
+    route = f"{PREFIX}/employees/{employee_id}/revisions/employee-revision:v1"
+    assert creator.get(route).status_code == 404
+    insert_dynamic_grant(
+        employee_workbench.authority,
+        employee_workbench.now,
+        principal="human:creator",
+        grant=ExactGrant(
+            "EMPLOYEE", "READ", f"employee:{employee_id}:employee-revision:v1"
+        ),
+        key="binding-read",
+    )
+    readback = creator.get(route)
+    assert readback.status_code == 200
+    result = readback.json()["result"]
+    assert result["responsibilityBindings"] == body["responsibilityBindings"]
+    assert (
+        result["employeeDefinitionDigest"]
+        == created.json()["result"]["employeeDefinitionDigest"]
+    )
+    assert result["publicationState"] == "NOT_PUBLISHED"
+    assert result["lifecycleState"] == "DRAFT"
+    successor = {
+        **body,
+        "employeeDefinitionRevisionId": "employee-revision:v2",
+        "predecessorEmployeeRevisionId": "employee-revision:v1",
+        "expectedVersion": 1,
+        "commandId": "legacy-successor",
+    }
+    successor.pop("responsibilityBindings")
+    rejected = creator.post(
+        f"{PREFIX}/employees", json=successor, headers=unsafe_headers(csrf)
+    )
+    assert rejected.status_code == 422
+    assert (
+        rejected.json()["reasonCode"]
+        == "INVALID_RESPONSIBILITY_BINDING_CONFIRMATION_REQUIRED"
+    )
+    assert (
+        creator.get(route).json()["result"]["responsibilityBindings"]
+        == body["responsibilityBindings"]
+    )
+    successor.update(responsibilityBindings=[], commandId="explicit-clear-successor")
+    cleared = creator.post(
+        f"{PREFIX}/employees", json=successor, headers=unsafe_headers(csrf)
+    )
+    assert cleared.status_code == 201
+    assert cleared.json()["result"]["lifecycleState"] == "DRAFT"
+    assert (
+        creator.get(route).json()["result"]["responsibilityBindings"]
+        == body["responsibilityBindings"]
+    )

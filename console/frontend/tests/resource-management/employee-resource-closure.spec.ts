@@ -6,7 +6,11 @@ import type {EmployeeDefinition,EmployeeCreateCommand} from '../../src/api/digit
 const old='employee-revision:consumer',agent={kind:'AGENT' as const,resourceId:'agent:consumer',revisionId:'agent-revision:1',digest:'e'.repeat(64)};
 const envelope=(result:unknown)=>({schemaVersion:'workbench-operation.v1',result,continuationIds:[]});
 const canonical=(value:unknown):unknown=>typeof value==='string'?value.normalize('NFC'):Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:1).map(([k,v])=>[k,canonical(v)])):value;
-function ownerDigest(c:EmployeeCreateCommand){return createHash('sha256').update(JSON.stringify(canonical({schemaVersion:'digital-employee-composition.v1',namespace:principal.tenantId,securityDomain:principal.securityDomain,definitionId:c.employeeDefinitionId,revisionId:c.employeeDefinitionRevisionId,role:c.role,responsibilities:c.responsibilities,members:[...c.members].sort((a,b)=>a.kind<b.kind?-1:a.kind>b.kind?1:a.resourceId<b.resourceId?-1:1).map(m=>({kind:m.kind,resource_id:m.resourceId,revision_id:m.revisionId,digest:m.digest})),predecessorRevisionId:c.predecessorEmployeeRevisionId??null}))).digest('hex')}
+function ownerDigest(c:EmployeeCreateCommand){
+ const record:Record<string,unknown>={schemaVersion:'digital-employee-composition.v1',namespace:principal.tenantId,securityDomain:principal.securityDomain,definitionId:c.employeeDefinitionId,revisionId:c.employeeDefinitionRevisionId,role:c.role,responsibilities:c.responsibilities,members:[...c.members].sort((a,b)=>a.kind<b.kind?-1:a.kind>b.kind?1:a.resourceId<b.resourceId?-1:1).map(m=>({kind:m.kind,resource_id:m.resourceId,revision_id:m.revisionId,digest:m.digest})),predecessorRevisionId:c.predecessorEmployeeRevisionId??null};
+ if(c.responsibilityBindings?.length){record.schemaVersion='digital-employee-composition.v2';record.responsibilityBindings=[...c.responsibilityBindings].sort((a,b)=>c.responsibilities.indexOf(a.responsibility)-c.responsibilities.indexOf(b.responsibility)||(a.member.kind<b.member.kind?-1:a.member.kind>b.member.kind?1:a.member.resourceId<b.member.resourceId?-1:1)).map(b=>({responsibility:b.responsibility,member:{kind:b.member.kind,resource_id:b.member.resourceId,revision_id:b.member.revisionId,digest:b.member.digest}}))}
+ return createHash('sha256').update(JSON.stringify(canonical(record))).digest('hex');
+}
 async function fixture(page:Page){
  const state=await maintenance(page,true);state.resource.aggregateVersion=8;state.resource.publishedRevisionId='revision:2';state.resource.currentDraftRevisionId=null;state.resource.lifecycleState='PUBLISHED';state.resource.revisions[0].state='PUBLISHED';state.resource.revisions.push({...structuredClone(state.resource.revisions[0]),revisionId:'revision:2',predecessorRevisionId:'revision:1',digest:'b'.repeat(64),state:'PUBLISHED'});
  state.resource.testResults=[{resultId:'test:old',revisionId:'revision:1',revisionDigest:'a'.repeat(64),operation:'READ_DATA',caseName:'旧维护用例',status:'PASSED',actualExecution:true,verificationLevel:'ISOLATED_SYNTHETIC_EXECUTOR',actual:{oldRevision:true}},{resultId:'test:current',revisionId:'revision:2',revisionDigest:'b'.repeat(64),operation:'READ_DATA',caseName:'新维护用例',status:'PASSED',actualExecution:true,verificationLevel:'ISOLATED_SYNTHETIC_EXECUTOR',actual:{newRevision:true}},{resultId:'test:unverified',revisionId:'unknown',revisionDigest:'0'.repeat(64),status:'PASSED',actualExecution:true}];
@@ -32,7 +36,7 @@ async function fixture(page:Page){
   if(path.endsWith('/employees')){
    if(extra.rejectNext){const reasonCode=extra.rejectNext;extra.rejectNext='';return route.fulfill({status:409,json:{reasonCode}})}
    const command=body as EmployeeCreateCommand;expect(command.employeeDefinitionId).toBe(employeeId);expect(command.predecessorEmployeeRevisionId).toBe(old);expect(command.expectedVersion).toBe(1);
-   original.aggregateVersion=2;result={...structuredClone(original),employeeDefinitionRevisionId:command.employeeDefinitionRevisionId,employeeDefinitionDigest:ownerDigest(command),responsibilities:command.responsibilities,members:command.members,aggregateVersion:2};extra.records.set(result.employeeDefinitionRevisionId,result);
+   original.aggregateVersion=2;result={...structuredClone(original),employeeDefinitionRevisionId:command.employeeDefinitionRevisionId,employeeDefinitionDigest:ownerDigest(command),responsibilities:command.responsibilities,responsibilityBindings:command.responsibilityBindings,members:command.members,aggregateVersion:2};extra.records.set(result.employeeDefinitionRevisionId,result);
   }else{
    result=extra.records.get(rev)!;expect(body.employeeDefinitionDigest).toBe(result.employeeDefinitionDigest);expect(body.expectedVersion).toBe(result.aggregateVersion);
    result.aggregateVersion!++;result.lifecycleState=path.endsWith('/validation')?'VALIDATED':path.endsWith('/approvals')?'APPROVED':'PUBLISHED';result.publicationState=result.lifecycleState==='PUBLISHED'?'PUBLISHED':'NOT_PUBLISHED';
@@ -241,4 +245,31 @@ test('work return restores exact employee tab scroll and focus after authorized 
  await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBe(top);
  await expect(page.getByRole('button',{name:'工作记录',exact:true})).toHaveClass(/active/);
  expect(extra.posts).toHaveLength(0);
+});
+
+
+test('explicit duty resource association survives save and reload without publishing or executing',async({page})=>{
+ const {extra,original}=await fixture(page);await page.goto(href().replace('employeeView=professional&',''));
+ await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ const mapping=page.getByRole('group',{name:'设置职责与资源关联',exact:true});
+ await mapping.locator('summary').filter({hasText:'维护旧修订'}).click();
+ await mapping.getByRole('checkbox',{name:'维护旧修订：关联资源 2',exact:true}).check();
+ await page.getByRole('button',{name:'核对修改',exact:true}).click();
+ await expect(page.getByText('本次保存 1 项职责资源关联。',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'保存修改草稿',exact:true}).click();
+ await expect.poll(()=>extra.posts.length).toBe(1);const command=extra.posts[0].body as EmployeeCreateCommand;
+ expect(command.responsibilityBindings).toEqual([{responsibility:'维护旧修订',member:original.members[2]}]);
+ await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(command.employeeDefinitionRevisionId);
+ await page.getByRole('navigation',{name:'选中员工详情分类'}).getByRole('button',{name:'职责与资源',exact:true}).click();await page.reload();
+ await expect(page.getByRole('region',{name:'职责与资源关联',exact:true}).getByRole('article',{name:'技能绑定资源',exact:true})).toHaveCount(1);
+ expect(extra.posts).toHaveLength(1);expect(original.responsibilityBindings).toBeUndefined();expect(original.employeeDefinitionRevisionId).toBe(old);
+});
+
+test('editing a mapped duty requires explicit stale association removal before saving',async({page})=>{
+ const {extra,original}=await fixture(page);original.responsibilityBindings=[{responsibility:original.responsibilities[0],member:original.members[2]}];
+ await page.goto(href().replace('employeeView=professional&',''));await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await page.getByLabel('职能职责',{exact:true}).fill('新的职责');await page.getByRole('button',{name:'核对修改',exact:true}).click();
+ await expect(page.getByText('请先处理职责与资源的失效关联。',{exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
+ await page.getByRole('button',{name:'移除此失效关联',exact:true}).click();await page.getByRole('button',{name:'核对修改',exact:true}).click();
+ await expect(page.getByRole('button',{name:'保存修改草稿',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
 });
