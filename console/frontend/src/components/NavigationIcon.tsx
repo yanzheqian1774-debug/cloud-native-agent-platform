@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 
 export type NavigationIconName =
-  | "skill" | "mcp" | "home" | "problem" | "employee" | "flow" | "knowledge" | "resource"
+  | "network" | "skill" | "mcp" | "home" | "problem" | "employee" | "flow" | "knowledge" | "resource"
   | "record" | "manage" | "runtime" | "outcome" | "shield" | "agent"
   | "relationships" | "attention" | "applications" | "operations"
   | "model" | "usage" | "help" | "conversation" | "target" | "clock" | "calendar";
 
 const paths: Record<NavigationIconName, ReactNode> = {
-  skill: <path d="m12 2 10 5v10l-10 5-10-5V7zM2 7l10 5 10-5M12 12v10"/>,
-  mcp: <><circle cx="12" cy="4" r="3"/><circle cx="4" cy="19" r="3"/><circle cx="20" cy="19" r="3"/><path d="M12 7v5M4 16v-4h16v4"/></>,
+  network: <><rect x="16" y="16" width="6" height="6" rx="1"></rect><rect x="2" y="16" width="6" height="6" rx="1"></rect><rect x="9" y="2" width="6" height="6" rx="1"></rect><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"></path><path d="M12 12V8"></path></>,
+  skill: <><path d="M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="m5 16-3 3 3 3"></path><path d="m9 22 3-3-3-3"></path></>,
+  mcp: <><path d="M12 22v-5"></path><path d="M15 8V2"></path><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"></path><path d="M9 8V2"></path></>,
   calendar: <><rect x="4" y="4" width="16" height="18" rx="2"/><path d="M8 2v5M16 2v5M4 10h16M8 14h2M14 14h2M8 18h2M14 18h2"/></>,
   clock: <><path d="M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0M12 5v8l5 2" /></>,
   target: <><path d="M22 12a10 10 0 1 1-6-9M17 12a5 5 0 1 1-5-5M12 12l10-10M17 2h5v5" /></>,

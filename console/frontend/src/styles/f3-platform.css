@@ -1,0 +1,52 @@
+/* Frozen V6.9-F3 shared frame. Existing feature-specific scroll owners remain. */
+.px-shell.f3-platform{--px-blue:#4567cd;--px-blue-dark:#3557b9;--px-ink:#273851;--px-muted:#63738b;--px-line:#e0e6ef;--px-bg:#f5f7fb;--px-shadow:none;grid-template-columns:216px minmax(0,1fr);grid-template-rows:64px minmax(0,1fr) 32px;color:var(--px-ink);background:var(--px-bg);font:14px/1.65 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.px-shell.f3-platform .px-topbar{grid-column:2;grid-row:1;height:64px;min-height:64px;padding:0 28px;gap:16px;border-color:var(--px-line);color:var(--px-ink)}
+.px-shell.f3-platform .px-sidebar{inset:0 auto 0 0;width:216px;background:#fff;border-right:1px solid var(--px-line);padding:0 12px 14px;display:flex;flex-direction:column;min-height:0}
+.px-shell.f3-platform .px-sidebar-brand{display:flex;min-height:64px;height:64px;flex-shrink:0;padding:0 8px;font-size:16px;font-weight:650;gap:9px;color:var(--px-ink)}
+.px-shell.f3-platform .px-brand-mark,.px-shell.f3-platform .px-brand-mark svg{width:24px;height:24px;flex-basis:24px;color:var(--px-blue)}
+.px-shell.f3-platform .px-brand>span:last-child{font-size:15px}.px-shell.f3-platform .px-mobile-brand{display:none}
+.px-shell.f3-platform .px-business-nav{flex:1;min-height:0;gap:18px;padding-top:16px;overflow:auto;overscroll-behavior:contain}
+.px-shell.f3-platform .px-business-nav h2{font-size:11px;font-weight:400;color:var(--px-muted);margin:0 10px 9px}
+.px-shell.f3-platform .px-business-nav :is(a,summary){font-size:14px;min-height:40px;padding:8px 10px;gap:10px;font-weight:400;color:var(--px-muted);border-radius:7px}
+.px-shell.f3-platform .px-business-nav :is(a.active,summary.active){background:#eef3ff;color:var(--px-blue);font-weight:600}
+.px-shell.f3-platform .px-business-nav svg{width:17px;height:17px;flex-basis:17px;stroke-width:1.7}
+.px-shell.f3-platform .px-business-nav details>a{margin:3px 0 3px 20px;padding:6px 8px;font-size:13px}.px-shell.f3-platform .px-business-nav details>a.active{box-shadow:inset 3px 0 var(--px-blue)}
+.px-shell.f3-platform .px-header-path,.px-shell.f3-platform .px-header-tool{color:var(--px-ink)}.px-shell.f3-platform .px-header-actions{gap:16px;font-size:13px}.px-shell.f3-platform .px-new-conversation{background:var(--px-blue);border:1px solid var(--px-blue);color:#fff;min-height:36px;border-radius:7px;font-size:13px;padding:7px 12px}.px-shell.f3-platform .px-user{color:var(--px-blue);background:#eef3ff}
+.px-shell.f3-platform .px-platform-footer{grid-column:2;border-color:var(--px-line);color:var(--px-muted);font-size:11px}.px-shell.f3-platform .px-content{min-width:0;background:var(--px-bg)}
+.px-shell.f3-platform .px-content>aside[aria-label="开发超级管理员"]{margin:0!important;padding:5px 24px!important;border:0!important;border-bottom:1px solid var(--px-line)!important;border-radius:0!important;background:var(--px-bg)!important;color:var(--px-muted)!important;font-size:12px;line-height:1.6}
+.px-shell.f3-platform :is(.trusted-resources,.employee-workbench,.current-work-directory){color:var(--px-ink)}
+.px-shell.f3-platform :is(.px-shared-page-header h1,.px-page-title h1){color:var(--px-ink);font-size:26px;font-weight:650;line-height:1.4}
+.px-shell.f3-platform :is(button,input,select,textarea){font-family:inherit}.px-shell.f3-platform :is(button,input,select){font-size:13px}.px-shell.f3-platform button{border-radius:7px}
+.px-shell.f3-platform :is(.rm-primary,.rd-primary-actions .primary,.employee-create-button){background:var(--px-blue);border-color:var(--px-blue)}
+.px-shell.f3-platform .px-resource-navigation{font-size:13px;border-color:var(--px-line)}
+@media(min-width:701px){.px-shell.f3-platform .px-content:has(>.f3-conversation){height:calc(100svh - 96px)}}
+@media(max-width:1000px) and (min-width:701px){.px-shell.f3-platform{grid-template-columns:216px minmax(0,1fr)}.px-shell.f3-platform .px-topbar{padding:0 16px}.px-shell.f3-platform .px-header-identity{display:none}}
+@media(max-width:700px){.px-shell.f3-platform{display:flex;flex-direction:column;min-height:100svh}.px-shell.f3-platform .px-sidebar{display:none}.px-shell.f3-platform .px-topbar{height:58px;min-height:58px;padding:0 12px;gap:10px}.px-shell.f3-platform .px-mobile-brand{display:flex;height:58px;min-width:0;font-size:14px;gap:8px}.px-shell.f3-platform .px-mobile-brand>span:last-child{font-size:14px}.px-shell.f3-platform .px-header-actions{gap:10px}.px-shell.f3-platform .px-content{width:100%;min-height:0}.px-shell.f3-platform .px-content:has(>.f3-conversation){height:0;flex:1}.px-shell.f3-platform .px-platform-footer{padding:8px 12px}}
+/* Keep keyboard focus visible; only suppress a pointer/initial route heading focus. */
+.px-shell.f3-platform h1.f3-route-autofocus:focus{outline:none}
+.px-shell.f3-platform .f3-workspace-context{flex-shrink:0;margin:8px 0 16px;padding:10px 12px;border:1px solid var(--px-line);border-radius:7px;background:var(--px-bg);font-size:13px}.f3-workspace-context summary{cursor:pointer}.f3-workspace-context small{display:block;overflow-wrap:anywhere;color:var(--px-muted);font-size:11px;margin-top:8px}
+.px-shell.f3-platform .px-sidebar{padding-bottom:76px}.px-shell.f3-platform .px-identity-menu{position:fixed;left:12px;bottom:14px;top:auto;width:192px;z-index:35}.px-shell.f3-platform .px-identity-menu>summary{width:100%;justify-content:flex-start;gap:8px}.px-shell.f3-platform .px-header-identity{display:block;max-width:134px;font-size:12px}.px-shell.f3-platform .px-identity-menu>div{top:auto;bottom:calc(100% + 10px);left:0;right:auto;width:280px}
+.px-shell.f3-platform .trusted-resources{padding:24px;max-width:1440px}.px-shell.f3-platform .trusted-resources .px-shared-page-header{margin-bottom:14px}
+.px-shell.f3-platform .resource-management:not(.rd-detail-mode){background:transparent;border:0;padding:0;margin:0 0 12px;box-shadow:none}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>header{gap:12px;align-items:center;margin:0 0 8px}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>header h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>header p{font-size:12px;color:var(--px-muted);margin:0}
+.px-shell.f3-platform .rm-batch{border:0;background:transparent;padding:0;margin:8px 0}.px-shell.f3-platform .rm-actions button{color:var(--px-blue);border-color:var(--px-line);font-size:13px;min-height:36px}.px-shell.f3-platform .rm-actions .rm-primary{color:#fff;background:var(--px-blue)}
+.px-shell.f3-platform .f3-redundant-types{display:none}
+.px-shell.f3-platform .trusted-resource-metrics{display:flex;flex-wrap:wrap;gap:10px 24px;margin:10px 0 14px}.px-shell.f3-platform .trusted-resource-metrics article{display:flex;align-items:baseline;gap:8px;background:transparent;border:0;padding:0;box-shadow:none}.px-shell.f3-platform .trusted-resource-metrics span{font-size:12px;color:var(--px-muted)}.px-shell.f3-platform .trusted-resource-metrics strong{font-size:16px;font-weight:600}
+.px-shell.f3-platform .trusted-resource-filters{padding:12px 16px;gap:12px}.px-shell.f3-platform .trusted-resource-filters label:first-child{flex:1}.px-shell.f3-platform .trusted-resource-filters p{flex-basis:100%;margin:0;font-size:12px}.px-shell.f3-platform .f3-resource-cards{padding:16px}
+@media(max-width:700px){.px-shell.f3-platform .px-identity-menu{position:relative;left:auto;bottom:auto;width:auto}.px-shell.f3-platform .px-header-identity{display:none}.px-shell.f3-platform .px-identity-menu>div{top:100%;bottom:auto;left:auto;right:0;max-width:calc(100vw - 24px)}.px-shell.f3-platform .trusted-resources{padding:16px 12px}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>header{flex-wrap:wrap}.px-shell.f3-platform .trusted-resource-filters{padding:12px}.px-shell.f3-platform .f3-resource-cards{padding:12px}}
+.px-shell.f3-platform .resource-management:not(.rd-detail-mode){display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:start}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>*{grid-column:1/-1}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>header{grid-column:2;grid-row:1;justify-content:flex-end;margin:0}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>.rm-batch{grid-column:1;grid-row:1;margin:0}.px-shell.f3-platform .resource-management:not(.rd-detail-mode):has(.rm-batch input)>.rm-batch{grid-column:1/-1;grid-row:2}.rm-maintenance-guidance{font-size:12px;color:var(--px-muted);max-width:260px}.rm-maintenance-guidance summary{cursor:pointer;padding:8px 0}.rm-maintenance-guidance p{margin-top:8px!important}
+.px-shell.f3-platform .trusted-resource-filters p{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+@media(max-width:1000px){.px-shell.f3-platform .resource-management:not(.rd-detail-mode){display:block}.px-shell.f3-platform .resource-management:not(.rd-detail-mode)>header{margin-bottom:8px}.px-shell.f3-platform .rm-maintenance-guidance{max-width:100%}}
+
+/* Compact the existing maintenance controls and let individual F3 cards own their surface. */
+.px-shell.f3-platform .resource-management:not(.rd-detail-mode) .rm-actions{margin:0}
+.px-shell.f3-platform .resource-management:not(.rd-detail-mode) .rm-maintenance-guidance{border:0;background:transparent;padding:0;margin:0;box-shadow:none}
+.px-shell.f3-platform .trusted-resource-list{background:transparent;border:0;border-radius:0;overflow:visible}
+.px-shell.f3-platform .trusted-resource-filters{padding:0 0 18px;border:0}
+.px-shell.f3-platform .trusted-resource-filters label{font-size:12px;font-weight:400;color:var(--px-muted)}
+.px-shell.f3-platform .f3-resource-cards{padding:0;gap:20px}
+.px-shell.f3-platform .f3-resource-card{padding:22px;border-radius:16px}
+.px-shell.f3-platform .f3-resource-card>header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center}
+.px-shell.f3-platform .f3-resource-card>header .resource-type-label{justify-self:start}
+.px-shell.f3-platform .f3-resource-card>header h2{grid-row:2;grid-column:1/-1;margin:4px 0 0;font-size:15px}
+.px-shell.f3-platform .f3-resource-maintain{grid-column:2;grid-row:1;margin:0}
+@media(max-width:700px){.px-shell.f3-platform .f3-resource-card{padding:16px}.px-shell.f3-platform .f3-resource-cards{gap:14px}}

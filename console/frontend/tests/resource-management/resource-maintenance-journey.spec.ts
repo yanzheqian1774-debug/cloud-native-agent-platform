@@ -57,7 +57,7 @@ test('maintenance draft edit failed test checked publication exact employee and 
     expect(new URL(page.url()).searchParams.get('resourceRevision')).toBe('revision:1');
     expect(state.posts).toHaveLength(beforeRead);
     await page.getByRole('link', { name: '返回资源目录', exact: true }).click();
-    await page.locator('.rm-resource-list button').filter({ hasText: '资源维护完整路径核验' }).click();
+    await page.getByRole('article',{name:'资源维护完整路径核验',exact:true}).getByRole('link',{name:'维护当前配置',exact:true}).click();
     await page.getByRole('button', { name: '创建后继草稿', exact: true }).click();
     await expect.poll(() => state.resource.currentDraftRevisionId).toBe('revision:2');
     const pinned = await page.getByRole('link', { name: '查看发布版本与使用记录' }).getAttribute('href');
@@ -166,5 +166,5 @@ test('late maintenance completion preserves the tab chosen while the command was
 });
 
 test('expired policy service cannot invalidate a still-authenticated user session',async({page})=>{
- await fixture(page);await page.addInitScript(()=>window.addEventListener('workbench-session-expired',()=>sessionStorage.setItem('unexpected-session-expiry','yes')));await page.route('**/api/workbench/v1/resource-management/skill',r=>r.fulfill({status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}));await page.goto('/skills');await expect(page.getByRole('region',{name:'资源配置状态'})).toContainText('当前未就绪');expect(await page.evaluate(()=>sessionStorage.getItem('unexpected-session-expiry'))).toBeNull();await expect(page.getByRole('link',{name:'描述新的业务需求',exact:true})).toBeVisible();
+ await fixture(page);await page.addInitScript(()=>window.addEventListener('workbench-session-expired',()=>sessionStorage.setItem('unexpected-session-expiry','yes')));await page.route('**/api/workbench/v1/resource-management/skill',r=>r.fulfill({status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}));await page.goto('/skills');await expect(page.getByRole('region',{name:'资源配置状态'})).toContainText('当前未就绪');expect(await page.evaluate(()=>sessionStorage.getItem('unexpected-session-expiry'))).toBeNull();await expect(page.getByRole('link',{name:'新会话',exact:true})).toBeVisible();
 });

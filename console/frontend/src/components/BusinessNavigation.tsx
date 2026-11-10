@@ -38,16 +38,16 @@ export function BusinessNavigation({mobile=false,sessionIdentity}:{mobile?:boole
   const advancedActive=advanced.some(x=>x.to===pathname);
   return <nav className="px-business-nav" aria-label={mobile?"移动端全部产品导航":"P1 核心产品导航"}>
     <section><h2>工作与协同</h2>
-      <EntryLink entry={{to:"/dashboard",label:"首页",icon:"home"}}/>
+      <EntryLink entry={{to:"/dashboard",label:"首页 · 我的工作台",icon:"home"}}/>
       <details key={`work-${workActive}`} open={workActive}>
-        <summary className={workActive?"active":""}><NavigationIcon name="problem"/><span>问题工作台</span></summary>
-        {sessionIdentity?<ConversationList key={sessionIdentity}/>:<p className="conversation-source-note">登录后读取当前账号的会话记录。</p>}<NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
-      </details>
-      <EntryLink entry={{to:"/workflow-definitions",label:"业务能力与流程",icon:"relationships"}}/>
+        <summary className={workActive?"active":""}><NavigationIcon name="problem"/><span>我的会话</span></summary>
+        {sessionIdentity?<ConversationList key={sessionIdentity}/>:<p className="conversation-source-note">登录后读取当前账号的会话记录。</p>}</details><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
+
     </section>
-    <section><h2>人员与资源</h2><EntryLink entry={{to:"/digital-employees",label:"数字员工",icon:"employee"}}/>
+    <section><h2>业务与团队</h2><EntryLink entry={{to:"/workflow-definitions",label:"业务流程",icon:"relationships"}}/><EntryLink entry={{to:"/digital-employees",label:"数字员工",icon:"employee"}}/>
+    </section><section><h2>资源与平台</h2>
       <details key={`resources-${resourceActive}`} open={resourceActive}>
-        <summary className={resourceActive?"active":""}><NavigationIcon name="resource"/><span>能力资源</span></summary>
+        <summary className={resourceActive?"active":""}><NavigationIcon name="resource"/><span>资源管理</span></summary>
         {resources.map(entry=><EntryLink key={entry.to} entry={entry}/>)}
       </details>
     </section>

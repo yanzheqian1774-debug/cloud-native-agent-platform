@@ -8,3 +8,4 @@
 @media(max-width:1000px){.f3-resource-cards{grid-template-columns:1fr}}@media(max-width:760px){.f3-resource-cards{padding:12px;gap:12px}.f3-resource-card{padding:14px}.f3-resource-card h2{font-size:16px}}
 
 .f3-resource-purpose{font-size:13px;line-height:1.8;color:#63738b;white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0 14px}
+.f3-resource-maintain{display:inline-flex;align-items:center;min-height:36px;font-size:13px;color:#4567cd;margin-top:10px;padding:6px 12px;border:1px solid #e0e6ef;border-radius:7px;text-decoration:none}.f3-resource-maintain:hover{background:#eef3ff}
