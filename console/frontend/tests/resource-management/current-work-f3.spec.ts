@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 const report=JSON.parse(readFileSync(new URL('../e2e/fixtures/delivery-report324.json',import.meta.url),'utf8'));
 const plan=JSON.parse(readFileSync(new URL('../e2e/fixtures/delivery-plan.json',import.meta.url),'utf8'));
 async function fixture(page:Page,count=1){
- const state={reads:[] as string[],writes:[] as string[],denied:false,nativeDenied:false,mismatch:false,running:false,answer:null as string|null,expired:false};
+ const state={reads:[] as string[],writes:[] as string[],denied:false,nativeDenied:false,mismatch:false,running:false,answer:null as string|null,expired:false,question:'确认使用生产环境还是测试环境规范？'};
  const ids=Array.from({length:count},(_,i)=>String(i+1));
  await page.route('**/api/**',async route=>{
   const request=route.request(),p=decodeURIComponent(new URL(request.url()).pathname);if(request.method()!=='GET'){state.writes.push(p);return route.abort()}
@@ -14,8 +14,8 @@ async function fixture(page:Page,count=1){
   if(p.endsWith('/conversations'))return ok({items:ids.map(id=>({conversation_id:'c'+id,title:'交付检查 '+id,created_at:'2026-11-10T00:00:00Z'}))});
   const detail=p.match(/\/problems\/p(\d+)$/);if(detail){const id=detail[1];return ok({problem:{business_problem_id:'p'+id},revisions:[{business_problem_id:'p'+id,revision_id:'p'+id+':1',digest:'a'.repeat(64),title:'交付检查 '+id,description:'固定问题范围'}]})}
   const journey=p.match(/\/conversations\/c(\d+)\/journey$/);if(journey)return ok({state:{execution:'e'+journey[1]}});
-  const conversation=p.match(/\/conversations\/c(\d+)$/);if(conversation){const id=conversation[1];return ok({conversation:{conversation_id:'c'+id,title:'交付检查 '+id,version:1},messages:[],links:[{link_id:'l'+id,readable:true,target:{problemId:'p'+id,executionDigest:'e'+id}}]})}
-  const native=p.match(/\/prepared-executions\/e(\d+)\/native-progress$/);if(native){if(state.nativeDenied)return route.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}});return ok({questions:[{questionKey:'q'+native[1],questionDigest:'a'.repeat(64),question:'确认使用生产环境还是测试环境规范？',expiresAt:state.expired?'2020-01-01':'2099-01-01',expired:state.expired,answer:state.answer}],steps:[],modelInFlight:false})}
+  const conversation=p.match(/\/conversations\/c(\d+)\/work-links$/);if(conversation){const id=conversation[1];return ok({conversation:{conversation_id:'c'+id,title:'交付检查 '+id,version:1},messages:[],links:[{link_id:'l'+id,readable:true,target:{problemId:'p'+id,executionDigest:'e'+id}}]})}
+  const native=p.match(/\/prepared-executions\/e(\d+)\/native-progress$/);if(native){if(state.nativeDenied)return route.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}});return ok({questions:[{questionKey:'q'+native[1],questionDigest:'a'.repeat(64),question:state.question,expiresAt:state.expired?'2020-01-01':'2099-01-01',expired:state.expired,answer:state.answer}],steps:[],modelInFlight:false})}
   const execution=p.match(/\/prepared-executions\/e(\d+)$/);if(execution){if(state.denied)return route.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}});const id=execution[1],source=report.sourceSnapshot;return ok({digest:state.mismatch?'wrong':'e'+id,executionStarted:true,preparation:{plan_id:'plan'+id,plan_version:4,source_snapshot:source,semantics:{...plan.semantics,title:'交付分析 '+id,target:{problem:{resource_id:'p'+id,revision_id:'p'+id+':1',digest:'a'.repeat(64)}}},participants:plan.semantics.tasks.map((t:{task_id:string;operation:string})=>({task_id:t.task_id,instance_id:'worker',assignment_id:'assignment',definition:source,skill:{reference:source,operation:t.operation},profile:source}))},progress:{state:state.running?'RUNNING':'SUCCEEDED',version:1,tasks:plan.semantics.tasks.map((t:{task_id:string})=>({task_id:t.task_id,state:state.running?'RUNNING':'SUCCEEDED',attempt_ordinal:1}))},admission:{state:'ADMITTED'},resourceUses:[],artifacts:[{artifact_id:'artifact'+id,task_id:plan.semantics.tasks.at(-1).task_id,digest:'f'.repeat(64),bytes:1000,created_at:'2026-11-10T00:00:00Z',contentAccess:'AUTHORIZED',content:JSON.stringify(report)}],events:[],outcome:{businessResolution:'UNDETERMINED',confirmationId:null,evaluation:{results:[]}}})}
   return ok({items:[],enabled:false});
  });return state;
@@ -45,7 +45,7 @@ test('narrow task page contains table scrolling and mismatched owner cannot supp
 test('a verified original journey wins over another readable link to the same execution',async({page})=>{
  const s=await fixture(page);s.running=true;
  await page.route('**/api/workbench/v1/conversations',r=>r.fulfill({json:{result:{items:[{conversation_id:'alias'},{conversation_id:'c1'}]}}}));
- await page.route('**/api/workbench/v1/conversations/alias',r=>r.fulfill({json:{result:{conversation:{conversation_id:'alias',title:'关联历史'},messages:[],links:[{readable:true,target:{problemId:'p1',executionDigest:'e1'}}]}}}));
+ await page.route('**/api/workbench/v1/conversations/alias/work-links',r=>r.fulfill({json:{result:{conversation:{conversation_id:'alias',title:'关联历史'},messages:[],links:[{readable:true,target:{problemId:'p1',executionDigest:'e1'}}]}}}));
  await page.route('**/api/workbench/v1/conversations/alias/journey',r=>r.fulfill({json:{result:{state:null}}}));
  await page.goto('/attention');await expect(page.getByRole('link',{name:'在原会话回答',exact:true})).toHaveAttribute('href','/work?conversation=c1');await expect(page.getByRole('link',{name:'在原会话回答',exact:true})).toHaveCount(1);expect(s.writes).toEqual([]);
 });
@@ -54,13 +54,13 @@ test('persisted partial artifacts never make a running task appear completed',as
 });
 
 test('real conversation problem-only link resolves only its matching original journal execution',async({page})=>{
- const s=await fixture(page);await page.route('**/api/workbench/v1/conversations/c1',r=>r.fulfill({json:{result:{conversation:{conversation_id:'c1',title:'交付检查 1'},messages:[],links:[{readable:true,target:{problemId:'p1',revisionId:'p1:1',problemDigest:'a'.repeat(64)}}]}}}));await page.route('**/api/workbench/v1/conversations/c1/journey',r=>r.fulfill({json:{result:{state:{execution:'e1',problem:{business_problem_id:'p1'}}}}}));await page.goto('/tasks?work=e1&origin=c1');await expect(page.locator('.px-delivery-summary')).toBeVisible();await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c1');expect(s.writes).toEqual([]);
+ const s=await fixture(page);await page.route('**/api/workbench/v1/conversations/c1/work-links',r=>r.fulfill({json:{result:{conversation:{conversation_id:'c1',title:'交付检查 1'},messages:[],links:[{readable:true,target:{problemId:'p1',revisionId:'p1:1',problemDigest:'a'.repeat(64)}}]}}}));await page.route('**/api/workbench/v1/conversations/c1/journey',r=>r.fulfill({json:{result:{state:{execution:'e1',problem:{business_problem_id:'p1'}}}}}));await page.goto('/tasks?work=e1&origin=c1');await expect(page.locator('.px-delivery-summary')).toBeVisible();await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c1');expect(s.writes).toEqual([]);
 });
 test('journal execution never attaches to a different linked problem',async({page})=>{
- const s=await fixture(page);await page.route('**/api/workbench/v1/conversations/c1',r=>r.fulfill({json:{result:{conversation:{conversation_id:'c1'},messages:[],links:[{readable:true,target:{problemId:'p1'}}]}}}));await page.route('**/api/workbench/v1/conversations/c1/journey',r=>r.fulfill({json:{result:{state:{execution:'e1',problem:{business_problem_id:'different'}}}}}));await page.goto('/tasks');await expect(page.getByText('当前筛选下没有可读取的执行记录。',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(0);expect(s.writes).toEqual([]);
+ const s=await fixture(page);await page.route('**/api/workbench/v1/conversations/c1/work-links',r=>r.fulfill({json:{result:{conversation:{conversation_id:'c1'},messages:[],links:[{readable:true,target:{problemId:'p1'}}]}}}));await page.route('**/api/workbench/v1/conversations/c1/journey',r=>r.fulfill({json:{result:{state:{execution:'e1',problem:{business_problem_id:'different'}}}}}));await page.goto('/tasks');await expect(page.getByText('当前筛选下没有可读取的执行记录。',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(0);expect(s.writes).toEqual([]);
 });
 test('verified work appears while another historical conversation is still reading',async({page})=>{
- const s=await fixture(page,2);let release=()=>{};const held=new Promise<void>(r=>{release=r});await page.route('**/api/workbench/v1/conversations/c2',async r=>{await held;await r.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}})});await page.goto('/tasks');await expect(page.locator('[data-open-work="e1"]')).toBeVisible();await expect(page.getByText('已读记录先行展示，正在继续核对其余会话；数量尚未完整。',{exact:true})).toBeVisible();release();await expect(page.getByText('已读记录先行展示，正在继续核对其余会话；数量尚未完整。',{exact:true})).toHaveCount(0);await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();expect(s.writes).toEqual([]);
+ const s=await fixture(page,2);let release=()=>{};const held=new Promise<void>(r=>{release=r});await page.route('**/api/workbench/v1/conversations/c2/work-links',async r=>{await held;await r.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}})});await page.goto('/tasks');await expect(page.locator('[data-open-work="e1"]')).toBeVisible();await expect(page.getByText('已读记录先行展示，正在继续核对其余会话；数量尚未完整。',{exact:true})).toBeVisible();release();await expect(page.getByText('已读记录先行展示，正在继续核对其余会话；数量尚未完整。',{exact:true})).toHaveCount(0);await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();expect(s.writes).toEqual([]);
 });
 
 test('selected detail reads only exact owners and survives reload without scanning history',async({page})=>{
@@ -78,4 +78,14 @@ test('different problem revision never substitutes the selected execution snapsh
 
 test('switching exact detail discards a delayed previous execution read',async({page})=>{
  const s=await fixture(page,2);let release=()=>{};const held=new Promise<void>(r=>{release=r});await page.route('**/api/workbench/v1/prepared-executions/e1',async r=>{await held;await r.fallback().catch(()=>{})});await page.goto('/tasks?work=e1&origin=c1');await expect.poll(()=>s.reads.filter(p=>p.endsWith('/session')).length).toBeGreaterThan(0);await page.evaluate(()=>{history.pushState({},'', '/tasks?work=e2&origin=c2');dispatchEvent(new PopStateEvent('popstate'))});await expect(page.locator('.f3-work-detail>header h2')).toHaveText('交付检查 2');release();await expect(page.locator('.f3-work-detail>header h2')).toHaveText('交付检查 2');await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c2');expect(s.writes).toEqual([]);
+});
+
+
+test('directory uses work links without reading unrelated conversation messages',async({page})=>{
+ const s=await fixture(page,3);await page.goto('/tasks');await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(3);
+ expect(s.reads.filter(p=>/\/conversations\/c\d+$/.test(p))).toEqual([]);
+ expect(s.reads.filter(p=>p.endsWith('/work-links'))).toHaveLength(3);expect(s.writes).toEqual([]);
+});
+for(const [question,label] of [['确认使用生产环境还是测试环境规范？','需确认口径'],['请提供交接资料。','需补充资料'],['请确认负责人姓名。','需确认信息']])test('pending label reflects literal question: '+label,async({page})=>{
+ const s=await fixture(page);s.running=true;s.question=question;await page.goto('/attention');await expect(page.locator('.f3-work-decision .f3-work-badge')).toHaveText(label);expect(s.writes).toEqual([]);
 });

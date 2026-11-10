@@ -185,14 +185,7 @@ class PrivateConversations:
                 message["content"] = "当前无权核验原办理记录"
                 message["kind"] = fact["kind"]
                 message["facts"] = {"readable": False}
-        visible = []
-        for link in links:
-            try:
-                resolved = self.resolve_link(ctx, link["target"])
-                visible.append({**link, "readable": True, "title": resolved["title"]})
-            except Exception:
-                # Do not reveal revoked target metadata; never use stale snapshots.
-                visible.append({"link_id": link["link_id"], "readable": False})
+        visible = self.visible_links(ctx, links)
         return {
             "conversation": {
                 k: row[k]
@@ -206,6 +199,41 @@ class PrivateConversations:
             },
             "messages": messages,
             "links": visible,
+        }
+
+    def visible_links(self, ctx, links):
+        visible = []
+        for link in links:
+            try:
+                resolved = self.resolve_link(ctx, link["target"])
+                visible.append({**link, "readable": True, "title": resolved["title"]})
+            except Exception:
+                # Do not reveal revoked target metadata; never use stale snapshots.
+                visible.append({"link_id": link["link_id"], "readable": False})
+        return visible
+
+    def work_links(self, ctx, identity):
+        """Exact authorized links without unrelated message/source projections."""
+        with self.connect() as c:
+            row = self.owned(c, ctx, identity)
+            links = c.execute(
+                "SELECT link_id,target FROM private_conversation.links WHERE "
+                "tenant_id=%s AND security_domain=%s AND conversation_id=%s ORDER "
+                "BY created_at,link_id",
+                (*self.scope(ctx), identity),
+            ).fetchall()
+        return {
+            "conversation": {
+                k: row[k]
+                for k in [
+                    "conversation_id",
+                    "title",
+                    "version",
+                    "created_at",
+                    "archived_at",
+                ]
+            },
+            "links": self.visible_links(ctx, links),
         }
 
     def mutate(self, ctx, identity, body, action):

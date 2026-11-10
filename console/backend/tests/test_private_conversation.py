@@ -82,6 +82,8 @@ def test_private_scope_read_and_write(service, other):
     with pytest.raises(ConversationError, match="NOT_FOUND"):
         service.read(other, identity)
     with pytest.raises(ConversationError, match="NOT_FOUND"):
+        service.work_links(other, identity)
+    with pytest.raises(ConversationError, match="NOT_FOUND"):
         service.mutate(
             other,
             identity,
@@ -221,8 +223,10 @@ def test_bff_flag_session_csrf_and_real_storage(database):
     assert response.status_code == 200, response.text
     identity = response.json()["result"]["conversation_id"]
     assert client.get(path + "/" + identity).status_code == 200
+    assert client.get(path + "/" + identity + "/work-links").status_code == 200
     sessions.logged_out = True
     assert client.get(path + "/" + identity).status_code == 401
+    assert client.get(path + "/" + identity + "/work-links").status_code == 401
     sessions.logged_out = False
     disabled = TestClient(
         create_workbench_bff(
@@ -330,8 +334,14 @@ def test_bff_exact_work_bridge_and_revocation(database):
     response = client.post(path + "/links", json=body, headers=headers)
     assert response.status_code == 200, response.text
     link = response.json()["result"]["identity"]
+    projected = client.get(path + "/work-links").json()["result"]
+    complete = client.get(path).json()["result"]
+    assert projected == {k: complete[k] for k in ("conversation", "links")}
     reader.allowed = False
     assert client.get(path).json()["result"]["links"] == [
+        {"link_id": link, "readable": False}
+    ]
+    assert client.get(path + "/work-links").json()["result"]["links"] == [
         {"link_id": link, "readable": False}
     ]
     response = client.post(
@@ -365,3 +375,57 @@ def test_additive_migration_replay_and_verify_retains_records(database, service)
         )
         assert result.returncode == 0, result.stderr
     assert service.read(ctx(), identity)["conversation"]["conversation_id"] == identity
+
+
+def test_work_links_omit_message_facts_and_do_not_read_message_sources(service):
+    identity = new(service)
+    service.mutate(
+        ctx(),
+        identity,
+        {
+            "idempotencyKey": "link",
+            "expectedVersion": 0,
+            "target": {"problemId": "allowed"},
+        },
+        "link",
+    )
+    service.mutate(
+        ctx(),
+        identity,
+        {
+            "idempotencyKey": "message",
+            "expectedVersion": 1,
+            "content": "private message never needed by directory",
+        },
+        "message",
+    )
+    complete = service.read(ctx(), identity)
+
+    calls = []
+
+    class UnexpectedFacts:
+        def source_read(self, *args):
+            calls.append(args)
+            raise AssertionError("Work links must not project message facts")
+
+    service.facts_reader = UnexpectedFacts()
+    with service.connect() as c:
+        from psycopg.types.json import Jsonb
+
+        c.execute(
+            "INSERT INTO private_conversation.message_facts "
+            "(tenant_id,security_domain,conversation_id,message_id,kind,facts) "
+            "VALUES (%s,%s,%s,%s,%s,%s)",
+            (
+                *service.scope(ctx()),
+                identity,
+                complete["messages"][0]["message_id"],
+                "ACTION_INTENT",
+                Jsonb({"source": {"private": "unrelated"}}),
+            ),
+        )
+    projected = service.work_links(ctx(), identity)
+    assert projected == {k: complete[k] for k in ("conversation", "links")}
+    assert "messages" not in projected
+    assert calls == []
+    assert projected["conversation"]["version"] == 2

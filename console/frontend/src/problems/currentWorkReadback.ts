@@ -28,7 +28,7 @@ export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>voi
   const conversations=await conversationRequest<{items:{conversation_id:string}[]}>('',undefined,undefined,signal);conversations.items.forEach((c,i)=>order.set(c.conversation_id,i));
   await mapBounded(conversations.items,async c=>{
    try{
-    const record=await conversationRequest<PrivateConversation>('/'+c.conversation_id,undefined,undefined,signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000));
+    const record=await conversationRequest<Pick<PrivateConversation,'conversation'|'links'>>('/'+c.conversation_id+'/work-links',undefined,undefined,signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000));
     if(!record.links.some(link=>link.readable&&link.target?.problemId))return;
     let ownedExecution:string|undefined,ownedProblem:string|undefined;
     try{const state=(await conversationRequest<{state?:{execution?:string;problem?:{business_problem_id?:string}}}>('/'+c.conversation_id+'/journey',undefined,undefined,signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000))).state;ownedExecution=state?.execution;ownedProblem=state?.problem?.business_problem_id}catch{/* Readable historical links need not have a journey. */}
@@ -59,7 +59,7 @@ export async function readSelectedWork(digest:string,origin:string,signal?:Abort
  if(detail.problem?.business_problem_id!==ref.resource_id||!problem)throw Error('本次执行引用的问题版本当前不可读，未替换为最新版本。');
  let conversation='',originVerified=false,qs:WorkQuestion[]=[],questionsReadable=true;
  if(origin){try{
-  const record=await conversationRequest<PrivateConversation>('/'+encodeURIComponent(origin),undefined,undefined,signal);let state:{execution?:string;problem?:{business_problem_id?:string}}|undefined;
+  const record=await conversationRequest<Pick<PrivateConversation,'conversation'|'links'>>('/'+encodeURIComponent(origin)+'/work-links',undefined,undefined,signal);let state:{execution?:string;problem?:{business_problem_id?:string}}|undefined;
   try{state=(await conversationRequest<{state?:typeof state}>('/'+encodeURIComponent(origin)+'/journey',undefined,undefined,signal)).state}catch{signal?.throwIfAborted()}
   const linked=record.conversation.conversation_id===origin&&record.links.some(l=>l.readable&&l.target?.problemId===ref.resource_id&&(l.target.executionDigest===digest||(state?.execution===digest&&state.problem?.business_problem_id===ref.resource_id)));
   if(linked){conversation=origin;originVerified=state?.execution===digest}
