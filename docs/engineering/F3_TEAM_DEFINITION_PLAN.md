@@ -66,3 +66,28 @@ real browser create/edit/readback, owner selection semantics and visual comparis
 Reviewer correction: a skill-only new frame is an isolated sample, not complete UI;
 verify shared frame continuity across skills, employees, tasks and conversation,
 including navigation, editing, loading/error states and retained context.
+
+## F3 frontend continuation (2026-11-11)
+
+Reuse the existing private team API for directory, exact detail and successor
+save. The frozen team-detail66 frame supplies team goal and member-local duties;
+show employee detail navigation with exact references, never infer shared task
+ownership from membership. The existing team owner is an accountable reference,
+not permission inheritance or an employee maintainer. New teams default to the
+current authenticated principal; editing preserves the recorded owner until a
+proper responsible-person selector exists.
+
+UI uses trusted session/CSRF and the existing command transport. Before confirm,
+read every chosen employee revision and verify its digest. Preserve one immutable
+save intent with the expected team head/version and digest in session-scoped
+storage, keyed by principal and team. Unknown writes can only read back the same
+revision, not silently create another. Refresh restores the frozen intent. Exact
+readback checks scope, content digest and revision identity; current-head changes
+block an edit instead of forking from stale state. Role/session changes withdraw
+content and invalidate pending UI state. Feature stays off until migration,
+authorization and paired installation have been independently verified.
+
+No scheduling, execution, publication, membership-derived grant, organizational
+hierarchy or SSO is introduced. Empty/inaccessible team data must not be presented
+as a successful empty global directory. Existing employee definitions are never
+changed by editing team-local responsibilities.

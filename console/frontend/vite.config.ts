@@ -11,6 +11,7 @@ export default defineConfig({
         trustedWorkbenchRoutes: process.env.VITE_SUPPLIER_QUALITY_DEMO_MODE === "live",
         resourceDirectory: process.env.VITE_RESOURCE_DIRECTORY_ENABLED === "true",
         resourceAuthoring: process.env.VITE_RESOURCE_AUTHORING_ENABLED === "true",
+        teamDefinitions: process.env.VITE_TEAM_DEFINITIONS_ENABLED === "true",
       }) });
     },
   }],

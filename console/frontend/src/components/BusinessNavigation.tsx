@@ -1,5 +1,5 @@
 import {ConversationList} from "../problems/ConversationList";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {resourceNavigationUrl} from "../resources/resourceNavigationContext";
 import { NavigationIcon, type NavigationIconName } from "./NavigationIcon";
 
@@ -27,8 +27,9 @@ const advanced: Entry[] = [
 ];
 function EntryLink({entry}:{entry:Entry}) {
   const {search,pathname}=useLocation();
-  const employeeAlias=entry.to==="/digital-employees"&&pathname==="/employees";
-  return <NavLink className={({isActive})=>isActive||employeeAlias?"active":undefined} aria-current={employeeAlias?"page":undefined} to={resourceNavigationUrl(employeeAlias?"/employees":entry.to,search)} data-resource-kind={entry.icon==="skill"||entry.icon==="mcp"?entry.icon:undefined} aria-label={entry.to==="/attention"?"Attention":undefined}>
+  const employeeAlias=entry.to==="/digital-employees"&&pathname==="/employees",teamAlias=entry.to==="/teams"&&pathname==="/employees";
+  if(teamAlias)return <Link className="active" aria-current="page" to="/teams"><NavigationIcon name={entry.icon}/><span>{entry.label}</span></Link>;
+  return <NavLink className={({isActive})=>isActive||employeeAlias||teamAlias?"active":undefined} aria-current={employeeAlias||teamAlias?"page":undefined} to={resourceNavigationUrl(employeeAlias?"/employees":entry.to,search)} data-resource-kind={entry.icon==="skill"||entry.icon==="mcp"?entry.icon:undefined} aria-label={entry.to==="/attention"?"Attention":undefined}>
     <NavigationIcon name={entry.icon}/><span>{entry.label}</span>
   </NavLink>;
 }
@@ -45,7 +46,7 @@ export function BusinessNavigation({mobile=false,sessionIdentity}:{mobile?:boole
         {sessionIdentity?<ConversationList key={sessionIdentity}/>:<p className="conversation-source-note">登录后读取当前账号的会话记录。</p>}</details><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
 
     </section>
-    <section><h2>业务与团队</h2><EntryLink entry={{to:"/workflow-definitions",label:"业务流程",icon:"relationships"}}/><EntryLink entry={{to:"/digital-employees",label:"数字员工",icon:"employee"}}/>
+    <section><h2>业务与团队</h2><EntryLink entry={{to:"/workflow-definitions",label:"业务流程",icon:"relationships"}}/><EntryLink entry={{to:import.meta.env.VITE_TEAM_DEFINITIONS_ENABLED==="true"?"/teams":"/digital-employees",label:import.meta.env.VITE_TEAM_DEFINITIONS_ENABLED==="true"?"数字人团队":"数字员工",icon:"employee"}}/>
     </section><section><h2>资源与平台</h2>
       <details key={`resources-${resourceActive}`} open={resourceActive}>
         <summary className={resourceActive?"active":""}><NavigationIcon name="resource"/><span>资源管理</span></summary>
