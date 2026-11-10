@@ -19,9 +19,13 @@ async function questions(digest:string,signal?:AbortSignal){
  return body.result.questions as WorkQuestion[];
 }
 export type WorkDirectoryRead={scope:string;works:CurrentWork[];limited:boolean;unlinkedProblems:number;loading:boolean};
-export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>void,signal?:AbortSignal):Promise<WorkDirectoryRead>{
+export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>void,signal?:AbortSignal,options:{includeCompletedQuestions?:boolean}={}):Promise<WorkDirectoryRead>{
  const session=await readWorkbenchSession(signal),scope=conversationScope(session);let limited=false;
  const problemReads=new Map<string,ReturnType<typeof readBusinessProblem>>();
+ // Share only this read's exact requests. A refresh always reauthorizes afresh.
+ const executionReads=new Map<string,Promise<ExecutionView>>(),questionReads=new Map<string,Promise<WorkQuestion[]>>();
+ const readExecution=(digest:string)=>{let read=executionReads.get(digest);if(!read){read=preparedRequest<ExecutionView>(digest,undefined,undefined,undefined,signal);executionReads.set(digest,read)}return read};
+ const readQuestions=(digest:string)=>{let read=questionReads.get(digest);if(!read){read=questions(digest,signal);questionReads.set(digest,read)}return read};
  const problems=await listBusinessProblems(signal),works=new Map<string,CurrentWork>(),order=new Map<string,number>();
  const ordered=()=>[...works.values()].sort((a,b)=>(order.get(a.conversation)??0)-(order.get(b.conversation)??0)||a.execution.digest.localeCompare(b.execution.digest));
  const publish=()=>onProgress?.({scope,works:ordered(),limited,unlinkedProblems:0,loading:true});
@@ -39,7 +43,7 @@ export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>voi
      if(!link.readable){limited=true;continue}if(!link.target||!digest)continue;
      const originVerified=ownedExecution===digest,prior=works.get(digest);if(prior&&(prior.originVerified||!originVerified))continue;
      try{
-      const execution=await preparedRequest<ExecutionView>(digest,undefined,undefined,undefined,signal),listed=problems.problems.find(p=>p.business_problem_id===link.target!.problemId);
+      const execution=await readExecution(digest),listed=problems.problems.find(p=>p.business_problem_id===link.target!.problemId);
       if(!Array.isArray(execution.artifacts)||!Array.isArray(execution.events)||!Array.isArray(execution.preparation?.participants)||!Array.isArray(execution.preparation?.semantics?.tasks))throw Error('WORK_PROJECTION_INVALID');
       const ref=execution.preparation.semantics.target?.problem;
       if(!listed||execution.digest!==digest||ref?.resource_id!==link.target.problemId||!ref.revision_id||!ref.digest)throw Error('WORK_IDENTITY_MISMATCH');
@@ -50,7 +54,8 @@ export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>voi
        if(detail.problem?.business_problem_id!==ref.resource_id||!exact)throw Error('WORK_PROBLEM_REVISION_UNAVAILABLE');
        problem=exact;
       }
-      let qs:WorkQuestion[]=[],questionsReadable=true;try{qs=await questions(digest,signal)}catch{questionsReadable=false;limited=true}
+      let qs:WorkQuestion[]=[],questionsReadable=true;
+      if(options.includeCompletedQuestions||!terminalWork.has(execution.progress?.state??'')){try{qs=await readQuestions(digest)}catch{signal?.throwIfAborted();questionsReadable=false;limited=true}}
       const existing=works.get(digest);if(!existing||(!existing.originVerified&&originVerified))works.set(digest,{problem,execution,conversation:record.conversation.conversation_id,originVerified,questions:qs,questionsReadable});publish();
      }catch{limited=true}
     }
