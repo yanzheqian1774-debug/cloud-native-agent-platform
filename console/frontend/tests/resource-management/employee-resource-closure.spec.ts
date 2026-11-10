@@ -145,6 +145,7 @@ test('F3 business editor saves then validates and publishes exact successor in t
  await expect.poll(()=>extra.posts.length).toBe(1);const command=extra.posts[0].body as EmployeeCreateCommand;
  await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(command.employeeDefinitionRevisionId);expect(new URL(page.url()).searchParams.get('employeeView')).toBeNull();
  await page.reload();await expect(page.getByRole('heading',{name:'正在查看修改草稿',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(1);
+ await expect(editor.getByRole('heading',{name:'已保存的职责与资源',exact:true})).toBeVisible();await expect(editor.getByText('核对采购交付并形成可追溯报告',{exact:true})).toBeVisible();await expect(editor.getByRole('article',{name:'技能绑定资源',exact:true})).toHaveCount(1);await expect(editor.getByRole('button',{name:'继续修改职责与资源',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(1);
  await page.screenshot({path:info.outputPath('f3-business-saved-draft.png')});
  for(const action of ['验证草稿','确认发布资格','发布定义']){await page.getByRole('button',{name:new RegExp('^'+action)}).click();await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'确认提交',exact:true})).toHaveCount(0)}
  await expect(page.getByRole('heading',{name:'已发布所选定义',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(4);expect(original.members.find(m=>m.kind==='SKILL')?.revisionId).toBe('revision:1');expect(original.lifecycleState).toBe('DRAFT');
