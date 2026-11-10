@@ -3,13 +3,17 @@
 
 import json
 
-from .native_document_skill import OPERATIONS, NativeDocumentSkillExecutor
+from .native_document_skill import (
+    OPERATIONS,
+    NativeDocumentSkillExecutor,
+    NativeEmployeeDocumentSkillExecutor,
+)
 from .native_document_tools import validate_source
 from .prepared_resource_bundle import resource_content as base_content
 from .skill_mcp_schemas import ResourceContent
 
 
-def resource_content(source):
+def resource_content(source, *, bound_employee=False):
     validate_source(source)
     bundle = base_content()
     skill = bundle["skill"]
@@ -19,7 +23,11 @@ def resource_content(source):
         capabilities=list(OPERATIONS),
     )
     skill["operations"] = [op for op in skill["operations"] if op["name"] in OPERATIONS]
-    revision = NativeDocumentSkillExecutor.revision
+    revision = (
+        NativeEmployeeDocumentSkillExecutor
+        if bound_employee
+        else NativeDocumentSkillExecutor
+    ).revision
     for op in skill["operations"]:
         op.update(
             executorId=revision.executor_id,

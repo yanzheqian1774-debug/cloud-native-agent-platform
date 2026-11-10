@@ -95,14 +95,22 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
             NativeValidatedLoopSkillExecutor.revision,
         )
     )
-    from .native_document_skill import NativeDocumentSkillExecutor
+    from .native_document_skill import (
+        NativeDocumentSkillExecutor,
+        NativeEmployeeDocumentSkillExecutor,
+    )
 
-    doc = NativeDocumentSkillExecutor.revision
     is_document = (
         participant.executor_id,
         participant.executor_revision,
         participant.executor_digest,
-    ) == (doc.executor_id, doc.executor_revision, doc.configuration_digest)
+    ) in {
+        (doc.executor_id, doc.executor_revision, doc.configuration_digest)
+        for doc in (
+            NativeDocumentSkillExecutor.revision,
+            NativeEmployeeDocumentSkillExecutor.revision,
+        )
+    }
     result = {
         "schemaVersion": "document-review-input.v1"
         if is_document

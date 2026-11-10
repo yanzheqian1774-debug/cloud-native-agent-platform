@@ -163,7 +163,10 @@ def test_every_document_operation_satisfies_published_platform_output_contract()
         assert "NO_DEPLOYMENT_AUTHORITY" in previous["limitations"]
 
 
-def test_resource_test_records_inventory_executor_without_claiming_model_execution():
+@pytest.mark.parametrize("bound_employee", [False, True])
+def test_resource_test_records_inventory_executor_without_claiming_model_execution(
+    bound_employee,
+):
     from agent_console.resource_automation_validation import executor_registry
     from agent_console.skill_mcp_repository import (
         InMemorySkillMcpRepository,
@@ -175,7 +178,11 @@ def test_resource_test_records_inventory_executor_without_claiming_model_executi
     service = SkillMcpService(InMemorySkillMcpRepository())
     scope = ResourceScope("test", "isolated")
     row = service.create(
-        scope, "skill", "actor", "Document review", resource_content(SOURCE)["skill"]
+        scope,
+        "skill",
+        "actor",
+        "Document review",
+        resource_content(SOURCE, bound_employee=bound_employee)["skill"],
     )
     result = run(
         service,

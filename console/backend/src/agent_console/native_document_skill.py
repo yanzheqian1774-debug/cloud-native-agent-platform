@@ -111,3 +111,32 @@ class NativeDocumentSkillExecutor(DocumentComputationExecutor):
                 )
             output.update(nativeLoop=loop, documentReview=reports[-1])
         return SkillExecutorResult(True, output, "native-document:" + invocation_id)
+
+
+BOUND_EMPLOYEE_CONFIGURATION = {
+    **CONFIGURATION,
+    "schemaVersion": "native-document-review.v2",
+    "decisionContext": "EXACT_AUTHORIZED_BOUND_EMPLOYEE_V1",
+}
+
+
+class NativeEmployeeDocumentSkillExecutor(NativeDocumentSkillExecutor):
+    """Explicit successor; original document executor semantics remain pinned."""
+
+    revision = ExecutorRevision(
+        "native-document-review", "2", digest(BOUND_EMPLOYEE_CONFIGURATION)
+    )
+
+
+def document_executor_revision(operations):
+    revisions = {
+        (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
+        for op in operations
+    }
+    for executor in (NativeDocumentSkillExecutor, NativeEmployeeDocumentSkillExecutor):
+        ref = executor.revision
+        if revisions == {
+            (ref.executor_id, ref.executor_revision, ref.configuration_digest)
+        }:
+            return ref
+    raise ValueError("DOCUMENT_EXECUTOR_REVISION_MISMATCH")
