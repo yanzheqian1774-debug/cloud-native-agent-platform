@@ -325,6 +325,7 @@ class PreparedExecutionOwner:
         else:
             admission["state"] = "ADMITTED"
         usage = []
+        from .prepared_resource_use_view import read_saved_use_binding
         from .prepared_skill_invocation import planned_outputs
 
         for output in planned_outputs(p, progress) if progress else ():
@@ -348,6 +349,11 @@ class PreparedExecutionOwner:
                 {
                     "resourceUseId": output["resourceUseId"],
                     "snapshot": used["record"] if used else None,
+                    "binding": read_saved_use_binding(
+                        call.connection, p, output["resourceUseId"]
+                    )
+                    if used
+                    else None,
                     "state": used["record"]["effective_state"]
                     if used
                     else "NOT_CALLED",
