@@ -1,3 +1,4 @@
+import {CurrentWorkbenchHome} from './CurrentWorkbenchHome';
 import {useEffect,useState} from "react";
 import {Link} from "react-router-dom";
 import {getProductDashboard,listAttention,listDigitalEmployeeTemplates,type AttentionItem,type DigitalEmployeeTemplate,type ProductDashboard} from "../api/productAssembly";
@@ -8,7 +9,8 @@ const kinds:Record<string,[string,string]>={AGENT:["数字员工定义","A"],SKI
 const entries=[["/work","问","提出业务问题","进入可信工作台创建问题并申请精确读取"],["/work?panel=existing","续","继续已有业务问题","从当前身份可读取的问题中选择，接续目标、标准与规划"],["/problems","旧","旧规划演示","查看独立的 v0.2.1 规划来源"],["/digital-employees","员","数字员工","查看已配置的定义模板"],["/catalog","能","能力资源","查找 Skill、MCP 和工作流"],["/knowledge","知","知识","检查知识来源和引用"],["/runtime-profiles","运","运行环境","查看 Runtime Profile"]];
 function WorkStatus({problem}:{problem:ProblemPlan}){if(problem.approval)return <span className="px-status success">计划已批准</span>;if(problem.status.includes("FAIL"))return <span className="px-status danger">执行失败</span>;return <span className="px-status warning">等待人工处理</span>}
 
-export function ProductDashboardPage(){
+export function ProductDashboardPage(){return import.meta.env.VITE_CURRENT_WORK_DIRECTORY_ENABLED==='true'?<CurrentWorkbenchHome/>:<LegacyProductDashboardPage/>}
+function LegacyProductDashboardPage(){
   const [data,setData]=useState<HomeData|null>(null);
   useEffect(()=>{let active=true;Promise.all([getProductDashboard().catch(()=>null),listDigitalEmployeeTemplates().catch(()=>null),listProblems().catch(()=>null),listAttention().catch(()=>null)]).then(([dashboard,employees,problems,attention])=>{if(active)setData({dashboard,employees,problems,attention})});return()=>{active=false}},[]);
   return <main className="px-page px-home">
