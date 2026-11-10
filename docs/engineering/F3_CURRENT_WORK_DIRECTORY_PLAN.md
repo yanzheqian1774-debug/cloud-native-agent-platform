@@ -189,3 +189,19 @@ is unknown, not verified non-waiting. Render waiting totals as unconfirmed when
 coverage is incomplete and explain the waiting filter may be partial; do not
 claim no waiting tasks. PENDING remains preparing execution, not recovery unknown.
 Test ordinary/denied visibility, off-page unknown rows and waiting empty state.
+
+## Exact-grant lock transport optimization
+
+The measured visible request executes 1657 database statements; most time is
+in exact grant checks. First optimize only the lock transport: inspect optional
+schema availability once per bundle, enqueue each existing delegation SHARE lock
+then grant SHARE lock in exactly the input order, and synchronize all commands
+before the existing locked checkpoint and dynamic authorization reads. Do not
+change SQL predicates, transaction isolation, lock strength/order, time/expiry,
+revocation decisions, audit, or cache decisions. Legacy single-lock helper keeps
+its synchronous default. PostgreSQL errors must still abort the transaction and
+surface as authority unavailable. Compare against the committed synchronous
+lock implementation using identical current directory handler and data. Verify
+existing owner/revocation concurrency and delegation regressions in isolated DB.
+
+Ordered lock pipeline: isolated authority/delegation/identity regression 66 tests passed without skips, including owner/revocation serialization and identity stop/revocation lock order. Nine paired real authenticated BFF responses were identical except readAt. Median ms: visible first 5949.38 -> 3220.19; second 2331.14 -> 1282.61; initiated 4214.99 -> 2396.32. Three observations per case, network/render excluded; performance target remains NOT MET. No live database cache eviction, model calls or business writes.

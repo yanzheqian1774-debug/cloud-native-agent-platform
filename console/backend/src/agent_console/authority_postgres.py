@@ -810,24 +810,42 @@ class PostgresAuthorityRepository:
         connection, context: TrustedRequestContext, grants: Sequence[ExactGrant]
     ) -> None:
         """Serialize matching revocations behind the caller-owned owner commit."""
-        from .task_delegation import lock_grant_delegations
+        from .task_delegation import available, lock_grant_delegations
 
-        for grant in grants:
-            lock_grant_delegations(connection, context, grant)
-            connection.execute(
-                "SELECT g.grant_id FROM authorization_admin.grants g "
-                "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
-                "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
-                "AND g.exact_resource=%s ORDER BY g.grant_id FOR SHARE",
-                (
-                    context.principal_id,
-                    context.scope.tenant_id,
-                    context.scope.security_domain,
-                    grant.owner,
-                    grant.action,
-                    grant.exact_resource,
-                ),
-            ).fetchall()
+        # Schema capability only, not a cached authorization decision. Keep the
+        # same per-grant lock order; pipeline exit synchronizes before any read
+        # or owner action can proceed. No lock result is used speculatively.
+        schema_available = available(connection)
+        cursors = []
+        with connection.pipeline():
+            for grant in grants:
+                cursor = lock_grant_delegations(
+                    connection,
+                    context,
+                    grant,
+                    schema_available=schema_available,
+                    defer_fetch=True,
+                )
+                if cursor is not None:
+                    cursors.append(cursor)
+                cursors.append(
+                    connection.execute(
+                        "SELECT g.grant_id FROM authorization_admin.grants g "
+                        "WHERE g.subject_principal_id=%s AND g.tenant_id=%s "
+                        "AND g.security_domain=%s AND g.owner=%s AND g.action=%s "
+                        "AND g.exact_resource=%s ORDER BY g.grant_id FOR SHARE",
+                        (
+                            context.principal_id,
+                            context.scope.tenant_id,
+                            context.scope.security_domain,
+                            grant.owner,
+                            grant.action,
+                            grant.exact_resource,
+                        ),
+                    )
+                )
+        for cursor in cursors:
+            cursor.fetchall()
 
     @staticmethod
     def _claim(

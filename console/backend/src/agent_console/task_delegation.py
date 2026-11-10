@@ -1029,10 +1029,12 @@ def guard_budget(connection, budget, invocation, quote):
     return bool(revision(connection, row["delegation_id"]))
 
 
-def lock_grant_delegations(connection, context, grant):
-    if not available(connection):
+def lock_grant_delegations(
+    connection, context, grant, *, schema_available=None, defer_fetch=False
+):
+    if not (available(connection) if schema_available is None else schema_available):
         return
-    connection.execute(
+    cursor = connection.execute(
         "SELECT control.delegation_id FROM "
         "authorization_admin.task_delegation_control control JOIN "
         "authorization_admin.task_delegation_decisions td USING(delegation_id) "
@@ -1048,7 +1050,10 @@ def lock_grant_delegations(connection, context, grant):
             grant.action,
             grant.exact_resource,
         ),
-    ).fetchall()
+    )
+    if not defer_fetch:
+        cursor.fetchall()
+    return cursor
 
 
 def record_created_object(
