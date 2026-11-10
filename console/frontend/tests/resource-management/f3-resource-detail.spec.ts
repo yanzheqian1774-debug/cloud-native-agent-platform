@@ -59,3 +59,9 @@ test('saved edit follows its new immutable draft while preserving published and 
 test('unknown requested revision does not silently display current publication',async({page})=>{
  const state=await published(page);await page.goto(href+'&viewRevision=revision%3Aabsent');await expect(page.getByRole('alert')).toContainText('当前版本未能核对');await expect(page.getByRole('heading',{name:'用途与交付'})).toHaveCount(0);expect(state.posts).toEqual([]);
 });
+
+test('impact counts distinct employees separately from version references',async({page})=>{
+ const state=await published(page);
+ await page.route('**/impact',route=>route.fulfill({json:{result:{current:{revisionId:'revision:1',digest:state.resource.revisions[0].digest},changes:[],authorizedUses:[],testCoverage:{ready:false,checks:[]},dependencies:{incoming:[1,2,3].map(i=>({kind:'EMPLOYEE',identity:i===3?'employee:other':'employee:same',revision:'revision:'+i,name:'同名员工',distance:1})),outgoing:[],limitations:[]}}}}));
+ await page.goto(href+'&resourceSection=impact');const group=page.locator('.rd-impact-group').filter({hasText:'数字员工'});await expect(group.locator('h3 strong')).toHaveText('2');await expect(group).toContainText('3 条版本引用');expect(state.posts).toHaveLength(0);
+});

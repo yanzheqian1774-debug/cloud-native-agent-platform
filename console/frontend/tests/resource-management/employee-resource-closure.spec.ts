@@ -190,15 +190,17 @@ test('historical employee edit resumes authoritative draft and refresh keeps its
  original.publicationState='PUBLISHED';original.lifecycleState='PUBLISHED';original.aggregateVersion=2;
  const draft={...structuredClone(original),employeeDefinitionRevisionId:'revision:aaa-current-draft',employeeDefinitionDigest:'8'.repeat(64),publicationState:'NOT_PUBLISHED' as const,lifecycleState:'VALIDATED' as const,responsibilities:['当前草稿职责']};
  extra.records.set(draft.employeeDefinitionRevisionId,draft);
- await page.goto(href().replace('employeeView=professional&',''));
+ await page.goto(href().replace('employeeView=professional&','').replace('section=overview','section=capabilities'));
  await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：已有草稿',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
  await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
  expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(draft.employeeDefinitionRevisionId);
- await page.reload();await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
+ await page.reload();await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');await expect(page.locator('.employee-edit-basis')).toContainText('原先查看的历史版本保持不变');
  await page.getByRole('button',{name:'返回原查看版本',exact:true}).click();
  await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);
  await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：已有草稿',{exact:true})).toBeVisible();
+ expect(new URL(page.url()).searchParams.get('section')).toBe('capabilities');
+ await expect(page.getByRole('button',{name:'职责与资源',exact:true})).toHaveClass(/active/);
  expect(extra.posts).toHaveLength(0);
 });
 
@@ -312,4 +314,39 @@ for(const mode of ['current','historical','unavailable','withdrawn','digest-mism
  await expect(page.locator('.employee-detail-context h2')).toHaveCSS('font-size','28px');
  await expect(page.getByRole('button',{name:'资源组成',exact:true})).toHaveCSS('font-size','15px');
  expect(extra.posts).toHaveLength(0);
+});
+
+test('collection separates authoritative publication and draft from listed history',async({page})=>{
+ const {extra,original}=await fixture(page);original.publicationState='PUBLISHED';original.lifecycleState='PUBLISHED';
+ const current={...structuredClone(original),employeeDefinitionRevisionId:'employee-revision:published',employeeDefinitionDigest:'f'.repeat(64),responsibilities:['当前发布职责'],aggregateVersion:2};
+ const draft={...structuredClone(original),employeeDefinitionRevisionId:'employee-revision:draft',employeeDefinitionDigest:'a'.repeat(64),publicationState:'NOT_PUBLISHED' as const,lifecycleState:'DRAFT' as const,responsibilities:['新草稿职责'],aggregateVersion:3};
+ extra.records.set(current.employeeDefinitionRevisionId,current);extra.records.set(draft.employeeDefinitionRevisionId,draft);
+ await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card).toHaveCount(1);
+ await expect(card.getByText('当前发布职责',{exact:true})).toBeVisible();await expect(card.getByText('新草稿职责',{exact:true})).toBeVisible();
+ await card.getByRole('button',{name:'查看当前发布',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('当前发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(current.employeeDefinitionRevisionId);
+ await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.getByRole('button',{name:'查看修改草稿',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('修改草稿 · 待验证');
+ await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.locator('summary').click();await card.getByRole('combobox').selectOption(old);await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('历史发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);expect(extra.posts).toHaveLength(0);
+});
+
+for(const mode of ['unavailable','withdrawn','wrong-parent','identity-change'] as const)test('collection never invents current versions: '+mode,async({page})=>{
+ const {state,extra,original}=await fixture(page);
+ await page.route('**/authoring',async route=>{
+  if(mode==='identity-change')state.otherIdentity=true;
+  return route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:{...original,...(mode==='wrong-parent'?{employeeDefinitionDigest:'0'.repeat(64)}:{})},aggregateVersion:1,head:{status:'NOT_AVAILABLE'},publication:{status:mode==='withdrawn'?'WITHDRAWN':'NOT_AVAILABLE'},draft:{status:'NOT_AVAILABLE'},executionStarted:false})});
+ });
+ await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card.getByText(mode==='withdrawn'?'当前发布已撤销':'当前发布暂未核实',{exact:true})).toBeVisible();await expect(card.getByText('修改草稿暂未核实',{exact:true})).toBeVisible();await expect(card.getByRole('button',{name:'查看当前发布',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'查看修改草稿',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(0);
+});
+
+for(const mode of ['published','validated'] as const)test('fresh authoring lifecycle overrides stale selected metadata: '+mode,async({page})=>{
+ const {extra,original}=await fixture(page);const fresh={...structuredClone(original),publicationState:mode==='published'?'PUBLISHED':'NOT_PUBLISHED',lifecycleState:mode==='published'?'PUBLISHED':'VALIDATED'};
+ await page.route('**/authoring',route=>route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:original,aggregateVersion:1,head:{status:'AVAILABLE',definition:fresh},publication:mode==='published'?{status:'AVAILABLE',definition:fresh}:{status:'NOT_AVAILABLE'},draft:mode==='validated'?{status:'AVAILABLE',definition:fresh}:{status:'NONE'},executionStarted:false})}));
+ await page.goto(href().replace('employeeView=professional&','')+'&employeeEdit=review');await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText(mode==='published'?'当前发布版本':'修改草稿 · 已验证');if(mode==='published')await expect(page.getByRole('button',{name:/^验证草稿/})).toHaveCount(0);expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);expect(extra.posts).toHaveLength(0);
+});
+
+test('collection bounds version reads and does not repeat them for local filters',async({page})=>{
+ const {extra,original}=await fixture(page);extra.records.clear();for(let i=0;i<7;i++)extra.records.set('revision:'+i,{...structuredClone(original),employeeDefinitionId:'employee:'+i,employeeDefinitionRevisionId:'revision:'+i,role:'核验员 '+i});
+ let active=0,maximum=0,calls=0;
+ await page.route('**/authoring',async route=>{calls++;active++;maximum=Math.max(maximum,active);const revision=decodeURIComponent(new URL(route.request().url()).pathname).split('/revisions/')[1].split('/')[0],item=extra.records.get(revision)!;await new Promise(resolve=>setTimeout(resolve,30));active--;return route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:item,aggregateVersion:1,head:{status:'AVAILABLE',definition:item},publication:{status:'NOT_AVAILABLE'},draft:{status:'AVAILABLE',definition:item},executionStarted:false})})});
+ await page.goto('/employees');await expect(page.locator('.employee-version-card').getByRole('button',{name:'查看修改草稿',exact:true})).toHaveCount(7);expect(calls).toBe(7);expect(maximum).toBeLessThanOrEqual(3);
+ await page.getByLabel('搜索当前结果',{exact:true}).fill('核验员 1');await expect(page.locator('.employee-version-card')).toHaveCount(1);expect(calls).toBe(7);expect(extra.posts).toHaveLength(0);
 });

@@ -1,0 +1,12 @@
+.employee-management.f3-employee-collection .employee-collection-row.employee-version-card{display:block}
+.employee-version-card{border:1px solid #e0e6ef;border-radius:12px;background:#fff;padding:18px;min-width:0}
+.employee-management .employee-version-card .employee-row-main{width:100%;padding:0 0 14px;grid-template-columns:auto minmax(0,1fr)}
+.employee-version-card .employee-row-copy small{color:#7486a3;font-weight:400;margin-top:4px}
+.employee-version-options{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.employee-version-options section{min-width:0;background:#f7f9ff;border:1px solid #e0e6ef;border-radius:8px;padding:14px}
+.employee-version-options h3{font-size:13px;margin:0 0 8px;color:#273851}
+.employee-version-options p{font-size:13px;line-height:1.7;margin:0 0 10px;overflow-wrap:anywhere}
+.employee-version-options button{border:0;background:none;color:#4865d5;padding:0;font:inherit;font-size:13px;cursor:pointer}
+.employee-listed-history{margin-top:14px;color:#7486a3;font-size:12px;overflow-wrap:anywhere}
+.employee-listed-history summary{cursor:pointer}.employee-listed-history select{max-width:100%;width:100%;margin:8px 0}
+@media(max-width:700px){.employee-version-card{padding:14px}.employee-version-options{grid-template-columns:1fr;gap:10px}}

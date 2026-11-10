@@ -1,3 +1,5 @@
+import {EmployeeCollectionCard} from './EmployeeCollectionCard';
+import {useEmployeeCollectionVersions} from './useEmployeeCollectionVersions';
 import '../components/F3DetailTypography.css';
 import {employeeVersionLabel} from './employeeVersionLabel';
 import {EmployeeTeamContext} from '../teams/EmployeeTeamContext';
@@ -97,8 +99,10 @@ export function DigitalEmployeesPage() {
   const [pages, setPages] = useState<CachedPage[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedIdentity, setSelectedIdentity] = useState<ExactDefinition | null>(null);
-  const [selected, setSelected] = useState<EmployeeDefinition | null>(null);
-  const authoring=useEmployeeAuthoring(selected,!professional);
+  const [selectedSnapshot, setSelected] = useState<EmployeeDefinition | null>(null);
+  const authoring=useEmployeeAuthoring(selectedSnapshot,!professional);
+  const refreshedSelected=authoring.value&&[authoring.value.head,authoring.value.publication,authoring.value.draft].find(target=>target.status==="AVAILABLE"&&target.definition.employeeDefinitionId===selectedSnapshot?.employeeDefinitionId&&target.definition.employeeDefinitionRevisionId===selectedSnapshot?.employeeDefinitionRevisionId&&target.definition.employeeDefinitionDigest===selectedSnapshot?.employeeDefinitionDigest);
+  const selected=refreshedSelected?.status==="AVAILABLE"?refreshedSelected.definition:selectedSnapshot;
   const authoringHead=authoring.value?.head;
   const editableCurrent=authoringHead?.status==="AVAILABLE"&&authoringHead.definition.employeeDefinitionRevisionId===selected?.employeeDefinitionRevisionId&&authoringHead.definition.employeeDefinitionDigest===selected?.employeeDefinitionDigest;
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
@@ -129,6 +133,7 @@ export function DigitalEmployeesPage() {
   const status = params.get("status") ?? "ALL";
   const items = useMemo(() => pages[pageIndex]?.items ?? [], [pages, pageIndex]);
   const currentPage = pages[pageIndex];
+  const collectionVersions=useEmployeeCollectionVersions(items,!professional&&mode==="employees"&&!mobileDetailOpen);
 
   const filteredRevisions = useMemo(() => items.filter(item =>
     (status === "ALL" || item.publicationState === status)
@@ -190,7 +195,7 @@ export function DigitalEmployeesPage() {
     setDetailError(null);
     setDetailState("LOADING");
     if (openDetail) {
-      savedListScroll.current = listScroll.current?.scrollTop ?? 0;
+      if (!mobileDetailOpen) savedListScroll.current = listScroll.current?.scrollTop ?? 0;
       setMobileDetailOpen(true);
     }
     try {
@@ -342,19 +347,22 @@ export function DigitalEmployeesPage() {
     const target=value.head.definition;
     setDetailSection("overview");
     setSelected(target);setSelectedIdentity(exactFromSummary(target));
-    updateUrl({employeeEdit:"edit",employeeEditOriginId:(keepOrigin?params.get("employeeEditOriginId"):null)||origin?.employeeDefinitionId||"",employeeEditOriginRevision:(keepOrigin?params.get("employeeEditOriginRevision"):null)||origin?.employeeDefinitionRevisionId||"",section:"overview",employeeDefinitionId:target.employeeDefinitionId,employeeDefinitionRevisionId:target.employeeDefinitionRevisionId});
+    updateUrl({employeeEdit:"edit",employeeEditOriginId:(keepOrigin?params.get("employeeEditOriginId"):null)||origin?.employeeDefinitionId||"",employeeEditOriginRevision:(keepOrigin?params.get("employeeEditOriginRevision"):null)||origin?.employeeDefinitionRevisionId||"",employeeEditOriginSection:(keepOrigin?params.get("employeeEditOriginSection"):null)||detailSection,section:"overview",employeeDefinitionId:target.employeeDefinitionId,employeeDefinitionRevisionId:target.employeeDefinitionRevisionId});
   }
 
   function returnFromEmployeeEdit(){
     const id=params.get("employeeEditOriginId"),revision=params.get("employeeEditOriginRevision");
     const origin=id===selected?.employeeDefinitionId&&revision&&revision.length<=512?{id,revision}:null;
-    updateUrl({employeeEdit:"",employeeEditOriginId:"",employeeEditOriginRevision:"",...(origin?{employeeDefinitionId:origin.id,employeeDefinitionRevisionId:origin.revision}:{})});
+    const originSection=params.get("employeeEditOriginSection");
+    const section: DetailSection=originSection==="capabilities"||originSection==="instances"||originSection==="assignments"?originSection:"overview";
+    setDetailSection(section);
+    updateUrl({section,employeeEdit:"",employeeEditOriginId:"",employeeEditOriginRevision:"",employeeEditOriginSection:"",...(origin?{employeeDefinitionId:origin.id,employeeDefinitionRevisionId:origin.revision}:{})});
     if(origin)void readDefinitionExact(origin,true);
   }
 
   function showSection(section: DetailSection) {
     setDetailSection(section);
-    updateUrl({ section, ...(params.get("employeeEdit")==="review"?{employeeEdit:"",employeeEditOriginId:"",employeeEditOriginRevision:""}:{}) });
+    updateUrl({ section, ...(params.get("employeeEdit")==="review"?{employeeEdit:"",employeeEditOriginId:"",employeeEditOriginRevision:"",employeeEditOriginSection:""}:{}) });
     requestAnimationFrame(() => {
       if (detailScroll.current) detailScroll.current.scrollTop = 0;
     });
@@ -450,9 +458,10 @@ export function DigitalEmployeesPage() {
 
     {mode === "create" ? <><button type="button" className="employee-back-button" onClick={() => { setMode("employees"); updateUrl({ mode: "employees" }); }}>← 返回员工集合</button><EmployeeDefinitionAssembly agents={agents} hasMoreAgents={Boolean(agentNextCursor)} agentError={agentError ? controlledMessage(agentError) : undefined} onLoadMoreAgents={() => void loadMoreAgents()} onReadback={applyCommandReadback} /></> : <div className={`employee-object-center ${mobileDetailOpen ? "show-mobile-detail" : ""}`}>
       <section className="employee-collection" aria-label="员工集合">
-        <div className="employee-collection-toolbar"><div><h2>员工集合</h2><p>{groups.length} 个员工 · {filteredRevisions.length} 个修订（当前批）</p></div><small>职责摘要在选择员工后显示</small><div className="employee-filters"><label><span>搜索当前结果</span><input value={query} onChange={event => changeFilter("q", event.target.value)} placeholder="职责角色或技术 ID" /></label><label><span>发布状态</span><select value={status} onChange={event => changeFilter("status", event.target.value)}><option value="ALL">全部状态</option><option value="PUBLISHED">已发布</option><option value="NOT_PUBLISHED">未发布</option></select></label></div></div>
+        <div className="employee-collection-toolbar"><div><h2>员工集合</h2><p>{groups.length} 个员工 · {filteredRevisions.length} 个修订（当前批）</p></div><small>{professional?"职责摘要在选择员工后显示":"按员工查看当前发布与修改草稿；筛选匹配当前批次的已列记录。"}</small><div className="employee-filters"><label><span>搜索当前结果</span><input value={query} onChange={event => changeFilter("q", event.target.value)} placeholder="职责角色或技术 ID" /></label><label><span>发布状态</span><select value={status} onChange={event => changeFilter("status", event.target.value)}><option value="ALL">全部状态</option><option value="PUBLISHED">已发布</option><option value="NOT_PUBLISHED">未发布</option></select></label></div></div>
         {listError && <div role="alert" className="qto-alert"><strong>列表读取失败</strong><span>{controlledMessage(listError)}</span></div>}
         <div className="employee-collection-rows" ref={listScroll}>{groups.map(group => {
+          if(!professional)return <EmployeeCollectionCard key={group.id} revisions={group.revisions} value={collectionVersions.values[group.id]} ready={collectionVersions.ready} selectedRevision={selectedIdentity?.id===group.id?selectedIdentity.revision:undefined} onSelect={select}/>;
           const active = selectedIdentity?.id === group.id ? group.revisions.find(item => item.employeeDefinitionRevisionId === selectedIdentity.revision) ?? group.revisions[0] : group.revisions[0];
           const isSelected = Boolean(selectedIdentity && exactKey(selectedIdentity) === exactKey(exactFromSummary(active)));
           const identityDisclosure = <details className="employee-row-identity"><summary>查看完整 ID</summary><code>{group.id}</code><code>{active.employeeDefinitionRevisionId}</code></details>;
@@ -463,7 +472,7 @@ export function DigitalEmployeesPage() {
 
       <section className="employee-selected-detail" aria-label="选中员工详情"><button type="button" className="employee-mobile-back" onClick={() => { setMobileDetailOpen(false); updateUrl({ detail: "" }); requestAnimationFrame(() => { if (listScroll.current) listScroll.current.scrollTop = savedListScroll.current; }); }}>← 返回员工集合</button>{!selectedIdentity && <div className="employee-detail-placeholder"><span className="employee-avatar large" aria-hidden="true">员</span><h2>选择一个数字员工</h2><p>每次选择都会读取所选修订；请从列表中明确选择要查看的修订。</p></div>}{detailBusy && <p role="status" className="agent-state">正在读取所选修订……</p>}{detailError && <div role="alert" className="qto-alert employee-detail-error"><strong>详情读取未完成</strong>{selectedListSummary && <section className="employee-denied-summary" aria-label="所选员工列表摘要"><span>所选员工</span><strong>{selectedListSummary.role}</strong><small>{shortIdentity(selectedListSummary.employeeDefinitionId)} · {shortIdentity(selectedListSummary.employeeDefinitionRevisionId)} · {selectedListSummary.publicationState === "PUBLISHED" ? "已发布" : "未发布"}</small></section>}<span>{controlledMessage(detailError)}</span>{selectedIdentity && <button onClick={() => void readDefinitionExact(selectedIdentity, true)}>重试</button>}</div>}{selected && <><header className="employee-detail-context"><div><p className="eyebrow">{professional?"选中员工 · 已核对修订":"DIGITAL EMPLOYEE"}</p><h2>{selected.role}</h2>{!professional&&<EmployeeTeamContext item={selected}/>}<details className="employee-heading-evidence"><summary>查看版本依据</summary><p><code>{selected.employeeDefinitionId}</code> · <code>{selected.employeeDefinitionRevisionId}</code></p></details></div><span className={`employee-state-chip ${selected.publicationState === "PUBLISHED" ? "published" : "draft"}`}>{selectedStateLabel}</span><div className="employee-business-actions"><button onClick={()=>updateUrl({employeeView:professional?"":"professional"})}>{professional?'返回业务详情':'查看专业管理'}</button>{!professional&&<button disabled={authoringHead?.status!=="AVAILABLE"} onClick={()=>void editCurrentDefinition()}>修改职责与资源</button>}</div></header><nav className="employee-detail-tabs" aria-label="选中员工详情分类">{(professional?([['overview', '概览'], ['capabilities', '职责与能力'], ['instances', '实例'], ['assignments', '工作分配']] as const):([['overview','资源组成'],['capabilities','职责与资源'],['instances','工作记录']] as const)).map(([key, label]) => <button type="button" key={key} className={detailSection === key||(!professional&&key==="instances"&&detailSection==="assignments") ? "active" : ""} onClick={() => showSection(key)}>{label}</button>)}</nav><article className="px-object-detail employee-detail-body" ref={detailScroll}>
         {businessEdit&&authoringStatus}
-        {businessEdit&&!editableCurrent?<section role="status"><p>正在查看的版本不是已核实的当前修改版本，原内容仍保留。</p><button disabled={authoringHead?.status!=="AVAILABLE"} onClick={()=>void editCurrentDefinition()}>继续当前修改</button></section>:businessEdit?<section className="employee-business-editor" aria-label="职责与资源修改"><button className="employee-editor-return" onClick={returnFromEmployeeEdit}>{params.get("employeeEditOriginRevision")&&params.get("employeeEditOriginRevision")!==selected.employeeDefinitionRevisionId?"返回原查看版本":"返回已选版本详情"}</button><EmployeeSuccessorPanel key={'business:'+exactKey(exactFromSummary(selected))+params.get("employeeEdit")} item={selected} business initialOpen={params.get("employeeEdit")==="edit"} onReadback={(definition,result)=>{applyCommandReadback(definition,result,{employeeEdit:"review"})}}/>{selected.lifecycleState!=="PUBLISHED"&&<EmployeeLifecycleActions key={'business-lifecycle:'+exactKey(exactFromSummary(selected))} item={selected} business onReadback={applyCommandReadback}/>}</section>:<>
+        {businessEdit&&!editableCurrent?<section role="status"><p>正在查看的版本不是已核实的当前修改版本，原内容仍保留。</p><button disabled={authoringHead?.status!=="AVAILABLE"} onClick={()=>void editCurrentDefinition()}>继续当前修改</button></section>:businessEdit?<section className="employee-business-editor" aria-label="职责与资源修改"><button className="employee-editor-return" onClick={returnFromEmployeeEdit}>{params.get("employeeEditOriginRevision")&&params.get("employeeEditOriginRevision")!==selected.employeeDefinitionRevisionId?"返回原查看版本":"返回已选版本详情"}</button>{params.get("employeeEdit")==="edit"&&<p className="employee-edit-basis">当前以{selectedStateLabel}为基准准备修改。{params.get("employeeEditOriginRevision")!==selected.employeeDefinitionRevisionId?"原先查看的历史版本保持不变，可返回核对。":"保存将保留原版本与已有任务引用。"}</p>}<EmployeeSuccessorPanel key={'business:'+exactKey(exactFromSummary(selected))+params.get("employeeEdit")} item={selected} business initialOpen={params.get("employeeEdit")==="edit"} onReadback={(definition,result)=>{applyCommandReadback(definition,result,{employeeEdit:"review"})}}/>{selected.lifecycleState!=="PUBLISHED"&&<EmployeeLifecycleActions key={'business-lifecycle:'+exactKey(exactFromSummary(selected))} item={selected} business onReadback={applyCommandReadback}/>}</section>:<>
 
         {detailSection === "overview" && (professional?<><EmployeeProfileLoader item={selected} section="overview" /><EmployeeLifecycleActions key={exactKey(exactFromSummary(selected))} item={selected} initialResult={latestCommand?.employeeDefinitionId === selected.employeeDefinitionId && latestCommand.employeeDefinitionRevisionId === selected.employeeDefinitionRevisionId ? latestCommand : undefined} onReadback={applyCommandReadback} /><EmployeeSuccessorPanel key={'successor:'+exactKey(exactFromSummary(selected))} item={selected} onReadback={applyCommandReadback}/><EmployeeRelations definition={selected} mode="history" onRevision={select}/></>:<EmployeeResourceComposition key={exactKey(exactFromSummary(selected))} item={selected} summaryControls={authoringStatus} versionLabel={selectedStateLabel}/>)}
         {detailSection === "capabilities" && (professional?<EmployeeProfileLoader item={selected} section="capabilities" />:<><EmployeeResourceComposition key={exactKey(exactFromSummary(selected))} item={selected} summaryControls={authoringStatus} versionLabel={selectedStateLabel} view="duties"/><details className="employee-duty-evidence"><summary>查看职责与资源专业依据</summary><EmployeeProfileLoader item={selected} section="capabilities" /></details></>)}

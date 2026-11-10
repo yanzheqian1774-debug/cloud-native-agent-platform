@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {getEmployeeAuthoring,getWorkbenchSession,workbenchPrincipalKey,type EmployeeAuthoring,type EmployeeDefinition} from '../api/digitalEmployees';
+import {getEmployeeAuthoring,getWorkbenchSession,workbenchPrincipalKey,type EmployeeAuthoring,type EmployeeDefinition,type EmployeeDefinitionSummary} from '../api/digitalEmployees';
 
-function verify(value:EmployeeAuthoring,item:EmployeeDefinition){
+export function verifyEmployeeAuthoring(value:EmployeeAuthoring,item:EmployeeDefinitionSummary & {aggregateVersion?:number}){
  if(value.basis!=='OWNER_FACT_ORDER'||value.executionStarted!==false||!Number.isInteger(value.aggregateVersion)||value.aggregateVersion<(item.aggregateVersion??0)||value.parent.employeeDefinitionId!==item.employeeDefinitionId||value.parent.employeeDefinitionRevisionId!==item.employeeDefinitionRevisionId||value.parent.employeeDefinitionDigest!==item.employeeDefinitionDigest)throw Error('员工版本依据不一致，请重新读取。');
  for(const key of ['head','publication','draft'] as const){
   const target=value[key];
@@ -27,7 +27,7 @@ export function useEmployeeAuthoring(item:EmployeeDefinition|null,enabled:boolea
   setState({identity});
   try{
    const before=workbenchPrincipalKey(await getWorkbenchSession(controller.signal));
-   const value=verify(await getEmployeeAuthoring(selected,controller.signal),selected);
+   const value=verifyEmployeeAuthoring(await getEmployeeAuthoring(selected,controller.signal),selected);
    if(workbenchPrincipalKey(await getWorkbenchSession(controller.signal))!==before)throw Error('登录身份已变化，请重新打开员工。');
    if(token!==generation.current)return null;
    setState({identity,value});return value;
