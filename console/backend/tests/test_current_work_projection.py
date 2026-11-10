@@ -180,3 +180,21 @@ def test_count_projection_does_not_read_or_disclose_outcome_evidence(monkeypatch
     assert value.businessResolution is None and value.outcomeVersion is None
     assert value.pendingQuestionCount == 0
     assert all(grant.owner != "EVALUATION" for grant in checked)
+
+
+@pytest.mark.parametrize(
+    "state,expected",
+    [
+        ("PENDING", "running"),
+        ("RUNNING", "unknown"),
+        ("CANCEL_REQUESTED", "unknown"),
+        ("RECOVERY_REQUIRED", "unknown"),
+    ],
+)
+def test_unreadable_questions_do_not_imply_confirmed_running(
+    monkeypatch, state, expected
+):
+    call, row = setup(monkeypatch, state=state)
+    result = project_runs(call, [row], verified_administrator=False)[0]
+    assert result.displayState == expected
+    assert result.pendingQuestionCount is None

@@ -179,3 +179,13 @@ No model calls or business writes occurred. Real isolated PostgreSQL answer/canc
 contention also passed five checks, including observed lock wait and answer replay;
 this is not an installed HTTP cancellation test. Same-commit installation remains
 outstanding. Evidence: f3-task-directory-query-review-20261110.
+
+## Incomplete question visibility before installation
+
+Preserve the existing Native read authorization. Add questionStatusComplete to
+the internal directory response, calculated across authorized scope/search rows
+before state filtering and paging. A running row with unreadable question status
+is unknown, not verified non-waiting. Render waiting totals as unconfirmed when
+coverage is incomplete and explain the waiting filter may be partial; do not
+claim no waiting tasks. PENDING remains preparing execution, not recovery unknown.
+Test ordinary/denied visibility, off-page unknown rows and waiting empty state.

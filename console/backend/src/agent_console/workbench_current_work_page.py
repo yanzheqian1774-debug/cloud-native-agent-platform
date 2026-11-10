@@ -62,12 +62,20 @@ def directory_page(
     after = query.after(
         codec, context, generation=generation, recovery_epoch=recovery_epoch
     )
-    matches = [
+    scoped = [
         item
         for item in items
         if (query.scopeFilter == "visible" or item.initiatorId == context.principal_id)
         and query.query.casefold() in (item.title + " " + item.workflowRunId).casefold()
-        and (query.state == "all" or item.displayState == query.state)
+    ]
+    question_status_complete = all(
+        item.executionState != "RUNNING" or item.pendingQuestionCount is not None
+        for item in scoped
+    )
+    matches = [
+        item
+        for item in scoped
+        if query.state == "all" or item.displayState == query.state
     ]
     matches.sort(key=lambda item: (item.createdAt, item.workflowRunId), reverse=True)
     counts = Counter(item.displayState for item in matches)
@@ -104,6 +112,7 @@ def directory_page(
         "securityDomain": context.scope.security_domain,
         "readAt": read_at.isoformat(),
         "complete": True,
+        "questionStatusComplete": question_status_complete,
         "total": len(matches),
         "counts": {
             state: counts[state]

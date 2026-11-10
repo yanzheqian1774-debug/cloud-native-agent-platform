@@ -1,6 +1,6 @@
 import {test,expect,type Page} from '@playwright/test';
 async function fixture(page:Page){
- const state={principal:'human:alice',error:false,requests:[] as string[],writes:[] as string[]};
+ const state={questionStatusComplete:true,principal:'human:alice',error:false,requests:[] as string[],writes:[] as string[]};
  await page.route('**/api/**',async route=>{
   const req=route.request(),url=new URL(req.url()),p=url.pathname;
   if(req.method()!=='GET'){state.writes.push(p);return route.abort()}
@@ -11,7 +11,7 @@ async function fixture(page:Page){
    if(state.error)return route.fulfill({status:503,json:{reasonCode:'CURRENT_WORK_AUTHORITY_UNAVAILABLE'}});
    const scope=url.searchParams.get('scopeFilter')??'visible',query=url.searchParams.get('query')??'',filter=url.searchParams.get('state')??'all',offset=Number(url.searchParams.get('cursor')??0);
    const all=Array.from({length:34},(_,i)=>({workflowRunId:'run:'+i,preparationDigest:(i+1).toString(16).padStart(64,'0'),title:'交接检查 '+(i+1),createdAt:'2026-11-10T01:00:00Z',initiatorId:i<21?'human:alice':'human:bob',executionState:'SUCCEEDED',displayState:'completed',progressVersion:3,problemId:'p'+i,problemRevisionId:'r'+i,problemDigest:'a'.repeat(64),pendingQuestionCount:0,artifactCount:3,businessResolution:'UNDETERMINED',originConversationId:i<26?'c'+i:null,originVerified:i<26,planVersion:4,participantCount:1,completedTaskCount:3,taskCount:3,updatedAt:'2026-11-10T02:00:00Z'})).filter(i=>(scope==='visible'||i.initiatorId===state.principal)&&i.title.includes(query)&&filter!=='waiting');
-   return route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:scope,subject:state.principal,tenantId:'fixture',securityDomain:'isolated',complete:true,readAt:'2026-11-10T03:00:00Z',total:all.length,counts:{completed:all.length,waiting:0,running:0,failed:0,cancelled:0,unknown:0},items:all.slice(offset,offset+25),nextCursor:offset+25<all.length?String(offset+25):null}}});
+   return route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:scope,subject:state.principal,tenantId:'fixture',securityDomain:'isolated',complete:true,questionStatusComplete:state.questionStatusComplete,readAt:'2026-11-10T03:00:00Z',total:all.length,counts:{completed:all.length,waiting:0,running:0,failed:0,cancelled:0,unknown:0},items:all.slice(offset,offset+25),nextCursor:offset+25<all.length?String(offset+25):null}}});
   }
   if(p.includes('/prepared-executions/'))return route.fulfill({status:403,json:{reasonCode:'DETAIL_READ_DENIED'}});
   return route.fulfill({json:{result:{items:[],enabled:false}}});
@@ -40,4 +40,13 @@ test('a new identity does not inherit the prior explicit scope',async({page})=>{
 });
 test('mobile detail return preserves table horizontal position and pagination remains reachable',async({page})=>{
  await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/tasks');const button=page.getByRole('button',{name:'查看任务',exact:true}).first();await button.waitFor();await button.scrollIntoViewIfNeeded();const table=page.locator('.f3-work-table-wrap'),left=await table.evaluate(n=>n.scrollLeft);expect(left).toBeGreaterThan(0);await button.click();await expect(page.getByRole('heading',{name:'当前无法读取这项工作'})).toBeVisible();await page.getByRole('button',{name:'返回我的任务',exact:true}).click();await expect(button).toBeFocused();await expect.poll(()=>table.evaluate(n=>n.scrollLeft)).toBeCloseTo(left,0);const next=page.getByRole('button',{name:'下一页',exact:true});await next.scrollIntoViewIfNeeded();await next.click();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(9);
+});
+
+test('unknown question coverage never claims zero waiting tasks',async({page})=>{
+ const state=await fixture(page);state.questionStatusComplete=false;
+ await page.goto('/tasks?filter=waiting');
+ await expect(page.getByText('暂未发现可确认的待补充任务，尚不能判断是否全部无需补充。')).toBeVisible();
+ await expect(page.getByText('待核实',{exact:true})).toBeVisible();
+ await expect(page.getByText('部分任务的追问状态暂不可读取，待补充列表可能不完整；可在全部任务中查看已保存进度。')).toBeVisible();
+ expect(state.writes).toEqual([]);
 });

@@ -77,3 +77,18 @@ def test_raw_rows_duplicate_runs_and_unzoned_time_are_rejected():
         CurrentWorkItem.model_validate(value | {"createdAt": "2026-11-10T00:00:00"})
     with pytest.raises(ValidationError):
         CurrentWorkItem.model_validate(value | {"preparation": {"private": "body"}})
+
+
+def test_unknown_question_coverage_survives_waiting_filter_and_paging():
+    unknown = item("run:a").model_copy(
+        update={"executionState": "RUNNING", "displayState": "unknown"}
+    )
+    complete = item("run:z")
+    result = page([unknown, complete], pageSize=1)
+    assert result["items"][0]["workflowRunId"] == "run:z"
+    assert result["questionStatusComplete"] is False
+    waiting = page([unknown, complete], state="waiting")
+    assert waiting["total"] == 0 and waiting["items"] == []
+    assert waiting["questionStatusComplete"] is False
+    assert page([complete])["questionStatusComplete"] is True
+    assert page([unknown], query="does not match")["questionStatusComplete"] is True

@@ -3,7 +3,7 @@ import {conversationScope} from './conversationViewState';
 import {readViewString} from './workViewState';
 export type WorkScope='visible'|'initiated';
 export type DirectoryItem={workflowRunId:string;preparationDigest:string;title:string;createdAt:string;initiatorId:string|null;executionState:string;displayState:string;progressVersion:number|null;problemId:string;problemRevisionId:string;problemDigest:string;pendingQuestionCount:number|null;artifactCount:number;businessResolution:string|null;originConversationId:string|null;originVerified:boolean;planVersion:number|null;participantCount:number|null;completedTaskCount:number|null;taskCount:number|null;updatedAt:string|null};
-export type DirectoryPage={schemaVersion:'current-work-directory.v1';scopeFilter:WorkScope;subject:string;tenantId:string;securityDomain:string;complete:true;readAt:string;total:number;counts:Record<string,number>;items:DirectoryItem[];nextCursor:string|null};
+export type DirectoryPage={schemaVersion:'current-work-directory.v1';scopeFilter:WorkScope;subject:string;tenantId:string;securityDomain:string;complete:true;questionStatusComplete?:boolean;readAt:string;total:number;counts:Record<string,number>;items:DirectoryItem[];nextCursor:string|null};
 export const directoryViewKey=(session:WorkbenchSession)=>conversationScope(session)+':directory:tasks-native';
 export async function readDirectoryPage(input:{scope?:string;query:string;state:string;cursor:string},signal:AbortSignal){
  const session=await readWorkbenchSession(signal),viewKey=directoryViewKey(session),scope=input.scope||readViewString(viewKey,'scope');

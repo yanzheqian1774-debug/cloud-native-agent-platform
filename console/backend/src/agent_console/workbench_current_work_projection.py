@@ -146,7 +146,10 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
             else "failed"
             if state.state == "FAILED"
             else "unknown"
-            if state.state != "RUNNING" or state.cancellation_request_id
+            if state.state in TERMINAL
+            or state.state == "CANCEL_REQUESTED"
+            or state.cancellation_request_id
+            or (state.state == "RUNNING" and pending is None)
             else "waiting"
             if pending
             else "running"
