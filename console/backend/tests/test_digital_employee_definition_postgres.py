@@ -509,3 +509,58 @@ def test_real_agent_binding_digest_projection_is_accepted_without_history_rewrit
         runtime_service.repository.pool.close()
         workflow_service.repository.pool.close()
         authority.pool.close()
+
+
+@pytest.mark.parametrize("workbench", [False, True])
+def test_existing_successor_is_definite_conflict_without_new_fact(workbench):
+    authority, store = setup_authority()
+    scope = ScopeIdentity(f"employee-successor-{uuid.uuid4().hex}", "quality")
+    try:
+        original, service, published = publish_employee(store, scope)
+        first = replace(
+            original,
+            revision_id="employee-revision:first",
+            predecessor_revision_id=original.revision_id,
+        )
+
+        def create(revision, version, command):
+            if workbench:
+                with authority.pool.connection() as connection:
+                    return store.create_for_workbench(
+                        connection,
+                        revision,
+                        expected_version=version,
+                        decision_id="test-successor-authorization",
+                        command_id=command,
+                        authorized=True,
+                    )
+            return service.create(
+                revision, expected_version=version, command_id=command
+            )
+
+        saved = create(first, published["aggregateVersion"], "first")
+        replay = create(first, published["aggregateVersion"], "first")
+        assert replay == saved
+        rejected = replace(first, revision_id="employee-revision:rejected")
+        with pytest.raises(
+            EmployeeDefinitionError, match=r"^EMPLOYEE_SUCCESSOR_ALREADY_EXISTS$"
+        ):
+            create(rejected, saved["aggregateVersion"], "rejected")
+        assert service.read(scope, original.definition_id, first.revision_id) == saved
+        with pytest.raises(EmployeeDefinitionError, match="EMPLOYEE_NOT_FOUND"):
+            service.read(scope, original.definition_id, rejected.revision_id)
+        next_revision = replace(
+            first,
+            revision_id="employee-revision:next",
+            predecessor_revision_id=first.revision_id,
+        )
+        next_saved = create(next_revision, saved["aggregateVersion"], "next")
+        assert next_saved["aggregateVersion"] == saved["aggregateVersion"] + 1
+        assert (
+            service.read(scope, original.definition_id, original.revision_id)[
+                "revision"
+            ]
+            == published["revision"]
+        )
+    finally:
+        authority.pool.close()

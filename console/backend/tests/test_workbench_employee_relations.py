@@ -422,3 +422,122 @@ def test_existing_management_read_target_is_exact_scope_and_never_grants(
         with pytest.raises(AuthorityError, match="AUTHORITY_STORAGE_UNAVAILABLE"):
             validator.is_known_exact_target(ctx, exact)
     assert snapshot(r.a) == before
+
+
+def test_authoring_uses_owner_fact_order_and_exact_authority_without_writes(relations):
+    r = relations
+    before = snapshot(r.a)
+    with client(r) as c:
+        value = read(c, r.root + "/authoring")
+        assert value["basis"] == "OWNER_FACT_ORDER"
+        assert value["parent"]["employeeDefinitionRevisionId"] == r.ref.revision_id
+        assert value["head"]["status"] == "AVAILABLE"
+        assert (
+            value["head"]["definition"]["employeeDefinitionRevisionId"]
+            == r.successor.revision_id
+        )
+        assert value["draft"] == value["head"]
+        assert (
+            value["publication"]["definition"]["employeeDefinitionRevisionId"]
+            == r.ref.revision_id
+        )
+        assert (
+            value["aggregateVersion"] == value["head"]["definition"]["aggregateVersion"]
+        )
+        assert value["executionStarted"] is False
+        r.acl.allowed.remove(
+            (
+                "EMPLOYEE",
+                "READ",
+                f"employee:{r.ref.resource_id}:{r.successor.revision_id}",
+            )
+        )
+        hidden = read(c, r.root + "/authoring")
+        assert hidden["head"] == {"status": "NOT_AVAILABLE"}
+        assert hidden["draft"] == {"status": "NOT_AVAILABLE"}
+        assert r.successor.revision_id not in json.dumps(hidden)
+        assert hidden["publication"] == value["publication"]
+        r.acl.allowed.remove(
+            ("EMPLOYEE", "READ", f"employee:{r.ref.resource_id}:{r.ref.revision_id}")
+        )
+        assert c.get(r.root + "/authoring").status_code == 404
+    assert snapshot(r.a) == before
+
+
+def test_authoring_withdrawal_never_falls_back_and_new_edit_needs_validation(
+    relations,
+):
+    r = relations
+
+    def decide(revision, action):
+        with r.a.repository.pool.connection() as c, c.transaction():
+            current = r.definitions.read_revision_for_workbench(
+                c, r.a.e.scope, r.ref.resource_id, revision.revision_id, authorized=True
+            )
+            return r.definitions.decide_for_workbench(
+                c,
+                r.a.e.scope,
+                r.ref.resource_id,
+                revision.revision_id,
+                revision.digest,
+                action,
+                expected_version=current["aggregateVersion"],
+                decision_id="isolated-authoring-test",
+                command_id=f"authoring:{action}:{revision.revision_id}",
+                authorized=True,
+            )
+
+    for action in ("VALIDATE", "APPROVE", "PUBLISH"):
+        decide(r.successor, action)
+    with client(r) as c:
+        published = read(c, r.root + "/authoring")
+        assert published["draft"] == {"status": "NONE"}
+        assert (
+            published["publication"]["definition"]["employeeDefinitionRevisionId"]
+            == r.successor.revision_id
+        )
+        decide(r.successor, "UNPUBLISH")
+        withdrawn = read(c, r.root + "/authoring")
+        assert withdrawn["publication"] == {"status": "WITHDRAWN"}
+        # The older publication remains valid but is never silently substituted.
+        with r.a.repository.pool.connection() as connection:
+            assert (
+                r.definitions.read_revision_for_workbench(
+                    connection,
+                    r.a.e.scope,
+                    r.ref.resource_id,
+                    r.ref.revision_id,
+                    authorized=True,
+                )["publicationState"]
+                == "PUBLISHED"
+            )
+        new_revision = replace(
+            r.successor,
+            revision_id="revision:aaa-newest",
+            predecessor_revision_id=r.successor.revision_id,
+        )
+        with r.a.repository.pool.connection() as connection, connection.transaction():
+            r.definitions.create_for_workbench(
+                connection,
+                new_revision,
+                expected_version=withdrawn["aggregateVersion"],
+                decision_id="isolated-authoring-test",
+                command_id="authoring:new-draft",
+                authorized=True,
+            )
+        r.acl.allowed.add(
+            (
+                "EMPLOYEE",
+                "READ",
+                f"employee:{r.ref.resource_id}:{new_revision.revision_id}",
+            )
+        )
+        before = snapshot(r.a)
+        edited = read(c, r.root + "/authoring")
+        assert (
+            edited["head"]["definition"]["employeeDefinitionRevisionId"]
+            == new_revision.revision_id
+        )
+        assert edited["draft"]["definition"]["lifecycleState"] == "DRAFT"
+        assert edited["publication"] == {"status": "WITHDRAWN"}
+        assert snapshot(r.a) == before

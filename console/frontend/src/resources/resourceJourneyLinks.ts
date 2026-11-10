@@ -13,12 +13,16 @@ export function safeResourceReturn(raw: string | null): string | null {
     const p = url.searchParams;
     if(['/agents','/knowledge'].includes(url.pathname)&&p.has('selected')){
       const expected=url.pathname==='/agents'?'agent':'knowledge';
-      if([...p.keys()].some(k=>!['selected','resourceRevision','resourceDigest','kind','query','status'].includes(k)||p.getAll(k).length!==1)||p.get('kind')!==expected||!identity(p.get('selected'))||!identity(p.get('resourceRevision'))||!digest(p.get('resourceDigest')??'')||(p.get('query')?.length??0)>200||(p.get('status')?.length??0)>32)return null;
+      if([...p.keys()].some(k=>!['selected','resourceRevision','resourceDigest','kind','query','status','resourceView','resourceSection'].includes(k)||p.getAll(k).length!==1)||p.get('kind')!==expected||!identity(p.get('selected'))||!identity(p.get('resourceRevision'))||!digest(p.get('resourceDigest')??'')||(p.get('query')?.length??0)>200||(p.get('status')?.length??0)>32)return null;
+      if((p.has('resourceView')&&p.get('resourceView')!=='professional')||(p.has('resourceSection')&&!['overview','content','impact'].includes(p.get('resourceSection')!)))return null;
       p.sort();return url.pathname+'?'+p;
     }
-    if ([...p.keys()].some(k => !['managedResource','resourceTab','query','status','kind','returnConversation','fromExecution'].includes(k) || p.getAll(k).length !== 1)
+    if ([...p.keys()].some(k => !['managedResource','resourceTab','resourceView','resourceSection','viewRevision','query','status','kind','returnConversation','fromExecution'].includes(k) || p.getAll(k).length !== 1)
       || (p.has('kind') && p.get('kind') !== ({'/skills':'skill','/mcp':'mcp','/agents':'agent','/knowledge':'knowledge'}[url.pathname]))
       || !identity(p.get('managedResource')) || (p.has('resourceTab') && !tabs.has(p.get('resourceTab')!))
+      || (p.has('resourceView')&&p.get('resourceView')!=='professional')
+      || (p.has('resourceSection')&&!['overview','content','impact','history'].includes(p.get('resourceSection')!))
+      || (p.has('viewRevision')&&!identity(p.get('viewRevision')))
       || (p.has('returnConversation')&&!identity(p.get('returnConversation'))) || (p.has('fromExecution')&&!/^[a-f0-9]{64}$/.test(p.get('fromExecution')!))
       || (p.get('query')?.length ?? 0) > 200 || (p.get('status')?.length ?? 0) > 32) return null;
     p.sort();

@@ -77,8 +77,8 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     assert composition.foundation is foundation
     assert captured["grant_administration"] is foundation.grants
     operations = captured["operations"]
-    assert len(operations) == 29
-    assert [(item.name, item.method, item.path) for item in operations[-16:]] == [
+    assert len(operations) == 30
+    assert [(item.name, item.method, item.path) for item in operations[-17:]] == [
         ("LIST_AGENTS", "GET", "/api/workbench/v1/agents"),
         (
             "READ_AGENT_REVISION",
@@ -125,6 +125,12 @@ def test_composition_registers_business_and_read_only_workflow_operations(
             "GET",
             "/api/workbench/v1/instances/{instance_id}/assignments/{assignment_id}/"
             "placements/{placement_id}",
+        ),
+        (
+            "READ_EMPLOYEE_AUTHORING",
+            "GET",
+            "/api/workbench/v1/employees/{employee_definition_id}/revisions/"
+            "{revision_id}/authoring",
         ),
         (
             "READ_EMPLOYEE_HISTORY",
@@ -205,7 +211,7 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
 
     operations = captured["operations"]
     assert captured["grant_administration"] is foundation.grants
-    assert len(operations) == (29 if model_enabled else 27)
+    assert len(operations) == (30 if model_enabled else 28)
     assert (
         any(item.name == "LIST_MODEL_DIRECTORY" for item in operations) is model_enabled
     )

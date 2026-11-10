@@ -17,7 +17,6 @@ import { EmployeeAuthorizationRequest } from "./EmployeeAuthorizationRequest";
 type Action = "VALIDATE" | "APPROVE" | "PUBLISH";
 type FrozenLifecycle = { action: Action; command: EmployeeLifecycleCommand; principalKey: string };
 
-const actionLabel: Record<Action, string> = { VALIDATE: "校验修订", APPROVE: "批准修订", PUBLISH: "发布修订" };
 const requiredState: Record<Action, EmployeeLifecycleState> = { VALIDATE: "DRAFT", APPROVE: "VALIDATED", PUBLISH: "APPROVED" };
 const targetState: Record<Action, EmployeeLifecycleState> = { VALIDATE: "VALIDATED", APPROVE: "APPROVED", PUBLISH: "PUBLISHED" };
 const lifecycleLabel: Record<EmployeeLifecycleState, string> = {
@@ -42,11 +41,14 @@ export function EmployeeLifecycleActions({
   item,
   initialResult,
   onReadback,
+  business = false,
 }: {
+  business?: boolean;
   item: EmployeeDefinition;
   initialResult?: EmployeeCommandResult;
   onReadback: (definition: EmployeeDefinition, result: EmployeeCommandResult) => void;
 }) {
+  const actionLabel:Record<Action,string>=business?{VALIDATE:"验证草稿",APPROVE:"确认发布资格",PUBLISH:"发布定义"}:{VALIDATE:"校验修订",APPROVE:"批准修订",PUBLISH:"发布修订"};
   const [latest, setLatest] = useState(initialResult);
   const [frozen, setFrozen] = useState<FrozenLifecycle | null>(null);
   const [busy, setBusy] = useState(false);
@@ -200,11 +202,11 @@ export function EmployeeLifecycleActions({
   }
 
   return <section className="employee-lifecycle" aria-labelledby="employee-lifecycle-title">
-    <header className="employee-section-heading"><div><h3 id="employee-lifecycle-title">生命周期操作</h3><p>校验、批准和发布是独立操作；每次提交都会重新核对当前访问权限。</p></div><span className={`employee-capability-state ${lifecycle ? "available" : "warning"}`}><i />{lifecycle ? `当前状态 · ${lifecycleLabel[lifecycle]}` : "部分实现 · 正式详情接口未提供状态"}</span></header>
+    <header className="employee-section-heading"><div><h3 id="employee-lifecycle-title">{business?"验证与发布":"生命周期操作"}</h3><p>校验、批准和发布是独立操作；每次提交都会重新核对当前访问权限。</p></div><span className={`employee-capability-state ${lifecycle ? "available" : "warning"}`}><i />{lifecycle ? `当前状态 · ${lifecycleLabel[lifecycle]}` : "部分实现 · 正式详情接口未提供状态"}</span></header>
     <p className="employee-honesty-note">系统在准备操作时核对最新状态与版本；确认前不会提交业务命令。</p>
     <div className="employee-lifecycle-flow">{(["VALIDATE", "APPROVE", "PUBLISH"] as const).map(action => <button type="button" key={action} disabled={busy || Boolean(frozen) || lifecycle !== requiredState[action]} onClick={() => void prepare(action)}><span>{actionLabel[action]}</span><small>需要当前操作权限与成员读取权限</small></button>)}</div>
     {!lifecycle && <p className="employee-honesty-note">当前 exact 详情响应没有生命周期字段，无法仅凭“未发布”判断阶段。获得正式状态后才能启用操作。</p>}
-    {frozen && <div className="employee-command-confirmation"><span className="employee-confirmation-state">等待用户明确确认</span><h4>{actionLabel[frozen.action]} · {item.role}</h4><p>将对所选修订 <code>{item.employeeDefinitionRevisionId}</code> 使用版本 {frozen.command.expectedVersion}。</p><details><summary>查看冻结 commandId 与摘要</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionDigest}</code></details><div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>取消</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void (unknown ? recover() : submit())}>{busy ? "正在核对……" : unknown ? "读取原修订状态" : "确认提交"}</button></div></div>}
+    {frozen && <div className="employee-command-confirmation"><span className="employee-confirmation-state">等待用户明确确认</span><h4>{actionLabel[frozen.action]} · {item.role}</h4>{business?<p>将对当前选中的草稿执行{actionLabel[frozen.action]}；已有任务保持原引用。</p>:<p>将对所选修订 <code>{item.employeeDefinitionRevisionId}</code> 使用版本 {frozen.command.expectedVersion}。</p>}<details><summary>查看冻结 commandId 与摘要</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionDigest}</code></details><div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>取消</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void (unknown ? recover() : submit())}>{busy ? "正在核对……" : unknown ? "读取原修订状态" : "确认提交"}</button></div></div>}
     {needsAuthorization && frozen && <EmployeeAuthorizationRequest
       title={`申请${actionLabel[frozen.action]}所需权限`}
       grants={[
@@ -220,6 +222,6 @@ export function EmployeeLifecycleActions({
       onApproved={submit}
     />}
     {message && <div role={unknown || commandFailed ? "alert" : "status"} className={`employee-command-state ${unknown ? "unknown" : commandFailed ? "failed" : "success"}`}><strong>{unknown ? "结果未知" : commandFailed ? "命令未执行" : "命令状态"}</strong><span>{message}</span></div>}
-    <div className="employee-unavailable-actions"><span className="employee-capability-state missing"><i />未实现</span><p>原修订不原地编辑，可在后继维护中调整职责与资源；删除、停用和实例化继续保留为欠项。</p></div>
+    {!business&&<div className="employee-unavailable-actions"><span className="employee-capability-state missing"><i />未实现</span><p>原修订不原地编辑，可在后继维护中调整职责与资源；删除、停用和实例化继续保留为欠项。</p></div>}
   </section>;
 }

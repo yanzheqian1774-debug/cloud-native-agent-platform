@@ -24,7 +24,7 @@ async function fixture(page:Page,mode='normal'){
 function path(kind='skill'){const item=items.find(i=>i.kind===kind)!;return '/'+(kind==='skill'?'skills':'mcp')+'?'+new URLSearchParams({selected:item.identity,resourceRevision:item.revisionId,returnConversation:conversation})}
 
 test('UI01 right detail scroll contains bottom wheel at the approved viewport',async({page})=>{
- const writes=await fixture(page);await page.setViewportSize({width:1280,height:720});await page.goto(path());
+ const writes=await fixture(page);await page.setViewportSize({width:1280,height:720});await page.goto(path()+'&resourceView=professional');
  await expect(page.getByRole('heading',{name:'准确销售技能',exact:true})).toBeVisible();
  const detail=page.getByRole('region',{name:'资源详情滚动区'});
  const positions=()=>page.evaluate(()=>({outer:document.scrollingElement!.scrollTop,side:document.querySelector('.px-sidebar')!.scrollTop,nav:document.querySelector('.px-business-nav')!.scrollTop,list:document.querySelector('.resource-detail-list')!.scrollTop,detail:document.querySelector('.resource-directory-detail')!.scrollTop}));
@@ -41,7 +41,7 @@ test('UI01 original conversation draft survives real navigation and detail reloa
 });
 
 for(const kind of ['skill','mcp'])test('UI01 '+kind+' uses exact SVG and semantic type color',async({page})=>{
- await fixture(page);await page.goto(path(kind));const mark=page.locator('.resource-readonly-detail>.resource-type-mark, .resource-readonly-detail>header>.resource-type-mark');await expect(mark).toBeVisible();expect(await mark.evaluate(node=>getComputedStyle(node).color)).toBe(kind==='skill'?'rgb(49, 94, 192)':'rgb(23, 110, 123)');await expect(mark.locator('svg')).toHaveAttribute('viewBox','0 0 24 24');if(kind==='mcp'){await expect(mark.locator('path')).toHaveCount(4);await expect(mark.locator('path').first()).toHaveAttribute('d','M12 22v-5');await expect(page.getByRole('heading',{name:'连接配置',exact:true})).toBeVisible();await expect(page.getByText('本版本读取接口未返回工具发现和选择记录，不推定其存在。',{exact:false})).toBeVisible()}else {await expect(mark.locator('path')).toHaveCount(4);await expect(mark.locator('path').first()).toHaveAttribute('d','M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35');}
+ await fixture(page);await page.goto(path(kind)+'&resourceView=professional');const mark=page.locator('.resource-readonly-detail>header .resource-type-mark');await expect(mark).toBeVisible();expect(await mark.evaluate(node=>getComputedStyle(node).color)).toBe(kind==='skill'?'rgb(49, 94, 192)':'rgb(23, 110, 123)');await expect(mark.locator('svg')).toHaveAttribute('viewBox','0 0 24 24');if(kind==='mcp'){await expect(mark.locator('path')).toHaveCount(4);await expect(mark.locator('path').first()).toHaveAttribute('d','M12 22v-5');await expect(page.getByRole('heading',{name:'连接配置',exact:true})).toBeVisible();await expect(page.getByText('本版本读取接口未返回工具发现和选择记录，不推定其存在。',{exact:false})).toBeVisible()}else {await expect(mark.locator('path')).toHaveCount(4);await expect(mark.locator('path').first()).toHaveAttribute('d','M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35');}
 });
 
 for(const mode of ['denied','identity','version'])test('UI01 '+mode+' never presents another or stale version',async({page})=>{
@@ -51,4 +51,30 @@ for(const mode of ['denied','identity','version'])test('UI01 '+mode+' never pres
 
 test('UI01 all-kind catalog detail carries the selected kind and exact revision',async({page})=>{
  const writes=await fixture(page);await page.goto('/catalog?returnConversation='+conversation);await page.getByRole('article',{name:'准确连接配置',exact:true}).getByRole('link',{name:'打开资源详情',exact:true}).click();await expect(page).toHaveURL(/kind=mcp/);await expect(page.getByRole('heading',{name:'准确连接配置',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'准确连接配置',exact:true})).toBeVisible();expect(writes).toEqual([]);
+});
+
+
+test('F3 readonly business tabs keep exact identity behind evidence and never grant maintenance',async({page},info)=>{
+ const writes=await fixture(page);await page.goto(path());
+ await expect(page.getByRole('tab',{name:'概览',exact:true})).toHaveAttribute('aria-selected','true');
+ await expect(page.getByRole('tab')).toHaveCount(3);
+ await expect(page.getByRole('heading',{name:'固定版本',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'修改当前发布内容',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('navigation',{name:'本页可读资源'})).toBeHidden();
+ await page.screenshot({path:info.outputPath('f3-readonly-overview.png')});
+ await page.getByRole('tab',{name:'概览',exact:true}).focus();await page.keyboard.press('ArrowRight');
+ await expect(page.getByRole('tab',{name:'内容与定义',exact:true})).toBeFocused();
+ await expect(page.getByRole('heading',{name:'办理规则与能力',exact:true})).toBeVisible();
+ await expect(page.getByText('revision:1',{exact:true})).toBeHidden();
+ await page.getByText('本版本完整定义与准确依据',{exact:true}).click();
+ await expect(page.getByText('revision:1',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'查看专业详情',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'固定版本',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'返回资源详情',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'内容与定义',exact:true})).toHaveAttribute('aria-selected','true');
+ await page.getByRole('tab',{name:'引用与影响',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'本版本可查看的使用记录',exact:true})).toBeVisible();
+ await page.reload();await expect(page.getByRole('tab',{name:'引用与影响',exact:true})).toHaveAttribute('aria-selected','true');
+ await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+ await page.screenshot({path:info.outputPath('f3-readonly-impact-mobile.png')});expect(writes).toEqual([]);
 });

@@ -22,12 +22,16 @@ test('maintenance draft edit failed test checked publication exact employee and 
     const state = await fixture(page);
     await page.goto('/skills');
     await create(page);
+    await page.getByRole('button',{name:'查看专业详情',exact:true}).click();
     await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText('维护原用途');
     await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
     await page.getByLabel('用途说明', { exact: true }).fill('保留操作契约的新用途');
     await page.getByRole('button', { name: '保存草稿', exact: true }).click();
     await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText('保留操作契约的新用途');
+    await expect(page.locator('.rm-success')).toContainText('草稿修改已保存，请按当前内容重新验证');
     await runTest(page, 'READ_DATA', false);
+    await expect(page.locator('.rm-success')).toContainText('本次测试结果已记录');
+    await expect(page.locator('.rm-success')).not.toContainText('测试通过');
     await page.getByRole('tab', { name: '发布检查', exact: true }).click();
     await expect(page.getByRole('tabpanel',{name:'发布检查',exact:true})).toBeVisible();
     await page.getByRole('tabpanel',{name:'发布检查',exact:true}).getByRole('button', { name: '验证全部操作后发布', exact: true }).click();
@@ -39,16 +43,19 @@ test('maintenance draft edit failed test checked publication exact employee and 
     await expect(page.getByRole('tabpanel',{name:'发布检查',exact:true})).toBeVisible();
     await page.getByRole('tabpanel',{name:'发布检查',exact:true}).getByRole('button', { name: '验证全部操作后发布', exact: true }).click();
     await expect(page.getByRole('link', { name: '查看发布版本与使用记录' })).toBeVisible();
+    await expect(page.locator('.rm-success')).toContainText('已完成操作测试核验并发布');
     const beforeRead = state.posts.length;
     await page.getByRole('tab', { name: '使用追溯', exact: true }).click();
     await page.getByRole('link', { name: '查看引用员工' }).click();
     await expect(page.getByRole('heading', { name: '准确资源引用员工', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: '返回资源维护', exact: false })).toBeVisible();
+    await page.getByRole('button',{name:'查看专业管理',exact:true}).click();
     const member = page.getByRole('table').getByRole('link').filter({ hasText: skillId });
     await expect(member).toHaveAttribute('href', new RegExp('resourceRevision=revision%3A1'));
     await page.getByRole('link', { name: '返回资源维护', exact: false }).click();
     await expect(page.getByRole('tab', { name: '使用追溯', exact: true })).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('link', { name: '查看发布版本与使用记录' }).click();
+    await page.getByRole('tab', { name: '引用与影响', exact: true }).click();
     await page.getByRole('button', { name: '已保存的同版本核对结果', exact: true }).click();
     await expect(page.getByRole('heading', { name: '已有执行的只读核对', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: '销售诊断关键数据' })).toBeVisible();
@@ -58,6 +65,7 @@ test('maintenance draft edit failed test checked publication exact employee and 
     expect(state.posts).toHaveLength(beforeRead);
     await page.getByRole('link', { name: '返回资源目录', exact: true }).click();
     await page.getByRole('article',{name:'资源维护完整路径核验',exact:true}).getByRole('link',{name:'编辑',exact:true}).click();
+    await page.getByRole('button',{name:'查看专业详情',exact:true}).click();
     await page.getByRole('button', { name: '创建后继草稿', exact: true }).click();
     await expect.poll(() => state.resource.currentDraftRevisionId).toBe('revision:2');
     const pinned = await page.getByRole('link', { name: '查看发布版本与使用记录' }).getAttribute('href');
@@ -80,7 +88,7 @@ for (const action of ['edit', 'test', 'publish-tested'])
         state.resource.testResults = operations.map(operation => ({ resultId: 'old-' + operation, revisionId: 'revision:1', revisionDigest: 'a'.repeat(64), operation, caseName: '覆盖核验', status: 'PASSED', actualExecution: true, verificationLevel: 'ISOLATED_SYNTHETIC_EXECUTOR', actual: { pass: true } }));
         state.loseNext = true;
         state.receiptReadable = false;
-        await page.goto('/skills?managedResource=' + encodeURIComponent(skillId));
+        await page.goto('/skills?managedResource=' + encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));
         await expect(page.getByRole('region', { name: '当前资源配置' })).toBeVisible();
         if (action === 'edit') {
             await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
@@ -103,7 +111,8 @@ for (const action of ['edit', 'test', 'publish-tested'])
         await page.reload();
         state.receiptReadable = true;
         await page.getByRole('button', { name: '读取原操作结果', exact: true }).click();
-        await expect(page.getByText('已读回原操作及当前正式记录，没有再次提交。', { exact: true })).toBeVisible();
+        await expect(page.locator('.rm-success')).toContainText('已读回原操作及当前正式记录，没有再次提交。');
+        await expect(page.locator('.rm-success')).toContainText(action === 'edit' ? '草稿修改已保存' : action === 'test' ? '本次测试结果已记录' : '已完成操作测试核验并发布');
         expect(state.posts).toHaveLength(1);
         expect(state.gets.filter(p => p.includes('/commands/')).every(p => p.endsWith(String(key)))).toBe(true);
     });
@@ -139,7 +148,7 @@ test('leaving after ordinary POST retains original intent and cannot restore det
 });
 test('fresh directory revocation withdraws a successful ordinary command result and never regrants', async ({ page }) => {
     const state = await fixture(page, true);
-    await page.goto('/skills?managedResource=' + encodeURIComponent(skillId));
+    await page.goto('/skills?managedResource=' + encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));
     await page.getByRole('button', { name: '编辑草稿', exact: true }).click();
     await page.getByLabel('用途说明', { exact: true }).fill('正式编辑结果');
     state.revoked = true;
@@ -162,7 +171,7 @@ test('legacy unknown ordinary key without binding is preserved and never replace
 });
 
 test('late maintenance completion preserves the tab chosen while the command was running',async({page})=>{
- const state=await fixture(page,true);state.hold=true;await page.goto('/skills?managedResource='+encodeURIComponent(skillId));await page.getByRole('button',{name:'编辑草稿',exact:true}).click();await page.getByLabel('用途说明',{exact:true}).fill('保留当前页面位置');await page.getByRole('button',{name:'保存草稿',exact:true}).click();await expect.poll(()=>state.posts.length).toBe(1);await page.getByRole('tab',{name:'发布检查',exact:true}).click();state.hold=false;state.release();await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);await expect(page.getByRole('tab',{name:'发布检查',exact:true})).toHaveAttribute('aria-selected','true');expect(new URL(page.url()).searchParams.get('resourceTab')).toBe('发布检查');expect(state.posts).toHaveLength(1);
+ const state=await fixture(page,true);state.hold=true;await page.goto('/skills?managedResource='+encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));await page.getByRole('button',{name:'编辑草稿',exact:true}).click();await page.getByLabel('用途说明',{exact:true}).fill('保留当前页面位置');await page.getByRole('button',{name:'保存草稿',exact:true}).click();await expect.poll(()=>state.posts.length).toBe(1);await page.getByRole('tab',{name:'发布检查',exact:true}).click();state.hold=false;state.release();await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);await expect(page.getByRole('tab',{name:'发布检查',exact:true})).toHaveAttribute('aria-selected','true');expect(new URL(page.url()).searchParams.get('resourceTab')).toBe('发布检查');expect(state.posts).toHaveLength(1);
 });
 
 test('expired policy service cannot invalidate a still-authenticated user session',async({page})=>{

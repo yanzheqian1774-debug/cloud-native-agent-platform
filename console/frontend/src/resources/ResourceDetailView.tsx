@@ -5,10 +5,19 @@ import {NavigationIcon} from '../components/NavigationIcon';
 import {formatTime} from '../journey/formatTime';
 import {ResourceVersionImpact} from './ResourceVersionImpact';
 import {SkillInputOutput} from './SkillInputOutput';
+import {F3ResourceDetail} from './F3ResourceDetail';
 import {publishedResourceHref} from './resourceJourneyLinks';
 const tabs=['业务规则','输入输出','依赖','执行设置','测试','发布检查','版本','使用追溯','管理'];
 const states:Record<string,string>={DRAFT:'草稿',VALIDATED:'验证通过',POLICY_REVIEWED:'策略核验通过',PUBLISHED:'已发布'};
-export function ResourceDetailView({resource,actions,editor,connection,tests,busy,onBack,onEdit,onExport,onCommand}:{resource:SkillMcpResource;actions:ReactNode;editor:ReactNode;connection:ReactNode;tests:ReactNode;busy:boolean;onBack:()=>void;onEdit:()=>void;onExport:()=>void;onCommand:(action:string)=>void}){
+type ResourceDetailProps={resource:SkillMcpResource;actions:ReactNode;editor:ReactNode;connection:ReactNode;tests:ReactNode;busy:boolean;onBack:()=>void;onEdit:()=>void;onModify:()=>void;onExport:()=>void;onCommand:(action:string)=>void};
+export function ResourceDetailView(props:ResourceDetailProps){
+ const [params,setParams]=useSearchParams();
+ const professional=params.get('resourceView')==='professional'||params.has('resourceTab');
+ function open(tab=props.resource.kind==='skill'?'业务规则':'执行设置'){setParams(previous=>{const next=new URLSearchParams(previous);next.set('resourceView','professional');next.set('resourceTab',tab);return next},{replace:true})}
+ function back(){setParams(previous=>{const next=new URLSearchParams(previous);next.delete('resourceView');next.delete('resourceTab');return next},{replace:true})}
+ return professional?<div className="f3-detail-professional"><button className="f3-detail-professional-return" onClick={back}>← 返回资源详情</button><ProfessionalResourceDetail {...props}/></div>:<F3ResourceDetail resource={props.resource} editor={props.editor} busy={props.busy} onBack={props.onBack} onModify={props.onModify} onProfessional={open}/>;
+}
+function ProfessionalResourceDetail({resource,actions,editor,connection,tests,busy,onBack,onEdit,onExport,onCommand}:ResourceDetailProps){
  const publishedHref=publishedResourceHref(resource);
  const availableTabs=resource.kind==='skill'?tabs:tabs.filter(x=>!['业务规则','输入输出','测试'].includes(x)),fallback=resource.kind==='skill'?'业务规则':'执行设置';
  const [params,setParams]=useSearchParams(),requested=params.get('resourceTab')??fallback,tab=availableTabs.includes(requested)?requested:fallback;const [selectedTest,setSelectedTest]=useState('');

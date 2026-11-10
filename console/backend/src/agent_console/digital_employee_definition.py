@@ -239,6 +239,15 @@ class EmployeeDefinitionRepository(Protocol):
         limit: int,
         authorized: bool,
     ): ...
+    def authoring_heads_for_workbench(
+        self,
+        connection: Any,
+        scope: ScopeIdentity,
+        definition_id: str,
+        *,
+        authorized: bool,
+    ): ...
+
     def revision_ids_for_definition_for_workbench(
         self,
         connection: Any,

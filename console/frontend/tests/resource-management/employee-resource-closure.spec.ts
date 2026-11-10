@@ -11,18 +11,25 @@ async function fixture(page:Page){
  const state=await maintenance(page,true);state.resource.aggregateVersion=8;state.resource.publishedRevisionId='revision:2';state.resource.currentDraftRevisionId=null;state.resource.lifecycleState='PUBLISHED';state.resource.revisions[0].state='PUBLISHED';state.resource.revisions.push({...structuredClone(state.resource.revisions[0]),revisionId:'revision:2',predecessorRevisionId:'revision:1',digest:'b'.repeat(64),state:'PUBLISHED'});
  state.resource.testResults=[{resultId:'test:old',revisionId:'revision:1',revisionDigest:'a'.repeat(64),operation:'READ_DATA',caseName:'旧维护用例',status:'PASSED',actualExecution:true,verificationLevel:'ISOLATED_SYNTHETIC_EXECUTOR',actual:{oldRevision:true}},{resultId:'test:current',revisionId:'revision:2',revisionDigest:'b'.repeat(64),operation:'READ_DATA',caseName:'新维护用例',status:'PASSED',actualExecution:true,verificationLevel:'ISOLATED_SYNTHETIC_EXECUTOR',actual:{newRevision:true}},{resultId:'test:unverified',revisionId:'unknown',revisionDigest:'0'.repeat(64),status:'PASSED',actualExecution:true}];
  const original:EmployeeDefinition={resourceKind:'DIGITAL_EMPLOYEE_DEFINITION',employeeDefinitionId:employeeId,employeeDefinitionRevisionId:old,employeeDefinitionDigest:'d'.repeat(64),role:'准确资源引用员工',responsibilities:['维护旧修订'],publicationState:'NOT_PUBLISHED',lifecycleState:'DRAFT',aggregateVersion:1,members:[agent,{kind:'MCP',resourceId:'mcp:disabled',revisionId:'mcp-revision:old',digest:'9'.repeat(64)},{kind:'SKILL',resourceId:skillId,revisionId:'revision:1',digest:'a'.repeat(64)}]};
- const extra={records:new Map([[old,original]]),posts:[] as {path:string;body:Record<string,unknown>}[],readable:true,loseNext:false,wrongReceipt:false,hold:false,release:()=>{}};
+ const extra={records:new Map([[old,original]]),posts:[] as {path:string;body:Record<string,unknown>}[],readable:true,rejectNext:"",loseNext:false,wrongReceipt:false,hold:false,release:()=>{}};
  await page.route('**/api/workbench/v1/employees**',async route=>{
   const req=route.request(),path=decodeURIComponent(new URL(req.url()).pathname),parts=path.split('/'),rev=parts[parts.indexOf('revisions')+1];
   if(req.method()==='GET'){
    state.gets.push(path);
    if(path.endsWith('/employees'))return route.fulfill({json:envelope({items:[...extra.records.values()]})});
+   if(path.endsWith('/authoring')){
+    const values=[...extra.records.values()],head=values.at(-1)!,publication=[...values].reverse().find(x=>x.publicationState==='PUBLISHED');
+    const version=Math.max(...values.map(x=>x.aggregateVersion??0));
+    const available=(d:EmployeeDefinition)=>({status:'AVAILABLE',definition:{...d,aggregateVersion:version}});
+    return route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:extra.records.get(rev),aggregateVersion:version,head:available(head),draft:['DRAFT','VALIDATED','APPROVED'].includes(head.lifecycleState??'')?available(head):{status:'NONE'},publication:publication?available(publication):{status:'NOT_AVAILABLE'},executionStarted:false})});
+   }
    if(path.endsWith('/history'))return route.fulfill({json:envelope({items:[...extra.records.values()],visibility:'AUTHORIZED_ONLY',nextCursor:null,executionStarted:false})});
    const record=extra.records.get(rev);return record&&(extra.readable||rev===old)?route.fulfill({json:envelope(record)}):route.fulfill({status:403,json:{reasonCode:'EXACT_READ_REQUIRED'}});
   }
   const body=req.postDataJSON();extra.posts.push({path,body});expect(req.headers()['x-csrf-token']).toBe('fixture-csrf');
   let result:EmployeeDefinition;
   if(path.endsWith('/employees')){
+   if(extra.rejectNext){const reasonCode=extra.rejectNext;extra.rejectNext='';return route.fulfill({status:409,json:{reasonCode}})}
    const command=body as EmployeeCreateCommand;expect(command.employeeDefinitionId).toBe(employeeId);expect(command.predecessorEmployeeRevisionId).toBe(old);expect(command.expectedVersion).toBe(1);
    original.aggregateVersion=2;result={...structuredClone(original),employeeDefinitionRevisionId:command.employeeDefinitionRevisionId,employeeDefinitionDigest:ownerDigest(command),responsibilities:command.responsibilities,members:command.members,aggregateVersion:2};extra.records.set(result.employeeDefinitionRevisionId,result);
   }else{
@@ -35,7 +42,7 @@ async function fixture(page:Page){
  });
  return {state,extra,original};
 }
-const href=()=>'/employees?'+new URLSearchParams({employeeDefinitionId:employeeId,employeeDefinitionRevisionId:old,detail:'1',section:'overview'});
+const href=()=>'/employees?'+new URLSearchParams({employeeView:'professional',employeeDefinitionId:employeeId,employeeDefinitionRevisionId:old,detail:'1',section:'overview'});
 async function prepare(page:Page){await page.getByRole('button',{name:'准备员工后继',exact:true}).click();await page.getByLabel('后继职责',{exact:true}).fill('维护发布后的准确资源\n保留旧记录，不启动业务运行');await page.getByRole('checkbox',{name:'保留 MCP mcp:disabled',exact:true}).uncheck();await page.getByRole('region',{name:'组合业务资源'}).getByRole('checkbox').check();await page.getByRole('button',{name:'核对后继草稿',exact:true}).click();await expect(page.getByRole('region',{name:'员工后继确认'})).toBeVisible()}
 async function save(page:Page){await page.getByRole('button',{name:'确认保存后继草稿',exact:true}).click()}
 test('same Employee successor selects current published Skill and preserves original draft through publication',async({page},info)=>{
@@ -84,11 +91,119 @@ test('Employee Agent saved result and same-resource return retain exact referrin
  });
  await page.goto(href()+'&resourceBack='+encodeURIComponent('/skills?'+new URLSearchParams({managedResource:skillId,resourceTab:'使用追溯'})));
  await page.getByRole('button',{name:'职责与能力',exact:true}).click();await page.getByRole('table').getByRole('link').filter({hasText:agent.resourceId}).click();await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'原Agent已保存结果',exact:true}).click();await expect(page.getByRole('region',{name:'销售诊断关键数据'})).toBeVisible();await page.reload();await page.getByRole('link',{name:'返回同一准确资源',exact:true}).click();await page.getByRole('link',{name:'返回引用员工',exact:true}).click();await page.getByRole('link',{name:/返回资源维护/}).click();await expect(page.getByRole('tab',{name:'使用追溯',exact:true})).toHaveAttribute('aria-selected','true');expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
+ await page.getByRole('tab',{name:'引用与影响',exact:true}).click();await page.getByRole('button',{name:'原Agent已保存结果',exact:true}).click();await expect(page.getByRole('region',{name:'销售诊断关键数据'})).toBeVisible();await page.reload();await page.getByRole('link',{name:'返回同一准确资源',exact:true}).click();await page.getByRole('link',{name:'返回引用员工',exact:true}).click();await page.getByRole('link',{name:/返回资源维护/}).click();await expect(page.getByRole('tab',{name:'使用追溯',exact:true})).toHaveAttribute('aria-selected','true');expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
 });
 
 test('explicit published Agent selection replaces only the primary member in same Employee successor',async({page})=>{
  const {extra,original}=await fixture(page);const replacement={kind:'AGENT',resourceId:'agent:replacement',revisionId:'agent-revision:published',digest:'6'.repeat(64)};
  await page.route('**/api/workbench/v1/resource-directory?**',route=>{if(new URL(route.request().url()).searchParams.get('kind')!=='agent')return route.fallback();return route.fulfill({json:{result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},items:[{kind:'agent',identity:replacement.resourceId,revisionId:replacement.revisionId,digest:replacement.digest,name:'明确选择的已发布Agent',enabled:true,isCurrentPublished:true},{kind:'agent',identity:'agent:another',revisionId:'agent-revision:another',digest:'5'.repeat(64),name:'另一个已发布Agent',enabled:true,isCurrentPublished:true},{kind:'agent',identity:'agent:draft',revisionId:'draft',digest:'4'.repeat(64),name:'不可选择的Agent草稿',enabled:true,isCurrentPublished:false}],nextCursor:null}}})});
  await page.goto(href());await page.getByRole('button',{name:'准备员工后继',exact:true}).click();await page.getByRole('checkbox',{name:'保留 MCP mcp:disabled',exact:true}).uncheck();const picker=page.getByRole('region',{name:'组合业务资源'});await picker.getByRole('checkbox').check();await picker.getByRole('button',{name:/^Agent职责/}).click();await picker.getByRole('checkbox',{name:/明确选择的已发布Agent/}).check();await picker.getByRole('checkbox',{name:/另一个已发布Agent/}).click();await expect(picker.getByRole('alert')).toContainText('只能选择一个Agent职责');await expect(picker.getByText('不可选择的Agent草稿',{exact:true})).toHaveCount(0);await page.getByRole('button',{name:'核对后继草稿',exact:true}).click();await save(page);await expect.poll(()=>extra.posts.length).toBe(1);expect((extra.posts[0].body as EmployeeCreateCommand).members).toEqual([{kind:'SKILL',resourceId:skillId,revisionId:'revision:2',digest:'b'.repeat(64)},replacement]);expect(original.members.find(m=>m.kind==='AGENT')).toEqual(agent);await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).not.toBe(old);
+});
+
+for(const mode of ['exact','historical','mismatch','denied'])test('F3 named employee resources '+mode+' preserve fixed references without writes',async({page},info)=>{
+ const {state,extra}=await fixture(page);
+ await page.route('**/api/workbench/v1/resource-directory?**',async route=>{
+  const url=new URL(route.request().url());if(url.searchParams.get('kind')!=='skill'||url.searchParams.get('query')!==skillId)return route.fallback();
+  if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
+  const item={kind:'skill',identity:skillId,revisionId:mode==='mismatch'?'revision:2':'revision:1',digest:'a'.repeat(64),name:'采购交付核对技能',state:'PUBLISHED',enabled:true,isCurrentPublished:mode==='exact',isCurrentDraft:false,createdAt:null,executionReady:false,policyReviewed:false};
+  return route.fulfill({json:{result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},items:[item],nextCursor:null,executionAuthority:'NONE'}}});
+ });
+ await page.goto(href().replace('employeeView=professional&',''));const card=page.getByRole('article',{name:'技能绑定资源',exact:true});
+ if(mode==='exact'||mode==='historical'){
+  await expect(card.getByText('采购交付核对技能',{exact:true})).toBeVisible();
+  await expect(card.getByText('本次绑定版本',{exact:true})).toBeVisible();
+ }else {await expect(card.getByText('已绑定技能 · 名称暂未核对',{exact:true})).toBeVisible();await expect(page.getByText('采购交付核对技能',{exact:true})).toHaveCount(0)}
+ await expect(card.getByRole('link',{name:'查看详情',exact:true})).toHaveAttribute('href',/resourceRevision=revision%3A1/);
+ await expect(card.getByText(skillId,{exact:true})).toBeHidden();await card.getByText('版本依据',{exact:true}).click();await expect(card.getByText(skillId,{exact:true})).toBeVisible();
+ if(mode==='exact'){await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('employee-named-resources-mobile.png')});await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));await expect(page.getByText('采购交付核对技能',{exact:true})).toHaveCount(0)}
+ expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
+});
+
+
+test('F3 employee full-page business frame retains professional operations and team filters',async({page},info)=>{
+ const {state,extra}=await fixture(page);await page.goto(href().replace('employeeView=professional&','')+'&q='+encodeURIComponent('准确资源'));
+ const main=page.locator('.f3-employee-detail');await expect(main).toBeVisible();await expect(page.getByRole('region',{name:'员工集合',exact:true})).toBeHidden();
+ const nav=page.getByRole('navigation',{name:'选中员工详情分类'});await expect(nav.getByRole('button')).toHaveText(['资源组成','职责与资源','工作记录']);
+ await expect(page.getByRole('button',{name:'准备员工后继',exact:true})).toHaveCount(0);
+ await expect(page.locator('.employee-detail-context code').first()).toBeHidden();await expect(page.getByText('2 项业务资源 · 已有任务保持原快照',{exact:true})).toBeVisible();await expect(page.getByRole('article',{name:'职责定义绑定资源',exact:true})).toHaveCount(0);expect(await page.locator('.employee-composition-duties li').first().evaluate(n=>getComputedStyle(n).fontSize)).toBe('14px');
+ await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:info.outputPath('f3-employee-desktop.png')});
+ await nav.getByRole('button',{name:'职责与资源',exact:true}).click();await page.reload();await expect(nav.getByRole('button',{name:'职责与资源',exact:true})).toHaveClass('active');
+ await page.getByRole('button',{name:'查看专业管理',exact:true}).click();await expect(page.getByRole('button',{name:'职责与能力',exact:true})).toHaveClass('active');await page.getByRole('button',{name:'返回业务详情',exact:true}).click();
+ await nav.getByRole('button',{name:'工作记录',exact:true}).click();await expect(page.getByRole('navigation',{name:'工作记录分类'})).toBeVisible();await page.getByRole('navigation',{name:'工作记录分类'}).getByRole('button',{name:'工作分配',exact:true}).click();await expect(nav.getByRole('button',{name:'工作记录',exact:true})).toHaveClass('active');
+ await nav.getByRole('button',{name:'资源组成',exact:true}).click();await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('f3-employee-mobile.png')});
+ await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await expect(page.getByLabel('搜索当前结果')).toHaveValue('准确资源');await expect(page.getByRole('region',{name:'员工集合',exact:true})).toBeVisible();expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
+});
+
+test('F3 business editor saves then validates and publishes exact successor in the same page',async({page},info)=>{
+ const {state,extra,original}=await fixture(page);await page.goto(href().replace('employeeView=professional&',''));
+ await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();const editor=page.getByRole('region',{name:'职责与资源修改',exact:true});await expect(editor).toBeVisible();
+ await page.getByLabel('职能职责',{exact:true}).fill('核对采购交付并形成可追溯报告');
+ await page.getByLabel('保留已绑定资源 1',{exact:true}).uncheck();
+ await page.getByRole('region',{name:'组合业务资源'}).getByRole('checkbox').check();
+ await page.getByRole('button',{name:'核对修改',exact:true}).click();await page.getByRole('button',{name:'保存修改草稿',exact:true}).click();
+ await expect.poll(()=>extra.posts.length).toBe(1);const command=extra.posts[0].body as EmployeeCreateCommand;
+ await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(command.employeeDefinitionRevisionId);expect(new URL(page.url()).searchParams.get('employeeView')).toBeNull();
+ await page.reload();await expect(page.getByRole('heading',{name:'正在查看修改草稿',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(1);
+ await page.screenshot({path:info.outputPath('f3-business-saved-draft.png')});
+ for(const action of ['验证草稿','确认发布资格','发布定义']){await page.getByRole('button',{name:new RegExp('^'+action)}).click();await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'确认提交',exact:true})).toHaveCount(0)}
+ await expect(page.getByRole('heading',{name:'已发布所选定义',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(4);expect(original.members.find(m=>m.kind==='SKILL')?.revisionId).toBe('revision:1');expect(original.lifecycleState).toBe('DRAFT');
+ await page.getByRole('button',{name:'返回已选版本详情',exact:true}).click();await expect(page.getByRole('region',{name:'员工资源组成',exact:true})).toBeVisible();expect(state.posts).toEqual([]);expect(new URL(page.url()).searchParams.get('employeeView')).toBeNull();
+});
+
+
+test('occupied predecessor gives definite guidance without unknown recovery or automatic resubmit',async({page})=>{
+ const {extra}=await fixture(page);extra.rejectNext='EMPLOYEE_SUCCESSOR_ALREADY_EXISTS';await page.goto(href().replace('employeeView=professional&',''));await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();await page.getByLabel('职能职责',{exact:true}).fill('保留旧版本并核对后继');await page.getByRole('button',{name:'核对修改',exact:true}).click();await page.getByRole('button',{name:'保存修改草稿',exact:true}).click();await expect(page.getByText('该版本已有后继记录。请从员工版本记录打开已有后继后继续修改；本次没有保存新草稿。',{exact:true})).toBeVisible();await expect(page.getByLabel('职能职责',{exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(1);expect(extra.records.size).toBe(1);await page.reload();expect(extra.posts).toHaveLength(1);
+});
+
+
+test('business confirmation includes retained resources, replacements and removals before submission',async({page})=>{
+ const {original,extra}=await fixture(page);
+ original.members.push({kind:'KNOWLEDGE',resourceId:'knowledge:retained',revisionId:'knowledge-revision:retained',digest:'7'.repeat(64)});
+ await page.goto(href().replace('employeeView=professional&',''));
+ await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await page.getByRole('checkbox',{name:'保留已绑定资源 1',exact:true}).uncheck();
+ await page.getByRole('region',{name:'组合业务资源'}).getByRole('checkbox').check();
+ await page.getByRole('button',{name:'核对修改',exact:true}).click();
+ const summary=page.getByRole('region',{name:'本次保存的完整资源摘要',exact:true});
+ await expect(summary.getByRole('heading',{name:'保存后共 2 项业务资源',exact:true})).toBeVisible();
+ await expect(summary.getByText('保留',{exact:true})).toBeVisible();
+ await expect(summary.getByText('替换版本',{exact:true})).toBeVisible();
+ await expect(summary.getByText('移除',{exact:true})).toBeVisible();
+ await expect(summary.getByText('另有 1 项内部依赖，保留固定引用。',{exact:true})).toBeVisible();
+ await summary.getByText('版本依据',{exact:true}).nth(1).click();
+ await expect(summary.getByText('knowledge-revision:retained',{exact:true})).toBeVisible();
+ expect(extra.posts).toHaveLength(0);
+ await page.getByRole('button',{name:'保存修改草稿',exact:true}).click();
+ await expect.poll(()=>extra.posts.length).toBe(1);
+ expect((extra.posts[0].body as EmployeeCreateCommand).members).toEqual([agent,{kind:'SKILL',resourceId:skillId,revisionId:'revision:2',digest:'b'.repeat(64)},original.members[3]]);
+});
+
+
+test('historical employee edit resumes authoritative draft and refresh keeps its identity',async({page})=>{
+ const {original,extra}=await fixture(page);
+ original.publicationState='PUBLISHED';original.lifecycleState='PUBLISHED';original.aggregateVersion=2;
+ const draft={...structuredClone(original),employeeDefinitionRevisionId:'revision:aaa-current-draft',employeeDefinitionDigest:'8'.repeat(64),publicationState:'NOT_PUBLISHED' as const,lifecycleState:'VALIDATED' as const,responsibilities:['当前草稿职责']};
+ extra.records.set(draft.employeeDefinitionRevisionId,draft);
+ await page.goto(href().replace('employeeView=professional&',''));
+ await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：已有草稿',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
+ expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(draft.employeeDefinitionRevisionId);
+ await page.reload();await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
+ await page.getByRole('button',{name:'返回已选版本详情',exact:true}).click();
+ await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：正在查看',{exact:true})).toBeVisible();
+ expect(extra.posts).toHaveLength(0);
+});
+
+for(const mode of ['denied','wrong-parent','withdrawn'])test('authoring '+mode+' cannot silently choose a historical publication',async({page})=>{
+ const {extra,original}=await fixture(page);
+ original.publicationState='PUBLISHED';original.lifecycleState='PUBLISHED';
+ await page.route('**/authoring',async route=>{
+  const target={status:'AVAILABLE',definition:original};
+  return route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:{...original,...(mode==='wrong-parent'?{employeeDefinitionDigest:'0'.repeat(64)}:{})},aggregateVersion:1,head:mode==='denied'?{status:'NOT_AVAILABLE'}:target,draft:{status:'NONE'},publication:{status:mode==='withdrawn'?'WITHDRAWN':'NOT_AVAILABLE'},executionStarted:false})});
+ });
+ await page.goto(href().replace('employeeView=professional&','')+'&employeeEdit=edit');
+ if(mode==='withdrawn')await expect(page.getByText('当前发布：已撤销',{exact:true})).toBeVisible();
+ else {await expect(page.getByRole('button',{name:'修改职责与资源',exact:true})).toBeDisabled();await expect(page.getByLabel('职能职责',{exact:true})).toHaveCount(0)}
+ expect(extra.posts).toHaveLength(0);
 });

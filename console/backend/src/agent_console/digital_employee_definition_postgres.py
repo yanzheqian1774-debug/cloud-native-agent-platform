@@ -453,6 +453,31 @@ class PostgresEmployeeDefinitionRepository:
             for row in rows
         ]
 
+    def authoring_heads_for_workbench(
+        self, connection, scope, definition_id, *, authorized
+    ):
+        """Owner fact order, not UUID/list order; caller authorizes each target."""
+        if not authorized:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        key = self._key(scope, identifier(definition_id))
+        head = connection.execute(
+            "SELECT aggregate_version FROM digital_employee_definition.definitions "
+            "WHERE namespace=%s AND security_domain=%s AND definition_id=%s FOR SHARE",
+            key,
+        ).fetchone()
+        if head is None:
+            raise EmployeeDefinitionError("EMPLOYEE_NOT_FOUND")
+        result = {"aggregateVersion": head["aggregate_version"]}
+        for name, action in (("head", "CREATE"), ("publication", "PUBLISH")):
+            row = connection.execute(
+                "SELECT revision_id FROM digital_employee_definition.facts "
+                "WHERE namespace=%s AND security_domain=%s AND definition_id=%s "
+                "AND action=%s ORDER BY ordinal DESC LIMIT 1",
+                (*key, action),
+            ).fetchone()
+            result[name] = row["revision_id"] if row else None
+        return result
+
     def revision_ids_for_definition_for_workbench(
         self, connection, scope, definition_id, *, after, limit, authorized
     ):
@@ -587,6 +612,19 @@ class PostgresEmployeeDefinitionRepository:
             ),
         )
 
+    @staticmethod
+    def _require_unused_predecessor(connection, key, predecessor):
+        # The caller already holds the definition aggregate lock. A predecessor
+        # has one successor; detect this before mutating the aggregate so this
+        # known conflict is not misreported as an unknown storage failure.
+        if connection.execute(
+            "SELECT 1 FROM digital_employee_definition.revisions "
+            "WHERE namespace=%s AND security_domain=%s AND definition_id=%s "
+            "AND predecessor_revision_id=%s LIMIT 1",
+            (*key, predecessor),
+        ).fetchone():
+            raise EmployeeDefinitionError("EMPLOYEE_SUCCESSOR_ALREADY_EXISTS")
+
     def create_for_workbench(
         self,
         connection,
@@ -633,6 +671,9 @@ class PostgresEmployeeDefinitionRepository:
                 revision.scope,
                 revision.definition_id,
                 revision.predecessor_revision_id,
+            )
+            self._require_unused_predecessor(
+                connection, key, revision.predecessor_revision_id
             )
             connection.execute(
                 "UPDATE digital_employee_definition.definitions SET aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND definition_id=%s",
@@ -695,6 +736,9 @@ class PostgresEmployeeDefinitionRepository:
                     revision.scope,
                     revision.definition_id,
                     revision.predecessor_revision_id,
+                )
+                self._require_unused_predecessor(
+                    conn, key, revision.predecessor_revision_id
                 )
                 conn.execute(
                     "UPDATE digital_employee_definition.definitions SET aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND definition_id=%s",

@@ -12,6 +12,21 @@ type Kind='skill'|'mcp';
 import {decodeManagementIntent,verifyManagementReceipt,verifyManagedResource,type ManagementCommandIntent,type ManagementReceipt} from './managementCommandState';
 export type ManagedResourceDirectory={subject:string;scope:{tenantId:string;securityDomain:string};items:SkillMcpResource[]};
 const stateNames:Record<string,string>={DRAFT:'草稿',VALIDATED:'验证通过',POLICY_REVIEWED:'策略核验通过',PUBLISHED:'已发布',DEPRECATED:'已弃用'};
+function completedOperation(action:string){
+ const messages:Record<string,string>={
+  create:'草稿已保存。',import:'配置已导入为新草稿。',edit:'草稿修改已保存，请按当前内容重新验证。',
+  successor:'后继草稿已创建，原发布版本和已有引用保持不变。',
+  validate:'当前配置验证已完成；发布状态以当前版本为准。',
+  publish:'配置已发布；已有引用保持原版本，执行资格需另行核对。',
+  'publish-tested':'当前版本已完成操作测试核验并发布；已有引用保持原版本。',
+  test:'本次测试结果已记录，请查看测试是否通过及具体依据。',
+  health:'连接检查结果已记录，请查看当前修订的连接状态。',
+  discover:'工具与资料发现结果已记录。','select-tools':'本版本的工具选择已保存。',
+  enable:'资源已启用，实际执行仍需核对当前条件。',disable:'资源已停用，历史版本和使用记录保留。',
+  access:'当前资源的管理资格已核对。',
+ };
+ return messages[action]??'本次操作结果已记录。';
+}
 class ManagementError extends Error{status:number;constructor(reason:string,status:number){super(reason);this.status=status}}
 async function request<T>(path:string,init?:RequestInit):Promise<T>{const response=await fetch('/api/workbench/v1/resource-management/'+path,{credentials:'same-origin',...init});const body=await response.json().catch(()=>null);if(response.status===401){const currentUser=await readWorkbenchSession().then(()=>true,()=>false);if(currentUser)throw new ManagementError('RESOURCE_POLICY_SERVICE_UNAVAILABLE',401)}if(!response.ok)throw new ManagementError(body?.reasonCode??'RESOURCE_MANAGEMENT_UNAVAILABLE',response.status);if(!body?.result)throw new ManagementError('RESOURCE_RESPONSE_UNKNOWN',503);return body.result}
 function sameScope(session:WorkbenchSession,d:ManagedResourceDirectory){return d.subject===session.principal.principalId&&d.scope.tenantId===session.principal.tenantId&&d.scope.securityDomain===session.principal.securityDomain}
@@ -76,10 +91,12 @@ export function ResourceManagement({kind,onChanged,onDetailChange,onDirectoryCha
   try{verifyManagedResource(current)}catch(reason){setSelected(null);throw reason}
   if(current.kind!==intent.kind || current.aggregateVersion<result.aggregateVersion)throw Error('RESOURCE_COMMAND_RECEIPT_MISMATCH');
   setSelected(current);
-  if(new URLSearchParams(location.search).get('managedResource')!==result.identity){
-   const next=new URLSearchParams(location.search);next.set('managedResource',result.identity);setParams(next,{replace:true});
+  const currentParams=new URLSearchParams(location.search);
+  const followEditedDraft=intent.action==='edit'&&current.currentDraftRevisionId&&currentParams.get('viewRevision')===selected?.currentDraftRevisionId;
+  if(currentParams.get('managedResource')!==result.identity||followEditedDraft){
+   currentParams.set('managedResource',result.identity);if(followEditedDraft)currentParams.set('viewRevision',current.currentDraftRevisionId!);setParams(currentParams,{replace:true});
   }
-  setMode(null);setTools([]);onChanged();
+  setMode(null);setTools([]);onChanged();return current;
  }
  async function submit(action:string,extra:Record<string,unknown>={},resource=selected){
   if(writeFlight.current||busy||pendingKey)return;
@@ -103,14 +120,23 @@ export function ResourceManagement({kind,onChanged,onDetailChange,onDirectoryCha
    catch(reason){assertCurrent();try{result=await request<ManagementReceipt>(kind+'/commands/'+encodeURIComponent(commandKey))}catch{throw reason}}
    assertCurrent();const after=await readWorkbenchSession();assertCurrent();
    if(principal!==JSON.stringify(after.principal))throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
-   await applyReceipt(result,intent,assertCurrent);clearPending(marker);
-   setMessage('已保存并读回当前正式记录。资源配置不会启动业务执行。');
+   const current=await applyReceipt(result,intent,assertCurrent);clearPending(marker);
+   setMessage(completedOperation(action));return current;
   }catch(reason){
    if(!view.current.active)return;
    const text=reason instanceof Error?reason.message:'RESOURCE_MANAGEMENT_UNAVAILABLE';setError(text);
    if(text==='RESOURCE_DIRECTORY_IDENTITY_CHANGED'||text==='RESOURCE_POLICY_SERVICE_UNAVAILABLE'){setSelected(null);setItems([]);setAvailable(false);accessScope.current=null;onDirectoryChange?.(null)}
    if(reason instanceof ManagementError&&reason.status>=400&&reason.status<500&&marker)clearPending(marker);
   }finally{writeFlight.current=false;if(view.current.active)setBusy(false)}
+ }
+ async function modifyCurrent(){
+  if(!selected||busy||pendingKey)return;
+  const assertCurrent=guard(selected.resourceId);
+  try{
+   const current=selected.currentDraftRevisionId?selected:await submit('successor');assertCurrent();
+   if(!current?.currentDraftRevisionId)return;
+   form(current);setParams(previous=>{const next=new URLSearchParams(previous);next.delete('resourceView');next.delete('resourceTab');next.set('resourceSection','content');next.set('viewRevision',current.currentDraftRevisionId!);return next},{replace:true});
+  }catch{/* A navigation or identity change keeps the original result in its owner. */}
  }
  async function recover(){
   if(!pendingKey||busy||writeFlight.current)return;
@@ -125,7 +151,7 @@ export function ResourceManagement({kind,onChanged,onDetailChange,onDirectoryCha
    if(JSON.stringify(after.principal)!==intent.principal)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
    await applyReceipt(result,intent,assertCurrent);
    clearPending('resource-management:'+session.principal.principalId+':'+session.principal.tenantId+':'+session.principal.securityDomain+':'+kind);
-   setError('');setMessage('已读回原操作及当前正式记录，没有再次提交。');
+   setError('');setMessage('已读回原操作及当前正式记录，没有再次提交。'+completedOperation(intent.action));
   }catch(reason){
    if(!view.current.active)return;
    setSelected(null);
@@ -146,7 +172,7 @@ export function ResourceManagement({kind,onChanged,onDetailChange,onDirectoryCha
  {mode!=='edit'&&editor}
 
  {!selected&&!hideOwnedList&&items.length>0&&<div className="rm-owned"><h3>本账号创建的配置</h3><div className="rm-resource-list">{items.map(item=><button key={item.resourceId} aria-pressed={false} onClick={()=>{setSelected(item);setMode(null);setTools([]);setError('');setParams(previous=>{const next=new URLSearchParams(previous);next.set('managedResource',item.resourceId);return next},{replace:true})}}><strong>{item.name}</strong><span>{stateNames[item.lifecycleState]??item.lifecycleState} · {item.revisions.length}个修订</span></button>)}</div></div>}
- {selected&&revision&&<ResourceDetailView key={selected.resourceId} resource={selected} busy={busy||!!pendingKey} onEdit={()=>form(selected)} onExport={exportSelected} onCommand={action=>void submit(action)} onBack={()=>{setSelected(null);setMode(null);setParams(previous=>{const next=new URLSearchParams(previous);next.delete('managedResource');return next},{replace:true})}} actions={<div className="rm-actions">{revision.state==='DRAFT'&&selected.currentDraftRevisionId&&<><button disabled={busy||!!pendingKey} onClick={()=>form(selected)}>编辑草稿</button><button disabled={busy||!!pendingKey} onClick={()=>void submit('validate')}>验证配置</button></>}{selected.currentDraftRevisionId&&<button disabled={busy||!!pendingKey} onClick={()=>void submit('publish')}>{kind==='skill'?'发布配置（不代表执行已验证）':'核验并发布'}</button>}{!selected.currentDraftRevisionId&&selected.publishedRevisionId&&<button disabled={busy||!!pendingKey} onClick={()=>void submit('successor')}>创建后继草稿</button>}<button disabled={busy||!!pendingKey} onClick={()=>void submit(selected.enabled?'disable':'enable')}>{selected.enabled?'停用':'启用'}</button><button onClick={exportSelected}>导出配置</button></div>} connection={<>{kind==='mcp'&&<section className="rm-connection"><h4>连接与工具</h4><p>服务地址：{revision.content.endpoint}</p><p>{revision.content.secretReference?'已配置凭据引用；实际解析支持需单独核验。':'无认证本机连接；只进行初始化与目录读取。'}</p><div className="rm-actions"><button disabled={busy||!!pendingKey} onClick={()=>void submit('health')}>测试连接</button><button disabled={busy||!!pendingKey} onClick={()=>void submit('discover')}>发现工具与资料</button></div><p>当前修订连接状态：{currentHealth?(currentHealth.status==='HEALTHY'?'初始化成功':'测试未通过'):'尚未测试'}</p><details><summary>连接测试历史（不作为当前修订就绪依据）</summary><ul>{selected.healthObservations.map(o=><li key={o.observationId}>{o.status==='HEALTHY'?'连接初始化成功':'连接不可用'} · {o.reasonCode}</li>)}</ul></details>{!snapshot&&<p>当前修订尚无工具发现记录；修改配置后需重新发现并选择。</p>}{snapshot&&<><p>已发现{snapshot.catalog.tools.length}项工具、{snapshot.catalog.resources.length}项资料、{snapshot.catalog.prompts.length}项提示。</p><fieldset><legend>选择本版本可用工具</legend>{snapshot.catalog.tools.map(t=><label key={t.name} className="rm-checkbox"><input type="checkbox" checked={tools.includes(t.name)} onChange={()=>setTools(old=>old.includes(t.name)?old.filter(n=>n!==t.name):[...old,t.name])}/>{t.name} · {t.description}</label>)}</fieldset><button disabled={busy||!!pendingKey||!tools.length} onClick={()=>void submit('select-tools',{snapshotId:snapshot.snapshotId,toolNames:tools})}>保存工具选择</button><p>已保存选择：{selected.toolSelections.at(-1)?.toolNames.join('、')||'尚未选择'}</p></>}<p>连接成功和工具发现不代表已调用工具，也不代表业务执行完成。</p></section>}</>} editor={mode==='edit'?editor:null} tests={kind==='skill'?<SkillTestingPanel resource={selected} busy={busy||!!pendingKey} onCommand={(action,payload)=>void submit(action,payload)}/>:null}/>}
+ {selected&&revision&&<ResourceDetailView key={selected.resourceId} resource={selected} busy={busy||!!pendingKey} onEdit={()=>form(selected)} onModify={()=>void modifyCurrent()} onExport={exportSelected} onCommand={action=>void submit(action)} onBack={()=>{setSelected(null);setMode(null);setParams(previous=>{const next=new URLSearchParams(previous);next.delete('managedResource');return next},{replace:true})}} actions={<div className="rm-actions">{revision.state==='DRAFT'&&selected.currentDraftRevisionId&&<><button disabled={busy||!!pendingKey} onClick={()=>form(selected)}>编辑草稿</button><button disabled={busy||!!pendingKey} onClick={()=>void submit('validate')}>验证配置</button></>}{selected.currentDraftRevisionId&&<button disabled={busy||!!pendingKey} onClick={()=>void submit('publish')}>{kind==='skill'?'发布配置（不代表执行已验证）':'核验并发布'}</button>}{!selected.currentDraftRevisionId&&selected.publishedRevisionId&&<button disabled={busy||!!pendingKey} onClick={()=>void submit('successor')}>创建后继草稿</button>}<button disabled={busy||!!pendingKey} onClick={()=>void submit(selected.enabled?'disable':'enable')}>{selected.enabled?'停用':'启用'}</button><button onClick={exportSelected}>导出配置</button></div>} connection={<>{kind==='mcp'&&<section className="rm-connection"><h4>连接与工具</h4><p>服务地址：{revision.content.endpoint}</p><p>{revision.content.secretReference?'已配置凭据引用；实际解析支持需单独核验。':'无认证本机连接；只进行初始化与目录读取。'}</p><div className="rm-actions"><button disabled={busy||!!pendingKey} onClick={()=>void submit('health')}>测试连接</button><button disabled={busy||!!pendingKey} onClick={()=>void submit('discover')}>发现工具与资料</button></div><p>当前修订连接状态：{currentHealth?(currentHealth.status==='HEALTHY'?'初始化成功':'测试未通过'):'尚未测试'}</p><details><summary>连接测试历史（不作为当前修订就绪依据）</summary><ul>{selected.healthObservations.map(o=><li key={o.observationId}>{o.status==='HEALTHY'?'连接初始化成功':'连接不可用'} · {o.reasonCode}</li>)}</ul></details>{!snapshot&&<p>当前修订尚无工具发现记录；修改配置后需重新发现并选择。</p>}{snapshot&&<><p>已发现{snapshot.catalog.tools.length}项工具、{snapshot.catalog.resources.length}项资料、{snapshot.catalog.prompts.length}项提示。</p><fieldset><legend>选择本版本可用工具</legend>{snapshot.catalog.tools.map(t=><label key={t.name} className="rm-checkbox"><input type="checkbox" checked={tools.includes(t.name)} onChange={()=>setTools(old=>old.includes(t.name)?old.filter(n=>n!==t.name):[...old,t.name])}/>{t.name} · {t.description}</label>)}</fieldset><button disabled={busy||!!pendingKey||!tools.length} onClick={()=>void submit('select-tools',{snapshotId:snapshot.snapshotId,toolNames:tools})}>保存工具选择</button><p>已保存选择：{selected.toolSelections.at(-1)?.toolNames.join('、')||'尚未选择'}</p></>}<p>连接成功和工具发现不代表已调用工具，也不代表业务执行完成。</p></section>}</>} editor={mode==='edit'?editor:null} tests={kind==='skill'?<SkillTestingPanel resource={selected} busy={busy||!!pendingKey} onCommand={(action,payload)=>void submit(action,payload)}/>:null}/>}
 
  </section>;
 }

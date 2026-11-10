@@ -35,7 +35,7 @@ async function setup(page:Page,declaration='empty'){
   return route.fulfill({status:404,json:{reasonCode:'FIXTURE_NOT_FOUND'}});
  });return state;
 }
-const root=()=>'/skills?'+new URLSearchParams({selected:ref.resource_id,resourceRevision:ref.revision_id,resourceDigest:ref.digest,fromExecution:digest,returnConversation:conversation,query:'隔离',status:'PUBLISHED'});
+const root=()=>'/skills?'+new URLSearchParams({resourceView:'professional',selected:ref.resource_id,resourceRevision:ref.revision_id,resourceDigest:ref.digest,fromExecution:digest,returnConversation:conversation,query:'隔离',status:'PUBLISHED'});
 async function openUse(page:Page){await page.goto(root());await page.getByRole('button',{name:'JX02已有隔离销售成果',exact:true}).click();await expect(page.getByRole('heading',{name:'已有执行的只读核对',exact:true})).toBeVisible()}
 async function capture(page:Page,name:string){const dir=process.env.JX02_SCREENSHOT_DIR;if(dir){mkdirSync(dir,{recursive:true});await page.screenshot({path:dir+'/'+name+'-1280x720.png'})}}
 
@@ -73,4 +73,17 @@ test('JX02 unavailable local view storage prevents untracked navigation without 
 test('JX02 explicit different-resource and directory navigation discard the old return context',async({page})=>{
  const state=await setup(page);await openUse(page);await expect(page.getByRole('region',{name:'销售诊断关键数据'})).toBeVisible();await page.getByRole('link',{name:'返回同一准确资源',exact:true}).click();await expect(page.getByRole('heading',{name:item.name,exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.has('resourceContext')).toBe(true);await expect(page.getByRole('link',{name:'返回资源目录',exact:true})).not.toHaveAttribute('href',/resourceContext/);
  await page.getByRole('navigation',{name:'本页可读资源'}).getByRole('link').filter({hasText:'其他当前可读版本 0'}).click();await expect(page.getByRole('heading',{name:'其他当前可读版本 0',exact:true})).toBeVisible();const u=new URL(page.url());for(const key of ['resourceContext','resourceDigest','fromExecution'])expect(u.searchParams.has(key)).toBe(false);expect(u.searchParams.get('returnConversation')).toBe(conversation);await expect(page.getByRole('region',{name:'原执行的版本引用'})).toHaveCount(0);expect(state.writes).toEqual([]);
+});
+
+
+test('F3 business impact returns from saved execution to same tab, exact version and focus',async({page})=>{
+ const state=await setup(page);const href=new URL(root(),'http://localhost');href.searchParams.delete('resourceView');href.searchParams.set('resourceSection','impact');
+ await page.goto(href.pathname+href.search);
+ await expect(page.getByRole('tab',{name:'引用与影响',exact:true})).toHaveAttribute('aria-selected','true');
+ const use=page.getByRole('button',{name:'JX02已有隔离销售成果',exact:true});await use.click();
+ await expect(page.getByRole('region',{name:'销售诊断关键数据'})).toBeVisible();
+ await page.getByRole('link',{name:'返回同一准确资源',exact:true}).click();
+ await expect(page.getByRole('tab',{name:'引用与影响',exact:true})).toHaveAttribute('aria-selected','true');await expect(use).toBeFocused();
+ expect(new URL(page.url()).searchParams.get('resourceRevision')).toBe(ref.revision_id);expect(new URL(page.url()).searchParams.get('query')).toBe('隔离');
+ expect(state.writes).toEqual([]);expect(state.detailReads.every(p=>!p.includes('latest'))).toBe(true);
 });

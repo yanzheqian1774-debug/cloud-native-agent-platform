@@ -45,6 +45,7 @@ class EmployeeRelations:
         operation = call.operation
         if operation not in {
             "READ_EMPLOYEE_HISTORY",
+            "READ_EMPLOYEE_AUTHORING",
             "READ_EMPLOYEE_INSTANCES",
             "READ_INSTANCE_ASSIGNMENTS",
         }:
@@ -58,7 +59,11 @@ class EmployeeRelations:
             call.authority.require(
                 principal, grant.owner, grant.action, grant.exact_resource
             )
-        if operation in {"READ_EMPLOYEE_HISTORY", "READ_EMPLOYEE_INSTANCES"}:
+        if operation in {
+            "READ_EMPLOYEE_HISTORY",
+            "READ_EMPLOYEE_INSTANCES",
+            "READ_EMPLOYEE_AUTHORING",
+        }:
             parent = EmployeeDefinitionOwnerAdapter(self.definitions)(
                 replace(call, operation="READ_EMPLOYEE_REVISION")
             )
@@ -74,6 +79,68 @@ class EmployeeRelations:
             binding = {"instanceId": parent["instanceId"]}
         else:
             raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
+        if operation == "READ_EMPLOYEE_AUTHORING":
+            heads = self.definitions.authoring_heads_for_workbench(
+                connection, scope, binding["employeeDefinitionId"], authorized=True
+            )
+            owner = EmployeeDefinitionOwnerAdapter(self.definitions)
+            cache = {}
+
+            def exact(identity):
+                if identity is None:
+                    return None
+                if identity not in cache:
+                    try:
+                        call.authority.require(
+                            principal,
+                            "EMPLOYEE",
+                            "READ",
+                            f"employee:{binding['employeeDefinitionId']}:{identity}",
+                        )
+                        value = owner(
+                            replace(
+                                call,
+                                operation="READ_EMPLOYEE_REVISION",
+                                path={**call.path, "revision_id": identity},
+                            )
+                        )
+                    except AuthorityError:
+                        value = None
+                    except WorkbenchOwnerError as exc:
+                        if exc.status_code not in {403, 404}:
+                            raise
+                        value = None
+                    cache[identity] = value
+                return cache[identity]
+
+            head, publication = exact(heads["head"]), exact(heads["publication"])
+
+            def available(value):
+                return {"status": "AVAILABLE", "definition": value}
+
+            unavailable = {"status": "NOT_AVAILABLE"}
+            return {
+                "basis": "OWNER_FACT_ORDER",
+                "parent": binding,
+                "aggregateVersion": heads["aggregateVersion"],
+                "head": available(head) if head else unavailable,
+                "publication": (
+                    available(publication)
+                    if publication and publication["publicationState"] == "PUBLISHED"
+                    else {"status": "WITHDRAWN"}
+                    if publication
+                    else unavailable
+                ),
+                "draft": (
+                    available(head)
+                    if head
+                    and head["lifecycleState"] in {"DRAFT", "VALIDATED", "APPROVED"}
+                    else {"status": "NONE"}
+                    if head
+                    else unavailable
+                ),
+                "executionStarted": False,
+            }
         # A cursor contains only the last disclosed authorized identity. Scope,
         # principal, relation and exact parent are bound without changing codec.
         route = "EMPLOYEE_RELATIONS:" + canonical_digest(
@@ -175,6 +242,15 @@ def operations(definitions, instances, cursors):
     owner = EmployeeRelations(definitions, instances, cursors)
     path = f"{PREFIX}/employees/{{employee_definition_id}}/revisions/{{revision_id}}"
     return (
+        WorkbenchOperation(
+            "READ_EMPLOYEE_AUTHORING",
+            "GET",
+            path + "/authoring",
+            None,
+            None,
+            _employee_revision_read,
+            owner,
+        ),
         WorkbenchOperation(
             "READ_EMPLOYEE_HISTORY",
             "GET",

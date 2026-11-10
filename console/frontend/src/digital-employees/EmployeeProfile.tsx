@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import {EmployeeResourceComposition} from "./EmployeeResourceComposition";
 import {
   DigitalEmployeeRequestError,
   getAgentDefinitionRevision,
@@ -94,9 +95,8 @@ export function EmployeeProfile({ item, agent, agentState, section }: { item: Em
     && agent.digest === primary.digest.replace(/^sha256:/, ""));
 
   if (section === "overview") return <section className="employee-profile" aria-labelledby="employee-profile-title">
-    <h3 id="employee-profile-title">职责与成员</h3>
-    <section className="employee-responsibilities"><h4>职责</h4><ul>{item.responsibilities.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul></section>
-    <section className="employee-overview-members"><h4>已装配成员</h4><ul>{item.members.map(member => <li key={`${member.kind}:${member.resourceId}:${member.revisionId}`}><span>{kindLabel[member.kind]}</span><strong title={member.resourceId}>{member.resourceId}</strong></li>)}</ul><small>来源：Digital Employee Definition 所选修订；装配不表示已运行。</small></section>
+    <h3 id="employee-profile-title">资源组成</h3>
+    <EmployeeResourceComposition key={item.employeeDefinitionId+item.employeeDefinitionRevisionId+item.employeeDefinitionDigest} item={item}/>
     <dl className="employee-status-facts"><div><dt>发布状态</dt><dd>{item.publicationState === "PUBLISHED" ? "已发布" : "未发布"}</dd></div><div><dt>生命周期</dt><dd>{item.lifecycleState ? lifecycleLabel[item.lifecycleState] : "正式详情接口未提供"}</dd></div></dl>
     <p className="employee-disclosure">运行状态未接通；发布不等于已运行。</p>
     <details className="employee-technical-details"><summary>技术身份与版本</summary><dl><dt>Employee Definition ID</dt><dd><CopyValue label="Employee Definition ID" value={item.employeeDefinitionId} /></dd><dt>Revision ID</dt><dd><CopyValue label="Revision ID" value={item.employeeDefinitionRevisionId} /></dd><dt>Digest</dt><dd><CopyValue label="Digest" value={item.employeeDefinitionDigest} /></dd></dl></details>

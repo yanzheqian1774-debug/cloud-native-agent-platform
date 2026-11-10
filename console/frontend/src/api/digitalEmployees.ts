@@ -540,3 +540,13 @@ export function getEmployeeRelations(definition:EmployeeDefinitionSummary,mode:E
   const parent=mode==='assignments'?`${root}/instances/${encodeURIComponent(instanceId??'')}`:`${root}/employees/${encodeURIComponent(definition.employeeDefinitionId)}/revisions/${encodeURIComponent(definition.employeeDefinitionRevisionId)}`;
   return request<EmployeeRelationPage>(`${parent}/${mode}?${pageQuery(cursor,25)}`,signal);
 }
+
+export type EmployeeAuthoringTarget = {status:'AVAILABLE';definition:EmployeeDefinition}|{status:'NOT_AVAILABLE'|'NONE'|'WITHDRAWN'};
+export type EmployeeAuthoring = {
+ basis:'OWNER_FACT_ORDER';
+ parent:Pick<EmployeeDefinitionSummary,'employeeDefinitionId'|'employeeDefinitionRevisionId'|'employeeDefinitionDigest'>;
+ aggregateVersion:number;
+ head:EmployeeAuthoringTarget;publication:EmployeeAuthoringTarget;draft:EmployeeAuthoringTarget;
+ executionStarted:false;
+};
+export const getEmployeeAuthoring=(item:EmployeeDefinitionSummary,signal?:AbortSignal)=>request<EmployeeAuthoring>(`${root}/employees/${encodeURIComponent(item.employeeDefinitionId)}/revisions/${encodeURIComponent(item.employeeDefinitionRevisionId)}/authoring`,signal);

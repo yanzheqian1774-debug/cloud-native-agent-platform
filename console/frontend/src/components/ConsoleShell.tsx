@@ -39,6 +39,9 @@ export function ConsoleShell({children}:ConsoleShellProps){const location=useLoc
     if(focusTransferred||document.querySelector('[role="dialog"]:not([hidden]),dialog[open],[aria-modal="true"]'))return;
     const active=document.activeElement;
     if(active instanceof HTMLElement&&active.matches('input,textarea,select,[contenteditable="true"]'))return;
+    // A child layout may restore its task button before this route effect runs.
+    // Treat that existing focus as transferred, just like a later focusin event.
+    if(active instanceof HTMLElement&&active.matches('[data-open-work]')&&active.closest('main')){focusTransferred=true;return;}
     const heading=document.querySelector<HTMLElement>("main h1");
     if(!heading||heading===ownedHeading||ownedHeading?.isConnected)return;
     if(ownedHeading&&active!==document.body&&active!==document.documentElement&&active!==ownedHeading)return;

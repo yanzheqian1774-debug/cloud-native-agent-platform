@@ -1,0 +1,36 @@
+.employee-management.f3-employee-detail>.employee-page-title,.employee-management.f3-employee-detail>.employee-summary-strip,.employee-management.f3-employee-detail .employee-collection{display:none}
+.employee-management.f3-employee-detail .employee-object-center{display:block;min-height:0;height:100%}
+.employee-management.f3-employee-detail .employee-selected-detail{display:flex;flex-direction:column;border:0;border-radius:0;background:transparent;min-width:0;height:100%}
+.employee-management.f3-employee-detail .employee-mobile-back{display:block;align-self:flex-start;border:0;background:transparent;color:#7486a3;font-size:12px;padding:0;margin:0 0 20px}
+.employee-management.f3-employee-detail .employee-detail-context{border:0;padding:0 0 24px;align-items:flex-start}
+.employee-management.f3-employee-detail .employee-detail-context h2{font-size:26px;line-height:1.45;color:#273851;margin:10px 0}
+.employee-management.f3-employee-detail .employee-detail-context .eyebrow{font-size:10px;color:#4865d5;letter-spacing:2px}
+.employee-management .employee-heading-evidence{font-size:12px;color:#7486a3}.employee-management .employee-heading-evidence code{overflow-wrap:anywhere}
+.employee-management.f3-employee-detail .employee-detail-tabs{padding:0;border-bottom:1px solid #dce3ef;gap:30px;background:transparent}
+.employee-management.f3-employee-detail .employee-detail-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:10px 0 12px;color:#7486a3;font-size:14px}
+.employee-management.f3-employee-detail .employee-detail-tabs button.active{border-bottom-color:#4865d5;color:#4865d5;background:transparent}
+.employee-management .employee-business-actions{display:flex;gap:10px;justify-content:flex-end;padding:12px 0;flex-wrap:wrap}
+.employee-management .employee-business-actions button,.employee-management .employee-work-categories button{font:inherit;font-size:12px;padding:7px 12px;border:1px solid #e0e6ef;border-radius:7px;background:#fff;color:#4865d5;cursor:pointer}
+.employee-management.f3-employee-detail .employee-detail-body{padding:8px 0 24px;background:transparent;border:0;box-shadow:none;min-height:0}
+.employee-management .employee-work-categories{display:flex;gap:10px;margin-bottom:12px}.employee-management .employee-work-categories button[aria-pressed=true]{background:#edf2ff}
+.employee-management .employee-duty-evidence{color:#7486a3;font-size:12px}.employee-management .employee-duty-evidence summary{cursor:pointer}
+@media(max-width:700px){.employee-management.f3-employee-detail .employee-detail-tabs{gap:20px}.employee-management.f3-employee-detail .employee-detail-context h2{font-size:24px}}
+.employee-management .employee-resource-composition :is(p,li,dd,dt){font-size:14px;line-height:1.8}
+.employee-management .employee-resource-composition .employee-resource-card :is(p,summary),.employee-management .employee-resource-composition .employee-composition-summary p{font-size:13px;line-height:1.8}
+.employee-management .employee-resource-composition .employee-resource-card-action{font-size:13px}
+.employee-management.f3-employee-detail .employee-team-context{font-size:13px;line-height:1.8;color:#7486a3;margin-bottom:10px}
+.employee-management .employee-detail-context .employee-business-actions{margin-left:auto;padding:0;align-self:flex-start}
+.employee-management .employee-detail-context .employee-business-actions button:last-child{background:#4865d5;color:#fff;border-color:#4865d5}
+.employee-management .employee-internal-reference{color:#7486a3;font-size:13px}
+@media(max-width:700px){.employee-management.f3-employee-detail .employee-detail-context{flex-wrap:wrap}.employee-management .employee-detail-context .employee-business-actions{width:100%;justify-content:flex-start;margin:0}}
+.employee-management .employee-business-editor{font-size:14px;line-height:1.8;color:#273851}
+.employee-management .employee-business-editor :is(p,label,textarea,li,button){font-size:14px;line-height:1.8}
+.employee-management .employee-business-editor :is(h3,h4){font-size:15px;color:#273851}
+.employee-management .employee-business-editor .employee-form-card,.employee-management .employee-business-editor .employee-lifecycle{border:1px solid #e0e6ef;border-radius:12px;padding:22px;background:#fff;margin-bottom:20px}
+.employee-management .employee-business-editor fieldset{border:0;padding:0;margin:20px 0}.employee-management .employee-business-editor textarea{width:100%;min-height:100px;box-sizing:border-box}
+.employee-management .employee-business-editor .employee-editor-return{border:0;background:transparent;color:#4865d5;margin-bottom:12px;padding:0}
+.employee-management .employee-business-editor details{font-size:13px;color:#7486a3}.employee-management .employee-business-editor details span{overflow-wrap:anywhere}
+.employee-management .employee-business-editor fieldset>div>label{display:flex;align-items:center;justify-content:flex-start;gap:8px;margin:12px 0;width:auto}
+.employee-management .employee-business-editor input[type=checkbox]{width:auto;min-width:0;max-width:none;flex:none;margin:0}
+.employee-management .employee-authoring-state{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:#f7f9ff;border:1px solid #e0e6ef;border-radius:10px;font-size:13px;color:#627797}
+.employee-management .employee-authoring-state>div{display:flex;align-items:center;gap:12px}.employee-management .employee-authoring-state button{background:transparent;color:#4865d5;border:0;padding:0;font-size:13px}.employee-management .employee-authoring-state p{margin:0}
