@@ -14,3 +14,7 @@ export function conversationUrl(scope:string,id:string){
   if(saved){const url=new URL(saved,window.location.origin);if(url.origin===window.location.origin&&url.pathname==="/work"&&url.searchParams.get("problem")===id)return url.pathname+url.search;}
   return `/work?${new URLSearchParams({problem:id})}`;
 }
+
+export function clearConversationViewState(){
+  try{for(const name of Object.keys(sessionStorage))if(['conversation-view.v1:','work-view.v1:','private-list-scroll:','conversation-list.scroll:'].some(prefix=>name.startsWith(prefix)))sessionStorage.removeItem(name)}catch{/* Presentation cleanup never changes authoritative records or command receipts. */}
+}

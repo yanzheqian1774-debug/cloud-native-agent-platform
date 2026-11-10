@@ -31,7 +31,7 @@ function EntryLink({entry}:{entry:Entry}) {
     <NavigationIcon name={entry.icon}/><span>{entry.label}</span>
   </NavLink>;
 }
-export function BusinessNavigation({mobile=false}:{mobile?:boolean}) {
+export function BusinessNavigation({mobile=false,sessionIdentity}:{mobile?:boolean;sessionIdentity:string|null}) {
   const {pathname}=useLocation();
   const workActive=pathname==="/work"||pathname.startsWith("/work/")||pathname==="/tasks";
   const resourceActive=resources.some(x=>x.to===pathname);
@@ -41,7 +41,7 @@ export function BusinessNavigation({mobile=false}:{mobile?:boolean}) {
       <EntryLink entry={{to:"/dashboard",label:"首页",icon:"home"}}/>
       <details key={`work-${workActive}`} open={workActive}>
         <summary className={workActive?"active":""}><NavigationIcon name="problem"/><span>问题工作台</span></summary>
-        <ConversationList/><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
+        {sessionIdentity?<ConversationList key={sessionIdentity}/>:<p className="conversation-source-note">登录后读取当前账号的会话记录。</p>}<NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
       </details>
       <EntryLink entry={{to:"/workflow-definitions",label:"业务能力与流程",icon:"relationships"}}/>
     </section>

@@ -26,3 +26,7 @@ Login change is presentation-only: frozen F3 login tokens/layout, actual usernam
 
 Known login failure reasons are projected from the existing authority diagnostic; unknown failures stay unattributed. Preserve escaped username only, never password, and retain the original return path. Session and authentication decisions remain unchanged.
 Login form disables repeat submission while navigation is pending; browser history restoration resets only the presentation latch, not authentication state. Verify against the actual served script with a delayed controlled response as well as the real login route.
+
+## G1 acceptance correction — session visibility
+
+Prototype review of installed 4f3a541 found previous conversation titles visible after successful logout even though the main content and server session were withdrawn. Gate both navigation copies by the verified session identity; withdraw all business content on session invalidation, invalidate pending session reads, and clear only conversation view/draft/scroll caches. Preserve command idempotency/recovery markers and server records. Verify explicit logout and expiry with late session/list responses, plus installed screenshots and same-account reauthentication. No new model run is needed for this presentation correction.
