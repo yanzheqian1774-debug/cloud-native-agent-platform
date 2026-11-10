@@ -225,3 +225,19 @@ for(const mode of ['ready','denied','wrong-parent','partial','origin'])test('bus
  else {await expect(records.getByText('平台交接文档缺口核对',{exact:true})).toBeVisible();await expect(page.locator('.skill-frame-navigation').getByRole('link',{name:'数字员工',exact:true})).toHaveAttribute('aria-current','page');const firstRow=await records.locator('tbody tr').first().boundingBox();expect(firstRow!.y).toBeLessThan(760);await expect(page.locator('.employee-composition-summary').getByRole('region',{name:'当前发布与修改草稿'})).toBeVisible();await expect(records.getByRole('link',{name:'查看任务',exact:true})).toHaveAttribute('href','/tasks?work='+'6'.repeat(64)+(mode==='origin'?'&origin=original-document-chat':'')+'&workView=result');if(mode==='partial')await expect(records.getByText('本次达到核对上限，列表可能不完整。',{exact:true})).toBeVisible();await page.reload();await expect(records.getByText('核对缺失章节',{exact:true})).toBeVisible();await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('employee-work-records-'+mode+'.png')});await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));await expect(page.getByText('平台交接文档缺口核对',{exact:true})).toHaveCount(0)}
  expect(extra.posts).toHaveLength(0);
 });
+
+
+test('work return restores exact employee tab scroll and focus after authorized read',async({page})=>{
+ const {original,extra}=await fixture(page);
+ await page.setViewportSize({width:1406,height:818});
+ await page.route('**/work-records',route=>route.fulfill({json:envelope({schemaVersion:'employee-work-records.v1',subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},employeeDefinition:original,items:Array.from({length:12},(_,i)=>({executionDigest:i.toString(16).padStart(64,'0'),participation:'TASK_EXECUTION',title:'已有任务 '+i,planVersion:1,state:'SUCCEEDED',tasks:[{taskId:'read',title:'核对已有资料'}]})),scanLimited:false,visibility:'AUTHORIZED_ONLY',executionStarted:false})}));
+ await page.goto(href().replace('employeeView=professional&',''));
+ await page.getByRole('button',{name:'工作记录',exact:true}).click();
+ const link=page.getByRole('region',{name:'员工工作记录'}).getByRole('link',{name:'查看任务',exact:true}).nth(7);
+ await link.scrollIntoViewIfNeeded();const originalUrl=page.url();const top=await page.locator('.employee-detail-body').evaluate(n=>n.scrollTop);expect(top).toBeGreaterThan(100);
+ await link.click();await expect(page).toHaveURL(/\/tasks\?work=/);
+ await page.goBack();await expect(page).toHaveURL(originalUrl);await expect(link).toBeFocused();
+ await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBe(top);
+ await expect(page.getByRole('button',{name:'工作记录',exact:true})).toHaveClass(/active/);
+ expect(extra.posts).toHaveLength(0);
+});

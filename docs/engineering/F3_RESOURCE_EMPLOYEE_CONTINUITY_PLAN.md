@@ -94,3 +94,7 @@ Installed authoring resolves current publication by PUBLISH fact ordinal, but pl
 
 ### Reviewer visual correction after 697e5a3
 Merge current/draft controls into published summary, keep exact-history switch visible and all owner checks. Move internal dependency count into summary disclosure; reduce header/section spacing without shrinking body type or deleting responsibilities. Highlight employees alias in sidebar. Validate three tabs at matched 1406x818 viewport with first resource/work row visible; keep missing duty mappings explicit. Complete employee-task-conversation-browser-back return context evidence separately.
+
+
+### Verified return-scroll gap
+Installed 697e5a3 real employee → task → original conversation → browser back twice preserves exact employee URL and work tab but loses detail scroll (479 to 0). Preserve return position and clicked execution using existing scoped work-view storage, keyed by revalidated response subject/domain/tenant and exact employee revision/digest. Restore only after authorized work data returns and the same execution remains readable; no task switching, stale-account restore or writes. Test mounted return, selected link focus and revoked/changed scope.

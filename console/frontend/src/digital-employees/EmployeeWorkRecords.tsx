@@ -1,9 +1,11 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,useRef} from 'react';
 import {Link} from 'react-router-dom';
+import {readViewString,saveViewString} from '../problems/workViewState';
 import {getEmployeeWorkRecords,getWorkbenchSession,workbenchPrincipalKey,type EmployeeDefinition,type EmployeeWorkRecords as Records} from '../api/digitalEmployees';
 
 const labels:Record<string,string>={NOT_STARTED:'尚未开始',PENDING:'等待执行',RUNNING:'执行中',SUCCEEDED:'执行完成',FAILED:'执行失败',CANCELLED:'已取消',RECOVERY_REQUIRED:'需要核对执行结果'};
 export function EmployeeWorkRecords({definition}:{definition:EmployeeDefinition}){
+ const root=useRef<HTMLElement|null>(null);
  const identity=JSON.stringify([definition.employeeDefinitionId,definition.employeeDefinitionRevisionId,definition.employeeDefinitionDigest]);
  const [state,setState]=useState<{identity:string;data?:Records;error?:string}|null>(null),[refresh,setRefresh]=useState(0);
  useEffect(()=>{
@@ -27,5 +29,25 @@ export function EmployeeWorkRecords({definition}:{definition:EmployeeDefinition}
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[identity,refresh]);
  const current=state?.identity===identity?state:null;
- return <section className="employee-work-records" aria-label="员工工作记录"><header><div><h3>关联工作</h3></div><button onClick={()=>{setState(null);setRefresh(v=>v+1)}}>刷新工作记录</button></header>{!current&&<p role="status">正在核对任务参与记录…</p>}{current?.error&&<div role="alert"><p>工作记录暂不可读，不能据此判断没有任务。</p><details><summary>核查信息</summary>{current.error}</details></div>}{current?.data&&<>{current.data.items.length?<div className="employee-work-records-table"><table><thead><tr><th>目标 / 来源</th><th>承担者 / 固定版本</th><th>进度与阻塞</th><th>下一步</th><th>详情</th></tr></thead><tbody>{current.data.items.map(w=><tr key={w.executionDigest}><td><strong>{w.title}</strong><small>{w.participation==='COORDINATION'?'统筹工作':'参与执行'} · {w.tasks.length} 项任务</small>{w.tasks.map(t=><small key={t.taskId}>{t.title}</small>)}</td><td>{definition.role}<small>固定版本 · 方案 v{w.planVersion}</small></td><td><span className="employee-work-state">{labels[w.state]??'状态待核对'}</span></td><td>{w.state==='SUCCEEDED'?'查看已保存结果':w.state==='FAILED'||w.state==='RECOVERY_REQUIRED'?'核对失败或未确认结果':w.state==='NOT_STARTED'?'查看执行安排':'查看进展与阻塞'}</td><td><Link to={'/tasks?'+new URLSearchParams({work:w.executionDigest,...(w.originConversationId?{origin:w.originConversationId}:{}),...(w.state==='SUCCEEDED'?{workView:'result'}:{})})}>查看任务</Link></td></tr>)}</tbody></table></div>:<p>当前可读范围内未返回这个版本的工作记录。</p>}{current.data.scanLimited&&<p role="status">本次达到核对上限，列表可能不完整。</p>}<p className="employee-work-records-note">仅展示当前查看的固定版本参与记录。执行完成不代表业务验收通过；查看结果不会重新执行任务。</p></>}</section>;
+ const data=current?.data;
+ const returnKey=data?JSON.stringify([data.subject,data.scope.tenantId,data.scope.securityDomain,identity,'employee-work-return']):undefined;
+ useEffect(()=>{
+  if(!returnKey||!data)return;
+  let saved:{outer:number;detail:number;digest:string}|null=null;
+  try{saved=JSON.parse(readViewString(returnKey,'position','null'))}catch{/* View state cannot choose a task. */}
+  if(!saved||!Number.isFinite(saved.outer)||saved.outer<0||!Number.isFinite(saved.detail)||saved.detail<0||!data.items.some(w=>w.executionDigest===saved!.digest))return;
+  const restore=saved;
+  const frame=requestAnimationFrame(()=>{
+   const detail=root.current?.closest<HTMLElement>('.employee-detail-body'),outer=root.current?.closest<HTMLElement>('.skill-frame-content');
+   if(detail)detail.scrollTop=restore.detail;if(outer)outer.scrollTop=restore.outer;
+   root.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(restore.digest)}"]`)?.focus({preventScroll:true});
+   saveViewString(returnKey,'position','');
+  });return()=>cancelAnimationFrame(frame);
+ },[returnKey,data]);
+ function remember(digest:string){
+  if(!returnKey)return;
+  saveViewString(returnKey,'position',JSON.stringify({outer:root.current?.closest('.skill-frame-content')?.scrollTop??0,detail:root.current?.closest('.employee-detail-body')?.scrollTop??0,digest}));
+ }
+
+ return <section ref={root} className="employee-work-records" aria-label="员工工作记录"><header><div><h3>关联工作</h3></div><button onClick={()=>{setState(null);setRefresh(v=>v+1)}}>刷新工作记录</button></header>{!current&&<p role="status">正在核对任务参与记录…</p>}{current?.error&&<div role="alert"><p>工作记录暂不可读，不能据此判断没有任务。</p><details><summary>核查信息</summary>{current.error}</details></div>}{current?.data&&<>{current.data.items.length?<div className="employee-work-records-table"><table><thead><tr><th>目标 / 来源</th><th>承担者 / 固定版本</th><th>进度与阻塞</th><th>下一步</th><th>详情</th></tr></thead><tbody>{current.data.items.map(w=><tr key={w.executionDigest}><td><strong>{w.title}</strong><small>{w.participation==='COORDINATION'?'统筹工作':'参与执行'} · {w.tasks.length} 项任务</small>{w.tasks.map(t=><small key={t.taskId}>{t.title}</small>)}</td><td>{definition.role}<small>固定版本 · 方案 v{w.planVersion}</small></td><td><span className="employee-work-state">{labels[w.state]??'状态待核对'}</span></td><td>{w.state==='SUCCEEDED'?'查看已保存结果':w.state==='FAILED'||w.state==='RECOVERY_REQUIRED'?'核对失败或未确认结果':w.state==='NOT_STARTED'?'查看执行安排':'查看进展与阻塞'}</td><td><Link data-open-work={w.executionDigest} onClick={()=>remember(w.executionDigest)} to={'/tasks?'+new URLSearchParams({work:w.executionDigest,...(w.originConversationId?{origin:w.originConversationId}:{}),...(w.state==='SUCCEEDED'?{workView:'result'}:{})})}>查看任务</Link></td></tr>)}</tbody></table></div>:<p>当前可读范围内未返回这个版本的工作记录。</p>}{current.data.scanLimited&&<p role="status">本次达到核对上限，列表可能不完整。</p>}<p className="employee-work-records-note">仅展示当前查看的固定版本参与记录。执行完成不代表业务验收通过；查看结果不会重新执行任务。</p></>}</section>;
 }
