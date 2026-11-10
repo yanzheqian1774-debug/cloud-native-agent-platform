@@ -154,3 +154,28 @@ verified the saved document task, readable report, same focus and scroll
 browser operation. New directory installed HTTP, real concurrent writers and
 controlled performance measurements remain unverified; replay duration is not
 an API latency result.
+
+## Page-only result verification optimization
+
+Measurements on the same identity/versions showed most directory time in
+optional metadata projection. Counts and filters depend on run state and
+authorized questions, not business resolution or outcome integrity. First
+project all authorized matching run/question metadata without outcomes, select
+the signed page, then run unchanged result permission/integrity checks only for
+returned rows. Do not cache permissions or results between requests. Each
+subsequent page reauthorizes and verifies its own result evidence. Off-page
+outcomes are never exposed or counted as validated.
+
+Verify response equality (excluding observation timestamps) against the eager
+implementation on the same record versions for both pages/scopes, and compare
+paired timings. Do not infer a stable percentile from a few observations.
+
+Paired authenticated in-process BFF verification completed with three samples per
+case. All nine paired responses were identical except readAt. Median milliseconds:
+visible first page 5370.45 -> 5037.92; second page 5568.58 -> 1993.35;
+initiated 3710.05 -> 3514.88. Single-page responses avoid a duplicate projection.
+These measurements exclude network/rendering and do not establish stable p95.
+No model calls or business writes occurred. Real isolated PostgreSQL answer/cancel
+contention also passed five checks, including observed lock wait and answer replay;
+this is not an installed HTTP cancellation test. Same-commit installation remains
+outstanding. Evidence: f3-task-directory-query-review-20261110.

@@ -46,8 +46,14 @@ class CurrentWorkDirectory:
             and query.query.casefold()
             in (row["title"] + " " + row["workflow_run_id"]).casefold()
         ]
-        items = project_runs(call, selected, verified_administrator=administrator)
-        return directory_page(
+        single_page = len(selected) <= query.pageSize and not query.cursor
+        items = project_runs(
+            call,
+            selected,
+            verified_administrator=administrator,
+            include_outcomes=single_page,
+        )
+        page = directory_page(
             items,
             query,
             self.cursors,
@@ -56,6 +62,22 @@ class CurrentWorkDirectory:
             recovery_epoch=epoch,
             read_at=read_at,
         )
+        if single_page:
+            return page
+        # Only visible rows expose business outcomes. Keep global run/question
+        # counts independent from per-page evidence reads and outcome checks.
+        page_ids = {item["workflowRunId"] for item in page["items"]}
+        enriched = project_runs(
+            call,
+            [row for row in selected if row["workflow_run_id"] in page_ids],
+            verified_administrator=administrator,
+        )
+        outcomes = {item.workflowRunId: item for item in enriched}
+        for item in page["items"]:
+            verified = outcomes[item["workflowRunId"]]
+            item["businessResolution"] = verified.businessResolution
+            item["outcomeVersion"] = verified.outcomeVersion
+        return page
 
 
 def operations(cursors):

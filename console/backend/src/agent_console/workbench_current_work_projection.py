@@ -53,7 +53,7 @@ def evaluation_grants(preparation, progress):
     return tuple(result)
 
 
-def project_runs(call, rows, *, verified_administrator):
+def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
     principal = OwnerPrincipal(
         call.context.principal_id,
         call.context.scope.tenant_id,
@@ -78,7 +78,8 @@ def project_runs(call, rows, *, verified_administrator):
         )
         evaluation = (
             evaluation_grants(p, state)
-            if row["outcome_version"] is not None
+            if include_outcomes
+            and row["outcome_version"] is not None
             and state.state in {"SUCCEEDED", "FAILED", "CANCELLED"}
             else ()
         )

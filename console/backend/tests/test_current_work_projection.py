@@ -155,3 +155,28 @@ def test_changed_progress_during_evidence_check_rejects_mixed_snapshot(monkeypat
     )
     with pytest.raises(WorkbenchOwnerError, match="CURRENT_WORK_SNAPSHOT_CHANGED"):
         project_runs(call, [row], verified_administrator=True)
+
+
+def test_count_projection_does_not_read_or_disclose_outcome_evidence(monkeypatch):
+    from agent_console import workbench_current_work_projection as module
+
+    call, row = setup(monkeypatch, state="SUCCEEDED")
+    row.update(outcome_version=1, business_resolution="CONFIRMED_SOLVED")
+    checked = []
+
+    def permissions(call, grants):
+        checked.extend(grants)
+        return tuple(True for _ in grants)
+
+    def must_not_read(*args):
+        raise AssertionError("Off-page outcome evidence was read")
+
+    monkeypatch.setattr(module, "readable_grants", permissions)
+    monkeypatch.setattr(module, "PreparedResultReview", must_not_read)
+    value = project_runs(
+        call, [row], verified_administrator=True, include_outcomes=False
+    )[0]
+    assert value.executionState == "SUCCEEDED"
+    assert value.businessResolution is None and value.outcomeVersion is None
+    assert value.pendingQuestionCount == 0
+    assert all(grant.owner != "EVALUATION" for grant in checked)
