@@ -133,3 +133,23 @@ rendered from this explicit association; fixed scheduling remains a separate gap
 Validate v1 digest compatibility, schema smuggling, duplicate/mismatched refs,
 explicit removal, revoked permissions, cross-scope access, replay and head races,
 then real browser association/history/return with original work unchanged.
+
+## F3 work/result sections and conversation return (2026-11-11)
+
+Preserve the explicit association owner. Split nonterminal work from saved
+artifacts; failed/incomplete runs may retain stage artifacts. Terminal records
+without artifacts remain readable but are not described as delivered results.
+Counts/empty states require complete current authorization; unavailable links are
+not zero work. Shared results mean results of explicitly associated work, never
+joint team execution or an ownership transfer.
+
+Carry only exact team coordinates through task-to-conversation navigation. The
+conversation return component must reauthorize the team and work projection,
+verify fixed team digest and exact execution plus verified original conversation,
+and withdraw on identity change. Save numeric team scroll position under the
+principal and exact team revision; restore after authorized work data renders.
+No scheduler or identity directory is invented: neither is currently exposed by
+Workbench. Fixed scheduling needs a scoped owner/lifecycle design before enabling
+execution. Responsible-person selection must use an authorized identity source.
+
+Reviewer correction: put the neutral source-team return in the existing progress rail, outside message content and outside the collapsible mobile progress body. Preserve exact references and scroll; no warning styling. Failed no-artifact links remain in other execution records.

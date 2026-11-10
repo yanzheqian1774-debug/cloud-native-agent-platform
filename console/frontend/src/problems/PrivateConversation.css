@@ -118,3 +118,5 @@
 
 .f3-conversation .conversation-assistant-bubble{min-width:0;max-width:100%;box-sizing:border-box;border:1px solid var(--px-line,#e0e6ef);border-radius:12px 12px 12px 3px;background:#fff;padding:14px 16px;overflow-wrap:anywhere;text-align:left}
 @media(max-width:700px){.f3-conversation .conversation-assistant-bubble{padding:12px}}
+
+.conversation-team-source{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 0;margin:0 0 10px;border-bottom:1px solid var(--px-line,#dfe5f2);font-size:12px;color:var(--px-muted,#63738b);background:transparent}.conversation-team-source>a{color:var(--px-blue,#4567cd);text-decoration:none;white-space:nowrap}.conversation-team-source>span{min-width:0;overflow-wrap:anywhere}

@@ -7,7 +7,7 @@ const canonical=(v:unknown):unknown=>typeof v==='string'?v.normalize('NFC'):Arra
 const employee={resourceKind:'DIGITAL_EMPLOYEE_DEFINITION',employeeDefinitionId:'employee:team-test',employeeDefinitionRevisionId:'employee-revision:one',employeeDefinitionDigest:'a'.repeat(64),aggregateVersion:4,role:'材料检查员',responsibilities:['检查材料'],members:[],publicationState:'PUBLISHED',lifecycleState:'PUBLISHED'};
 const work={workflowRunId:'run:review',preparationDigest:'b'.repeat(64),title:'核对发布说明的回退证据',createdAt:'2026-11-11T00:00:00Z',initiatorId:principal.principalId,executionState:'SUCCEEDED',displayState:'completed',progressVersion:1,problemId:'problem:review',problemRevisionId:'revision:review',problemDigest:'c'.repeat(64),pendingQuestionCount:0,artifactCount:1,businessResolution:'UNDETERMINED',originConversationId:null,originVerified:false,planVersion:1,participantCount:1,completedTaskCount:1,taskCount:1,updatedAt:null};
 async function fixture(page:Page){
- const auth=await maintenance(page,true);const state={auth,records:new Map<string,TeamDetail>(),posts:[] as SaveTeamCommand[],lose:false,wrong:false,deny:false};
+ const auth=await maintenance(page,true);const state={auth,records:new Map<string,TeamDetail>(),posts:[] as SaveTeamCommand[],lose:false,wrong:false,deny:false,work:{...work},unavailable:false};
  await page.route('**/api/workbench/v1/employees**',async route=>{const path=new URL(route.request().url()).pathname;return route.fulfill({json:envelope(path.endsWith('/employees')?{items:[employee],nextCursor:null}:path.endsWith('/authoring')?{basis:'OWNER_FACT_ORDER',parent:employee,aggregateVersion:employee.aggregateVersion,head:{status:'AVAILABLE',definition:employee},publication:{status:'AVAILABLE',definition:employee},draft:{status:'NONE'},executionStarted:false}:path.endsWith('/history')?{items:[employee],nextCursor:null,executionStarted:false}:employee)})});
  await page.route('**/api/workbench/v1/prepared-executions/'+work.preparationDigest,route=>route.fulfill({json:envelope({workflowRunId:work.workflowRunId,digest:work.preparationDigest,executionStarted:true,preparation:{plan_id:'plan:review',plan_version:1,source_snapshot:{resource_id:'doc:review',revision_id:'doc-revision:1',digest:'d'.repeat(64)},semantics:{title:work.title,target:{problem:{resource_id:work.problemId,revision_id:work.problemRevisionId,digest:work.problemDigest}},tasks:[]},participants:[]},progress:{state:'SUCCEEDED',version:1,tasks:[]},events:[],artifacts:[],outcome:null,resourceUses:[],admission:{state:'ADMITTED',reason:null}})}));
  await page.route('**/api/workbench/v1/problems/'+encodeURIComponent(work.problemId),route=>route.fulfill({json:envelope({problem:{business_problem_id:work.problemId},revisions:[{business_problem_id:work.problemId,revision_id:work.problemRevisionId,digest:work.problemDigest,title:work.title,description:'固定问题范围'}]})}));
@@ -15,7 +15,7 @@ async function fixture(page:Page){
  await page.route('**/api/workbench/v1/teams**',async route=>{const req=route.request(),path=decodeURIComponent(new URL(req.url()).pathname);if(state.deny)return route.fulfill({status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
  if(req.method()==='POST'){const c=req.postDataJSON() as SaveTeamCommand;expect(req.headers()['x-csrf-token']).toBe('fixture-csrf');expect(c.ownerId).toBe(principal.principalId);state.posts.push(c);const revision:TeamRecord={schemaVersion:c.workLinks?.length?'team-definition.v2':'team-definition.v1',...(c.workLinks?.length?{work_links:c.workLinks.map(w=>({workflow_run_id:w.workflowRunId,preparation_digest:w.preparationDigest,business_problem_id:w.problemId,problem_revision_id:w.problemRevisionId,problem_digest:w.problemDigest}))}:{}),scope:{namespace:principal.tenantId,security_domain:principal.securityDomain},team_id:c.teamId,revision_id:c.revisionId,title:c.title,goal:c.goal,owner_id:c.ownerId,members:c.members.map(m=>({employee_definition_id:m.employeeDefinitionId,employee_revision_id:m.employeeRevisionId,employee_digest:m.employeeDigest,responsibility:m.responsibility,handoff:m.handoff})),predecessor_revision_id:c.predecessorRevisionId};const digest=createHash('sha256').update(JSON.stringify(canonical(revision))).digest('hex');const detail={revision,digest,aggregateVersion:c.expectedVersion+1,headRevisionId:c.revisionId};for(const existing of state.records.values())if(existing.revision.team_id===c.teamId){existing.aggregateVersion=detail.aggregateVersion;existing.headRevisionId=c.revisionId}state.records.set(c.revisionId,detail);if(state.lose){state.lose=false;return route.abort('failed')}return route.fulfill({status:201,json:envelope({teamId:c.teamId,revisionId:c.revisionId,digest,aggregateVersion:detail.aggregateVersion,replayed:false,decisionId:'decision:fixture'})});}
  if(path.endsWith('/teams'))return route.fulfill({json:envelope({items:[...state.records.values()].filter(v=>v.headRevisionId===v.revision.revision_id).map(v=>({teamId:v.revision.team_id,revisionId:v.revision.revision_id,title:v.revision.title,ownerId:v.revision.owner_id,memberCount:v.revision.members.length,digest:v.digest,aggregateVersion:v.aggregateVersion})),nextCursor:null})});
- if(path.endsWith('/work')){const v=state.records.get(path.split('/').at(-2)!);return route.fulfill({json:envelope({teamId:v?.revision.team_id,revisionId:v?.revision.revision_id,teamDigest:v?.digest,items:v?.revision.work_links?.length?[work]:[],linkedCount:v?.revision.work_links?.length??0,unavailableCount:0})})}
+ if(path.endsWith('/work')){const v=state.records.get(path.split('/').at(-2)!);return route.fulfill({json:envelope({teamId:v?.revision.team_id,revisionId:v?.revision.revision_id,teamDigest:v?.digest,items:v?.revision.work_links?.length&&!state.unavailable?[state.work]:[],linkedCount:v?.revision.work_links?.length??0,unavailableCount:state.unavailable?(v?.revision.work_links?.length??0):0})})}
  const value=state.records.get(path.split('/').at(-1)!);return value?route.fulfill({json:envelope(state.wrong?{...value,digest:'0'.repeat(64)}:value)}):route.fulfill({status:404,json:{reasonCode:'TEAM_NOT_FOUND'}});
  });return state;
 }
@@ -35,3 +35,41 @@ test('forged team context does not become an employee affiliation',async({page})
 test('resource summary pins member and editing survives member return',async({page})=>{const state=await fixture(page);await prepare(page);await page.getByRole('button',{name:'保存团队分工',exact:true}).click();await expect(page.getByRole('button',{name:'修改团队分工',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'读取原保存记录',exact:true})).toHaveCount(0);await expect(page.getByText('团队分工已保存并核对。',{exact:true})).toBeVisible();await expect(page.getByRole('region',{name:'团队成员资源概览',exact:true})).toContainText('材料检查员');await page.getByRole('link',{name:'查看职责与资源',exact:true}).click();await expect(page).toHaveURL(/section=capabilities/);await page.getByRole('link',{name:'返回原团队',exact:true}).click();await page.getByRole('button',{name:'修改团队分工',exact:true}).click();await page.getByLabel('在本团队的职责',{exact:true}).fill('尚未保存的团队职责');await page.getByRole('link',{name:'查看成员',exact:true}).click();await page.getByRole('link',{name:'返回原团队',exact:true}).click();await expect(page.getByLabel('在本团队的职责',{exact:true})).toHaveValue('尚未保存的团队职责');expect(state.posts).toHaveLength(1);});
 
  test('explicit work association saves a successor without implying business success',async({page})=>{const state=await fixture(page);await prepare(page);await page.getByRole('button',{name:'保存团队分工',exact:true}).click();await page.getByRole('button',{name:'修改团队分工',exact:true}).click();await page.getByRole('button',{name:'选择已有工作',exact:true}).click();await page.getByRole('button',{name:'关联此工作',exact:true}).click();await page.getByRole('button',{name:'核对团队分工',exact:true}).click();await page.getByRole('button',{name:'保存团队分工',exact:true}).click();await expect(page.getByRole('button',{name:'修改团队分工',exact:true})).toBeVisible();await page.reload();const panel=page.getByRole('region',{name:'团队关联工作',exact:true});await expect(panel.getByRole('heading',{name:work.title,exact:true})).toBeVisible();await expect(panel).toContainText('执行已完成');await expect(panel).toContainText('业务结论尚未确认');await expect(panel.getByRole('link',{name:'查看工作与结果',exact:true})).toHaveAttribute('href',new RegExp('work='+work.preparationDigest));expect(state.posts).toHaveLength(2);expect(state.posts[1].workLinks?.[0].workflowRunId).toBe(work.workflowRunId);expect(state.records.get(state.posts[0].revisionId)?.revision.work_links).toBeUndefined();const teamUrl=page.url();await panel.getByRole('link',{name:'查看工作与结果',exact:true}).click();await page.getByRole('link',{name:'返回原团队',exact:true}).click();await expect(page).toHaveURL(teamUrl);expect(state.posts).toHaveLength(2);});
+
+async function seededLinkedTeam(page:Page){
+ const state=await fixture(page);
+ const revision:TeamRecord={schemaVersion:'team-definition.v2',scope:{namespace:principal.tenantId,security_domain:principal.securityDomain},team_id:'team:sections',revision_id:'team-revision:sections',title:'关联工作分区',goal:'读取阶段成果',owner_id:principal.principalId,members:[],predecessor_revision_id:null,work_links:[{workflow_run_id:work.workflowRunId,preparation_digest:work.preparationDigest,business_problem_id:work.problemId,problem_revision_id:work.problemRevisionId,problem_digest:work.problemDigest}]};
+ const digest=createHash('sha256').update(JSON.stringify(canonical(revision))).digest('hex');
+ state.records.set(revision.revision_id,{revision,digest,aggregateVersion:1,headRevisionId:revision.revision_id});
+ return Object.assign(state,{url:'/teams?'+new URLSearchParams({team:revision.team_id,revision:revision.revision_id})});
+}
+test('failed work retains saved artifacts without becoming active or accepted',async({page})=>{
+ const state=await seededLinkedTeam(page);state.work.executionState='FAILED';state.work.displayState='failed';
+ await page.goto(state.url);
+ await expect(page.getByRole('region',{name:'共同成果',exact:true})).toContainText(work.title);
+ await expect(page.getByRole('region',{name:'共同成果',exact:true})).toContainText('业务结论尚未确认');
+ await expect(page.getByRole('region',{name:'推进中的工作',exact:true})).not.toContainText(work.title);
+ expect(state.posts).toHaveLength(0);
+});
+test('running work may have partial results in both distinct sections',async({page})=>{
+ const state=await seededLinkedTeam(page);state.work.executionState='RUNNING';state.work.displayState='running';
+ await page.goto(state.url);
+ await expect(page.getByRole('region',{name:'共同成果',exact:true})).toContainText(work.title);
+ await expect(page.getByRole('region',{name:'推进中的工作',exact:true})).toContainText(work.title);
+ expect(state.posts).toHaveLength(0);
+});
+test('terminal work without artifacts remains a record rather than a result',async({page})=>{
+ const state=await seededLinkedTeam(page);state.work.artifactCount=0;
+ await page.goto(state.url);
+ await expect(page.getByRole('region',{name:'其他执行记录',exact:true})).toContainText(work.title);
+ await expect(page.getByRole('region',{name:'共同成果',exact:true})).not.toContainText(work.title);
+ expect(state.posts).toHaveLength(0);
+});
+
+test('unavailable linked work is not rendered as an empty result set',async({page})=>{
+ const state=await seededLinkedTeam(page);state.unavailable=true;await page.goto(state.url);
+ await expect(page.getByRole('region',{name:'推进中的工作',exact:true})).toContainText('有 1 项关联当前无法核对');
+ await expect(page.getByRole('region',{name:'共同成果',exact:true})).toContainText('成果范围尚未完整核对');
+ await expect(page.getByText('当前可读关联中尚无已保存产物。',{exact:true})).toHaveCount(0);
+ expect(state.posts).toHaveLength(0);
+});
