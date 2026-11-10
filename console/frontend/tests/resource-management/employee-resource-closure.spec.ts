@@ -273,3 +273,28 @@ test('editing a mapped duty requires explicit stale association removal before s
  await page.getByRole('button',{name:'移除此失效关联',exact:true}).click();await page.getByRole('button',{name:'核对修改',exact:true}).click();
  await expect(page.getByRole('button',{name:'保存修改草稿',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
 });
+
+test('business collection preserves filters and scroll through exact employee detail',async({page})=>{
+ const {extra,original}=await fixture(page);
+ extra.records.clear();
+ for(let i=0;i<18;i++)extra.records.set('employee-revision:list-'+i,{...structuredClone(original),employeeDefinitionId:'employee:list-'+i,employeeDefinitionRevisionId:'employee-revision:list-'+i,role:'检查员 '+i});
+ await page.goto('/employees');
+ await expect(page.locator('.employee-collection-row')).toHaveCount(18);
+ await expect(page.getByRole('region',{name:'选中员工详情',exact:true})).toBeHidden();
+ await page.getByLabel('搜索当前结果',{exact:true}).fill('检查员');
+ await page.getByRole('combobox',{name:'发布状态',exact:true}).selectOption('NOT_PUBLISHED');
+ const row=page.locator('.employee-row-main').filter({hasText:'检查员 16'});
+ await row.scrollIntoViewIfNeeded();
+ const position=await page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop);
+ expect(position).toBeGreaterThan(0);
+ await row.click();
+ await expect(page.locator('.employee-detail-context h2')).toHaveText('检查员 16');
+ expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe('employee-revision:list-16');
+ await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();
+ await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue('检查员');
+ await expect(page.getByRole('combobox',{name:'发布状态',exact:true})).toHaveValue('NOT_PUBLISHED');
+ await expect.poll(()=>page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop)).toBe(position);
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
+ expect(extra.posts).toHaveLength(0);
+});

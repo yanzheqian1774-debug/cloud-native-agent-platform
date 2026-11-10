@@ -56,3 +56,15 @@
 
 .employee-saved-resource-count{display:flex;align-items:center;gap:6px;color:#7486a3;font-size:13px;margin:6px 0 12px}.employee-saved-resource-count details{display:inline-block}.employee-saved-resource-count details p{margin:6px 0}.employee-management .employee-business-editor .employee-form-card>h3{margin-top:0}.employee-management .employee-business-editor .employee-resource-composition{margin-top:8px}
 @media(max-width:700px){.employee-management .employee-business-editor .employee-form-card{padding:14px}.employee-management .employee-business-editor .employee-editor-return{margin-bottom:8px}.employee-management .employee-authoring-state{padding:8px 12px;margin-bottom:12px;gap:8px 16px}.employee-management .employee-business-editor .employee-composition-duties{padding:14px}}
+.employee-management.f3-employee-collection .employee-object-center{display:block;min-height:0}
+.employee-management.f3-employee-collection .employee-selected-detail{display:none}
+.employee-management.f3-employee-collection .employee-collection{border:1px solid #e0e6ef;border-radius:12px;background:#fff}
+.employee-management.f3-employee-collection .employee-collection-toolbar{padding:22px 24px;border-color:#e0e6ef}
+.employee-management.f3-employee-collection .employee-filters{max-width:760px;margin-top:18px;gap:16px}
+.employee-management.f3-employee-collection .employee-collection-rows{min-height:240px;max-height:540px;overflow:auto;padding:16px 24px;gap:12px}
+.employee-management.f3-employee-collection .employee-collection-row{grid-template-columns:minmax(0,1fr) minmax(180px,280px);border-radius:10px;border-color:#e0e6ef}
+.employee-management.f3-employee-collection .employee-row-main{padding:18px;gap:12px}
+.employee-management.f3-employee-collection .employee-row-copy strong{font-size:15px;line-height:1.6}
+.employee-management.f3-employee-collection .employee-revision-picker{max-width:none;padding:12px 16px;font-size:12px}
+.employee-management.f3-employee-collection .employee-single-revision{padding:12px 16px}
+@media(max-width:700px){.employee-management.f3-employee-collection .employee-collection-toolbar{padding:16px}.employee-management.f3-employee-collection .employee-filters{grid-template-columns:1fr;gap:12px}.employee-management.f3-employee-collection .employee-collection-rows{padding:12px;max-height:60vh}.employee-management.f3-employee-collection .employee-collection-row{grid-template-columns:1fr}.employee-management.f3-employee-collection .employee-revision-picker{border-left:0;border-top:1px solid #e0e6ef}}
