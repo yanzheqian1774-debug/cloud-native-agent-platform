@@ -14,6 +14,7 @@ from .business_problem_authorization import (
 )
 from .execution_preparation import ExecutionPreparationError
 from .execution_preparation_postgres import PreparedExecutionStore
+from .prepared_snapshot_reads import basis_rows, output_rows
 from .resource_use_domain import canonical_digest, stable_id
 
 EVALUATOR = "prepared-synthetic-evidence.v1"
@@ -69,12 +70,7 @@ class PreparedResultReview:
         )
         if stored != p or progress.state not in {"SUCCEEDED", "FAILED", "CANCELLED"}:
             raise ExecutionPreparationError("EVALUATION_TERMINAL_RUN_REQUIRED")
-        criteria = self.connection.execute(
-            "SELECT digest,canonical_bytes,problem_revision_id FROM "
-            "business_problem_authority.criteria_sets "
-            "WHERE namespace=%s AND security_domain=%s AND set_revision_id=%s AND business_problem_id=%s",
-            (*key, target.criteria.revision_id, target.problem.resource_id),
-        ).fetchone()
+        criteria, problem = basis_rows(self.connection, key, target)
         if (
             criteria is None
             or criteria["digest"] != target.criteria.digest
@@ -83,11 +79,6 @@ class PreparedResultReview:
             != target.criteria.digest
         ):
             raise ExecutionPreparationError("EVALUATION_CRITERIA_BINDING_MISMATCH")
-        problem = self.connection.execute(
-            "SELECT digest,canonical_bytes FROM business_problem_authority.problem_revisions "
-            "WHERE namespace=%s AND security_domain=%s AND business_problem_id=%s AND revision_id=%s",
-            (*key, target.problem.resource_id, target.problem.revision_id),
-        ).fetchone()
         if (
             problem is None
             or problem["digest"] != target.problem.digest
@@ -140,12 +131,7 @@ class PreparedResultReview:
             self.require("RESOURCE_USE", "READ", output["resourceGrant"])
         artifact_ids = {o["artifactId"] for o in authorized_outputs}
         resource_use_ids = {o["resourceUseId"] for o in authorized_outputs}
-        artifacts = self.connection.execute(
-            "SELECT artifact_id,task_id,attempt_id,record,digest,content FROM "
-            "execution_authority.run_artifacts "
-            "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s ORDER BY artifact_id",
-            (*key, p.run_id),
-        ).fetchall()
+        artifacts, uses, events = output_rows(self.connection, key, p.run_id)
         evidence = []
         for a in artifacts:
             if a["artifact_id"] not in artifact_ids:
@@ -155,15 +141,6 @@ class PreparedResultReview:
             evidence.append(
                 {k: a[k] for k in ("artifact_id", "task_id", "attempt_id", "digest")}
             )
-        uses = self.connection.execute(
-            "SELECT DISTINCT ON (u.resource_use_id) "
-            "u.resource_use_id,s.snapshot_id,s.digest,s.high_water,s.record "
-            "FROM resource_use.uses u JOIN resource_use.snapshots s "
-            "USING(namespace,security_domain,resource_use_id) "
-            "WHERE u.namespace=%s AND u.security_domain=%s AND u.workflow_run_id=%s "
-            "ORDER BY u.resource_use_id,s.high_water DESC",
-            (*key, p.run_id),
-        ).fetchall()
         for use in uses:
             if use["resource_use_id"] not in resource_use_ids:
                 raise ExecutionPreparationError(
@@ -194,12 +171,6 @@ class PreparedResultReview:
                 "CONFLICTED",
             }:
                 raise ExecutionPreparationError("EVALUATION_RESOURCE_USE_AMBIGUOUS")
-        events = self.connection.execute(
-            "SELECT max(version) AS high_water FROM "
-            "execution_authority.prepared_run_events "
-            "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s",
-            (*key, p.run_id),
-        ).fetchone()["high_water"]
         return {
             "schemaVersion": "prepared-terminal-snapshot.v1",
             "runId": p.run_id,

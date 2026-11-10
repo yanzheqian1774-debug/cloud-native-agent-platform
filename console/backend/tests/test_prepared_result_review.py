@@ -187,3 +187,31 @@ def test_terminal_snapshot_human_successor_replay_and_restart(repository):
         auth.denied = "SUCCESS_CRITERION"
         with pytest.raises(PermissionError, match="REVIEW_DENIED"):
             review.evaluate(p, "denied")
+
+
+@pytest.mark.parametrize(
+    "field,reason",
+    [
+        (0, "EVALUATION_CRITERIA_BINDING_MISMATCH"),
+        (1, "EVALUATION_PROBLEM_BINDING_MISMATCH"),
+    ],
+)
+def test_batched_snapshot_rejects_corrupt_canonical_bytes(
+    repository, monkeypatch, field, reason
+):
+    from agent_console import prepared_result_review
+
+    p, principal = setup_case(repository)
+    original = prepared_result_review.basis_rows
+
+    def corrupted(*args):
+        rows = list(original(*args))
+        rows[field] = {**rows[field], "canonical_bytes": b"corrupted-read"}
+        return rows
+
+    monkeypatch.setattr(prepared_result_review, "basis_rows", corrupted)
+    with repository.pool.connection() as c, c.transaction():
+        c.row_factory = dict_row
+        terminal_failure(c, p, principal)
+        with pytest.raises(ExecutionPreparationError, match=reason):
+            PreparedResultReview(c, principal, ReviewAuthority()).snapshot(p)

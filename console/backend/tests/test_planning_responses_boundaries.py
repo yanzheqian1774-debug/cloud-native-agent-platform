@@ -234,6 +234,8 @@ def test_actual_local_https_deadline_reaps_and_replay_never_retries(
     assert network.endpoint.requests == 1
 
 
+# Parsing cases must reach the real endpoint; startup deadline has separate coverage.
+@pytest.mark.parametrize("network", [{"totalTimeoutSeconds": 5}], indirect=True)
 @pytest.mark.parametrize(
     "mode,status,kind",
     [
@@ -399,7 +401,9 @@ def test_cleanup_failure_blocks_subsequent_dispatch(network, monkeypatch):
     assert network.endpoint.requests == 0
 
 
+@pytest.mark.parametrize("network", [{"totalTimeoutSeconds": 5}], indirect=True)
 def test_actual_tcp_peer_stalled_tls_is_reaped(network, monkeypatch, record_property):
+    from concurrent.futures import ThreadPoolExecutor
     from dataclasses import replace
     from socketserver import BaseRequestHandler, ThreadingTCPServer
 
@@ -427,8 +431,12 @@ def test_actual_tcp_peer_stalled_tls_is_reaped(network, monkeypatch, record_prop
 
     monkeypatch.setattr(responses_deadline, "supervise", local_tls_peer)
     try:
-        response = send(network.client)
-        assert accepted.is_set()
+        # Assert we reach TLS, rather than silently testing slow worker startup.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = pool.submit(send, network.client)
+            reached = accepted.wait(2.5)
+            response = pending.result(timeout=7.5)
+        assert reached, receipt(network, response)["deadline"]
         assert result(response)["technical_status"] == "OUTCOME_UNKNOWN"
         diagnostic = receipt(network, response)["deadline"]
         record_property("deadline", diagnostic)
