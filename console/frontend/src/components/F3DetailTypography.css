@@ -1,0 +1,8 @@
+/* Shared business-detail primitives; sizes retain the two frozen F3 variants. */
+.f3-managed-resource{--f3-title-size:24px;--f3-title-weight:650;--f3-title-line:1.45;--f3-tab-size:12px;--f3-tab-weight:400}
+.employee-management.f3-employee-detail{--f3-title-size:28px;--f3-title-weight:600;--f3-title-line:1.35;--f3-tab-size:15px;--f3-tab-weight:500}
+.resource-management .f3-managed-resource .f3-detail-heading h1,.resource-directory-detail .f3-read-business .f3-detail-heading h1,.employee-management.f3-employee-detail .employee-detail-context h2{font-size:var(--f3-title-size);font-weight:var(--f3-title-weight);line-height:var(--f3-title-line);color:#273851;margin:8px 0}
+.resource-management .f3-managed-resource .f3-detail-tabs button,.resource-directory-detail .f3-read-business .f3-detail-tabs button,.employee-management.f3-employee-detail .employee-detail-tabs button{font-size:var(--f3-tab-size);font-weight:var(--f3-tab-weight);line-height:1.5}
+.resource-management .f3-managed-resource .f3-detail-back,.resource-directory-detail .f3-read-business .f3-detail-back,.employee-management.f3-employee-detail .employee-mobile-back{font-size:12px;font-weight:400;line-height:18px;padding:2px 4px;margin:0 0 20px;min-height:0;border:0;background:transparent;color:#7486a3;text-decoration:none}
+.f3-managed-resource .f3-detail-heading{margin:0 0 24px}
+@media(max-width:700px){.f3-managed-resource{--f3-title-size:22px}.employee-management.f3-employee-detail{--f3-title-size:24px}}

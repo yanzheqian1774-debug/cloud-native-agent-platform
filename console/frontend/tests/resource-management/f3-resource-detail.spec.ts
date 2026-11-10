@@ -6,6 +6,8 @@ test('F3 default detail reads publication and keeps exact technical identities b
  const state=await published(page);await page.goto(href);
  await expect(page.getByRole('tab')).toHaveText(['概览','内容与定义','引用与影响']);
  await expect(page.locator('.f3-detail-banner')).toContainText('当前发布内容');
+ await expect(page.locator('.f3-detail-heading h1')).toHaveCSS('font-size','24px');
+ await expect(page.getByRole('tab',{name:'概览',exact:true})).toHaveCSS('font-size','12px');
  await expect(page.getByRole('heading',{name:'用途与交付'})).toBeVisible();
  await expect(page.getByText(skillId,{exact:true})).toHaveCount(0);
  await expect(page.getByRole('button',{name:'运行测试',exact:true})).toHaveCount(0);

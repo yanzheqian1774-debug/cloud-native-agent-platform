@@ -1,3 +1,4 @@
+import '../components/F3DetailTypography.css';
 import {useRef,type ReactNode} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
 import type {SkillMcpResource} from '../api/skillMcpResources';

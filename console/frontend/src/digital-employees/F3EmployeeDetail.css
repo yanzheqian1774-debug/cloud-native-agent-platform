@@ -1,13 +1,13 @@
 .employee-management.f3-employee-detail>.employee-page-title,.employee-management.f3-employee-detail>.employee-summary-strip,.employee-management.f3-employee-detail .employee-collection{display:none}
 .employee-management.f3-employee-detail .employee-object-center{display:block;min-height:0;height:100%}
 .employee-management.f3-employee-detail .employee-selected-detail{display:flex;flex-direction:column;border:0;border-radius:0;background:transparent;min-width:0;height:100%}
-.employee-management.f3-employee-detail .employee-mobile-back{display:block;align-self:flex-start;border:0;background:transparent;color:#7486a3;font-size:12px;padding:0;margin:0 0 20px}
+.employee-management.f3-employee-detail .employee-mobile-back{display:block;align-self:flex-start;border:0;background:transparent;color:#7486a3;font-size:12px;line-height:18px;font-weight:400;padding:2px 4px;margin:0 0 20px}
 .employee-management.f3-employee-detail .employee-detail-context{border:0;padding:0 0 24px;align-items:flex-start}
-.employee-management.f3-employee-detail .employee-detail-context h2{font-size:26px;line-height:1.45;color:#273851;margin:10px 0}
+.employee-management.f3-employee-detail .employee-detail-context h2{font-size:var(--f3-title-size,28px);font-weight:var(--f3-title-weight,600);line-height:var(--f3-title-line,1.35);color:#273851;margin:8px 0}
 .employee-management.f3-employee-detail .employee-detail-context .eyebrow{font-size:10px;color:#4865d5;letter-spacing:2px}
 .employee-management .employee-heading-evidence{font-size:12px;color:#7486a3}.employee-management .employee-heading-evidence code{overflow-wrap:anywhere}
 .employee-management.f3-employee-detail .employee-detail-tabs{padding:0;border-bottom:1px solid #dce3ef;gap:30px;background:transparent}
-.employee-management.f3-employee-detail .employee-detail-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:10px 0 12px;color:#7486a3;font-size:14px}
+.employee-management.f3-employee-detail .employee-detail-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:10px 0 12px;color:#7486a3;font-size:var(--f3-tab-size,15px);font-weight:var(--f3-tab-weight,500)}
 .employee-management.f3-employee-detail .employee-detail-tabs button.active{border-bottom-color:#4865d5;color:#4865d5;background:transparent}
 .employee-management .employee-business-actions{display:flex;gap:10px;justify-content:flex-end;padding:12px 0;flex-wrap:wrap}
 .employee-management .employee-business-actions button,.employee-management .employee-work-categories button{font:inherit;font-size:12px;padding:7px 12px;border:1px solid #e0e6ef;border-radius:7px;background:#fff;color:#4865d5;cursor:pointer}

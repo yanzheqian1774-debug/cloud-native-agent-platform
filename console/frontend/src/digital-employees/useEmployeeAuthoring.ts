@@ -9,6 +9,7 @@ function verify(value:EmployeeAuthoring,item:EmployeeDefinition){
   if(target.status==='AVAILABLE'){
    const d=target.definition;
    if(d.resourceKind!=='DIGITAL_EMPLOYEE_DEFINITION'||d.employeeDefinitionId!==item.employeeDefinitionId||!d.employeeDefinitionRevisionId||!d.employeeDefinitionDigest||d.aggregateVersion!==value.aggregateVersion||!Array.isArray(d.members)||!Array.isArray(d.responsibilities))throw Error('员工版本内容不一致。');
+   if(d.employeeDefinitionRevisionId===item.employeeDefinitionRevisionId&&d.employeeDefinitionDigest!==item.employeeDefinitionDigest)throw Error('所选修订与当前版本依据不一致。');
    if(key==='publication'&&d.publicationState!=='PUBLISHED')throw Error('发布状态尚未核实。');
    if(key==='draft'&&(!['DRAFT','VALIDATED','APPROVED'].includes(d.lifecycleState??'')||value.head.status!=='AVAILABLE'||d.employeeDefinitionRevisionId!==value.head.definition.employeeDefinitionRevisionId||d.employeeDefinitionDigest!==value.head.definition.employeeDefinitionDigest))throw Error('修改草稿与当前版本不一致。');
   }

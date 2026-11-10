@@ -152,7 +152,7 @@ test('F3 business editor saves then validates and publishes exact successor in t
  await expect(editor.getByRole('heading',{name:'已保存的职责与资源',exact:true})).toBeVisible();await expect(editor.getByText('核对采购交付并形成可追溯报告',{exact:true})).toBeVisible();await expect(editor.getByRole('article',{name:'技能绑定资源',exact:true})).toHaveCount(1);await expect(editor.getByRole('button',{name:'继续修改职责与资源',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(1);
  await page.screenshot({path:info.outputPath('f3-business-saved-draft.png')});
  for(const action of ['验证草稿','确认发布资格','发布定义']){await page.getByRole('button',{name:new RegExp('^'+action)}).click();await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'确认提交',exact:true})).toHaveCount(0)}
- await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('当前发布');expect(extra.posts).toHaveLength(4);expect(original.members.find(m=>m.kind==='SKILL')?.revisionId).toBe('revision:1');expect(original.lifecycleState).toBe('DRAFT');
+ await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('当前发布版本');expect(extra.posts).toHaveLength(4);expect(original.members.find(m=>m.kind==='SKILL')?.revisionId).toBe('revision:1');expect(original.lifecycleState).toBe('DRAFT');
  await page.getByRole('button',{name:'返回原查看版本',exact:true}).click();await expect(page.getByRole('region',{name:'员工资源组成',exact:true})).toBeVisible();expect(state.posts).toEqual([]);expect(new URL(page.url()).searchParams.get('employeeView')).toBeNull();
 });
 
@@ -296,5 +296,20 @@ test('business collection preserves filters and scroll through exact employee de
  await expect.poll(()=>page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop)).toBe(position);
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();
+ expect(extra.posts).toHaveLength(0);
+});
+
+for(const mode of ['current','historical','unavailable','withdrawn','digest-mismatch'] as const)test('selected publication label remains evidence based: '+mode,async({page})=>{
+ const {extra,original}=await fixture(page);original.publicationState='PUBLISHED';original.lifecycleState='PUBLISHED';
+ const current={...structuredClone(original),employeeDefinitionRevisionId:mode==='historical'?'employee-revision:current':old,employeeDefinitionDigest:mode==='historical'||mode==='digest-mismatch'?'f'.repeat(64):original.employeeDefinitionDigest};
+ await page.route('**/authoring',route=>route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:original,aggregateVersion:1,head:{status:'AVAILABLE',definition:current},draft:{status:'NONE'},publication:mode==='unavailable'?{status:'NOT_AVAILABLE'}:mode==='withdrawn'?{status:'WITHDRAWN'}:{status:'AVAILABLE',definition:current},executionStarted:false})}));
+ await page.goto(href().replace('employeeView=professional&',''));
+ const label={current:'当前发布版本',historical:'历史发布版本',unavailable:'已发布记录 · 当前版本待核实',withdrawn:'已发布记录 · 当前发布已撤销','digest-mismatch':'已发布记录 · 当前状态暂不可核实'}[mode];
+ await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText(label);
+ await expect(page.locator('.employee-composition-summary h3')).toHaveText(label);
+ expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);
+ if(mode==='historical')await expect(page.getByText('当前发布：另有发布版本',{exact:true})).toBeVisible();
+ await expect(page.locator('.employee-detail-context h2')).toHaveCSS('font-size','28px');
+ await expect(page.getByRole('button',{name:'资源组成',exact:true})).toHaveCSS('font-size','15px');
  expect(extra.posts).toHaveLength(0);
 });
