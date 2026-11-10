@@ -29,6 +29,7 @@ export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>voi
   await mapBounded(conversations.items,async c=>{
    try{
     const record=await conversationRequest<Pick<PrivateConversation,'conversation'|'links'>>('/'+c.conversation_id+'/work-links',undefined,undefined,signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000));
+    if(record.links.some(link=>!link.readable))limited=true;
     if(!record.links.some(link=>link.readable&&link.target?.problemId))return;
     let ownedExecution:string|undefined,ownedProblem:string|undefined;
     try{const state=(await conversationRequest<{state?:{execution?:string;problem?:{business_problem_id?:string}}}>('/'+c.conversation_id+'/journey',undefined,undefined,signal?AbortSignal.any([signal,AbortSignal.timeout(15000)]):AbortSignal.timeout(15000))).state;ownedExecution=state?.execution;ownedProblem=state?.problem?.business_problem_id}catch{/* Readable historical links need not have a journey. */}

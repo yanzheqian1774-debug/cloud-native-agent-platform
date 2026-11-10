@@ -89,3 +89,8 @@ test('directory uses work links without reading unrelated conversation messages'
 for(const [question,label] of [['确认使用生产环境还是测试环境规范？','需确认口径'],['请提供交接资料。','需补充资料'],['请确认负责人姓名。','需确认信息']])test('pending label reflects literal question: '+label,async({page})=>{
  const s=await fixture(page);s.running=true;s.question=question;await page.goto('/attention');await expect(page.locator('.f3-work-decision .f3-work-badge')).toHaveText(label);expect(s.writes).toEqual([]);
 });
+
+
+test('all revoked conversation links retain an explicit incomplete-directory warning',async({page})=>{
+ const s=await fixture(page);await page.route('**/api/workbench/v1/conversations/c1/work-links',r=>r.fulfill({json:{result:{conversation:{conversation_id:'c1'},links:[{link_id:'revoked',readable:false}]}}}));await page.goto('/attention');await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();await expect(page.getByText('当前已读记录中没有仍有效的未回答追问。',{exact:true})).toBeVisible();expect(s.reads.some(p=>p.includes('/prepared-executions/'))).toBe(false);expect(s.writes).toEqual([]);
+});
