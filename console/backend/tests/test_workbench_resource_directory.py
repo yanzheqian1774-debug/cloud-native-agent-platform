@@ -180,3 +180,50 @@ def test_directory_real_bff_boundary_keeps_exact_reads_and_nonempty_command_cont
             query={},
             handler=lambda call: {},
         )
+
+
+def test_directory_purpose_uses_only_authorized_exact_revision_content(automation):
+    from agent_console.workbench_prepared_resources import TABLES
+
+    a = automation
+    handler = ResourceDirectory(a.services, WorkbenchCursorCodec(b"x" * 32))
+    assert act(a, handler, {})["items"] == []
+    a.run()
+    items = act(a, handler, {})["items"]
+    assert items
+    purposes = []
+    with a.repository.pool.connection() as connection:
+        for item in items:
+            table, column = TABLES[item["kind"]]
+            row = connection.execute(
+                f"SELECT r->'content' content FROM {table} t "
+                "CROSS JOIN LATERAL jsonb_array_elements(t.record->'revisions') r "
+                f"WHERE namespace=%s AND security_domain=%s AND {column}=%s "
+                "AND r->>'revisionId'=%s",
+                (
+                    a.e.scope.namespace,
+                    a.e.scope.security_domain,
+                    item["identity"],
+                    item["revisionId"],
+                ),
+            ).fetchone()
+            content = row["content"] or {}
+            expected = content.get("description") or content.get("businessPurpose")
+            assert item["businessPurpose"] == expected
+            purposes.append(item["businessPurpose"])
+    assert any(purposes)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        None,
+        [],
+        {"description": {"secret": "not text"}},
+        {"documents": [{"content": "not a purpose"}]},
+    ],
+)
+def test_directory_does_not_invent_purpose_from_nontext_or_documents(content):
+    from agent_console.workbench_resource_directory import revision_purpose
+
+    assert revision_purpose({"content": content}) is None

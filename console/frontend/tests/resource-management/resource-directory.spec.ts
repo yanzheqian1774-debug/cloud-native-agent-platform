@@ -8,3 +8,25 @@ test('trusted resource page reads exact current scope and expands readable confi
 test('resource directory denial shows a controlled gap instead of a successful empty list',async({page})=>{
  await page.route('**/api/workbench/v1/**',async route=>route.request().url().endsWith('/session')?route.fulfill({json:{principal,session:{},csrfToken:'fixture'}}):route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}}));await page.goto('/catalog');await expect(page.getByRole('alert')).toContainText('资源暂未读回');await expect(page.getByText('暂无符合条件的可读资源版本',{exact:true})).toHaveCount(0);
 });
+
+test('resource type navigation retains authorized authoring routes without submitting commands',async({page})=>{
+ const writes:string[]=[];
+ await page.route('**/api/workbench/v1/**',route=>{
+  const request=route.request(),url=new URL(request.url());if(request.method()!=='GET')writes.push(url.pathname);
+  if(url.pathname.endsWith('/session'))return route.fulfill({json:{principal,session:{},csrfToken:'fixture'}});
+  if(url.pathname==='/api/workbench/v1/resource-directory'||/^\/api\/workbench\/v1\/resource-management\/(skill|mcp)$/.test(url.pathname))return route.fulfill({json:{result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},items:[],nextCursor:null}}});
+  return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+ });
+ await page.goto('/catalog');const navigation=page.getByRole('navigation',{name:'资源类型'});
+ await navigation.getByRole('link',{name:'Skill 技能',exact:true}).click();await expect(page).toHaveURL(/\/skills$/);await expect(page.getByRole('button',{name:'新建Skill',exact:true})).toBeVisible();
+ await navigation.getByRole('link',{name:'MCP 连接工具',exact:true}).click();await expect(page).toHaveURL(/\/mcp$/);await expect(page.getByRole('button',{name:'新建MCP连接',exact:true})).toBeVisible();
+ await expect(navigation.getByRole('link',{name:'知识资料',exact:true})).toHaveAttribute('href','/knowledge');await expect(navigation.getByRole('link',{name:'Agent 职责',exact:true})).toHaveAttribute('href','/agents');
+ await navigation.getByRole('link',{name:'运行配置',exact:true}).click();await expect(page).toHaveURL(/\/catalog\?kind=runtime$/);expect(writes).toEqual([]);
+});
+
+test('F3 cards preserve exact current draft and history identities across partial pages',async({page})=>{
+ const rows=[{...item,revisionId:'old',isCurrentPublished:false,businessPurpose:'历史口径说明'},{...item,revisionId:'current',businessPurpose:'当前发布用途 <script>不得执行</script>'},{...item,revisionId:'draft',businessPurpose:'草稿用途尚未发布',state:'DRAFT',isCurrentPublished:false,isCurrentDraft:true},{...item,identity:'skill:other',revisionId:'other-history',isCurrentPublished:false}];const writes:string[]=[];
+ await page.route('**/api/workbench/v1/**',route=>{const url=new URL(route.request().url());if(route.request().method()!=='GET')writes.push(url.pathname);if(url.pathname.endsWith('/session'))return route.fulfill({json:{principal,session:{},csrfToken:'fixture'}});if(url.pathname==='/api/workbench/v1/resource-directory')return route.fulfill({json:{result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},items:rows,nextCursor:null}}});return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}})});
+ await page.goto('/catalog?kind=skill');const cards=page.locator('.f3-resource-card');await expect(cards).toHaveCount(2);await expect(cards.first().getByText('当前发布内容',{exact:true})).toBeVisible();await expect(cards.first().getByText('修改草稿',{exact:true})).toBeVisible();await expect(cards.last()).toContainText('当前加载范围仅含历史记录');await expect(cards.first().getByText('当前发布用途 <script>不得执行</script>',{exact:true})).toBeVisible();await expect(cards.first().getByText('草稿用途尚未发布',{exact:true})).toBeVisible();await expect(cards.first().locator('script')).toHaveCount(0);
+ await expect(cards.first().getByRole('link',{name:'打开资源详情'})).toHaveCount(2);await cards.first().getByText('历史记录 · 已加载 1 个版本',{exact:true}).click();const history=cards.first().getByRole('region',{name:'历史固定版本 · old'});await expect(history).toBeVisible();await expect(history.getByText('历史口径说明',{exact:true})).toBeVisible();await expect(history.getByRole('link',{name:'打开资源详情'})).toHaveAttribute('href',/selected=skill%3Aexact&resourceRevision=old&resourceDigest=a{64}/);await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();expect(writes).toEqual([]);
+});

@@ -50,5 +50,5 @@ for(const mode of ['denied','identity','version'])test('UI01 '+mode+' never pres
 
 
 test('UI01 all-kind catalog detail carries the selected kind and exact revision',async({page})=>{
- const writes=await fixture(page);await page.goto('/catalog?returnConversation='+conversation);await page.getByRole('row').filter({hasText:'准确连接配置'}).getByRole('link',{name:'打开资源详情',exact:true}).click();await expect(page).toHaveURL(/kind=mcp/);await expect(page.getByRole('heading',{name:'准确连接配置',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'准确连接配置',exact:true})).toBeVisible();expect(writes).toEqual([]);
+ const writes=await fixture(page);await page.goto('/catalog?returnConversation='+conversation);await page.getByRole('article',{name:'准确连接配置',exact:true}).getByRole('link',{name:'打开资源详情',exact:true}).click();await expect(page).toHaveURL(/kind=mcp/);await expect(page.getByRole('heading',{name:'准确连接配置',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'准确连接配置',exact:true})).toBeVisible();expect(writes).toEqual([]);
 });

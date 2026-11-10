@@ -40,6 +40,17 @@ def target(kind, identity, revision):
     )
 
 
+def revision_purpose(revision):
+    content = revision.get("content")
+    if not isinstance(content, dict):
+        return None
+    for field in ("description", "businessPurpose"):
+        value = content.get(field)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
 class ResourceDirectory:
     def __init__(self, services, cursors, workflows=None):
         self.services, self.cursors = services, cursors
@@ -190,6 +201,7 @@ class ResourceDirectory:
                             "revisionId": r["revisionId"],
                             "digest": r["digest"],
                             "name": record["name"],
+                            "businessPurpose": revision_purpose(r),
                             "state": r["state"],
                             "enabled": record.get("enabled", True)
                             and not record.get("archived", False),
