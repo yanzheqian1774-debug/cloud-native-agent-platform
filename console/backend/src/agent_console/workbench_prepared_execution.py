@@ -5,6 +5,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 from .authority_contracts import AuthorityError, ExactGrant
+from .digital_employee_definition import EmployeeDefinitionError
 from .execution_preparation import ExecutionPreparation, ExecutionPreparationError
 from .execution_preparation_postgres import PreparedExecutionStore
 from .ontology_execution import OntologyExecutionPreparation, parse_preparation
@@ -320,7 +321,11 @@ class PreparedExecutionOwner:
                     "INVOKE_SKILL",
                     f"skill-invocation:prepared:{p.digest}:{t.task_id}:1",
                 )
-        except (AuthorityError, ExecutionPreparationError) as exc:
+        except (
+            AuthorityError,
+            ExecutionPreparationError,
+            EmployeeDefinitionError,
+        ) as exc:
             admission["reason"] = str(exc)
         else:
             admission["state"] = "ADMITTED"
