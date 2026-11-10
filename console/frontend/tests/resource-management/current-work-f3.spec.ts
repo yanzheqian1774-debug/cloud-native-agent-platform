@@ -8,7 +8,7 @@ async function fixture(page:Page,count=1){
  await page.route('**/api/**',async route=>{
   const request=route.request(),p=decodeURIComponent(new URL(request.url()).pathname);if(request.method()!=='GET'){state.writes.push(p);return route.abort()}
   state.reads.push(p);const ok=(result:unknown)=>route.fulfill({json:{result}});
-  if(p.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:directory',tenantId:'fixture',securityDomain:'isolated'},session:{expiresAt:'2099-01-01'},csrfToken:'fixture'}});
+  if(p.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:directory',tenantId:'fixture',securityDomain:'isolated'},session:{expiresAt:'2099-01-01'},csrfToken:'fixture'}});
   if(p.endsWith('/conversations/capabilities'))return ok({enabled:true});
   if(p.endsWith('/problems'))return ok({problems:ids.map(id=>({business_problem_id:'p'+id,title:'交付检查 '+id,description:'合成资料范围',created_at:'2026-11-10T00:00:00Z'}))});
   if(p.endsWith('/conversations'))return ok({items:ids.map(id=>({conversation_id:'c'+id,title:'交付检查 '+id,created_at:'2026-11-10T00:00:00Z'}))});
@@ -103,4 +103,17 @@ for(const mode of ['historical','exact-listed','denied-history'] as const)test('
  if(mode==='denied-history'){await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(0)}
  else{await expect(page.locator('.f3-work-table strong')).toHaveText('交付检查 1');if(mode==='exact-listed')expect(s.reads.filter(p=>p.endsWith('/problems/p1'))).toHaveLength(0);else expect(s.reads.filter(p=>p.endsWith('/problems/p1'))).toHaveLength(1)}
  await expect(page.getByText('后来修改的新问题标题',{exact:true})).toHaveCount(0);expect(s.writes).toEqual([]);
+});
+
+for(const mode of ['matched','wrong-binding','foreign-origin'] as const)test('task process reuses lazy exact runtime binding: '+mode,async({page})=>{
+ const s=await fixture(page,2);let runtimeReads=0;
+ await page.route('**/api/workbench/v1/prepared-executions/e1/runtime-review',r=>{runtimeReads++;return r.fulfill({json:{result:{schemaVersion:'execution-runtime-review.v1',executionDigest:'e1',subject:'human:directory',scope:{tenantId:'fixture',securityDomain:'isolated'},executionStarted:false,tasks:plan.semantics.tasks.map((t:{task_id:string;title:string})=>({taskId:t.task_id,title:t.title,state:'SUCCEEDED',attemptId:null,instanceId:mode==='wrong-binding'?'foreign':'worker',assignmentId:'assignment',employee:{resource_id:'employee:fixed',revision_id:'1',digest:'a'.repeat(64)},agentInstanceId:'agent:fixed',runtimeInstanceId:'',runtimeGeneration:0,profile:report.sourceSnapshot,providerHealth:'NOT_OBSERVED'}))}}})});
+ await page.goto('/tasks?work=e1&origin='+(mode==='foreign-origin'?'c2':'c1'));await expect(page.locator('.px-delivery-summary')).toBeVisible();expect(runtimeReads).toBe(0);
+ await page.getByRole('navigation',{name:'工作详情页签'}).getByRole('button',{name:'办理过程',exact:true}).click();await expect(page.getByText('查看任务运行绑定',{exact:true})).toBeVisible();expect(runtimeReads).toBe(0);await page.getByText('查看任务运行绑定',{exact:true}).click();const region=page.getByRole('region',{name:'本次任务运行绑定',exact:true});
+ if(mode==='wrong-binding'){await expect(region.getByRole('alert')).toBeVisible();await expect(region.getByRole('link',{name:'查看此员工分工'})).toHaveCount(0)}else{const link=region.getByRole('link',{name:'查看此员工分工'}).first();await expect(link).toBeVisible();const url=new URL((await link.getAttribute('href'))!, 'http://local');expect(url.searchParams.get('workExecution')).toBe('e1');expect(url.searchParams.get('returnConversation')).toBe(mode==='foreign-origin'?null:'c1')}
+ expect(runtimeReads).toBe(1);expect(s.writes).toEqual([]);
+});
+
+test('explicit task result destination overrides remembered process but leaves tabs usable',async({page})=>{
+ const s=await fixture(page);await page.goto('/tasks?work=e1&origin=c1');await expect(page.locator('.px-delivery-summary')).toBeVisible();const tabs=page.getByRole('navigation',{name:'工作详情页签'});await tabs.getByRole('button',{name:'办理过程',exact:true}).click();await expect(page.getByRole('region',{name:'当前作业过程',exact:true})).toBeVisible();await page.goto('/tasks?work=e1&workView=result&origin=c1');await expect(page.locator('.px-delivery-summary')).toBeVisible();await page.reload();await expect(page.locator('.px-delivery-summary')).toBeVisible();await tabs.getByRole('button',{name:'办理过程',exact:true}).click();await expect(page.getByRole('region',{name:'当前作业过程',exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.has('workView')).toBe(false);expect(s.writes).toEqual([]);
 });

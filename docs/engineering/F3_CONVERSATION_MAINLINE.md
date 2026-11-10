@@ -108,3 +108,9 @@ Task-list records currently select a problem by identity only, while selected ta
 ## 2026-11-10 employee task result destination (G1)
 
 Employee participation may list several executions while returnConversation describes only entry context. Return-result links must always address the selected execution in /tasks?work=<digest>; carry the conversation only as origin hint for existing exact work-owner verification. Never send every row to the entry conversation or use an unverified generic /work destination. Reuse the current exact-task result reader and original-conversation validation. No visual redesign, new API or writes. Verify separate row destinations with/without entry context and real existing employee/task result return.
+
+## 2026-11-10 task process runtime binding continuity (G1)
+
+Reuse the existing ExecutionRuntimeSection in exact task detail process tab. Keep the disclosure closed by default, lazy authorized GET only on opening, and existing execution/participant binding verification. Pass only the conversation established by readSelectedWork; an unverified URL origin must not become the employee return context. Reuse current employee result routes and original task result readback. No new execution, authority, health inference, APIs or styling. Validate lazy reads, mismatched bindings, foreign origin suppression, and real task-to-employee-to-result navigation.
+
+Real navigation exposed remembered process tabs taking precedence over a result link. Employee result links now request workView=result; exact task detail honors that explicit read-view request, while ordinary navigation retains scoped remembered tabs. Manual tab changes consume the request without changing execution identity or triggering actions. Verify reload and subsequent tab changes.
