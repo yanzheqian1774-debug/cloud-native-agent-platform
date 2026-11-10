@@ -1,6 +1,6 @@
 import {expect,test,type Page} from '@playwright/test';
 import {fixture,skillContent,reportText,source,principal,operations,skillId,employeeId} from '../helpers/resourceMaintenanceFixture';
-async function create(page: Page) { await page.getByRole('button', { name: '新建Skill', exact: true }).click(); await page.getByLabel('名称', { exact: true }).fill('资源维护完整路径核验'); await page.getByLabel('用途说明', { exact: true }).fill('维护原用途'); await page.getByLabel('能力名称', { exact: true }).fill('READ_DATA'); await page.getByLabel('办理说明', { exact: true }).fill('核对来源'); await page.getByText('高级配置与输入输出契约', { exact: true }).click(); await page.getByLabel('配置对象', { exact: true }).fill(JSON.stringify(skillContent)); await page.getByRole('button', { name: '保存草稿', exact: true }).click(); }
+async function create(page: Page) { await page.getByRole('button', { name: '创建技能', exact: true }).click(); await page.getByLabel('名称', { exact: true }).fill('资源维护完整路径核验'); await page.getByLabel('用途说明', { exact: true }).fill('维护原用途'); await page.getByLabel('能力名称', { exact: true }).fill('READ_DATA'); await page.getByLabel('办理说明', { exact: true }).fill('核对来源'); await page.getByText('高级配置与输入输出契约', { exact: true }).click(); await page.getByLabel('配置对象', { exact: true }).fill(JSON.stringify(skillContent)); await page.getByRole('button', { name: '保存草稿', exact: true }).click(); }
 async function openTestForm(page:Page){
  await page.getByRole('tab',{name:'测试',exact:true}).click();
  await expect(page.getByRole('tabpanel',{name:'测试',exact:true})).toBeVisible();
@@ -57,7 +57,7 @@ test('maintenance draft edit failed test checked publication exact employee and 
     expect(new URL(page.url()).searchParams.get('resourceRevision')).toBe('revision:1');
     expect(state.posts).toHaveLength(beforeRead);
     await page.getByRole('link', { name: '返回资源目录', exact: true }).click();
-    await page.getByRole('article',{name:'资源维护完整路径核验',exact:true}).getByRole('link',{name:'维护当前配置',exact:true}).click();
+    await page.getByRole('article',{name:'资源维护完整路径核验',exact:true}).getByRole('link',{name:'编辑',exact:true}).click();
     await page.getByRole('button', { name: '创建后继草稿', exact: true }).click();
     await expect.poll(() => state.resource.currentDraftRevisionId).toBe('revision:2');
     const pinned = await page.getByRole('link', { name: '查看发布版本与使用记录' }).getAttribute('href');
@@ -118,7 +118,7 @@ for (const [field, value] of [['action', 'access'], ['kind', 'mcp'], ['commandKe
         await expect(page.getByRole('region', { name: '当前资源配置' })).toHaveCount(0);
         expect(state.posts).toHaveLength(1);
     });
-test('account change before ordinary create sends no command and withdraws old view', async ({ page }) => { const state = await fixture(page); await page.goto('/skills'); await page.getByRole('button', { name: '新建Skill', exact: true }).click(); state.otherIdentity = true; await page.getByLabel('名称', { exact: true }).fill('不可跨账号创建'); await page.getByLabel('用途说明', { exact: true }).fill('核验'); await page.getByLabel('能力名称', { exact: true }).fill('READ_DATA'); await page.getByLabel('办理说明', { exact: true }).fill('核验'); await page.getByRole('button', { name: '保存草稿', exact: true }).click(); await expect(page.getByRole('region', { name: '资源配置状态' })).toContainText('当前未就绪'); expect(state.posts).toEqual([]); });
+test('account change before ordinary create sends no command and withdraws old view', async ({ page }) => { const state = await fixture(page); await page.goto('/skills'); await page.getByRole('button', { name: '创建技能', exact: true }).click(); state.otherIdentity = true; await page.getByLabel('名称', { exact: true }).fill('不可跨账号创建'); await page.getByLabel('用途说明', { exact: true }).fill('核验'); await page.getByLabel('能力名称', { exact: true }).fill('READ_DATA'); await page.getByLabel('办理说明', { exact: true }).fill('核验'); await page.getByRole('button', { name: '保存草稿', exact: true }).click(); await expect(page.getByRole('region', { name: '资源配置状态' })).toContainText('当前未就绪'); expect(state.posts).toEqual([]); });
 test('unsafe resource return cannot create an external or unrelated navigation link', async ({ page }) => { await fixture(page, true); await page.goto('/employees?employeeDefinitionId=' + employeeId + '&employeeDefinitionRevisionId=employee-revision%3Aconsumer&detail=1&section=capabilities&resourceBack=' + encodeURIComponent('https://foreign.invalid/skills?managedResource=x')); await expect(page.getByRole('heading', { name: '准确资源引用员工', exact: true })).toBeVisible(); await expect(page.getByRole('link', { name: '返回资源维护', exact: false })).toHaveCount(0); });
 test('leaving after ordinary POST retains original intent and cannot restore detail in another view', async ({ page }) => {
     const state = await fixture(page);
@@ -158,7 +158,7 @@ test('legacy unknown ordinary key without binding is preserved and never replace
     await expect(page.getByRole('alert')).toContainText('原操作的核对依据尚未恢复');
     expect(await page.evaluate(marker => sessionStorage.getItem(marker), marker)).toBe('original-legacy-key');
     expect(state.posts).toEqual([]);
-    await expect(page.getByRole('button', { name: '新建Skill', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '创建技能', exact: true })).toBeDisabled();
 });
 
 test('late maintenance completion preserves the tab chosen while the command was running',async({page})=>{
@@ -166,5 +166,5 @@ test('late maintenance completion preserves the tab chosen while the command was
 });
 
 test('expired policy service cannot invalidate a still-authenticated user session',async({page})=>{
- await fixture(page);await page.addInitScript(()=>window.addEventListener('workbench-session-expired',()=>sessionStorage.setItem('unexpected-session-expiry','yes')));await page.route('**/api/workbench/v1/resource-management/skill',r=>r.fulfill({status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}));await page.goto('/skills');await expect(page.getByRole('region',{name:'资源配置状态'})).toContainText('当前未就绪');expect(await page.evaluate(()=>sessionStorage.getItem('unexpected-session-expiry'))).toBeNull();await expect(page.getByRole('link',{name:'新会话',exact:true})).toBeVisible();
+ await fixture(page);await page.addInitScript(()=>window.addEventListener('workbench-session-expired',()=>sessionStorage.setItem('unexpected-session-expiry','yes')));await page.route('**/api/workbench/v1/resource-management/skill',r=>r.fulfill({status:401,json:{reasonCode:'AUTHENTICATION_REQUIRED'}}));await page.goto('/skills');await expect(page.getByRole('region',{name:'资源配置状态'})).toContainText('当前未就绪');expect(await page.evaluate(()=>sessionStorage.getItem('unexpected-session-expiry'))).toBeNull();await expect(page.getByRole('link',{name:'＋ 发起会话',exact:true})).toBeVisible();
 });

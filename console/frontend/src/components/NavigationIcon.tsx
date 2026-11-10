@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import {useContext,type ReactNode} from "react";
+import {FrozenNavigationIconContext} from "./navigationIconTheme";
+import {frozenF3NavigationPaths} from "./FrozenF3NavigationIcons";
 
 export type NavigationIconName =
   | "network" | "skill" | "mcp" | "home" | "problem" | "employee" | "flow" | "knowledge" | "resource"
@@ -36,5 +38,6 @@ const paths: Record<NavigationIconName, ReactNode> = {
 };
 
 export function NavigationIcon({ name }: { name: NavigationIconName }) {
-  return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+  const frozen=useContext(FrozenNavigationIconContext);
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{frozen?(frozenF3NavigationPaths[name]??paths[name]):paths[name]}</svg>;
 }

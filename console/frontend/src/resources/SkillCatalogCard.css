@@ -1,0 +1,21 @@
+/* Frozen V6.9-F3 complete HTML measurements; scoped reusable card, no page overrides. */
+.skill-catalog-card{box-sizing:border-box;min-width:0;display:flex;flex-direction:column;gap:13px;padding:22px;border:1px solid #e7ecf4;border-radius:16px;background:#fff;color:#273851;font:14px/1.65 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.skill-catalog-card *{box-sizing:border-box}
+.skill-catalog-card .skill-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.skill-catalog-card .skill-card-icon{width:37px;height:37px;flex:0 0 37px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#eef3ff;color:#4567cd}
+.skill-catalog-card .skill-card-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.skill-catalog-card .skill-card-statuses,.skill-catalog-card .skill-card-tags{display:flex;flex-wrap:wrap;gap:5px}
+.skill-catalog-card .skill-card-badge{display:flex;align-items:center;gap:5px;padding:2px 7px;border-radius:5px;font:500 12px/1.6 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.skill-catalog-card .skill-card-badge.green{color:#21826a;background:#eaf6f1}.skill-catalog-card .skill-card-badge.amber{color:#a86b18;background:#fff4e1}.skill-catalog-card .skill-card-badge.neutral{color:#667b98;background:#edf2f8}
+.skill-catalog-card>h2,.skill-catalog-card>.skill-card-purpose{font-family:-apple-system-body,ui-sans-serif,-apple-system,system-ui,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif,"Segoe UI Emoji","Segoe UI Symbol";overflow-wrap:anywhere}
+.skill-catalog-card>h2{margin:0;font-size:15px;font-weight:600;line-height:1.5;color:#273851}
+.skill-catalog-card>.skill-card-purpose{margin:0 0 18px;min-height:40px;font-size:12px;font-weight:400;line-height:1.6;color:#63738b;white-space:pre-wrap}
+.skill-catalog-card .skill-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-top:1px solid #edf1f6;padding-top:12px;margin-top:auto}
+.skill-catalog-card .skill-card-bottom>small{font:400 12px/1.6 Inter,"PingFang SC","Microsoft YaHei",sans-serif;color:#63738b;overflow-wrap:anywhere;max-width:65%}
+.skill-catalog-card .skill-card-bottom :is(a,button){display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;margin:0;padding:8px 12px;border:1px solid #e0e6ef;border-radius:7px;background:#fff;color:#273851;text-decoration:none;cursor:pointer;font:400 13px/1.5 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.skill-catalog-card .skill-card-bottom>:nth-child(3){margin-left:4px}
+.skill-catalog-card .skill-card-bottom .skill-card-detail{padding:5px 7px;border-color:transparent;background:transparent;color:#4567cd}
+.skill-catalog-card :focus-visible{outline:3px solid #8dbbff;outline-offset:3px}
+.skill-catalog-card .skill-card-additional{border-top:1px solid #edf1f6;padding-top:12px;color:#63738b;font-size:12px}
+.skill-catalog-card .skill-card-additional>details>summary{cursor:pointer;color:#4567cd}
+@media(max-width:700px){.skill-catalog-card{padding:16px}.skill-catalog-card .skill-card-bottom>small{max-width:100%}}

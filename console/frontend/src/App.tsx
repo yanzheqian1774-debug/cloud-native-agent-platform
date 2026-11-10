@@ -61,6 +61,7 @@ import "./styles/workspace-system.css";
 import "./styles/prototype-frame.css";
 import "./problems/conversationList.css";
 import "./styles/f3-platform.css";
+import "./components/SkillWorkspaceFrame.css";
 
 let cancelPendingEvidenceFocus: (() => void) | null = null;
 

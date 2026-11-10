@@ -36,7 +36,7 @@ test('UI01 right detail scroll contains bottom wheel at the approved viewport',a
 test('UI01 original conversation draft survives real navigation and detail reload without writes',async({page})=>{
  const writes=await fixture(page);await page.goto('/work?conversation='+conversation);await page.locator('#private-input').fill('尚未发送的原会话草稿');
  const link=page.getByRole('navigation',{name:'P1 核心产品导航'}).getByRole('link',{name:'技能',exact:true});await page.getByText('资源管理',{exact:true}).first().click();await expect(link).toHaveAttribute('href','/skills?returnConversation='+conversation);await link.click();
- await page.getByRole('link',{name:'打开资源详情',exact:true}).click();await expect(page.getByRole('heading',{name:'准确销售技能',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'准确销售技能',exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'查看详情',exact:true}).click();await expect(page.getByRole('heading',{name:'准确销售技能',exact:true})).toBeVisible();await page.reload();await expect(page.getByRole('heading',{name:'准确销售技能',exact:true})).toBeVisible();
  await page.getByRole('link',{name:'返回原会话',exact:true}).click();await expect(page.locator('#private-input')).toHaveValue('尚未发送的原会话草稿');expect(writes).toEqual([]);
 });
 

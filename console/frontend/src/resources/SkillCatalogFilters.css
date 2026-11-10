@@ -1,0 +1,6 @@
+.skill-catalog-filters{display:flex;align-items:center;gap:10px;margin:0 0 19px;font:14px/1.65 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.skill-catalog-filters input{width:auto;flex:1 1 0;min-width:0;padding:10px 11px;border:1px solid #e0e6ef;border-radius:7px;background:#fff;color:#273851;font:inherit}
+.skill-catalog-filters select{width:auto;flex:0 0 auto;max-width:50%;padding:9px;border:1px solid #e0e6ef;border-radius:7px;background:#fff;color:#61728c;font:14px/1.5 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+.skill-catalog-filters button{padding:8px 12px;border:1px solid #4567cd;border-radius:7px;background:#4567cd;color:#fff;font:13px/1.5 Inter,"PingFang SC","Microsoft YaHei",sans-serif;white-space:nowrap;cursor:pointer}
+.skill-catalog-filters :focus-visible{outline:3px solid #8dbbff;outline-offset:3px}
+@media(max-width:700px){.skill-catalog-filters{flex-wrap:wrap}.skill-catalog-filters input{flex-basis:100%}}
