@@ -748,17 +748,25 @@ class PostgresAuthorityRepository:
             # across authorization calls. Exact grant locks and SQL expiry/
             # revocation checks remain per grant.
             delegation_predicate = grant_condition(current, credential_id)
+            with current.pipeline():
+                cursors = [
+                    self._dynamic_authorization_cursor(
+                        current,
+                        context,
+                        grant,
+                        now=now,
+                        recovery_epoch=recovery_epoch,
+                        delegation_predicate=delegation_predicate,
+                    )
+                    for grant in grants
+                ]
             states = tuple(
-                self._read_dynamic_authorization_state(
-                    current,
-                    context,
-                    grant,
-                    now=now,
+                self._dynamic_authorization_state_from_row(
+                    cursor.fetchone(),
                     generation=generation,
                     recovery_epoch=recovery_epoch,
-                    delegation_predicate=delegation_predicate,
                 )
-                for grant in grants
+                for cursor in cursors
             )
             states = tuple(
                 DynamicAuthorizationState.ALLOWED
@@ -1822,6 +1830,30 @@ class PostgresAuthorityRepository:
         recovery_epoch: int,
         delegation_predicate: str | None = None,
     ) -> DynamicAuthorizationState:
+        row = PostgresAuthorityRepository._dynamic_authorization_cursor(
+            connection,
+            context,
+            grant,
+            now=now,
+            recovery_epoch=recovery_epoch,
+            delegation_predicate=delegation_predicate,
+        ).fetchone()
+        return PostgresAuthorityRepository._dynamic_authorization_state_from_row(
+            row,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+        )
+
+    @staticmethod
+    def _dynamic_authorization_cursor(
+        connection,
+        context: TrustedRequestContext,
+        grant: ExactGrant,
+        *,
+        now: datetime,
+        recovery_epoch: int,
+        delegation_predicate: str | None = None,
+    ):
         from .task_delegation import grant_condition
 
         if delegation_predicate is None:
@@ -1831,7 +1863,7 @@ class PostgresAuthorityRepository:
                     connection, context, now=now, recovery_epoch=recovery_epoch
                 ),
             )
-        row = connection.execute(
+        return connection.execute(
             "SELECT a.generation,a.recovery_epoch,"
             "(SELECT max(r.revoked_at) FROM authorization_admin.grants g "
             "JOIN authorization_admin.grant_revocation_facts r "
@@ -1862,7 +1894,15 @@ class PostgresAuthorityRepository:
                 now,
                 recovery_epoch,
             ),
-        ).fetchone()
+        )
+
+    @staticmethod
+    def _dynamic_authorization_state_from_row(
+        row,
+        *,
+        generation: int,
+        recovery_epoch: int,
+    ) -> DynamicAuthorizationState:
         if (
             row is None
             or row["generation"] != generation

@@ -205,3 +205,17 @@ lock implementation using identical current directory handler and data. Verify
 existing owner/revocation concurrency and delegation regressions in isolated DB.
 
 Ordered lock pipeline: isolated authority/delegation/identity regression 66 tests passed without skips, including owner/revocation serialization and identity stop/revocation lock order. Nine paired real authenticated BFF responses were identical except readAt. Median ms: visible first 5949.38 -> 3220.19; second 2331.14 -> 1282.61; initiated 4214.99 -> 2396.32. Three observations per case, network/render excluded; performance target remains NOT MET. No live database cache eviction, model calls or business writes.
+
+## Dynamic grant-state transport optimization
+
+After ordered locks finish, enqueue the existing per-grant SELECT statements in
+input order and synchronize before interpreting any result or entering bounded
+fallback decisions. Reuse the exact same SQL and row-to-state interpretation
+for synchronous single-grant and pipelined bundle paths. Preserve each SQL
+statement boundary, lock/credential/generation checkpoints, expiry predicates
+and deny/unavailable outcomes. This changes transport only; no cross-request
+cache, role shortcut, wider grant, runtime capability or audit change. Compare
+to dd4435a using the same handler and lock pipeline; verify mixed/expired/revoked,
+generation/epoch mismatch, task delegation and owner concurrency in isolated DB.
+
+Dynamic-state pipeline verification: 66 isolated authority/delegation/identity tests passed; foundation tests initially lacked their distinct database environment variable and were skipped, then all 14 foundation plus 2 pipeline failure/order tests were run explicitly against the isolated database and passed. Nine paired BFF responses equal except readAt; visible first median 2974.00 -> 1954.67 ms, second 1302.36 -> 845.86, initiated 1935.60 -> 1617.39. Three paired samples do not establish complete-page p95; directory performance remains unaccepted.
