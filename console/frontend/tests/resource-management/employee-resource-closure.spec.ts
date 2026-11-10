@@ -352,13 +352,13 @@ test('collection bounds version reads and does not repeat them for local filters
  await page.getByLabel('搜索当前结果',{exact:true}).fill('核验员 1');await expect(page.locator('.employee-version-card')).toHaveCount(1);expect(calls).toBe(7);expect(extra.posts).toHaveLength(0);
 });
 
-test('bound resource return restores original overview position and clicked link',async({page})=>{
- const {original,extra}=await fixture(page);original.responsibilities=Array.from({length:20},(_,i)=>'核对第 '+(i+1)+' 项已保存资料与来源。');
+for(const mode of ['immediate','expanded-refresh','identity-change'])test('bound resource return restores scoped position '+mode,async({page})=>{
+ const {original,extra,state}=await fixture(page);original.responsibilities=Array.from({length:20},(_,i)=>'核对第 '+(i+1)+' 项已保存资料与来源。');
  original.members=original.members.filter(m=>m.kind!=='MCP');const skill=original.members.find(m=>m.kind==='SKILL')!;skill.revisionId='revision:2';skill.digest='b'.repeat(64);
  await page.setViewportSize({width:1406,height:550});await page.goto(href().replace('employeeView=professional&',''));
- const link=page.locator('.employee-resource-card').filter({has:page.locator('a[href*="kind=skill"]')}).getByRole('link',{name:'查看详情',exact:true});await link.scrollIntoViewIfNeeded();
+ const card=page.locator('.employee-resource-card').filter({has:page.locator('a[href*="kind=skill"]')}),link=card.getByRole('link',{name:'查看详情',exact:true});if(mode==='expanded-refresh')await card.locator('summary').click();await link.scrollIntoViewIfNeeded();
  await expect.poll(()=>page.evaluate(()=>document.querySelector('.employee-detail-body')!.scrollTop)).toBeGreaterThan(0);
- const before=await page.locator('.employee-detail-body').evaluate(n=>n.scrollTop);await link.click();await page.getByRole('link',{name:'返回引用员工',exact:true}).click();
+ const before=await page.locator('.employee-detail-body').evaluate(n=>n.scrollTop);await link.click();await page.getByRole('link',{name:'返回引用员工',exact:true}).waitFor();if(mode==='expanded-refresh')await page.reload();if(mode==='identity-change')state.otherIdentity=true;await page.getByRole('link',{name:'返回引用员工',exact:true}).click();
  await expect(page.getByRole('button',{name:'资源组成',exact:true})).toHaveClass(/active/);
- await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBeCloseTo(before,0);await expect(link).toBeFocused();expect(extra.posts).toHaveLength(0);
+ if(mode==='identity-change'){await expect(link).not.toBeFocused();await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBe(0)}else{await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBeCloseTo(before,0);await expect(link).toBeFocused();if(mode==='expanded-refresh')await expect(card.locator('details')).toHaveAttribute('open','')}expect(extra.posts).toHaveLength(0);
 });

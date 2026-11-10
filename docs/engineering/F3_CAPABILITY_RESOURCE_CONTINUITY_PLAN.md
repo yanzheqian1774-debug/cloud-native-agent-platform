@@ -19,3 +19,5 @@ chain evidence separately; retain pre-fix failure evidence. Continue broader
 entry/route inventory and report unavailable capability authority explicitly.
 
 Actual nonzero position audit found detail scroll 324 -> 0 on return. Add per-session-principal, exact employee revision/digest, section and view scoped position/focus restoration. Store view state only, require an existing exact resource link before restoration, withdraw on session expiry, stop bounded restoration on user input. No authorization or resource content stored.
+
+Followup after installed fast-click failure: obtain same principal before/after exact Employee read, then mount position capture synchronously with detail. Preserve expanded fixed-resource evidence sections by exact resource reference, including a reload of the resource page before returning. Identity changes must not restore prior principal position or focus.

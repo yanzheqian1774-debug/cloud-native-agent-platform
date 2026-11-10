@@ -10,6 +10,8 @@ import {safeResourceReturn} from "../resources/resourceJourneyLinks";
 import {
   DigitalEmployeeRequestError,
   employeeControlledState,
+  getWorkbenchSession,
+  workbenchPrincipalKey,
   getEmployeeAssignment,
   getEmployeeDefinition,
   getEmployeeInstance,
@@ -100,6 +102,7 @@ export function DigitalEmployeesPage() {
   const [pages, setPages] = useState<CachedPage[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [selectedIdentity, setSelectedIdentity] = useState<ExactDefinition | null>(null);
+  const [selectedScope,setSelectedScope]=useState<string>();
   const [selectedSnapshot, setSelected] = useState<EmployeeDefinition | null>(null);
   const authoring=useEmployeeAuthoring(selectedSnapshot,!professional);
   const refreshedSelected=authoring.value&&[authoring.value.head,authoring.value.publication,authoring.value.draft].find(target=>target.status==="AVAILABLE"&&target.definition.employeeDefinitionId===selectedSnapshot?.employeeDefinitionId&&target.definition.employeeDefinitionRevisionId===selectedSnapshot?.employeeDefinitionRevisionId&&target.definition.employeeDefinitionDigest===selectedSnapshot?.employeeDefinitionDigest);
@@ -129,7 +132,7 @@ export function DigitalEmployeesPage() {
   const activeWorkRead = useRef<AbortController | null>(null);
   const listScroll = useRef<HTMLDivElement | null>(null);
   const detailScroll = useRef<HTMLElement | null>(null);
-  useEmployeeResourcePosition(detailScroll,selected,detailSection,professional);
+  useEmployeeResourcePosition(detailScroll,selected,detailSection,professional,selectedScope);
   const savedListScroll = useRef(0);
   const query = params.get("q") ?? "";
   const status = params.get("status") ?? "ALL";
@@ -201,13 +204,16 @@ export function DigitalEmployeesPage() {
       setMobileDetailOpen(true);
     }
     try {
+      const scope=workbenchPrincipalKey(await getWorkbenchSession(controller.signal));
       const value = await getEmployeeDefinition(exact.id, exact.revision, controller.signal);
+      if(workbenchPrincipalKey(await getWorkbenchSession(controller.signal))!==scope)throw new DigitalEmployeeRequestError("WORKBENCH_IDENTITY_CHANGED",409);
       if (value.employeeDefinitionId !== exact.id
         || value.employeeDefinitionRevisionId !== exact.revision
         || (exact.digest && value.employeeDefinitionDigest !== exact.digest)) {
         throw new DigitalEmployeeRequestError("EMPLOYEE_DEFINITION_IDENTITY_MISMATCH", 409);
       }
       if (turn !== detailGeneration.current) return;
+      setSelectedScope(scope);
       setSelected(value);
       setSelectedIdentity(exactFromSummary(value));
       setDetailState("READY");
