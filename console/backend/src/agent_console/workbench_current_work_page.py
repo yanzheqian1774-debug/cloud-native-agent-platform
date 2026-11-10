@@ -26,6 +26,11 @@ class CurrentWorkItem(BaseModel):
     problemRevisionId: str
     problemDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
     pendingQuestionCount: int | None = Field(ge=0)
+    planVersion: int | None = Field(default=None, ge=1)
+    participantCount: int | None = Field(default=None, ge=0)
+    completedTaskCount: int | None = Field(default=None, ge=0)
+    taskCount: int | None = Field(default=None, ge=0)
+    updatedAt: datetime | None = None
     questionsDigest: str | None = None
     outcomeVersion: int | None = Field(default=None, ge=1)
     artifactCount: int = Field(ge=0)
@@ -95,6 +100,8 @@ def directory_page(
         "schemaVersion": "current-work-directory.v1",
         "scopeFilter": query.scopeFilter,
         "subject": context.principal_id,
+        "tenantId": context.scope.tenant_id,
+        "securityDomain": context.scope.security_domain,
         "readAt": read_at.isoformat(),
         "complete": True,
         "total": len(matches),

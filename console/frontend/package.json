@@ -10,7 +10,8 @@
     "test:e2e": "playwright test",
     "test:production-route": "playwright test --config playwright.production-route.config.ts",
     "preview": "vite preview",
-    "test:resource-management": "playwright test --config playwright.resource-management.config.ts"
+    "test:resource-management": "playwright test --config playwright.resource-management.config.ts",
+    "test:current-work-directory": "playwright test --config playwright.current-work.config.ts"
   },
   "dependencies": {
     "react": "^19.2.8",

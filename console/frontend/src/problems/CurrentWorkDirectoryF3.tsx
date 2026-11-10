@@ -72,7 +72,7 @@ export function CurrentWorkDirectory({outcomes=false,attention=false}:{outcomes?
   </>}
  </main>;
 }
-function SelectedWork({digest,origin,version,now}:{digest:string;origin:string;version:number;now:number}){
+export function SelectedWork({digest,origin,version,now}:{digest:string;origin:string;version:number;now:number}){
  const [value,setValue]=useState<Awaited<ReturnType<typeof readSelectedWork>>|null>(null),[error,setError]=useState('');
  useEffect(()=>{let live=true,timer:ReturnType<typeof setTimeout>|undefined;const controller=new AbortController();const expired=()=>{live=false;controller.abort();setValue(null);setError('登录已失效，请重新登录后读取。')};window.addEventListener('workbench-session-expired',expired);
   const read=()=>readSelectedWork(digest,origin,controller.signal).then(v=>{if(live){setValue(v);setError('');if(!terminalWork.has(v.work.execution.progress?.state??''))timer=setTimeout(()=>{if(live&&document.visibilityState==='visible')void read()},10000)}}).catch(e=>{if(live){setValue(null);setError(e instanceof Error?e.message:'当前任务读取失败')}});void read();

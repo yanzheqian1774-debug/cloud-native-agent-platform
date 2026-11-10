@@ -123,3 +123,34 @@ uses an isolated candidate app, not the installed listening server. Normal
 login/idle maintenance occurs; no business mutation or model call. Forty
 directory tests and 47 BFF/bootstrap/route checks passed (overlapping suites,
 not additive distinct tests). Full normal commit validation follows.
+
+## F3 page integration
+
+The existing task page uses the directory only when
+VITE_CURRENT_WORK_DIRECTORY_ENABLED=true. Attention and results retain their
+existing readers. The task table, detail component and shared F3 styles are
+reused. Scope selection, query and state changes reset pagination; session-bound
+view storage preserves an explicit scope selection and exact-run scroll/focus
+on return. Requests are cancelled on selection/query/identity changes; late
+responses cannot overwrite newer reads. Fixed-work remains explicitly pending.
+
+List metadata adds saved plan version, distinct participant instance count,
+completed task count and saved progress timestamp from the same snapshot; it
+does not fabricate full detail objects or artifact contents. Opening a task
+continues to use the existing exact-execution detail read and permissions.
+
+## Page review corrections and evidence
+
+The prototype reviewer accepted the five scoped corrections: compact scope row
+in the filter area, underline tabs and wide search, stable table columns,
+explicit pending-input/execution-complete wording, equal 1424x820 comparison
+and 390px row actions/pagination. Mobile horizontal table scrolling is retained
+and its position restores on detail return. The frozen F3 package is unchanged.
+
+Six candidate page tests and 32 existing task/result/attention regressions pass.
+Fresh authorized candidate-list replay plus a live installed exact detail read
+verified the saved document task, readable report, same focus and scroll
+220 -> 220. The reviewer independently reviewed evidence/visuals, not a separate
+browser operation. New directory installed HTTP, real concurrent writers and
+controlled performance measurements remain unverified; replay duration is not
+an API latency result.
