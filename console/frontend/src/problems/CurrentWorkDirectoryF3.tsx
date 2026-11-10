@@ -1,3 +1,4 @@
+import {pageScrollTop,scrollPageTo} from './pageScroll';
 import {ExecutionRuntimeSection} from '../digital-employees/EmployeeExecutionTrace';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
@@ -37,13 +38,13 @@ export function CurrentWorkDirectory({outcomes=false,attention=false}:{outcomes?
   return()=>{live=false;controller.abort();if(timer)clearTimeout(timer);window.removeEventListener('workbench-session-expired',expired)};
  },[version,attention,outcomes,selected]);
  useEffect(()=>{const refresh=()=>{setData(null);setVersion(v=>v+1)};window.addEventListener('focus',refresh);const timer=setInterval(()=>setClock(Date.now()),1000);return()=>{window.removeEventListener('focus',refresh);clearInterval(timer)}},[]);
- useLayoutEffect(()=>{if(!selected&&data&&!data.loading){let previous=restore.current;try{previous=previous??JSON.parse(readViewString(returnKey,'return','null'))}catch{/* Damaged view state cannot choose a work record. */}if(!previous||!Number.isFinite(previous.top)||typeof previous.digest!=='string')return;restore.current=null;saveViewString(returnKey,'return','');const target=previous;const frame=requestAnimationFrame(()=>{window.scrollTo(0,target.top);main.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(target.digest)}"]`)?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)}},[selected,data,returnKey]);
+ useLayoutEffect(()=>{if(!selected&&data&&!data.loading){let previous=restore.current;try{previous=previous??JSON.parse(readViewString(returnKey,'return','null'))}catch{/* Damaged view state cannot choose a work record. */}if(!previous||!Number.isFinite(previous.top)||typeof previous.digest!=='string')return;restore.current=null;saveViewString(returnKey,'return','');const target=previous;const frame=requestAnimationFrame(()=>{scrollPageTo(target.top);main.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(target.digest)}"]`)?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)}},[selected,data,returnKey]);
  const works=data?.works??[],waiting=works.filter(w=>pendingQuestions(w,clock).length),completed=works.filter(w=>w.execution.progress?.state==='SUCCEEDED');
  const matches=works.filter(w=>(w.problem.title+' '+w.execution.preparation.semantics.title).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
  const questions=matches.flatMap(w=>w.questions.filter(q=>filter==='done'?q.answer!==null:pendingQuestions(w,clock).some(p=>p.questionKey===q.questionKey)).map(q=>({w,q})));
  const visible=outcomes?(filter==='stage'?matches:[]):matches.filter(w=>filter==='waiting'?pendingQuestions(w,clock).length:filter==='completed'?w.execution.progress?.state==='SUCCEEDED':true);
  function choose(patch:Record<string,string>){const next=new URLSearchParams(params);for(const [k,v] of Object.entries(patch)){if(v)next.set(k,v);else next.delete(k)}setParams(next,{replace:patch.q!==undefined})}
- function open(w:CurrentWork){restore.current={top:window.scrollY,digest:w.execution.digest};saveViewString(returnKey,'return',JSON.stringify(restore.current));choose({work:w.execution.digest,origin:w.conversation});window.scrollTo(0,0)}
+ function open(w:CurrentWork){restore.current={top:pageScrollTop(),digest:w.execution.digest};saveViewString(returnKey,'return',JSON.stringify(restore.current));choose({work:w.execution.digest,origin:w.conversation});scrollPageTo(0)}
  function refresh(){setData(null);setError('');setVersion(v=>v+1)}
  const title=attention?'待我处理':outcomes?'成果与记录':'我的任务';
  const tabs=outcomes?[['accepted','已确认成果'],['stage','阶段与执行记录']]:attention?[['all','待你处理'],['done','已处理']]:[['all','全部任务'],['waiting','等待处理'],['completed','已完成']];
@@ -74,8 +75,8 @@ function WorkDetail({work:w,scope,now}:{work:CurrentWork;scope:string;now:number
  const [storedTab,setStoredTab]=useViewString(key,'tab',view.progress?.state==='SUCCEEDED'&&view.artifacts.length?'result':'process'),[artifact,setArtifact]=useViewString(key,'artifact'),[origin,setOrigin]=useViewString(key,'artifactReturn','result');
  const tab=requestedResult?'result':storedTab;
  function setTab(value:string){setStoredTab(value);if(requestedResult)setParams(previous=>{const next=new URLSearchParams(previous);next.delete('workView');return next},{replace:true})}
- function inspect(id:string,from='result'){saveViewString(key,'artifactScroll',String(window.scrollY));setOrigin(from);setArtifact(id);setTab('result')}
- function closeArtifact(){const id=artifact;setArtifact('');setTab(origin==='process'?'process':'result');requestAnimationFrame(()=>{window.scrollTo(0,Number(readViewString(key,'artifactScroll','0')));document.querySelector<HTMLElement>(`${origin==='process'?'.work-artifact-open':'.artifact-file-open'}[data-artifact-id="${CSS.escape(id)}"]`)?.focus({preventScroll:true})})}
+ function inspect(id:string,from='result'){saveViewString(key,'artifactScroll',String(pageScrollTop()));setOrigin(from);setArtifact(id);setTab('result')}
+ function closeArtifact(){const id=artifact;setArtifact('');setTab(origin==='process'?'process':'result');requestAnimationFrame(()=>{scrollPageTo(Number(readViewString(key,'artifactScroll','0')));document.querySelector<HTMLElement>(`${origin==='process'?'.work-artifact-open':'.artifact-file-open'}[data-artifact-id="${CSS.escape(id)}"]`)?.focus({preventScroll:true})})}
  const active=pendingQuestions(w,now);
  return <section className="f3-work-detail"><header><Badge>{workState(w,now)}</Badge><h2>{w.problem.title}</h2><p>{summary(w)}</p>{w.conversation?<Link className="f3-work-primary" to={conversationHref(w)}>{w.originVerified?(active.length?'在原会话回答并继续':'回到原会话'):'回到关联会话'}</Link>:<p className="f3-work-notice">原会话关联尚未核实，未提供替代跳转；本次任务与报告仍可按当前权限查看。</p>}</header>
   {active.map(q=><aside className="f3-work-notice" key={q.questionKey}><strong>需要补充的必要信息</strong><p>{q.question}</p><small>请在 {formatTime(q.expiresAt)} 前回原会话回答。</small></aside>)}

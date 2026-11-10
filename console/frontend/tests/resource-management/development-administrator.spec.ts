@@ -10,7 +10,7 @@ test('administrator label follows verified server role and clears on revocation'
    {result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},items:[],nextCursor:null,basis:'EXACT_CURRENT_READ_GRANTS',executionAuthority:'NONE'}};
   await route.fulfill({json:body});
  });
- await page.goto('/catalog');
+ await page.goto('/catalog');await page.locator('.skill-frame-workspace>details>summary').click();
  await expect(page.getByRole('note',{name:'开发超级管理员'})).toBeVisible();
  enabled=false;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
  await expect(page.getByRole('note',{name:'开发超级管理员'})).toHaveCount(0);
