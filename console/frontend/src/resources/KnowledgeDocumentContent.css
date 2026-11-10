@@ -1,0 +1,12 @@
+.knowledge-document-content>article+article{border-top:1px solid #e1e7f0;margin-top:24px;padding-top:20px}
+.knowledge-document-context{color:#6d7f99;font-size:13px}
+.knowledge-document-reading{line-height:1.75;overflow-wrap:anywhere;color:#31445e}
+.knowledge-document-reading h1{font-size:22px;font-weight:650;margin:20px 0 12px}
+.knowledge-document-reading h2{font-size:19px;font-weight:650;margin:20px 0 10px}
+.knowledge-document-reading h3{font-size:16px;font-weight:600;margin:18px 0 8px}
+.knowledge-document-reading p{white-space:normal;margin:10px 0}
+.knowledge-document-reading pre,.knowledge-document-content>details pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;padding:14px;border-radius:8px}
+.knowledge-document-reading blockquote{border-left:3px solid #d6def4;margin:12px 0;padding-left:16px;color:#6d7f99}
+.knowledge-document-table{overflow-x:auto}
+.knowledge-document-table th,.knowledge-document-table td{border:1px solid #e1e7f0;padding:8px 12px}
+.knowledge-document-table table{border-collapse:collapse}
