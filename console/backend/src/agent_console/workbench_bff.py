@@ -345,7 +345,20 @@ def create_workbench_bff(
     @app.get(f"{PREFIX}/login-script")
     def login_script():
         return Response(
-            'document.getElementById("show-password")?.addEventListener("change",event=>{document.getElementById("password").type=event.target.checked?"text":"password";});',
+            'document.getElementById("show-password")?.addEventListener("change",event=>{document.getElementById("password").type=event.target.checked?"text":"password";});'
+            'const form=document.querySelector(".login-card689");'
+            "let submitting=false;"
+            'form?.addEventListener("submit",event=>{'
+            "if(submitting){event.preventDefault();return;}"
+            'submitting=true;form.setAttribute("aria-busy","true");'
+            'const button=form.querySelector("button[type=submit]");'
+            "button.dataset.label=button.textContent;button.disabled=true;"
+            'button.textContent="正在登录…";});'
+            'window.addEventListener("pageshow",()=>{'
+            'submitting=false;form?.removeAttribute("aria-busy");'
+            'const button=form?.querySelector("button[type=submit]");'
+            "if(button){button.disabled=false;"
+            "if(button.dataset.label)button.textContent=button.dataset.label;}});",
             media_type="application/javascript",
         )
 
@@ -406,6 +419,8 @@ def create_workbench_bff(
                     error=True,
                     accounts=getattr(sessions, "accounts_enabled", False),
                     request_id=request_id,
+                    reason=getattr(exc, "diagnostic_reason", exc.reason_code),
+                    username=values.get("username", [""])[0] if account_form else "",
                 ),
                 status_code=_status_for_authority_error(exc.reason_code),
             )

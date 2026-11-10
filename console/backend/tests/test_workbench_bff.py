@@ -849,3 +849,39 @@ def test_configured_draft_route_is_not_shadowed_by_unavailable_fallback():
     ]
     assert len(routes) == 1
     assert routes[0].endpoint() == {"configured": True}
+
+
+@pytest.mark.parametrize(
+    "reason,expected",
+    [
+        ("ACCOUNT_AUTHENTICATION_FAILED", "账号或密码不匹配"),
+        ("LOGIN_NONCE_INVALID", "登录表单已过期"),
+        ("ACCOUNT_LOGIN_THROTTLED", "登录尝试过于频繁"),
+        ("AUTHORITY_STORAGE_UNAVAILABLE", "登录服务暂不可用"),
+        ("UNCLASSIFIED", "暂时无法确认原因"),
+    ],
+)
+def test_login_failure_displays_only_known_reason_and_escapes_preserved_username(
+    reason, expected
+):
+    from agent_console.workbench_login import login_document
+
+    value = login_document(
+        "new-nonce",
+        "/work?conversation=original",
+        accounts=True,
+        error=True,
+        reason=reason,
+        username='person"><script>alert(1)</script>',
+        request_id="safe-id",
+    )
+    assert expected in value
+    assert "<script>alert(1)</script>" not in value
+    assert "person&quot;&gt;&lt;script&gt;" in value
+    assert 'name="password" autocomplete="current-password"' in value
+    assert 'name="password" value=' not in value
+    assert 'value="/work?conversation=original"' in value
+    assert "登录并继续" in value
+    assert "safe-id" in value
+    if reason != "ACCOUNT_AUTHENTICATION_FAILED":
+        assert "账号或密码不匹配" not in value

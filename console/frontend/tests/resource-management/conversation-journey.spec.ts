@@ -44,12 +44,19 @@ test('conversation result panel refreshes automatically while execution commands
  await expect(page.locator('.prepared-execution')).toHaveClass(/prepared-complete/,{timeout:12000});expect(posts).toBe(0);
 });
 
-test('known settled invalid understanding keeps the question and offers source clarification without automatic retry',async({page})=>{
- const s=await fixture(page);let calls=0;
- await page.route('**/draft-assistance/invocations',async route=>{calls++;const body=route.request().postDataJSON();if(calls===2)expect(body.parentContextId).toBeUndefined();return route.fulfill({json:{result:{invocationId:'failed'+calls,contextId:'context'+calls,turnId:'turn',turnVersion:1,state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',settlementStatus:'ESTIMATE_SETTLED',localWorkerState:'REAPED',resultKind:null,clarificationQuestion:null,draft:null}}})});
- await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(0);expect(s.journal.state?.draft).toBeUndefined();
- await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(calls).toBe(0);await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>calls).toBe(1);await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。')).toBeVisible();
- await page.locator('#journey-reply').fill('请检查缺失记录');await page.getByRole('button',{name:'发送补充',exact:true}).click();await expect.poll(()=>calls).toBe(2);
+test('schema-invalid understanding stops honestly and explicitly continues the unchanged question after receipt verification',async({page})=>{
+ const s=await fixture(page);let calls=0;const keys:string[]=[];const failure=(id:string)=>({invocationId:id,contextId:'context',turnId:'turn',turnVersion:1,state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',settlementStatus:'ESTIMATE_SETTLED',localWorkerState:'REAPED',resultKind:null,clarificationQuestion:null,draft:null});
+ await page.route('**/draft-assistance/invocations',async route=>{calls++;const body=route.request().postDataJSON();keys.push(body.idempotencyKey);expect(body.parentContextId).toBeUndefined();return route.fulfill({json:{result:failure('failed'+calls)}})});
+ await page.route('**/draft-assistance/invocations/failed*',route=>route.fulfill({json:{result:failure('failed'+calls)}}));
+ await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect(page.getByRole('heading',{name:'理解未成功',exact:true})).toBeVisible();expect(calls).toBe(1);const messages=s.messages.length;
+ await expect(page.locator('#journey-reply')).toHaveCount(0);await expect(page.getByLabel('全流程进展')).toContainText('理解结果格式未通过校验');await expect(page.getByLabel('模型流式输出')).toHaveCount(0);
+ await page.reload();await expect(page.getByRole('button',{name:'沿用原问题重新理解'})).toBeVisible();expect(calls).toBe(1);
+ await page.getByRole('button',{name:'沿用原问题重新理解'}).dblclick();await expect.poll(()=>calls).toBe(2);await expect(page.getByRole('heading',{name:'理解未成功',exact:true})).toBeVisible();expect(s.messages).toHaveLength(messages);expect(new Set(keys).size).toBe(2);
+});
+test('old misleading clarification journal renders stopped and an unknown receipt cannot authorize a new model call',async({page})=>{
+ const s=await fixture(page);s.journal={version:2,state:{key:'old',phase:'CLARIFY',question:prompt,messages:[{id:'user:q',text:prompt}],log:[],draft:{invocationId:'failed-old',state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',settlementStatus:'ESTIMATE_SETTLED',localWorkerState:'REAPED'}}};let posts=0;
+ await page.route('**/draft-assistance/invocations',route=>{posts++;return route.abort()});await page.route('**/draft-assistance/invocations/failed-old',route=>route.fulfill({json:{result:{invocationId:'failed-old',state:'UNKNOWN'}}}));
+ await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'理解未成功',exact:true})).toBeVisible();await expect(page.locator('#journey-reply')).toHaveCount(0);await page.getByRole('button',{name:'沿用原问题重新理解'}).click();await expect(page.getByText('Error: 原理解调用尚未核实为已结束，不会重新请求。',{exact:true})).toBeVisible();expect(posts).toBe(0);expect(s.journal.version).toBe(2);
 });
 
 test('known coverage rejection reads actual gaps and proposes one bounded successor without replaying selection',async({page})=>{
@@ -208,4 +215,11 @@ for(const receipt of ['unknown','lost'])test('F3 ambiguous answer receipt reads 
 });
 test('F3 expired input stays only within the old question for optional reference',async({page})=>{
  const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('尚未提交的回答');s.q.expired=true;await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await page.getByText('查看本题未提交内容',{exact:true}).click();await expect(page.getByText('尚未提交的回答',{exact:true})).toBeVisible();expect(s.calls).toHaveLength(0);
+});
+
+test('actual unquoted either-or question offers literal options without a default and still allows free text',async({page})=>{
+ const s=await nativeQuestionFixture(page);s.q.question='请确认本次完整性检查适用测试环境交接规范，还是生产环境交接规范？';await page.goto('/work?conversation=new');const option=page.getByRole('button',{name:'生产环境交接规范',exact:true});await expect(option).toHaveAttribute('aria-pressed','false');await option.click();await expect(page.locator('#native-clarification-reply')).toHaveValue('生产环境交接规范');await page.reload();await expect(option).toHaveAttribute('aria-pressed','true');await page.locator('#native-clarification-reply').fill('其他范围，暂不检查');await expect(option).toHaveAttribute('aria-pressed','false');expect(s.calls).toHaveLength(0);
+});
+test('ambiguous unquoted choice wording stays free text rather than inventing alternatives',async({page})=>{
+ const s=await nativeQuestionFixture(page);s.q.question='先检查资料还是先确认范围，还是暂停处理？';await page.goto('/work?conversation=new');await expect(page.getByRole('group',{name:'选择明确选项'})).toHaveCount(0);await expect(page.locator('#native-clarification-reply')).toBeVisible();expect(s.calls).toHaveLength(0);
 });
