@@ -292,3 +292,20 @@ and existing owner/revocation semantics in isolation. The isolated delivery work
 uninstalled 89d6744 worker experiment. Only index maintenance, its checks, the
 network-test setup correction and terminal-read batching enter this candidate.
 F3 is frozen; no frontend source changes.
+
+## Closed-menu duplicate read removal
+
+ConsoleShell mounts BusinessNavigation twice: desktop sidebar and a closed native
+details menu. Both mount ConversationList and independently authenticate/read.
+Render the menu navigation only while its outer details element is open. Preserve
+the native summary keyboard interaction, existing menu DOM/styles/links, and
+ConversationList's fresh pre/post session checks on every opening. No shared cache
+or authorization deduplication. Ignore nested details toggle events. Key the menu
+by route plus trusted identity/scope so route/identity changes discard hidden data.
+
+Validate closed-menu one list read, initial-open progress and real loading,
+close/reopen (including late responses), route/reload reset, breakpoint changes,
+scroll/selected conversation restoration, logout/expiry/identity change cleanup.
+Run relevant existing navigation/session/current-task browser tests, lint/build,
+then actual installed full-page timings with the original end marker and 5-second
+functional assertions. Keep backend and Native source unchanged for this rollout.
