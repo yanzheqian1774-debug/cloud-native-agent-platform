@@ -38,7 +38,18 @@ export function CurrentWorkDirectory({outcomes=false,attention=false}:{outcomes?
   return()=>{live=false;controller.abort();if(timer)clearTimeout(timer);window.removeEventListener('workbench-session-expired',expired)};
  },[version,attention,outcomes,selected]);
  useEffect(()=>{const refresh=()=>{setData(null);setVersion(v=>v+1)};window.addEventListener('focus',refresh);const timer=setInterval(()=>setClock(Date.now()),1000);return()=>{window.removeEventListener('focus',refresh);clearInterval(timer)}},[]);
- useLayoutEffect(()=>{if(!selected&&data&&!data.loading){let previous=restore.current;try{previous=previous??JSON.parse(readViewString(returnKey,'return','null'))}catch{/* Damaged view state cannot choose a work record. */}if(!previous||!Number.isFinite(previous.top)||typeof previous.digest!=='string')return;restore.current=null;saveViewString(returnKey,'return','');const target=previous;const frame=requestAnimationFrame(()=>{scrollPageTo(target.top);main.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(target.digest)}"]`)?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)}},[selected,data,returnKey]);
+ useLayoutEffect(()=>{if(!selected&&data&&!data.loading){let previous=restore.current;try{previous=previous??JSON.parse(readViewString(returnKey,'return','null'))}catch{/* Damaged view state cannot choose a work record. */}if(!previous||!Number.isFinite(previous.top)||typeof previous.digest!=='string')return;restore.current=null;saveViewString(returnKey,'return','');const target=previous;const frame=requestAnimationFrame(()=>{saveViewString(returnKey,'page-scroll',String(target.top));saveViewString(returnKey,'page-focus',target.digest);scrollPageTo(target.top);main.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(target.digest)}"]`)?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)}},[selected,data,returnKey]);
+ const listReady=!selected&&!!data&&!data.loading;
+ useLayoutEffect(()=>{
+  if(!listReady||!returnKey)return;
+  const node=main.current?.closest<HTMLElement>('.skill-frame-content');if(!node)return;
+  let ready=false;
+  const frame=requestAnimationFrame(()=>{const saved=Number(readViewString(returnKey,'page-scroll','0'));if(Number.isFinite(saved))node.scrollTop=saved;const focused=readViewString(returnKey,'page-focus','');if(focused)main.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});ready=true});
+  const save=()=>{if(ready&&!restore.current)saveViewString(returnKey,'page-scroll',String(node.scrollTop))};
+  const focus=(event:FocusEvent)=>{const target=event.target;if(target instanceof HTMLElement&&target.dataset.openWork)saveViewString(returnKey,'page-focus',target.dataset.openWork)};
+  node.addEventListener('scroll',save);node.addEventListener('focusin',focus);
+  return()=>{cancelAnimationFrame(frame);node.removeEventListener('scroll',save);node.removeEventListener('focusin',focus)};
+ },[listReady,returnKey]);
  const works=data?.works??[],waiting=works.filter(w=>pendingQuestions(w,clock).length),completed=works.filter(w=>w.execution.progress?.state==='SUCCEEDED');
  const matches=works.filter(w=>(w.problem.title+' '+w.execution.preparation.semantics.title).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
  const questions=matches.flatMap(w=>w.questions.filter(q=>filter==='done'?q.answer!==null:pendingQuestions(w,clock).some(p=>p.questionKey===q.questionKey)).map(q=>({w,q})));

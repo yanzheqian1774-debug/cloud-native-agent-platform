@@ -41,3 +41,7 @@
 .px-shell.f3-workspace-frame .skill-frame-sidebar{padding-bottom:76px}
 .f3-workspace-frame .skill-frame-identity{position:fixed;left:18px;bottom:14px;width:180px;z-index:40}
 @media(max-width:700px){.f3-workspace-frame .skill-frame-identity{position:relative;left:auto;bottom:auto;width:auto;margin:0;padding:0;border:0}.skill-frame-identity .px-identity-menu>summary{min-width:30px;gap:0}.skill-frame-identity .px-header-identity,.skill-frame-identity .px-identity-menu>summary>span:last-child{display:none}.skill-frame-identity .px-identity-menu>div{position:absolute;left:auto;right:0;bottom:auto;top:calc(100% + 12px);width:min(280px,calc(100vw - 24px))}.skill-frame-actions{gap:6px}.skill-frame-actions>a:not(.skill-frame-primary){display:none}.skill-frame-menu{flex-shrink:0}}
+
+/* Expanded groups are not selected destinations; only the current leaf is active. */
+.px-shell.f3-workspace-frame .skill-frame-navigation .px-business-nav summary.active,.px-shell.f3-workspace-frame .skill-frame-navigation .conversation-list-toggle.active{background:transparent;color:#63738b;font-weight:400;box-shadow:none}
+.px-shell.f3-workspace-frame .skill-frame-navigation .conversation-list a.selected{background:#eef3ff;border-color:transparent;color:#4567cd}
