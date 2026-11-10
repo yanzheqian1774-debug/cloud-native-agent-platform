@@ -277,3 +277,31 @@ test('saved Native steps arriving before run state remain readback rather than a
  await page.route('**/api/workbench/v1/prepared-executions/**',async r=>{if(r.request().method()!=='GET')posts++;if(r.request().url().endsWith('/native-progress'))return r.fulfill({json:{result:{steps:[{id:'old-step',decision:{action:'TOOL',tool:'read_document'},toolState:'COMPLETED',output:{lines:[{line:1,text:'保存的原文'}]}}],questions:[],modelInFlight:false}}});await gate;return r.fulfill({json:{result:{digest,preparation:{semantics:{tasks:[]},participants:[]},progress:{state:'SUCCEEDED',tasks:[]},artifacts:[],resourceUses:[],events:[]}}})});
  await page.goto('/work?conversation=new');await expect(page.locator('[data-native-step="old-step"]')).toBeVisible();const status=page.getByRole('region',{name:'实时执行过程'}).locator('p[role=status]');await expect(status).toContainText('正在读取已保存的执行状态');await expect(status).not.toContainText('正在衔接下一步');release();await expect(status).toContainText('执行已结束');expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
 });
+
+for(const width of [1440,390])test(`message groups show recorded authors and honest times without losing content at ${width}`,async({page})=>{
+ await page.setViewportSize({width,height:900});const s=await fixture(page);let writes=0;
+ page.on('request',request=>{if(request.method()!=='GET'&&request.url().includes('/api/'))writes++});
+ const texts=['好','第一行说明\n第二行保留原文 '+ '长文字'.repeat(45),'没有作者和时间的历史记录','保留原办理意图内容'];
+ s.messages=[{message_id:'short',author_id:'human:original-author',created_at:'2026-11-09T08:03:00Z',content:texts[0],disposition:'GOAL_RECORDED'},
+ {message_id:'long',author_id:'human:another-author',created_at:'not-a-date',content:texts[1],disposition:'GOAL_RECORDED'},
+ {message_id:'missing',content:texts[2],disposition:'GOAL_RECORDED'},
+ {message_id:'action',author_id:'human:requester',created_at:'2026-11-09T08:04:00Z',content:texts[3],kind:'ACTION_INTENT',disposition:'ACTION_INTENT',facts:{state:'NOT_SUBMITTED'}}];
+ await page.goto('/work?conversation=new');const short=page.locator('[data-message-id="short"]'),long=page.locator('[data-message-id="long"]'),missing=page.locator('[data-message-id="missing"]'),action=page.locator('[data-message-id="action"]');
+ await expect(short.locator('.conversation-message-author')).toHaveText('human:original-author');await expect(short.locator('time')).toHaveAttribute('datetime','2026-11-09T08:03:00Z');await expect(short.locator('time')).toContainText('16:03');
+ await expect(long.locator('.conversation-message-time')).toHaveText('时间待核实');await expect(missing.locator('.conversation-message-author')).toHaveText('用户');await expect(missing.locator('.conversation-message-time')).toHaveText('时间未记录');
+ expect(await page.locator('.private-user>p').allTextContents()).toEqual(texts);await expect(page.locator('.private-message .conversation-message-author').filter({hasText:'human:development-admin'})).toHaveCount(0);
+ await expect(action.locator('.conversation-message-author')).toHaveText('human:requester');await action.getByText('查看办理记录与回执',{exact:true}).click();await expect(action.getByText('已确认的办理意图',{exact:true})).toBeVisible();
+ await short.scrollIntoViewIfNeeded();const geometry=await short.evaluate(node=>{const bubble=node.querySelector('.private-user')!.getBoundingClientRect(),group=node.getBoundingClientRect();return {bubbleWidth:bubble.width,groupWidth:group.width,rightGap:group.right-bubble.right,textAlign:getComputedStyle(node.querySelector('.private-user p')!).textAlign,receiptHeight:node.querySelector('.private-receipt')!.getBoundingClientRect().height}});
+ expect(geometry.bubbleWidth).toBeLessThan(geometry.groupWidth/2);expect(geometry.rightGap).toBeLessThan(3);expect(geometry.textAlign).toBe('left');await expect(short.locator('.private-user')).toHaveCSS('border-top-width','1px');await expect(short.locator('.conversation-message-author')).toHaveCSS('order','1');await expect(short.locator('time')).toHaveCSS('order','0');expect(geometry.receiptHeight).toBeLessThan(40);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.locator('#private-input').fill('未发送的内容');await page.reload();await expect(page.locator('#private-input')).toHaveValue('未发送的内容');expect(await page.locator('.private-user>p').allTextContents()).toEqual(texts);expect(writes).toBe(0);expect(s.modelCalls).toBe(0);
+});
+
+test('assistant identifies itself and labels real execution update time without impersonating a participant',async({page})=>{
+ const s=await fixture(page),digest='a'.repeat(64),ref={resource_id:'p',revision_id:'1',digest:'b'.repeat(64)};let writes=0;
+ s.messages=[{message_id:'first',author_id:'human:original',content:prompt,created_at:'2026-11-09T08:00:00Z',disposition:'GOAL_RECORDED'}];
+ s.journal={version:2,state:{key:'k',question:prompt,phase:'RUNNING',execution:digest,problem:{business_problem_id:'p'},messages:[{id:'user:q',text:prompt}],log:[]}};
+ await page.route('**/api/workbench/v1/prepared-executions/**',route=>{if(route.request().method()!=='GET')writes++;return route.fulfill({json:{result:{digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,source_snapshot:ref,semantics:{title:'历史分析',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'SUCCEEDED',version:3,tasks:[]},admission:{state:'ADMITTED'},resourceUses:[],artifacts:[],events:[{version:3,created_at:'2026-11-09T08:08:00Z',record:{action:'SUCCEEDED'}},{version:2,created_at:'2026-11-09T08:01:00Z',record:{action:'RUNNING'}}],outcome:null}}})});
+ await page.goto('/work?conversation=new');const identity=page.locator('.conversation-journey>.conversation-message-identity');await expect(identity.locator('.conversation-message-author')).toHaveText('工作助手');await expect(identity.locator('time')).toContainText('执行更新');await expect(identity.locator('time')).toHaveAttribute('datetime','2026-11-09T08:08:00Z');await expect(page.getByRole('heading',{name:'分析结果',exact:true})).toBeVisible();
+ await expect(page.locator('.conversation-assistant-bubble')).toHaveCSS('border-top-width','1px');expect(await identity.evaluate(node=>getComputedStyle(node).justifyContent)).not.toBe('flex-end');expect(writes).toBe(0);expect(s.modelCalls).toBe(0);
+});
