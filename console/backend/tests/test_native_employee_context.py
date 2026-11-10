@@ -138,9 +138,11 @@ def test_successor_has_distinct_registered_identity_and_rejects_mixed_revisions(
     assert executor_registry().resolve(new).revision == new
 
 
-@pytest.mark.parametrize("with_employee", [False, True])
+@pytest.mark.parametrize(
+    "with_employee,with_scope", [(False, False), (True, False), (True, True)]
+)
 def test_provider_receives_exact_duties_without_expanding_tool_policy(
-    monkeypatch, with_employee
+    monkeypatch, with_employee, with_scope
 ):
     from agent_console import native_loop_provider as module
 
@@ -158,6 +160,12 @@ def test_provider_receives_exact_duties_without_expanding_tool_policy(
     }
     if with_employee:
         context["employeeContext"] = employee
+    if with_scope:
+        context["confirmedScopeEvidence"] = {
+            "scope": "生产环境",
+            "conversationId": "original",
+            "affirmativeMessageIds": ["m1"],
+        }
     captured = []
 
     def exchange(**kwargs):
@@ -187,6 +195,7 @@ def test_provider_receives_exact_duties_without_expanding_tool_policy(
     assert result["failure"] == "NATIVE_DECISION_PROVIDER_REJECTED"
     body = captured[0]
     assert ("employeeContext" in json.loads(body["input"])["context"]) is with_employee
+    assert ("do not ask the user to repeat" in body["instructions"]) is with_scope
     if with_employee:
         assert json.loads(body["input"])["context"]["employeeContext"] == employee
         assert "cannot add tools" in body["instructions"]

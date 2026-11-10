@@ -53,3 +53,6 @@
 
 .employee-management .employee-composition-summary .employee-authoring-state{display:inline-flex;vertical-align:baseline;margin-top:5px}
 .employee-management .employee-composition-summary .employee-internal-reference{display:inline-block;vertical-align:baseline;margin-left:16px}
+
+.employee-saved-resource-count{display:flex;align-items:center;gap:6px;color:#7486a3;font-size:13px;margin:6px 0 12px}.employee-saved-resource-count details{display:inline-block}.employee-saved-resource-count details p{margin:6px 0}.employee-management .employee-business-editor .employee-form-card>h3{margin-top:0}.employee-management .employee-business-editor .employee-resource-composition{margin-top:8px}
+@media(max-width:700px){.employee-management .employee-business-editor .employee-form-card{padding:14px}.employee-management .employee-business-editor .employee-editor-return{margin-bottom:8px}.employee-management .employee-authoring-state{padding:8px 12px;margin-bottom:12px;gap:8px 16px}.employee-management .employee-business-editor .employee-composition-duties{padding:14px}}

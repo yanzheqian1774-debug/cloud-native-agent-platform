@@ -98,6 +98,7 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
     from .native_document_skill import (
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
+        NativeUserScopeDocumentSkillExecutor,
     )
 
     is_document = (
@@ -109,6 +110,7 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
         for doc in (
             NativeDocumentSkillExecutor.revision,
             NativeEmployeeDocumentSkillExecutor.revision,
+            NativeUserScopeDocumentSkillExecutor.revision,
         )
     }
     result = {

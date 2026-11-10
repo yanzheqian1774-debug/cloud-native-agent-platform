@@ -84,6 +84,7 @@ def compose(
     from .native_document_skill import (
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
+        NativeUserScopeDocumentSkillExecutor,
     )
 
     native_runtime = []
@@ -102,6 +103,7 @@ def compose(
             for executor_type in (
                 NativeDocumentSkillExecutor,
                 NativeEmployeeDocumentSkillExecutor,
+                NativeUserScopeDocumentSkillExecutor,
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )

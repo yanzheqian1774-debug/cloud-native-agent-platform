@@ -223,6 +223,15 @@ class NativeDocumentTools:
         ):
             raise ValueError("DOCUMENT_NOT_FOUND")
 
+    def apply_confirmed_scope(self, evidence):
+        """Owner-projected original intent, not a synthetic native answer."""
+        scope = evidence["scope"] if evidence is not None else None
+        if scope is not None and scope not in {
+            d["scope"] for d in self.documents.values() if d["role"] == "POLICY"
+        }:
+            raise ValueError("DOCUMENT_CONFIRMED_SCOPE_UNAVAILABLE")
+        self.confirmed_scope = scope
+
     def record_answer(self, answer):
         scopes = [
             d["scope"]

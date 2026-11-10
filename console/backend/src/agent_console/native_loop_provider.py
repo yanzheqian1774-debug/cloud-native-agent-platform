@@ -143,6 +143,15 @@ class NativeDecisionJob:
                 }
             },
         }
+        if self.context["context"].get("confirmedScopeEvidence"):
+            document["instructions"] += (
+                " context.confirmedScopeEvidence records an explicit instruction "
+                "from the original user in this exact problem's conversation. "
+                "The documentInventory.confirmedScope is already confirmed on "
+                "that basis; do not ask the user to repeat that same scope. "
+                "Clarify only genuinely missing or conflicting information. "
+                "This evidence grants no tools or deployment permission. "
+            )
         if self.context["context"].get("employeeContext") is not None:
             document["instructions"] += (
                 " Use the exact bound employeeContext role and responsibilities "

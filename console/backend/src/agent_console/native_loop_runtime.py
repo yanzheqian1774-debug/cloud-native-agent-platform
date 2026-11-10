@@ -27,8 +27,12 @@ from .model_binding_resolution import (
     resolve_authorized_model_binding,
 )
 from .model_governance_authorization import invoke_model_use
+from .native_confirmed_scope import read_confirmed_scope
 from .native_diagnostic_tools import NativeDiagnosticTools
-from .native_document_skill import NativeEmployeeDocumentSkillExecutor
+from .native_document_skill import (
+    NativeEmployeeDocumentSkillExecutor,
+    NativeUserScopeDocumentSkillExecutor,
+)
 from .native_employee_context import read_bound_employee_context
 from .native_loop_journal import NativeLoopJournal
 from .native_loop_provider import NativeDecisionJob
@@ -163,17 +167,24 @@ class NativeLoopRuntime:
                     ("tabular-diagnostic-readonly", "3"),
                     ("native-document-review", "1"),
                     ("native-document-review", "2"),
+                    ("native-document-review", "3"),
                 }
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
         employee_mode = (
             invocation["executor_id"],
             invocation["executor_revision"],
-        ) == ("native-document-review", "2")
+        ) in {("native-document-review", "2"), ("native-document-review", "3")}
+        user_scope_mode = employee_mode and invocation["executor_revision"] == "3"
+        document_revision = (
+            NativeUserScopeDocumentSkillExecutor
+            if user_scope_mode
+            else NativeEmployeeDocumentSkillExecutor
+        ).revision
         if (
             employee_mode
             and invocation["executor_configuration_digest"]
-            != NativeEmployeeDocumentSkillExecutor.revision.configuration_digest
+            != document_revision.configuration_digest
         ):
             raise ValueError("NATIVE_EMPLOYEE_EXECUTOR_MISMATCH")
 
@@ -200,7 +211,11 @@ class NativeLoopRuntime:
                     raise AuthorityError("AUTHORIZATION_NOT_FOUND")
 
             return read_bound_employee_context(
-                connection, p, row["task_id"], authorize=require
+                connection,
+                p,
+                row["task_id"],
+                authorize=require,
+                executor_revision=document_revision,
             )
 
         employee_context = None
@@ -214,6 +229,26 @@ class NativeLoopRuntime:
         library = (NativeDocumentTools if document_mode else NativeDiagnosticTools)(
             output["source"], output["sourceSnapshot"]
         )
+
+        def scope_snapshot(connection):
+            return read_confirmed_scope(
+                connection,
+                p,
+                command.principal_id,
+                [
+                    d["scope"]
+                    for d in library.documents.values()
+                    if d["role"] == "POLICY"
+                ],
+            )
+
+        scope_evidence = None
+        if user_scope_mode:
+            if not document_mode:
+                raise ValueError("NATIVE_DOCUMENT_SCOPE_DOMAIN_MISMATCH")
+            with self.pool.connection() as c:
+                scope_evidence = scope_snapshot(c)
+            library.apply_confirmed_scope(scope_evidence)
         manager = self
 
         authority_timing = {"checks": 0, "seconds": 0.0}
@@ -247,6 +282,8 @@ class NativeLoopRuntime:
                     ):
                         return False
                 if employee_mode and employee_snapshot(c) != employee_context:
+                    return False
+                if user_scope_mode and scope_snapshot(c) != scope_evidence:
                     return False
                 progress = c.execute(
                     "SELECT record FROM execution_authority.prepared_run_progress "
@@ -351,6 +388,11 @@ class NativeLoopRuntime:
                     "authorityGeneration": command.authority_generation.value,
                     "recoveryEpoch": command.recovery_epoch.value,
                     **({"employeeContext": employee_context} if employee_mode else {}),
+                    **(
+                        {"confirmedScopeEvidence": scope_evidence}
+                        if user_scope_mode
+                        else {}
+                    ),
                     "sourceSnapshot": output["sourceSnapshot"],
                     "policyDigest": manager.policy_digest,
                     "inputDigest": input_digest,
@@ -433,6 +475,11 @@ class NativeLoopRuntime:
                     else {}
                 ),
                 **({"employeeContext": employee_context} if employee_mode else {}),
+                **(
+                    {"confirmedScopeEvidence": scope_evidence}
+                    if user_scope_mode
+                    else {}
+                ),
                 "sourceSnapshot": output["sourceSnapshot"],
                 "model": asdict(profile.binding),
                 "policyDigest": self.policy_digest,
@@ -448,6 +495,7 @@ class NativeLoopRuntime:
                 "note": "Includes supervisor cancellation checks; nested, not additive",
             },
             **({"employeeContext": employee_context} if employee_mode else {}),
+            **({"confirmedScopeEvidence": scope_evidence} if user_scope_mode else {}),
             "modelExecution": "REAL_PROVIDER",
             "model": asdict(profile.binding),
             "ledgerId": self.model.budget.ledger_id,

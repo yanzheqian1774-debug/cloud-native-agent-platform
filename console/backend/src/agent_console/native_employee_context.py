@@ -10,12 +10,19 @@ from .execution_domain import ScopeIdentity
 from .native_document_skill import NativeEmployeeDocumentSkillExecutor
 
 
-def read_bound_employee_context(connection, preparation, task_id, *, authorize):
+def read_bound_employee_context(
+    connection,
+    preparation,
+    task_id,
+    *,
+    authorize,
+    executor_revision=NativeEmployeeDocumentSkillExecutor.revision,
+):
     members = [p for p in preparation.participants if p.task_id == task_id]
     if len(members) != 1:
         raise ValueError("NATIVE_EMPLOYEE_TASK_BINDING_MISMATCH")
     member = members[0]
-    executor = NativeEmployeeDocumentSkillExecutor.revision
+    executor = executor_revision
     if (member.executor_id, member.executor_revision, member.executor_digest) != (
         executor.executor_id,
         executor.executor_revision,

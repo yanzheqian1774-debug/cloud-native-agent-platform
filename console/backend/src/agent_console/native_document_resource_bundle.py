@@ -7,13 +7,14 @@ from .native_document_skill import (
     OPERATIONS,
     NativeDocumentSkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
+    NativeUserScopeDocumentSkillExecutor,
 )
 from .native_document_tools import validate_source
 from .prepared_resource_bundle import resource_content as base_content
 from .skill_mcp_schemas import ResourceContent
 
 
-def resource_content(source, *, bound_employee=False):
+def resource_content(source, *, bound_employee=False, confirmed_user_scope=False):
     validate_source(source)
     bundle = base_content()
     skill = bundle["skill"]
@@ -24,7 +25,9 @@ def resource_content(source, *, bound_employee=False):
     )
     skill["operations"] = [op for op in skill["operations"] if op["name"] in OPERATIONS]
     revision = (
-        NativeEmployeeDocumentSkillExecutor
+        NativeUserScopeDocumentSkillExecutor
+        if confirmed_user_scope
+        else NativeEmployeeDocumentSkillExecutor
         if bound_employee
         else NativeDocumentSkillExecutor
     ).revision

@@ -128,12 +128,31 @@ class NativeEmployeeDocumentSkillExecutor(NativeDocumentSkillExecutor):
     )
 
 
+CONFIRMED_SCOPE_CONFIGURATION = {
+    **BOUND_EMPLOYEE_CONFIGURATION,
+    "schemaVersion": "native-document-review.v3",
+    "scopeContext": "EXACT_ORIGINAL_USER_MESSAGE_V1",
+}
+
+
+class NativeUserScopeDocumentSkillExecutor(NativeEmployeeDocumentSkillExecutor):
+    """Explicit original-user scope successor; old revisions stay unchanged."""
+
+    revision = ExecutorRevision(
+        "native-document-review", "3", digest(CONFIRMED_SCOPE_CONFIGURATION)
+    )
+
+
 def document_executor_revision(operations):
     revisions = {
         (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
         for op in operations
     }
-    for executor in (NativeDocumentSkillExecutor, NativeEmployeeDocumentSkillExecutor):
+    for executor in (
+        NativeDocumentSkillExecutor,
+        NativeEmployeeDocumentSkillExecutor,
+        NativeUserScopeDocumentSkillExecutor,
+    ):
         ref = executor.revision
         if revisions == {
             (ref.executor_id, ref.executor_revision, ref.configuration_digest)
