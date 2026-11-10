@@ -211,17 +211,17 @@ for(const mode of ['denied','wrong-parent','withdrawn'])test('authoring '+mode+'
 });
 
 
-for(const mode of ['ready','denied','wrong-parent','partial'])test('business work records '+mode+' use saved exact participation directly',async({page},info)=>{
+for(const mode of ['ready','denied','wrong-parent','partial','origin'])test('business work records '+mode+' use saved exact participation directly',async({page},info)=>{
  const {original,extra}=await fixture(page);let reads=0;
  await page.route('**/work-records',async route=>{
   reads++;if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
-  return route.fulfill({json:envelope({schemaVersion:'employee-work-records.v1',subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},employeeDefinition:{...original,...(mode==='wrong-parent'?{employeeDefinitionRevisionId:'revision:other'}:{})},items:[{executionDigest:'6'.repeat(64),participation:'COORDINATION',title:'平台交接文档缺口核对',planVersion:2,state:'SUCCEEDED',tasks:[{taskId:'review',title:'核对缺失章节'}]}],scanLimited:mode==='partial',visibility:'AUTHORIZED_ONLY',executionStarted:false})});
+  return route.fulfill({json:envelope({schemaVersion:'employee-work-records.v1',subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},employeeDefinition:{...original,...(mode==='wrong-parent'?{employeeDefinitionRevisionId:'revision:other'}:{})},items:[{executionDigest:'6'.repeat(64),...(mode==='origin'?{originConversationId:'original-document-chat',originVerified:true}:{}),participation:'COORDINATION',title:'平台交接文档缺口核对',planVersion:2,state:'SUCCEEDED',tasks:[{taskId:'review',title:'核对缺失章节'}]}],scanLimited:mode==='partial',visibility:'AUTHORIZED_ONLY',executionStarted:false})});
  });
  await page.goto(href().replace('employeeView=professional&',''));
  expect(reads).toBe(0);
  await page.getByRole('button',{name:'工作记录',exact:true}).click();
  const records=page.getByRole('region',{name:'员工工作记录',exact:true});
  if(mode==='denied'||mode==='wrong-parent'){await expect(records.getByRole('alert')).toBeVisible();await expect(records.getByRole('link',{name:'查看任务',exact:true})).toHaveCount(0)}
- else {await expect(records.getByText('平台交接文档缺口核对',{exact:true})).toBeVisible();await expect(records.getByRole('link',{name:'查看任务',exact:true})).toHaveAttribute('href','/tasks?work='+'6'.repeat(64)+'&workView=result');if(mode==='partial')await expect(records.getByText('本次达到核对上限，列表可能不完整。',{exact:true})).toBeVisible();await page.reload();await expect(records.getByText('核对缺失章节',{exact:true})).toBeVisible();await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('employee-work-records-'+mode+'.png')});await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));await expect(page.getByText('平台交接文档缺口核对',{exact:true})).toHaveCount(0)}
+ else {await expect(records.getByText('平台交接文档缺口核对',{exact:true})).toBeVisible();await expect(records.getByRole('link',{name:'查看任务',exact:true})).toHaveAttribute('href','/tasks?work='+'6'.repeat(64)+(mode==='origin'?'&origin=original-document-chat':'')+'&workView=result');if(mode==='partial')await expect(records.getByText('本次达到核对上限，列表可能不完整。',{exact:true})).toBeVisible();await page.reload();await expect(records.getByText('核对缺失章节',{exact:true})).toBeVisible();await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('employee-work-records-'+mode+'.png')});await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));await expect(page.getByText('平台交接文档缺口核对',{exact:true})).toHaveCount(0)}
  expect(extra.posts).toHaveLength(0);
 });

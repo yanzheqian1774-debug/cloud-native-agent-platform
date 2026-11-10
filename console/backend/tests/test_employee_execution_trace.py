@@ -101,6 +101,18 @@ def trace(relations, request):
 
     handler = EmployeeExecutionTrace(r.instances, definitions=r.definitions)
     handler.saved.execution = lambda _: deepcopy(view)
+    from pathlib import Path
+
+    from agent_console.conversation_journey import install
+    from fastapi import FastAPI
+
+    with a.repository.pool.connection() as c, c.transaction():
+        c.execute(
+            (
+                Path(__file__).parents[1] / "migrations/0046_private_conversation.sql"
+            ).read_text()
+        )
+    install(FastAPI(), SimpleNamespace(connect=a.repository.pool.connection), None)
     with a.repository.pool.connection() as c, c.transaction():
         c.execute(
             "INSERT INTO execution_authority.prepared_candidates(namespace,security_domain,digest,plan_id,plan_version,record,prepared_by) VALUES(%s,%s,%s,%s,%s,%s::jsonb,%s)",
@@ -665,3 +677,64 @@ def test_employee_work_records_missing_progress_is_not_false_not_started(
         {"employee_definition_id": r.ref.resource_id, "revision_id": r.ref.revision_id},
     )
     assert value["items"][0]["state"] == expected
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "exact",
+        "journey",
+        "associated",
+        "other-owner",
+        "other-domain",
+        "other-problem",
+        "other-execution",
+    ],
+)
+def test_employee_origin_preserves_exact_private_link_boundary(trace, variant):
+    from psycopg.types.json import Jsonb
+
+    a = trace.r.a
+    scope = a.e.scope
+    problem = a.e.p.semantics.target.problem.resource_id
+    owner = "someone-else" if variant == "other-owner" else a.subject.principal_id
+    domain = "another-domain" if variant == "other-domain" else scope.security_domain
+    target = {"problemId": "another-problem" if variant == "other-problem" else problem}
+    if variant != "journey":
+        target["executionDigest"] = (
+            "f" * 64 if variant == "other-execution" else "e" * 64
+        )
+    with a.repository.pool.connection() as c, c.transaction():
+        c.execute(
+            "INSERT INTO private_conversation.conversations(tenant_id,security_domain,conversation_id,owner_id,title,request_key,request_digest) VALUES(%s,%s,'origin',%s,'same title','key','digest')",
+            (scope.namespace, domain, owner),
+        )
+        c.execute(
+            "INSERT INTO private_conversation.links(tenant_id,security_domain,conversation_id,link_id,target,created_by,request_key,request_digest) VALUES(%s,%s,'origin','link',%s,%s,'link','digest')",
+            (scope.namespace, domain, Jsonb(target), owner),
+        )
+        if variant != "associated":
+            c.execute(
+                "INSERT INTO private_conversation.journeys(tenant_id,security_domain,conversation_id,version,state) VALUES(%s,%s,'origin',1,%s)",
+                (
+                    scope.namespace,
+                    domain,
+                    Jsonb(
+                        {
+                            "execution": "e" * 64,
+                            "problem": {"business_problem_id": problem},
+                        }
+                    ),
+                ),
+            )
+    value = trace.call(
+        "READ_EMPLOYEE_WORK_RECORDS",
+        {
+            "employee_definition_id": trace.r.ref.resource_id,
+            "revision_id": trace.r.ref.revision_id,
+        },
+    )["items"][0]
+    assert value["originConversationId"] == (
+        "origin" if variant in {"exact", "journey", "associated"} else None
+    )
+    assert value["originVerified"] is (variant in {"exact", "journey"})

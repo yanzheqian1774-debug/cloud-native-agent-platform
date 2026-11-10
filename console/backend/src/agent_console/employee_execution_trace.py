@@ -23,6 +23,7 @@ from .workbench_employee import (
     _assignment_read,
     _employee_revision_read,
 )
+from .workbench_execution_origin import read_execution_origin
 from .workbench_owner_authorization import WorkbenchOwnerError
 from .workbench_prepared_execution import grant
 
@@ -354,6 +355,11 @@ class EmployeeExecutionTrace:
             items.append(
                 {
                     "executionDigest": view["digest"],
+                    **read_execution_origin(
+                        call,
+                        view["digest"],
+                        preparation["semantics"]["target"]["problem"]["resource_id"],
+                    ),
                     "participation": "COORDINATION"
                     if coordinating
                     else "TASK_EXECUTION",

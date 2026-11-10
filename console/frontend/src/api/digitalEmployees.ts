@@ -554,7 +554,7 @@ export const getEmployeeAuthoring=(item:EmployeeDefinitionSummary,signal?:AbortS
 export type EmployeeWorkRecords = {
  schemaVersion:'employee-work-records.v1';subject:string;scope:{tenantId:string;securityDomain:string};
  employeeDefinition:Pick<EmployeeDefinitionSummary,'employeeDefinitionId'|'employeeDefinitionRevisionId'|'employeeDefinitionDigest'>;
- items:{executionDigest:string;participation:'COORDINATION'|'TASK_EXECUTION';title:string;planVersion:number;state:string;tasks:{taskId:string;title:string}[]}[];
+ items:{executionDigest:string;originConversationId?:string|null;originVerified?:boolean;participation:'COORDINATION'|'TASK_EXECUTION';title:string;planVersion:number;state:string;tasks:{taskId:string;title:string}[]}[];
  scanLimited:boolean;visibility:'AUTHORIZED_ONLY';executionStarted:false;
 };
 export const getEmployeeWorkRecords=(item:EmployeeDefinitionSummary,signal?:AbortSignal)=>request<EmployeeWorkRecords>(`${root}/employees/${encodeURIComponent(item.employeeDefinitionId)}/revisions/${encodeURIComponent(item.employeeDefinitionRevisionId)}/work-records`,signal);
