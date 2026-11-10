@@ -91,3 +91,16 @@ No scheduling, execution, publication, membership-derived grant, organizational
 hierarchy or SSO is introduced. Empty/inaccessible team data must not be presented
 as a successful empty global directory. Existing employee definitions are never
 changed by editing team-local responsibilities.
+
+## Team presentation and resource summary continuation (2026-11-11)
+
+Align the installed team workspace with the frozen frame: compact title and
+right-side actions, labeled member-duty-handoff columns, and no recovery action
+after a confirmed save. Reuse already authorized exact employee reads to present
+per-member resource counts and duties navigation. Counts describe the team's
+pinned employee revision, not the latest publication or executable tool access.
+No inferred team work or outcomes: the current backend has no team-work binding.
+Any later association requires explicit authoritative linkage, not a join on
+shared employee membership. Preserve team context on the duties return path.
+Validate save/read/history, unknown recovery, member return and mobile layout;
+compare actual page with the frozen prototype before visual acceptance.
