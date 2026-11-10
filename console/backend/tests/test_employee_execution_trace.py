@@ -29,7 +29,7 @@ from test_workbench_employee_relations import relations
 
 
 @pytest.fixture
-def trace(relations):
+def trace(relations, request):
     r = relations
     a = r.a
     ref = r.ref.model_dump(mode="json")
@@ -61,6 +61,24 @@ def trace(relations):
             "tasks": [{"task_id": "read", "title": "Read original source"}],
         },
     }
+    variant = getattr(request, "param", None)
+    if variant == "separate-participant":
+        actor2 = deepcopy(actor)
+        actor2.update(
+            task_id="review",
+            instance_id="instance:relations-2",
+            assignment_id="assignment:relations-2",
+        )
+        p["participants"].append(actor2)
+        p["semantics"]["tasks"].append(
+            {"task_id": "review", "title": "Review saved evidence"}
+        )
+    elif variant == "coordinator":
+        p["participants"][0]["definition"] = {
+            "resource_id": "employee:other",
+            "revision_id": "revision:other",
+            "digest": "f" * 64,
+        }
     view = {
         "digest": digest,
         "preparation": p,
@@ -81,7 +99,7 @@ def trace(relations):
                 )
             return r.acl.require(principal, owner, action, resource)
 
-    handler = EmployeeExecutionTrace(r.instances)
+    handler = EmployeeExecutionTrace(r.instances, definitions=r.definitions)
     handler.saved.execution = lambda _: deepcopy(view)
     with a.repository.pool.connection() as c, c.transaction():
         c.execute(
@@ -532,3 +550,118 @@ def test_saved_completed_placement_is_canonical_and_bound_without_active_lease(m
         assert result["digest"] == value.digest
         assert result["binding"]["assignmentId"] == "assignment:saved"
     assert len(queries) == 1
+
+
+def test_exact_employee_work_records_reuse_saved_work_without_writes(trace):
+    from test_sales_supplement_owners import snapshot
+
+    r = trace.r
+    before = snapshot(r.a)
+    path = {
+        "employee_definition_id": r.ref.resource_id,
+        "revision_id": r.ref.revision_id,
+    }
+    value = trace.call("READ_EMPLOYEE_WORK_RECORDS", path)
+    assert value["schemaVersion"] == "employee-work-records.v1"
+    assert value["items"][0]["participation"] == "COORDINATION"
+    assert value["employeeDefinition"]["employeeDefinitionDigest"] == r.ref.digest
+    assert value["items"][0]["tasks"] == [
+        {"taskId": "read", "title": "Read original source"}
+    ]
+    assert value["executionStarted"] is False
+    assert value["scanLimited"] is False
+    historical = trace.call(
+        "READ_EMPLOYEE_WORK_RECORDS", {**path, "revision_id": r.successor.revision_id}
+    )
+    assert historical["items"] == []
+    assert snapshot(r.a) == before
+
+
+@pytest.mark.parametrize("denied", ["EXECUTION", "INSTANCE", "ASSIGNMENT"])
+def test_employee_work_records_do_not_disclose_denied_work(trace, denied):
+    trace.denied.add(denied)
+    r = trace.r
+    value = trace.call(
+        "READ_EMPLOYEE_WORK_RECORDS",
+        {"employee_definition_id": r.ref.resource_id, "revision_id": r.ref.revision_id},
+    )
+    assert value["items"] == []
+
+
+def test_employee_work_records_require_selected_employee_read(trace):
+    trace.denied.add("EMPLOYEE")
+    r = trace.r
+    with pytest.raises(AuthorityError):
+        trace.call(
+            "READ_EMPLOYEE_WORK_RECORDS",
+            {
+                "employee_definition_id": r.ref.resource_id,
+                "revision_id": r.ref.revision_id,
+            },
+        )
+
+
+@pytest.mark.parametrize("trace", ["separate-participant"], indirect=True)
+def test_employee_work_records_keep_authorized_participation_when_root_denied(trace):
+    r = trace.r
+    r.acl.allowed.remove(("ASSIGNMENT", "READ", "assignment:assignment:relations-1"))
+    value = trace.call(
+        "READ_EMPLOYEE_WORK_RECORDS",
+        {"employee_definition_id": r.ref.resource_id, "revision_id": r.ref.revision_id},
+    )
+    assert value["items"][0]["tasks"] == [
+        {"taskId": "review", "title": "Review saved evidence"}
+    ]
+    assert value["items"][0]["participation"] == "TASK_EXECUTION"
+
+
+@pytest.mark.parametrize("trace", ["coordinator"], indirect=True)
+def test_employee_work_records_root_can_coordinate_other_employee_tasks(trace):
+    r = trace.r
+    value = trace.call(
+        "READ_EMPLOYEE_WORK_RECORDS",
+        {"employee_definition_id": r.ref.resource_id, "revision_id": r.ref.revision_id},
+    )
+    assert value["items"][0]["tasks"] == [
+        {"taskId": "read", "title": "Read original source"}
+    ]
+
+
+def test_employee_work_route_is_exact_read_only_and_requires_definition_owner():
+    from agent_console.employee_execution_trace import operations
+
+    routes = operations(SimpleNamespace(), definitions=SimpleNamespace())
+    route = next(x for x in routes if x.name == "READ_EMPLOYEE_WORK_RECORDS")
+    assert route.method == "GET"
+    assert (
+        route.path
+        == "/api/workbench/v1/employees/{employee_definition_id}/revisions/{revision_id}/work-records"
+    )
+    assert route.request_model is None and route.query_model is None
+    grants = route.grant_builder(
+        None,
+        {"employee_definition_id": "employee:test", "revision_id": "revision:fixed"},
+        None,
+        None,
+    )
+    assert [(g.owner, g.action, g.exact_resource) for g in grants] == [
+        ("EMPLOYEE", "READ", "employee:employee:test:revision:fixed")
+    ]
+    assert all(
+        x.name != "READ_EMPLOYEE_WORK_RECORDS" for x in operations(SimpleNamespace())
+    )
+
+
+@pytest.mark.parametrize(
+    "started,expected", [(True, "UNKNOWN"), (False, "NOT_STARTED")]
+)
+def test_employee_work_records_missing_progress_is_not_false_not_started(
+    trace, started, expected
+):
+    trace.view.update(progress=None, executionStarted=started)
+    r = trace.r
+    value = trace.call(
+        "READ_EMPLOYEE_WORK_RECORDS",
+        {"employee_definition_id": r.ref.resource_id, "revision_id": r.ref.revision_id},
+    )
+    assert value["items"][0]["state"] == expected

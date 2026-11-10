@@ -580,6 +580,7 @@ def build_workbench_composition(
             runtime_trace_routes = trace_operations(
                 digital_employees,
                 prepared_execution_coordinator,
+                definitions=employee_definitions,
                 configuration=ObservationConfiguration.load(
                     os.environ["EXECUTION_RUNTIME_OBSERVATION_CONFIGURATION"]
                 ),

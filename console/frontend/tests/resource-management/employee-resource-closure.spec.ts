@@ -17,6 +17,7 @@ async function fixture(page:Page){
   if(req.method()==='GET'){
    state.gets.push(path);
    if(path.endsWith('/employees'))return route.fulfill({json:envelope({items:[...extra.records.values()]})});
+   if(path.endsWith('/work-records'))return route.fulfill({json:envelope({schemaVersion:'employee-work-records.v1',subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},employeeDefinition:extra.records.get(rev),items:[],scanLimited:false,visibility:'AUTHORIZED_ONLY',executionStarted:false})});
    if(path.endsWith('/authoring')){
     const values=[...extra.records.values()],head=values.at(-1)!,publication=[...values].reverse().find(x=>x.publicationState==='PUBLISHED');
     const version=Math.max(...values.map(x=>x.aggregateVersion??0));
@@ -129,7 +130,7 @@ test('F3 employee full-page business frame retains professional operations and t
  await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:info.outputPath('f3-employee-desktop.png')});
  await nav.getByRole('button',{name:'职责与资源',exact:true}).click();await page.reload();await expect(nav.getByRole('button',{name:'职责与资源',exact:true})).toHaveClass('active');
  await page.getByRole('button',{name:'查看专业管理',exact:true}).click();await expect(page.getByRole('button',{name:'职责与能力',exact:true})).toHaveClass('active');await page.getByRole('button',{name:'返回业务详情',exact:true}).click();
- await nav.getByRole('button',{name:'工作记录',exact:true}).click();await expect(page.getByRole('navigation',{name:'工作记录分类'})).toBeVisible();await page.getByRole('navigation',{name:'工作记录分类'}).getByRole('button',{name:'工作分配',exact:true}).click();await expect(nav.getByRole('button',{name:'工作记录',exact:true})).toHaveClass('active');
+ await nav.getByRole('button',{name:'工作记录',exact:true}).click();await expect(page.getByRole('region',{name:'员工工作记录',exact:true})).toBeVisible();await expect(page.getByText('当前可读范围内未返回这个版本的工作记录。',{exact:true})).toBeVisible();await expect(nav.getByRole('button',{name:'工作记录',exact:true})).toHaveClass('active');
  await nav.getByRole('button',{name:'资源组成',exact:true}).click();await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('f3-employee-mobile.png')});
  await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await expect(page.getByLabel('搜索当前结果')).toHaveValue('准确资源');await expect(page.getByRole('region',{name:'员工集合',exact:true})).toBeVisible();expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
 });
@@ -147,7 +148,7 @@ test('F3 business editor saves then validates and publishes exact successor in t
  await page.screenshot({path:info.outputPath('f3-business-saved-draft.png')});
  for(const action of ['验证草稿','确认发布资格','发布定义']){await page.getByRole('button',{name:new RegExp('^'+action)}).click();await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'确认提交',exact:true})).toHaveCount(0)}
  await expect(page.getByRole('heading',{name:'已发布所选定义',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(4);expect(original.members.find(m=>m.kind==='SKILL')?.revisionId).toBe('revision:1');expect(original.lifecycleState).toBe('DRAFT');
- await page.getByRole('button',{name:'返回已选版本详情',exact:true}).click();await expect(page.getByRole('region',{name:'员工资源组成',exact:true})).toBeVisible();expect(state.posts).toEqual([]);expect(new URL(page.url()).searchParams.get('employeeView')).toBeNull();
+ await page.getByRole('button',{name:'返回原查看版本',exact:true}).click();await expect(page.getByRole('region',{name:'员工资源组成',exact:true})).toBeVisible();expect(state.posts).toEqual([]);expect(new URL(page.url()).searchParams.get('employeeView')).toBeNull();
 });
 
 
@@ -190,8 +191,9 @@ test('historical employee edit resumes authoritative draft and refresh keeps its
  await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
  expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(draft.employeeDefinitionRevisionId);
  await page.reload();await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
- await page.getByRole('button',{name:'返回已选版本详情',exact:true}).click();
- await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：正在查看',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'返回原查看版本',exact:true}).click();
+ await expect.poll(()=>new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);
+ await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：已有草稿',{exact:true})).toBeVisible();
  expect(extra.posts).toHaveLength(0);
 });
 
@@ -205,5 +207,21 @@ for(const mode of ['denied','wrong-parent','withdrawn'])test('authoring '+mode+'
  await page.goto(href().replace('employeeView=professional&','')+'&employeeEdit=edit');
  if(mode==='withdrawn')await expect(page.getByText('当前发布：已撤销',{exact:true})).toBeVisible();
  else {await expect(page.getByRole('button',{name:'修改职责与资源',exact:true})).toBeDisabled();await expect(page.getByLabel('职能职责',{exact:true})).toHaveCount(0)}
+ expect(extra.posts).toHaveLength(0);
+});
+
+
+for(const mode of ['ready','denied','wrong-parent','partial'])test('business work records '+mode+' use saved exact participation directly',async({page},info)=>{
+ const {original,extra}=await fixture(page);let reads=0;
+ await page.route('**/work-records',async route=>{
+  reads++;if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
+  return route.fulfill({json:envelope({schemaVersion:'employee-work-records.v1',subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},employeeDefinition:{...original,...(mode==='wrong-parent'?{employeeDefinitionRevisionId:'revision:other'}:{})},items:[{executionDigest:'6'.repeat(64),participation:'COORDINATION',title:'平台交接文档缺口核对',planVersion:2,state:'SUCCEEDED',tasks:[{taskId:'review',title:'核对缺失章节'}]}],scanLimited:mode==='partial',visibility:'AUTHORIZED_ONLY',executionStarted:false})});
+ });
+ await page.goto(href().replace('employeeView=professional&',''));
+ expect(reads).toBe(0);
+ await page.getByRole('button',{name:'工作记录',exact:true}).click();
+ const records=page.getByRole('region',{name:'员工工作记录',exact:true});
+ if(mode==='denied'||mode==='wrong-parent'){await expect(records.getByRole('alert')).toBeVisible();await expect(records.getByRole('link',{name:'查看任务',exact:true})).toHaveCount(0)}
+ else {await expect(records.getByText('平台交接文档缺口核对',{exact:true})).toBeVisible();await expect(records.getByRole('link',{name:'查看任务',exact:true})).toHaveAttribute('href','/tasks?work='+'6'.repeat(64)+'&workView=result');if(mode==='partial')await expect(records.getByText('本次达到核对上限，列表可能不完整。',{exact:true})).toBeVisible();await page.reload();await expect(records.getByText('核对缺失章节',{exact:true})).toBeVisible();await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('employee-work-records-'+mode+'.png')});await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));await expect(page.getByText('平台交接文档缺口核对',{exact:true})).toHaveCount(0)}
  expect(extra.posts).toHaveLength(0);
 });

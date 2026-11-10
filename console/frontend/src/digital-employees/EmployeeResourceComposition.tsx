@@ -35,13 +35,13 @@ export function EmployeeBoundResourceCard({member,item}:{member:EmployeeMember;i
  </article>;
 }
 
-export function EmployeeResourceComposition({item,view="composition"}:{item:EmployeeDefinition;view?:"composition"|"duties"}){
+export function EmployeeResourceComposition({item,view="composition"}:{item:EmployeeDefinition;view?:"composition"|"duties"|"summary"}){
  const business=item.members.filter(member=>["SKILL","MCP","KNOWLEDGE"].includes(member.kind)),internalCount=item.members.length-business.length;
  const entries=Object.entries(kinds) as [EmployeeMember['kind'],typeof kinds[EmployeeMember['kind']]][];
  return <section className="employee-resource-composition" aria-label="员工资源组成">
   <section className="employee-composition-summary"><div><h3>{item.publicationState==='PUBLISHED'?'已发布定义':'未发布定义'}</h3><p>{business.length} 项业务资源 · 已有任务保持原快照</p></div><div className="employee-composition-counts">{entries.filter(([kind])=>business.some(member=>member.kind===kind)).map(([kind,label])=><span key={kind}>{label.name} <strong>{business.filter(member=>member.kind===kind).length}</strong></span>)}</div></section>
   <section className="employee-composition-duties"><h3>职能职责</h3>{item.responsibilities.length?<ul>{item.responsibilities.map((d,i)=><li key={i}>{d}</li>)}</ul>:<p>当前定义未填写职责。</p>}</section>
   {internalCount>0&&<p className="employee-internal-reference">另有 {internalCount} 项内部依赖，可在专业管理中核对，不计入业务资源数量。</p>}
-  {view==='duties'?<section aria-label="职责与资源关联">{item.responsibilities.map((d,i)=><article className="employee-composition-duties" key={i}><h3>{d}</h3><p>当前定义未提供此项职责与资源的逐项关联，不能据此推定资源用途。</p></article>)}</section>:entries.map(([kind,label])=>{const members=business.filter(member=>member.kind===kind);return members.length?<section key={kind} aria-label={label.name+'资源组'}><h3>{label.name} <small>{members.length} 项</small></h3>{members.map(member=><EmployeeBoundResourceCard key={memberKey(member)} member={member} item={item}/>)}</section>:null})}
+  {view==='summary'?null:view==='duties'?<section aria-label="职责与资源关联">{item.responsibilities.map((d,i)=><article className="employee-composition-duties" key={i}><h3>{d}</h3><p>当前定义未提供此项职责与资源的逐项关联，不能据此推定资源用途。</p></article>)}</section>:entries.map(([kind,label])=>{const members=business.filter(member=>member.kind===kind);return members.length?<section key={kind} aria-label={label.name+'资源组'}><h3>{label.name} <small>{members.length} 项</small></h3>{members.map(member=><EmployeeBoundResourceCard key={memberKey(member)} member={member} item={item}/>)}</section>:null})}
  </section>;
 }

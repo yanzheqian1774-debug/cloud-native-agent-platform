@@ -17,7 +17,12 @@ from .authority_contracts import AuthorityError
 from .execution_postgres import PlacementDecision
 from .execution_source_review import ExecutionSourceReview
 from .workbench_bff import PREFIX, WorkbenchOperation
-from .workbench_employee import DigitalEmployeeOwnerAdapter, _assignment_read
+from .workbench_employee import (
+    DigitalEmployeeOwnerAdapter,
+    EmployeeDefinitionOwnerAdapter,
+    _assignment_read,
+    _employee_revision_read,
+)
 from .workbench_owner_authorization import WorkbenchOwnerError
 from .workbench_prepared_execution import grant
 
@@ -144,7 +149,13 @@ class EmployeeExecutionTrace:
         observer=None,
         policy=None,
         sales_v2_candidate=False,
+        definitions=None,
     ):
+        self.definitions = (
+            EmployeeDefinitionOwnerAdapter(definitions)
+            if definitions is not None
+            else None
+        )
         self.instances = DigitalEmployeeOwnerAdapter(instances)
         self.saved = ExecutionSourceReview(
             {}, coordinator, sales_v2_candidate=sales_v2_candidate
@@ -242,6 +253,142 @@ class EmployeeExecutionTrace:
             "employeeDefinition": ref,
             "items": items,
             "scanLimited": len(candidates) > 200,
+            "visibility": "AUTHORIZED_ONLY",
+            "executionStarted": False,
+        }
+
+    def employee_links(self, call):
+        if self.definitions is None:
+            raise WorkbenchOwnerError("EMPLOYEE_WORK_RECORDS_UNAVAILABLE", 503)
+        identity, revision = (
+            call.path["employee_definition_id"],
+            call.path["revision_id"],
+        )
+        self.require(call, "EMPLOYEE", f"employee:{identity}:{revision}")
+        definition = self.definitions(replace(call, operation="READ_EMPLOYEE_REVISION"))
+        ref = {
+            "resource_id": identity,
+            "revision_id": revision,
+            "digest": definition["employeeDefinitionDigest"],
+        }
+        ctx = call.context
+        candidates = call.connection.execute(
+            "SELECT p.digest,p.record FROM execution_authority.prepared_candidates p "
+            "WHERE p.namespace=%s AND p.security_domain=%s AND ("
+            "EXISTS(SELECT 1 FROM jsonb_array_elements(p.record->'participants') member "
+            "WHERE member->'definition'->>'resource_id'=%s AND member->'definition'->>'revision_id'=%s AND member->'definition'->>'digest'=%s) "
+            "OR EXISTS(SELECT 1 FROM digital_employee_definition.instance_bindings b "
+            "WHERE b.namespace=p.namespace AND b.security_domain=p.security_domain "
+            "AND b.digital_employee_instance_id=p.record->>'root_instance_id' "
+            "AND b.definition_id=%s AND b.revision_id=%s AND b.digest=%s)) "
+            "ORDER BY p.digest LIMIT 51",
+            (
+                ctx.scope.tenant_id,
+                ctx.scope.security_domain,
+                identity,
+                revision,
+                ref["digest"],
+                identity,
+                revision,
+                ref["digest"],
+            ),
+        ).fetchall()
+        items = []
+        parents = {}
+        for row in candidates[:50]:
+            try:
+                view = self.saved.saved(replace(call, path={"digest": row["digest"]}))
+            except AuthorityError:
+                continue
+            preparation = view["preparation"]
+            task_ids = set()
+            coordinating = False
+            pairs = {
+                (p["instance_id"], p["assignment_id"])
+                for p in preparation["participants"]
+                if p["definition"] == ref
+            }
+            root_pair = (
+                preparation["root_instance_id"],
+                preparation["root_assignment_id"],
+            )
+            # The root may coordinate without being a task participant. Its exact
+            # owner reference, not the candidate index, determines membership.
+            pairs.add(root_pair)
+            for iid, aid in sorted(pairs):
+                try:
+                    if (iid, aid) not in parents:
+                        parents[(iid, aid)] = self.parents(call, iid, aid)
+                    parent = parents[(iid, aid)]
+                except AuthorityError:
+                    continue
+                actual = {
+                    "resource_id": parent["employeeDefinitionId"],
+                    "revision_id": parent["employeeDefinitionRevisionId"],
+                    "digest": parent["digest"],
+                }
+                if actual != ref:
+                    if any(
+                        p["definition"] == ref
+                        and (p["instance_id"], p["assignment_id"]) == (iid, aid)
+                        for p in preparation["participants"]
+                    ):
+                        raise WorkbenchOwnerError(
+                            "EMPLOYEE_TRACE_DEFINITION_MISMATCH", 409
+                        )
+                    continue
+                if (iid, aid) == root_pair:
+                    coordinating = True
+                    task_ids.update(
+                        t["task_id"] for t in preparation["semantics"]["tasks"]
+                    )
+                else:
+                    task_ids.update(
+                        p["task_id"]
+                        for p in preparation["participants"]
+                        if p["definition"] == ref
+                        and (p["instance_id"], p["assignment_id"]) == (iid, aid)
+                    )
+            if not task_ids:
+                continue
+            items.append(
+                {
+                    "executionDigest": view["digest"],
+                    "participation": "COORDINATION"
+                    if coordinating
+                    else "TASK_EXECUTION",
+                    "title": preparation["semantics"]["title"],
+                    "planVersion": preparation["plan_version"],
+                    "state": (view.get("progress") or {}).get("state")
+                    or (
+                        "NOT_STARTED"
+                        if view.get("executionStarted") is False
+                        else "UNKNOWN"
+                    ),
+                    "tasks": [
+                        {"taskId": task["task_id"], "title": task["title"]}
+                        for task in preparation["semantics"]["tasks"]
+                        if task["task_id"] in task_ids
+                    ],
+                }
+            )
+        return {
+            "schemaVersion": "employee-work-records.v1",
+            "subject": ctx.principal_id,
+            "scope": {
+                "tenantId": ctx.scope.tenant_id,
+                "securityDomain": ctx.scope.security_domain,
+            },
+            "employeeDefinition": {
+                key: definition[key]
+                for key in [
+                    "employeeDefinitionId",
+                    "employeeDefinitionRevisionId",
+                    "employeeDefinitionDigest",
+                ]
+            },
+            "items": items,
+            "scanLimited": len(candidates) > 50,
             "visibility": "AUTHORIZED_ONLY",
             "executionStarted": False,
         }
@@ -451,6 +598,8 @@ class EmployeeExecutionTrace:
         return command
 
     def __call__(self, call):
+        if call.operation == "READ_EMPLOYEE_WORK_RECORDS":
+            return self.employee_links(call)
         return (
             self.links(call)
             if call.operation == "READ_ASSIGNMENT_EXECUTIONS"
@@ -459,7 +608,12 @@ class EmployeeExecutionTrace:
 
 
 def operations(
-    instances, coordinator=None, *, configuration=None, sales_v2_candidate=False
+    instances,
+    coordinator=None,
+    *,
+    configuration=None,
+    sales_v2_candidate=False,
+    definitions=None,
 ):
     owner = EmployeeExecutionTrace(
         instances,
@@ -467,9 +621,25 @@ def operations(
         observer=ExactTaskObserver(configuration) if configuration else None,
         policy=configuration,
         sales_v2_candidate=sales_v2_candidate,
+        definitions=definitions,
     )
     path = PREFIX + "/prepared-executions/{digest}"
     return (
+        (
+            WorkbenchOperation(
+                "READ_EMPLOYEE_WORK_RECORDS",
+                "GET",
+                PREFIX
+                + "/employees/{employee_definition_id}/revisions/{revision_id}/work-records",
+                None,
+                None,
+                _employee_revision_read,
+                owner,
+            ),
+        )
+        if definitions is not None
+        else ()
+    ) + (
         WorkbenchOperation(
             "READ_ASSIGNMENT_EXECUTIONS",
             "GET",
