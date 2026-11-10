@@ -30,8 +30,8 @@ async function decode<T>(response:Response):Promise<T>{
   return body as T;
 }
 
-async function read<T>(path:string):Promise<T>{
-  const envelope=await decode<Envelope<T>>(await fetch(`${PREFIX}${path}`,{credentials:"same-origin",headers:{Accept:"application/json"}}));
+async function read<T>(path:string,signal?:AbortSignal):Promise<T>{
+  const envelope=await decode<Envelope<T>>(await fetch(`${PREFIX}${path}`,{credentials:"same-origin",headers:{Accept:"application/json"},signal}));
   return envelope.result;
 }
 
@@ -46,8 +46,8 @@ async function authorizationWrite<T>(path:string,csrfToken:string,idempotencyKey
 
 export const newIdempotencyKey=(operation:string)=>`${operation}:${crypto.randomUUID()}`;
 export const readWorkbenchSession=async(signal?:AbortSignal)=>decode<WorkbenchSession>(await fetch(`${PREFIX}/session`,{credentials:"same-origin",headers:{Accept:"application/json"},signal}));
-export const listBusinessProblems=()=>read<{problems:BusinessProblemRevision[]}>("/problems");
-export const readBusinessProblem=(problemId:string)=>read<BusinessProblemDetail>(`/problems/${encodeURIComponent(problemId)}`);
+export const listBusinessProblems=(signal?:AbortSignal)=>read<{problems:BusinessProblemRevision[]}>("/problems",signal);
+export const readBusinessProblem=(problemId:string,signal?:AbortSignal)=>read<BusinessProblemDetail>(`/problems/${encodeURIComponent(problemId)}`,signal);
 export const readCriteriaSets=(problemId:string)=>read<{revisions:CriteriaSetRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`);
 export const readProblemCriteria=(problemId:string)=>read<{revisions:CriterionRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria`);
 
