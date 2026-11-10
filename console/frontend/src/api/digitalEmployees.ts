@@ -565,10 +565,14 @@ export const getEmployeeWorkRecords=(item:EmployeeDefinitionSummary,signal?:Abor
 
 export type TeamMember = {employeeDefinitionId:string;employeeRevisionId:string;employeeDigest:string;responsibility:string;handoff:string};
 export type TeamSummary = {teamId:string;revisionId:string;title:string;ownerId:string;memberCount:number;digest:string;aggregateVersion:number};
-export type TeamRecord = {schemaVersion:'team-definition.v1';scope:{namespace:string;security_domain:string};team_id:string;revision_id:string;title:string;goal:string;owner_id:string;members:{employee_definition_id:string;employee_revision_id:string;employee_digest:string;responsibility:string;handoff:string}[];predecessor_revision_id:string|null};
+export type TeamWorkReference = {workflowRunId:string;preparationDigest:string;problemId:string;problemRevisionId:string;problemDigest:string};
+export type TeamRecord = {schemaVersion:'team-definition.v1'|'team-definition.v2';work_links?:{workflow_run_id:string;preparation_digest:string;business_problem_id:string;problem_revision_id:string;problem_digest:string}[];scope:{namespace:string;security_domain:string};team_id:string;revision_id:string;title:string;goal:string;owner_id:string;members:{employee_definition_id:string;employee_revision_id:string;employee_digest:string;responsibility:string;handoff:string}[];predecessor_revision_id:string|null};
 export type TeamDetail = {revision:TeamRecord;digest:string;aggregateVersion:number;headRevisionId:string};
-export type SaveTeamCommand = {teamId:string;revisionId:string;title:string;goal:string;ownerId:string;members:TeamMember[];predecessorRevisionId:string|null;expectedVersion:number;commandId:string};
+export type SaveTeamCommand = {workLinks?:TeamWorkReference[];teamId:string;revisionId:string;title:string;goal:string;ownerId:string;members:TeamMember[];predecessorRevisionId:string|null;expectedVersion:number;commandId:string};
 export type SaveTeamResult = {teamId:string;revisionId:string;digest:string;aggregateVersion:number;replayed:boolean;decisionId:string};
 export const listTeams=(cursor?:string,signal?:AbortSignal)=>request<WorkbenchPage<TeamSummary>>(`${root}/teams?${pageQuery(cursor)}`,signal);
 export const readTeam=(id:string,revision:string,signal?:AbortSignal)=>request<TeamDetail>(`${root}/teams/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}`,signal);
 export const saveTeam=(payload:SaveTeamCommand,principal:string,signal?:AbortSignal)=>command<SaveTeamResult>(`${root}/teams`,payload,principal,signal);
+
+export type TeamWorkPage = {teamId:string;revisionId:string;teamDigest:string;items:import("../problems/currentWorkDirectoryApi").DirectoryItem[];linkedCount:number;unavailableCount:number};
+export const readTeamWork=(id:string,revision:string,signal?:AbortSignal)=>request<TeamWorkPage>(`${root}/teams/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}/work`,signal);

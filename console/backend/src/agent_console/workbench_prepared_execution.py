@@ -410,6 +410,7 @@ class PreparedExecutionOwner:
                 else {}
             ),
             "taskTranslation": prepared_task_translation(p),
+            "workflowRunId": p.run_id,
             "preparation": p.model_dump(mode="json"),
             "digest": p.digest,
             "progress": progress.model_dump(mode="json") if progress else None,

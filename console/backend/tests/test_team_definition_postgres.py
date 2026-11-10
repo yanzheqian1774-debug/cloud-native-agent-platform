@@ -144,3 +144,42 @@ def test_same_command_concurrency_creates_one_receipt(store):
             (revision.scope.namespace,),
         ).fetchone()["n"]
         assert count == 1
+
+
+def test_linked_successor_requires_explicit_retention_or_removal(store):
+    from agent_console.team_definition import TeamWorkReference
+
+    original = replace(
+        fresh(),
+        work_links=(
+            TeamWorkReference("run:1", "a" * 64, "problem:1", "revision:1", "b" * 64),
+        ),
+    )
+    save(store, original)
+    successor = replace(
+        original,
+        revision_id="team-revision:2",
+        predecessor_revision_id=original.revision_id,
+        work_links=None,
+    )
+    with pytest.raises(TeamDefinitionError, match="TEAM_WORK_CONFIRMATION_REQUIRED"):
+        save(store, successor, "command:2", 1)
+    removed = replace(successor, work_links=())
+    assert save(store, removed, "command:2", 1)["aggregateVersion"] == 2
+    with store.pool.connection() as conn:
+        assert (
+            store.read(
+                conn, original.scope, original.team_id, original.revision_id
+            ).work_links
+            == original.work_links
+        )
+        assert not store.read(
+            conn, removed.scope, removed.team_id, removed.revision_id
+        ).work_links
+        assert (
+            conn.execute(
+                "SELECT count(*) n FROM team_definition.receipts WHERE namespace=%s",
+                (original.scope.namespace,),
+            ).fetchone()["n"]
+            == 2
+        )

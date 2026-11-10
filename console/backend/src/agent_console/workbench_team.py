@@ -8,10 +8,16 @@ from pydantic import Field
 from .authority_contracts import AuthorityError, ExactGrant
 from .digital_employee_definition import EmployeeDefinitionError
 from .execution_domain import ScopeIdentity
-from .team_definition import TeamDefinitionError, TeamMember, TeamRevision
+from .team_definition import (
+    TeamDefinitionError,
+    TeamMember,
+    TeamRevision,
+    TeamWorkReference,
+)
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_bff_schemas import StrictWorkbenchModel, WorkbenchPageQuery
 from .workbench_owner_authorization import WorkbenchOwnerError
+from .workbench_team_work import project_team_work, validate_work_links
 
 
 class TeamMemberInput(StrictWorkbenchModel):
@@ -22,6 +28,14 @@ class TeamMemberInput(StrictWorkbenchModel):
     handoff: str = Field(default="", max_length=1000)
 
 
+class TeamWorkInput(StrictWorkbenchModel):
+    workflowRunId: str = Field(min_length=1, max_length=200)
+    preparationDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+    problemId: str = Field(min_length=1, max_length=200)
+    problemRevisionId: str = Field(min_length=1, max_length=200)
+    problemDigest: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class SaveTeamInput(StrictWorkbenchModel):
     teamId: str = Field(min_length=1, max_length=200)
     revisionId: str = Field(min_length=1, max_length=200)
@@ -30,6 +44,7 @@ class SaveTeamInput(StrictWorkbenchModel):
     ownerId: str = Field(min_length=1, max_length=200)
     members: tuple[TeamMemberInput, ...] = Field(min_length=1, max_length=32)
     predecessorRevisionId: str | None = Field(default=None, max_length=200)
+    workLinks: tuple[TeamWorkInput, ...] | None = Field(default=None, max_length=32)
     expectedVersion: int = Field(strict=True, ge=0)
     commandId: str = Field(min_length=1, max_length=200)
 
@@ -109,6 +124,18 @@ class TeamOwner:
                         for m in data.members
                     ),
                     data.predecessorRevisionId,
+                    tuple(
+                        TeamWorkReference(
+                            link.workflowRunId,
+                            link.preparationDigest,
+                            link.problemId,
+                            link.problemRevisionId,
+                            link.problemDigest,
+                        )
+                        for link in data.workLinks
+                    )
+                    if data.workLinks is not None
+                    else None,
                 )
                 grant = save_grants(call.context, call.path, call.payload, call.query)[
                     0
@@ -133,6 +160,7 @@ class TeamOwner:
                     )
                     if value["digest"] != member.employee_digest:
                         raise TeamDefinitionError("TEAM_MEMBER_VERSION_MISMATCH")
+                validate_work_links(call, principal, revision.work_links)
                 result = self.repository.save(
                     call.connection,
                     revision,
@@ -145,6 +173,19 @@ class TeamOwner:
                     **result,
                     "teamId": revision.team_id,
                     "digest": revision.content_digest,
+                }
+            if call.operation == "READ_TEAM_WORK":
+                revision = self.repository.read(
+                    call.connection,
+                    scope,
+                    call.path["team_id"],
+                    call.path["revision_id"],
+                )
+                return {
+                    "teamId": revision.team_id,
+                    "revisionId": revision.revision_id,
+                    "teamDigest": revision.content_digest,
+                    **project_team_work(call, revision),
                 }
             if call.operation == "READ_TEAM_REVISION":
                 head = call.connection.execute(
@@ -262,6 +303,17 @@ def team_operations(repository, employees, cursors):
             save_grants,
             handler,
             201,
+        ),
+        WorkbenchOperation(
+            "READ_TEAM_WORK",
+            "GET",
+            PREFIX + "/teams/{team_id}/revisions/{revision_id}/work",
+            None,
+            None,
+            lambda _c, p, _v, _q: (
+                ExactGrant("TEAM", "READ", f"team:{p['team_id']}:{p['revision_id']}"),
+            ),
+            handler,
         ),
         WorkbenchOperation(
             "READ_TEAM_REVISION",

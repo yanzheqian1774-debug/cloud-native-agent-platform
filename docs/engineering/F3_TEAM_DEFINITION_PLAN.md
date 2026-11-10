@@ -104,3 +104,32 @@ Any later association requires explicit authoritative linkage, not a join on
 shared employee membership. Preserve team context on the duties return path.
 Validate save/read/history, unknown recovery, member return and mobile layout;
 compare actual page with the frozen prototype before visual acceptance.
+
+## Explicit team-work association (G1, 2026-11-11)
+
+User-authorized continuation: associate selected existing work with an exact team
+revision. This is a business grouping, not delegation, execution ownership, a
+schedule or a grant. Reuse the existing immutable team revision/receipt repository
+and current-work owner projection. No new persistent infrastructure, public CRD,
+Control Plane authority, IAM scope or frozen public Contract is introduced.
+
+A bounded work reference pins workflow run, preparation digest and original
+problem id/revision/digest. Team record v2 is used only when work references exist;
+legacy v1 bytes/digests remain unchanged. Omission cannot silently clear prior
+links: a successor of a linked revision must explicitly retain/change/clear the
+list. Both old and new references retain historical team revisions.
+
+Before saving, reauthorize TEAM revision plus exact execution and business
+problem reads and verify each reference against the current owner snapshot,
+including idempotent command replay. Never trust client titles, employee-history
+joins or counts. Read-only work projection rechecks those authorities and returns
+only accessible linked work, separating unavailable references from empty results.
+Execution status and business outcome retain their existing separate meanings.
+
+Frontend selects from authorized current work, confirms the exact association,
+saves a successor once, reads it back, and links back to the original work and
+conversation. Unknown saves recover the same intent. Team work and results are
+rendered from this explicit association; fixed scheduling remains a separate gap.
+Validate v1 digest compatibility, schema smuggling, duplicate/mismatched refs,
+explicit removal, revoked permissions, cross-scope access, replay and head races,
+then real browser association/history/return with original work unchanged.

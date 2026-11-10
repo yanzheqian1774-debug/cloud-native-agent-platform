@@ -204,6 +204,12 @@ class PostgresTeamDefinitionRepository:
             )
         ):
             raise TeamDefinitionError("TEAM_VERSION_CONFLICT")
+        if head is not None and revision.work_links is None:
+            predecessor = PostgresTeamDefinitionRepository.read(
+                conn, scope, revision.team_id, head["head_revision_id"]
+            )
+            if predecessor.work_links:
+                raise TeamDefinitionError("TEAM_WORK_CONFIRMATION_REQUIRED")
         version = expected_version + 1
         if head is None:
             conn.execute(

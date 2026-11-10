@@ -110,3 +110,50 @@ def test_stored_team_roundtrip_and_malformed_records():
     ):
         with pytest.raises(TeamDefinitionError, match="TEAM_RECORD_CORRUPT"):
             TeamRevision.from_record({**original.canonical_record(), **change})
+
+
+def test_work_reference_is_exact_and_legacy_digest_remains_unchanged():
+    from agent_console.digital_employee_definition import digest
+    from agent_console.team_definition import TeamWorkReference
+
+    original = team()
+    legacy = {
+        "schemaVersion": "team-definition.v1",
+        "scope": {"namespace": "test-tenant", "security_domain": "isolated"},
+        "team_id": "team:handoff",
+        "revision_id": "team-revision:1",
+        "title": "上线交接核对团队",
+        "goal": "核对材料完整性并保留缺失项",
+        "owner_id": "human:accountable",
+        "members": [
+            {
+                "employee_definition_id": "employee:reviewer",
+                "employee_revision_id": "employee-revision:1",
+                "employee_digest": "a" * 64,
+                "responsibility": "在本团队核对交接材料",
+                "handoff": "交付缺失说明清单",
+            }
+        ],
+        "predecessor_revision_id": None,
+    }
+    assert original.content_digest == digest(legacy)
+    assert replace(original, work_links=()).content_digest == digest(legacy)
+    link = TeamWorkReference(
+        "run:1", "b" * 64, "problem:1", "problem-revision:1", "c" * 64
+    )
+    linked = replace(original, work_links=(link,))
+    assert linked.canonical_record()["schemaVersion"] == "team-definition.v2"
+    assert TeamRevision.from_record(linked.canonical_record()) == linked
+    assert (
+        linked.content_digest
+        != replace(
+            linked,
+            work_links=(replace(link, problem_revision_id="problem-revision:2"),),
+        ).content_digest
+    )
+    with pytest.raises(TeamDefinitionError, match="TEAM_WORK_DUPLICATE"):
+        replace(original, work_links=(link, link))
+    with pytest.raises(TeamDefinitionError, match="TEAM_RECORD_CORRUPT"):
+        TeamRevision.from_record({**legacy, "work_links": []})
+    with pytest.raises(TeamDefinitionError, match="TEAM_RECORD_CORRUPT"):
+        TeamRevision.from_record({**linked.canonical_record(), "work_links": []})

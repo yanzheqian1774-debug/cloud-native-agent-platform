@@ -51,6 +51,30 @@ class TeamMember:
 
 
 @dataclass(frozen=True)
+class TeamWorkReference:
+    workflow_run_id: str
+    preparation_digest: str
+    business_problem_id: str
+    problem_revision_id: str
+    problem_digest: str
+
+    def __post_init__(self) -> None:
+        for value in (
+            self.workflow_run_id,
+            self.business_problem_id,
+            self.problem_revision_id,
+        ):
+            _identity(value)
+        for value in (self.preparation_digest, self.problem_digest):
+            if (
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(c not in "0123456789abcdef" for c in value)
+            ):
+                raise TeamDefinitionError("TEAM_WORK_DIGEST_INVALID")
+
+
+@dataclass(frozen=True)
 class TeamRevision:
     scope: ScopeIdentity
     team_id: str
@@ -60,6 +84,7 @@ class TeamRevision:
     owner_id: str
     members: tuple[TeamMember, ...]
     predecessor_revision_id: str | None = None
+    work_links: tuple[TeamWorkReference, ...] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, ScopeIdentity):
@@ -81,15 +106,47 @@ class TeamRevision:
         if len({m.employee_definition_id for m in self.members}) != len(self.members):
             raise TeamDefinitionError("TEAM_MEMBER_DUPLICATE")
 
+        if self.work_links is not None:
+            if (
+                not isinstance(self.work_links, tuple)
+                or len(self.work_links) > 32
+                or any(
+                    not isinstance(link, TeamWorkReference) for link in self.work_links
+                )
+            ):
+                raise TeamDefinitionError("TEAM_WORK_LINKS_INVALID")
+            if len({link.workflow_run_id for link in self.work_links}) != len(
+                self.work_links
+            ):
+                raise TeamDefinitionError("TEAM_WORK_DUPLICATE")
+
     def canonical_record(self) -> dict:
-        return {"schemaVersion": "team-definition.v1", **asdict(self)}
+        record = asdict(self)
+        if not self.work_links:
+            record.pop("work_links")
+        return {
+            "schemaVersion": "team-definition.v2"
+            if self.work_links
+            else "team-definition.v1",
+            **record,
+        }
 
     @classmethod
     def from_record(cls, record: dict) -> TeamRevision:
         """Reject malformed stored content instead of silently dropping fields."""
         try:
             value = dict(record)
-            if value.pop("schemaVersion") != "team-definition.v1":
+            schema = value.pop("schemaVersion")
+            if schema == "team-definition.v1":
+                if "work_links" in value:
+                    raise ValueError("unexpected work links")
+            elif schema == "team-definition.v2":
+                if not value.get("work_links"):
+                    raise ValueError("missing work links")
+                value["work_links"] = tuple(
+                    TeamWorkReference(**link) for link in value["work_links"]
+                )
+            else:
                 raise ValueError("schema")
             value["scope"] = ScopeIdentity(**value["scope"])
             value["members"] = tuple(TeamMember(**m) for m in value["members"])
