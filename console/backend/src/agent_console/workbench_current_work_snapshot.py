@@ -1,0 +1,91 @@
+"""Internal single-statement task facts, not an authorized browser response.
+
+Call only within the existing owner transaction. The caller must filter exact
+permissions before exposing any row or count. Do not return this raw snapshot:
+preparation/resource bindings and conversation identities have separate policies.
+"""
+
+from .workbench_owner_authorization import WorkbenchOwnerError
+
+# Bounded admission fails the entire read rather than presenting a partial total.
+MAX_SNAPSHOT_RUNS = 10000
+
+SNAPSHOT_SQL = """
+WITH runs AS MATERIALIZED (
+ SELECT p.*, g.version AS progress_version, g.record AS progress,
+        g.updated_at AS progress_updated_at
+ FROM execution_authority.run_preparations p
+ LEFT JOIN execution_authority.prepared_run_progress g
+   USING(namespace,security_domain,workflow_run_id)
+ WHERE p.namespace=%s AND p.security_domain=%s
+ ORDER BY p.created_at DESC,p.workflow_run_id DESC
+ LIMIT %s
+)
+SELECT p.namespace,p.security_domain,p.workflow_run_id,p.digest,p.record preparation,
+ p.created_at,p.progress_version,p.progress,p.progress_updated_at,
+ statement_timestamp() read_at,
+ r.business_problem_id,r.revision_id problem_revision_id,r.digest problem_digest,
+ r.title,
+ (SELECT coalesce(jsonb_agg(DISTINCT s.actor_id),'[]'::jsonb)
+  FROM execution_authority.prepared_start_commands s
+  WHERE (s.namespace,s.security_domain,s.workflow_run_id)=
+        (p.namespace,p.security_domain,p.workflow_run_id)) initiators,
+ (SELECT count(*) FROM execution_authority.run_artifacts a
+  WHERE (a.namespace,a.security_domain,a.workflow_run_id)=
+        (p.namespace,p.security_domain,p.workflow_run_id)) artifact_count,
+ h.version outcome_version,o.resolution business_resolution,
+ (SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'invocationId',q.skill_invocation_id,'questionKey',q.result->>'questionKey',
+    'questionDigest',q.request_digest,'expiresAt',q.result->>'expiresAt',
+    'answered',a.result IS NOT NULL,
+    'answerDigest',CASE WHEN a.result IS NOT NULL THEN a.request_digest END)
+    ORDER BY q.skill_invocation_id,q.record_key),'[]'::jsonb)
+  FROM skill_invocation.invocations i
+  JOIN skill_invocation.native_loop_records q
+    USING(namespace,security_domain,skill_invocation_id)
+  LEFT JOIN skill_invocation.native_loop_records a
+    ON (a.namespace,a.security_domain,a.skill_invocation_id)=
+       (q.namespace,q.security_domain,q.skill_invocation_id)
+    AND a.record_key=(q.result->>'questionKey')||':answer'
+  WHERE (i.namespace,i.security_domain,i.workflow_run_id)=
+        (p.namespace,p.security_domain,p.workflow_run_id)
+    AND q.result->>'kind'='NATIVE_QUESTION') questions,
+ (SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'conversationId',l.conversation_id,'ownerId',c.owner_id,
+    'schemaVersion',c.schema_version,
+    'journeyMatches',coalesce(j.state->>'execution'=p.digest,false))
+    ORDER BY l.created_at,l.conversation_id,l.link_id),'[]'::jsonb)
+  FROM private_conversation.links l
+  JOIN private_conversation.conversations c
+    USING(tenant_id,security_domain,conversation_id)
+  LEFT JOIN private_conversation.journeys j
+    USING(tenant_id,security_domain,conversation_id)
+  WHERE l.tenant_id=p.namespace AND l.security_domain=p.security_domain
+    AND l.target->>'problemId'=r.business_problem_id
+    AND (l.target->>'executionDigest'=p.digest OR (
+      l.target->>'executionDigest' IS NULL
+      AND j.state->>'execution'=p.digest
+      AND j.state#>>'{problem,business_problem_id}'=r.business_problem_id))) origins
+FROM runs p
+LEFT JOIN business_problem_authority.problem_revisions r
+ ON r.namespace=p.namespace AND r.security_domain=p.security_domain
+ AND r.business_problem_id=p.record#>>'{semantics,target,problem,resource_id}'
+ AND r.revision_id=p.record#>>'{semantics,target,problem,revision_id}'
+ AND r.digest=p.record#>>'{semantics,target,problem,digest}'
+LEFT JOIN product_outcome.heads h
+ ON (h.namespace,h.security_domain,h.workflow_run_id)=
+    (p.namespace,p.security_domain,p.workflow_run_id)
+LEFT JOIN product_outcome.outcomes o
+ ON (o.namespace,o.security_domain,o.outcome_id)=
+    (h.namespace,h.security_domain,h.outcome_id)
+ORDER BY p.created_at DESC,p.workflow_run_id DESC
+"""
+
+
+def read_current_work_snapshot(connection, *, namespace: str, security_domain: str):
+    rows = connection.execute(
+        SNAPSHOT_SQL, (namespace, security_domain, MAX_SNAPSHOT_RUNS + 1)
+    ).fetchall()
+    if len(rows) > MAX_SNAPSHOT_RUNS:
+        raise WorkbenchOwnerError("CURRENT_WORK_SNAPSHOT_CAPACITY", 503)
+    return rows

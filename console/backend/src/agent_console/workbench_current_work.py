@@ -1,0 +1,74 @@
+"""Authenticated F3 task directory, assembled from existing owner facts."""
+
+from .authority_contracts import ExactGrant
+from .business_problem_authorization import problem_resource
+from .development_administrator import for_call
+from .workbench_bff import PREFIX, WorkbenchOperation
+from .workbench_current_work_authorization import readable_runs
+from .workbench_current_work_page import directory_page
+from .workbench_current_work_projection import project_runs
+from .workbench_current_work_query import CurrentWorkQuery
+from .workbench_current_work_snapshot import read_current_work_snapshot
+
+
+class CurrentWorkDirectory:
+    def __init__(self, cursors):
+        self.cursors = cursors
+
+    def __call__(self, call):
+        administrator = for_call(call)
+        query = CurrentWorkQuery.model_validate(call.query).resolved(
+            verified_development_administrator=administrator
+        )
+        generation = call.policy_generation
+        epoch = call.recovery_epoch
+        # Reject stale or cross-subject/filter cursors before expensive reads.
+        query.after(
+            self.cursors, call.context, generation=generation, recovery_epoch=epoch
+        )
+        rows = read_current_work_snapshot(
+            call.connection,
+            namespace=call.context.scope.tenant_id,
+            security_domain=call.context.scope.security_domain,
+        )
+        read_at = rows[0]["read_at"] if rows else call.authority.adapter.clock()
+        visible = readable_runs(call, rows)
+        # These predicates require no optional metadata, so avoid integrity reads
+        # on records excluded by the user's scope and search. State filtering
+        # follows the authorized Native question projection.
+        selected = [
+            row
+            for row in visible
+            if (
+                query.scopeFilter == "visible"
+                or row["initiators"] == [call.context.principal_id]
+            )
+            and query.query.casefold()
+            in (row["title"] + " " + row["workflow_run_id"]).casefold()
+        ]
+        items = project_runs(call, selected, verified_administrator=administrator)
+        return directory_page(
+            items,
+            query,
+            self.cursors,
+            call.context,
+            generation=generation,
+            recovery_epoch=epoch,
+            read_at=read_at,
+        )
+
+
+def operations(cursors):
+    return (
+        WorkbenchOperation(
+            name="LIST_CURRENT_WORK",
+            method="GET",
+            path=PREFIX + "/current-work",
+            request_model=None,
+            query_model=CurrentWorkQuery,
+            grant_builder=lambda context, path, payload, query: (
+                ExactGrant("BUSINESS_PROBLEM", "LIST", problem_resource()),
+            ),
+            handler=CurrentWorkDirectory(cursors),
+        ),
+    )

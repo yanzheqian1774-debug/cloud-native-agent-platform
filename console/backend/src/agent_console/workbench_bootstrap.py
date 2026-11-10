@@ -479,6 +479,16 @@ def build_workbench_composition(
             resource_automation.continuation = continuation
             continuation_routes = continuation_operations(continuation)
 
+        current_work_routes = ()
+        if os.environ.get("CURRENT_WORK_DIRECTORY_ENABLED") == "true":
+            if prepared_execution_coordinator is None:
+                raise AuthorityError("CURRENT_WORK_DIRECTORY_DEPENDENCIES_REQUIRED")
+            from .workbench_current_work import operations as current_work_operations
+
+            current_work_routes = current_work_operations(
+                WorkbenchCursorCodec(foundation.continuation_owner.signing_key)
+            )
+
         directory_routes = ()
         directory_installers = ()
         if prepared_resource_services:
@@ -626,6 +636,7 @@ def build_workbench_composition(
                 *resource_automation_routes,
                 *continuation_routes,
                 *directory_routes,
+                *current_work_routes,
                 *ontology_operations,
                 *(
                     prepared_resource_operations(

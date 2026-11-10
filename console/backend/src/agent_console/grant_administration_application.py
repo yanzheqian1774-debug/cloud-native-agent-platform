@@ -247,12 +247,16 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
         recovery_epoch: int,
         connection: object | None = None,
         configure_transaction: bool = True,
+        require_available: bool = False,
     ) -> tuple[bool, ...]:
+        if not grants:
+            return ()
         if (
-            not grants
-            or generation != self.generation.generation
+            generation != self.generation.generation
             or recovery_epoch != self.recovery_epoch
         ):
+            if require_available:
+                raise AuthorityError("AUTHORIZATION_STATE_UNAVAILABLE")
             return tuple(False for _ in grants)
         credential_id, states = self.read_linearized_authorization_states(
             context,
@@ -263,6 +267,11 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             connection=connection,
             configure_transaction=configure_transaction,
         )
+        if require_available and (
+            len(states) != len(grants)
+            or DynamicAuthorizationState.UNAVAILABLE in states
+        ):
+            raise AuthorityError("AUTHORIZATION_STATE_UNAVAILABLE")
         credential, expected_source = self._current_credential(
             context, credential_id, now=now
         )
