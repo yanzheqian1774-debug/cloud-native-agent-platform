@@ -142,7 +142,7 @@ test('first native model shows progress with no completed steps and polling neve
   if(route.request().url().endsWith('/native-progress')){reads++;if(reads===1)await gate;if(fail)return route.fulfill({status:503,json:{}});return route.fulfill({json:{result:{steps:completed?[{id:'read',decision:{action:'TOOL',tool:'read_document'},toolState:'COMPLETED',output:{lines:[{line:1,text:'文档原文'}]}}]:[],questions:[],modelInFlight:!completed}}});}
   return route.fulfill({json:{result:{digest,preparation:{semantics:{tasks:[]},participants:[]},progress:{state:'RUNNING',tasks:[]},artifacts:[],resourceUses:[],events:[]}}});
  });
- await page.goto('/work?conversation=new');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('正在读取任务进展');await expect.poll(()=>reads).toBe(1);await page.waitForTimeout(1600);expect(reads).toBe(1);release();await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('等待本轮返回');completed=true;await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=true;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toBeVisible();await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=false;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toHaveCount(0,{timeout:10000});expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
+ await page.goto('/work?conversation=new');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('正在读取已保存的执行进展');await expect.poll(()=>reads).toBe(1);await page.waitForTimeout(1600);expect(reads).toBe(1);release();await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('等待本轮返回');completed=true;await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=true;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toBeVisible();await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=false;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toHaveCount(0,{timeout:10000});expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
 });
 
 for(const interrupted of [false,true])test('streamed understanding shows provisional text and never resends after disconnect '+interrupted,async({page})=>{
@@ -222,4 +222,21 @@ test('actual unquoted either-or question offers literal options without a defaul
 });
 test('ambiguous unquoted choice wording stays free text rather than inventing alternatives',async({page})=>{
  const s=await nativeQuestionFixture(page);s.q.question='先检查资料还是先确认范围，还是暂停处理？';await page.goto('/work?conversation=new');await expect(page.getByRole('group',{name:'选择明确选项'})).toHaveCount(0);await expect(page.locator('#native-clarification-reply')).toBeVisible();expect(s.calls).toHaveLength(0);
+});
+
+
+test('reopening saved execution waits for authoritative progress without claiming a new execution',async({page})=>{
+ const s=await fixture(page),digest='a'.repeat(64),ref={resource_id:'p',revision_id:'1',digest:'b'.repeat(64)};
+ s.journal={version:2,state:{key:'saved',question:prompt,phase:'RUNNING',execution:digest,problem:{business_problem_id:'p'},messages:[{id:'user:q',text:prompt}],log:[]}};
+ let release!:()=>void;const gate=new Promise<void>(r=>release=r);let posts=0;
+ await page.route('**/api/workbench/v1/prepared-executions/**',async route=>{
+  if(route.request().method()!=='GET')posts++;
+  await gate;
+  if(route.request().url().endsWith('/native-progress'))return route.fulfill({json:{result:{steps:[],questions:[],modelInFlight:false}}});
+  return route.fulfill({json:{result:{digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'c'.repeat(64),approval_id:'approval',source_snapshot:ref,semantics:{title:'已保存分析',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'SUCCEEDED',version:2,tasks:[]},admission:{state:'ADMITTED',reason:null},resourceUses:[],artifacts:[],events:[],outcome:null}}});
+ });
+ await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'正在读取本次工作',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('正在读取已保存的执行进度与结果');await expect(page.locator('.journey-stages [aria-current=step]')).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('不会重新提交或执行任务');release();
+ await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('结果已返回');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('执行已结束');expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
 });

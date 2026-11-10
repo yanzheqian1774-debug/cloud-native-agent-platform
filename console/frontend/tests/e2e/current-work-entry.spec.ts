@@ -7,10 +7,11 @@ for(const incomplete of [false,true])test(`attention reads current owners and st
   if(path.endsWith('/problems'))return route.fulfill({json:{result:{problems:[{business_problem_id:'p',title:'合成待处理验证'}]}}});
   if(path.endsWith('/conversations'))return route.fulfill(incomplete?{status:503,json:{reasonCode:'READ_INCOMPLETE_FIXTURE'}}:{json:{result:{items:[{conversation_id:'c'}]}}});
   if(path.endsWith('/conversations/c'))return route.fulfill({json:{result:{conversation:{conversation_id:'c',version:1},messages:[],links:[{link_id:'l',readable:true,target:{problemId:'p',executionDigest:'execution'}}]}}});
-  if(path.endsWith('/prepared-executions/execution'))return route.fulfill({json:{result:{digest:'execution',preparation:{semantics:{title:'仅合成数据结果',target:{problem:{resource_id:'p'}}}},progress:{state:'SUCCEEDED',tasks:[]},outcome:{businessResolution:'UNDETERMINED',confirmationId:null}}}});
+  if(path.endsWith('/prepared-executions/execution/native-progress'))return route.fulfill({json:{result:{questions:[{questionKey:'q',questionDigest:'a'.repeat(64),question:'请确认本次适用规范。',expiresAt:'2099-01-01',expired:false,answer:null}]}}});
+  if(path.endsWith('/prepared-executions/execution'))return route.fulfill({json:{result:{digest:'execution',preparation:{plan_version:1,source_snapshot:{resource_id:'source',revision_id:'1',digest:'a'.repeat(64)},participants:[],semantics:{title:'仅合成数据结果',tasks:[],target:{problem:{resource_id:'p'}}}},progress:{state:'RUNNING',tasks:[]},artifacts:[],events:[],outcome:{businessResolution:'UNDETERMINED',confirmationId:null,evaluation:{results:[]}}}}});
   return route.fulfill({status:404,json:{reasonCode:'UNEXPECTED_FIXTURE'}});
- });await page.goto('/attention');await expect(page.getByRole('heading',{name:'核对当前工作的待处理事项',exact:true})).toBeVisible();
- if(incomplete)await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();else await expect(page.getByText('业务结果尚未判定，请核对交付证据与完成标准。',{exact:true})).toBeVisible();
+ });await page.goto('/attention');await expect(page.getByRole('heading',{name:'待我处理',exact:true})).toBeVisible();
+ if(incomplete)await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();else await expect(page.getByText('请确认本次适用规范。',{exact:true})).toBeVisible();
  expect(requests.every(r=>r.startsWith('GET '))).toBe(true);expect(requests.some(r=>r.includes('product/attention'))).toBe(false);
 });
 test('verified logout clears identity and keeps the exact login return link',async({page})=>{let deleted=false;
