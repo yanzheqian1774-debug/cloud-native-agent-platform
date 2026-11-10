@@ -1,3 +1,4 @@
+import {employeeReadFeedback} from './employeeReadFeedback';
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {getEmployeeAuthoring,getWorkbenchSession,workbenchPrincipalKey,type EmployeeAuthoring,type EmployeeDefinition,type EmployeeDefinitionSummary} from '../api/digitalEmployees';
 
@@ -23,15 +24,15 @@ export function useEmployeeAuthoring(item:EmployeeDefinition|null,enabled:boolea
  useLayoutEffect(()=>{itemRef.current=item},[item]);
  const refresh=useCallback(async()=>{
   const selected=itemRef.current;if(!identity||!selected)return null;
-  const token=++generation.current;active.current?.abort();const controller=new AbortController();active.current=controller;
+  const token=++generation.current;active.current?.abort();const controller=new AbortController();active.current=controller;const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(8000)]);
   setState({identity});
   try{
-   const before=workbenchPrincipalKey(await getWorkbenchSession(controller.signal));
-   const value=verifyEmployeeAuthoring(await getEmployeeAuthoring(selected,controller.signal),selected);
-   if(workbenchPrincipalKey(await getWorkbenchSession(controller.signal))!==before)throw Error('登录身份已变化，请重新打开员工。');
+   const before=workbenchPrincipalKey(await getWorkbenchSession(signal));
+   const value=verifyEmployeeAuthoring(await getEmployeeAuthoring(selected,signal),selected);
+   if(workbenchPrincipalKey(await getWorkbenchSession(signal))!==before)throw Error('登录身份已变化，请重新打开员工。');
    if(token!==generation.current)return null;
    setState({identity,value});return value;
-  }catch(error){if(token===generation.current)setState({identity,error:error instanceof Error?error.message:'当前版本暂未读回。'});return null}
+  }catch(error){if(token===generation.current)setState({identity,error:employeeReadFeedback(error,signal)});return null}
  },[identity]);
  useEffect(()=>{
   const epoch=generation;

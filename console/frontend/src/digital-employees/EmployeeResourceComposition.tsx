@@ -12,12 +12,13 @@ const kinds:Record<EmployeeMember['kind'],{name:string;directory:DirectoryKind}>
 };
 const memberKey=(m:EmployeeMember)=>JSON.stringify([m.kind,m.resourceId,m.revisionId,m.digest]);
 export function EmployeeBoundResourceCard({member,item}:{member:EmployeeMember;item:EmployeeDefinition}){
- const key=memberKey(member),kind=kinds[member.kind];
+ const [attempt,setAttempt]=useState(0);
+ const key=memberKey(member)+":"+attempt,kind=kinds[member.kind];
  const [result,setResult]=useState<{key:string;value:DirectoryItem|null}|null>(null);
  useEffect(()=>{
   let active=true;const controller=new AbortController();
   const withdraw=()=>{active=false;controller.abort();setResult({key,value:null})};
-  void listReadableResources(kind.directory,member.resourceId,'',null,controller.signal).then(page=>{
+  void listReadableResources(kind.directory,member.resourceId,'',null,AbortSignal.any([controller.signal,AbortSignal.timeout(8000)])).then(page=>{
    const matches=page.items.filter(value=>value.kind===kind.directory&&value.identity===member.resourceId&&value.revisionId===member.revisionId&&value.digest===member.digest.replace(/^sha256:/,''));
    if(active)setResult({key,value:matches.length===1?matches[0]:null});
   }).catch(()=>{if(active)setResult({key,value:null})});
@@ -31,7 +32,7 @@ export function EmployeeBoundResourceCard({member,item}:{member:EmployeeMember;i
   <div><strong>{resultValue?.name||(loaded?'已绑定'+kind.name+' · 名称暂未核对':'正在核对'+kind.name+'名称…')}</strong><p>{resultValue?.businessPurpose||'保留员工定义中的固定版本引用。'}</p>
    <details><summary>版本依据</summary><dl><dt>资源</dt><dd>{member.resourceId}</dd><dt>修订</dt><dd>{member.revisionId}</dd><dt>摘要</dt><dd>{member.digest}</dd></dl></details>
   </div>
-  <div className="employee-resource-card-action"><span>{resultValue?'本次绑定版本':loaded?'准确名称未读回':'正在核对…'}</span>{href?<Link to={employeeMemberHref(href,item)}>查看详情</Link>:<span>详情入口尚未接通</span>}</div>
+  <div className="employee-resource-card-action"><span>{resultValue?'本次绑定版本':loaded?'准确名称未读回':'正在核对…'}</span>{loaded&&!resultValue&&<button onClick={()=>setAttempt(v=>v+1)}>重新核对名称</button>}{href?<Link to={employeeMemberHref(href,item)}>查看详情</Link>:<span>详情入口尚未接通</span>}</div>
  </article>;
 }
 

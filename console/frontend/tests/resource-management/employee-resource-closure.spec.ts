@@ -362,3 +362,29 @@ for(const mode of ['immediate','expanded-refresh','identity-change'])test('bound
  await expect(page.getByRole('button',{name:'资源组成',exact:true})).toHaveClass(/active/);
  if(mode==='identity-change'){await expect(link).not.toBeFocused();await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBe(0)}else{await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBeCloseTo(before,0);await expect(link).toBeFocused();if(mode==='expanded-refresh')await expect(card.locator('details')).toHaveAttribute('open','')}expect(extra.posts).toHaveLength(0);
 });
+
+for(const view of ['collection','detail'])test('stalled version read becomes retryable without command '+view,async({page})=>{
+ const {extra}=await fixture(page);let hold=true,release=()=>{};const pending=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/authoring',async route=>{if(hold)await pending;await route.fallback().catch(()=>{})});
+ await page.goto(view==='collection'?'/employees':href().replace('employeeView=professional&',''));
+ if(view==='collection')await expect(page.getByText('读取等待时间较长，可重新核对。 当前发布与草稿仍未确认。')).toBeVisible({timeout:15000});
+ else await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('当前版本暂未核实，暂不能修改。读取等待时间较长，可重新核对。')).toBeVisible({timeout:15000});
+ hold=false;release();const retry=view==='collection'?page.getByRole('region',{name:'员工集合'}).getByRole('button',{name:'重新核对版本',exact:true}):page.getByRole('region',{name:'当前发布与修改草稿'}).getByRole('button',{name:'重新核对版本',exact:true});await retry.click();
+ if(view==='collection')await expect(page.locator('.employee-version-card').getByRole('button',{name:'查看修改草稿',exact:true})).toBeVisible();else await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：正在查看',{exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
+});
+
+test('stalled member name preserves fixed reference and retries only reads',async({page})=>{
+ const {original,extra}=await fixture(page);original.members=original.members.filter(m=>m.kind!=='MCP');const skill=original.members.find(m=>m.kind==='SKILL')!;skill.revisionId='revision:2';skill.digest='b'.repeat(64);
+ let hold=true,release=()=>{};const pending=new Promise<void>(resolve=>{release=resolve});await page.route('**/resource-directory?*',async route=>{if(hold)await pending;await route.fallback().catch(()=>{})});
+ await page.goto(href().replace('employeeView=professional&',''));const card=page.getByRole('article',{name:'技能绑定资源'});const link=card.getByRole('link',{name:'查看详情'});await expect(link).toBeVisible();const exact=await link.getAttribute('href');await card.locator('summary').click();await expect(card.getByText('revision:2',{exact:true})).toBeVisible();
+ await expect(card.getByRole('button',{name:'重新核对名称'})).toBeVisible({timeout:15000});hold=false;release();await card.getByRole('button',{name:'重新核对名称'}).click();await expect(card.getByRole('button',{name:'重新核对名称'})).toHaveCount(0);await expect(card.getByText('本次绑定版本',{exact:true})).toBeVisible();await expect(link).toHaveAttribute('href',exact!);await expect(card.locator('details')).toHaveAttribute('open','');expect(extra.posts).toHaveLength(0);
+});
+
+for(const mode of ['timeout','denied'])test('collection reread preserves prior facts only as stale unless denied '+mode,async({page})=>{
+ const {original,extra}=await fixture(page);await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card.getByRole('button',{name:'查看修改草稿',exact:true})).toBeVisible();
+ let release=()=>{};const pending=new Promise<void>(resolve=>{release=resolve});await page.route('**/authoring',async route=>{if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'READ_DENIED'}});await pending;await route.fallback().catch(()=>{})});
+ await page.getByRole('button',{name:'重新核对版本',exact:true}).click();
+ if(mode==='timeout'){await expect(card.getByText('显示上次核对内容，当前状态待重新确认。',{exact:false})).toBeVisible();await expect(card.getByText(original.responsibilities[0],{exact:true})).toBeVisible();await expect(card.getByText('读取等待时间较长，可重新核对。',{exact:false})).toBeVisible({timeout:15000});await expect(card.getByRole('button',{name:'查看当前发布',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'查看已读草稿',exact:true})).toBeVisible();release()}
+ else{await expect(card.getByText('当前资源不可读取，请核对访问范围。',{exact:false})).toBeVisible();await expect(card.getByRole('button',{name:'查看已读草稿',exact:true})).toHaveCount(0)}
+ expect(extra.posts).toHaveLength(0);
+});
