@@ -52,3 +52,34 @@
  .px-shell.journey-shell .f3-conversation .px-workspace-body{height:0;min-height:0;flex:1}
  .px-shell.journey-shell .f3-conversation .px-workspace-body>.px-conversation{height:0;min-height:0;flex:1;order:0}
 }
+
+/* Frozen F3 source tokens and component dimensions, scoped to this delivery. */
+.px-shell.journey-shell:has(.f3-conversation){--px-blue:#4567cd;--px-ink:#273851;--px-muted:#63738b;--px-line:#e0e6ef;--px-bg:#f5f7fb;color:var(--px-ink);font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.65;background:var(--px-bg)}
+.px-shell.journey-shell:has(.f3-conversation) :is(.px-brand,.px-header-path,.px-header-tool,.px-business-nav a,.px-business-nav summary){color:var(--px-ink)}
+.px-shell.journey-shell:has(.f3-conversation) :is(.px-business-nav a,.px-business-nav summary){font-size:14px;font-weight:400;min-height:40px}
+.px-shell.journey-shell:has(.f3-conversation) :is(.px-business-nav a.active,.px-business-nav summary.active){color:var(--px-blue);background:#eef3ff;font-weight:600}
+.px-shell.journey-shell:has(.f3-conversation) :is(.px-brand-mark,.px-user){color:var(--px-blue)}
+.px-shell.journey-shell:has(.f3-conversation) .px-new-conversation{background:var(--px-blue);border-color:var(--px-blue);font-weight:400}
+.px-shell.journey-shell:has(.f3-conversation) .px-content>aside[aria-label="开发超级管理员"]{margin:0!important;padding:5px 24px!important;border:0!important;border-bottom:1px solid var(--px-line)!important;border-radius:0!important;background:#f5f7fb!important;color:var(--px-muted)!important;font-size:12px;line-height:1.6}
+.px-shell.journey-shell .f3-conversation{--px-blue:#4567cd;color:var(--px-ink);background:var(--px-bg)}
+.px-shell.journey-shell .f3-conversation.f3-start{grid-template-rows:0 minmax(0,1fr)}
+.px-shell.journey-shell .f3-start>.private-heading{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden;clip-path:inset(50%);padding:0!important;border:0}
+.f3-start .private-heading h1{display:none}
+.f3-conversation :is(h1,h2,h3,h4,strong){color:var(--px-ink)}
+.f3-welcome{padding:36px 8px}.f3-welcome h1{font-size:26px;line-height:1.35;font-weight:650;margin:20px 0 8px;letter-spacing:0}.f3-welcome h3{font-size:18px;line-height:1.5;font-weight:600}
+.f3-welcome p,.f3-examples span,.f3-examples small{color:var(--px-muted)}
+.f3-examples{gap:20px}.f3-examples button{padding:22px;border:1px solid var(--px-line);border-radius:10px;min-height:168px;font:inherit;font-size:14px;font-weight:400;display:flex;flex-direction:column;align-items:flex-start}
+.f3-examples strong{font-size:15px;font-weight:600;line-height:1.5}.f3-examples span{margin-top:12px}.f3-examples small{margin-top:auto;padding-top:24px;font-size:12px;font-weight:400;color:var(--px-blue)}
+.f3-spark{color:var(--px-blue);background:#eef3ff}
+.f3-conversation .f3-composer-dock{border-top-color:#dce4ef;padding:10px 24px}
+.f3-conversation .f3-composer-dock .private-composer{padding:10px 14px;border-color:#cbd6ed;border-radius:12px;box-shadow:none}
+.px-shell.journey-shell .f3-conversation .private-composer textarea{border:0;border-radius:0;min-height:52px;height:52px;max-height:120px;padding:4px;margin:4px 0 8px;box-shadow:none;color:var(--px-ink);background:transparent;font:inherit;resize:vertical}
+.f3-conversation .private-composer button{min-height:36px;padding:8px 12px;border-radius:7px;background:var(--px-blue);font-size:13px;line-height:1.5;font-weight:400}
+.f3-conversation .private-composer :is(label,small){font-size:12px;line-height:1.6;color:var(--px-muted)}
+.f3-conversation .f3-answer-choices button{background:#fff;color:var(--px-blue);border-color:var(--px-line)}
+.f3-conversation .f3-answer-choices button[aria-pressed=true]{background:#eef3ff;border-color:var(--px-blue)}
+.f3-conversation .conversation-journey button{border-color:var(--px-line);color:var(--px-blue);background:#fff;font-size:13px;line-height:1.5;font-weight:400;min-height:36px;padding:8px 12px;border-radius:7px}
+.f3-conversation .journey-stages [data-state=current]{color:var(--px-blue)}.f3-conversation .journey-stages [data-state=current] span{background:var(--px-blue)}
+.f3-conversation .private-user{background:#eef3ff}.f3-conversation .f3-progress-rail :is(.journey-progress,.px-result-card){border-color:var(--px-line);background:#fff}.f3-conversation .f3-progress-rail h2{font-size:18px;font-weight:600}.f3-conversation .f3-progress-rail h3{font-size:15px;font-weight:600}
+.f3-conversation :is(button,a,textarea):focus-visible{outline:3px solid #9ab2ef;outline-offset:3px}
+@media(max-width:700px){.f3-welcome{padding:14px 0}.f3-welcome h1{font-size:24px}.f3-conversation .f3-composer-dock{padding:8px 12px}.f3-examples button{min-height:144px}.px-shell.journey-shell:has(.f3-conversation) .px-content>aside[aria-label="开发超级管理员"]{padding:4px 16px!important}}

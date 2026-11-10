@@ -135,7 +135,7 @@ test('first native model shows progress with no completed steps and polling neve
   if(route.request().url().endsWith('/native-progress')){reads++;if(reads===1)await gate;if(fail)return route.fulfill({status:503,json:{}});return route.fulfill({json:{result:{steps:completed?[{id:'read',decision:{action:'TOOL',tool:'read_document'},toolState:'COMPLETED',output:{lines:[{line:1,text:'文档原文'}]}}]:[],questions:[],modelInFlight:!completed}}});}
   return route.fulfill({json:{result:{digest,preparation:{semantics:{tasks:[]},participants:[]},progress:{state:'RUNNING',tasks:[]},artifacts:[],resourceUses:[],events:[]}}});
  });
- await page.goto('/work?conversation=new');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('正在读取任务进展');await expect.poll(()=>reads).toBe(1);await page.waitForTimeout(1600);expect(reads).toBe(1);release();await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('等待本轮返回');completed=true;await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=true;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toBeVisible();await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=false;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toHaveCount(0);expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
+ await page.goto('/work?conversation=new');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('正在读取任务进展');await expect.poll(()=>reads).toBe(1);await page.waitForTimeout(1600);expect(reads).toBe(1);release();await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('等待本轮返回');completed=true;await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=true;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toBeVisible();await expect(page.getByText('已读取 1 行原文，可展开查看依据。')).toBeVisible();fail=false;await expect(page.getByText('最新进展暂不可用，下方保留上次读到的记录。')).toHaveCount(0,{timeout:10000});expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
 });
 
 for(const interrupted of [false,true])test('streamed understanding shows provisional text and never resends after disconnect '+interrupted,async({page})=>{
@@ -162,12 +162,12 @@ for(const interrupted of [false,true])test('streamed understanding shows provisi
 async function nativeQuestionFixture(page:Page){
  const state=await fixture(page);state.journal={version:2,state:{key:'f3',phase:'RUNNING',execution:'a'.repeat(64),problem:{business_problem_id:'p'},messages:[],log:[]}};
  const q={invocationId:'invocation',questionKey:'q1',questionDigest:'d1',question:'请确认适用《测试环境交接规范》还是《生产环境交接规范》？',expiresAt:new Date(Date.now()+600000).toISOString(),answer:null as string|null,expired:false};
- const calls:{answer:string;questionKey:string}[]=[];let denied=false;
+ const calls:{answer:string;questionKey:string}[]=[];let denied=false,receipt='ok';
  await page.route('**/api/workbench/v1/prepared-executions/**',async route=>{
   if(route.request().url().endsWith('/native-progress'))return denied?route.fulfill({status:403,json:{}}):route.fulfill({json:{result:{steps:[],questions:[q],modelInFlight:false}}});
-  if(route.request().method()==='POST'){calls.push(route.request().postDataJSON());await new Promise(r=>setTimeout(r,300));q.answer=calls.at(-1)!.answer;return route.fulfill({json:{result:{}}});}
-  return route.fulfill({json:{result:{digest:'a'.repeat(64),preparation:{semantics:{tasks:[]},participants:[]},progress:{state:'RUNNING',tasks:[]},artifacts:[],resourceUses:[],events:[]}}});
- });return {q,calls,deny:()=>{denied=true}};
+  if(route.request().method()==='POST'){calls.push(route.request().postDataJSON());await new Promise(r=>setTimeout(r,300));if(receipt==='rejected')return route.fulfill({status:422,json:{reasonCode:'INVALID_ANSWER'}});if(receipt==='unknown')return route.fulfill({status:503,json:{}});q.answer=calls.at(-1)!.answer;if(receipt==='lost')return route.abort();return route.fulfill({json:{result:{accepted:true,replayed:false}}});}
+  return route.fulfill({json:{result:{digest:'a'.repeat(64),executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'c'.repeat(64),approval_id:'approval',source_snapshot:{resource_id:'source',revision_id:'1',digest:'b'.repeat(64)},semantics:{title:'文档检查',target:{problem:{resource_id:'p',revision_id:'1',digest:'b'.repeat(64)}},tasks:[]},participants:[]},progress:{state:'RUNNING',version:1,tasks:[]},admission:{state:'ADMITTED',reason:null},artifacts:[],resourceUses:[],events:[],outcome:null}}});
+ });return {q,calls,deny:()=>{denied=true},setReceipt:(value:string)=>{receipt=value}};
 }
 test('F3 fixed composer and right rail preserve exact-question draft on reload and submit once',async({page})=>{
  const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');
@@ -192,4 +192,20 @@ test('F3 new conversation draft survives return and fits a narrow viewport',asyn
 });
 test('F3 narrow active conversation keeps the answer visible and progress expandable',async({page})=>{
  await nativeQuestionFixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/work?conversation=new');await expect(page.locator('#native-clarification-reply')).toBeVisible();const box=await page.locator('#native-clarification-reply').boundingBox();if(box!.y+box!.height>=844)console.log(await page.locator('#native-clarification-reply').evaluate(node=>{const out=[];for(let e:Element|null=node;e;e=e.parentElement){const c=getComputedStyle(e);out.push({class:e.className,rect:e.getBoundingClientRect().toJSON(),display:c.display,height:c.height,minHeight:c.minHeight,flex:c.flex,overflow:c.overflow})}return out}));expect(box!.y+box!.height).toBeLessThan(844);await page.getByRole('button',{name:'展开工作进展'}).click();await expect(page.getByLabel('全流程进展')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('F3 actual Chinese-quoted alternatives preserve the selected literal without a default',async({page})=>{
+ const s=await nativeQuestionFixture(page);s.q.question='本次检查采用“测试环境交接规范”还是“生产环境交接规范”？';await page.goto('/work?conversation=new');const option=page.getByRole('button',{name:'生产环境交接规范',exact:true});await expect(option).toHaveAttribute('aria-pressed','false');await option.click();await page.reload();await expect(page.locator('#native-clarification-reply')).toHaveValue('“生产环境交接规范”');await expect(option).toHaveAttribute('aria-pressed','true');expect(s.calls).toHaveLength(0);
+});
+test('F3 explicit answer rejection retains text and only manual resubmission writes again',async({page})=>{
+ const s=await nativeQuestionFixture(page);s.setReceipt('rejected');await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect(page.getByRole('button',{name:'重新提交回答'})).toBeEnabled();await expect(page.locator('#native-clarification-reply')).toHaveValue('生产环境');expect(s.calls).toHaveLength(1);s.setReceipt('ok');await page.getByRole('button',{name:'重新提交回答'}).click();await expect.poll(()=>s.calls.length).toBe(2);await expect(page.locator('#native-clarification-reply')).toHaveCount(0);
+});
+for(const receipt of ['unknown','lost'])test('F3 ambiguous answer receipt reads existing state without another POST: '+receipt,async({page})=>{
+ const s=await nativeQuestionFixture(page);s.setReceipt(receipt);await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect.poll(()=>s.calls.length).toBe(1);
+ if(receipt==='lost'){await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);expect(await page.evaluate(()=>Object.values(sessionStorage).includes('生产环境'))).toBe(false);await expect(page.getByLabel('实时执行过程').getByRole('alert')).toHaveCount(0);}
+ else{await expect(page.getByLabel('实时执行过程').getByRole('alert')).toContainText('不会自动重发');await expect(page.locator('#native-clarification-reply')).toHaveValue('生产环境');await expect(page.getByRole('button',{name:'提交回答并继续'})).toBeDisabled();await page.waitForTimeout(1500);}
+ expect(s.calls).toHaveLength(1);
+});
+test('F3 expired input stays only within the old question for optional reference',async({page})=>{
+ const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('尚未提交的回答');s.q.expired=true;await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await page.getByText('查看本题未提交内容',{exact:true}).click();await expect(page.getByText('尚未提交的回答',{exact:true})).toBeVisible();expect(s.calls).toHaveLength(0);
 });
