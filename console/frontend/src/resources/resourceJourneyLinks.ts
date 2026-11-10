@@ -47,16 +47,21 @@ export function employeeReferenceHref(employee: {identity: string;revision: stri
   return '/employees?' + p;
 }
 
-export const employeeReturnKeys=['employeeRef','employeeRev','employeeDigest','employeeResourceBack'];
+export const employeeReturnKeys=['employeeRef','employeeRev','employeeDigest','employeeResourceBack','employeeSection','employeeViewReturn'];
 export function employeeReturnContext(params:URLSearchParams){
  if(!employeeReturnKeys.some(k=>params.has(k)))return null;
  if(employeeReturnKeys.some(k=>params.getAll(k).length>1)||!identity(params.get('employeeRef'))||!identity(params.get('employeeRev'))||!/^[a-f0-9]{64}$/.test(params.get('employeeDigest')??''))throw Error('EMPLOYEE_RETURN_UNSAFE');
  const raw=params.get('employeeResourceBack'),back=raw?safeResourceReturn(raw):null;if(raw&&!back)throw Error('EMPLOYEE_RETURN_UNSAFE');
- return {id:params.get('employeeRef')!,revision:params.get('employeeRev')!,digest:params.get('employeeDigest')!,back};
+ const section=params.get('employeeSection')??'capabilities',view=params.get('employeeViewReturn');
+ if(!['overview','capabilities','instances','assignments'].includes(section)||(view!==null&&view!=='professional'))throw Error('EMPLOYEE_RETURN_UNSAFE');
+ return {section,view,id:params.get('employeeRef')!,revision:params.get('employeeRev')!,digest:params.get('employeeDigest')!,back};
 }
 export function employeeMemberHref(href:string,item:{employeeDefinitionId:string;employeeDefinitionRevisionId:string;employeeDefinitionDigest:string}){
  const u=new URL(href,window.location.origin);if(u.origin!==window.location.origin||!['/skills','/mcp','/knowledge','/agents'].includes(u.pathname))return href;
  u.searchParams.set('employeeRef',item.employeeDefinitionId);u.searchParams.set('employeeRev',item.employeeDefinitionRevisionId);u.searchParams.set('employeeDigest',item.employeeDefinitionDigest);
- const back=safeResourceReturn(new URLSearchParams(window.location.search).get('resourceBack'));if(back)u.searchParams.set('employeeResourceBack',back);
+ const current=new URLSearchParams(window.location.search),section=current.get('section')??'overview';
+ if(['overview','capabilities','instances','assignments'].includes(section))u.searchParams.set('employeeSection',section);
+ if(current.get('employeeView')==='professional')u.searchParams.set('employeeViewReturn','professional');
+ const back=safeResourceReturn(current.get('resourceBack'));if(back)u.searchParams.set('employeeResourceBack',back);
  employeeReturnContext(u.searchParams);return u.pathname+'?'+u.searchParams;
 }

@@ -1,3 +1,4 @@
+import {useEmployeeResourcePosition} from './useEmployeeResourcePosition';
 import {EmployeeCollectionCard} from './EmployeeCollectionCard';
 import {useEmployeeCollectionVersions} from './useEmployeeCollectionVersions';
 import '../components/F3DetailTypography.css';
@@ -128,6 +129,7 @@ export function DigitalEmployeesPage() {
   const activeWorkRead = useRef<AbortController | null>(null);
   const listScroll = useRef<HTMLDivElement | null>(null);
   const detailScroll = useRef<HTMLElement | null>(null);
+  useEmployeeResourcePosition(detailScroll,selected,detailSection,professional);
   const savedListScroll = useRef(0);
   const query = params.get("q") ?? "";
   const status = params.get("status") ?? "ALL";
