@@ -18,27 +18,35 @@ async function questions(digest:string){
  if(!Array.isArray(body.result?.questions)||body.result.questions.some((q:WorkQuestion)=>typeof q.questionKey!=='string'||typeof q.questionDigest!=='string'||typeof q.question!=='string'||typeof q.expired!=='boolean'||!(q.answer===null||typeof q.answer==='string')||!Number.isFinite(Date.parse(q.expiresAt))))throw Error('QUESTION_PROJECTION_INVALID');
  return body.result.questions as WorkQuestion[];
 }
-export async function readCurrentWork(){
+export type WorkDirectoryRead={scope:string;works:CurrentWork[];limited:boolean;unlinkedProblems:number;loading:boolean};
+export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>void):Promise<WorkDirectoryRead>{
  const session=await readWorkbenchSession(),scope=conversationScope(session);let limited=false;
- const problems=await listBusinessProblems();
- const refs=new Map<string,{problemId:string;conversation:string;originVerified:boolean}>();
+ const problems=await listBusinessProblems(),works=new Map<string,CurrentWork>(),order=new Map<string,number>();
+ const ordered=()=>[...works.values()].sort((a,b)=>(order.get(a.conversation)??0)-(order.get(b.conversation)??0)||a.execution.digest.localeCompare(b.execution.digest));
+ const publish=()=>onProgress?.({scope,works:ordered(),limited,unlinkedProblems:0,loading:true});
  try{
-  const conversations=await conversationRequest<{items:{conversation_id:string}[]}>();
-  const records=await mapBounded(conversations.items,async c=>{try{const record=await conversationRequest<PrivateConversation>('/'+c.conversation_id);let ownedExecution:string|undefined;try{ownedExecution=(await conversationRequest<{state?:{execution?:string}}>('/'+c.conversation_id+'/journey')).state?.execution}catch{/* Linked history can remain readable without a journey journal. */}return {record,ownedExecution}}catch{limited=true;return null}});
-  for(const item of records)for(const link of item?.record.links??[]){
-   if(link.readable&&link.target?.executionDigest){const digest=link.target.executionDigest,originVerified=item?.ownedExecution===digest,prior=refs.get(digest);if(!prior||(!prior.originVerified&&originVerified))refs.set(digest,{problemId:link.target.problemId,conversation:item!.record.conversation.conversation_id,originVerified});}else if(!link.readable)limited=true;
-  }
+  const conversations=await conversationRequest<{items:{conversation_id:string}[]}>();conversations.items.forEach((c,i)=>order.set(c.conversation_id,i));
+  await mapBounded(conversations.items,async c=>{
+   try{
+    const record=await conversationRequest<PrivateConversation>('/'+c.conversation_id,undefined,undefined,AbortSignal.timeout(15000));
+    if(!record.links.some(link=>link.readable&&link.target?.problemId))return;
+    let ownedExecution:string|undefined,ownedProblem:string|undefined;
+    try{const state=(await conversationRequest<{state?:{execution?:string;problem?:{business_problem_id?:string}}}>('/'+c.conversation_id+'/journey',undefined,undefined,AbortSignal.timeout(15000))).state;ownedExecution=state?.execution;ownedProblem=state?.problem?.business_problem_id}catch{/* Readable historical links need not have a journey. */}
+    for(const link of record.links){
+     const digest=link.target?.executionDigest??(ownedProblem===link.target?.problemId?ownedExecution:undefined);
+     if(!link.readable){limited=true;continue}if(!link.target||!digest)continue;
+     const originVerified=ownedExecution===digest,prior=works.get(digest);if(prior&&(prior.originVerified||!originVerified))continue;
+     try{
+      const execution=await preparedRequest<ExecutionView>(digest),problem=problems.problems.find(p=>p.business_problem_id===link.target!.problemId);
+      if(!Array.isArray(execution.artifacts)||!Array.isArray(execution.events)||!Array.isArray(execution.preparation?.participants)||!Array.isArray(execution.preparation?.semantics?.tasks))throw Error('WORK_PROJECTION_INVALID');
+      if(!problem||execution.digest!==digest||execution.preparation.semantics.target.problem.resource_id!==link.target.problemId)throw Error('WORK_IDENTITY_MISMATCH');
+      let qs:WorkQuestion[]=[],questionsReadable=true;try{qs=await questions(digest)}catch{questionsReadable=false;limited=true}
+      const existing=works.get(digest);if(!existing||(!existing.originVerified&&originVerified))works.set(digest,{problem,execution,conversation:record.conversation.conversation_id,originVerified,questions:qs,questionsReadable});publish();
+     }catch{limited=true}
+    }
+   }catch{limited=true}
+  });
  }catch{limited=true}
- const records=await mapBounded([...refs],async([digest,ref]):Promise<CurrentWork|null>=>{
-  try{
-   const execution=await preparedRequest<ExecutionView>(digest),problem=problems.problems.find(p=>p.business_problem_id===ref.problemId);
-   if(!Array.isArray(execution.artifacts)||!Array.isArray(execution.events)||!Array.isArray(execution.preparation?.participants)||!Array.isArray(execution.preparation?.semantics?.tasks))throw Error('WORK_PROJECTION_INVALID');
-   if(!problem||execution.digest!==digest||execution.preparation.semantics.target.problem.resource_id!==ref.problemId)throw Error('WORK_IDENTITY_MISMATCH');
-   let qs:WorkQuestion[]=[],questionsReadable=true;
-   try{qs=await questions(digest)}catch{questionsReadable=false;limited=true}
-   return {problem,execution,conversation:ref.conversation,originVerified:ref.originVerified,questions:qs,questionsReadable};
-  }catch{limited=true;return null}
- });
  if(conversationScope(await readWorkbenchSession())!==scope)throw Error('登录身份已变化，请重新读取当前工作。');
- return {scope,works:records.filter((r):r is CurrentWork=>r!==null),limited,unlinkedProblems:problems.problems.filter(p=>!records.some(w=>w?.problem.business_problem_id===p.business_problem_id)).length};
+ const records=ordered();return {scope,works:records,limited,loading:false,unlinkedProblems:problems.problems.filter(p=>!records.some(w=>w.problem.business_problem_id===p.business_problem_id)).length};
 }
