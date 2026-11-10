@@ -57,6 +57,7 @@ from agent_console.workbench_plan_suggestion import (
     PlanningGrantTargetValidator,
     planning_operations,
 )
+from agent_console.workbench_team import team_operations
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_service import WorkflowDefinitionService
 
@@ -221,6 +222,22 @@ def build_workbench_composition(
                 json.loads(os.environ.get("BUSINESS_ONTOLOGY_CREATION_TARGETS", "[]"))
             ),
         )
+    # Explicit opt-in: deployment applies the migration separately; startup only
+    # verifies it. The existing owner pool and authorization transaction are reused.
+    team_repository = None
+    team_targets = ()
+    if os.environ.get("TEAM_DEFINITIONS_ENABLED") == "true":
+        from .team_definition_postgres import PostgresTeamDefinitionRepository
+        from .workbench_team import TeamTargets
+
+        team_repository = PostgresTeamDefinitionRepository(
+            business_problems.problems.pool
+        )
+        team_repository.compatibility(
+            Path(__file__).parents[2] / "migrations/0051_team_definition.sql"
+        )
+        team_targets = (TeamTargets(),)
+
     from .resource_definition_management import DefinitionTargets
     from .resource_management import ManagementTargets
     from .workbench_model_directory import ModelReadTargets
@@ -230,6 +247,7 @@ def build_workbench_composition(
         agent_definitions,
         employee_definitions,
         additional=(ManagementTargets(), DefinitionTargets())
+        + team_targets
         + (
             (ModelReadTargets(model_repository),)
             if model_repository is not None
@@ -652,6 +670,15 @@ def build_workbench_composition(
                     employee_definitions,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
                     prepared_resource_reads=prepared_resource_services is not None,
+                ),
+                *(
+                    team_operations(
+                        team_repository,
+                        employee_definitions,
+                        WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    )
+                    if team_repository is not None
+                    else ()
                 ),
                 *digital_employee_operations(digital_employees),
                 *employee_relation_operations(
