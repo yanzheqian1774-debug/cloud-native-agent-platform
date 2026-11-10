@@ -100,3 +100,11 @@ Latest user direction via the authorized prototype review thread holds shared-fr
 ### Skill sample review checkpoint
 
 Internal prototype review accepts this complete sample for user visual confirmation, not installation or rollout. Sidebar groups retain the frozen sticky opaque-white behavior; fixture workspace reads T 制造. Actual current-backend readback reached exact-version detail, existing owner draft editor, and directory return without business writes. Missing list-purpose projection is described as not returned by this list, never as absent from the underlying revision; current installed backend may still expose the description in exact detail. Candidate backend already projects authorized exact revision descriptions, but that has not been installed. Keep maintainer/tags/independent validation absent unless evidenced.
+
+## 2026-11-10 task list exact problem revision (G1)
+
+Task-list records currently select a problem by identity only, while selected task detail checks revision and digest. Resolve list titles from the execution-fixed problem reference as well. Reuse already listed exact matches; otherwise use the existing authorized problem detail read, memoized per problem within one directory read only. Verify returned parent identity, revision and digest; unreadable/mismatched history must mark the directory partial and never substitute the latest title. No public API, permission, write, model call or visual layout change. Verify old/new titles, exact-match no-extra-read and denied history, then existing task/navigation regression.
+
+## 2026-11-10 employee task result destination (G1)
+
+Employee participation may list several executions while returnConversation describes only entry context. Return-result links must always address the selected execution in /tasks?work=<digest>; carry the conversation only as origin hint for existing exact work-owner verification. Never send every row to the entry conversation or use an unverified generic /work destination. Reuse the current exact-task result reader and original-conversation validation. No visual redesign, new API or writes. Verify separate row destinations with/without entry context and real existing employee/task result return.

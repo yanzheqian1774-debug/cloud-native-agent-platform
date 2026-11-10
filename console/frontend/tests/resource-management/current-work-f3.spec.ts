@@ -94,3 +94,13 @@ for(const [question,label] of [['确认使用生产环境还是测试环境规�
 test('all revoked conversation links retain an explicit incomplete-directory warning',async({page})=>{
  const s=await fixture(page);await page.route('**/api/workbench/v1/conversations/c1/work-links',r=>r.fulfill({json:{result:{conversation:{conversation_id:'c1'},links:[{link_id:'revoked',readable:false}]}}}));await page.goto('/attention');await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();await expect(page.getByText('当前已读记录中没有仍有效的未回答追问。',{exact:true})).toBeVisible();expect(s.reads.some(p=>p.includes('/prepared-executions/'))).toBe(false);expect(s.writes).toEqual([]);
 });
+
+for(const mode of ['historical','exact-listed','denied-history'] as const)test('task list preserves execution problem revision: '+mode,async({page})=>{
+ const s=await fixture(page);
+ await page.route('**/api/workbench/v1/problems',r=>r.fulfill({json:{result:{problems:[{business_problem_id:'p1',revision_id:mode==='exact-listed'?'p1:1':'p1:2',digest:(mode==='exact-listed'?'a':'b').repeat(64),title:mode==='exact-listed'?'交付检查 1':'后来修改的新问题标题'}]}}}));
+ if(mode==='denied-history')await page.route('**/api/workbench/v1/problems/p1',r=>r.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}}));
+ await page.goto('/tasks');
+ if(mode==='denied-history'){await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(0)}
+ else{await expect(page.locator('.f3-work-table strong')).toHaveText('交付检查 1');if(mode==='exact-listed')expect(s.reads.filter(p=>p.endsWith('/problems/p1'))).toHaveLength(0);else expect(s.reads.filter(p=>p.endsWith('/problems/p1'))).toHaveLength(1)}
+ await expect(page.getByText('后来修改的新问题标题',{exact:true})).toHaveCount(0);expect(s.writes).toEqual([]);
+});
