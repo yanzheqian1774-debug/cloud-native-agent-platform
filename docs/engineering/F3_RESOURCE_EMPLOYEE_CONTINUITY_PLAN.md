@@ -86,3 +86,11 @@ The work-record projection now reads at most 50 candidate executions, caches exa
 
 ### Follow-up: employee work to original conversation
 Installed b7133d5 proves employee to saved document report, but employee links omit origin while selected task reads only validate a supplied origin. Add an exact scoped persisted-link lookup after authorized execution and employee parent reads. Reuse current-work ownership/development-admin policy and journey-vs-associated distinction; pass the resulting conversation hint for existing task-page revalidation. Never infer by title, scan all chats, change execution or replay. Validate wrong owner/scope/problem/digest and associated-only cases against PostgreSQL; verify installed original conversation navigation.
+
+
+### Current employee publication in new-work discovery (G1)
+Installed authoring resolves current publication by PUBLISH fact ordinal, but planning candidate identities scans every immutable revision in revision-ID order. Align new discovery, capability observation and coverage with the same most-recent PUBLISH pointer. Join exact revision digest, then preserve existing exact READ and active-publication/member checks. An unvalidated successor must not hide its current publication; a withdrawn or denied latest publication must not silently restore an older one. Keep explicit historical exact reads and saved task references unchanged. No lifecycle, grant, persistent schema or runtime mutation. Validate fact ordering, draft isolation, current denial/withdrawal and old exact-read continuity against isolated PostgreSQL before live capability maintenance.
+
+
+### Reviewer visual correction after 697e5a3
+Merge current/draft controls into published summary, keep exact-history switch visible and all owner checks. Move internal dependency count into summary disclosure; reduce header/section spacing without shrinking body type or deleting responsibilities. Highlight employees alias in sidebar. Validate three tabs at matched 1406x818 viewport with first resource/work row visible; keep missing duty mappings explicit. Complete employee-task-conversation-browser-back return context evidence separately.

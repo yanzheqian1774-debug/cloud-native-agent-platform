@@ -26,8 +26,9 @@ const advanced: Entry[] = [
   {to:"/help",label:"帮助中心",icon:"help"},
 ];
 function EntryLink({entry}:{entry:Entry}) {
-  const {search}=useLocation();
-  return <NavLink to={resourceNavigationUrl(entry.to,search)} data-resource-kind={entry.icon==="skill"||entry.icon==="mcp"?entry.icon:undefined} aria-label={entry.to==="/attention"?"Attention":undefined}>
+  const {search,pathname}=useLocation();
+  const employeeAlias=entry.to==="/digital-employees"&&pathname==="/employees";
+  return <NavLink className={({isActive})=>isActive||employeeAlias?"active":undefined} aria-current={employeeAlias?"page":undefined} to={resourceNavigationUrl(employeeAlias?"/employees":entry.to,search)} data-resource-kind={entry.icon==="skill"||entry.icon==="mcp"?entry.icon:undefined} aria-label={entry.to==="/attention"?"Attention":undefined}>
     <NavigationIcon name={entry.icon}/><span>{entry.label}</span>
   </NavLink>;
 }

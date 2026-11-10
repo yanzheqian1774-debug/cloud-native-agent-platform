@@ -110,7 +110,17 @@ def read_published(c, scope, kind, ref, *, historical=False):
 def identities(c, scope, kind, limit=200):
     if kind == "EMPLOYEE":
         return c.execute(
-            "SELECT definition_id identity,revision_id revision,digest FROM digital_employee_definition.revisions WHERE namespace=%s AND security_domain=%s ORDER BY definition_id,revision_id LIMIT %s",
+            "SELECT r.definition_id identity,r.revision_id revision,r.digest "
+            "FROM digital_employee_definition.definitions d "
+            "JOIN LATERAL (SELECT revision_id FROM digital_employee_definition.facts f "
+            "WHERE (f.namespace,f.security_domain,f.definition_id)="
+            "(d.namespace,d.security_domain,d.definition_id) AND f.action='PUBLISH' "
+            "ORDER BY ordinal DESC LIMIT 1) published ON true "
+            "JOIN digital_employee_definition.revisions r "
+            "ON (r.namespace,r.security_domain,r.definition_id,r.revision_id)="
+            "(d.namespace,d.security_domain,d.definition_id,published.revision_id) "
+            "WHERE d.namespace=%s AND d.security_domain=%s "
+            "ORDER BY d.definition_id LIMIT %s",
             (scope.namespace, scope.security_domain, limit),
         ).fetchall()
     if kind not in OWNERS:

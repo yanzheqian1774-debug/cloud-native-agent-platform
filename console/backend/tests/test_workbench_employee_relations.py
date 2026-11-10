@@ -541,3 +541,85 @@ def test_authoring_withdrawal_never_falls_back_and_new_edit_needs_validation(
         assert edited["draft"]["definition"]["lifecycleState"] == "DRAFT"
         assert edited["publication"] == {"status": "WITHDRAWN"}
         assert snapshot(r.a) == before
+
+
+def test_new_discovery_uses_current_publication_and_preserves_historical_read(
+    relations,
+):
+    from agent_console.plan_suggestion_domain import ExactReference, PlanningError
+    from agent_console.planning_candidates import identities, read_published
+
+    r = relations
+
+    def found():
+        with r.a.repository.pool.connection() as c:
+            return [
+                x
+                for x in identities(c, r.a.e.scope, "EMPLOYEE")
+                if x["identity"] == r.ref.resource_id
+            ]
+
+    # A created successor is not an eligible replacement for the publication.
+    assert [x["revision"] for x in found()] == [r.ref.revision_id]
+    for action in ("VALIDATE", "APPROVE", "PUBLISH"):
+        with r.a.repository.pool.connection() as c, c.transaction():
+            current = r.definitions.read_revision_for_workbench(
+                c,
+                r.a.e.scope,
+                r.ref.resource_id,
+                r.successor.revision_id,
+                authorized=True,
+            )
+            r.definitions.decide_for_workbench(
+                c,
+                r.a.e.scope,
+                r.ref.resource_id,
+                r.successor.revision_id,
+                r.successor.digest,
+                action,
+                expected_version=current["aggregateVersion"],
+                decision_id="isolated-current-discovery",
+                command_id="discovery:" + action,
+                authorized=True,
+            )
+    assert found() == [
+        {
+            "identity": r.ref.resource_id,
+            "revision": r.successor.revision_id,
+            "digest": r.successor.digest,
+        }
+    ]
+    with r.a.repository.pool.connection() as c, c.transaction():
+        current = r.definitions.read_revision_for_workbench(
+            c, r.a.e.scope, r.ref.resource_id, r.successor.revision_id, authorized=True
+        )
+        r.definitions.decide_for_workbench(
+            c,
+            r.a.e.scope,
+            r.ref.resource_id,
+            r.successor.revision_id,
+            r.successor.digest,
+            "UNPUBLISH",
+            expected_version=current["aggregateVersion"],
+            decision_id="isolated-current-discovery",
+            command_id="discovery:withdraw",
+            authorized=True,
+        )
+    assert [x["revision"] for x in found()] == [r.successor.revision_id]
+    # Selection still undergoes exact publication checks; no fallback to old.
+    with r.a.repository.pool.connection() as c:
+        with pytest.raises(PlanningError, match="CANDIDATE_VERSION_UNAVAILABLE"):
+            read_published(
+                c,
+                r.a.e.scope,
+                "EMPLOYEE",
+                ExactReference(
+                    resource_id=r.ref.resource_id,
+                    revision_id=r.successor.revision_id,
+                    digest=r.successor.digest,
+                ),
+            )
+        historical, _ = read_published(
+            c, r.a.e.scope, "EMPLOYEE", r.ref, historical=True
+        )
+        assert historical["revisionId"] == r.ref.revision_id
