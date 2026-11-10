@@ -153,3 +153,23 @@ Workbench. Fixed scheduling needs a scoped owner/lifecycle design before enablin
 execution. Responsible-person selection must use an authorized identity source.
 
 Reviewer correction: put the neutral source-team return in the existing progress rail, outside message content and outside the collapsible mobile progress body. Preserve exact references and scroll; no warning styling. Failed no-artifact links remain in other execution records.
+
+## Team responsible-person selection (2026-11-11)
+
+G1 private Workbench extension; no new identity owner, authority action, schema,
+credential management or grants. Source candidates from the existing active
+Browser Session Authority local-account bindings plus matching ENABLED account
+rows. Only the already verified development administrator may enumerate other
+same-scope accounts; other team editors can choose their authenticated self.
+Candidate list requires existing TEAM CREATE collection authority. Existing
+stored owner remains readable and retainable even if no longer selectable.
+Changing owner must revalidate the candidate in the same save transaction,
+including replay; a URL/client string or a username never confers authority.
+Return principalId and account username only (label as account, not personal name),
+never credential IDs, password material, scopes of other tenants or sessions.
+Preserve immutable versions, command idempotency, head checks and audit actor.
+Test disabled/revoked/mismatched/cross-scope bindings, generation drift, ordinary
+caller enumeration, stale selection, historical owner retention and unknown save.
+Fixed scheduling remains a separate architecture gap: reuse governed execution
+admission and idempotent commands, but define trigger ownership and lifecycle
+before implementation; do not add a parallel scheduler under team metadata.

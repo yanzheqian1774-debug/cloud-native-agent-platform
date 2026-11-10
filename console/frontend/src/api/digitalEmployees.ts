@@ -576,3 +576,6 @@ export const saveTeam=(payload:SaveTeamCommand,principal:string,signal?:AbortSig
 
 export type TeamWorkPage = {teamId:string;revisionId:string;teamDigest:string;items:import("../problems/currentWorkDirectoryApi").DirectoryItem[];linkedCount:number;unavailableCount:number};
 export const readTeamWork=(id:string,revision:string,signal?:AbortSignal)=>request<TeamWorkPage>(`${root}/teams/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}/work`,signal);
+
+export type TeamOwnerCandidate={principalId:string;label:string;source:'CURRENT_SESSION'|'LOCAL_TEST_ACCOUNT'};
+export const listTeamOwnerCandidates=(signal?:AbortSignal)=>request<{items:TeamOwnerCandidate[];authorityGranted:false}>(`${root}/teams/owner-candidates`,signal);

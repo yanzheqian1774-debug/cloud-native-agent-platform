@@ -17,6 +17,7 @@ from .team_definition import (
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_bff_schemas import StrictWorkbenchModel, WorkbenchPageQuery
 from .workbench_owner_authorization import WorkbenchOwnerError
+from .workbench_team_people import candidates, validate_owner
 from .workbench_team_work import project_team_work, validate_work_links
 
 
@@ -160,6 +161,16 @@ class TeamOwner:
                     )
                     if value["digest"] != member.employee_digest:
                         raise TeamDefinitionError("TEAM_MEMBER_VERSION_MISMATCH")
+                previous = (
+                    self.repository.read(
+                        call.connection, scope, data.teamId, data.predecessorRevisionId
+                    )
+                    if data.predecessorRevisionId is not None
+                    else None
+                )
+                validate_owner(
+                    call, data.ownerId, previous.owner_id if previous else None
+                )
                 validate_work_links(call, principal, revision.work_links)
                 result = self.repository.save(
                     call.connection,
@@ -208,6 +219,8 @@ class TeamOwner:
                     "aggregateVersion": head["aggregate_version"],
                     "headRevisionId": head["head_revision_id"],
                 }
+            if call.operation == "LIST_TEAM_OWNER_CANDIDATES":
+                return {"items": candidates(call), "authorityGranted": False}
             if call.operation == "LIST_TEAMS":
                 return self._list(call, scope)
             raise WorkbenchOwnerError("WORKBENCH_OPERATION_INVALID", 500)
@@ -285,6 +298,15 @@ class TeamOwner:
 def team_operations(repository, employees, cursors):
     handler = TeamOwner(repository, employees, cursors)
     return (
+        WorkbenchOperation(
+            "LIST_TEAM_OWNER_CANDIDATES",
+            "GET",
+            PREFIX + "/teams/owner-candidates",
+            None,
+            None,
+            lambda *_: (ExactGrant("TEAM", "CREATE", "team:collection"),),
+            handler,
+        ),
         WorkbenchOperation(
             "LIST_TEAMS",
             "GET",

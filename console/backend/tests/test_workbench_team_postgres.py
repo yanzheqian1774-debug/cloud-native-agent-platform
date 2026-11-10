@@ -376,3 +376,103 @@ def test_linked_work_requires_current_grants_on_save_replay_and_read(app):
                 ).fetchone()["n"]
                 == 1
             )
+
+
+def test_owner_candidates_require_team_authority_and_do_not_grant_assignment(app):
+    with TestClient(app.application, base_url="https://console.example") as client:
+        csrf = employee_fixture.login(client, "alice-secret")
+        assert client.get(PREFIX + "/teams/owner-candidates").status_code == 404
+        allow(app, "TEAM", "CREATE", "team:collection", "candidate-read")
+        response = client.get(PREFIX + "/teams/owner-candidates")
+        assert response.status_code == 200, response.text
+        value = response.json()["result"]
+        assert value["authorityGranted"] is False
+        assert value["items"] == [
+            {
+                "principalId": "human:alice",
+                "label": "human:alice",
+                "source": "CURRENT_SESSION",
+            }
+        ]
+        employee = prepare_employee(app, client, csrf)
+        allow(
+            app,
+            "EMPLOYEE",
+            "READ",
+            f"employee:{employee['employeeDefinitionId']}:{employee['employeeDefinitionRevisionId']}",
+            "candidate-member",
+        )
+        body = team_body(employee)
+        body["ownerId"] = "human:unavailable"
+        response = client.post(
+            PREFIX + "/teams", json=body, headers=employee_fixture.unsafe_headers(csrf)
+        )
+        assert response.status_code == 422, response.text
+        assert "TEAM_OWNER_UNAVAILABLE" in response.text
+        body["ownerId"] = "human:alice"
+        response = client.post(
+            PREFIX + "/teams", json=body, headers=employee_fixture.unsafe_headers(csrf)
+        )
+        assert response.status_code == 201, response.text
+
+
+def test_candidate_projection_uses_real_account_rows_and_rechecks_disable(
+    app, monkeypatch
+):
+    """Real SQL projection; administrator role decision is isolated here."""
+    from types import SimpleNamespace as S
+
+    from agent_console import workbench_team_people as people
+    from agent_console.authority_contracts import AuthorityScope
+    from agent_console.team_definition import TeamDefinitionError
+
+    scope = AuthorityScope("tenant-a", "quality")
+    binding = S(
+        credential_id="local-account:owner",
+        grant_source_id="grant:owner",
+        principal_id="human:owner",
+        username="owner",
+        scope=scope,
+    )
+    generation = S(
+        generation=18, local_accounts=(binding,), credential_revocation_tombstones=set()
+    )
+    monkeypatch.setattr(people, "for_call", lambda _: True)
+    with app.authority.connection_scope() as connection:
+        if (
+            connection.execute(
+                "SELECT to_regclass('browser_identity.local_accounts') present"
+            ).fetchone()["present"]
+            is None
+        ):
+            connection.execute(
+                (
+                    employee_fixture.MIGRATIONS / "0036_local_test_accounts.sql"
+                ).read_text()
+            )
+        connection.execute(
+            "INSERT INTO browser_identity.local_accounts "
+            "VALUES (%s,%s,%s,%s,%s,'ENABLED',1,now())",
+            (
+                binding.credential_id,
+                binding.username,
+                binding.principal_id,
+                scope.tenant_id,
+                scope.security_domain,
+            ),
+        )
+        call = S(
+            context=S(principal_id="human:alice", scope=scope),
+            connection=connection,
+            policy_generation=18,
+            authority=S(adapter=S(authorization=S(generation=generation))),
+        )
+        assert people.candidates(call)[1]["principalId"] == "human:owner"
+        people.validate_owner(call, "human:owner", "human:alice")
+        connection.execute(
+            "UPDATE browser_identity.local_accounts SET status='DISABLED',"
+            "revision=2 WHERE account_id=%s",
+            (binding.credential_id,),
+        )
+        with pytest.raises(TeamDefinitionError, match="TEAM_OWNER_UNAVAILABLE"):
+            people.validate_owner(call, "human:owner", "human:alice")
