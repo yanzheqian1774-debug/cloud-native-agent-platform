@@ -616,6 +616,8 @@ def build_workbench_composition(
                 ),
             )
 
+        resource_manager = None
+        selected_upgrade_routes = ()
         management_path = os.environ.get("RESOURCE_MANAGEMENT_POLICY")
         if management_path and prepared_resource_services:
             from .resource_management import (
@@ -627,18 +629,59 @@ def build_workbench_composition(
             management_policy = ManagementPolicy.model_validate_json(
                 Path(management_path).read_text()
             )
-            directory_installers += (
-                install_management(
-                    ResourceManagement(
-                        prepared_resource_services,
-                        management_policy,
-                        foundation.grants,
-                        sales_v2_candidate=sales_v2_candidate,
-                        prepared_handoff_enabled=sales_supplement_candidate
-                        and sales_v2_candidate,
+            resource_manager = ResourceManagement(
+                prepared_resource_services,
+                management_policy,
+                foundation.grants,
+                sales_v2_candidate=sales_v2_candidate,
+                prepared_handoff_enabled=sales_supplement_candidate
+                and sales_v2_candidate,
+            )
+            directory_installers += (install_management(resource_manager, authorizer),)
+
+        if os.environ.get("SELECTED_RESOURCE_UPGRADES_ENABLED") == "true":
+            if resource_manager is None or capability_repository is None:
+                raise AuthorityError("SELECTED_UPGRADE_DEPENDENCIES_REQUIRED")
+            from .resource_upgrade_batch_postgres import UpgradeBatchRepository
+            from .resource_upgrade_coordinator import SelectedUpgradeCoordinator
+            from .resource_upgrade_owners import SelectedUpgradeOwners
+            from .resource_upgrade_preview import SelectedUpgradePreview
+            from .workbench_business_capability import (
+                CapabilityOwner,
+                CapabilityReferences,
+            )
+            from .workbench_employee import EmployeeDefinitionCommandOwnerAdapter
+            from .workbench_resource_upgrade import (
+                operations as selected_upgrade_operations,
+            )
+
+            UpgradeBatchRepository(capability_repository.pool).compatibility(
+                Path(__file__).parents[2] / "migrations/0060_resource_upgrade_batch.sql"
+            )
+            references = CapabilityReferences(
+                employee_definitions, prepared_resource_services, workflows
+            )
+            capability_owner = CapabilityOwner(
+                capability_repository,
+                references,
+                WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+            )
+            selected_upgrade_routes = selected_upgrade_operations(
+                SelectedUpgradeCoordinator(
+                    SelectedUpgradePreview(
+                        prepared_resource_services["skill"],
+                        employee_definitions,
+                        capability_repository,
+                        references,
                     ),
-                    authorizer,
-                ),
+                    SelectedUpgradeOwners(
+                        resource_manager,
+                        EmployeeDefinitionCommandOwnerAdapter(
+                            employee_definitions, prepared_resource_reads=True
+                        ),
+                        capability_owner,
+                    ),
+                )
             )
 
         source_review_routes = ()
@@ -796,6 +839,7 @@ def build_workbench_composition(
                     if business_process_repository is not None
                     else ()
                 ),
+                *selected_upgrade_routes,
                 *digital_employee_operations(digital_employees),
                 *employee_relation_operations(
                     employee_definitions,

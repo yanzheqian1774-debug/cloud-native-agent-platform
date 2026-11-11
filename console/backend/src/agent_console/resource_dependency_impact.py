@@ -114,6 +114,7 @@ def capability_nodes(call, principal, limits):
                 "digest": value.content_digest,
                 "name": value.title,
                 "state": state,
+                "hasDraft": row["head_revision_id"] != row["published_revision_id"],
                 "references": [
                     {
                         "kind": binding.kind.value,
@@ -182,6 +183,7 @@ def incoming_references(nodes, identity, revisions, current):
                     "digest": parent.get("digest"),
                 },
                 automaticUpgrade=False,
+                hasDraft=node.get("hasDraft", False),
             )
             expected = parent.get("digest")
             supplied = link.get("digest")
@@ -274,7 +276,16 @@ def project(call, kind, record):
         "SELECT to_regclass('digital_employee_definition.revisions') value"
     ).fetchone()["value"]:
         rows = c.execute(
-            "SELECT definition_id,revision_id,digest,record FROM digital_employee_definition.revisions WHERE namespace=%s AND security_domain=%s ORDER BY definition_id,revision_id LIMIT 501",
+            "SELECT r.definition_id,r.revision_id,r.digest,r.record,"
+            "h.revision_id head_revision_id,p.revision_id published_revision_id "
+            "FROM digital_employee_definition.revisions r "
+            "LEFT JOIN LATERAL (SELECT revision_id FROM digital_employee_definition.facts "
+            "WHERE namespace=r.namespace AND security_domain=r.security_domain "
+            "AND definition_id=r.definition_id AND action='CREATE' ORDER BY ordinal DESC LIMIT 1) h ON true "
+            "LEFT JOIN LATERAL (SELECT revision_id FROM digital_employee_definition.facts "
+            "WHERE namespace=r.namespace AND security_domain=r.security_domain "
+            "AND definition_id=r.definition_id AND action='PUBLISH' ORDER BY ordinal DESC LIMIT 1) p ON true "
+            "WHERE r.namespace=%s AND r.security_domain=%s ORDER BY r.definition_id,r.revision_id LIMIT 501",
             (p.tenant_id, p.security_domain),
         ).fetchall()
         if len(rows) > 500:
@@ -296,7 +307,14 @@ def project(call, kind, record):
                     "revision": ref.revision_id,
                     "digest": ref.digest,
                     "name": row["record"]["role"],
-                    "state": "SAVED_REVISION",
+                    "state": (
+                        "PUBLISHED"
+                        if ref.revision_id == row["published_revision_id"]
+                        else "DRAFT"
+                        if ref.revision_id == row["head_revision_id"]
+                        else "HISTORICAL_REVISION"
+                    ),
+                    "hasDraft": row["head_revision_id"] != row["published_revision_id"],
                     "references": references(row["record"].get("members", [])),
                 }
             )

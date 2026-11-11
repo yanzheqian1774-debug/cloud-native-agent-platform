@@ -21,3 +21,65 @@ entry/route inventory and report unavailable capability authority explicitly.
 Actual nonzero position audit found detail scroll 324 -> 0 on return. Add per-session-principal, exact employee revision/digest, section and view scoped position/focus restoration. Store view state only, require an existing exact resource link before restoration, withdraw on session expiry, stop bounded restoration on user input. No authorization or resource content stored.
 
 Followup after installed fast-click failure: obtain same principal before/after exact Employee read, then mount position capture synchronously with detail. Preserve expanded fixed-resource evidence sections by exact resource reference, including a reload of the resource page before returning. Identity changes must not restore prior principal position or focus.
+
+
+## Selected publication successor (2026-11-12, G1)
+
+This separately authorized implementation extends the earlier read/navigation
+scope. It publishes a tested Skill successor with explicitly selected Employee
+and business-capability successors in one existing PostgreSQL transaction. The
+original resource, Employee and capability owners remain responsible for their
+lifecycle, immutable revisions, authorization and audit records. No CRD,
+Kubernetes authority, execution dispatch, model budget or infrastructure changes.
+The G1 implementation and evidence inventory is maintained in the delivery
+workspace under `atomic-selected-upgrade/implementation-plan-r2.json`.
+
+### Operation and recovery
+
+The optional workbench endpoints are POST `resource-upgrades/preview`, `submit`
+and `receipt` under `/api/workbench/v1`. All use the existing session, CSRF,
+generation-pinned authorization and caller-owned transaction. Preview binds
+exact old/new references, selected consumers, current aggregate versions,
+authority generation and recovery epoch. Submit rebuilds it with locks and
+rejects any mismatch. Existing drafts are not overwritten. Only current
+published consumer heads are selectable; historical references stay readable.
+
+Migration `0060_resource_upgrade_batch.sql` adds an immutable batch receipt in
+the same database. The resource test gate, Employee CREATE/VALIDATE/APPROVE/
+PUBLISH and capability SAVE/PUBLISH execute together. Failure rolls back owner
+records, decisions and receipt writes. Existing owner aggregate advisory locks
+are attempted without waiting before row locks, rejecting competing changes
+rather than reversing owner lock order. The original batch command serializes
+replays and requires the identical request digest and fresh authorization.
+
+The browser persists the exact pending command before submission. An unknown
+outcome permits receipt reads only; NOT_RECORDED is not proof of rollback and
+never authorizes a new command. A committed receipt proves publication even if
+subsequent detail reads fail. Detail refresh is read-only and preserves success.
+Changing selection invalidates the old preview. A selected object disappearing
+from a refreshed list is retained for explicit resolution, never silently omitted.
+No model call, conversation run, task migration or resource execution is started.
+
+### Enablement and compatibility
+
+Deploy the additive migration before enabling
+`SELECTED_RESOURCE_UPGRADES_ENABLED=true`. Build the matching frontend with
+`VITE_SELECTED_RESOURCE_UPGRADES_ENABLED=true`; the acceptance runtime pins the
+bundle and verifies that feature profile. Existing resource-management and
+business-capability dependencies must be available. Default is disabled.
+Rollback disables this feature and serves the prior bundle; retain migration
+and immutable receipts, do not drop or rewrite committed history.
+
+### Evidence and limits
+
+Dedicated real-PostgreSQL tests cover three-owner commit, whole-transaction
+rollback, stale preview, existing draft, authenticated HTTP/CSRF, receipt replay
+and competing aggregate locks. Controlled browser checks cover one confirmation,
+unknown-result recovery, conflict, current-object selection, detail failure and
+selected-object disappearance. Isolated actual-browser evidence records one
+preview/submit and one persisted receipt plus preserved historical content;
+subsequent recovery only reads that original receipt. Final preview visual
+review uses explicitly labelled replay of recorded real snapshots, not a new
+real-time backend preview. Prototype review is scoped file/screenshot review.
+These checks do not prove main-site installation, every resource type, current
+model execution, real network-failure recovery, or whole-platform completion.

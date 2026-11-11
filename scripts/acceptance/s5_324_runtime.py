@@ -217,6 +217,7 @@ def serve(output, tls_manifest, origin):
                 ("CURRENT_WORK_DIRECTORY_ENABLED", "currentWorkDirectory"),
                 ("TEAM_DEFINITIONS_ENABLED", "teamDefinitions"),
                 ("BUSINESS_CAPABILITIES_ENABLED", "businessCapabilities"),
+                ("SELECTED_RESOURCE_UPGRADES_ENABLED", "selectedResourceUpgrades"),
                 ("BUSINESS_PROCESS_DEFINITIONS_ENABLED", "businessProcessDefinitions"),
             )
             if os.environ.get(variable) == "true"
