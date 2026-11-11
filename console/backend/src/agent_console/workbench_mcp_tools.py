@@ -6,6 +6,61 @@ from .workbench_owner_authorization import WorkbenchOwnerError
 from .workbench_prepared_resources import bind_service
 
 
+def receipt_index(record, revision):
+    """Only explicit runtime provenance can attribute a receipt to this revision."""
+    invocations = record.get("invocations", [])
+    required = ("revisionId", "revisionDigest", "snapshotId", "snapshotDigest")
+    unknown = sum(not all(item.get(key) for key in required) for item in invocations)
+    snapshots = {s["snapshotId"]: s for s in record.get("discoverySnapshots", [])}
+    selections = {
+        s.get("selectionId"): s
+        for s in record.get("toolSelections", [])
+        if s.get("selectionId")
+    }
+    grouped = {}
+    for item in invocations[-1000:]:
+        if (
+            item.get("revisionId") != revision["revisionId"]
+            or item.get("revisionDigest") != revision["digest"]
+        ):
+            continue
+        snapshot = snapshots.get(item.get("snapshotId"))
+        selection = selections.get(item.get("selectionId"))
+        if not snapshot or not selection or not item.get("invocationId"):
+            continue
+        if (
+            snapshot.get("revisionId") != revision["revisionId"]
+            or snapshot.get("revisionDigest") != revision["digest"]
+            or snapshot.get("digest") != item.get("snapshotDigest")
+            or selection.get("snapshotId") != snapshot["snapshotId"]
+            or selection.get("revisionId") != revision["revisionId"]
+            or selection.get("revisionDigest") != revision["digest"]
+            or item.get("toolName") not in selection.get("toolNames", [])
+        ):
+            continue
+        dispatch, status = item.get("dispatchState"), item.get("status")
+        outcome = "RESULT_UNKNOWN"
+        if dispatch == "NOT_DISPATCHED":
+            outcome = (
+                "CANCELLED_BEFORE_DISPATCH"
+                if status == "CANCELLED"
+                else "NOT_DISPATCHED"
+            )
+        elif dispatch == "RESPONSE_RECEIVED":
+            if item.get("reasonCode") == "MCP_TOOL_REPORTED_ERROR":
+                outcome = "TOOL_ERROR"
+            elif status == "SUCCEEDED":
+                outcome = "TOOL_RESPONSE_RECEIVED"
+        grouped.setdefault((snapshot["snapshotId"], item.get("toolName")), []).append(
+            {
+                "invocationId": item["invocationId"],
+                "invokedAt": item.get("invokedAt"),
+                "outcome": outcome,
+            }
+        )
+    return grouped, unknown, len(invocations) > 1000
+
+
 def project_tools(record, revision_id):
     revision = next(
         (r for r in record["revisions"] if r["revisionId"] == revision_id), None
@@ -18,6 +73,7 @@ def project_tools(record, revision_id):
         if s.get("revisionId") == revision_id
         and s.get("revisionDigest") == revision["digest"]
     ]
+    receipts, unattributed, receipts_truncated = receipt_index(record, revision)
     snapshots = []
     for snapshot in exact[-200:]:
         catalog = snapshot.get("catalog")
@@ -66,6 +122,13 @@ def project_tools(record, revision_id):
                             }
                         ),
                         "selectedInSavedSnapshot": tool["name"] in selected,
+                        "invocations": receipts.get(
+                            (snapshot["snapshotId"], tool["name"]), []
+                        )[-20:],
+                        "invocationsTruncated": len(
+                            receipts.get((snapshot["snapshotId"], tool["name"]), [])
+                        )
+                        > 20,
                     }
                     for tool in tools[:500]
                 ],
@@ -85,7 +148,11 @@ def project_tools(record, revision_id):
         "basis": "SAVED_EXACT_MCP_DISCOVERY",
         "availability": "EXACT_SNAPSHOT_SAVED" if snapshots else "NO_EXACT_SNAPSHOT",
         "executionAuthority": "NONE",
-        "invocationEvidence": "EXACT_RUNTIME_REVISION_NOT_ESTABLISHED",
+        "invocationEvidence": "EXACT_RUNTIME_RECEIPTS"
+        if receipts
+        else "EXACT_RUNTIME_REVISION_NOT_ESTABLISHED",
+        "unattributedSourceInvocationCount": unattributed,
+        "invocationWindowTruncated": receipts_truncated,
     }
 
 

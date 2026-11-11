@@ -1,8 +1,9 @@
 import {readWorkbenchSession, WorkbenchRequestError} from './businessWorkspace';
 
-export type SavedMcpTool = {name:string;description?:string;inputSchema?:unknown;outputSchema?:unknown;annotations?:Record<string,unknown>;sideEffect?:unknown;selectedInSavedSnapshot:boolean};
+export type McpToolInvocation = {invocationId:string;invokedAt:string|null;outcome:'TOOL_RESPONSE_RECEIVED'|'TOOL_ERROR'|'CANCELLED_BEFORE_DISPATCH'|'NOT_DISPATCHED'|'RESULT_UNKNOWN'};
+export type SavedMcpTool = {name:string;description?:string;inputSchema?:unknown;outputSchema?:unknown;annotations?:Record<string,unknown>;sideEffect?:unknown;selectedInSavedSnapshot:boolean;invocations?:McpToolInvocation[];invocationsTruncated?:boolean};
 export type McpToolSnapshot = {snapshotId:string;digest:string;capturedAt:string|null;protocolRevision:string|null;tools:SavedMcpTool[];toolsTruncated:boolean};
-export type McpTools = {identity:string;name:string;revisionId:string;revisionDigest:string;sourceRevisionState:string;sourceEnabled:boolean;sourceArchived:boolean;snapshots:McpToolSnapshot[];snapshotsTruncated:boolean;availability:'EXACT_SNAPSHOT_SAVED'|'NO_EXACT_SNAPSHOT';executionAuthority:'NONE';subject:string;scope:{tenantId:string;securityDomain:string}};
+export type McpTools = {identity:string;name:string;revisionId:string;revisionDigest:string;sourceRevisionState:string;sourceEnabled:boolean;sourceArchived:boolean;unattributedSourceInvocationCount?:number;invocationWindowTruncated?:boolean;snapshots:McpToolSnapshot[];snapshotsTruncated:boolean;availability:'EXACT_SNAPSHOT_SAVED'|'NO_EXACT_SNAPSHOT';executionAuthority:'NONE';subject:string;scope:{tenantId:string;securityDomain:string}};
 export type McpSourceReference = {identity:string;revision:string;digest:string};
 export const toolsScope = (v: Pick<McpTools,'subject'|'scope'>)=>JSON.stringify([v.subject,v.scope.tenantId,v.scope.securityDomain]);
 

@@ -124,3 +124,92 @@ def test_endpoint_uses_existing_exact_mcp_read_grant_without_new_authority():
     assert operation.grant_builder(
         None, {"identity": "mcp:orders", "revision": "revision:old"}, {}, {}
     ) == (target("mcp", "mcp:orders", "revision:old"),)
+
+
+def exact_receipt(value, **changes):
+    snapshot = value["discoverySnapshots"][0]
+    value["toolSelections"][0]["selectionId"] = "selection:exact"
+    return {
+        "invocationId": "call:1",
+        "selectionId": "selection:exact",
+        "revisionId": "revision:old",
+        "revisionDigest": "a" * 64,
+        "snapshotId": snapshot["snapshotId"],
+        "snapshotDigest": snapshot["digest"],
+        "toolName": "find_orders",
+        "dispatchState": "RESPONSE_RECEIVED",
+        "status": "SUCCEEDED",
+        "input": "private-input",
+        "result": "private-output",
+        **changes,
+    }
+
+
+@pytest.mark.parametrize(
+    "dispatch,status,reason,outcome",
+    [
+        (
+            "RESPONSE_RECEIVED",
+            "SUCCEEDED",
+            "MCP_TOOL_COMPLETED",
+            "TOOL_RESPONSE_RECEIVED",
+        ),
+        ("RESPONSE_RECEIVED", "FAILED", "MCP_TOOL_REPORTED_ERROR", "TOOL_ERROR"),
+        ("CALL_ATTEMPTED", "FAILED", "MCP_TIMEOUT", "RESULT_UNKNOWN"),
+        ("NOT_DISPATCHED", "FAILED", "MCP_CONNECTION_FAILED", "NOT_DISPATCHED"),
+        (
+            "NOT_DISPATCHED",
+            "CANCELLED",
+            "CANCELLED_BEFORE_DISPATCH",
+            "CANCELLED_BEFORE_DISPATCH",
+        ),
+    ],
+)
+def test_receipt_outcome_is_explicit_and_sensitive_payload_never_exposed(
+    dispatch, status, reason, outcome
+):
+    value = record()
+    value["invocations"].append(
+        exact_receipt(value, dispatchState=dispatch, status=status, reasonCode=reason)
+    )
+    result = project_tools(value, "revision:old")
+    receipts = result["snapshots"][0]["tools"][0]["invocations"]
+    assert receipts == [
+        {"invocationId": "call:1", "invokedAt": None, "outcome": outcome}
+    ]
+    assert result["unattributedSourceInvocationCount"] == 1
+    assert "private-" not in json.dumps(result)
+    assert project_tools(value, "revision:new")["snapshots"] == []
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "revisionId",
+        "revisionDigest",
+        "snapshotId",
+        "snapshotDigest",
+        "selectionId",
+        "toolName",
+    ],
+)
+def test_receipts_never_follow_same_name_or_selection_ancestry(key):
+    value = record()
+    value["invocations"] = [exact_receipt(value, **{key: "mismatch"})]
+    result = project_tools(value, "revision:old")
+    assert result["snapshots"][0]["tools"][0]["invocations"] == []
+
+
+def test_receipt_window_and_per_tool_limits_are_explicit():
+    value = record()
+    template = exact_receipt(value)
+    value["invocations"] = [
+        {**template, "invocationId": f"call:{i}"} for i in range(1001)
+    ]
+    result = project_tools(value, "revision:old")
+    tool = result["snapshots"][0]["tools"][0]
+    assert result["invocationWindowTruncated"] and tool["invocationsTruncated"]
+    assert (
+        len(tool["invocations"]) == 20
+        and tool["invocations"][0]["invocationId"] == "call:981"
+    )

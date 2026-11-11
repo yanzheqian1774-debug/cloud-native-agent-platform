@@ -42,3 +42,19 @@ local transport checks from installed UI/general execution acceptance.
 Result integrity: an MCP tool error returned inside a successful HTTP response
 must be recorded as a tool failure, not SUCCEEDED. Preserve the redacted result
 and RESPONSE_RECEIVED evidence; no retry or claim that side effects were absent.
+
+## Readback and F3 presentation
+
+Extend the existing exact MCP READ_RESOURCE projection with bounded receipt
+metadata only: no inputs, outputs, credentials or arbitrary error text. Match
+receipt source revision/digest, discovery snapshot/digest, selection and tool;
+never infer old receipts from selection ancestry. Group exact metadata by tool
+and snapshot. Expose a separate source-level count for legacy unattributed
+records, explicitly not assigned to the current tool/version. Latest 1000 source
+receipts and 20 matching receipts per tool are bounded with partial flags.
+
+In existing tool detail, distinguish tool response, reported tool error,
+pre-dispatch cancellation/failure, and result unknown after call attempt. Unknown
+never says not executed or offers retry. Identity/scope changes use existing
+withdrawal controls. Source versions remain in the expandable technical details.
+No new mutation, grant, invocation control or model call is added.

@@ -19,7 +19,7 @@ from test_workbench_authorization_postgres import (
     seed_workflow_grant,
 )
 from test_workbench_bff import SessionStub
-from test_workbench_mcp_tools import record
+from test_workbench_mcp_tools import exact_receipt, record
 
 
 def test_real_route_exact_grant_history_scope_and_revocation(repository):
@@ -32,6 +32,9 @@ def test_real_route_exact_grant_history_scope_and_revocation(repository):
     try:
         owner.migrate()
         value = record()
+        value["invocations"].append(
+            exact_receipt(value, dispatchState="CALL_ATTEMPTED", status="FAILED")
+        )
         value.update(namespace="tenant-a", securityDomain="quality", kind="mcp")
         original = copy.deepcopy(value)
         with repository.connection_scope() as connection:
@@ -66,6 +69,11 @@ def test_real_route_exact_grant_history_scope_and_revocation(repository):
             assert result["subject"] == "human:alice"
             assert result["snapshots"][0]["tools"][0]["name"] == "find_orders"
             assert result["executionAuthority"] == "NONE"
+            assert (
+                result["snapshots"][0]["tools"][0]["invocations"][0]["outcome"]
+                == "RESULT_UNKNOWN"
+            )
+            assert result["unattributedSourceInvocationCount"] == 1
             assert "private-" not in response.text
             assert (
                 client.get(path.replace("revision:old", "revision:new")).status_code
