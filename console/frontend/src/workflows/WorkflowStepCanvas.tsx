@@ -14,7 +14,7 @@ export function WorkflowStepCanvas({tasks,selectedId,locked,onSelect,onAdd,onIns
  const edges=nodes.flatMap(to=>to.task.dependsOn.flatMap(id=>{const from=nodes.find(n=>n.task.taskId===id);return from?[{from,to}]:[]}));
  return <section className="plan-canvas" aria-label="步骤关系画布">
   <div className="plan-canvas-toolbar"><button type="button" aria-label="添加步骤" disabled={locked||tasks.length>=200} onClick={onAdd}>＋ 添加步骤</button><span>按依赖横向排列</span></div>
-  <div className="plan-canvas-intro"><strong>选中步骤，就地编辑</strong><p>{tasks.length} 个步骤 · 连线表示先后关系</p></div>
+  <div className="plan-canvas-intro"><strong>{locked?'选中步骤，查看详情':'选中步骤，就地编辑'}</strong><p>{tasks.length} 个步骤 · 连线表示先后关系</p></div>
   <div className="plan-canvas-viewport" ref={viewport} tabIndex={0} aria-label="滚动查看步骤画布">
    <div style={{width:width*zoom,height:height*zoom,position:'relative'}}><div className="plan-canvas-stage" style={{width,height,transform:`scale(${zoom})`}}>
     <svg className="plan-connectors" width={width} height={height} aria-hidden="true"><defs><marker id={marker} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#a8bce8"/></marker></defs>{edges.map(({from,to})=><path key={from.task.taskId+to.task.taskId} d={`M${from.x+210},${from.y+57} C${from.x+245},${from.y+57} ${to.x-35},${to.y+57} ${to.x},${to.y+57}`} fill="none" stroke="#a8bce8" strokeWidth="1.3" markerEnd={`url(#${marker})`}/>)}</svg>
