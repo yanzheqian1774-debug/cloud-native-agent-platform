@@ -131,3 +131,9 @@
 .f3-composer-dock:has(.capability-answer)>form.private-composer{display:none}
 
 .capability-preparation-status:has(.capability-live-status)>h2,.capability-preparation-status:has(.capability-live-status)>p{display:none}
+
+.f3-conversation .conversation-author-details{position:relative;margin:0;padding:0;border:0;background:transparent}
+.f3-conversation .conversation-author-details>summary{cursor:pointer;list-style:none}
+.f3-conversation .conversation-author-details>summary::-webkit-details-marker{display:none}
+.f3-conversation .conversation-author-details>summary:focus-visible{outline:2px solid var(--px-blue,#4567cd);outline-offset:3px}
+.f3-conversation .conversation-author-record{position:absolute;right:0;top:100%;z-index:3;display:block;width:max-content;max-width:min(280px,70vw);padding:8px 12px;border:1px solid var(--px-line,#dce6f4);border-radius:8px;background:white;color:var(--px-muted,#63738b);font-size:12px;font-weight:400;overflow-wrap:anywhere}

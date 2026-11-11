@@ -116,7 +116,7 @@ test('running native question survives refresh and an answer continues the exact
   return route.fulfill({json:{result:{digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'c'.repeat(64),approval_id:'approval',source_snapshot:ref,semantics:{title:'文档检查',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'RUNNING',version:1,tasks:[]},admission:{state:'ADMITTED',reason:null},resourceUses:[],artifacts:[],events:[],outcome:null}}});
  });
  await page.goto('/work?conversation=new');await expect(page.getByText('读取原文与行号',{exact:true})).toBeVisible();await expect(page.locator('#native-clarification-reply')).toBeVisible();await page.reload();await expect(page.locator('#native-clarification-reply')).toBeVisible();expect(posts).toBe(0);
- await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await page.reload();await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();expect(posts).toBe(1);expect(s.modelCalls).toBe(0);
+ await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect(page.getByText('你的回答：生产环境。回答已保存；后续执行状态以工作步骤为准。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);await page.reload();await expect(page.getByText('你的回答：生产环境。回答已保存；后续执行状态以工作步骤为准。')).toBeVisible();expect(posts).toBe(1);expect(s.modelCalls).toBe(0);
 });
 
 test('first understanding request remains visible before the model returns without narration calls',async({page})=>{
@@ -184,7 +184,7 @@ test('F3 fixed composer and right rail preserve exact-question draft on reload a
  await page.getByRole('button',{name:'生产环境交接规范',exact:true}).click();await page.reload();
  await expect(page.locator('#native-clarification-reply')).toHaveValue('《生产环境交接规范》');
  const dock=await page.locator('.f3-composer-dock').boundingBox();const stream=page.locator('.px-message-stream');await stream.evaluate(e=>e.scrollTop=e.scrollHeight);expect(await page.locator('.f3-composer-dock').boundingBox()).toEqual(dock);
- await page.getByRole('button',{name:'提交回答并继续'}).dblclick();await expect.poll(()=>s.calls.length).toBe(1);await expect(page.getByText('你的回答：《生产环境交接规范》。已沿用原任务继续处理。')).toBeVisible();expect(s.calls[0].questionKey).toBe('q1');
+ await page.getByRole('button',{name:'提交回答并继续'}).dblclick();await expect.poll(()=>s.calls.length).toBe(1);await expect(page.getByText('你的回答：《生产环境交接规范》。回答已保存；后续执行状态以工作步骤为准。')).toBeVisible();expect(s.calls[0].questionKey).toBe('q1');
 });
 test('F3 expired or replaced question does not reuse another question draft',async({page})=>{
  const s=await nativeQuestionFixture(page);await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('保留的旧回答');
@@ -209,7 +209,7 @@ test('F3 explicit answer rejection retains text and only manual resubmission wri
 });
 for(const receipt of ['unknown','lost'])test('F3 ambiguous answer receipt reads existing state without another POST: '+receipt,async({page})=>{
  const s=await nativeQuestionFixture(page);s.setReceipt(receipt);await page.goto('/work?conversation=new');await page.locator('#native-clarification-reply').fill('生产环境');await page.getByRole('button',{name:'提交回答并继续'}).click();await expect.poll(()=>s.calls.length).toBe(1);
- if(receipt==='lost'){await expect(page.getByText('你的回答：生产环境。已沿用原任务继续处理。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);expect(await page.evaluate(()=>Object.values(sessionStorage).includes('生产环境'))).toBe(false);await expect(page.getByLabel('实时执行过程').getByRole('alert')).toHaveCount(0);}
+ if(receipt==='lost'){await expect(page.getByText('你的回答：生产环境。回答已保存；后续执行状态以工作步骤为准。')).toBeVisible();await expect(page.locator('#native-clarification-reply')).toHaveCount(0);expect(await page.evaluate(()=>Object.values(sessionStorage).includes('生产环境'))).toBe(false);await expect(page.getByLabel('实时执行过程').getByRole('alert')).toHaveCount(0);}
  else{await expect(page.getByLabel('实时执行过程').getByRole('alert')).toContainText('不会自动重发');await expect(page.locator('#native-clarification-reply')).toHaveValue('生产环境');await expect(page.getByRole('button',{name:'提交回答并继续'})).toBeDisabled();await page.waitForTimeout(1500);}
  expect(s.calls).toHaveLength(1);
 });
@@ -287,10 +287,10 @@ for(const width of [1440,390])test(`message groups show recorded authors and hon
  {message_id:'missing',content:texts[2],disposition:'GOAL_RECORDED'},
  {message_id:'action',author_id:'human:requester',created_at:'2026-11-09T08:04:00Z',content:texts[3],kind:'ACTION_INTENT',disposition:'ACTION_INTENT',facts:{state:'NOT_SUBMITTED'}}];
  await page.goto('/work?conversation=new');const short=page.locator('[data-message-id="short"]'),long=page.locator('[data-message-id="long"]'),missing=page.locator('[data-message-id="missing"]'),action=page.locator('[data-message-id="action"]');
- await expect(short.locator('.conversation-message-author')).toHaveText('human:original-author');await expect(short.locator('time')).toHaveAttribute('datetime','2026-11-09T08:03:00Z');await expect(short.locator('time')).toContainText('16:03');
+ await expect(short.locator('.conversation-message-author summary')).toHaveText('用户');await short.locator('.conversation-message-author summary').click();await expect(short.getByText('记录账号：human:original-author',{exact:true})).toBeVisible();await short.locator('.conversation-message-author summary').click();await expect(short.locator('time')).toHaveAttribute('datetime','2026-11-09T08:03:00Z');await expect(short.locator('time')).toContainText('16:03');
  await expect(long.locator('.conversation-message-time')).toHaveText('时间待核实');await expect(missing.locator('.conversation-message-author')).toHaveText('用户');await expect(missing.locator('.conversation-message-time')).toHaveText('时间未记录');
  expect(await page.locator('.private-user>p').allTextContents()).toEqual(texts);await expect(page.locator('.private-message .conversation-message-author').filter({hasText:'human:development-admin'})).toHaveCount(0);
- await expect(action.locator('.conversation-message-author')).toHaveText('human:requester');await action.getByText('查看办理记录与回执',{exact:true}).click();await expect(action.getByText('已确认的办理意图',{exact:true})).toBeVisible();
+ await expect(action.locator('.conversation-message-author summary')).toHaveText('用户');await action.locator('.conversation-message-author summary').click();await expect(action.getByText('记录账号：human:requester',{exact:true})).toBeVisible();await action.locator('.conversation-message-author summary').click();await action.getByText('查看办理记录与回执',{exact:true}).click();await expect(action.getByText('已确认的办理意图',{exact:true})).toBeVisible();
  await short.scrollIntoViewIfNeeded();const geometry=await short.evaluate(node=>{const bubble=node.querySelector('.private-user')!.getBoundingClientRect(),group=node.getBoundingClientRect();return {bubbleWidth:bubble.width,groupWidth:group.width,rightGap:group.right-bubble.right,textAlign:getComputedStyle(node.querySelector('.private-user p')!).textAlign,receiptHeight:node.querySelector('.private-receipt')!.getBoundingClientRect().height}});
  expect(geometry.bubbleWidth).toBeLessThan(geometry.groupWidth/2);expect(geometry.rightGap).toBeLessThan(3);expect(geometry.textAlign).toBe('left');await expect(short.locator('.private-user')).toHaveCSS('border-top-width','1px');await expect(short.locator('.conversation-message-author')).toHaveCSS('order','1');await expect(short.locator('time')).toHaveCSS('order','0');expect(geometry.receiptHeight).toBeLessThan(40);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
