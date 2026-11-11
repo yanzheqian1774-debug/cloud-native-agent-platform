@@ -12,7 +12,9 @@ async function mapBounded<T,R>(values:T[],map:(value:T)=>Promise<R>,signal?:Abor
  await Promise.all(Array.from({length:Math.min(4,values.length)},async()=>{while(next<values.length){signal?.throwIfAborted();const index=next++;results[index]=await map(values[index])}}));return results;
 }
 async function questions(digest:string,signal?:AbortSignal){
- const response=await fetch(`/api/workbench/v1/prepared-executions/${encodeURIComponent(digest)}/native-progress`,{credentials:'same-origin',headers:{Accept:'application/json'},signal});
+ // Bound this auxiliary read so saved work remains accessible when progress stalls.
+ const deadline=AbortSignal.timeout(15000),readSignal=signal?AbortSignal.any([signal,deadline]):deadline;
+ const response=await fetch(`/api/workbench/v1/prepared-executions/${encodeURIComponent(digest)}/native-progress`,{credentials:'same-origin',headers:{Accept:'application/json'},signal:readSignal});
  const body=await response.json();if(response.status===401)window.dispatchEvent(new Event('workbench-session-expired'));
  if(!response.ok)throw new WorkbenchRequestError(body.reasonCode??'PROGRESS_UNAVAILABLE',response.status);
  if(!Array.isArray(body.result?.questions)||body.result.questions.some((q:WorkQuestion)=>typeof q.questionKey!=='string'||typeof q.questionDigest!=='string'||typeof q.question!=='string'||typeof q.expired!=='boolean'||!(q.answer===null||typeof q.answer==='string')||!Number.isFinite(Date.parse(q.expiresAt))))throw Error('QUESTION_PROJECTION_INVALID');

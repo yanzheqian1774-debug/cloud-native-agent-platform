@@ -357,3 +357,15 @@ Keep the F3 layout, authorization, filters, polling, historical snapshots and al
 execution commands unchanged. This is a display/read-state correction, not a
 new scheduler or result-acceptance authority. Validate native list and detail
 with unavailable questions, known zero and actual pending questions; no writes.
+
+## Bounded necessary-question read (2026-11-12, G0)
+
+The shared task-detail/inbox Native progress fetch lacked a deadline, so a
+stalled auxiliary read could indefinitely hide already saved task evidence.
+Apply a 15-second abortable read deadline, matching the existing bounded
+conversation-link reads. Preserve parent cancellation, unknown question state,
+exact task/origin checks, session reauthorization and existing read refresh.
+This does not cancel, retry or execute any task/model command. On timeout the
+existing partial-read path preserves saved records; a subsequent explicit read
+can recover the actual question. Verify detail and inbox with a held response,
+then successful reread; no writes, no substituted task, no late response override.

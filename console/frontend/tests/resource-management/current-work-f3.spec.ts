@@ -139,3 +139,31 @@ test('running detail keeps unavailable questions distinct from no questions',asy
  await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c1');expect(s.writes).toEqual([]);
  await page.screenshot({path:testInfo.outputPath('unknown-clarification-detail.png'),fullPage:true});
 });
+
+for(const destination of ['detail','inbox'] as const)test(`stalled question read releases saved ${destination} and recovers on reread`,async({page},testInfo)=>{
+ const s=await fixture(page);s.running=true;let reads=0;let release!:()=>void;
+ const held=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/api/workbench/v1/prepared-executions/e1/native-progress',async route=>{
+  reads++;if(reads===1)await held;await route.fallback();
+ });
+ try{
+  await page.goto(destination==='detail'?'/tasks?work=e1&origin=c1':'/attention');
+  await expect.poll(()=>reads).toBe(1);
+  if(destination==='detail'){
+   await expect(page.locator('.f3-work-detail > header .f3-work-badge')).toHaveText('进展待核实',{timeout:20000});
+   await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c1');
+   await expect(page.locator('.f3-work-detail > header')).toContainText('已有 1 份保存产物');
+  }else{
+   await expect(page.getByText('部分关联记录当前未能读取。',{exact:false})).toBeVisible({timeout:20000});
+   await expect(page.getByText('已读记录先行展示，正在继续核对其余会话；数量尚未完整。',{exact:true})).toHaveCount(0);
+   await expect(page.getByRole('link',{name:'在原会话回答',exact:true})).toHaveCount(0);
+  }
+  expect(reads).toBe(1);expect(s.writes).toEqual([]);
+  await page.screenshot({path:testInfo.outputPath(`stalled-${destination}-read.png`),fullPage:true});
+  await page.getByRole('button',{name:'重新读取',exact:true}).click();
+  await expect(page.getByText(s.question,{exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:destination==='detail'?'在原会话回答并继续':'在原会话回答',exact:true})).toHaveAttribute('href','/work?conversation=c1');
+  expect(reads).toBe(2);release();
+  await expect(page.getByText(s.question,{exact:true})).toBeVisible();expect(s.writes).toEqual([]);
+ }finally{release()}
+});
