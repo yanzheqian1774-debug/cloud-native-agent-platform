@@ -198,3 +198,35 @@ def test_unreadable_questions_do_not_imply_confirmed_running(
     result = project_runs(call, [row], verified_administrator=False)[0]
     assert result.displayState == expected
     assert result.pendingQuestionCount is None
+
+
+@pytest.mark.parametrize("state", ["RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"])
+def test_answered_count_survives_terminal_state_without_changing_pending_count(
+    monkeypatch, state
+):
+    call, row = setup(monkeypatch, state=state)
+    question = row["questions"][0]
+    question.update(answered=True, answerDigest=question["questionDigest"])
+    value = project_runs(call, [row], verified_administrator=True)[0]
+    assert value.answeredQuestionCount == 1
+    assert value.pendingQuestionCount == 0
+    assert value.executionState == state
+
+
+def test_answered_history_count_is_unknown_without_native_grants(monkeypatch):
+    from agent_console import workbench_current_work_projection as module
+
+    call, row = setup(monkeypatch, state="SUCCEEDED")
+    question = row["questions"][0]
+    question.update(answered=True, answerDigest=question["questionDigest"])
+    assert (
+        project_runs(call, [row], verified_administrator=False)[0].answeredQuestionCount
+        is None
+    )
+    monkeypatch.setattr(
+        module, "readable_grants", lambda call, grants: tuple(False for _ in grants)
+    )
+    assert (
+        project_runs(call, [row], verified_administrator=True)[0].answeredQuestionCount
+        is None
+    )

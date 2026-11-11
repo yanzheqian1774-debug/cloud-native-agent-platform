@@ -26,6 +26,7 @@ class CurrentWorkItem(BaseModel):
     problemRevisionId: str
     problemDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
     pendingQuestionCount: int | None = Field(ge=0)
+    answeredQuestionCount: int | None = Field(default=None, ge=0)
     planVersion: int | None = Field(default=None, ge=1)
     participantCount: int | None = Field(default=None, ge=0)
     completedTaskCount: int | None = Field(default=None, ge=0)
@@ -72,10 +73,15 @@ def directory_page(
         item.executionState != "RUNNING" or item.pendingQuestionCount is not None
         for item in scoped
     )
+    answer_history_complete = all(
+        item.answeredQuestionCount is not None for item in scoped
+    )
     matches = [
         item
         for item in scoped
-        if query.state == "all" or item.displayState == query.state
+        if query.state == "all"
+        or (query.state == "answered" and (item.answeredQuestionCount or 0) > 0)
+        or item.displayState == query.state
     ]
     matches.sort(key=lambda item: (item.createdAt, item.workflowRunId), reverse=True)
     counts = Counter(item.displayState for item in matches)
@@ -113,6 +119,7 @@ def directory_page(
         "readAt": read_at.isoformat(),
         "complete": True,
         "questionStatusComplete": question_status_complete,
+        "answerHistoryComplete": answer_history_complete,
         "total": len(matches),
         "counts": {
             state: counts[state]

@@ -95,7 +95,7 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
         question_readable = verified_administrator and all(
             allowed[g] for g in question_grants
         )
-        pending, question_digest = None, None
+        pending, answered, question_digest = None, None, None
         if question_readable:
             if any(
                 q["answered"] and q["answerDigest"] != q["questionDigest"]
@@ -105,6 +105,7 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
                     "CURRENT_WORK_QUESTION_IDENTITY_MISMATCH", 503
                 )
             question_digest = canonical_digest(row["questions"])
+            answered = sum(q["answered"] for q in row["questions"])
             pending = (
                 0
                 if state.state != "RUNNING" or state.cancellation_request_id
@@ -170,6 +171,7 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
                 problemRevisionId=row["problem_revision_id"],
                 problemDigest=row["problem_digest"],
                 pendingQuestionCount=pending,
+                answeredQuestionCount=answered,
                 questionsDigest=question_digest,
                 artifactCount=row["artifact_count"],
                 planVersion=p.plan_version,

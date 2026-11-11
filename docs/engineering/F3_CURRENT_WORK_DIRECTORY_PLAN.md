@@ -401,3 +401,35 @@ questions can appear. Background reads retain visible current questions; switchi
 pending/handled uses separate keyed view lifetimes to cancel the old read without
 flashing old history as new work. Explicit refresh still reauthorizes. Controlled
 checks cover these cases in addition to the pagination/identity boundaries above.
+
+## Answered-history directory (2026-11-12, G1)
+
+Extend the existing private current-work projection additively with an authorized
+answeredQuestionCount and answerHistoryComplete flag, plus state=answered filter.
+Derive counts from the existing question/answer snapshot only after the same Native
+role/resource grants and answer-digest integrity checks. Unlike active pending
+counts, answered history survives terminal execution. Unknown historical coverage
+must be computed before answered filtering and paging, including terminal runs.
+Do not expose question text/answers through the directory or alter task state.
+No schema migration, new endpoint, public CRD, lifecycle or authorization change.
+
+Use this index for the handled tab, then reuse exact task/problem/origin checks and
+read existing Native history even for terminal tasks. Consume every cursor page,
+preserve unknown/denied notices and cancel prior tab reads. Legacy flag-off paths
+remain unchanged. Existing pending directory semantics and active task counts must
+not change. Validate count grants, terminal answers, mismatched answer identities,
+unknown coverage before filtering, signed cursor separation, frontend multi-page
+history and original links. Compare a real historical read before/after on an
+isolated backend using current authorized data; a frontend-only overlay cannot
+prove this backend change. Do not claim installation until guarded rollout and
+actual readback pass. Include answered records outside the first page; no sampling
+or artificial complete/empty claims to improve timing.
+
+The real isolated read retained all 15 answer cards but still took 26.474 seconds
+versus 53.691 seconds. Preserve all owner requests and pre/post session checks;
+after verifying the execution reference, read its fixed problem, origin links /
+journey and optional Native questions concurrently. Publish only after fixed
+problem identity, origin association and final session checks finish. This reduces
+independent serial waiting without removing authorization, truncating history or
+loading another version. Confirm denied/mismatched fixed records never expose a
+result even if independent reads have already returned.

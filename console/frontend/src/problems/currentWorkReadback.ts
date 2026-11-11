@@ -68,20 +68,29 @@ export async function readCurrentWork(onProgress?:(value:WorkDirectoryRead)=>voi
  const records=ordered();return {scope,works:records,limited,loading:false,unlinkedProblems:problems.problems.filter(p=>!records.some(w=>w.problem.business_problem_id===p.business_problem_id)).length};
 }
 
-export async function readSelectedWork(digest:string,origin:string,signal?:AbortSignal):Promise<{scope:string;work:CurrentWork}>{
+export async function readSelectedWork(digest:string,origin:string,signal?:AbortSignal,options:{includeCompletedQuestions?:boolean}={}):Promise<{scope:string;work:CurrentWork}>{
  const scope=conversationScope(await readWorkbenchSession(signal));
  const execution=await preparedRequest<ExecutionView>(digest,undefined,undefined,undefined,signal),ref=execution.preparation?.semantics?.target?.problem;
  if(execution.digest!==digest||!ref?.resource_id||!ref.revision_id||!ref.digest||!Array.isArray(execution.artifacts)||!Array.isArray(execution.events)||!Array.isArray(execution.preparation.participants)||!Array.isArray(execution.preparation.semantics.tasks))throw Error('本次执行或固定问题版本尚未核实。');
- const detail=await readBusinessProblem(ref.resource_id,signal),problem=detail.revisions?.find(p=>p.business_problem_id===ref.resource_id&&p.revision_id===ref.revision_id&&p.digest===ref.digest);
+ // These reads share the already verified execution reference; publish only after all checks.
+ const originRead=async()=>{
+  if(!origin)return {conversation:'',originVerified:false};
+  try{
+   const [record,journey]=await Promise.all([
+    conversationRequest<Pick<PrivateConversation,'conversation'|'links'>>('/'+encodeURIComponent(origin)+'/work-links',undefined,undefined,signal),
+    conversationRequest<{state?:{execution?:string;problem?:{business_problem_id?:string}}}>('/'+encodeURIComponent(origin)+'/journey',undefined,undefined,signal).catch(()=>{signal?.throwIfAborted();return {state:undefined}}),
+   ]);
+   const state=journey.state,linked=record.conversation.conversation_id===origin&&record.links.some(l=>l.readable&&l.target?.problemId===ref.resource_id&&(l.target.executionDigest===digest||(state?.execution===digest&&state.problem?.business_problem_id===ref.resource_id)));
+   return {conversation:linked?origin:'',originVerified:linked&&state?.execution===digest};
+  }catch{signal?.throwIfAborted();return {conversation:'',originVerified:false}}
+ };
+ const questionRead=async()=>{
+  if(!options.includeCompletedQuestions&&terminalWork.has(execution.progress?.state??''))return {qs:[] as WorkQuestion[],questionsReadable:true};
+  try{return {qs:await questions(digest,signal),questionsReadable:true}}catch{signal?.throwIfAborted();return {qs:[] as WorkQuestion[],questionsReadable:false}}
+ };
+ const [detail,{conversation,originVerified},{qs,questionsReadable}]=await Promise.all([readBusinessProblem(ref.resource_id,signal),originRead(),questionRead()]);
+ const problem=detail.revisions?.find(p=>p.business_problem_id===ref.resource_id&&p.revision_id===ref.revision_id&&p.digest===ref.digest);
  if(detail.problem?.business_problem_id!==ref.resource_id||!problem)throw Error('本次执行引用的问题版本当前不可读，未替换为最新版本。');
- let conversation='',originVerified=false,qs:WorkQuestion[]=[],questionsReadable=true;
- if(origin){try{
-  const record=await conversationRequest<Pick<PrivateConversation,'conversation'|'links'>>('/'+encodeURIComponent(origin)+'/work-links',undefined,undefined,signal);let state:{execution?:string;problem?:{business_problem_id?:string}}|undefined;
-  try{state=(await conversationRequest<{state?:typeof state}>('/'+encodeURIComponent(origin)+'/journey',undefined,undefined,signal)).state}catch{signal?.throwIfAborted()}
-  const linked=record.conversation.conversation_id===origin&&record.links.some(l=>l.readable&&l.target?.problemId===ref.resource_id&&(l.target.executionDigest===digest||(state?.execution===digest&&state.problem?.business_problem_id===ref.resource_id)));
-  if(linked){conversation=origin;originVerified=state?.execution===digest}
- }catch{signal?.throwIfAborted()}}
- if(!terminalWork.has(execution.progress?.state??'')){try{qs=await questions(digest,signal)}catch{signal?.throwIfAborted();questionsReadable=false}}
  if(conversationScope(await readWorkbenchSession(signal))!==scope)throw Error('登录身份已变化，请重新读取当前工作。');
  return {scope,work:{problem,execution,conversation,originVerified,questions:qs,questionsReadable}};
 }

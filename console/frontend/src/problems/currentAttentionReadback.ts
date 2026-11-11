@@ -4,16 +4,16 @@ import {readDirectoryPage,type DirectoryItem} from './currentWorkDirectoryApi';
 import {readSelectedWork,type CurrentWork,type WorkDirectoryRead} from './currentWorkReadback';
 
 // The directory locates candidates; exact owner reads still authorize the question.
-export async function readPendingAttention(onProgress:((value:WorkDirectoryRead)=>void)|undefined,signal:AbortSignal):Promise<WorkDirectoryRead>{
+export async function readAttentionDirectory(onProgress:((value:WorkDirectoryRead)=>void)|undefined,signal:AbortSignal,handled=false):Promise<WorkDirectoryRead>{
  const scope=conversationScope(await readWorkbenchSession(signal));
  const works:CurrentWork[]=[],seen=new Set<string>(),cursors=new Set<string>();
  let cursor='',limited=false;
  const snapshot=(loading:boolean):WorkDirectoryRead=>({scope,works:[...works],limited,unlinkedProblems:0,loading});
  do{
   signal.throwIfAborted();
-  const result=await readDirectoryPage({scope:'visible',query:'',state:'waiting',cursor},signal);
+  const result=await readDirectoryPage({scope:'visible',query:'',state:handled?'answered':'waiting',cursor},signal);
   if(result.viewKey!==scope+':directory:tasks-native')throw Error('登录身份已变化，请重新读取待办。');
-  limited ||= result.page.questionStatusComplete!==true;
+  limited ||= (handled?result.page.answerHistoryComplete:result.page.questionStatusComplete)!==true;
   const items:DirectoryItem[]=[];
   for(const item of result.page.items){
    if(seen.has(item.preparationDigest))throw Error('待办目录在读取期间发生变化，请重新读取。');
@@ -23,7 +23,7 @@ export async function readPendingAttention(onProgress:((value:WorkDirectoryRead)
    const batch=await Promise.all(items.slice(start,start+4).map(async item=>{
     try{
      if(!item.originConversationId){limited=true;return null}
-     const value=await readSelectedWork(item.preparationDigest,item.originConversationId,signal);
+     const value=await readSelectedWork(item.preparationDigest,item.originConversationId,signal,{includeCompletedQuestions:handled});
      if(value.scope!==scope)throw Error('ATTENTION_SCOPE_CHANGED');
      const work=value.work;
      if(work.problem.business_problem_id!==item.problemId||work.problem.revision_id!==item.problemRevisionId||work.problem.digest!==item.problemDigest||!work.conversation){limited=true;return null}

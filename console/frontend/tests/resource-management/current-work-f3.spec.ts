@@ -167,3 +167,9 @@ for(const destination of ['detail','inbox'] as const)test(`stalled question read
   await expect(page.getByText(s.question,{exact:true})).toBeVisible();expect(s.writes).toEqual([]);
  }finally{release()}
 });
+
+test('independent detail reads proceed while fixed problem verification is pending without exposing a result',async({page})=>{
+ const s=await fixture(page);s.running=true;let entered=false,release!:()=>void;const held=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/api/workbench/v1/problems/p1',async route=>{entered=true;await held;return route.fallback()});
+ try{await page.goto('/tasks?work=e1&origin=c1');await expect.poll(()=>entered).toBe(true);await expect.poll(()=>s.reads.filter(p=>p.endsWith('/native-progress')).length).toBe(1);await expect.poll(()=>s.reads.filter(p=>p.endsWith('/journey')).length).toBe(1);await expect(page.locator('.f3-work-detail')).toHaveCount(0);release();await expect(page.getByText(s.question,{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'在原会话回答并继续',exact:true})).toHaveAttribute('href','/work?conversation=c1');expect(s.writes).toEqual([])}finally{release()}
+});

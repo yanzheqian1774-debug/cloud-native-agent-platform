@@ -92,3 +92,29 @@ def test_unknown_question_coverage_survives_waiting_filter_and_paging():
     assert waiting["questionStatusComplete"] is False
     assert page([complete])["questionStatusComplete"] is True
     assert page([unknown], query="does not match")["questionStatusComplete"] is True
+
+
+def test_answered_history_filter_preserves_terminal_answers_and_unknown_coverage():
+    answered = item("run:z").model_copy(update={"answeredQuestionCount": 2})
+    zero = item("run:y").model_copy(update={"answeredQuestionCount": 0})
+    unknown = item("run:x")
+    result = page([answered, zero, unknown], state="answered", pageSize=1)
+    assert [row["workflowRunId"] for row in result["items"]] == ["run:z"]
+    assert result["total"] == result["counts"]["completed"] == 1
+    assert result["answerHistoryComplete"] is False
+    assert result["questionStatusComplete"] is True
+    assert page([answered, zero], state="answered")["answerHistoryComplete"] is True
+    empty = page([zero, unknown], state="answered")
+    assert empty["total"] == 0 and empty["answerHistoryComplete"] is False
+
+
+def test_answered_history_cursor_is_not_valid_for_active_pending_filter():
+    records = [
+        item("run:" + name).model_copy(update={"answeredQuestionCount": 1})
+        for name in "abc"
+    ]
+    first = page(records, state="answered", pageSize=2)
+    second = page(records, state="answered", pageSize=2, cursor=first["nextCursor"])
+    assert [row["workflowRunId"] for row in second["items"]] == ["run:a"]
+    with pytest.raises(WorkbenchOwnerError, match="REQUEST_INVALID"):
+        page(records, state="waiting", pageSize=2, cursor=first["nextCursor"])
