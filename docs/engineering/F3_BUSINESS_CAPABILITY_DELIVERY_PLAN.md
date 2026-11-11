@@ -1058,3 +1058,31 @@ direct-reference-only limitation is now closed for this isolated actual case.
 This does not prove Runtime instance health, model execution, general scale,
 sharing authority or main deployment. Subsequent clone checks must use counts
 1 definition / 3 revisions / 3 receipts / 3 publications, not the former 1/2/2/2.
+
+### G1: original-conversation input reuse and ambiguous resource labels
+
+Reuse the latest readable CAPABILITY source for the same capability in the
+explicit return conversation, after checking the session before and after the
+read and matching the returned conversation identity. Copy only saved objective
+and inputNotes, disclose their origin, and preserve each field the user already
+edited. Do not infer inputs from unrelated messages, other capabilities, or
+unreadable source facts. Read failure stays visible with a read-only retry;
+loading performs no source submission, model call, or execution. Preserve
+fixed-version admission, budget, audit, and stable submission keys.
+Distinguish duplicate resource names in the picker with exact identity/version;
+unique names stay concise. This is presentation only, without changing resource
+selection authority or publication behavior. Validate positive reuse, unrelated
+and unreadable exclusion, delayed-read editing, and duplicate-name selection.
+Main installed commit remains 69f738f until separately validated installation.
+
+Validation for this increment: frontend lint and full-feature production build
+passed. The existing 58 capability browser cases and four new input-context
+cases passed. One new duplicate-name fixture initially omitted the required
+response schema; after correcting the fixture, the targeted case passed.
+Actual clone browser (60662, PID 25449) reused an existing readable source from
+the original conversation into the latest capability version and displayed
+actual distinct Employee duties plus fixed version evidence. Zero business
+writes/model calls/runs. See real-browser/input-context-browser-complete.json
+and screenshots 43–44. Main stable home-to-detail body was separately read back
+without business replay; see main-release/test-capability-r2/stable-detail-complete.json
+and screenshot 06. New input/context code is not installed on main yet.

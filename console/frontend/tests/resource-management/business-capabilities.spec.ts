@@ -511,3 +511,31 @@ for(const layout of ['cards','list'] as const)test('catalogue direct use and tru
  expect(state.preferenceWrites.length).toBe(writes);
  await page.reload();await expect(page.getByRole('region',{name:'能力本次输入'})).toHaveCount(0);
 });
+
+for(const mode of ['reuse','unreadable','other','edited'])test('original input context '+mode,async({page})=>{
+ const state=await fixture(page);state.published=true;
+ let release:()=>void=()=>{};const delayed=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/conversations/original',async route=>{
+  if(mode==='edited')await delayed;
+  return route.fulfill({json:{result:{conversation:{conversation_id:'original',title:'原会话',version:1},links:[],messages:[{message_id:'saved-input',sequence:1,kind:'SOURCE',facts:{readable:mode!=='unreadable',source:{kind:'CAPABILITY',target:{capabilityId:mode==='other'?'different':'handover',revisionId:'r1',digest,objective:'此前确认的交接核对目标',inputNotes:'已保存的说明文件及责任清单'}}}}]}}});
+ });
+ await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');await page.getByRole('button',{name:'在会话中使用',exact:true}).click();
+ if(mode==='edited'){await page.getByLabel('已提供的资料与范围').fill('用户本次新增范围');release()}
+ if(mode==='reuse'||mode==='edited'){
+  await expect(page.getByText('已参考原会话中本能力最近保存的目标与资料；保留你已编辑的内容，请按本次需要调整。历史版本的执行结果不会自动重跑。')).toBeVisible();
+  await expect(page.getByLabel('希望完成什么',{exact:true})).toHaveValue('此前确认的交接核对目标');
+  await expect(page.getByLabel('已提供的资料与范围')).toHaveValue(mode==='edited'?'用户本次新增范围':'已保存的说明文件及责任清单');
+ }else{
+  await expect(page.getByText('原会话尚无本能力可复用的资料说明，请补充本次范围。')).toBeVisible();await expect(page.getByLabel('已提供的资料与范围')).toHaveValue('');
+ }
+ expect(state.sources).toHaveLength(0);expect(state.work.writes).toHaveLength(0);
+});
+
+test('duplicate employee names display actual duties and fixed version preview',async({page})=>{
+ await fixture(page);
+ await page.route('**/employees?*',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:['one','two'].map(id=>({employeeDefinitionId:id,employeeDefinitionRevisionId:'revision-'+id,employeeDefinitionDigest:digest,role:'同名助手',publicationState:'PUBLISHED'}))}}}));
+ await page.route('**/employees/*/revisions/*',route=>{const id=new URL(route.request().url()).pathname.includes('/one/')?'one':'two';return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{employeeDefinitionId:id,employeeDefinitionRevisionId:'revision-'+id,employeeDefinitionDigest:digest,role:'同名助手',publicationState:'PUBLISHED',responsibilities:[id==='one'?'检查回退步骤':'核对责任清单']}}})});
+ await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();
+ const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option').filter({hasText:'检查回退步骤'})).toHaveCount(1);await expect(picker.locator('option').filter({hasText:'核对责任清单'})).toHaveCount(1);
+ await picker.selectOption({label:'同名助手 · 核对责任清单 · 已发布 · sion-two'});const preview=page.getByRole('region',{name:'所选固定资源'});await expect(preview).toContainText('核对责任清单');await preview.getByText('查看资源与版本依据').click();await expect(preview).toContainText('revision-two');await expect(preview).toContainText('资源：two');
+});

@@ -11,6 +11,29 @@ export function CapabilityUse({detail,principal,conversation,onCancel}:{detail:C
  const [key]=useState(()=>crypto.randomUUID());const pending=useRef(false),submitted=useRef<{conversation:string;body:{idempotencyKey:string;expectedVersion:number;source:CapabilityConversationSource}}|null>(null);
  const [locked,setLocked]=useState(false),alive=useRef(true),controller=useRef<AbortController|null>(null);
  useEffect(()=>{alive.current=true;controller.current=new AbortController();return()=>{alive.current=false;controller.current?.abort()}},[]);
+ const touched=useRef({objective:false,notes:false});
+ const [contextState,setContextState]=useState(conversation?'loading':'none'),[contextReload,setContextReload]=useState(0);
+ useEffect(()=>{
+  if(!conversation)return;
+  const abort=new AbortController();let active=true;
+  const load=async()=>{
+   setContextState('loading');
+   try{
+    const signal=AbortSignal.any([abort.signal,AbortSignal.timeout(30_000)]),before=await capabilitySession(signal);
+    if(workbenchPrincipalKey(before)!==principal)throw Error('identity');
+    const data=await conversationRequest<PrivateConversation>('/'+encodeURIComponent(conversation),undefined,undefined,signal),after=await capabilitySession(signal);
+    if(workbenchPrincipalKey(after)!==principal||data.conversation.conversation_id!==conversation)throw Error('identity');
+    const saved=[...data.messages].sort((a,b)=>b.sequence-a.sequence).find(message=>message.kind==='SOURCE'&&message.facts?.readable!==false&&message.facts?.source?.kind==='CAPABILITY'&&message.facts.source.target.capabilityId===detail.revision.capability_id);
+    const source=saved?.facts?.source;
+    if(!active)return;
+    if(source?.kind==='CAPABILITY'&&typeof source.target.objective==='string'&&typeof source.target.inputNotes==='string'&&source.target.objective.length<=2000&&source.target.inputNotes.length<=6000){
+     if(!touched.current.objective)setObjective(source.target.objective);
+     if(!touched.current.notes)setNotes(source.target.inputNotes);
+     setContextState('loaded');
+    }else setContextState('empty');
+   }catch{if(active)setContextState('failed')}
+  };void load();return()=>{active=false;abort.abort()};
+ },[conversation,principal,detail.revision.capability_id,contextReload]);
  async function prepare(event:FormEvent){
   event.preventDefault();if(pending.current)return;
   if(!objective.trim()||!notes.trim()){setChecked(false);setError('请填写本次目标与资料范围，不能只输入空格。');return}
@@ -40,8 +63,12 @@ export function CapabilityUse({detail,principal,conversation,onCancel}:{detail:C
   finally{pending.current=false;if(alive.current)setBusy(false)}
  }
  return <section className="capability-panel" aria-label="能力本次输入"><h2>使用 {detail.revision.title}</h2><p>使用已发布的固定版本；维护草稿不会改变本次准备。</p><form onSubmit={checked?prepare:event=>{event.preventDefault();if(!objective.trim()||!notes.trim()){setError('请填写本次目标与资料范围，不能只输入空格。');return}setError('');setChecked(true)}}>
- <fieldset disabled={busy||locked}><legend>本次输入</legend><label>希望完成什么<textarea aria-label="希望完成什么" required maxLength={2000} value={objective} onChange={event=>{setObjective(event.target.value);setChecked(false)}}/></label><p>所需资料：{detail.revision.inputs}</p><label>已提供的资料与范围<textarea aria-label="已提供的资料与范围" required maxLength={6000} placeholder="说明本次资料、范围及仍缺少的信息" value={notes} onChange={event=>{setNotes(event.target.value);setChecked(false)}}/></label></fieldset>
+ {contextState==='loading'&&<p role="status">正在读取原会话已提供的目标与资料…</p>}
+ {contextState==='loaded'&&<p role="status">已参考原会话中本能力最近保存的目标与资料；保留你已编辑的内容，请按本次需要调整。历史版本的执行结果不会自动重跑。</p>}
+ {contextState==='empty'&&<p>原会话尚无本能力可复用的资料说明，请补充本次范围。</p>}
+ {contextState==='failed'&&<p role="alert">原会话资料暂未读取成功，已填写内容保持不变。<button type="button" disabled={busy||locked} onClick={()=>setContextReload(value=>value+1)}>重新读取原会话资料</button></p>}
+ <fieldset disabled={busy||locked}><legend>本次输入</legend><label>希望完成什么<textarea aria-label="希望完成什么" required maxLength={2000} value={objective} onChange={event=>{touched.current.objective=true;setObjective(event.target.value);setChecked(false)}}/></label><p>所需资料：{detail.revision.inputs}</p><label>已提供的资料与范围<textarea aria-label="已提供的资料与范围" required maxLength={6000} placeholder="说明本次资料、范围及仍缺少的信息" value={notes} onChange={event=>{touched.current.notes=true;setNotes(event.target.value);setChecked(false)}}/></label></fieldset>
  <details><summary>本次版本与固定分工</summary><ul>{detail.revision.bindings.map(binding=><li key={binding.kind+binding.reference.resource_id}>{detail.members?.find(member=>member.kind===binding.kind&&member.resourceId===binding.reference.resource_id&&member.revisionId===binding.reference.revision_id)?.name??binding.purpose} · {binding.purpose}</li>)}</ul><p>交付内容：{detail.revision.outputs}</p><p>人工参与：{detail.revision.manual_involvement}</p></details>
  {error&&<p role="alert">{error}</p>}{checked&&<div className="capability-notice"><h3>确认保存到{conversation?'原会话':'新会话'}</h3><p>目标与资料说明已填写，将保留本能力的固定版本和完成标准。将固定本次范围和完成标准，并返回会话继续准备方案、查看进度和结果。</p></div>}
- <div className="capability-actions"><button type="submit" disabled={busy}>{busy?'正在核实并保存…':checked?locked?'核实本次准备记录':'准备工作并进入会话':'检查输入并继续'}</button><button type="button" disabled={busy} onClick={onCancel}>返回能力</button></div></form></section>;
+ <div className="capability-actions"><button type="submit" disabled={busy||contextState==='loading'}>{busy?'正在核实并保存…':checked?locked?'核实本次准备记录':'准备工作并进入会话':'检查输入并继续'}</button><button type="button" disabled={busy} onClick={onCancel}>返回能力</button></div></form></section>;
 }
