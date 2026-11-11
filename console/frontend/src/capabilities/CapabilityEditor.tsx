@@ -5,6 +5,12 @@ import {listReadableResources,type DirectoryKind} from '../api/resourceDirectory
 
 type Option={title:string;summary?:string;reference:CapabilityReference};
 type PickKind=CapabilityBinding['kind']|'WORKFLOW';
+function optionLabel(option:Option,options:Option[]){
+ const compact=(item:Option)=>item.title+(options.some(other=>other!==item&&other.title===item.title)?` · ${item.summary?.slice(0,60)||'职责待核实'} · 已发布 · ${item.reference.revision_id.slice(-8)}${options.some(other=>other!==item&&other.title===item.title&&other.summary===item.summary)?' · '+item.reference.resource_id.slice(-8):''}`:'');
+ const label=compact(option);
+ return options.some(other=>other!==option&&compact(other)===label)?`${label} · 资源 ${option.reference.resource_id} · 版本 ${option.reference.revision_id}`:label;
+}
+
 const kinds:{kind:PickKind;title:string;directory?:DirectoryKind}[]=[{kind:'EMPLOYEE',title:'数字人'},{kind:'SKILL',title:'技能',directory:'skill'},{kind:'MCP',title:'MCP 服务',directory:'mcp'},{kind:'KNOWLEDGE',title:'知识',directory:'knowledge'},{kind:'RUNTIME_PROFILE',title:'运行环境',directory:'runtime'},{kind:'WORKFLOW',title:'来源执行方案',directory:'workflow'}];
 const textFields=[['title','能力名称'],['intent','希望完成什么'],['inputs','需要提供哪些资料'],['outputs','将交付什么'],['business_scope','适用范围'],['exclusions','不包含哪些操作'],['manual_involvement','需要人工参与什么'],['known_limitations','当前已知限制']] as const;
 type FormFields=Record<typeof textFields[number][0],string>;
@@ -133,7 +139,7 @@ export function CapabilityEditor({base,principal,fromWorkflow=false,seed,initial
    {origin.workflow&&<p>已固定来源执行方案。更换执行方案需重新选择，既有工作不会随之改变。</p>}
    <h3>选择承担职责的数字人与资源</h3><label>资源类别<select aria-label="资源类别" value={kind} onChange={event=>setKind(event.target.value as PickKind)}>{kinds.filter(item=>item.kind!=='WORKFLOW'||origin.kind==='WORKFLOW_REVISION').map(item=><option key={item.kind} value={item.kind}>{item.title}</option>)}</select></label>
    {loading&&<p role="status">正在读取可选资源…</p>}{pickerError&&<p role="alert">{pickerError}<button type="button" onClick={()=>setReload(n=>n+1)}>重试读取</button></p>}
-   <label>已发布资源<select aria-label="已发布资源" value={selected} onChange={event=>setSelected(event.target.value)} disabled={loading}><option value="">请选择</option>{options.map((option,index)=><option key={`${option.reference.resource_id}:${option.reference.revision_id}`} value={index}>{option.title}{options.some(other=>other!==option&&other.title===option.title)?` · ${option.summary?.slice(0,60)||'职责待核实'} · 已发布 · ${option.reference.revision_id.slice(-8)}${options.some(other=>other!==option&&other.title===option.title&&other.summary===option.summary)?' · '+option.reference.resource_id.slice(-8):''}`:''}</option>)}</select></label>
+   <label>已发布资源<select aria-label="已发布资源" value={selected} onChange={event=>setSelected(event.target.value)} disabled={loading}><option value="">请选择</option>{options.map((option,index)=><option key={`${option.reference.resource_id}:${option.reference.revision_id}`} value={index}>{optionLabel(option,options)}</option>)}</select></label>
    {selected!==''&&options[Number(selected)]&&<section aria-label="所选固定资源"><p><strong>{options[Number(selected)].title}</strong> · 已发布版本</p>{options[Number(selected)].summary&&<p>{options[Number(selected)].summary}</p>}<details><summary>查看资源与版本依据</summary><p>资源：{options[Number(selected)].reference.resource_id}</p><p>版本：{options[Number(selected)].reference.revision_id}</p><p>内容摘要：{options[Number(selected)].reference.digest}</p></details></section>}
    {kind==='EMPLOYEE'&&<button type="button" disabled={loading||selected===''} onClick={()=>void importEmployee()}>带入已保存职责与资源</button>}
    {!loading&&!pickerError&&!options.length&&<p>当前没有可选的已发布资源。</p>}{cursor&&<button type="button" disabled={loading} onClick={()=>void more()}>读取更多资源</button>}

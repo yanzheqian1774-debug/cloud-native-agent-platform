@@ -728,3 +728,20 @@ test('using a capability while editing keeps saved version and restores unsaved 
  await page.getByRole('button',{name:'在会话中使用',exact:true}).click();const panel=page.getByRole('region',{name:'能力本次输入'});await expect(panel.getByLabel('希望完成什么',{exact:true})).toHaveValue(revision.intent);await expect(panel.getByText('所需资料：'+revision.inputs,{exact:true})).toBeVisible();await expect(panel.getByText('未保存资料不得生效',{exact:true})).toHaveCount(0);
  await page.goto('/capabilities');await page.goto(editUrl);await expect(page.getByLabel('希望完成什么',{exact:true})).toHaveValue('未保存目标不得生效');await expect(page.getByLabel('需要提供哪些资料',{exact:true})).toHaveValue('未保存资料不得生效');expect(state.saves).toHaveLength(0);expect(state.sources).toHaveLength(0);expect(state.work.writes).toHaveLength(0);
 });
+
+
+test('colliding employee names duties and id suffixes remain distinguishable',async({page})=>{
+ const state=await fixture(page);
+ const ids=['employee:one-tabular','employee:two-tabular'];
+ const employee=(id:string)=>({employeeDefinitionId:id,employeeDefinitionRevisionId:id+'-1',employeeDefinitionDigest:digest,role:'应用响应异常检查助手',publicationState:'PUBLISHED',responsibilities:['核对已确认测试资料'],members:[]});
+ await page.route('**/employees?*',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:ids.map(employee)}}}));
+ await page.route('**/employees/*/revisions/*',route=>{const id=decodeURIComponent(new URL(route.request().url()).pathname.split('/employees/')[1].split('/revisions/')[0]);return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:employee(id)}})});
+ await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();
+ const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option')).toHaveCount(3);
+ const labels=await picker.locator('option').allTextContents();expect(new Set(labels).size).toBe(3);
+ for(const id of ids){
+  const option=picker.locator('option').filter({hasText:'资源 '+id+' ·'});await expect(option).toHaveCount(1);await picker.selectOption({label:(await option.textContent())!});
+  const preview=page.getByRole('region',{name:'所选固定资源'});await preview.getByText('查看资源与版本依据').click();await expect(preview).toContainText('资源：'+id);await expect(preview).toContainText('版本：'+id+'-1');await preview.getByText('查看资源与版本依据').click();
+ }
+ expect(state.sources).toHaveLength(0);expect(state.work.writes).toHaveLength(0);
+});
