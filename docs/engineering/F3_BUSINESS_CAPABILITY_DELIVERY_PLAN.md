@@ -1086,3 +1086,70 @@ writes/model calls/runs. See real-browser/input-context-browser-complete.json
 and screenshots 43–44. Main stable home-to-detail body was separately read back
 without business replay; see main-release/test-capability-r2/stable-detail-complete.json
 and screenshot 06. New input/context code is not installed on main yet.
+
+### G1: explicit fixed-resource upgrades (F3 cap-upgrade66)
+
+Use existing published Employee/directory owners to discover same-identity
+successors, with session checks and exact current/candidate reads. Compare
+business duties/resources and fixed versions. A bounded incomplete scan or
+unreadable/unsupported kind is reported as unverified, never as current.
+Selection only seeds existing CapabilityEditor with replacement bindings;
+existing purpose, business fields, criteria, predecessor and CAS version stay
+unchanged. Save/publication remain their current explicit owner operations.
+Original conversations and callers retain fixed references; no auto execution,
+caller upgrade or additional authority. Test discovery identity/digest gates,
+selection, unchanged unrelated fields, and existing unknown-save semantics;
+then verify an actual published successor in the owned clone before main install.
+
+Actual isolated upgrade validation (not main acceptance): Employee lists include
+historical publications, so the implementation now uses OWNER_FACT_ORDER authoring
+publication for Employee and exact-read validation, not listing order. Other
+supported resource types share one bounded published directory scan per kind.
+The clone already had an unpublished Employee successor; the initial guarded
+attempt stopped before business writes. Inspected and reused that exact draft,
+then validated/approved/published it through existing UI owners. Selected the new
+Employee reference, saved and published one capability successor. All other
+business fields/bindings and the original conversation contract stayed unchanged.
+Database verification confirms unchanged old Employee revisions, old capability
+revisions/publications, source messages, executions, budgets and teams. Only the
+Employee aggregate advanced three lifecycle transitions and one capability
+revision/publication was added. Clone baseline is now 1/4/4/4, not 1/3/3/3.
+Evidence: real-browser/resource-upgrade-r2/{complete,database-complete}.json.
+Earlier full suite 67 passed; after authoritative Employee adapter correction,
+seven targeted upgrade cases passed, including withdrawn, mismatched authority
+and historical-version write prevention. Full-feature build passed.
+Remaining interaction fidelity: frozen cap-upgrade66 creates a new draft directly
+from the comparison; current implementation seeds the existing editor before
+save. Consolidate that action using the existing save owner with stable command
+identity and CAS, rather than treating this intermediate extra step as final.
+Then verify the final interaction, prototype alignment and main installation.
+
+Historical read follow-up: after publishing a successor, the Employee owner can
+report the old exact revision as NOT_PUBLISHED even though the immutable old
+revision is still readable. Comparison now verifies old identity/digest without
+requiring current-publication status; proposed candidates still require the
+current owner publication and exact PUBLISHED read. Historical capability pages
+may compare but cannot seed a successor over the current head. Seven targeted
+upgrade cases passed after this correction, including a historical old Employee
+marked NOT_PUBLISHED. The earlier failed read-only screenshot remains retained.
+
+Direct draft creation alignment: replace the intermediate editor with one explicit
+comparison-page create action using existing saveCapability. Re-read current head,
+aggregate and selected owner publication before issuing a frozen command. Preserve
+all unrelated revision fields. A lost/unknown response retains the same revision
+and command and exposes read-only recovery; no automatic replay. Compare saved
+revision contents before leaving the panel. No publication or execution is implied.
+
+Final candidate alignment: comparison now directly creates one successor draft,
+without the full editor. It re-reads capability head/aggregate and selected owner
+publication before save; unknown result recovery is read-only for the original
+revision, never a second POST. Historical compare is visibly read-only at the top
+and has no adoption control. No-update state omits draft creation. Changed duties
+show deterministic added/deleted clauses; unchanged resources are compact and
+expandable. No model explanations are requested. The complete 73-case capability
+browser suite passed, including lost-save readback and changed-head/resource
+pre-submit rejection. Sequential frontend lint and full-feature build passed.
+Main remains 7ee5 until separately frozen, installed and read back. The final
+positive direct-create action will be checked against the existing main synthetic
+test capability after installation, preserving old sources and avoiding additional
+clone sample publication solely for screenshots.

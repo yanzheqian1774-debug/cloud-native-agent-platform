@@ -539,3 +539,30 @@ test('duplicate employee names display actual duties and fixed version preview',
  const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option').filter({hasText:'检查回退步骤'})).toHaveCount(1);await expect(picker.locator('option').filter({hasText:'核对责任清单'})).toHaveCount(1);
  await picker.selectOption({label:'同名助手 · 核对责任清单 · 已发布 · sion-two'});const preview=page.getByRole('region',{name:'所选固定资源'});await expect(preview).toContainText('核对责任清单');await preview.getByText('查看资源与版本依据').click();await expect(preview).toContainText('revision-two');await expect(preview).toContainText('资源：two');
 });
+
+for(const mode of ['new','same','denied','mismatch','owner-mismatch','withdrawn','historical','lost-save','changed-head','changed-resource'])test('resource upgrade compares exact published versions '+mode,async({page})=>{
+ const state=await fixture(page);state.published=true;const newer='b'.repeat(64);let ownerReads=0,headReads=0;
+ const employee=(id:string)=>({employeeDefinitionId:'worker',employeeDefinitionRevisionId:id,employeeDefinitionDigest:id==='worker-v2'?newer:digest,role:'交接核对助手',publicationState:'PUBLISHED',responsibilities:[id==='worker-v2'?'补充核对回退责任':'核对交接材料'],members:[]});
+ await page.route('**/employees?*',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:[employee(mode==='same'?'worker-v1':'worker-v2')]}}}));
+ await page.route('**/employees/worker/revisions/*',route=>{
+  if(mode==='denied')return route.fulfill({status:404,json:{reasonCode:'AUTHORITY_DENIED'}});
+  const id=new URL(route.request().url()).pathname.endsWith('worker-v2')?'worker-v2':'worker-v1';return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{...employee(id),...(mode==='historical'&&id==='worker-v1'?{publicationState:'NOT_PUBLISHED'}:{}),...(mode==='mismatch'&&id==='worker-v2'?{employeeDefinitionDigest:'c'.repeat(64)}:{})}}});
+ });
+ await page.route('**/employees/worker/revisions/worker-v1/authoring',route=>{ownerReads++;return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{basis:'OWNER_FACT_ORDER',parent:{employeeDefinitionId:mode==='owner-mismatch'?'different':'worker',employeeDefinitionRevisionId:'worker-v1',employeeDefinitionDigest:digest},publication:mode==='withdrawn'||mode==='changed-resource'&&ownerReads>1?{status:'WITHDRAWN'}:{status:'AVAILABLE',definition:employee(mode==='same'?'worker-v1':'worker-v2')}}}})});
+ if(mode==='changed-head')await page.route('**/business-capabilities/handover/revisions/r2',route=>{headReads++;return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{revision,members,digest,aggregateVersion:headReads>1?4:3,headRevisionId:headReads>1?'r3':'r2',publishedRevisionId:'r2',currentDraftRevisionId:null,state:'PUBLISHED',executionAuthorized:false}}})});
+ if(mode==='lost-save')await page.route('**/business-capabilities',route=>{if(route.request().method()!=='POST')return route.fallback();state.saves.push(route.request().postDataJSON());return route.abort('failed')});
+ if(mode==='historical')await page.route('**/business-capabilities/handover/revisions/r2',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{revision,members,digest,aggregateVersion:4,headRevisionId:'r3',publishedRevisionId:'r3',currentDraftRevisionId:null,state:'PUBLISHED',executionAuthorized:false}}}));
+ await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');await page.getByRole('button',{name:'检查资源更新',exact:true}).click();const panel=page.getByRole('region',{name:'资源版本升级'});
+ if(['new','lost-save','changed-head','changed-resource'].includes(mode)){
+  await expect(panel).toContainText('补充核对回退责任');await expect(panel).toContainText('核对交接材料');await expect(panel.getByRole('button',{name:'创建能力新版本草稿'})).toBeDisabled();expect(state.saves).toHaveLength(0);
+  await panel.getByRole('checkbox').check();await panel.getByRole('button',{name:'创建能力新版本草稿'}).click();
+  if(mode==='changed-head'||mode==='changed-resource'){await expect(panel.getByRole('alert')).toContainText('已变化');expect(state.saves).toHaveLength(0);return}
+  if(mode==='lost-save'){await expect(panel.getByRole('alert')).toContainText('草稿结果尚未核实');expect(state.saves).toHaveLength(1);await panel.getByRole('button',{name:'读取原草稿',exact:true}).click();await expect(panel).toHaveCount(0);expect(state.saves).toHaveLength(1)}
+  await expect.poll(()=>state.saves.length).toBe(1);
+  const saved=state.saves[0];expect(saved.expectedVersion).toBe(3);expect(saved.revision.predecessor_revision_id).toBe('r2');expect(saved.revision.bindings).toEqual([{...revision.bindings[0],reference:{resource_id:'worker',revision_id:'worker-v2',digest:newer}}]);
+  for(const field of ['intent','inputs','outputs','acceptance_criteria','origin','business_scope','exclusions'] as const)expect(saved.revision[field]).toEqual(revision[field]);expect(state.writes).toHaveLength(0);expect(state.sources).toHaveLength(0);
+ }else if(mode==='historical'){await expect(panel.getByRole('checkbox')).toHaveCount(0);await expect(panel).toContainText('正在比较历史版本');await expect(panel.getByRole('button',{name:'创建能力新版本草稿'})).toHaveCount(0);expect(state.saves).toHaveLength(0);
+ }else{
+  await expect(panel).toContainText(mode==='same'?'当前引用已一致，无需创建升级草稿。':mode==='withdrawn'?'当前发布版本暂不可核实':'当前或候选版本未能核实');await expect(panel.getByRole('button',{name:'创建能力新版本草稿'})).toHaveCount(0);expect(state.saves).toHaveLength(0);
+ }
+});
