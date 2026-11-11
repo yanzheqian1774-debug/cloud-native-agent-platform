@@ -343,3 +343,17 @@ Evidence real-browser/task-directory-parity-r2/demo.html and stage.json. First
 script incorrectly treated required detail-origin reads as list traversal, then
 corrected observation scope; no product bypass. Main rollout must exclude the
 unaccepted workflow editor candidate. Full platform goal remains active.
+
+
+## Unknown clarification state parity (2026-11-12, G0)
+
+The server intentionally returns null pending-question counts when exact Native
+question reads are unavailable, and marks an otherwise RUNNING row unknown.
+The native directory must honor that uncertainty rather than show active progress.
+The exact task detail must likewise preserve questionsReadable=false, display
+progress awaiting verification and direct users to saved evidence/original chat.
+Known zero, a real pending question and terminal execution remain distinct.
+Keep the F3 layout, authorization, filters, polling, historical snapshots and all
+execution commands unchanged. This is a display/read-state correction, not a
+new scheduler or result-acceptance authority. Validate native list and detail
+with unavailable questions, known zero and actual pending questions; no writes.

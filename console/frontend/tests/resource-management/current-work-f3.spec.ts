@@ -129,3 +129,13 @@ test('task list omits terminal question history but handled attention retains it
 test('directory does not increase read fanout while the original journey is pending',async({page})=>{
  const s=await fixture(page);let entered=false;let release!:()=>void;const gate=new Promise<void>(r=>release=r);await page.route('**/conversations/c1/journey',async route=>{entered=true;await gate;await route.fulfill({json:{result:{state:{execution:'e1'}}}})});await page.goto('/tasks');try{await expect.poll(()=>entered).toBe(true);expect(s.reads.filter(p=>p==='/api/workbench/v1/prepared-executions/e1')).toHaveLength(0)}finally{release()}await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(1);expect(s.writes).toEqual([]);
 });
+
+test('running detail keeps unavailable questions distinct from no questions',async({page},testInfo)=>{
+ const s=await fixture(page);s.running=true;
+ await page.route('**/api/workbench/v1/prepared-executions/e1/native-progress',r=>r.fulfill({status:403,json:{reasonCode:'NOT_AUTHORIZED'}}));
+ await page.goto('/tasks?work=e1&origin=c1');
+ await expect(page.locator('.f3-work-detail > header .f3-work-badge')).toHaveText('进展待核实');
+ await expect(page.getByText('必要追问状态暂不可读取，不能判断是否需要补充。请重新读取或回到原会话核对。',{exact:true})).toBeVisible();
+ await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c1');expect(s.writes).toEqual([]);
+ await page.screenshot({path:testInfo.outputPath('unknown-clarification-detail.png'),fullPage:true});
+});
