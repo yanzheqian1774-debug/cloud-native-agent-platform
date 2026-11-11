@@ -539,8 +539,8 @@ test('duplicate employee names display actual duties and fixed version preview',
  await page.route('**/employees?*',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:['one','two'].map(id=>({employeeDefinitionId:id,employeeDefinitionRevisionId:'revision-'+id,employeeDefinitionDigest:digest,role:'同名助手',publicationState:'PUBLISHED'}))}}}));
  await page.route('**/employees/*/revisions/*',route=>{const id=new URL(route.request().url()).pathname.includes('/one/')?'one':'two';return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{employeeDefinitionId:id,employeeDefinitionRevisionId:'revision-'+id,employeeDefinitionDigest:digest,role:'同名助手',publicationState:'PUBLISHED',responsibilities:[id==='one'?'检查回退步骤':'核对责任清单']}}})});
  await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();
- const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option').filter({hasText:'检查回退步骤'})).toHaveCount(1);await expect(picker.locator('option').filter({hasText:'核对责任清单'})).toHaveCount(1);
- await picker.selectOption({label:'同名助手 · 核对责任清单 · 已发布 · sion-two'});const preview=page.getByRole('region',{name:'所选固定资源'});await expect(preview).toContainText('核对责任清单');await preview.getByText('查看资源与版本依据').click();await expect(preview).toContainText('revision-two');await expect(preview).toContainText('资源：two');
+ const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option').filter({hasText:'同名助手 · 标识 one'})).toHaveCount(1);await expect(picker.locator('option').filter({hasText:'同名助手 · 标识 two'})).toHaveCount(1);
+ await picker.selectOption({label:'同名助手 · 标识 two · 已发布'});const preview=page.getByRole('region',{name:'所选固定资源'});await expect(preview).toContainText('核对责任清单');await preview.getByText('查看资源与版本依据').click();await expect(preview).toContainText('revision-two');await expect(preview).toContainText('资源：two');
 });
 
 for(const mode of ['new','same','denied','mismatch','owner-mismatch','withdrawn','historical','lost-save','changed-head','changed-resource'])test('resource upgrade compares exact published versions '+mode,async({page})=>{
@@ -738,10 +738,26 @@ test('colliding employee names duties and id suffixes remain distinguishable',as
  await page.route('**/employees/*/revisions/*',route=>{const id=decodeURIComponent(new URL(route.request().url()).pathname.split('/employees/')[1].split('/revisions/')[0]);return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:employee(id)}})});
  await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();
  const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option')).toHaveCount(3);
- const labels=await picker.locator('option').allTextContents();expect(new Set(labels).size).toBe(3);
+ const labels=await picker.locator('option').allTextContents();expect(new Set(labels).size).toBe(3);for(const label of labels.slice(1)){expect(label.length).toBeLessThan(50);expect(label).not.toContain('核对已确认测试资料');}
  for(const id of ids){
-  const option=picker.locator('option').filter({hasText:'资源 '+id+' ·'});await expect(option).toHaveCount(1);await picker.selectOption({label:(await option.textContent())!});
+  const option=picker.locator('option').filter({hasText:'标识 …'+id.slice(-9)+' ·'});await expect(option).toHaveCount(1);await picker.selectOption({label:(await option.textContent())!});
   const preview=page.getByRole('region',{name:'所选固定资源'});await preview.getByText('查看资源与版本依据').click();await expect(preview).toContainText('资源：'+id);await expect(preview).toContainText('版本：'+id+'-1');await preview.getByText('查看资源与版本依据').click();
  }
  expect(state.sources).toHaveLength(0);expect(state.work.writes).toHaveLength(0);
+});
+
+test('same employee historical versions have short distinct labels and exact visible references',async({page})=>{
+ await fixture(page);
+ const revisions=['revision:older-tabular','revision:newer-tabular'];
+ const employee=(rev:string)=>({employeeDefinitionId:'worker',employeeDefinitionRevisionId:rev,employeeDefinitionDigest:digest,role:'同名助手',publicationState:'PUBLISHED',responsibilities:['核对已确认测试资料'],members:[]});
+ await page.route('**/employees?*',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:revisions.map(employee)}}}));
+ await page.route('**/employees/*/revisions/*',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:employee(decodeURIComponent(new URL(route.request().url()).pathname.split('/revisions/')[1]))}}));
+ await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();
+ const picker=page.getByLabel('已发布资源',{exact:true});await expect(picker.locator('option')).toHaveCount(3);
+ const labels=(await picker.locator('option').allTextContents()).slice(1);expect(new Set(labels).size).toBe(2);
+ for(let index=0;index<labels.length;index++){
+  expect(labels[index].length).toBeLessThan(45);await picker.selectOption({label:labels[index]});const preview=page.getByRole('region',{name:'所选固定资源'});
+  if(!await preview.locator('details').evaluate(e=>(e as HTMLDetailsElement).open))await preview.getByText('查看资源与版本依据').click();
+  await expect(preview.getByText('资源：worker',{exact:true})).toBeVisible();await expect(preview.getByText('版本：'+revisions[index],{exact:true})).toBeVisible();await expect(preview).toContainText('核对已确认测试资料');
+ }
 });

@@ -6,9 +6,16 @@ import {listReadableResources,type DirectoryKind} from '../api/resourceDirectory
 type Option={title:string;summary?:string;reference:CapabilityReference};
 type PickKind=CapabilityBinding['kind']|'WORKFLOW';
 function optionLabel(option:Option,options:Option[]){
- const compact=(item:Option)=>item.title+(options.some(other=>other!==item&&other.title===item.title)?` · ${item.summary?.slice(0,60)||'职责待核实'} · 已发布 · ${item.reference.revision_id.slice(-8)}${options.some(other=>other!==item&&other.title===item.title&&other.summary===item.summary)?' · '+item.reference.resource_id.slice(-8):''}`:'');
- const label=compact(option);
- return options.some(other=>other!==option&&compact(other)===label)?`${label} · 资源 ${option.reference.resource_id} · 版本 ${option.reference.revision_id}`:label;
+ const peers=options.filter(item=>item.title===option.title);
+ if(peers.length<2)return option.title;
+ const resourceUnique=new Set(peers.map(item=>item.reference.resource_id)).size===peers.length;
+ const versionKey=(item:Option)=>`${item.reference.resource_id} / ${item.reference.revision_id}`;
+ const versionsUnique=new Set(peers.map(versionKey)).size===peers.length;
+ const identity=(item:Option)=>resourceUnique?item.reference.resource_id:versionsUnique?versionKey(item):`${versionKey(item)} / ${item.reference.digest}`;
+ const value=identity(option);
+ let length=Math.min(8,value.length);
+ while(length<value.length&&peers.some(other=>other!==option&&identity(other).slice(-length)===value.slice(-length)))length++;
+ return `${option.title} · 标识 ${length<value.length?'…':''}${value.slice(-length)} · 已发布`;
 }
 
 const kinds:{kind:PickKind;title:string;directory?:DirectoryKind}[]=[{kind:'EMPLOYEE',title:'数字人'},{kind:'SKILL',title:'技能',directory:'skill'},{kind:'MCP',title:'MCP 服务',directory:'mcp'},{kind:'KNOWLEDGE',title:'知识',directory:'knowledge'},{kind:'RUNTIME_PROFILE',title:'运行环境',directory:'runtime'},{kind:'WORKFLOW',title:'来源执行方案',directory:'workflow'}];
