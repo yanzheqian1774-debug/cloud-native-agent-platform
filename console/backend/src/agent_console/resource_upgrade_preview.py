@@ -43,8 +43,17 @@ class UpgradeSelection:
     new_skill: FixedReference
     employees: tuple[ConsumerSelection, ...]
     capabilities: tuple[ConsumerSelection, ...]
+    resource_kind: str = "skill"
+
+    def record(self):
+        value = asdict(self)
+        if self.resource_kind == "skill":
+            value.pop("resource_kind")
+        return value
 
     def __post_init__(self):
+        if self.resource_kind not in {"skill", "mcp"}:
+            raise UpgradeBatchError("UPGRADE_RESOURCE_KIND_INVALID")
         if self.old_skill.resource_id != self.new_skill.resource_id:
             raise UpgradeBatchError("UPGRADE_RESOURCE_IDENTITY_CHANGED")
         if self.old_skill.revision_id == self.new_skill.revision_id:
@@ -92,14 +101,17 @@ class SelectedUpgradePreview:
         """Also used before receipt replay; never skip fresh source authorization."""
         skill = selected.new_skill
         self._require(
-            call, "SKILL", "MANAGE_RESOURCE", target("skill", skill.resource_id)
+            call,
+            "SKILL",
+            "MANAGE_RESOURCE",
+            target(selected.resource_kind, skill.resource_id),
         )
         for ref in (selected.old_skill, skill):
             self._require(
                 call,
                 "SKILL",
                 "READ_RESOURCE",
-                reference("skill", ref.resource_id, ref.revision_id),
+                reference(selected.resource_kind, ref.resource_id, ref.revision_id),
             )
         if selected.employees:
             self._require(call, "EMPLOYEE", "CREATE", "employee:collection")
@@ -149,9 +161,9 @@ class SelectedUpgradePreview:
                     raise UpgradeBatchError("UPGRADE_CONCURRENT_CHANGE")
         call.connection.execute(
             "SELECT resource_id FROM skill_mcp_resource.resources WHERE namespace=%s "
-            "AND security_domain=%s AND kind='skill' "
+            "AND security_domain=%s AND kind=%s "
             "AND resource_id=%s FOR UPDATE NOWAIT",
-            (*scope, selected.new_skill.resource_id),
+            (*scope, selected.resource_kind, selected.new_skill.resource_id),
         )
         for table, column, values in (
             (
@@ -178,7 +190,7 @@ class SelectedUpgradePreview:
         service = bind_service(self.skill_service, call.connection)
         record = service.repository.get(
             service.scope(scope.namespace, scope.security_domain),
-            "skill",
+            selected.resource_kind,
             selected.new_skill.resource_id,
         )
         if (
@@ -193,10 +205,18 @@ class SelectedUpgradePreview:
                 or revisions[ref.revision_id]["digest"] != ref.digest
             ):
                 raise UpgradeBatchError("UPGRADE_SKILL_REFERENCE_CHANGED")
-        if not coverage(record, revisions[selected.new_skill.revision_id])["ready"]:
+        if (
+            selected.resource_kind == "skill"
+            and not coverage(record, revisions[selected.new_skill.revision_id])["ready"]
+        ):
             raise UpgradeBatchError("CURRENT_OPERATION_TESTS_REQUIRED")
         changes = [
-            SelectedReplacement(scope, "SKILL", selected.old_skill, selected.new_skill)
+            SelectedReplacement(
+                scope,
+                selected.resource_kind.upper(),
+                selected.old_skill,
+                selected.new_skill,
+            )
         ]
         employee_results, capability_results = [], []
         employee_views, capability_views = [], []
@@ -287,7 +307,7 @@ class SelectedUpgradePreview:
             "actorId": call.context.principal_id,
             "authorityGeneration": call.policy_generation,
             "recoveryEpoch": call.recovery_epoch,
-            "selection": asdict(selected),
+            "selection": selected.record(),
             "skill": {
                 "name": record["name"],
                 "before": asdict(selected.old_skill),

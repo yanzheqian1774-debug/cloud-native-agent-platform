@@ -4,8 +4,6 @@ The BFF must provide a generation-pinned AuthorizedOwnerCall; no endpoint or
 implicit grant is introduced here. The caller commits the returned receipt.
 """
 
-from dataclasses import asdict
-
 from .digital_employee_definition import digest
 from .execution_domain import ScopeIdentity
 from .resource_upgrade_batch_postgres import UpgradeBatchError, UpgradeBatchRepository
@@ -37,6 +35,7 @@ class SelectedUpgradeCoordinator:
                 batch=command,
                 skill=selected.new_skill,
                 skill_version=value.skill_version,
+                resource_kind=selected.resource_kind,
                 employees=value.employees,
                 capabilities=value.capabilities,
                 reason=reason,
@@ -49,7 +48,7 @@ class SelectedUpgradeCoordinator:
             ),
             call.context.principal_id,
             command,
-            request={"selection": asdict(selected), "reason": reason},
+            request={"selection": selected.record(), "reason": reason},
             reviewed_digest=reviewed_digest,
             authority_generation=call.policy_generation,
             recovery_epoch=call.recovery_epoch,
@@ -76,7 +75,7 @@ class SelectedUpgradeCoordinator:
         if result["state"] == "COMMITTED":
             expected = digest(
                 {
-                    "request": {"selection": asdict(selected), "reason": reason},
+                    "request": {"selection": selected.record(), "reason": reason},
                     "previewDigest": reviewed_digest,
                 }
             )

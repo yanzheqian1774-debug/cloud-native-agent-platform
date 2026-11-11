@@ -2,15 +2,16 @@ import {test,expect,type Page} from '@playwright/test';
 const principal={principalId:'human:upgrade',tenantId:'upgrade-test',securityDomain:'isolated'};
 const digest='d'.repeat(64),oldDigest='a'.repeat(64);
 const content={description:'明确标记的交互测试技能',capabilities:['READ_DATA'],instructions:'读取合成材料',operations:[],inputSchema:{},outputSchema:{}};
-const resource={resourceId:'skill-definition:upgrade-ui',kind:'skill',name:'交互测试技能',aggregateVersion:7,lifecycleState:'PUBLISHED',enabled:true,currentDraftRevisionId:'revision:new',publishedRevisionId:'revision:old',revisions:[{revisionId:'revision:old',state:'PUBLISHED',digest:oldDigest,content},{revisionId:'revision:new',state:'DRAFT',digest,content}],testResults:[],relationships:[],healthObservations:[],discoverySnapshots:[],toolSelections:[]};
+const sourceResource={resourceId:'skill-definition:upgrade-ui',kind:'skill',name:'交互测试技能',aggregateVersion:7,lifecycleState:'PUBLISHED',enabled:true,currentDraftRevisionId:'revision:new',publishedRevisionId:'revision:old',revisions:[{revisionId:'revision:old',state:'PUBLISHED',digest:oldDigest,content},{revisionId:'revision:new',state:'DRAFT',digest,content}],testResults:[],relationships:[],healthObservations:[],discoverySnapshots:[],toolSelections:[]};
 const url='/skills?managedResource=skill-definition%3Aupgrade-ui&resourceTab='+encodeURIComponent('版本');
-async function setup(page:Page,mode:'success'|'unknown'|'conflict'|'detail-failure',incoming:Record<string,unknown>[]=[]){
+async function setup(page:Page,mode:'success'|'unknown'|'conflict'|'detail-failure',incoming:Record<string,unknown>[]=[],kind:'skill'|'mcp'='skill'){
+ const resource=kind==='skill'?sourceResource:{...sourceResource,kind:'mcp',name:'交互测试MCP连接'};
  const commands:{action:string;body:Record<string,unknown>}[]=[];
- const receipt={schemaVersion:'selected-resource-upgrade-receipt.v1',batchId:'fixture-batch',result:{resource:{identity:resource.resourceId,revisionId:'revision:new',digest},employees:[],capabilities:[]}};
+ const receipt={schemaVersion:'selected-resource-upgrade-receipt.v1',batchId:'fixture-batch',result:{resource:{...(kind==='mcp'?{resourceKind:'mcp'}:{}),identity:resource.resourceId,revisionId:'revision:new',digest},employees:[],capabilities:[]}};
  await page.route('**/api/workbench/v1/**',async route=>{const request=route.request(),path=new URL(request.url()).pathname;
  if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal,csrfToken:'fixture'}});
- if(path.endsWith('/resource-management/skill')&&mode==='detail-failure'&&commands.some(c=>c.action==='submit'))return route.fulfill({status:503,json:{reasonCode:'DETAIL_TEMPORARILY_UNAVAILABLE'}});
- if(path.endsWith('/resource-management/skill'))return route.fulfill({json:{result:{items:[mode==='success'&&commands.some(c=>c.action==='submit')?{...resource,currentDraftRevisionId:null,publishedRevisionId:'revision:new',aggregateVersion:8,revisions:resource.revisions.map(r=>r.revisionId==='revision:new'?{...r,state:'PUBLISHED'}:r)}:resource],subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain}}}});
+ if(path.endsWith('/resource-management/'+kind)&&mode==='detail-failure'&&commands.some(c=>c.action==='submit'))return route.fulfill({status:503,json:{reasonCode:'DETAIL_TEMPORARILY_UNAVAILABLE'}});
+ if(path.endsWith('/resource-management/'+kind))return route.fulfill({json:{result:{items:[mode==='success'&&commands.some(c=>c.action==='submit')?{...resource,currentDraftRevisionId:null,publishedRevisionId:'revision:new',aggregateVersion:8,revisions:resource.revisions.map(r=>r.revisionId==='revision:new'?{...r,state:'PUBLISHED'}:r)}:resource],subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain}}}});
  if(path.endsWith('/resource-directory'))return route.fulfill({json:{result:{items:[],nextCursor:null,subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain}}}});
  if(path.endsWith('/impact'))return route.fulfill({json:{result:{current:{revisionId:'revision:new',digest},previousPublished:{revisionId:'revision:old',digest:oldDigest},changes:[],testCoverage:{ready:true,checks:[]},olderTestsNotCurrent:0,authorizedUses:[],truncated:false,dependencies:{incoming,outgoing:[],limitations:[],unresolvedDeclarations:[]}}}});
  if(path.includes('/resource-upgrades/')){const action=path.split('/').at(-1)!;commands.push({action,body:request.postDataJSON()});if(action==='preview')return route.fulfill({json:{result:{reviewDigest:'f'.repeat(64),preview:{employees:[],capabilities:[]}}}});if(action==='receipt')return route.fulfill({json:{result:{state:'COMMITTED',receipt}}});if(mode==='unknown')return route.abort('failed');if(mode==='conflict')return route.fulfill({status:409,json:{detail:{reasonCode:'UPGRADE_PREVIEW_CHANGED'}}});return route.fulfill({json:{result:{receipt,replayed:false}}})}
@@ -55,4 +56,23 @@ test('refresh never silently omits an unavailable selected object',async({page})
  await expect(area).toContainText('暂不能生成发布预览');
  expect(commands).toHaveLength(0);
  await expect(area.getByRole('button',{name:/移除不可用选择/})).toBeVisible();
+});
+
+for(const mode of ['success','unknown'] as const)test('MCP selected publication retains its type and recovery '+mode,async({page})=>{
+ const commands=await setup(page,mode,[],'mcp');
+ await page.goto(url.replace('/skills?','/mcp?'));
+ const area=page.getByRole('region',{name:'集中更新选定引用'});
+ await expect(area).toContainText('发布当前MCP连接');
+ await expect(area).toContainText('发布连接配置不代表工具调用已经验证');
+ await area.getByRole('button',{name:'预览本次更新'}).click();
+ await expect(area).toContainText('MCP连接、0 个数字人');
+ await area.getByRole('button',{name:'确认并整批发布'}).click();
+ if(mode==='unknown'){
+  await expect(area.getByRole('button',{name:'读取原发布结果'})).toBeVisible();
+  await page.reload();await area.getByRole('button',{name:'读取原发布结果'}).click();
+ }
+ await expect(area.getByRole('heading',{name:'整批发布完成'})).toBeVisible();
+ expect(commands.filter(c=>c.action==='submit')).toHaveLength(1);
+ expect(commands.every(c=>c.body.resourceKind==='mcp')).toBe(true);
+ if(mode==='unknown')expect(commands.find(c=>c.action==='receipt')?.body).toEqual(commands.find(c=>c.action==='submit')?.body);
 });

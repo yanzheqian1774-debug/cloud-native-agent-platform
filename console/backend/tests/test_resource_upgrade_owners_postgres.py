@@ -78,7 +78,10 @@ MIGRATIONS = Path(__file__).parents[1] / "migrations"
         "http",
     ],
 )
-def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
+@pytest.mark.parametrize("resource_kind", ["skill", "mcp"])
+def test_three_real_owners_commit_or_rollback(
+    manager, monkeypatch, failure, resource_kind
+):
     a, resources = manager
     monkeypatch.setattr(grants_fixture, "SCOPE", a.subject.scope)
     employees = a.automation.employees
@@ -90,7 +93,11 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
     UpgradeBatchRepository(a.repository.pool).migrate(
         MIGRATIONS / "0060_resource_upgrade_batch.sql"
     )
-    caps = CapabilityOwner(caprepo, CapabilityReferences(employees, a.services), None)
+    caps = CapabilityOwner(
+        caprepo,
+        CapabilityReferences(employees, {**a.services, "mcp": a.services["skill"]}),
+        None,
+    )
     runner = SelectedUpgradeOwners(
         resources,
         EmployeeDefinitionCommandOwnerAdapter(employees, prepared_resource_reads=True),
@@ -127,11 +134,19 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
     content = json.loads(
         (fixture / "resource-management/fixtures/maintenance-skill.json").read_text()
     )
+    if resource_kind == "mcp":
+        content = {
+            "description": "隔离MCP配置发布验证",
+            "capabilities": ["READ_DATA"],
+            "endpoint": "http://127.0.0.1:19191/mcp",
+            "sideEffect": "READ",
+        }
     source = json.loads((fixture / "e2e/fixtures/sales-report.json").read_text())
     resource = command(
         manager,
         "create",
         key="batch-skill-create",
+        kind=resource_kind,
         name="原子更新隔离验证",
         content=content,
     )["resource"]
@@ -145,12 +160,16 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
             manager,
             action,
             key=f"batch-skill-{sequence}",
+            kind=resource_kind,
             identity=identity,
             expectedVersion=resource["aggregateVersion"],
             **extra,
         )["resource"]
 
     def test_operations():
+        if resource_kind == "mcp":
+            act("validate")
+            return
         read_output = None
         for op in content["operations"]:
             operation = op["name"]
@@ -175,7 +194,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
                 read_output = resource["testResults"][-1]["actual"]
 
     test_operations()
-    act("publish-tested")
+    act("publish-tested" if resource_kind == "skill" else "publish")
     oldskill = next(
         r
         for r in resource["revisions"]
@@ -194,7 +213,10 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
                 MemberKind.AGENT, agent.resource_id, agent.revision_id, agent.digest
             ),
             CompositionMember(
-                MemberKind.SKILL, before.resource_id, before.revision_id, before.digest
+                MemberKind(resource_kind.upper()),
+                before.resource_id,
+                before.revision_id,
+                before.digest,
             ),
         ),
     )
@@ -231,7 +253,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
                 ),
                 "核对材料",
             ),
-            CapabilityBinding(BindingKind.SKILL, before, "提供技能"),
+            CapabilityBinding(BindingKind(resource_kind.upper()), before, "提供资源"),
         ),
     )
     allow(
@@ -286,7 +308,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
         if r["revisionId"] == resource["currentDraftRevisionId"]
     )
     after = FixedReference(identity, draft["revisionId"], draft["digest"])
-    skill_change = SelectedReplacement(a.e.scope, "SKILL", before, after)
+    skill_change = SelectedReplacement(a.e.scope, resource_kind.upper(), before, after)
     successor = employee_successor(
         original, "employee-revision:batch-new", [skill_change]
     )
@@ -331,6 +353,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
     selection = dict(
         batch="batch:three-owners",
         skill=after,
+        resource_kind=resource_kind,
         skill_version=resource["aggregateVersion"],
         employees=(EmployeePublication(successor, seeded["aggregateVersion"]),),
         capabilities=(
@@ -371,6 +394,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
             ),
         ),
     )
+    selected = replace(selected, resource_kind=resource_kind)
     real_preview = None
     if failure not in {"employee_authorization", "capability_review"}:
         with a.authority.connection_scope() as conn:
@@ -436,7 +460,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
                 ),
                 "SKILL",
                 "MANAGE_RESOURCE",
-                target("skill", identity),
+                target(resource_kind, identity),
             )
             return UpgradeBatchRepository.apply(
                 conn,
@@ -522,6 +546,7 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
             ]
 
         body = {
+            "resourceKind": resource_kind,
             "oldSkill": ref_body(before),
             "newSkill": ref_body(after),
             "employees": consumers(selected.employees),
@@ -615,6 +640,11 @@ def test_three_real_owners_commit_or_rollback(manager, monkeypatch, failure):
                 == "COMMITTED"
             )
 
+        if resource_kind == "mcp":
+            source_receipt = result["receipt"]["result"]["resource"]
+            assert source_receipt["resourceKind"] == "mcp"
+            assert source_receipt["invocationVerified"] is False
+            assert "currentOperationTestsReady" not in source_receipt
         assert len(result["receipt"]["decisionIds"]) > 4
         assert all(
             d.startswith("workbench-authorization:")

@@ -125,3 +125,48 @@ def test_no_selected_reference_cannot_create_spurious_successor():
     )
     with pytest.raises(UpgradeSelectionError, match="NO_SELECTED_REFERENCE"):
         capability_successor(original, "new:revision", (chosen,))
+
+
+def test_mcp_exact_replacement_preserves_employee_duties_and_skill_reference():
+    original = employee()
+    mcp = CompositionMember(MemberKind.MCP, "mcp:test", "revision:1", "a" * 64)
+    original = replace(
+        original,
+        members=(*original.members, mcp),
+        responsibility_bindings=(
+            *original.responsibility_bindings,
+            ResponsibilityBinding(original.responsibilities[0], mcp),
+        ),
+    )
+    chosen = SelectedReplacement(
+        original.scope,
+        "MCP",
+        FixedReference("mcp:test", "revision:1", "a" * 64),
+        FixedReference("mcp:test", "revision:2", "b" * 64),
+    )
+    updated = employee_successor(original, "employee:mcp-new", (chosen,))
+    assert updated.members[:-1] == original.members[:-1]
+    assert updated.members[-1].revision_id == "revision:2"
+    assert updated.responsibility_bindings[-1].member == updated.members[-1]
+    with pytest.raises(UpgradeSelectionError, match="ORIGINAL_REFERENCE_MISMATCH"):
+        employee_successor(
+            original,
+            "employee:bad",
+            (replace(chosen, before=replace(chosen.before, digest="c" * 64)),),
+        )
+
+
+def test_skill_selection_canonical_record_stays_compatible_and_mcp_is_separate():
+    from dataclasses import asdict
+
+    from agent_console.resource_upgrade_preview import UpgradeSelection
+
+    chosen = selection(capability().scope)
+    legacy = UpgradeSelection(chosen.before, chosen.after, (), ())
+    expected = asdict(legacy)
+    expected.pop("resource_kind")
+    assert legacy.record() == expected
+    assert replace(legacy, resource_kind="mcp").record() == {
+        **expected,
+        "resource_kind": "mcp",
+    }

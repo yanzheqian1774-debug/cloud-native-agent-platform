@@ -2,8 +2,9 @@
 
 Internal only: the coordinator must lock and revalidate the complete preview,
 heads, absence of conflicting drafts, exact successor contents and scope before
-calling this runner inside UpgradeBatchRepository.apply. No HTTP route enables
-this module yet. It never creates substitute permissions or recomputes a review.
+calling this runner inside UpgradeBatchRepository.apply. Existing private BFF
+routes enable this module. It never creates substitute permissions or recomputes
+a review.
 """
 
 from dataclasses import dataclass, replace
@@ -176,7 +177,10 @@ class SelectedUpgradeOwners:
         employees,
         capabilities,
         reason,
+        resource_kind="skill",
     ):
+        if resource_kind not in {"skill", "mcp"}:
+            raise UpgradeBatchError("UPGRADE_RESOURCE_KIND_INVALID")
         scope = (call.context.scope.tenant_id, call.context.scope.security_domain)
         if not reason.strip():
             raise UpgradeBatchError("UPGRADE_REVIEW_REASON_REQUIRED")
@@ -202,13 +206,17 @@ class SelectedUpgradeOwners:
             replace(
                 call,
                 operation="RESOURCE_MANAGEMENT",
-                path={"kind": "skill"},
+                path={"kind": resource_kind},
                 query={},
                 payload={
-                    "action": "publish-tested",
+                    "action": "publish-tested"
+                    if resource_kind == "skill"
+                    else "publish",
                     "identity": skill.resource_id,
                     "expectedVersion": skill_version,
-                    "commandKey": _command(batch, "skill-publish", skill.resource_id),
+                    "commandKey": _command(
+                        batch, resource_kind + "-publish", skill.resource_id
+                    ),
                 },
             )
         )
@@ -240,9 +248,19 @@ class SelectedUpgradeOwners:
                 "commandKey": resource["commandKey"],
                 "policyDecisionId": resource["policyDecisionId"],
                 "policyIssuer": resource["policyIssuer"],
-                "currentOperationTestsReady": resource["publicationVerification"][
-                    "ready"
-                ],
+                **(
+                    {
+                        "currentOperationTestsReady": resource[
+                            "publicationVerification"
+                        ]["ready"]
+                    }
+                    if resource_kind == "skill"
+                    else {
+                        "resourceKind": "mcp",
+                        "verificationLevel": "CONFIGURATION_POLICY_PUBLICATION",
+                        "invocationVerified": False,
+                    }
+                ),
             },
             "employees": employee_receipts,
             "capabilities": capability_receipts,

@@ -1,5 +1,7 @@
 """Selected publication routes under the existing BFF session/CSRF authority."""
 
+from typing import Literal
+
 from psycopg.errors import LockNotAvailable
 from pydantic import Field
 
@@ -35,6 +37,7 @@ class UpgradeConsumer(StrictWorkbenchModel):
 
 
 class UpgradePreviewInput(StrictWorkbenchModel):
+    resourceKind: Literal["skill", "mcp"] = "skill"
     oldSkill: UpgradeReference
     newSkill: UpgradeReference
     employees: list[UpgradeConsumer] = Field(default_factory=list, max_length=64)
@@ -46,6 +49,7 @@ class UpgradePreviewInput(StrictWorkbenchModel):
             self.newSkill.reference(),
             tuple(item.selection() for item in self.employees),
             tuple(item.selection() for item in self.capabilities),
+            self.resourceKind,
         )
 
 
@@ -59,13 +63,21 @@ def root_grant(context, path, payload, query):
     value = UpgradePreviewInput.model_validate(
         {
             k: payload[k]
-            for k in ("oldSkill", "newSkill", "employees", "capabilities")
+            for k in (
+                "oldSkill",
+                "newSkill",
+                "employees",
+                "capabilities",
+                "resourceKind",
+            )
             if k in payload
         }
     )
     return (
         ExactGrant(
-            "SKILL", "MANAGE_RESOURCE", target("skill", value.newSkill.resourceId)
+            "SKILL",
+            "MANAGE_RESOURCE",
+            target(value.resourceKind, value.newSkill.resourceId),
         ),
     )
 

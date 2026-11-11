@@ -5,7 +5,7 @@ function VersionChange({name,before,after}:{name:string;before:string;after:stri
 }
 
 export function SelectedUpgradeDifference({preview,selection,names,resourceName}:{preview:UpgradePreview;selection:UpgradeSelection;names:{kind:string;identity:string;name?:string}[];resourceName:string}) {
- const name=(kind:string,id:string)=>kind==='SKILL'?resourceName:names.find(n=>n.kind===kind&&n.identity===id)?.name??id;
+ const name=(kind:string,id:string)=>kind===(selection.resourceKind??'skill').toUpperCase()?resourceName:names.find(n=>n.kind===kind&&n.identity===id)?.name??id;
  return <div aria-label="本次准确引用变化">
   <VersionChange name={resourceName} before={selection.oldSkill.revisionId} after={selection.newSkill.revisionId}/>
   {preview.preview.employees.map(({before,after})=><section key={before.definitionId}><h4>{before.role} · 数字人</h4>

@@ -24,6 +24,7 @@ class SelectedReplacement:
     def __post_init__(self):
         if not isinstance(self.scope, ScopeIdentity) or self.kind not in {
             "SKILL",
+            "MCP",
             "EMPLOYEE",
         }:
             raise UpgradeSelectionError("UPGRADE_SELECTION_KIND_OR_SCOPE_INVALID")
