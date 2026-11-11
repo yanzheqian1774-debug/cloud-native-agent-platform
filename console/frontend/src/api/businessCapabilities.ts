@@ -71,3 +71,12 @@ export type CapabilityCatalogueState={query:string;domain:string;layout:'cards'|
 export type CapabilityCataloguePreferences={version:number;state:CapabilityCatalogueState;commandId:string|null;replayed:boolean};
 export const readCapabilityPreferences=(principal:string,signal?:AbortSignal)=>request<CapabilityCataloguePreferences>(root+'/preferences',principal,signal);
 export const saveCapabilityPreferences=(principal:string,expectedVersion:number,commandId:string,state:CapabilityCatalogueState,signal?:AbortSignal)=>request<CapabilityCataloguePreferences>(root+'/preferences',principal,signal,{expectedVersion,commandId,state});
+
+export type CapabilityWorkflowSourceDetail={definition:{workflowDefinitionId:string;name:string};revision:{revisionId:string;digest:string;state:string;content:Record<string,unknown>}};
+export async function readCapabilityWorkflowSource(reference:CapabilityReference,principal:string,signal?:AbortSignal){
+ const value=await request<CapabilityWorkflowSourceDetail>('/api/workbench/v1/workflows/'+encodeURIComponent(reference.resource_id)+'/revisions/'+encodeURIComponent(reference.revision_id),principal,signal);
+ if(value.definition?.workflowDefinitionId!==reference.resource_id||value.revision?.revisionId!==reference.revision_id||value.revision?.digest.replace(/^sha256:/,'')!==reference.digest)throw new CapabilityRequestError('CAPABILITY_SOURCE_VERSION_MISMATCH',409);
+ return value;
+}
+
+export const listWorkflowDerivedCapabilities=(reference:CapabilityReference,principal:string,cursor:string|null=null,signal?:AbortSignal)=>request<CapabilityList>(root+'?'+new URLSearchParams({pageSize:'20',workflowId:reference.resource_id,workflowRevision:reference.revision_id,workflowDigest:reference.digest,...(cursor?{cursor}:{})}),principal,signal);

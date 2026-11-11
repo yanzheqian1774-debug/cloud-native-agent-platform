@@ -267,17 +267,70 @@ def build_workbench_composition(
             preferences_compatibility(connection)
         capability_targets = (CapabilityTargets(),)
 
+    business_process_repository = None
+    business_process_targets = ()
+    if os.environ.get("BUSINESS_PROCESS_DEFINITIONS_ENABLED") == "true":
+        from .business_process_postgres import PostgresBusinessProcessRepository
+        from .workbench_business_process import (
+            BusinessProcessTargets,
+            business_process_operations,
+        )
+
+        business_process_repository = PostgresBusinessProcessRepository(
+            business_problems.problems.pool
+        )
+        business_process_repository.compatibility(
+            Path(__file__).parents[2] / "migrations/0056_business_process.sql"
+        )
+        from .business_process_publication_postgres import (
+            BusinessProcessPublicationRepository,
+        )
+
+        BusinessProcessPublicationRepository(
+            business_problems.problems.pool
+        ).compatibility(
+            Path(__file__).parents[2]
+            / "migrations/0057_business_process_publication.sql"
+        )
+        from .business_process_relations_postgres import (
+            BusinessProcessRelationRepository,
+        )
+
+        BusinessProcessRelationRepository(
+            business_problems.problems.pool
+        ).compatibility(
+            Path(__file__).parents[2]
+            / "migrations/0058_business_capability_relations.sql"
+        )
+        from .business_process_relation_withdrawals import (
+            BusinessRelationWithdrawalRepository,
+        )
+
+        BusinessRelationWithdrawalRepository(
+            business_problems.problems.pool
+        ).compatibility(
+            Path(__file__).parents[2]
+            / "migrations/0059_business_relation_withdrawals.sql"
+        )
+        business_process_targets = (BusinessProcessTargets(),)
+
     from .resource_definition_management import DefinitionTargets
     from .resource_management import ManagementTargets
     from .workbench_model_directory import ModelReadTargets
+    from .workbench_workflow_authoring import (
+        WorkflowAuthoringTargets,
+        authoring_operations,
+    )
 
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
         additional=(ManagementTargets(), DefinitionTargets())
+        + ((WorkflowAuthoringTargets(),) if workflows is not None else ())
         + team_targets
         + capability_targets
+        + business_process_targets
         + (
             (ModelReadTargets(model_repository),)
             if model_repository is not None
@@ -733,6 +786,16 @@ def build_workbench_composition(
                     if capability_repository is not None
                     else ()
                 ),
+                *(
+                    business_process_operations(
+                        business_process_repository,
+                        WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                        employees=employee_definitions,
+                        services=prepared_resource_services or {},
+                    )
+                    if business_process_repository is not None
+                    else ()
+                ),
                 *digital_employee_operations(digital_employees),
                 *employee_relation_operations(
                     employee_definitions,
@@ -740,6 +803,11 @@ def build_workbench_composition(
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
                 ),
                 *(workflow_operations(workflows) if workflows is not None else ()),
+                *(
+                    authoring_operations(workflows, prepared_resource_services)
+                    if workflows is not None and prepared_resource_services
+                    else ()
+                ),
             ),
             **(
                 {

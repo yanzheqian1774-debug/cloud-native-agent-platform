@@ -50,3 +50,19 @@ test('unknown question coverage never claims zero waiting tasks',async({page})=>
  await expect(page.getByText('部分任务的追问状态暂不可读取，待补充列表可能不完整；可在全部任务中查看已保存进度。')).toBeVisible();
  expect(state.writes).toEqual([]);
 });
+
+
+test('directory deadline ends waiting and retries only after explicit action',async({page})=>{
+ const state=await fixture(page);let release=()=>{},held=true,requests=0;const pending=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/api/workbench/v1/current-work?*',async route=>{requests++;if(held){await pending;await route.abort().catch(()=>{});return}await route.fallback()});
+ await page.clock.install();
+ try{
+  await page.goto('/tasks');await expect.poll(()=>requests).toBe(1);
+  await page.clock.fastForward(30_001);
+  await expect(page.getByRole('alert')).toContainText('读取超过 30 秒，请重新核对。');
+  await expect(page.getByText('正在读取任务、当前权限和保存结果…',{exact:true})).toHaveCount(0);
+  await page.clock.fastForward(60_000);expect(requests).toBe(1);
+  held=false;release();await page.getByRole('button',{name:'重新核对',exact:true}).click();
+  await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);expect(requests).toBe(2);expect(state.writes).toEqual([]);
+ }finally{release()}
+});

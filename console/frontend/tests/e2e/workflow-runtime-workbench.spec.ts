@@ -45,6 +45,7 @@ test("publishes a Runtime Profile then a governed Workflow through real Workbenc
   await page.getByRole("button", { name: "Save governed Workflow draft" }).click();
   await expect(page.getByRole("heading", { name: "Canonical DAG" })).toBeVisible();
   await page.getByRole("button", { name: "Validate DAG and references" }).click();
+  await page.getByLabel("复核说明", { exact: true }).fill("已核对步骤与固定资源版本。");
   await page.getByRole("button", { name: "Review exact Workflow digest" }).click();
   await page.getByRole("button", { name: "Publish immutable Workflow" }).click();
   await expect(page.locator(".module-layout > section").getByText("PUBLISHED", { exact: true }).first()).toBeVisible();
@@ -238,6 +239,7 @@ test("binds a formally published Skill operation through the real Workflow UI", 
   response=await json("GET",`/api/internal/v0.2.2/workflow-definitions/${encodeURIComponent(workflowId)}`);workflow=response.body.definition;task=workflow.revisions.at(-1).content.tasks[0];expect(task.skillOperationBindings).toEqual([binding]);
   const review=page.getByLabel("Workflow Skill operation binding review");await expect(review).toContainText(binding.skillId);await expect(review).toContainText(binding.skillRevisionId);await expect(review).toContainText(binding.skillDigest);await expect(review).toContainText(binding.operation);
   await page.getByRole("button",{name:"Validate DAG and references"}).click();
+  await page.getByLabel("复核说明", { exact: true }).fill("已核对技能绑定与固定资源版本。");
   await page.getByRole("button",{name:"Review exact Workflow digest"}).click();
   await page.getByRole("button",{name:"Publish immutable Workflow"}).click();
   await expect(page.locator(".module-layout > section").getByText("PUBLISHED",{exact:true}).first()).toBeVisible();

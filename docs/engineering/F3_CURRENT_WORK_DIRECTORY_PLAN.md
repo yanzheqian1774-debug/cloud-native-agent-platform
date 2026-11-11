@@ -309,3 +309,37 @@ scroll/selected conversation restoration, logout/expiry/identity change cleanup.
 Run relevant existing navigation/session/current-task browser tests, lint/build,
 then actual installed full-page timings with the original end marker and 5-second
 functional assertions. Keep backend and Native source unchanged for this rollout.
+
+## Build feature parity correction (2026-11-11)
+Actual clone management inspection showed legacy task traversal still loading at
+30 seconds. This is an observation cutoff, not first-render latency. Current
+frontend build omitted VITE_CURRENT_WORK_DIRECTORY_ENABLED while release launch
+requires the backend route. Build profile omitted this feature entirely. Add
+currentWorkDirectory and businessCapabilities to the existing profile. Allow
+pinning to require explicit feature keys; runtime requires directory/team/capability
+UI when their corresponding backend feature is enabled. Fail before serving a
+mismatched bundle; preserve legacy callers when no features are required. Verify
+missing/false/non-boolean values reject without copying assets; matching profiles
+pass. Build candidate with all current delivery features, no installation or
+writer restart until separately verified. No API, grants, budget or visual change.
+
+Feature parity candidate verified: 14 pinning tests, 7 native task browser tests,
+frontend lint/build, targeted Ruff and actual generated-bundle pinning passed.
+Profile now explicitly records directory, capability and team features as true.
+No server restart or main deployment. Real management screenshots and notes:
+real-browser/management-readonly-r1/review.html; correction evidence:
+build-feature-parity-r1. A later controlled task directory switch is still needed
+before claiming the observed runtime fallback is fixed for users.
+
+Actual isolated task-directory switch verified on clone PID45055. Profile
+requires/enables directory, teams and capabilities; main remains PID31764.
+Read-only real browser: 25+10 rows, page-2 refresh, search exact original task,
+detail and return search/focus, mobile document fit. Directory makes zero
+work-links traversal requests; detail preserves exact origin verification. Three
+navigation-to-list observations: 3001/2928/2902 ms; still above 2000 ms target.
+No comparison ratio to earlier network-idle timeout. Protected execution/budget/
+employee/team records and both existing workflow definitions remain unchanged.
+Evidence real-browser/task-directory-parity-r2/demo.html and stage.json. First
+script incorrectly treated required detail-origin reads as list traversal, then
+corrected observation scope; no product bypass. Main rollout must exclude the
+unaccepted workflow editor candidate. Full platform goal remains active.

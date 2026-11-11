@@ -4,7 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from psycopg import Error as PostgresError
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .authority_contracts import AuthorityError, ExactGrant
 from .business_capability import (
@@ -40,6 +40,16 @@ class CapabilityListQuery(WorkbenchPageQuery):
     query: str = Field(default="", max_length=500)
     domain: str = Field(default="", max_length=80)
     favoritesOnly: bool = False
+    workflowId: str = Field(default="", max_length=200)
+    workflowRevision: str = Field(default="", max_length=200)
+    workflowDigest: str = Field(default="", pattern=r"^(|[a-f0-9]{64})$")
+
+    @model_validator(mode="after")
+    def complete_workflow_reference(self):
+        supplied = (self.workflowId, self.workflowRevision, self.workflowDigest)
+        if any(supplied) and not all(supplied):
+            raise ValueError("CAPABILITY_WORKFLOW_FILTER_INCOMPLETE")
+        return self
 
 
 class PublishCapabilityInput(StrictWorkbenchModel):
@@ -229,7 +239,7 @@ class CapabilityReferences:
             )
             if require_published and value["revision"]["state"] != "PUBLISHED":
                 raise BusinessCapabilityError("CAPABILITY_SOURCE_NOT_PUBLISHED")
-            if value["revision"]["digest"] != ref.digest:
+            if value["revision"]["digest"].removeprefix("sha256:") != ref.digest:
                 raise BusinessCapabilityError("CAPABILITY_SOURCE_VERSION_MISMATCH")
         elif origin.kind is OriginKind.SAVED_PREPARATION:
             call.authority.require(
@@ -492,6 +502,18 @@ class CapabilityOwner:
             revision = self.repository.read(
                 call.connection, scope, row["capability_id"], revision_id
             )
+            if call.query.get("workflowId"):
+                source = revision.origin.workflow
+                if source is None or (
+                    source.resource_id,
+                    source.revision_id,
+                    source.digest,
+                ) != (
+                    call.query["workflowId"],
+                    call.query["workflowRevision"],
+                    call.query["workflowDigest"],
+                ):
+                    continue
             visible[label] = {
                 "revisionId": revision.revision_id,
                 "title": revision.title,
@@ -571,9 +593,30 @@ class CapabilityOwner:
                 unavailable += 1
         return {**item, "employeeNames": names, "employeeNamesUnavailable": unavailable}
 
+    def _verify_workflow_filter(self, call, scope, principal):
+        identity = call.query["workflowId"]
+        revision = call.query["workflowRevision"]
+        call.authority.require(
+            principal, "WORKFLOW", "READ", f"workflow:{identity}:{revision}"
+        )
+        if self.references.workflows is None:
+            raise BusinessCapabilityError("CAPABILITY_SOURCE_UNAVAILABLE")
+        value = self.references.workflows.read_revision_for_workbench(
+            call.connection, scope, identity, revision, authorized=True
+        )
+        if (
+            value["definition"]["workflowDefinitionId"] != identity
+            or value["revision"]["revisionId"] != revision
+            or value["revision"]["digest"].removeprefix("sha256:")
+            != call.query["workflowDigest"]
+        ):
+            raise BusinessCapabilityError("CAPABILITY_SOURCE_VERSION_MISMATCH")
+
     def _list(self, call, scope, principal):
         from .capability_catalogue_preferences import latest as preferences
 
+        if call.query.get("workflowId"):
+            self._verify_workflow_filter(call, scope, principal)
         size = call.query["pageSize"]
         query = call.query["query"].strip().casefold()
         domain = call.query["domain"]
@@ -590,6 +633,20 @@ class CapabilityOwner:
                 "query": query,
                 "domain": domain,
                 "favorites": sorted(favorites) if favorites is not None else None,
+                **(
+                    {
+                        "workflow": [
+                            call.query[key]
+                            for key in (
+                                "workflowId",
+                                "workflowRevision",
+                                "workflowDigest",
+                            )
+                        ]
+                    }
+                    if call.query.get("workflowId")
+                    else {}
+                ),
             }
         )
         after = (

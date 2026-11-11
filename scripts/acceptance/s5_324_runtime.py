@@ -211,6 +211,16 @@ def serve(output, tls_manifest, origin):
         ROOT / "console/frontend/dist",
         output / "frontend-builds",
         assistance_required=model_manifest.is_file(),
+        required_features=tuple(
+            feature
+            for variable, feature in (
+                ("CURRENT_WORK_DIRECTORY_ENABLED", "currentWorkDirectory"),
+                ("TEAM_DEFINITIONS_ENABLED", "teamDefinitions"),
+                ("BUSINESS_CAPABILITIES_ENABLED", "businessCapabilities"),
+                ("BUSINESS_PROCESS_DEFINITIONS_ENABLED", "businessProcessDefinitions"),
+            )
+            if os.environ.get(variable) == "true"
+        ),
     )
     (output / "frontend-runtime.json").write_text(
         json.dumps(

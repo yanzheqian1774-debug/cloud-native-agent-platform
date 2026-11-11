@@ -657,7 +657,11 @@ class PostgresAuthorityRepository:
             )
             if state is not DynamicAuthorizationState.ALLOWED:
                 task = self._bounded_task_decision(
-                    current, context, grant, credential_id, state
+                    current,
+                    context,
+                    grant,
+                    credential_id,
+                    state,
                 )
                 return credential_id, task
             from .task_delegation import grant_condition
@@ -768,10 +772,18 @@ class PostgresAuthorityRepository:
                 )
                 for cursor in cursors
             )
+            from .bounded_task_authorization import ExactDecisionBatch
+
+            read_exact = ExactDecisionBatch(current, context)
             states = tuple(
                 DynamicAuthorizationState.ALLOWED
                 if self._bounded_task_decision(
-                    current, context, grant, credential_id, state
+                    current,
+                    context,
+                    grant,
+                    credential_id,
+                    state,
+                    read_exact=read_exact,
                 )
                 else state
                 for grant, state in zip(grants, states, strict=True)
@@ -786,7 +798,9 @@ class PostgresAuthorityRepository:
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
 
-    def _bounded_task_decision(self, connection, context, grant, credential_id, state):
+    def _bounded_task_decision(
+        self, connection, context, grant, credential_id, state, *, read_exact=None
+    ):
         if (
             not getattr(self, "bounded_task_authorization_enabled", False)
             or credential_id is None
@@ -800,7 +814,11 @@ class PostgresAuthorityRepository:
             return None
         from .bounded_task_authorization import exact_decision
 
-        row = exact_decision(connection, context, grant)
+        row = (
+            read_exact(grant)
+            if read_exact is not None
+            else exact_decision(connection, context, grant)
+        )
         if not row:
             return None
         return CurrentExactGrantDecision(

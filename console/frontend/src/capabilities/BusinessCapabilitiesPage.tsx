@@ -1,3 +1,6 @@
+import {CapabilityProcessDesign} from './CapabilityProcessDesign';
+import {safeBusinessProcessReturn} from '../businessProcesses/businessRelationNavigation';
+import {BusinessCapabilityRelations} from '../businessProcesses/BusinessCapabilityRelations';
 import {NavigationIcon} from '../components/NavigationIcon';
 import {useCapabilityCatalogueScroll} from './useCapabilityCatalogueScroll';
 import {useCapabilityCataloguePreferences} from './useCapabilityCataloguePreferences';
@@ -10,9 +13,10 @@ import {capabilitySession,listCapabilities,listCapabilityDomains,readCapability,
 import './businessCapabilities.css';
 import {CapabilityResourceUpdates} from './CapabilityResourceUpdates';
 import {CapabilityEditor} from './CapabilityEditor';
+import {CapabilityWorkflowSource} from './CapabilityWorkflowSource';
 
 const fieldNames:Record<string,string>={title:'名称',intent:'业务目标',inputs:'所需资料',outputs:'交付结果',business_scope:'适用范围',business_domain:'业务领域',exclusions:'不包含',manual_involvement:'人工参与',acceptance_criteria:'完成标准',known_limitations:'已知限制',origin:'来源'};
-const origins={INDEPENDENT:'独立设计',WORKFLOW_REVISION:'来源于业务流程',SAVED_PREPARATION:'来源于已保存的工作准备'};
+const origins={INDEPENDENT:'直接创建定义',WORKFLOW_REVISION:'来源于执行方案',SAVED_PREPARATION:'来源于已保存的工作准备'};
 const kinds:Record<string,string>={EMPLOYEE:'数字人',SKILL:'技能',MCP:'MCP 服务',KNOWLEDGE:'知识',ONTOLOGY:'本体',TOOL:'工具',RUNTIME_PROFILE:'运行环境'};
 function failure(error:unknown){
   if(error instanceof CapabilityRequestError){
@@ -66,7 +70,7 @@ export function BusinessCapabilitiesPage(){
       try{
         const session=await capabilitySession(controller.signal),key=workbenchPrincipalKey(session);
         if(!active)return;setPrincipal(key);
-        if(id&&revision){const value=await readCapability(id,revision,key,controller.signal);if(expectedDigest&&value.digest!==expectedDigest)throw new CapabilityRequestError('CAPABILITY_REFERENCE_MISMATCH',409);if(active)setDetail(value)}
+        if(id&&revision){const value=await readCapability(id,revision,key,controller.signal);if(value.revision.capability_id!==id||value.revision.revision_id!==revision||(expectedDigest!==null&&value.digest!==expectedDigest))throw new CapabilityRequestError('CAPABILITY_REFERENCE_MISMATCH',409);if(active)setDetail(value)}
 
       }catch(cause){if(active){setError(failure(cause));setLoading(false)}}finally{if(active&&id)setLoading(false)}
     };
@@ -122,9 +126,11 @@ export function BusinessCapabilitiesPage(){
   const versionInfo=(item:CapabilityItem)=><details className="capability-version"><summary>查看版本</summary><span>{item.revisionId}</span></details>;
   const activeUseDetail=useDetail??detail;
   const current=detail?.revision;
+  const businessProcessReturn=safeBusinessProcessReturn(params.get('businessProcessReturn'));
   const memberName=(binding:import('../api/businessCapabilities').CapabilityBinding)=>detail?.members?.find(item=>item.kind===binding.kind&&item.resourceId===binding.reference.resource_id&&item.revisionId===binding.reference.revision_id&&item.digest===binding.reference.digest)?.name??'名称尚未读回';
+  if(params.has('processDesign')&&principal&&!id)return <CapabilityProcessDesign key={principal+params.get('processDesign')} source={params.get('processDesign')!} principal={principal}/>;
   return <main ref={root} className="f3-capabilities">
-    <header><div><p className="eyebrow">BUSINESS CAPABILITIES</p><h1>{current?.title??'业务能力'}</h1><p>{current?'核对本版本的分工、资源与交付范围。':'按目标查找能力，使用前核对当前版本。'}</p></div>{id?<div className="capability-actions"><button onClick={back}>返回业务能力</button>{detail?.state==='PUBLISHED'&&<button className="capability-primary" onClick={()=>{setUpgrading(false);setEditing(null);setUsing(true)}}>在会话中使用</button>}</div>:<div className="capability-actions"><button disabled={!principal||loading} onClick={()=>setEditing('independent')}>创建独立能力</button><button disabled={!principal||loading} onClick={()=>setEditing('workflow')}>从流程设计能力</button></div>}</header>
+    <header><div><p className="eyebrow">BUSINESS CAPABILITIES</p><h1>{current?.title??'业务能力'}</h1><p>{current?'核对本版本的分工、资源与交付范围。':'按目标查找能力，使用前核对当前版本。'}</p></div>{id?<div className="capability-actions"><button onClick={back}>返回业务能力</button>{detail?.state==='PUBLISHED'&&<button className="capability-primary" onClick={()=>{setUpgrading(false);setEditing(null);setUsing(true)}}>在会话中使用</button>}</div>:<div className="capability-actions"><button disabled={!principal||loading} onClick={()=>setEditing('independent')}>创建独立能力</button><button disabled={!principal||loading} onClick={()=>setEditing('workflow')}>从执行方案设计能力</button></div>}</header>
     {loading&&!preferences.error&&<p role="status">正在读取业务能力…</p>}
     {error&&<section role="alert" className="capability-notice"><p>{error}</p><button disabled={busy} onClick={()=>setRetry(n=>n+1)}>重新读取</button></section>}
     {domainError&&<p role="alert">{domainError}<button onClick={()=>setRetry(n=>n+1)}>重新读取目录</button></p>}
@@ -137,6 +143,8 @@ export function BusinessCapabilitiesPage(){
     {!using&&!editing&&!upgrading&&current&&detail&&<>
       <div className="capability-actions">{favoriteButton(current.capability_id,current.title)}<span className="capability-badge">{origins[current.origin.kind]}</span><span className="capability-badge">{detail.state==='PUBLISHED'?'已发布定义':'修改草稿'}</span></div>
       <section className="capability-panel"><h2>本版本固定的分工与资源</h2><div className="capability-fixed-table"><table><thead><tr><th>绑定项</th><th>本次采用内容</th></tr></thead><tbody><tr><th>业务目标</th><td>{current.intent}</td></tr>{current.bindings.map(binding=><tr key={`${binding.kind}:${binding.reference.resource_id}`}><th>{kinds[binding.kind]}</th><td>{capabilityMemberHref(binding,detail,params.get('returnConversation'),params.get('returnHome')==='1')&&<Link to={capabilityMemberHref(binding,detail,params.get('returnConversation'),params.get('returnHome')==='1')!}>{memberName(binding)}</Link>}<p>{binding.purpose}</p><details><summary>查看版本依据</summary><dl><div><dt>资源</dt><dd>{binding.reference.resource_id}</dd></div><div><dt>版本</dt><dd>{binding.reference.revision_id}</dd></div><div><dt>内容标识</dt><dd>{binding.reference.digest}</dd></div></dl></details></td></tr>)}</tbody></table></div><h3>版本更新</h3><button onClick={()=>setUpgrading(true)}>检查资源更新</button><p>历史会话与任务保留启动时的固定引用。修改本能力不会改写已有工作。</p></section>
+      {current.origin.kind==='WORKFLOW_REVISION'&&current.origin.workflow&&<CapabilityWorkflowSource key={`${current.capability_id}:${current.revision_id}:${principal}`} reference={current.origin.workflow} principal={principal}/>}
+      {import.meta.env.VITE_BUSINESS_PROCESS_DEFINITIONS_ENABLED==='true'&&<BusinessCapabilityRelations side="CAPABILITY" reference={{resource_id:current.capability_id,revision_id:current.revision_id,digest:detail.digest}} principal={principal}/>}
       <section className="capability-panel"><h2>输入输出与人工边界</h2><p>业务领域：{current.business_domain??'未设置'}</p><dl>{([['inputs','必需输入'],['outputs','交付内容'],['manual_involvement','人工参与'],['business_scope','适用范围'],['exclusions','不包含'],['known_limitations','当前限制']] as const).map(([field,label])=><div key={field}><dt>{label}</dt><dd>{current[field]}</dd></div>)}</dl><h3>完成标准</h3><ul>{current.acceptance_criteria.map(item=><li key={item}>{item}</li>)}</ul></section>
       <section className="capability-panel"><details><summary>查看数字人与资源组成</summary>{current.bindings.map(binding=><div className="capability-binding" key={`${binding.kind}:${binding.reference.resource_id}`}><h3>{kinds[binding.kind]}</h3>{capabilityMemberHref(binding,detail,params.get('returnConversation'),params.get('returnHome')==='1')&&<Link to={capabilityMemberHref(binding,detail,params.get('returnConversation'),params.get('returnHome')==='1')!}>{memberName(binding)}</Link>}<p>{binding.purpose}</p><details><summary>查看固定引用</summary><dl><div><dt>资源</dt><dd>{binding.reference.resource_id}</dd></div><div><dt>版本</dt><dd>{binding.reference.revision_id}</dd></div><div><dt>内容标识</dt><dd>{binding.reference.digest}</dd></div></dl></details></div>)}</details><p>发布检查核对定义和固定资源；实际执行结果以对应工作记录为准。</p></section>
       {detail.headRevisionId===current.revision_id&&<button disabled={busy} onClick={()=>{setPreview(null);setEditing('edit')}}>修改能力</button>}
@@ -144,6 +152,7 @@ export function BusinessCapabilitiesPage(){
       {detail.currentDraftRevisionId&&detail.currentDraftRevisionId!==current.revision_id&&<button onClick={()=>choose(id,detail.currentDraftRevisionId!)}>查看当前修改草稿</button>}
       {preview&&<section className="capability-panel" aria-label="发布变更确认"><h2>本次变更与影响</h2><p>仅发布当前能力定义。历史会话、既有任务及其资源引用保持原样。</p>{preview.fieldChanges.map(change=><div className="capability-change" key={change.field}><h3>{fieldNames[change.field]??change.field}</h3><p>原内容：{valueText(change.before)}</p><p>新内容：{valueText(change.after)}</p></div>)}{preview.bindingChanges.map(change=><div className="capability-change" key={`${change.kind}:${change.resourceId}`}><h3>{kinds[change.kind]} · {change.after?change.before?'调整引用':'新增引用':'移除引用'}</h3><p>{change.after?.purpose??change.before?.purpose}</p><details><summary>核对资源变化</summary><pre>{JSON.stringify({before:change.before,after:change.after},null,2)}</pre></details></div>)}<label>发布说明<textarea maxLength={1000} value={reason} disabled={busy||command!==null} onChange={event=>setReason(event.target.value)}/></label><div className="capability-actions"><button disabled={busy||!reason.trim()} onClick={publish}>{busy?'正在处理…':command?'核实并重试本次发布':'确认并发布'}</button><button disabled={busy} onClick={()=>{setPreview(null);setCommand(null)}}>关闭预览</button></div></section>}
     </>}
+    {businessProcessReturn&&<Link to={businessProcessReturn}>返回流程活动</Link>}
     {params.get('returnHome')==='1'&&<Link to="/dashboard">返回工作台</Link>}
     {params.get('returnConversation')&&<Link to={'/work?'+new URLSearchParams({conversation:params.get('returnConversation')!})}>返回原会话</Link>}
   </main>;

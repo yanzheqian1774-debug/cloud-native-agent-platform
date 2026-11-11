@@ -89,7 +89,7 @@ def test_bundle_states_wait_for_sync_and_fail_before_fallback(monkeypatch, fail)
 
     monkeypatch.setattr(repository, "_dynamic_authorization_cursor", cursor)
     monkeypatch.setattr(
-        repository, "_bounded_task_decision", lambda *a: events.append("fallback")
+        repository, "_bounded_task_decision", lambda *a, **kw: events.append("fallback")
     )
     grants = tuple(ExactGrant("EXECUTION", "READ", str(i)) for i in range(4))
 

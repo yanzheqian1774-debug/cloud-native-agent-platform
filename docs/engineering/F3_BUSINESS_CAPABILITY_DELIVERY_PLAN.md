@@ -1153,3 +1153,256 @@ Main remains 7ee5 until separately frozen, installed and read back. The final
 positive direct-create action will be checked against the existing main synthetic
 test capability after installation, preserving old sources and avoiding additional
 clone sample publication solely for screenshots.
+
+## Workflow association continuation (G1, 2026-11-11)
+
+Main resource upgrade installed as be670d197c74; actual direct creation, publication,
+and new-conversation PREPARE_PLAN verified. Evidence is resource-upgrade-main-release;
+zero new model calls/runs. This does not close full execution acceptance.
+
+Retain durable origin WORKFLOW_REVISION as the provenance owner. First expose the
+exact source workflow inline using existing authorized exact workflow reads, session
+and digest checks. Read only on expansion; preserve historical version and page.
+Show source steps and inputs/outputs, never equate provenance with execution usage.
+Denied/missing/mismatch hide content and permit read retry. No schema, permission,
+model, frozen contract or lifecycle changes. Then add authoritative reverse
+provenance lookup and separately implement workflow task capability binding and
+consumer impact; current empty relationship arrays are not proof of those features.
+Sharing remains separate. Test historical source, mismatch, denied/retry, no reads
+for independent capabilities, and no mutation. Lint/build and real page review are
+required before deployment.
+
+Source inspection found workflow directory reads retain the workflow-owner shape,
+not the generic resource-directory envelope. Use the exact Workbench workflow
+endpoint and validate definition ID, revision ID and digest after guarded session
+reads. Do not add synthetic metadata to tests or weaken existing directory checks.
+
+Workflow source candidate: 77 capability browser cases, configured Vite build and
+frontend lint passed. First targeted run omitted the capability feature flag and
+failed before the route; corrected environment passed all four new cases and then
+the full suite. No main install or persisted-browser acceptance yet. Tests rebuild
+worktree dist: clone asset baseline must be revalidated before further clone use.
+Main private immutable source remains be670d197c74.
+
+Reverse provenance G1 refinement: extend the existing authorized capability list
+with an optional complete workflow ID/revision/digest filter. Validate source READ
+and exact owner identity/digest before scanning. Filter each readable published/draft
+revision independently so an unrelated current publication cannot hide a matching
+draft or falsely match it. Bind pagination cursors to this filter. Reuse durable
+origin facts, not a new relation table. UI lists these as derived capabilities, not
+execution consumers; no automatic revision adoption. Unit checks cover complete
+filter validation, permission/digest rejection, and mixed published/draft sources;
+real isolated PostgreSQL and browser checks remain installation gates.
+
+Reverse provenance candidate: exact workflow filter and source READ/digest checks,
+independent published/draft matching, filter-bound cursors, workflow management
+entry and fixed capability links implemented. 27 focused backend tests and 77
+frontend capability cases passed; frontend lint and build, Ruff passed. Tests use
+substitutes and are not persisted/main acceptance. Next gate is isolated durable
+lookup and real workflow-to-capability-to-source browser verification, followed by
+prototype review and guarded installation. Actual task capability consumption and
+shared review scope remain separate unfinished requirements.
+
+Persisted verification uncovered a real adapter mismatch: Workflow owner digests
+include sha256:, while capability references use canonical hex. Corrected strict
+matching in save/read validation, reverse filter and frontend source reader. Real
+isolated PostgreSQL plus BFF tests passed (2), including source revocation and
+foreign-filter cursor rejection. Focused backend 27 and targeted frontend 4 passed;
+full-feature build and lint passed. Clone restarted as PID34559 with protected
+record hashes unchanged. Actual authenticated browser found zero workflows and
+legacy authoring GET 404, while trusted workflow list returns 200. Thus browser
+association creation acceptance is not closed. Next: add trusted authoring adapter
+reusing WorkflowDefinitionService lifecycle and exact authorization, then create a
+synthetic workflow via the product path. Do not insert fake production relation
+rows or claim the read-only provenance feature completes execution consumption.
+
+## Trusted workflow authoring (G1 continuation)
+
+Reuse WorkflowDefinitionService and PostgreSQL repository unchanged lifecycle.
+Add explicit CREATE versus MANAGE/REVIEW_PUBLISH authority targets, authenticated
+BFF commands, exact referenced-resource reads on the same authorization transaction,
+and actor/scope-bound immutable command receipts in existing prepared_resource_commands.
+Bind the original service repository to the caller connection, so command receipt,
+workflow lifecycle fact and aggregate update commit or roll back together. Serialize
+same command key; reject changed payload, recheck current authority before replay.
+Frontend retains submitted command identity and reconciles unknown outcomes by GET;
+no automatic write retry. Keep original internal API compatibility. No CRD, new
+infrastructure or workflow lifecycle changes. Check atomic rollback, replay, stale
+aggregate, denial, cross-scope, exact digest review/publication, then real UI.
+Command core is not activated until exact target validation, reference adapter,
+BFF registration and real integration checks are complete.
+
+Authoring command core added but intentionally not registered: same-transaction
+workflow and immutable command receipts, actor/scope advisory lock, changed-payload
+conflict, current authorization before replay, explicit lifecycle operations and
+publication-time reference revalidation. Real PostgreSQL suite now 3 passed. The
+atomicity test uses authority/reference substitutes and exact production receipt
+DDL subset; it proves rollback/replay, not BFF authorization. Initial r3 failed
+because the small capability fixture lacked the receipt table; r4 installed its
+canonical DDL and immutable trigger. Required next steps remain exact authority
+target registry, real resource checker, BFF activation, UI reconciliation and
+actual product-path walkthrough. No main deployment or paid execution occurred.
+
+Trusted API candidate now registers command/receipt/authoring reads when existing
+Workflow and prepared-resource services are available. Added MANAGE and
+REVIEW_PUBLISH exact aggregate targets without changing lifecycle. Exact dependency
+checker binds each existing repository to authorized transaction and verifies
+identity/digest/state. Real login/CSRF/CREATE/runtime READ/replay/receipt/revocation
+checks passed in PostgreSQL suite (4), plus 23 command/authority/workflow checks.
+Initial r5 receipt GET failed because empty grant lists are prohibited; r6 uses
+explicit original action/target query plus stored-result equality, retaining the
+existing authorization rule. Remaining: full edit/validate/review/publish API
+acceptance, all resource kinds, frontend reconciliation, actual browser and review.
+Neither main nor running clone has been restarted with these authoring modules.
+
+Trusted lifecycle PostgreSQL suite now 5 passed (checks-r7): create, validation,
+review, publication, successor, edit, stale rejection, revoked dependency block,
+old publication replay without rewinding newer draft. Frontend uses trusted paths
+under existing live capability/resource flags; runtime selector binds exact owner
+digest. Pending command persists across refresh; read-only receipt reconciliation
+prevents a second POST. Normal and lost-response UI cases passed (2), lint/build
+passed. These UI tests use routed responses, not real deployed browser acceptance.
+Remaining: migrate comparison route, provide explicit same-key retry for absent
+receipt, actual browser lifecycle and provenance, F3 style/language alignment,
+full regression and guarded install. Current clone backend is not this candidate.
+
+Workflow comparison now uses exact two-version READ grants and existing owner
+comparison. Frontend rejects wrong result pair, shows readable step changes, and
+explicit retry reuses the original command bytes/key. Real SQL suite 5 passed;
+focused UI 4 passed, lint and full-feature build passed (index-wQGfIe8D.js).
+Clone restarted PID37690. Actual UI created/validated/reviewed/published one test
+workflow and refreshed same publication; 4 immutable commands and 4 lifecycle
+facts verified. Protected runs, budget, employees, teams and 1/4/4/4 capability
+counts unchanged. Evidence real-browser/workflow-authoring-r1. Not main deployed
+or prototype accepted. Actual screenshot exposes old technical labels and legacy
+skill-operation directory failure; these remain to fix. Reviewer notified with
+actual screenshot and request for exact frozen workflow view mapping. Next actual
+step: use this published workflow to create one synthetic source capability and
+verify forward/reverse provenance, then close live directory and F3 interaction gaps.
+
+Actual provenance walkthrough (workflow-capability-r1) saved one new synthetic
+workflow-origin capability draft and verified its exact source. Reverse lookup
+from the workflow failed: the workflow owner emits sha256-prefixed digests while
+the capability filter requires bare SHA-256. G1 correction plan: normalize only
+that known prefix at the workflow-to-capability boundary; retain exact ID,
+revision, digest checks. Add a workflow-page regression using owner-format digest,
+build with live flags and resume read-only against the existing draft, never
+repeat its save. Audit protected records and draft counts. This is not a change
+to source/consumer semantics or frozen public contracts. F3 visual acceptance,
+legacy skill directory migration, and actual capability consumption remain open.
+
+Workflow source actual draft saved once (capability 8670ff09 / revision 8db429de).
+Prefix normalization fixed the real reverse-page failure; focused workflow UI
+4 passed, lint/build passed (index-mIN5rd5q.js). Clone PID38604 now serves
+the corrected bundle. Read-only real-browser resumption verified reverse link,
+return, source and reload with zero business writes. Protected-table hash audit
+passed; capability counts are now 2/5/5/4. Evidence and screenshot demo in
+real-browser/workflow-capability-readback-r1; no main install or F3 acceptance.
+
+G1 next increment: replace the live workflow skill directory's legacy internal
+endpoint with the existing authorized resource-directory list and exact revision
+read. Add owner-projected lifecycle/enabled/archived flags to prepared-resource
+read so a deprecated resource cannot appear eligible merely because its revision
+was published. Enumerate bounded pages, limit concurrent exact reads, reject
+identity/version changes and incomplete/duplicate operations, retain current
+READ_ONLY operation contract. Keep legacy adapter when trusted flags are off.
+Tests cover pagination, identity/version mismatch, disabled/deprecated resources,
+missing/duplicate operations and selection carrying fixed references. Validate in
+owned clone without executing skills or models. Business display can use names;
+full F3 missing authoring interactions still require incremental design review.
+
+Real clone invalidated the eager exact-detail approach: 24 skills cause repeated
+session reads and each directory detail also scans run usage. Timings show detail
+reads 1.5–5.6 seconds and queued session reads up to 12.9 seconds; the 30-second
+bounded load expires. Revise this increment to an opt-in workflow-operation
+projection of the existing directory page, using the already-loaded exact row
+only after the same per-revision READ grant. Include lifecycle and fixed identity
+with operation declarations, omit run usage and separate detail requests. Scope
+its cursor to the projection and require kind=skill/status=PUBLISHED. Preserve
+ordinary directory output and old cursor semantics. No authorization removal or
+model calls; publication still revalidates dependencies against owning services.
+
+Workflow skill directory batched projection passed 15 real PostgreSQL checks
+and 11 UI checks, lint/build/Ruff/diff checks. Clone PID40180 serves
+index-C8PfiIEt.js. Actual isolated UI loaded 91 eligible operations in 2494/2959ms
+(two measurements), versus prior 30s timeout. One skill directory request, no
+per-resource usage/detail fanout. Selected existing published skill and READ_DATA
+operation, checked exact reference then closed editor with zero writes/runs/model
+calls. Original r2 verifier incorrectly expected sha256 prefix; owner digest is
+bare and r3 corrected that evidence assertion, no product bypass. Protected-table
+audit and capability 2/5/5/4 counts unchanged. Demo: real-browser/
+workflow-skill-directory-r3/demo.html. Not F3 accepted or main installed.
+
+Workflow authoring interaction proposal prepared as a separate frozen-shell copy,
+not a modification of the F3 freeze or production frontend. Four local pages
+cover edit/check-publication/version-relations/source. Backend support assessment
+explicitly records missing business activity/role/group/import model, missing
+workflow capability consumption, and mandatory-human current workflow lifecycle
+versus not-yet-supported dynamic policy. Local prototype interaction checks cover
+validation invalidation, reason requirement, unknown receipt preservation and
+return context; they are not backend acceptance. Multi-step dependency editing
+remains to complete in the incremental design. Submission artifacts under
+evidence/f3-business-capability-design-20261111/workflow-authoring-interaction-r1.
+
+Prototype reviewer first pass recognized shell/name selectors/folded details but
+required execution-plan positioning, visible step summary, corrected new-page
+scroll, multistep dependencies/deletion impact/cycle errors, default environment,
+separate review/publication and permission states, review-only annotations outside
+product. Revision 2 of the isolated proposal incorporates these with local browser
+interaction checks and top/lower screenshots. It is still not approved to install
+or evidence of actual backend multistep operation. Backend and main unchanged in
+this design increment. Latest review packet: workflow-authoring-interaction-r1/
+review.html, review-revision2.json and verified.json.
+
+G1 implementation increment after the execution-plan proposal: add a trusted-mode
+step editor using names and selected-step detail, preserving the legacy path.
+Generate stable unique task IDs, select dependencies by name, block cycles and
+referenced-step deletion with useful messages, preserve all untouched exact refs.
+Use existing published runtime and skill-operation directory; carry fixed values
+without manual IDs, fold technical detail. Keep valid inherited runtime fixed;
+new blank plans still require an explicit eligible runtime until a genuine
+workspace default exists. This does not create business activities/roles or a new
+navigation model. Existing workflow save/receipt/lifecycle authority stays intact.
+Tests must cover meaningful dependency failure and deletion/addition ID uniqueness,
+then actual multi-step saved definition readback in the owned clone. Prototype
+review and whole-page alignment remain explicit gates before main installation.
+
+Trusted WorkflowPlanEditor implemented with stable generated step IDs, named
+dependencies, cycle prevention and referenced-deletion explanation. Existing
+refs and untouched content are retained; skill operations selected by directory
+names carry fixed refs. Runtime inherited when present, otherwise explicitly
+selected; no fabricated default. Delimited input preserves separators during
+typing. Twelve focused UI tests and lint/build passed. Clone PID42277 serves
+index-DL-zPVPS.js/index-DPJUpXbX.css. Actual UI created/published one new two-step
+workflow efc7920f-7811-4ab7-82a3-1706d8e9c186 (READ_DATA then RENDER_REPORT), four
+commands/facts, fixed bindings and dependency readback confirmed after refresh.
+Original workflow full record and protected hashes unchanged; capabilities stay
+2/5/5/4. Evidence real-browser/workflow-plan-editor-r1. No execution/model calls
+or main installation. Whole page remains old workbench shell, technical review
+labels and checkbox inline alignment need F3 reconciliation; prototype not yet
+accepted. Do not replay either published test workflow.
+
+G1 save-target reliability increment: visual authoring redesign/install is paused
+pending refined mockup and user review (review-thread update 2026-11-11).
+Keep existing UI layout unchanged. Replace name-based create/edit inference with
+an explicit captured edit target; new drafts cannot overwrite a selected same-name
+workflow. Existing definition names are immutable under the edit contract; expose
+that field read-only during editing. Conflict recovery explicitly adopts the
+read-back target only on user reapply. Verify same-name creation and edit routing
+in focused UI tests, then lint/build; no main install or model execution.
+
+Explicit save target implemented. Same-name creation cannot be routed to edit;
+edit captures original identity/version, immutable name read-only, explicit conflict
+reapply adopts authoritative target. Seven focused browser tests passed (mocked
+API, not installed acceptance), lint/build/diff-check passed. New test fixture
+initially omitted mandatory receipt GET and was corrected without product bypass.
+Evidence workflow-save-target-r1/stage.json. No runtime restart or main install;
+refined visual proposal/user review remains required before authoring UI delivery.
+
+Cross-management candidate regression: 102 browser tests passed (2.2m), covering
+capability provenance, resource upgrade, exact source returns, original-chat
+continuation and employee composition; controlled API fixtures, not real model
+acceptance. Five real dedicated PostgreSQL tests passed (52.17s): workflow
+lifecycle, receipt transaction/replay, exact-source grants and catalogue filtering.
+Evidence cross-management-regression-r1 includes source hashes, last-run record,
+PostgreSQL log/XML. No runtime install/restart, no paid call, visual gate unchanged.

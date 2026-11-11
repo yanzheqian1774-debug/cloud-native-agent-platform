@@ -227,3 +227,53 @@ def test_directory_does_not_invent_purpose_from_nontext_or_documents(content):
     from agent_console.workbench_resource_directory import revision_purpose
 
     assert revision_purpose({"content": content}) is None
+
+
+def test_workflow_operation_projection_uses_exact_authorized_row_without_usage(
+    automation, monkeypatch
+):
+    a = automation
+    handler = ResourceDirectory(a.services, WorkbenchCursorCodec(b"x" * 32))
+    query = {
+        "kind": "skill",
+        "status": "PUBLISHED",
+        "projection": "workflow-skill-operations",
+    }
+    assert act(a, handler, query)["items"] == []
+    a.run()
+
+    def forbidden_usage(*args):
+        raise AssertionError("Operation selector must not scan execution usage")
+
+    monkeypatch.setattr(handler, "usage", forbidden_usage)
+    summary = act(a, handler, {"kind": "skill", "status": "PUBLISHED"})["items"]
+    assert all("workflowOperations" not in item for item in summary)
+    items = act(a, handler, query)["items"]
+    assert len(items) == 1
+    item = items[0]
+    source = item["workflowOperations"]
+    assert source["identity"] == item["identity"]
+    assert source["revisionId"] == item["revisionId"]
+    assert source["digest"] == item["digest"]
+    assert source["enabled"] is True and source["archived"] is False
+    assert source["publishedRevisionId"] == item["revisionId"]
+    service = a.services["skill"]
+    record = service.repository.get(a.e.scope, "skill", item["identity"])
+    exact = next(
+        r for r in record["revisions"] if r["revisionId"] == item["revisionId"]
+    )
+    assert source["operations"] == exact["content"]["operations"]
+    from dataclasses import replace
+
+    assert (
+        act(
+            a, handler, query, context=replace(a.subject, principal_id="different-user")
+        )["items"]
+        == []
+    )
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        act(
+            a, handler, {"projection": "workflow-skill-operations", "kind": "knowledge"}
+        )

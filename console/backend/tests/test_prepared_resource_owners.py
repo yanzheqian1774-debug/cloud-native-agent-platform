@@ -166,6 +166,44 @@ def test_normal_owner_review_publication_exact_replay_and_rollback(
             == revision["revisionId"]
         )
 
+        if kind == "skill":
+            current = service.repository.get(*owner_args)
+            service.lifecycle(
+                scope,
+                kind,
+                identity,
+                context.principal_id,
+                current["aggregateVersion"],
+                "DEPRECATE",
+                "fixture directory check",
+            )
+            current = service.repository.get(*owner_args)
+            service.lifecycle(
+                scope,
+                kind,
+                identity,
+                context.principal_id,
+                current["aggregateVersion"],
+                "DISABLE",
+                "fixture directory check",
+            )
+            with repository.pool.connection() as c, c.transaction():
+                c.row_factory = dict_row
+                exact_read = handler(
+                    SimpleNamespace(
+                        **{
+                            **vars(call),
+                            "operation": "READ_PREPARED_RESOURCE",
+                            "connection": c,
+                        }
+                    )
+                )
+                assert exact_read["lifecycleState"] == "DEPRECATED"
+                assert exact_read["enabled"] is False
+                assert exact_read["archived"] is False
+                assert exact_read["revision"]["revisionId"] == revision["revisionId"]
+                assert exact_read["revision"]["state"] == "PUBLISHED"
+
 
 def test_resource_draft_preparation_is_atomic_and_resume_does_not_recreate(
     repository, services

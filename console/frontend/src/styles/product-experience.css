@@ -185,3 +185,8 @@
 .px-topbar .px-demo-launcher{flex:0 0 auto}
 .px-sidebar .px-nav-group nav svg{width:18px;height:18px;flex:0 0 18px}
 @media(min-width:701px) and (max-width:1180px){.px-topbar .px-search{display:none}}
+
+.px-business-nav .px-navigation-unavailable{display:flex;align-items:center;gap:10px;padding:10px 12px;color:#8491a6;cursor:default}
+.px-business-nav .px-navigation-unavailable svg{width:18px;height:18px;flex-shrink:0}
+.px-business-nav .px-navigation-unavailable span{display:flex;align-items:center;gap:10px}
+.px-business-nav .px-navigation-unavailable small{font-size:11px;color:#8b98ac;background:#f1f4f8;border-radius:4px;padding:1px 5px}

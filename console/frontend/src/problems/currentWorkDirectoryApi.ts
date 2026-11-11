@@ -5,7 +5,16 @@ export type WorkScope='visible'|'initiated';
 export type DirectoryItem={workflowRunId:string;preparationDigest:string;title:string;createdAt:string;initiatorId:string|null;executionState:string;displayState:string;progressVersion:number|null;problemId:string;problemRevisionId:string;problemDigest:string;pendingQuestionCount:number|null;artifactCount:number;businessResolution:string|null;originConversationId:string|null;originVerified:boolean;planVersion:number|null;participantCount:number|null;completedTaskCount:number|null;taskCount:number|null;updatedAt:string|null};
 export type DirectoryPage={schemaVersion:'current-work-directory.v1';scopeFilter:WorkScope;subject:string;tenantId:string;securityDomain:string;complete:true;questionStatusComplete?:boolean;readAt:string;total:number;counts:Record<string,number>;items:DirectoryItem[];nextCursor:string|null};
 export const directoryViewKey=(session:WorkbenchSession)=>conversationScope(session)+':directory:tasks-native';
-export async function readDirectoryPage(input:{scope?:string;query:string;state:string;cursor:string},signal:AbortSignal){
+export const directoryTimeoutMessage='读取超过 30 秒，请重新核对。';
+type DirectoryInput={scope?:string;query:string;state:string;cursor:string};
+export async function readDirectoryPage(input:DirectoryInput,signal:AbortSignal){
+ const deadline=new AbortController();
+ const timer=window.setTimeout(()=>deadline.abort(),30_000);
+ try{return await readBoundedDirectoryPage(input,AbortSignal.any([signal,deadline.signal]))}
+ catch(error){if(deadline.signal.aborted&&!signal.aborted)throw new Error(directoryTimeoutMessage,{cause:error});throw error}
+ finally{window.clearTimeout(timer)}
+}
+async function readBoundedDirectoryPage(input:DirectoryInput,signal:AbortSignal){
  const session=await readWorkbenchSession(signal),viewKey=directoryViewKey(session),scope=input.scope||readViewString(viewKey,'scope');
  const query=new URLSearchParams({query:input.query,state:input.state,pageSize:'25'});
  if(scope==='visible'||scope==='initiated')query.set('scopeFilter',scope);

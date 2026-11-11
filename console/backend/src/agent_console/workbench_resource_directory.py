@@ -4,7 +4,7 @@
 from dataclasses import replace
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .authority_contracts import AuthorityError, ExactGrant
 from .resource_use_domain import canonical_digest
@@ -28,6 +28,15 @@ class DirectoryQuery(BaseModel):
     status: str = Field(default="", max_length=32)
     pageSize: int = Field(default=50, ge=1, le=100)
     cursor: str | None = Field(default=None, max_length=2048)
+    projection: Literal["summary", "workflow-skill-operations"] = "summary"
+
+    @model_validator(mode="after")
+    def operation_projection_scope(self):
+        if self.projection != "summary" and (
+            self.kind != "skill" or self.status != "PUBLISHED"
+        ):
+            raise ValueError("Skill operations require published skill scope")
+        return self
 
 
 def target(kind, identity, revision):
@@ -134,6 +143,7 @@ class ResourceDirectory:
         )
         route = "resource-directory:" + canonical_digest(
             [p.principal_id, args.kind, args.query, args.status]
+            + ([args.projection] if args.projection != "summary" else [])
         )
         after = (
             self.cursors.resolve(
@@ -218,6 +228,17 @@ class ResourceDirectory:
                             ),
                         }
                     )
+                    if args.projection == "workflow-skill-operations":
+                        result[-1]["workflowOperations"] = {
+                            "identity": identity,
+                            "revisionId": r["revisionId"],
+                            "digest": r["digest"],
+                            "lifecycleState": record.get("lifecycleState"),
+                            "enabled": record.get("enabled", True),
+                            "archived": record.get("archived", False),
+                            "publishedRevisionId": record.get("publishedRevisionId"),
+                            "operations": r.get("content", {}).get("operations", []),
+                        }
                     if len(result) > args.pageSize:
                         break
                 if len(rows) < 100:

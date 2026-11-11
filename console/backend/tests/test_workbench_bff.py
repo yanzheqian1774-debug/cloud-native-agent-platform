@@ -785,6 +785,13 @@ def test_login_page_return_and_html_failure_do_not_expose_credentials():
     [
         ("", "/workbench"),
         ("?returnTo=%2Fwork%2Fplanning%2Fcost", "/work/planning/cost"),
+        (
+            "?returnTo=%2Fbusiness-processes%3Fprocess%3Dp1%26edit%3Dprocess",
+            "/business-processes?process=p1&edit=process",
+        ),
+        ("?returnTo=%2Fcapabilities%3Fcapability%3Dc1", "/capabilities?capability=c1"),
+        ("?returnTo=https%3A%2F%2Fexample.com%2Fbusiness-processes", "/work"),
+        ("?returnTo=%2Fbusiness-processes%2F..%2Fsecret", "/work"),
     ],
 )
 def test_browser_login_form_preserves_legacy_default_and_explicit_return(

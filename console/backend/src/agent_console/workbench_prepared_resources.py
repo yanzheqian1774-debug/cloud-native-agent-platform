@@ -178,6 +178,9 @@ class PreparedResourceOwner:
                 "identity": identity,
                 "name": record["name"],
                 "aggregateVersion": record["aggregateVersion"],
+                "lifecycleState": record.get("lifecycleState"),
+                "enabled": record.get("enabled", True),
+                "archived": record.get("archived", False),
                 "revision": exact,
                 "publishedRevisionId": record.get("publishedRevisionId"),
                 "successorPreparationEnabled": bool(

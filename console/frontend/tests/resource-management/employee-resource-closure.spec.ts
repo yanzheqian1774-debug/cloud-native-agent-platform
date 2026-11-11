@@ -142,7 +142,7 @@ test('F3 employee full-page business frame retains professional operations and t
 
 test('F3 business editor saves then validates and publishes exact successor in the same page',async({page},info)=>{
  const {state,extra,original}=await fixture(page);await page.goto(href().replace('employeeView=professional&',''));
- await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();const editor=page.getByRole('region',{name:'职责与资源修改',exact:true});await expect(editor).toBeVisible();
+ await page.getByRole('button',{name:'维护当前定义',exact:true}).click();const editor=page.getByRole('region',{name:'职责与资源修改',exact:true});await expect(editor).toBeVisible();
  await page.getByLabel('职能职责',{exact:true}).fill('核对采购交付并形成可追溯报告');
  await page.getByLabel('保留已绑定资源 1',{exact:true}).uncheck();
  await page.getByRole('region',{name:'组合业务资源'}).getByRole('checkbox').check();
@@ -159,7 +159,7 @@ test('F3 business editor saves then validates and publishes exact successor in t
 
 
 test('occupied predecessor gives definite guidance without unknown recovery or automatic resubmit',async({page})=>{
- const {extra}=await fixture(page);extra.rejectNext='EMPLOYEE_SUCCESSOR_ALREADY_EXISTS';await page.goto(href().replace('employeeView=professional&',''));await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();await page.getByLabel('职能职责',{exact:true}).fill('保留旧版本并核对后继');await page.getByRole('button',{name:'核对修改',exact:true}).click();await page.getByRole('button',{name:'保存修改草稿',exact:true}).click();await expect(page.getByText('该版本已有后继记录。请从员工版本记录打开已有后继后继续修改；本次没有保存新草稿。',{exact:true})).toBeVisible();await expect(page.getByLabel('职能职责',{exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(1);expect(extra.records.size).toBe(1);await page.reload();expect(extra.posts).toHaveLength(1);
+ const {extra}=await fixture(page);extra.rejectNext='EMPLOYEE_SUCCESSOR_ALREADY_EXISTS';await page.goto(href().replace('employeeView=professional&',''));await page.getByRole('button',{name:'维护当前定义',exact:true}).click();await page.getByLabel('职能职责',{exact:true}).fill('保留旧版本并核对后继');await page.getByRole('button',{name:'核对修改',exact:true}).click();await page.getByRole('button',{name:'保存修改草稿',exact:true}).click();await expect(page.getByText('该版本已有后继记录。请从员工版本记录打开已有后继后继续修改；本次没有保存新草稿。',{exact:true})).toBeVisible();await expect(page.getByLabel('职能职责',{exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'读取原后继修订',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(1);expect(extra.records.size).toBe(1);await page.reload();expect(extra.posts).toHaveLength(1);
 });
 
 
@@ -167,7 +167,7 @@ test('business confirmation includes retained resources, replacements and remova
  const {original,extra}=await fixture(page);
  original.members.push({kind:'KNOWLEDGE',resourceId:'knowledge:retained',revisionId:'knowledge-revision:retained',digest:'7'.repeat(64)});
  await page.goto(href().replace('employeeView=professional&',''));
- await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await page.getByRole('button',{name:'维护当前定义',exact:true}).click();
  await page.getByRole('checkbox',{name:'保留已绑定资源 1',exact:true}).uncheck();
  await page.getByRole('region',{name:'组合业务资源'}).getByRole('checkbox').check();
  await page.getByRole('button',{name:'核对修改',exact:true}).click();
@@ -192,8 +192,10 @@ test('historical employee edit resumes authoritative draft and refresh keeps its
  const draft={...structuredClone(original),employeeDefinitionRevisionId:'revision:aaa-current-draft',employeeDefinitionDigest:'8'.repeat(64),publicationState:'NOT_PUBLISHED' as const,lifecycleState:'VALIDATED' as const,responsibilities:['当前草稿职责']};
  extra.records.set(draft.employeeDefinitionRevisionId,draft);
  await page.goto(href().replace('employeeView=professional&','').replace('section=overview','section=capabilities'));
+ await expect(page.getByText('维护将进入当前定义；正在查看的固定版本和已有流程绑定保持不变。',{exact:true})).toBeVisible();
+ await expect(page.getByText('本版本未记录此项职责与资源的对应关系；版本已绑定的资源见资源组成。',{exact:true}).first()).toBeVisible();
  await expect(page.getByRole('region',{name:'当前发布与修改草稿'}).getByText('修改草稿：已有草稿',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await page.getByRole('button',{name:'维护当前定义',exact:true}).click();
  await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');
  expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(draft.employeeDefinitionRevisionId);
  await page.reload();await expect(page.getByLabel('职能职责',{exact:true})).toHaveValue('当前草稿职责');await expect(page.locator('.employee-edit-basis')).toContainText('原先查看的历史版本保持不变');
@@ -214,7 +216,7 @@ for(const mode of ['denied','wrong-parent','withdrawn'])test('authoring '+mode+'
  });
  await page.goto(href().replace('employeeView=professional&','')+'&employeeEdit=edit');
  if(mode==='withdrawn')await expect(page.getByText('当前发布：已撤销',{exact:true})).toBeVisible();
- else {await expect(page.getByRole('button',{name:'修改职责与资源',exact:true})).toBeDisabled();await expect(page.getByLabel('职能职责',{exact:true})).toHaveCount(0)}
+ else {await expect(page.getByRole('button',{name:'维护当前定义',exact:true})).toBeDisabled();await expect(page.getByLabel('职能职责',{exact:true})).toHaveCount(0)}
  expect(extra.posts).toHaveLength(0);
 });
 
@@ -253,7 +255,7 @@ test('work return restores exact employee tab scroll and focus after authorized 
 
 test('explicit duty resource association survives save and reload without publishing or executing',async({page})=>{
  const {extra,original}=await fixture(page);await page.goto(href().replace('employeeView=professional&',''));
- await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await page.getByRole('button',{name:'维护当前定义',exact:true}).click();
  const mapping=page.getByRole('group',{name:'设置职责与资源关联',exact:true});
  await mapping.locator('summary').filter({hasText:'维护旧修订'}).click();
  await mapping.getByRole('checkbox',{name:'维护旧修订：关联资源 2',exact:true}).check();
@@ -270,7 +272,7 @@ test('explicit duty resource association survives save and reload without publis
 
 test('editing a mapped duty requires explicit stale association removal before saving',async({page})=>{
  const {extra,original}=await fixture(page);original.responsibilityBindings=[{responsibility:original.responsibilities[0],member:original.members[2]}];
- await page.goto(href().replace('employeeView=professional&',''));await page.getByRole('button',{name:'修改职责与资源',exact:true}).click();
+ await page.goto(href().replace('employeeView=professional&',''));await page.getByRole('button',{name:'维护当前定义',exact:true}).click();
  await page.getByLabel('职能职责',{exact:true}).fill('新的职责');await page.getByRole('button',{name:'核对修改',exact:true}).click();
  await expect(page.getByText('请先处理职责与资源的失效关联。',{exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
  await page.getByRole('button',{name:'移除此失效关联',exact:true}).click();await page.getByRole('button',{name:'核对修改',exact:true}).click();

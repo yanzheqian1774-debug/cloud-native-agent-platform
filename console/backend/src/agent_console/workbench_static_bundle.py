@@ -6,7 +6,13 @@ import shutil
 from pathlib import Path
 
 
-def pin_frontend(source: Path, destination: Path, *, assistance_required: bool):
+def pin_frontend(
+    source: Path,
+    destination: Path,
+    *,
+    assistance_required: bool,
+    required_features: tuple[str, ...] = (),
+):
     profile = json.loads((source / "workbench-build-profile.json").read_text())
     if profile.get("schemaVersion") != "workbench-build-profile.v1" or (
         assistance_required
@@ -16,6 +22,8 @@ def pin_frontend(source: Path, destination: Path, *, assistance_required: bool):
         )
     ):
         raise ValueError("WORKBENCH_FRONTEND_MODE_MISMATCH")
+    if any(profile.get(feature) is not True for feature in required_features):
+        raise ValueError("WORKBENCH_FRONTEND_FEATURE_MISMATCH")
     if not (source / "index.html").is_file():
         raise ValueError("WORKBENCH_FRONTEND_INDEX_MISSING")
 

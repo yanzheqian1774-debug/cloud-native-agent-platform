@@ -386,15 +386,42 @@ def bind_plan(c, scope, actor_id, proposal):
         )
 
 
+class ExactDecisionBatch:
+    """Candidate reads scoped to one bundle, never cached authorization decisions."""
+
+    def __init__(self, connection, context):
+        self.connection = connection
+        self.context = context
+        self.rows = None
+
+    def __call__(self, grant):
+        c, context = self.connection, self.context
+        if self.rows is None:
+            self.rows = (
+                c.execute(
+                    "SELECT * FROM authorization_admin.bounded_task_requests "
+                    "WHERE tenant_id=%s AND security_domain=%s AND subject_id=%s "
+                    "ORDER BY created_at DESC",
+                    (
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        context.principal_id,
+                    ),
+                ).fetchall()
+                if available(c)
+                else []
+            )
+        return _exact_candidate_decision(c, context, grant, self.rows)
+
+
 def exact_decision(c, context, grant):
-    """Existing sessions/revocation checks precede this optional narrow authority."""
-    if not available(c):
-        return False
-    rows = c.execute(
-        "SELECT * FROM authorization_admin.bounded_task_requests WHERE tenant_id=%s "
-        "AND security_domain=%s AND subject_id=%s ORDER BY created_at DESC",
-        (context.scope.tenant_id, context.scope.security_domain, context.principal_id),
-    ).fetchall()
+    """Single-grant callers receive a fresh candidate read on every call."""
+    return ExactDecisionBatch(c, context)(grant)
+
+
+def _exact_candidate_decision(c, context, grant, rows):
+    # Candidate reuse never skips the current root lock, expiry, revocation,
+    # generation, account or audit-effect checks for a matched grant.
     for row in rows:
         spec = TaskAuthorizationRequest.model_validate(row["record"])
         exact = any(

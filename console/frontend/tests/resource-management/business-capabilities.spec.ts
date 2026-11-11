@@ -1,3 +1,6 @@
+import type {CapabilityDetail} from '../../src/api/businessCapabilities';
+import type {BusinessRelationCommand} from '../../src/api/businessProcesses';
+import type {CapabilitySaveDraft} from '../../src/capabilities/CapabilityEditor';
 import {createHash} from 'node:crypto';
 import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64);
@@ -92,12 +95,12 @@ test('denied read and expired session withdraw definition content',async({page})
 });
 
 for(const source of ['independent','workflow'])test('creates '+source+' capability with owner-selected fixed employee and reads it back',async({page})=>{
- const state=await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:source==='workflow'?'从流程设计能力':'创建独立能力',exact:true}).click();
+ const state=await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:source==='workflow'?'从执行方案设计能力':'创建独立能力',exact:true}).click();
  const form=page.getByRole('form',{name:'业务能力编辑'});
  for(const label of ['能力名称','希望完成什么','需要提供哪些资料','将交付什么','适用范围','不包含哪些操作','需要人工参与什么','当前已知限制'])await form.getByLabel(label,{exact:true}).fill(label==='能力名称'?'新设计的文档核对':label+'的业务说明');
  await form.getByLabel('业务领域（可选）').fill('运营管理');
  await form.getByLabel('完成标准（每行一项）').fill('指出每一项缺失内容');
- if(source==='workflow'){await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接流程'});await form.getByRole('button',{name:'固定来源流程'}).click();await form.getByLabel('资源类别').selectOption('EMPLOYEE')}
+ if(source==='workflow'){await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接流程'});await form.getByRole('button',{name:'固定来源执行方案'}).click();await form.getByLabel('资源类别').selectOption('EMPLOYEE')}
  await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接核对助手'});await form.getByLabel('本次承担什么职责').fill('核对文档并引用依据');await form.getByRole('button',{name:'加入能力组成'}).click();
  await form.getByRole('button',{name:'保存草稿',exact:true}).click();await expect(page.getByRole('heading',{name:'新设计的文档核对',exact:true})).toBeVisible();
  expect(state.saves).toHaveLength(1);expect(state.saves[0].expectedVersion).toBe(0);expect(state.saves[0].revision.bindings[0].reference).toEqual({resource_id:'worker',revision_id:'worker-v1',digest});expect(state.saves[0].revision.origin.kind).toBe(source==='workflow'?'WORKFLOW_REVISION':'INDEPENDENT');
@@ -565,4 +568,90 @@ for(const mode of ['new','same','denied','mismatch','owner-mismatch','withdrawn'
  }else{
   await expect(panel).toContainText(mode==='same'?'当前引用已一致，无需创建升级草稿。':mode==='withdrawn'?'当前发布版本暂不可核实':'当前或候选版本未能核实');await expect(panel.getByRole('button',{name:'创建能力新版本草稿'})).toHaveCount(0);expect(state.saves).toHaveLength(0);
  }
+});
+
+for(const mode of ['historical','mismatch','denied'] as const){
+ test(`workflow provenance exact source ${mode}`,async({page})=>{
+  const state=await fixture(page);let reads=0,denied=mode==='denied';
+  await page.route('**/business-capabilities/handover/revisions/r2',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{revision:{...revision,origin:{kind:'WORKFLOW_REVISION',workflow:{resource_id:'workflow:handover',revision_id:'workflow-v1',digest},preparation_digest:null}},members,digest,aggregateVersion:2,headRevisionId:'r2',publishedRevisionId:'r2',currentDraftRevisionId:null,state:'PUBLISHED',executionAuthorized:false}}}));
+  await page.route('**/workflows/workflow%3Ahandover/revisions/workflow-v1',route=>{
+   reads++;
+   if(denied)return route.fulfill({status:403,json:{reasonCode:'AUTHORITY_DENIED'}});
+   return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{subject:'human:tester',scope:{tenantId:'tenant',securityDomain:'domain'},definition:{workflowDefinitionId:'workflow:handover',name:'历史交接流程'},revision:{revisionId:'workflow-v1',digest:'sha256:'+(mode==='mismatch'?'b'.repeat(64):digest),state:'ARCHIVED',content:{description:'固定历史说明',inputs:['交接说明'],outputs:['核对清单'],tasks:[{taskId:'one',name:'核对责任分工',inputs:['人员记录'],outputs:['待补事项']}]}}}}});
+  });
+  await page.route('**/business-capabilities?**',route=>{
+   const query=new URL(route.request().url()).searchParams;
+   if(!query.has('workflowId'))return route.fallback();
+   expect(query.get('workflowId')).toBe('workflow:handover');expect(query.get('workflowRevision')).toBe('workflow-v1');expect(query.get('workflowDigest')).toBe(digest);
+   return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:[{capabilityId:'related',revisionId:'related-r1',digest,title:'同源责任核对',intent:'核对职责',state:'DRAFT',currentPublished:null,currentDraft:null}],nextCursor:null}}});
+  });
+  await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');
+  await expect(page.getByRole('button',{name:'查看来源执行方案',exact:true})).toBeVisible();expect(reads).toBe(0);
+  await page.getByRole('button',{name:'查看来源执行方案',exact:true}).click();
+  if(mode==='historical'){
+   await expect(page.getByRole('heading',{name:'历史交接流程'})).toBeVisible();await expect(page.getByText('核对责任分工',{exact:true})).toBeVisible();
+   await page.getByText('查看来源固定版本',{exact:true}).click();await expect(page.getByText('workflow-v1',{exact:true})).toBeVisible();
+   await page.getByRole('button',{name:'查看由此执行方案形成的能力'}).click();await expect(page.getByRole('link',{name:'同源责任核对'})).toHaveAttribute('href',`/capabilities?capability=related&revision=related-r1&digest=${digest}&returnConversation=original`);
+  }else{
+   await expect(page.getByText('来源执行方案暂时无法读取，或当前账号无权查看此版本。未展示未经核对的内容。')).toBeVisible();
+   await expect(page.getByText('固定历史说明',{exact:true})).toHaveCount(0);
+   if(mode==='denied'){denied=false;await page.getByRole('button',{name:'重新读取来源执行方案'}).click();await expect(page.getByRole('heading',{name:'历史交接流程'})).toBeVisible()}
+  }
+  await expect(page.getByRole('link',{name:'返回原会话'})).toHaveAttribute('href','/work?conversation=original');
+  expect(state.saves).toEqual([]);expect(state.writes).toEqual([]);expect(state.sources).toEqual([]);
+ });
+}
+test('independent capability has no invented workflow provenance',async({page})=>{
+ await fixture(page);let reads=0;page.on('request',request=>{if(request.url().includes('/workflows/'))reads++});
+ await page.goto('/capabilities?capability=handover&revision=r2');await expect(page.getByRole('heading',{name:revision.title,exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'查看来源执行方案',exact:true})).toHaveCount(0);expect(reads).toBe(0);
+});
+
+for(const mode of ['normal','source-lost','capability-lost','draft-return','draft-isolation','draft-storage-failure'])test(`process design automatically records fixed source and resumes original receipt ${mode}`,async({page})=>{
+ await fixture(page);
+ const source={resource_id:'process-one',revision_id:'process-v1',digest},activity={activity_id:'activity-one',name:'核对证据',inputs:['原始说明'],outputs:['缺项清单'],human_boundary:'负责人确认',completion_conditions:['每项有原文'],employee:{resource_id:'worker',revision_id:'worker-v1',digest}};
+ const sourceUrl='/business-processes?'+new URLSearchParams({process:source.resource_id,revision:source.revision_id,digest,activity:activity.activity_id});
+ let saved:CapabilityDetail,relation:BusinessRelationCommand;const capabilityWrites:CapabilitySaveDraft[]=[],relationWrites:BusinessRelationCommand[]=[];
+ await page.route('**/api/workbench/v1/business-processes/**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  const json=(result:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result}});
+  if(path.endsWith('/capability-relations')&&route.request().method()==='POST'){
+   relation=route.request().postDataJSON();relationWrites.push(relation);
+   if(mode==='source-lost')return route.abort('failed');
+   return json({relationId:relation.relation.relation_id,relationRevisionId:relation.relation.relation_revision_id,relationVersion:1,digest,executionAuthorized:false});
+  }
+  if(path.includes('/capability-relations/commands/'))return json({relationId:relation.relation.relation_id,relationRevisionId:relation.relation.relation_revision_id,relationVersion:1,digest,executionAuthorized:false});
+  return json({objectId:source.resource_id,revisionId:source.revision_id,digest,record:{content:{name:'证据核对流程',purpose:'核对资料完整性',activities:[activity],source_materials:[]}}});
+ });
+ await page.route('**/api/workbench/v1/business-capabilities**',route=>{
+  const path=new URL(route.request().url()).pathname;
+  const json=(result:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result}});
+  if(path.endsWith('/business-capabilities')&&route.request().method()==='POST'){const command=route.request().postDataJSON();capabilityWrites.push(command);saved={revision:command.revision,digest,state:'DRAFT',aggregateVersion:1,headRevisionId:command.revision.revision_id,publishedRevisionId:null,currentDraftRevisionId:command.revision.revision_id,executionAuthorized:false};if(mode==='capability-lost')return route.abort('failed');return json({accepted:true})}
+  if(saved&&path.includes('/revisions/'))return json(saved);
+  return route.fallback();
+ });
+ await page.goto('/capabilities?'+new URLSearchParams({processDesign:sourceUrl}));
+ await expect(page.getByLabel('需要提供哪些资料',{exact:true})).toHaveValue('原始说明');
+ await expect(page.getByLabel('将交付什么',{exact:true})).toHaveValue('缺项清单');
+ if(mode.startsWith('draft-')){
+  const notes='  原始边界\n第二行\n\n';
+  if(mode==='draft-storage-failure')await page.evaluate(()=>{const set=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('capability-process-design:'))throw Error('Quota');return set.call(this,k,v)}});
+  await page.getByLabel('适用范围',{exact:true}).fill(notes);await page.getByLabel('完成标准（每行一项）',{exact:true}).fill(notes);
+  if(mode==='draft-storage-failure'){await expect(page.getByRole('alert')).toContainText('编辑内容暂时无法保留');await page.getByRole('link',{name:'返回原流程活动',exact:true}).click();await expect(page).toHaveURL(/processDesign=/)}
+  else{
+   if(mode==='draft-isolation')await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:other',tenantId:'tenant',securityDomain:'domain'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'other-csrf'}}));
+   await page.reload();await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(mode==='draft-isolation'?'':notes);
+   if(mode==='draft-return'){await expect(page.getByLabel('完成标准（每行一项）',{exact:true})).toHaveValue(notes);await page.goto('/capabilities');await page.goto('/capabilities?'+new URLSearchParams({processDesign:sourceUrl}));await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(notes)}
+  }
+  expect(capabilityWrites).toHaveLength(0);expect(relationWrites).toHaveLength(0);return;
+ }
+ for(const [name,value] of [['适用范围','仅合成资料'],['不包含哪些操作','不部署'],['当前已知限制','未验证执行效果']])await page.getByLabel(name,{exact:true}).fill(value);
+ await page.getByRole('button',{name:'保存草稿',exact:true}).click();
+ if(mode==='capability-lost'){await expect(page.getByRole('alert')).toContainText('保存结果尚未核实');await page.reload();await page.getByRole('button',{name:'核实并重试本次保存',exact:true}).click()}
+ if(mode==='source-lost'){await expect(page.getByRole('alert')).toContainText('来源登记未完成');await page.reload();await page.getByRole('button',{name:'核实原来源登记',exact:true}).click()}
+ await expect(page.getByRole('status').filter({hasText:'设计来源已登记'})).toBeVisible();
+ expect(capabilityWrites).toHaveLength(1);expect(relationWrites).toHaveLength(1);
+ expect(relation.relation.process).toEqual(source);expect(relation.relation.activity_ids).toEqual(['activity-one']);expect(relation.relation.relation_type).toBe('DERIVED_FROM_PROCESS');
+ expect(relation.relation.capability).toEqual({resource_id:saved.revision.capability_id,revision_id:saved.revision.revision_id,digest});
+ await page.screenshot({path:test.info().outputPath('process-design-controlled.png'),fullPage:true});
 });

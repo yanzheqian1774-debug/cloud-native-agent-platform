@@ -1,4 +1,6 @@
-import {referenceSupportsBinding,type ExactReference,type WorkflowContent,type WorkflowTask} from "../api/workflowDefinitions";
+import {WorkflowPlanEditor} from './WorkflowPlanEditor';
+import {WorkflowRuntimePicker} from "./WorkflowRuntimePicker";
+import {trustedWorkflowAuthoring,referenceSupportsBinding,type ExactReference,type WorkflowContent,type WorkflowTask} from "../api/workflowDefinitions";
 import type {WorkflowSkillOperationEntry} from "../api/workflowSkillOperations";
 import {WorkflowSkillOperationBindingEditor} from "./WorkflowSkillOperationBindingEditor";
 
@@ -7,13 +9,14 @@ const csv = (value: string) => value.split(",").map(item => item.trim()).filter(
 const emptyTask = (index: number): WorkflowTask => ({taskId:`step-${index}`,name:"",dependsOn:[],inputs:[],outputs:[],capabilityRequirements:[],references:[],retryLimit:0,timeoutSeconds:300,failurePolicy:"FAIL_WORKFLOW"});
 
 export function WorkflowBuilderPage({content,onChange,operationDirectory=[],operationDirectoryState="UNAVAILABLE",operationDirectoryReason,isLocked=()=>false}:{content:WorkflowContent;onChange:(value:WorkflowContent)=>void;operationDirectory?:WorkflowSkillOperationEntry[];operationDirectoryState?:"LOADING"|"READY"|"UNAVAILABLE";operationDirectoryReason?:string|null;isLocked?:()=>boolean}){
+  if(trustedWorkflowAuthoring)return <WorkflowPlanEditor content={content} onChange={onChange} operationDirectory={operationDirectory} operationDirectoryState={operationDirectoryState} operationDirectoryReason={operationDirectoryReason} isLocked={isLocked}/>;
   const updateTask=(index:number,patch:Partial<WorkflowTask>)=>{if(isLocked())return;onChange({...content,tasks:content.tasks.map((task,position)=>position===index?{...task,...patch}:task)})};
   const updateReference=(taskIndex:number,referenceIndex:number,patch:Partial<ExactReference>)=>updateTask(taskIndex,{references:content.tasks[taskIndex].references.map((reference,index)=>index===referenceIndex?{...reference,...patch}:reference)});
   return <section className="workbench-card resource-form" aria-label="Workflow Builder">
     <header><p className="eyebrow">Definition Builder</p><h3>Workflow Definition 编写器</h3><p>这里保存定义，不创建 Workflow Run、Task Run 或 Attempt。</p></header>
     <label>用途说明<textarea value={content.description} onChange={event=>onChange({...content,description:event.target.value})}/></label>
     <div className="resource-form-grid"><label>Workflow 输入（逗号分隔）<input value={content.inputs.join(", ")} onChange={event=>onChange({...content,inputs:csv(event.target.value)})}/></label><label>Workflow 输出（逗号分隔）<input value={content.outputs.join(", ")} onChange={event=>onChange({...content,outputs:csv(event.target.value)})}/></label></div>
-    <fieldset><legend>精确 Runtime Profile 绑定</legend><label>资源 ID<input value={content.runtimeProfile.resourceId} onChange={event=>onChange({...content,runtimeProfile:{...content.runtimeProfile,resourceId:event.target.value}})}/></label><label>修订 ID<input value={content.runtimeProfile.revisionId} onChange={event=>onChange({...content,runtimeProfile:{...content.runtimeProfile,revisionId:event.target.value}})}/></label></fieldset>
+    {trustedWorkflowAuthoring?<WorkflowRuntimePicker value={content.runtimeProfile} locked={isLocked()} onChange={value=>{if(!isLocked())onChange({...content,runtimeProfile:value})}}/>:(<fieldset><legend>精确 Runtime Profile 绑定</legend><label>资源 ID<input value={content.runtimeProfile.resourceId} onChange={event=>onChange({...content,runtimeProfile:{...content.runtimeProfile,resourceId:event.target.value}})}/></label><label>修订 ID<input value={content.runtimeProfile.revisionId} onChange={event=>onChange({...content,runtimeProfile:{...content.runtimeProfile,revisionId:event.target.value}})}/></label></fieldset>)}
     {content.tasks.map((task,index)=><fieldset key={`${index}-${task.taskId}`}><legend>步骤 {index+1}</legend>
       <label>步骤 ID<input value={task.taskId} pattern="[a-z][a-z0-9-]{0,62}" onChange={event=>updateTask(index,{taskId:event.target.value})}/></label><label>名称<input value={task.name} onChange={event=>updateTask(index,{name:event.target.value})}/></label>
       <label>依赖步骤 ID（逗号分隔）<input value={task.dependsOn.join(", ")} onChange={event=>updateTask(index,{dependsOn:csv(event.target.value)})}/></label><label>能力要求（逗号分隔）<input value={task.capabilityRequirements.join(", ")} onChange={event=>updateTask(index,{capabilityRequirements:csv(event.target.value)})}/></label>
