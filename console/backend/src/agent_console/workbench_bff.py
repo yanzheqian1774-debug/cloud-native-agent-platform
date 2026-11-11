@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from urllib.parse import parse_qs
 
+from anyio import CapacityLimiter, to_thread
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -198,6 +199,7 @@ def create_workbench_bff(
         raise AuthorityError("WORKBENCH_OPERATION_INVALID")
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    directory_read_limiter = CapacityLimiter(1)
 
     @app.middleware("http")
     async def browser_boundary(request: Request, call_next):
@@ -762,6 +764,21 @@ def create_workbench_bff(
 
                 result = original_action(
                     request, context, "CREATE_PROBLEM", payload, invoke_owner
+                )
+            elif operation.name == "LIST_CURRENT_WORK" and request.method == "GET":
+
+                def read_directory():
+                    # Recheck after queuing; the owner still obtains its own
+                    # connection and pins current grants through transaction end.
+                    _, fresh_context = authenticate(request)
+                    if fresh_context != context:
+                        raise AuthorityError("AUTHENTICATION_REQUIRED")
+                    return invoke_owner()
+
+                result = await to_thread.run_sync(
+                    read_directory,
+                    abandon_on_cancel=False,
+                    limiter=directory_read_limiter,
                 )
             else:
                 result = invoke_owner()
