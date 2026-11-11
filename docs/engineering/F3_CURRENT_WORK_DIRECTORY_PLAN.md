@@ -369,3 +369,35 @@ This does not cancel, retry or execute any task/model command. On timeout the
 existing partial-read path preserves saved records; a subsequent explicit read
 can recover the actual question. Verify detail and inbox with a held response,
 then successful reread; no writes, no substituted task, no late response override.
+
+## Pending inbox uses existing authorized directory (2026-11-12, G1)
+
+Measured installed navigation: 70,874 ms, 141 API reads, including 45 work-link
+reads (two reached the existing 15-second limit), 32 journeys and 27 full
+execution/question pairs. This was a read-only observation, not a model call.
+
+For the pending inbox only, use the already enabled current-work directory with
+explicit visible scope and waiting state. Consume every cursor page; preserve
+questionStatusComplete=false and any failed detail/page as incomplete. For each
+returned item read the exact saved task, fixed problem revision and verified
+origin through the existing selected-work reader, with at most four in flight.
+Recheck session scope across pages/details and before final publication. Do not
+reuse cached grants, infer zero from null, truncate pages or create questions.
+Deduplicate by execution digest; reject repeated cursors or conflicting identities.
+Keep the F3 component and question rendering. The handled tab continues its
+existing historical reader so answered terminal questions are not lost. Switching
+tabs must cancel the old read and clear incompatible results. The legacy feature
+flag path remains unchanged. No new endpoint/schema/state authority or model call.
+
+Validate empty pending without historical fanout, multi-page pending, exact origin,
+unreadable questions, failed continuation, scope change, cancellation/tab switch,
+and preserved handled history. Then compare the same installed data using the
+compiled candidate in an isolated browser asset overlay, with all writes blocked;
+this overlay is comparison evidence, not installation. Run lint/full-feature
+build and normal hooks before a separately guarded combined release.
+
+The pending inbox keeps its existing read-refresh cadence even when empty so new
+questions can appear. Background reads retain visible current questions; switching
+pending/handled uses separate keyed view lifetimes to cancel the old read without
+flashing old history as new work. Explicit refresh still reauthorizes. Controlled
+checks cover these cases in addition to the pagination/identity boundaries above.

@@ -1,3 +1,4 @@
+import {readPendingAttention} from './currentAttentionReadback';
 import {WorkTeamContext} from '../teams/WorkTeamContext';
 import {pageScrollTop,scrollPageTo} from './pageScroll';
 import {ExecutionRuntimeSection} from '../digital-employees/EmployeeExecutionTrace';
@@ -32,12 +33,15 @@ function Empty({text}:{text:string}){return <section className="f3-work-empty"><
 export function CurrentWorkDirectory({outcomes=false,attention=false}:{outcomes?:boolean;attention?:boolean}){
  const [params,setParams]=useSearchParams(),selected=params.get('work')??'',originHint=params.get('origin')??'',query=params.get('q')??'',filter=params.get('filter')??(outcomes?'accepted':'all');
  const [data,setData]=useState<Awaited<ReturnType<typeof readCurrentWork>>|null>(null),[error,setError]=useState(''),[version,setVersion]=useState(0),[clock,setClock]=useState(()=>Date.now());
+ const pendingDirectory=attention&&filter!=='done'&&import.meta.env.VITE_CURRENT_WORK_DIRECTORY_ENABLED==='true';
  const returnKey=data?data.scope+':directory:'+(attention?'attention':outcomes?'outcomes':'tasks')+':'+filter+':'+query:undefined;
  const restore=useRef<{top:number;digest:string}|null>(null),main=useRef<HTMLElement>(null);
  useEffect(()=>{if(selected)return;const controller=new AbortController();let live=true,timer:ReturnType<typeof setTimeout>|undefined;const expired=()=>{live=false;setData(null);setError('登录已失效，请重新登录后读取。')};window.addEventListener('workbench-session-expired',expired);
-  void readCurrentWork(value=>{if(live)setData(previous=>previous&&!previous.loading?previous:value)},controller.signal,{includeCompletedQuestions:attention}).then(value=>{if(live){setData(value);setError('');if(value.works.some(w=>!terminalWork.has(w.execution.progress?.state??'')))timer=setTimeout(()=>{if(live&&document.visibilityState==='visible')setVersion(v=>v+1)},10000)}}).catch(e=>{if(live){setData(null);setError(e instanceof Error?e.message:'当前工作读取失败')}});
+  const progress=(value:Awaited<ReturnType<typeof readCurrentWork>>)=>{if(live)setData(previous=>previous&&!previous.loading?previous:value)};
+  const read=pendingDirectory?readPendingAttention(progress,controller.signal):readCurrentWork(progress,controller.signal,{includeCompletedQuestions:attention});
+  void read.then(value=>{if(live){setData(value);setError('');if(pendingDirectory||value.works.some(w=>!terminalWork.has(w.execution.progress?.state??'')))timer=setTimeout(()=>{if(live&&document.visibilityState==='visible')setVersion(v=>v+1)},10000)}}).catch(e=>{if(live){setData(null);setError(e instanceof Error?e.message:'当前工作读取失败')}});
   return()=>{live=false;controller.abort();if(timer)clearTimeout(timer);window.removeEventListener('workbench-session-expired',expired)};
- },[version,attention,outcomes,selected]);
+ },[version,attention,outcomes,selected,pendingDirectory]);
  useEffect(()=>{const refresh=()=>{setData(null);setVersion(v=>v+1)};window.addEventListener('focus',refresh);const timer=setInterval(()=>setClock(Date.now()),1000);return()=>{window.removeEventListener('focus',refresh);clearInterval(timer)}},[]);
  useLayoutEffect(()=>{if(!selected&&data&&!data.loading){let previous=restore.current;try{previous=previous??JSON.parse(readViewString(returnKey,'return','null'))}catch{/* Damaged view state cannot choose a work record. */}if(!previous||!Number.isFinite(previous.top)||typeof previous.digest!=='string')return;restore.current=null;saveViewString(returnKey,'return','');const target=previous;const frame=requestAnimationFrame(()=>{saveViewString(returnKey,'page-scroll',String(target.top));saveViewString(returnKey,'page-focus',target.digest);scrollPageTo(target.top);main.current?.querySelector<HTMLElement>(`[data-open-work="${CSS.escape(target.digest)}"]`)?.focus({preventScroll:true})});return()=>cancelAnimationFrame(frame)}},[selected,data,returnKey]);
  const listReady=!selected&&!!data&&!data.loading;
