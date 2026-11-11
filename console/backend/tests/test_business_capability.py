@@ -98,3 +98,29 @@ def test_corrupt_or_ambiguous_persisted_records_fail_closed(change):
     record.update(change)
     with pytest.raises(BusinessCapabilityError, match="RECORD_CORRUPT"):
         BusinessCapabilityRevision.from_record(record)
+
+
+def test_optional_domain_preserves_legacy_digest_and_is_revision_metadata():
+    from dataclasses import asdict
+
+    from agent_console.business_capability_publication import change_preview
+    from agent_console.digital_employee_definition import digest
+
+    original = capability()
+    legacy = {"schemaVersion": "business-capability.v1", **asdict(original)}
+    legacy.pop("business_domain")
+    assert original.canonical_record() == legacy
+    assert original.content_digest == digest(legacy)
+    assert BusinessCapabilityRevision.from_record(legacy).content_digest == digest(
+        legacy
+    )
+    changed = replace(original, business_domain="运营管理")
+    assert changed.content_digest != original.content_digest
+    assert BusinessCapabilityRevision.from_record(changed.canonical_record()) == changed
+    preview = change_preview(changed, original, aggregate_version=2, generation=1)
+    assert preview["fieldChanges"] == [
+        {"field": "business_domain", "before": None, "after": "运营管理"}
+    ]
+    for invalid in ("", " 运营管理", "__UNASSIGNED__", "x" * 81):
+        with pytest.raises(BusinessCapabilityError):
+            replace(original, business_domain=invalid)

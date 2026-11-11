@@ -1,10 +1,11 @@
 import {test,expect,type Page} from '@playwright/test';
 async function fixture(page:Page){
- const state={writes:[] as string[],denied:false,unknown:false,foreign:false,changed:false,wrongScope:false};
+ const state={writes:[] as string[],denied:false,unknown:false,foreign:false,changed:false,wrongScope:false,favorite:false,favoriteDenied:false};
  const principal={principalId:'human:home',tenantId:'tenant',securityDomain:'domain'};
  const item={workflowRunId:'run:home',preparationDigest:'a'.repeat(64),title:'检查非表格交接资料',createdAt:'2026-11-11T00:00:00Z',initiatorId:principal.principalId,executionState:'RUNNING',displayState:'waiting',progressVersion:1,problemId:'problem:home',problemRevisionId:'revision:home',problemDigest:'b'.repeat(64),pendingQuestionCount:1,artifactCount:1,businessResolution:'UNDETERMINED',originConversationId:'original',originVerified:true,planVersion:1,participantCount:1,completedTaskCount:0,taskCount:1,updatedAt:null};
  await page.route('**/api/**',async route=>{const url=new URL(route.request().url()),path=url.pathname;if(route.request().method()!=='GET')state.writes.push(path);const result=(r:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:r,continuationIds:[]}});
  if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:state.changed?{...principal,principalId:'human:other'}:principal,csrfToken:'csrf',session:{expiresAt:'2026-11-12T00:00:00Z'}}});
+ if(path.endsWith('/business-capabilities')){expect(url.searchParams.get('favoritesOnly')).toBe('true');if(state.favoriteDenied)return route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}});return result({items:state.favorite?[{capabilityId:'cap:home',revisionId:'rev:fixed',digest:'c'.repeat(64),title:'交接资料完整性核对',intent:'核对缺项并返回原文依据',businessDomain:'运营管理',currentPublished:{revisionId:'rev:fixed'}}]:[],nextCursor:null})}
  if(path.endsWith('/current-work')){if(state.denied)return route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}});return result({schemaVersion:'current-work-directory.v1',scopeFilter:state.wrongScope?'visible':url.searchParams.get('scopeFilter'),subject:state.foreign?'human:other':principal.principalId,tenantId:'tenant',securityDomain:'domain',complete:true,questionStatusComplete:!state.unknown,readAt:'2026-11-11T00:00:00Z',total:1,counts:{waiting:1},items:[{...item,pendingQuestionCount:state.unknown?null:1}],nextCursor:null})}
  if(path.endsWith('/conversations/capabilities'))return result({enabled:true});
  if(path.endsWith('/development-administrator'))return result({enabled:false});
@@ -25,3 +26,18 @@ test('mobile home retains readable cards and no horizontal overflow',async({page
 
 test('changed identity cannot transfer a home draft',async({page})=>{const state=await fixture(page);await page.goto('/dashboard');await expect(page.getByLabel('问题或工作目标',{exact:true})).toBeEnabled();await page.getByLabel('问题或工作目标',{exact:true}).fill('检查资料');state.changed=true;await page.locator('form').getByRole('button',{name:'发起会话',exact:true}).click();await expect(page).toHaveURL(/dashboard/);await expect(page.getByRole('alert')).toContainText('登录身份已变化');await expect(page.getByRole('heading',{name:'检查非表格交接资料',exact:true})).toHaveCount(0);expect(state.writes).toEqual([])});
 test('response must match the explicitly selected scope',async({page})=>{const state=await fixture(page);state.wrongScope=true;await page.goto('/dashboard');await expect(page.getByRole('alert')).toContainText('返回的工作范围尚未核实');await expect(page.getByRole('heading',{name:'检查非表格交接资料',exact:true})).toHaveCount(0);expect(state.writes).toEqual([])});
+
+test('home favorites reuse authorized catalogue and exact definition links without writes',async({page},info)=>{
+ const state=await fixture(page);state.favorite=true;await page.goto('/dashboard');
+ const region=page.getByRole('region',{name:'我的收藏能力',exact:true});
+ await expect(region).toContainText('交接资料完整性核对');
+ await expect(region.getByRole('link',{name:'查看与使用'})).toHaveAttribute('href','/capabilities?'+new URLSearchParams({capability:'cap:home',revision:'rev:fixed',digest:'c'.repeat(64),returnHome:'1'}));
+ await region.scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('home-real-favorites-layout.png'),fullPage:true});
+ state.favorite=false;await region.getByRole('button',{name:'刷新收藏'}).click();
+ await expect(region).toContainText('暂无可读取的收藏能力');
+ await expect(region.getByRole('link',{name:'查看与使用'})).toHaveCount(0);
+ state.favoriteDenied=true;await region.getByRole('button',{name:'刷新收藏'}).click();
+ await expect(region.getByRole('alert')).toContainText('暂未读取成功');
+ await expect(region.getByText('暂无可读取的收藏能力。可到能力目录收藏常用能力。',{exact:true})).toHaveCount(0);
+ expect(state.writes).toEqual([]);
+});

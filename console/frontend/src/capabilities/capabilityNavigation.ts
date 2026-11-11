@@ -5,13 +5,14 @@ export function safeCapabilityReturn(raw:string|null):string|null{
  try{
   const url=new URL(raw,window.location.origin),p=url.searchParams;
   if(url.origin!==window.location.origin||url.pathname!=='/capabilities'||url.hash)return null;
-  if([...p.keys()].some(key=>!['capability','revision','digest','returnConversation'].includes(key)||p.getAll(key).length!==1))return null;
+  if([...p.keys()].some(key=>!['capability','revision','digest','returnConversation','returnHome'].includes(key)||p.getAll(key).length!==1))return null;
   if(!identity(p.get('capability'))||!identity(p.get('revision'))||!/^[a-f0-9]{64}$/.test(p.get('digest')??'')||(p.has('returnConversation')&&!identity(p.get('returnConversation'))))return null;
+  if(p.has('returnHome')&&p.get('returnHome')!=='1')return null;
   return url.pathname+'?'+p;
  }catch{return null}
 }
-export function capabilityMemberHref(binding:CapabilityBinding,detail:CapabilityDetail,conversation:string|null):string|null{
- const backParams=new URLSearchParams({capability:detail.revision.capability_id,revision:detail.revision.revision_id,digest:detail.digest});if(conversation)backParams.set('returnConversation',conversation);
+export function capabilityMemberHref(binding:CapabilityBinding,detail:CapabilityDetail,conversation:string|null,returnHome=false):string|null{
+ const backParams=new URLSearchParams({capability:detail.revision.capability_id,revision:detail.revision.revision_id,digest:detail.digest});if(conversation)backParams.set('returnConversation',conversation);if(returnHome)backParams.set('returnHome','1');
  const back='/capabilities?'+backParams,ref=binding.reference;
  if(binding.kind==='EMPLOYEE')return '/employees?'+new URLSearchParams({employeeDefinitionId:ref.resource_id,employeeDefinitionRevisionId:ref.revision_id,employeeDefinitionDigest:ref.digest,section:'capabilities',detail:'1',capabilityReturn:back});
  const routes:Partial<Record<CapabilityBinding['kind'],[string,string]>>={SKILL:['/skills','skill'],MCP:['/mcp','mcp'],KNOWLEDGE:['/knowledge','knowledge']};

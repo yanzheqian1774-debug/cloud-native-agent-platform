@@ -834,3 +834,143 @@ default local PostgreSQL connection. Re-exported the actual shared fixture and e
 the dedicated-DSN requirement inside it, including imported use. Eight affected tests
 pass on isolated real PostgreSQL in 35.98s; no assertion removed. First commit rejected;
 normal hooks will run again, without bypass. No main deployment or new paid model call.
+
+### Catalogue interaction continuation — 2026-11-11
+
+Implement F3 catalogue card/list presentation over the same authorized owner records,
+including keyword filtering and an explicit filtered-empty state. Both presentations
+must open the exact selected revision and preserve the return-conversation context.
+Do not synthesize domain labels from prose or expose nonfunctional favourite controls.
+This UI-only increment introduces no owner writes, authorization changes, model calls,
+or schema changes. Account/workspace-persistent preferences and domain metadata remain
+required follow-on work, not satisfied by component state. Validate both layouts,
+filtering, detail return, narrow screens, and existing capability tests; run frontend
+lint and build. Consolidated prototype acceptance remains pending.
+
+Validation of this increment: frontend lint/build passed; capability browser suite
+44/44 passed in 56.2s. Initial run 43 passed/1 failed due to a timing assumption:
+visible initial progress precedes the request reaching the route. The test now
+waits for exactly one request before releasing the held response, retaining its
+refresh/no-replay assertions. Desktop/mobile screenshots inspected. Evidence:
+`work/evidence/f3-business-capability-design-20261111/catalogue-layout-r1` in the
+continuation workspace. Controlled API data, not real-provider acceptance. Main
+runtime unchanged; account/workspace persistence and full-catalogue filtering
+remain unfinished.
+
+### G1 — Own capability catalogue preferences
+
+Add an append-only preferences aggregate in the existing PostgreSQL capability
+schema, keyed by tenant, security domain, and authenticated principal. GET/POST
+`business-capabilities/preferences` use the existing directory LIST admission;
+this permits only the caller's UI preferences, never editing another user's data
+or resource authority. No caller-supplied account/scope is accepted. POST is CSRF
+protected by the existing BFF, CAS/versioned and command-idempotent. A saved
+favorite identifies a capability, not a frozen execution revision; saving must
+verify current READ on a real current published or head revision. UI listing still
+filters through the resource owner. Removing a favorite requires no resource read.
+Persist query, layout, favorites-only choice, and scroll offset with bounded input;
+keep fields typed and reject extra fields. Record policy decision and actor scope.
+Use migration 0055 with immutable trigger/checksum/schema validation, explicit
+installation only; startup never migrates. Conflict/lost response must stop writes
+and reconcile from the original command/read. Do not silently overwrite another
+session's preferences. Existing histories and model budgets remain untouched.
+Validate real PostgreSQL account/scope isolation, CAS, replay, CSRF, permission
+revocation, and immutability before frontend integration and deployment.
+
+Own-preferences validation: 7 real PostgreSQL/BFF tests passed (22.37s),
+frontend lint/build passed, 45 capability browser tests passed (55.8s), plus the
+added lost-response readback check passed (14.7s including build). Explicitly
+installed 0055 in the owned clone only and restarted its verified process; ready
+PID 15260 at https://127.0.0.1:60662. Actual authenticated browser saved favorite,
+query and list/favorites modes, refreshed, opened exact detail and returned;
+state matched the two immutable scoped preference rows. Existing execution,
+budget and resource hashes unchanged; zero model calls and no new runs. Initial
+restart helper failed before migration/process stop due to missing local import
+paths; paths were corrected, and the one guarded restart then completed. Do not
+repeat completed mutation scripts. Actual images 27/28 and database/browser
+receipts are in `real-browser`; this is real preference persistence, not model
+execution acceptance. Main unchanged. Scroll restoration, home synchronization,
+domain metadata/full-catalogue filtering and consolidated review remain open.
+
+### G1 — Domain metadata and whole-catalogue filtering
+
+Extend the non-frozen capability definition with optional `business_domain` (80
+characters, explicit author input). Omit absent values from canonical records so
+all old content digests and fixed references remain identical. Domain edits are
+ordinary immutable successors, visible in publication diff; never rewrite old
+published records or infer categories from free prose. Old entries display unset.
+Add owner-side keyword/domain/favorites filtering before matching-page pagination,
+retaining exact READ checks and published-before-draft selection. Bind continuation
+cursors to account, query/domain and the saved favorite set. Enumerate available
+domain labels only from currently readable selected definitions. Use chunked reads
+in the existing database (no index/service dependency); large-directory latency
+remains a measured follow-up, not claimed optimized. Preference JSON adds a domain
+field with default-all for old records. Frontend cancels obsolete filter reads and
+never presents a stale filtered result as current. Validate legacy digest identity,
+domain diff, filters beyond the first raw page, revoked/unreadable exclusion, and
+cursor rejection across filters/accounts. Preserve all execution and budget gates.
+
+Domain/filter validation: 19 backend checks passed (38.22s); 46 capability browser
+checks passed plus the added combined-filter persistence check (19.0s including
+build). Latest frontend lint/build and backend lint/format passed. Explicit owned
+clone restart completed, PID 16183, frontend index-BKVxCHTQ.js. Actual authenticated
+browser appended a metadata successor, reviewed/published it, filtered by its
+运营管理 domain and existing favorite, then refreshed successfully. The old revision
+and original conversation source contract are byte-equivalent; database comparison
+shows only business_domain/revision_id/predecessor_revision_id changed. Definitions
+remain 1, revisions/receipts/publications now 2 each, both publications use the real
+development-administrator policy basis. Existing execution/resource/budget hashes
+unchanged; zero provider calls and zero new runs. Evidence images 29/30 and
+capability-catalogue-{browser,database}-complete.json are in real-browser. Do not
+rerun the completed mutation script. Domain options refresh on detail return after
+publication. Remaining: scroll/home synchronization, consolidated prototype review,
+large-directory performance characterization, and overall project delivery. Main
+runtime unchanged; this does not close real-model acceptance.
+
+### Home favourites continuation
+
+Replace the home placeholder with the same authorized favourites-only catalogue
+reader. Show at most three real readable capabilities, exact revision/digest links,
+and an explicit directory entry. Re-read on return/focus and manual refresh; logout
+withdraws content. Do not create a second bookmark store, grant rights, or start work.
+Preserve a validated home return marker through nested fixed-resource navigation.
+Keep feature-disabled installations on the existing resource entry. Validate home
+read/error/withdrawal, exact links and zero writes; then verify the installed clone.
+Scroll restoration remains part of this catalogue package and is not closed here.
+
+Home favourite validation: 10 home regressions passed (16.8s), two fixed-return
+checks passed (15.7s), frontend lint and full-feature build passed. Owned clone
+restart completed at PID 16823, bundle index-CHD9mceF.js. Actual authenticated browser
+opened the saved published capability from home, traversed its fixed Employee and
+returned with capability revision/digest and home origin preserved. Removing then
+restoring the favourite updated home correctly; exactly two preference writes,
+zero resource mutations, zero model calls and no new executions. Database readback
+matches the final preference and protected execution/budget/resource hashes.
+Evidence: capability-home-{browser,database}-complete.json and screenshots 31–33
+in real-browser. Do not repeat completed mutation/restart scripts. Main unchanged.
+Scroll restoration and consolidated prototype acceptance remain open.
+
+### Catalogue position restoration
+
+Persist scrollTop together with loadedCount in the existing own-account preference
+record. Old records default to the first 50 rows. On return/refresh, read matching
+pages only through current owner authorization until the saved extent or catalogue
+end, then restore the scroll container (clamped when data shrinks). Bound replay to
+10,000 rows and a 30-second combined read deadline; repeated cursors fail explicitly.
+Never persist resource payloads or reuse stale records to restore position. New
+filters reset extent/position; layout changes reset position. Suppress scroll writes
+while loading/restoring or viewing a detail. Keep save feedback height stable to
+avoid scroll-driven save loops. Validate second-page refresh, detail return, filter
+reset, schema bounds and no domain/execution writes.
+
+Scroll validation: 49 capability browser checks passed, including restoring 60
+rows across two owner pages, refresh and detail return, resetting new filters, and
+no idle autosave loop. Seven real PostgreSQL preference tests passed (24.86s),
+frontend lint/full-feature build passed. Actual clone browser at PID 17576 restored
+405px after refresh and after detail return, without idle write loops. Installed
+asset index-Dl5WLAgN.js. Only personal preferences changed; no new model calls or
+executions. Evidence capability-scroll-browser-complete.json and images 34–35.
+The initial controlled scroll assertion incorrectly referenced a browser global
+instead of passing the expected coordinate; corrected the test argument without
+changing its tolerance. Main remains unchanged; consolidated prototype acceptance
+and project-wide delivery remain open.

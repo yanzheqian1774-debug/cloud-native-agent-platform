@@ -71,6 +71,13 @@ def app(monkeypatch):
         CapabilityPublicationRepository(repository.pool).migrate(
             employee_fixture.MIGRATIONS / "0053_business_capability_publication.sql"
         )
+        from agent_console.capability_catalogue_preferences import (
+            migrate as migrate_preferences,
+        )
+
+        with repository.pool.connection() as connection:
+            migrate_preferences(connection)
+            migrate_preferences(connection)
         services = {}
         for kind, repo_type, service_type, migration, id_field in (
             (

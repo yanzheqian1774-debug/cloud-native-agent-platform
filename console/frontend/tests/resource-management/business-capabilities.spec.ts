@@ -2,14 +2,24 @@ import {createHash} from 'node:crypto';
 import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64);
 const members=[{kind:'EMPLOYEE',resourceId:'worker',revisionId:'worker-v1',digest,name:'交接核对助手'}];
-const revision={schemaVersion:'business-capability.v1',scope:{namespace:'tenant',security_domain:'domain'},capability_id:'handover',revision_id:'r2',predecessor_revision_id:'r1',title:'交接材料核对',intent:'找出交接资料中的缺项和责任不清之处',inputs:'交接说明和责任清单',outputs:'缺项清单及对应原文',business_scope:'已授权交接文档',exclusions:'自动部署或对外发送',manual_involvement:'负责人核实待补事项',acceptance_criteria:['逐项提供原文依据'],known_limitations:'无法证明实际部署状态',origin:{kind:'INDEPENDENT',workflow:null,preparation_digest:null},bindings:[{kind:'EMPLOYEE',reference:{resource_id:'worker',revision_id:'worker-v1',digest},purpose:'核对材料并列出待补事项'}]};
+const revision={schemaVersion:'business-capability.v1',scope:{namespace:'tenant',security_domain:'domain'},capability_id:'handover',revision_id:'r2',predecessor_revision_id:'r1',title:'交接材料核对',intent:'找出交接资料中的缺项和责任不清之处',inputs:'交接说明和责任清单',outputs:'缺项清单及对应原文',business_scope:'已授权交接文档',business_domain:'运营管理',exclusions:'自动部署或对外发送',manual_involvement:'负责人核实待补事项',acceptance_criteria:['逐项提供原文依据'],known_limitations:'无法证明实际部署状态',origin:{kind:'INDEPENDENT',workflow:null,preparation_digest:null},bindings:[{kind:'EMPLOYEE',reference:{resource_id:'worker',revision_id:'worker-v1',digest},purpose:'核对材料并列出待补事项'}]};
 async function fixture(page:Page){
  const work={writes:[] as {path:string;body:Record<string,unknown>}[],messages:[] as Record<string,unknown>[],criterion:null as Record<string,unknown>|null,set:null as Record<string,unknown>|null,active:false,problem:null as Record<string,unknown>|null,unknownCreate:false,unknownReceipt:false,changedDuringPreparation:false};
- const state={work,journal:{version:0,contractDigest:'d'.repeat(64),sourceMessageId:'source-message',state:null as Record<string,unknown>|null},journalWrites:[] as Record<string,unknown>[],journalUnknown:false,answerUnknown:false,answerWrites:[] as Record<string,unknown>[],published:false,deny:false,unknown:false,contractMismatch:false,writes:[] as {commandId:string;reason:string}[],sources:[] as {idempotencyKey:string;expectedVersion:number;source:{kind:string;target:Record<string,string>}}[],saves:[] as {revision:typeof revision;expectedVersion:number;commandId:string}[]};
+ const state={preferences:{version:0,state:{query:'',layout:'cards',favoritesOnly:false,favorites:[] as string[],scrollTop:0},commandId:null as string|null,replayed:false},preferenceWrites:[] as Record<string,unknown>[],preferenceConflict:false,preferenceLost:false,work,journal:{version:0,contractDigest:'d'.repeat(64),sourceMessageId:'source-message',state:null as Record<string,unknown>|null},journalWrites:[] as Record<string,unknown>[],journalUnknown:false,answerUnknown:false,answerWrites:[] as Record<string,unknown>[],published:false,deny:false,unknown:false,contractMismatch:false,writes:[] as {commandId:string;reason:string}[],sources:[] as {idempotencyKey:string;expectedVersion:number;source:{kind:string;target:Record<string,string>}}[],saves:[] as {revision:typeof revision;expectedVersion:number;commandId:string}[]};
  await page.route('**/api/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   const json=(result:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result,continuationIds:[]}});
   if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:tester',tenantId:'tenant',securityDomain:'domain'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'csrf-test'}});
+  if(path.endsWith('/business-capabilities/domains'))return json({domains:['运营管理'],hasUnassigned:true});
+  if(path.endsWith('/business-capabilities/preferences')){
+   if(route.request().method()==='POST'){
+    const body=route.request().postDataJSON();state.preferenceWrites.push(body);
+    if(state.preferenceConflict||body.expectedVersion!==state.preferences.version)return route.fulfill({status:409,json:{reasonCode:'CAPABILITY_PREFERENCES_VERSION_CONFLICT'}});
+    state.preferences={version:state.preferences.version+1,state:body.state,commandId:body.commandId,replayed:false};
+    if(state.preferenceLost)return route.abort('failed');
+   }
+   return json(state.preferences);
+  }
   if(path.endsWith('/conversations/capabilities'))return json({enabled:true});
   if(path.endsWith('/conversations/original/sources')){const body=route.request().postDataJSON();if(!state.sources.some(s=>s.idempotencyKey===body.idempotencyKey))state.sources.push(body);return json({identity:'source-message',replayed:false})}
   if(path.endsWith('/sources/source-message/execution-contract')){const source=state.sources[0].source.target;const contract={schemaVersion:'capability-execution-constraints.v1',scope:{tenantId:'tenant',securityDomain:'domain'},conversationId:'original',sourceMessageId:'source-message',capability:{resource_id:'handover',revision_id:'r2',digest:state.contractMismatch?'f'.repeat(64):digest},objective:source.objective,inputNotes:source.inputNotes,inputs:revision.inputs,outputs:revision.outputs,acceptanceCriteria:revision.acceptance_criteria,businessScope:revision.business_scope,exclusions:revision.exclusions,manualInvolvement:revision.manual_involvement,knownLimitations:revision.known_limitations,bindings:revision.bindings};return json({contractDigest:'d'.repeat(64),admissionState:'NOT_ADMITTED',executionAuthorized:false,executionStarted:false,contract,workInput:{problem:{title:source.objective.slice(0,200),description:source.objective},criterion:{criterionType:'HUMAN_EVALUATED',measurement:{rubric:revision.acceptance_criteria.join('\n')},requiredEvidenceKinds:[],evaluatorType:'HUMAN',evaluatorVersion:'v1',applicability:{capabilityContractDigest:'d'.repeat(64),capabilityConstraints:contract}}}})}
@@ -58,7 +68,7 @@ async function fixture(page:Page){
    if(state.deny)return route.fulfill({status:404,json:{reasonCode:'AUTHORITY_DENIED'}});
    return json({revision,members,digest,aggregateVersion:state.published?3:2,headRevisionId:'r2',publishedRevisionId:state.published?'r2':'r1',currentDraftRevisionId:state.published?null:'r2',state:state.published?'PUBLISHED':'DRAFT',executionAuthorized:false});
   }
-  if(path.endsWith('/business-capabilities'))return json({items:[{capabilityId:'handover',revisionId:'r2',title:revision.title,intent:revision.intent,digest,state:'DRAFT',aggregateVersion:2,currentPublished:null,currentDraft:{revisionId:'r2',title:revision.title,intent:revision.intent,digest}}],nextCursor:null});
+  if(path.endsWith('/business-capabilities'))return json({items:[{capabilityId:'handover',revisionId:'r2',title:revision.title,intent:revision.intent,inputs:revision.inputs,outputs:revision.outputs,employeeResponsibilities:['核对资料'],exclusions:revision.exclusions,originKind:'INDEPENDENT',businessDomain:revision.business_domain,digest,state:'DRAFT',aggregateVersion:2,currentPublished:null,currentDraft:{revisionId:'r2',title:revision.title,intent:revision.intent,digest}}],nextCursor:null});
   return json({items:[],conversations:[]});
  });return state;
 }
@@ -85,6 +95,7 @@ for(const source of ['independent','workflow'])test('creates '+source+' capabili
  const state=await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:source==='workflow'?'从流程设计能力':'创建独立能力',exact:true}).click();
  const form=page.getByRole('form',{name:'业务能力编辑'});
  for(const label of ['能力名称','希望完成什么','需要提供哪些资料','将交付什么','适用范围','不包含哪些操作','需要人工参与什么','当前已知限制'])await form.getByLabel(label,{exact:true}).fill(label==='能力名称'?'新设计的文档核对':label+'的业务说明');
+ await form.getByLabel('业务领域（可选）').fill('运营管理');
  await form.getByLabel('完成标准（每行一项）').fill('指出每一项缺失内容');
  if(source==='workflow'){await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接流程'});await form.getByRole('button',{name:'固定来源流程'}).click();await form.getByLabel('资源类别').selectOption('EMPLOYEE')}
  await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接核对助手'});await form.getByLabel('本次承担什么职责').fill('核对文档并引用依据');await form.getByRole('button',{name:'加入能力组成'}).click();
@@ -203,7 +214,7 @@ for(const mode of ['stream','lost','unavailable','adaptive'] as const)test('orig
  await expect(page.getByRole('button',{name:'继续准备方案',exact:true})).toBeVisible();expect(dispatches).toBe(0);
  await page.getByRole('button',{name:'继续准备方案',exact:true}).click();
  const panel=page.getByRole('region',{name:'本次方案进展',exact:true}),rail=page.getByRole('region',{name:'当前工作方案进展',exact:true});
- if(mode==='stream'){await expect(rail.getByRole('status')).toContainText('正在生成方案');expect(dispatches).toBe(1);release()}
+ if(mode==='stream'){await expect(rail.getByRole('status')).toContainText('正在生成方案');await expect.poll(()=>dispatches).toBe(1);release()}
  if(mode==='unavailable'){await expect(panel.getByRole('alert')).toContainText('模型服务尚未接通');await expect(rail).toContainText('需要处理');expect(dispatches).toBe(0);expect(state.journal.state?.phase).toBe('PREPARE_PLAN');return}
  if(mode==='lost'){await expect(panel.getByRole('alert')).toContainText('不会自动重发');expect(state.journal.state?.phase).toBe('PLANNING_PENDING')}
  else {await expect(panel).toContainText('交接材料核验方案');await expect(rail).toContainText('方案已返回');await expect(rail).toContainText('尚未确认或启动执行');}
@@ -340,4 +351,109 @@ for(const mode of ['complete','confirmation-lost','wrong-resource'] as const)tes
  if(mode==='complete'){await expect(page.getByRole('region',{name:'文档检查结果',exact:true})).toContainText('缺少回退步骤');expect(calls).toEqual({model:1,confirmation:1,selection:1,preparation:1,execution:1})}
  else {const panel=page.getByRole('region',{name:mode==='confirmation-lost'?'本次方案确认':'本次固定资源准备',exact:true});await expect(panel.getByRole('alert')).toBeVisible();expect(calls.execution).toBe(0);expect(calls.preparation).toBe(0);expect(calls.selection).toBe(mode==='confirmation-lost'?0:1)}
  const before={...calls};await page.reload();await expect(page.getByRole('button',{name:'读取原方案调用',exact:true})).toBeVisible();expect(calls).toEqual(before);await expect(page).toHaveURL(/\/work\?conversation=original$/);
+});
+
+test('catalogue layouts preserve facts and exact detail return with honest filtered empty state',async({page},info)=>{
+ const state=await fixture(page);await page.goto('/capabilities?returnConversation=original');
+ await expect(page.getByRole('button',{name:'卡片',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.locator('.capability-grid')).toContainText(revision.outputs);
+ await page.getByLabel('搜索业务能力').fill('  核对资料  ');
+ await page.getByRole('button',{name:'列表',exact:true}).click();
+ await expect(page.getByRole('table')).toContainText(revision.outputs);
+ await expect(page.getByRole('table')).toContainText(revision.exclusions);
+ await page.getByRole('button',{name:'查看详情',exact:true}).click();
+ await expect(page).toHaveURL(/capability=handover&revision=r2/);
+ await page.getByRole('button',{name:'返回业务能力',exact:true}).click();
+ await expect(page.getByRole('button',{name:'列表',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByLabel('搜索业务能力')).toHaveValue('  核对资料  ');
+ await expect(page.getByRole('link',{name:'返回原会话'})).toHaveAttribute('href','/work?conversation=original');
+ for(const width of [1280,390]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath(`catalogue-list-${width}.png`),fullPage:true})}
+ await page.getByLabel('搜索业务能力').fill('不存在的能力');
+ await expect(page.getByText('没有匹配的可读能力。请调整关键词、业务领域或收藏筛选。',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'暂无可读取的业务能力'})).toHaveCount(0);
+ await page.getByRole('button',{name:'卡片',exact:true}).click();
+ await expect(page.getByText('没有匹配的可读能力。请调整关键词、业务领域或收藏筛选。',{exact:true})).toBeVisible();
+ expect(state.writes).toHaveLength(0);expect(state.saves).toHaveLength(0);
+});
+
+test('catalogue favorites and layout survive refresh and conflict never overwrites server state',async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities');
+ await page.getByRole('button',{name:'收藏'+revision.title,exact:true}).click();
+ await expect.poll(()=>state.preferences.state.favorites).toEqual(['handover']);
+ await page.getByRole('button',{name:'列表',exact:true}).click();
+ await page.getByRole('button',{name:'我的收藏',exact:true}).click();
+ await page.getByLabel('搜索业务能力').fill('交接');
+ await expect.poll(()=>state.preferences.state.query).toBe('交接');
+ await page.reload();
+ await expect(page.getByLabel('搜索业务能力')).toHaveValue('交接');
+ await expect(page.getByRole('button',{name:'列表',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByRole('button',{name:'我的收藏',exact:true})).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('button',{name:'取消收藏'+revision.title,exact:true}).click();
+ await expect(page.getByRole('table').getByRole('button',{name:revision.title,exact:true})).toHaveCount(0);
+ await expect.poll(()=>state.preferences.state.favorites).toEqual([]);
+ state.preferenceConflict=true;
+ await page.getByLabel('搜索业务能力').fill('不覆盖其他窗口');
+ await expect(page.getByRole('alert')).toContainText('已在其他位置更新');
+ const writes=state.preferenceWrites.length;
+ expect(state.preferences.state.query).toBe('交接');
+ await page.getByRole('button',{name:'重新读取目录设置'}).click();
+ await expect(page.getByLabel('搜索业务能力')).toHaveValue('交接');
+ expect(state.preferenceWrites).toHaveLength(writes);
+});
+
+test('catalogue lost save response is reconciled without another write',async({page})=>{
+ const state=await fixture(page);state.preferenceLost=true;await page.goto('/capabilities');
+ await page.getByRole('button',{name:'收藏'+revision.title,exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('保存结果尚未核实');
+ expect(state.preferenceWrites).toHaveLength(1);
+ await page.getByRole('button',{name:'重新读取目录设置'}).click();
+ await expect(page.getByRole('button',{name:'取消收藏'+revision.title,exact:true})).toBeEnabled();
+ expect(state.preferenceWrites).toHaveLength(1);
+ await page.reload();
+ await expect(page.getByRole('button',{name:'取消收藏'+revision.title,exact:true})).toBeEnabled();
+ expect(state.preferenceWrites).toHaveLength(1);
+});
+
+test('catalogue requests combined owner filters and restores saved domain',async({page})=>{
+ const state=await fixture(page);const requests:URL[]=[];
+ page.on('request',request=>{const url=new URL(request.url());if(url.pathname.endsWith('/business-capabilities')&&request.method()==='GET')requests.push(url)});
+ await page.goto('/capabilities');await page.getByLabel('业务领域',{exact:true}).selectOption('运营管理');
+ await page.getByLabel('搜索业务能力').fill('交接');
+ await expect.poll(()=>requests.some(url=>url.searchParams.get('query')==='交接'&&url.searchParams.get('domain')==='运营管理')).toBe(true);
+ await page.getByRole('button',{name:'收藏'+revision.title,exact:true}).click();
+ await page.getByRole('button',{name:'我的收藏',exact:true}).click();
+ await expect.poll(()=>requests.some(url=>url.searchParams.get('favoritesOnly')==='true'&&url.searchParams.get('domain')==='运营管理')).toBe(true);
+ await expect.poll(()=>state.preferences.state).toMatchObject({domain:'运营管理',query:'交接',favoritesOnly:true});
+ await page.reload();await expect(page.getByLabel('业务领域',{exact:true})).toHaveValue('运营管理');
+ await page.getByRole('button',{name:'查看详情',exact:true}).click();
+ await expect(page.getByText('业务领域：运营管理',{exact:true})).toBeVisible();
+});
+
+test('home origin survives a nested fixed employee visit',async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities?capability=handover&revision=r2&returnHome=1');
+ await page.locator('.capability-fixed-table').getByRole('link',{name:'交接核对助手',exact:true}).click();
+ await page.getByRole('link',{name:'返回业务能力详情',exact:false}).click();
+ await expect(page.getByRole('link',{name:'返回工作台',exact:true})).toHaveAttribute('href','/dashboard');
+ expect(new URL(page.url()).searchParams.get('revision')).toBe('r2');
+ expect(new URL(page.url()).searchParams.get('digest')).toBe(digest);
+ expect(state.writes).toHaveLength(0);expect(state.saves).toHaveLength(0);
+});
+
+test('catalogue restores second-page extent and scroll after refresh and detail return',async({page})=>{
+ const state=await fixture(page);
+ const template={revisionId:'r2',title:revision.title,intent:revision.intent,inputs:revision.inputs,outputs:revision.outputs,exclusions:revision.exclusions,employeeResponsibilities:['核对资料'],businessDomain:'运营管理',digest,state:'DRAFT',currentPublished:null,currentDraft:{revisionId:'r2'}};
+ const entries=Array.from({length:60},(_,i)=>({...template,capabilityId:i===59?'handover':'other-'+i,title:i===59?revision.title:'核对能力 '+i}));
+ await page.route('**/business-capabilities?*',route=>{const cursor=new URL(route.request().url()).searchParams.get('cursor');return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:cursor?entries.slice(50):entries.slice(0,50),nextCursor:cursor?null:'second-page'},continuationIds:[]}})});
+ await page.goto('/capabilities');await page.getByRole('button',{name:'加载更多',exact:true}).click();await expect(page.getByRole('button',{name:'查看详情',exact:true})).toHaveCount(60);
+ const container=page.locator('.skill-frame-content');await container.evaluate(node=>{node.scrollTop=node.scrollHeight});
+ await expect.poll(()=>state.preferences.state.scrollTop).toBeGreaterThan(1000);
+ await expect.poll(()=>state.preferences.state).toMatchObject({loadedCount:60});
+ await expect(page.getByText('正在保存目录设置…',{exact:true})).toHaveCount(0);
+ const savedWrites=state.preferenceWrites.length;await page.waitForTimeout(800);expect(state.preferenceWrites).toHaveLength(savedWrites);
+ const top=state.preferences.state.scrollTop;
+ await page.reload();await expect(page.getByRole('button',{name:'查看详情',exact:true})).toHaveCount(60);await expect.poll(()=>container.evaluate((node,expected)=>Math.abs(node.scrollTop-expected),top)).toBeLessThan(5);
+ await page.getByRole('button',{name:'查看详情',exact:true}).last().click();await expect(page.getByRole('heading',{name:revision.title,exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'返回业务能力',exact:true}).click();await expect(page.getByRole('button',{name:'查看详情',exact:true})).toHaveCount(60);await expect.poll(()=>container.evaluate(node=>node.scrollTop)).toBeGreaterThan(1000);
+ await page.getByLabel('搜索业务能力').fill('改用新的筛选');await expect.poll(()=>state.preferences.state).toMatchObject({query:'改用新的筛选',loadedCount:50,scrollTop:0});
+ expect(state.writes).toHaveLength(0);expect(state.saves).toHaveLength(0);
 });

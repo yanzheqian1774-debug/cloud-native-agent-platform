@@ -259,6 +259,12 @@ def build_workbench_composition(
             Path(__file__).parents[2]
             / "migrations/0053_business_capability_publication.sql"
         )
+        from .capability_catalogue_preferences import (
+            compatibility as preferences_compatibility,
+        )
+
+        with business_problems.problems.pool.connection() as connection:
+            preferences_compatibility(connection)
         capability_targets = (CapabilityTargets(),)
 
     from .resource_definition_management import DefinitionTargets

@@ -9,6 +9,7 @@ _FIELDS = (
     "inputs",
     "outputs",
     "business_scope",
+    "business_domain",
     "exclusions",
     "manual_involvement",
     "acceptance_criteria",
@@ -21,9 +22,9 @@ def change_preview(revision, previous, *, aggregate_version, generation):
     current = revision.canonical_record()
     before = previous.canonical_record() if previous else {}
     changes = [
-        {"field": field, "before": before.get(field), "after": current[field]}
+        {"field": field, "before": before.get(field), "after": current.get(field)}
         for field in _FIELDS
-        if before.get(field) != current[field]
+        if before.get(field) != current.get(field)
     ]
     old = (
         {(b.kind, b.reference.resource_id): b for b in previous.bindings}

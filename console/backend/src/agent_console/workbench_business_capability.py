@@ -15,8 +15,9 @@ from .business_capability import (
 )
 from .business_capability_publication import change_preview, verify_review
 from .business_capability_publication_postgres import CapabilityPublicationRepository
+from .capability_catalogue_preferences import operations as preference_operations
 from .development_administrator import for_call
-from .digital_employee_definition import EmployeeDefinitionError
+from .digital_employee_definition import EmployeeDefinitionError, digest
 from .execution_domain import ScopeIdentity
 from .execution_preparation import ExecutionPreparationError
 from .knowledge_repository import KnowledgeRepositoryError
@@ -33,6 +34,12 @@ from .workflow_definition_service import WorkflowDefinitionFailure
 
 OWNER = "BUSINESS_CAPABILITY"
 COLLECTION = "business-capability:collection"
+
+
+class CapabilityListQuery(WorkbenchPageQuery):
+    query: str = Field(default="", max_length=500)
+    domain: str = Field(default="", max_length=80)
+    favoritesOnly: bool = False
 
 
 class PublishCapabilityInput(StrictWorkbenchModel):
@@ -367,6 +374,16 @@ class CapabilityOwner:
                     "state": "PUBLISHED" if published else "DRAFT",
                     "executionAuthorized": False,
                 }
+            if call.operation == "LIST_CAPABILITY_DOMAINS":
+                call.authority.require(principal, OWNER, "LIST", COLLECTION)
+                values = {
+                    item.get("businessDomain")
+                    for item in self._scan(call, scope, principal)
+                }
+                return {
+                    "domains": sorted(value for value in values if value),
+                    "hasUnassigned": None in values,
+                }
             if call.operation == "LIST_CAPABILITIES":
                 call.authority.require(principal, OWNER, "LIST", COLLECTION)
                 return self._list(call, scope, principal)
@@ -444,12 +461,100 @@ class CapabilityOwner:
             generation=call.policy_generation,
         )
 
+    def _item(self, call, scope, principal, row):
+        latest = CapabilityPublicationRepository.latest(
+            call.connection, scope, row["capability_id"]
+        )
+        candidates = [("currentPublished", latest["revision_id"])] if latest else []
+        if not latest or latest["revision_id"] != row["head_revision_id"]:
+            candidates.append(("currentDraft", row["head_revision_id"]))
+        visible = {}
+        for label, revision_id in candidates:
+            try:
+                call.authority.require(
+                    principal,
+                    OWNER,
+                    "READ",
+                    f"business-capability:{row['capability_id']}:{revision_id}",
+                )
+            except AuthorityError:
+                continue
+            revision = self.repository.read(
+                call.connection, scope, row["capability_id"], revision_id
+            )
+            visible[label] = {
+                "revisionId": revision.revision_id,
+                "title": revision.title,
+                "intent": revision.intent,
+                "inputs": revision.inputs,
+                "outputs": revision.outputs,
+                "manualInvolvement": revision.manual_involvement,
+                "businessDomain": revision.business_domain,
+                "exclusions": revision.exclusions,
+                "originKind": revision.origin.kind,
+                "employeeResponsibilities": [
+                    binding.purpose
+                    for binding in revision.bindings
+                    if binding.kind.value == "EMPLOYEE"
+                ],
+                "digest": revision.content_digest,
+            }
+        selected = visible.get("currentPublished") or visible.get("currentDraft")
+        if selected is None:
+            return None
+        return {
+            **selected,
+            "capabilityId": row["capability_id"],
+            "aggregateVersion": row["aggregate_version"],
+            "state": "PUBLISHED" if "currentPublished" in visible else "DRAFT",
+            "currentPublished": visible.get("currentPublished"),
+            "currentDraft": visible.get("currentDraft"),
+            "executionAuthorized": False,
+        }
+
+    def _scan(self, call, scope, principal, after=""):
+        while True:
+            rows = call.connection.execute(
+                "SELECT capability_id,head_revision_id,aggregate_version "
+                "FROM business_capability.definitions "
+                "WHERE namespace=%s AND security_domain=%s "
+                'AND capability_id COLLATE "C">%s '
+                'ORDER BY capability_id COLLATE "C" LIMIT 100',
+                (scope.namespace, scope.security_domain, after),
+            ).fetchall()
+            for row in rows:
+                item = self._item(call, scope, principal, row)
+                if item is not None:
+                    yield item
+            if len(rows) < 100:
+                return
+            after = rows[-1]["capability_id"]
+
     def _list(self, call, scope, principal):
+        from .capability_catalogue_preferences import latest as preferences
+
         size = call.query["pageSize"]
+        query = call.query["query"].strip().casefold()
+        domain = call.query["domain"]
+        favorites = None
+        if call.query["favoritesOnly"]:
+            own = preferences(
+                call.connection,
+                (scope.namespace, scope.security_domain, principal.principal_id),
+            )
+            favorites = set(own["state"]["favorites"]) if own else set()
+        route = "CAPABILITY_LIST:" + digest(
+            {
+                "principal": principal.principal_id,
+                "query": query,
+                "domain": domain,
+                "favorites": sorted(favorites) if favorites is not None else None,
+            }
+        )
         after = (
             self.cursors.resolve(
                 call.query["cursor"],
-                route="CAPABILITY_LIST",
+                route=route,
                 context=call.context,
                 page_size=size,
                 key_size=1,
@@ -457,75 +562,29 @@ class CapabilityOwner:
             if call.query.get("cursor")
             else ""
         )
-        rows = call.connection.execute(
-            "SELECT capability_id,head_revision_id,aggregate_version "
-            "FROM business_capability.definitions "
-            "WHERE namespace=%s AND security_domain=%s "
-            'AND capability_id COLLATE "C">%s '
-            'ORDER BY capability_id COLLATE "C" LIMIT %s',
-            (scope.namespace, scope.security_domain, after, size + 1),
-        ).fetchall()
         items = []
-        for row in rows[:size]:
-            latest = CapabilityPublicationRepository.latest(
-                call.connection, scope, row["capability_id"]
-            )
-            candidates = [("currentPublished", latest["revision_id"])] if latest else []
-            if not latest or latest["revision_id"] != row["head_revision_id"]:
-                candidates.append(("currentDraft", row["head_revision_id"]))
-            visible = {}
-            for label, revision_id in candidates:
-                try:
-                    call.authority.require(
-                        principal,
-                        OWNER,
-                        "READ",
-                        f"business-capability:{row['capability_id']}:{revision_id}",
-                    )
-                except AuthorityError:
-                    continue
-                revision = self.repository.read(
-                    call.connection, scope, row["capability_id"], revision_id
-                )
-                visible[label] = {
-                    "revisionId": revision.revision_id,
-                    "title": revision.title,
-                    "intent": revision.intent,
-                    "inputs": revision.inputs,
-                    "outputs": revision.outputs,
-                    "manualInvolvement": revision.manual_involvement,
-                    "exclusions": revision.exclusions,
-                    "originKind": revision.origin.kind,
-                    "employeeResponsibilities": [
-                        binding.purpose
-                        for binding in revision.bindings
-                        if binding.kind.value == "EMPLOYEE"
-                    ],
-                    "digest": revision.content_digest,
-                }
-            selected = visible.get("currentPublished") or visible.get("currentDraft")
-            if selected is None:
+        for item in self._scan(call, scope, principal, after):
+            if favorites is not None and item["capabilityId"] not in favorites:
                 continue
-            items.append(
-                {
-                    **selected,
-                    "capabilityId": row["capability_id"],
-                    "aggregateVersion": row["aggregate_version"],
-                    "state": "PUBLISHED" if "currentPublished" in visible else "DRAFT",
-                    "currentPublished": visible.get("currentPublished"),
-                    "currentDraft": visible.get("currentDraft"),
-                    "executionAuthorized": False,
-                }
-            )
+            if domain and (item.get("businessDomain") or "__UNASSIGNED__") != domain:
+                continue
+            searchable = " ".join(
+                [item["title"], item["intent"], *item["employeeResponsibilities"]]
+            ).casefold()
+            if query not in searchable:
+                continue
+            items.append(item)
+            if len(items) > size:
+                break
         return {
-            "items": items,
+            "items": items[:size],
             "nextCursor": self.cursors.mint(
-                route="CAPABILITY_LIST",
+                route=route,
                 context=call.context,
                 page_size=size,
-                last_key=(rows[size - 1]["capability_id"],),
+                last_key=(items[size - 1]["capabilityId"],),
             )
-            if len(rows) > size
+            if len(items) > size
             else None,
         }
 
@@ -535,6 +594,16 @@ def capability_operations(repository, employees, services, cursors, workflows=No
         repository, CapabilityReferences(employees, services, workflows), cursors
     )
     return (
+        *preference_operations(),
+        WorkbenchOperation(
+            "LIST_CAPABILITY_DOMAINS",
+            "GET",
+            PREFIX + "/business-capabilities/domains",
+            None,
+            None,
+            lambda *_: (ExactGrant(OWNER, "LIST", COLLECTION),),
+            handler,
+        ),
         WorkbenchOperation(
             "PREVIEW_CAPABILITY_PUBLICATION",
             "GET",
@@ -573,7 +642,7 @@ def capability_operations(repository, employees, services, cursors, workflows=No
             "GET",
             PREFIX + "/business-capabilities",
             None,
-            WorkbenchPageQuery,
+            CapabilityListQuery,
             lambda *_: (ExactGrant(OWNER, "LIST", COLLECTION),),
             handler,
         ),

@@ -10,6 +10,7 @@ const textFields=[['title','能力名称'],['intent','希望完成什么'],['inp
 type FormFields=Record<typeof textFields[number][0],string>;
 export function CapabilityEditor({base,principal,fromWorkflow=false,onSaved,onCancel}:{base?:CapabilityDetail;principal:string;fromWorkflow?:boolean;onSaved:(value:CapabilityDetail)=>void;onCancel:()=>void}){
  const [fields,setFields]=useState<FormFields>(()=>Object.fromEntries(textFields.map(([key])=>[key,base?.revision[key]??''])) as FormFields);
+ const [domain,setDomain]=useState(base?.revision.business_domain??'');
  const [criteria,setCriteria]=useState(base?.revision.acceptance_criteria.join('\n')??'');
  const [bindings,setBindings]=useState<CapabilityBinding[]>(base?.revision.bindings??[]);
  const [origin,setOrigin]=useState<CapabilityRevision['origin']>(base?.revision.origin??{kind:fromWorkflow?'WORKFLOW_REVISION':'INDEPENDENT',workflow:null,preparation_digest:null});
@@ -92,7 +93,7 @@ export function CapabilityEditor({base,principal,fromWorkflow=false,onSaved,onCa
     if(!bindings.some(item=>item.kind==='EMPLOYEE'))throw new Error('employee');
     if(origin.kind==='WORKFLOW_REVISION'&&!origin.workflow)throw new Error('workflow');
     const session=await capabilitySession();if(workbenchPrincipalKey(session)!==principal)throw new Error('identity');
-    const revision:CapabilityRevision={schemaVersion:'business-capability.v1',scope:{namespace:session.principal.tenantId,security_domain:session.principal.securityDomain},capability_id:base?.revision.capability_id??`capability:${crypto.randomUUID()}`,revision_id:`capability-revision:${crypto.randomUUID()}`,predecessor_revision_id:base?.revision.revision_id??null,...fields,acceptance_criteria:criteria.split('\n').map(item=>item.trim()).filter(Boolean),origin,bindings};
+    const revision:CapabilityRevision={schemaVersion:'business-capability.v1',scope:{namespace:session.principal.tenantId,security_domain:session.principal.securityDomain},capability_id:base?.revision.capability_id??`capability:${crypto.randomUUID()}`,revision_id:`capability-revision:${crypto.randomUUID()}`,predecessor_revision_id:base?.revision.revision_id??null,...fields,...(domain.trim()?{business_domain:domain.trim()}:{}),acceptance_criteria:criteria.split('\n').map(item=>item.trim()).filter(Boolean),origin,bindings};
     command={revision,expectedVersion:base?.aggregateVersion??0,commandId:`capability-save:${crypto.randomUUID()}`};
     if(!alive.current)return;setSubmitted(command);
    }
@@ -108,7 +109,7 @@ export function CapabilityEditor({base,principal,fromWorkflow=false,onSaved,onCa
  return <form className="capability-panel capability-editor" onSubmit={save} aria-label="业务能力编辑">
   <h2>{base?'修改业务能力':'设计业务能力'}</h2><p>描述目标与交付，选择已有数字人及资料。保存为草稿后，再集中核对变更与发布影响。</p>
   {error&&<p role="alert">{error}</p>}{importNotice&&<p role="status">{importNotice}</p>}
-  <fieldset disabled={busy||submitted!==null}><legend>目标与边界</legend><div className="capability-grid">{textFields.map(([key,title])=><label key={key}>{title}{key==='title'?<input aria-label={title} required maxLength={120} value={fields[key]} onChange={event=>setFields(old=>({...old,[key]:event.target.value}))}/>:<textarea aria-label={title} required maxLength={2000} value={fields[key]} onChange={event=>setFields(old=>({...old,[key]:event.target.value}))}/>}</label>)}</div><label>完成标准（每行一项）<textarea aria-label="完成标准（每行一项）" required value={criteria} onChange={event=>setCriteria(event.target.value)}/></label>
+  <fieldset disabled={busy||submitted!==null}><legend>目标与边界</legend><label>业务领域（可选）<input maxLength={80} value={domain} onChange={event=>setDomain(event.target.value)} placeholder="填写能力所属的业务领域"/></label><div className="capability-grid">{textFields.map(([key,title])=><label key={key}>{title}{key==='title'?<input aria-label={title} required maxLength={120} value={fields[key]} onChange={event=>setFields(old=>({...old,[key]:event.target.value}))}/>:<textarea aria-label={title} required maxLength={2000} value={fields[key]} onChange={event=>setFields(old=>({...old,[key]:event.target.value}))}/>}</label>)}</div><label>完成标准（每行一项）<textarea aria-label="完成标准（每行一项）" required value={criteria} onChange={event=>setCriteria(event.target.value)}/></label>
    <label>设计来源<select aria-label="设计来源" value={origin.kind} disabled={base!==undefined} onChange={event=>{const workflow=event.target.value==='WORKFLOW_REVISION';setOrigin({kind:workflow?'WORKFLOW_REVISION':'INDEPENDENT',workflow:null,preparation_digest:null});if(workflow)setKind('WORKFLOW')}}><option value="INDEPENDENT">独立设计</option><option value="WORKFLOW_REVISION">从业务流程设计</option>{origin.kind==='SAVED_PREPARATION'&&<option value="SAVED_PREPARATION">已保存的工作准备</option>}</select></label>
    {origin.workflow&&<p>已固定来源流程。更换流程需重新选择，既有工作不会随之改变。</p>}
    <h3>选择承担职责的数字人与资源</h3><label>资源类别<select aria-label="资源类别" value={kind} onChange={event=>setKind(event.target.value as PickKind)}>{kinds.filter(item=>item.kind!=='WORKFLOW'||origin.kind==='WORKFLOW_REVISION').map(item=><option key={item.kind} value={item.kind}>{item.title}</option>)}</select></label>

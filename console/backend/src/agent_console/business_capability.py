@@ -121,6 +121,7 @@ class BusinessCapabilityRevision:
     origin: CapabilityOrigin
     bindings: tuple[CapabilityBinding, ...]
     predecessor_revision_id: str | None = None
+    business_domain: str | None = None
 
     def __post_init__(self):
         if not isinstance(self.scope, ScopeIdentity):
@@ -131,6 +132,13 @@ class BusinessCapabilityRevision:
             _identity(self.predecessor_revision_id)
             if self.predecessor_revision_id == self.revision_id:
                 raise BusinessCapabilityError("CAPABILITY_PREDECESSOR_INVALID")
+        if self.business_domain is not None:
+            _text(self.business_domain, 80, "CAPABILITY_DOMAIN_INVALID")
+            if (
+                self.business_domain != self.business_domain.strip()
+                or self.business_domain == "__UNASSIGNED__"
+            ):
+                raise BusinessCapabilityError("CAPABILITY_DOMAIN_INVALID")
         _text(self.title, 120, "CAPABILITY_TITLE_REQUIRED")
         for field in (
             "intent",
@@ -165,7 +173,10 @@ class BusinessCapabilityRevision:
             raise BusinessCapabilityError("CAPABILITY_EMPLOYEE_REQUIRED")
 
     def canonical_record(self) -> dict:
-        return {"schemaVersion": "business-capability.v1", **asdict(self)}
+        record = {"schemaVersion": "business-capability.v1", **asdict(self)}
+        if self.business_domain is None:
+            record.pop("business_domain")
+        return record
 
     @property
     def content_digest(self) -> str:

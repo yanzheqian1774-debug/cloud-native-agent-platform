@@ -5,12 +5,12 @@ export type CapabilityBinding = {kind:'EMPLOYEE'|'SKILL'|'MCP'|'KNOWLEDGE'|'ONTO
 export type CapabilityRevision = {
   schemaVersion:'business-capability.v1'; scope:{namespace:string;security_domain:string};
   capability_id:string; revision_id:string; predecessor_revision_id:string|null;
-  title:string; intent:string; inputs:string; outputs:string; business_scope:string;
+  title:string; intent:string; inputs:string; outputs:string; business_scope:string; business_domain?:string;
   exclusions:string; manual_involvement:string; acceptance_criteria:string[]; known_limitations:string;
   origin:{kind:'INDEPENDENT'|'WORKFLOW_REVISION'|'SAVED_PREPARATION';workflow:CapabilityReference|null;preparation_digest:string|null};
   bindings:CapabilityBinding[];
 };
-export type CapabilitySummary = {revisionId:string;title:string;intent:string;digest:string;inputs?:string;outputs?:string;manualInvolvement?:string;exclusions?:string;originKind?:CapabilityRevision['origin']['kind'];employeeResponsibilities?:string[]};
+export type CapabilitySummary = {revisionId:string;title:string;intent:string;digest:string;businessDomain?:string|null;inputs?:string;outputs?:string;manualInvolvement?:string;exclusions?:string;originKind?:CapabilityRevision['origin']['kind'];employeeResponsibilities?:string[]};
 export type CapabilityItem = CapabilitySummary & {capabilityId:string;aggregateVersion:number;state:'PUBLISHED'|'DRAFT';currentPublished:CapabilitySummary|null;currentDraft:CapabilitySummary|null};
 export type CapabilityList = {items:CapabilityItem[];nextCursor:string|null};
 export type CapabilityDetail = {members?:{kind:string;resourceId:string;revisionId:string;digest:string;name:string}[];revision:CapabilityRevision;digest:string;aggregateVersion:number;headRevisionId:string;publishedRevisionId:string|null;currentDraftRevisionId:string|null;state:'PUBLISHED'|'DRAFT';executionAuthorized:false};
@@ -56,7 +56,9 @@ async function request<T>(path:string,principal:string,signal?:AbortSignal,paylo
 export async function capabilitySession(signal?:AbortSignal):Promise<WorkbenchSession>{
   return getWorkbenchSession(AbortSignal.any([signal??new AbortController().signal,AbortSignal.timeout(30_000)]));
 }
-export const listCapabilities=(principal:string,cursor:string|null=null,signal?:AbortSignal)=>request<CapabilityList>(root+'?'+new URLSearchParams({pageSize:'50',...(cursor?{cursor}:{})}),principal,signal);
+export type CapabilityCatalogueFilters={query:string;domain:string;favoritesOnly:boolean};
+export const listCapabilities=(principal:string,cursor:string|null=null,signal?:AbortSignal,filters?:CapabilityCatalogueFilters)=>request<CapabilityList>(root+'?'+new URLSearchParams({pageSize:'50',...(cursor?{cursor}:{}),...(filters?{query:filters.query,domain:filters.domain,favoritesOnly:String(filters.favoritesOnly)}:{})}),principal,signal);
+export const listCapabilityDomains=(principal:string,signal?:AbortSignal)=>request<{domains:string[];hasUnassigned:boolean}>(root+'/domains',principal,signal);
 export const readCapability=(id:string,revision:string,principal:string,signal?:AbortSignal)=>request<CapabilityDetail>(revisionPath(id,revision),principal,signal);
 export const previewCapability=(id:string,revision:string,principal:string,signal?:AbortSignal)=>request<CapabilityPreview>(revisionPath(id,revision)+'/publication-preview',principal,signal);
 export const publishCapability=(id:string,revision:string,command:CapabilityPublishCommand,principal:string,signal?:AbortSignal)=>request<{state:'PUBLISHED';aggregateVersion:number}>(revisionPath(id,revision)+'/publication',principal,signal,command);
@@ -64,3 +66,8 @@ export const saveCapability=(revision:CapabilityRevision,expectedVersion:number,
 
 export type CapabilityWorkInput={problem:{title:string;description:string};criterion:{criterionType:'HUMAN_EVALUATED';measurement:{rubric:string};requiredEvidenceKinds:string[];evaluatorType:string;evaluatorVersion:string;applicability:{capabilityContractDigest:string;capabilityConstraints:CapabilityExecutionContract['contract']}}};
 export type CapabilityExecutionContract = {workInput?:CapabilityWorkInput;contractDigest:string;admissionState:'NOT_ADMITTED';executionAuthorized:false;executionStarted:false;contract:{schemaVersion:'capability-execution-constraints.v1';scope:{tenantId:string;securityDomain:string};conversationId:string;sourceMessageId:string;capability:CapabilityReference;objective:string;inputNotes:string;inputs:string;outputs:string;acceptanceCriteria:string[];businessScope:string;exclusions:string;manualInvolvement:string;knownLimitations:string;bindings:CapabilityBinding[]}};
+
+export type CapabilityCatalogueState={query:string;domain:string;layout:'cards'|'list';favoritesOnly:boolean;favorites:string[];scrollTop:number;loadedCount:number};
+export type CapabilityCataloguePreferences={version:number;state:CapabilityCatalogueState;commandId:string|null;replayed:boolean};
+export const readCapabilityPreferences=(principal:string,signal?:AbortSignal)=>request<CapabilityCataloguePreferences>(root+'/preferences',principal,signal);
+export const saveCapabilityPreferences=(principal:string,expectedVersion:number,commandId:string,state:CapabilityCatalogueState,signal?:AbortSignal)=>request<CapabilityCataloguePreferences>(root+'/preferences',principal,signal,{expectedVersion,commandId,state});
