@@ -6,6 +6,8 @@ from dataclasses import replace
 from psycopg.types.json import Jsonb
 
 from .authority_contracts import AuthorityError, ExactGrant
+from .capability_execution_constraints import verify_plan, verify_resources
+from .capability_plan_confirmation import validate_source
 from .cost_execution_revision import (
     DELIVERY_SYNTHETIC_ONLY,
     DOCUMENT_SYNTHETIC_ONLY,
@@ -26,7 +28,7 @@ from .plan_suggestion_domain import (
 from .planning_contracts import validation_report
 from .planning_source_change import SourceChangeRequest, approved_source
 from .planning_source_reference import is_source_boundary
-from .resource_automation import SelectEmployeeResources
+from .resource_automation import ReadEmployeeSelection, SelectEmployeeResources
 from .resource_policy_lineage import require_supported_lineage
 from .resource_use_domain import canonical_digest
 from .workbench_business_problem import OwnerPrincipal
@@ -55,9 +57,56 @@ def select_employee(automation, call, *, automatic_coverage=None):
         work = automation.work(
             call.context, old.semantics.target.problem, automation.grants.clock()
         )
-        payload_digest = canonical_digest(
-            [request.model_dump(mode="json"), automation.policy.digest]
+        target = old.semantics.target
+        target_reads = [
+            ExactGrant(
+                "BUSINESS_PROBLEM",
+                "READ",
+                "business-problem:" + target.problem.resource_id,
+            ),
+            ExactGrant(
+                "SUCCESS_CRITERIA_SET",
+                "READ",
+                "success-criteria-set:" + target.problem.resource_id,
+            ),
+            *[
+                ExactGrant(
+                    "SUCCESS_CRITERION",
+                    "READ",
+                    "success-criterion:revision:" + revision,
+                )
+                for revision in target.criterion_revision_ids
+            ],
+        ]
+        automation.decide(
+            call,
+            target_reads,
+            "selection-target:" + request.idempotencyKey,
+            work,
+            issuer,
         )
+        automation.proof_grants(call, target_reads)
+        current = app.current_input(
+            principal, old.semantics.target.problem.resource_id, c
+        )
+        capability = validate_source(automation, call, request, old, current)
+        if capability:
+            employees = [
+                b["reference"]
+                for b in capability["contract"]["bindings"]
+                if b["kind"] == "EMPLOYEE"
+            ]
+            if employees != [request.employee.model_dump(mode="json")]:
+                raise WorkbenchOwnerError("CAPABILITY_PREPARED_EMPLOYEE_MISMATCH", 409)
+        payload = request.model_dump(mode="json")
+        if request.capabilityConversationId is None:
+            for field in (
+                "capabilityConversationId",
+                "capabilityMessageId",
+                "capabilityContractDigest",
+            ):
+                payload.pop(field)
+        payload_digest = canonical_digest([payload, automation.policy.digest])
         replay = c.execute(
             "SELECT record,payload_digest FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
             (
@@ -111,6 +160,17 @@ def select_employee(automation, call, *, automatic_coverage=None):
         )
         if not employee:
             raise AuthorityError("RESOURCE_EMPLOYEE_COMMITMENT_REQUIRED")
+        if capability:
+            verify_resources(
+                capability,
+                {
+                    "assembly": {"definition": employee[0].model_dump(mode="json")},
+                    "resources": [
+                        {"kind": kind, "reference": ref.model_dump(mode="json")}
+                        for kind, ref in refs
+                    ],
+                },
+            )
         # One source remains explicit. Same-content alias change uses D10's
         # immutable source owner record and truthful POLICY_SOURCE_CHANGE first.
         selected_sources = [
@@ -235,6 +295,8 @@ def select_employee(automation, call, *, automatic_coverage=None):
             ),
         )
         validation_report(successor.semantics)
+        if capability:
+            verify_plan(capability, successor, current)
         app.repository.add_proposal(cur, scope, successor)
         confirmed = app.repository.confirmation(
             cur,
@@ -272,6 +334,12 @@ def select_employee(automation, call, *, automatic_coverage=None):
             "newRuns": 0,
             "executionStarted": False,
         }
+        if capability:
+            result["capabilitySource"] = {
+                "conversationId": request.capabilityConversationId,
+                "sourceMessageId": request.capabilityMessageId,
+                "contractDigest": request.capabilityContractDigest,
+            }
         if automatic_coverage is not None:
             result["automaticCoverage"] = automatic_coverage
         c.execute(
@@ -285,4 +353,75 @@ def select_employee(automation, call, *, automatic_coverage=None):
                 Jsonb(result),
             ),
         )
+        return result
+
+
+def read_selection(automation, call):
+    """Read a committed fixed selection without reselecting or writing."""
+    request = ReadEmployeeSelection.model_validate(call.query)
+    app = automation.bound_app(call)
+    principal = OwnerPrincipal(
+        call.context.principal_id,
+        call.context.scope.tenant_id,
+        call.context.scope.security_domain,
+    )
+    scope = app.scope(principal)
+    identity = call.path["proposal_id"]
+    automation.authenticate(call.context)
+    with app.repository.transaction(scope, identity, authorized=True) as cur:
+        baseline = app.repository.read_plan(cur, scope, identity, request.version)
+        plan = ConfirmedPlanRevision.model_validate(baseline["plan"])
+        if baseline["digest"] != plan.digest:
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
+        require_supported_lineage(app, cur, scope, plan)
+        automation.work(
+            call.context, plan.semantics.target.problem, automation.grants.clock()
+        )
+        current = app.current_input(
+            principal, plan.semantics.target.problem.resource_id, cur.connection
+        )
+        capability = validate_source(automation, call, request, plan, current)
+        row = cur.connection.execute(
+            "SELECT record FROM execution_authority.resource_policy_plan_commands "
+            "WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
+            (
+                scope.namespace,
+                scope.security_domain,
+                principal.principal_id,
+                request.key,
+            ),
+        ).fetchone()
+        if row is None:
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_NOT_FOUND", 404)
+        result = row["record"]
+        successor = ProposalRevision.model_validate(result["proposal"])
+        expected = ExactReference(
+            resource_id=identity, revision_id=str(request.version), digest=plan.digest
+        )
+        if (
+            not isinstance(successor.origin, PolicyResourcePreparationOrigin)
+            or successor.origin.predecessor_plan != expected
+        ):
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_KEY_CONFLICT", 409)
+        if result["policyBasis"]["policy_digest"] != automation.policy.digest:
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_POLICY_CHANGED", 409)
+        if capability:
+            source = {
+                "conversationId": request.capabilityConversationId,
+                "sourceMessageId": request.capabilityMessageId,
+                "contractDigest": request.capabilityContractDigest,
+            }
+            if result.get("capabilitySource") != source:
+                raise WorkbenchOwnerError("CAPABILITY_SELECTION_SOURCE_MISMATCH", 409)
+            verify_plan(capability, successor, current)
+            employees = [
+                b["reference"]
+                for b in capability["contract"]["bindings"]
+                if b["kind"] == "EMPLOYEE"
+            ]
+            if employees != [result["preflight"].get("employeeReference")]:
+                raise WorkbenchOwnerError("CAPABILITY_PREPARED_EMPLOYEE_MISMATCH", 409)
+        elif result.get("capabilitySource"):
+            raise WorkbenchOwnerError("CAPABILITY_CONFIRMATION_SOURCE_REQUIRED", 409)
+        automation.recheck(call, result["preflight"])
         return result

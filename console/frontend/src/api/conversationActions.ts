@@ -1,6 +1,7 @@
 import {conversationRequest,type PrivateConversation} from './privateConversation';
 import {WorkbenchRequestError} from './businessWorkspace';
-export type SourceReference={kind:'DRAFT';invocationId:string;contextId:string;turnId:string;turnVersion:number}|{kind:'PROBLEM';target:{problemId:string;revisionId:string;problemDigest:string}}|{kind:'PLANNING';invocationId:string;contextId:string;requestRevision:number;target:Record<string,unknown>};
+export type CapabilityConversationSource={kind:'CAPABILITY';target:{capabilityId:string;revisionId:string;digest:string;objective:string;inputNotes:string}};
+export type SourceReference=CapabilityConversationSource|{kind:'DRAFT';invocationId:string;contextId:string;turnId:string;turnVersion:number}|{kind:'PROBLEM';target:{problemId:string;revisionId:string;problemDigest:string}}|{kind:'PLANNING';invocationId:string;contextId:string;requestRevision:number;target:Record<string,unknown>};
 export function continuationQuery(search=window.location.search){const c=new URLSearchParams(search).get('returnConversation');return c?'&returnConversation='+encodeURIComponent(c):''}
 export async function conversationActionHeaders(conversation:string|null,csrf:string,action:'DRAFT'|'CREATE_PROBLEM'|'PLANNING'|'PLANNING_CONTINUE',payload:Record<string,unknown>,source:SourceReference|null,expectedOwnerVersion:number,humanText?:string,isCurrent:()=>boolean=()=>true):Promise<Record<string,string>>{
  if(!conversation)return {};

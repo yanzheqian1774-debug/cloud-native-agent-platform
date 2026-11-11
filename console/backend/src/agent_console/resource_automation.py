@@ -16,6 +16,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 
 from .authority_contracts import AuthorityError, ExactGrant
+from .capability_plan_confirmation import CapabilityPlanSource
 from .digital_employee_definition import CompositionMember, EmployeeRevision, MemberKind
 from .execution_domain import ScopeIdentity
 from .grant_administration_application import GrantDecisionCommand, GrantRequestCommand
@@ -43,13 +44,19 @@ class PrepareResources(BaseModel):
     idempotencyKey: str = Field(min_length=1, max_length=160)
 
 
-class SelectEmployeeResources(BaseModel):
+class SelectEmployeeResources(CapabilityPlanSource):
     model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=1)
     digest: str = Field(pattern="^[a-f0-9]{64}$")
     expectedProposalRevision: int = Field(ge=1)
     employee: ExactReference
     idempotencyKey: str = Field(min_length=1, max_length=120)
+
+
+class ReadEmployeeSelection(CapabilityPlanSource):
+    model_config = ConfigDict(extra="forbid")
+    version: int = Field(ge=1)
+    key: str = Field(min_length=1, max_length=120)
 
 
 class ReadPreparation(BaseModel):
@@ -1102,6 +1109,10 @@ def vars_grant(grant):
 
 def operations(automation):
     path = PREFIX + "/planning-v2/{proposal_id}/resource-preparation"
+    from .capability_planning_input import (
+        CapabilityPlanningInput,
+        CapabilityPlanningRequest,
+    )
     from .conversation_sources import ConversationSources
     from .planning_source_change import SourceChangeRequest
     from .policy_plan_confirmation import (
@@ -1116,9 +1127,21 @@ def operations(automation):
         ProblemResourceCoverage,
     )
     from .question_activity_input import QuestionActivityInput, QuestionActivityRequest
+    from .resource_preparation_plan import read_selection
 
     coverage = ProblemResourceCoverage(automation)
     return (
+        WorkbenchOperation(
+            "PREPARE_CAPABILITY_PLANNING_INPUT",
+            "POST",
+            PREFIX + "/capability-planning-input",
+            CapabilityPlanningRequest,
+            None,
+            lambda *args: (
+                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
+            ),
+            CapabilityPlanningInput(automation),
+        ),
         WorkbenchOperation(
             "READ_CONVERSATION_SOURCES",
             "GET",
@@ -1176,6 +1199,15 @@ def operations(automation):
             CoverageRecovery,
             target_grants("READ"),
             coverage,
+        ),
+        WorkbenchOperation(
+            "READ_POLICY_EMPLOYEE_SELECTION",
+            "GET",
+            PREFIX + "/planning-v2/{proposal_id}/resource-selection",
+            None,
+            ReadEmployeeSelection,
+            target_grants("READ"),
+            lambda call: read_selection(automation, call),
         ),
         WorkbenchOperation(
             "SELECT_POLICY_EMPLOYEE_RESOURCES",

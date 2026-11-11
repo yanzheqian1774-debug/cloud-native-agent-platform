@@ -50,3 +50,43 @@ def test_only_readable_exact_source_members_supply_registered_capability_facts(
         )
         assert hidden["operations"] == []
         assert "employee-definition" not in str(hidden)
+
+
+def test_fixed_capability_does_not_scan_or_borrow_other_employee_members(
+    automation, monkeypatch
+):
+    from agent_console import question_member_capabilities as module
+
+    a = automation
+    ready = a.run()
+    bindings = [{"kind": "EMPLOYEE", "reference": ready["assembly"]["definition"]}]
+    bindings += [
+        {
+            "kind": "RUNTIME_PROFILE" if k == "runtime" else k.upper(),
+            "reference": dict(reversed(list(r.model_dump(mode="json").items()))),
+        }
+        for k, r in a.refs.items()
+        if k != "agent"
+    ]
+
+    def no_global_scan(*args, **kwargs):
+        raise AssertionError("fixed capability must not scan all employees")
+
+    monkeypatch.setattr(module, "identities", no_global_scan)
+    with a.repository.pool.connection() as c:
+        authority = AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ())
+        call = SimpleNamespace(connection=c, context=a.subject, authority=authority)
+
+        def read():
+            return observe(
+                a.automation,
+                call,
+                a.refs["knowledge"],
+                "sales-diagnostic-source.v1",
+                a.policy.workScopes[0],
+                fixed_bindings=bindings,
+            )
+
+        assert read()["operations"]
+        bindings[:] = [b for b in bindings if b["kind"] != "SKILL"]
+        assert read()["operations"] == []

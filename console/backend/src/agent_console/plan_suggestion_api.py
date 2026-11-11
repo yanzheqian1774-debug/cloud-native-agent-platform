@@ -201,6 +201,15 @@ def install_planning_invocations(
 
             return invoke(request, read)
 
+        @app.get(f"{PREFIX}/planning-v2/requests/{{request_key}}/read-only-chain")
+        def read_original_chain(request: Request, request_key: str):
+            from .planning_readonly_chain import read_chain
+
+            return invoke(
+                request,
+                lambda service, principal: read_chain(service, principal, request_key),
+            )
+
         @app.post(f"{PREFIX}/planning-v2/requests/{{request_key}}/continue")
         async def continue_prepared(request: Request, request_key: str):
             from .responses_deadline import cancellable_request

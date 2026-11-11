@@ -285,7 +285,7 @@ export function DigitalEmployeesPage() {
     const controller = new AbortController();
     const turn = ++listGeneration.current;
     const fromUrl = params.get("employeeDefinitionId") && params.get("employeeDefinitionRevisionId")
-      ? { id: params.get("employeeDefinitionId")!, revision: params.get("employeeDefinitionRevisionId")! }
+      ? { id: params.get("employeeDefinitionId")!, revision: params.get("employeeDefinitionRevisionId")!, ...(params.get("employeeDefinitionDigest")?{digest:params.get("employeeDefinitionDigest")!}:{}) }
       : null;
     if (params.get("instanceId")) queueMicrotask(() => void restoreWorkContext(fromUrl));
     else if (fromUrl) queueMicrotask(() => void readDefinitionExact(fromUrl, Boolean(params.get("detail"))));

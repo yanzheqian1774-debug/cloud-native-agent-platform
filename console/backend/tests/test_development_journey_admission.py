@@ -123,3 +123,65 @@ def test_understanding_testing_cap_preserves_ledger_and_revocation(env, setup):
         pytest.raises(AuthorityError, match="CONTEXT_ADMISSION_REQUIRED"),
     ):
         development_call_cap(c, budget, draft, 12)
+
+
+def test_capability_provenance_reuses_shared_limits_without_fabricated_draft(
+    env, setup
+):
+    repo, _generation, sessions, _ = setup
+    _, context = sessions.authenticate_session(login(sessions, "devadmin").value)
+    service = PlanningCallAdmission(
+        env.admission.delegation,
+        {**env.limits, "ledger_id": "planning-original", "calls": 8},
+    )
+    service.migrate()
+    request = SimpleNamespace(
+        idempotency_key="capability-planning",
+        target=SimpleNamespace(
+            problem=SimpleNamespace(resource_id="capability-problem")
+        ),
+        model_dump=lambda **kw: {"idempotency_key": "capability-planning"},
+    )
+    record = {
+        "target": {
+            "invocation_id": "capability-invocation",
+            "suggestion_context_id": "capability-context",
+            "input_commitment": "capability-commitment",
+            "problem": {"problem": {"resource_id": "capability-problem"}},
+        }
+    }
+    with pytest.raises(AuthorityError, match="OWN_DRAFT_REQUIRED"):
+        service.prepare_record(context, request, record)
+    proof = {
+        "conversationId": "conversation",
+        "sourceMessageId": "source",
+        "contractDigest": "a" * 64,
+    }
+    seen = []
+
+    def read_source(ctx, connection, body):
+        assert ctx is context and body is request
+        seen.append(True)
+        return proof
+
+    service.capability_source_reader = read_source
+    first = service.prepare_record(context, request, record)
+    assert first["admission"]["ready"] is True
+    assert first["admission"]["maximum_new_calls"] == 1
+    assert service.prepare_record(context, request, record) == first
+    assert len(seen) == 2
+    with repo.connection_scope() as connection:
+        row = request_row(connection, first["admission"]["context_id"])
+        assert row["record"]["source_context_id"] is None
+        assert row["record"]["capability_source"] == proof
+        assert row["record"]["cumulative_call_cap"] == 100
+        assert row["record"]["total_cost_cap_microusd"] == 50_000_000
+    service.capability_source_reader = lambda *args: {
+        **proof,
+        "contractDigest": "b" * 64,
+    }
+    with pytest.raises(AuthorityError, match="SOURCE_CHANGED"):
+        service.prepare_record(context, request, record)
+    service.capability_source_reader = lambda *args: None
+    with pytest.raises(AuthorityError, match="OWN_DRAFT_REQUIRED"):
+        service.prepare_record(context, request, record)

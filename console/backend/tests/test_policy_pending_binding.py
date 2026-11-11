@@ -278,3 +278,50 @@ def test_policy_confirmation_does_not_elevate_unreadable_source(automation):
             ]
             == a.e.p.plan_version
         )
+
+
+@pytest.mark.parametrize("mismatch", ["employee", "business_resources"])
+def test_capability_selection_rejects_substitution_before_successor(
+    automation, monkeypatch, mismatch
+):
+    from agent_console.workbench_owner_authorization import WorkbenchOwnerError
+
+    a = automation
+    assert a.run()["state"] == "READY"
+    report = invoke(a, "READ_PROBLEM_RESOURCE_COVERAGE")
+    employee = report["selection"]
+    if mismatch == "employee":
+        employee = {**employee, "revision_id": "different-fixed-revision"}
+    # Source provenance itself is covered separately; this controlled adapter
+    # exercises the actual PostgreSQL selection owner before successor writes.
+    monkeypatch.setattr(
+        "agent_console.resource_preparation_plan.validate_source",
+        lambda *args: {
+            "contract": {"bindings": [{"kind": "EMPLOYEE", "reference": employee}]}
+        },
+    )
+    with a.repository.pool.connection() as c:
+        before = c.execute(
+            "SELECT count(*) n FROM workflow_planning.proposals"
+        ).fetchone()["n"]
+    expected = (
+        "EMPLOYEE_MISMATCH"
+        if mismatch == "employee"
+        else "UNDECLARED_BUSINESS_RESOURCE"
+    )
+    with pytest.raises(WorkbenchOwnerError, match=expected):
+        invoke(a, "SELECT_PROBLEM_RESOURCES", key="fixed-capability-reject")
+    with a.repository.pool.connection() as c:
+        assert (
+            c.execute("SELECT count(*) n FROM workflow_planning.proposals").fetchone()[
+                "n"
+            ]
+            == before
+        )
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM "
+                "execution_authority.resource_policy_plan_commands"
+            ).fetchone()["n"]
+            == 0
+        )

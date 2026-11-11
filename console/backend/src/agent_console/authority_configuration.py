@@ -21,6 +21,9 @@ SCHEMA_VERSION = "static-authority-generation.v1"
 RUNTIME_SCHEMA_VERSION = "authority-foundation-runtime.v1"
 
 OWNER_ACTIONS: dict[str, frozenset[str]] = {
+    "BUSINESS_CAPABILITY": frozenset(
+        {"CREATE", "LIST", "READ", "REVISE", "REVIEW_PUBLISH"}
+    ),
     "TEAM": frozenset({"CREATE", "LIST", "READ", "REVISE"}),
     "BUSINESS_ONTOLOGY": frozenset(
         {
@@ -99,6 +102,7 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
 }
 
 OWNER_RESOURCE_PREFIXES = {
+    "BUSINESS_CAPABILITY": "business-capability:",
     "TEAM": "team:",
     "BUSINESS_ONTOLOGY": "business-ontology:",
     "BUSINESS_PROBLEM": "business-problem:",

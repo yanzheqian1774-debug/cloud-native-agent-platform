@@ -7,7 +7,7 @@ export function artifactMatchesSource(content:string,expected:Ref){
   const value:unknown=JSON.parse(content);
   if(!value||typeof value!=='object'||!('schemaVersion' in value))return true;
   const document=value as Record<string,unknown>;
-  if(!['sales-diagnostic-output.v1','sales-diagnostic-output.v2','synthetic-delivery-output.v1'].includes(String(document.schemaVersion)))return true;
+  if(!['sales-diagnostic-output.v1','sales-diagnostic-output.v2','synthetic-delivery-output.v1','document-review-output.v1','tabular-diagnostic-output.v1'].includes(String(document.schemaVersion)))return true;
   const ref=document.sourceSnapshot;
   return Boolean(ref)&&typeof ref==='object'&&(['resource_id','revision_id','digest'] as const).every(k=>(ref as Record<string,unknown>)[k]===expected[k]);
  }catch{return true}

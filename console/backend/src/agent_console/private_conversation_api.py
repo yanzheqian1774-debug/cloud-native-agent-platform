@@ -56,7 +56,7 @@ class LinkCommand(BaseModel):
 
 class SourceReference(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["DRAFT", "PLANNING", "PROBLEM"]
+    kind: Literal["DRAFT", "PLANNING", "PROBLEM", "CAPABILITY"]
     invocationId: str | None = Field(default=None, min_length=1, max_length=200)
     contextId: str | None = Field(default=None, min_length=1, max_length=200)
     turnId: str | None = Field(default=None, min_length=1, max_length=200)
@@ -76,6 +76,7 @@ class SourceReference(BaseModel):
                 "target",
             },
             "PROBLEM": {"kind", "target"},
+            "CAPABILITY": {"kind", "target"},
         }[self.kind]
         if {k for k, v in self.model_dump().items() if v is not None} != required:
             raise ValueError("CONVERSATION_SOURCE_INVALID")
@@ -83,6 +84,12 @@ class SourceReference(BaseModel):
             self.target = WorkTarget.model_validate(self.target).model_dump(
                 exclude_none=True
             )
+        elif self.kind == "CAPABILITY":
+            from .capability_conversation_source import CapabilityConversationTarget
+
+            self.target = CapabilityConversationTarget.model_validate(
+                self.target
+            ).model_dump()
         elif self.kind == "PLANNING":
             from .plan_suggestion_domain import ProblemTarget
 
@@ -189,6 +196,10 @@ def install_private_conversations(
         from .conversation_actions import reference
 
         kind = source["kind"]
+        if kind == "CAPABILITY":
+            from .capability_conversation_source import read_capability_source
+
+            return read_capability_source(ctx, source, owner_read)
         if kind == "PROBLEM":
             value = resolve(ctx, source["target"])
             return {**value, "state": "RECORDED", "receiptState": "SUCCEEDED"}
@@ -292,6 +303,41 @@ def install_private_conversations(
             }
         }
 
+    def capability_contract_in_owner_call(call, identity, message_id):
+        from dataclasses import replace
+
+        from .capability_conversation_source import read_capability_source
+        from .workbench_business_problem import OwnerPrincipal
+
+        def same_transaction_read(ctx, name, path):
+            op = reads.get(name)
+            if op is None:
+                raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+            principal = OwnerPrincipal(
+                ctx.principal_id, ctx.scope.tenant_id, ctx.scope.security_domain
+            )
+            for grant in op.grant_builder(ctx, path, {}, {}):
+                call.authority.require(
+                    principal, grant.owner, grant.action, grant.exact_resource
+                )
+            value = op.handler(
+                replace(call, operation=op.name, payload={}, path=path, query={})
+            )
+            return jsonable_encoder(dict(value))
+
+        return actions.capability_contract(
+            call.context,
+            identity,
+            message_id,
+            connection=call.connection,
+            source_reader=lambda ctx, source: read_capability_source(
+                ctx, source, same_transaction_read
+            ),
+        )
+
+    app.state.capability_execution_contract_reader = (
+        capability_contract_in_owner_call if actions else None
+    )
     app.state.conversation_actions = actions
     if service:
         service.facts_reader = actions
@@ -322,6 +368,10 @@ def install_private_conversations(
         from .conversation_journey import install as install_journey
 
         install_journey(app, service, safe)
+        if "READ_CAPABILITY_REVISION" in reads:
+            from .capability_work_journal import install as install_capability_journal
+
+            install_capability_journal(app, service, actions, safe)
 
     @app.get(PREFIX + "/conversations/capabilities")
     def capabilities(request: Request):
@@ -370,6 +420,14 @@ def install_private_conversations(
                 ctx, identity, body.model_dump(exclude_none=True)
             ),
             True,
+        )
+
+    @app.get(
+        PREFIX + "/conversations/{identity}/sources/{message_id}/execution-contract"
+    )
+    def capability_contract(request: Request, identity: str, message_id: str):
+        return safe(
+            request, lambda ctx: actions.capability_contract(ctx, identity, message_id)
         )
 
     @app.post(PREFIX + "/conversations/{identity}/intents")

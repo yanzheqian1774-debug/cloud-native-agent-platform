@@ -8,7 +8,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .authority_contracts import AuthorityError, ExactGrant
 from .cost_execution_revision import (
@@ -40,6 +40,26 @@ from .workbench_prepared_resources import bind_service
 class ContinueReadonly(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=1)
+    capabilityConversationId: str | None = Field(
+        default=None, min_length=1, max_length=128
+    )
+    capabilityMessageId: str | None = Field(default=None, min_length=1, max_length=128)
+    capabilityContractDigest: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$"
+    )
+
+    @model_validator(mode="after")
+    def complete_capability_reference(self):
+        values = (
+            self.capabilityConversationId,
+            self.capabilityMessageId,
+            self.capabilityContractDigest,
+        )
+        if any(value is not None for value in values) and not all(
+            value is not None for value in values
+        ):
+            raise ValueError("CAPABILITY_EXECUTION_REFERENCE_INCOMPLETE")
+        return self
 
 
 def command_key(plan):
@@ -61,6 +81,7 @@ def resource_policy_digest(automation, call, development):
 class ReadonlyContinuation:
     def __init__(self, automation, policy, coordinator):
         self.automation, self.policy, self.coordinator = automation, policy, coordinator
+        self.capability_contract_reader = None
         self.execution = coordinator.repository
         self.owner = PreparedExecutionOwner(
             coordinator, sales_v2_candidate=automation.sales_v2_candidate
@@ -103,7 +124,27 @@ class ReadonlyContinuation:
             if call.operation == "READ_READONLY_CONTINUATION"
             else call.payload
         )
-        version = args["version"]
+        request = ContinueReadonly.model_validate(args)
+        resolved = None
+        association = None
+        if request.capabilityConversationId is not None:
+            if self.capability_contract_reader is None:
+                raise WorkbenchOwnerError(
+                    "CAPABILITY_EXECUTION_SOURCE_UNAVAILABLE", 409
+                )
+            resolved = self.capability_contract_reader(
+                call,
+                request.capabilityConversationId,
+                request.capabilityMessageId,
+            )
+            if resolved["contractDigest"] != request.capabilityContractDigest:
+                raise WorkbenchOwnerError("CAPABILITY_EXECUTION_CONTRACT_MISMATCH", 409)
+            association = {
+                "conversationId": request.capabilityConversationId,
+                "sourceMessageId": request.capabilityMessageId,
+                "contractDigest": request.capabilityContractDigest,
+            }
+        version = request.version
         app = self.automation.bound_app(call)
         principal = OwnerPrincipal(
             call.context.principal_id,
@@ -119,6 +160,23 @@ class ReadonlyContinuation:
             plan = ConfirmedPlanRevision.model_validate(original["plan"])
             if original["digest"] != plan.digest:
                 raise WorkbenchOwnerError("READONLY_SOURCE_PLAN_DIGEST_MISMATCH", 409)
+            if resolved:
+                from .capability_conversation_source import verify_work_association
+                from .capability_execution_constraints import verify_plan
+
+                verify_work_association(
+                    call,
+                    resolved,
+                    plan.semantics.target.problem.model_dump(mode="json"),
+                )
+
+                verify_plan(
+                    resolved,
+                    plan,
+                    app.current_input(
+                        principal, plan.semantics.target.problem.resource_id, c
+                    ),
+                )
             key = command_key(plan)
             # Same transaction's Plan lock serializes first POST and GET recovery.
             prior = c.execute(
@@ -126,6 +184,10 @@ class ReadonlyContinuation:
                 "WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND command_key=%s",
                 (scope.namespace, scope.security_domain, principal.principal_id, key),
             ).fetchone()
+            if prior and prior["result"].get("capabilitySource") != association:
+                raise WorkbenchOwnerError(
+                    "CAPABILITY_EXECUTION_ASSOCIATION_MISMATCH", 409
+                )
             source = approved_source(plan.semantics)
             call.authority.require(
                 principal,
@@ -212,9 +274,14 @@ class ReadonlyContinuation:
                     "expiresAt": min(resource_work.expiresAt, approved_work.expiresAt)
                 }
             )
-            payload_digest = canonical_digest(
-                [plan.digest, self.policy.digest, self.automation.policy.digest]
-            )
+            payload_basis = [
+                plan.digest,
+                self.policy.digest,
+                self.automation.policy.digest,
+            ]
+            if association:
+                payload_basis.append(association)
+            payload_digest = canonical_digest(payload_basis)
             if prior:
                 if prior["digest"] != payload_digest:
                     raise WorkbenchOwnerError("READONLY_WORK_POLICY_CHANGED", 409)
@@ -258,6 +325,10 @@ class ReadonlyContinuation:
                 raise WorkbenchOwnerError(
                     "READONLY_PREPARATION_PLAN_DIGEST_MISMATCH", 409
                 )
+            if resolved:
+                from .capability_execution_constraints import verify_resources
+
+                verify_resources(resolved, ready)
             self.automation.recheck(call, ready)
             if self.automation.runtime_probe(scope.namespace)["status"] != "PASSED":
                 raise WorkbenchOwnerError("READONLY_RUNTIME_NOT_READY", 409)
@@ -430,6 +501,8 @@ class ReadonlyContinuation:
                 "humanResourceApprovalClicks": 0,
                 "executionStarted": True,
             }
+            if association:
+                record["capabilitySource"] = association
             c.execute(
                 "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES(%s,%s,%s,%s,%s,%s)",
                 (

@@ -158,7 +158,7 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
             a.automation, policy, PreparedNativeCoordinator(native)
         )
 
-        def act(read=False):
+        def act(read=False, capability=False):
             with a.repository.pool.connection() as c, c.transaction():
                 authority = AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ())
                 return handler(
@@ -168,7 +168,18 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                         else "CONTINUE_READONLY_WORK",
                         a.subject,
                         c,
-                        {"version": source_version},
+                        {
+                            "version": source_version,
+                            **(
+                                {
+                                    "capabilityConversationId": "source-conversation",
+                                    "capabilityMessageId": "source-message",
+                                    "capabilityContractDigest": "a" * 64,
+                                }
+                                if capability
+                                else {}
+                            ),
+                        },
                         {"proposal_id": a.e.p.plan_id},
                         {"version": source_version},
                         (),
@@ -195,6 +206,13 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                 )
 
         before = footprint()
+        from agent_console.workbench_owner_authorization import WorkbenchOwnerError
+
+        with pytest.raises(
+            WorkbenchOwnerError, match="CAPABILITY_EXECUTION_SOURCE_UNAVAILABLE"
+        ):
+            act(capability=True)
+        assert footprint() == before
         handler.policy = policy.model_copy(update={"enabled": False})
         with pytest.raises(AuthorityError, match="READONLY_WORK_DISABLED"):
             act()

@@ -681,3 +681,112 @@ def test_readonly_request_recovery_checks_exact_payload(journey, monkeypatch):
     path = "/conversations/" + c + "/intents/" + headers["X-Conversation-Intent"]
     assert j.client.get(ROOT + path).json()["result"]["state"] == "UNKNOWN"
     assert j.provider.calls == 2
+
+
+def test_capability_source_creates_problem_through_original_owner(journey):
+    """Real Problem persistence; controlled capability reader, separately PG-tested."""
+    j = journey
+    c = create(j)
+    actions = j.app.state.conversation_actions
+    original_reader = actions.source_read
+    source = {
+        "kind": "CAPABILITY",
+        "target": {
+            "capabilityId": "capability:handover",
+            "revisionId": "capability-revision:1",
+            "digest": "a" * 64,
+            "objective": "核查交接说明中的责任缺口",
+            "inputNotes": "资料" * 3000,
+        },
+    }
+    observation = {
+        "title": "交接检查",
+        "state": "PREPARED_NOT_EXECUTED",
+        "receiptState": "NOT_STARTED",
+        "capability": {
+            "inputs": "交接文档",
+            "outputs": "缺口与依据",
+            "acceptanceCriteria": ["说明未明确责任的条目及来源"],
+            "businessScope": "文档审阅",
+            "exclusions": "不执行上线操作",
+            "manualInvolvement": "负责人确认",
+            "knownLimitations": "仅基于文档",
+            "bindings": [],
+        },
+    }
+
+    def source_reader(ctx, value):
+        return observation if value == source else original_reader(ctx, value)
+
+    actions.source_read = source_reader
+    message = post(
+        j,
+        f"/conversations/{c}/sources",
+        {
+            "idempotencyKey": "capability-source",
+            "expectedVersion": 0,
+            "source": source,
+        },
+    )["identity"]
+    prior = read(j, c)["messages"]
+    contract = j.client.get(
+        ROOT + f"/conversations/{c}/sources/{message}/execution-contract"
+    ).json()["result"]
+    payload = {
+        **contract["workInput"]["problem"],
+        "ownerId": j.principal.principal_id,
+        "idempotencyKey": "capability-original-problem",
+    }
+    body = {
+        "idempotencyKey": "capability-create-intent",
+        "expectedVersion": 1,
+        "messageId": message,
+        "action": "CREATE_PROBLEM",
+        "payload": payload,
+        "source": source,
+        "expectedOwnerVersion": 0,
+        "confirmed": True,
+    }
+    intent = post(j, f"/conversations/{c}/intents", body)["intentId"]
+    headers = {"X-Conversation-ID": c, "X-Conversation-Intent": intent}
+    result = post(j, "/problems", payload, headers, 201)
+    revision = result["revision"]
+    assert revision["description"] == source["target"]["objective"]
+    assert revision["created_by"] == j.principal.principal_id
+    with psycopg.connect(j.dsn, row_factory=psycopg.rows.dict_row) as connection:
+        row = connection.execute(
+            "SELECT * FROM private_conversation.action_intents WHERE intent_id=%s",
+            (intent,),
+        ).fetchone()
+        assert row["message_id"] == message and row["source"] == source
+        assert row["owner_ref"] == reference("CREATE_PROBLEM", result)
+        assert row["claimed_at"] is not None
+        from agent_console.capability_conversation_source import verify_work_association
+        from agent_console.workbench_owner_authorization import WorkbenchOwnerError
+
+        call = SimpleNamespace(
+            connection=connection,
+            context=SimpleNamespace(
+                scope=SimpleNamespace(
+                    tenant_id=j.principal.tenant_id,
+                    security_domain=j.principal.security_domain,
+                )
+            ),
+        )
+        target = {
+            "resource_id": revision["business_problem_id"],
+            "revision_id": revision["revision_id"],
+            "digest": revision["digest"],
+        }
+        verify_work_association(call, contract, target)
+        with pytest.raises(
+            WorkbenchOwnerError, match="CAPABILITY_WORK_ASSOCIATION_REQUIRED"
+        ):
+            verify_work_association(
+                call, contract, {**target, "resource_id": "other-problem"}
+            )
+    after = read(j, c)
+    assert after["messages"][: len(prior)] == prior
+    assert any(m.get("disposition") == "OWNER_RECEIPT" for m in after["messages"])
+    post(j, "/problems", payload, headers, 409)
+    assert j.provider.calls == 0

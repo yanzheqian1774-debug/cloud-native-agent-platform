@@ -9,7 +9,7 @@ from .resource_automation_validation import validate
 from .workbench_business_problem import OwnerPrincipal
 
 
-def observe(automation, call, source, source_schema, work):
+def observe(automation, call, source, source_schema, work, *, fixed_bindings=None):
     if not getattr(automation, "services", None):
         return {"state": "NOT_CONFIGURED", "operations": [], "executionReady": False}
     scope = ScopeIdentity(
@@ -19,7 +19,20 @@ def observe(automation, call, source, source_schema, work):
         call.context.principal_id, scope.namespace, scope.security_domain
     )
     operations = set()
-    for row in identities(call.connection, scope, "EMPLOYEE", limit=201):
+    rows = (
+        identities(call.connection, scope, "EMPLOYEE", limit=201)
+        if fixed_bindings is None
+        else [
+            {
+                "identity": b["reference"]["resource_id"],
+                "revision": b["reference"]["revision_id"],
+                "digest": b["reference"]["digest"],
+            }
+            for b in fixed_bindings
+            if b["kind"] == "EMPLOYEE"
+        ]
+    )
+    for row in rows:
         try:
             employee = ExactReference(
                 resource_id=row["identity"],
@@ -28,6 +41,31 @@ def observe(automation, call, source, source_schema, work):
             )
             require_read(call.authority, principal, "EMPLOYEE", employee)
             definition, _ = read_published(call.connection, scope, "EMPLOYEE", employee)
+            if fixed_bindings is not None:
+                declared = {
+                    (
+                        b["kind"],
+                        b["reference"]["resource_id"],
+                        b["reference"]["revision_id"],
+                        b["reference"]["digest"].removeprefix("sha256:"),
+                    )
+                    for b in fixed_bindings
+                    if b["kind"] != "EMPLOYEE"
+                }
+                actual = {
+                    (
+                        m["kind"],
+                        m["resource_id"],
+                        m["revision_id"],
+                        m["digest"].removeprefix("sha256:"),
+                    )
+                    for m in definition["members"]
+                }
+                if not declared <= actual or any(
+                    m[0] in {"SKILL", "MCP", "KNOWLEDGE"} and m not in declared
+                    for m in actual
+                ):
+                    continue
             contents = {}
             sources = []
             for member in definition["members"]:

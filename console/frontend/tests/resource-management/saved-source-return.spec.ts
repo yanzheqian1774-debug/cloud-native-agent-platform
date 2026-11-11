@@ -21,3 +21,11 @@ for(const kind of ['sales','supplier'])test('long original '+kind+' title fits m
  }
  await page.getByRole('link',{name:'查看来源版本',exact:true}).click();await page.getByRole('tab',{name:'内容与定义',exact:true}).click();await expect(page.getByRole('region',{name:'知识正文与来源'})).toBeVisible();await page.getByRole('link',{name:'返回原会话',exact:true}).click();await expect(page.locator('#private-input')).toHaveValue('保留原会话未发送草稿');await expect(page.locator('.private-work .px-delivery-summary')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);expect(state.writes).toEqual([]);
 });
+
+for(const valid of [true,false])test('fixed knowledge validates capability return context '+valid,async({page})=>{
+ const {state}=await fixture(page);await open(page);const link=page.getByRole('link',{name:'查看来源版本',exact:true});const target=new URL((await link.getAttribute('href'))!,page.url());
+ const back='/capabilities?'+new URLSearchParams({capability:'handover',revision:'r1',digest:'a'.repeat(64),returnConversation:conversation});target.searchParams.set('capabilityReturn',valid?back:'https://example.invalid/steal');await page.goto(target.pathname+target.search);
+ if(valid){await page.getByRole('tab',{name:'内容与定义',exact:true}).click();await expect(page.locator('.knowledge-document-reading').getByText('只读核对的原始来源正文',{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'返回业务能力详情',exact:false})).toHaveAttribute('href',back)}
+ else{await expect(page.getByRole('alert').first()).toBeVisible();await expect(page.getByRole('link',{name:'返回业务能力详情',exact:false})).toHaveCount(0);await expect(page.locator('.knowledge-document-reading')).toHaveCount(0)}
+ expect(state.writes).toEqual([]);
+});

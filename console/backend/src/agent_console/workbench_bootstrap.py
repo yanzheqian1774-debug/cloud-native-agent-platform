@@ -42,6 +42,7 @@ from agent_console.workbench_bff import (
     WorkbenchBffPolicy,
     create_workbench_bff,
 )
+from agent_console.workbench_business_capability import capability_operations
 from agent_console.workbench_business_problem import business_problem_operations
 from agent_console.workbench_employee import (
     digital_employee_operations,
@@ -238,6 +239,28 @@ def build_workbench_composition(
         )
         team_targets = (TeamTargets(),)
 
+    capability_repository = None
+    capability_targets = ()
+    if os.environ.get("BUSINESS_CAPABILITIES_ENABLED") == "true":
+        from .business_capability_postgres import PostgresBusinessCapabilityRepository
+        from .workbench_business_capability import CapabilityTargets
+
+        capability_repository = PostgresBusinessCapabilityRepository(
+            business_problems.problems.pool
+        )
+        capability_repository.compatibility(
+            Path(__file__).parents[2] / "migrations/0052_business_capability.sql"
+        )
+        from .business_capability_publication_postgres import (
+            CapabilityPublicationRepository,
+        )
+
+        CapabilityPublicationRepository(business_problems.problems.pool).compatibility(
+            Path(__file__).parents[2]
+            / "migrations/0053_business_capability_publication.sql"
+        )
+        capability_targets = (CapabilityTargets(),)
+
     from .resource_definition_management import DefinitionTargets
     from .resource_management import ManagementTargets
     from .workbench_model_directory import ModelReadTargets
@@ -248,6 +271,7 @@ def build_workbench_composition(
         employee_definitions,
         additional=(ManagementTargets(), DefinitionTargets())
         + team_targets
+        + capability_targets
         + (
             (ModelReadTargets(model_repository),)
             if model_repository is not None
@@ -692,6 +716,17 @@ def build_workbench_composition(
                     if team_repository is not None
                     else ()
                 ),
+                *(
+                    capability_operations(
+                        capability_repository,
+                        employee_definitions,
+                        prepared_resource_services or {},
+                        WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                        workflows,
+                    )
+                    if capability_repository is not None
+                    else ()
+                ),
                 *digital_employee_operations(digital_employees),
                 *employee_relation_operations(
                     employee_definitions,
@@ -732,6 +767,26 @@ def build_workbench_composition(
                 else {}
             ),
         )
+        if resource_automation is not None:
+            resource_automation.capability_contract_reader = getattr(
+                application.state, "capability_execution_contract_reader", None
+            )
+        if (
+            planning_admission is not None
+            and capability_repository is not None
+            and resource_automation is not None
+        ):
+            from .capability_planning_admission import source_reader
+
+            planning_admission.capability_source_reader = source_reader(
+                resource_automation,
+                application.state.capability_execution_contract_reader,
+                authorizer,
+            )
+        if continuation_path:
+            continuation.capability_contract_reader = getattr(
+                application.state, "capability_execution_contract_reader", None
+            )
         return WorkbenchComposition(application, foundation, managed_closeables)
     except Exception:
         foundation.close()

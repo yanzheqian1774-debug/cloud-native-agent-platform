@@ -1,9 +1,10 @@
 """D11 confirmation of an existing qualified proposal, without execution."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from .authority_contracts import ExactGrant
 from .business_problem_domain import BusinessProblemError
+from .capability_plan_confirmation import CapabilityPlanSource, validate_source
 from .plan_suggestion_domain import (
     ExactReference,
     PlanningConflict,
@@ -18,7 +19,7 @@ from .workbench_business_problem import OwnerPrincipal
 from .workbench_owner_authorization import WorkbenchOwnerError
 
 
-class ConfirmPolicyPlan(BaseModel):
+class ConfirmPolicyPlan(CapabilityPlanSource):
     model_config = ConfigDict(extra="forbid")
     problem: ExactReference
     revision: int = Field(ge=1)
@@ -82,6 +83,15 @@ class PolicyPlanConfirmation:
             def validate_current():
                 try:
                     app.validate_target(p, proposal.semantics.target, cur.connection)
+                    validate_source(
+                        a,
+                        call,
+                        request,
+                        proposal,
+                        app.current_input(
+                            p, request.problem.resource_id, cur.connection
+                        ),
+                    )
                 except BusinessProblemError as exc:
                     raise WorkbenchOwnerError(
                         "POLICY_CONFIRMATION_TARGET_STALE", 409

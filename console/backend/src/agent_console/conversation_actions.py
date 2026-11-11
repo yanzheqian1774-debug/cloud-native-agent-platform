@@ -111,12 +111,44 @@ class ConversationActions:
                 ctx,
                 row,
                 body["idempotencyKey"],
-                "原办理来源记录",
+                "业务能力与本次输入已保存"
+                if body["source"]["kind"] == "CAPABILITY"
+                else "原办理来源记录",
                 "SOURCE",
                 {"source": body["source"], "observation": facts},
                 digest(body),
             )
         return {"identity": message, "replayed": False}
+
+    def capability_contract(
+        self, ctx, identity, message_id, *, connection=None, source_reader=None
+    ):
+        from contextlib import nullcontext
+
+        def connected():
+            return (
+                nullcontext(connection)
+                if connection is not None
+                else self.records.connect()
+            )
+
+        from .capability_conversation_source import execution_contract
+
+        with connected() as c:
+            self.records.owned(c, ctx, identity)
+            row = c.execute(
+                "SELECT facts FROM private_conversation.message_facts "
+                "WHERE tenant_id=%s AND security_domain=%s "
+                "AND conversation_id=%s AND message_id=%s AND kind='SOURCE'",
+                (*self.records.scope(ctx), identity, message_id),
+            ).fetchone()
+        if not row or row["facts"].get("source", {}).get("kind") != "CAPABILITY":
+            raise ConversationError("CAPABILITY_SOURCE_NOT_FOUND", 404)
+        source = row["facts"]["source"]
+        observation = (source_reader or self.source_read)(ctx, source)
+        with connected() as c:
+            self.records.owned(c, ctx, identity)
+        return execution_contract(ctx, identity, message_id, source, observation)
 
     def prepare(self, ctx, identity, body):
         # Owner readers have their own authorization transactions. Never call
@@ -157,7 +189,20 @@ class ConversationActions:
             elif action == "CREATE_PROBLEM":
                 if payload["ownerId"] != ctx.principal_id:
                     raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
-                if payload.get("draftInvocationId"):
+                if source and source["kind"] == "CAPABILITY":
+                    from .capability_conversation_source import execution_contract
+
+                    resolved = execution_contract(
+                        ctx, identity, body["messageId"], source, facts
+                    )
+                    expected = {
+                        **resolved["workInput"]["problem"],
+                        "ownerId": ctx.principal_id,
+                        "idempotencyKey": payload["idempotencyKey"],
+                    }
+                    if version != 0 or payload != expected:
+                        raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
+                elif payload.get("draftInvocationId"):
                     if (
                         not source
                         or source["kind"] != "DRAFT"
@@ -184,16 +229,32 @@ class ConversationActions:
                     or facts["ownerVersion"] != version
                 ):
                     raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
-            # The referenced user message must belong to this exact private C.
+            capability_creation = (
+                action == "CREATE_PROBLEM" and source and source["kind"] == "CAPABILITY"
+            )
+            # Only capability creation may refer to its exact saved SOURCE.
+            # Other actions still require the original user message.
             message = c.execute(
-                "SELECT message_id FROM private_conversation.messages WHERE "
-                "tenant_id=%s "
-                "AND security_domain=%s AND conversation_id=%s AND message_id=%s "
-                "AND disposition NOT IN ('SOURCE','ACTION_INTENT','OWNER_RECEIPT')",
+                "SELECT message_id,disposition FROM private_conversation.messages "
+                "WHERE tenant_id=%s "
+                "AND security_domain=%s AND conversation_id=%s AND message_id=%s",
                 (*self.records.scope(ctx), identity, body["messageId"]),
             ).fetchone()
-            if not message:
+            if not message or (
+                not capability_creation
+                and message["disposition"]
+                in {"SOURCE", "ACTION_INTENT", "OWNER_RECEIPT"}
+            ):
                 raise ConversationError("CONVERSATION_MESSAGE_NOT_FOUND", 404)
+            if capability_creation:
+                saved = c.execute(
+                    "SELECT facts FROM private_conversation.message_facts WHERE "
+                    "tenant_id=%s AND security_domain=%s AND conversation_id=%s "
+                    "AND message_id=%s AND kind='SOURCE'",
+                    (*self.records.scope(ctx), identity, body["messageId"]),
+                ).fetchone()
+                if not saved or saved["facts"].get("source") != source:
+                    raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
             key = payload.get("idempotencyKey") or payload["idempotency_key"]
             # Enforce one original owner key even across distinct conversations.
             c.execute(

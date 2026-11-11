@@ -66,6 +66,7 @@ def test_safe_same_object_return():
     "mode",
     [
         "repair",
+        "clarification",
         "reference",
         "external",
         "external_unknown",
@@ -107,6 +108,10 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
             self.contexts.append(deepcopy(context))
             if mode in {"unknown", "external_unknown"}:
                 raise TimeoutError
+            if mode == "clarification" and self.calls == 1:
+                return json.dumps(
+                    {"kind": "NEEDS_CLARIFICATION", "questions": ["按哪个环境核对?"]}
+                )
             output = deepcopy(semantics)
             if (
                 mode in {"reference", "external", "external_changed"}
@@ -169,6 +174,41 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
         output_language="zh-CN",
         idempotency_key="adaptive-root",
     )
+    if mode == "clarification":
+        from agent_console.planning_readonly_chain import read_chain
+
+        first = service.begin_adaptive(principal, request)
+        assert first["result"]["kind"] == "NEEDS_CLARIFICATION"
+        assert provider.calls == 1
+        identity = first["invocation"]["target"]["invocation_id"]
+        successor = request.model_copy(
+            update={
+                "idempotency_key": "clarification-followup",
+                "predecessor_invocation_id": identity,
+                "answers": ("按生产环境核对, 仅检查材料",),
+            }
+        )
+        result = service.begin_adaptive(principal, successor)
+        assert result["result"]["kind"] == "VALID_SUGGESTION"
+        assert provider.calls == 2
+        assert result["invocation"]["request"]["predecessor_invocation_id"] == identity
+        assert result["invocation"]["request"]["answers"] == list(successor.answers)
+        assert result["result"]["proposal"]["semantics"]["target"] == (
+            request.target.model_dump(mode="json")
+        )
+        assert (
+            read_chain(service, principal, "adaptive-root")["value"]["result"]
+            == (first["result"])
+        )
+        assert (
+            read_chain(service, principal, "clarification-followup")["value"]["result"]
+            == result["result"]
+        )
+        assert (
+            service.begin_adaptive(principal, successor)["result"] == result["result"]
+        )
+        assert provider.calls == 2
+        return
     if mode in {"external", "external_unknown", "external_changed"}:
         failed = service.begin(principal, request)
         assert failed["result"]["kind"] == (
@@ -251,6 +291,26 @@ def test_adaptive_preserves_attempts_and_replay_never_dispatches(repository, mod
         service, principal, request.idempotency_key, service.read(principal, root)
     )
     assert read["result"] == result["result"]
+    from agent_console.planning_readonly_chain import read_chain
+
+    original_read = service.read
+    readonly_ids = []
+
+    def strict_read(principal, identity, *, settle_receipt=True):
+        assert settle_receipt is False
+        readonly_ids.append(identity)
+        return original_read(principal, identity, settle_receipt=False)
+
+    service.read = strict_read
+    try:
+        exact = read_chain(service, principal, request.idempotency_key)
+    finally:
+        service.read = original_read
+    assert exact["rootRequestKey"] == request.idempotency_key
+    assert exact["rootInvocationId"] == root
+    assert exact["value"]["result"] == result["result"]
+    assert readonly_ids[0] == root
+    assert len(readonly_ids) == len(result["adaptive"]["attempts"])
     assert provider.calls == saved_calls
     with repository.pool.connection() as conn:
         assert (

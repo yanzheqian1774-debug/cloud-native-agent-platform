@@ -388,3 +388,13 @@ for(const mode of ['timeout','denied'])test('collection reread preserves prior f
  else{await expect(card.getByText('当前资源不可读取，请核对访问范围。',{exact:false})).toBeVisible();await expect(card.getByRole('button',{name:'查看已读草稿',exact:true})).toHaveCount(0)}
  expect(extra.posts).toHaveLength(0);
 });
+
+for(const mode of ['valid','foreign','duplicate'])test('capability Employee member return preserves fixed context '+mode,async({page})=>{
+ const {state,extra,original}=await fixture(page);original.members=original.members.filter(m=>m.kind==='SKILL');original.members[0].revisionId='revision:2';original.members[0].digest='b'.repeat(64);
+ const back='/capabilities?'+new URLSearchParams({capability:'handover',revision:'cap-r1',digest:'c'.repeat(64),returnConversation:'original'});
+ const params=new URLSearchParams({kind:'skill',selected:skillId,query:skillId,resourceRevision:'revision:2',resourceDigest:'b'.repeat(64),employeeRef:employeeId,employeeRev:old,employeeDigest:'d'.repeat(64),capabilityReturn:mode==='foreign'?'https://foreign.invalid/capabilities':back});if(mode==='duplicate')params.append('capabilityReturn',back);
+ await page.goto('/skills?'+params);
+ if(mode==='valid'){await page.getByRole('link',{name:'返回引用员工',exact:true}).click();await expect(page.getByRole('heading',{name:'准确资源引用员工',exact:true})).toBeVisible();const current=new URL(page.url());expect(current.searchParams.get('employeeDefinitionDigest')).toBe('d'.repeat(64));expect(current.searchParams.get('capabilityReturn')).toBe(back);
+  await page.getByRole('button',{name:'资源组成',exact:true}).click();const card=page.getByRole('article',{name:'技能绑定资源',exact:true});await card.getByRole('link',{name:'查看详情',exact:true}).click();expect(new URL(page.url()).searchParams.get('capabilityReturn')).toBe(back);await page.getByRole('link',{name:'返回引用员工',exact:true}).click();expect(new URL(page.url()).searchParams.get('capabilityReturn')).toBe(back);
+ }else{await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toHaveCount(0)}expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
+});

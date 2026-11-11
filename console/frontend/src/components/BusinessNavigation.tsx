@@ -46,7 +46,7 @@ export function BusinessNavigation({mobile=false,sessionIdentity}:{mobile?:boole
         {sessionIdentity?<ConversationList key={sessionIdentity}/>:<p className="conversation-source-note">登录后读取当前账号的会话记录。</p>}</details><NavLink to="/tasks"><NavigationIcon name="outcome"/>我的任务</NavLink><NavLink to="/attention"><NavigationIcon name="attention"/>待我处理</NavLink><NavLink to="/outcomes"><NavigationIcon name="record"/>成果与记录</NavLink>
 
     </section>
-    <section><h2>业务与团队</h2><EntryLink entry={{to:"/workflow-definitions",label:"业务流程",icon:"relationships"}}/><EntryLink entry={{to:import.meta.env.VITE_TEAM_DEFINITIONS_ENABLED==="true"?"/teams":"/digital-employees",label:import.meta.env.VITE_TEAM_DEFINITIONS_ENABLED==="true"?"数字人团队":"数字员工",icon:"employee"}}/>
+    <section><h2>业务与团队</h2><EntryLink entry={{to:"/workflow-definitions",label:"业务流程",icon:"relationships"}}/>{import.meta.env.VITE_BUSINESS_CAPABILITIES_ENABLED === "true"&&<EntryLink entry={{to:"/capabilities",label:"业务能力",icon:"agent"}}/>}<EntryLink entry={{to:import.meta.env.VITE_TEAM_DEFINITIONS_ENABLED==="true"?"/teams":"/digital-employees",label:import.meta.env.VITE_TEAM_DEFINITIONS_ENABLED==="true"?"数字人团队":"数字员工",icon:"employee"}}/>
     </section><section><h2>资源与平台</h2>
       <details key={`resources-${resourceActive}`} open={resourceActive}>
         <summary className={resourceActive?"active":""}><NavigationIcon name="resource"/><span>资源管理</span></summary>

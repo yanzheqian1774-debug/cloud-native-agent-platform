@@ -74,7 +74,9 @@ def admit(service, connection, context, row):
         event_type="CONTEXT_CALL_ADMISSION",
         actor_id=context.principal_id,
         outcome="APPROVED",
-        reason="D12_CURRENT_ROLE_EXISTING_DRAFT_BUDGET",
+        reason="D12_CAPABILITY_SHARED_PLANNING_BUDGET"
+        if row["record"].get("capability_source")
+        else "D12_CURRENT_ROLE_EXISTING_DRAFT_BUDGET",
         occurred_at=now,
         scope=context.scope,
         subject_id=row["context_id"],

@@ -120,3 +120,14 @@
 @media(max-width:700px){.f3-conversation .conversation-assistant-bubble{padding:12px}}
 
 .conversation-team-source{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 0;margin:0 0 10px;border-bottom:1px solid var(--px-line,#dfe5f2);font-size:12px;color:var(--px-muted,#63738b);background:transparent}.conversation-team-source>a{color:var(--px-blue,#4567cd);text-decoration:none;white-space:nowrap}.conversation-team-source>span{min-width:0;overflow-wrap:anywhere}
+
+/* Capability preparation is primary conversation content, not a collapsed receipt. */
+.f3-conversation .capability-preparation-card{margin:12px 0;padding:18px 20px;background:#fff;border:1px solid var(--px-line,#e0e6ef);border-radius:14px;color:var(--px-text,#263b59);text-align:left;overflow-wrap:anywhere}
+.f3-conversation .capability-preparation-card h3{font-size:16px;margin:10px 0}
+.f3-conversation .private-receipt .capability-preparation-card p,.f3-conversation .capability-preparation-card li{font-size:14px;line-height:1.7}
+
+.capability-preparation-status{padding:16px;margin-bottom:22px;border:1px solid var(--px-line,#e0e6ef);border-radius:12px;background:#fff}.capability-preparation-status p{font-size:13px;line-height:1.7}.conversation-original-work{border-bottom:1px solid var(--px-line,#e0e6ef);padding-bottom:14px;margin-bottom:16px}.conversation-original-work p{font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+
+.f3-composer-dock:has(.capability-answer)>form.private-composer{display:none}
+
+.capability-preparation-status:has(.capability-live-status)>h2,.capability-preparation-status:has(.capability-live-status)>p{display:none}

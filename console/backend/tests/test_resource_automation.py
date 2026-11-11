@@ -919,6 +919,31 @@ def test_policy_role_selection_keeps_goal_graph_and_standards_and_creates_truthf
 
     result = act()
     assert result == act()
+    from agent_console.resource_preparation_plan import read_selection
+    from agent_console.workbench_owner_authorization import WorkbenchOwnerError
+
+    def recover(key="select-resource-role"):
+        with a.repository.pool.connection() as c, c.transaction():
+            return read_selection(
+                a.automation,
+                AuthorizedOwnerCall(
+                    "READ_POLICY_EMPLOYEE_SELECTION",
+                    a.subject,
+                    c,
+                    {},
+                    {"proposal_id": a.e.p.plan_id},
+                    {"version": body["version"], "key": key},
+                    (),
+                    AuthorizedOwnerAuthority(a.adapter, a.subject, c, 1, ()),
+                    1,
+                    1,
+                ),
+            )
+
+    assert recover() == result
+    assert recover() == result
+    with pytest.raises(WorkbenchOwnerError, match="RESOURCE_SELECTION_NOT_FOUND"):
+        recover("never-submitted")
     proposal = ProposalRevision.model_validate(result["proposal"])
     assert isinstance(proposal.origin, PolicyResourcePreparationOrigin)
     assert proposal.semantics.target == a.e.p.semantics.target

@@ -24,7 +24,14 @@ def prepare(service, c, context, request, record):
         "AND o.resource_id=%s AND r.subject_id=%s",
         (*scope, request.target.problem.resource_id, context.principal_id),
     ).fetchone()
-    if not source or not source["record"].get("development_administrator"):
+    capability_source = None
+    if not source:
+        read_capability = getattr(service, "capability_source_reader", None)
+        if read_capability is not None:
+            capability_source = read_capability(context, c, request)
+    if not capability_source and (
+        not source or not source["record"].get("development_administrator")
+    ):
         raise AuthorityError("DEVELOPMENT_JOURNEY_OWN_DRAFT_REQUIRED")
     key = (*scope, context.principal_id, request.idempotency_key)
     lock(c, "planning:" + digest(key))
@@ -37,6 +44,8 @@ def prepare(service, c, context, request, record):
         if old["input_commitment"] != record["target"]["input_commitment"]:
             raise AuthorityError("IDEMPOTENCY_PAYLOAD_CONFLICT")
         row = request_row(c, old["context_id"])
+        if row["record"].get("capability_source") != capability_source:
+            raise AuthorityError("DEVELOPMENT_CAPABILITY_SOURCE_CHANGED")
         from .development_draft_admission import admit
 
         admit(service, c, context, row)
@@ -52,14 +61,16 @@ def prepare(service, c, context, request, record):
     # Each paid attempt owns a distinct admission; proposal lineage stays intact.
     identity = "development-planning:" + record["target"]["invocation_id"]
     payload = dict(
-        task_id="D13-CONVERSATION-JOURNEY",
+        task_id="F3-CAPABILITY-PLANNING"
+        if capability_source
+        else "D13-CONVERSATION-JOURNEY",
         phase="planning",
         synthetic_only=True,
         development_administrator=True,
         development_journey=True,
         context_id=identity,
         first_invocation_id=record["target"]["invocation_id"],
-        source_context_id=source["context_id"],
+        source_context_id=source["context_id"] if source else None,
         configuration=service.configuration,
         subject_id=context.principal_id,
         account_id=account["account_id"],
@@ -69,6 +80,8 @@ def prepare(service, c, context, request, record):
         total_cost_cap_microusd=COST_CAP,
         maximum_new_calls=1,
     )
+    if capability_source:
+        payload["capability_source"] = capability_source
     c.execute(
         "INSERT INTO authorization_admin.context_call_requests "
         "(context_id,tenant_id,security_domain,subject_id,account_id,account_revision,first_invocation_id,record,digest) "
