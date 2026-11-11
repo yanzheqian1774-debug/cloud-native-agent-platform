@@ -4,8 +4,8 @@ const digest='d'.repeat(64),oldDigest='a'.repeat(64);
 const content={description:'明确标记的交互测试技能',capabilities:['READ_DATA'],instructions:'读取合成材料',operations:[],inputSchema:{},outputSchema:{}};
 const sourceResource={resourceId:'skill-definition:upgrade-ui',kind:'skill',name:'交互测试技能',aggregateVersion:7,lifecycleState:'PUBLISHED',enabled:true,currentDraftRevisionId:'revision:new',publishedRevisionId:'revision:old',revisions:[{revisionId:'revision:old',state:'PUBLISHED',digest:oldDigest,content},{revisionId:'revision:new',state:'DRAFT',digest,content}],testResults:[],relationships:[],healthObservations:[],discoverySnapshots:[],toolSelections:[]};
 const url='/skills?managedResource=skill-definition%3Aupgrade-ui&resourceTab='+encodeURIComponent('版本');
-async function setup(page:Page,mode:'success'|'unknown'|'conflict'|'detail-failure',incoming:Record<string,unknown>[]=[],kind:'skill'|'mcp'='skill'){
- const resource=kind==='skill'?sourceResource:{...sourceResource,kind:'mcp',name:'交互测试MCP连接'};
+async function setup(page:Page,mode:'success'|'unknown'|'conflict'|'detail-failure',incoming:Record<string,unknown>[]=[],kind:'skill'|'mcp'='skill',health:Record<string,unknown>[]=[]){
+ const resource=kind==='skill'?sourceResource:{...sourceResource,kind:'mcp',name:'交互测试MCP连接',healthObservations:health};
  const commands:{action:string;body:Record<string,unknown>}[]=[];
  const receipt={schemaVersion:'selected-resource-upgrade-receipt.v1',batchId:'fixture-batch',result:{resource:{...(kind==='mcp'?{resourceKind:'mcp'}:{}),identity:resource.resourceId,revisionId:'revision:new',digest},employees:[],capabilities:[]}};
  await page.route('**/api/workbench/v1/**',async route=>{const request=route.request(),path=new URL(request.url()).pathname;
@@ -75,4 +75,15 @@ for(const mode of ['success','unknown'] as const)test('MCP selected publication 
  expect(commands.filter(c=>c.action==='submit')).toHaveLength(1);
  expect(commands.every(c=>c.body.resourceKind==='mcp')).toBe(true);
  if(mode==='unknown')expect(commands.find(c=>c.action==='receipt')?.body).toEqual(commands.find(c=>c.action==='submit')?.body);
+});
+
+for(const [record,expected] of [
+ [{revisionId:'revision:old',revisionDigest:oldDigest,status:'HEALTHY'},'未读到匹配本版本的检查记录'],
+ [{revisionId:'revision:new',revisionDigest:'e'.repeat(64),status:'HEALTHY'},'未读到匹配本版本的检查记录'],
+ [{revisionId:'revision:new',revisionDigest:digest,status:'HEALTHY'},'最近一次初始化检查通过'],
+ [{revisionId:'revision:new',revisionDigest:digest,status:'UNHEALTHY'},'最近一次初始化检查未通过'],
+] as const)test('MCP version evidence '+JSON.stringify(record),async({page})=>{
+ const commands=await setup(page,'success',[],'mcp',[record]);await page.goto(url.replace('/skills?','/mcp?'));
+ const evidence=page.getByRole('region',{name:'当前MCP版本验证'});await expect(evidence).toContainText(expected);await expect(evidence).toContainText('均不代表工具调用已验证');
+ await expect(page.getByText('测试与验证影响',{exact:true})).toHaveCount(0);expect(commands).toEqual([]);
 });

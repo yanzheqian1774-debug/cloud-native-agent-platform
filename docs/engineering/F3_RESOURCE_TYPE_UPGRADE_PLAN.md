@@ -42,3 +42,34 @@ page for MCP publication plus selected employee/capability references; no model
 execution or main data seeding. Compare F3 existing version/impact layout and send
 the page to prototype review before guarded combined installation. Until those
 checks pass, classify the new route as candidate, not delivered or callable.
+
+## Knowledge owner boundary verified; follow-up plan (2026-11-12)
+
+DefinitionManagement already rebinds KnowledgeLifecycleService's PostgreSQL pool
+to the authorized caller connection and delegates policy publication to
+PreparedResourceOwner. Reuse that manager; add its dependency to the existing
+selected-upgrade bootstrap, not a second Knowledge lifecycle. Knowledge uses
+KNOWLEDGE grants and knowledge_operation.knowledge row locking. Publication does
+not rebuild indexes or perform retrieval; preserve activeIndexSnapshotId and old
+retrieval/citation facts. Keep Skill/MCP canonical request and receipt recovery
+unchanged. Add knowledge as a distinct source kind with its existing management
+targets. Validate late-owner rollback of the knowledge resource alongside selected
+employee/capability changes in real isolated PostgreSQL before browser publication.
+
+Current presentation drift: ResourceVersionImpact showed Skill operation-test
+coverage for MCP. Correct this bounded view first: health records must match both
+current revision and digest; distinguish initialization from invocation and make
+no new network calls. This correction does not establish knowledge batch support.
+
+## Functional drift review gate (2026-11-12)
+
+For each delivered page, compare the frozen F3 user intent, displayed capability,
+actual authorized backend command, and persisted result. Review functionality
+alongside visual matching. Distinguish draft/save, publication, connection check,
+tool invocation, and business acceptance; do not collapse these into success.
+Check exact revision binding, original-conversation return, pending clarification
+continuation, receipt recovery without duplicate submission, and unchanged old
+references where applicable. Record mismatches with the page, expected behavior,
+observed evidence, bounded correction, verification, and installation status.
+Ordinary corrections are authorized; missing backend capabilities remain visible
+gaps. Reviewer handoff must name both visual and functional acceptance scope.
