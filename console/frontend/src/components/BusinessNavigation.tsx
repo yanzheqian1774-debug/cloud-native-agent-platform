@@ -8,6 +8,7 @@ const resources: Entry[] = [
   {to:"/skills",label:"技能",icon:"skill"},
   {to:"/mcp",label:"MCP 服务",icon:"mcp"},
   {to:"/knowledge",label:"知识",icon:"knowledge"},
+  {to:"/tools",label:"工具",icon:"tool"},
   {to:"/workflow-definitions",label:"工作流",icon:"flow"},
 ];
 const advanced: Entry[] = [

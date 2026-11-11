@@ -3,12 +3,13 @@ import {FrozenNavigationIconContext} from "./navigationIconTheme";
 import {frozenF3NavigationPaths} from "./FrozenF3NavigationIcons";
 
 export type NavigationIconName =
-  | "network" | "skill" | "mcp" | "home" | "problem" | "employee" | "flow" | "knowledge" | "resource"
+  | "tool" | "network" | "skill" | "mcp" | "home" | "problem" | "employee" | "flow" | "knowledge" | "resource"
   | "record" | "manage" | "runtime" | "outcome" | "shield" | "agent"
   | "relationships" | "attention" | "applications" | "operations"
   | "model" | "usage" | "help" | "conversation" | "target" | "clock" | "calendar";
 
 const paths: Record<NavigationIconName, ReactNode> = {
+  tool: <><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></>,
   network: <><rect x="16" y="16" width="6" height="6" rx="1"></rect><rect x="2" y="16" width="6" height="6" rx="1"></rect><rect x="9" y="2" width="6" height="6" rx="1"></rect><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"></path><path d="M12 12V8"></path></>,
   skill: <><path d="M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="m5 16-3 3 3 3"></path><path d="m9 22 3-3-3-3"></path></>,
   mcp: <><path d="M12 22v-5"></path><path d="M15 8V2"></path><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"></path><path d="M9 8V2"></path></>,

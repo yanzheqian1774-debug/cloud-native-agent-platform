@@ -67,6 +67,10 @@ class ResourceDirectory:
         self.workflows = workflows
 
     def __call__(self, call):
+        if call.operation == "READ_MCP_TOOL_DECLARATIONS":
+            from .workbench_mcp_tools import read_tools
+
+            return read_tools(self.services, call)
         if call.operation == "READ_DIRECTORY_REFERENCES":
             kind, identity, revision = (
                 call.path[k] for k in ("kind", "identity", "revision")
@@ -353,6 +357,17 @@ class ResourceDirectory:
 def operations(services, cursors, workflows=None):
     handler = ResourceDirectory(services, cursors, workflows)
     return (
+        WorkbenchOperation(
+            "READ_MCP_TOOL_DECLARATIONS",
+            "GET",
+            PREFIX + "/resource-directory/mcp/{identity}/{revision}/tools",
+            None,
+            None,
+            lambda ctx, path, payload, query: (
+                target("mcp", path["identity"], path["revision"]),
+            ),
+            handler,
+        ),
         WorkbenchOperation(
             "READ_DIRECTORY_REFERENCES",
             "GET",
