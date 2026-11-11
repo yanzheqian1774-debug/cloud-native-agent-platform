@@ -138,8 +138,8 @@ for(const mode of ['exact','mismatch','denied'])test('authoring reuses only veri
  await page.route('**/employees/worker/revisions/worker-v1',route=>mode==='denied'?route.fulfill({status:403,json:{reasonCode:'EXACT_READ_REQUIRED'}}):route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{resourceKind:'DIGITAL_EMPLOYEE_DEFINITION',employeeDefinitionId:'worker',employeeDefinitionRevisionId:'worker-v1',employeeDefinitionDigest:mode==='mismatch'?'f'.repeat(64):digest,role:'交接核对助手',publicationState:'PUBLISHED',responsibilities:['逐项检查交接内容','引用文档依据'],members:[{kind:'SKILL',resourceId:'skill:review',revisionId:'skill-v1',digest:'b'.repeat(64)},{kind:'AGENT',resourceId:'agent:review',revisionId:'agent-v1',digest:'c'.repeat(64)}]},continuationIds:[]}}));
  await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();const form=page.getByRole('form',{name:'业务能力编辑'});await form.getByLabel('能力名称',{exact:true}).fill('我填写的能力名称');await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接核对助手'});await form.getByRole('button',{name:'带入已保存职责与资源',exact:true}).click();
  if(mode==='exact'){
-  await expect(page.getByRole('status')).toContainText('2 项固定引用');await expect(form.getByLabel('能力名称',{exact:true})).toHaveValue('我填写的能力名称');await expect(form.getByLabel('希望完成什么',{exact:true})).toHaveValue('逐项检查交接内容；引用文档依据');await expect(form.getByLabel('完成标准（每行一项）')).toHaveValue('');
-  await form.getByRole('button',{name:'带入已保存职责与资源',exact:true}).click();await expect(page.getByRole('status')).toContainText('0 项固定引用');await expect(form.getByRole('button',{name:'移除',exact:true})).toHaveCount(2);
+  await expect(form.getByRole('status')).toContainText('2 项固定引用');await expect(form.getByLabel('能力名称',{exact:true})).toHaveValue('我填写的能力名称');await expect(form.getByLabel('希望完成什么',{exact:true})).toHaveValue('逐项检查交接内容；引用文档依据');await expect(form.getByLabel('完成标准（每行一项）')).toHaveValue('');
+  await form.getByRole('button',{name:'带入已保存职责与资源',exact:true}).click();await expect(form.getByRole('status')).toContainText('0 项固定引用');await expect(form.getByRole('button',{name:'移除',exact:true})).toHaveCount(2);
   for(const label of ['需要提供哪些资料','将交付什么','适用范围','不包含哪些操作','需要人工参与什么','当前已知限制'])await form.getByLabel(label,{exact:true}).fill(label+'由用户核对');await form.getByLabel('完成标准（每行一项）').fill('缺项必须引用原文');await form.getByRole('button',{name:'保存草稿',exact:true}).click();await expect(page.getByRole('heading',{name:'我填写的能力名称',exact:true})).toBeVisible();expect(state.saves).toHaveLength(1);expect(state.saves[0].revision.bindings.map(b=>b.reference.revision_id)).toEqual(['worker-v1','skill-v1']);
  }else{await expect(page.getByRole('alert')).toContainText('已有填写保持不变');await expect(form.getByLabel('能力名称',{exact:true})).toHaveValue('我填写的能力名称');await expect(form.getByLabel('希望完成什么',{exact:true})).toHaveValue('');await expect(form.getByRole('button',{name:'移除',exact:true})).toHaveCount(0);expect(state.saves).toHaveLength(0)}expect(state.writes).toHaveLength(0);
 });
@@ -655,3 +655,29 @@ for(const mode of ['normal','source-lost','capability-lost','draft-return','draf
  expect(relation.relation.capability).toEqual({resource_id:saved.revision.capability_id,revision_id:saved.revision.revision_id,digest});
  await page.screenshot({path:test.info().outputPath('process-design-controlled.png'),fullPage:true});
 });
+
+for(const mode of ['return','isolation','cancel'])test(`independent draft restores safely ${mode}`,async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();
+ const raw='  未提交的独立草稿\n保留末尾空行\n\n';await page.getByLabel('适用范围',{exact:true}).fill(raw);await page.getByLabel('能力名称',{exact:true}).fill('独立草稿恢复测试');await page.getByLabel('本次承担什么职责',{exact:true}).fill('  尚未加入的职责  ');await expect(page).toHaveURL(/create=independent/);
+ if(mode==='isolation')await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:other',tenantId:'tenant',securityDomain:'domain'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'other-csrf'}}));
+ await page.reload();await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(mode==='isolation'?'':raw);
+ if(mode==='return'){await expect(page.getByLabel('本次承担什么职责',{exact:true})).toHaveValue('  尚未加入的职责  ');await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(raw)}
+ if(mode==='cancel'){await page.getByRole('button',{name:'取消编辑',exact:true}).click();await page.getByRole('button',{name:'创建独立能力',exact:true}).click();await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue('')}
+ expect(state.saves).toHaveLength(0);
+});
+
+test('independent pending save survives reload without duplicate creation',async({page})=>{
+ const state=await fixture(page);await page.route('**/business-capabilities',route=>{if(route.request().method()!=='POST')return route.fallback();state.saves.push(route.request().postDataJSON());return route.abort('failed')});
+ await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();const form=page.getByRole('form',{name:'业务能力编辑'});
+ for(const label of ['能力名称','希望完成什么','需要提供哪些资料','将交付什么','适用范围','不包含哪些操作','需要人工参与什么','当前已知限制'])await form.getByLabel(label,{exact:true}).fill(label==='能力名称'?'原提交续接测试':label+'说明');
+ await form.getByLabel('完成标准（每行一项）').fill('核对依据');await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接核对助手'});await form.getByLabel('本次承担什么职责').fill('核对依据');await form.getByRole('button',{name:'加入能力组成'}).click();await form.getByRole('button',{name:'保存草稿',exact:true}).click();await expect(page.getByText('保存结果尚未核实。再次核实会沿用同一份内容和提交记录。',{exact:true})).toBeVisible();
+ await page.reload();await page.getByRole('button',{name:'核实并重试本次保存',exact:true}).click();await expect(page.getByRole('heading',{name:'原提交续接测试',exact:true})).toBeVisible();expect(state.saves).toHaveLength(1);
+});
+
+test('independent local storage failure preserves form and blocks silent cancellation',async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities?create=independent');await expect(page.getByLabel('能力名称',{exact:true})).toBeVisible();
+ await page.evaluate(()=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k.startsWith('capability-independent-draft:'))throw Error('Quota');return original.call(this,k,v)}});
+ await page.getByLabel('能力名称',{exact:true}).fill('仍保留在页面的填写');await expect(page.getByText('本地草稿暂存失败，请保留此页并恢复浏览器存储后继续。',{exact:true})).toBeVisible();await page.getByRole('button',{name:'取消编辑',exact:true}).click();await expect(page.getByLabel('能力名称',{exact:true})).toHaveValue('仍保留在页面的填写');expect(state.saves).toHaveLength(0);
+});
+
+ test('independent cancel after directory settles restores usable directory',async({page})=>{await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();await expect(page.getByText('正在读取业务能力…',{exact:true})).toBeHidden();await page.getByRole('button',{name:'取消编辑',exact:true}).click();await expect(page.getByRole('button',{name:'创建独立能力',exact:true})).toBeEnabled();await expect(page.getByText('正在读取业务能力…',{exact:true})).toBeHidden();});
