@@ -106,3 +106,11 @@ it is not labelled read-only and never starts plan generation. Loading or failed
 journal reads keep reconciliation disabled. Do not unmount the active planning
 component on a same-context refresh: it owns clarification and continuation state.
 Use "方案待准备" for the saved PREPARE_PLAN state, not a running-model claim.
+
+Installed main verification exposed a distinct case: a prepared capability with
+existing goal links but no original conversation run rendered both the progress
+rail and legacy association rail. Hide the legacy association rail when a readable
+capability preparation exists; the exact preparation and its current journal own
+the right rail. Keep association available for conversations without capability
+preparation. This changes no selection, links or commands. Add regression using
+an existing goal link, empty original journey, save and reload with zero new writes.

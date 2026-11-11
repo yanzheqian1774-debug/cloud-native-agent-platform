@@ -8,7 +8,7 @@ const members=[{kind:'EMPLOYEE',resourceId:'worker',revisionId:'worker-v1',diges
 const revision={schemaVersion:'business-capability.v1',scope:{namespace:'tenant',security_domain:'domain'},capability_id:'handover',revision_id:'r2',predecessor_revision_id:'r1',title:'交接材料核对',intent:'找出交接资料中的缺项和责任不清之处',inputs:'交接说明和责任清单',outputs:'缺项清单及对应原文',business_scope:'已授权交接文档',business_domain:'运营管理',exclusions:'自动部署或对外发送',manual_involvement:'负责人核实待补事项',acceptance_criteria:['逐项提供原文依据'],known_limitations:'无法证明实际部署状态',origin:{kind:'INDEPENDENT',workflow:null,preparation_digest:null},bindings:[{kind:'EMPLOYEE',reference:{resource_id:'worker',revision_id:'worker-v1',digest},purpose:'核对材料并列出待补事项'}]};
 async function fixture(page:Page){
  const work={writes:[] as {path:string;body:Record<string,unknown>}[],messages:[] as Record<string,unknown>[],criterion:null as Record<string,unknown>|null,set:null as Record<string,unknown>|null,active:false,problem:null as Record<string,unknown>|null,unknownCreate:false,unknownReceipt:false,changedDuringPreparation:false};
- const state={preferences:{version:0,state:{query:'',layout:'cards',favoritesOnly:false,favorites:[] as string[],scrollTop:0},commandId:null as string|null,replayed:false},preferenceWrites:[] as Record<string,unknown>[],preferenceConflict:false,preferenceLost:false,runtime:false,work,journal:{version:0,contractDigest:'d'.repeat(64),sourceMessageId:'source-message',state:null as Record<string,unknown>|null},journalWrites:[] as Record<string,unknown>[],journalUnknown:false,answerUnknown:false,answerWrites:[] as Record<string,unknown>[],published:false,deny:false,unknown:false,contractMismatch:false,writes:[] as {commandId:string;reason:string}[],sources:[] as {idempotencyKey:string;expectedVersion:number;source:{kind:string;target:Record<string,string>}}[],saves:[] as {revision:typeof revision;expectedVersion:number;commandId:string}[]};
+ const state={links:[] as Record<string,unknown>[],preferences:{version:0,state:{query:'',layout:'cards',favoritesOnly:false,favorites:[] as string[],scrollTop:0},commandId:null as string|null,replayed:false},preferenceWrites:[] as Record<string,unknown>[],preferenceConflict:false,preferenceLost:false,runtime:false,work,journal:{version:0,contractDigest:'d'.repeat(64),sourceMessageId:'source-message',state:null as Record<string,unknown>|null},journalWrites:[] as Record<string,unknown>[],journalUnknown:false,answerUnknown:false,answerWrites:[] as Record<string,unknown>[],published:false,deny:false,unknown:false,contractMismatch:false,writes:[] as {commandId:string;reason:string}[],sources:[] as {idempotencyKey:string;expectedVersion:number;source:{kind:string;target:Record<string,string>}}[],saves:[] as {revision:typeof revision;expectedVersion:number;commandId:string}[]};
  await page.route('**/api/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   const json=(result:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result,continuationIds:[]}});
@@ -41,7 +41,7 @@ async function fixture(page:Page){
    return json({identity:'answer-message'});
   }
   if(path.endsWith('/conversations/original/journey'))return json({version:0,state:null});
-  if(path.endsWith('/conversations/original'))return json({conversation:{conversation_id:'original',title:'原会话',version:state.sources.length,created_at:'2026-11-11'},links:[],messages:[...work.messages,...state.sources.map((entry,index)=>({message_id:'source-message',request_key:entry.idempotencyKey,sequence:index+1,content:'业务能力与本次输入已保存',kind:'SOURCE',disposition:'SOURCE',author_id:'human:tester',facts:{source:entry.source,observation:{state:'PREPARED_NOT_EXECUTED',title:revision.title,objective:entry.source.target.objective,inputNotes:entry.source.target.inputNotes,capability:{capabilityId:'handover',revisionId:'r2',digest,inputs:revision.inputs,outputs:revision.outputs,acceptanceCriteria:revision.acceptance_criteria,manualInvolvement:revision.manual_involvement,exclusions:revision.exclusions}}}}))]});
+  if(path.endsWith('/conversations/original'))return json({conversation:{conversation_id:'original',title:'原会话',version:state.sources.length,created_at:'2026-11-11'},links:state.links,messages:[...work.messages,...state.sources.map((entry,index)=>({message_id:'source-message',request_key:entry.idempotencyKey,sequence:index+1,content:'业务能力与本次输入已保存',kind:'SOURCE',disposition:'SOURCE',author_id:'human:tester',facts:{source:entry.source,observation:{state:'PREPARED_NOT_EXECUTED',title:revision.title,objective:entry.source.target.objective,inputNotes:entry.source.target.inputNotes,capability:{capabilityId:'handover',revisionId:'r2',digest,inputs:revision.inputs,outputs:revision.outputs,acceptanceCriteria:revision.acceptance_criteria,manualInvolvement:revision.manual_involvement,exclusions:revision.exclusions}}}}))]});
   if(route.request().method()==='POST'&&(path.endsWith('/intents')||path.endsWith('/problems')||path.endsWith('/success-criteria')||path.endsWith('/criteria-sets')||path.endsWith('/lifecycle'))){
    const body=route.request().postDataJSON();work.writes.push({path,body});expect(route.request().headers()['x-csrf-token']).toBe('csrf-test');
    if(path.endsWith('/intents')){work.messages.push({message_id:'intent-message',kind:'ACTION_INTENT',disposition:'ACTION_INTENT',facts:{intentId:'intent-one',messageId:'source-message',action:'CREATE_PROBLEM',ownerRequestKey:body.payload.idempotencyKey,source:body.source,attemptState:'NOT_SUBMITTED'}});return json({intentId:'intent-one',claimed:false})}
@@ -764,6 +764,7 @@ test('same employee historical versions have short distinct labels and exact vis
 
 for(const failure of ['unavailable','invalid'] as const)test('saved capability progress read failure stays visible and retry is read only '+failure,async({page})=>{
  const state=await fixture(page);state.published=true;
+ state.links=[{link_id:'prepared-target',title:'已有准备目标',readable:true,target:{problemId:'new-problem'}}];
  await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');
  await page.getByRole('button',{name:'在会话中使用',exact:true}).click();
  await page.getByLabel('已提供的资料与范围').fill('本次交接说明与责任清单');
@@ -779,6 +780,7 @@ for(const failure of ['unavailable','invalid'] as const)test('saved capability p
  });
  await page.reload();
  const panel=page.locator('.capability-work-resume');
+ await expect(page.locator('.private-rail')).toHaveCount(0);
  await expect(panel.getByRole('alert')).toContainText('已保存进展暂未核实');
  await expect(panel.getByRole('button',{name:'核对准备记录',exact:true})).not.toBeVisible();
  await panel.getByText('准备遇到问题？',{exact:true}).click();await expect(panel.getByRole('button',{name:'核对准备记录',exact:true})).toBeDisabled();
@@ -793,4 +795,25 @@ for(const failure of ['unavailable','invalid'] as const)test('saved capability p
  await expect(panel.getByRole('alert')).toHaveCount(0);
  expect(reads).toBeGreaterThanOrEqual(2);
  expect(JSON.stringify({writes:state.work.writes,journal:state.journalWrites,sources:state.sources})).toBe(before);
+});
+
+
+test('prepared capability retains progress rail without legacy association when no original run exists',async({page})=>{
+ const state=await fixture(page);state.published=true;
+ state.links=[{link_id:'prepared-target',title:'已有准备目标',readable:true,target:{problemId:'new-problem'}}];
+ await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');
+ await page.getByRole('button',{name:'在会话中使用',exact:true}).click();await page.getByLabel('已提供的资料与范围').fill('已有交接材料');await page.getByRole('button',{name:'检查输入并继续',exact:true}).click();await page.getByRole('button',{name:'准备工作并进入会话',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'当前工作 · 方案待准备',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'关联工作',exact:true})).toHaveCount(0);
+ await expect(page.locator('.private-rail')).toHaveCount(0);
+ const writes=JSON.stringify({work:state.work.writes,journal:state.journalWrites});
+ await page.reload();await expect(page.getByRole('heading',{name:'当前工作 · 方案待准备',exact:true})).toBeVisible();await expect(page.locator('.private-rail')).toHaveCount(0);
+ expect(JSON.stringify({work:state.work.writes,journal:state.journalWrites})).toBe(writes);
+});
+
+
+test('conversation without capability preparation retains existing work association entry',async({page})=>{
+ const state=await fixture(page);state.links=[{link_id:'original-target',title:'已有目标',readable:true,target:{problemId:'new-problem'}}];
+ await page.goto('/work?conversation=original');await expect(page.getByRole('heading',{name:'关联工作',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'已有目标',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'当前能力准备',exact:true})).toHaveCount(0);expect(state.work.writes).toHaveLength(0);expect(state.journalWrites).toHaveLength(0);
 });
