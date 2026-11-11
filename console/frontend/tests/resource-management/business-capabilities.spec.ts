@@ -166,7 +166,7 @@ for(const mode of ['ready','partial','unknown','changed'] as const)test('origina
  if(mode==='partial'){state.work.criterion=null;state.work.set=null;state.work.active=false}
  if(mode==='unknown')state.work.unknownReceipt=true;
  if(mode==='changed')state.work.criterion={...state.work.criterion,measurement:{rubric:'替换完成标准'}};
- await page.reload();await page.getByRole('button',{name:'核验并继续准备',exact:true}).click();
+ await page.reload();await page.getByText('准备遇到问题？',{exact:true}).click();await page.getByRole('button',{name:'核对准备记录',exact:true}).click();
  if(mode==='unknown'||mode==='changed'){await expect(page.locator('.capability-work-resume').getByRole('alert')).toContainText(mode==='unknown'?'不会重复创建':'不同的完成标准');expect(state.work.writes).toHaveLength(before)}
  else{await expect(page.locator('.capability-work-resume').getByRole('status')).toContainText('已核实目标和完成标准');expect(state.work.writes).toHaveLength(before+(mode==='partial'?3:0));expect(state.work.active).toBe(true)}
  expect(state.work.writes.filter(w=>w.path.endsWith('/problems'))).toHaveLength(1);expect(state.sources).toHaveLength(1);
@@ -192,7 +192,7 @@ for(const lost of [false,true])test('saved capability progress survives refresh 
  const writes=state.work.writes.length;
  await page.reload();await expect(progress).toContainText('等待方案准备');
  state.journal={...state.journal,version:2,state:{phase:'WAITING_FOR_CLARIFICATION',problemId:'new-problem'}};
- await page.getByRole('button',{name:'核验并继续准备',exact:true}).click();
+ await page.getByText('准备遇到问题？',{exact:true}).click();await page.getByRole('button',{name:'核对准备记录',exact:true}).click();
  await expect(page.locator('.capability-work-resume').getByRole('status')).toContainText('已核实目标');
  await expect(progress).toContainText('后续办理记录已保留');expect(state.journal.version).toBe(2);expect(state.journalWrites).toHaveLength(1);expect(state.work.writes).toHaveLength(writes);
 });
@@ -780,12 +780,16 @@ for(const failure of ['unavailable','invalid'] as const)test('saved capability p
  await page.reload();
  const panel=page.locator('.capability-work-resume');
  await expect(panel.getByRole('alert')).toContainText('已保存进展暂未核实');
- await expect(panel.getByRole('button',{name:'核验并继续准备',exact:true})).toBeDisabled();
+ await expect(panel.getByRole('button',{name:'核对准备记录',exact:true})).not.toBeVisible();
+ await panel.getByText('准备遇到问题？',{exact:true}).click();await expect(panel.getByRole('button',{name:'核对准备记录',exact:true})).toBeDisabled();
  await expect(panel.getByRole('region',{name:'已保存的工作进度'})).toHaveCount(0);
  failed=false;
  await panel.getByRole('button',{name:'重新读取已保存进展',exact:true}).click();
  await expect(panel.getByRole('region',{name:'已保存的工作进度'})).toBeVisible();
- await expect(panel.getByRole('button',{name:'核验并继续准备',exact:true})).toBeEnabled();
+ await expect(panel.getByRole('button',{name:'核对准备记录',exact:true})).toBeEnabled();
+ await panel.getByText('准备遇到问题？',{exact:true}).click();
+ await expect(panel.getByRole('button',{name:'核对准备记录',exact:true})).not.toBeVisible();
+ await expect(panel.getByRole('button',{name:'继续准备方案',exact:true})).toBeVisible();
  await expect(panel.getByRole('alert')).toHaveCount(0);
  expect(reads).toBeGreaterThanOrEqual(2);
  expect(JSON.stringify({writes:state.work.writes,journal:state.journalWrites,sources:state.sources})).toBe(before);

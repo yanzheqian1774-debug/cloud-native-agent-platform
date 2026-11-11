@@ -97,3 +97,12 @@ all owner commands, receipts, authorization and budgets unchanged. Regression
 covers server failure and wrong-source response, recovery of the same saved
 progress and zero writes during retry. Broader real-model and full F3 acceptance
 remain separate; this is an existing continuation reliability fix.
+
+Reviewer followup: keep normal preparation to one prominent plan action. The
+separate owner-record reconciliation remains only inside the collapsed
+"准备遇到问题？" recovery disclosure, named "核对准备记录" with an explanation
+that it checks target/criteria and may complete the original preparation records;
+it is not labelled read-only and never starts plan generation. Loading or failed
+journal reads keep reconciliation disabled. Do not unmount the active planning
+component on a same-context refresh: it owns clarification and continuation state.
+Use "方案待准备" for the saved PREPARE_PLAN state, not a running-model claim.
