@@ -23,12 +23,12 @@ test('one short message starts understanding and clarification stays in the same
 });
 test('an interrupted claimed operation is preserved and never dispatched again on refresh',async({page})=>{
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'UNDERSTAND',pending:'understanding',messages:[{id:'q',text:prompt}],log:['已收到问题']}};
- await page.goto('/work?conversation=new');await expect(page.getByText('上次请求尚未核实，已保留原记录，暂不重复执行。')).toBeVisible();await page.reload();await expect(page.getByText('上次请求尚未核实，已保留原记录，暂不重复执行。')).toBeVisible();expect(s.modelCalls).toBe(0);
+ await page.goto('/work?conversation=new');await expect(page.getByText('上次请求尚未核实，已保留原记录，暂不重复执行。')).toBeVisible();await expect(page.getByRole('heading',{name:'正在核对原请求',exact:true})).toBeVisible();await page.reload();await expect(page.getByText('上次请求尚未核实，已保留原记录，暂不重复执行。')).toBeVisible();await expect(page.getByRole('heading',{name:'正在核对原请求',exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);
 });
 
 for(const reason of ['MODEL_AUTHORIZATION_INVALID','NETWORK_UNKNOWN'])test('only known pre-dispatch rejection offers in-conversation continuation: '+reason,async({page})=>{
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'PLAN',pending:'planning',error:'Error: 规划服务未能完成此操作，请核对权限与配置（'+reason+'）',messages:[{id:'user:q',text:prompt}],log:['分析目标已保存']}};
- await page.goto('/work?conversation=new');await expect(page.getByText('本次处理停在当前步骤，已有内容已保留。')).toBeVisible();
+ await page.goto('/work?conversation=new');await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(reason==='MODEL_AUTHORIZATION_INVALID'?1:0);expect(s.modelCalls).toBe(0);
 });
 
@@ -65,7 +65,7 @@ test('known coverage rejection reads actual gaps and proposes one bounded succes
  await page.route('**/api/workbench/v1/planning-v2/proposal/resource-coverage?version=1',route=>route.fulfill({json:{result:{planId:'proposal',planVersion:1,planDigest:'c'.repeat(64),subject:'human:development-admin',candidates:[{state:'REJECTED',reason:'PENDING_MEMBER_REQUIREMENT_UNAVAILABLE'}],selection:null,state:'BLOCKED'}}}));
  await page.route('**/question-activity-input',route=>route.fulfill({json:{result:{state:'READY',planningRequest:{target:{},answers:['original goal'],idempotency_key:route.request().postDataJSON().idempotencyKey,policy:{schema_version:'planning-policy.v2',mode:'FREE',required_operations:[],prohibited_operations:[],business_acceptance_as_task:false,template:null},output_language:'zh-CN'}}}}));
  await page.route('**/planning-v2/invocations',route=>{calls++;const body=route.request().postDataJSON();expect(body.source_proposal).toEqual({resource_id:'proposal',revision_id:'1',digest:'b'.repeat(64)});expect(body.answers.at(-1)).toContain('PENDING_MEMBER_REQUIREMENT_UNAVAILABLE');expect(body.idempotency_key).toBe('k:planning:1');return route.fulfill({status:503,json:{reasonCode:'REPAIR_TEST_STOP'}})});
- await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByText('本次处理停在当前步骤，已有内容已保留。')).toBeVisible();expect(s.journal.state?.cycle).toBe(1);expect(s.journal.state?.expectedPlanVersion).toBe(1);await page.reload();await expect(page.getByText('本次处理停在当前步骤，已有内容已保留。')).toBeVisible();expect(calls).toBe(1);
+ await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();expect(s.journal.state?.cycle).toBe(1);expect(s.journal.state?.expectedPlanVersion).toBe(1);await page.reload();await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();expect(calls).toBe(1);
 });
 
 
@@ -131,7 +131,7 @@ test('planning has its own visible pending state before its sole model response'
  let release!:()=>void;const gate=new Promise<void>(r=>release=r);let calls=0;
  await page.route('**/question-activity-input',route=>route.fulfill({json:{result:{state:'READY',planningRequest:{target:{},answers:[]}}}}));
  await page.route('**/planning-v2/invocations',async route=>{calls++;await gate;await route.fulfill({status:503,json:{reasonCode:'TEST_STOP'}});});
- await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByLabel('全流程进展')).toContainText('等待方案返回');await expect(page.getByLabel('全流程进展').locator('[aria-current=step]')).toContainText('准备方案');release();await expect(page.getByLabel('全流程进展')).toContainText('当前处理已停止');expect(calls).toBe(1);expect(s.modelCalls).toBe(0);
+ await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByLabel('全流程进展')).toContainText('等待方案返回');await expect(page.getByLabel('全流程进展').locator('[aria-current=step]')).toContainText('准备方案');release();await expect(page.getByLabel('全流程进展')).toContainText('最新进展暂无法确认');expect(calls).toBe(1);expect(s.modelCalls).toBe(0);
 });
 
 test('first native model shows progress with no completed steps and polling never overlaps',async({page})=>{
@@ -304,4 +304,11 @@ for(const admitted of [true,false])test('assistant identifies itself and preserv
  await page.route('**/api/workbench/v1/prepared-executions/**',route=>{if(route.request().method()!=='GET')writes++;return route.fulfill({json:{result:{digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,source_snapshot:ref,semantics:{title:'历史分析',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'SUCCEEDED',version:3,tasks:[]},admission:{state:admitted?'ADMITTED':'NOT_ADMITTED',reason:admitted?null:'BOUND_RESOURCE_INELIGIBLE'},resourceUses:[],artifacts:[],events:[{version:3,created_at:'2026-11-09T08:08:00Z',record:{action:'SUCCEEDED'}},{version:2,created_at:'2026-11-09T08:01:00Z',record:{action:'RUNNING'}}],outcome:null}}})});
  await page.goto('/work?conversation=new');const identity=page.locator('.conversation-journey>.conversation-message-identity');await expect(identity.locator('.conversation-message-author')).toHaveText('工作助手');await expect(identity.locator('time')).toContainText('执行更新');await expect(identity.locator('time')).toHaveAttribute('datetime','2026-11-09T08:08:00Z');await expect(page.getByRole('heading',{name:'分析结果',exact:true})).toBeVisible();
  await expect(page.locator('.conversation-assistant-bubble')).toHaveCSS('border-top-width','1px');expect(await identity.evaluate(node=>getComputedStyle(node).justifyContent)).not.toBe('flex-end');await expect(page.locator('.prepared-execution')).toHaveClass(/prepared-complete/);if(!admitted){await page.getByText('核对标准、执行记录与来源',{exact:true}).click();await expect(page.getByText('当前再次运行条件尚未满足',{exact:true})).toBeVisible();await expect(page.getByText('这是对当前资源与授权条件的核验，不改变已保存的执行状态、成果或业务评价。再次执行前需重新核验。',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'启动本次只读执行',exact:true})).toHaveCount(0);}expect(writes).toBe(0);expect(s.modelCalls).toBe(0);
+});
+
+for(const reason of ['MODEL_AUTHORIZATION_INVALID','NETWORK_UNKNOWN'])test('understanding errors show an unresolved result without inventing clarification or retry: '+reason,async({page})=>{
+ const s=await fixture(page);s.journal={version:2,state:{key:'stopped-understanding',question:prompt,phase:'UNDERSTAND',pending:'understanding',error:'Error: 问题理解尚未完成：'+reason,messages:[{id:'user:q',text:prompt}],log:['原问题已保存']}};let writes=0;
+ page.on('request',r=>{if(r.method()!=='GET'&&r.url().includes('/api/'))writes++});
+ await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'理解进展待核实',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'正在办理你的问题',exact:true})).toHaveCount(0);await expect(page.locator('#journey-reply')).toHaveCount(0);await expect(page.getByRole('button',{name:'沿用原问题重新理解',exact:true})).toHaveCount(0);await expect(page.getByLabel('全流程进展')).toContainText('需要核查');
+ await page.reload();await expect(page.getByRole('heading',{name:'理解进展待核实',exact:true})).toBeVisible();expect(writes).toBe(0);expect(s.modelCalls).toBe(0);expect(s.journal.version).toBe(2);
 });
