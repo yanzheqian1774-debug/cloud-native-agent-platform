@@ -761,3 +761,32 @@ test('same employee historical versions have short distinct labels and exact vis
   await expect(preview.getByText('资源：worker',{exact:true})).toBeVisible();await expect(preview.getByText('版本：'+revisions[index],{exact:true})).toBeVisible();await expect(preview).toContainText('核对已确认测试资料');
  }
 });
+
+for(const failure of ['unavailable','invalid'] as const)test('saved capability progress read failure stays visible and retry is read only '+failure,async({page})=>{
+ const state=await fixture(page);state.published=true;
+ await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');
+ await page.getByRole('button',{name:'在会话中使用',exact:true}).click();
+ await page.getByLabel('已提供的资料与范围').fill('本次交接说明与责任清单');
+ await page.getByRole('button',{name:'检查输入并继续',exact:true}).click();
+ await page.getByRole('button',{name:'准备工作并进入会话',exact:true}).click();
+ await expect(page).toHaveURL(/\/work\?conversation=original$/);
+ const before=JSON.stringify({writes:state.work.writes,journal:state.journalWrites,sources:state.sources});
+ let failed=true;let reads=0;
+ await page.route('**/sources/source-message/journey',route=>{
+  expect(route.request().method()).toBe('GET');reads++;
+  if(!failed)return route.fulfill({json:{result:state.journal}});
+  return failure==='unavailable'?route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}}):route.fulfill({json:{result:{...state.journal,sourceMessageId:'wrong-message'}}});
+ });
+ await page.reload();
+ const panel=page.locator('.capability-work-resume');
+ await expect(panel.getByRole('alert')).toContainText('已保存进展暂未核实');
+ await expect(panel.getByRole('button',{name:'核验并继续准备',exact:true})).toBeDisabled();
+ await expect(panel.getByRole('region',{name:'已保存的工作进度'})).toHaveCount(0);
+ failed=false;
+ await panel.getByRole('button',{name:'重新读取已保存进展',exact:true}).click();
+ await expect(panel.getByRole('region',{name:'已保存的工作进度'})).toBeVisible();
+ await expect(panel.getByRole('button',{name:'核验并继续准备',exact:true})).toBeEnabled();
+ await expect(panel.getByRole('alert')).toHaveCount(0);
+ expect(reads).toBeGreaterThanOrEqual(2);
+ expect(JSON.stringify({writes:state.work.writes,journal:state.journalWrites,sources:state.sources})).toBe(before);
+});

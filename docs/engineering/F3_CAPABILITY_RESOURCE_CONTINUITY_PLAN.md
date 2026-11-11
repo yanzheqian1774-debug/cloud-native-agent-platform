@@ -83,3 +83,17 @@ review uses explicitly labelled replay of recorded real snapshots, not a new
 real-time backend preview. Prototype review is scoped file/screenshot review.
 These checks do not prove main-site installation, every resource type, current
 model execution, real network-failure recovery, or whole-platform completion.
+
+## Saved conversation progress read failure (2026-11-12, G0)
+
+Scope audit found CapabilityWorkResume swallowed journal read/validation errors
+as a null record. That hid actual progress without explaining failure and left
+preparation actionable before saved state was known. Add context-scoped loading,
+failed and verified states with a read-only retry. Hide unverified journal content
+and disable preparation until the current conversation/message/principal read
+succeeds. A verified version-zero empty journal remains valid. Keep the existing
+30-second read bound, before/after identity checks, exact source validation and
+all owner commands, receipts, authorization and budgets unchanged. Regression
+covers server failure and wrong-source response, recovery of the same saved
+progress and zero writes during retry. Broader real-model and full F3 acceptance
+remain separate; this is an existing continuation reliability fix.
