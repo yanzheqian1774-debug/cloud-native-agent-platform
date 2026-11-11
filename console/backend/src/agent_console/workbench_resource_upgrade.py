@@ -8,9 +8,13 @@ from pydantic import Field
 from .authority_contracts import ExactGrant
 from .business_capability import BusinessCapabilityError, FixedReference
 from .digital_employee_definition import EmployeeDefinitionError
-from .resource_management import target
 from .resource_upgrade_batch_postgres import UpgradeBatchError
-from .resource_upgrade_preview import ConsumerSelection, UpgradeSelection
+from .resource_upgrade_preview import (
+    ConsumerSelection,
+    UpgradeSelection,
+    source_owner,
+    source_target,
+)
 from .resource_upgrade_selection import UpgradeSelectionError
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_bff_schemas import StrictWorkbenchModel
@@ -37,7 +41,7 @@ class UpgradeConsumer(StrictWorkbenchModel):
 
 
 class UpgradePreviewInput(StrictWorkbenchModel):
-    resourceKind: Literal["skill", "mcp"] = "skill"
+    resourceKind: Literal["skill", "mcp", "knowledge"] = "skill"
     oldSkill: UpgradeReference
     newSkill: UpgradeReference
     employees: list[UpgradeConsumer] = Field(default_factory=list, max_length=64)
@@ -75,9 +79,9 @@ def root_grant(context, path, payload, query):
     )
     return (
         ExactGrant(
-            "SKILL",
+            source_owner(value.resourceKind),
             "MANAGE_RESOURCE",
-            target(value.resourceKind, value.newSkill.resourceId),
+            source_target(value.resourceKind, value.newSkill.resourceId),
         ),
     )
 

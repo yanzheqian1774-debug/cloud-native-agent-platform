@@ -73,3 +73,47 @@ references where applicable. Record mismatches with the page, expected behavior,
 observed evidence, bounded correction, verification, and installation status.
 Ordinary corrections are authorized; missing backend capabilities remain visible
 gaps. Reviewer handoff must name both visual and functional acceptance scope.
+
+## Knowledge candidate implementation and UI continuation (2026-11-12)
+
+The candidate now admits resourceKind=knowledge through the existing private
+selected-upgrade route. Root and exact read authorization use KNOWLEDGE and the
+existing definition management target. Bootstrap retains the existing
+DefinitionManagement instance and passes it as an optional owner; absent policy
+configuration does not grant access or fall back to Skill publication. Knowledge
+rows are locked in their existing table, and its owner publishes inside the same
+caller transaction. Receipts separately report knowledge publication, unchanged
+active index identity, no indexing started, and no verified retrieval.
+
+The isolated stale-preview case must use a valid Knowledge draft-to-validated
+transition after preview; unlike Skill testing, Knowledge validation cannot be
+repeated on an already validated revision. Do not loosen that lifecycle for tests.
+
+Next UI work must reuse the authorized exact-version resource-directory
+/{kind}/{identity}/{revision}/references projection already used by
+DefinitionContentView. Check principal, scope, kind, identity, revision and digest;
+an unavailable projection must disable batch preview rather than mean no incoming
+references. Adapt the existing selected-upgrade component to a minimal typed
+source view, preserve source-kind receipt recovery, lock conflicting single-owner
+commands during unknown batch outcomes, and refresh the same definition after
+receipt. Keep F3's existing resource detail and professional maintenance boundary.
+Candidate backend checks do not establish installed, browser, or indexing success.
+
+## Knowledge isolated delivery evidence (2026-11-12)
+
+Candidate backend: 18 real PostgreSQL cases across Skill, MCP and Knowledge passed
+(knowledge-extension-r2); 13 exact-selection/root-grant checks passed. Frontend:
+32 selected-upgrade and definition-maintenance browser checks passed, plus lint
+and full-feature build. Existing lint/build bundle-size warning remains.
+
+Actual isolated UI submitted one batch ad9d03c720213edc211b4b238f60be666986a180430056543cd3b5dab364d8b4:
+one selected employee and one selected capability advanced with the Knowledge
+publication. One unselected employee and capability, old fixed revisions, index
+and retrieval records stayed unchanged. Original COMMITTED receipt read back
+equals the original receipt; no second submit. Protected run/model/budget records
+and main process stayed unchanged. Read-only current-published detail return was
+verified separately after its loading state settled. Evidence is under
+work/evidence/f3-business-capability-design-20261111/knowledge-selected-upgrade
+in the continuation workspace, not this repository. Main remains 99815cce48ea;
+this candidate is not installed. Prototype review and guarded combined installation
+remain gates; professional maintenance styling is not a full F3 visual pass.

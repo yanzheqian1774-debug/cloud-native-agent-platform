@@ -41,6 +41,8 @@ from agent_console.resource_upgrade_preview import (
     ConsumerSelection,
     SelectedUpgradePreview,
     UpgradeSelection,
+    source_owner,
+    source_target,
 )
 from agent_console.resource_upgrade_selection import (
     SelectedReplacement,
@@ -62,6 +64,15 @@ from test_plan_suggestion_v2 import repository
 from test_planning_candidates_source_change import case
 from test_prepared_resource_owners import services
 from test_resource_automation import automation
+from test_resource_definition_management import (
+    SOURCE as KNOWLEDGE_SOURCE,
+)
+from test_resource_definition_management import (
+    command as definition_command,
+)
+from test_resource_definition_management import (
+    definitions,
+)
 from test_resource_management import command, manager
 
 MIGRATIONS = Path(__file__).parents[1] / "migrations"
@@ -78,11 +89,29 @@ MIGRATIONS = Path(__file__).parents[1] / "migrations"
         "http",
     ],
 )
-@pytest.mark.parametrize("resource_kind", ["skill", "mcp"])
+@pytest.mark.parametrize("resource_kind", ["skill", "mcp", "knowledge"])
 def test_three_real_owners_commit_or_rollback(
-    manager, monkeypatch, failure, resource_kind
+    manager, monkeypatch, failure, resource_kind, request
 ):
     a, resources = manager
+    definition_manager = None
+    if resource_kind == "knowledge":
+        previous_generation = a.automation.grants._generation_provider()
+        _, definition_manager = request.getfixturevalue("definitions")
+        current_generation = a.automation.grants._generation_provider()
+        combined = replace(
+            current_generation,
+            requestability=tuple(
+                dict.fromkeys(
+                    (
+                        *previous_generation.requestability,
+                        *current_generation.requestability,
+                    )
+                )
+            ),
+        )
+        a.automation.grants._generation_provider = lambda: combined
+        a.automation.grants.authorization._generation_provider = lambda: combined
     monkeypatch.setattr(grants_fixture, "SCOPE", a.subject.scope)
     employees = a.automation.employees
     caprepo = PostgresBusinessCapabilityRepository(a.repository.pool)
@@ -102,6 +131,7 @@ def test_three_real_owners_commit_or_rollback(
         resources,
         EmployeeDefinitionCommandOwnerAdapter(employees, prepared_resource_reads=True),
         caps,
+        definitions=definition_manager,
     )
     counter = 0
 
@@ -142,32 +172,57 @@ def test_three_real_owners_commit_or_rollback(
             "sideEffect": "READ",
         }
     source = json.loads((fixture / "e2e/fixtures/sales-report.json").read_text())
-    resource = command(
-        manager,
-        "create",
-        key="batch-skill-create",
-        kind=resource_kind,
-        name="原子更新隔离验证",
-        content=content,
-    )["resource"]
-    identity = resource["resourceId"]
+    if resource_kind == "knowledge":
+        resource = definition_command(
+            (a, definition_manager),
+            "knowledge",
+            "create",
+            key="batch-knowledge-create",
+            name="知识整批更新隔离验证",
+            source=KNOWLEDGE_SOURCE,
+        )["resource"]
+    else:
+        resource = command(
+            manager,
+            "create",
+            key="batch-skill-create",
+            kind=resource_kind,
+            name="原子更新隔离验证",
+            content=content,
+        )["resource"]
+    identity = resource["knowledgeId" if resource_kind == "knowledge" else "resourceId"]
     sequence = 0
 
     def act(action, **extra):
         nonlocal resource, sequence
         sequence += 1
-        resource = command(
-            manager,
-            action,
-            key=f"batch-skill-{sequence}",
-            kind=resource_kind,
-            identity=identity,
-            expectedVersion=resource["aggregateVersion"],
-            **extra,
-        )["resource"]
+        if resource_kind == "knowledge":
+            resource = definition_command(
+                (a, definition_manager),
+                "knowledge",
+                action,
+                key=f"batch-knowledge-{sequence}",
+                identity=identity,
+                expectedVersion=resource["aggregateVersion"],
+                **(
+                    {"successorContent": "更新后的隔离知识正文: 核对交接负责人。"}
+                    if action == "successor"
+                    else extra
+                ),
+            )["resource"]
+        else:
+            resource = command(
+                manager,
+                action,
+                key=f"batch-skill-{sequence}",
+                kind=resource_kind,
+                identity=identity,
+                expectedVersion=resource["aggregateVersion"],
+                **extra,
+            )["resource"]
 
     def test_operations():
-        if resource_kind == "mcp":
+        if resource_kind in {"mcp", "knowledge"}:
             act("validate")
             return
         read_output = None
@@ -301,7 +356,8 @@ def test_three_real_owners_commit_or_rollback(
             )
         )
     act("successor")
-    test_operations()
+    if not (resource_kind == "knowledge" and failure == "stale_preview"):
+        test_operations()
     draft = next(
         r
         for r in resource["revisions"]
@@ -368,7 +424,11 @@ def test_three_real_owners_commit_or_rollback(
 
     coordinator = SelectedUpgradeCoordinator(
         SelectedUpgradePreview(
-            a.services["skill"], employees, caprepo, caps.references
+            a.services["skill"],
+            employees,
+            caprepo,
+            caps.references,
+            knowledge_service=a.services["knowledge"] if definition_manager else None,
         ),
         runner,
     )
@@ -400,7 +460,8 @@ def test_three_real_owners_commit_or_rollback(
         with a.authority.connection_scope() as conn:
             real_preview = coordinator.preview(call(conn), selected)
         if failure == "stale_preview":
-            # Fresh successful tests change the actual aggregate after user review.
+            # A valid owner action changes the aggregate after user review.
+            # Knowledge validates its draft once; it cannot validate twice.
             test_operations()
         elif failure == "existing_employee_draft":
             with a.authority.connection_scope() as conn:
@@ -422,6 +483,7 @@ def test_three_real_owners_commit_or_rollback(
             ).fetchall()
             for table in (
                 "skill_mcp_resource.resources",
+                "knowledge_operation.knowledge",
                 "digital_employee_definition.definitions",
                 "digital_employee_definition.revisions",
                 "digital_employee_definition.facts",
@@ -458,9 +520,9 @@ def test_three_real_owners_commit_or_rollback(
                     a.subject.scope.tenant_id,
                     a.subject.scope.security_domain,
                 ),
-                "SKILL",
+                source_owner(resource_kind),
                 "MANAGE_RESOURCE",
-                target(resource_kind, identity),
+                source_target(resource_kind, identity),
             )
             return UpgradeBatchRepository.apply(
                 conn,
@@ -640,9 +702,16 @@ def test_three_real_owners_commit_or_rollback(
                 == "COMMITTED"
             )
 
-        if resource_kind == "mcp":
+        if resource_kind in {"mcp", "knowledge"}:
             source_receipt = result["receipt"]["result"]["resource"]
-            assert source_receipt["resourceKind"] == "mcp"
+            assert source_receipt["resourceKind"] == resource_kind
+            if resource_kind == "knowledge":
+                assert source_receipt["indexingStarted"] is False
+                assert source_receipt["retrievalVerified"] is False
+                assert (
+                    source_receipt["activeIndexSnapshotId"]
+                    == resource["activeIndexSnapshotId"]
+                )
             assert source_receipt["invocationVerified"] is False
             assert "currentOperationTestsReady" not in source_receipt
         assert len(result["receipt"]["decisionIds"]) > 4

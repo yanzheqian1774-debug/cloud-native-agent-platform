@@ -44,8 +44,9 @@ def _member(member):
 
 
 class SelectedUpgradeOwners:
-    def __init__(self, resources, employees, capabilities):
+    def __init__(self, resources, employees, capabilities, *, definitions=None):
         self.resources = resources
+        self.definitions = definitions
         self.employees = employees
         self.capabilities = capabilities
 
@@ -179,7 +180,7 @@ class SelectedUpgradeOwners:
         reason,
         resource_kind="skill",
     ):
-        if resource_kind not in {"skill", "mcp"}:
+        if resource_kind not in {"skill", "mcp", "knowledge"}:
             raise UpgradeBatchError("UPGRADE_RESOURCE_KIND_INVALID")
         scope = (call.context.scope.tenant_id, call.context.scope.security_domain)
         if not reason.strip():
@@ -202,10 +203,15 @@ class SelectedUpgradeOwners:
                 ):
                     raise UpgradeBatchError("UPGRADE_SUCCESSOR_SELECTION_INVALID")
                 seen.add(key)
-        resource = self.resources.handle(
+        manager = self.definitions if resource_kind == "knowledge" else self.resources
+        if manager is None:
+            raise UpgradeBatchError("UPGRADE_KNOWLEDGE_OWNER_UNAVAILABLE")
+        resource = manager.handle(
             replace(
                 call,
-                operation="RESOURCE_MANAGEMENT",
+                operation="DEFINITION_MANAGEMENT"
+                if resource_kind == "knowledge"
+                else "RESOURCE_MANAGEMENT",
                 path={"kind": resource_kind},
                 query={},
                 payload={
@@ -256,8 +262,21 @@ class SelectedUpgradeOwners:
                     }
                     if resource_kind == "skill"
                     else {
-                        "resourceKind": "mcp",
-                        "verificationLevel": "CONFIGURATION_POLICY_PUBLICATION",
+                        "resourceKind": resource_kind,
+                        "verificationLevel": "KNOWLEDGE_POLICY_PUBLICATION"
+                        if resource_kind == "knowledge"
+                        else "CONFIGURATION_POLICY_PUBLICATION",
+                        **(
+                            {
+                                "indexingStarted": False,
+                                "retrievalVerified": False,
+                                "activeIndexSnapshotId": record.get(
+                                    "activeIndexSnapshotId"
+                                ),
+                            }
+                            if resource_kind == "knowledge"
+                            else {}
+                        ),
                         "invocationVerified": False,
                     }
                 ),

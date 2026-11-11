@@ -592,6 +592,7 @@ def build_workbench_composition(
                 workflows,
             )
 
+        definition_manager = None
         definition_path = os.environ.get("RESOURCE_DEFINITION_MANAGEMENT_POLICY")
         if definition_path:
             if not prepared_resource_services or not all(
@@ -607,13 +608,11 @@ def build_workbench_composition(
             definition_policy = DefinitionPolicy.model_validate_json(
                 Path(definition_path).read_text()
             )
+            definition_manager = DefinitionManagement(
+                prepared_resource_services, definition_policy, foundation.grants
+            )
             directory_installers += (
-                install_definitions(
-                    DefinitionManagement(
-                        prepared_resource_services, definition_policy, foundation.grants
-                    ),
-                    authorizer,
-                ),
+                install_definitions(definition_manager, authorizer),
             )
 
         resource_manager = None
@@ -673,6 +672,9 @@ def build_workbench_composition(
                         employee_definitions,
                         capability_repository,
                         references,
+                        knowledge_service=prepared_resource_services.get("knowledge")
+                        if definition_manager
+                        else None,
                     ),
                     SelectedUpgradeOwners(
                         resource_manager,
@@ -680,6 +682,7 @@ def build_workbench_composition(
                             employee_definitions, prepared_resource_reads=True
                         ),
                         capability_owner,
+                        definitions=definition_manager,
                     ),
                 )
             )

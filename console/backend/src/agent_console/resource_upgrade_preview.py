@@ -13,6 +13,7 @@ from .business_capability_publication import change_preview
 from .business_capability_publication_postgres import CapabilityPublicationRepository
 from .digital_employee_definition import EmployeeRevision, digest, identifier
 from .execution_domain import ScopeIdentity
+from .resource_definition_management import target as definition_target
 from .resource_management import target
 from .resource_upgrade_batch_postgres import UpgradeBatchError
 from .resource_upgrade_owners import CapabilityPublication, EmployeePublication
@@ -24,6 +25,18 @@ from .resource_upgrade_selection import (
 from .skill_resource_testing import coverage
 from .workbench_business_problem import OwnerPrincipal
 from .workbench_prepared_resources import bind_service, reference
+
+
+def source_owner(kind):
+    return "KNOWLEDGE" if kind == "knowledge" else "SKILL"
+
+
+def source_target(kind, identity):
+    return (
+        definition_target(kind, identity)
+        if kind == "knowledge"
+        else target(kind, identity)
+    )
 
 
 @dataclass(frozen=True)
@@ -52,7 +65,7 @@ class UpgradeSelection:
         return value
 
     def __post_init__(self):
-        if self.resource_kind not in {"skill", "mcp"}:
+        if self.resource_kind not in {"skill", "mcp", "knowledge"}:
             raise UpgradeBatchError("UPGRADE_RESOURCE_KIND_INVALID")
         if self.old_skill.resource_id != self.new_skill.resource_id:
             raise UpgradeBatchError("UPGRADE_RESOURCE_IDENTITY_CHANGED")
@@ -78,8 +91,17 @@ class PreparedUpgrade:
 
 
 class SelectedUpgradePreview:
-    def __init__(self, skill_service, employees, capabilities, capability_references):
+    def __init__(
+        self,
+        skill_service,
+        employees,
+        capabilities,
+        capability_references,
+        *,
+        knowledge_service=None,
+    ):
         self.skill_service = skill_service
+        self.knowledge_service = knowledge_service
         self.employees = employees
         self.capabilities = capabilities
         self.capability_references = capability_references
@@ -102,14 +124,14 @@ class SelectedUpgradePreview:
         skill = selected.new_skill
         self._require(
             call,
-            "SKILL",
+            source_owner(selected.resource_kind),
             "MANAGE_RESOURCE",
-            target(selected.resource_kind, skill.resource_id),
+            source_target(selected.resource_kind, skill.resource_id),
         )
         for ref in (selected.old_skill, skill):
             self._require(
                 call,
-                "SKILL",
+                source_owner(selected.resource_kind),
                 "READ_RESOURCE",
                 reference(selected.resource_kind, ref.resource_id, ref.revision_id),
             )
@@ -159,12 +181,21 @@ class SelectedUpgradePreview:
                 ).fetchone()["acquired"]
                 if not acquired:
                     raise UpgradeBatchError("UPGRADE_CONCURRENT_CHANGE")
-        call.connection.execute(
-            "SELECT resource_id FROM skill_mcp_resource.resources WHERE namespace=%s "
-            "AND security_domain=%s AND kind=%s "
-            "AND resource_id=%s FOR UPDATE NOWAIT",
-            (*scope, selected.resource_kind, selected.new_skill.resource_id),
-        )
+        if selected.resource_kind == "knowledge":
+            call.connection.execute(
+                "SELECT knowledge_id FROM knowledge_operation.knowledge "
+                "WHERE namespace=%s "
+                "AND security_domain=%s AND knowledge_id=%s FOR UPDATE NOWAIT",
+                (*scope, selected.new_skill.resource_id),
+            )
+        else:
+            call.connection.execute(
+                "SELECT resource_id FROM skill_mcp_resource.resources "
+                "WHERE namespace=%s "
+                "AND security_domain=%s AND kind=%s "
+                "AND resource_id=%s FOR UPDATE NOWAIT",
+                (*scope, selected.resource_kind, selected.new_skill.resource_id),
+            )
         for table, column, values in (
             (
                 "digital_employee_definition.definitions",
@@ -187,12 +218,21 @@ class SelectedUpgradePreview:
         scope = ScopeIdentity(
             call.context.scope.tenant_id, call.context.scope.security_domain
         )
-        service = bind_service(self.skill_service, call.connection)
-        record = service.repository.get(
-            service.scope(scope.namespace, scope.security_domain),
-            selected.resource_kind,
-            selected.new_skill.resource_id,
-        )
+        if selected.resource_kind == "knowledge":
+            if self.knowledge_service is None:
+                raise UpgradeBatchError("UPGRADE_KNOWLEDGE_OWNER_UNAVAILABLE")
+            service = bind_service(self.knowledge_service, call.connection)
+            record = service.repository.get(
+                service.scope(scope.namespace, scope.security_domain),
+                selected.new_skill.resource_id,
+            )
+        else:
+            service = bind_service(self.skill_service, call.connection)
+            record = service.repository.get(
+                service.scope(scope.namespace, scope.security_domain),
+                selected.resource_kind,
+                selected.new_skill.resource_id,
+            )
         if (
             record["publishedRevisionId"] != selected.old_skill.revision_id
             or record["currentDraftRevisionId"] != selected.new_skill.revision_id

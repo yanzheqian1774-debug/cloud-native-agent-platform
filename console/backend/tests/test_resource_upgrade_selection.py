@@ -127,9 +127,10 @@ def test_no_selected_reference_cannot_create_spurious_successor():
         capability_successor(original, "new:revision", (chosen,))
 
 
-def test_mcp_exact_replacement_preserves_employee_duties_and_skill_reference():
+@pytest.mark.parametrize("kind", ["MCP", "KNOWLEDGE"])
+def test_exact_replacement_preserves_employee_duties_and_skill_reference(kind):
     original = employee()
-    mcp = CompositionMember(MemberKind.MCP, "mcp:test", "revision:1", "a" * 64)
+    mcp = CompositionMember(MemberKind(kind), "resource:test", "revision:1", "a" * 64)
     original = replace(
         original,
         members=(*original.members, mcp),
@@ -140,9 +141,9 @@ def test_mcp_exact_replacement_preserves_employee_duties_and_skill_reference():
     )
     chosen = SelectedReplacement(
         original.scope,
-        "MCP",
-        FixedReference("mcp:test", "revision:1", "a" * 64),
-        FixedReference("mcp:test", "revision:2", "b" * 64),
+        kind,
+        FixedReference("resource:test", "revision:1", "a" * 64),
+        FixedReference("resource:test", "revision:2", "b" * 64),
     )
     updated = employee_successor(original, "employee:mcp-new", (chosen,))
     assert updated.members[:-1] == original.members[:-1]
@@ -170,3 +171,25 @@ def test_skill_selection_canonical_record_stays_compatible_and_mcp_is_separate()
         **expected,
         "resource_kind": "mcp",
     }
+
+
+def test_knowledge_root_grant_uses_existing_knowledge_owner():
+    from agent_console.workbench_resource_upgrade import root_grant
+
+    ref = {
+        "resourceId": "knowledge:test",
+        "revisionId": "revision:new",
+        "digest": "a" * 64,
+    }
+    (grant,) = root_grant(
+        None,
+        {},
+        {
+            "resourceKind": "knowledge",
+            "oldSkill": {**ref, "revisionId": "revision:old"},
+            "newSkill": ref,
+        },
+        {},
+    )
+    assert grant.owner == "KNOWLEDGE"
+    assert grant.exact_resource == "knowledge:resource-management:knowledge:test"
