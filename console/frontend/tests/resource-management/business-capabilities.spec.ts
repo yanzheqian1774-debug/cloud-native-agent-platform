@@ -681,3 +681,50 @@ test('independent local storage failure preserves form and blocks silent cancell
 });
 
  test('independent cancel after directory settles restores usable directory',async({page})=>{await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();await expect(page.getByText('正在读取业务能力…',{exact:true})).toBeHidden();await page.getByRole('button',{name:'取消编辑',exact:true}).click();await expect(page.getByRole('button',{name:'创建独立能力',exact:true})).toBeEnabled();await expect(page.getByText('正在读取业务能力…',{exact:true})).toBeHidden();});
+
+for(const mode of ['edit','workflow'])test(`other capability editor restores raw draft and clears only canceled form ${mode}`,async({page})=>{
+ const state=await fixture(page);const raw='  尚未保存的范围\n第二行\n\n';
+ await page.goto(mode==='edit'?'/capabilities?capability=handover&revision=r2':'/capabilities');
+ await page.getByRole('button',{name:mode==='edit'?'修改能力':'从执行方案设计能力',exact:true}).click();
+ await page.getByLabel('适用范围',{exact:true}).fill(raw);await page.getByLabel('完成标准（每行一项）').fill(raw);await page.reload();
+ await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(raw);await expect(page.getByLabel('完成标准（每行一项）')).toHaveValue(raw);
+ const url=page.url();await page.goto('/capabilities');await page.goto(url);await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(raw);
+ await page.getByRole('button',{name:'取消编辑',exact:true}).click();await page.getByRole('button',{name:mode==='edit'?'修改能力':'从执行方案设计能力',exact:true}).click();await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(mode==='edit'?revision.business_scope:'');
+ expect(state.saves).toHaveLength(0);expect(state.writes).toHaveLength(0);
+});
+
+test('workflow and independent creation use separate local drafts',async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities');await page.getByRole('button',{name:'从执行方案设计能力',exact:true}).click();await page.getByLabel('能力名称',{exact:true}).fill('执行方案入口未提交');
+ await page.goto('/capabilities');await page.getByRole('button',{name:'创建独立能力',exact:true}).click();await expect(page.getByLabel('能力名称',{exact:true})).toHaveValue('');await page.getByLabel('能力名称',{exact:true}).fill('独立入口未提交');
+ await page.goto('/capabilities?create=workflow');await expect(page.getByLabel('能力名称',{exact:true})).toHaveValue('执行方案入口未提交');await expect(page.getByLabel('定义创建方式')).toHaveValue('WORKFLOW_REVISION');expect(state.saves).toHaveLength(0);
+});
+
+test('existing edit reconciles saved pending command after refresh without duplicate save',async({page})=>{
+ const state=await fixture(page);
+ await page.route('**/api/workbench/v1/business-capabilities',async route=>{if(route.request().method()!=='POST')return route.fallback();state.saves.push(route.request().postDataJSON());return route.abort('failed')});
+ await page.goto('/capabilities?capability=handover&revision=r2');await page.getByRole('button',{name:'修改能力',exact:true}).click();await page.getByLabel('能力名称',{exact:true}).fill('修改后待核实');await page.getByRole('button',{name:'保存草稿',exact:true}).click();await expect(page.getByRole('alert')).toContainText('尚未核实');
+ await page.route('**/business-capabilities/handover/revisions/r2',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',continuationIds:[],result:{revision,members,digest,aggregateVersion:3,headRevisionId:state.saves[0].revision.revision_id,publishedRevisionId:'r1',currentDraftRevisionId:state.saves[0].revision.revision_id,state:'DRAFT',executionAuthorized:false}}}));
+ await page.reload();await expect(page.getByLabel('能力名称',{exact:true})).toHaveValue('修改后待核实');await expect(page.getByLabel('能力名称',{exact:true})).toBeDisabled();await page.getByRole('button',{name:'核实并重试本次保存',exact:true}).click();await expect(page.getByRole('heading',{name:'修改后待核实',exact:true})).toBeVisible();expect(state.saves).toHaveLength(1);expect(state.saves[0].revision.predecessor_revision_id).toBe('r2');expect(state.saves[0].expectedVersion).toBe(2);
+});
+
+test('existing edit recovery withholds draft after read access revoked',async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities?capability=handover&revision=r2&edit=true');await page.getByLabel('能力名称',{exact:true}).fill('受限未提交名称');state.deny=true;await page.reload();await expect(page.getByRole('alert')).toContainText('当前无法读取');await expect(page.getByLabel('能力名称',{exact:true})).toHaveCount(0);expect(state.saves).toHaveLength(0);
+});
+
+for(const mode of ['advanced','account'])test(`existing edit recovery keeps version and account boundaries ${mode}`,async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities?capability=handover&revision=r2&edit=true');await page.getByLabel('适用范围',{exact:true}).fill('原版本未提交范围');
+ if(mode==='advanced')await page.route('**/business-capabilities/handover/revisions/r2',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',continuationIds:[],result:{revision,members,digest,aggregateVersion:3,headRevisionId:'r3',publishedRevisionId:'r1',currentDraftRevisionId:'r3',state:'DRAFT',executionAuthorized:false}}}));
+ else await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:other',tenantId:'tenant',securityDomain:'domain'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'other-csrf'}}));
+ await page.reload();if(mode==='advanced'){await expect(page.getByRole('alert')).toContainText('已有更新版本');await expect(page.getByLabel('适用范围',{exact:true})).toHaveCount(0)}else await expect(page.getByLabel('适用范围',{exact:true})).toHaveValue(revision.business_scope);expect(state.saves).toHaveLength(0);
+});
+
+test('workflow editor restores exact selected source after refresh',async({page})=>{
+ const state=await fixture(page);await page.goto('/capabilities?create=workflow');await page.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接流程'});await page.getByRole('button',{name:'固定来源执行方案',exact:true}).click();await page.reload();await expect(page.getByText('已固定来源执行方案。更换执行方案需重新选择，既有工作不会随之改变。',{exact:true})).toBeVisible();
+ const source=await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('capability-workflow-draft:')).map(k=>JSON.parse(sessionStorage.getItem(k)!).draft.origin));expect(source).toEqual([{kind:'WORKFLOW_REVISION',workflow:{resource_id:'workflow:handover',revision_id:'workflow-v1',digest},preparation_digest:null}]);expect(state.saves).toHaveLength(0);
+});
+
+test('using a capability while editing keeps saved version and restores unsaved draft on return',async({page})=>{
+ const state=await fixture(page);state.published=true;await page.goto('/capabilities?capability=handover&revision=r2&returnConversation=original');await page.getByRole('button',{name:'修改能力',exact:true}).click();await page.getByLabel('希望完成什么',{exact:true}).fill('未保存目标不得生效');await page.getByLabel('需要提供哪些资料',{exact:true}).fill('未保存资料不得生效');const editUrl=page.url();
+ await page.getByRole('button',{name:'在会话中使用',exact:true}).click();const panel=page.getByRole('region',{name:'能力本次输入'});await expect(panel.getByLabel('希望完成什么',{exact:true})).toHaveValue(revision.intent);await expect(panel.getByText('所需资料：'+revision.inputs,{exact:true})).toBeVisible();await expect(panel.getByText('未保存资料不得生效',{exact:true})).toHaveCount(0);
+ await page.goto('/capabilities');await page.goto(editUrl);await expect(page.getByLabel('希望完成什么',{exact:true})).toHaveValue('未保存目标不得生效');await expect(page.getByLabel('需要提供哪些资料',{exact:true})).toHaveValue('未保存资料不得生效');expect(state.saves).toHaveLength(0);expect(state.sources).toHaveLength(0);expect(state.work.writes).toHaveLength(0);
+});

@@ -12,11 +12,11 @@ export type CapabilitySaveDraft={revision:CapabilityRevision;expectedVersion:num
 export type CapabilityEditorDraft={fields:FormFields;domain:string;criteria:string;bindings:CapabilityBinding[];origin:CapabilityRevision['origin'];purpose:string};
 export type CapabilitySeed=Partial<FormFields>&{acceptance_criteria?:string[];bindings?:CapabilityBinding[]};
 export function CapabilityEditor({base,principal,fromWorkflow=false,seed,initialDraft,onDraft,initialCommand,onCommand,onSaved,onCancel}:{base?:CapabilityDetail;principal:string;fromWorkflow?:boolean;seed?:CapabilitySeed;initialDraft?:CapabilityEditorDraft;onDraft?:(draft:CapabilityEditorDraft)=>void;initialCommand?:CapabilitySaveDraft;onCommand?:(command:CapabilitySaveDraft|null)=>void;onSaved:(value:CapabilityDetail)=>void;onCancel:()=>void}){
- const [fields,setFields]=useState<FormFields>(()=>Object.fromEntries(textFields.map(([key])=>[key,base?.revision[key]??initialCommand?.revision[key]??initialDraft?.fields[key]??seed?.[key]??''])) as FormFields);
- const [domain,setDomain]=useState(base?.revision.business_domain??initialCommand?.revision.business_domain??initialDraft?.domain??'');
- const [criteria,setCriteria]=useState(base?.revision.acceptance_criteria.join('\n')??initialCommand?.revision.acceptance_criteria.join('\n')??initialDraft?.criteria??seed?.acceptance_criteria?.join('\n')??'');
- const [bindings,setBindings]=useState<CapabilityBinding[]>(base?.revision.bindings??initialCommand?.revision.bindings??initialDraft?.bindings??seed?.bindings??[]);
- const [origin,setOrigin]=useState<CapabilityRevision['origin']>(base?.revision.origin??initialCommand?.revision.origin??initialDraft?.origin??{kind:fromWorkflow?'WORKFLOW_REVISION':'INDEPENDENT',workflow:null,preparation_digest:null});
+ const [fields,setFields]=useState<FormFields>(()=>Object.fromEntries(textFields.map(([key])=>[key,initialCommand?.revision[key]??initialDraft?.fields[key]??base?.revision[key]??seed?.[key]??''])) as FormFields);
+ const [domain,setDomain]=useState(initialCommand?.revision.business_domain??initialDraft?.domain??base?.revision.business_domain??'');
+ const [criteria,setCriteria]=useState(initialCommand?.revision.acceptance_criteria.join('\n')??initialDraft?.criteria??base?.revision.acceptance_criteria.join('\n')??seed?.acceptance_criteria?.join('\n')??'');
+ const [bindings,setBindings]=useState<CapabilityBinding[]>(initialCommand?.revision.bindings??initialDraft?.bindings??base?.revision.bindings??seed?.bindings??[]);
+ const [origin,setOrigin]=useState<CapabilityRevision['origin']>(initialCommand?.revision.origin??initialDraft?.origin??base?.revision.origin??{kind:fromWorkflow?'WORKFLOW_REVISION':'INDEPENDENT',workflow:null,preparation_digest:null});
  const [kind,setKind]=useState<PickKind>(fromWorkflow?'WORKFLOW':'EMPLOYEE'),[options,setOptions]=useState<Option[]>([]),[selected,setSelected]=useState(''),[purpose,setPurpose]=useState(initialDraft?.purpose??'');
  const [cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(false),[pickerError,setPickerError]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reload,setReload]=useState(0);
  const [submitted,setSubmitted]=useState<CapabilitySaveDraft|null>(initialCommand??null);
