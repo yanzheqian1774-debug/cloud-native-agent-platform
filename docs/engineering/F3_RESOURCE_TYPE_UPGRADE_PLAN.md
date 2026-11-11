@@ -117,3 +117,17 @@ work/evidence/f3-business-capability-design-20261111/knowledge-selected-upgrade
 in the continuation workspace, not this repository. Main remains 99815cce48ea;
 this candidate is not installed. Prototype review and guarded combined installation
 remain gates; professional maintenance styling is not a full F3 visual pass.
+
+## Knowledge reading presentation follow-up (2026-11-12)
+
+A bounded frontend-only correction reuses one KnowledgeBody in both maintenance
+and F3 read-only detail. Render stored paragraph chunks as one reading document
+with blank-line separators, while the single document-level original disclosure
+retains each saved chunk verbatim; do not claim original-file whitespace recovery.
+Existing Markdown safety and document-review bundle parsing remain. Structured
+JSON gets a generic field/row preview, preserving zero/false/null/missing distinction,
+showing array preview limits explicitly, and retaining full saved original text.
+Technical format/version metadata is collapsed; unknown field names and values
+are not invented or interpreted as business conclusions. No mutation, indexing,
+retrieval, backend contract or authorization change is included. Normal main
+version remains 42291d82 until separately installed and verified.

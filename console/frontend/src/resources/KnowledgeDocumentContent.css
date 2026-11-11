@@ -10,3 +10,11 @@
 .knowledge-document-table{overflow-x:auto}
 .knowledge-document-table th,.knowledge-document-table td{border:1px solid #e1e7f0;padding:8px 12px}
 .knowledge-document-table table{border-collapse:collapse}
+
+.knowledge-saved-document+article{border-top:1px solid #e1e7f0;margin-top:24px;padding-top:20px}
+.knowledge-saved-document>details pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;padding:14px;border-radius:8px}
+.knowledge-source{color:#6d7f99;overflow-wrap:anywhere}
+.knowledge-structured-fields{margin:8px 0;overflow-wrap:anywhere}
+.knowledge-structured-fields>div{border-bottom:1px solid #e1e7f0;padding:8px 0}
+.knowledge-structured-fields dt{font-weight:600}
+.knowledge-structured-fields dd{margin:6px 0 8px 16px}

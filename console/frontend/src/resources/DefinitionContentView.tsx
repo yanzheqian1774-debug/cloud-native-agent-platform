@@ -1,4 +1,4 @@
-import {KnowledgeDocumentContent} from './KnowledgeDocumentContent';
+import {KnowledgeBody} from './KnowledgeBody';
 import {Link} from 'react-router-dom';
 import type {DirectoryItem} from '../api/resourceDirectory';
 import {readDirectoryResource} from '../api/resourceDirectory';
@@ -8,7 +8,7 @@ import {exactDefinitionHref} from './definitionJourney';
 import {exactSkillMcpHref,safeResourceReturn} from './resourceJourneyLinks';
 
 export function DefinitionContentView({kind,content}:{kind:'agent'|'knowledge';content:Record<string,unknown>}){
- if(kind==='knowledge'){const source=content.source as Record<string,unknown>|undefined,docs=content.documents as {documentId:string;chunks:{content:string}[]}[]|undefined;return <section aria-label="知识正文与来源"><h2>知识正文与来源</h2><p>出处：{String(source?.provenance??'未提供')}</p><p>来源：{String(source?.sourceId??'未提供')}</p>{docs?.map(d=><article key={d.documentId}>{d.chunks.map((c,i)=><KnowledgeDocumentContent key={i} text={c.content}/>)}</article>)}<p>这里核对保存的正文版本；发布不代表索引已建立、已检索或已被业务采用。</p></section>}
+ if(kind==='knowledge')return <KnowledgeBody content={content}/>;
  const bindings=content.bindings as Record<string,unknown>|undefined;
  return <section aria-label="Agent职责与准确绑定"><h2>{String(content.title??'Agent职责')}</h2><p>{String(content.businessPurpose??'未提供业务用途')}</p><ul>{Array.isArray(content.duties)&&content.duties.map((x,i)=><li key={i}>{String(x)}</li>)}</ul><h3>准确资源绑定</h3>{(['skills','knowledge','mcpTools'] as const).map(group=>{const values=bindings?.[group];return Array.isArray(values)&&values.map((r:{resourceId:string;revisionId:string;digest:string;toolName?:string},i)=><p key={group+i}><Link to={group==='knowledge'?exactDefinitionHref('knowledge',r.resourceId,r.revisionId,r.digest):exactSkillMcpHref(group==='skills'?'skill':'mcp',r.resourceId,r.revisionId,r.digest)}>{group==='knowledge'?'查看绑定知识':group==='skills'?'查看绑定技能':'查看绑定MCP'}{r.toolName?' · '+r.toolName:''}</Link></p>)})}<p>职责与保存绑定不代表已运行；既有员工与工作维持原版本。</p></section>;
 }
