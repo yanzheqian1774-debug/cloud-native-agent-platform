@@ -27,3 +27,12 @@ prototype reviewer before closing this bounded stage.
 Remaining scope: this patch does not bound every directory/client read, eliminate
 server-side latency, prove model execution recovery, renew Native budgets, or
 complete the overall task/resource/digital-employee delivery.
+
+Reviewer follow-up: error states also render the existing independently verified
+EmployeeResourceReturn. Do not make escape depend on successful detail retry.
+Use "重新读取此版本" and state that the original reference is unchanged; historical
+revisions must not imply a switch to the latest publication. Add historical retry,
+verified employee-return target and ignored late-response coverage. A pre-existing
+UI01 heading assertion still expected an obsolete "usage records" heading; align
+that assertion with the already implemented "关联任务中的保存引用" semantics, without
+changing the product back to a misleading actual-invocation claim.

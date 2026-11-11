@@ -73,7 +73,7 @@ test('F3 readonly business tabs keep exact identity behind evidence and never gr
  await page.getByRole('button',{name:'返回资源详情',exact:true}).click();
  await expect(page.getByRole('tab',{name:'内容与定义',exact:true})).toHaveAttribute('aria-selected','true');
  await page.getByRole('tab',{name:'引用与影响',exact:true}).click();
- await expect(page.getByRole('heading',{name:'本版本可查看的使用记录',exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'关联任务中的保存引用',exact:true})).toBeVisible();
  await page.reload();await expect(page.getByRole('tab',{name:'引用与影响',exact:true})).toHaveAttribute('aria-selected','true');
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await page.screenshot({path:info.outputPath('f3-readonly-impact-mobile.png')});expect(writes).toEqual([]);

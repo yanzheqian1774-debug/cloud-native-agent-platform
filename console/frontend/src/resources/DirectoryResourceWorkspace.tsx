@@ -38,7 +38,7 @@ function ExactResourceDetail({item,expectedScope,conversation,sourceExecution}:{
  const article=useRef<HTMLElement>(null),navigate=useNavigate(),detail=loaded?.detail;
  useEffect(()=>{
   const abort=new AbortController();let active=true,generation=0;
-  const deadline=window.setTimeout(()=>{if(active){generation++;setLoaded(null);setError('读取等待超时，请重新读取当前版本。');abort.abort()}},30000);
+  const deadline=window.setTimeout(()=>{if(active){generation++;setLoaded(null);setError('读取等待超时，原引用版本保持不变，请重新读取此版本。');abort.abort()}},30000);
   async function load(version:number){
    const before=await readWorkbenchSession(abort.signal);
    if(scopeKey(before.principal.principalId,before.principal)!==expectedScope)throw Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
@@ -71,7 +71,7 @@ function ExactResourceDetail({item,expectedScope,conversation,sourceExecution}:{
    navigate('/work?'+new URLSearchParams({resourceRead:saved.id}));
   }catch(reason){setLoaded(null);setError(reason instanceof Error?reason.message:'RESOURCE_RETURN_UNAVAILABLE')}
  }
- if(error)return <div role="alert"><h1>当前版本详情未读回</h1><p>{error.startsWith('读取等待超时')?error:'这次未能读取，请重新读取或返回资源目录。原资源和已保存的工作不会改变。'}</p><button type="button" onClick={()=>setAttempt(value=>value+1)}>重新读取当前版本</button><details><summary>核查依据</summary><code>{error}</code></details></div>;
+ if(error)return <><EmployeeResourceReturn item={item}/><div role="alert"><h1>当前版本详情未读回</h1><p>{error.startsWith('读取等待超时')?error:'这次未能读取，请重新读取或返回资源目录。原资源和已保存的工作不会改变。'}</p><button type="button" onClick={()=>setAttempt(value=>value+1)}>重新读取此版本</button><details><summary>核查依据</summary><code>{error}</code></details></div></>;
  if(!detail)return <p role="status">正在核对准确版本与读取资格…</p>;
  const c=detail.revision!.content,isSkill=item.kind==='skill';
  return <article ref={article} className={"resource-readonly-detail f3-managed-resource"+(professional?" f3-read-professional":" f3-read-business")} data-resource-kind={item.kind}>
