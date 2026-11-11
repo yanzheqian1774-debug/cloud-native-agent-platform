@@ -56,6 +56,157 @@ def structural(content, kind):
     return {}
 
 
+def capability_nodes(call, principal, limits):
+    """Read exact capability bindings; publication never implies execution."""
+    from .business_capability_postgres import PostgresBusinessCapabilityRepository
+    from .execution_domain import ScopeIdentity
+
+    c = call.connection
+    for table in ("revisions", "definitions", "publications"):
+        if not c.execute(
+            "SELECT to_regclass(%s) value", ("business_capability." + table,)
+        ).fetchone()["value"]:
+            limits.append("BUSINESS_CAPABILITY_OWNER_UNAVAILABLE")
+            return []
+    rows = c.execute(
+        "SELECT r.capability_id,r.revision_id,d.head_revision_id,"
+        "p.revision_id published_revision_id FROM business_capability.revisions r "
+        "JOIN business_capability.definitions d USING(namespace,security_domain,capability_id) "
+        "LEFT JOIN LATERAL (SELECT revision_id FROM business_capability.publications "
+        "WHERE namespace=r.namespace AND security_domain=r.security_domain "
+        "AND capability_id=r.capability_id ORDER BY aggregate_version DESC LIMIT 1) p ON true "
+        "WHERE r.namespace=%s AND r.security_domain=%s "
+        "ORDER BY r.capability_id,r.revision_id LIMIT 501",
+        (principal.tenant_id, principal.security_domain),
+    ).fetchall()
+    if len(rows) > 500:
+        limits.append("BUSINESS_CAPABILITY_SCAN_LIMIT")
+    nodes = []
+    for row in rows[:500]:
+        identity, revision = row["capability_id"], row["revision_id"]
+        try:
+            call.authority.require(
+                principal,
+                "BUSINESS_CAPABILITY",
+                "READ",
+                f"business-capability:{identity}:{revision}",
+            )
+        except AuthorityError:
+            continue
+        value = PostgresBusinessCapabilityRepository.read(
+            c,
+            ScopeIdentity(principal.tenant_id, principal.security_domain),
+            identity,
+            revision,
+        )
+        state = (
+            "PUBLISHED"
+            if revision == row["published_revision_id"]
+            else "DRAFT"
+            if revision == row["head_revision_id"]
+            else "HISTORICAL_REVISION"
+        )
+        nodes.append(
+            {
+                "kind": "BUSINESS_CAPABILITY",
+                "identity": identity,
+                "revision": revision,
+                "digest": value.content_digest,
+                "name": value.title,
+                "state": state,
+                "references": [
+                    {
+                        "kind": binding.kind.value,
+                        "identity": binding.reference.resource_id,
+                        "revision": binding.reference.revision_id,
+                        "digest": binding.reference.digest,
+                    }
+                    for binding in value.bindings
+                ],
+            }
+        )
+    return nodes
+
+
+def incoming_references(nodes, identity, revisions, current):
+    """Breadth-first exact references, checking digest at every hop."""
+    frontier = {
+        (identity, current["revisionId"]): {
+            "distance": 0,
+            "targetRevision": current["revisionId"],
+            "versionRelation": "CURRENT_VERSION",
+        }
+    }
+    # All actual pinned revisions of this resource family are distinct roots.
+    for revision in revisions:
+        frontier[(identity, revision["revisionId"])] = {
+            "distance": 0,
+            "digest": revision["digest"].removeprefix("sha256:"),
+            "targetRevision": revision["revisionId"],
+            "versionRelation": "CURRENT_VERSION"
+            if revision["revisionId"] == current["revisionId"]
+            else "OTHER_VERSION",
+        }
+    incoming = []
+    seen = set()
+    for _ in range(6):
+        added = False
+        previous = dict(frontier)
+        for node in nodes:
+            key = (node["identity"], node["revision"])
+            if key in seen or node["identity"] == identity:
+                continue
+            matches = [
+                (r, previous[(r["identity"], r["revision"])])
+                for r in node["references"]
+                if (r["identity"], r["revision"]) in previous
+            ]
+            if not matches:
+                continue
+            link, parent = min(matches, key=lambda x: x[1]["distance"])
+            if parent["distance"] >= 6:
+                continue
+            entry = {
+                k: node[k] for k in ["kind", "identity", "revision", "name", "state"]
+            }
+            entry.update(
+                digest=node.get("digest"),
+                distance=parent["distance"] + 1,
+                targetRevision=parent["targetRevision"],
+                versionRelation=parent["versionRelation"],
+                via={
+                    "identity": link["identity"],
+                    "revision": link["revision"],
+                    "name": parent.get("name"),
+                    "kind": parent.get("kind"),
+                    "digest": parent.get("digest"),
+                },
+                automaticUpgrade=False,
+            )
+            expected = parent.get("digest")
+            supplied = link.get("digest")
+            if expected and supplied and supplied.removeprefix("sha256:") != expected:
+                entry["versionRelation"] = "DIGEST_MISMATCH"
+            elif (not expected or not supplied) and entry[
+                "versionRelation"
+            ] != "DIGEST_MISMATCH":
+                entry["versionRelation"] = "DIGEST_UNVERIFIED"
+            frontier[key] = {
+                "distance": entry["distance"],
+                "digest": node.get("digest", "").removeprefix("sha256:"),
+                "name": node["name"],
+                "kind": node["kind"],
+                "targetRevision": entry["targetRevision"],
+                "versionRelation": entry["versionRelation"],
+            }
+            seen.add(key)
+            incoming.append(entry)
+            added = True
+        if not added:
+            break
+    return incoming
+
+
 def project(call, kind, record):
     c = call.connection
     p = OwnerPrincipal(
@@ -72,6 +223,9 @@ def project(call, kind, record):
     identity = record["resourceId"]
     nodes = []
     limits = []
+    outgoing_keys = {
+        (r["identity"], r["revision"]) for r in references(current["content"])
+    }
     for owner_kind in ("AGENT", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME", "WORKFLOW"):
         table, col, _, _ = OWNERS[owner_kind]
         if not c.execute("SELECT to_regclass(%s) value", (table,)).fetchone()["value"]:
@@ -90,6 +244,12 @@ def project(call, kind, record):
         if len(rows) > 500:
             limits.append(owner_kind + "_SCAN_LIMIT")
         for row in rows[:500]:
+            dependencies = references(structural(row["r"]["content"], owner_kind))
+            if (
+                not dependencies
+                and (row["identity"], row["r"]["revisionId"]) not in outgoing_keys
+            ):
+                continue
             ref = ExactReference(
                 resource_id=row["identity"],
                 revision_id=row["r"]["revisionId"],
@@ -107,9 +267,7 @@ def project(call, kind, record):
                     "digest": ref.digest,
                     "name": row["record"]["name"],
                     "state": row["r"]["state"],
-                    "references": references(
-                        structural(row["r"]["content"], owner_kind)
-                    ),
+                    "references": dependencies,
                 }
             )
     if c.execute(
@@ -144,6 +302,7 @@ def project(call, kind, record):
             )
     else:
         limits.append("EMPLOYEE_OWNER_UNAVAILABLE")
+    nodes.extend(capability_nodes(call, p, limits))
     # Plans remain their own owner. Only authorized exact Plan revisions enter graph.
     rows = c.execute(
         "SELECT plan_id,version,record FROM workflow_planning.plans WHERE namespace=%s AND security_domain=%s ORDER BY plan_id,version LIMIT 501",
@@ -201,71 +360,7 @@ def project(call, kind, record):
                 }
             )
     target_kind = kind.upper()
-    frontier = {
-        (identity, current["revisionId"]): {
-            "distance": 0,
-            "targetRevision": current["revisionId"],
-            "versionRelation": "CURRENT_VERSION",
-        }
-    }
-    # All actual pinned revisions of this resource family are distinct roots.
-    for revision in record["revisions"]:
-        frontier[(identity, revision["revisionId"])] = {
-            "distance": 0,
-            "targetRevision": revision["revisionId"],
-            "versionRelation": "CURRENT_VERSION"
-            if revision["revisionId"] == current["revisionId"]
-            else "OTHER_VERSION",
-        }
-    incoming = []
-    seen = set()
-    for _ in range(6):
-        added = False
-        for node in nodes:
-            key = (node["identity"], node["revision"])
-            if key in seen or node["identity"] == identity:
-                continue
-            matches = [
-                (r, frontier[(r["identity"], r["revision"])])
-                for r in node["references"]
-                if (r["identity"], r["revision"]) in frontier
-            ]
-            if not matches:
-                continue
-            link, parent = min(matches, key=lambda x: x[1]["distance"])
-            if parent["distance"] >= 6:
-                continue
-            entry = {
-                k: node[k] for k in ["kind", "identity", "revision", "name", "state"]
-            }
-            entry.update(
-                distance=parent["distance"] + 1,
-                targetRevision=parent["targetRevision"],
-                versionRelation=parent["versionRelation"],
-                via={"identity": link["identity"], "revision": link["revision"]},
-                automaticUpgrade=False,
-            )
-            if parent["distance"] == 0:
-                expected = next(
-                    x["digest"].removeprefix("sha256:")
-                    for x in record["revisions"]
-                    if x["revisionId"] == link["revision"]
-                )
-                if (
-                    link.get("digest")
-                    and link["digest"].removeprefix("sha256:") != expected
-                ):
-                    entry["versionRelation"] = "DIGEST_MISMATCH"
-            frontier[key] = {
-                "distance": entry["distance"],
-                "targetRevision": entry["targetRevision"],
-                "versionRelation": entry["versionRelation"],
-            }
-            seen.add(key)
-            incoming.append(entry)
-            added = True
-        if not added:
-            break
+    incoming = incoming_references(nodes, identity, record["revisions"], current)
     outgoing = []
     for ref in references(current["content"]):
         child = next(
@@ -306,6 +401,7 @@ def project(call, kind, record):
             "RUNTIME",
             "WORKFLOW",
             "EMPLOYEE",
+            "BUSINESS_CAPABILITY",
             "PLAN",
             "RUN",
         ],

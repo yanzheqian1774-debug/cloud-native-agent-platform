@@ -14,9 +14,14 @@ import {
 } from "../api/digitalEmployees";
 import { EmployeeAuthorizationRequest } from "./EmployeeAuthorizationRequest";
 
+import {employeeMemberKey,employeeMemberLabels,type EmployeeSelectionNames} from './employeeResourceSelection';
 import {EmployeeResourcePicker} from "./EmployeeResourcePicker";
 
-type FrozenCreate = { command: EmployeeCreateCommand; principalKey: string };
+type FrozenCreate = { command: EmployeeCreateCommand; principalKey: string; memberNames:EmployeeSelectionNames };
+function SelectionSummary({members,names}:{members:EmployeeMember[];names:EmployeeSelectionNames}){
+ if(!members.length)return null;
+ return <><ul>{members.map(member=><li key={employeeMemberKey(member)}>{employeeMemberLabels[member.kind]} · {names[employeeMemberKey(member)]||'名称未读取'}</li>)}</ul><details><summary>查看所选资源版本依据</summary><ul>{members.map(member=><li key={employeeMemberKey(member)}>{employeeMemberLabels[member.kind]}<code>{member.resourceId} / {member.revisionId}</code><code>摘要：{member.digest}</code></li>)}</ul></details></>;
+}
 
 const lifecycleLabel: Record<EmployeeLifecycleState, string> = {
   DRAFT: "草稿",
@@ -54,6 +59,7 @@ export function EmployeeDefinitionAssembly({
   const [role, setRole] = useState("");
   const [responsibilities, setResponsibilities] = useState("");
   const [agentIdentity, setAgentIdentity] = useState("");
+  const [resourceNames,setResourceNames]=useState<EmployeeSelectionNames>({});
   const [resourceMembers, setResourceMembers] = useState<EmployeeMember[]>([]);
   const [resourcePrincipal, setResourcePrincipal] = useState<string|null>(null);
   const [frozen, setFrozen] = useState<FrozenCreate | null>(null);
@@ -94,7 +100,7 @@ export function EmployeeDefinitionAssembly({
     try {
       const session = await getWorkbenchSession(controller.signal);
       if (turn !== generation.current) return;
-      if(resourceMembers.length && resourcePrincipal!==workbenchPrincipalKey(session)){setResourceMembers([]);throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED",409)}
+      if(resourceMembers.length && resourcePrincipal!==workbenchPrincipalKey(session)){setResourceMembers([]);setResourceNames({});throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED",409)}
       const command: EmployeeCreateCommand = {
         employeeDefinitionId: definitionId.trim(),
         employeeDefinitionRevisionId: revisionId.trim(),
@@ -113,7 +119,7 @@ export function EmployeeDefinitionAssembly({
       command.members.forEach(Object.freeze);
       Object.freeze(command.members);
       Object.freeze(command);
-      setFrozen({ command, principalKey: workbenchPrincipalKey(session) });
+      setFrozen({ command, principalKey: workbenchPrincipalKey(session),memberNames:Object.freeze({...resourceNames,[employeeMemberKey(command.members[0])]:selectedAgent.name}) });
       setNeedsCreateAuthorization(false);
       setUnknown(false);
       setResult(null);
@@ -213,14 +219,14 @@ export function EmployeeDefinitionAssembly({
         </label>; })}</div>
         {hasMoreAgents && <button type="button" className="employee-secondary-button" onClick={onLoadMoreAgents}>加载更多 Agent</button>}
       </div>
-      <EmployeeResourcePicker disabled={Boolean(frozen)||busy} onChange={(members,principal)=>{setResourceMembers(members);setResourcePrincipal(principal)}}/>
+      <EmployeeResourcePicker disabled={Boolean(frozen)||busy} onChange={(members,principal,names)=>{setResourceMembers(members);setResourcePrincipal(principal);setResourceNames(names??{})}}/>
     </div>
 
     <aside className="assembly-preview" aria-label="装配预览">
       <span className="px-eyebrow">装配预览</span><h3>{role.trim() || "待定义角色"}</h3>
       <h4>职责边界</h4>{responsibilityList.length ? <ul>{responsibilityList.map((d,i)=><li key={i}>{d}</li>)}</ul> : <p>填写这位员工负责的业务事项。</p>}
-      <h4>执行成员</h4><p>{selectedAgent?.name ?? "请选择 Agent"}</p>{selectedAgent && <code>{selectedAgent.revisionId}</code>}
-      <h4>业务资源 · {resourceMembers.length} 项</h4><ul>{resourceMembers.map(m=><li key={m.kind+":"+m.resourceId}>{m.kind} · <code>{m.revisionId}</code></li>)}</ul>
+      <h4>执行成员</h4><p>{selectedAgent?.name ?? "请选择 Agent"}</p>{selectedAgent&&<details><summary>查看执行职责版本依据</summary><p>{selectedAgent.definitionId} / {selectedAgent.revisionId}</p><p>摘要：{selectedAgent.digest}</p></details>}
+      <h4>业务资源 · {resourceMembers.length} 项</h4><SelectionSummary members={resourceMembers} names={resourceNames}/>
       <h4>创建前核对</h4><ul>{readiness.map(({ ready, label }) =>
         <li key={label}><b className={ready ? "ready" : ""}>{ready ? "已填写" : "待补齐"}</b> {label}</li>
       )}</ul>
@@ -231,7 +237,7 @@ export function EmployeeDefinitionAssembly({
       <span className="employee-confirmation-state">等待用户明确确认</span>
       <h3>{frozen.command.role}</h3>
       <p>{frozen.command.responsibilities.join("；")}</p>
-      <p>组合成员：{frozen.command.members.length} 项</p><ul>{frozen.command.members.map(m=><li key={m.kind+":"+m.resourceId}>{m.kind} · {m.resourceId} / {m.revisionId}</li>)}</ul>
+      <p>组合成员：{frozen.command.members.length} 项</p><SelectionSummary members={frozen.command.members} names={frozen.memberNames}/>
       <details><summary>查看冻结命令身份</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionId}</code><code>{frozen.command.employeeDefinitionRevisionId}</code></details>
       <div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认创建"}</button></div>
     </section>}

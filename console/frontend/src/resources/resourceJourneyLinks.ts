@@ -12,8 +12,8 @@ export function safeResourceReturn(raw: string | null): string | null {
     const url = new URL(raw, window.location.origin);
     if (url.origin !== window.location.origin || url.hash || !['/skills','/mcp','/agents','/knowledge'].includes(url.pathname)) return null;
     const p = url.searchParams;
-    if(['/agents','/knowledge'].includes(url.pathname)&&p.has('selected')){
-      const expected=url.pathname==='/agents'?'agent':'knowledge';
+    if(p.has('selected')){
+      const expected={'/agents':'agent','/knowledge':'knowledge','/skills':'skill','/mcp':'mcp'}[url.pathname];
       if([...p.keys()].some(k=>!['selected','resourceRevision','resourceDigest','kind','query','status','resourceView','resourceSection'].includes(k)||p.getAll(k).length!==1)||p.get('kind')!==expected||!identity(p.get('selected'))||!identity(p.get('resourceRevision'))||!digest(p.get('resourceDigest')??'')||(p.get('query')?.length??0)>200||(p.get('status')?.length??0)>32)return null;
       if((p.has('resourceView')&&p.get('resourceView')!=='professional')||(p.has('resourceSection')&&!['overview','content','impact'].includes(p.get('resourceSection')!)))return null;
       p.sort();return url.pathname+'?'+p;

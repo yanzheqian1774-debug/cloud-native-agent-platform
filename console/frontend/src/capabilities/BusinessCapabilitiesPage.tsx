@@ -1,3 +1,4 @@
+import {safeResourceReturn} from '../resources/resourceJourneyLinks';
 import {CapabilityEditorRecovery} from './CapabilityEditorRecovery';
 import {CapabilityProcessDesign} from './CapabilityProcessDesign';
 import {safeBusinessProcessReturn} from '../businessProcesses/businessRelationNavigation';
@@ -133,6 +134,7 @@ export function BusinessCapabilitiesPage(){
   const memberName=(binding:import('../api/businessCapabilities').CapabilityBinding)=>detail?.members?.find(item=>item.kind===binding.kind&&item.resourceId===binding.reference.resource_id&&item.revisionId===binding.reference.revision_id&&item.digest===binding.reference.digest)?.name??'名称尚未读回';
   if(params.has('processDesign')&&principal&&!id)return <CapabilityProcessDesign key={principal+params.get('processDesign')} source={params.get('processDesign')!} principal={principal}/>;
   return <main ref={root} className="f3-capabilities">
+    {safeResourceReturn(params.get('resourceBack'))&&<Link to={safeResourceReturn(params.get('resourceBack'))!}>← 返回来源资源</Link>}
     <header><div><p className="eyebrow">BUSINESS CAPABILITIES</p><h1>{current?.title??'业务能力'}</h1><p>{current?'核对本版本的分工、资源与交付范围。':'按目标查找能力，使用前核对当前版本。'}</p></div>{id?<div className="capability-actions"><button onClick={back}>返回业务能力</button>{detail?.state==='PUBLISHED'&&<button className="capability-primary" onClick={()=>{setUpgrading(false);setEditing(null);setUsing(true)}}>在会话中使用</button>}</div>:<div className="capability-actions"><button disabled={!principal||loading} onClick={()=>{setEditing('independent');createRoute('independent')}}>创建独立能力</button><button disabled={!principal||loading} onClick={()=>{setEditing('workflow');createRoute('workflow')}}>从执行方案设计能力</button></div>}</header>
     {loading&&!preferences.error&&<p role="status">正在读取业务能力…</p>}
     {error&&<section role="alert" className="capability-notice"><p>{error}</p><button disabled={busy} onClick={()=>setRetry(n=>n+1)}>重新读取</button></section>}

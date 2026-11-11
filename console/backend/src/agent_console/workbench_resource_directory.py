@@ -71,7 +71,7 @@ class ResourceDirectory:
             kind, identity, revision = (
                 call.path[k] for k in ("kind", "identity", "revision")
             )
-            if kind not in {"agent", "knowledge"}:
+            if kind not in {"agent", "knowledge", "skill", "mcp"}:
                 raise WorkbenchOwnerError("RESOURCE_DIRECTORY_NOT_FOUND", 404)
             from .resource_dependency_impact import project
             from .workbench_prepared_resources import bind_service
@@ -80,7 +80,11 @@ class ResourceDirectory:
             scope = service.scope(
                 call.context.scope.tenant_id, call.context.scope.security_domain
             )
-            record = service.repository.get(scope, identity)
+            record = (
+                service.repository.get(scope, kind, identity)
+                if kind in {"skill", "mcp"}
+                else service.repository.get(scope, identity)
+            )
             exact = next(
                 (r for r in record["revisions"] if r["revisionId"] == revision), None
             )
@@ -190,19 +194,19 @@ class ResourceDirectory:
                         raise WorkbenchOwnerError("RESOURCE_DIRECTORY_SCAN_LIMIT", 503)
                     r, record, identity = row["r"], row["record"], row["identity"]
                     lower = (identity, r["revisionId"])
-                    grant = target(kind, identity, r["revisionId"])
-                    try:
-                        call.authority.require(
-                            p, grant.owner, grant.action, grant.exact_resource
-                        )
-                    except AuthorityError:
-                        continue
                     if (
                         args.query.casefold()
                         not in (record["name"] + " " + identity).casefold()
                     ):
                         continue
                     if args.status and r["state"] != args.status:
+                        continue
+                    grant = target(kind, identity, r["revisionId"])
+                    try:
+                        call.authority.require(
+                            p, grant.owner, grant.action, grant.exact_resource
+                        )
+                    except AuthorityError:
                         continue
                     result.append(
                         {
