@@ -194,6 +194,8 @@ class CapabilityReferences:
                 )
                 name = value["name"]
                 actual_digest = value["revision"]["digest"]
+                if binding.kind is BindingKind.RUNTIME_PROFILE:
+                    actual_digest = actual_digest.removeprefix("sha256:")
                 if require_published and value["revision"]["state"] != "PUBLISHED":
                     raise BusinessCapabilityError("CAPABILITY_MEMBER_NOT_PUBLISHED")
             if actual_digest != ref.digest:
@@ -376,13 +378,21 @@ class CapabilityOwner:
                 }
             if call.operation == "LIST_CAPABILITY_DOMAINS":
                 call.authority.require(principal, OWNER, "LIST", COLLECTION)
-                values = {
-                    item.get("businessDomain")
-                    for item in self._scan(call, scope, principal)
-                }
+                from .capability_catalogue_preferences import latest as preferences
+
+                own = preferences(
+                    call.connection,
+                    (scope.namespace, scope.security_domain, principal.principal_id),
+                )
+                favorites = set(own["state"]["favorites"]) if own else set()
+                values, favorite_count = set(), 0
+                for item in self._scan(call, scope, principal):
+                    values.add(item.get("businessDomain"))
+                    favorite_count += item["capabilityId"] in favorites
                 return {
                     "domains": sorted(value for value in values if value),
                     "hasUnassigned": None in values,
+                    "readableFavoriteCount": favorite_count,
                 }
             if call.operation == "LIST_CAPABILITIES":
                 call.authority.require(principal, OWNER, "LIST", COLLECTION)
@@ -530,6 +540,37 @@ class CapabilityOwner:
                 return
             after = rows[-1]["capability_id"]
 
+    def _employee_names(self, call, scope, principal, item):
+        revision = self.repository.read(
+            call.connection, scope, item["capabilityId"], item["revisionId"]
+        )
+        names, unavailable = [], 0
+        for binding in revision.bindings:
+            if binding.kind is not BindingKind.EMPLOYEE:
+                continue
+            ref = binding.reference
+            try:
+                call.authority.require(
+                    principal,
+                    "EMPLOYEE",
+                    "READ",
+                    f"employee:{ref.resource_id}:{ref.revision_id}",
+                )
+                value = self.references.employees.read_revision_for_workbench(
+                    call.connection,
+                    scope,
+                    ref.resource_id,
+                    ref.revision_id,
+                    authorized=True,
+                )
+                if value["digest"] != ref.digest:
+                    unavailable += 1
+                    continue
+                names.append(value["revision"]["role"])
+            except (AuthorityError, EmployeeDefinitionError):
+                unavailable += 1
+        return {**item, "employeeNames": names, "employeeNamesUnavailable": unavailable}
+
     def _list(self, call, scope, principal):
         from .capability_catalogue_preferences import latest as preferences
 
@@ -577,7 +618,10 @@ class CapabilityOwner:
             if len(items) > size:
                 break
         return {
-            "items": items[:size],
+            "items": [
+                self._employee_names(call, scope, principal, item)
+                for item in items[:size]
+            ],
             "nextCursor": self.cursors.mint(
                 route=route,
                 context=call.context,

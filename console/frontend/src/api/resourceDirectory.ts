@@ -6,3 +6,13 @@ export type DirectoryDetail={name:string;subject?:string;scope?:{tenantId:string
 async function read<T>(path:string,signal?:AbortSignal):Promise<T>{const response=await fetch('/api/workbench/v1/resource-directory'+path,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});const body=await response.json().catch(()=>null);if(response.status===401)window.dispatchEvent(new Event('workbench-session-expired'));if(!response.ok)throw new WorkbenchRequestError(body?.reasonCode??'RESOURCE_DIRECTORY_UNAVAILABLE',response.status,body?.requestId);return body.result as T}
 export async function listReadableResources(kind:string,query:string,status:string,cursor:string|null,signal?:AbortSignal){const before=await readWorkbenchSession(signal);const value=await read<DirectoryPage>('?'+new URLSearchParams({kind,query,status,pageSize:'50',...(cursor?{cursor}:{})}),signal);const after=await readWorkbenchSession(signal);if(JSON.stringify(before.principal)!==JSON.stringify(after.principal)||value.subject!==after.principal.principalId||value.scope.tenantId!==after.principal.tenantId||value.scope.securityDomain!==after.principal.securityDomain)throw new Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');return value}
 export const readDirectoryResource=(item:DirectoryItem,signal?:AbortSignal)=>read<DirectoryDetail>('/'+[item.kind,item.identity,item.revisionId].map(encodeURIComponent).join('/'),signal);
+
+export async function readExactDirectoryResource(kind:DirectoryKind,identity:string,revision:string,digest:string,signal?:AbortSignal){
+ const before=await readWorkbenchSession(signal);
+ const value=await read<DirectoryDetail>('/'+[kind,identity,revision].map(encodeURIComponent).join('/'),signal);
+ const after=await readWorkbenchSession(signal);
+ if(JSON.stringify(before.principal)!==JSON.stringify(after.principal)||value.subject!==after.principal.principalId||value.scope?.tenantId!==after.principal.tenantId||value.scope?.securityDomain!==after.principal.securityDomain)throw new Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
+ const canonical=(value:unknown)=>typeof value==='string'?/^(?:sha256:)?([a-f0-9]{64})$/.exec(value)?.[1]:undefined;
+ if(value.kind!==kind||value.identity!==identity||value.revision?.revisionId!==revision||!canonical(digest)||canonical(value.revision.digest)!==canonical(digest))throw new Error('RESOURCE_DIRECTORY_VERSION_MISMATCH');
+ return value;
+}

@@ -10,7 +10,7 @@ export type CapabilityRevision = {
   origin:{kind:'INDEPENDENT'|'WORKFLOW_REVISION'|'SAVED_PREPARATION';workflow:CapabilityReference|null;preparation_digest:string|null};
   bindings:CapabilityBinding[];
 };
-export type CapabilitySummary = {revisionId:string;title:string;intent:string;digest:string;businessDomain?:string|null;inputs?:string;outputs?:string;manualInvolvement?:string;exclusions?:string;originKind?:CapabilityRevision['origin']['kind'];employeeResponsibilities?:string[]};
+export type CapabilitySummary = {revisionId:string;title:string;intent:string;digest:string;businessDomain?:string|null;inputs?:string;outputs?:string;manualInvolvement?:string;exclusions?:string;originKind?:CapabilityRevision['origin']['kind'];employeeResponsibilities?:string[];employeeNames?:string[];employeeNamesUnavailable?:number};
 export type CapabilityItem = CapabilitySummary & {capabilityId:string;aggregateVersion:number;state:'PUBLISHED'|'DRAFT';currentPublished:CapabilitySummary|null;currentDraft:CapabilitySummary|null};
 export type CapabilityList = {items:CapabilityItem[];nextCursor:string|null};
 export type CapabilityDetail = {members?:{kind:string;resourceId:string;revisionId:string;digest:string;name:string}[];revision:CapabilityRevision;digest:string;aggregateVersion:number;headRevisionId:string;publishedRevisionId:string|null;currentDraftRevisionId:string|null;state:'PUBLISHED'|'DRAFT';executionAuthorized:false};
@@ -58,7 +58,7 @@ export async function capabilitySession(signal?:AbortSignal):Promise<WorkbenchSe
 }
 export type CapabilityCatalogueFilters={query:string;domain:string;favoritesOnly:boolean};
 export const listCapabilities=(principal:string,cursor:string|null=null,signal?:AbortSignal,filters?:CapabilityCatalogueFilters)=>request<CapabilityList>(root+'?'+new URLSearchParams({pageSize:'50',...(cursor?{cursor}:{}),...(filters?{query:filters.query,domain:filters.domain,favoritesOnly:String(filters.favoritesOnly)}:{})}),principal,signal);
-export const listCapabilityDomains=(principal:string,signal?:AbortSignal)=>request<{domains:string[];hasUnassigned:boolean}>(root+'/domains',principal,signal);
+export const listCapabilityDomains=(principal:string,signal?:AbortSignal)=>request<{domains:string[];hasUnassigned:boolean;readableFavoriteCount:number}>(root+'/domains',principal,signal);
 export const readCapability=(id:string,revision:string,principal:string,signal?:AbortSignal)=>request<CapabilityDetail>(revisionPath(id,revision),principal,signal);
 export const previewCapability=(id:string,revision:string,principal:string,signal?:AbortSignal)=>request<CapabilityPreview>(revisionPath(id,revision)+'/publication-preview',principal,signal);
 export const publishCapability=(id:string,revision:string,command:CapabilityPublishCommand,principal:string,signal?:AbortSignal)=>request<{state:'PUBLISHED';aggregateVersion:number}>(revisionPath(id,revision)+'/publication',principal,signal,command);

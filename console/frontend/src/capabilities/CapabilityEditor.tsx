@@ -30,7 +30,7 @@ export function CapabilityEditor({base,principal,fromWorkflow=false,onSaved,onCa
   }else{
    const directory=kinds.find(item=>item.kind===type)!.directory!;
    const page=await listReadableResources(directory,'','PUBLISHED',after,signal);
-   result={items:page.items.filter(item=>item.enabled&&item.isCurrentPublished).map(item=>({title:item.name,reference:{resource_id:item.identity,revision_id:item.revisionId,digest:item.digest}})),cursor:page.nextCursor};
+   result={items:page.items.filter(item=>item.enabled&&item.isCurrentPublished).map(item=>({title:item.name,reference:{resource_id:item.identity,revision_id:item.revisionId,digest:item.digest.replace(/^sha256:/,'')}})),cursor:page.nextCursor};
   }
   const afterSession=await capabilitySession(signal);
   if(workbenchPrincipalKey(afterSession)!==principal)throw new Error('identity');

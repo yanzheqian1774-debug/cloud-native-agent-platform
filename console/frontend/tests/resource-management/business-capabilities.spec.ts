@@ -5,12 +5,12 @@ const members=[{kind:'EMPLOYEE',resourceId:'worker',revisionId:'worker-v1',diges
 const revision={schemaVersion:'business-capability.v1',scope:{namespace:'tenant',security_domain:'domain'},capability_id:'handover',revision_id:'r2',predecessor_revision_id:'r1',title:'交接材料核对',intent:'找出交接资料中的缺项和责任不清之处',inputs:'交接说明和责任清单',outputs:'缺项清单及对应原文',business_scope:'已授权交接文档',business_domain:'运营管理',exclusions:'自动部署或对外发送',manual_involvement:'负责人核实待补事项',acceptance_criteria:['逐项提供原文依据'],known_limitations:'无法证明实际部署状态',origin:{kind:'INDEPENDENT',workflow:null,preparation_digest:null},bindings:[{kind:'EMPLOYEE',reference:{resource_id:'worker',revision_id:'worker-v1',digest},purpose:'核对材料并列出待补事项'}]};
 async function fixture(page:Page){
  const work={writes:[] as {path:string;body:Record<string,unknown>}[],messages:[] as Record<string,unknown>[],criterion:null as Record<string,unknown>|null,set:null as Record<string,unknown>|null,active:false,problem:null as Record<string,unknown>|null,unknownCreate:false,unknownReceipt:false,changedDuringPreparation:false};
- const state={preferences:{version:0,state:{query:'',layout:'cards',favoritesOnly:false,favorites:[] as string[],scrollTop:0},commandId:null as string|null,replayed:false},preferenceWrites:[] as Record<string,unknown>[],preferenceConflict:false,preferenceLost:false,work,journal:{version:0,contractDigest:'d'.repeat(64),sourceMessageId:'source-message',state:null as Record<string,unknown>|null},journalWrites:[] as Record<string,unknown>[],journalUnknown:false,answerUnknown:false,answerWrites:[] as Record<string,unknown>[],published:false,deny:false,unknown:false,contractMismatch:false,writes:[] as {commandId:string;reason:string}[],sources:[] as {idempotencyKey:string;expectedVersion:number;source:{kind:string;target:Record<string,string>}}[],saves:[] as {revision:typeof revision;expectedVersion:number;commandId:string}[]};
+ const state={preferences:{version:0,state:{query:'',layout:'cards',favoritesOnly:false,favorites:[] as string[],scrollTop:0},commandId:null as string|null,replayed:false},preferenceWrites:[] as Record<string,unknown>[],preferenceConflict:false,preferenceLost:false,runtime:false,work,journal:{version:0,contractDigest:'d'.repeat(64),sourceMessageId:'source-message',state:null as Record<string,unknown>|null},journalWrites:[] as Record<string,unknown>[],journalUnknown:false,answerUnknown:false,answerWrites:[] as Record<string,unknown>[],published:false,deny:false,unknown:false,contractMismatch:false,writes:[] as {commandId:string;reason:string}[],sources:[] as {idempotencyKey:string;expectedVersion:number;source:{kind:string;target:Record<string,string>}}[],saves:[] as {revision:typeof revision;expectedVersion:number;commandId:string}[]};
  await page.route('**/api/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   const json=(result:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result,continuationIds:[]}});
   if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:tester',tenantId:'tenant',securityDomain:'domain'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'csrf-test'}});
-  if(path.endsWith('/business-capabilities/domains'))return json({domains:['运营管理'],hasUnassigned:true});
+  if(path.endsWith('/business-capabilities/domains'))return json({domains:['运营管理'],hasUnassigned:true,readableFavoriteCount:state.preferences.state.favorites.filter(id=>id==='handover').length});
   if(path.endsWith('/business-capabilities/preferences')){
    if(route.request().method()==='POST'){
     const body=route.request().postDataJSON();state.preferenceWrites.push(body);
@@ -66,9 +66,9 @@ async function fixture(page:Page){
   }
   if(path.endsWith('/revisions/r2')){
    if(state.deny)return route.fulfill({status:404,json:{reasonCode:'AUTHORITY_DENIED'}});
-   return json({revision,members,digest,aggregateVersion:state.published?3:2,headRevisionId:'r2',publishedRevisionId:state.published?'r2':'r1',currentDraftRevisionId:state.published?null:'r2',state:state.published?'PUBLISHED':'DRAFT',executionAuthorized:false});
+   return json({revision:state.runtime?{...revision,bindings:[...revision.bindings,{kind:'RUNTIME_PROFILE',reference:{resource_id:'runtime',revision_id:'runtime-v1',digest},purpose:'执行隔离'}]}:revision,members:state.runtime?[...members,{kind:'RUNTIME_PROFILE',resourceId:'runtime',revisionId:'runtime-v1',digest,name:'旧版隔离运行环境'}]:members,digest,aggregateVersion:state.published?3:2,headRevisionId:'r2',publishedRevisionId:state.published?'r2':'r1',currentDraftRevisionId:state.published?null:'r2',state:state.published?'PUBLISHED':'DRAFT',executionAuthorized:false});
   }
-  if(path.endsWith('/business-capabilities'))return json({items:[{capabilityId:'handover',revisionId:'r2',title:revision.title,intent:revision.intent,inputs:revision.inputs,outputs:revision.outputs,employeeResponsibilities:['核对资料'],exclusions:revision.exclusions,originKind:'INDEPENDENT',businessDomain:revision.business_domain,digest,state:'DRAFT',aggregateVersion:2,currentPublished:null,currentDraft:{revisionId:'r2',title:revision.title,intent:revision.intent,digest}}],nextCursor:null});
+  if(path.endsWith('/business-capabilities'))return json({items:[{capabilityId:'handover',revisionId:'r2',title:revision.title,intent:revision.intent,inputs:revision.inputs,outputs:revision.outputs,employeeNames:['交接核对助手'],employeeNamesUnavailable:0,employeeResponsibilities:['核对资料'],exclusions:revision.exclusions,originKind:'INDEPENDENT',businessDomain:revision.business_domain,digest,state:state.published?'PUBLISHED':'DRAFT',aggregateVersion:2,currentPublished:state.published?{revisionId:'r2',title:revision.title,intent:revision.intent,digest}:null,currentDraft:{revisionId:'r2',title:revision.title,intent:revision.intent,digest}}],nextCursor:null});
   return json({items:[],conversations:[]});
  });return state;
 }
@@ -456,4 +456,58 @@ test('catalogue restores second-page extent and scroll after refresh and detail 
  await page.getByRole('button',{name:'返回业务能力',exact:true}).click();await expect(page.getByRole('button',{name:'查看详情',exact:true})).toHaveCount(60);await expect.poll(()=>container.evaluate(node=>node.scrollTop)).toBeGreaterThan(1000);
  await page.getByLabel('搜索业务能力').fill('改用新的筛选');await expect.poll(()=>state.preferences.state).toMatchObject({query:'改用新的筛选',loadedCount:50,scrollTop:0});
  expect(state.writes).toHaveLength(0);expect(state.saves).toHaveLength(0);
+});
+
+for(const mode of ['exact','prefixed','denied','mismatch','digest-mismatch'] as const)test('fixed Runtime drilldown retains original reference '+mode,async({page},info)=>{
+ const state=await fixture(page);state.runtime=true;const reads:string[]=[],writes:string[]=[];
+ page.on('request',r=>{reads.push(new URL(r.url()).pathname);if(r.method()!=='GET')writes.push(r.url())});
+ await page.route('**/resource-directory/runtime/runtime/runtime-v1',route=>route.fulfill(mode==='denied'?{status:404,json:{reasonCode:'NOT_FOUND'}}:{json:{schemaVersion:'workbench-operation.v1',result:{kind:'runtime',identity:'runtime',name:'旧版隔离运行环境',subject:'human:tester',scope:{tenantId:'tenant',securityDomain:'domain'},revision:{revisionId:mode==='mismatch'?'runtime-v2':'runtime-v1',digest:mode==='prefixed'?'sha256:'+digest:mode==='digest-mismatch'?'b'.repeat(64):digest,state:'PUBLISHED',content:{provider:'NATIVE_KUBERNETES',resources:{cpuRequest:'250m',cpuLimit:'500m',memoryRequest:'256Mi',memoryLimit:'1Gi'},isolation:'NAMESPACE',stateMode:'STATELESS',sessionAffinity:'NONE',secretReferences:[],openClawPackageRef:null}}},continuationIds:[]}}));
+ await page.goto('/capabilities?capability=handover&revision=r2&returnHome=1&returnConversation=original');
+ await page.locator('.capability-fixed-table').getByRole('link',{name:'旧版隔离运行环境',exact:true}).click();
+ await expect(page).toHaveURL(/runtime-profiles/);
+ if(mode==='exact'||mode==='prefixed'){
+  await expect(page.getByRole('heading',{name:'旧版隔离运行环境',exact:true})).toBeVisible();await expect(page.getByText('250m / 500m',{exact:true})).toBeVisible();
+  await page.getByText('查看版本与配置依据',{exact:true}).click();await expect(page.getByText('runtime-v1',{exact:true})).toBeVisible();
+  for(const width of [1280,390]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.locator('.skill-frame-content').evaluate(node=>node.scrollTop=0);await page.screenshot({path:info.outputPath(`fixed-runtime-${width}.png`),fullPage:true})}
+ }else{await expect(page.getByRole('alert')).toContainText(mode==='denied'?'暂时无法读取':'版本未能核对');await expect(page.getByRole('heading',{name:'旧版隔离运行环境',exact:true})).toHaveCount(0)}
+ await page.getByRole('link',{name:'返回业务能力详情',exact:false}).click();await expect(page.getByRole('heading',{name:revision.title,exact:true})).toBeVisible();
+ await expect(page.getByRole('link',{name:'返回工作台',exact:true})).toHaveAttribute('href','/dashboard');await expect(page.getByRole('link',{name:'返回原会话',exact:true})).toHaveAttribute('href','/work?conversation=original');
+ expect(new URL(page.url()).searchParams.get('revision')).toBe('r2');expect(new URL(page.url()).searchParams.get('digest')).toBe(digest);
+ expect(reads.some(path=>path.includes('/api/internal/'))).toBe(false);expect(writes).toEqual([]);
+});
+test('partial Runtime reference never falls back to management or latest revision',async({page})=>{
+ await fixture(page);const reads:string[]=[];page.on('request',r=>reads.push(r.url()));await page.goto('/runtime-profiles?resourceId=runtime&resourceRevision=runtime-v1');
+ await expect(page.getByRole('alert')).toContainText('版本未能核对');expect(reads.some(path=>path.includes('/api/internal/'))).toBe(false);
+ await expect(page.getByRole('button',{name:'Create Native Kubernetes Profile'})).toHaveCount(0);
+});
+
+ test('catalogue session failure ends loading and explicit retry recovers',async({page})=>{
+ const state=await fixture(page);let unavailable=true;
+ await page.route('**/api/workbench/v1/session',route=>unavailable?route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}}):route.fallback());
+ await page.goto('/capabilities');
+ await expect(page.getByRole('alert').filter({hasText:'暂时无法获取能力信息'})).toBeVisible();
+ await expect(page.getByText('正在读取业务能力…',{exact:true})).toHaveCount(0);
+ unavailable=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
+ await expect(page.getByRole('button',{name:revision.title,exact:true})).toBeVisible();
+ expect(state.writes).toEqual([]);expect(state.preferenceWrites).toEqual([]);
+ });
+
+for(const layout of ['cards','list'] as const)test('catalogue direct use and truthful metadata '+layout,async({page},info)=>{
+ const state=await fixture(page);state.published=true;
+ await page.goto('/capabilities?returnConversation=original');
+ if(layout==='list')await page.getByRole('button',{name:'列表',exact:true}).click();
+ const catalogue=page.locator(layout==='cards'?'.capability-grid':'.capability-catalogue-table');
+ await expect(catalogue.getByText('交接核对助手',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'我的收藏',exact:true})).toHaveText('我的收藏（0）');
+ await catalogue.getByRole('button',{name:'收藏'+revision.title,exact:true}).click();
+ await expect(page.getByRole('button',{name:'我的收藏',exact:true})).toHaveText('我的收藏（1）');
+ await catalogue.getByText('查看版本',{exact:true}).click();await expect(catalogue.getByText('r2',{exact:true})).toBeVisible();
+ for(const width of [1406,390]){await page.setViewportSize({width,height:1000});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath(`catalogue-${layout}-${width}.png`),fullPage:true})}
+ const writes=state.preferenceWrites.length;
+ await catalogue.getByRole('button',{name:'在会话中使用',exact:true}).click();
+ await expect(page.getByRole('region',{name:'能力本次输入'})).toBeVisible();
+ await expect(page.getByLabel('希望完成什么')).toHaveValue(revision.intent);
+ expect(state.sources).toEqual([]);expect(state.work.writes).toEqual([]);expect(state.writes).toEqual([]);
+ expect(state.preferenceWrites.length).toBe(writes);
+ await page.reload();await expect(page.getByRole('region',{name:'能力本次输入'})).toHaveCount(0);
 });

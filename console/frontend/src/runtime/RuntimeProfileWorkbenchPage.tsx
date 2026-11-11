@@ -1,3 +1,4 @@
+import {FixedRuntimeProfilePage} from './FixedRuntimeProfilePage';
 import {ControlledState} from "../shared/ControlledState";
 import {PageHeader,StatusBadge} from "../components/WorkspacePrimitives";
 import {useEffect,useMemo,useRef,useState} from "react";
@@ -23,6 +24,11 @@ function RuntimeProfileForm({name,content,onName,onChange}:{name:string;content:
 }
 
 export function RuntimeProfileWorkbenchPage(){
+ const [params]=useSearchParams();
+ return params.has('resourceRevision')||params.has('resourceDigest')||params.has('capabilityReturn')?<FixedRuntimeProfilePage/>:<RuntimeProfileManagementPage/>;
+}
+
+function RuntimeProfileManagementPage(){
  const [searchParams,setSearchParams]=useSearchParams();const [initialProfileId]=useState(()=>searchParams.get("resourceId"));
  const [items,setItems]=useState<RuntimeProjection[]>([]),[selected,setSelected]=useState<RuntimeProjection|null>(null),[form,setForm]=useState<RuntimeContent|null>(null),[formName,setFormName]=useState(""),[query,setQuery]=useState(searchParams.get("query")??""),[filter,setFilter]=useState(searchParams.get("lifecycle")??"ALL");
  const [state,setState]=useState<"LOADING"|"READY"|"SAVING">("LOADING"),[failure,setFailure]=useState<{state:RuntimeControlledState;reason:string}|null>(null),[recovery,setRecovery]=useState<Recovery|null>(null);const requestId=useRef(0),actionInFlight=useRef(false),saveInFlight=useRef(false);

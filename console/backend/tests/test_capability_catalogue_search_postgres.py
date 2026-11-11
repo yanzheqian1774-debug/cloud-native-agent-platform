@@ -54,10 +54,16 @@ def test_search_domain_favorites_and_cursor_are_authorized_and_bound(app):
                     "read:" + identity,
                 )
         domains = client.get(URL + "/domains").json()["result"]
-        assert domains == {"domains": ["运营管理"], "hasUnassigned": True}
+        assert domains == {
+            "domains": ["运营管理"],
+            "hasUnassigned": True,
+            "readableFavoriteCount": 0,
+        }
         query = {"pageSize": 1, "query": "经营核对", "domain": "运营管理"}
         first = client.get(URL, params=query).json()["result"]
         assert [v["capabilityId"] for v in first["items"]] == ["b"]
+        assert first["items"][0]["employeeNames"] == ["Quality owner"]
+        assert first["items"][0]["employeeNamesUnavailable"] == 0
         assert first["nextCursor"]
         second = client.get(
             URL, params={**query, "cursor": first["nextCursor"]}
@@ -88,6 +94,18 @@ def test_search_domain_favorites_and_cursor_are_authorized_and_bound(app):
         assert [v["capabilityId"] for v in favorites["items"]] == ["c"]
         assert favorites["nextCursor"] is None
         assert (
+            client.get(URL + "/domains").json()["result"]["readableFavoriteCount"] == 1
+        )
+        with app.authority.connection_scope() as conn:
+            conn.execute(
+                "DELETE FROM authorization_admin.effective_grants "
+                "WHERE owner='EMPLOYEE' AND action='READ'"
+            )
+        denied_member = client.get(URL, params=query).json()["result"]["items"][0]
+        assert denied_member["capabilityId"] == "b"
+        assert denied_member["employeeNames"] == []
+        assert denied_member["employeeNamesUnavailable"] == 1
+        assert (
             client.get(URL, params={"domain": "保密领域"}).json()["result"]["items"]
             == []
         )
@@ -100,4 +118,5 @@ def test_search_domain_favorites_and_cursor_are_authorized_and_bound(app):
         assert client.get(URL + "/domains").json()["result"] == {
             "domains": [],
             "hasUnassigned": False,
+            "readableFavoriteCount": 0,
         }

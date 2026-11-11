@@ -974,3 +974,87 @@ The initial controlled scroll assertion incorrectly referenced a browser global
 instead of passing the expected coordinate; corrected the test argument without
 changing its tolerance. Main remains unchanged; consolidated prototype acceptance
 and project-wide delivery remain open.
+
+### G1 — Fixed Runtime reference drilldown
+
+Reuse the trusted resource-directory exact Runtime reader, with session identity
+checked before/after and response kind/id/revision/digest/scope verified. A capability
+Runtime binding opens a read-only detail, never the old aggregate management form
+or newest draft. Partial/mismatched references fail visibly without fallback. Use
+existing F3 detail styles and validated capability return context (including home
+and original conversation). This is a delivery addition using the existing detail
+shell; the frozen prototype lacks a dedicated complete capability→Runtime return
+journey, as the reviewer recorded. OpenClaw remains isolated/off; reading a profile
+is not instance health or execution. Validate old fixed revision despite a newer
+aggregate, denied/mismatch/expiry and zero mutations before actual clone evidence.
+Reviewer catalogue findings A (employee name, direct use, count/version, styling)
+will be delivered as one consolidated correction, not separate micro-packages.
+
+### Fixed Runtime implementation verification — 2026-11-11
+
+The first controlled run exposed a missing Runtime route in the shared capability
+return-link allowlist. Added the route, preserving the existing safe-return parser.
+Exact, denied, mismatched and partial Runtime reference browser cases now pass.
+Also corrected catalogue first-session read failure leaving its loading indicator
+active; an explicit retry recovers without mutation. Latest lint and production
+build passed, and all five targeted browser cases passed in 17.2 seconds. The build
+retains its existing large-chunk warning. Screenshots at 1280 and 390 pixels plus
+source hashes are recorded under evidence/f3-business-capability-design-20261111/
+runtime-controlled-r1. These are controlled fixtures, not live-backend acceptance.
+No installation, model call, business execution or budget change occurred in this
+verification. Consolidated catalogue corrections, actual clone Runtime evidence,
+prototype review and main deployment remain pending.
+
+### G1 — Consolidated catalogue review corrections
+
+Expose fixed Employee names only after exact Employee READ and digest checks,
+enriching returned page items rather than every scanned candidate. Unreadable
+member names remain explicitly unavailable; capability visibility does not grant
+member access. Domain metadata additionally counts readable saved favorites across
+the same authorized scan, independent of keyword/page filters. Refresh the count
+after preference saves. Reuse CapabilityUse directly from published catalogue
+items after re-reading their exact revision/digest. Opening the input form performs
+no writes/model calls and refresh never resumes the intent automatically. Show
+actual revision identifiers, published status and the existing package icon style;
+never invent semantic version numbers or usage counts. Validate member denial,
+favorite count after revoked capability READ, direct-use no-write behavior and
+responsive catalogue rendering before consolidated prototype resubmission.
+
+### Consolidated catalogue / Runtime candidate verification — 2026-11-11
+
+Catalogue now exposes exact-authorized Employee names, readable saved favorite
+counts, direct published-version input, actual revision identifiers and F3 layout.
+Real PostgreSQL checks: 19 passed. Controlled capability suite: 56 passed before
+final layout and Runtime digest adjustments; affected layout checks and nine
+Runtime/authoring cases passed after corrections. Four Runtime digest unit cases
+pass, retaining READ_RESOURCE grants and rejecting wrong hashes/algorithms.
+Live verification found the Runtime owner stores sha256-prefixed digests while
+capability references use canonical hex. The adapter now compares canonical
+SHA-256 content without rewriting existing definitions. The editor emits canonical
+references; fixed-detail reader also accepts the owner format. The first live
+attempt stopped on that check; its prior catalogue/form evidence was preserved,
+and only the remaining read/return was resumed.
+Candidate https://127.0.0.1:60662 PID 21685 serves index-CQS5DADp.js and
+index-CHFe5jBj.css. Main remains unchanged. Database protected execution/budget
+hashes and 1/2/2/2 capability counts remain unchanged. No new model calls or runs.
+Evidence: catalogue-prototype-review-packet-r2.json and real-browser/
+catalogue-review-demo-r2.html. Runtime actual evidence is a direct exact-reference
+read and return; a real capability-to-Runtime binding publication remains open.
+Prototype review and final stage commit remain pending.
+
+### Actual Runtime binding publication and roundtrip — 2026-11-11
+
+The owned clone now has one capability with three immutable revisions/publications.
+Through the actual editor, selected the existing published Native Runtime, saved
+one successor, reviewed a single Runtime binding addition, and published through
+the existing governed owner. Clicked the actual binding, read its fixed Runtime
+version, and returned to the exact capability revision with home/conversation
+context preserved. The old capability and original source execution contract were
+read before/after and remain identical. Protected execution/budget hashes remain
+unchanged; no model calls or executions were started.
+Evidence: capability-runtime-binding-browser-complete.json and
+capability-runtime-binding-database-complete.json; screenshots 41–42. The original
+direct-reference-only limitation is now closed for this isolated actual case.
+This does not prove Runtime instance health, model execution, general scale,
+sharing authority or main deployment. Subsequent clone checks must use counts
+1 definition / 3 revisions / 3 receipts / 3 publications, not the former 1/2/2/2.

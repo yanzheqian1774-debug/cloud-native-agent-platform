@@ -14,6 +14,7 @@ export function safeCapabilityReturn(raw:string|null):string|null{
 export function capabilityMemberHref(binding:CapabilityBinding,detail:CapabilityDetail,conversation:string|null,returnHome=false):string|null{
  const backParams=new URLSearchParams({capability:detail.revision.capability_id,revision:detail.revision.revision_id,digest:detail.digest});if(conversation)backParams.set('returnConversation',conversation);if(returnHome)backParams.set('returnHome','1');
  const back='/capabilities?'+backParams,ref=binding.reference;
+ if(binding.kind==='RUNTIME_PROFILE')return '/runtime-profiles?'+new URLSearchParams({resourceId:ref.resource_id,resourceRevision:ref.revision_id,resourceDigest:ref.digest,capabilityReturn:back});
  if(binding.kind==='EMPLOYEE')return '/employees?'+new URLSearchParams({employeeDefinitionId:ref.resource_id,employeeDefinitionRevisionId:ref.revision_id,employeeDefinitionDigest:ref.digest,section:'capabilities',detail:'1',capabilityReturn:back});
  const routes:Partial<Record<CapabilityBinding['kind'],[string,string]>>={SKILL:['/skills','skill'],MCP:['/mcp','mcp'],KNOWLEDGE:['/knowledge','knowledge']};
  const target=routes[binding.kind];if(!target)return null;
