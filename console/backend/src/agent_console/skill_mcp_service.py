@@ -676,6 +676,48 @@ class SkillMcpService:
             mcp, expected, "MCP_TOOL_SELECTION_GOVERNED", actor, selection
         )
 
+    @staticmethod
+    def _invocation_source(
+        record: dict[str, Any], selection: dict[str, Any], tool_name: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if not record["enabled"] or record["archived"]:
+            raise SkillMcpFailure("MCP_SOURCE_UNAVAILABLE", 409)
+        revision = (
+            SkillMcpService._draft(record)
+            if record["currentDraftRevisionId"]
+            else SkillMcpService._published(record)
+        )
+        snapshot = next(
+            (
+                item
+                for item in record["discoverySnapshots"]
+                if item["snapshotId"] == selection["snapshotId"]
+            ),
+            None,
+        )
+        if SkillMcpService._digest(record, revision) != revision["digest"]:
+            raise SkillMcpFailure("EXACT_MCP_RUNTIME_CONTENT_REQUIRED", 409)
+        if snapshot is None or any(
+            item.get("revisionId") != revision["revisionId"]
+            or item.get("revisionDigest") != revision["digest"]
+            for item in (selection, snapshot)
+        ):
+            raise SkillMcpFailure("EXACT_MCP_SELECTION_SOURCE_REQUIRED", 409)
+        catalog = snapshot.get("catalog")
+        if (
+            not isinstance(catalog, dict)
+            or canonical_digest(catalog, domain="mcp-discovery-snapshot-v1")
+            != snapshot.get("digest")
+            or not isinstance(catalog.get("tools"), list)
+            or sum(
+                isinstance(item, dict) and item.get("name") == tool_name
+                for item in catalog["tools"]
+            )
+            != 1
+        ):
+            raise SkillMcpFailure("EXACT_MCP_DISCOVERY_CATALOG_REQUIRED", 409)
+        return revision, snapshot
+
     def invoke_mcp(
         self,
         scope: ResourceScope,
@@ -703,7 +745,13 @@ class SkillMcpService:
             raise SkillMcpFailure("GOVERNED_TOOL_SELECTION_REQUIRED", 409)
         if authorization != "ALLOW_BOUNDED_MCP_INVOCATION":
             raise SkillMcpFailure("INVOCATION_NOT_AUTHORIZED", 403)
+        revision, snapshot = self._invocation_source(mcp, selection, tool_name)
         invocation = {
+            "revisionId": revision["revisionId"],
+            "revisionDigest": revision["digest"],
+            "snapshotId": snapshot["snapshotId"],
+            "snapshotDigest": snapshot["digest"],
+            "dispatchState": "NOT_DISPATCHED",
             "invocationId": _id("mcp-invocation"),
             "selectionId": selection_id,
             "toolName": tool_name,
@@ -733,13 +781,21 @@ class SkillMcpService:
             projected["invocation"] = invocation
             return projected
         try:
-            client = self._mcp_client(mcp, timeout)
+            client = StreamableHttpMcpClient(
+                revision["content"]["endpoint"], timeout=timeout
+            )
             initialized = client.initialize()
+            invocation["dispatchState"] = "CALL_ATTEMPTED"
             invocation["result"] = client.request(
                 "tools/call",
                 {"name": tool_name, "arguments": inputs},
                 session_id=initialized.session_id,
             ).result
+            invocation["dispatchState"] = "RESPONSE_RECEIVED"
+            if invocation["result"].get("isError") is True:
+                invocation.update(
+                    {"status": "FAILED", "reasonCode": "MCP_TOOL_REPORTED_ERROR"}
+                )
         except McpTransportFailure as exc:
             invocation.update(
                 {"status": "FAILED", "reasonCode": str(exc), "result": {}}
