@@ -314,6 +314,23 @@ def build_workbench_composition(
         )
         business_process_targets = (BusinessProcessTargets(),)
 
+    tool_definition_repository = None
+    tool_definition_targets = ()
+    if os.environ.get("TOOL_DEFINITIONS_ENABLED") == "true":
+        from .tool_definition_postgres import PostgresToolDefinitionRepository
+        from .workbench_tool_definitions import (
+            ToolDefinitionTargets,
+            tool_definition_operations,
+        )
+
+        tool_definition_repository = PostgresToolDefinitionRepository(
+            business_problems.problems.pool
+        )
+        tool_definition_repository.compatibility(
+            Path(__file__).parents[2] / "migrations/0061_tool_definitions.sql"
+        )
+        tool_definition_targets = (ToolDefinitionTargets(),)
+
     from .resource_definition_management import DefinitionTargets
     from .resource_management import ManagementTargets
     from .workbench_model_directory import ModelReadTargets
@@ -331,6 +348,7 @@ def build_workbench_composition(
         + team_targets
         + capability_targets
         + business_process_targets
+        + tool_definition_targets
         + (
             (ModelReadTargets(model_repository),)
             if model_repository is not None
@@ -733,17 +751,27 @@ def build_workbench_composition(
             WorkbenchBffPolicy(
                 allowed_host,
                 allowed_origin,
-                route_body_limits=tuple(
-                    (
-                        "/api/workbench/v1/resource-management/"
-                        + kind
-                        + "/import-preview",
-                        10 * 1024 * 1024,
+                route_body_limits=(
+                    tuple(
+                        (
+                            "/api/workbench/v1/resource-management/"
+                            + kind
+                            + "/import-preview",
+                            10 * 1024 * 1024,
+                        )
+                        for kind in ("skill", "mcp")
                     )
-                    for kind in ("skill", "mcp")
+                    if management_path
+                    else ()
                 )
-                if management_path
-                else (),
+                + (
+                    tuple(
+                        ("/api/workbench/v1/tool-definitions/" + suffix, 200000)
+                        for suffix in ("import-preview", "imports")
+                    )
+                    if tool_definition_repository is not None
+                    else ()
+                ),
             ),
             **(
                 {"conversation_database_url": owner_database_url}
@@ -840,6 +868,14 @@ def build_workbench_composition(
                         services=prepared_resource_services or {},
                     )
                     if business_process_repository is not None
+                    else ()
+                ),
+                *(
+                    tool_definition_operations(
+                        tool_definition_repository,
+                        WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    )
+                    if tool_definition_repository is not None
                     else ()
                 ),
                 *selected_upgrade_routes,

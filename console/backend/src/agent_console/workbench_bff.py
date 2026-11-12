@@ -694,7 +694,10 @@ def create_workbench_bff(
             payload: Mapping[str, Any] = {}
             if operation.request_model is not None:
                 body = await request.body()
-                if len(body) > policy.maximum_body_bytes:
+                body_limit = dict(policy.route_body_limits).get(
+                    request.url.path, policy.maximum_body_bytes
+                )
+                if len(body) > body_limit:
                     raise WorkbenchBoundaryError("REQUEST_TOO_LARGE", 413)
                 try:
                     model = operation.request_model.model_validate_json(body)

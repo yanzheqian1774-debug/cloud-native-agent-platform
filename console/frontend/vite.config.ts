@@ -14,6 +14,7 @@ export default defineConfig({
         currentWorkDirectory: process.env.VITE_CURRENT_WORK_DIRECTORY_ENABLED === "true",
         selectedResourceUpgrades: process.env.VITE_SELECTED_RESOURCE_UPGRADES_ENABLED === "true",
         businessCapabilities: process.env.VITE_BUSINESS_CAPABILITIES_ENABLED === "true",
+        toolDefinitions: process.env.VITE_TOOL_DEFINITIONS_ENABLED === "true",
         businessProcessDefinitions: process.env.VITE_BUSINESS_PROCESS_DEFINITIONS_ENABLED === "true",
         teamDefinitions: process.env.VITE_TEAM_DEFINITIONS_ENABLED === "true",
       }) });

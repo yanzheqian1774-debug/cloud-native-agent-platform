@@ -37,7 +37,7 @@ function EntryLink({entry}:{entry:Entry}) {
 export function BusinessNavigation({mobile=false,sessionIdentity}:{mobile?:boolean;sessionIdentity:string|null}) {
   const {pathname}=useLocation();
   const workActive=pathname==="/work"||pathname.startsWith("/work/")||pathname==="/tasks";
-  const resourceActive=resources.some(x=>x.to===pathname);
+  const resourceActive=resources.some(x=>x.to===pathname||pathname.startsWith(x.to+"/"));
   const advancedActive=advanced.some(x=>x.to===pathname);
   return <nav className="px-business-nav" aria-label={mobile?"移动端全部产品导航":"P1 核心产品导航"}>
     <section><h2>工作与协同</h2>
