@@ -160,3 +160,43 @@
 .px-shell.journey-shell .f3-conversation .private-user .knowledge-document-reading p{white-space:normal}
 .px-shell.journey-shell .f3-conversation .private-message[data-record=true] .private-user{padding:16px 18px}
 .f3-conversation .private-receipt>details{margin:0}
+
+/* F3 conversation sample: bounded reading width, shared by browser and client. */
+.px-shell.journey-shell .px-content>.f3-conversation{
+ max-width:1328px;
+ margin-inline:auto;
+ grid-template-columns:minmax(0,1fr) clamp(280px,22vw,320px);
+}
+.px-shell.journey-shell .px-content>.f3-conversation.f3-new{
+ max-width:1008px;
+ grid-template-columns:minmax(0,1fr);
+}
+.f3-conversation .px-message-stream{min-width:0;scrollbar-gutter:stable}
+.f3-conversation .knowledge-document-reading :is(pre,.knowledge-document-table){max-width:100%;overflow-x:auto}
+.f3-conversation .knowledge-document-reading pre{white-space:pre;overflow-wrap:normal}
+@media(min-width:701px) and (max-width:1100px){
+ .px-shell.journey-shell .px-content>.f3-conversation{
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:90px minmax(0,1fr) auto;
+ }
+ .px-shell.journey-shell .f3-conversation .f3-progress-rail,
+ .px-shell.journey-shell .f3-conversation .private-rail{
+  grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--px-line);
+  max-height:240px;padding:8px 24px;
+ }
+}
+@media(max-width:1100px){
+ .f3-conversation .f3-mobile-progress{
+  display:block;border:1px solid #cbd3ff;background:#fff;color:var(--px-blue);
+  padding:8px;border-radius:6px;width:100%;
+ }
+ .f3-progress-rail:not(.is-expanded)>:not(.f3-mobile-progress){display:none}
+ .f3-progress-rail.is-expanded .f3-rail-content{display:block}
+ .f3-progress-rail>h2{display:none}
+}
+.px-shell.journey-shell .f3-conversation .px-workspace-body{min-width:0}
+.px-shell.journey-shell .f3-conversation .px-conversation{min-width:0;width:100%}
+@media(max-width:700px){
+ .px-shell.journey-shell .f3-conversation .px-workspace-body{width:100%;align-self:stretch}
+ .f3-conversation .f3-composer-dock{padding-inline:16px}
+}

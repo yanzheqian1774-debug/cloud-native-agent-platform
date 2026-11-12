@@ -166,3 +166,25 @@ test('server confirmed absent request resumes same key without duplicate user me
  expect(state.messages.filter(m=>!m.kind)).toHaveLength(1);
  await page.reload();await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();expect(state.calls).toHaveLength(1);
 });
+
+
+test('conversation reading width stays bounded and composer aligned across viewports',async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ state.messages.at(-1)!.content='## 阅读宽度核对\n\n'+('这是保留的长正文，用于核对阅读、固定输入和局部溢出。\n\n'.repeat(12))+'\n```text\n'+('long-code-'.repeat(100))+'\n```\n\n|项目|内容|\n|---|---|\n|长字段|'+('abc'.repeat(200))+'|';
+ await page.reload();
+ for(const width of [1440,1920,2560,980,390]){
+  await page.setViewportSize({width,height:1000});await expect(page.getByRole('heading',{name:'阅读宽度核对'})).toBeAttached();
+  const geometry=await page.evaluate(()=>{const stream=document.querySelector('.px-message-stream')!.getBoundingClientRect(),form=document.querySelector('.private-composer')!.getBoundingClientRect();return {stream:{x:stream.x,width:stream.width},form:{x:form.x,width:form.width},overflow:document.documentElement.scrollWidth-innerWidth,boxes:['.px-content','.f3-conversation','.px-conversation','.px-message-stream'].map(s=>{const e=document.querySelector(s)!;return [s,e.getBoundingClientRect().width,getComputedStyle(e).minWidth,getComputedStyle(e).maxWidth,getComputedStyle(e).alignItems]})}});
+  expect(geometry.stream.width,JSON.stringify(geometry)).toBeLessThanOrEqual(960);expect(geometry.overflow).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.stream.x-geometry.form.x)).toBeLessThanOrEqual(1);expect(Math.abs(geometry.stream.width-geometry.form.width)).toBeLessThanOrEqual(1);
+ }
+ expect(state.calls).toHaveLength(1);
+});
+
+test('narrow conversation exposes existing progress through explicit toggle',async({page})=>{
+ const state=await directFixture(page);state.journal.state={...state.journal.state,phase:'UNDERSTAND',understandingProtocol:3,pending:'understanding'};
+ state.lastResult={state:'OUTCOME_UNKNOWN',invocationId:'unknown-1',resultKind:null};
+ await page.setViewportSize({width:980,height:900});await page.goto('/work?conversation=direct');
+ const toggle=page.getByRole('button',{name:'展开工作进展'});await expect(toggle).toBeVisible();await toggle.click();await expect(page.getByRole('button',{name:'收起工作进展'})).toHaveAttribute('aria-expanded','true');
+ await expect(page.locator('.f3-rail-content')).toBeVisible();expect(state.calls).toHaveLength(0);
+});
