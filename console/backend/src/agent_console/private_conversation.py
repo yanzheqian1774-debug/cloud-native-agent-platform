@@ -239,41 +239,48 @@ class PrivateConversations:
         with self.connect() as c:
             row = self.owned(c, ctx, identity)
             scope = (*self.scope(ctx), identity)
-            messages = c.execute(
-                "SELECT "
-                "message_id,sequence,author_id,content,focus_link_id,"
-                "disposition,created_at,request_key "
-                "FROM private_conversation.messages WHERE tenant_id=%s AND "
-                "security_domain=%s AND conversation_id=%s ORDER BY sequence",
-                scope,
-            ).fetchall()
-            links = c.execute(
-                "SELECT link_id,target FROM private_conversation.links WHERE "
-                "tenant_id=%s AND security_domain=%s AND conversation_id=%s ORDER "
-                "BY created_at,link_id",
-                scope,
-            ).fetchall()
-            facts_reader = getattr(self, "facts_reader", None)
-            facts = (
-                c.execute(
-                    "SELECT message_id,kind,facts FROM "
-                    "private_conversation.message_facts "
-                    "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
+            with c.pipeline():
+                messages_query = c.execute(
+                    "SELECT "
+                    "message_id,sequence,author_id,content,focus_link_id,"
+                    "disposition,created_at,request_key "
+                    "FROM private_conversation.messages WHERE tenant_id=%s AND "
+                    "security_domain=%s AND conversation_id=%s ORDER BY sequence",
                     scope,
-                ).fetchall()
-                if facts_reader
-                else []
-            )
-            intents = (
-                c.execute(
-                    "SELECT intent_id,claimed_at,owner_ref FROM "
-                    "private_conversation.action_intents "
-                    "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
+                )
+                links_query = c.execute(
+                    "SELECT link_id,target FROM private_conversation.links WHERE "
+                    "tenant_id=%s AND security_domain=%s AND conversation_id=%s ORDER "
+                    "BY created_at,link_id",
                     scope,
-                ).fetchall()
-                if facts_reader
-                else []
-            )
+                )
+                facts_reader = getattr(self, "facts_reader", None)
+                facts_query = (
+                    c.execute(
+                        "SELECT message_id,kind,facts FROM "
+                        "private_conversation.message_facts "
+                        "WHERE tenant_id=%s AND security_domain=%s "
+                        "AND conversation_id=%s",
+                        scope,
+                    )
+                    if facts_reader
+                    else None
+                )
+                intents_query = (
+                    c.execute(
+                        "SELECT intent_id,claimed_at,owner_ref FROM "
+                        "private_conversation.action_intents "
+                        "WHERE tenant_id=%s AND security_domain=%s "
+                        "AND conversation_id=%s",
+                        scope,
+                    )
+                    if facts_reader
+                    else None
+                )
+            messages = messages_query.fetchall()
+            links = links_query.fetchall()
+            facts = facts_query.fetchall() if facts_query is not None else []
+            intents = intents_query.fetchall() if intents_query is not None else []
         by_id = {f["message_id"]: f for f in facts}
         intent_by_id = {i["intent_id"]: i for i in intents}
         for message in messages:

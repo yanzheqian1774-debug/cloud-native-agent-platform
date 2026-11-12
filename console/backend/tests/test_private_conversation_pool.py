@@ -99,3 +99,29 @@ def test_bff_lifespan_opens_and_closes_its_owned_pool(database):
         with records.connect() as c:
             assert c.execute("SELECT pg_backend_pid() AS pid").fetchone()["pid"] == pid
     assert pool.closed and records._connection_pool is None
+
+
+def test_read_pipeline_is_entered_only_after_owner_authorization(service, monkeypatch):
+    service.start_pool()
+    original = psycopg.Connection.pipeline
+    entries = []
+
+    @contextmanager
+    def observed(connection):
+        entries.append(connection.info.backend_pid)
+        with original(connection) as pipeline:
+            yield pipeline
+
+    monkeypatch.setattr(psycopg.Connection, "pipeline", observed)
+    try:
+        identity = new(service)
+        with pytest.raises(ConversationError, match="CONVERSATION_NOT_FOUND"):
+            service.read(ctx("other-owner"), identity)
+        assert entries == []
+        first = service.read(ctx(), identity)
+        second = service.read(ctx(), identity)
+        assert first == second
+        assert first["conversation"]["conversation_id"] == identity
+        assert len(entries) == 2 and entries[0] == entries[1]
+    finally:
+        service.close_pool()
