@@ -557,6 +557,16 @@ def build_workbench_composition(
                     and sales_v2_candidate,
                 )
 
+        test_read_routes = ()
+        test_read_path = os.environ.get("TEST_RESOURCE_READ_POLICY")
+        if test_read_path:
+            from .test_resource_read_access import operations as test_read_operations
+            from .test_resource_read_policy import TestReadPolicy
+
+            test_read_routes = test_read_operations(
+                TestReadPolicy.load(test_read_path), foundation.grants
+            )
+
         resource_automation = None
         resource_automation_routes = ()
         automation_path = os.environ.get("RESOURCE_PREPARATION_POLICY")
@@ -818,6 +828,7 @@ def build_workbench_composition(
                 *source_review_routes,
                 *runtime_trace_routes,
                 *resource_automation_routes,
+                *test_read_routes,
                 *continuation_routes,
                 *directory_routes,
                 *current_work_routes,

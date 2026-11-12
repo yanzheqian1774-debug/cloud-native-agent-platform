@@ -340,6 +340,8 @@ class PostgresAgentDefinitionRepository:
         exact_resource: str,
     ) -> bool:
         """Validate one exact Agent revision without disclosing its record."""
+        if action == "LIST":
+            return exact_resource == "agent:collection"
         if action != "READ":
             return False
         try:

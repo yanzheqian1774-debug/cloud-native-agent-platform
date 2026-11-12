@@ -16,6 +16,7 @@ export default defineConfig({
         businessCapabilities: process.env.VITE_BUSINESS_CAPABILITIES_ENABLED === "true",
         toolDefinitions: process.env.VITE_TOOL_DEFINITIONS_ENABLED === "true",
         businessProcessDefinitions: process.env.VITE_BUSINESS_PROCESS_DEFINITIONS_ENABLED === "true",
+        testResourceRead: process.env.VITE_TEST_RESOURCE_READ_ENABLED === "true",
         teamDefinitions: process.env.VITE_TEAM_DEFINITIONS_ENABLED === "true",
       }) });
     },

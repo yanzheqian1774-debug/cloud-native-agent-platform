@@ -44,8 +44,23 @@ class WorkflowAuthoringTargets:
     def is_known_exact_target(self, context, grant, *, connection=None):
         if grant.owner != "WORKFLOW" or connection is None:
             return False
-        if grant.action == "CREATE":
+        if grant.action in {"CREATE", "LIST"}:
             return grant.exact_resource == "workflow:collection"
+        if grant.action == "READ":
+            return (
+                connection.execute(
+                    "SELECT 1 FROM workflow_definition.definitions t "
+                    "CROSS JOIN LATERAL jsonb_array_elements(t.record->'revisions') r "
+                    "WHERE namespace=%s AND security_domain=%s AND 'workflow:' || "
+                    "workflow_definition_id || ':' || (r->>'revisionId')=%s",
+                    (
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        grant.exact_resource,
+                    ),
+                ).fetchone()
+                is not None
+            )
         if grant.action not in {"MANAGE", "REVIEW_PUBLISH"}:
             return False
         return (
