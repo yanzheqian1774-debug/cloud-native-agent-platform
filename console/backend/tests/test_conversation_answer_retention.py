@@ -243,7 +243,7 @@ def test_followup_context_uses_the_exact_saved_answer_and_rejects_forgery(journe
     assert second["contextId"] == first["contextId"]
 
 
-def test_server_attachment_is_bound_to_original_request_and_not_persisted(journey):  # noqa: F811
+def test_server_attachment_retains_metadata_but_not_original_content(journey):  # noqa: F811
     from agent_console.conversation_source_input import current_attachment
 
     j = journey
@@ -252,7 +252,9 @@ def test_server_attachment_is_bound_to_original_request_and_not_persisted(journe
     body = request(c, j)
     observed = []
     selected = [
-        '{"source":"exact-test-revision","originalContent":"private synthetic"}'
+        '{"source":"exact-test-revision","originalContent":"private synthetic",'
+        '"sourceContentDigest":"digest-test",'
+        '"sourceSchema":"document-review-source.v1","name":"Test document"}'
     ]
 
     def source_input(context, conversation, message_id):
@@ -282,6 +284,9 @@ def test_server_attachment_is_bound_to_original_request_and_not_persisted(journe
     assert len(calls) == 1
     assert len(observed) == 3
     assert "private synthetic" not in str(read(j, c))
+    assert first["inputSource"]["source"] == "exact-test-revision"
+    assert again["inputSource"] == first["inputSource"]
+    assert "exact-test-revision" in str(read(j, c))
 
 
 def test_absent_request_evidence_then_same_key_dispatches_once(journey):  # noqa: F811

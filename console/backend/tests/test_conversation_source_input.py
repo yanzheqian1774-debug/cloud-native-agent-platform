@@ -88,3 +88,28 @@ def test_attachment_scope_resets_on_exception_and_nested_calls():
             raise RuntimeError
         assert source.current_attachment() == "first"
     assert source.current_attachment() is None
+
+
+def test_invocation_keeps_exact_metadata_without_original_content(monkeypatch):
+    from agent_console.draft_assistance_postgres import _invocation, _record
+    from test_draft_assistance import build, context
+
+    automation, call, selected, _, _ = setup(monkeypatch)
+    attachment = source.read_selected(automation, call, selected)
+    service, *_ = build()
+    with source.bind_attachment(attachment):
+        expected = source.current_source_metadata()
+        result = service.begin(
+            context(),
+            key="source-proof",
+            content="Review the synthetic handover document and list missing items.",
+        )
+    stored = _record(result.invocation)
+    assert stored["inputSource"] == expected
+    assert "originalContent" not in str(stored)
+    assert "回退步骤待补充" not in str(stored)
+    restored = _invocation(json.loads(json.dumps(stored)))
+    assert restored.input_source == expected
+    stored.pop("inputSource")
+    assert _invocation(stored).input_source is None
+    assert source.current_source_metadata() is None

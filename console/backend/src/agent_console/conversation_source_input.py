@@ -24,6 +24,18 @@ def current_attachment():
     return _attachment.get()
 
 
+def current_source_metadata():
+    """Copy only exact provenance from the authorized server attachment."""
+    attachment = current_attachment()
+    if attachment is None:
+        return None
+    value = json.loads(attachment)
+    return {
+        key: value[key]
+        for key in ("source", "sourceContentDigest", "sourceSchema", "name")
+    }
+
+
 @contextmanager
 def bind_attachment(value):
     token = _attachment.set(value)

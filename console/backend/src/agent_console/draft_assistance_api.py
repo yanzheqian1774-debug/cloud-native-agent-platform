@@ -138,6 +138,7 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
             "problemId": value.problem_id,
             "problemRevisionId": value.problem_revision_id,
             "problemDigest": value.problem_digest,
+            **({"inputSource": value.input_source} if value.input_source else {}),
             "transport": "SYNTHETIC" if response.synthetic else "REAL_PROVIDER",
             "requestAuthorizationRequestId": (
                 value.authorization.request_authorization_request_id

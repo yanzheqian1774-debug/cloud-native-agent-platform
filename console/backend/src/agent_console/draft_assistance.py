@@ -311,6 +311,7 @@ class DraftInvocation:
     problem_id: str | None = None
     problem_revision_id: str | None = None
     problem_digest: str | None = None
+    input_source: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -834,6 +835,8 @@ class DraftAssistanceService:
             pepper,
         )
         turn_version = expected_parent_version + 1
+        from .conversation_source_input import current_source_metadata
+
         candidate = DraftInvocation(
             context_id,
             turn_id,
@@ -858,6 +861,7 @@ class DraftAssistanceService:
             ),
             parent_turn_id,
             predecessor_invocation_id,
+            input_source=current_source_metadata(),
         )
         invocation, won = self.repository.claim(candidate)
         if not won:

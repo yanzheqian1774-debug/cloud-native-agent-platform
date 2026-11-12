@@ -103,6 +103,8 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
             (*actions.records.scope(ctx), conversation, key),
         ).fetchone()
         response = {field: value.get(field) for field in FIELDS}
+        if value.get("inputSource") is not None:
+            response["inputSource"] = value["inputSource"]
         if prior:
             facts = prior["facts"]
             if (

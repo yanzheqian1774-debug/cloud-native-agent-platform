@@ -145,6 +145,7 @@ def _record(value: DraftInvocation) -> dict[str, Any]:
         "problemId": value.problem_id,
         "problemRevisionId": value.problem_revision_id,
         "problemDigest": value.problem_digest,
+        "inputSource": value.input_source,
     }
 
 
@@ -244,6 +245,7 @@ def _invocation(value: dict[str, Any]) -> DraftInvocation:
         problem_id=value["problemId"],
         problem_revision_id=value["problemRevisionId"],
         problem_digest=value["problemDigest"],
+        input_source=value.get("inputSource"),
     )
 
 

@@ -177,11 +177,11 @@
 @media(min-width:701px) and (max-width:1100px){
  .px-shell.journey-shell .px-content>.f3-conversation{
   grid-template-columns:minmax(0,1fr);
-  grid-template-rows:90px minmax(0,1fr) auto;
+  grid-template-rows:90px auto minmax(0,1fr);
  }
  .px-shell.journey-shell .f3-conversation .f3-progress-rail,
  .px-shell.journey-shell .f3-conversation .private-rail{
-  grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--px-line);
+  grid-column:1;grid-row:2;border-left:0;border-top:1px solid var(--px-line);
   max-height:240px;padding:8px 24px;
  }
 }
@@ -199,4 +199,16 @@
 @media(max-width:700px){
  .px-shell.journey-shell .f3-conversation .px-workspace-body{width:100%;align-self:stretch}
  .f3-conversation .f3-composer-dock{padding-inline:16px}
+}
+
+/* Narrow progress opens above the reading area; the composer keeps its bottom anchor. */
+@media(min-width:701px) and (max-width:1100px){
+ .px-shell.journey-shell .f3-conversation .px-conversation{grid-column:1;grid-row:3}
+}
+@media(max-width:700px){
+ .px-shell.journey-shell .f3-conversation .f3-progress-rail{order:-1;width:100%;max-height:30%;flex-shrink:0}
+}
+@media(max-width:1100px){
+ .px-shell.journey-shell .f3-conversation .f3-progress-rail{overscroll-behavior:contain}
+ .f3-progress-rail .f3-mobile-progress{position:sticky;top:0;z-index:1}
 }

@@ -72,7 +72,7 @@ test('unknown original request is read once and never automatically replayed',as
  await expect(page.getByRole('button',{name:'等待结果核实'})).toBeDisabled();await expect(page.locator('.journey-stages')).toHaveCount(0);
  await expect(page.getByRole('alert').getByText('原调用状态：OUTCOME_UNKNOWN。未重新调用模型，原请求保留。')).toBeHidden();
  await page.reload();await expect(page.getByRole('alert')).toContainText('OUTCOME_UNKNOWN');await expect(page.getByLabel('暂存补充',{exact:true})).toHaveValue('保留我的后续要求');
- expect(state.calls).toHaveLength(0);expect(state.recoveries).toBe(2);
+ expect(state.calls).toHaveLength(0);expect(state.recoveries).toBe(2);expect(state.writes).toEqual([]);
 });
 
 
@@ -187,4 +187,24 @@ test('narrow conversation exposes existing progress through explicit toggle',asy
  await page.setViewportSize({width:980,height:900});await page.goto('/work?conversation=direct');
  const toggle=page.getByRole('button',{name:'展开工作进展'});await expect(toggle).toBeVisible();await toggle.click();await expect(page.getByRole('button',{name:'收起工作进展'})).toHaveAttribute('aria-expanded','true');
  await expect(page.locator('.f3-rail-content')).toBeVisible();expect(state.calls).toHaveLength(0);
+});
+
+
+test('narrow progress preserves bottom composer draft and reading position',async({page},testInfo)=>{
+ const state=await directFixture(page);state.journal.state={...state.journal.state,phase:'UNDERSTAND',understandingProtocol:3,pending:'understanding'};
+ state.messages.unshift(...Array.from({length:20},(_,i)=>({message_id:'history-'+i,content:'已保存的上下文记录 '+i,author_id:'human:ordinary',disposition:'GOAL_RECORDED'})));
+ state.lastResult={state:'OUTCOME_UNKNOWN',invocationId:'unknown-1',resultKind:null};
+ for(const width of [980,390]){
+  await page.setViewportSize({width,height:900});await page.goto('/work?conversation=direct');
+  const input=page.getByLabel('暂存补充',{exact:true});await expect(input).toBeVisible();await input.fill('关闭进展后继续这份草稿');
+  const geometry=()=>page.evaluate(()=>{const dock=document.querySelector('.f3-composer-dock')!.getBoundingClientRect(),stream=document.querySelector('.px-message-stream')!;return {bottom:dock.bottom,top:dock.top,scroll:stream.scrollTop,height:stream.clientHeight}});
+  await page.locator('.px-message-stream').evaluate(e=>{e.scrollTop=120});
+  const before=await geometry();expect(before.scroll).toBeGreaterThan(0);await page.getByRole('button',{name:'展开工作进展'}).click();
+  await expect(page.locator('.f3-rail-content')).toBeVisible();const expanded=await geometry();
+  expect(Math.abs(expanded.bottom-before.bottom)).toBeLessThanOrEqual(1);expect(expanded.bottom).toBeGreaterThan(870);expect(expanded.height).toBeGreaterThan(100);
+  await page.screenshot({path:testInfo.outputPath('progress-expanded-'+width+'.png')});
+  await page.getByRole('button',{name:'收起工作进展'}).click();await expect(input).toHaveValue('关闭进展后继续这份草稿');
+  const after=await geometry();expect(Math.abs(after.scroll-before.scroll)).toBeLessThanOrEqual(1);expect(Math.abs(after.bottom-before.bottom)).toBeLessThanOrEqual(1);
+ }
+ expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
 });
