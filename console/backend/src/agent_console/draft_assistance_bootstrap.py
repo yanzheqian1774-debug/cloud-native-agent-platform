@@ -289,7 +289,9 @@ def _profile(
         or not isinstance(tls, dict)
         or set(tls) != {"caFile"}
         or not isinstance(budget, dict)
-        or set(budget) - ({"profilePricingRootDigest"} if planning else set())
+        or set(budget)
+        - {"allowanceId"}
+        - ({"profilePricingRootDigest"} if planning else set())
         != {
             "ledgerId",
             "currency",
@@ -406,6 +408,7 @@ def _profile(
             if (
                 not isinstance(identity, str)
                 or not identity.strip()
+                or identity != identity.strip()
                 or len(identity) > 200
             ):
                 raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
