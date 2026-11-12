@@ -1,0 +1,15 @@
+.f3-knowledge-maintenance .rm-detail{border:0;padding-top:8px}
+.f3-knowledge-maintenance .rm-detail>header{align-items:flex-start;margin:20px 0 16px}
+.f3-knowledge-maintenance .rm-detail>header h1{font-size:var(--f3-title-size,24px);line-height:var(--f3-title-line,1.45);font-weight:650;color:#273851;margin:0;overflow-wrap:anywhere}
+.f3-knowledge-maintenance .rm-definition-state{font-size:12px;white-space:nowrap;border-radius:6px;padding:4px 10px;background:#edf2ff;color:#4865d5}
+.f3-knowledge-maintenance .rm-definition-state[data-state=PUBLISHED]{background:#edf9f3;color:#24724b}
+.f3-knowledge-maintenance .rm-actions .rm-primary{background:#4865d5;border-color:#4865d5;color:#fff}
+.f3-knowledge-maintenance .knowledge-maintenance-body{margin-top:20px}
+.f3-knowledge-maintenance .knowledge-maintenance-body h2{font-size:18px}
+.f3-knowledge-maintenance .knowledge-maintenance-body p{color:#273851}
+.f3-knowledge-maintenance .knowledge-index-state{font-size:12px;color:#7486a3;margin:0 0 20px}
+.f3-knowledge-maintenance .knowledge-maintenance-history h3{font-size:14px}
+.f3-knowledge-maintenance .rm-form{background:#fff;border-color:#e0e6ef;border-radius:12px}
+@media(max-width:700px){.f3-knowledge-maintenance .rm-detail>header h1{font-size:22px}.f3-knowledge-maintenance .rm-detail>header{gap:12px}}
+
+.f3-knowledge-maintenance .knowledge-maintenance-body p code{display:inline;white-space:break-spaces}
