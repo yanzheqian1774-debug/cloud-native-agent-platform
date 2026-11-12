@@ -746,6 +746,11 @@ class DraftAssistanceService:
             str(expected_parent_version),
             content,
         )
+        from .conversation_source_input import current_attachment
+
+        attachment = current_attachment()
+        if attachment is not None:
+            values += ("SERVER_READ_SELECTED_SOURCE.v1", attachment)
         return b"".join(_field(value) for value in values)
 
     def _commitment(

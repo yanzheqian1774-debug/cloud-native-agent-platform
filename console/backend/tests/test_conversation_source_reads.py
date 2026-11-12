@@ -106,3 +106,39 @@ def test_corrupt_authorized_content_is_not_offered(readable_source):
     f.allowed.add("human:ordinary")
     f.content["documents"][0]["contentDigest"] = "0" * 64
     assert module.sources(f.automation, f.call) == []
+
+
+def test_understanding_reads_same_document_payload_and_current_exact_permission(
+    readable_source, monkeypatch
+):
+    from agent_console import conversation_source_input
+    from agent_console.resource_automation_policy import source_digest
+    from test_native_document_tools import SOURCE
+
+    f = readable_source
+    monkeypatch.setattr(
+        conversation_source_input, "read_published", module.read_published
+    )
+    selected = {
+        "source": {
+            "resource_id": "knowledge:docs",
+            "revision_id": "1",
+            "digest": "a" * 64,
+        },
+        "sourceContentDigest": source_digest(f.content),
+    }
+    with pytest.raises(AuthorityError):
+        conversation_source_input.read_selected(f.automation, f.call, selected)
+    assert f.loaded == []
+    f.allowed.add("human:ordinary")
+    data = json.loads(
+        conversation_source_input.read_selected(f.automation, f.call, selected)
+    )
+    assert data["originalContent"] == SOURCE
+    assert data["source"] == selected["source"]
+    assert data["sourceContentDigest"] == selected["sourceContentDigest"]
+    assert f.calls[-1][1:3] == ("KNOWLEDGE", "READ_RESOURCE")
+    f.allowed.clear()
+    with pytest.raises(AuthorityError):
+        conversation_source_input.read_selected(f.automation, f.call, selected)
+    assert len(f.loaded) == 1

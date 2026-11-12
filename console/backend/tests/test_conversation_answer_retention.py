@@ -241,3 +241,132 @@ def test_followup_context_uses_the_exact_saved_answer_and_rejects_forgery(journe
     )
     assert second["conversationDelivery"]["state"] == "SAVED" and len(calls) == 2
     assert second["contextId"] == first["contextId"]
+
+
+def test_server_attachment_is_bound_to_original_request_and_not_persisted(journey):  # noqa: F811
+    from agent_console.conversation_source_input import current_attachment
+
+    j = journey
+    calls = configure(j)
+    c = create(j)
+    body = request(c, j)
+    observed = []
+    selected = [
+        '{"source":"exact-test-revision","originalContent":"private synthetic"}'
+    ]
+
+    def source_input(context, conversation, message_id):
+        assert conversation == c
+        assert message_id == body["conversationMessageId"]
+        observed.append((context.principal_id, conversation, message_id))
+        return selected[0]
+
+    j.app.state.conversation_source_input = source_input
+    original_prepare = j.transport.prepare
+
+    def prepare(**kwargs):
+        assert current_attachment() == selected[0]
+        assert kwargs["content"] == body["content"]
+        return original_prepare(**kwargs)
+
+    j.transport.prepare = prepare
+    first = post(j, "/draft-assistance/invocations", body, status=201)
+    assert first["conversationDelivery"]["state"] == "SAVED"
+    assert current_attachment() is None
+    again = post(j, "/draft-assistance/invocations", body, status=201)
+    assert again["invocationId"] == first["invocationId"]
+    assert len(calls) == 1
+    selected[0] = '{"source":"another-revision"}'
+    response = post(j, "/draft-assistance/invocations", body, status=409)
+    assert response["reasonCode"] == "IDEMPOTENCY_PAYLOAD_MISMATCH"
+    assert len(calls) == 1
+    assert len(observed) == 3
+    assert "private synthetic" not in str(read(j, c))
+
+
+def test_absent_request_evidence_then_same_key_dispatches_once(journey):  # noqa: F811
+    j = journey
+    calls = configure(j)
+    c = create(j)
+    body = request(c, j)
+    route = (
+        ROOT
+        + "/conversations/"
+        + c
+        + "/understanding-results/"
+        + body["conversationMessageId"]
+    )
+    before = j.client.get(route, params={"requestKey": body["idempotencyKey"]})
+    assert before.status_code == 404
+    assert before.json()["reasonCode"] == "CONVERSATION_REQUEST_NOT_DISPATCHED"
+    original_dispatch = j.transport.dispatch
+
+    def dispatch(**kwargs):
+        recorded = j.draft.repository.get(
+            j.draft.profile.scope, kwargs["invocation_id"]
+        )
+        assert recorded.state.value == "DISPATCH_RECORDED"
+        assert recorded.budget_reservation_id is not None
+        return original_dispatch(**kwargs)
+
+    j.transport.dispatch = dispatch
+    first = post(j, "/draft-assistance/invocations", body, status=201)
+    # A delayed browser observing absence cannot create a second invocation.
+    again = post(j, "/draft-assistance/invocations", body, status=201)
+    assert first["invocationId"] == again["invocationId"]
+    assert len(calls) == 1
+    after = j.client.get(route, params={"requestKey": body["idempotencyKey"]})
+    assert after.status_code == 200
+    assert after.json()["result"]["state"] == "SUCCEEDED"
+
+
+def test_missing_claimed_history_is_not_treated_as_not_dispatched(journey, monkeypatch):  # noqa: F811
+    j = journey
+    calls = configure(j)
+    c = create(j)
+    body = request(c, j)
+    post(j, "/draft-assistance/invocations", body, status=201)
+    monkeypatch.setattr(j.draft.repository, "_latest", lambda *args: None)
+    route = (
+        ROOT
+        + "/conversations/"
+        + c
+        + "/understanding-results/"
+        + body["conversationMessageId"]
+    )
+    result = j.client.get(route, params={"requestKey": body["idempotencyKey"]})
+    assert result.status_code == 503
+    assert result.json()["reasonCode"] == "DRAFT_STORAGE_UNAVAILABLE"
+    assert len(calls) == 1
+
+
+def test_two_absent_observers_share_one_postgres_dispatch(journey, monkeypatch):  # noqa: F811
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from test_draft_assistance_postgres import _context
+
+    j = journey
+    calls = configure(j)
+    original_claim = j.draft.repository.claim
+    rendezvous = Barrier(2)
+
+    def claim(candidate):
+        rendezvous.wait(timeout=10)
+        return original_claim(candidate)
+
+    monkeypatch.setattr(j.draft.repository, "claim", claim)
+    key = "race-" + str(uuid4())
+    with ThreadPoolExecutor(2) as pool:
+        results = list(
+            pool.map(
+                lambda _: j.draft.begin(
+                    _context(),
+                    key=key,
+                    content="Inspect the selected synthetic handover document.",
+                ),
+                range(2),
+            )
+        )
+    assert results[0].invocation.invocation_id == results[1].invocation.invocation_id
+    assert len(calls) == 1

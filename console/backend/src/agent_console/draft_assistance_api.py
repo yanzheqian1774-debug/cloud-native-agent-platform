@@ -207,9 +207,13 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                     DraftScope.from_context(context), context.principal_id, key
                 )
                 if invocation is None:
+                    # Ownership and exact request key were checked above. The
+                    # service persists an invocation before budget reservation or
+                    # dispatch. Re-submission MUST use the same key: the owner's
+                    # CAS still fences a concurrent request after this observation.
                     return JSONResponse(
                         status_code=404,
-                        content={"reasonCode": "CONVERSATION_RESULT_NOT_FOUND"},
+                        content={"reasonCode": "CONVERSATION_REQUEST_NOT_DISPATCHED"},
                     )
                 value = _payload(service.read(context, invocation.invocation_id))[
                     "result"
@@ -276,21 +280,31 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
 
                 def invoke_owner():
                     from .conversation_experience_admission import begin_bound
+                    from .conversation_source_input import bind_attachment
 
-                    value = _payload(
-                        begin_bound(
-                            service,
-                            context,
-                            conversation=conversation,
-                            message_id=body.conversationMessageId,
-                            key=key,
-                            content=body.content,
-                            parent_context_id=body.parentContextId,
-                            parent_turn_id=body.parentTurnId,
-                            expected_parent_version=body.expectedParentVersion,
-                            predecessor_invocation_id=body.predecessorInvocationId,
-                        )
+                    reader = getattr(
+                        request.app.state, "conversation_source_input", None
                     )
+                    attachment = (
+                        reader(context, conversation, body.conversationMessageId)
+                        if conversation and reader is not None
+                        else None
+                    )
+                    with bind_attachment(attachment):
+                        value = _payload(
+                            begin_bound(
+                                service,
+                                context,
+                                conversation=conversation,
+                                message_id=body.conversationMessageId,
+                                key=key,
+                                content=body.content,
+                                parent_context_id=body.parentContextId,
+                                parent_turn_id=body.parentTurnId,
+                                expected_parent_version=body.expectedParentVersion,
+                                predecessor_invocation_id=body.predecessorInvocationId,
+                            )
+                        )
                     if conversation:
                         try:
                             value["result"] = retain(

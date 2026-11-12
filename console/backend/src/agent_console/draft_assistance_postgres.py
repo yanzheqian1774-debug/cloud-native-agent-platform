@@ -479,11 +479,14 @@ class PostgresDraftAssistanceRepository(_Pool):
                     "AND scoped_idempotency_key=%s",
                     (scope.namespace, scope.security_domain, principal_id, key),
                 ).fetchone()
-                return (
-                    None
-                    if row is None
-                    else self._latest(connection, scope, row["invocation_id"])
-                )
+                if row is None:
+                    return None
+                value = self._latest(connection, scope, row["invocation_id"])
+                if value is None:
+                    # A claimed request with missing history is not evidence
+                    # that it was never dispatched.
+                    raise DraftAssistanceError("DRAFT_STORAGE_UNAVAILABLE")
+                return value
         except PsycopgError as exc:
             raise DraftAssistanceError("DRAFT_STORAGE_UNAVAILABLE") from exc
 

@@ -966,6 +966,18 @@ def build_workbench_composition(
                 application.state.capability_execution_contract_reader,
                 authorizer,
             )
+        if (
+            os.environ.get("F3_CONVERSATION_PLANNING_ENABLED") == "true"
+            and resource_automation is not None
+            and getattr(application.state, "conversation_actions", None) is not None
+        ):
+            from .conversation_source_input import source_reader
+
+            application.state.conversation_source_input = source_reader(
+                resource_automation,
+                authorizer,
+                application.state.conversation_actions.records,
+            )
         if continuation_path:
             continuation.capability_contract_reader = getattr(
                 application.state, "capability_execution_contract_reader", None

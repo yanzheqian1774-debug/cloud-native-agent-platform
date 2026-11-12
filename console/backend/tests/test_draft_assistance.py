@@ -707,3 +707,16 @@ def test_current_readiness_is_read_only_and_rechecks_revocation():
     assert calls == [READ]
     # No submit_request/resolve/admit methods exist on the doubles: a query
     # cannot create an application, revive a grant, or dispatch a provider call.
+
+
+def test_server_source_attachment_is_part_of_request_commitment():
+    from agent_console.conversation_source_input import bind_attachment
+
+    service, *_ = build()
+    base = service._canonical(context(), "key", "same question", None, 0)
+    with bind_attachment('{"source":"revision-a"}'):
+        first = service._canonical(context(), "key", "same question", None, 0)
+    with bind_attachment('{"source":"revision-b"}'):
+        second = service._canonical(context(), "key", "same question", None, 0)
+    assert base != first != second
+    assert service._canonical(context(), "key", "same question", None, 0) == base

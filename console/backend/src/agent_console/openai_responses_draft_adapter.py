@@ -297,6 +297,18 @@ class OpenAIResponsesDraftTransport:
                 }
             },
         }
+        from .conversation_source_input import current_attachment
+
+        attachment = current_attachment()
+        if attachment is not None:
+            if policy.revision != "v3":
+                raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
+            document["input"].append(
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": attachment}],
+                }
+            )
         payload = json.dumps(
             document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")

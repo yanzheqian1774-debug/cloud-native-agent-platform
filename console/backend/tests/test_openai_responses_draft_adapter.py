@@ -764,3 +764,52 @@ def test_conversation_runtime_pins_v3_policy_before_provider_use(mock_responses)
     with pytest.raises(DraftAssistanceError, match="DRAFT_PROFILE_INVALID"):
         parse_runtime_profile(document, allow_local_https_mock=True)
     assert _ResponsesHandler.requests == []
+
+
+def test_server_source_is_separate_from_v3_user_input_and_budgeted(mock_responses):
+    from agent_console.conversation_source_input import bind_attachment
+    from agent_console.draft_assistance_policy import (
+        V3_CONTEXT_VERSION,
+        V3_SCHEMA_VERSION,
+        policy_for,
+    )
+
+    server, cert, tmp_path = mock_responses
+    document = _real_runtime_document(server, cert, tmp_path)
+    document["adapter"]["revision"] = "v3"
+    document["outputSchemaVersion"] = V3_SCHEMA_VERSION
+    document["policyDigest"] = policy_for("v3", V3_SCHEMA_VERSION).digest
+    profile, _, configuration, _ = parse_runtime_profile(
+        document, allow_local_https_mock=True
+    )
+    transport = OpenAIResponsesDraftTransport(configuration)
+    content = json.dumps(
+        {
+            "schemaVersion": V3_CONTEXT_VERSION,
+            "uiRevision": 1,
+            "messages": [{"id": "user:1", "text": "检查已选资料"}],
+            "currentDraft": None,
+            "previousUnderstanding": None,
+            "previousQuestion": None,
+            "previousAssistantResponse": None,
+        }
+    )
+    base = transport.prepare(invocation_id="test", content=content, profile=profile)
+    attachment = (
+        '{"kind":"SERVER_READ_SELECTED_SOURCE","originalContent":"已读取的合成原文"}'
+    )
+    with bind_attachment(attachment):
+        prepared = transport.prepare(
+            invocation_id="test", content=content, profile=profile
+        )
+    payload = json.loads(prepared.payload)
+    assert payload["input"][0]["content"][0]["text"] == content
+    assert payload["input"][1]["content"][0]["text"] == attachment
+    assert payload["instructions"] == policy_for("v3", V3_SCHEMA_VERSION).instructions
+    assert prepared.quote.input_token_upper_bound > base.quote.input_token_upper_bound
+    with (
+        bind_attachment("x" * configuration.maximum_input_tokens),
+        pytest.raises(DraftAssistanceError, match="PROVIDER_INPUT_BOUND_EXCEEDED"),
+    ):
+        transport.prepare(invocation_id="too-large", content=content, profile=profile)
+    assert _ResponsesHandler.requests == []
