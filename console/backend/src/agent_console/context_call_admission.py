@@ -617,6 +617,10 @@ def development_call_cap(c, budget, invocation, original):
     if context_id is None or not available(c):
         return original
     row = request_row(c, context_id)
+    if row and row["record"].get("experience_policy_digest"):
+        from .provider_budget_allowance import experience_limits
+
+        return min(original, experience_limits(c, row, budget)[0])
     if not row or row["record"].get("development_call_cap") != 100:
         return original
     if (
@@ -630,3 +634,15 @@ def development_call_cap(c, budget, invocation, original):
         raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
     active(c, row, getattr(budget, "delegation_configuration", None))
     return 100
+
+
+def experience_cost_cap(c, budget, invocation, original):
+    context_id = getattr(invocation, "context_id", None)
+    if context_id is None or not available(c):
+        return original
+    row = request_row(c, context_id)
+    if row and row["record"].get("experience_policy_digest"):
+        from .provider_budget_allowance import experience_limits
+
+        return min(original, experience_limits(c, row, budget)[1])
+    return original

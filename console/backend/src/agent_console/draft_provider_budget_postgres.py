@@ -45,6 +45,7 @@ class PostgresProviderCallBudget:
         output_price_microusd_per_million_tokens: int,
         timeout: float = 5.0,
         profile_pricing_root_digest: str | None = None,
+        allowance_id: str | None = None,
     ) -> None:
         if (
             not database_url
@@ -61,6 +62,7 @@ class PostgresProviderCallBudget:
             or any(c not in "0123456789abcdef" for c in profile_pricing_root_digest)
         ):
             raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
+        self.allowance_id = allowance_id
         self.profile_pricing_root_digest = profile_pricing_root_digest
         self.migration_path = migration_path
         self.profile = profile
@@ -176,6 +178,9 @@ class PostgresProviderCallBudget:
         with (
             nullcontext(connection) if connection is not None else self._connection()
         ) as connection:
+            from .provider_budget_allowance import require
+
+            require(connection, self)
             guard_budget(connection, self, invocation, quote)
             yield
 
@@ -188,6 +193,9 @@ class PostgresProviderCallBudget:
             admission = getattr(self, "context_admission", None)
             if admission is not None:
                 admission.require_dispatch_grants(connection, context, invocation)
+            from .provider_budget_allowance import require
+
+            require(connection, self)
             guard_budget(connection, self, invocation, quote)
             yield
 
@@ -237,6 +245,9 @@ class PostgresProviderCallBudget:
                 ).fetchone()
                 if policy is None:
                     raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
+                from .provider_budget_allowance import require
+
+                allowance = require(connection, self)
                 existing = connection.execute(
                     "SELECT reservation_id,payload_digest "
                     "FROM draft_provider_budget.reservations WHERE namespace=%s "
@@ -267,11 +278,23 @@ class PostgresProviderCallBudget:
                 from .planning_call_admission import effective_cap, effective_cost_cap
 
                 call_cap = effective_cap(
-                    connection, self, invocation, policy["call_cap"]
+                    connection,
+                    self,
+                    invocation,
+                    allowance.callCap if allowance else policy["call_cap"],
                 )
                 cost_cap = effective_cost_cap(
-                    connection, self, invocation, policy["total_cost_cap_microusd"]
+                    connection,
+                    self,
+                    invocation,
+                    allowance.totalCostCapMicrousd
+                    if allowance
+                    else policy["total_cost_cap_microusd"],
                 )
+                if allowance is not None:
+                    call_cap = min(call_cap, allowance.callCap)
+                    cost_cap = min(cost_cap, allowance.totalCostCapMicrousd)
+                    continuous_development = False
                 if not continuous_development and (
                     totals["calls"] + 1 > call_cap
                     or totals["cost"] + quote.worst_case_cost_microusd > cost_cap

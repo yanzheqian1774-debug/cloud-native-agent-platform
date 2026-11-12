@@ -566,6 +566,7 @@ def build_planning_runtime(
                 "outputPriceMicrousdPerMillionTokens"
             ],
         )
+        budget.allowance_id = budget_config.get("allowanceId")
         budget.profile_pricing_root_digest = budget_config.get(
             "profilePricingRootDigest"
         )

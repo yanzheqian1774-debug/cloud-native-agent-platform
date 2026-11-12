@@ -401,6 +401,15 @@ def _profile(
                 "outputPriceMicrousdPerMillionTokens"
             ],
         }
+        if "allowanceId" in budget:
+            identity = budget["allowanceId"]
+            if (
+                not isinstance(identity, str)
+                or not identity.strip()
+                or len(identity) > 200
+            ):
+                raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
+            normalized_budget["allowanceId"] = identity
         if "profilePricingRootDigest" in budget:
             normalized_budget["profilePricingRootDigest"] = budget[
                 "profilePricingRootDigest"
@@ -462,6 +471,7 @@ def build_draft_assistance_composition(
                 migration_path=migrations_path / "0024_draft_provider_budget.sql",
                 profile=profile,
                 ledger_id=str(budget_configuration["ledgerId"]),
+                allowance_id=budget_configuration.get("allowanceId"),
                 call_cap=int(budget_configuration["callCap"]),
                 total_cost_cap_microusd=int(
                     budget_configuration["totalCostCapMicrousd"]

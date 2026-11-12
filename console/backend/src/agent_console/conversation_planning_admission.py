@@ -24,7 +24,11 @@ class ConversationPlanningAdmission:
             configuration["ledger_id"],
             configuration["calls"],
             configuration["cost_microusd"],
-        ) != (LEDGER, 20, 1_000_000):
+        ) != (
+            LEDGER,
+            self.experience.document.configuration.calls,
+            self.experience.document.configuration.cost_microusd,
+        ):
             raise AuthorityError("CONTEXT_ADMISSION_CONFIGURATION_MISMATCH")
 
     def require_source(self, service, c, context, problem):
@@ -122,10 +126,18 @@ class ConversationPlanningAdmission:
             target=record["target"],
             experience_policy_digest=self.experience.policy_digest,
             conversation_id=source["record"]["conversation_id"],
-            cumulative_call_cap=20,
-            total_cost_cap_microusd=1_000_000,
+            cumulative_call_cap=self.configuration["calls"],
+            total_cost_cap_microusd=self.configuration["cost_microusd"],
             maximum_new_calls=1,
             understanding_input_source=source["understanding_input_source"],
+            **(
+                {
+                    "budget_allowance_id": source["record"]["budget_allowance_id"],
+                    "authorization_digest": source["record"]["authorization_digest"],
+                }
+                if source["record"].get("budget_allowance_id")
+                else {}
+            ),
         )
         c.execute(
             "INSERT INTO authorization_admin.context_call_requests "
@@ -250,8 +262,6 @@ def limits(c, row, budget):
     if (
         budget.ledger_id != LEDGER
         or configuration["ledger_id"] != LEDGER
-        or configuration["calls"] != 20
-        or configuration["cost_microusd"] != 1_000_000
         or policy != {"call_cap": 20, "total_cost_cap_microusd": 1_000_000}
     ):
         raise AuthorityError("CONTEXT_ADMISSION_BUDGET_MISMATCH")
@@ -261,7 +271,20 @@ def limits(c, row, budget):
         or source["subject_id"] != row["subject_id"]
         or source["record"].get("experience_policy_digest")
         != row["record"]["experience_policy_digest"]
+        or source["record"].get("budget_allowance_id")
+        != row["record"].get("budget_allowance_id")
+        or (
+            source["record"].get("budget_allowance_id") is not None
+            and source["record"].get("authorization_digest")
+            != row["record"].get("authorization_digest")
+        )
+        or any(
+            source["record"]["configuration"][key] != configuration[key]
+            for key in ("ledger_id", "calls", "cost_microusd")
+        )
     ):
         raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
     active(c, source, source["record"]["configuration"])
-    return 20, 1_000_000
+    from .provider_budget_allowance import experience_limits
+
+    return experience_limits(c, row, budget)

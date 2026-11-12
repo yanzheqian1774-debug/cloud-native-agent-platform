@@ -212,3 +212,112 @@ def test_existing_exact_grants_are_issued_and_replay_does_not_renew(env, tmp_pat
             "SELECT * FROM authorization_admin.grant_decisions ORDER BY decision_id"
         ).fetchall()
     assert before == after
+
+
+def configure_successor(e, tmp_path, *, allowance_expired=False):
+    from pathlib import Path
+
+    from agent_console.provider_budget_allowance import prepare as prepare_allowance
+    from test_provider_budget_allowance import document as allowance_document
+
+    invocation, owner, path, document = configure(e, tmp_path, expired=True)
+    budget = SimpleNamespace(
+        _connection=e.repo.connection_scope,
+        migration_path=Path(__file__).parents[1]
+        / "migrations/0024_draft_provider_budget.sql",
+        profile=e.draft.profile,
+        ledger_id=LEDGER,
+    )
+    allowance = allowance_document(
+        budget, calls=100, cost=10_000_000, expired=allowance_expired
+    )
+    allowance["authorizationDigest"] = document["authorizationDigest"]
+    saved = prepare_allowance(budget, allowance)
+    e.admission.configuration = {
+        **e.admission.configuration,
+        "calls": 100,
+        "cost_microusd": 10_000_000,
+    }
+    document.update(
+        schemaVersion="f3-conversation-experience.v2",
+        allowanceId=saved["allowanceId"],
+        configuration=e.admission.configuration,
+    )
+    path.write_text(json.dumps(document))
+    e.admission.experience = ConversationExperienceAdmission(
+        path, e.admission.configuration
+    )
+    return invocation, owner, path, saved
+
+
+def test_successor_uses_fixed_expiry_after_old_window_and_reload(env, tmp_path):  # noqa: F811
+    from datetime import datetime
+
+    e = env
+    invocation, owner, path, allowance = configure_successor(e, tmp_path)
+    assert prepare(e, invocation, owner)
+    with e.repo.connection_scope() as c:
+        before = c.execute(
+            "SELECT * FROM authorization_admin.context_call_decisions"
+        ).fetchall()
+        assert len(before) == 1
+        assert before[0]["expires_at"] <= datetime.fromisoformat(allowance["expiresAt"])
+        row = c.execute(
+            "SELECT record FROM authorization_admin.context_call_requests "
+            "WHERE context_id=%s",
+            (invocation.context_id,),
+        ).fetchone()["record"]
+        assert row["budget_allowance_id"] == allowance["allowanceId"]
+        assert datetime.fromisoformat(
+            row["ledger_expires_at"]
+        ) == datetime.fromisoformat(allowance["expiresAt"])
+    e.admission.experience = ConversationExperienceAdmission(
+        path, e.admission.configuration
+    )
+    assert prepare(e, invocation, owner)
+    with e.repo.connection_scope() as c:
+        assert (
+            c.execute(
+                "SELECT * FROM authorization_admin.context_call_decisions"
+            ).fetchall()
+            == before
+        )
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM draft_provider_budget.policies"
+            ).fetchone()["n"]
+            == 1
+        )
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM draft_provider_budget.reservations"
+            ).fetchone()["n"]
+            == 0
+        )
+
+
+def test_expired_successor_cannot_open_or_reload(env, tmp_path):  # noqa: F811
+    e = env
+    invocation, owner, path, _ = configure_successor(
+        e, tmp_path, allowance_expired=True
+    )
+    for _ in range(2):
+        with pytest.raises(AuthorityError, match="ALLOWANCE_EXPIRED"):
+            prepare(e, invocation, owner)
+        e.admission.experience = ConversationExperienceAdmission(
+            path, e.admission.configuration
+        )
+    with e.repo.connection_scope() as c:
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM authorization_admin.context_call_decisions"
+            ).fetchone()["n"]
+            == 0
+        )
+
+
+def test_legacy_policy_digest_keeps_original_shape(env, tmp_path):  # noqa: F811
+    from agent_console.task_delegation import digest
+
+    _, _, _, document = configure(env, tmp_path)
+    assert env.admission.experience.policy_digest == digest(document)

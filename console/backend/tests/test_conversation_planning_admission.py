@@ -320,3 +320,29 @@ def test_revoked_planning_and_raised_allowance_are_not_renewed(ordinary):
             e.admission, {**e.planning.configuration, "calls": 100}
         )
     assert result["admission"]["maximum_new_calls"] == 1
+
+
+def test_planning_cannot_substitute_source_allowance_or_raise_cap(ordinary):
+    from copy import deepcopy
+
+    e = ordinary
+    result = planned(e)
+    with e.repo.connection_scope() as c:
+        row = c.execute(
+            "SELECT * FROM authorization_admin.context_call_requests "
+            "WHERE context_id=%s",
+            (result["admission"]["context_id"],),
+        ).fetchone()
+        budget = SimpleNamespace(ledger_id=e.planning.configuration["ledger_id"])
+        changed = deepcopy(row)
+        changed["record"]["budget_allowance_id"] = "unrelated-allowance"
+        with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+            limits(c, changed, budget)
+        changed = deepcopy(row)
+        changed["record"]["configuration"]["calls"] = 100
+        with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+            limits(c, changed, budget)
+        # Understanding and planning may use different configured profiles.
+        changed = deepcopy(row)
+        changed["record"]["configuration"]["profile_revision_id"] = "planning-profile"
+        assert limits(c, changed, budget) == (20, 1_000_000)

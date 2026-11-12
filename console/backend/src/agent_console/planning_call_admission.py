@@ -369,7 +369,9 @@ def effective_cap(c, budget, invocation, original):
 def effective_cost_cap(c, budget, invocation, original):
     row = guarded_row(c, budget, invocation)
     if row is None:
-        return original
+        from .context_call_admission import experience_cost_cap
+
+        return experience_cost_cap(c, budget, invocation, original)
     if row["record"].get("experience_policy_digest"):
         from .conversation_planning_admission import limits
 

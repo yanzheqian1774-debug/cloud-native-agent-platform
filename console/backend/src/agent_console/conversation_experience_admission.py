@@ -11,7 +11,7 @@ from typing import Literal
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .authority_contracts import AuthenticationSource, AuthorityError
 from .task_delegation import Limits, digest
@@ -22,7 +22,9 @@ _binding = ContextVar("verified_conversation_experience_request", default=None)
 
 class ExperiencePolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schemaVersion: Literal["f3-conversation-experience.v1"]
+    schemaVersion: Literal[
+        "f3-conversation-experience.v1", "f3-conversation-experience.v2"
+    ]
     tenantId: Literal["s5-323-demo"]
     securityDomain: Literal["isolated-real-demo"]
     subjectId: Literal["human:demo323-approver"]
@@ -33,6 +35,15 @@ class ExperiencePolicy(BaseModel):
         str, Literal["SYNTHETIC_DOCUMENT_REVIEW", "SYNTHETIC_SALES_ANALYSIS"]
     ] = Field(min_length=1, max_length=2)
     externalWrites: Literal[False]
+    allowanceId: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def allowance_version(self):
+        if (self.schemaVersion == "f3-conversation-experience.v2") != (
+            self.allowanceId is not None
+        ):
+            raise ValueError("CONTEXT_ADMISSION_ALLOWANCE_VERSION_MISMATCH")
+        return self
 
 
 def begin_bound(service, context, *, conversation, message_id, **kwargs):
@@ -50,13 +61,19 @@ class ConversationExperienceAdmission:
         if not self.path.is_absolute() or self.path.stat().st_mode & 0o077:
             raise AuthorityError("CONTEXT_ADMISSION_EXPERIENCE_POLICY_INVALID")
         self.document = ExperiencePolicy.model_validate_json(self.path.read_text())
-        self.policy_digest = digest(self.document.model_dump(mode="json"))
+        self.policy_digest = digest(
+            self.document.model_dump(mode="json", exclude_none=True)
+        )
         limits = self.document.configuration.model_dump()
         if (
             limits != configuration
             or limits["ledger_id"] != LEDGER
-            or limits["calls"] != 20
-            or limits["cost_microusd"] != 1_000_000
+            or (
+                self.document.allowanceId is None
+                and (limits["calls"], limits["cost_microusd"]) != (20, 1_000_000)
+            )
+            or limits["calls"] > 100
+            or limits["cost_microusd"] > 10_000_000
             or any(
                 not key.strip() or len(key) > 128 for key in self.document.conversations
             )
@@ -120,6 +137,19 @@ class ConversationExperienceAdmission:
         ):
             raise AuthorityError("CONTEXT_ADMISSION_BUDGET_MISMATCH")
         expires = budget["created_at"] + timedelta(hours=24)
+        if policy.allowanceId is not None:
+            from .provider_budget_allowance import require_context
+
+            allowance = require_context(
+                c,
+                policy.tenantId,
+                policy.securityDomain,
+                LEDGER,
+                policy.allowanceId,
+                policy.authorizationDigest,
+                policy.configuration.model_dump(),
+            )
+            expires = allowance.expiresAt
         now = c.execute("SELECT clock_timestamp() AS now").fetchone()["now"]
         if not budget["created_at"] <= now < expires:
             raise AuthorityError("CONTEXT_ADMISSION_EXPERIENCE_EXPIRED")
@@ -182,6 +212,11 @@ class ConversationExperienceAdmission:
             "first_user_message_id": binding[1],
             "scenario": self.document.conversations[binding[0]],
             "ledger_expires_at": expires.isoformat(),
+            **(
+                {"budget_allowance_id": self.document.allowanceId}
+                if self.document.allowanceId
+                else {}
+            ),
         }
         c.execute(
             "INSERT INTO authorization_admin.context_call_requests "
