@@ -151,3 +151,12 @@
 
 .f3-conversation .private-message[data-record=true] .conversation-message-identity{justify-content:flex-start}
 .f3-conversation .private-message[data-record=true] .conversation-message-identity>*{order:0}
+
+/* Reading rhythm stays inside conversation prose; code and tables retain their layout. */
+.f3-conversation .private-user .knowledge-document-reading{white-space:normal;font-size:14px;line-height:1.7}
+.f3-conversation .private-user .knowledge-document-reading> :first-child{margin-top:0}
+.f3-conversation .private-user .knowledge-document-reading> :last-child{margin-bottom:0}
+.f3-conversation .private-user .knowledge-document-reading li+li{margin-top:8px}
+.px-shell.journey-shell .f3-conversation .private-user .knowledge-document-reading p{white-space:normal}
+.px-shell.journey-shell .f3-conversation .private-message[data-record=true] .private-user{padding:16px 18px}
+.f3-conversation .private-receipt>details{margin:0}

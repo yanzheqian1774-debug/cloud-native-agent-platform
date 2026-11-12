@@ -13,6 +13,6 @@ export function ConversationAnswer({storageKey,id,label,button,disabled,onAnswer
  async function send(){if(flight.current||disabled||!reply.trim())return;flight.current=true;setSending(true);try{if(await onAnswer(reply.trim()))setReply('')}finally{flight.current=false;setSending(false)}}
  return <form className="private-composer f3-answer" onSubmit={e=>{e.preventDefault();void send()}}>
  <label htmlFor={id}>{label}</label>{showQuestion&&question&&<p className="f3-composer-question">{question}</p>}{choices.length>0&&<div className="f3-answer-choices" role="group" aria-label="选择明确选项">{choices.map(c=><button type="button" key={c[0]} disabled={disabled||sending} aria-pressed={reply===c[1]} onClick={()=>setReply(c[1])}>{c[0]}</button>)}</div>}
- <textarea id={id} value={reply} disabled={disabled||sending} maxLength={1800} onChange={e=>setReply(e.target.value)} placeholder="在这里补充，回答后继续原任务"/>
+ <textarea id={id} value={reply} disabled={disabled||sending} maxLength={1800} onChange={e=>setReply(e.target.value)} placeholder="继续提问，或补充你的要求"/>
  <button disabled={disabled||sending||!reply.trim()}>{sending?'正在提交…':button}</button><small>输入自动保留；发送后以实际接收状态为准。</small></form>;
 }

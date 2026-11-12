@@ -98,3 +98,20 @@ test('confirmed pre-dispatch rejection repairs message references before continu
  expect(JSON.parse(String(state.calls[0].content)).messages[0].id).toBe('user:old-unprefixed-message');
  expect(state.messages.filter(m=>m.author_id==='human:ordinary'&&!m.kind)).toHaveLength(1);
 });
+
+test('new reply indicator clears when latest is visible and stays clear after refresh',async({page})=>{
+ const state=await directFixture(page);state.messages[0].content='较长的历史问题。\n'.repeat(100);
+ await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ const stream=page.locator('.px-message-stream');await stream.evaluate(node=>{node.dispatchEvent(new Event('wheel',{bubbles:true}));node.scrollTop=0});
+ await page.getByLabel('继续提问',{exact:true}).fill('补充说明');await page.getByRole('button',{name:'发送',exact:true}).click();
+ await expect(page.locator('#conversation-message-a2')).toBeAttached();
+ await expect(page.getByRole('button',{name:'有新消息，回到最新'})).toBeVisible();
+ await page.getByRole('button',{name:'有新消息，回到最新'}).click();
+ await expect(page.getByRole('button',{name:'有新消息，回到最新'})).toBeHidden();
+ await expect.poll(()=>stream.evaluate(node=>node.scrollHeight-node.scrollTop-node.clientHeight)).toBeLessThan(72);
+ await page.reload();await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'有新消息，回到最新'})).toBeHidden();expect(state.calls).toHaveLength(2);
+ await expect(page.getByLabel('继续提问',{exact:true})).toHaveAttribute('placeholder','继续提问，或补充你的要求');
+ await expect(page.locator('#conversation-message-a2 .private-receipt summary')).toHaveText('查看来源与记录');
+ expect(await page.locator('#conversation-message-a2 .knowledge-document-reading').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('normal');
+});
