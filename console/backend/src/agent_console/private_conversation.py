@@ -5,13 +5,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from contextlib import contextmanager
 from uuid import uuid4
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 
-from .request_timing import measured
+from .request_timing import measured, measured_context
 
 
 class ConversationError(ValueError):
@@ -88,12 +90,58 @@ class PrivateConversations:
     def __init__(self, database_url, resolve_link, administrator_access=None):
         self.database_url, self.resolve_link = database_url, resolve_link
         self.administrator_access = administrator_access or (lambda c, ctx: False)
+        self._connection_pool = None
+
+    def start_pool(self):
+        """Called once by the application lifespan, never per request."""
+        if self._connection_pool is not None:
+            return
+        pool = ConnectionPool(
+            self.database_url,
+            name="private-conversation",
+            min_size=1,
+            max_size=4,
+            timeout=5,
+            max_idle=60,
+            kwargs={"row_factory": dict_row, "autocommit": False, "connect_timeout": 5},
+            open=False,
+        )
+        try:
+            pool.open(wait=True, timeout=5)
+        except Exception:
+            pool.close()
+            raise
+        self._connection_pool = pool
+
+    def close_pool(self):
+        pool, self._connection_pool = self._connection_pool, None
+        if pool is not None:
+            pool.close()
+
+    @contextmanager
+    def pooled_connection(self, pool):
+        entered = False
+        try:
+            with measured_context(pool.connection(timeout=5), "conversation.pool") as c:
+                entered = True
+                yield c
+        except psycopg.Error as exc:
+            if not entered:
+                exc._conversation_storage_phase = "POOL_ACQUIRE"
+            raise
 
     @measured("conversation.connection")
     def connect(self):
-        return psycopg.connect(
-            self.database_url, row_factory=dict_row, connect_timeout=5
-        )
+        if self._connection_pool is not None:
+            return self.pooled_connection(self._connection_pool)
+        try:
+            return psycopg.connect(
+                self.database_url, row_factory=dict_row, connect_timeout=5
+            )
+        except psycopg.Error as exc:
+            # Fixed phase only; never attach connection details or retry a write.
+            exc._conversation_storage_phase = "CONNECT"
+            raise
 
     @staticmethod
     def scope(ctx):

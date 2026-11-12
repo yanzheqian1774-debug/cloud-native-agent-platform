@@ -1,11 +1,15 @@
 """Authenticated private conversation endpoints; only existing owner READ bridges."""
 
+import logging
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 import psycopg
+from anyio import to_thread
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from psycopg_pool import PoolTimeout
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agent_console.private_conversation import (
@@ -348,6 +352,18 @@ def install_private_conversations(
     app.state.conversation_actions = actions
     if service:
         service.facts_reader = actions
+        previous_lifespan = app.router.lifespan_context
+
+        @asynccontextmanager
+        async def conversation_lifespan(application):
+            await to_thread.run_sync(service.start_pool)
+            try:
+                async with previous_lifespan(application) as state:
+                    yield state
+            finally:
+                await to_thread.run_sync(service.close_pool)
+
+        app.router.lifespan_context = conversation_lifespan
 
     def invoke(request, action, write=False):
         with span("conversation.authentication"):
@@ -366,10 +382,48 @@ def install_private_conversations(
     def safe(request, action, write=False):
         try:
             return invoke(request, action, write)
-        except psycopg.Error:
+        except psycopg.Error as exc:
+            diagnostic = getattr(request.state, "diagnostic_id", None)
+            # Only fixed categories and SQLSTATE: never exception text, SQL,
+            # parameters, database names, connection strings or user content.
+            state = exc.sqlstate
+            if (
+                not isinstance(state, str)
+                or len(state) != 5
+                or not all(
+                    char in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" for char in state
+                )
+            ):
+                state = "UNKNOWN"
+            category = (
+                "POOL_TIMEOUT"
+                if isinstance(exc, PoolTimeout)
+                else "CONNECTION_TIMEOUT"
+                if isinstance(exc, psycopg.errors.ConnectionTimeout)
+                else "OPERATIONAL"
+                if isinstance(exc, psycopg.OperationalError)
+                else "INTEGRITY"
+                if isinstance(exc, psycopg.IntegrityError)
+                else "PROGRAMMING"
+                if isinstance(exc, psycopg.ProgrammingError)
+                else "DATABASE"
+            )
+            logging.getLogger(__name__).warning(
+                "conversation_storage_failure request_id=%s route=%s "
+                "category=%s sqlstate=%s phase=%s",
+                diagnostic,
+                getattr(request.scope.get("route"), "path", "UNREGISTERED"),
+                category,
+                state,
+                exc._conversation_storage_phase
+                if getattr(exc, "_conversation_storage_phase", None)
+                in {"CONNECT", "POOL_ACQUIRE"}
+                else "UNKNOWN",
+            )
             return JSONResponse(
                 status_code=503,
                 content={"reasonCode": "CONVERSATION_STORAGE_UNAVAILABLE"},
+                headers={"X-Diagnostic-ID": diagnostic} if diagnostic else None,
             )
 
     if service:
