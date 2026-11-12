@@ -1,3 +1,5 @@
+import {readExactDirectoryResource} from '../api/resourceDirectory';
+import {exactDefinitionHref} from '../resources/definitionJourney';
 import {readAttentionDirectory} from './currentAttentionReadback';
 import {WorkTeamContext} from '../teams/WorkTeamContext';
 import {pageScrollTop,scrollPageTo} from './pageScroll';
@@ -13,7 +15,7 @@ import {formatTime} from '../journey/formatTime';
 import './CurrentWorkDirectory.css';
 
 const states:Record<string,string>={SUCCEEDED:'执行完成',RUNNING:'正在推进',QUEUED:'已排队',PENDING:'尚未启动',FAILED:'需要核查',RECOVERY_REQUIRED:'结果待核实',UNKNOWN:'结果未知',OUTCOME_UNKNOWN:'结果未知',CANCELLED:'已取消',CANCELED:'已取消'};
-const labels:Record<string,string>={CONFIRMED_SOLVED:'业务已确认解决',UNDETERMINED:'业务结论尚未判定',NOT_SOLVED:'业务问题尚未解决'};
+const labels:Record<string,string>={CONFIRMED_SOLVED:'业务已确认解决',UNDETERMINED:'业务问题是否解决尚未确认',NOT_SOLVED:'业务问题尚未解决'};
 const conversationHref=(w:CurrentWork)=>'/work?'+new URLSearchParams({conversation:w.conversation});
 function questionLabel(question:string){
  if(/(?:还是|或者|或).{0,40}(?:规范|口径|范围)|(?:规范|口径|范围).{0,40}(?:还是|或者|或)/.test(question))return '需确认口径';
@@ -85,6 +87,17 @@ export function SelectedWork({digest,origin,version,now}:{digest:string;origin:s
  },[digest,origin,version]);
  return error?<section className="f3-work-empty" role="alert"><h2>当前无法读取这项工作</h2><p>{error}</p><p>未替换为其他任务或最新版本，可重新读取后核对。</p></section>:value?<WorkDetail work={value.work} scope={value.scope} now={now}/>:<p role="status">正在读取本次任务与固定版本；无需遍历其他会话。</p>;
 }
+function InputSource({source}:{source:CurrentWork['execution']['preparation']['source_snapshot']}){
+ const [params]=useSearchParams();
+ const href=exactDefinitionHref('knowledge',source.resource_id,source.revision_id,source.digest);
+ const target=new URLSearchParams(href.split('?')[1]);if(params.get('work'))target.set('fromExecution',params.get('work')!);if(params.get('origin'))target.set('returnConversation',params.get('origin')!);
+ const [name,setName]=useState(''),[unavailable,setUnavailable]=useState(false);
+ useEffect(()=>{let live=true;const controller=new AbortController();const expired=()=>{live=false;controller.abort();setName('');setUnavailable(true)};window.addEventListener('workbench-session-expired',expired);
+  void readExactDirectoryResource('knowledge',source.resource_id,source.revision_id,source.digest,controller.signal).then(value=>{if(live){setName(value.name);setUnavailable(!value.name)}}).catch(()=>{if(live)setUnavailable(true)});
+  return()=>{live=false;controller.abort();window.removeEventListener('workbench-session-expired',expired)};
+ },[source.resource_id,source.revision_id,source.digest]);
+ return <><p>{name|| (unavailable?'本次资料名称暂不可读取':'正在读取本次资料名称…')}</p>{name&&<Link to={href.split('?')[0]+'?'+target}>查看本次输入版本</Link>}<details><summary>查看准确版本标识</summary><p>{source.resource_id}</p><p>{source.revision_id}</p><p>{source.digest}</p></details></>;
+}
 function WorkDetail({work:w,scope,now}:{work:CurrentWork;scope:string;now:number}){
  const view=w.execution,key=scope+':work-directory:'+view.digest;
  const [params,setParams]=useSearchParams(),requestedResult=params.get('workView')==='result';
@@ -98,6 +111,6 @@ function WorkDetail({work:w,scope,now}:{work:CurrentWork;scope:string;now:number
   {!w.questionsReadable&&<p role="status" className="f3-work-notice">必要追问状态暂不可读取，不能判断是否需要补充。请重新读取或回到原会话核对。</p>}
   {active.map(q=><aside className="f3-work-notice" key={q.questionKey}><strong>需要补充的必要信息</strong><p>{q.question}</p><small>请在 {formatTime(q.expiresAt)} 前回原会话回答。</small></aside>)}
   <nav className="f3-work-tabs" aria-label="工作详情页签">{[['result','成果与记录'],['process','办理过程'],['basis','输入与版本依据']].map(([id,label])=><button key={id} aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</nav>
-  {tab==='result'?(view.progress?.state==='SUCCEEDED'&&view.artifacts.length?<PreparedDeliverySummary view={view} viewKey={key} selectedArtifact={artifact} onArtifact={id=>inspect(id)} onCloseArtifact={closeArtifact} query="" onReview={()=>setTab('basis')}/>:<Empty text={view.artifacts.length?`执行尚未完成，已有 ${view.artifacts.length} 份阶段产物记录；请查看办理过程与原会话中的实际返回。`:"尚未保存可交付产物，可查看办理过程。"}/>):tab==='process'?<><ExecutionWorkView view={view} viewKey={key} onArtifact={id=>inspect(id,'process')}/><ExecutionRuntimeSection digest={view.digest} conversationId={w.conversation} bindings={view.preparation.participants.map(t=>({taskId:t.task_id,instanceId:t.instance_id,assignmentId:t.assignment_id,runtimeInstanceId:t.runtime_instance_id??'',runtimeGeneration:t.runtime_generation??0}))}/></>:<section className="f3-work-card"><h3>本次输入与固定版本</h3><dl><dt>输入资料</dt><dd>{view.preparation.source_snapshot.resource_id} · {view.preparation.source_snapshot.revision_id}</dd><dt>计划版本</dt><dd>v{view.preparation.plan_version}</dd><dt>业务评价</dt><dd>{labels[view.outcome?.businessResolution??'']??'尚未取得评价记录'}</dd><dt>人工决定</dt><dd>{view.outcome?.confirmationId?'已有决定记录；不据此推断业务批准':'尚无已读的人工决定记录'}</dd></dl><h3>本次实际绑定</h3>{view.preparation.participants.map(p=><details key={p.task_id}><summary>{view.preparation.semantics.tasks.find(t=>t.task_id===p.task_id)?.title??'原任务'}</summary><dl><dt>参与实例</dt><dd>{p.instance_id}</dd><dt>数字人定义</dt><dd>{p.definition.resource_id} · {p.definition.revision_id}</dd><dt>技能版本</dt><dd>{p.skill.reference.resource_id} · {p.skill.reference.revision_id}</dd><dt>运行环境快照</dt><dd>{p.runtime_instance_id?`${p.runtime_instance_id} · ${p.runtime_generation??'版本未记录'}`:'原记录未提供运行实例快照，不追补当前配置。'}</dd></dl></details>)}</section>}
+  {tab==='result'?(view.progress?.state==='SUCCEEDED'&&view.artifacts.length?<PreparedDeliverySummary view={view} viewKey={key} selectedArtifact={artifact} onArtifact={id=>inspect(id)} onCloseArtifact={closeArtifact} query="" onReview={()=>setTab('basis')}/>:<Empty text={view.artifacts.length?`执行尚未完成，已有 ${view.artifacts.length} 份阶段产物记录；请查看办理过程与原会话中的实际返回。`:"尚未保存可交付产物，可查看办理过程。"}/>):tab==='process'?<><ExecutionWorkView view={view} viewKey={key} onArtifact={id=>inspect(id,'process')}/><ExecutionRuntimeSection digest={view.digest} conversationId={w.conversation} bindings={view.preparation.participants.map(t=>({taskId:t.task_id,instanceId:t.instance_id,assignmentId:t.assignment_id,runtimeInstanceId:t.runtime_instance_id??'',runtimeGeneration:t.runtime_generation??0}))}/></>:<section className="f3-work-card"><h3>本次输入与固定版本</h3><dl><dt>输入资料</dt><dd><InputSource key={view.digest} source={view.preparation.source_snapshot}/></dd><dt>计划版本</dt><dd>v{view.preparation.plan_version}</dd><dt>业务评价</dt><dd>{labels[view.outcome?.businessResolution??'']??'尚未取得评价记录'}</dd><dt>人工决定</dt><dd>{view.outcome?.confirmationId?'已有决定记录；不据此推断业务批准':'尚无已读的人工决定记录'}</dd></dl><h3>本次实际绑定</h3>{view.preparation.participants.map(p=><details key={p.task_id}><summary>{view.preparation.semantics.tasks.find(t=>t.task_id===p.task_id)?.title??'原任务'}</summary><dl><dt>参与实例</dt><dd>{p.instance_id}</dd><dt>数字人定义</dt><dd>{p.definition.resource_id} · {p.definition.revision_id}</dd><dt>技能版本</dt><dd>{p.skill.reference.resource_id} · {p.skill.reference.revision_id}</dd><dt>运行环境快照</dt><dd>{p.runtime_instance_id?`${p.runtime_instance_id} · ${p.runtime_generation??'版本未记录'}`:'原记录未提供运行实例快照，不追补当前配置。'}</dd></dl></details>)}</section>}
  </section>;
 }

@@ -22,7 +22,7 @@ async function fixture(page:Page,count=1){
 }
 test('stage result stays readable without falsely becoming confirmed business success',async({page})=>{
  const s=await fixture(page);await page.goto('/outcomes');await expect(page.getByText('成果验收状态尚未接通。',{exact:false})).toBeVisible();
- await page.getByRole('button',{name:'阶段与执行记录',exact:true}).click();await expect(page.getByText('业务结论尚未判定',{exact:true})).toBeVisible();await page.getByLabel('搜索工作',{exact:false}).fill('交付检查');
+ await page.getByRole('button',{name:'阶段与执行记录',exact:true}).click();await expect(page.getByText('业务问题是否解决尚未确认',{exact:true})).toBeVisible();await page.getByLabel('搜索工作',{exact:false}).fill('交付检查');
  await page.getByRole('button',{name:'阅读成果与依据',exact:true}).click();await expect(page.getByRole('heading',{name:'成果预览',exact:true})).toBeVisible();await expect(page.locator('.px-delivery-summary')).toBeVisible();await expect(page.getByRole('link',{name:'回到原会话',exact:true})).toHaveAttribute('href','/work?conversation=c1');
  await page.getByRole('button',{name:'返回成果与记录',exact:true}).click();await expect(page.getByLabel('搜索工作',{exact:false})).toHaveValue('交付检查');await expect(page.getByRole('button',{name:'阶段与执行记录',exact:true})).toHaveAttribute('aria-pressed','true');expect(s.writes).toEqual([]);
 });
@@ -172,4 +172,13 @@ test('independent detail reads proceed while fixed problem verification is pendi
  const s=await fixture(page);s.running=true;let entered=false,release!:()=>void;const held=new Promise<void>(resolve=>{release=resolve});
  await page.route('**/api/workbench/v1/problems/p1',async route=>{entered=true;await held;return route.fallback()});
  try{await page.goto('/tasks?work=e1&origin=c1');await expect.poll(()=>entered).toBe(true);await expect.poll(()=>s.reads.filter(p=>p.endsWith('/native-progress')).length).toBe(1);await expect.poll(()=>s.reads.filter(p=>p.endsWith('/journey')).length).toBe(1);await expect(page.locator('.f3-work-detail')).toHaveCount(0);release();await expect(page.getByText(s.question,{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'在原会话回答并继续',exact:true})).toHaveAttribute('href','/work?conversation=c1');expect(s.writes).toEqual([])}finally{release()}
+});
+
+for(const mismatch of [false,true])test(`input basis uses exact authorized source name; mismatch=${mismatch}`,async({page})=>{
+ const state=await fixture(page),source=report.sourceSnapshot;
+ await page.route('**/api/workbench/v1/resource-directory/**',route=>route.fulfill({json:{result:{kind:'knowledge',identity:source.resource_id,name:'原版本交接说明',subject:'human:directory',scope:{tenantId:'fixture',securityDomain:'isolated'},revision:{revisionId:source.revision_id,digest:mismatch?'0'.repeat(64):source.digest,state:'PUBLISHED',content:{}}}}}));
+ await page.goto('/tasks?work=e1&origin=c1');await page.getByRole('button',{name:'输入与版本依据',exact:true}).click();
+ if(mismatch){await expect(page.getByText('本次资料名称暂不可读取',{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'查看本次输入版本',exact:true})).toHaveCount(0)}
+ else{await expect(page.getByText('原版本交接说明',{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'查看本次输入版本',exact:true})).toHaveAttribute('href',/returnConversation=c1/)}
+ await page.getByText('查看准确版本标识',{exact:true}).click();await expect(page.getByText(source.revision_id,{exact:true}).first()).toBeVisible();expect(state.writes).toEqual([]);
 });

@@ -238,7 +238,7 @@ test('reopening saved execution waits for authoritative progress without claimin
  });
  await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'正在读取本次工作',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('正在读取已保存的执行进度与结果');await expect(page.locator('.journey-stages [aria-current=step]')).toHaveCount(0);
- await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('不会重新提交或执行任务');release();
+ await expect(page.getByText('执行状态：正在读取 · 产物数量待读取',{exact:true})).toBeVisible();await expect(page.getByText(/执行状态：正在读取.*已生成0份产物/)).toHaveCount(0);await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('不会重新提交或执行任务');release();
  await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('结果已返回');await expect(page.getByRole('region',{name:'实时执行过程'})).toContainText('执行已结束');expect(posts).toBe(0);expect(s.modelCalls).toBe(0);
 });
 
@@ -353,4 +353,15 @@ for(const scenario of [
  await page.goto('/work?conversation=new');await page.getByRole('button',{name:'使用2026-08、2026-09交付测试资料',exact:true}).click();
  await expect(page.getByRole('heading',{name:'有一点需要确认',exact:true})).toBeVisible();expect(calls).toBe(1);expect(s.messages[0].content).toBe(scenario.goal);expect(s.messages).toHaveLength(2);
  await page.reload();await expect(page.getByLabel('补充说明',{exact:true})).toBeVisible();expect(calls).toBe(1);
+});
+
+for(const mismatch of [false,true])test(`saved journey enables its exact existing work without relinking: mismatch=${mismatch}`,async({page})=>{
+ const s=await fixture(page),digest='a'.repeat(64),ref={resource_id:'p',revision_id:'1',digest:'b'.repeat(64)};let writes=0;
+ page.on('request',r=>{if(r.method()!=='GET'&&r.url().includes('/api/'))writes++});
+ s.journal={version:2,state:{key:'saved',question:prompt,phase:'RUNNING',execution:digest,problem:{business_problem_id:'p',revision_id:'1',digest:ref.digest},messages:[],log:[]}};
+ await page.route('**/api/workbench/v1/conversations/new',r=>r.fulfill({json:{result:{conversation:{conversation_id:'new',title:prompt,version:1},messages:[],links:[{link_id:'existing',title:'已保存分析',readable:true,target:{problemId:'p',revisionId:mismatch?'other':'1',problemDigest:ref.digest}}]}}}));
+ await page.route('**/api/workbench/v1/prepared-executions/**',r=>r.fulfill({json:{result:r.request().url().endsWith('/native-progress')?{steps:[],questions:[],modelInFlight:false}:{digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,source_snapshot:ref,semantics:{title:'已保存分析',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'SUCCEEDED',version:2,tasks:[]},admission:{state:'ADMITTED'},resourceUses:[],artifacts:[],events:[],outcome:null}}}));
+ await page.goto('/work?conversation=new');await expect(page.getByText('执行状态：SUCCEEDED · 已生成0份产物',{exact:true})).toBeVisible();const tab=page.getByRole('button',{name:'当前工作',exact:true});
+ if(mismatch)await expect(tab).toBeDisabled();else{await expect(tab).toBeEnabled();await tab.click();await expect(page.locator('.private-work')).toContainText('已保存分析');await expect(page.getByText('已关联问题，尚未关联精确执行。',{exact:false})).toHaveCount(0)}
+ expect(writes).toBe(0);expect(s.modelCalls).toBe(0);
 });
