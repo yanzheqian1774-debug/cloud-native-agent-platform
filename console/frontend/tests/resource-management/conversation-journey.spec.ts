@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 const prompt='帮我分析一下最近的销售情况，看看哪里出了问题';
 async function fixture(page:Page){
- const state={journal:{version:0,state:null as Record<string,unknown>|null},messages:[] as Record<string,unknown>[],modelCalls:0};
+ const state={title:prompt,journal:{version:0,state:null as Record<string,unknown>|null},messages:[] as Record<string,unknown>[],modelCalls:0};
  await page.route('**/api/**',async route=>{const p=new URL(route.request().url()).pathname,method=route.request().method(),body=method==='POST'?route.request().postDataJSON():null;const result=(r:unknown)=>route.fulfill({json:{result:r}});
  if(p.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:development-admin',tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{}}});
  if(p.endsWith('/development-administrator'))return result({enabled:true});
@@ -9,7 +9,7 @@ async function fixture(page:Page){
  if(p.endsWith('/conversations'))return method==='POST'?result({conversation_id:'new'}):result({items:[]});
  if(p.endsWith('/new/journey')){if(method==='POST'){if(body.expectedVersion!==state.journal.version)return route.fulfill({status:409,json:{reasonCode:'JOURNEY_VERSION_CONFLICT'}});state.journal={version:state.journal.version+1,state:body.state}}return result(state.journal)}
  if(p.endsWith('/new/messages')){state.messages.push({message_id:'m'+state.messages.length,content:body.content,disposition:'GOAL_RECORDED',created_at:'2026-11-09T08:00:00Z'});return result({identity:'m1'})}
- if(p.endsWith('/conversations/new'))return result({conversation:{conversation_id:'new',title:prompt,version:state.messages.length},messages:state.messages,links:[]});
+ if(p.endsWith('/conversations/new'))return result({conversation:{conversation_id:'new',title:state.title,version:state.messages.length},messages:state.messages,links:[]});
  if(p.endsWith('/draft-assistance/invocations')){const content=JSON.parse(body.content);if(content.messages.some((m:{id:string})=>!m.id.startsWith('user:')))return route.fulfill({status:404,json:{reasonCode:'DRAFT_CONTEXT_INVALID'}});state.modelCalls++;return result({invocationId:'draft'+state.modelCalls,contextId:'context',turnId:'turn',turnVersion:state.modelCalls,state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'你想比较哪个时间范围的销售？',draft:null,transport:'REAL_PROVIDER'})}
  if(p.endsWith('/conversation-sources'))return result({items:[{source:{resource_id:'source',revision_id:'1',digest:'a'.repeat(64)},name:'项目销售样本',periods:['2026-08','2026-09'],sourceSchema:'sales-diagnostic-source.v1',synthetic:true}]});
  if(p.endsWith('/problems'))return result({problems:[]});
@@ -19,7 +19,7 @@ async function fixture(page:Page){
 test('one short message starts understanding and clarification stays in the same conversation after reload',async({page})=>{
  const s=await fixture(page);await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect(page).toHaveURL(/conversation=new/);await expect(page.getByText('请选择本次要分析的资料范围。',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);await expect(page.getByRole('link',{name:'在本会话核对目标与草稿'})).toHaveCount(0);
  await page.reload();await expect(page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'})).toBeVisible();expect(s.modelCalls).toBe(0);
- await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>s.modelCalls).toBe(1);await expect(page).toHaveURL(/conversation=new/);await expect(page.locator('.conversation-journey blockquote')).toContainText('项目销售样本');
+ await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();await expect.poll(()=>s.modelCalls).toBe(1);await expect(page).toHaveURL(/conversation=new/);await page.getByText('本次补充说明',{exact:true}).click();await expect(page.locator('.conversation-journey blockquote')).toContainText('项目销售样本');
 });
 test('an interrupted claimed operation is preserved and never dispatched again on refresh',async({page})=>{
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'UNDERSTAND',pending:'understanding',messages:[{id:'q',text:prompt}],log:['已收到问题']}};
@@ -92,9 +92,9 @@ for(const reason of ['READONLY_CONTINUATION_VALIDATION_FAILED','NETWORK_UNKNOWN'
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(reason==='READONLY_CONTINUATION_VALIDATION_FAILED'?1:0);expect(s.modelCalls).toBe(0);
 });
 
-test('empty source dates use the full source scope without sending an empty time range',async({page})=>{
+test('source selection does not invent a time range or replace the user scope',async({page})=>{
  const s=await fixture(page);s.journal={version:2,state:{key:'latency',question:'看看响应异常',phase:'CLARIFY',messages:[{id:'user:q',text:'看看响应异常'}],sources:[{source:{resource_id:'latency',revision_id:'1',digest:'d'.repeat(64)},name:'响应资料',label:'响应资料',periods:[],sourceSchema:'tabular-diagnostic-source.v1',synthetic:true}],log:[]}};
- await page.goto('/work?conversation=new');await page.getByRole('button',{name:'使用现有响应资料'}).click();await expect.poll(()=>s.modelCalls).toBe(1);expect(s.messages[0].content).toContain('分析范围为该资料包含的全部记录');expect(s.messages[0].content).not.toContain('时间范围为。');
+ await page.goto('/work?conversation=new');await page.getByRole('button',{name:'使用现有响应资料'}).click();await expect.poll(()=>s.modelCalls).toBe(1);expect(s.messages[0].content).toContain('继续按原问题和已确认的要求处理');expect(s.messages[0].content).not.toContain('全部记录');expect(s.messages[0].content).not.toContain('时间范围为。');
 });
 
 test('known exhausted coverage can recheck new capabilities without replaying model or execution',async({page})=>{
@@ -316,7 +316,7 @@ for(const reason of ['MODEL_AUTHORIZATION_INVALID','NETWORK_UNKNOWN'])test('unde
 for(const recovery of ['normal','lost-source-response','denied-source','lost-reply-response'])test('planning clarification resumes the same problem in the fixed composer without restarting understanding: '+recovery,async({page},testInfo)=>{
  await page.setViewportSize({width:1440,height:1000});
  const s=await fixture(page),question='检查交接说明还缺什么',source={source:{resource_id:'source',revision_id:'1',digest:'a'.repeat(64)},name:'交接说明',periods:[],sourceSchema:'document-review-source.v1',synthetic:true};
- s.messages=[{message_id:'q1',content:question,disposition:'GOAL_RECORDED'}];
+ s.title=question;s.messages=[{message_id:'q1',content:question,disposition:'GOAL_RECORDED'}];
  s.journal={version:1,state:{key:'document',question,phase:'PLAN',messages:[{id:'user:q1',text:question}],log:[],problem:{business_problem_id:'p'},criterion:'criterion-one',source}};
  let calls=0,created=0,confirmations=0,sourceWrites=0,replyWrites=0;
  await page.route('**/conversations/new/messages',route=>{replyWrites++;const body=route.request().postDataJSON();s.messages.push({message_id:'saved-reply',request_key:body.idempotencyKey,content:body.content,disposition:'GOAL_RECORDED'});if(recovery==='lost-reply-response'&&replyWrites===1)return route.abort();return route.fulfill({json:{result:{identity:'saved-reply'}}})});
@@ -338,4 +338,18 @@ for(const recovery of ['normal','lost-source-response','denied-source','lost-rep
  expect(s.modelCalls).toBe(0);expect(created).toBe(0);expect(replyWrites).toBe(1);expect(sourceWrites).toBe(recovery==='denied-source'?2:1);await expect(page.getByRole('region',{name:'已保存的方案追问'})).toContainText('按测试环境还是生产环境检查？');
  await page.reload();await expect(page.getByRole('alert')).toBeVisible();expect(calls).toBe(2);await expect(page.getByRole('region',{name:'已保存的方案追问'})).toContainText('按测试环境还是生产环境检查？');expect(sourceWrites).toBe(recovery==='denied-source'?2:1);
  await page.getByRole('region',{name:'已保存的方案追问'}).scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('retained-planning-question.png'),fullPage:true});
+});
+
+for(const scenario of [
+ {schema:'document-review-source.v1',name:'交接说明',goal:'只比较测试与生产交接规范的差异，分成两列，不要做完整性检查。'},
+ {schema:'tabular-diagnostic-source.v1',name:'响应资料',goal:'只看9月第一周的响应记录，按负责人列出原文，不做销售或毛利分析。'},
+])test('source selection preserves the original goal without injecting a scenario: '+scenario.schema,async({page})=>{
+ const s=await fixture(page),source={source:{resource_id:'exact-source',revision_id:'r2',digest:'c'.repeat(64)},name:scenario.name,periods:['2026-08','2026-09'],sourceSchema:scenario.schema,synthetic:true};
+ s.title=scenario.goal;s.messages=[{message_id:'original',content:scenario.goal,disposition:'GOAL_RECORDED'}];
+ s.journal={version:1,state:{key:'goal-preservation',question:scenario.goal,phase:'CLARIFY',understandingProtocol:3,userMessageId:'original',messages:[{id:'user:original',text:scenario.goal}],sources:[source],log:[]}};
+ let calls=0;
+ await page.route('**/draft-assistance/invocations',route=>{calls++;const body=route.request().postDataJSON(),input=JSON.parse(body.content);expect(input.messages[0].text).toBe(scenario.goal);expect(input.messages.at(-1).text).toBe('使用系统现有的'+scenario.name+'作为资料。继续按原问题和已确认的要求处理。');expect(s.journal.state?.question).toBe(scenario.goal);expect(s.journal.state?.source).toEqual(source);return route.fulfill({json:{result:{invocationId:'clarify',state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'结果需要包含原文位置吗？',conversationDelivery:{state:'SAVED'}}}})});
+ await page.goto('/work?conversation=new');await page.getByRole('button',{name:'使用2026-08、2026-09交付测试资料',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'有一点需要确认',exact:true})).toBeVisible();expect(calls).toBe(1);expect(s.messages[0].content).toBe(scenario.goal);expect(s.messages).toHaveLength(2);
+ await page.reload();await expect(page.getByLabel('补充说明',{exact:true})).toBeVisible();expect(calls).toBe(1);
 });
