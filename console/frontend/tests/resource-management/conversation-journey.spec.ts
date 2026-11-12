@@ -313,16 +313,18 @@ for(const reason of ['MODEL_AUTHORIZATION_INVALID','NETWORK_UNKNOWN'])test('unde
  await page.reload();await expect(page.getByRole('heading',{name:'理解进展待核实',exact:true})).toBeVisible();expect(writes).toBe(0);expect(s.modelCalls).toBe(0);expect(s.journal.version).toBe(2);
 });
 
-test('planning clarification resumes the same problem in the fixed composer without restarting understanding',async({page},testInfo)=>{
+for(const recovery of ['normal','lost-source-response','denied-source','lost-reply-response'])test('planning clarification resumes the same problem in the fixed composer without restarting understanding: '+recovery,async({page},testInfo)=>{
  await page.setViewportSize({width:1440,height:1000});
  const s=await fixture(page),question='检查交接说明还缺什么',source={source:{resource_id:'source',revision_id:'1',digest:'a'.repeat(64)},name:'交接说明',periods:[],sourceSchema:'document-review-source.v1',synthetic:true};
  s.messages=[{message_id:'q1',content:question,disposition:'GOAL_RECORDED'}];
  s.journal={version:1,state:{key:'document',question,phase:'PLAN',messages:[{id:'user:q1',text:question}],log:[],problem:{business_problem_id:'p'},criterion:'criterion-one',source}};
- let calls=0,created=0,confirmations=0;
+ let calls=0,created=0,confirmations=0,sourceWrites=0,replyWrites=0;
+ await page.route('**/conversations/new/messages',route=>{replyWrites++;const body=route.request().postDataJSON();s.messages.push({message_id:'saved-reply',request_key:body.idempotencyKey,content:body.content,disposition:'GOAL_RECORDED'});if(recovery==='lost-reply-response'&&replyWrites===1)return route.abort();return route.fulfill({json:{result:{identity:'saved-reply'}}})});
+ await page.route('**/conversations/new/sources',route=>{sourceWrites++;if(recovery==='denied-source'&&sourceWrites===1)return route.fulfill({status:403,json:{reasonCode:'CONVERSATION_SOURCE_NOT_READABLE'}});const body=route.request().postDataJSON();s.messages.push({message_id:'saved-question',kind:'SOURCE',request_key:body.idempotencyKey,content:'原办理来源记录',facts:{source:Object.fromEntries(Object.entries(body.source).reverse()),observation:{state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',questions:['按测试环境还是生产环境检查？']}}});if(recovery==='lost-source-response'&&sourceWrites===1)return route.abort();return route.fulfill({json:{result:{identity:'saved-question'}}})});
  await page.route('**/conversation-sources',route=>route.fulfill({json:{result:{items:[source]}}}));
  await page.route('**/question-activity-input',route=>{expect(route.request().postDataJSON().problemId).toBe('p');return route.fulfill({json:{result:{state:'READY',planningRequest:{target:{problem:{resource_id:'p'}},answers:[question],idempotency_key:route.request().postDataJSON().idempotencyKey,policy:{},output_language:'zh-CN'}}}})});
  await page.route('**/problems',route=>{if(route.request().method()==='POST')created++;return route.fulfill({json:{result:{problems:[]}}})});
- await page.route('**/planning-v2/invocations',route=>{calls++;const body=route.request().postDataJSON();if(calls===2){expect(body.predecessor_invocation_id).toBe('plan-first');expect(body.answers.at(-1)).toContain('按测试环境检查');expect(body.idempotency_key).toBe('document:planning:clarification:1');expect(body.target.problem.resource_id).toBe('p')}return route.fulfill({json:{result:{invocation:{target:{invocation_id:calls===1?'plan-first':'plan-second'},request:body},result:calls===1?{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['按测试环境还是生产环境检查？']}:{technical_status:'SUCCEEDED',kind:'VALID_SUGGESTION',proposal:{proposal_id:'proposal',revision:1,semantics:{target:{problem:{resource_id:'p',revision_id:'p:1',digest:'c'.repeat(64)}}}},proposal_digest:'b'.repeat(64)}}}})});
+ await page.route('**/planning-v2/invocations',route=>{calls++;const body=route.request().postDataJSON();if(calls===2){expect(body.predecessor_invocation_id).toBe('plan-first');expect(body.answers.at(-1)).toContain('按测试环境检查');expect(body.idempotency_key).toBe('document:planning:clarification:1');expect(body.target.problem.resource_id).toBe('p')}return route.fulfill({json:{result:{invocation:{target:{invocation_id:calls===1?'plan-first':'plan-second',suggestion_context_id:'context',request_revision:calls,problem:{problem:{resource_id:'p'}}},request:body},result:calls===1?{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['按测试环境还是生产环境检查？']}:{technical_status:'SUCCEEDED',kind:'VALID_SUGGESTION',proposal:{proposal_id:'proposal',revision:1,semantics:{target:{problem:{resource_id:'p',revision_id:'p:1',digest:'c'.repeat(64)}}}},proposal_digest:'b'.repeat(64)}}}})});
  await page.route('**/planning-v2/proposal/**',route=>{confirmations++;return route.fulfill({status:503,json:{reasonCode:'CONFIRMATION_TEST_BOUNDARY'}})});
  await page.goto('/work?conversation=new');
  await expect(page.getByRole('region',{name:'方案补充确认'})).toContainText('按测试环境还是生产环境检查？');
@@ -330,8 +332,10 @@ test('planning clarification resumes the same problem in the fixed composer with
  await page.reload();await expect(page.locator('#planning-reply')).toBeVisible();expect(calls).toBe(1);
  await page.screenshot({path:testInfo.outputPath('planning-clarification.png'),fullPage:true});
  await page.locator('#planning-reply').fill('按测试环境检查');await page.getByRole('button',{name:'发送补充',exact:true}).click();
+ if(recovery!=='normal'){await expect(page.getByRole('alert')).toBeVisible();expect(calls).toBe(1);expect(s.messages.filter(m=>m.content==='按测试环境检查')).toHaveLength(recovery==='lost-reply-response'?1:0);await page.getByRole('button',{name:'发送补充',exact:true}).click();}
  await expect.poll(()=>calls).toBe(2);await expect.poll(()=>confirmations).toBe(1);
  expect(s.journal.state?.problem).toEqual({business_problem_id:'p'});expect(s.journal.state?.criterion).toBe('criterion-one');expect(s.journal.state?.planningPredecessor).toBeUndefined();expect(s.journal.state?.planningAnswers).toEqual(['按测试环境检查']);expect(s.journal.state?.source).toMatchObject(source);
- expect(s.modelCalls).toBe(0);expect(created).toBe(0);
- await page.reload();await expect(page.getByRole('alert')).toBeVisible();expect(calls).toBe(2);
+ expect(s.modelCalls).toBe(0);expect(created).toBe(0);expect(replyWrites).toBe(1);expect(sourceWrites).toBe(recovery==='denied-source'?2:1);await expect(page.getByRole('region',{name:'已保存的方案追问'})).toContainText('按测试环境还是生产环境检查？');
+ await page.reload();await expect(page.getByRole('alert')).toBeVisible();expect(calls).toBe(2);await expect(page.getByRole('region',{name:'已保存的方案追问'})).toContainText('按测试环境还是生产环境检查？');expect(sourceWrites).toBe(recovery==='denied-source'?2:1);
+ await page.getByRole('region',{name:'已保存的方案追问'}).scrollIntoViewIfNeeded();await page.screenshot({path:testInfo.outputPath('retained-planning-question.png'),fullPage:true});
 });

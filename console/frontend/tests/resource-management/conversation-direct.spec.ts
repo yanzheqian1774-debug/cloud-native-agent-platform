@@ -258,6 +258,9 @@ for(const code of ['CONTEXT_ADMISSION_SOURCE_MISMATCH','PLANNING_OUTPUT_SOURCE_M
 test('saved answer downloads original Markdown and provenance after a fresh authorized read without model calls',async({page})=>{
  const state=await directFixture(page);await page.goto('/work?conversation=direct');
  const message=page.locator('#conversation-message-a1');await expect(message).toContainText('先明确核对目标');
+ // Wait for the answer journey to settle before measuring download-only writes.
+ await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ expect(state.journal.state.phase).toBe('DIRECT_DONE');
  const beforeCalls=state.calls.length,beforeWrites=state.writes.length;
  const event=page.waitForEvent('download');await message.getByRole('button',{name:'下载答复与来源（Markdown）'}).click();const download=await event;
  expect(download.suggestedFilename()).toBe('会话答复-a1.md');

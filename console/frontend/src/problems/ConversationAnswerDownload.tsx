@@ -26,5 +26,5 @@ export function ConversationAnswerDownload({conversation,message,session}:{conve
   }catch(reason){if(active.current)setError(abort.signal.aborted?'核对答复超时，未下载文件，可稍后再试。':String(reason).includes('identity')?'登录身份已变化，未下载文件。请重新打开会话后核对。':'暂不能下载这条答复，请确认当前仍有权查看原答复及资料。');}
   finally{clearTimeout(timer);flight.current=false;if(active.current)setBusy(false)}
  }
- return <div className="conversation-answer-download"><button type="button" disabled={busy} onClick={()=>void download()}>{busy?'正在核对答复…':'下载答复与来源（Markdown）'}</button>{error&&<p role="alert">{error}</p>}</div>;
+ return <div className="conversation-answer-download"><button type="button" disabled={busy} onClick={()=>void download()}>{busy?'正在核对答复…':'下载答复与来源（Markdown）'}</button><small>导出此条已保存答复，未重新分析。</small>{error&&<p role="alert">{error}</p>}</div>;
 }

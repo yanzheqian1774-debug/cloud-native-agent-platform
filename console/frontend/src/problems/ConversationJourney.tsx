@@ -1,3 +1,4 @@
+import {retainPlanningQuestion} from './ConversationPlanningHistory';
 import {ConversationTeamContext} from '../teams/ConversationTeamContext';
 import {ConversationMessageIdentity} from './ConversationMessageIdentity';
 import {ConversationElapsed} from './ConversationElapsed';
@@ -171,8 +172,11 @@ export function ConversationJourney({conversation,session,onActive,onProgressVis
   if(flight.current||!state||state.phase!=='PLANNING_CLARIFY'||!text.trim()||!state.planning)return false;
   flight.current=true;setBusy(true);setError('');
   try{await verify();const previous=state.planning.invocation.target.invocation_id;
-   const c=await conversationRequest<PrivateConversation>('/'+conversation);
-   const sent=await conversationRequest<{identity:string}>('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':planning-answer:'+previous,content:text.trim()});
+   const c=await retainPlanningQuestion(conversation,session.csrfToken,state.key,state.planning,verify);
+   await onMessagesChanged?.();
+   const replyKey=state.key+':planning-answer:'+previous,known=c.messages.find(message=>message.request_key===replyKey);
+   if(known&&(known.kind||known.content!==text.trim()))throw Error('上次补充已保存，请保留原补充内容继续，避免重复提交。');
+   const sent=known?{identity:known.message_id}:await conversationRequest<{identity:string}>('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:replyKey,content:text.trim()});
    await save({...state,pending:undefined,error:undefined,phase:'PLAN',planningPredecessor:previous,planningReply:(state.planningReply??0)+1,planningAnswers:[...(state.planningAnswers??[]),text.trim()],messages:[...state.messages,{id:'user:'+sent.identity,text:text.trim()}],log:[...state.log,'已收到补充，沿用原问题、资料和完成标准继续准备方案。']});
    await onMessagesChanged?.();return true;
   }catch(e){setError(String(e));return false}finally{flight.current=false;setBusy(false)}
