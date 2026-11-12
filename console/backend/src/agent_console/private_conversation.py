@@ -122,6 +122,24 @@ class PrivateConversations:
             )
         return {"conversation_id": identity}
 
+    @measured("conversation.head")
+    def head(self, ctx, identity):
+        """Owned metadata only; message contents still require full source reads."""
+        with self.connect() as c:
+            row = self.owned(c, ctx, identity)
+        return {
+            "conversation": {
+                k: row[k]
+                for k in (
+                    "conversation_id",
+                    "title",
+                    "version",
+                    "created_at",
+                    "archived_at",
+                )
+            }
+        }
+
     @measured("conversation.read")
     def read(self, ctx, identity):
         with self.connect() as c:

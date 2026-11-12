@@ -11,6 +11,7 @@ async function directFixture(page:Page,firstKind='DIRECT_ANSWER'){
   if(path.endsWith('/conversations'))return result({items:[]});
   if(path.endsWith('/conversations/direct/journey')){if(body){expect(body.expectedVersion).toBe(state.journal.version);state.journal={version:state.journal.version+1,state:body.state}}return result(state.journal)}
   if(path.endsWith('/conversations/direct/messages')){expect(body.expectedVersion).toBe(state.version);state.version++;const id='q'+state.version;state.messages.push({message_id:id,content:body.content,author_id:'human:ordinary',disposition:'GOAL_RECORDED'});return result({identity:id})}
+  if(path.endsWith('/conversations/direct/head'))return result({conversation:{conversation_id:'direct',title:'普通交流',version:state.version}});
   if(path.endsWith('/conversations/direct'))return result({conversation:{conversation_id:'direct',title:'普通交流',version:state.version},messages:state.messages,links:[]});
   if(path.includes('/understanding-results/')){state.recoveries++;if(state.notDispatched)return route.fulfill({status:404,json:{reasonCode:'CONVERSATION_REQUEST_NOT_DISPATCHED'}});if(state.missingResult)return route.fulfill({status:404,json:{reasonCode:'CONVERSATION_RESULT_NOT_FOUND'}});expect(path.endsWith('/q1')).toBe(true);expect(new URL(req.url()).searchParams.get('requestKey')).toBe('new-question:draft:1');return result(state.lastResult)}
   if(path.endsWith('/conversation-sources')){state.sources++;return result({items:state.availableSources})}
@@ -293,4 +294,13 @@ test('Chinese punctuation bold renders without altering code escaped text or the
  expect(state.calls).toHaveLength(0);expect(state.writes).toHaveLength(0);
  await page.reload();await expect(page.locator('#conversation-message-cjk-answer strong')).toContainText(['结论：','适用限制：']);
  expect(state.messages.at(-1)?.content).toBe(markdown);expect(state.calls).toHaveLength(0);expect(state.writes).toHaveLength(0);
+});
+
+test('sending a followup reads only owned version metadata before append, then refreshes authorized history',async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ let sent=false,unnecessaryReads=0;
+ await page.route('**/conversations/direct/messages',route=>{sent=true;return route.fallback()});
+ await page.route('**/conversations/direct',route=>{if(!sent){unnecessaryReads++;return route.fulfill({status:503,json:{reasonCode:'HISTORY_SHOULD_NOT_GATE_APPEND'}})}return route.fallback()});
+ await page.getByLabel('继续提问',{exact:true}).fill('请继续解释核对方法');await page.getByRole('button',{name:'发送',exact:true}).click();
+ await expect(page.locator('#conversation-message-a2')).toContainText('补充说明');expect(unnecessaryReads).toBe(0);expect(sent).toBe(true);expect(state.calls).toHaveLength(2);
 });

@@ -394,6 +394,10 @@ def install_private_conversations(
     def read(request: Request, identity: str):
         return safe(request, lambda ctx: service.read(ctx, identity))
 
+    @app.get(PREFIX + "/conversations/{identity}/head")
+    def head(request: Request, identity: str):
+        return safe(request, lambda ctx: service.head(ctx, identity))
+
     @app.get(PREFIX + "/conversations/{identity}/work-links")
     def work_links(request: Request, identity: str):
         return safe(request, lambda ctx: service.work_links(ctx, identity))

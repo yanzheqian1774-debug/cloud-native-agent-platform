@@ -82,6 +82,8 @@ def test_private_scope_read_and_write(service, other):
     with pytest.raises(ConversationError, match="NOT_FOUND"):
         service.read(other, identity)
     with pytest.raises(ConversationError, match="NOT_FOUND"):
+        service.head(other, identity)
+    with pytest.raises(ConversationError, match="NOT_FOUND"):
         service.work_links(other, identity)
     with pytest.raises(ConversationError, match="NOT_FOUND"):
         service.mutate(
@@ -224,9 +226,17 @@ def test_bff_flag_session_csrf_and_real_storage(database):
     identity = response.json()["result"]["conversation_id"]
     assert client.get(path + "/" + identity).status_code == 200
     assert client.get(path + "/" + identity + "/work-links").status_code == 200
+    head = client.get(path + "/" + identity + "/head")
+    assert head.status_code == 200
+    assert head.json()["result"] == {
+        "conversation": client.get(path + "/" + identity).json()["result"][
+            "conversation"
+        ]
+    }
     sessions.logged_out = True
     assert client.get(path + "/" + identity).status_code == 401
     assert client.get(path + "/" + identity + "/work-links").status_code == 401
+    assert client.get(path + "/" + identity + "/head").status_code == 401
     sessions.logged_out = False
     disabled = TestClient(
         create_workbench_bff(
@@ -237,6 +247,7 @@ def test_bff_flag_session_csrf_and_real_storage(database):
     disabled.cookies.set(SESSION_COOKIE, sessions.secret)
     assert disabled.get(path + "/capabilities").json()["result"]["enabled"] is False
     assert disabled.post(path, json=body, headers=headers).status_code == 404
+    assert disabled.get(path + "/" + identity + "/head").status_code == 404
 
 
 def test_distinct_concurrent_writes_cas(service):
@@ -429,3 +440,52 @@ def test_work_links_omit_message_facts_and_do_not_read_message_sources(service):
     assert "messages" not in projected
     assert calls == []
     assert projected["conversation"]["version"] == 2
+
+
+def test_head_is_owned_metadata_only_and_does_not_replace_source_authorization(service):
+    from agent_console.conversation_actions import ConversationActions
+
+    identity = new(service)
+    reads = []
+    denied = False
+
+    def source_read(context, source):
+        reads.append(source)
+        if denied:
+            raise ConversationError("SOURCE_DENIED", 403)
+        return {"state": "SUCCEEDED"}
+
+    actions = ConversationActions(service, source_read, None)
+    service.facts_reader = actions
+    actions.source(
+        ctx(),
+        identity,
+        {
+            "idempotencyKey": "source-one",
+            "expectedVersion": 0,
+            "source": {"kind": "DRAFT", "invocationId": "private-source"},
+        },
+    )
+    before = service.read(ctx(), identity)
+    reads.clear()
+    denied = True
+    head = service.head(ctx(), identity)
+    assert head == {"conversation": before["conversation"]}
+    assert not reads
+    assert set(head) == {"conversation"}
+    assert "private-source" not in str(head)
+    current = service.read(ctx(), identity)
+    assert len(reads) == 1
+    assert current["messages"][0]["facts"] == {"readable": False}
+    assert current["messages"][0]["content"] == "当前无权核验原办理记录"
+    body = {
+        "idempotencyKey": "reply",
+        "expectedVersion": head["conversation"]["version"],
+        "content": "New question",
+    }
+    sent = service.mutate(ctx(), identity, body, "message")
+    assert (
+        service.mutate(ctx(), identity, body, "message")["identity"] == sent["identity"]
+    )
+    with pytest.raises(ConversationError, match="VERSION_CONFLICT"):
+        service.mutate(ctx(), identity, {**body, "idempotencyKey": "stale"}, "message")

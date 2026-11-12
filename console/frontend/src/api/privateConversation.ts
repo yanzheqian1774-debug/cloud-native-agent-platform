@@ -7,3 +7,5 @@ export async function conversationRequest<T>(path='',csrf?:string,body?:unknown,
  const response=await fetch('/api/workbench/v1/conversations'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',signal,headers:{Accept:'application/json',...(body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf??''})},...(body===undefined?{}:{body:JSON.stringify(body)})});
  const value=await response.json();if(!response.ok){if(response.status===401)window.dispatchEvent(new Event('workbench-session-expired'));throw new WorkbenchRequestError(value.reasonCode??'CONVERSATION_UNAVAILABLE',response.status)}return value.result as T;
 }
+
+export const readConversationHead=(identity:string)=>conversationRequest<Pick<PrivateConversation,'conversation'>>('/'+encodeURIComponent(identity)+'/head');
