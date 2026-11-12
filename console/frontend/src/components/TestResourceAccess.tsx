@@ -6,7 +6,7 @@ type Receipt = {policyDigest:string;items:{state:string}[]};
 const pending = new Map<string, Promise<Receipt>>();
 const prefix = '/api/workbench/v1/test-resource-access';
 async function json<T>(path:string, init?:RequestInit):Promise<T> {
-  const response = await fetch(prefix+path, {credentials:'same-origin', signal:AbortSignal.timeout(15000), ...init});
+  const response = await fetch(prefix+path, {credentials:'same-origin', signal:AbortSignal.timeout(init?.method==='POST'?60000:15000), ...init});
   if (!response.ok) throw Object.assign(new Error('RESOURCE_ACCESS_UNAVAILABLE'), {status:response.status});
   const value = await response.json();
   return value.result as T;
