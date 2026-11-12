@@ -1,6 +1,6 @@
 import {test,expect,type Page} from '@playwright/test';
 async function directFixture(page:Page,firstKind='DIRECT_ANSWER'){
- const state={missingResult:false,lastResult:null as Record<string,unknown>|null,recoveries:0,calls:[] as Record<string,unknown>[],sources:0,writes:[] as string[],journal:{version:0,state:{key:'new-question',phase:'UNDERSTAND',question:'解释一下资料核对的方法',userMessageId:'q1',messages:[{id:'user:1',text:'解释一下资料核对的方法'}],log:[]} as Record<string,unknown>},messages:[{message_id:'q1',content:'解释一下资料核对的方法',author_id:'human:ordinary',disposition:'GOAL_RECORDED'}] as Record<string,unknown>[],version:1};
+ const state={availableSources:[] as Record<string,unknown>[],missingResult:false,lastResult:null as Record<string,unknown>|null,recoveries:0,calls:[] as Record<string,unknown>[],sources:0,writes:[] as string[],journal:{version:0,state:{key:'new-question',phase:'UNDERSTAND',question:'解释一下资料核对的方法',userMessageId:'q1',messages:[{id:'user:1',text:'解释一下资料核对的方法'}],log:[]} as Record<string,unknown>},messages:[{message_id:'q1',content:'解释一下资料核对的方法',author_id:'human:ordinary',disposition:'GOAL_RECORDED'}] as Record<string,unknown>[],version:1};
  await page.route('**/api/**',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname,body=req.method()==='POST'?req.postDataJSON():null,result=(value:unknown)=>route.fulfill({json:{result:value}});
   if(req.method()!=='GET')state.writes.push(path);
@@ -13,7 +13,7 @@ async function directFixture(page:Page,firstKind='DIRECT_ANSWER'){
   if(path.endsWith('/conversations/direct/messages')){expect(body.expectedVersion).toBe(state.version);state.version++;const id='q'+state.version;state.messages.push({message_id:id,content:body.content,author_id:'human:ordinary',disposition:'GOAL_RECORDED'});return result({identity:id})}
   if(path.endsWith('/conversations/direct'))return result({conversation:{conversation_id:'direct',title:'普通交流',version:state.version},messages:state.messages,links:[]});
   if(path.includes('/understanding-results/')){state.recoveries++;if(state.missingResult)return route.fulfill({status:404,json:{reasonCode:'CONVERSATION_RESULT_NOT_FOUND'}});expect(path.endsWith('/q1')).toBe(true);expect(new URL(req.url()).searchParams.get('requestKey')).toBe('new-question:draft:1');return result(state.lastResult)}
-  if(path.endsWith('/conversation-sources')){state.sources++;return result({items:[]})}
+  if(path.endsWith('/conversation-sources')){state.sources++;return result({items:state.availableSources})}
   if(path.endsWith('/draft-assistance/invocations')){
    const input=JSON.parse(body.content);expect(input.messages.every((m:{id:string})=>m.id.startsWith('user:')&&m.id.length<=64)).toBe(true);state.calls.push(body);
    if(firstKind==='FORMAT_FAILURE'){state.lastResult={state:'FAILED',resultKind:null,reasonCode:'OUTPUT_SCHEMA_INVALID',settlementStatus:'ESTIMATE_SETTLED',localWorkerState:'REAPED',invocationId:'failed-1',conversationDelivery:{state:'NOT_COMPLETED'}};return result(state.lastResult)}
@@ -117,4 +117,13 @@ test('new reply indicator clears when latest is visible and stays clear after re
  await expect(page.getByLabel('继续提问',{exact:true})).toHaveAttribute('placeholder','继续提问，或补充你的要求');
  await expect(page.locator('#conversation-message-a2 .private-receipt summary')).toHaveText('查看来源与记录');
  expect(await page.locator('#conversation-message-a2 .knowledge-document-reading').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('normal');
+});
+
+for(const mode of ['repaired','withdrawn'] as const)test('data request rechecks '+mode+' source instead of using cached capability',async({page})=>{
+ const state=await directFixture(page,'NEEDS_DATA');const old={name:'交接资料',sourceSchema:'document-review-source.v1',synthetic:true,periods:[],source:{resource_id:'knowledge:1',revision_id:'revision:1',digest:'old'},assessment:{state:'MISSING_TOOLS',missingOperations:['READ_DATA'],limitations:[]}};
+ state.journal.state={...state.journal.state,source:old,sources:[old]};
+ const current={...old,source:mode==='repaired'?old.source:{resource_id:'knowledge:1',revision_id:'revision:2',digest:'new'},assessment:{...old.assessment,state:'BOUNDED_ANALYSIS_AVAILABLE',missingOperations:[]}};state.availableSources=[current];
+ await page.goto('/work?conversation=direct');await expect(page.getByLabel('补充说明',{exact:true})).toBeVisible();expect(state.sources).toBe(1);expect(state.calls).toHaveLength(1);
+ expect(state.journal.state.sources).toEqual([current]);expect(state.journal.state.source).toEqual(mode==='repaired'?current:undefined);
+ expect(state.writes.some(p=>p.endsWith('/problems')||p.includes('/execute'))).toBe(false);
 });

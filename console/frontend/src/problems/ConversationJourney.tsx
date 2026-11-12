@@ -67,8 +67,9 @@ export function ConversationJourney({conversation,session,onActive,onProgressVis
   if(draft.resultKind==='DIRECT_ANSWER')return save({...s,pending:undefined,error:undefined,draft,phase:'DIRECT_DONE',log:[...s.log,'答复已保存到原会话。']});
   if(draft.resultKind==='NEEDS_CLARIFICATION')return save({...s,pending:undefined,error:undefined,draft,phase:'CLARIFY',log:[...s.log,'有一处会影响后续处理的信息需要确认。']});
   s=await pending({...s,draft},'source-discovery');
-  const sources=s.sources??(await planningRequest<{items:Source[]}>('conversation-sources')).items;
-  return save({...s,pending:undefined,error:undefined,draft,sources,phase:draft.resultKind==='DRAFT_READY'&&s.source?'CREATE':'CLARIFY',log:[...s.log,'已核对当前可读资料，继续确定本次范围。']});
+  const sources=(await planningRequest<{items:Source[]}>('conversation-sources')).items;
+  const source=s.source?sources.find(item=>item.source.resource_id===s.source!.source.resource_id&&item.source.revision_id===s.source!.source.revision_id&&item.source.digest===s.source!.source.digest&&item.assessment?.state!=='MISSING_TOOLS'):undefined;
+  return save({...s,pending:undefined,error:undefined,draft,sources,source,phase:draft.resultKind==='DRAFT_READY'&&source?'CREATE':'CLARIFY',log:[...s.log,'已核对当前可读资料，继续确定本次范围。']});
  }
  async function run(){
   if(flight.current||!current.current?.state||(current.current.state.pending&&!canRepair(current.current.state)))return;
