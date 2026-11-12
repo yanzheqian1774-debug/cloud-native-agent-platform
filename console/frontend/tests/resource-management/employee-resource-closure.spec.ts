@@ -400,3 +400,22 @@ for(const mode of ['valid','foreign','duplicate'])test('capability Employee memb
   await page.getByRole('button',{name:'资源组成',exact:true}).click();const card=page.getByRole('article',{name:'技能绑定资源',exact:true});await card.getByRole('link',{name:'查看详情',exact:true}).click();expect(new URL(page.url()).searchParams.get('capabilityReturn')).toBe(back);await page.getByRole('link',{name:'返回引用员工',exact:true}).click();expect(new URL(page.url()).searchParams.get('capabilityReturn')).toBe(back);
  }else{await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toHaveCount(0)}expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
 });
+
+
+test('resource return focuses the originating duty when two duties share one resource',async({page})=>{
+ const {original,extra}=await fixture(page);
+ original.responsibilities=['检查资料完整性','核对回退安排'];
+ const skill=original.members.find(m=>m.kind==='SKILL')!;skill.revisionId='revision:2';skill.digest='b'.repeat(64);
+ original.responsibilityBindings=original.responsibilities.map(responsibility=>({responsibility,member:{...skill}}));
+ await page.setViewportSize({width:1406,height:550});
+ await page.goto(href().replace('employeeView=professional&',''));
+ await page.getByRole('button',{name:'职责与资源',exact:true}).click();
+ const links=page.locator('.employee-resource-card a[href*="kind=skill"]');
+ await expect(links).toHaveCount(2);await links.last().scrollIntoViewIfNeeded();
+ const before=await page.locator('.employee-detail-body').evaluate(n=>n.scrollTop);
+ await links.last().click();await page.getByRole('link',{name:'返回引用员工',exact:true}).click();
+ await expect(page.getByRole('button',{name:'职责与资源',exact:true})).toHaveClass(/active/);
+ await expect(links.last()).toBeFocused();await expect(links.first()).not.toBeFocused();
+ await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBeCloseTo(before,0);
+ expect(extra.posts).toHaveLength(0);
+});

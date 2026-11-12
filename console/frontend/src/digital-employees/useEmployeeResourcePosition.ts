@@ -14,20 +14,20 @@ export function useEmployeeResourcePosition(root:RefObject<HTMLElement|null>,ite
   const remember=(event:MouseEvent)=>{
    const link=(event.target as Element).closest<HTMLAnchorElement>('a[href]');if(!key||!link||!node.contains(link))return;
    const url=new URL(link.href);if(url.origin!==location.origin||!url.searchParams.has('employeeRef'))return;
-   saveViewString(key,'resource-return',JSON.stringify({href:link.getAttribute('href'),detail:node.scrollTop,outer:outer?.scrollTop??0,expanded:[...node.querySelectorAll('.employee-resource-card')].filter(card=>card.querySelector('details[open]')).map(resourceCardKey)}));
+   saveViewString(key,'resource-return',JSON.stringify({href:link.getAttribute('href'),occurrence:[...node.querySelectorAll<HTMLAnchorElement>('a[href]')].filter(a=>a.getAttribute('href')===link.getAttribute('href')).indexOf(link),detail:node.scrollTop,outer:outer?.scrollTop??0,expanded:[...node.querySelectorAll('.employee-resource-card')].filter(card=>card.querySelector('details[open]')).map(resourceCardKey)}));
   };
   const withdraw=()=>{active=false;cleanupRestore();key=undefined};
   node.addEventListener('click',remember,true);window.addEventListener('workbench-session-expired',withdraw);
   {
    if(!active)return;key=JSON.stringify([scope,identity,section,professional,'employee-resource-position']);
-   let saved:{href:string;detail:number;outer:number;expanded?:string[]}|null=null;
+   let saved:{href:string;occurrence?:number;detail:number;outer:number;expanded?:string[]}|null=null;
    try{saved=JSON.parse(readViewString(key,'resource-return','null'))}catch{/* Invalid view state is ignored. */}
    if(saved&&typeof saved.href==='string'&&[saved.detail,saved.outer].every(n=>Number.isFinite(n)&&n>=0)){
    const position=saved;saveViewString(key,'resource-return','');
    let frame=0,done=false;
    const stop=()=>{done=true;observer?.disconnect();if(timer)clearTimeout(timer);cancelAnimationFrame(frame);node.removeEventListener('wheel',stop);node.removeEventListener('touchstart',stop);node.removeEventListener('keydown',stop)};
    cleanupRestore=stop;
-   const restore=()=>{if(done||!active)return;const link=[...node.querySelectorAll<HTMLAnchorElement>('a[href]')].find(a=>a.getAttribute('href')===position.href);if(!link)return;const expanded=Array.isArray(position.expanded)?position.expanded.filter(k=>typeof k==='string').slice(0,100):[];for(const card of node.querySelectorAll('.employee-resource-card'))if(expanded.includes(resourceCardKey(card)))for(const detail of card.querySelectorAll('details'))detail.open=true;node.scrollTop=position.detail;if(outer)outer.scrollTop=position.outer;link.focus({preventScroll:true});if(Math.abs(node.scrollTop-position.detail)<2&&Math.abs((outer?.scrollTop??0)-position.outer)<2)stop()};
+   const restore=()=>{if(done||!active)return;const link=[...node.querySelectorAll<HTMLAnchorElement>('a[href]')].filter(a=>a.getAttribute('href')===position.href)[Number.isInteger(position.occurrence)&&position.occurrence!>=0?position.occurrence!:0];if(!link)return;const expanded=Array.isArray(position.expanded)?position.expanded.filter(k=>typeof k==='string').slice(0,100):[];for(const card of node.querySelectorAll('.employee-resource-card'))if(expanded.includes(resourceCardKey(card)))for(const detail of card.querySelectorAll('details'))detail.open=true;node.scrollTop=position.detail;if(outer)outer.scrollTop=position.outer;link.focus({preventScroll:true});if(Math.abs(node.scrollTop-position.detail)<2&&Math.abs((outer?.scrollTop??0)-position.outer)<2)stop()};
    node.addEventListener('wheel',stop,{passive:true});node.addEventListener('touchstart',stop,{passive:true});node.addEventListener('keydown',stop);
    const observer=new ResizeObserver(restore);observer.observe(node);for(const child of node.children)observer.observe(child);const timer=setTimeout(stop,3000);frame=requestAnimationFrame(restore);
    }
