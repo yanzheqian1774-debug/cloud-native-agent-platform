@@ -60,3 +60,14 @@ release review, guarded activation, ordinary-account real-model answer in the
 original conversation, refresh and followup, visible progress, paid-call counts,
 limit evidence, and F3 visual acceptance. Tests are not a substitute for that
 product path.
+
+## Followup reference compatibility
+
+Conversation message identities are persisted as their owner UUID, while the
+understanding context contract requires `user:`-prefixed reference identities.
+The frontend prefixes new followups and normalizes previously saved references
+when constructing the context. It preserves the original message and request key.
+A saved CONTENT_INVALID rejection may continue only after the exact original
+result lookup reports RESULT_NOT_FOUND. Unknown or active provider outcomes are
+never automatically replayed. Saved assistant answers use the existing safe
+Markdown reader; user message content remains plain text.
