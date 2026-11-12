@@ -16,7 +16,7 @@ async function fixture(page:Page){
   if(path.includes('/prepared-executions/')){
    if(state.readDelay)await new Promise(resolve=>setTimeout(resolve,state.readDelay));
    if(state.deny)return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
-   return result({digest,preparation:{semantics:{title:'原有交接检查',target:{problem:{resource_id:'problem',revision_id:state.wrongVersion?'2':'1',digest:problemDigest}},tasks:[]},source_snapshot:{resource_id:'knowledge',revision_id:'1',digest:'a'.repeat(64)}},progress:{state:'SUCCEEDED',tasks:[]},artifacts:[],resourceUses:[],events:[],outcome:null});
+   return result({digest,executionStarted:true,admission:{state:'ADMITTED'},preparation:{plan_id:'plan',plan_version:1,plan_digest:'c'.repeat(64),approval_id:'approval',participants:[],source_snapshot:{resource_id:'knowledge',revision_id:'1',digest:'a'.repeat(64)},semantics:{title:'原有交接检查',target:{problem:{resource_id:'problem',revision_id:state.wrongVersion?'2':'1',digest:problemDigest}},tasks:[]},source_snapshot:{resource_id:'knowledge',revision_id:'1',digest:'a'.repeat(64)}},progress:{state:'SUCCEEDED',tasks:[]},artifacts:[],resourceUses:[],events:[],outcome:null});
   }
   if(path.endsWith('/problems'))return result({problems:[]});
   return result({items:[]});
@@ -103,4 +103,30 @@ test('saved assistant reply reads as an assistant and refresh never invokes a mo
  await page.reload();
  await expect(page.locator('#conversation-message-answer .private-user')).toHaveText('先明确目标，再核对所需资料。');
  expect(state.writes).toEqual([]);
+});
+
+for(const width of [1440,1920,980,390])test(`fixed heading and independent view positions at ${width}`,async({page})=>{
+ await page.setViewportSize({width,height:900});const state=await fixture(page);
+ await page.route('**/api/workbench/v1/conversations/historical',route=>route.fulfill({json:{result:{conversation:{conversation_id:'historical',title:'长会话与工作位置',version:1},messages:Array.from({length:25},(_,i)=>({message_id:'m'+i,content:'第'+i+'条说明。'+ '保留阅读位置。'.repeat(12),author_id:'human:ordinary',created_at:'2026-11-12T00:00:00Z',disposition:'GOAL_RECORDED'})),links:[{link_id:'work',readable:true,title:'原有交接检查',target:{problemId:'problem',revisionId:'1',problemDigest:'b'.repeat(64),executionDigest:'d'.repeat(64)}}]}}}));
+ await page.goto('/work?conversation=historical');const stream=page.locator('.px-message-stream');
+ await page.locator('#private-input').fill('不发送的文字');
+ if(width<=1100)await page.getByRole('button',{name:'展开工作进展',exact:true}).click();
+ await page.getByText('管理关联工作',{exact:true}).click();await page.getByRole('button',{name:'原有交接检查',exact:true}).click();
+ await page.getByText('管理关联工作',{exact:true}).click();
+ if(width<=1100)await page.getByRole('button',{name:'收起工作进展',exact:true}).click();
+ await stream.evaluate(n=>{n.dispatchEvent(new WheelEvent('wheel',{deltaY:-100,bubbles:true}));n.scrollTop=300});
+ await expect.poll(()=>stream.evaluate(n=>n.scrollTop)).toBe(300);
+ const heading=page.locator('.private-heading');const top=(await heading.boundingBox())!.y;
+ await page.getByRole('button',{name:'当前工作',exact:true}).click();await expect(page.locator('.private-work')).toBeVisible();
+ await stream.evaluate(n=>{n.dispatchEvent(new WheelEvent('wheel',{deltaY:100,bubbles:true}));n.scrollTop=70});
+ const workTop=await stream.evaluate(n=>n.scrollTop);
+ await page.getByRole('button',{name:'会话消息',exact:true}).click();await expect.poll(()=>stream.evaluate(n=>n.scrollTop)).toBe(300);
+ await expect(page.locator('#private-input')).toHaveValue('不发送的文字');
+ await page.getByRole('button',{name:'当前工作',exact:true}).click();await expect.poll(()=>stream.evaluate(n=>n.scrollTop)).toBe(workTop);
+ await expect(page.locator('#private-input')).toHaveValue('不发送的文字');
+ expect((await heading.boundingBox())!.y).toBe(top);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ expect(await page.locator('.px-message-stream').getByRole('button',{name:'会话消息',exact:true}).count()).toBe(0);
+ expect(state.writes).toEqual([]);
+ await page.screenshot({path:test.info().outputPath(`heading-${width}.png`),fullPage:true});
 });

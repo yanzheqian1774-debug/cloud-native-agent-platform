@@ -105,18 +105,16 @@ test('confirmed pre-dispatch rejection repairs message references before continu
  expect(state.messages.filter(m=>m.author_id==='human:ordinary'&&!m.kind)).toHaveLength(1);
 });
 
-test('new reply indicator clears when latest is visible and stays clear after refresh',async({page})=>{
+test('own successful send follows latest and remains at latest after refresh',async({page})=>{
  const state=await directFixture(page);state.messages[0].content='较长的历史问题。\n'.repeat(100);
  await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
  const stream=page.locator('.px-message-stream');await stream.evaluate(node=>{node.dispatchEvent(new Event('wheel',{bubbles:true}));node.scrollTop=0});
  await page.getByLabel('继续提问',{exact:true}).fill('补充说明');await page.getByRole('button',{name:'发送',exact:true}).click();
  await expect(page.locator('#conversation-message-a2')).toBeAttached();
- await expect(page.getByRole('button',{name:'有新消息，回到最新'})).toBeVisible();
- await page.getByRole('button',{name:'有新消息，回到最新'}).click();
- await expect(page.getByRole('button',{name:'有新消息，回到最新'})).toBeHidden();
+ await expect(page.getByRole('button',{name:'回到最新消息'})).toBeHidden();
  await expect.poll(()=>stream.evaluate(node=>node.scrollHeight-node.scrollTop-node.clientHeight)).toBeLessThan(72);
  await page.reload();await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
- await expect(page.getByRole('button',{name:'有新消息，回到最新'})).toBeHidden();expect(state.calls).toHaveLength(2);
+ await expect(page.getByRole('button',{name:'回到最新消息'})).toBeHidden();expect(state.calls).toHaveLength(2);
  await expect(page.getByLabel('继续提问',{exact:true})).toHaveAttribute('placeholder','继续提问，或补充你的要求');
  await expect(page.locator('#conversation-message-a2 .private-receipt summary')).toHaveText('查看来源与记录');
  expect(await page.locator('#conversation-message-a2 .knowledge-document-reading').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('normal');
@@ -303,4 +301,44 @@ test('sending a followup reads only owned version metadata before append, then r
  await page.route('**/conversations/direct',route=>{if(!sent){unnecessaryReads++;return route.fulfill({status:503,json:{reasonCode:'HISTORY_SHOULD_NOT_GATE_APPEND'}})}return route.fallback()});
  await page.getByLabel('继续提问',{exact:true}).fill('请继续解释核对方法');await page.getByRole('button',{name:'发送',exact:true}).click();
  await expect(page.locator('#conversation-message-a2')).toContainText('补充说明');expect(unnecessaryReads).toBe(0);expect(sent).toBe(true);expect(state.calls).toHaveLength(2);
+});
+
+test('keyboard send respects newline IME repeat and pending outcome',async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');
+ const input=page.getByLabel('继续提问',{exact:true});await expect(input).toBeVisible();
+ await input.fill('第一行');await input.press('Shift+Enter');await input.press('a');
+ await expect(input).toHaveValue('第一行\na');expect(state.calls).toHaveLength(1);
+ await input.dispatchEvent('compositionstart');await input.press('Enter');expect(state.calls).toHaveLength(1);
+ await input.dispatchEvent('compositionend');await input.dispatchEvent('keydown',{key:'Enter',keyCode:229});
+ await input.dispatchEvent('keydown',{key:'Enter',repeat:true});expect(state.calls).toHaveLength(1);
+ await input.press('Enter');await expect(page.locator('#conversation-message-a2')).toBeVisible();
+ expect(state.calls).toHaveLength(2);expect(state.messages.filter(m=>m.content==='第一行\na')).toHaveLength(1);
+});
+
+test('keyboard cannot dispatch while original result is unknown',async({page})=>{
+ const state=await directFixture(page);state.journal.state={...state.journal.state,understandingProtocol:3,pending:'understanding'};state.lastResult={state:'OUTCOME_UNKNOWN',conversationDelivery:{state:'NOT_COMPLETED'}};
+ await page.goto('/work?conversation=direct');const input=page.getByLabel('暂存补充',{exact:true});await input.fill('先保留');await input.press('Enter');
+ await expect(input).toHaveValue('先保留');expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
+});
+
+test('controlled incremental content preserves reading anchor and shows only real new content',async({page})=>{
+ const state=await directFixture(page);state.messages[0].content='较长的历史问题。\n'.repeat(100);
+ await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ const stream=page.locator('.px-message-stream');
+ await stream.evaluate(n=>{n.dispatchEvent(new WheelEvent('wheel',{deltaY:-100,bubbles:true}));n.scrollTop=120});
+ await expect(page.getByRole('button',{name:'回到最新消息'})).toBeVisible();
+ expect(await page.getByRole('button',{name:'回到最新消息'}).evaluate(n=>getComputedStyle(n).borderRadius)).toBe('50%');
+ const circle=await page.getByRole('button',{name:'回到最新消息'}).boundingBox();expect(circle!.width).toBe(circle!.height);
+ await stream.evaluate(n=>{const p=document.createElement('div');p.className='journey-progress';p.textContent='受控增量内容一';n.append(p)});
+ await expect(page.getByText('有新消息',{exact:true})).toBeVisible();
+ await expect.poll(()=>stream.evaluate(n=>n.scrollTop)).toBe(120);
+ await page.getByRole('button',{name:'回到最新消息'}).click();
+ await expect.poll(()=>stream.evaluate(n=>n.scrollHeight-n.scrollTop-n.clientHeight)).toBeLessThan(72);
+ await expect(page.getByText('有新消息',{exact:true})).toBeHidden();
+ await stream.evaluate(n=>{n.querySelector('.journey-progress')!.textContent+='\n受控增量内容二'.repeat(20)});
+ await expect.poll(()=>stream.evaluate(n=>n.scrollHeight-n.scrollTop-n.clientHeight)).toBeLessThan(72);
+ await stream.evaluate(n=>{n.dispatchEvent(new WheelEvent('wheel',{deltaY:-100,bubbles:true}));n.scrollTop=120});
+ await stream.evaluate(n=>{const p=n.querySelector('.journey-progress')!;p.replaceWith(p.cloneNode(true))});
+ await expect(page.getByText('有新消息',{exact:true})).toBeHidden();
+ expect(state.calls).toHaveLength(1);
 });

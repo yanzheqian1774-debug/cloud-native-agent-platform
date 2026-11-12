@@ -1,51 +1,15 @@
-import {readConversationView,writeConversationView} from "./conversationViewState";
-import {Fragment,useLayoutEffect,useEffect,useRef,useState,type FormEvent,type KeyboardEvent,type ReactNode} from "react";
+import {useConversationSubmitKey} from './useConversationSubmitKey';
+import {useConversationScroll} from "./useConversationScroll";
+import {Fragment,useEffect,useRef,type FormEvent,type KeyboardEvent,type ReactNode} from "react";
 import {formatTime} from "../journey/formatTime";
 import {fieldLabels,sourceLabels,understandingDisplay,isUnstructuredStatement} from "./problemUnderstandingModel";
 import type {DraftTurn,ProblemDraft} from "./problemConversationModel";
 
 export function ConversationFrame({children,composer,newMessageKey,startAtTop=false,viewScope,viewId}:{viewScope?:string;viewId?:string;children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
-  const initial=useRef(true);
-  const stream=useRef<HTMLDivElement>(null),nearBottom=useRef(true),[showNew,setShowNew]=useState(false);
-  const restoring=useRef(false),lastMessageKey=useRef(newMessageKey);
-  function latestVisible(node:HTMLDivElement){const latest=node.querySelector<HTMLElement>(".private-message:last-child,.px-message:last-child");if(!latest)return false;const item=latest.getBoundingClientRect(),frame=node.getBoundingClientRect();return item.bottom<=frame.bottom+8&&item.bottom>frame.top}
-  useEffect(()=>{const node=stream.current;if(!node)return;const check=()=>{if(latestVisible(node))setShowNew(false)};const observer=new ResizeObserver(check);observer.observe(node);for(const child of node.children)observer.observe(child);return()=>observer.disconnect()},[]);
-  useLayoutEffect(()=>{
-    if(!viewScope||!viewId)return;
-    const node=stream.current;if(!node)return;
-    const saved=readConversationView(viewScope,viewId).scrollTop;
-    restoring.current=saved!==undefined;nearBottom.current=saved===undefined;
-    const restore=()=>{if(saved!==undefined)node.scrollTop=saved};restore();
-    const observer=new ResizeObserver(restore);observer.observe(node);for(const child of node.children)observer.observe(child);
-    const changes=new MutationObserver(restore);changes.observe(node,{subtree:true,childList:true});
-    // Late readbacks can arrive after a fixed timeout. Keep restoring until the
-    // reader interacts; never fight deliberate scrolling or composing.
-    const frame=node.closest('.px-conversation')??node;
-    const stop=()=>{observer.disconnect();changes.disconnect();restoring.current=false};
-    const events=['wheel','touchstart','pointerdown','keydown'];
-    for(const event of events)frame.addEventListener(event,stop,{passive:true});
-    return()=>{stop();for(const event of events)frame.removeEventListener(event,stop)};
-  },[viewScope,viewId]);
-  function latestTop(node:HTMLDivElement){
-    const latest=node.querySelector<HTMLElement>(".private-message:last-child,.px-message:last-child");
-    // A tall reply starts at its heading, not at its footer. Only this stream scrolls.
-    return latest&&latest.offsetHeight>node.clientHeight
-      ? node.scrollTop+latest.getBoundingClientRect().top-node.getBoundingClientRect().top
-      : node.scrollHeight;
-  }
-  function scrollToLatest(){const node=stream.current;if(node)node.scrollTo({top:latestTop(node),behavior:"smooth"});setShowNew(false)}
-  useEffect(()=>{
-    const changed=lastMessageKey.current!==newMessageKey;lastMessageKey.current=newMessageKey;
-    if(restoring.current)return;
-    if(initial.current){initial.current=false;if(startAtTop){stream.current?.scrollTo({top:0});return;}}
-    if(nearBottom.current){const node=stream.current;if(node)node.scrollTo({top:latestTop(node)});setShowNew(false)}
-    else if(changed)setShowNew(!stream.current||!latestVisible(stream.current));
-  },[newMessageKey,startAtTop]);
+  const {stream,away,unread,onScroll,latest}=useConversationScroll({newMessageKey,startAtTop,viewScope,viewId});
   return <section className="px-conversation" aria-label="业务问题对话">
-    <div className="px-message-stream" ref={stream} onScroll={event=>{const node=event.currentTarget;if(viewScope&&viewId&&!restoring.current)writeConversationView(viewScope,viewId,{scrollTop:node.scrollTop});nearBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<72;if(nearBottom.current||latestVisible(node))setShowNew(false)}}>
-      {children}
-    </div>
-    {showNew&&<button className="px-new-message" type="button" onClick={scrollToLatest}>有新消息，回到最新</button>}
+    <div className="px-message-stream" ref={stream} onScroll={onScroll}>{children}</div>
+    {away&&<div className="conversation-scroll-controls"><button type="button" className="conversation-scroll-latest" title="回到最新消息" aria-label="回到最新消息" onClick={latest}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg></button>{unread&&<span role="status">有新消息</span>}</div>}
     {composer}
   </section>;
 }
@@ -55,16 +19,12 @@ export function ConversationComposer({value,onChange,onSend,onCancelEdit,disable
   useEffect(()=>{const node=input.current;if(!node)return;node.style.height="auto";node.style.height=`${Math.min(node.scrollHeight,144)}px`},[value,mode]);
   useEffect(()=>{if(mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE"||mode==="CRITERION"||mode==="CRITERION_REPLACE")input.current?.focus()},[mode]);
   function submit(event:FormEvent){event.preventDefault();if(value.trim()&&!disabled&&!sendBlocked)onSend()}
-  function keyDown(event:KeyboardEvent<HTMLTextAreaElement>){
-    if(event.key!=="Enter"||event.shiftKey||event.nativeEvent.isComposing||event.keyCode===229)return;
-    event.stopPropagation();if(event.repeat){event.preventDefault();return;}
-    event.preventDefault();if(value.trim()&&!disabled&&!sendBlocked)onSend();
-  }
+  const submitKeys=useConversationSubmitKey(Boolean(value.trim())&&!disabled&&!sendBlocked);
   const resultSearch=mode==="RESULT_SEARCH",formalSupplement=mode==="FORMAL_SUPPLEMENT",planning=mode==="PLANNING",criterion=mode==="CRITERION"||mode==="CRITERION_REPLACE",criterionReplace=mode==="CRITERION_REPLACE",replacing=mode==="DRAFT_REPLACE"||mode==="FORMAL_REPLACE"||criterionReplace,formal=mode==="FORMAL_REPLACE",supplement=mode==="SUPPLEMENT"||formalSupplement;
   return <form className={`px-composer${resultSearch?" is-result-search":""}${supplement?" is-supplement":""}${criterion?" is-criterion":""}`} aria-label={resultSearch?"查找交付报告":planning?"规划对话":criterion?"定义成功标准":replacing?"完整修改问题草稿":supplement?"准备待处理补充":"描述业务问题"} onSubmit={submit}>
     <label htmlFor="problem-composer">{resultSearch?"查找报告中的编号、维度或异常":planning?(continuousPlanning?"描述本次希望办理的分析":"补充信息或提出方案修改"):criterionReplace?"修改成功标准原文":criterion?"怎样才算解决？":formal?"完整替换正式问题描述":replacing?"完整替换草稿描述":formalSupplement?"补充或纠正正式目标":supplement?"待处理补充（仅本页）":"你希望解决什么问题？"}</label>
     {criterion&&contextLabel&&<span className="px-composer-context">当前针对：{contextLabel} · 成功标准</span>}
-    <textarea ref={input} id="problem-composer" value={value} disabled={disabled} maxLength={maxLength} rows={1} onChange={event=>onChange(event.target.value)} onKeyDown={keyDown} placeholder={resultSearch?"输入编号、区域、渠道或产品；仅查找已交付报告。":planning?(continuousPlanning?"用自己的话说明本次分析目标；平台核对已授权资料与可用能力后继续办理。":"说明希望调整的任务、约束或信息；目标和标准请返回问题页正式修订。"):criterion?"用自己的话描述达到什么结果才算解决。":replacing?"请输入完整描述；采用后会替换当前描述。":supplement?"继续补充背景、约束或后续想法。":"描述现状、影响和希望解决的问题。"}/>
+    <textarea ref={input} id="problem-composer" value={value} disabled={disabled} maxLength={maxLength} rows={1} onChange={event=>onChange(event.target.value)} {...submitKeys} placeholder={resultSearch?"输入编号、区域、渠道或产品；仅查找已交付报告。":planning?(continuousPlanning?"用自己的话说明本次分析目标；平台核对已授权资料与可用能力后继续办理。":"说明希望调整的任务、约束或信息；目标和标准请返回问题页正式修订。"):criterion?"用自己的话描述达到什么结果才算解决。":replacing?"请输入完整描述；采用后会替换当前描述。":supplement?"继续补充背景、约束或后续想法。":"描述现状、影响和希望解决的问题。"}/>
     <div className="px-composer-footer"><span>{resultSearch?"查找当前报告，不发起模型调用，也不修改问题、计划或人工决定。":planning?(continuousPlanning?"发送即明确请求本次分析；按现有授权确认方案、准备资源并接续只读执行。":"生成持久化的后继建议，旧计划和批准保留；新建议需要重新确认。"):criterion?"保留原文；发送后选择类型并确认，确认前不会保存。":replacing?"无模型模式：本次输入会完整替换描述。":formalSupplement?"发送后形成待保存修订；必须保存并重新核对标准，旧计划及批准保留。":supplement?(assisted?"补充或直接说明要修改哪一项；发送后更新理解，确认后才创建。":"仅保留在当前页面，尚未修改正式问题，管理员不会自动收到。"):"Enter 发送，Shift+Enter 换行；发送后仍需确认。"}</span><div>{(replacing||mode==="CRITERION")&&<button type="button" onClick={onCancelEdit}>取消修改</button>}<button className="px-primary-button" type="submit" disabled={disabled||sendBlocked||!value.trim()}>{resultSearch?"查找报告":planning?(continuousPlanning?"开始本次办理":"提交规划补充"):criterionReplace?"采用标准原文":criterion?"生成待确认卡片":formal?"采用正式描述":replacing?"采用草稿描述":formalSupplement?"准备正式修订":supplement?(assisted?"更新理解":"保留补充"):"发送"}</button></div></div>
   </form>;
 }
