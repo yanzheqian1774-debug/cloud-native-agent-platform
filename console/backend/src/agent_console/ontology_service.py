@@ -2,7 +2,12 @@
 
 import json
 
-from .ontology_domain import OntologyCommand, OntologyContent, OntologyError
+from .ontology_domain import (
+    DocumentRulesContent,
+    OntologyCommand,
+    OntologyError,
+    parse_ontology_content,
+)
 from .ontology_postgres import PostgresOntologyRepository
 from .ontology_query import SemanticQuery, query_sales
 from .prepared_execution_resources import published
@@ -47,6 +52,14 @@ class OntologyService:
             source = json.loads(raw)
             if mapping.source_digest != canonical_digest(source):
                 raise OntologyError("ONTOLOGY_SOURCE_DIGEST_MISMATCH")
+            if isinstance(content, DocumentRulesContent):
+                from .native_document_tools import validate_source
+
+                docs = validate_source(source)
+                if not any(
+                    d["role"] == "POLICY" and d["scope"] == content.scope for d in docs
+                ):
+                    raise OntologyError("DOCUMENT_RULE_SCOPE_UNAVAILABLE")
             sources.append(source)
         for action in content.actions:
             ref = action.skill
@@ -92,10 +105,14 @@ class OntologyService:
                 raise OntologyError("ONTOLOGY_CONTENT_REQUIRED")
         else:
             record = self.repo.read(self.scope, identity, command.revision_id)
-            content = OntologyContent.model_validate(record["content"])
+            content = parse_ontology_content(record["content"])
         sources = self.dependencies(content)
         evidence = None
-        if action == "TEST":
+        if action == "TEST" and isinstance(content, DocumentRulesContent):
+            from .document_rule_evaluation import evaluate_document_rules
+
+            evidence = [evaluate_document_rules(content, source) for source in sources]
+        elif action == "TEST":
             checks = []
             for source in sources:
                 for metric in content.metrics:

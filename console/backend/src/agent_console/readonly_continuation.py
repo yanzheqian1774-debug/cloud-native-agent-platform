@@ -390,6 +390,28 @@ class ReadonlyContinuation:
                 agent_name=approved_work.nativeAgentName,
                 sales_v2_candidate=self.automation.sales_v2_candidate,
             )
+            rule_binding = approved_work.documentRules
+            if rule_binding is not None:
+                from .ontology_execution import (
+                    document_mapping_digest,
+                    published_content,
+                )
+                from .ontology_service import resource as ontology_resource
+
+                for action in ("READ", "USE"):
+                    authorize(
+                        "BUSINESS_ONTOLOGY",
+                        action,
+                        ontology_resource(
+                            rule_binding.ontology.resource_id,
+                            rule_binding.ontology.revision_id,
+                        ),
+                    )
+                published_content(c, scope, rule_binding)
+                binding["mappingDigest"] = document_mapping_digest(
+                    binding["mapping"], rule_binding
+                )
+                binding["documentRules"] = rule_binding.model_dump(mode="json")
             for action in ("READ", "PREPARE", "APPROVE"):
                 execution_proof = authorize("PLAN", action, "plan:v2:" + identity)
             source_proposal = app.repository.proposal(
@@ -445,7 +467,18 @@ class ReadonlyContinuation:
                 approval_kind="POLICY_READONLY_EXECUTION_APPROVAL",
             )
             execution_plan = ConfirmedPlanRevision.model_validate(confirmation["plan"])
-            p = ExecutionPreparation(
+            from .ontology_execution import DocumentRuleExecutionPreparation
+
+            preparation_type = (
+                DocumentRuleExecutionPreparation
+                if rule_binding is not None
+                else ExecutionPreparation
+            )
+            extra = (
+                {"business_semantics": rule_binding} if rule_binding is not None else {}
+            )
+            p = preparation_type(
+                **extra,
                 **binding["mapping"],
                 plan_id=identity,
                 plan_version=execution_plan.version,

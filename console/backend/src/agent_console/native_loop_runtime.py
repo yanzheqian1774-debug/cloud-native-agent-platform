@@ -31,6 +31,7 @@ from .native_confirmed_scope import read_confirmed_scope
 from .native_diagnostic_tools import NativeDiagnosticTools
 from .native_document_skill import (
     NativeEmployeeDocumentSkillExecutor,
+    NativeRuleDocumentSkillExecutor,
     NativeUserScopeDocumentSkillExecutor,
 )
 from .native_employee_context import read_bound_employee_context
@@ -168,16 +169,27 @@ class NativeLoopRuntime:
                     ("native-document-review", "1"),
                     ("native-document-review", "2"),
                     ("native-document-review", "3"),
+                    ("native-document-review", "4"),
                 }
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
         employee_mode = (
             invocation["executor_id"],
             invocation["executor_revision"],
-        ) in {("native-document-review", "2"), ("native-document-review", "3")}
-        user_scope_mode = employee_mode and invocation["executor_revision"] == "3"
+        ) in {
+            ("native-document-review", "2"),
+            ("native-document-review", "3"),
+            ("native-document-review", "4"),
+        }
+        rule_mode = employee_mode and invocation["executor_revision"] == "4"
+        user_scope_mode = employee_mode and invocation["executor_revision"] in {
+            "3",
+            "4",
+        }
         document_revision = (
-            NativeUserScopeDocumentSkillExecutor
+            NativeRuleDocumentSkillExecutor
+            if rule_mode
+            else NativeUserScopeDocumentSkillExecutor
             if user_scope_mode
             else NativeEmployeeDocumentSkillExecutor
         ).revision
@@ -229,6 +241,45 @@ class NativeLoopRuntime:
         library = (NativeDocumentTools if document_mode else NativeDiagnosticTools)(
             output["source"], output["sourceSnapshot"]
         )
+
+        def rule_snapshot(connection):
+            from .ontology_execution import DocumentSemanticsBinding, published_content
+            from .ontology_service import resource
+
+            binding = getattr(p, "business_semantics", None)
+            if not isinstance(binding, DocumentSemanticsBinding):
+                raise ValueError("DOCUMENT_RULE_PREPARATION_V3_REQUIRED")
+            grant = ExactGrant(
+                "BUSINESS_ONTOLOGY",
+                "USE",
+                resource(binding.ontology.resource_id, binding.ontology.revision_id),
+            )
+            if not all(
+                self.reader.has_current_grants(
+                    context,
+                    (grant,),
+                    now=datetime.now(UTC),
+                    generation=command.authority_generation.value,
+                    recovery_epoch=command.recovery_epoch.value,
+                    connection=connection,
+                    configure_transaction=False,
+                )
+            ):
+                raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+            return published_content(connection, scope, binding).model_dump(mode="json")
+
+        rule_content = None
+        if rule_mode:
+            from .native_document_rule_tools import NativeDocumentRuleTools
+
+            with self.pool.connection() as c:
+                rule_content = rule_snapshot(c)
+            library = NativeDocumentRuleTools(
+                output["source"],
+                output["sourceSnapshot"],
+                rule_content,
+                p.business_semantics.model_dump(mode="json"),
+            )
 
         def scope_snapshot(connection):
             return read_confirmed_scope(
@@ -282,6 +333,8 @@ class NativeLoopRuntime:
                     ):
                         return False
                 if employee_mode and employee_snapshot(c) != employee_context:
+                    return False
+                if rule_mode and rule_snapshot(c) != rule_content:
                     return False
                 if user_scope_mode and scope_snapshot(c) != scope_evidence:
                     return False

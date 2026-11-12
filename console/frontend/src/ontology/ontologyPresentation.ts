@@ -21,6 +21,24 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 export function validateOntologyImport(value: unknown) {
+  if (isRecord(value) && value.schema_version === "business-document-rules.v1") {
+    if (typeof value.name !== "string" || !value.name.trim() ||
+        typeof value.business_owner !== "string" || typeof value.data_owner !== "string" ||
+        typeof value.scope !== "string" || !value.scope.trim() || value.synthetic !== true ||
+        !Array.isArray(value.mappings) || value.mappings.length !== 1 ||
+        !Array.isArray(value.actions) || !value.actions.length ||
+        !Array.isArray(value.rules) || !value.rules.length || value.rules.length > 32 ||
+        value.rules.some(r => !isRecord(r) || typeof r.code !== "string" || typeof r.name !== "string" ||
+          typeof r.section !== "string" || !r.section.trim() ||
+          !["REQUIRED_SECTION", "SINGLE_VALUE_FIELD"].includes(String(r.kind)) ||
+          (r.kind === "SINGLE_VALUE_FIELD" && (typeof r.field !== "string" || !r.field.trim())))) {
+      throw new Error("文档规则包格式不完整，请核对名称、负责人、范围、规则与来源。原有内容未更改。");
+    }
+    return;
+  }
+  if (isRecord(value) && value.schema_version !== undefined && value.schema_version !== "business-ontology.v1") {
+    throw new Error("暂不支持此业务定义格式，请核对文件版本。原有内容未更改。");
+  }
   if (!isRecord(value) || typeof value.name !== "string" || !value.name.trim() ||
       typeof value.business_owner !== "string" || typeof value.data_owner !== "string" ||
       !isRecord(value.rules) || !Array.isArray(value.rules.included_kinds) ||

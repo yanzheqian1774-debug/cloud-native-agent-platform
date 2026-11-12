@@ -8,7 +8,11 @@ from .authority_contracts import AuthorityError, ExactGrant
 from .digital_employee_definition import EmployeeDefinitionError
 from .execution_preparation import ExecutionPreparation, ExecutionPreparationError
 from .execution_preparation_postgres import PreparedExecutionStore
-from .ontology_execution import OntologyExecutionPreparation, parse_preparation
+from .ontology_execution import (
+    DocumentRuleExecutionPreparation,
+    OntologyExecutionPreparation,
+    parse_preparation,
+)
 from .prepared_execution_application import PreparedExecutionApplication
 from .prepared_execution_lineage import (
     validate_approved_preparation,
@@ -22,7 +26,11 @@ from .workbench_owner_authorization import WorkbenchOwnerError
 
 
 class PreparationCommand(
-    RootModel[ExecutionPreparation | OntologyExecutionPreparation]
+    RootModel[
+        ExecutionPreparation
+        | OntologyExecutionPreparation
+        | DocumentRuleExecutionPreparation
+    ]
 ):
     pass
 

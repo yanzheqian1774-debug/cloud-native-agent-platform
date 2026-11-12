@@ -4,9 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .authority_contracts import AuthorityError
+from .ontology_execution import DocumentSemanticsBinding
 from .plan_suggestion_domain import ExactReference
 from .resource_use_domain import canonical_digest
 
@@ -21,6 +22,13 @@ class ReadonlyWork(BaseModel):
     case: Literal["delivery", "sales", "tabular", "document"]
     nativeAgentName: str = Field(pattern=r"^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$")
     expiresAt: datetime
+    documentRules: DocumentSemanticsBinding | None = None
+
+    @model_validator(mode="after")
+    def document_rule_case(self):
+        if self.documentRules is not None and self.case != "document":
+            raise ValueError("DOCUMENT_RULE_CASE_MISMATCH")
+        return self
 
 
 class ReadonlyContinuationPolicy(BaseModel):

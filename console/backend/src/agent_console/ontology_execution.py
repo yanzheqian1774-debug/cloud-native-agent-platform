@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import Field
 
 from .execution_preparation import ExecutionPreparation, ExecutionPreparationError
-from .ontology_domain import OntologyContent, OntologyError, Value
+from .ontology_domain import DocumentRulesContent, OntologyContent, OntologyError, Value
 from .ontology_postgres import PostgresOntologyRepository
 from .ontology_query import SemanticQuery, resolve
 from .plan_suggestion_domain import ExactReference
@@ -78,9 +78,39 @@ class OntologyExecutionPreparation(ExecutionPreparation):
         )
 
 
+class DocumentSemanticsBinding(Value):
+    schema_version: Literal["document-semantics-binding.v1"] = (
+        "document-semantics-binding.v1"
+    )
+    ontology: ExactReference
+    mapping_code: str = Field(min_length=1, max_length=64)
+    source: ExactReference
+    scope: str = Field(min_length=1, max_length=200)
+
+    @property
+    def digest(self):
+        return canonical_digest(self.model_dump(mode="json"))
+
+
+class DocumentRuleExecutionPreparation(ExecutionPreparation):
+    schema_version: Literal["execution-preparation.v3"] = "execution-preparation.v3"
+    business_semantics: DocumentSemanticsBinding
+
+    @property
+    def mapping_digest(self):
+        return canonical_digest(
+            {
+                "base_mapping": super().mapping_digest,
+                "business_semantics": self.business_semantics.model_dump(mode="json"),
+            }
+        )
+
+
 def parse_preparation(value):
     if isinstance(value, ExecutionPreparation):
         return value
+    if value.get("schema_version") == "execution-preparation.v3":
+        return DocumentRuleExecutionPreparation.model_validate(value)
     if value.get("schema_version") == "execution-preparation.v2":
         return OntologyExecutionPreparation.model_validate(value)
     return ExecutionPreparation.model_validate(value)
@@ -98,7 +128,19 @@ def published_content(connection, scope, binding, *, current=True):
         actions = [f["action"] for f in record["facts"]]
         if "PUBLISH" not in actions or (current and "DEPRECATE" in actions):
             raise OntologyError("ONTOLOGY_PUBLISHED_VERSION_REQUIRED")
-        content = OntologyContent.model_validate(record["content"])
+        expected_schema = (
+            "business-document-rules.v1"
+            if isinstance(binding, DocumentSemanticsBinding)
+            else "business-ontology.v1"
+        )
+        if record["content"].get("schema_version") != expected_schema:
+            raise OntologyError("ONTOLOGY_BINDING_DOMAIN_MISMATCH")
+        if isinstance(binding, DocumentSemanticsBinding):
+            content = DocumentRulesContent.model_validate(record["content"])
+            if content.scope != binding.scope:
+                raise OntologyError("DOCUMENT_RULE_BINDING_SCOPE_MISMATCH")
+        else:
+            content = OntologyContent.model_validate(record["content"])
         mappings = [
             m
             for m in content.mappings
@@ -106,8 +148,9 @@ def published_content(connection, scope, binding, *, current=True):
         ]
         if len(mappings) != 1:
             raise OntologyError("ONTOLOGY_BINDING_MAPPING_MISMATCH")
-        for query in binding.queries:
-            resolve(content, query)
+        if isinstance(binding, BusinessSemanticsBinding):
+            for query in binding.queries:
+                resolve(content, query)
         return content
     except OntologyError as exc:
         raise ExecutionPreparationError(str(exc)) from exc
@@ -117,9 +160,14 @@ def validate_semantics(connection, scope, preparation, participant):
     binding = getattr(preparation, "business_semantics", None)
     if binding is None:
         return
+    from .native_document_skill import NativeRuleDocumentSkillExecutor
     from .sales_ontology_executor import SalesOntologyExecutor
 
-    expected = SalesOntologyExecutor.revision
+    expected = (
+        NativeRuleDocumentSkillExecutor.revision
+        if isinstance(binding, DocumentSemanticsBinding)
+        else SalesOntologyExecutor.revision
+    )
     if (
         participant.executor_id,
         participant.executor_revision,
@@ -162,3 +210,29 @@ def attach_binding(connection, preparation):
                 Jsonb(binding.model_dump(mode="json")),
             ),
         )
+
+
+def document_mapping_digest(mapping, binding):
+    """Commit the policy-selected rules before the execution plan is approved."""
+    from .native_document_skill import NativeRuleDocumentSkillExecutor
+
+    if mapping["source_snapshot"] != binding.source.model_dump(mode="json"):
+        raise ExecutionPreparationError("ONTOLOGY_PREPARATION_SOURCE_MISMATCH")
+    expected = NativeRuleDocumentSkillExecutor.revision
+    participants = mapping["participants"]
+    if not participants or any(
+        (p["executor_id"], p["executor_revision"], p["executor_digest"])
+        != (
+            expected.executor_id,
+            expected.executor_revision,
+            expected.configuration_digest,
+        )
+        for p in participants
+    ):
+        raise ExecutionPreparationError("ONTOLOGY_EXECUTOR_UNSUPPORTED")
+    return canonical_digest(
+        {
+            "base_mapping": canonical_digest(mapping),
+            "business_semantics": binding.model_dump(mode="json"),
+        }
+    )

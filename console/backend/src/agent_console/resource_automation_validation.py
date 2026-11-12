@@ -6,6 +6,7 @@ from .authority_contracts import AuthorityError
 from .native_document_skill import (
     NativeDocumentSkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
+    NativeRuleDocumentSkillExecutor,
     NativeUserScopeDocumentSkillExecutor,
 )
 from .native_loop_skill import NativeLoopSkillExecutor, NativeValidatedLoopSkillExecutor
@@ -24,6 +25,7 @@ EXECUTORS = SkillExecutorRegistry(
         NativeDocumentSkillExecutor(),
         NativeEmployeeDocumentSkillExecutor(),
         NativeUserScopeDocumentSkillExecutor(),
+        NativeRuleDocumentSkillExecutor(),
         TabularDiagnosticSkillExecutor(),
         NativeLoopSkillExecutor(),
         NativeValidatedLoopSkillExecutor(),
@@ -52,6 +54,7 @@ def executor_registry(*, sales_v2_candidate=False):
             NativeDocumentSkillExecutor(),
             NativeEmployeeDocumentSkillExecutor(),
             NativeUserScopeDocumentSkillExecutor(),
+            NativeRuleDocumentSkillExecutor(),
             TabularDiagnosticSkillExecutor(),
             NativeLoopSkillExecutor(),
             NativeValidatedLoopSkillExecutor(),

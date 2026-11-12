@@ -7,6 +7,7 @@ from .native_document_skill import (
     OPERATIONS,
     NativeDocumentSkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
+    NativeRuleDocumentSkillExecutor,
     NativeUserScopeDocumentSkillExecutor,
 )
 from .native_document_tools import validate_source
@@ -14,7 +15,9 @@ from .prepared_resource_bundle import resource_content as base_content
 from .skill_mcp_schemas import ResourceContent
 
 
-def resource_content(source, *, bound_employee=False, confirmed_user_scope=False):
+def resource_content(
+    source, *, bound_employee=False, confirmed_user_scope=False, rule_bound=False
+):
     validate_source(source)
     bundle = base_content()
     skill = bundle["skill"]
@@ -25,7 +28,9 @@ def resource_content(source, *, bound_employee=False, confirmed_user_scope=False
     )
     skill["operations"] = [op for op in skill["operations"] if op["name"] in OPERATIONS]
     revision = (
-        NativeUserScopeDocumentSkillExecutor
+        NativeRuleDocumentSkillExecutor
+        if rule_bound
+        else NativeUserScopeDocumentSkillExecutor
         if confirmed_user_scope
         else NativeEmployeeDocumentSkillExecutor
         if bound_employee
@@ -40,6 +45,15 @@ def resource_content(source, *, bound_employee=False, confirmed_user_scope=False
         op["inputSchema"]["properties"]["schemaVersion"]["enum"] = [
             "document-review-input.v1"
         ]
+        if rule_bound:
+            op["inputSchema"]["properties"].update(
+                ontologyContent={"type": "object"}, businessSemantics={"type": "object"}
+            )
+            op["inputSchema"]["required"] = [
+                *op["inputSchema"]["required"],
+                "ontologyContent",
+                "businessSemantics",
+            ]
         op["outputSchema"]["properties"]["schemaVersion"]["enum"] = [
             "document-review-output.v1"
         ]

@@ -48,6 +48,17 @@ def validate_resources(connection, scope, preparation, participant):
     ):
         raise ExecutionPreparationError("ONTOLOGY_PREPARATION_V2_REQUIRED")
 
+    if (
+        participant.executor_id == "native-document-review"
+        and participant.executor_revision == "4"
+    ):
+        from .ontology_execution import DocumentSemanticsBinding
+
+        if not isinstance(
+            getattr(preparation, "business_semantics", None), DocumentSemanticsBinding
+        ):
+            raise ExecutionPreparationError("DOCUMENT_RULE_PREPARATION_V3_REQUIRED")
+
     validate_semantics(connection, scope, preparation, participant)
     skill = published(connection, scope, "SKILL", participant.skill.reference)
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor

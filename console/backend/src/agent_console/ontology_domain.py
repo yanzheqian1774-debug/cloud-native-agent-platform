@@ -184,12 +184,68 @@ class OntologyContent(Value):
         return self
 
 
+class DocumentRule(Value):
+    code: Code
+    name: Label
+    kind: Literal["REQUIRED_SECTION", "SINGLE_VALUE_FIELD"]
+    section: Label
+    field: Label | None = None
+
+    @model_validator(mode="after")
+    def shape(self):
+        if (self.kind == "SINGLE_VALUE_FIELD") != (self.field is not None):
+            raise OntologyError("DOCUMENT_RULE_FIELD_INVALID")
+        if not self.section.strip() or any(c in self.section for c in "\n\r"):
+            raise OntologyError("DOCUMENT_RULE_SECTION_INVALID")
+        if self.field is not None and (
+            not self.field.strip() or any(c in self.field for c in "\n\r\uff1a:")
+        ):
+            raise OntologyError("DOCUMENT_RULE_FIELD_INVALID")
+        return self
+
+
+class DocumentSourceMapping(Value):
+    code: Code
+    source: ExactReference
+    source_digest: Annotated[str, Field(pattern="^[a-f0-9]{64}$")]
+    source_schema: Literal["document-review-source.v1"]
+
+
+class DocumentRuleAction(ActionContract):
+    operation: Literal["READ_DATA", "VALIDATE_DATA", "ANALYZE_DATA", "RENDER_REPORT"]
+
+
+class DocumentRulesContent(Value):
+    schema_version: Literal["business-document-rules.v1"] = "business-document-rules.v1"
+    name: Label
+    business_owner: Label
+    data_owner: Label
+    synthetic: Literal[True] = True
+    scope: Label
+    mappings: tuple[DocumentSourceMapping, ...] = Field(min_length=1, max_length=1)
+    rules: tuple[DocumentRule, ...] = Field(min_length=1, max_length=32)
+    actions: tuple[DocumentRuleAction, ...] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        unique([rule.code for rule in self.rules])
+        if len(self.model_dump_json().encode()) > 96 * 1024:
+            raise OntologyError("ONTOLOGY_CONTENT_TOO_LARGE")
+        return self
+
+
+def parse_ontology_content(value):
+    if value.get("schema_version") == "business-document-rules.v1":
+        return DocumentRulesContent.model_validate(value)
+    return OntologyContent.model_validate(value)
+
+
 class OntologyCommand(Value):
     request_key: Annotated[str, Field(min_length=1, max_length=128)]
     expected_version: int = Field(ge=0)
     revision_id: Annotated[str, Field(min_length=1, max_length=128)]
     digest: Annotated[str, Field(pattern="^[a-f0-9]{64}$")] | None = None
-    content: OntologyContent | None = None
+    content: OntologyContent | DocumentRulesContent | None = None
     reason: Annotated[str, Field(min_length=1, max_length=500)]
 
 

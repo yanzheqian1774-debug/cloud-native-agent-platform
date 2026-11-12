@@ -1,3 +1,4 @@
+import {DocumentRuleResultView} from "./DocumentRuleResultView";
 import {NativeLoopTrace,type NativeLoopResult} from './NativeLoopTrace';
 import {RememberedDetails} from './RememberedDetails';
 import './DocumentArtifactView.css';
@@ -18,6 +19,7 @@ export function DocumentArtifactView({content,viewKey}:{content:string;viewKey?:
  let value:{nativeLoop?:NativeLoopResult;documentReview?:unknown};try{value=JSON.parse(content)}catch{return <p role="alert">文档检查结果暂不可读。</p>}
  if(!object(value))return <p role="alert">文档检查结果暂不可读。</p>;
  const r=value.documentReview;if(!r)return <p>文档已读取或校验，尚未形成最终检查结果。</p>;
+ if(object(r)&&Object.hasOwn(r,'ruleResult'))return <><DocumentRuleResultView review={r} viewKey={viewKey}/>{value.nativeLoop&&Array.isArray(value.nativeLoop.trace)&&<RememberedDetails viewKey={viewKey} name="trace" summary="查看执行过程与核验记录"><NativeLoopTrace loop={value.nativeLoop}/></RememberedDetails>}</>;
  if(!valid(r))return <p role="alert">文档检查结果格式尚未核实，未生成替代结论。</p>;
  if(!r.findings.length)return <p>未取得可核对的章节记录，尚不能给出完整性结论。</p>;
  if(new Set(r.findings.map(f=>f.section)).size!==r.findings.length)return <p role="alert">章节记录存在重复，检查结论尚待核实。</p>;

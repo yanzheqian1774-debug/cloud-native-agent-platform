@@ -19,3 +19,15 @@ for(const width of [1440,390])test('document reply leads with actual gaps and ci
 test('unknown finding status is never reinterpreted as provided or approved',async({page})=>{const s=await fixture(page);s.value.documentReview.findings[0].status='UNKNOWN';await page.goto('/tasks?work=e');await expect(page.getByText('检查状态待核实',{exact:true})).toBeVisible();await expect(page.getByText('另有 1 项已提供：负责人',{exact:true})).toHaveCount(0);expect(s.writes).toEqual([])});
 test('contradictory document summary does not become a business conclusion',async({page})=>{const s=await fixture(page);s.value.documentReview.missingSections=[];await page.goto('/tasks?work=e');await expect(page.getByText('文档检查汇总与逐项记录不一致，请核对原报告。')).toBeVisible();await expect(page.locator('.document-lead')).toHaveCount(0)});
 test('malformed and empty document findings do not imply successful checks',async({page})=>{const s=await fixture(page);s.value.documentReview.findings=[];s.value.documentReview.missingSections=[];s.value.documentReview.incompleteSections=[];await page.goto('/tasks?work=e');await expect(page.getByText('未取得可核对的章节记录，尚不能给出完整性结论。')).toBeVisible();s.value=report();s.value.documentReview.findings[0].requirement.line=0;await page.reload();await expect(page.getByText('文档检查结果格式尚未核实，未生成替代结论。')).toBeVisible()});
+test('fixed document rules show distinct outcomes and exact provenance in the result',async({page})=>{
+ const s=await fixture(page);
+ const ruleResult={schemaVersion:'document-rule-result.v1',scope:'生产环境',documentTitle:'订单服务上线交接',rulesDigest:'d'.repeat(64),sourceDigest:'e'.repeat(64),findings:[{ruleCode:'owner',ruleName:'单一上线负责人',status:'CONFLICT',evidence:[{documentId:'handover',line:4,text:'负责人：李明'},{documentId:'handover',line:5,text:'负责人：陈玲'}]},{ruleCode:'rollback',ruleName:'上线回退步骤',status:'MISSING',evidence:[]},{ruleCode:'scope',ruleName:'明确发布范围',status:'UNKNOWN',evidence:[{documentId:'handover',line:6,text:'范围：待确认'}]},{ruleCode:'validation',ruleName:'验证记录',status:'SATISFIED',evidence:[{documentId:'handover',line:8,text:'验证记录：已附测试结果'}]}]};
+ Object.assign(s.value.documentReview,{ruleResult,ruleBinding:{schema_version:'document-semantics-binding.v1',scope:'生产环境',ontology:{resource_id:'handover-rules',revision_id:'rules-r2',digest:'f'.repeat(64)}}});
+ await page.goto('/tasks?work=e');const result=page.getByRole('region',{name:'文档规则核对结果'});
+ await expect(result).toContainText('1 项满足 · 1 项缺失 · 1 项待确认 · 1 项冲突');
+ await expect(result).toContainText('规则版本：rules-r2 · 原文：订单服务上线交接');
+ await expect(result).toContainText('第 5 行：负责人：陈玲');
+ await result.getByText('查看规则版本与原文依据',{exact:true}).click();await expect(result).toContainText('规则标识：handover-rules');
+ ruleResult.findings[0].status='UNVERIFIED';await page.reload();await expect(page.getByRole('alert').filter({hasText:'规则核对结果或版本依据尚未核实'})).toBeVisible();
+ expect(s.writes).toEqual([]);
+});

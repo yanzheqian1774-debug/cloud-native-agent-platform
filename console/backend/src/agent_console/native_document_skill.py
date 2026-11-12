@@ -143,6 +143,55 @@ class NativeUserScopeDocumentSkillExecutor(NativeEmployeeDocumentSkillExecutor):
     )
 
 
+RULE_BOUND_CONFIGURATION = {
+    **CONFIRMED_SCOPE_CONFIGURATION,
+    "schemaVersion": "native-document-review.v4",
+    "ruleContext": "EXACT_PUBLISHED_DOCUMENT_RULE_BINDING_V1",
+    "verification": "EXACT_RULE_FINDINGS_AND_MARKDOWN_CITATIONS",
+}
+
+
+class NativeRuleDocumentSkillExecutor(NativeUserScopeDocumentSkillExecutor):
+    """Rule-bound successor; registration requires the matching runtime adapter."""
+
+    revision = ExecutorRevision(
+        "native-document-review", "4", digest(RULE_BOUND_CONFIGURATION)
+    )
+
+    def invoke(self, invocation_id, operation, inputs, timeout_ms):
+        from .native_document_rule_tools import NativeDocumentRuleTools
+
+        source = inputs.get("source")
+        if source is None:
+            dependencies = list(inputs.get("dependencies", {}).values())
+            source = dependencies[0].get("source") if dependencies else None
+        try:
+            library = NativeDocumentRuleTools(
+                source,
+                inputs["sourceSnapshot"],
+                inputs["ontologyContent"],
+                inputs["businessSemantics"],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise SkillExecutorFailure(
+                "DOCUMENT_RULE_INPUT_INVALID", outcome_unknown=False
+            ) from exc
+        result = super().invoke(invocation_id, operation, inputs, timeout_ms)
+        if operation in {"ANALYZE_DATA", "RENDER_REPORT"}:
+            from .document_rule_evaluation import evaluate_document_rules
+
+            report = result.output.get("documentReview", {})
+            if report.get("ruleBinding") != library.binding.model_dump(
+                mode="json"
+            ) or report.get("ruleResult") != evaluate_document_rules(
+                library.rules, source
+            ):
+                raise SkillExecutorFailure(
+                    "DOCUMENT_RULE_REPORT_MISMATCH", outcome_unknown=False
+                )
+        return result
+
+
 def document_executor_revision(operations):
     revisions = {
         (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
@@ -152,6 +201,7 @@ def document_executor_revision(operations):
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
         NativeUserScopeDocumentSkillExecutor,
+        NativeRuleDocumentSkillExecutor,
     ):
         ref = executor.revision
         if revisions == {

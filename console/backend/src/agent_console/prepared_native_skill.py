@@ -98,6 +98,7 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
     from .native_document_skill import (
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
+        NativeRuleDocumentSkillExecutor,
         NativeUserScopeDocumentSkillExecutor,
     )
 
@@ -111,6 +112,7 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
             NativeDocumentSkillExecutor.revision,
             NativeEmployeeDocumentSkillExecutor.revision,
             NativeUserScopeDocumentSkillExecutor.revision,
+            NativeRuleDocumentSkillExecutor.revision,
         )
     }
     result = {
@@ -135,7 +137,9 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
 
         ontology = published_content(connection, command.scope, binding)
         result.update(
-            schemaVersion="ontology-sales-input.v1",
+            schemaVersion="document-review-input.v1"
+            if is_document
+            else "ontology-sales-input.v1",
             ontologyContent=ontology.model_dump(mode="json"),
             businessSemantics=binding.model_dump(mode="json"),
         )

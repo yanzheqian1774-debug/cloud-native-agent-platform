@@ -84,6 +84,7 @@ def compose(
     from .native_document_skill import (
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
+        NativeRuleDocumentSkillExecutor,
         NativeUserScopeDocumentSkillExecutor,
     )
 
@@ -104,6 +105,7 @@ def compose(
                 NativeDocumentSkillExecutor,
                 NativeEmployeeDocumentSkillExecutor,
                 NativeUserScopeDocumentSkillExecutor,
+                NativeRuleDocumentSkillExecutor,
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )

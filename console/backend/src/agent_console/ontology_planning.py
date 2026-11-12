@@ -6,7 +6,11 @@ from pydantic import Field
 from .cost_execution_revision import EXECUTION_ONLY, SALES_SYNTHETIC_ONLY
 from .execution_preparation import ExecutionPreparationError
 from .ontology_domain import OntologyError, Value
-from .ontology_execution import OntologyExecutionPreparation, published_content
+from .ontology_execution import (
+    DocumentRuleExecutionPreparation,
+    OntologyExecutionPreparation,
+    published_content,
+)
 from .ontology_service import resource
 from .plan_suggestion_application import PlanningApplication
 from .plan_suggestion_domain import (
@@ -25,7 +29,7 @@ from .workbench_business_problem import OwnerPrincipal
 
 class OntologyDraftCommand(Value):
     request_key: str = Field(min_length=1, max_length=128)
-    draft: OntologyExecutionPreparation
+    draft: OntologyExecutionPreparation | DocumentRuleExecutionPreparation
 
 
 def prepare(call, planning):

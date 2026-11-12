@@ -291,11 +291,16 @@ class PreparedResultReview:
                 for c in snapshot["criteria"]
             )
         )
+        from .ontology_execution import BusinessSemanticsBinding
+
+        sales_binding = isinstance(
+            getattr(p, "business_semantics", None), BusinessSemanticsBinding
+        )
         evaluator = (
             "prepared-synthetic-sales-evidence.v2"
             if sales_v2
             else "prepared-ontology-sales-evidence.v1"
-            if getattr(p, "business_semantics", None) is not None
+            if sales_binding
             else "prepared-synthetic-sales-evidence.v1"
             if sales
             else "prepared-synthetic-delivery-evidence.v1"
@@ -384,7 +389,7 @@ class PreparedResultReview:
                         result["measurementReportDigest"] = (
                             canonical_digest(report) if report else None
                         )
-            if getattr(p, "business_semantics", None) is not None:
+            if sales_binding:
                 from .execution_domain import ScopeIdentity
                 from .ontology_execution import published_content
                 from .ontology_sales_evaluation import evaluate as evaluate_ontology

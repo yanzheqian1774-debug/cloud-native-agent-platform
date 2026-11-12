@@ -116,6 +116,7 @@ class PreparedNativeCoordinator:
             from .native_document_skill import (
                 NativeDocumentSkillExecutor,
                 NativeEmployeeDocumentSkillExecutor,
+                NativeRuleDocumentSkillExecutor,
                 NativeUserScopeDocumentSkillExecutor,
             )
             from .native_loop_skill import (
@@ -127,6 +128,7 @@ class PreparedNativeCoordinator:
                 NativeDocumentSkillExecutor.revision,
                 NativeEmployeeDocumentSkillExecutor.revision,
                 NativeUserScopeDocumentSkillExecutor.revision,
+                NativeRuleDocumentSkillExecutor.revision,
                 NativeLoopSkillExecutor.revision,
                 NativeValidatedLoopSkillExecutor.revision,
             )
