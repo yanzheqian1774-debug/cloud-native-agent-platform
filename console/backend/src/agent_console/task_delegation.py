@@ -839,6 +839,13 @@ def configured_limits(profile, configuration, budget, *, planning=False):
     binding = profile.binding
     suffix = f"{binding.resource_id}:{binding.revision_id}:{binding.digest}"
     provider = asdict(configuration)
+    calls, cost = budget.call_cap, budget.total_cost_cap_microusd
+    if getattr(budget, "allowance_id", None) is not None:
+        from .provider_budget_allowance import require
+
+        with budget._connection() as connection:
+            allowance = require(connection, budget)
+        calls, cost = allowance.callCap, allowance.totalCostCapMicrousd
     if provider.get("planning_model_policy") is None:
         provider.pop("planning_model_policy", None)  # Preserve legacy signed digests.
     return {
@@ -850,10 +857,10 @@ def configured_limits(profile, configuration, budget, *, planning=False):
         "profile_digest": profile.profile_digest,
         "model_target": ("model:invocation:plan-suggestion:" if planning else "")
         + suffix,
-        "calls": budget.call_cap,
+        "calls": calls,
         "input_tokens": configuration.maximum_input_tokens,
         "output_tokens": configuration.maximum_output_tokens,
-        "cost_microusd": budget.total_cost_cap_microusd,
+        "cost_microusd": cost,
     }
 
 

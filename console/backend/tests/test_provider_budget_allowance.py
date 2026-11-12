@@ -226,3 +226,30 @@ def test_conversation_allowance_binding_and_expiry(database_url):  # noqa: F811
             experience_limits(c, row, owner)
     finally:
         owner.close()
+
+
+def test_runtime_configuration_uses_selected_caps_without_rewriting_root(database_url):  # noqa: F811
+    from agent_console.task_delegation import configured_limits
+    from test_task_timeout_revision import Configuration
+
+    owner = _ledger(
+        database_url, "runtime-" + uuid4().hex, call_cap=20, cost_cap=1_000_000
+    )
+    try:
+        configuration = Configuration(30, 60, 65536, 500)
+        legacy = configured_limits(owner.profile, configuration, owner)
+        saved = prepare(owner, document(owner, calls=100, cost=10_000_000))
+        # Merely preparing an allowance never selects it.
+        assert configured_limits(owner.profile, configuration, owner) == legacy
+        owner.allowance_id = saved["allowanceId"]
+        selected = configured_limits(owner.profile, configuration, owner)
+        assert selected == {**legacy, "calls": 100, "cost_microusd": 10_000_000}
+        assert (owner.call_cap, owner.total_cost_cap_microusd) == (20, 1_000_000)
+        expired = document(owner, calls=100, cost=10_000_000, expired=True)
+        expired["allowanceId"] = "expired-runtime"
+        prepare(owner, expired)
+        owner.allowance_id = expired["allowanceId"]
+        with pytest.raises(DraftAssistanceError, match="ALLOWANCE_EXPIRED"):
+            configured_limits(owner.profile, configuration, owner)
+    finally:
+        owner.close()
