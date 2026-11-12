@@ -112,3 +112,45 @@ def test_denied_retrieval_does_not_read_repository():
             "authorization:denied",
             "query",
         )
+
+
+def test_edit_draft_preserves_history_and_invalidates_old_validation():
+    import copy
+
+    service = KnowledgeLifecycleService(InMemoryKnowledgeRepository())
+    scope = service.scope("tenant-a", "quality")
+    created = service.create(scope, "human:owner", "Interview", source())["knowledge"]
+    identity = created["knowledgeId"]
+    validated = service.validate(scope, identity, "human:owner", 1)["knowledge"]
+    old = copy.deepcopy(validated["revisions"][-1])
+    changed = service.edit(
+        scope, identity, "human:owner", 2, "New interview evidence."
+    )["knowledge"]
+    assert changed["aggregateVersion"] == 3
+    assert changed["revisions"][0] == old
+    new = changed["revisions"][-1]
+    assert new["state"] == "DRAFT" and new["digest"] != old["digest"]
+    assert new["predecessorRevisionId"] == old["revisionId"]
+    assert changed["currentDraftRevisionId"] == new["revisionId"]
+    assert changed["publishedRevisionId"] is None
+    with pytest.raises(KnowledgeLifecycleFailure, match="EXACT_REVIEW_REQUIRED"):
+        service.publish(scope, identity, "human:owner", 3, old["digest"])
+    assert not changed["indexSnapshots"] and not changed["retrievals"]
+    with pytest.raises(KnowledgeLifecycleFailure, match="STALE_KNOWLEDGE"):
+        service.edit(scope, identity, "human:owner", 2, "Stale input")
+    assert service.repository.get(scope, identity)["aggregateVersion"] == 3
+
+
+def test_edit_published_resource_requires_existing_draft():
+    service, scope, published = published_service()
+    with pytest.raises(KnowledgeLifecycleFailure, match="KNOWLEDGE_DRAFT_REQUIRED"):
+        service.edit(
+            scope,
+            published["knowledgeId"],
+            "human:owner",
+            4,
+            "Do not replace publication",
+        )
+    assert (
+        service.repository.get(scope, published["knowledgeId"])["aggregateVersion"] == 4
+    )

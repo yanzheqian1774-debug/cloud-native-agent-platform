@@ -91,6 +91,7 @@ class AgentCommand(Command):
 class KnowledgeCommand(Command):
     source: SourceInput | None = None
     successorContent: str | None = Field(default=None, min_length=1, max_length=200000)
+    draftContent: str | None = Field(default=None, min_length=1, max_length=200000)
 
 
 class DefinitionTargets:
@@ -320,7 +321,10 @@ class DefinitionManagement(ResourceManagement):
                     not cmd.name or not (cmd.content if kind == "agent" else cmd.source)
                 )
             )
-            or (cmd.action == "edit" and (kind != "agent" or not cmd.content))
+            or (
+                cmd.action == "edit"
+                and not (cmd.content if kind == "agent" else cmd.draftContent)
+            )
             or (
                 cmd.action == "successor"
                 and kind == "knowledge"
@@ -390,7 +394,12 @@ class DefinitionManagement(ResourceManagement):
                         self, call, revision["content"].get("bindings", {})
                     )
                 if cmd.action == "edit":
-                    service.edit(*args, cmd.content.model_dump())
+                    service.edit(
+                        *args,
+                        cmd.content.model_dump()
+                        if kind == "agent"
+                        else cmd.draftContent,
+                    )
                 elif cmd.action == "successor":
                     service.successor(
                         *args, *([cmd.successorContent] if kind == "knowledge" else [])

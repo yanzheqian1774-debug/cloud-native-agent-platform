@@ -907,3 +907,36 @@ def test_d12_role_publication_uses_actual_admin_and_no_grant_queue(
                 source={**SOURCE, "content": " "},
             )
     assert requests() == before
+
+
+def test_knowledge_draft_edit_replay_and_stale_version_preserve_old_content(
+    definitions,
+):
+    import copy
+
+    created = command(
+        definitions, "knowledge", "create", name="Interview draft", source=SOURCE
+    )
+    identity = created["identity"]
+    old = copy.deepcopy(created["resource"]["revisions"][0])
+    payload = dict(
+        identity=identity,
+        expectedVersion=1,
+        draftContent="Updated synthetic interview.\n\nOwner still to confirm.",
+    )
+    changed = command(definitions, "knowledge", "edit", **payload)
+    assert changed == command(definitions, "knowledge", "edit", **payload)
+    record = changed["resource"]
+    assert record["aggregateVersion"] == 2 and len(record["revisions"]) == 2
+    assert record["revisions"][0] == old and record["publishedRevisionId"] is None
+    assert record["currentDraftRevisionId"] == record["revisions"][-1]["revisionId"]
+    assert changed["modelCalls"] == 0 and changed["executionStarted"] is False
+    with pytest.raises(WorkbenchOwnerError, match="RESOURCE_VERSION_STALE"):
+        command(definitions, "knowledge", "edit", key="stale-edit-key", **payload)
+    with pytest.raises(WorkbenchOwnerError, match="RESOURCE_COMMAND_CONFLICT"):
+        command(
+            definitions,
+            "knowledge",
+            "edit",
+            **{**payload, "draftContent": "Changed payload"},
+        )

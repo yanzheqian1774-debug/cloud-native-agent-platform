@@ -24,9 +24,9 @@ async function fixture(page:Page,kind:Kind,seed=false){
   if(path.endsWith('/definition-management/'+kind))return route.fulfill(state.service401?{status:401,json:{reasonCode:'SERVICE_CREDENTIAL_EXPIRED'}}:{json:{result:{subject:actor.principalId,scope,items:state.created&&!state.revoked&&!state.hiddenUntilAccess?[r]:[]}}});
   if(path.endsWith('/definition-management/'+kind+'/commands')){
    if(state.service401)return route.fulfill({status:401,json:{reasonCode:'SERVICE_CREDENTIAL_EXPIRED'}});
-   const b=req.postDataJSON();state.posts.push(b);if(state.rejectNext){const reason=state.rejectNext;state.rejectNext='';return route.fulfill({status:422,json:{reasonCode:reason}})}if(b.action==='access')state.hiddenUntilAccess=false;expect(req.headers()['x-csrf-token']).toBe('fixture-csrf');
+   const b=req.postDataJSON();state.posts.push(b);if(state.rejectNext){const reason=state.rejectNext;state.rejectNext='';return route.fulfill({status:reason==='RESOURCE_VERSION_STALE'?409:422,json:{reasonCode:reason}})}if(b.action==='access')state.hiddenUntilAccess=false;expect(req.headers()['x-csrf-token']).toBe('fixture-csrf');
    if(b.action==='create'){state.created=true;r.name=b.name;r.revisions[0].content=kind==='agent'?b.content:{source:{sourceId:b.source.sourceId,provenance:b.source.provenance},documents:[{documentId:b.source.documentId,chunks:[{content:b.source.content}]}]};}
-   if(b.action==='edit'){r.currentDraftRevisionId='revision:'+String(r.revisions.length+1);r.revisions.push({revisionId:r.currentDraftRevisionId,digest:'b'.repeat(64),state:'DRAFT',content:b.content,predecessorRevisionId:r.revisions.at(-1)!.revisionId});r.aggregateVersion++;}
+   if(b.action==='edit'){r.currentDraftRevisionId='revision:'+String(r.revisions.length+1);r.revisions.push({revisionId:r.currentDraftRevisionId,digest:'b'.repeat(64),state:'DRAFT',content:kind==='agent'?b.content:{...structuredClone(r.revisions.at(-1)!.content),documents:[{documentId:'fixture-document',chunks:[{content:b.draftContent}]}]},predecessorRevisionId:r.revisions.at(-1)!.revisionId});r.aggregateVersion++;}
    if(b.action==='validate'){r.revisions.at(-1)!.state='VALIDATED';r.lifecycleState='VALIDATED';r.aggregateVersion++;}
    if(b.action==='publish'){r.revisions.at(-1)!.state='PUBLISHED';r.publishedRevisionId=r.currentDraftRevisionId;r.currentDraftRevisionId=null;r.lifecycleState='PUBLISHED';r.aggregateVersion+=3;}
    if(b.action==='successor'){r.currentDraftRevisionId='revision:'+String(r.revisions.length+1);const prev=structuredClone(r.revisions.at(-1)!);r.revisions.push({...prev,revisionId:r.currentDraftRevisionId,predecessorRevisionId:prev.revisionId,state:'DRAFT',digest:'c'.repeat(64),content:kind==='knowledge'?{...prev.content,documents:[{documentId:'fixture-document',chunks:[{content:b.successorContent}]}]}:prev.content});r.lifecycleState='DRAFT';r.aggregateVersion++;}
@@ -107,4 +107,20 @@ for(const expire of [false,true])test('knowledge initial loading is distinct and
  await page.goto('/knowledge?managedResource=knowledge%3Amaintenance');await expect(page.getByText('正在读取维护信息…',{exact:true})).toBeVisible();await expect(page.getByText('维护暂未就绪，可继续核对下方当前可读的准确版本。',{exact:true})).toHaveCount(0);
  if(expire)await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));const settled=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/session'));release();await settled;await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
  if(expire){await expect(page.getByRole('heading',{name:'当前登录已失效',exact:true})).toBeVisible();await expect(page.getByRole('region',{name:'当前定义配置'})).toHaveCount(0)}else{await expect(page.getByRole('region',{name:'当前定义配置'})).toBeVisible();await expect(page.getByText('正在读取维护信息…',{exact:true})).toHaveCount(0)}expect(state.posts).toEqual([]);
+});
+
+for(const stale of [false,true])test(`knowledge saved draft can be edited; stale=${stale}`,async({page})=>{
+ const state=await fixture(page,'knowledge',true),original=structuredClone(state.r.revisions[0]);
+ await page.goto('/knowledge?managedResource=knowledge%3Amaintenance');
+ await page.getByRole('button',{name:'继续修改草稿',exact:true}).click();
+ await expect(page.getByLabel('知识正文',{exact:true})).toHaveValue('隔离知识正文');
+ await page.getByLabel('知识正文',{exact:true}).fill('访谈范围已补充，负责人待确认。');
+ await expect(page.getByRole('button',{name:'验证当前草稿',exact:true})).toBeDisabled();
+ await expect(page.getByRole('button',{name:'核验并发布',exact:true})).toBeDisabled();
+ if(stale)state.rejectNext='RESOURCE_VERSION_STALE';
+ await page.getByRole('button',{name:'保存知识草稿',exact:true}).click();
+ await expect.poll(()=>state.posts.length).toBe(1);expect(state.posts[0]).toMatchObject({action:'edit',identity:'knowledge:maintenance',expectedVersion:1,draftContent:'访谈范围已补充，负责人待确认。'});
+ if(stale){await expect(page.getByRole('alert')).toContainText('版本已变化');await expect(page.getByLabel('知识正文',{exact:true})).toHaveValue('访谈范围已补充，负责人待确认。');expect(state.r.revisions).toHaveLength(1)}
+ else{await expect(page.getByText('修改已保存。',{exact:true})).toBeVisible();await page.reload();await expect(page.locator('.knowledge-maintenance-body')).toContainText('访谈范围已补充，负责人待确认。');expect(state.r.revisions).toHaveLength(2);expect(state.r.publishedRevisionId).toBeNull()}
+ expect(state.r.revisions[0]).toEqual(original);expect(state.unexpectedWrites).toEqual([]);
 });

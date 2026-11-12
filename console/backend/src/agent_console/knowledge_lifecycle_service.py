@@ -258,6 +258,61 @@ class KnowledgeLifecycleService:
             scope, knowledge_id, actor, expected_version, "KNOWLEDGE_PUBLISHED", mutate
         )
 
+    def edit(
+        self,
+        scope: KnowledgeScope,
+        knowledge_id: str,
+        actor: str,
+        expected_version: int,
+        source_content: str,
+    ) -> dict[str, Any]:
+        def mutate(record: dict[str, Any], fact: dict[str, Any]) -> None:
+            if record["archived"] or record["purge"]:
+                raise KnowledgeLifecycleFailure("KNOWLEDGE_NOT_EDITABLE")
+            predecessor = self._draft(record)
+            content = copy.deepcopy(predecessor["content"])
+            document = content["documents"][0]
+            chunks, content_digest = ingest_text(document["documentId"], source_content)
+            document.update(chunks=chunks, contentDigest=content_digest)
+            revision_id = identity("knowledge-revision")
+            digest = canonical_digest(
+                {
+                    "scope": {
+                        "namespace": scope.namespace,
+                        "securityDomain": scope.security_domain,
+                    },
+                    "content": content,
+                    "predecessorRevisionId": predecessor["revisionId"],
+                },
+                domain="knowledge-revision.v1",
+            )
+            record["revisions"].append(
+                {
+                    "revisionId": revision_id,
+                    "predecessorRevisionId": predecessor["revisionId"],
+                    "state": "DRAFT",
+                    "digest": digest,
+                    "content": content,
+                    "createdAt": now(),
+                }
+            )
+            record["currentDraftRevisionId"] = revision_id
+            record["lifecycleState"] = "DRAFT"
+            fact.update(
+                revisionId=revision_id,
+                predecessorRevisionId=predecessor["revisionId"],
+                digest=digest,
+            )
+
+        return self._change(
+            scope,
+            knowledge_id,
+            actor,
+            expected_version,
+            "KNOWLEDGE_DRAFT_EDITED",
+            mutate,
+        )
+
     def successor(
         self,
         scope: KnowledgeScope,
