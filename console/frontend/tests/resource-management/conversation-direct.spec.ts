@@ -127,3 +127,17 @@ for(const mode of ['repaired','withdrawn'] as const)test('data request rechecks 
  expect(state.journal.state.sources).toEqual([current]);expect(state.journal.state.source).toEqual(mode==='repaired'?current:undefined);
  expect(state.writes.some(p=>p.endsWith('/problems')||p.includes('/execute'))).toBe(false);
 });
+
+for(const mode of ['repaired','withdrawn'] as const)test('waiting conversation reload reads current sources without model or journal writes '+mode,async({page})=>{
+ const state=await directFixture(page,'NEEDS_DATA');
+ const old={name:'交接资料',sourceSchema:'document-review-source.v1',synthetic:true,periods:[],source:{resource_id:'knowledge:1',revision_id:'revision:1',digest:'old'},assessment:{state:'MISSING_TOOLS',missingOperations:['READ_DATA'],limitations:[]}};
+ state.journal.state={...state.journal.state,understandingProtocol:3,phase:'CLARIFY',draft:{state:'SUCCEEDED',resultKind:'NEEDS_DATA'},sources:[old],source:mode==='withdrawn'?old:undefined};
+ const snapshot=JSON.stringify(state.journal);
+ state.availableSources=[{...old,source:mode==='repaired'?old.source:{...old.source,revision_id:'revision:2',digest:'new'},assessment:{state:'BOUNDED_ANALYSIS_AVAILABLE',missingOperations:[],limitations:[]}}];
+ await page.goto('/work?conversation=direct');await expect(page.getByLabel('补充说明',{exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'使用现有交付测试资料',exact:true})).toBeEnabled();
+ if(mode==='withdrawn')await expect(page.getByRole('status').filter({hasText:'原先选定的资料'})).toContainText('原先选定的资料或执行能力当前不可用');
+ await page.getByLabel('补充说明',{exact:true}).fill('尚未发送的补充');
+ await page.reload();await expect(page.getByLabel('补充说明',{exact:true})).toHaveValue('尚未发送的补充');
+ expect(state.calls).toHaveLength(0);expect(state.sources).toBe(2);expect(state.writes).toHaveLength(0);expect(JSON.stringify(state.journal)).toBe(snapshot);
+});

@@ -498,6 +498,16 @@ def build_workbench_composition(
                     delegation, configurations["planning"]
                 )
                 planning_admission.migrate()
+                if os.environ.get("F3_CONVERSATION_PLANNING_ENABLED") == "true":
+                    from .conversation_planning_admission import (
+                        ConversationPlanningAdmission,
+                    )
+
+                    planning_admission.conversation_experience = (
+                        ConversationPlanningAdmission(
+                            admission, configurations["planning"]
+                        )
+                    )
                 admission.planning = planning_admission
                 planning_invocations = replace(
                     planning_invocations,

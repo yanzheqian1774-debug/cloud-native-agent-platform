@@ -53,6 +53,11 @@ class PlanningCallAdmission(ContextCallAdmission):
         """Persist the actual generated object before signing or invocation claim."""
         scope = (context.scope.tenant_id, context.scope.security_domain)
         with self.repository.connection_scope() as c:
+            experience = getattr(self, "conversation_experience", None)
+            if experience is not None:
+                prepared = experience.prepare(self, c, context, request, record)
+                if prepared is not None:
+                    return prepared
             from .development_journey_admission import prepare as prepare_journey
 
             journey = prepare_journey(self, c, context, request, record)
@@ -201,6 +206,7 @@ class PlanningCallAdmission(ContextCallAdmission):
                     }
                     if row["record"].get("development_revision")
                     or row["record"].get("initial_case_revision")
+                    or row["record"].get("experience_policy_digest")
                     else {}
                 ),
             },
@@ -337,6 +343,10 @@ def effective_cap(c, budget, invocation, original):
         from .context_call_admission import development_call_cap
 
         return development_call_cap(c, budget, invocation, original)
+    if row["record"].get("experience_policy_digest"):
+        from .conversation_planning_admission import limits
+
+        return limits(c, row, budget)[0]
     if row["record"].get("development_journey"):
         from .development_journey_admission import CALL_CAP
 
@@ -360,6 +370,10 @@ def effective_cost_cap(c, budget, invocation, original):
     row = guarded_row(c, budget, invocation)
     if row is None:
         return original
+    if row["record"].get("experience_policy_digest"):
+        from .conversation_planning_admission import limits
+
+        return limits(c, row, budget)[1]
     if row["record"].get("development_journey"):
         from .development_journey_admission import COST_CAP
 
@@ -430,6 +444,11 @@ class BoundPlanningAdmission:
                 ):
                     raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
                 active(c, row, self.service.configuration)
+                if row["record"].get("experience_policy_digest"):
+                    experience = getattr(self.service, "conversation_experience", None)
+                    if experience is None:
+                        raise AuthorityError("PLANNING_EXACT_ADMISSION_REQUIRED")
+                    experience.require(self.service, c, self.context, row)
                 grants = self.service.delegation.grants
                 problem = record["target"]["problem"]["problem"]["resource_id"]
                 exacts = (
