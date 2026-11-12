@@ -40,6 +40,11 @@ class DirectoryQuery(BaseModel):
         return self
 
 
+class ResourceDetailQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    projection: Literal["detail", "content"] = "detail"
+
+
 def target(kind, identity, revision):
     if kind == "workflow":
         return ExactGrant("WORKFLOW", "READ", f"workflow:{identity}:{revision}")
@@ -137,7 +142,12 @@ class ResourceDirectory:
             value = self.resources(replace(call, operation="READ_PREPARED_RESOURCE"))
             return {
                 **value,
-                "usage": self.usage(call),
+                **(
+                    {"usage": self.usage(call)}
+                    if ResourceDetailQuery.model_validate(call.query).projection
+                    == "detail"
+                    else {}
+                ),
                 "subject": call.context.principal_id,
                 "scope": {
                     "tenantId": call.context.scope.tenant_id,
@@ -394,7 +404,7 @@ def operations(services, cursors, workflows=None):
             "GET",
             PREFIX + "/resource-directory/{kind}/{identity}/{revision}",
             None,
-            None,
+            ResourceDetailQuery,
             lambda ctx, path, payload, query: (
                 target(path["kind"], path["identity"], path["revision"]),
             ),

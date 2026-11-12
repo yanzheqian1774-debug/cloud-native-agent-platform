@@ -7,9 +7,9 @@ async function read<T>(path:string,signal?:AbortSignal):Promise<T>{const respons
 export async function listReadableResources(kind:string,query:string,status:string,cursor:string|null,signal?:AbortSignal,projection:'summary'|'workflow-skill-operations'='summary'){const before=await readWorkbenchSession(signal);const value=await read<DirectoryPage>('?'+new URLSearchParams({kind,query,status,pageSize:'50',...(cursor?{cursor}:{}),...(projection==='summary'?{}:{projection})}),signal);const after=await readWorkbenchSession(signal);if(JSON.stringify(before.principal)!==JSON.stringify(after.principal)||value.subject!==after.principal.principalId||value.scope.tenantId!==after.principal.tenantId||value.scope.securityDomain!==after.principal.securityDomain)throw new Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');return value}
 export const readDirectoryResource=(item:DirectoryItem,signal?:AbortSignal)=>read<DirectoryDetail>('/'+[item.kind,item.identity,item.revisionId].map(encodeURIComponent).join('/'),signal);
 
-export async function readExactDirectoryResource(kind:DirectoryKind,identity:string,revision:string,digest:string,signal?:AbortSignal){
+export async function readExactDirectoryResource(kind:DirectoryKind,identity:string,revision:string,digest:string,signal?:AbortSignal,projection:'detail'|'content'='detail'){
  const before=await readWorkbenchSession(signal);
- const value=await read<DirectoryDetail>('/'+[kind,identity,revision].map(encodeURIComponent).join('/'),signal);
+ const value=await read<DirectoryDetail>('/'+[kind,identity,revision].map(encodeURIComponent).join('/')+(projection==='content'?'?projection=content':''),signal);
  const after=await readWorkbenchSession(signal);
  if(JSON.stringify(before.principal)!==JSON.stringify(after.principal)||value.subject!==after.principal.principalId||value.scope?.tenantId!==after.principal.tenantId||value.scope?.securityDomain!==after.principal.securityDomain)throw new Error('RESOURCE_DIRECTORY_IDENTITY_CHANGED');
  const canonical=(value:unknown)=>typeof value==='string'?/^(?:sha256:)?([a-f0-9]{64})$/.exec(value)?.[1]:undefined;

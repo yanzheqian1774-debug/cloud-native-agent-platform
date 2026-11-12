@@ -56,6 +56,8 @@ def test_selected_reference_uses_server_read_content_not_journal_claims(monkeypa
     assert result["originalContent"] == original
     assert result["name"] == "actual name"
     assert result["executionStatus"] == "NOT_EXECUTED"
+    assert result["readStatus"] == "EXACT_PUBLISHED_SNAPSHOT_READ"
+    assert result["externalLiveQuery"] is False
     assert calls == ["authorized"]
 
 

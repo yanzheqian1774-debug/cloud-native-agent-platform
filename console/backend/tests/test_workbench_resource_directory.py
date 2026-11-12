@@ -115,6 +115,7 @@ def test_directory_cursor_cannot_cross_filters_or_subject_and_get_has_no_new_wor
 
 def test_directory_real_bff_boundary_keeps_exact_reads_and_nonempty_command_contract(
     automation,
+    monkeypatch,
 ):
     from contextlib import nullcontext
     from types import SimpleNamespace
@@ -146,7 +147,31 @@ def test_directory_real_bff_boundary_keeps_exact_reads_and_nonempty_command_cont
         empty = client.get("/api/workbench/v1/resource-directory")
         assert empty.status_code == 200
         assert empty.json()["result"]["items"] == []
+        from urllib.parse import quote
+
+        ref = a.refs["knowledge"]
+        path = (
+            "/api/workbench/v1/resource-directory/knowledge/"
+            + quote(ref.resource_id, safe="")
+            + "/"
+            + quote(ref.revision_id, safe="")
+        )
+        denied = client.get(path + "?projection=content")
+        assert denied.status_code == 404
+        assert "revision" not in denied.json()
         a.run()
+        full = client.get(path)
+        assert full.status_code == 200 and "usage" in full.json()["result"]
+
+        def no_usage(*args):
+            raise AssertionError("Content reads must not scan unrelated usages")
+
+        monkeypatch.setattr(ResourceDirectory, "usage", no_usage)
+        content = client.get(path + "?projection=content")
+        assert content.status_code == 200
+        assert content.json()["result"]["revision"] == full.json()["result"]["revision"]
+        assert "usage" not in content.json()["result"]
+        assert client.get(path + "?projection=all").status_code == 422
         response = client.get("/api/workbench/v1/resource-directory")
         assert response.status_code == 200
         assert len(response.json()["result"]["items"]) == 4

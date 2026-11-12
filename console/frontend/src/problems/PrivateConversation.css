@@ -212,3 +212,8 @@
  .px-shell.journey-shell .f3-conversation .f3-progress-rail{overscroll-behavior:contain}
  .f3-progress-rail .f3-mobile-progress{position:sticky;top:0;z-index:1}
 }
+
+.px-shell.journey-shell .f3-conversation .private-receipt:has(.conversation-input-source[data-open=true]){width:100%;max-width:100%;align-self:stretch;box-sizing:border-box}
+.conversation-input-source{min-width:0}
+.conversation-source-reading{max-height:55vh;overflow:auto;overscroll-behavior:contain;padding:12px 16px;border:1px solid var(--px-line,#e0e6ef);border-radius:8px;background:#fff;margin-top:12px;font-size:14px}
+.f3-conversation .private-receipt .conversation-source-reading p{font-size:14px;line-height:1.75;margin:10px 0}
