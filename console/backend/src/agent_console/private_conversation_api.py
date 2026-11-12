@@ -8,7 +8,11 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from agent_console.private_conversation import ConversationError, PrivateConversations
+from agent_console.private_conversation import (
+    ConversationError,
+    PrivateConversations,
+    source_read_failure,
+)
 from agent_console.workbench_bff import PREFIX
 
 
@@ -218,7 +222,7 @@ def install_private_conversations(
         try:
             value = reader(ctx, source["invocationId"])
         except Exception as exc:
-            raise ConversationError("CONVERSATION_SOURCE_NOT_READABLE", 404) from exc
+            raise source_read_failure(exc) from exc
         if reference(kind, value) != source:
             raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
         if kind == "DRAFT":

@@ -20,6 +20,52 @@ class ConversationError(ValueError):
         super().__init__(reason)
 
 
+def source_read_failure(exc):
+    """Expose a bounded read failure without leaking owner exception details."""
+    reason = getattr(exc, "reason_code", getattr(exc, "reason", str(exc)))
+    if reason == "CONVERSATION_SOURCE_MISMATCH":
+        return ConversationError(reason, 409)
+    if getattr(exc, "status", None) in {401, 403, 404} or reason in {
+        "AUTHENTICATION_REQUIRED",
+        "AUTHORIZATION_NOT_FOUND",
+        "ACCESS_DENIED",
+        "FORBIDDEN",
+        "DRAFT_ASSISTANCE_NOT_FOUND",
+        "DRAFT_AUTHORIZATION_UNAVAILABLE",
+        "PLANNING_NOT_FOUND",
+        "PLANNING_INVOCATION_NOT_FOUND",
+        "CONVERSATION_SOURCE_NOT_READABLE",
+    }:
+        return ConversationError("CONVERSATION_SOURCE_NOT_READABLE", 404)
+    return ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+
+
+def unavailable_message(fact, exc):
+    failure = source_read_failure(exc)
+    state, content = {
+        404: ("ACCESS_RESTRICTED", "当前无法读取这条记录。请核对访问权限。"),
+        409: ("SOURCE_MISMATCH", "原记录与来源暂未核对一致。内容暂不展示。"),
+        503: (
+            "TEMPORARILY_UNAVAILABLE",
+            "这条记录暂时加载失败。可重新读取。原内容仍保留。",
+        ),
+    }[failure.status]
+    details = fact["facts"]
+    # Only owner-persisted response metadata identifies an assistant. A human
+    # request principal or a planned participant never establishes that role.
+    assistant = (
+        fact["kind"] == "SOURCE"
+        and details.get("assistantResponse") is True
+        and details.get("state") == "SUCCEEDED"
+        and (details.get("source") or {}).get("kind") == "DRAFT"
+    )
+    return content, {
+        "readable": False,
+        "readState": state,
+        **({"assistantResponse": True} if assistant else {}),
+    }
+
+
 def digest(value):
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, ensure_ascii=False).encode()
@@ -204,10 +250,9 @@ class PrivateConversations:
                         if intent["claimed_at"]
                         else "NOT_SUBMITTED",
                     }
-            except Exception:
-                message["content"] = "当前无权核验原办理记录"
+            except Exception as exc:
+                message["content"], message["facts"] = unavailable_message(fact, exc)
                 message["kind"] = fact["kind"]
-                message["facts"] = {"readable": False}
         visible = self.visible_links(ctx, links)
         return {
             "conversation": {

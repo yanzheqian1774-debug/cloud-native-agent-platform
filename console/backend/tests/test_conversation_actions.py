@@ -505,7 +505,7 @@ def test_source_mismatch_revocation_cross_account_and_csrf(journey):
     assert bad.status_code == 403
     j.draft.authorization.readable = False
     assert all(
-        m["facts"] == {"readable": False}
+        m["facts"] == {"readable": False, "readState": "ACCESS_RESTRICTED"}
         for m in read(j, c)["messages"]
         if m.get("kind") == "SOURCE"
     )
@@ -790,3 +790,25 @@ def test_capability_source_creates_problem_through_original_owner(journey):
     assert any(m.get("disposition") == "OWNER_RECEIPT" for m in after["messages"])
     post(j, "/problems", payload, headers, 409)
     assert j.provider.calls == 0
+
+
+def test_source_read_timeout_is_not_denial_and_retry_never_dispatches(journey):
+    j = journey
+    conversation = create(j)
+    draft_turn(j, conversation)
+    original = read(j, conversation)
+    calls = j.transport.dispatch_count
+    reader = j.app.state.conversation_draft_reader
+
+    def unavailable(*args):
+        raise TimeoutError("internal diagnostic must not be exposed")
+
+    j.app.state.conversation_draft_reader = unavailable
+    failed = read(j, conversation)
+    sources = [m for m in failed["messages"] if m.get("kind") == "SOURCE"]
+    assert sources
+    assert all(m["facts"]["readState"] == "TEMPORARILY_UNAVAILABLE" for m in sources)
+    assert "internal diagnostic" not in str(failed)
+    j.app.state.conversation_draft_reader = reader
+    assert read(j, conversation) == original
+    assert j.transport.dispatch_count == calls

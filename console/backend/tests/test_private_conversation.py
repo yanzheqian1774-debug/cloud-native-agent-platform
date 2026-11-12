@@ -476,8 +476,11 @@ def test_head_is_owned_metadata_only_and_does_not_replace_source_authorization(s
     assert "private-source" not in str(head)
     current = service.read(ctx(), identity)
     assert len(reads) == 1
-    assert current["messages"][0]["facts"] == {"readable": False}
-    assert current["messages"][0]["content"] == "当前无权核验原办理记录"
+    assert current["messages"][0]["facts"] == {
+        "readable": False,
+        "readState": "ACCESS_RESTRICTED",
+    }
+    assert current["messages"][0]["content"] == "当前无法读取这条记录。请核对访问权限。"
     body = {
         "idempotencyKey": "reply",
         "expectedVersion": head["conversation"]["version"],
@@ -489,3 +492,87 @@ def test_head_is_owned_metadata_only_and_does_not_replace_source_authorization(s
     )
     with pytest.raises(ConversationError, match="VERSION_CONFLICT"):
         service.mutate(ctx(), identity, {**body, "idempotencyKey": "stale"}, "message")
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (
+            ConversationError("CONVERSATION_SOURCE_NOT_READABLE", 404),
+            "ACCESS_RESTRICTED",
+        ),
+        (TimeoutError("internal address must not escape"), "TEMPORARILY_UNAVAILABLE"),
+        (ConversationError("CONVERSATION_SOURCE_MISMATCH"), "SOURCE_MISMATCH"),
+    ],
+)
+def test_unavailable_assistant_retains_role_not_content_and_recovers_read_only(
+    service, failure, expected
+):
+    from psycopg.types.json import Jsonb
+
+    identity = new(service)
+    service.mutate(
+        ctx(),
+        identity,
+        {"idempotencyKey": "answer", "expectedVersion": 0, "content": "saved answer"},
+        "message",
+    )
+    original = service.read(ctx(), identity)
+    message_id = original["messages"][0]["message_id"]
+    details = {
+        "assistantResponse": True,
+        "state": "SUCCEEDED",
+        "source": {"kind": "DRAFT", "invocationId": "private-call"},
+        "response": {"answer": "saved answer"},
+        "invokedBy": "human:a",
+    }
+    with service.connect() as c:
+        c.execute(
+            "INSERT INTO private_conversation.message_facts "
+            "(tenant_id,security_domain,conversation_id,message_id,kind,facts) "
+            "VALUES (%s,%s,%s,%s,%s,%s)",
+            (*service.scope(ctx()), identity, message_id, "SOURCE", Jsonb(details)),
+        )
+    mode = {"failure": failure}
+    reads = []
+
+    def source_read(context, source):
+        reads.append(source)
+        if mode["failure"]:
+            raise mode["failure"]
+
+    service.facts_reader = SimpleNamespace(source_read=source_read)
+    hidden = service.read(ctx(), identity)["messages"][0]
+    assert hidden["facts"] == {
+        "assistantResponse": True,
+        "readable": False,
+        "readState": expected,
+    }
+    assert "saved answer" not in str(hidden)
+    assert "private-call" not in str(hidden)
+    assert "internal address" not in str(hidden)
+    mode["failure"] = None
+    recovered = service.read(ctx(), identity)
+    assert recovered["messages"][0]["content"] == "saved answer"
+    assert recovered["messages"][0]["facts"] == details
+    assert recovered["conversation"] == original["conversation"]
+    assert len(reads) == 2
+    with service.connect() as c:
+        persisted = c.execute(
+            "SELECT content FROM private_conversation.messages WHERE message_id=%s",
+            (message_id,),
+        ).fetchone()
+    assert persisted["content"] == "saved answer"
+
+
+def test_unavailable_human_request_never_implies_assistant_identity():
+    from agent_console.private_conversation import unavailable_message
+
+    _, facts = unavailable_message(
+        {
+            "kind": "SOURCE",
+            "facts": {"invokedBy": "human:a", "source": {"kind": "DRAFT"}},
+        },
+        TimeoutError(),
+    )
+    assert facts == {"readable": False, "readState": "TEMPORARILY_UNAVAILABLE"}

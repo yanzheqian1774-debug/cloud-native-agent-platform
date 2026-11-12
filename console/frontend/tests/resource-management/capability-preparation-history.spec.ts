@@ -26,7 +26,7 @@ for(const mode of ['recorded','pending','other-source','unreadable','conflicting
  const region=page.getByRole('region',{name:'当前能力准备',exact:true});
  await expect(region).toContainText(mode==='recorded'?'目标已建立':mode==='other-source'?'未启动':'待核验');
  await expect(region).not.toContainText('任务已完成');
- await page.getByText('查看办理记录与回执',{exact:true}).first().click();
+ await page.getByText('查看处理详情',{exact:true}).first().click();
  await expect(page.getByRole('button',{name:'只读核查原动作',exact:true}).first()).toBeVisible();
  await page.reload();
  await expect(region).toContainText(mode==='recorded'?'目标已建立':mode==='other-source'?'未启动':'待核验');

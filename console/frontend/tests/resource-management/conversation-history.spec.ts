@@ -130,3 +130,18 @@ for(const width of [1440,1920,980,390])test(`fixed heading and independent view 
  expect(state.writes).toEqual([]);
  await page.screenshot({path:test.info().outputPath(`heading-${width}.png`),fullPage:true});
 });
+
+for(const stateName of ['ACCESS_RESTRICTED','TEMPORARILY_UNAVAILABLE'] as const)test('unavailable assistant identity and read-only recovery '+stateName,async({page})=>{
+ const state=await fixture(page);let restored=false;const content=stateName==='ACCESS_RESTRICTED'?'当前无法读取这条记录。请核对访问权限。':'这条记录暂时加载失败。可重新读取。原内容仍保留。';
+ await page.route('**/api/workbench/v1/conversations/historical',route=>route.fulfill({json:{result:{conversation:{conversation_id:'historical',title:'已保存助手回复',version:2},messages:[{message_id:'answer',kind:'SOURCE',author_id:'human:ordinary',content:restored?'原答复完整保留':content,facts:restored?{assistantResponse:true,state:'SUCCEEDED',source:{kind:'DRAFT',invocationId:'original-call'}}:{assistantResponse:true,readable:false,readState:stateName}}],links:[]}}}));
+ await page.goto('/work?conversation=historical');const message=page.locator('#conversation-message-answer');
+ await expect(message.locator('.conversation-message-author')).toHaveText('工作助手');
+ await expect(message.locator('.private-user')).toHaveText(content);await expect(message.getByText('原答复完整保留')).toHaveCount(0);
+ await page.locator('#private-input').fill('保留未发送内容');const top=await page.locator('.px-message-stream').evaluate(n=>n.scrollTop);
+ await message.getByText('查看来源与记录',{exact:true}).click();restored=true;
+ await message.getByRole('button',{name:'重新读取记录',exact:true}).click();
+ await expect(message.locator('.private-user')).toHaveText('原答复完整保留');
+ await expect(page.locator('#private-input')).toHaveValue('保留未发送内容');
+ await expect.poll(()=>page.locator('.px-message-stream').evaluate(n=>n.scrollTop)).toBe(top);
+ expect(state.writes).toEqual([]);
+});

@@ -116,7 +116,7 @@ test('own successful send follows latest and remains at latest after refresh',as
  await page.reload();await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'回到最新消息'})).toBeHidden();expect(state.calls).toHaveLength(2);
  await expect(page.getByLabel('继续提问',{exact:true})).toHaveAttribute('placeholder','继续提问，或补充你的要求');
- await expect(page.locator('#conversation-message-a2 .private-receipt summary')).toHaveText('查看来源与记录');
+ await expect(page.locator('#conversation-message-a2 .private-receipt > details > summary')).toHaveText('查看来源与记录');
  expect(await page.locator('#conversation-message-a2 .knowledge-document-reading').evaluate(node=>getComputedStyle(node).whiteSpace)).toBe('normal');
 });
 

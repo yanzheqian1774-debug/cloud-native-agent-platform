@@ -5,25 +5,25 @@ type Anchor={node:Element;offset:number};
 export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId}:{newMessageKey:string;startAtTop:boolean;viewScope?:string;viewId?:string}){
  const stream=useRef<HTMLDivElement>(null),following=useRef(!startAtTop),restoring=useRef(false),anchor=useRef<Anchor|null>(null);
  const [away,setAway]=useState(false),[unread,setUnread]=useState(false);
- const previousKey=useRef(newMessageKey),first=useRef(true),programmatic=useRef(false),interaction=useRef(0);
+ const previousKey=useRef(newMessageKey),first=useRef(true),programmatic=useRef(false),expectedScroll=useRef<number|null>(null),interaction=useRef(0);
  function capture(){const n=stream.current;if(!n)return;const top=n.getBoundingClientRect().top;const candidates=n.querySelectorAll('.private-message p,.private-message tr,.private-message h1,.private-message h2,.private-message h3,.private-message header,.private-message summary,.px-message p,.journey-progress p');const item=Array.from(candidates).find(e=>e.getBoundingClientRect().bottom>top+2);anchor.current=item?{node:item,offset:item.getBoundingClientRect().top-top}:null}
  function save(){const n=stream.current;if(n&&viewScope&&viewId&&!restoring.current)writeConversationView(viewScope,viewId,{scrollTop:n.scrollTop})}
- function position(){const n=stream.current;if(!n)return;programmatic.current=true;if(following.current&&!restoring.current)n.scrollTop=n.scrollHeight;else if(!restoring.current&&anchor.current?.node.isConnected)n.scrollTop+=anchor.current.node.getBoundingClientRect().top-n.getBoundingClientRect().top-anchor.current.offset;programmatic.current=false;const off=n.scrollHeight-n.clientHeight-n.scrollTop>72;setAway(off);if(!off)setUnread(false);save()}
+ function position(){const n=stream.current;if(!n)return;programmatic.current=true;if(following.current&&!restoring.current)n.scrollTop=n.scrollHeight;else if(!restoring.current&&anchor.current?.node.isConnected)n.scrollTop+=anchor.current.node.getBoundingClientRect().top-n.getBoundingClientRect().top-anchor.current.offset;expectedScroll.current=n.scrollTop;programmatic.current=false;const off=n.scrollHeight-n.clientHeight-n.scrollTop>72;setAway(off);if(!off)setUnread(false);save()}
  function latest(){following.current=true;restoring.current=false;anchor.current=null;setUnread(false);setAway(false);const token=++interaction.current;position();requestAnimationFrame(()=>{if(token===interaction.current)position()})}
- function onScroll(event:UIEvent<HTMLDivElement>){const n=event.currentTarget;const off=n.scrollHeight-n.scrollTop-n.clientHeight>72;setAway(off);if(!programmatic.current&&!restoring.current){following.current=!off;if(off)capture();save()}if(!off)setUnread(false)}
+ function onScroll(event:UIEvent<HTMLDivElement>){const n=event.currentTarget;const off=n.scrollHeight-n.scrollTop-n.clientHeight>72;setAway(off);if(!programmatic.current&&!restoring.current){if(expectedScroll.current===null||Math.abs(expectedScroll.current-n.scrollTop)>1)following.current=!off;if(off)capture();save()}if(!off)setUnread(false)}
  useLayoutEffect(()=>{
   const n=stream.current;if(!n)return;
   const saved=viewScope&&viewId?readConversationView(viewScope,viewId).scrollTop:undefined;
   restoring.current=saved!==undefined;following.current=saved===undefined&&!startAtTop;
   let frame:number|undefined;
   let preview=Array.from(n.querySelectorAll('.journey-progress,.native-live-progress')).map(e=>e.textContent).join('\n');
-  const restoreOrPosition=()=>{if(restoring.current&&saved!==undefined){programmatic.current=true;n.scrollTop=saved;programmatic.current=false;setAway(n.scrollHeight-n.scrollTop-n.clientHeight>72);capture()}else position()};
+  const restoreOrPosition=()=>{if(restoring.current&&saved!==undefined){programmatic.current=true;n.scrollTop=saved;expectedScroll.current=n.scrollTop;programmatic.current=false;setAway(n.scrollHeight-n.scrollTop-n.clientHeight>72);capture()}else position()};
   const schedule=()=>{if(frame===undefined)frame=requestAnimationFrame(()=>{frame=undefined;restoreOrPosition()})};
   const resize=new ResizeObserver(schedule);resize.observe(n);const observeChildren=()=>{for(const child of n.children)resize.observe(child)};observeChildren();
   const changes=new MutationObserver(()=>{observeChildren();const next=Array.from(n.querySelectorAll('.journey-progress,.native-live-progress')).map(e=>e.textContent).join('\n');if(next&&next!==preview&&!following.current&&!restoring.current)setUnread(true);preview=next;schedule()});
   changes.observe(n,{subtree:true,childList:true,characterData:true});
-  const stopRestore=()=>{restoring.current=false;interaction.current++;capture()};
-  const wheel=(event:WheelEvent)=>{stopRestore();if(event.deltaY<0)following.current=false};
+  const stopRestore=()=>{expectedScroll.current=null;restoring.current=false;interaction.current++;capture()};
+  const wheel=()=>{stopRestore();following.current=false};
   const touch=()=>{stopRestore();following.current=false};
   const key=(event:KeyboardEvent)=>{if(['ArrowUp','PageUp','Home','PageDown','ArrowDown','End'].includes(event.key)){stopRestore();following.current=false}};
   const pointer=(event:PointerEvent)=>{stopRestore();if(event.clientX>=n.getBoundingClientRect().left+n.clientWidth)following.current=false};
