@@ -1,3 +1,4 @@
+import {remarkCjkStrong} from './remarkCjkStrong';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './KnowledgeDocumentContent.css';
@@ -16,7 +17,7 @@ function documents(raw:string):Document[]|null{
  }catch{return null}
 }
 export function MarkdownReading({text}:{text:string}){
- return <div className="knowledge-document-reading"><Markdown remarkPlugins={[remarkGfm]} urlTransform={url=>/^(https?:\/\/|mailto:)/i.test(url)?url:''} components={{a:({href,children})=>href?<a href={href} target="_blank" rel="noopener noreferrer">{children}</a>:<span>{children}</span>,img:({alt})=><span>图片引用：{alt||'未提供说明'}</span>,table:({children})=><div className="knowledge-document-table"><table>{children}</table></div>}}>{text}</Markdown></div>;
+ return <div className="knowledge-document-reading"><Markdown remarkPlugins={[remarkGfm,remarkCjkStrong]} urlTransform={url=>/^(https?:\/\/|mailto:)/i.test(url)?url:''} components={{a:({href,children})=>href?<a href={href} target="_blank" rel="noopener noreferrer">{children}</a>:<span>{children}</span>,img:({alt})=><span>图片引用：{alt||'未提供说明'}</span>,table:({children})=><div className="knowledge-document-table"><table>{children}</table></div>}}>{text}</Markdown></div>;
 }
 export function KnowledgeDocumentContent({text,showOriginal=true,metadataTitles=false}:{text:string;showOriginal?:boolean;metadataTitles?:boolean}){
  const rows=documents(text);let structured:unknown;try{structured=JSON.parse(text)}catch{structured=null}

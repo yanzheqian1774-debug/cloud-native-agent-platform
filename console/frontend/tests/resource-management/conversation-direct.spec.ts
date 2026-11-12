@@ -277,3 +277,20 @@ for(const failure of ['denied','identity'])test(`saved answer download rejects $
  else await page.route('**/session',route=>route.fulfill({json:{principal:{principalId:'human:other',tenantId:'tenant',securityDomain:'domain'},csrfToken:'other',session:{}}}));
  await message.getByRole('button',{name:'下载答复与来源（Markdown）'}).click();await expect(message.getByRole('alert')).toBeVisible();expect(downloads).toBe(0);expect(state.calls.length).toBe(1);
 });
+
+test('Chinese punctuation bold renders without altering code escaped text or the downloaded answer',async({page})=>{
+ const state=await directFixture(page);
+ const markdown='**结论：**两份规范不同。\n\n**适用限制：**仅用于测试。\n\n`**代码：**保持原样`\n\n```text\n**代码块：**保持原样\n```\n\n\\*\\*字面：\\*\\*保持原样\n\n**English:**literal';
+ state.journal.state={...state.journal.state,phase:'DIRECT_DONE'};
+ state.messages.push({message_id:'cjk-answer',kind:'SOURCE',content:markdown,facts:{assistantResponse:true,state:'SUCCEEDED',response:{resultKind:'DIRECT_ANSWER'},source:{kind:'DRAFT',invocationId:'saved-invocation',contextId:'saved-context',turnId:'saved-turn',turnVersion:1}}});
+ await page.goto('/work?conversation=direct');
+ const message=page.locator('#conversation-message-cjk-answer'),reading=message.locator('.knowledge-document-reading');
+ await expect(reading.locator('strong')).toHaveText(['结论：','适用限制：']);
+ await expect(reading.locator('code')).toHaveText(['**代码：**保持原样','**代码块：**保持原样\n']);
+ await expect(reading).toContainText('**字面：**保持原样');await expect(reading).toContainText('**English:**literal');
+ const event=page.waitForEvent('download');await message.getByRole('button',{name:'下载答复与来源（Markdown）'}).click();const download=await event;
+ const {readFile}=await import('node:fs/promises');expect((await readFile((await download.path())!,'utf8')).startsWith(markdown+'\n\n---')).toBe(true);
+ expect(state.calls).toHaveLength(0);expect(state.writes).toHaveLength(0);
+ await page.reload();await expect(page.locator('#conversation-message-cjk-answer strong')).toContainText(['结论：','适用限制：']);
+ expect(state.messages.at(-1)?.content).toBe(markdown);expect(state.calls).toHaveLength(0);expect(state.writes).toHaveLength(0);
+});

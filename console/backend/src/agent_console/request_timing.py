@@ -76,8 +76,14 @@ def observe_request(function):
     @wraps(function)
     async def wrapped(request, call_next):
         path = request.scope.get("path", "") if request is not None else ""
-        selected = path == "/api/workbench/v1/session" or path.startswith(
-            "/api/workbench/v1/resource-directory"
+        selected = (
+            path == "/api/workbench/v1/session"
+            or path.startswith("/api/workbench/v1/resource-directory")
+            or (
+                request is not None
+                and request.scope.get("method") == "GET"
+                and path.startswith("/api/workbench/v1/conversations")
+            )
         )
         if os.environ.get("WORKBENCH_REQUEST_TIMING") != "1" or not selected:
             return await function(request, call_next)

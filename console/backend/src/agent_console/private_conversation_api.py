@@ -192,6 +192,9 @@ def install_private_conversations(
             "ownerVersion": problem.get("problem", {}).get("aggregate_version", 0),
         }
 
+    from .request_timing import measured, span
+
+    @measured("conversation.source_read")
     def source_read(ctx, source):
         from .conversation_actions import reference
 
@@ -343,7 +346,8 @@ def install_private_conversations(
         service.facts_reader = actions
 
     def invoke(request, action, write=False):
-        session, ctx = authenticate(request)
+        with span("conversation.authentication"):
+            session, ctx = authenticate(request)
         if write:
             require_csrf(request, session)
         if not service:

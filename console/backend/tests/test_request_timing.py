@@ -118,3 +118,33 @@ def test_real_bff_request_records_identity_without_credentials(monkeypatch, capl
     assert "opaque-session-secret" not in records[0]
     assert "human:alice" not in records[0]
     assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_conversation_read_only_timing_redacts_identity(monkeypatch, caplog, method):
+    monkeypatch.setenv("WORKBENCH_REQUEST_TIMING", "1")
+    caplog.set_level("INFO", logger="uvicorn.error")
+    request = SimpleNamespace(
+        state=SimpleNamespace(diagnostic_id="request-one"),
+        scope={
+            "path": "/api/workbench/v1/conversations/private-identity",
+            "method": method,
+            "route": SimpleNamespace(path="/api/workbench/v1/conversations/{identity}"),
+        },
+    )
+
+    @observe_request
+    async def endpoint(request, next_call):
+        with span("conversation.source_read"):
+            assert (_current.get() is not None) == (method == "GET")
+        return SimpleNamespace(status_code=200)
+
+    assert asyncio.run(endpoint(request, None)).status_code == 200
+    assert _current.get() is None
+    if method == "POST":
+        assert not caplog.records
+    else:
+        assert len(caplog.records) == 1
+        record = json.loads(caplog.records[0].message.split(" ", 1)[1])
+        assert record["spans"]["conversation.source_read"]["count"] == 1
+        assert "private-identity" not in json.dumps(record)

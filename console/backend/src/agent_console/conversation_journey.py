@@ -6,6 +6,7 @@ import json
 from psycopg.types.json import Jsonb
 
 from .private_conversation import ConversationError
+from .request_timing import measured
 
 
 def install(app, service, safe):
@@ -24,6 +25,7 @@ def install(app, service, safe):
             state jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(),
             PRIMARY KEY(tenant_id,security_domain,conversation_id))""")
 
+    @measured("conversation.journal_read")
     def read(ctx, identity):
         with service.connect() as c:
             service.owned(c, ctx, identity)

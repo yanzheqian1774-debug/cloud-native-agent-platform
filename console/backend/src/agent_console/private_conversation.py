@@ -11,6 +11,8 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from .request_timing import measured
+
 
 class ConversationError(ValueError):
     def __init__(self, reason, status=409):
@@ -41,6 +43,7 @@ class PrivateConversations:
         self.database_url, self.resolve_link = database_url, resolve_link
         self.administrator_access = administrator_access or (lambda c, ctx: False)
 
+    @measured("conversation.connection")
     def connect(self):
         return psycopg.connect(
             self.database_url, row_factory=dict_row, connect_timeout=5
@@ -50,6 +53,7 @@ class PrivateConversations:
     def scope(ctx):
         return (ctx.scope.tenant_id, ctx.scope.security_domain)
 
+    @measured("conversation.ownership")
     def owned(self, c, ctx, identity, lock=False):
         row = c.execute(
             "SELECT * FROM private_conversation.conversations WHERE tenant_id=%s "
@@ -118,6 +122,7 @@ class PrivateConversations:
             )
         return {"conversation_id": identity}
 
+    @measured("conversation.read")
     def read(self, ctx, identity):
         with self.connect() as c:
             row = self.owned(c, ctx, identity)
@@ -201,6 +206,7 @@ class PrivateConversations:
             "links": visible,
         }
 
+    @measured("conversation.links")
     def visible_links(self, ctx, links):
         visible = []
         for link in links:
