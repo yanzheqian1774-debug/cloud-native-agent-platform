@@ -217,3 +217,10 @@
 .conversation-input-source{min-width:0}
 .conversation-source-reading{max-height:55vh;overflow:auto;overscroll-behavior:contain;padding:12px 16px;border:1px solid var(--px-line,#e0e6ef);border-radius:8px;background:#fff;margin-top:12px;font-size:14px}
 .f3-conversation .private-receipt .conversation-source-reading p{font-size:14px;line-height:1.75;margin:10px 0}
+
+.conversation-source-header{position:sticky;top:0;z-index:2;background:#fff;padding:8px 0}
+.px-shell.journey-shell .f3-conversation .private-receipt:has(.conversation-input-source[data-open=true])>.private-action-record{padding:0}
+@media(max-width:700px){
+ .f3-conversation .private-receipt:has(.conversation-input-source[data-open=true])>details[open]{padding:8px 4px}
+ .conversation-source-reading{padding:10px 12px}
+}
