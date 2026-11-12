@@ -231,11 +231,16 @@ for(const outcome of ['readable','denied','wrong-version'])test('answer source s
 for(const code of ['CONTEXT_ADMISSION_SOURCE_MISMATCH','PLANNING_OUTPUT_SOURCE_MISMATCH'])test(`source mismatch ${code} preserves conversation and never redispatches`,async({page},testInfo)=>{
  await page.setViewportSize({width:1440,height:1000});
  const state=await directFixture(page);
+ // Fault-injected saved planning state; this does not verify real intent routing.
  state.journal.state={...state.journal.state,phase:'PLAN',pending:'planning',error:'Error: '+code};
  await page.goto('/work?conversation=direct');
  const alert=page.getByRole('alert').filter({hasText:'方案使用的资料与本次已确认的资料不一致'});
  await expect(alert).toBeVisible();
  await expect(alert).toContainText('无需重新描述问题');
+ await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('已暂停：资料不一致');
+ await expect(page.getByRole('region',{name:'全流程进展'})).not.toContainText('最新进展暂无法确认');
+ await page.locator('#source-mismatch-reply').fill('补充先暂存，不发送');
+ await expect(page.getByRole('button',{name:'暂不能发送'})).toBeDisabled();
  await expect(alert.locator('details p')).toBeHidden();
  await alert.scrollIntoViewIfNeeded();
  await page.screenshot({path:testInfo.outputPath('source-mismatch.png'),fullPage:true});
@@ -247,4 +252,5 @@ for(const code of ['CONTEXT_ADMISSION_SOURCE_MISMATCH','PLANNING_OUTPUT_SOURCE_M
  expect(state.calls).toHaveLength(0);
  expect(state.writes).toEqual([]);
  expect(state.journal.state.error).toBe('Error: '+code);
+ await expect(page.locator('#source-mismatch-reply')).toHaveValue('补充先暂存，不发送');
 });

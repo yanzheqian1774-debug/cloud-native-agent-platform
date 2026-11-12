@@ -102,7 +102,11 @@ class ConversationPlanningAdmission:
             row = request_row(c, previous["context_id"])
             self.require(service, c, context, row)
             return service._projection(c, row, previous["record"])
-        identity = record["target"]["suggestion_context_id"]
+        from .conversation_planning_successor import successor
+
+        identity, expires = successor(
+            self, service, c, context, source, saved_request, record["target"], expires
+        )
         payload = dict(
             task_id="F3-CONVERSATION-EXPERIENCE",
             phase="planning",
@@ -208,6 +212,10 @@ class ConversationPlanningAdmission:
         ):
             raise AuthorityError("CONTEXT_ADMISSION_SOURCE_MISMATCH")
         active(c, row, self.configuration)
+        from .conversation_planning_successor import validated_predecessor
+
+        target = row["record"]["target"]
+        validated_predecessor(self, service, c, context, source, target, target)
 
 
 def require_resolved_source(c, source):

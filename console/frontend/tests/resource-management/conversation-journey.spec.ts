@@ -288,9 +288,9 @@ for(const width of [1440,390])test(`message groups show recorded authors and hon
  {message_id:'action',author_id:'human:requester',created_at:'2026-11-09T08:04:00Z',content:texts[3],kind:'ACTION_INTENT',disposition:'ACTION_INTENT',facts:{state:'NOT_SUBMITTED'}}];
  await page.goto('/work?conversation=new');const short=page.locator('[data-message-id="short"]'),long=page.locator('[data-message-id="long"]'),missing=page.locator('[data-message-id="missing"]'),action=page.locator('[data-message-id="action"]');
  await expect(short.locator('.conversation-message-author summary')).toHaveText('用户');await short.locator('.conversation-message-author summary').click();await expect(short.getByText('记录账号：human:original-author',{exact:true})).toBeVisible();await short.locator('.conversation-message-author summary').click();await expect(short.locator('time')).toHaveAttribute('datetime','2026-11-09T08:03:00Z');await expect(short.locator('time')).toContainText('16:03');
- await expect(long.locator('.conversation-message-time')).toHaveText('时间待核实');await expect(missing.locator('.conversation-message-author')).toHaveText('用户');await expect(missing.locator('.conversation-message-time')).toHaveText('时间未记录');
+ await expect(long.locator('.conversation-message-time')).toHaveText('时间待核实');await expect(missing.locator('.conversation-message-author')).toHaveText('操作人未记录');await expect(missing.locator('.conversation-message-time')).toHaveText('时间未记录');
  expect(await page.locator('.private-user>p').allTextContents()).toEqual(texts);await expect(page.locator('.private-message .conversation-message-author').filter({hasText:'human:development-admin'})).toHaveCount(0);
- await expect(action.locator('.conversation-message-author summary')).toHaveText('用户');await action.locator('.conversation-message-author summary').click();await expect(action.getByText('记录账号：human:requester',{exact:true})).toBeVisible();await action.locator('.conversation-message-author summary').click();await action.getByText('查看办理记录与回执',{exact:true}).click();await expect(action.getByText('已确认的办理意图',{exact:true})).toBeVisible();
+ await expect(action.locator('.conversation-message-author summary')).toHaveText('操作人：用户');await action.locator('.conversation-message-author summary').click();await expect(action.getByText('记录账号：human:requester',{exact:true})).toBeVisible();await action.locator('.conversation-message-author summary').click();await action.getByText('查看办理记录与回执',{exact:true}).click();await expect(action.getByText('已确认的办理意图',{exact:true})).toBeVisible();
  await short.scrollIntoViewIfNeeded();const geometry=await short.evaluate(node=>{const bubble=node.querySelector('.private-user')!.getBoundingClientRect(),group=node.getBoundingClientRect();return {bubbleWidth:bubble.width,groupWidth:group.width,rightGap:group.right-bubble.right,textAlign:getComputedStyle(node.querySelector('.private-user p')!).textAlign,receiptHeight:node.querySelector('.private-receipt')!.getBoundingClientRect().height}});
  expect(geometry.bubbleWidth).toBeLessThan(geometry.groupWidth/2);expect(geometry.rightGap).toBeLessThan(3);expect(geometry.textAlign).toBe('left');await expect(short.locator('.private-user')).toHaveCSS('border-top-width','1px');await expect(short.locator('.conversation-message-author')).toHaveCSS('order','1');await expect(short.locator('time')).toHaveCSS('order','0');expect(geometry.receiptHeight).toBeLessThan(40);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -311,4 +311,27 @@ for(const reason of ['MODEL_AUTHORIZATION_INVALID','NETWORK_UNKNOWN'])test('unde
  page.on('request',r=>{if(r.method()!=='GET'&&r.url().includes('/api/'))writes++});
  await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'理解进展待核实',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'正在办理你的问题',exact:true})).toHaveCount(0);await expect(page.locator('#journey-reply')).toHaveCount(0);await expect(page.getByRole('button',{name:'沿用原问题重新理解',exact:true})).toHaveCount(0);await expect(page.getByLabel('全流程进展')).toContainText('需要核查');
  await page.reload();await expect(page.getByRole('heading',{name:'理解进展待核实',exact:true})).toBeVisible();expect(writes).toBe(0);expect(s.modelCalls).toBe(0);expect(s.journal.version).toBe(2);
+});
+
+test('planning clarification resumes the same problem in the fixed composer without restarting understanding',async({page},testInfo)=>{
+ await page.setViewportSize({width:1440,height:1000});
+ const s=await fixture(page),question='检查交接说明还缺什么',source={source:{resource_id:'source',revision_id:'1',digest:'a'.repeat(64)},name:'交接说明',periods:[],sourceSchema:'document-review-source.v1',synthetic:true};
+ s.messages=[{message_id:'q1',content:question,disposition:'GOAL_RECORDED'}];
+ s.journal={version:1,state:{key:'document',question,phase:'PLAN',messages:[{id:'user:q1',text:question}],log:[],problem:{business_problem_id:'p'},criterion:'criterion-one',source}};
+ let calls=0,created=0,confirmations=0;
+ await page.route('**/conversation-sources',route=>route.fulfill({json:{result:{items:[source]}}}));
+ await page.route('**/question-activity-input',route=>{expect(route.request().postDataJSON().problemId).toBe('p');return route.fulfill({json:{result:{state:'READY',planningRequest:{target:{problem:{resource_id:'p'}},answers:[question],idempotency_key:route.request().postDataJSON().idempotencyKey,policy:{},output_language:'zh-CN'}}}})});
+ await page.route('**/problems',route=>{if(route.request().method()==='POST')created++;return route.fulfill({json:{result:{problems:[]}}})});
+ await page.route('**/planning-v2/invocations',route=>{calls++;const body=route.request().postDataJSON();if(calls===2){expect(body.predecessor_invocation_id).toBe('plan-first');expect(body.answers.at(-1)).toContain('按测试环境检查');expect(body.idempotency_key).toBe('document:planning:clarification:1');expect(body.target.problem.resource_id).toBe('p')}return route.fulfill({json:{result:{invocation:{target:{invocation_id:calls===1?'plan-first':'plan-second'},request:body},result:calls===1?{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['按测试环境还是生产环境检查？']}:{technical_status:'SUCCEEDED',kind:'VALID_SUGGESTION',proposal:{proposal_id:'proposal',revision:1,semantics:{target:{problem:{resource_id:'p',revision_id:'p:1',digest:'c'.repeat(64)}}}},proposal_digest:'b'.repeat(64)}}}})});
+ await page.route('**/planning-v2/proposal/**',route=>{confirmations++;return route.fulfill({status:503,json:{reasonCode:'CONFIRMATION_TEST_BOUNDARY'}})});
+ await page.goto('/work?conversation=new');
+ await expect(page.getByRole('region',{name:'方案补充确认'})).toContainText('按测试环境还是生产环境检查？');
+ await expect(page.locator('#planning-reply')).toBeVisible();expect(calls).toBe(1);
+ await page.reload();await expect(page.locator('#planning-reply')).toBeVisible();expect(calls).toBe(1);
+ await page.screenshot({path:testInfo.outputPath('planning-clarification.png'),fullPage:true});
+ await page.locator('#planning-reply').fill('按测试环境检查');await page.getByRole('button',{name:'发送补充',exact:true}).click();
+ await expect.poll(()=>calls).toBe(2);await expect.poll(()=>confirmations).toBe(1);
+ expect(s.journal.state?.problem).toEqual({business_problem_id:'p'});expect(s.journal.state?.criterion).toBe('criterion-one');expect(s.journal.state?.planningPredecessor).toBeUndefined();expect(s.journal.state?.planningAnswers).toEqual(['按测试环境检查']);expect(s.journal.state?.source).toMatchObject(source);
+ expect(s.modelCalls).toBe(0);expect(created).toBe(0);
+ await page.reload();await expect(page.getByRole('alert')).toBeVisible();expect(calls).toBe(2);
 });

@@ -1,5 +1,6 @@
 """Isolated owner integration: ordinary planning does not borrow admin authority."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -58,22 +59,121 @@ def ordinary(env, tmp_path):  # noqa: F811
 
 
 def planned(
-    e, key="new-plan", problem="ordinary-new-problem", commitment=None, answers=()
+    e,
+    key="new-plan",
+    problem="ordinary-new-problem",
+    commitment=None,
+    answers=(),
+    predecessor=None,
+    planning_context=None,
+    revision=1,
 ):
     request = SimpleNamespace(
         idempotency_key=key,
         target=SimpleNamespace(problem=SimpleNamespace(resource_id=problem)),
     )
     record = {
-        "request": {"idempotency_key": key, "answers": list(answers)},
+        "request": {
+            "idempotency_key": key,
+            "answers": list(answers),
+            "predecessor_invocation_id": predecessor,
+        },
         "target": {
             "invocation_id": "planning-invocation:" + key,
-            "suggestion_context_id": "planning-context:" + key,
+            "suggestion_context_id": planning_context or "planning-context:" + key,
+            "predecessor_invocation_id": predecessor,
+            "request_revision": revision,
             "input_commitment": commitment or key,
             "problem": {"problem": {"resource_id": problem}},
         },
     }
     return e.planning.prepare_record(e.reviewer, request, record)
+
+
+def clarification(e, kind="NEEDS_CLARIFICATION"):
+    first = planned(e)
+    with e.repo.connection_scope() as c:
+        migrations = Path(__file__).parents[1] / "migrations"
+        for name in ("0025_plan_suggestion.sql", "0026_plan_suggestion_invocation.sql"):
+            c.execute((migrations / name).read_text())
+        c.execute(
+            "INSERT INTO workflow_planning.invocations VALUES "
+            "('s5-323-demo','isolated-real-demo','planning-invocation:new-plan',"
+            "%s,'new-plan','fixture-digest',%s)",
+            (e.reviewer.principal_id, Jsonb(first["invocation"])),
+        )
+        c.execute(
+            "INSERT INTO workflow_planning.invocation_results VALUES "
+            "('s5-323-demo','isolated-real-demo','planning-invocation:new-plan',%s)",
+            (Jsonb({"technical_status": "SUCCEEDED", "kind": kind}),),
+        )
+    return first
+
+
+def continued(e, key="clarification", **changes):
+    return planned(
+        e,
+        key=key,
+        **{
+            "predecessor": "planning-invocation:new-plan",
+            "planning_context": "planning-context:new-plan",
+            "revision": 2,
+            **changes,
+        },
+    )
+
+
+def test_clarification_has_separate_admission_same_context_and_no_duplicate(ordinary):
+    e = ordinary
+    first = clarification(e)
+    result = continued(e)
+    assert result["admission"]["context_id"] != first["admission"]["context_id"]
+    assert (
+        result["invocation"]["target"]["suggestion_context_id"]
+        == "planning-context:new-plan"
+    )
+    assert result["admission"]["cumulative_call_cap"] == 20
+    assert result["admission"]["total_cost_cap_microusd"] == 1_000_000
+    assert continued(e) == result
+    with pytest.raises(AuthorityError, match="SUCCESSOR_ALREADY_PREPARED"):
+        continued(e, key="different-key-same-answer")
+    with e.repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO authorization_admin.context_call_revocations "
+            "(admission_id,actor_id) SELECT admission_id,'operator:test' "
+            "FROM authorization_admin.context_call_decisions WHERE context_id=%s",
+            (first["admission"]["context_id"],),
+        )
+    with pytest.raises(AuthorityError, match="ADMISSION_REQUIRED"):
+        continued(e)
+
+
+@pytest.mark.parametrize("kind", ["INVALID", "VALID_SUGGESTION"])
+def test_only_clarification_result_can_continue_without_proposal(ordinary, kind):
+    clarification(ordinary, kind)
+    with pytest.raises(AuthorityError, match="CLARIFICATION_REQUIRED"):
+        continued(ordinary)
+
+
+def test_clarification_cannot_change_context_or_skip_revision(ordinary):
+    clarification(ordinary)
+    for changes in ({"planning_context": "another-context"}, {"revision": 3}):
+        with pytest.raises(AuthorityError, match="CLARIFICATION_REQUIRED"):
+            continued(ordinary, **changes)
+
+
+def test_unsettled_planning_predecessor_cannot_continue(ordinary):
+    e = ordinary
+    clarification(e)
+    with e.repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO draft_provider_budget.reservations VALUES "
+            "('s5-323-demo','isolated-real-demo',%s,'pending','pending-op',"
+            "'planning-invocation:new-plan',100,500,1000,%s,now())",
+            (e.planning.configuration["ledger_id"], "f" * 64),
+        )
+    with pytest.raises(AuthorityError, match="OUTCOME_UNKNOWN"):
+        continued(e)
 
 
 def retain_source(e, source):
