@@ -16,8 +16,13 @@ export function ConversationFrame({children,composer,newMessageKey,startAtTop=fa
     const restore=()=>{if(saved!==undefined)node.scrollTop=saved};restore();
     const observer=new ResizeObserver(restore);observer.observe(node);for(const child of node.children)observer.observe(child);
     const changes=new MutationObserver(restore);changes.observe(node,{subtree:true,childList:true});
-    const timer=window.setTimeout(()=>{observer.disconnect();changes.disconnect();restoring.current=false},1200);
-    return()=>{window.clearTimeout(timer);observer.disconnect();changes.disconnect()};
+    // Late readbacks can arrive after a fixed timeout. Keep restoring until the
+    // reader interacts; never fight deliberate scrolling or composing.
+    const frame=node.closest('.px-conversation')??node;
+    const stop=()=>{observer.disconnect();changes.disconnect();restoring.current=false};
+    const events=['wheel','touchstart','pointerdown','keydown'];
+    for(const event of events)frame.addEventListener(event,stop,{passive:true});
+    return()=>{stop();for(const event of events)frame.removeEventListener(event,stop)};
   },[viewScope,viewId]);
   function latestTop(node:HTMLDivElement){
     const latest=node.querySelector<HTMLElement>(".px-message:last-child");

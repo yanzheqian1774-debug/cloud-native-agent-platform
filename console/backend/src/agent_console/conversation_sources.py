@@ -1,19 +1,24 @@
 """Readable published analysis sources, independent of historical business plans."""
 
 import json
+from dataclasses import dataclass
 
 from .authority_contracts import AuthorityError
 from .plan_suggestion_domain import ExactReference, PlanningError
 from .planning_candidates import identities, read_published, require_read
+from .resource_automation_policy import source_digest
 from .resource_automation_validation import validate
 from .workbench_business_problem import OwnerPrincipal
 
 
-def sources(automation, call, root=None):
-    from .development_administrator import for_call
+@dataclass(frozen=True)
+class ReadableSourceValidation:
+    """Content validation only; never an execution or policy authorization."""
 
-    if not for_call(call):
-        return []
+    sourceContentDigests: tuple[str, ...]
+
+
+def sources(automation, call, root=None):
     app = automation.bound_app(call)
     principal = OwnerPrincipal(
         call.context.principal_id,
@@ -21,16 +26,12 @@ def sources(automation, call, root=None):
         call.context.scope.security_domain,
     )
     scope = app.scope(principal)
-    # Work scope never authorizes execution; exact owner checks still apply below.
-    work = automation.work(
-        call.context,
-        root
-        or ExactReference(
-            resource_id="conversation-source-discovery",
-            revision_id="1",
-            digest="0" * 64,
-        ),
-        automation.grants.clock(),
+    # A named task still checks its existing work policy. Browsing sources only
+    # needs current exact read grants; it must not require an execution window.
+    task_work = (
+        automation.work(call.context, root, automation.grants.clock())
+        if root is not None
+        else None
     )
     result = []
     seen = set()
@@ -43,6 +44,7 @@ def sources(automation, call, root=None):
             )
             require_read(call.authority, principal, "KNOWLEDGE", ref)
             content, name = read_published(call.connection, scope, "KNOWLEDGE", ref)
+            work = task_work or ReadableSourceValidation((source_digest(content),))
             check = validate("knowledge", content, work)
             raw = json.loads(content["documents"][0]["chunks"][0]["content"])
             if raw.get("synthetic") is not True:

@@ -137,3 +137,17 @@
 .f3-conversation .conversation-author-details>summary::-webkit-details-marker{display:none}
 .f3-conversation .conversation-author-details>summary:focus-visible{outline:2px solid var(--px-blue,#4567cd);outline-offset:3px}
 .f3-conversation .conversation-author-record{position:absolute;right:0;top:100%;z-index:3;display:block;width:max-content;max-width:min(280px,70vw);padding:8px 12px;border:1px solid var(--px-line,#dce6f4);border-radius:8px;background:white;color:var(--px-muted,#63738b);font-size:12px;font-weight:400;overflow-wrap:anywhere}
+
+.f3-conversation .conversation-history{margin:20px 0;min-width:0;text-align:left}
+.f3-conversation .conversation-history h2{font-size:20px;line-height:1.5;margin:8px 0 12px}
+.f3-conversation .conversation-history-label{color:var(--px-muted,#63738b);font-size:12px}
+.f3-conversation .conversation-history-rail h3{font-size:14px;margin:20px 0 10px}
+.f3-conversation .conversation-history-rail p{font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.f3-conversation .conversation-history-rail details{margin-top:24px}
+.f3-conversation .conversation-history-rail button{display:block;margin:8px 0;text-align:left;width:100%}
+.px-shell.journey-shell .f3-conversation .private-message[data-record=true]{align-items:flex-start}
+.f3-conversation .private-message[data-record=true] .private-message-group{align-self:flex-start;align-items:flex-start}
+.px-shell.journey-shell .f3-conversation .private-message[data-record=true] .private-user{background:#fff;border-color:var(--px-line,#e0e6ef);border-radius:12px 12px 12px 3px}
+
+.f3-conversation .private-message[data-record=true] .conversation-message-identity{justify-content:flex-start}
+.f3-conversation .private-message[data-record=true] .conversation-message-identity>*{order:0}
