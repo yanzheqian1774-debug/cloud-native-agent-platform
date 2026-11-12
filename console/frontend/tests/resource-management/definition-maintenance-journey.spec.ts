@@ -100,3 +100,11 @@ test('knowledge publication withdraws stale directory while fresh read is pendin
  try{await page.getByRole('button',{name:'核验并发布',exact:true}).click();await expect(page.getByText('已发布，并已核对当前发布版本。',{exact:true})).toBeVisible();await page.getByRole('button',{name:'返回维护目录',exact:true}).click();await expect(page.locator('.f3-resource-card')).toHaveCount(0);expect(state.r.currentDraftRevisionId).toBeNull();expect(state.posts).toHaveLength(1);}finally{hold=false;release()}
  await expect(page.locator('.f3-resource-card')).toHaveCount(1);expect(state.r.publishedRevisionId).toBe('revision:2');expect(state.posts).toHaveLength(1);
 });
+
+
+for(const expire of [false,true])test('knowledge initial loading is distinct and late read cannot restore expired view '+expire,async({page})=>{
+ const state=await fixture(page,'knowledge',true);let release=()=>{};const gate=new Promise<void>(resolve=>{release=resolve});await page.route('**/api/workbench/v1/definition-management/knowledge',async route=>{await gate;await route.fallback()});
+ await page.goto('/knowledge?managedResource=knowledge%3Amaintenance');await expect(page.getByText('正在读取维护信息…',{exact:true})).toBeVisible();await expect(page.getByText('维护暂未就绪，可继续核对下方当前可读的准确版本。',{exact:true})).toHaveCount(0);
+ if(expire)await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));const settled=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/session'));release();await settled;await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+ if(expire){await expect(page.getByRole('heading',{name:'当前登录已失效',exact:true})).toBeVisible();await expect(page.getByRole('region',{name:'当前定义配置'})).toHaveCount(0)}else{await expect(page.getByRole('region',{name:'当前定义配置'})).toBeVisible();await expect(page.getByText('正在读取维护信息…',{exact:true})).toHaveCount(0)}expect(state.posts).toEqual([]);
+});
