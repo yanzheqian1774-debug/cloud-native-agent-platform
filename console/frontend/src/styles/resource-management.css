@@ -714,3 +714,12 @@
 .employee-management .assembly-preview code {overflow-wrap:anywhere}
 
 @media(min-width:761px){.employee-management .employee-collection-row{grid-template-columns:minmax(0,1fr) minmax(110px,40%)}.employee-management .employee-single-revision{min-width:0;display:grid;gap:4px;padding:8px;overflow-wrap:anywhere}.employee-management .employee-single-revision small{font-size:12px}.employee-management .employee-row-main{grid-template-columns:auto minmax(0,1fr)}.employee-management .employee-row-main>.employee-state-chip{grid-column:2;justify-self:start}}
+
+/* Match the existing F3 resource cards; scope to initial employee assembly. */
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] {min-width:0;margin:0;padding:20px;border:1px solid #d5e3ff;border-radius:9px;background:#fff}
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] legend {padding:0 6px;font-size:16px;font-weight:600;color:#253957}
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] details {margin-top:12px;padding:12px;border:1px solid #e0e6ef;border-radius:8px}
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] summary {font-weight:600;cursor:pointer;line-height:1.6}
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] label {display:flex;align-items:center;gap:8px;margin:12px 0 6px}
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] input[type="checkbox"] {width:16px;height:16px;min-width:16px;flex:none;margin:0;accent-color:#4566d5}
+.px-shell .employee-management .employee-assembly-grid > fieldset[aria-label="设置职责与资源关联"] details > div > span {display:block;padding-left:24px;overflow-wrap:anywhere;line-height:1.6;color:#52677f}
