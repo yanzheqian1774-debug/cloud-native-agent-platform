@@ -224,3 +224,6 @@
  .f3-conversation .private-receipt:has(.conversation-input-source[data-open=true])>details[open]{padding:8px 4px}
  .conversation-source-reading{padding:10px 12px}
 }
+
+.f3-conversation .conversation-answer-download{align-self:flex-start;margin:8px 0;max-width:100%}
+.f3-conversation .conversation-answer-download button{background:transparent;color:#435fc4;border:1px solid #d8e1f3;border-radius:8px;padding:6px 10px;font-size:12px}

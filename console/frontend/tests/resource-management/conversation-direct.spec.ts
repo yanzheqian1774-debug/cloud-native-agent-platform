@@ -254,3 +254,23 @@ for(const code of ['CONTEXT_ADMISSION_SOURCE_MISMATCH','PLANNING_OUTPUT_SOURCE_M
  expect(state.journal.state.error).toBe('Error: '+code);
  await expect(page.locator('#source-mismatch-reply')).toHaveValue('补充先暂存，不发送');
 });
+
+test('saved answer downloads original Markdown and provenance after a fresh authorized read without model calls',async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');
+ const message=page.locator('#conversation-message-a1');await expect(message).toContainText('先明确核对目标');
+ const beforeCalls=state.calls.length,beforeWrites=state.writes.length;
+ const event=page.waitForEvent('download');await message.getByRole('button',{name:'下载答复与来源（Markdown）'}).click();const download=await event;
+ expect(download.suggestedFilename()).toBe('会话答复-a1.md');
+ const {readFile}=await import('node:fs/promises');const content=await readFile((await download.path())!,'utf8');
+ expect(content.startsWith('先**明确核对目标**，再检查资料依据。\n\n---')).toBe(true);
+ expect(content).toContain('"会话": "direct"');expect(content).toContain('"答复": "a1"');expect(content).toContain('"invocationId": "invocation-1"');
+ expect(state.calls.length).toBe(beforeCalls);expect(state.writes.length).toBe(beforeWrites);
+});
+
+for(const failure of ['denied','identity'])test(`saved answer download rejects ${failure} rather than exporting cached text`,async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');
+ const message=page.locator('#conversation-message-a1');await expect(message).toContainText('先明确核对目标');let downloads=0;page.on('download',()=>downloads++);
+ if(failure==='denied')state.messages.find(m=>m.message_id==='a1')!.facts={readable:false};
+ else await page.route('**/session',route=>route.fulfill({json:{principal:{principalId:'human:other',tenantId:'tenant',securityDomain:'domain'},csrfToken:'other',session:{}}}));
+ await message.getByRole('button',{name:'下载答复与来源（Markdown）'}).click();await expect(message.getByRole('alert')).toBeVisible();expect(downloads).toBe(0);expect(state.calls.length).toBe(1);
+});
