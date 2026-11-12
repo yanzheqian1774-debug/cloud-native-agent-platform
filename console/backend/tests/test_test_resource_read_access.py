@@ -162,14 +162,13 @@ def test_unregistered_purpose_stops_before_request(read_policy):
 def test_http_protects_identity_csrf_and_key_only_payload(read_policy):
     from contextlib import nullcontext
 
-    from agent_console.authority_configuration import StaticGrant
-    from agent_console.authority_contracts import ExactGrant, GrantSource
+    from agent_console.authority_contracts import GrantSource
     from agent_console.browser_session_application import (
         BrowserSessionPolicy,
         BrowserSessionService,
         StaticGenerationAuthenticator,
     )
-    from agent_console.test_resource_read_access import operations
+    from agent_console.test_resource_read_access import install_test_read_access
     from agent_console.workbench_bff import WorkbenchBffPolicy, create_workbench_bff
     from fastapi.testclient import TestClient
 
@@ -177,12 +176,7 @@ def test_http_protects_identity_csrf_and_key_only_payload(read_policy):
     credential = replace(
         g.generation.credentials[0],
         authentication_source=GrantSource.BROWSER_BOOTSTRAP,
-        grants=(
-            StaticGrant(
-                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
-                GrantSource.BROWSER_BOOTSTRAP,
-            ),
-        ),
+        grants=(),
     )
     generation = replace(
         g.generation, credentials=(credential, *g.generation.credentials[1:])
@@ -211,7 +205,7 @@ def test_http_protects_identity_csrf_and_key_only_payload(read_policy):
         a.adapter,
         WorkbenchBffPolicy("workbench.example", "https://workbench.example"),
         grant_administration=g,
-        operations=operations(policy, g),
+        route_installers=(install_test_read_access(policy, g, a.adapter),),
     )
     path = "/api/workbench/v1/test-resource-access/prepare"
     headers = {"origin": "https://workbench.example", "x-csrf-token": csrf}
@@ -259,6 +253,38 @@ def test_http_protects_identity_csrf_and_key_only_payload(read_policy):
             ]
             == response.json()["result"]
         )
+    with a.repository.pool.connection() as c:
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM authorization_admin.grant_decisions"
+            ).fetchone()["n"]
+            == 1
+        )
+    for changes in (
+        {"subjects": ("human:someone-else",)},
+        {"tenant": "another-tenant"},
+        {"enabled": False},
+    ):
+        denied_app = create_workbench_bff(
+            session,
+            a.adapter,
+            WorkbenchBffPolicy("workbench.example", "https://workbench.example"),
+            grant_administration=g,
+            route_installers=(
+                install_test_read_access(
+                    policy.model_copy(update=changes), g, a.adapter
+                ),
+            ),
+        )
+        with TestClient(
+            denied_app, base_url="https://workbench.example"
+        ) as denied_client:
+            denied_client.cookies.set("__Host-workbench_session", secret.value)
+            denied = denied_client.post(
+                path, json={"idempotencyKey": "forbidden"}, headers=headers
+            )
+            assert denied.status_code != 200
+            assert "credentialPath" not in denied.text
     with a.repository.pool.connection() as c:
         assert (
             c.execute(

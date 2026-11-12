@@ -557,14 +557,16 @@ def build_workbench_composition(
                     and sales_v2_candidate,
                 )
 
-        test_read_routes = ()
+        test_read_installers = ()
         test_read_path = os.environ.get("TEST_RESOURCE_READ_POLICY")
         if test_read_path:
-            from .test_resource_read_access import operations as test_read_operations
+            from .test_resource_read_access import install_test_read_access
             from .test_resource_read_policy import TestReadPolicy
 
-            test_read_routes = test_read_operations(
-                TestReadPolicy.load(test_read_path), foundation.grants
+            test_read_installers = (
+                install_test_read_access(
+                    TestReadPolicy.load(test_read_path), foundation.grants, authorizer
+                ),
             )
 
         resource_automation = None
@@ -828,7 +830,6 @@ def build_workbench_composition(
                 *source_review_routes,
                 *runtime_trace_routes,
                 *resource_automation_routes,
-                *test_read_routes,
                 *continuation_routes,
                 *directory_routes,
                 *current_work_routes,
@@ -933,6 +934,7 @@ def build_workbench_composition(
                 {
                     "route_installers": (
                         directory_installers
+                        + test_read_installers
                         + delegation_routes
                         + (
                             (install_draft_assistance_routes(draft_assistance),)
@@ -956,6 +958,7 @@ def build_workbench_composition(
                     )
                 }
                 if directory_installers
+                or test_read_installers
                 or draft_assistance is not None
                 or planning_v2_enabled
                 else {}

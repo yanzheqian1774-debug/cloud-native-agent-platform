@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from .authority_contracts import AuthorityError, ExactGrant, GrantRequestStatus
+from .authority_contracts import AuthorityError, GrantRequestStatus
 from .grant_administration_application import GrantDecisionCommand, GrantRequestCommand
 from .read_access_recovery import current
 from .resource_automation import bound_grants
@@ -187,57 +187,53 @@ def prepare(policy, grants, context, connection, key):
     }
 
 
-def operations(policy, grants):
-    """Install only when an operator supplied the policy; disabled remains denied."""
+def install_test_read_access(policy, grants, authorizer):
+    """Use the existing session/CSRF admission path, not a business-list permission."""
+    from fastapi import Request
     from pydantic import BaseModel, ConfigDict, Field
 
-    from .workbench_bff import PREFIX, WorkbenchOperation
+    from .workbench_bff import PREFIX, WorkbenchBoundaryError
 
     class PrepareTestRead(BaseModel):
         model_config = ConfigDict(extra="forbid")
         idempotencyKey: str = Field(min_length=1, max_length=160)
 
-    def handle(call):
-        return prepare(
-            policy,
-            grants,
-            call.context,
-            call.connection,
-            call.payload["idempotencyKey"],
-        )
+    def install(app, authenticate, require_csrf, boundary_policy):
+        def run(request, operation):
+            if request.query_params:
+                raise WorkbenchBoundaryError("REQUEST_INVALID", 422)
+            with (
+                authorizer.controller.protected_request(),
+                authorizer.repository.connection_scope() as connection,
+            ):
+                session, context = authenticate(request)
+                if request.method != "GET":
+                    require_csrf(request, session)
+                connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                return {"result": operation(context, connection)}
 
-    def status(call):
-        if not policy.enabled or call.context.principal_id not in policy.subjects:
-            return {"available": False}
-        policy.authenticate(grants, call.context)
-        return {
-            "available": True,
-            "policyDigest": policy.digest,
-            "policyVersion": policy.policyVersion,
-            "expiresAt": policy.expiresAt.isoformat(),
-        }
+        @app.get(PREFIX + "/test-resource-access/status")
+        def status(request: Request):
+            def read(context, connection):
+                if not policy.enabled or context.principal_id not in policy.subjects:
+                    return {"available": False}
+                policy.authenticate(grants, context)
+                return {
+                    "available": True,
+                    "policyDigest": policy.digest,
+                    "policyVersion": policy.policyVersion,
+                    "expiresAt": policy.expiresAt.isoformat(),
+                }
 
-    return (
-        WorkbenchOperation(
-            "READ_TEST_RESOURCE_READ_STATUS",
-            "GET",
-            PREFIX + "/test-resource-access/status",
-            None,
-            None,
-            lambda *_: (
-                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
-            ),
-            status,
-        ),
-        WorkbenchOperation(
-            "PREPARE_TEST_RESOURCE_READ",
-            "POST",
-            PREFIX + "/test-resource-access/prepare",
-            PrepareTestRead,
-            None,
-            lambda *_: (
-                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
-            ),
-            handle,
-        ),
-    )
+            return run(request, read)
+
+        @app.post(PREFIX + "/test-resource-access/prepare")
+        def prepare_access(request: Request, spec: PrepareTestRead):
+            return run(
+                request,
+                lambda context, connection: prepare(
+                    policy, grants, context, connection, spec.idempotencyKey
+                ),
+            )
+
+    return install
