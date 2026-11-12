@@ -38,6 +38,7 @@ test('simple answer refresh and followup use original conversation without task 
  await page.getByLabel('继续提问',{exact:true}).fill('再详细说一点');await page.getByRole('button',{name:'发送',exact:true}).click();
  await expect(page.locator('#conversation-message-a2 .private-user')).toContainText('补充说明');
  expect(state.calls).toHaveLength(2);expect(state.sources).toBe(0);
+ for(const field of ['parentContextId','parentTurnId','expectedParentVersion','predecessorInvocationId'])expect(state.calls[1][field]).toBeUndefined();
  const input=JSON.parse(String(state.calls[1].content));expect(input.schemaVersion).toBe('conversation-understanding-context.v2');expect(input.previousAssistantResponse).toEqual({invocationId:'invocation-1',answer:'先**明确核对目标**，再检查资料依据。'});expect(input.messages.at(-1).text).toBe('再详细说一点');
  await page.getByLabel('继续提问',{exact:true}).fill('再详细说一点');await page.getByRole('button',{name:'发送',exact:true}).click();
  await expect(page.locator('#conversation-message-a3')).toBeVisible();expect(state.calls).toHaveLength(3);
@@ -51,6 +52,7 @@ test('necessary clarification uses fixed input without premature resource discov
  await expect(page.getByRole('heading',{name:'有一点需要确认'})).toBeVisible();await expect(page.getByLabel('补充说明',{exact:true})).toBeVisible();expect(state.sources).toBe(0);
  await page.getByLabel('补充说明',{exact:true}).fill('核对上线交接说明的方法');await page.getByRole('button',{name:'发送补充',exact:true}).click();
  await expect(page.locator('#conversation-message-a2')).toBeVisible();expect(state.calls).toHaveLength(2);expect(state.sources).toBe(0);
+ expect(state.calls[1].parentContextId).toBe('context');expect(state.calls[1].predecessorInvocationId).toBe('invocation-1');
 });
 
 
@@ -140,4 +142,18 @@ for(const mode of ['repaired','withdrawn'] as const)test('waiting conversation r
  await page.getByLabel('补充说明',{exact:true}).fill('尚未发送的补充');
  await page.reload();await expect(page.getByLabel('补充说明',{exact:true})).toHaveValue('尚未发送的补充');
  expect(state.calls).toHaveLength(0);expect(state.sources).toBe(2);expect(state.writes).toHaveLength(0);expect(JSON.stringify(state.journal)).toBe(snapshot);
+});
+
+test('new request retains previous answer and user constraints without old execution admission',async({page})=>{
+ const state=await directFixture(page);
+ const question='说明资料核对标准，只读检查，不修改源文件。';
+ state.messages[0].content=question;state.journal.state.question=question;state.journal.state.messages=[{id:'user:1',text:question}];
+ await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ await page.getByLabel('继续提问',{exact:true}).fill('按刚才的标准继续，仍然只读。');await page.getByRole('button',{name:'发送',exact:true}).click();
+ await expect(page.locator('#conversation-message-a2')).toBeVisible();
+ const input=JSON.parse(String(state.calls[1].content));
+ expect(input.messages.map((m:{text:string})=>m.text)).toEqual([question,'按刚才的标准继续，仍然只读。']);
+ expect(input.previousAssistantResponse.answer).toBe('先**明确核对目标**，再检查资料依据。');
+ expect(state.calls[1].parentContextId).toBeUndefined();expect(state.calls).toHaveLength(2);
+ expect(state.journal.state.question).toBe('按刚才的标准继续，仍然只读。');expect(state.journal.state.key).toBe('question:'+state.calls[1].conversationMessageId);
 });
