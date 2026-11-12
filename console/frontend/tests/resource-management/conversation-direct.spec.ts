@@ -66,7 +66,10 @@ test('unknown original request is read once and never automatically replayed',as
  const state=await directFixture(page);state.journal.state={...state.journal.state,understandingProtocol:3,pending:'understanding'};state.lastResult={state:'OUTCOME_UNKNOWN',conversationDelivery:{state:'NOT_COMPLETED'}};
  await page.goto('/work?conversation=direct');await expect(page.getByRole('alert')).toContainText('OUTCOME_UNKNOWN');
  expect(state.calls).toHaveLength(0);expect(state.recoveries).toBe(1);
- await page.reload();await expect(page.getByRole('alert')).toContainText('OUTCOME_UNKNOWN');
+ await expect(page.getByLabel('暂存补充',{exact:true})).toBeEnabled();await page.getByLabel('暂存补充',{exact:true}).fill('保留我的后续要求');
+ await expect(page.getByRole('button',{name:'等待结果核实'})).toBeDisabled();await expect(page.locator('.journey-stages')).toHaveCount(0);
+ await expect(page.getByRole('alert').getByText('原调用状态：OUTCOME_UNKNOWN。未重新调用模型，原请求保留。')).toBeHidden();
+ await page.reload();await expect(page.getByRole('alert')).toContainText('OUTCOME_UNKNOWN');await expect(page.getByLabel('暂存补充',{exact:true})).toHaveValue('保留我的后续要求');
  expect(state.calls).toHaveLength(0);expect(state.recoveries).toBe(2);
 });
 
