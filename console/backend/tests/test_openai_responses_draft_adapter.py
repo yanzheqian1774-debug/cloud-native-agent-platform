@@ -740,3 +740,27 @@ def test_credential_resolver_rejects_non_private_file(mock_responses):
     )
     with pytest.raises(DraftAssistanceError, match="CREDENTIAL_RESOLUTION_FAILED"):
         resolver.resolve(_profile(), "invocation-public-file")
+
+
+def test_conversation_runtime_pins_v3_policy_before_provider_use(mock_responses):
+    from agent_console.draft_assistance_policy import V3_SCHEMA_VERSION, policy_for
+
+    server, cert, tmp_path = mock_responses
+    document = _real_runtime_document(server, cert, tmp_path)
+    document["adapter"]["revision"] = "v3"
+    document["outputSchemaVersion"] = V3_SCHEMA_VERSION
+    document["policyDigest"] = policy_for("v3", V3_SCHEMA_VERSION).digest
+    profile, _, configuration, budget = parse_runtime_profile(
+        document, allow_local_https_mock=True
+    )
+    assert profile.adapter_revision == "v3"
+    assert configuration is not None
+    assert budget is not None
+    document["policyDigest"] = "0" * 64
+    with pytest.raises(DraftAssistanceError, match="DRAFT_PROFILE_INVALID") as rejected:
+        parse_runtime_profile(document, allow_local_https_mock=True)
+    assert str(rejected.value.__cause__) == "DRAFT_POLICY_MISMATCH"
+    del document["policyDigest"]
+    with pytest.raises(DraftAssistanceError, match="DRAFT_PROFILE_INVALID"):
+        parse_runtime_profile(document, allow_local_https_mock=True)
+    assert _ResponsesHandler.requests == []

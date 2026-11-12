@@ -33,6 +33,7 @@ from agent_console.draft_assistance_policy import (
     V1_SCHEMA,
     PolicyValidationError,
     context_references,
+    conversation_context_references,
     legacy_content,
     policy_for,
     validate_result,
@@ -190,6 +191,7 @@ class ExactFileOpenAICredentialResolver:
                 (ADAPTER_REVISION, "plan-suggestion-output.v1"),
                 ("v2", "problem-draft-assistance-output.v2"),
                 ("v2-zh-CN", "problem-draft-assistance-output.v2"),
+                ("v3", "conversation-understanding-output.v3"),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -251,6 +253,7 @@ class OpenAIResponsesDraftTransport:
                 (ADAPTER_REVISION, OUTPUT_SCHEMA_VERSION),
                 ("v2", "problem-draft-assistance-output.v2"),
                 ("v2-zh-CN", "problem-draft-assistance-output.v2"),
+                ("v3", "conversation-understanding-output.v3"),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
@@ -258,8 +261,12 @@ class OpenAIResponsesDraftTransport:
             raise DraftAssistanceError("OPENAI_RESPONSES_PROFILE_MISMATCH")
         try:
             policy = policy_for(profile.adapter_revision, profile.output_schema_version)
-            if policy.revision in {"v2", "v2-zh-CN"}:
-                context_references(content)
+            if policy.revision in {"v2", "v2-zh-CN", "v3"}:
+                (
+                    conversation_context_references
+                    if policy.revision == "v3"
+                    else context_references
+                )(content)
             else:
                 content = legacy_content(content)
         except PolicyValidationError as exc:
@@ -628,9 +635,13 @@ class OpenAIResponsesDraftTransport:
             )
         try:
             refs = frozenset()
-            if policy.revision in {"v2", "v2-zh-CN"}:
+            if policy.revision in {"v2", "v2-zh-CN", "v3"}:
                 sent = json.loads(request.payload)
-                refs = context_references(sent["input"][0]["content"][0]["text"])
+                refs = (
+                    conversation_context_references
+                    if policy.revision == "v3"
+                    else context_references
+                )(sent["input"][0]["content"][0]["text"])
             understanding = validate_result(result, policy, refs)
         except (PolicyValidationError, ValueError, KeyError, TypeError):
             return self._failure(
@@ -645,6 +656,18 @@ class OpenAIResponsesDraftTransport:
         question = result["clarificationQuestion"]
         title = result["title"]
         description = result["description"]
+        if kind in {"DIRECT_ANSWER", "NEEDS_DATA"} and policy.revision == "v3":
+            return ProviderObservation(
+                self._observation_id(invocation_id, correlation, kind),
+                ObservationState.SUCCEEDED,
+                correlation=correlation,
+                result_kind=DraftResultKind(kind),
+                answer=result["answer"],
+                data_needs=result["dataNeeds"],
+                latency_ms=latency_ms,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
         if kind == "NEEDS_CLARIFICATION":
             if (
                 not isinstance(question, str)

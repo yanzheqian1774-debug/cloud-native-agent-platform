@@ -480,6 +480,15 @@ def build_workbench_composition(
                     delegation, configurations["understanding"]
                 )
                 admission.migrate()
+                experience_path = os.environ.get("F3_CONVERSATION_EXPERIENCE_POLICY")
+                if experience_path:
+                    from .conversation_experience_admission import (
+                        ConversationExperienceAdmission,
+                    )
+
+                    admission.experience = ConversationExperienceAdmission(
+                        experience_path, configurations["understanding"]
+                    )
                 from .planning_call_admission import (
                     BoundPlanningAdmission,
                     PlanningCallAdmission,

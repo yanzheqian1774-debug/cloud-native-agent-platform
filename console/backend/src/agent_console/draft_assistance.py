@@ -54,6 +54,8 @@ class DraftInvocationState(StrEnum):
 
 
 class DraftResultKind(StrEnum):
+    DIRECT_ANSWER = "DIRECT_ANSWER"
+    NEEDS_DATA = "NEEDS_DATA"
     NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
     DRAFT_READY = "DRAFT_READY"
 
@@ -196,11 +198,32 @@ class ProviderObservation:
     input_tokens: int | None = None
     output_tokens: int | None = None
     understanding: list[dict] | None = field(default=None, repr=False)
+    answer: str | None = field(default=None, repr=False)
+    data_needs: list[str] | None = field(default=None, repr=False)
     measurement: dict | None = None
     local_cleanup: dict | None = None
 
     def __post_init__(self) -> None:
         if self.state is ObservationState.SUCCEEDED:
+            if self.result_kind in {
+                DraftResultKind.DIRECT_ANSWER,
+                DraftResultKind.NEEDS_DATA,
+            }:
+                if (
+                    self.clarification_question
+                    or self.title
+                    or self.description
+                    or self.understanding
+                ):
+                    raise DraftAssistanceError("OUTPUT_SCHEMA_INVALID")
+                if self.result_kind is DraftResultKind.DIRECT_ANSWER:
+                    if not self.answer or not self.answer.strip() or self.data_needs:
+                        raise DraftAssistanceError("OUTPUT_SCHEMA_INVALID")
+                elif self.answer is not None or not self.data_needs:
+                    raise DraftAssistanceError("OUTPUT_SCHEMA_INVALID")
+                return
+            if self.answer is not None or self.data_needs:
+                raise DraftAssistanceError("OUTPUT_SCHEMA_INVALID")
             if self.result_kind is DraftResultKind.NEEDS_CLARIFICATION:
                 if not self.clarification_question or self.title or self.description:
                     raise DraftAssistanceError("OUTPUT_SCHEMA_INVALID")
@@ -298,6 +321,8 @@ class DraftResponse:
     description: str | None = field(default=None, repr=False)
     synthetic: bool = True
     understanding: list[dict] | None = field(default=None, repr=False)
+    answer: str | None = field(default=None, repr=False)
+    data_needs: list[str] | None = field(default=None, repr=False)
 
 
 class DraftAssistanceRepository(Protocol):
@@ -1141,6 +1166,8 @@ class DraftAssistanceService:
                     title=None,
                     description=None,
                     understanding=None,
+                    answer=None,
+                    data_needs=None,
                     reason_code="LATE_RESULT_AFTER_CANCEL_REQUEST",
                 )
         state_map = {
@@ -1211,6 +1238,8 @@ class DraftAssistanceService:
             updated,
             clarification_question=observation.clarification_question,
             understanding=observation.understanding,
+            answer=observation.answer,
+            data_needs=observation.data_needs,
             title=observation.title,
             description=observation.description,
             synthetic=self.transport.synthetic,
@@ -1329,6 +1358,12 @@ class DraftAssistanceService:
             measurement=invocation.measurement,
             local_cleanup=invocation.local_cleanup,
             result_kind=invocation.result_kind,
+            answer="CONTENT_NOT_RETAINED"
+            if invocation.result_kind is DraftResultKind.DIRECT_ANSWER
+            else None,
+            data_needs=["CONTENT_NOT_RETAINED"]
+            if invocation.result_kind is DraftResultKind.NEEDS_DATA
+            else None,
             clarification_question=clarification,
             title=title,
             description=description,

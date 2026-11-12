@@ -55,8 +55,13 @@ test('unknown legacy receipt restores a truthful rail without inventing executio
  await expect(page.locator('#conversation-message-receipt .conversation-message-identity')).toContainText('办理回执');
  await expect(page.locator('#conversation-message-receipt .conversation-message-identity')).toContainText('操作人：用户');
  await expect(page.locator('.conversation-history .px-delivery-summary')).toHaveCount(0);
+ await page.locator('#private-input').fill('未发送的回执补充');
+ const originalScroll=await page.locator('.px-message-stream').evaluate(node=>node.scrollTop);
  await page.getByRole('button',{name:'查看原办理回执',exact:true}).click();
  await expect(page.locator('#conversation-message-receipt .private-receipt details')).toHaveAttribute('open','');
+ await page.getByRole('button',{name:'返回查看前位置',exact:true}).click();
+ await expect(page.locator('#private-input')).toHaveValue('未发送的回执补充');
+ await expect.poll(()=>page.locator('.px-message-stream').evaluate(node=>node.scrollTop)).toBe(originalScroll);
  expect(state.writes).toEqual([]);
 });
 
@@ -85,5 +90,17 @@ test('historical reading retains secondary association controls without executin
  await expect(page.getByRole('button',{name:'关联到本会话',exact:true})).toBeDisabled();
  await page.getByRole('button',{name:'暂不指定工作',exact:true}).click();
  await expect(page.locator('#private-input')).toBeVisible();
+ expect(state.writes).toEqual([]);
+});
+
+
+test('saved assistant reply reads as an assistant and refresh never invokes a model',async({page})=>{
+ const state=await fixture(page);
+ await page.route('**/api/workbench/v1/conversations/historical',route=>route.fulfill({json:{result:{conversation:{conversation_id:'historical',title:'普通交流',version:2},messages:[{message_id:'answer',content:'先明确目标，再核对所需资料。',kind:'SOURCE',author_id:'human:ordinary',created_at:'2026-11-12T02:00:00Z',facts:{assistantResponse:true,state:'SUCCEEDED',invokedBy:'human:ordinary',source:{kind:'DRAFT',invocationId:'actual-invocation',contextId:'context',turnId:'turn',turnVersion:1}}}],links:[]}}}));
+ await page.goto('/work?conversation=historical');
+ await expect(page.locator('#conversation-message-answer .conversation-message-author')).toHaveText('工作助手');
+ await expect(page.locator('#conversation-message-answer .private-user')).toHaveText('先明确目标，再核对所需资料。');
+ await page.reload();
+ await expect(page.locator('#conversation-message-answer .private-user')).toHaveText('先明确目标，再核对所需资料。');
  expect(state.writes).toEqual([]);
 });

@@ -114,6 +114,20 @@ class GrantAdministrationDraftAuthorization:
             )
             from .development_administrator import for_service
 
+            experience = getattr(self.context_admission, "experience", None)
+            experience = (
+                experience if experience and experience.matches(context) else None
+            )
+            if experience and current and current.model_authorization_request_id:
+                experience.authorize_requests(
+                    self.context_admission,
+                    context,
+                    invocation,
+                    (
+                        current.request_authorization_request_id,
+                        current.model_authorization_request_id,
+                    ),
+                )
             if for_service(self.grants, context):
                 request_decision = self._current(context, request)
                 model_decision = self._current(context, model)
@@ -150,6 +164,21 @@ class GrantAdministrationDraftAuthorization:
                     if independent_context
                     else None
                 )
+                if experience and model_request:
+                    from dataclasses import replace
+
+                    pending = DraftAuthorization(
+                        AuthorizationState.PENDING,
+                        submitted.request_id,
+                        model_request.request_id,
+                        "",
+                        None,
+                        submitted.aggregate_version,
+                        model_request.aggregate_version,
+                    )
+                    return self.resolve(
+                        context, replace(invocation, authorization=pending)
+                    )
                 return DraftAuthorization(
                     AuthorizationState.PENDING,
                     submitted.request_id,

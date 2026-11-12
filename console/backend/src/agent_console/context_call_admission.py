@@ -112,10 +112,13 @@ class ContextCallAdmission:
         self.repository = delegation.repository
         self.configuration = configuration
         self.planning = None
+        self.experience = None
 
     def require_dispatch_grants(self, c, context, invocation):
         if request_row(c, invocation.context_id) is None:
             return
+        if self.experience and self.experience.matches(context):
+            self.experience._require(self, c, context)
         from .draft_assistance_authorization import model_grant, request_grant
         from .local_accounts import current_session_account
 
@@ -165,7 +168,11 @@ class ContextCallAdmission:
         """Create only a request, after the normal owner has created actual IDs."""
         with self.repository.connection_scope() as c:
             if old_context(c, invocation.context_id):
+                if self.experience and self.experience.matches(context):
+                    raise AuthorityError("CONTEXT_ADMISSION_HISTORY_DENIED")
                 return False
+            if self.experience and self.experience.matches(context):
+                return self.experience.prepare(self, c, context, invocation)
             from .development_administrator import for_service
             from .development_draft_admission import admit
 
@@ -263,6 +270,8 @@ class ContextCallAdmission:
 
     def ready(self, context, invocation):
         with self.repository.connection_scope() as c:
+            if self.experience and self.experience.matches(context):
+                self.experience._require(self, c, context)
             row = request_row(c, invocation.context_id)
             if row is None:
                 return old_context(c, invocation.context_id)

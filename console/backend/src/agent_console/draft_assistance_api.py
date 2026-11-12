@@ -26,6 +26,10 @@ class BeginDraftAssistance(BaseModel):
     parentTurnId: str | None = Field(default=None, max_length=128)
     expectedParentVersion: int = Field(default=0, ge=0)
     predecessorInvocationId: str | None = Field(default=None, max_length=128)
+    conversationId: str | None = Field(default=None, min_length=1, max_length=128)
+    conversationMessageId: str | None = Field(
+        default=None, min_length=1, max_length=128
+    )
 
 
 class ResubmitDraftAssistance(BaseModel):
@@ -64,6 +68,7 @@ def _status(reason: str) -> int:
         "EVIDENCE_STORAGE_UNAVAILABLE",
         "TRANSPORT_AMBIGUOUS",
         "CREDENTIAL_RESOLUTION_FAILED",
+        "CONVERSATION_UNDERSTANDING_UNAVAILABLE",
     }:
         return 503
     if reason in {
@@ -84,6 +89,8 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
         and response.clarification_question is None
         and response.title is None
         and response.description is None
+        and response.answer is None
+        and not response.data_needs
     )
     return {
         "result": {
@@ -112,6 +119,12 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
             "remoteCancellation": "NOT_PROVEN",
             "clarificationQuestion": response.clarification_question,
             "understanding": response.understanding,
+            **(
+                {"answer": response.answer, "dataNeeds": response.data_needs or []}
+                if value.result_kind
+                and value.result_kind.value in {"DIRECT_ANSWER", "NEEDS_DATA"}
+                else {}
+            ),
             "draft": (
                 {"title": response.title, "description": response.description}
                 if response.title and response.description
@@ -158,28 +171,155 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                     content={"reasonCode": exc.reason_code},
                 )
 
+        @app.get(f"{PREFIX}/draft-assistance/capabilities")
+        def capabilities(request: Request):
+            authenticate(request)
+            return {
+                "result": {
+                    "conversationUnderstanding": service.profile.adapter_revision
+                    == "v3"
+                }
+            }
+
+        @app.get(
+            f"{PREFIX}/conversations/{{conversation}}/understanding-results/{{message_id}}"
+        )
+        def read_conversation_result(
+            conversation: str, message_id: str, requestKey: str, request: Request
+        ):
+            from .conversation_answer_retention import read_retained, require_target
+            from .draft_assistance import DraftScope
+            from .private_conversation import ConversationError, digest
+
+            _, context = authenticate(request)
+            actions = getattr(request.app.state, "conversation_actions", None)
+            if not actions or not 1 <= len(requestKey) <= 128:
+                return JSONResponse(
+                    status_code=404,
+                    content={"reasonCode": "CONVERSATION_RESULT_NOT_FOUND"},
+                )
+            try:
+                require_target(
+                    actions, context, conversation, message_id, allow_archived=True
+                )
+                key = "conversation:" + digest([conversation, message_id, requestKey])
+                invocation = service.repository.get_by_key(
+                    DraftScope.from_context(context), context.principal_id, key
+                )
+                if invocation is None:
+                    return JSONResponse(
+                        status_code=404,
+                        content={"reasonCode": "CONVERSATION_RESULT_NOT_FOUND"},
+                    )
+                value = _payload(service.read(context, invocation.invocation_id))[
+                    "result"
+                ]
+                return {
+                    "result": read_retained(
+                        actions,
+                        context,
+                        conversation,
+                        value,
+                        request_key=requestKey,
+                        message_id=message_id,
+                    )
+                }
+            except ConversationError as exc:
+                return JSONResponse(
+                    status_code=exc.status, content={"reasonCode": exc.reason}
+                )
+            except DraftAssistanceError as exc:
+                return JSONResponse(
+                    status_code=_status(exc.reason_code),
+                    content={"reasonCode": exc.reason_code},
+                )
+
         @app.post(f"{PREFIX}/draft-assistance/invocations", status_code=201)
         async def begin(body: BeginDraftAssistance, request: Request):
             from .conversation_actions import original_action
 
             def action(context):
-                return original_action(
-                    request,
-                    context,
-                    "DRAFT",
-                    body.model_dump(mode="json", exclude_none=True),
-                    lambda: _payload(
-                        service.begin(
+                from .conversation_answer_retention import require_target, retain
+                from .private_conversation import ConversationError, digest
+
+                conversation = body.conversationId
+                actions = getattr(request.app.state, "conversation_actions", None)
+                if conversation:
+                    if request.headers.get("x-conversation-id") or request.headers.get(
+                        "x-conversation-intent"
+                    ):
+                        return JSONResponse(
+                            status_code=409,
+                            content={"reasonCode": "CONVERSATION_CONTEXT_CONFLICT"},
+                        )
+                    if not actions or service.profile.adapter_revision != "v3":
+                        raise DraftAssistanceError(
+                            "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
+                        )
+                    try:
+                        require_target(
+                            actions,
                             context,
-                            key=body.idempotencyKey,
+                            conversation,
+                            body.conversationMessageId,
+                            body.content,
+                        )
+                    except ConversationError as exc:
+                        return JSONResponse(
+                            status_code=exc.status, content={"reasonCode": exc.reason}
+                        )
+                    key = "conversation:" + digest(
+                        [conversation, body.conversationMessageId, body.idempotencyKey]
+                    )
+                else:
+                    key = body.idempotencyKey
+
+                def invoke_owner():
+                    from .conversation_experience_admission import begin_bound
+
+                    value = _payload(
+                        begin_bound(
+                            service,
+                            context,
+                            conversation=conversation,
+                            message_id=body.conversationMessageId,
+                            key=key,
                             content=body.content,
                             parent_context_id=body.parentContextId,
                             parent_turn_id=body.parentTurnId,
                             expected_parent_version=body.expectedParentVersion,
                             predecessor_invocation_id=body.predecessorInvocationId,
                         )
-                    ),
-                )
+                    )
+                    if conversation:
+                        try:
+                            value["result"] = retain(
+                                actions,
+                                context,
+                                conversation,
+                                value["result"],
+                                request_key=body.idempotencyKey,
+                                message_id=body.conversationMessageId,
+                            )
+                        except Exception:
+                            # Preserve the result; do not claim retention.
+                            value["result"]["conversationDelivery"] = {
+                                "state": "SAVE_FAILED"
+                            }
+                    return value
+
+                try:
+                    return original_action(
+                        request,
+                        context,
+                        "DRAFT",
+                        body.model_dump(mode="json", exclude_none=True),
+                        invoke_owner,
+                    )
+                except ConversationError as exc:
+                    return JSONResponse(
+                        status_code=exc.status, content={"reasonCode": exc.reason}
+                    )
 
             # Preserve the original owner error mapping and cancellation deadline.
             def submit():

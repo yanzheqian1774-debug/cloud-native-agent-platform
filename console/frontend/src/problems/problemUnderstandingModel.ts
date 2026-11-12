@@ -27,3 +27,10 @@ export function understandingDisplay(item:UnderstandingItem,description:string){
   return {label:isUnstructuredStatement(item,description)?'你提供的信息':fieldLabels[item.field],
     value:item.source==='UNKNOWN'?'尚未单独整理':item.value};
 }
+
+export function conversationUnderstandingContent(messages:UserFactMessage[],previous:import('../api/draftAssistanceTypes').DraftAssistanceResult|undefined){
+ const original=JSON.parse(understandingContent(messages,messages.length,previous?.draft??null,previous?.understanding??null,previous?.clarificationQuestion??null));
+ const content=JSON.stringify({...original,schemaVersion:'conversation-understanding-context.v2',previousAssistantResponse:previous?.resultKind==='DIRECT_ANSWER'&&previous.answer&&previous.conversationDelivery?.state==='SAVED'?{invocationId:previous.invocationId,answer:previous.answer}:null});
+ if(new TextEncoder().encode(content).length>MAX_CONTEXT_BYTES)throw Error('会话上下文已达到本轮长度上限，原内容保留。');
+ return content;
+}

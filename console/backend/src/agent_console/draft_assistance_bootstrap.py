@@ -215,7 +215,7 @@ def _profile(
     )
     if isinstance(document.get("adapter"), dict) and document["adapter"].get(
         "revision"
-    ) in {"v2", "v2-zh-CN"}:
+    ) in {"v2", "v2-zh-CN", "v3"}:
         expected = expected | {"policyDigest"}
     if (
         set(document) != expected
@@ -355,7 +355,7 @@ def _profile(
         else:
             policy = policy_for(value.adapter_revision, value.output_schema_version)
             if (
-                policy.revision in {"v2", "v2-zh-CN"}
+                policy.revision in {"v2", "v2-zh-CN", "v3"}
                 and document["policyDigest"] != policy.digest
             ):
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
