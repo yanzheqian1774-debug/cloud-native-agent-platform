@@ -13,12 +13,14 @@ from agent_console.planning_call_admission import (
     BoundPlanningAdmission,
     PlanningCallAdmission,
 )
+from psycopg.types.json import Jsonb
 from test_context_call_admission import env  # noqa: F401
 from test_conversation_experience_admission import (  # noqa: F401
     configure,
     prepare,
     pytestmark,
 )
+from test_conversation_planning_source import SOURCE, boundary
 from test_local_accounts_postgres import setup  # noqa: F401
 
 
@@ -55,13 +57,15 @@ def ordinary(env, tmp_path):  # noqa: F811
     return e
 
 
-def planned(e, key="new-plan", problem="ordinary-new-problem", commitment=None):
+def planned(
+    e, key="new-plan", problem="ordinary-new-problem", commitment=None, answers=()
+):
     request = SimpleNamespace(
         idempotency_key=key,
         target=SimpleNamespace(problem=SimpleNamespace(resource_id=problem)),
     )
     record = {
-        "request": {"idempotency_key": key},
+        "request": {"idempotency_key": key, "answers": list(answers)},
         "target": {
             "invocation_id": "planning-invocation:" + key,
             "suggestion_context_id": "planning-context:" + key,
@@ -70,6 +74,44 @@ def planned(e, key="new-plan", problem="ordinary-new-problem", commitment=None):
         },
     }
     return e.planning.prepare_record(e.reviewer, request, record)
+
+
+def retain_source(e, source):
+    with e.repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO draft_assistance.invocation_versions "
+            "SELECT namespace,security_domain,invocation_id,"
+            "aggregate_version+1,'SUCCEEDED',record || %s,now() "
+            "FROM draft_assistance.invocation_versions WHERE invocation_id=%s "
+            "ORDER BY aggregate_version DESC LIMIT 1",
+            (Jsonb({"inputSource": {"source": source}}), e.source.invocation_id),
+        )
+
+
+def test_source_substitution_rejected_before_preparation_and_budget(ordinary):
+    e = ordinary
+    retain_source(e, SOURCE)
+    with pytest.raises(AuthorityError, match="SOURCE_MISMATCH"):
+        planned(e, answers=[boundary({**SOURCE, "digest": "b" * 64})])
+    with e.repo.connection_scope() as c:
+        for table in (
+            "authorization_admin.planning_call_preparations",
+            "draft_provider_budget.reservations",
+        ):
+            assert c.execute("SELECT count(*) AS n FROM " + table).fetchone()["n"] == 0
+    result = planned(e, answers=[boundary(SOURCE)])
+    assert result["admission"]["ready"]
+    assert planned(e, answers=[boundary(SOURCE)]) == result
+    with e.repo.connection_scope() as c:
+        row = c.execute(
+            "SELECT * FROM authorization_admin.context_call_requests "
+            "WHERE context_id=%s",
+            (result["admission"]["context_id"],),
+        ).fetchone()
+        assert row["record"]["understanding_input_source"] == {"source": SOURCE}
+        row["record"]["understanding_input_source"]["source"]["digest"] = "b" * 64
+        with pytest.raises(AuthorityError, match="SOURCE_MISMATCH"):
+            e.planning.conversation_experience.require(e.planning, c, e.reviewer, row)
 
 
 def test_prepares_once_same_budget_and_retains_independent_grant_gate(ordinary):

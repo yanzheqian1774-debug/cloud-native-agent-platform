@@ -29,6 +29,9 @@ from test_plan_suggestion_v2 import proposal, repository  # noqa: F401
         "budget",
         "input",
         "admission",
+        "source_exact",
+        "source_missing",
+        "source_changed",
     ],
 )
 @pytest.mark.parametrize("modern_policy", [False, True])
@@ -41,6 +44,21 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
 
         sample = sample.model_copy(
             update={"semantics": FlexiblePlanSemantics.model_validate(modern())}
+        )
+    from test_conversation_planning_source import SOURCE, boundary
+
+    if outcome in {"source_exact", "source_changed"}:
+        selected = (
+            SOURCE if outcome == "source_exact" else {**SOURCE, "digest": "b" * 64}
+        )
+        sample = sample.model_copy(
+            update={
+                "semantics": sample.semantics.model_copy(
+                    update={
+                        "boundaries": (*sample.semantics.boundaries, boundary(selected))
+                    }
+                )
+            }
         )
     scope = ScopeIdentity("tenant-a", "quality")
     principal = SimpleNamespace(principal_id="employee:17")
@@ -144,6 +162,7 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
         target=sample.semantics.target,
         idempotency_key="same-key",
         policy=sample.semantics.policy if modern_policy else None,
+        answers=(boundary(SOURCE),) if outcome.startswith("source_") else (),
     )
     if outcome in {"denied", "budget", "input"}:
         from agent_console.draft_assistance import DraftAssistanceError
@@ -220,8 +239,14 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
         "clarification": "NEEDS_CLARIFICATION",
         "invalid": "INVALID",
         "unknown": None,
+        "source_exact": "VALID_SUGGESTION",
+        "source_missing": "INVALID",
+        "source_changed": "INVALID",
     }
     assert result["result"]["kind"] == expected[outcome]
+    if outcome in {"source_missing", "source_changed"}:
+        assert result["result"]["reason"] == "PLANNING_OUTPUT_SOURCE_MISMATCH"
+        assert result["result"].get("proposal") is None
     if outcome == "unknown":
         assert result["result"]["technical_status"] == "OUTCOME_UNKNOWN"
     assert "raw" not in json.dumps(result)

@@ -436,6 +436,11 @@ class PlanningSuggestionService:
         if diagnostic_layer is not None:
             raise PlanningError("PLANNING_DIAGNOSTIC_RESPONSE_INVALID")
         proposal = None
+        from .conversation_planning_source import (
+            PlanningSourceMismatch,
+            require_output_source,
+        )
+
         try:
             if not isinstance(raw, str) or len(raw.encode()) > 131072:
                 raise ValueError("PLANNING_OUTPUT_TOO_LARGE")
@@ -491,6 +496,7 @@ class PlanningSuggestionService:
                     raise ValueError("PLANNING_OUTPUT_TARGET_MISMATCH")
                 if request.policy and parsed.semantics.policy != request.policy:
                     raise ValueError("PLANNING_OUTPUT_POLICY_MISMATCH")
+                require_output_source(request, parsed.semantics)
                 from .planning_scope import restrict_to_planning
 
                 proposal = ProposalRevision(
@@ -523,7 +529,9 @@ class PlanningSuggestionService:
             result = {
                 "technical_status": "SUCCEEDED",
                 "kind": "INVALID",
-                "reason": "PLANNING_OUTPUT_SCHEMA_INVALID",
+                "reason": "PLANNING_OUTPUT_SOURCE_MISMATCH"
+                if isinstance(exc, PlanningSourceMismatch)
+                else "PLANNING_OUTPUT_SCHEMA_INVALID",
                 "validation_diagnostic": diagnostic(
                     raw,
                     "SCHEMA_OR_CONTRACT",

@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 from .authority_contracts import AuthorityError
 from .context_call_admission import active, lock, request_row
 from .conversation_experience_admission import LEDGER
+from .conversation_planning_source import require_same_source
 from .task_delegation import digest
 
 
@@ -66,6 +67,7 @@ class ConversationPlanningAdmission:
         ):
             raise AuthorityError("CONTEXT_ADMISSION_DRAFT_INVALID")
         require_resolved_source(c, source)
+        source["understanding_input_source"] = value.get("inputSource")
         return source, account, now, min(expires, decision["expires_at"])
 
     def prepare(self, service, c, context, request, record):
@@ -79,6 +81,12 @@ class ConversationPlanningAdmission:
         source, account, now, expires = self.require_source(
             service, c, context, request.target.problem.resource_id
         )
+        saved_request = (
+            record["request"]
+            if "request" in record
+            else request.model_dump(mode="json")
+        )
+        require_same_source(source["understanding_input_source"], saved_request)
         scope = (context.scope.tenant_id, context.scope.security_domain)
         key = (*scope, context.principal_id, request.idempotency_key)
         lock(c, "planning:" + digest(key))
@@ -113,6 +121,7 @@ class ConversationPlanningAdmission:
             cumulative_call_cap=20,
             total_cost_cap_microusd=1_000_000,
             maximum_new_calls=1,
+            understanding_input_source=source["understanding_input_source"],
         )
         c.execute(
             "INSERT INTO authorization_admin.context_call_requests "
@@ -193,6 +202,11 @@ class ConversationPlanningAdmission:
             != self.experience.policy_digest
         ):
             raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
+        if (
+            row["record"].get("understanding_input_source")
+            != source["understanding_input_source"]
+        ):
+            raise AuthorityError("CONTEXT_ADMISSION_SOURCE_MISMATCH")
         active(c, row, self.configuration)
 
 

@@ -227,3 +227,24 @@ for(const outcome of ['readable','denied','wrong-version'])test('answer source s
  if(outcome==='readable'){await expect(page.getByRole('heading',{name:'原版本依据'})).toBeVisible();await expect(page.getByRole('region',{name:'本次回答使用的资料'}).locator('.knowledge-document-reading strong')).toHaveText('责任人');const widths=await page.evaluate(()=>({source:document.querySelector('.conversation-source-reading')!.getBoundingClientRect().width,stream:document.querySelector('.px-message-stream')!.getBoundingClientRect().width}));expect(widths.source).toBeGreaterThan(widths.stream*.85);for(const width of [1440,980,390]){await page.setViewportSize({width,height:1000});const reading=page.getByLabel('原文阅读区',{exact:true});await reading.evaluate(e=>e.scrollTop=e.scrollHeight);await expect(page.getByRole('button',{name:'收起原文'})).toBeInViewport();const size=await page.evaluate(()=>({reader:document.querySelector('.conversation-source-reading')!.getBoundingClientRect().width,stream:document.querySelector('.px-message-stream')!.getBoundingClientRect().width}));expect(size.reader).toBeGreaterThan(size.stream*.8);await page.screenshot({path:testInfo.outputPath('source-reading-'+width+'.png')})}}else{await expect(page.getByRole('alert')).toContainText(outcome==='denied'?'当前无权读取此资料版本':'资料版本核对不一致');await expect(page.getByRole('heading',{name:'原版本依据'})).toHaveCount(0)}
  await page.getByRole('button',{name:'收起原文'}).click();await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();expect(reads).toBe(1);expect(state.calls).toHaveLength(1);
 });
+
+for(const code of ['CONTEXT_ADMISSION_SOURCE_MISMATCH','PLANNING_OUTPUT_SOURCE_MISMATCH'])test(`source mismatch ${code} preserves conversation and never redispatches`,async({page},testInfo)=>{
+ await page.setViewportSize({width:1440,height:1000});
+ const state=await directFixture(page);
+ state.journal.state={...state.journal.state,phase:'PLAN',pending:'planning',error:'Error: '+code};
+ await page.goto('/work?conversation=direct');
+ const alert=page.getByRole('alert').filter({hasText:'方案使用的资料与本次已确认的资料不一致'});
+ await expect(alert).toBeVisible();
+ await expect(alert).toContainText('无需重新描述问题');
+ await expect(alert.locator('details p')).toBeHidden();
+ await alert.scrollIntoViewIfNeeded();
+ await page.screenshot({path:testInfo.outputPath('source-mismatch.png'),fullPage:true});
+ await alert.getByText('技术详情',{exact:true}).click();
+ await expect(alert.locator('details p')).toHaveText('Error: '+code);
+ await expect(page.locator('#conversation-message-q1')).toContainText('解释一下资料核对的方法');
+ await page.reload();
+ await expect(alert).toBeVisible();
+ expect(state.calls).toHaveLength(0);
+ expect(state.writes).toEqual([]);
+ expect(state.journal.state.error).toBe('Error: '+code);
+});
