@@ -728,6 +728,13 @@ def create_workbench_bff(
             )
 
             def invoke_owner():
+                work_authorization = getattr(
+                    authorizer, "conversation_work_authorization", None
+                )
+                if work_authorization is not None:
+                    work_authorization.before(
+                        context, operation.name, payload, request.path_params, grants
+                    )
                 result = authorizer.execute(
                     context,
                     grants,
@@ -739,6 +746,8 @@ def create_workbench_bff(
                 )
                 if operation.post_commit_handler is not None:
                     result = operation.post_commit_handler(context, result)
+                if work_authorization is not None:
+                    work_authorization.after(context, operation.name, payload, result)
                 return result
 
             if operation.name == "READ_NATIVE_PROGRESS":

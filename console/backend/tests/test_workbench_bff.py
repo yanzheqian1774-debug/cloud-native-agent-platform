@@ -892,3 +892,41 @@ def test_login_failure_displays_only_known_reason_and_escapes_preserved_username
     assert "safe-id" in value
     if reason != "ACCOUNT_AUTHENTICATION_FAILED":
         assert "账号或密码不匹配" not in value
+
+
+def test_optional_work_preparation_keeps_original_owner_and_browser_checks():
+    client, _, authorizer = build_client()
+    events = []
+    execute = authorizer.execute
+
+    def before(context, operation, payload, path, grants):
+        assert operation == "REVISE_PROBLEM"
+        assert context.principal_id == "human:alice"
+        assert path["problem_id"] == "problem-1"
+        assert len(grants) == 1
+        events.append("before")
+
+    def owner(*args, **kwargs):
+        events.append("owner")
+        return execute(*args, **kwargs)
+
+    def after(context, operation, payload, result):
+        assert result["problemId"] == "problem-1"
+        events.append("after")
+
+    authorizer.conversation_work_authorization = SimpleNamespace(
+        before=before, after=after
+    )
+    authorizer.execute = owner
+    login(client)
+    denied = client.post(f"{PREFIX}/problems/problem-1/revisions", json={"title": "x"})
+    assert denied.status_code != 201
+    assert events == []
+    response = client.post(
+        f"{PREFIX}/problems/problem-1/revisions",
+        headers={"origin": "https://console.example", "x-csrf-token": "csrf-token"},
+        json={"title": "x"},
+    )
+    assert response.status_code == 201
+    assert events == ["before", "owner", "after"]
+    assert len(authorizer.calls) == 1

@@ -508,6 +508,13 @@ def build_workbench_composition(
                             admission, configurations["planning"]
                         )
                     )
+                    from .conversation_work_authorization import (
+                        ConversationWorkAuthorization,
+                    )
+
+                    authorizer.conversation_work_authorization = (
+                        ConversationWorkAuthorization(planning_admission)
+                    )
                 admission.planning = planning_admission
                 planning_invocations = replace(
                     planning_invocations,
