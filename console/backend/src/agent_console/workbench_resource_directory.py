@@ -203,7 +203,7 @@ class ResourceDirectory:
                     lower = (identity, r["revisionId"])
                     name = record.get("name")
                     if not isinstance(name, str) or not name.strip():
-                        name = identity
+                        name = "未命名资源"
                     if args.query.casefold() not in (name + " " + identity).casefold():
                         continue
                     if args.status and r["state"] != args.status:
@@ -304,6 +304,23 @@ class ResourceDirectory:
         for row in rows:
             count("directory.usage_scanned")
             p = parse_preparation(row["record"])
+            refs = (
+                [p.source_snapshot]
+                if path["kind"] == "knowledge"
+                else [t.skill.reference for t in p.participants]
+                if path["kind"] == "skill"
+                else [t.profile for t in p.participants]
+                if path["kind"] == "runtime"
+                else []
+            )
+            matched = any(
+                ref.resource_id == path["identity"]
+                and ref.revision_id == path["revision"]
+                for ref in refs
+            )
+            if path["kind"] != "agent" and not matched:
+                continue
+            count("directory.usage_authorization_candidates")
             try:
                 call.authority.require(
                     principal,
@@ -319,20 +336,6 @@ class ResourceDirectory:
                 )
             except AuthorityError:
                 continue
-            refs = (
-                [p.source_snapshot]
-                if path["kind"] == "knowledge"
-                else [t.skill.reference for t in p.participants]
-                if path["kind"] == "skill"
-                else [t.profile for t in p.participants]
-                if path["kind"] == "runtime"
-                else []
-            )
-            matched = any(
-                ref.resource_id == path["identity"]
-                and ref.revision_id == path["revision"]
-                for ref in refs
-            )
             if path["kind"] == "agent":
                 matched = any(
                     call.connection.execute(
