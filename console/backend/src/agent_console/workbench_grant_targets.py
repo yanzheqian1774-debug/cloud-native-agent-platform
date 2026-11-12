@@ -64,6 +64,11 @@ class WorkbenchGrantTargetValidator:
         if connection is None:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE")
         try:
+            if grant.owner == "BUSINESS_PROBLEM" and grant.action == "LIST":
+                # Collection discovery enables an exact grant request only.
+                # Listing still checks the current caller's grant and filters
+                # individual problem/execution reads through their owners.
+                return grant.exact_resource == "business-problem:collection"
             if grant.owner == "INSTANCE" and grant.action == "CREATE":
                 return grant.exact_resource == "instance:collection"
             if grant.owner == "ASSIGNMENT" and grant.action == "CREATE":
