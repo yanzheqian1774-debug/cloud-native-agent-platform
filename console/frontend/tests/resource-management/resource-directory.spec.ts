@@ -44,6 +44,6 @@ test('workflow reading does not require authoring and preserves exact expansion'
  await page.goto('/workflow-definitions');await expect(page.getByRole('heading',{name:'工作流',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:workflow.name})).toBeVisible();
  await page.getByRole('button',{name:'就地展开',exact:true}).click();await expect(page.getByText('读取资料后逐项核对负责人和回退步骤',{exact:true})).toBeVisible();
  expect(requests.some(p=>p.includes('/workflows'))).toBe(false);expect(writes).toEqual([]);
- await page.getByRole('link',{name:'配置工作流',exact:true}).click();await expect(page).toHaveURL(/resourceView=professional/);await expect(page.getByText('Workflow 不可用或当前访问未获授权。',{exact:true})).toBeVisible();
- await page.getByRole('link',{name:'← 返回可读工作流',exact:true}).click();await expect(page.getByRole('heading',{name:workflow.name})).toBeVisible();expect(writes).toEqual([]);
+ await page.getByRole('link',{name:'配置工作流',exact:true}).click();await expect(page).toHaveURL(/resourceView=professional/);await expect(page.getByText('当前配置不存在或尚未向此账号开放。你仍可查看已获准读取的工作流。',{exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'Workflow quick authoring context'})).toHaveCount(0);await expect(page.getByRole('heading',{name:'not found',exact:true})).toHaveCount(0);await page.getByRole('link',{name:'返回可读工作流',exact:true}).click();await expect(page.getByRole('heading',{name:workflow.name})).toBeVisible();expect(writes).toEqual([]);
 });
