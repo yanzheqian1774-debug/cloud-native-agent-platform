@@ -30,3 +30,20 @@ test('F3 cards preserve exact current draft and history identities across partia
  await page.goto('/catalog?kind=skill');const cards=page.locator('.f3-resource-card');await expect(cards).toHaveCount(2);await expect(cards.first().getByText('当前发布内容',{exact:true})).toBeVisible();await expect(cards.first().getByText('修改草稿',{exact:true})).toBeVisible();await expect(cards.last()).toContainText('当前加载范围仅含历史记录');await expect(cards.first().getByText('当前发布用途 <script>不得执行</script>',{exact:true})).toBeVisible();await expect(cards.first().getByText('草稿用途尚未发布',{exact:true})).toBeVisible();await expect(cards.first().locator('script')).toHaveCount(0);
  await expect(cards.first().getByRole('link',{name:'打开资源详情'})).toHaveCount(2);await cards.first().getByText('历史记录 · 已加载 1 个版本',{exact:true}).click();const history=cards.first().getByRole('region',{name:'历史固定版本 · old'});await expect(history).toBeVisible();await expect(history.getByText('历史口径说明',{exact:true})).toBeVisible();await expect(history.getByRole('link',{name:'打开资源详情'})).toHaveAttribute('href',/selected=skill%3Aexact&resourceRevision=old&resourceDigest=a{64}/);await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();expect(writes).toEqual([]);
 });
+
+test('workflow reading does not require authoring and preserves exact expansion',async({page})=>{
+ const requests:string[]=[],writes:string[]=[];
+ const workflow={...item,kind:'workflow',identity:'flow:read',revisionId:'flow-v1',name:'可读交接工作流',businessPurpose:'核对交接并返回缺口'};
+ await page.route('**/api/workbench/v1/**',route=>{
+  const req=route.request(),u=new URL(req.url());requests.push(u.pathname);if(req.method()!=='GET')writes.push(u.pathname);
+  if(u.pathname.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal,session:{},csrfToken:'fixture'}});
+  if(u.pathname==='/api/workbench/v1/resource-directory'){return route.fulfill({json:{result:{items:u.searchParams.get('kind')==='workflow'?[workflow]:[],subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},nextCursor:null}}})}
+  if(u.pathname.includes('/resource-directory/workflow/')){expect(decodeURIComponent(u.pathname)).toContain('flow:read');expect(u.pathname.endsWith('/flow-v1')).toBe(true);return route.fulfill({json:{result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},revision:{revisionId:workflow.revisionId,digest:workflow.digest,content:{description:'读取资料后逐项核对负责人和回退步骤'}},usage:[]}}})}
+  return route.fulfill({status:404,json:{reasonCode:'WORKFLOW_NOT_AUTHORIZED'}});
+ });
+ await page.goto('/workflow-definitions');await expect(page.getByRole('heading',{name:'工作流',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:workflow.name})).toBeVisible();
+ await page.getByRole('button',{name:'就地展开',exact:true}).click();await expect(page.getByText('读取资料后逐项核对负责人和回退步骤',{exact:true})).toBeVisible();
+ expect(requests.some(p=>p.includes('/workflows'))).toBe(false);expect(writes).toEqual([]);
+ await page.getByRole('link',{name:'配置工作流',exact:true}).click();await expect(page).toHaveURL(/resourceView=professional/);await expect(page.getByText('Workflow 不可用或当前访问未获授权。',{exact:true})).toBeVisible();
+ await page.getByRole('link',{name:'← 返回可读工作流',exact:true}).click();await expect(page.getByRole('heading',{name:workflow.name})).toBeVisible();expect(writes).toEqual([]);
+});

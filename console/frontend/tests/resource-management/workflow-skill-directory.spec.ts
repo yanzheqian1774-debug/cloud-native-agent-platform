@@ -21,7 +21,7 @@ for(const mode of ['ready','wrong-version','denied','deprecated','disabled','dup
   if(p.includes('/resource-directory/skill/')){details++;return route.fulfill({status:500,json:{reasonCode:'UNEXPECTED_DETAIL_FANOUT'}})}
   return reply({items:[]});
  });
- await page.goto('/workflow-definitions');const status=page.getByRole('region',{name:'Skill operation directory status'});
+ await page.goto('/workflow-definitions?resourceView=professional');const status=page.getByRole('region',{name:'Skill operation directory status'});
  if(['wrong-version','denied','identity-change'].includes(mode))await expect(status).toContainText('目录不可用');
  else await expect(status).toContainText(mode==='ready'?'1 个合格 operation':'0 个合格 operation');
  expect(cursors).toEqual(['','next-page']);expect(details).toBe(0);expect(legacy).toBe(0);

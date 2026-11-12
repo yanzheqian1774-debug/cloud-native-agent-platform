@@ -3,7 +3,8 @@ import {WorkflowCapabilityLookup} from "../capabilities/WorkflowDerivedCapabilit
 import {ControlledState} from "../shared/ControlledState";
 import {PageHeader,StatusBadge} from "../components/WorkspacePrimitives";
 import {useEffect,useMemo,useRef,useState} from "react";
-import {useSearchParams} from "react-router-dom";
+import {Link,useSearchParams} from "react-router-dom";
+import {TrustedResourceDirectory} from "../resources/TrustedResourceDirectory";
 import {trustedWorkflowAuthoring,hasPendingWorkflowCommand,recoverWorkflowCommand,retryOriginalWorkflowCommand,createWorkflowDefinition,editWorkflowDefinition,getWorkflowDefinition,hasSkillOperationBindings,listWorkflowDefinitions,publishWorkflowDefinition,referenceSupportsBinding,reviewWorkflowDefinition,successorWorkflowDefinition,validateWorkflowDefinition,workflowControlledState,WorkflowDefinitionRequestError,type WorkflowContent,type WorkflowControlledState,type WorkflowProjection} from "../api/workflowDefinitions";
 import {listWorkflowSkillOperations,WorkflowSkillOperationDirectoryError,type WorkflowSkillOperationEntry} from "../api/workflowSkillOperations";
 import {WorkflowBuilderPage} from "./WorkflowBuilderPage";
@@ -15,6 +16,14 @@ const blank=(runtimeProfileId="",runtimeRevisionId=""):WorkflowContent=>({descri
 type Recovery={state:WorkflowControlledState;reason:string;attemptedVersion:number;attemptedRevisionId:string|null;authoritative:WorkflowProjection;safeDraft:WorkflowContent|null};
 
 export function WorkflowWorkbenchPage(){
+ const [params]=useSearchParams();
+ // Preserve existing editing deep links and unresolved command recovery.
+ const configure=!trustedWorkflowAuthoring||params.get("resourceView")==="professional"||params.has("resourceId")||(params.get("resourceView")!=="read"&&hasPendingWorkflowCommand());
+ if(configure)return <WorkflowAuthoringPage/>;
+ return <TrustedResourceDirectory resourceKind="workflow"/>;
+}
+
+function WorkflowAuthoringPage(){
  const [searchParams,setSearchParams]=useSearchParams();const [initialDefinitionId]=useState(()=>searchParams.get("resourceId"));
  const [items,setItems]=useState<WorkflowProjection[]>([]),[selected,setSelected]=useState<WorkflowProjection|null>(null),[builder,setBuilder]=useState<WorkflowContent|null>(null),[builderName,setBuilderName]=useState("");
  const [state,setState]=useState<"LOADING"|"READY"|"SAVING">("LOADING"),[failure,setFailure]=useState<{state:WorkflowControlledState;reason:string}|null>(null),[recovery,setRecovery]=useState<Recovery|null>(null),[selectedTask,setSelectedTask]=useState<string|null>(null),[query,setQuery]=useState(searchParams.get("query")??""),[filter,setFilter]=useState(searchParams.get("lifecycle")??"ALL"),[runtimeId,setRuntimeId]=useState(""),[runtimeRevision,setRuntimeRevision]=useState("");
@@ -26,7 +35,7 @@ export function WorkflowWorkbenchPage(){
  const editorLocked=()=>saveInFlight.current||renderedEditorId!==editorId.current;
  const changeBuilder=(value:WorkflowContent)=>{if(!editorLocked())setBuilder(value)};
  const closeEditor=()=>{editorId.current+=1;requestId.current+=1;setBuilder(null);setRecovery(null);setState("READY")};
- function preserveContext(patch:Record<string,string|null>){const next=new URLSearchParams(searchParams);for(const [key,value] of Object.entries(patch)){if(value)next.set(key,value);else next.delete(key)}setSearchParams(next,{replace:true})}
+ function preserveContext(patch:Record<string,string|null>){const next=new URLSearchParams(searchParams);if(trustedWorkflowAuthoring)next.set("resourceView","professional");for(const [key,value] of Object.entries(patch)){if(value)next.set(key,value);else next.delete(key)}setSearchParams(next,{replace:true})}
  function recordFailure(reason:unknown){const error=reason instanceof WorkflowDefinitionRequestError?reason:new WorkflowDefinitionRequestError("WORKFLOW_DEFINITION_UNAVAILABLE",503);setFailure({state:workflowControlledState(error),reason:error.reasonCode});setState("READY")}
  async function loadOperationDirectory(){const current=++directoryRequestId.current;setOperationDirectoryState("LOADING");try{const result=await listWorkflowSkillOperations();if(current!==directoryRequestId.current)return;setOperationDirectory(result.entries);setRejectedSkillCount(result.rejectedResources);setOperationDirectoryReason(null);setOperationDirectoryState("READY")}catch(reason){if(current!==directoryRequestId.current)return;setOperationDirectory([]);setRejectedSkillCount(0);setOperationDirectoryReason(reason instanceof WorkflowSkillOperationDirectoryError?reason.reasonCode:"SKILL_OPERATION_DIRECTORY_UNAVAILABLE");setOperationDirectoryState("UNAVAILABLE")}}
  async function refresh(id?:string,keepEditor=false){if(!keepEditor){editorId.current+=1;setBuilder(null);}const current=++requestId.current;setState("LOADING");try{const values=await listWorkflowDefinitions();if(current!==requestId.current)return;const detail=id?await getWorkflowDefinition(id):null;if(current!==requestId.current)return;setItems(values);setSelected(detail);setSelectedTask(null);if(id)preserveContext({resourceId:id});setFailure(null);setRecovery(null);setState("READY")}catch(reason){if(current===requestId.current)recordFailure(reason)}}
@@ -44,7 +53,7 @@ export function WorkflowWorkbenchPage(){
  const lifecycleLocked=Boolean(builder)||hasPendingWorkflowCommand();
  const bindingValidationBlocked=activeHasSkillBindings&&!activeBindingsReviewable;
  async function recoverOriginalCommand(retry=false){if(actionInFlight.current)return;actionInFlight.current=true;setState("SAVING");try{const value=await (retry?retryOriginalWorkflowCommand():recoverWorkflowCommand());await refresh(value.definition.workflowDefinitionId)}catch(reason){recordFailure(reason)}finally{actionInFlight.current=false}}
- const feedback=<> {hasPendingWorkflowCommand()&&<section role="alert" className="workbench-card"><h2>上次提交结果待核对</h2><p>已保留原提交记录。先读取保存结果；仍未查到时，可明确沿用原记录重试。不会创建新提交编号或启动执行。</p><button disabled={state==="SAVING"} onClick={()=>void recoverOriginalCommand()}>读取原提交结果</button><button disabled={state==="SAVING"} onClick={()=>void recoverOriginalCommand(true)}>沿用原记录重试</button></section>}
+ const feedback=<> {trustedWorkflowAuthoring&&<Link to="/workflow-definitions?resourceView=read">← 返回可读工作流</Link>} {hasPendingWorkflowCommand()&&<section role="alert" className="workbench-card"><h2>上次提交结果待核对</h2><p>已保留原提交记录。先读取保存结果；仍未查到时，可明确沿用原记录重试。不会创建新提交编号或启动执行。</p><button disabled={state==="SAVING"} onClick={()=>void recoverOriginalCommand()}>读取原提交结果</button><button disabled={state==="SAVING"} onClick={()=>void recoverOriginalCommand(true)}>沿用原记录重试</button></section>}
  {state==="LOADING"&&<ControlledState kind="loading" title="正在读取权威 Workflow Definition…"/>}{state==="SAVING"&&<ControlledState kind="saving" title="正在保存受治理的 Workflow Definition…"/>}{failure&&<ControlledState label={`${failure.state} state`} kind={failure.state==="denied"?"denied":failure.state==="not found"?"not-found":"unavailable"} title={failure.state} detail={failure.state==="denied"||failure.state==="not found"?"Workflow 不可用或当前访问未获授权。":"数据暂时不可用，当前数量未知；请重新读取后继续。"} action={<button onClick={()=>void refresh(definition?.workflowDefinitionId,Boolean(builder))}>重新读取权威数据</button>}/>}
  {recovery&&<section role="alert" aria-label="Guided conflict recovery"><h2>{recovery.state}: 需要明确恢复操作</h2><dl><dt>Attempted aggregate version / 尝试的聚合版本</dt><dd>{recovery.attemptedVersion}</dd><dt>Authoritative aggregate version / 权威聚合版本</dt><dd>{recovery.authoritative.definition.aggregateVersion}</dd><dt>尝试的修订</dt><dd>{recovery.attemptedRevisionId??"NO_REVISION"}</dd><dt>权威修订</dt><dd>{recovery.authoritative.definition.revisions.at(-1)?.revisionId??"NO_REVISION"}</dd></dl><p>已只读获取权威版本。写请求不会自动重放，未保存的 Definition 输入（包括完整 Skill operation binding）会保留到你明确决定。</p>{recovery.safeDraft?<button aria-label="Explicitly reapply safe draft input" onClick={()=>{if(editorLocked())return;setEditTarget(recovery.authoritative.definition);setBuilder(structuredClone(recovery.safeDraft!));setBuilderName(recovery.authoritative.definition.name);setRecovery(null)}}>明确恢复保留的定义输入</button>:<button onClick={()=>setRecovery(null)}>确认权威版本</button>}<button onClick={closeEditor}>放弃保留输入</button></section>}</>;
  const savedContent=active?.content;
