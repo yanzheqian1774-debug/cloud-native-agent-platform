@@ -85,3 +85,18 @@ test('knowledge shows nested saved rows without turning zero false or missing in
  const state=await fixture(page,'knowledge',true),raw=JSON.stringify({schemaVersion:'example.v1',source:{rows:[{source_line:2,values:{name:'记录甲',cost:0,enabled:false}},{source_line:3,values:{name:'记录乙',cost:null}}]}});
  state.r.revisions[0].content={documents:[{documentId:'data',chunks:[{content:raw}]}]};await page.goto('/knowledge?managedResource=knowledge%3Amaintenance');const body=page.getByRole('region',{name:'知识正文与来源'}),table=body.getByRole('table');await expect(table).toBeVisible();await expect(table.getByRole('cell',{name:'0',exact:true})).toBeVisible();await expect(table.getByRole('cell',{name:'否',exact:true})).toBeVisible();await expect(table.getByRole('cell',{name:'未填写',exact:true})).toBeVisible();await expect(table.getByRole('cell',{name:'未提供',exact:true})).toBeVisible();await expect(body.locator('.knowledge-saved-document>details pre')).not.toBeVisible();await body.getByText('核对保存的原始正文',{exact:true}).click();await expect(body.locator('.knowledge-saved-document>details pre')).toHaveText(raw);expect(state.posts).toEqual([]);
 });
+
+
+test('knowledge repeated modify preserves unsaved content and cancel restores published prefill',async({page})=>{
+ const state=await fixture(page,'knowledge',true);state.r.currentDraftRevisionId=null;state.r.publishedRevisionId='revision:1';state.r.revisions[0].state='PUBLISHED';state.r.lifecycleState='PUBLISHED';
+ await page.goto('/knowledge?managedResource=knowledge%3Amaintenance');await page.getByRole('button',{name:'修改知识',exact:true}).click();const input=page.getByLabel('知识正文',{exact:true});await expect(input).toHaveValue('隔离知识正文');await input.fill('尚未保存的修改');await page.getByRole('button',{name:'修改知识',exact:true}).click();await expect(input).toHaveValue('尚未保存的修改');expect(await input.evaluate(n=>n.getBoundingClientRect().height)).toBeGreaterThanOrEqual(240);await page.getByRole('button',{name:'取消',exact:true}).click();await expect(input).toHaveCount(0);await page.getByRole('button',{name:'修改知识',exact:true}).click();await expect(input).toHaveValue('隔离知识正文');expect(state.posts).toEqual([]);
+});
+
+test('knowledge publication withdraws stale directory while fresh read is pending',async({page})=>{
+ const state=await fixture(page,'knowledge',true);state.r.revisions[0].state='PUBLISHED';state.r.publishedRevisionId='revision:1';state.r.currentDraftRevisionId='revision:2';state.r.revisions.push({...structuredClone(state.r.revisions[0]),revisionId:'revision:2',state:'VALIDATED',digest:'b'.repeat(64),predecessorRevisionId:'revision:1'});
+ let hold=false,release=()=>{};const gate=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/api/workbench/v1/resource-directory?**',async route=>{if(hold)await gate;await route.fallback()});
+ await page.goto('/knowledge?managedResource=knowledge%3Amaintenance');await expect(page.locator('.f3-resource-card')).toHaveCount(1);hold=true;
+ try{await page.getByRole('button',{name:'核验并发布',exact:true}).click();await expect(page.getByText('已发布，并已核对当前发布版本。',{exact:true})).toBeVisible();await page.getByRole('button',{name:'返回维护目录',exact:true}).click();await expect(page.locator('.f3-resource-card')).toHaveCount(0);expect(state.r.currentDraftRevisionId).toBeNull();expect(state.posts).toHaveLength(1);}finally{hold=false;release()}
+ await expect(page.locator('.f3-resource-card')).toHaveCount(1);expect(state.r.publishedRevisionId).toBe('revision:2');expect(state.posts).toHaveLength(1);
+});

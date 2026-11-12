@@ -13,3 +13,5 @@
 @media(max-width:700px){.f3-knowledge-maintenance .rm-detail>header h1{font-size:22px}.f3-knowledge-maintenance .rm-detail>header{gap:12px}}
 
 .f3-knowledge-maintenance .knowledge-maintenance-body p code{display:inline;white-space:break-spaces}
+
+.px-shell .resource-management.definition-management.f3-knowledge-maintenance .rm-form textarea{min-height:240px;max-height:65vh;line-height:1.6;resize:vertical}
