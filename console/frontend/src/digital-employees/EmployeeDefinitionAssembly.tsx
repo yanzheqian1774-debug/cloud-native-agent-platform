@@ -9,6 +9,7 @@ import {
   type EmployeeCommandResult,
   type EmployeeCreateCommand,
   type EmployeeMember,
+  type ResponsibilityBinding,
   type EmployeeDefinition,
   type EmployeeLifecycleState,
 } from "../api/digitalEmployees";
@@ -16,6 +17,9 @@ import { EmployeeAuthorizationRequest } from "./EmployeeAuthorizationRequest";
 
 import {employeeMemberKey,employeeMemberLabels,type EmployeeSelectionNames} from './employeeResourceSelection';
 import {EmployeeResourcePicker} from "./EmployeeResourcePicker";
+
+import {EmployeeResponsibilityEditor} from './EmployeeResponsibilityEditor';
+import {validResponsibilityBinding} from './employeeResponsibilityBindings';
 
 type FrozenCreate = { command: EmployeeCreateCommand; principalKey: string; memberNames:EmployeeSelectionNames };
 function SelectionSummary({members,names}:{members:EmployeeMember[];names:EmployeeSelectionNames}){
@@ -61,6 +65,7 @@ export function EmployeeDefinitionAssembly({
   const [agentIdentity, setAgentIdentity] = useState("");
   const [resourceNames,setResourceNames]=useState<EmployeeSelectionNames>({});
   const [resourceMembers, setResourceMembers] = useState<EmployeeMember[]>([]);
+  const [bindings,setBindings]=useState<ResponsibilityBinding[]>([]);
   const [resourcePrincipal, setResourcePrincipal] = useState<string|null>(null);
   const [frozen, setFrozen] = useState<FrozenCreate | null>(null);
   const [busy, setBusy] = useState(false);
@@ -86,7 +91,7 @@ export function EmployeeDefinitionAssembly({
     { label: "可用 Agent 版本", ready: Boolean(selectedAgent?.enabled && !selectedAgent.archived) },
     { label: "定义与修订标识", ready: Boolean(definitionId.trim() && revisionId.trim()) },
   ];
-  const valid = readiness.every(item => item.ready);
+  const valid = readiness.every(item => item.ready) && bindings.every(b=>validResponsibilityBinding(b,responsibilityList,resourceMembers));
 
   async function prepare() {
     if (!valid || !selectedAgent || inFlight.current) return;
@@ -100,12 +105,13 @@ export function EmployeeDefinitionAssembly({
     try {
       const session = await getWorkbenchSession(controller.signal);
       if (turn !== generation.current) return;
-      if(resourceMembers.length && resourcePrincipal!==workbenchPrincipalKey(session)){setResourceMembers([]);setResourceNames({});throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED",409)}
+      if(resourceMembers.length && resourcePrincipal!==workbenchPrincipalKey(session)){setResourceMembers([]);setResourceNames({});setBindings([]);throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED",409)}
       const command: EmployeeCreateCommand = {
         employeeDefinitionId: definitionId.trim(),
         employeeDefinitionRevisionId: revisionId.trim(),
         role: role.trim(),
         responsibilities: [...responsibilityList],
+        responsibilityBindings: bindings.map(b=>({responsibility:b.responsibility,member:{...b.member}})),
         members: [{
           kind: "AGENT",
           resourceId: selectedAgent.definitionId,
@@ -115,6 +121,8 @@ export function EmployeeDefinitionAssembly({
         expectedVersion: 0,
         commandId: `employee-command:${crypto.randomUUID()}`,
       };
+      command.responsibilityBindings?.forEach(b=>{Object.freeze(b.member);Object.freeze(b)});
+      Object.freeze(command.responsibilityBindings);
       Object.freeze(command.responsibilities);
       command.members.forEach(Object.freeze);
       Object.freeze(command.members);
@@ -220,6 +228,7 @@ export function EmployeeDefinitionAssembly({
         {hasMoreAgents && <button type="button" className="employee-secondary-button" onClick={onLoadMoreAgents}>加载更多 Agent</button>}
       </div>
       <EmployeeResourcePicker disabled={Boolean(frozen)||busy} onChange={(members,principal,names)=>{setResourceMembers(members);setResourcePrincipal(principal);setResourceNames(names??{})}}/>
+      <EmployeeResponsibilityEditor names={resourceNames} duties={responsibilityList} members={resourceMembers} value={bindings} onChange={setBindings} disabled={Boolean(frozen)||busy}/>
     </div>
 
     <aside className="assembly-preview" aria-label="装配预览">
@@ -237,7 +246,7 @@ export function EmployeeDefinitionAssembly({
       <span className="employee-confirmation-state">等待用户明确确认</span>
       <h3>{frozen.command.role}</h3>
       <p>{frozen.command.responsibilities.join("；")}</p>
-      <p>组合成员：{frozen.command.members.length} 项</p><SelectionSummary members={frozen.command.members} names={frozen.memberNames}/>
+      <p>职责资源关联：{frozen.command.responsibilityBindings?.length??0} 项</p><ul>{frozen.command.responsibilityBindings?.map((b,i)=><li key={i}>{b.responsibility} → {frozen.memberNames[employeeMemberKey(b.member)]??"所选资源"}</li>)}</ul><p>组合成员：{frozen.command.members.length} 项</p><SelectionSummary members={frozen.command.members} names={frozen.memberNames}/>
       <details><summary>查看冻结命令身份</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionId}</code><code>{frozen.command.employeeDefinitionRevisionId}</code></details>
       <div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认创建"}</button></div>
     </section>}
