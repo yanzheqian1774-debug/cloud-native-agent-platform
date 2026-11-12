@@ -33,7 +33,7 @@ test('simple answer refresh and followup use original conversation without task 
  await expect(page.locator('#conversation-message-a1 .private-user')).toContainText('先明确核对目标');
  await expect(page.locator('#conversation-message-a1 .private-user strong')).toHaveText('明确核对目标');
  await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();await expect(page.locator('.f3-progress-rail')).toBeHidden();
- expect(state.calls).toHaveLength(1);expect(state.sources).toBe(0);
+ expect(state.calls).toHaveLength(1);expect(state.sources).toBe(0);await expect(page.getByText('已记录',{exact:true})).toHaveCount(0);
  await page.reload();await expect(page.locator('#conversation-message-a1')).toBeVisible();expect(state.calls).toHaveLength(1);
  await page.getByLabel('继续提问',{exact:true}).fill('再详细说一点');await page.getByRole('button',{name:'发送',exact:true}).click();
  await expect(page.locator('#conversation-message-a2 .private-user')).toContainText('补充说明');
@@ -207,4 +207,23 @@ test('narrow progress preserves bottom composer draft and reading position',asyn
   const after=await geometry();expect(Math.abs(after.scroll-before.scroll)).toBeLessThanOrEqual(1);expect(Math.abs(after.bottom-before.bottom)).toBeLessThanOrEqual(1);
  }
  expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
+});
+
+
+test('saved-message cleanup retains actionable routing hints and answer provenance',async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();state.messages.push({message_id:'clarify',content:'继续处理原有工作',author_id:'human:ordinary',disposition:'CLARIFY_WORK'},{message_id:'new-goal',content:'另一个目标',author_id:'human:ordinary',disposition:'NEW_GOAL_REVIEW'});
+ await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ await expect(page.getByText('已记录',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('这条要求指向哪项工作？请选择下方关联工作后补充，原消息会保留。',{exact:true})).toBeVisible();
+ await expect(page.getByRole('link',{name:'核对新的业务目标'})).toBeVisible();
+ await page.getByText('查看来源与记录',{exact:true}).click();await expect(page.getByText('助手答复已保存',{exact:true})).toBeVisible();
+});
+
+for(const outcome of ['readable','denied','wrong-version'])test('answer source stays exact and authorized '+outcome,async({page})=>{
+ const state=await directFixture(page);await page.goto('/work?conversation=direct');await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();
+ const answer=state.messages.find(m=>m.message_id==='a1')!;const facts=answer.facts as {response:Record<string,unknown>};facts.response.inputSource={source:{resource_id:'knowledge:original',revision_id:'revision:original',digest:'a'.repeat(64)},name:'原交接说明',sourceSchema:'document-review-source.v1',sourceContentDigest:'b'.repeat(64)};
+ let reads=0;await page.route('**/api/workbench/v1/resource-directory/**',route=>{reads++;expect(decodeURIComponent(new URL(route.request().url()).pathname)).toBe('/api/workbench/v1/resource-directory/knowledge/knowledge:original/revision:original');if(outcome==='denied')return route.fulfill({status:403,json:{reasonCode:'READ_DENIED'}});return route.fulfill({json:{result:{kind:'knowledge',identity:'knowledge:original',subject:'human:ordinary',scope:{tenantId:'tenant',securityDomain:'domain'},revision:{revisionId:outcome==='wrong-version'?'revision:latest':'revision:original',digest:'a'.repeat(64),content:{documents:[{documentId:'doc',chunks:[{content:'# 原版本依据\n\n**责任人**：李明'}]}]}}}}})});
+ await page.reload();await page.getByText('查看来源与记录',{exact:true}).click();expect(reads).toBe(0);await page.getByRole('button',{name:'查看本次使用的原文'}).click();
+ if(outcome==='readable'){await expect(page.getByRole('heading',{name:'原版本依据'})).toBeVisible();await expect(page.getByRole('region',{name:'本次回答使用的资料'}).locator('.knowledge-document-reading strong')).toHaveText('责任人')}else{await expect(page.getByRole('alert')).toContainText('暂时无法读取本次使用的资料版本');await expect(page.getByRole('heading',{name:'原版本依据'})).toHaveCount(0)}
+ await page.getByRole('button',{name:'收起原文'}).click();await expect(page.getByLabel('继续提问',{exact:true})).toBeVisible();expect(reads).toBe(1);expect(state.calls).toHaveLength(1);
 });
