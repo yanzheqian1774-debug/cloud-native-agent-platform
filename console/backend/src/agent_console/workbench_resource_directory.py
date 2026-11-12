@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .authority_contracts import AuthorityError, ExactGrant
+from .request_timing import count, measured, span
 from .resource_use_domain import canonical_digest
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_business_problem import OwnerPrincipal
@@ -179,29 +180,31 @@ class ResourceDirectory:
                 continue
             lower = after[1:] if after and kind == after[0] else ("", "")
             while len(result) <= args.pageSize:
-                rows = call.connection.execute(
-                    f"SELECT {column} identity,t.record,r FROM {table} t "
-                    "CROSS JOIN LATERAL jsonb_array_elements(t.record->'revisions') r "
-                    f"WHERE namespace=%s AND security_domain=%s AND ({column},r->>'revisionId')>(%s,%s) "
-                    + ("AND kind=%s " if kind in {"skill", "mcp"} else "")
-                    + f"ORDER BY {column},r->>'revisionId' LIMIT 100",
-                    (
-                        p.tenant_id,
-                        p.security_domain,
-                        *lower,
-                        *([kind] if kind in {"skill", "mcp"} else []),
-                    ),
-                ).fetchall()
+                with span("directory.query_fetch"):
+                    rows = call.connection.execute(
+                        f"SELECT {column} identity,t.record,r FROM {table} t "
+                        "CROSS JOIN LATERAL jsonb_array_elements(t.record->'revisions') r "
+                        f"WHERE namespace=%s AND security_domain=%s AND ({column},r->>'revisionId')>(%s,%s) "
+                        + ("AND kind=%s " if kind in {"skill", "mcp"} else "")
+                        + f"ORDER BY {column},r->>'revisionId' LIMIT 100",
+                        (
+                            p.tenant_id,
+                            p.security_domain,
+                            *lower,
+                            *([kind] if kind in {"skill", "mcp"} else []),
+                        ),
+                    ).fetchall()
                 for row in rows:
+                    count("directory.scanned")
                     scanned += 1
                     if scanned > 10000:
                         raise WorkbenchOwnerError("RESOURCE_DIRECTORY_SCAN_LIMIT", 503)
                     r, record, identity = row["r"], row["record"], row["identity"]
                     lower = (identity, r["revisionId"])
-                    if (
-                        args.query.casefold()
-                        not in (record["name"] + " " + identity).casefold()
-                    ):
+                    name = record.get("name")
+                    if not isinstance(name, str) or not name.strip():
+                        name = identity
+                    if args.query.casefold() not in (name + " " + identity).casefold():
                         continue
                     if args.status and r["state"] != args.status:
                         continue
@@ -212,13 +215,14 @@ class ResourceDirectory:
                         )
                     except AuthorityError:
                         continue
+                    count("directory.allowed")
                     result.append(
                         {
                             "kind": kind,
                             "identity": identity,
                             "revisionId": r["revisionId"],
                             "digest": r["digest"],
-                            "name": record["name"],
+                            "name": name,
                             "businessPurpose": revision_purpose(r),
                             "state": r["state"],
                             "enabled": record.get("enabled", True)
@@ -279,6 +283,7 @@ class ResourceDirectory:
         }
 
     @staticmethod
+    @measured("directory.usage")
     def usage(call):
         from .ontology_execution import parse_preparation
 
@@ -288,14 +293,16 @@ class ResourceDirectory:
             call.context.scope.security_domain,
         )
         path = call.path
-        rows = call.connection.execute(
-            "SELECT p.record,s.record progress FROM execution_authority.run_preparations p "
-            "JOIN execution_authority.prepared_run_progress s USING(namespace,security_domain,workflow_run_id) "
-            "WHERE p.namespace=%s AND p.security_domain=%s ORDER BY p.workflow_run_id LIMIT 200",
-            (principal.tenant_id, principal.security_domain),
-        ).fetchall()
+        with span("directory.usage_query_fetch"):
+            rows = call.connection.execute(
+                "SELECT p.record,s.record progress FROM execution_authority.run_preparations p "
+                "JOIN execution_authority.prepared_run_progress s USING(namespace,security_domain,workflow_run_id) "
+                "WHERE p.namespace=%s AND p.security_domain=%s ORDER BY p.workflow_run_id LIMIT 200",
+                (principal.tenant_id, principal.security_domain),
+            ).fetchall()
         visible = []
         for row in rows:
+            count("directory.usage_scanned")
             p = parse_preparation(row["record"])
             try:
                 call.authority.require(

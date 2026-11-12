@@ -19,6 +19,8 @@ from agent_console.authority_foundation import AuthorityGenerationController
 from agent_console.authority_postgres import PostgresAuthorityRepository
 from agent_console.grant_administration_application import GenerationAuthorizationReader
 
+from .request_timing import count, measured, measured_context
+
 T = TypeVar("T")
 
 
@@ -57,6 +59,7 @@ class AuthorizedOwnerAuthority:
             (item.owner, item.action, item.exact_resource): item for item in initial
         }
 
+    @measured("owner.require")
     def require(self, principal, owner: str, action: str, resource: str):
         if (
             principal.principal_id != self.context.principal_id
@@ -69,7 +72,9 @@ class AuthorizedOwnerAuthority:
         key = (owner, action, resource)
         decision = self.decisions.get(key)
         if decision is not None:
+            count("owner.allowed_cache_hit")
             return decision
+        count("owner.grant_lookup")
         allowed = self.adapter.authorization.has_current_grants(
             self.context,
             (grant,),
@@ -162,7 +167,9 @@ class WorkbenchOwnerAuthorization:
         for grant in grants:
             validate_registered_grant(grant, allow_meta=False)
         with (
-            self.controller.protected_request() as generation,
+            measured_context(
+                self.controller.protected_request(), "generation"
+            ) as generation,
             self.repository.connection_scope() as connection,
         ):
             # Owner idempotency claims intentionally serialize after this
@@ -170,7 +177,7 @@ class WorkbenchOwnerAuthorization:
             # winner's completed claim while the session/grant share locks and
             # generation barrier still hold revocation behind this transaction.
             connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-            allowed = self.authorization.has_current_grants(
+            allowed = measured("entry.grants")(self.authorization.has_current_grants)(
                 context,
                 grants,
                 now=self.clock(),
@@ -188,7 +195,7 @@ class WorkbenchOwnerAuthorization:
             owner_authority = AuthorizedOwnerAuthority(
                 self, context, connection, generation.generation, decisions
             )
-            return handler(
+            return measured("owner.handler")(handler)(
                 AuthorizedOwnerCall(
                     operation=operation,
                     context=context,

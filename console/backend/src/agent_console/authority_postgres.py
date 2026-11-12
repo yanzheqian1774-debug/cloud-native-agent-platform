@@ -38,6 +38,8 @@ from agent_console.authority_contracts import (
     require_bounded_label,
 )
 
+from .request_timing import measured_context
+
 ADAPTER = "browser-session-grant-authority-postgresql-v18"
 MIGRATION_VERSION = 18
 
@@ -75,7 +77,10 @@ class PostgresAuthorityRepository:
         if connection is not None:
             yield connection
         else:
-            with self.pool.connection() as owned, owned.transaction():
+            with (
+                measured_context(self.pool.connection(), "connection") as owned,
+                measured_context(owned.transaction(), "transaction"),
+            ):
                 yield owned
 
     def migrate(self) -> None:
@@ -708,7 +713,10 @@ class PostgresAuthorityRepository:
         try:
             if connection is not None:
                 return read(connection, lock_for_owner=True)
-            with self.pool.connection() as owned, owned.transaction():
+            with (
+                measured_context(self.pool.connection(), "connection") as owned,
+                measured_context(owned.transaction(), "transaction"),
+            ):
                 return read(owned, lock_for_owner=False)
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc
@@ -793,7 +801,10 @@ class PostgresAuthorityRepository:
         try:
             if connection is not None:
                 return read(connection, lock_for_owner=True)
-            with self.pool.connection() as owned, owned.transaction():
+            with (
+                measured_context(self.pool.connection(), "connection") as owned,
+                measured_context(owned.transaction(), "transaction"),
+            ):
                 return read(owned, lock_for_owner=False)
         except PsycopgError as exc:
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE") from exc

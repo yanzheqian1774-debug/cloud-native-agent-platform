@@ -49,6 +49,8 @@ from agent_console.workbench_owner_authorization import (
     WorkbenchOwnerError,
 )
 
+from .request_timing import measured, observe_request
+
 PREFIX = "/api/workbench/v1"
 SESSION_COOKIE = "__Host-workbench_session"
 UNTRUSTED_IDENTITY_HEADERS = frozenset(
@@ -202,6 +204,7 @@ def create_workbench_bff(
     directory_read_limiter = CapacityLimiter(1)
 
     @app.middleware("http")
+    @observe_request
     async def browser_boundary(request: Request, call_next):
         request.state.diagnostic_id = _request_id()
         if request.headers.get("host") != policy.allowed_host:
@@ -300,6 +303,7 @@ def create_workbench_bff(
             return _error("WORKBENCH_METHOD_NOT_ALLOWED", 405)
         return _error("REQUEST_INVALID", exc.status_code)
 
+    @measured("identity")
     def authenticate(request: Request):
         value = request.cookies.get(SESSION_COOKIE)
         if not value:
