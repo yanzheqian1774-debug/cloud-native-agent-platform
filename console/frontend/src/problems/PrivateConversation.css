@@ -203,7 +203,7 @@
 
 /* Narrow progress opens above the reading area; the composer keeps its bottom anchor. */
 @media(min-width:701px) and (max-width:1100px){
- .px-shell.journey-shell .f3-conversation .px-conversation{grid-column:1;grid-row:3}
+ .px-shell.journey-shell .f3-conversation .px-workspace-body>.px-conversation{grid-column:1;grid-row:3}
 }
 @media(max-width:700px){
  .px-shell.journey-shell .f3-conversation .f3-progress-rail{order:-1;width:100%;max-height:30%;flex-shrink:0}

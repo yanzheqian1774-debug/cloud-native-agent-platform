@@ -197,11 +197,11 @@ test('narrow progress preserves bottom composer draft and reading position',asyn
  for(const width of [980,390]){
   await page.setViewportSize({width,height:900});await page.goto('/work?conversation=direct');
   const input=page.getByLabel('暂存补充',{exact:true});await expect(input).toBeVisible();await input.fill('关闭进展后继续这份草稿');
-  const geometry=()=>page.evaluate(()=>{const dock=document.querySelector('.f3-composer-dock')!.getBoundingClientRect(),stream=document.querySelector('.px-message-stream')!;return {bottom:dock.bottom,top:dock.top,scroll:stream.scrollTop,height:stream.clientHeight}});
+  const geometry=()=>page.evaluate(()=>{const dock=document.querySelector('.f3-composer-dock')!.getBoundingClientRect(),stream=document.querySelector('.px-message-stream')!;return {bottom:dock.bottom,top:dock.top,scroll:stream.scrollTop,height:stream.clientHeight,streamTop:stream.getBoundingClientRect().top,railBottom:document.querySelector('.f3-progress-rail')!.getBoundingClientRect().bottom}});
   await page.locator('.px-message-stream').evaluate(e=>{e.scrollTop=120});
   const before=await geometry();expect(before.scroll).toBeGreaterThan(0);await page.getByRole('button',{name:'展开工作进展'}).click();
   await expect(page.locator('.f3-rail-content')).toBeVisible();const expanded=await geometry();
-  expect(Math.abs(expanded.bottom-before.bottom)).toBeLessThanOrEqual(1);expect(expanded.bottom).toBeGreaterThan(870);expect(expanded.height).toBeGreaterThan(100);
+  expect(Math.abs(expanded.bottom-before.bottom)).toBeLessThanOrEqual(1);expect(expanded.bottom).toBeGreaterThan(870);expect(expanded.height).toBeGreaterThan(100);expect(expanded.streamTop).toBeGreaterThanOrEqual(expanded.railBottom);
   await page.screenshot({path:testInfo.outputPath('progress-expanded-'+width+'.png')});
   await page.getByRole('button',{name:'收起工作进展'}).click();await expect(input).toHaveValue('关闭进展后继续这份草稿');
   const after=await geometry();expect(Math.abs(after.scroll-before.scroll)).toBeLessThanOrEqual(1);expect(Math.abs(after.bottom-before.bottom)).toBeLessThanOrEqual(1);
