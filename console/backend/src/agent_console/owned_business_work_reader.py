@@ -15,6 +15,7 @@ from .draft_assistance_postgres import PostgresDraftAssistanceRepository
 from .execution_domain import ScopeIdentity
 from .owned_business_policy import OwnedBusinessPolicy, OwnedBusinessScope
 from .owned_business_postgres import context_binding, require_not_revoked, saved
+from .owned_business_result_link import same_result_after_problem_link
 from .plan_suggestion_domain import ExactReference
 from .planning_candidates import read_published
 from .understanding_adoption_postgres import read_chain
@@ -246,7 +247,9 @@ class OwnedBusinessWorkReader:
             and value.turn_id == r["turnId"]
             and value.turn_version == r["turnVersion"]
             and value.commitment == r["commitment"]
-            and value.aggregate_version == r["aggregateVersion"]
+            and same_result_after_problem_link(
+                c, context, value, r["aggregateVersion"], problem.resource_id
+            )
             and value.profile_revision_id == r["profileRevision"]
             and value.snapshot is not None
             and value.snapshot.profile_digest == r["profileDigest"]

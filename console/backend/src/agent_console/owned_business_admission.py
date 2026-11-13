@@ -9,6 +9,7 @@ from .draft_assistance_postgres import PostgresDraftAssistanceRepository
 from .execution_domain import ScopeIdentity
 from .owned_business_policy import OwnedBusinessPolicy
 from .owned_business_postgres import append, context_binding, require_not_revoked, saved
+from .owned_business_result_link import same_result_after_problem_link
 from .owned_business_work_reader import OwnedBusinessWorkReader
 from .plan_suggestion_domain import ExactReference
 from .planning_candidates import read_published
@@ -292,7 +293,8 @@ class OwnedBusinessAdmission:
         )
         previous = saved(c, context, invocation_id)
         bound_problem = c.execute(
-            "SELECT invocation_id FROM authorization_admin.context_call_objects "
+            "SELECT invocation_id,resource_id FROM "
+            "authorization_admin.context_call_objects "
             "WHERE context_id=%s AND owner='BUSINESS_PROBLEM'",
             (value.context_id,),
         ).fetchone()
@@ -354,6 +356,19 @@ class OwnedBusinessAdmission:
         }
         previous = saved(c, context, invocation_id)
         if previous:
+            if value.aggregate_version != previous["record"]["aggregateVersion"]:
+                require(
+                    bound_problem is not None
+                    and same_result_after_problem_link(
+                        c,
+                        context,
+                        value,
+                        previous["record"]["aggregateVersion"],
+                        bound_problem["resource_id"],
+                    ),
+                    "RESULT_CHANGED",
+                )
+                record["aggregateVersion"] = previous["record"]["aggregateVersion"]
             require(previous["record"] == record, "ADMISSION_CHANGED")
         else:
             previous = append(c, context, record)
