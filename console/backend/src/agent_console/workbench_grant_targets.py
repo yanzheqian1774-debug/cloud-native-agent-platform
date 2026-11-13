@@ -128,7 +128,7 @@ class WorkbenchGrantTargetValidator:
                 )
             if grant.owner in {"SUCCESS_CRITERION", "SUCCESS_CRITERIA_SET"} or (
                 grant.owner == "BUSINESS_PROBLEM"
-                and grant.action in {"READ", "REVISE", "TRANSITION"}
+                and grant.action in {"CREATE", "READ", "REVISE", "TRANSITION"}
             ):
                 if self.problems is None:
                     return False

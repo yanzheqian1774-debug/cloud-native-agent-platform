@@ -83,6 +83,9 @@ class PostgresBusinessProblemRepository:
     ) -> bool:
         """Validate a direct Workbench grant target from canonical owner facts."""
         try:
+            if owner == "BUSINESS_PROBLEM" and action == "CREATE":
+                # Target discovery only; requestability and grants authorize create.
+                return exact_resource == "business-problem:collection"
             if owner == "BUSINESS_PROBLEM" and action in {
                 "READ",
                 "REVISE",
