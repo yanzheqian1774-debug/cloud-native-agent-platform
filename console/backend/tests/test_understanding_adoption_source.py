@@ -10,6 +10,7 @@ from types import SimpleNamespace as NS
 import pytest
 from agent_console.authority_configuration import RequestabilityRule
 from agent_console.authority_contracts import ExactGrant
+from agent_console.conversation_source_access import ConversationSourceAccess
 from agent_console.conversation_source_input import source_reader
 from agent_console.grant_administration_application import (
     GrantDecisionCommand,
@@ -112,22 +113,24 @@ def select(e):
         ),
     )
     app = e.adoption_client.app
+    automation = NS(
+        bound_app=lambda call: NS(
+            scope=lambda p: NS(namespace=p.tenant_id, security_domain=p.security_domain)
+        )
+    )
+    authorizer = e.draft.authorization.owner_authorization
+    records = app.state.conversation_actions.records
     raw = source_reader(
-        NS(
-            bound_app=lambda call: NS(
-                scope=lambda p: NS(
-                    namespace=p.tenant_id, security_domain=p.security_domain
-                )
-            )
-        ),
-        e.draft.authorization.owner_authorization,
-        app.state.conversation_actions.records,
+        automation,
+        authorizer,
+        records,
         adoption=True,
+        owned_access=ConversationSourceAccess(automation, authorizer, records, e.draft),
     )
     app.state.conversation_adoption_source_input = raw
 
-    def metadata(*args):
-        attachment = raw(*args)
+    def metadata(*args, **kwargs):
+        attachment = raw(*args, **kwargs)
         if attachment is None:
             return None
         value = json.loads(attachment)
@@ -196,3 +199,166 @@ def test_source_changed_after_model_result_cannot_be_adopted(adopted):
             == 0
         )
     assert len(e.calls) == 1
+
+
+@pytest.mark.parametrize("adopted", ["NEEDS_DATA"], indirect=True)
+@pytest.mark.parametrize("revoked", [False, True])
+def test_actual_owned_source_adoption_reuses_transaction_and_keeps_read_gate(
+    adopted, monkeypatch, revoked
+):
+    from contextlib import contextmanager
+
+    from agent_console.grant_administration_application import GrantRevocationCommand
+
+    e = adopted
+    selected = select(
+        e
+    )  # Actual published owner record, current exact READ and access.
+    from agent_console.draft_assistance import DraftResultKind
+
+    e.kind = DraftResultKind.DRAFT_READY
+    path, result = answer(e)
+    assert result["state"] == "SUCCEEDED"
+    app = e.adoption_client.app
+    application = app.state.understanding_adoption
+    metadata = application.source_reader
+    connections = []
+    held = []
+    protected = e.draft.authorization.owner_authorization.controller.protected_request
+
+    @contextmanager
+    def generation_guard():
+        with protected():
+            held.append(True)
+            try:
+                yield
+            finally:
+                held.pop()
+
+    application.source_transaction = generation_guard
+
+    def observed(ctx, conversation, message, *, connection=None):
+        assert (
+            connection is not None
+        )  # The actual adoption owner UoW, not another pool.
+        connections.append(connection.info.backend_pid)
+        return metadata(ctx, conversation, message, connection=connection)
+
+    monkeypatch.setattr(application, "source_reader", observed)
+    # Old nested-lock implementations fail boundedly instead of hanging the suite.
+    repository = e.draft.authorization.owner_authorization.repository
+    original_connection = repository.connection_scope
+
+    @contextmanager
+    def bounded(connection=None):
+        with original_connection(connection) as c:
+            c.execute("SET LOCAL statement_timeout='1500ms'")
+            yield c
+
+    monkeypatch.setattr(repository, "connection_scope", bounded)
+    if revoked:
+        grants = e.admission.delegation.grants
+        with e.repo.connection_scope() as c:
+            grant = c.execute(
+                "SELECT grant_id FROM authorization_admin.grants "
+                "WHERE subject_principal_id=%s AND owner='KNOWLEDGE' "
+                "AND action='READ_RESOURCE' AND exact_resource=%s",
+                (
+                    e.context.principal_id,
+                    reference(
+                        "knowledge", selected["resource_id"], selected["revision_id"]
+                    ),
+                ),
+            ).fetchone()
+        grants.revoke_grant(
+            e.context,
+            GrantRevocationCommand(
+                grant["grant_id"],
+                "TEST_WITHDRAWAL",
+                "source-adoption-withdrawal",
+                surrender=True,
+            ),
+        )
+    response = e.adoption_client.post(
+        PREFIX + path, headers=e.adoption_headers, json={"requestKey": "answer"}
+    )
+    assert response.status_code == (403 if revoked else 200), response.text
+    assert connections
+    with e.repo.connection_scope() as c:
+        count = c.execute(
+            "SELECT count(*) n FROM draft_assistance.result_adoptions"
+        ).fetchone()["n"]
+        assert count == (0 if revoked else 1)
+    if not revoked:
+        replay = e.adoption_client.post(
+            PREFIX + path, headers=e.adoption_headers, json={"requestKey": "answer"}
+        )
+        assert replay.status_code == 200, replay.text
+    assert len(e.calls) == len(e.initial_calls) == 1
+
+
+@pytest.mark.parametrize("adopted", ["NEEDS_DATA"], indirect=True)
+def test_adoption_nested_source_read_completes_with_generation_writer_waiting(
+    adopted, monkeypatch
+):
+    from contextlib import contextmanager
+    from threading import Event, Thread, current_thread
+
+    from agent_console.authority_foundation import ActivationBarrier
+
+    e = adopted
+    controller = e.draft.authorization.owner_authorization.controller
+    original_protected = controller.protected_request
+    barrier = ActivationBarrier(e.admission.delegation.grants.generation)
+    waiting, entered = Event(), Event()
+    original_wait = barrier._condition.wait
+
+    def observe_wait(*args, **kwargs):
+        if current_thread().name == "adoption-generation-writer":
+            waiting.set()
+        return original_wait(*args, **kwargs)
+
+    monkeypatch.setattr(barrier._condition, "wait", observe_wait)
+
+    @contextmanager
+    def protected():
+        with barrier.read() as generation, original_protected():
+            yield generation
+
+    monkeypatch.setattr(controller, "protected_request", protected)
+    original_execute = ConversationSourceAccess.execute
+    writers = []
+
+    def write_generation():
+        with barrier.write():
+            entered.set()
+
+    def execute(reader, context, conversation, handler, *, connection=None):
+        if connection is not None and not writers:
+            writer = Thread(
+                target=write_generation, name="adoption-generation-writer", daemon=True
+            )
+            writers.append(writer)
+            writer.start()
+            assert waiting.wait(2), (
+                "writer did not wait for outer owner generation read"
+            )
+            assert not entered.is_set()
+            value = original_execute(
+                reader, context, conversation, handler, connection=connection
+            )
+            assert not entered.is_set(), (
+                "writer entered before owner transaction finished"
+            )
+            return value
+        return original_execute(
+            reader, context, conversation, handler, connection=connection
+        )
+
+    monkeypatch.setattr(ConversationSourceAccess, "execute", execute)
+    test_actual_owned_source_adoption_reuses_transaction_and_keeps_read_gate(
+        e, monkeypatch, False
+    )
+    assert len(writers) == 1
+    writers[0].join(2)
+    assert not writers[0].is_alive() and entered.is_set()

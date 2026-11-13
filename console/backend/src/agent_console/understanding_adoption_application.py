@@ -1,5 +1,6 @@
 """Disabled successor owner: references a saved result, never dispatches a model."""
 
+from contextlib import nullcontext
 from datetime import UTC, datetime
 
 from .conversation_answer_retention import read_retained, require_target
@@ -12,7 +13,16 @@ from .understanding_result_adoption import require
 
 class UnderstandingAdoptionApplication:
     def __init__(
-        self, actions, primary, routing, service_for, reader, source_reader, payload
+        self,
+        actions,
+        primary,
+        routing,
+        service_for,
+        reader,
+        source_reader,
+        payload,
+        *,
+        source_transaction=None,
     ):
         self.actions, self.primary, self.routing = actions, primary, routing
         self.service_for, self.reader, self.source_reader = (
@@ -21,6 +31,7 @@ class UnderstandingAdoptionApplication:
             source_reader,
         )
         self.payload = payload
+        self.source_transaction = source_transaction or nullcontext
 
     def result(self, context, conversation, message, key):
         require(
@@ -92,7 +103,9 @@ class UnderstandingAdoptionApplication:
 
     def apply(self, context, conversation, message, key):
         result, target, value = self.result(context, conversation, message, key)
-        with self.actions.records.connect() as c:
+        # Acquire the existing generation barrier before any owner DB locks;
+        # hold it through commit so nested source verification cannot invert it.
+        with self.source_transaction(), self.actions.records.connect() as c:
             # Same order as journal writes: conversation row, then draft context.
             owned = self.actions.records.owned(c, context, conversation, lock=True)
             require(not owned["archived_at"], "CONVERSATION_ARCHIVED")
@@ -127,7 +140,9 @@ class UnderstandingAdoptionApplication:
                         "target",
                     )
                 }
-                selected = self.source_reader(ctx, conversation, message)
+                selected = self.source_reader(
+                    ctx, conversation, message, connection=connection
+                )
                 require(selected == actual.input_source, "SOURCE_CHANGED")
                 facts = connection.execute(
                     "SELECT facts FROM private_conversation.message_facts WHERE "

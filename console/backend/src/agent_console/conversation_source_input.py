@@ -5,7 +5,7 @@ No browser field can install the request-local attachment below.
 """
 
 import json
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 
 from psycopg import Error as StorageError
@@ -101,7 +101,7 @@ def read_selected(automation, call, selected):
 def source_reader(
     automation, authorizer, records, *, adoption=False, owned_access=None
 ):
-    def read(context, conversation, message_id):
+    def read(context, conversation, message_id, *, connection=None):
         def resolve(call):
             records.owned(call.connection, context, conversation)
             row = call.connection.execute(
@@ -129,7 +129,9 @@ def source_reader(
             # Absence of a selected resource is a private-conversation fact.
             # Prove ownership and the exact original user message before checking
             # it; ordinary questions do not enter the business resource directory.
-            with records.connect() as c:
+            with (
+                nullcontext(connection) if connection is not None else records.connect()
+            ) as c:
                 owned = records.owned(c, context, conversation)
                 if owned["archived_at"]:
                     raise ConversationError("CONVERSATION_ARCHIVED", 409)
@@ -161,6 +163,14 @@ def source_reader(
                 ).fetchone()
                 if not selected or not selected["state"].get("source"):
                     return None
+            if connection is not None:
+                if owned_access is None:
+                    raise ConversationError(
+                        "CONVERSATION_INPUT_TRANSACTION_UNAVAILABLE", 503
+                    )
+                return owned_access.execute(
+                    context, conversation, resolve, connection=connection
+                )
             if owned_access is not None:
                 admission = getattr(
                     getattr(owned_access.draft_service, "authorization", None),

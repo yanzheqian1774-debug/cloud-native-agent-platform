@@ -1106,8 +1106,8 @@ def build_workbench_composition(
                 )
                 application.state.conversation_adoption_source_input = adoption_source
 
-                def source_metadata(ctx, conv, message):
-                    raw = adoption_source(ctx, conv, message)
+                def source_metadata(ctx, conv, message, *, connection=None):
+                    raw = adoption_source(ctx, conv, message, connection=connection)
                     if raw is None:
                         return None
                     value = json.loads(raw)
@@ -1121,17 +1121,17 @@ def build_workbench_composition(
                         )
                     }
 
-                application.state.understanding_adoption = (
-                    UnderstandingAdoptionApplication(
-                        application.state.conversation_actions,
-                        draft_assistance,
-                        conversation_adoption,
-                        application.state.conversation_draft_service_for,
-                        application.state.conversation_relation_reader,
-                        source_metadata,
-                        _payload,
-                    )
+                adoption_owner = UnderstandingAdoptionApplication(
+                    application.state.conversation_actions,
+                    draft_assistance,
+                    conversation_adoption,
+                    application.state.conversation_draft_service_for,
+                    application.state.conversation_relation_reader,
+                    source_metadata,
+                    _payload,
+                    source_transaction=owned_source_access.authorizer.controller.protected_request,
                 )
+                application.state.understanding_adoption = adoption_owner
         if continuation_path:
             continuation.capability_contract_reader = getattr(
                 application.state, "capability_execution_contract_reader", None

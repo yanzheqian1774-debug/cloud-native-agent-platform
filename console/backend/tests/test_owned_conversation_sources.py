@@ -176,3 +176,109 @@ def test_owned_catalogue_real_bff_route_preserves_ownership(env, tmp_path, monke
             client.get("/api/workbench/v1/conversations/not-owned/sources").status_code
             == 404
         )
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_owner_locked_transaction_is_reused_and_current_policy_still_required(
+    env, tmp_path, monkeypatch, changed
+):
+    e = env
+    _, _, path, document = configure(e, tmp_path)
+    successor(e, path, document)
+    conversation(e)
+    reader = access(e)
+    with e.repo.connection_scope() as c:
+        c.execute("SET LOCAL lock_timeout='500ms'")
+        reader.records.owned(c, e.reviewer, "new-own", lock=True)
+        pid = c.execute("SELECT pg_backend_pid() pid").fetchone()["pid"]
+        monkeypatch.setattr(
+            e.repo, "connection_scope", lambda: pytest.fail("nested connection")
+        )
+        if changed:
+            path.unlink()
+            with pytest.raises(
+                ConversationError, match="CONVERSATION_SOURCE_ACCESS_DENIED"
+            ):
+                reader.execute(
+                    e.reviewer,
+                    "new-own",
+                    lambda call: pytest.fail("handler"),
+                    connection=c,
+                )
+        else:
+            assert (
+                reader.execute(
+                    e.reviewer,
+                    "new-own",
+                    lambda call: call.connection.execute(
+                        "SELECT pg_backend_pid() pid"
+                    ).fetchone()["pid"],
+                    connection=c,
+                )
+                == pid
+            )
+        # The supplied transaction is not committed or closed by the reader.
+        assert c.execute("SELECT 1 n").fetchone()["n"] == 1
+
+
+def test_actual_source_reader_reuses_locked_owner_and_preserves_exact_read_denial(
+    env, tmp_path, monkeypatch
+):
+    from agent_console.conversation_journey import install
+    from agent_console.conversation_source_input import source_reader
+    from fastapi import FastAPI
+    from psycopg.types.json import Jsonb
+
+    e = env
+    _, _, path, document = configure(e, tmp_path)
+    successor(e, path, document)
+    conversation(e)
+    reader = access(e)
+    install(FastAPI(), reader.records, lambda *a: None)
+    with e.repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO private_conversation.journeys VALUES(%s,%s,%s,1,%s,now())",
+            (
+                *reader.records.scope(e.reviewer),
+                "new-own",
+                Jsonb(
+                    {
+                        "phase": "CLARIFY",
+                        "draft": {"invocationId": "retained"},
+                        "source": {
+                            "source": {
+                                "resource_id": "knowledge:private",
+                                "revision_id": "1",
+                                "digest": "a" * 64,
+                            },
+                            "sourceContentDigest": "b" * 64,
+                        },
+                    }
+                ),
+            ),
+        )
+        c.execute("SET LOCAL lock_timeout='500ms'")
+        reader.records.owned(c, e.reviewer, "new-own", lock=True)
+        monkeypatch.setattr(
+            reader.records,
+            "connect",
+            lambda: pytest.fail("nested conversation connection"),
+        )
+        monkeypatch.setattr(
+            e.repo,
+            "connection_scope",
+            lambda: pytest.fail("nested authority connection"),
+        )
+        read = source_reader(
+            None, reader.authorizer, reader.records, adoption=True, owned_access=reader
+        )
+        with pytest.raises(
+            ConversationError, match="CONVERSATION_SOURCE_ACCESS_DENIED"
+        ):
+            read(e.reviewer, "new-own", "actual-user-message", connection=c)
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM draft_provider_budget.reservations"
+            ).fetchone()["n"]
+            == 0
+        )

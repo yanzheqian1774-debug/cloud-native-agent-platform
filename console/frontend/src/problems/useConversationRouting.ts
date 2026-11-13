@@ -7,7 +7,7 @@ import {notifyConversationReply,notifyConversationSend} from './useConversationS
 import type {RoutedOwner,ConversationRoutingValue,RoutedOwnerTarget} from './ConversationRoutingContext';
 
 type Phase='MESSAGE_PENDING'|'MODEL_PENDING'|'READY_TO_APPLY'|'APPLYING'|'DONE'|'REVIEW';
-type Saved={key:string;messageKey:string;messageId?:string;text:string;phase:Phase;thread:UserFactMessage[];previousQuestion?:string;relation?:string;ownerTarget?:RoutedOwnerTarget};
+type Saved={key:string;messageKey:string;messageId?:string;text:string;phase:Phase;thread:UserFactMessage[];previousQuestion?:string;relation?:string;ownerTarget?:RoutedOwnerTarget;persistentRecovery?:boolean};
 type ExactRoute={relation:string;originalText:string;messageId:string;target:RoutedOwnerTarget|null};
 function restored(key:string):Saved|null{try{const raw=sessionStorage.getItem(key);if(!raw||raw.length>64000)return null;const value=JSON.parse(raw);return typeof value?.key==='string'&&typeof value.messageKey==='string'&&typeof value.text==='string'&&Array.isArray(value.thread)&&['MESSAGE_PENDING','MODEL_PENDING','READY_TO_APPLY','APPLYING','DONE','REVIEW'].includes(value.phase)?value:null}catch{return null}}
 function notDispatched(error:unknown){return error instanceof WorkbenchRequestError&&error.status===404&&error.reasonCode==='CONVERSATION_REQUEST_NOT_DISPATCHED'}
@@ -19,13 +19,48 @@ function sameTarget(expected:RoutedOwnerTarget,actual:RoutedOwnerTarget){
 }
 export function useConversationRouting({enabled,conversation,session,onMessagesChanged}:{enabled:boolean;conversation:string|null;session:WorkbenchSession;onMessagesChanged:()=>Promise<void>}){
  const scope=conversationScope(session),storage='conversation-routing.v1:'+scope+':'+conversation;
- const [saved,setSaved]=useState<Saved|null>(()=>restored(storage)),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[preview,setPreview]=useState(''),[canResume,setCanResume]=useState(false);
+ const [saved,setSaved]=useState<Saved|null>(()=>restored(storage)),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[preview,setPreview]=useState(''),[canResume,setCanResume]=useState(false),[ownerEpoch,setOwnerEpoch]=useState(0);
  const current=useRef(saved),flight=useRef(false),alive=useRef(true),owners=useRef(new Map<symbol,RoutedOwner>()),refresh=useRef(onMessagesChanged);useEffect(()=>{refresh.current=onMessagesChanged},[onMessagesChanged]);
  const persist=useCallback((value:Saved)=>{current.current=value;try{sessionStorage.setItem(storage,JSON.stringify(value))}catch{/* The server still owns the saved request. */}if(alive.current)setSaved(value)},[storage]);
- const registerOwner=useCallback((owner:RoutedOwner)=>{const key=Symbol();owners.current.set(key,owner);return()=>{owners.current.delete(key)}},[]);
+ const registerOwner=useCallback((owner:RoutedOwner)=>{const key=Symbol();owners.current.set(key,owner);setOwnerEpoch(n=>n+1);return()=>{owners.current.delete(key);setOwnerEpoch(n=>n+1)}},[]);
  const sendHandler=useRef<((text:string)=>Promise<boolean>)|null>(null);
  const context=useMemo<ConversationRoutingValue>(()=>({enabled,registerOwner,send:text=>sendHandler.current?sendHandler.current(text):Promise.resolve(false)}),[enabled,registerOwner]);
  async function verify(){const actual=await readWorkbenchSession();if(!alive.current||conversationScope(actual)!==scope)throw Error('登录或会话已变化，原请求保留。')}
+ // A durable answer is only a candidate: every exact owner GET must agree.
+ const discoverPersisted=useEffectEvent(async(isLive:()=>boolean)=>{
+  const before=current.current;
+  if(!conversation||flight.current||before&&!['DONE','REVIEW'].includes(before.phase)||![...owners.current.values()].some(o=>o.target.kind==='UNDERSTANDING'))return;
+  try{
+   await verify();
+   const record=await conversationRequest<PrivateConversation>('/'+encodeURIComponent(conversation));
+   if(record.conversation.conversation_id!==conversation)return;
+   const candidates:Saved[]=[];
+   for(const message of record.messages){
+    const f=message.facts;
+    if(!f?.assistantResponse||f.invokedBy!==session.principal.principalId||f.state!=='SUCCEEDED'||f.source?.kind!=='DRAFT'||f.response?.conversationRoute?.relation!=='CURRENT_QUESTION'||!f.requestKey||!f.userMessageId)continue;
+    const users=record.messages.filter(m=>m.message_id===f.userMessageId&&m.author_id===session.principal.principalId&&!m.facts?.assistantResponse);
+    if(users.length!==1||!users[0].request_key)continue;
+    const user=users[0],path='/'+encodeURIComponent(conversation)+'/understanding-results/'+encodeURIComponent(user.message_id),query='?'+new URLSearchParams({requestKey:f.requestKey});
+    const result=await readConversationUnderstandingResult(conversation,user.message_id,f.requestKey);
+    if(result.state!=='SUCCEEDED'||result.invocationId!==f.source.invocationId||result.conversationDelivery?.state!=='SAVED'||result.conversationRoute?.relation!=='CURRENT_QUESTION'||!['DRAFT_READY','NEEDS_DATA','NEEDS_CLARIFICATION'].includes(result.resultKind??''))continue;
+    type Adoption={adoption:{target:{original_invocation_id:string;journal_version:number;journey_key:string;message_id:string};actualResult:{invocationId:string}};understanding:DraftAssistanceResult;modelDispatched:false};
+    let adoption:Adoption|null=null;
+    try{adoption=await conversationRequest<Adoption>(path+'/adoption'+query)}catch(e){if(!(e instanceof WorkbenchRequestError&&e.status===404&&e.reasonCode==='UNDERSTANDING_ADOPTION_NOT_FOUND'))throw e}
+    if(adoption&&[...owners.current.values()].some(o=>o.target.kind==='UNDERSTANDING'&&o.target.invocationId===adoption.adoption.actualResult.invocationId))continue;
+    let route:ExactRoute;
+    try{route=await conversationRequest<ExactRoute>(path+'/route'+query)}catch(e){if(e instanceof WorkbenchRequestError&&['CONVERSATION_ROUTE_STALE','CONVERSATION_ROUTING_CONTEXT_CHANGED'].includes(e.reasonCode))continue;throw e}
+    const target=route.target;
+    if(route.relation!=='CURRENT_QUESTION'||route.messageId!==user.message_id||route.originalText!==user.content||target?.kind!=='UNDERSTANDING'||[...owners.current.values()].filter(o=>sameTarget(o.target,target)).length!==1)continue;
+    if(adoption){const t=adoption.adoption.target;if(adoption.modelDispatched!==false||adoption.adoption.actualResult.invocationId!==result.invocationId||adoption.understanding.invocationId!==result.invocationId||t.original_invocation_id!==target.invocationId||t.journal_version!==target.journalVersion||t.journey_key!==target.journeyKey||t.message_id!==user.message_id)continue}
+    candidates.push({key:f.requestKey,messageKey:user.request_key!,messageId:user.message_id,text:user.content,thread:[],phase:'READY_TO_APPLY',relation:'CURRENT_QUESTION',ownerTarget:target,persistentRecovery:true});
+   }
+   await verify();
+   if(!isLive()||flight.current||current.current!==before)return;
+   if(candidates.length===1&&[...owners.current.values()].filter(o=>sameTarget(o.target,candidates[0].ownerTarget!)).length===1){persist(candidates[0]);setNotice('已找到本问题保存的回答。核对并继续后，将接回原会话，不会重新调用模型。')}
+   else if(candidates.length>1)setNotice('发现多条已保存回答，尚不能唯一对应。原记录已保留，未自动提交。');
+  }catch{if(isLive()&&current.current===before)setNotice('暂时无法核对已保存回答。原记录已保留，未重新提交。')}
+ });
+ useEffect(()=>{if(!enabled)return;let live=true;const timer=setTimeout(()=>void discoverPersisted(()=>live),0);return()=>{live=false;clearTimeout(timer)}},[enabled,conversation,ownerEpoch]);
  async function accept(result:DraftAssistanceResult,request:Saved,apply:boolean){
   if(!alive.current)return false;
   if(result.state!=='SUCCEEDED'){
@@ -131,5 +166,5 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
  useEffect(()=>{sendHandler.current=send});
  async function continueAnswer(){if(flight.current||current.current?.phase!=='READY_TO_APPLY')return;flight.current=true;setBusy(true);try{await applyOwner(current.current)}catch(e){if(alive.current)setNotice(String(e))}finally{flight.current=false;if(alive.current)setBusy(false)}}
  const blocked=Boolean(saved&&!['DONE','REVIEW'].includes(saved.phase));
- return {context,send,busy,blocked,notice,preview,readSaved,continueAnswer,canResume,resumeUnstarted,acceptedKey:saved?.phase==='DONE'?saved.key:undefined,acceptedText:saved?.phase==='DONE'?saved.text:undefined,readyToApply:saved?.phase==='READY_TO_APPLY'};
+ return {context,send,busy,blocked,notice,preview,readSaved,continueAnswer,canResume,resumeUnstarted,acceptedKey:saved?.phase==='DONE'?saved.key:undefined,acceptedText:saved?.phase==='DONE'?saved.text:undefined,persistentRecovery:saved?.persistentRecovery===true,readyToApply:saved?.phase==='READY_TO_APPLY'};
 }

@@ -46,6 +46,9 @@ export function ConversationJourney({initialAdoption=false,conversation,session,
   conversationRequest<Journal>('/'+conversation+'/journey').then(async j=>{
    if(live)setSourceRefreshMessage('');
    const s=j.state;
+   // Saved work must remain available while the optional source list loads.
+   if(live){current.current=j;setJournal(j);onActive(Boolean(j.state))}
+   const loaded=j;
    if(s?.understandingProtocol===3&&s.phase==='CLARIFY'&&!s.pending&&!s.error&&['NEEDS_DATA','DRAFT_READY'].includes(s.draft?.resultKind??'')){
     try{const sources=(await readSources(s.understandingProtocol)).items;
      const source=s.source?sources.find(item=>sameUsableSource(item,s.source!)):undefined;
@@ -53,7 +56,7 @@ export function ConversationJourney({initialAdoption=false,conversation,session,
      if(live&&s.source&&!source)setSourceRefreshMessage('原先选定的资料或执行能力当前不可用，请重新确认资料范围；尚未开始执行。');
     }catch{j={...j,state:{...s,sources:[],source:undefined}};if(live)setSourceRefreshMessage('暂时无法核对当前可用资料，请刷新后重试。原问题与补充说明已保留。')}
    }
-   if(live){current.current=j;setJournal(j);onActive(Boolean(j.state))}
+   if(live&&!flight.current&&current.current===loaded){current.current=j;setJournal(j);onActive(Boolean(j.state))}
   }).catch(e=>{if(live)setError(String(e))});return()=>{live=false;alive.current=false}
  },[conversation,onActive,readSources]);
  async function reloadSources(){

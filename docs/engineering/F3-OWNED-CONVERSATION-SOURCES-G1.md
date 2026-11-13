@@ -12,3 +12,7 @@ source_input.source_reader 选取资料后仍复用同 collection LIST，必须�
 真实隔离PG owner/BFF：本人准入成功/跨主体/跨域/归档/过期policy/停用账号/撤销session/旧generation拒绝；零exact资源READ返回空；仅exact被授权版本可见；旧入口仍需LIST；selected digest/version不匹配拒绝；无权限写入/预算预留/模型。
 浏览器：原 SUCCEEDED NEEDS_DATA+pending/error刷新，GET恢复同会话；失败文案/重读按钮/补充输入；点击仅一次GET，不POST model/adopt/execute；原问题/draft/message不变；无资源明确提示；切账号/会话不串读。
 完整hook由根排队，真实原会话由根唯一验证；本包不访问实际DB/平台/模型。无新表/冻结契约变更。
+
+后继G1同事务修正
+实际采用owner先锁会话，再通过source_reader新连接锁同会话，形成自等待。可选connection由server owner传入（不接受浏览器字段），初始message/journal及exact source读取都复用该事务；source access仍进入generation barrier，核当前policy/account/session/owned/archive及每项READ，不SET已经开始的事务、不自行commit/close。原无connection入口保持兼容。给了connection但未配置owned_access必须失败，禁止回退第二连接。application由理解代理单写，将verify的原c传到source_metadata；它负责完整真实adoption+真实source_reader PG测试，本包核同锁同c与当前policy拒绝。无DB新表/权限扩大/实际平台操作。
+采用owner在任何会话/上下文/active_generation数据库锁之前进入相同进程generation read barrier并持到commit，避免并发activate持writer等待DB行而采用线程持DB行等待barrier的锁顺序反转。application新增可选source_transaction由理解代理负责，bootstrap显式注入现有protected_request；不新建权限或绕过逐项检查。

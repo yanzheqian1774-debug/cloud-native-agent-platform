@@ -252,7 +252,9 @@ def adopted(routed, tmp_path, request):
         route,
         app.state.conversation_draft_service_for,
         app.state.conversation_relation_reader,
-        lambda *args: app.state.conversation_adoption_source_input(*args),
+        lambda *args, **kwargs: app.state.conversation_adoption_source_input(
+            *args, **kwargs
+        ),
         _payload,
     )
     migrate(primary.repository)
