@@ -9,6 +9,7 @@ import json
 import re
 from types import SimpleNamespace
 
+from psycopg import Error as StorageError
 from pydantic import BaseModel, ConfigDict, Field
 
 from .authority_contracts import AuthorityError
@@ -118,7 +119,22 @@ class QuestionActivityInput:
     def __call__(self, call):
         a = self.automation
         request = QuestionActivityRequest.model_validate(call.payload)
-        a.authenticate(call.context)
+        # Browser session/CSRF and entry grants have already passed the BFF.
+        # This step authenticates the preparation service, not the browser user.
+        try:
+            a.authenticate(call.context)
+        except AuthorityError as exc:
+            denied = exc.reason_code == "RESOURCE_POLICY_SCOPE_DENIED"
+            raise WorkbenchOwnerError(
+                "QUESTION_INPUT_SERVICE_ACCESS_DENIED"
+                if denied
+                else "QUESTION_INPUT_SERVICE_UNAVAILABLE",
+                403 if denied else 503,
+            ) from exc
+        except (StorageError, OSError, TimeoutError) as exc:
+            raise WorkbenchOwnerError(
+                "QUESTION_INPUT_SERVICE_UNAVAILABLE", 503
+            ) from exc
         p = OwnerPrincipal(
             call.context.principal_id,
             call.context.scope.tenant_id,

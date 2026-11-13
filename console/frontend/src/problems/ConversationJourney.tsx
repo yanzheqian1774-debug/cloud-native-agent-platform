@@ -196,7 +196,8 @@ export function ConversationJourney({conversation,session,onActive,onExecutionCo
  if(!state)return error?<p role="alert">{error}</p>:null;
  const processingError=Boolean(error||state.error);
  const sourceMismatch=['CONTEXT_ADMISSION_SOURCE_MISMATCH','PLANNING_OUTPUT_SOURCE_MISMATCH'].some(code=>(error||state.error)?.includes(code));
- const inputReadFailure=(error||state.error)?.includes('CONVERSATION_INPUT_ACCESS_DENIED')?'当前访问校验未通过，原提问已保留。请在访问恢复后继续，无需重新描述问题。':(error||state.error)?.includes('CONVERSATION_INPUT_SERVICE_UNAVAILABLE')?'当前读取服务暂不可用，原提问已保留。请稍后在本会话重新核对。':state.phase==='UNDERSTAND'&&(error||state.error)?.includes('CONVERSATION_SOURCE_STALE_OR_UNREADABLE')?'本次所选资料的准确版本或内容未通过核对，原提问已保留。请重新核对资料后继续。':undefined;
+ const preparationReadFailure=(error||state.error)?.includes('QUESTION_INPUT_SERVICE_UNAVAILABLE')?'后台准备服务暂不可用，原问题和已确认资料已保留。服务恢复后可在本会话继续，无需重新登录或重新提问。':(error||state.error)?.includes('QUESTION_INPUT_SERVICE_ACCESS_DENIED')?'后台准备服务的授权校验未通过，原问题和资料已保留。请在服务配置恢复后继续。':undefined;
+ const inputReadFailure=preparationReadFailure??((error||state.error)?.includes('CONVERSATION_INPUT_ACCESS_DENIED')?'当前访问校验未通过，原提问已保留。请在访问恢复后继续，无需重新描述问题。':(error||state.error)?.includes('CONVERSATION_INPUT_SERVICE_UNAVAILABLE')?'当前读取服务暂不可用，原提问已保留。请稍后在本会话重新核对。':state.phase==='UNDERSTAND'&&(error||state.error)?.includes('CONVERSATION_SOURCE_STALE_OR_UNREADABLE')?'本次所选资料的准确版本或内容未通过核对，原提问已保留。请重新核对资料后继续。':undefined);
  const unknownUnderstanding=state.understandingProtocol===3&&!state.execution&&Boolean((error||state.error)?.includes('OUTCOME_UNKNOWN'));
  const unresolvedRequest=Boolean(state.pending&&!busy&&!processingError&&!state.execution);
  const recordedUpdate=execution?.events?.filter(event=>Number.isFinite(Date.parse(event.created_at))).reduce<string|undefined>((latest,event)=>!latest||Date.parse(event.created_at)>Date.parse(latest)?event.created_at:latest,undefined);
