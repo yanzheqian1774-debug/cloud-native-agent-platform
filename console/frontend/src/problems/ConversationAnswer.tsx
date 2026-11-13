@@ -1,9 +1,11 @@
+import {readUnsentDraft,saveUnsentDraft} from './unsentConversationDraft';
 import {useConversationSubmitKey} from './useConversationSubmitKey';
 import {useEffect,useEffectEvent,useRef,useState} from 'react';
 import {useViewString} from './workViewState';
 
-export function ConversationAnswer({storageKey,id,label,button,disabled,onAnswer,question,showQuestion=false,blockedReason,editableWhileDisabled=false,acceptedKey,acceptedText}:{acceptedKey?:string;acceptedText?:string;editableWhileDisabled?:boolean;blockedReason?:string;showQuestion?:boolean;storageKey:string;id:string;label:string;button:string;disabled:boolean;onAnswer:(text:string)=>Promise<boolean>;question?:string}){
- const [reply,setReply]=useViewString(storageKey,'answer');
+export function ConversationAnswer({recoveryKey,storageKey,id,label,button,disabled,onAnswer,question,showQuestion=false,blockedReason,editableWhileDisabled=false,acceptedKey,acceptedText}:{recoveryKey?:string;acceptedKey?:string;acceptedText?:string;editableWhileDisabled?:boolean;blockedReason?:string;showQuestion?:boolean;storageKey:string;id:string;label:string;button:string;disabled:boolean;onAnswer:(text:string)=>Promise<boolean>;question?:string}){
+ const [reply,setViewReply]=useViewString(storageKey,'answer',readUnsentDraft(recoveryKey));
+ const setReply=(text:string)=>{setViewReply(text);saveUnsentDraft(recoveryKey,text)};
  const [sending,setSending]=useState(false),flight=useRef(false),latest=useRef(reply);useEffect(()=>{latest.current=reply},[reply]);
  const clearAccepted=useEffectEvent((text:string)=>{if(reply.trim()===text)setReply('')});
  useEffect(()=>{if(acceptedKey&&acceptedText!==undefined)clearAccepted(acceptedText)},[acceptedKey,acceptedText]);

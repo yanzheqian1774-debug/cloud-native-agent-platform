@@ -182,3 +182,35 @@ test('pre-update REVIEW receipt reload reads exact failure without a new model r
  await page.evaluate(()=>{const key=Object.keys(sessionStorage).find(k=>k.startsWith('conversation-routing.v1:'))!;const v=JSON.parse(sessionStorage.getItem(key)!);delete v.lastResult;delete v.observedOwner;delete v.unacceptedPreview;sessionStorage.setItem(key,JSON.stringify(v))});await page.reload();
  await expect(page.getByText('本次补充的回复格式校验未通过，生成文字未被采纳。原问题、输入与原任务均保留，不会自动重试。',{exact:true})).toBeVisible();expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
 });
+
+test('unsent text returns for the same account after a new login without submission',async({page})=>{
+ const s=await fixture(page,'PLAN');let expiry='2099-01-01T00:00:00Z';
+ await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{principal:{principalId:'human:alice',tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{expiresAt:expiry}}}));
+ await page.goto('/work?conversation=routing');await input(page).fill('尚未发送的交接补充');
+ await page.evaluate(()=>window.dispatchEvent(new Event('workbench-session-expired')));
+ await expect(page.getByRole('heading',{name:'当前登录已失效',exact:true})).toBeVisible();
+ expiry='2099-01-02T00:00:00Z';await page.reload();await expect(input(page)).toHaveValue('尚未发送的交接补充');
+ expect(s.modelCalls).toHaveLength(0);expect(s.ownerPosts).toHaveLength(0);expect(s.writes).toHaveLength(0);
+});
+
+test('unsent text is isolated from another account and clears after accepted send',async({page})=>{
+ const s=await fixture(page,'PLAN');let principal='human:alice',expiry='2099-01-01T00:00:00Z';
+ await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{principal:{principalId:principal,tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{expiresAt:expiry}}}));
+ await page.goto('/work?conversation=routing');await input(page).fill('HTTP 是什么？');
+ principal='human:bob';expiry='2099-01-02T00:00:00Z';await page.reload();await expect(input(page)).toHaveValue('');
+ principal='human:alice';expiry='2099-01-03T00:00:00Z';await page.reload();await expect(input(page)).toHaveValue('HTTP 是什么？');
+ await page.getByRole('button',{name:'发送',exact:true}).click();await expect(input(page)).toHaveValue('');
+ expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
+ expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('conversation-unsent.v1:')))).toEqual([]);
+ expiry='2099-01-04T00:00:00Z';await page.reload();await expect(input(page)).toHaveValue('');expect(s.modelCalls).toHaveLength(1);
+});
+
+test('explicit successful logout removes local unsent recovery text',async({page})=>{
+ const s=await fixture(page,'PLAN');let deletes=0;
+ await page.route('**/api/workbench/v1/session',route=>{if(route.request().method()==='DELETE'){deletes++;return route.fulfill({status:204})}return route.fulfill({json:{principal:{principalId:'human:alice',tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{expiresAt:'2099-01-01T00:00:00Z'}}})});
+ await page.goto('/work?conversation=routing');await input(page).fill('退出前不保留这段草稿');
+ await page.locator('summary[aria-label="当前可信身份 human:alice"]').click();await page.getByRole('button',{name:'退出登录',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'已退出登录',exact:true})).toBeVisible();
+ expect(deletes).toBe(1);expect(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('conversation-unsent.v1:')))).toEqual([]);
+ expect(s.modelCalls).toHaveLength(0);expect(s.ownerPosts).toHaveLength(0);
+});

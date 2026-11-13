@@ -1,0 +1,5 @@
+# Same-account unsent conversation draft recovery
+
+Actual installed F3 loses unsent text when session cookies disappear and the same account follows the login link back to the same authorized conversation. Keep the existing session-scoped view, request and authority caches unchanged. Add a separate tab-local text-only draft slot, keyed by principal, tenant, security domain and conversation. Restore only inside the existing authenticated/read-authorized conversation composer; never submit automatically or restore an interpretation or execution command. Clear after accepted send and on explicit successful logout. Other accounts and conversations cannot select this slot. Bound text to the existing 1800-character limit and expire local backup after 24 hours. Storage errors must not prevent typing or sending.
+
+Validate same-account new-session restore; other-account/conversation isolation; accepted send clears backup; explicit logout clears backup; no model request during restore. Re-run actual cookie-loss/login flow after installation. Cookie-loss evidence does not prove natural clock expiry.
