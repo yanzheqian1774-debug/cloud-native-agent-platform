@@ -117,7 +117,9 @@ export function ConversationJourney({conversation,session,onActive,onExecutionCo
    }else if(s.phase==='CRITERION'){
     s=await pending(s,'criterion');const p=s.problem!;
     await linkDraftAssistanceProblem(session.csrfToken,s.draft!.invocationId,{problemId:p.business_problem_id,problemRevisionId:p.revision_id,problemDigest:p.digest});
-    const criterion=await writeCriterion(session.csrfToken,{problemId:p.business_problem_id,criterionType:'HUMAN_EVALUATED',measurement:{rubric:'回答已确认的用户目标：'+s.question+'。'+(s.source?.completionCriteria??['展示来源依据、异常与资料缺口；区分观察和推测。']).join('')+'仅作为测试资料分析，不代表真实业务问题已经解决。'},requiredEvidenceKinds:[],evaluatorType:'HUMAN',evaluatorVersion:'v1',applicability:{sourceReference:s.source!.source},idempotencyKey:s.key+':criterion'});
+    // Use the created revision, including corrections made during clarification.
+    // The original question stays in history; it must not redefine the goal.
+    const criterion=await writeCriterion(session.csrfToken,{problemId:p.business_problem_id,criterionType:'HUMAN_EVALUATED',measurement:{rubric:'回答已确认的用户目标：'+(p.description??s.question)+'。'+(s.source?.completionCriteria??['展示来源依据、异常与资料缺口；区分观察和推测。']).join('')+'仅作为测试资料分析，不代表真实业务问题已经解决。'},requiredEvidenceKinds:[],evaluatorType:'HUMAN',evaluatorVersion:'v1',applicability:{sourceReference:s.source!.source},idempotencyKey:s.key+':criterion'});
     s=await save({...s,pending:undefined,criterion:criterion.revision.revision_id,phase:'ACTIVATE'});
    }else if(s.phase==='ACTIVATE'){
     s=await pending(s,'activate');const p=s.problem!,id=p.business_problem_id;let detail=await readBusinessProblem(id);
@@ -127,7 +129,9 @@ export function ConversationJourney({conversation,session,onActive,onExecutionCo
     s=await save({...s,pending:undefined,phase:'PLAN',log:[...s.log,'正在结合资料和可用能力制定分析方案。']});
    }else if(s.phase==='PLAN'){
     s=await pending(s,'planning');
-    const routed=await planningRequest<{state:string;planningRequest:PlanningBody|null}>('question-activity-input',{question:s.question,problemId:s.problem!.business_problem_id,source:s.source!.source,idempotencyKey:s.key+':planning'+(s.cycle?':'+s.cycle:'')+(s.planningReply?':clarification:'+s.planningReply:'')});
+    // The bounded routing question uses the current title; the exact problem
+    // target supplies its complete description and criteria to planning.
+    const routed=await planningRequest<{state:string;planningRequest:PlanningBody|null}>('question-activity-input',{question:s.problem!.title??s.question,problemId:s.problem!.business_problem_id,source:s.source!.source,idempotencyKey:s.key+':planning'+(s.cycle?':'+s.cycle:'')+(s.planningReply?':clarification:'+s.planningReply:'')});
     if(!routed.planningRequest)throw Error('暂不能根据所选资料开始分析：'+routed.state);
     if(s.coverageFeedback&&s.planning?.result.proposal){const old=s.planning.result.proposal;routed.planningRequest={...routed.planningRequest,source_proposal:{resource_id:old.proposal_id,revision_id:String(old.revision),digest:s.planning.result.proposal_digest!},answers:[...routed.planningRequest.answers,s.coverageFeedback]};}
     if(s.planningAnswers?.length)routed.planningRequest={...routed.planningRequest,answers:[...routed.planningRequest.answers,'用户对必要追问的补充：'+JSON.stringify(s.planningAnswers)]};

@@ -342,3 +342,44 @@ test('controlled incremental content preserves reading anchor and shows only rea
  await expect(page.getByText('有新消息',{exact:true})).toBeHidden();
  expect(state.calls).toHaveLength(1);
 });
+
+// The model output is controlled here: this proves propagation of a corrected
+// goal into owner requests, not the real model's semantic understanding.
+for(const longDescription of [false,true])test(`corrected task keeps canonical goal in criteria and planning ${longDescription}`,async({page})=>{
+ const state=await directFixture(page);
+ const original='检查上线材料完整性，生成待补清单';
+ const title='比较测试与生产规范';
+ const description='只比较两份规范的适用范围，不检查上线材料完整性，也不生成待补清单。'+(longDescription?'保留逐条原文依据，不推断技术正确性。'.repeat(40):'');
+ const source={source:{resource_id:'source',revision_id:'source-v1',digest:'a'.repeat(64)},name:'两份交接规范',periods:[],sourceSchema:'document-review-source.v1',synthetic:true,completionCriteria:['提供逐条原文依据']};
+ const problem={business_problem_id:'corrected-problem',revision_id:'corrected-revision',digest:'b'.repeat(64),title,description};
+ state.journal.state={...state.journal.state,understandingProtocol:3,phase:'CLARIFY',question:original,source,messages:[{id:'user:q1',text:original}],draft:{state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',invocationId:'previous-understanding',contextId:'previous-context',turnId:'previous-turn',turnVersion:1,clarificationQuestion:'需要按哪份规范检查完整性？',draft:null},log:[]};
+ state.availableSources=[source];
+ await page.route('**/draft-assistance/invocations',route=>{
+  const body=route.request().postDataJSON(),input=JSON.parse(body.content);state.calls.push(body);
+  expect(input.messages.at(-1).text).toBe(description);expect(input.previousQuestion).toBe('需要按哪份规范检查完整性？');expect(body.predecessorInvocationId).toBe('previous-understanding');
+  const response={state:'SUCCEEDED',resultKind:'DRAFT_READY',invocationId:'corrected-understanding',contextId:'corrected-context',turnId:'corrected-turn',turnVersion:2,draft:{title,description},conversationDelivery:{state:'SAVED',messageId:'corrected-answer'}};
+  state.messages.push({message_id:'corrected-answer',kind:'SOURCE',content:description,facts:{assistantResponse:true,state:'SUCCEEDED',response}});state.version++;return route.fulfill({json:{result:response}});
+ });
+ const criteria:Record<string,unknown>[]=[],planning:Record<string,unknown>[]=[],creates:Record<string,unknown>[]=[];
+ await page.route('**/api/workbench/v1/problems',route=>{
+  if(route.request().method()!=='POST')return route.fallback();creates.push(route.request().postDataJSON());return route.fulfill({json:{result:{revision:problem}}});
+ });
+ await page.route('**/api/workbench/v1/problems/corrected-problem',route=>route.fulfill({json:{result:{problem:{aggregate_version:1},revisions:[problem]}}}));
+ await page.route('**/api/workbench/v1/problems/corrected-problem/criteria-sets',route=>route.fulfill({json:{result:{revision:{}}}}));
+ await page.route('**/api/workbench/v1/problems/corrected-problem/lifecycle',route=>route.fulfill({json:{result:{}}}));
+ await page.route('**/draft-assistance/invocations/corrected-understanding/problem-link',route=>route.fulfill({json:{result:{}}}));
+ await page.route('**/api/workbench/v1/success-criteria',route=>{criteria.push(route.request().postDataJSON());return route.fulfill({json:{result:{revision:{revision_id:'criterion-corrected'}}}})});
+ await page.route('**/conversations/direct/links',route=>route.fulfill({json:{result:{}}}));
+ await page.route('**/question-activity-input',route=>{planning.push(route.request().postDataJSON());return route.fulfill({json:{result:{state:'READY',planningRequest:{target:{problem:{resource_id:problem.business_problem_id,revision_id:problem.revision_id,digest:problem.digest}},answers:[title]}}}})});
+ await page.route('**/planning-v2/preflight',route=>route.fulfill({status:409,json:{reasonCode:'CONTROLLED_STOP_BEFORE_MODEL'}}));
+ await page.goto('/work?conversation=direct');
+ await page.getByLabel('补充说明',{exact:true}).fill(description);await page.getByRole('button',{name:'发送补充',exact:true}).click();
+ await expect.poll(()=>planning.length).toBe(1);
+ expect(creates).toHaveLength(1);expect(creates[0].description).toBe(description);
+ expect(criteria).toHaveLength(1);expect((criteria[0].measurement as {rubric:string}).rubric).toContain('回答已确认的用户目标：'+description);
+ expect((criteria[0].measurement as {rubric:string}).rubric).not.toContain('回答已确认的用户目标：'+original);
+ expect(planning[0].question).toBe(title);expect(planning[0].problemId).toBe(problem.business_problem_id);expect(planning[0].source).toEqual(source.source);
+ expect(state.journal.state.question).toBe(original);expect((state.journal.state.messages as {text:string}[])[0].text).toBe(original);
+ await expect(page.getByRole('alert')).toBeVisible();await page.reload();await expect(page.getByRole('alert')).toBeVisible();
+ expect(planning).toHaveLength(1);expect(creates).toHaveLength(1);expect(criteria).toHaveLength(1);expect(state.calls).toHaveLength(1);
+});
