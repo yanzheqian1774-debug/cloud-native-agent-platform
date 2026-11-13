@@ -45,6 +45,8 @@ def policy(**changes):
         ("MODEL_GOVERNANCE", "INVOKE_MODEL", "model:revision:model:r"),
         ("EMPLOYEE", "PUBLISH", "employee:definition:revision"),
         ("TOOL", "REVISE", "tool:test:aggregate"),
+        ("TEAM", "CREATE", "team:collection"),
+        ("TEAM", "REVISE", "team:test:aggregate"),
         ("GRANT_ADMIN", "DECIDE", "grant-scope:test:isolated"),
     ],
 )
@@ -137,3 +139,23 @@ def test_existing_catalog_list_targets_are_requestable_without_revision_lookup()
     assert not WorkflowAuthoringTargets().is_known_exact_target(
         context, ExactGrant("WORKFLOW", "LIST", "workflow:foreign"), connection=object()
     )
+
+
+def test_team_read_inventory_requires_exact_revision_digest():
+    collection = dict(
+        owner="TEAM",
+        action="LIST",
+        resource="team:collection",
+        purpose="TEST_RESOURCE_READ",
+    )
+    TestReadTarget.model_validate(collection)
+    with pytest.raises(ValidationError):
+        TestReadTarget.model_validate(collection | {"resource": "team:foreign"})
+    revision = collection | {
+        "action": "READ",
+        "resource": "team:test:r1",
+        "digest": "a" * 64,
+    }
+    TestReadTarget.model_validate(revision)
+    with pytest.raises(ValidationError):
+        TestReadTarget.model_validate(revision | {"digest": None})

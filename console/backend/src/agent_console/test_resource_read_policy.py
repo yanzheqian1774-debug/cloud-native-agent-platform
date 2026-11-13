@@ -27,6 +27,7 @@ READ_ACTIONS = {
     "BUSINESS_CAPABILITY": {"READ", "LIST"},
     "TOOL": {"READ", "LIST"},
     "MODEL_GOVERNANCE": {"READ_MODEL"},
+    "TEAM": {"READ", "LIST"},
 }
 COLLECTIONS = {
     ("AGENT", "LIST"): "agent:collection",
@@ -35,6 +36,7 @@ COLLECTIONS = {
     ("BUSINESS_CAPABILITY", "LIST"): "business-capability:collection",
     ("TOOL", "LIST"): "tool:collection",
     ("MODEL_GOVERNANCE", "READ_MODEL"): "model:catalog",
+    ("TEAM", "LIST"): "team:collection",
 }
 
 
