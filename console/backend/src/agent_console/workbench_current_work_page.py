@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .workbench_current_work_attribution import AttributionKind, in_scope
 from .workbench_owner_authorization import WorkbenchOwnerError
 
 
@@ -17,6 +18,9 @@ class CurrentWorkItem(BaseModel):
     title: str
     createdAt: datetime
     initiatorId: str | None
+    requestedById: str | None = None
+    attributionKind: AttributionKind = "UNVERIFIED"
+    startedByIds: list[str] = Field(default_factory=list)
     executionState: str
     displayState: Literal[
         "waiting", "completed", "running", "failed", "cancelled", "unknown"
@@ -66,7 +70,13 @@ def directory_page(
     scoped = [
         item
         for item in items
-        if (query.scopeFilter == "visible" or item.initiatorId == context.principal_id)
+        if in_scope(
+            query.scopeFilter,
+            context.principal_id,
+            item.requestedById,
+            item.attributionKind,
+            item.startedByIds or ([item.initiatorId] if item.initiatorId else []),
+        )
         and query.query.casefold() in (item.title + " " + item.workflowRunId).casefold()
         and (
             query.sourceFilter == "all"

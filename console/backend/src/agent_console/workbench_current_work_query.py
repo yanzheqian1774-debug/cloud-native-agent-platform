@@ -43,7 +43,7 @@ class CurrentWorkQuery(BaseModel):
     ) -> str:
         if self.scopeFilter is None:
             raise ValueError("CURRENT_WORK_SCOPE_UNRESOLVED")
-        return "current-work:" + canonical_digest(
+        return "current-work:attribution-v2:" + canonical_digest(
             [
                 context.principal_id,
                 generation,

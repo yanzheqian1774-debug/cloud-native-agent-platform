@@ -30,6 +30,45 @@ SELECT p.namespace,p.security_domain,p.workflow_run_id,p.digest,p.record prepara
   FROM execution_authority.prepared_start_commands s
   WHERE (s.namespace,s.security_domain,s.workflow_run_id)=
         (p.namespace,p.security_domain,p.workflow_run_id)) initiators,
+ (SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'contextId',o.context_id,'subjectId',q.subject_id,
+    'recordSubjectId',q.record->>'subject_id',
+    'recordContextId',q.record->>'context_id',
+    'conversationId',q.record->>'conversation_id',
+    'conversationOwnerId',c.owner_id,'conversationSchema',c.schema_version,
+    'messageAuthorId',m.author_id,'messageSchema',m.schema_version,
+    'messagePredatesRun',m.created_at<=p.created_at,
+    'messageIsUser',m.message_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM private_conversation.message_facts f
+      WHERE (f.tenant_id,f.security_domain,f.conversation_id,f.message_id)=
+            (m.tenant_id,m.security_domain,m.conversation_id,m.message_id)),
+    'invocation',jsonb_build_object(
+      'contextId',v.record->>'contextId','state',v.record->>'state',
+      'resultKind',v.record->>'resultKind',
+      'initiatingPrincipalId',v.record->>'initiatingPrincipalId',
+      'problemId',v.record->>'problemId',
+      'problemRevisionId',v.record->>'problemRevisionId',
+      'problemDigest',v.record->>'problemDigest'))),'[]'::jsonb)
+  FROM authorization_admin.context_call_objects o
+  LEFT JOIN authorization_admin.context_call_requests q
+    ON (q.tenant_id,q.security_domain,q.context_id)=
+       (o.tenant_id,o.security_domain,o.context_id)
+  LEFT JOIN private_conversation.conversations c
+    ON (c.tenant_id,c.security_domain,c.conversation_id)=
+       (o.tenant_id,o.security_domain,q.record->>'conversation_id')
+  LEFT JOIN private_conversation.messages m
+    ON (m.tenant_id,m.security_domain,m.conversation_id,m.message_id)=
+       (c.tenant_id,c.security_domain,c.conversation_id,
+        q.record->>'first_user_message_id')
+  LEFT JOIN LATERAL (
+    SELECT record FROM draft_assistance.invocation_versions v
+    WHERE (v.namespace,v.security_domain,v.invocation_id)=
+          (o.tenant_id,o.security_domain,o.invocation_id)
+    ORDER BY aggregate_version DESC LIMIT 1
+  ) v ON true
+  WHERE o.tenant_id=p.namespace AND o.security_domain=p.security_domain
+    AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=r.business_problem_id
+ ) attribution_sources,
  (SELECT count(*) FROM execution_authority.run_artifacts a
   WHERE (a.namespace,a.security_domain,a.workflow_run_id)=
         (p.namespace,p.security_domain,p.workflow_run_id)) artifact_count,

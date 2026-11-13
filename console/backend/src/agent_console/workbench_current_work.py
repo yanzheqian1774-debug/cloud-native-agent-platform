@@ -4,6 +4,7 @@ from .authority_contracts import ExactGrant
 from .business_problem_authorization import problem_resource
 from .development_administrator import for_call
 from .workbench_bff import PREFIX, WorkbenchOperation
+from .workbench_current_work_attribution import in_scope, requester
 from .workbench_current_work_authorization import readable_runs
 from .workbench_current_work_page import directory_page
 from .workbench_current_work_projection import project_runs
@@ -33,15 +34,22 @@ class CurrentWorkDirectory:
         )
         read_at = rows[0]["read_at"] if rows else call.authority.adapter.clock()
         visible = readable_runs(call, rows)
-        # These predicates require no optional metadata, so avoid integrity reads
-        # on records excluded by the user's scope and search. State filtering
-        # follows the authorized Native question projection.
+        # Attribution is metadata, not admission. Apply only after exact READs;
+        # use the same predicate as counts/pages before expensive evidence reads.
         selected = [
             row
             for row in visible
+            for attribution in [
+                requester(row, call.context.principal_id, administrator=administrator)
+            ]
             if (
-                query.scopeFilter == "visible"
-                or row["initiators"] == [call.context.principal_id]
+                in_scope(
+                    query.scopeFilter,
+                    call.context.principal_id,
+                    attribution.requested_by,
+                    attribution.kind,
+                    row["initiators"],
+                )
             )
             and query.query.casefold()
             in (row["title"] + " " + row["workflow_run_id"]).casefold()

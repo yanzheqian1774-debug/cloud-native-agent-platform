@@ -19,6 +19,7 @@ def item(name, initiator="human:alice", state="completed"):
         title="检查交接材料",
         createdAt=NOW,
         initiatorId=initiator,
+        attributionKind="DIRECT_START",
         executionState="SUCCEEDED",
         displayState=state,
         progressVersion=3,

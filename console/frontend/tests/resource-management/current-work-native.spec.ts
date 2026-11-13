@@ -123,3 +123,30 @@ test('conversation source mismatch fails visibly instead of accepting unfiltered
  await page.goto('/tasks?group=conversation');await expect(page.getByRole('alert')).toBeVisible();
  await expect(page.getByText('当前筛选下没有可读取的执行记录。',{exact:true})).toHaveCount(0);
 });
+
+test('requester and direct-start provenance stay separate from worker assignment',async({page},testInfo)=>{
+ const state=await fixture(page);
+ await page.route('**/api/workbench/v1/current-work?*',async route=>{
+  const url=new URL(route.request().url()),scope=url.searchParams.get('scopeFilter')??'visible';state.requests.push(url.search);
+  const rows=[
+   {workflowRunId:'delegated',title:'原用户提出的交接材料检查',initiatorId:'human:operator',requestedById:'human:alice',attributionKind:'VERIFIED_REQUESTER',startedByIds:['human:operator'],originConversationId:'original-conversation',originVerified:true},
+   {workflowRunId:'direct',title:'直接启动的历史检查',initiatorId:'human:alice',requestedById:null,attributionKind:'DIRECT_START',startedByIds:['human:alice'],originConversationId:null,originVerified:false},
+   {workflowRunId:'unverified',title:'来源待核实的检查',initiatorId:'human:alice',requestedById:null,attributionKind:'UNVERIFIED',startedByIds:['human:alice'],originConversationId:null,originVerified:false},
+  ].filter(r=>scope==='visible'||r.attributionKind==='VERIFIED_REQUESTER'&&r.requestedById===state.principal||r.attributionKind==='DIRECT_START'&&r.initiatorId===state.principal).map((r,i)=>({...r,preparationDigest:(i+1).toString(16).padStart(64,'0'),createdAt:'2026-11-10T01:00:00Z',executionState:'SUCCEEDED',displayState:'completed',progressVersion:3,problemId:'p'+i,problemRevisionId:'r'+i,problemDigest:'a'.repeat(64),pendingQuestionCount:0,answeredQuestionCount:0,artifactCount:1,businessResolution:'UNDETERMINED',planVersion:4,participantCount:1,completedTaskCount:1,taskCount:1,updatedAt:'2026-11-10T02:00:00Z'}));
+  return route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:scope,sourceFilter:'all',subject:state.principal,tenantId:'fixture',securityDomain:'isolated',complete:true,questionStatusComplete:true,readAt:'2026-11-10T03:00:00Z',total:rows.length,counts:{completed:rows.length,waiting:0,running:0,failed:0,cancelled:0,unknown:0},items:rows,nextCursor:null}}});
+ });
+ await page.setViewportSize({width:1440,height:900});await page.goto('/tasks');
+ await expect(page.getByRole('region',{name:'任务记录概览'}).locator('article').filter({hasText:'待补充任务'}).locator('strong')).toHaveText('0');
+ const delegated=page.getByRole('row').filter({has:page.getByText('原用户提出的交接材料检查',{exact:true})});
+ await expect(delegated).toContainText('提问人：human:alice');await expect(delegated.locator('td').nth(1)).not.toContainText('human:');
+ await delegated.getByText('来源依据',{exact:true}).click();await expect(delegated).toContainText('启动操作人：human:operator');
+ const direct=page.getByRole('row').filter({has:page.getByText('直接启动的历史检查',{exact:true})});await expect(direct.locator('td').nth(3)).toContainText('直接启动');
+ const unknown=page.getByRole('row').filter({has:page.getByText('来源待核实的检查',{exact:true})});await expect(unknown).toContainText('原提问人待核实');await expect(unknown).not.toContainText('提问人：human:alice');
+ await page.screenshot({path:testInfo.outputPath('task-attribution-visible-1440.png'),fullPage:true});
+ await page.getByLabel('查看范围',{exact:true}).selectOption('initiated');await expect(page.locator('.f3-work-table tbody tr')).toHaveCount(2);await expect(unknown).toHaveCount(0);
+ await expect(page.getByText('我发起的 · 共 2 条 · 第 1 页')).toBeVisible();expect(state.requests.at(-1)).toContain('scopeFilter=initiated');
+ await delegated.getByRole('button',{name:'查看任务'}).click();await page.getByRole('button',{name:'返回我的任务',exact:true}).click();await expect(page.getByLabel('查看范围',{exact:true})).toHaveValue('initiated');await expect(delegated.getByRole('button',{name:'查看任务'})).toBeFocused();
+ await page.reload();await expect(page.locator('.f3-work-table tbody tr')).toHaveCount(2);
+ await page.screenshot({path:testInfo.outputPath('task-attribution-initiated-1440.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:testInfo.outputPath('task-attribution-390.png'),fullPage:true});expect(state.writes).toEqual([]);
+});

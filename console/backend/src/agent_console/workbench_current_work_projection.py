@@ -14,6 +14,7 @@ from .prepared_result_review import PreparedResultReview
 from .prepared_skill_invocation import planned_outputs
 from .resource_use_domain import canonical_digest
 from .workbench_business_problem import OwnerPrincipal
+from .workbench_current_work_attribution import requester
 from .workbench_current_work_authorization import readable_grants
 from .workbench_current_work_page import CurrentWorkItem
 from .workbench_owner_authorization import WorkbenchOwnerError
@@ -155,6 +156,9 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
             if pending
             else "running"
         )
+        attribution = requester(
+            row, call.context.principal_id, administrator=verified_administrator
+        )
         result.append(
             CurrentWorkItem(
                 workflowRunId=p.run_id,
@@ -164,6 +168,9 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
                 initiatorId=row["initiators"][0]
                 if len(row["initiators"]) == 1
                 else None,
+                requestedById=attribution.requested_by,
+                attributionKind=attribution.kind,
+                startedByIds=sorted(row["initiators"]),
                 executionState=state.state,
                 displayState=display,
                 progressVersion=state.version,
