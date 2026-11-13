@@ -394,3 +394,62 @@ def test_execution_successor_can_bind_existing_pricing_root_only(mock_responses)
     document["policyDigest"] = policy_for("v3", V3_SCHEMA_VERSION).digest
     with pytest.raises(DraftAssistanceError, match="DRAFT_PROFILE_INVALID"):
         parse(document, allow_local_https_mock=True)
+
+
+@pytest.mark.parametrize(
+    "latest,previous,expected_intent",
+    [
+        ("工具是什么?", "", "ANSWER"),
+        ("你好", "", "ANSWER"),
+        ("只看旧结果不要重跑", "请调用工具执行核查", "ANSWER"),
+        ("请调用系统检查工具按生产规范执行核查", "", "TASK"),
+        ("使用刚才选中的资料继续原请求", "请调用工具执行核查", "TASK"),
+        ("先不要执行,仅解释检查方法", "请调用工具执行核查", "ANSWER"),
+    ],
+)
+def test_semantic_acceptance_inputs_are_preserved_without_keyword_dispatch(
+    latest,
+    previous,
+    expected_intent,
+    mock_responses,  # noqa: F811
+):
+    """Contract coverage only; expected intent is a fixture, not model inference."""
+    import json
+    from dataclasses import replace
+
+    from agent_console.draft_assistance_policy import V3_CONTEXT_VERSION
+    from agent_console.openai_responses_draft_adapter import (
+        OpenAIResponsesDraftTransport,
+    )
+    from test_draft_assistance_policy import content
+    from test_openai_responses_draft_adapter import _configuration, _profile
+
+    policy = execution_policy()
+    server, cert, tmp = mock_responses
+    configuration = replace(
+        _configuration(server, cert, tmp / "unused-key"), maximum_input_tokens=65536
+    )
+    profile = replace(
+        _profile(),
+        adapter_revision=policy.revision,
+        output_schema_version=policy.schema_version,
+    )
+    messages = []
+    if previous:
+        messages.append({"id": "user:prior", "text": previous})
+    messages.append({"id": "user:1", "text": latest})
+    wire = json.loads(content(messages))
+    wire.update(schemaVersion=V3_CONTEXT_VERSION, previousAssistantResponse=None)
+    request = OpenAIResponsesDraftTransport(configuration).prepare(
+        invocation_id="intent-context", content=json.dumps(wire), profile=profile
+    )
+    payload = json.loads(request.payload)
+    assert json.loads(payload["input"][0]["content"][0]["text"]) == wire
+    assert payload["tools"] == []
+    value = (
+        direct()
+        if expected_intent == "ANSWER"
+        else {**result(), "answer": None, "dataNeeds": []}
+    )
+    value["intent"] = expected_intent
+    validate_result(value, policy, frozenset({"user:1", "user:prior"}))
