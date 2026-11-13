@@ -88,9 +88,9 @@ test('resource recheck requires a matching durable no-execution receipt and uses
  await page.goto('/work?conversation=new');await page.getByRole('button',{name:'重新核对可用能力'}).click();await expect.poll(()=>writes).toBe(1);await expect(page.getByText('Error: 分析所需能力尚未全部就绪：MISSING_TOOL')).toBeVisible();expect(s.modelCalls).toBe(0);
 });
 
-for(const reason of ['READONLY_CONTINUATION_VALIDATION_FAILED','NETWORK_UNKNOWN'])test('execution continuation is offered only for known validation rejection: '+reason,async({page})=>{
+for(const reason of ['READONLY_CONTINUATION_VALIDATION_FAILED','NETWORK_UNKNOWN'])test('execution errors alone without a confirmed Plan cannot offer retry: '+reason,async({page})=>{
  const s=await fixture(page);s.journal={version:2,state:{key:'k',question:prompt,phase:'EXECUTE',pending:'execute',error:'Error: '+reason,messages:[{id:'user:q',text:prompt}],log:[]}};
- await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(reason==='READONLY_CONTINUATION_VALIDATION_FAILED'?1:0);expect(s.modelCalls).toBe(0);
+ await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'配置修复后继续分析'})).toHaveCount(0);await expect(page.getByRole('button',{name:'核对执行状态',exact:true})).toHaveCount(0);expect(s.modelCalls).toBe(0);
 });
 
 test('source selection does not invent a time range or replace the user scope',async({page})=>{
@@ -430,4 +430,39 @@ for(const delayedFailure of [false,true])test('late recovery observation cannot 
   expect(posts).toBe(1);expect(s.modelCalls).toBe(0);
   releaseContinue();await expect(page.getByText('需要哪个环境？',{exact:true}).first()).toBeVisible();expect(posts).toBe(1);
  }finally{releaseRead();releaseContinue()}
+});
+
+for(const mode of ['existing','absent','race','denied','other404','mismatch','post-lost'])test('original execute recovery reads before continuing: '+mode,async({page})=>{
+ const s=await fixture(page),digest='b'.repeat(64),preparation='c'.repeat(64);
+ s.journal={version:8,state:{key:'original-question',question:prompt,phase:'EXECUTE',pending:'execute',error:'Error: GRANT_REQUEST_NOT_FOUND',messages:[{id:'user:q',text:prompt}],log:[],confirmation:{digest,plan:{plan_id:'original-plan',version:2}}}};
+ let reads=0,posts=0;
+ const receipt={sourcePlanId:'original-plan',sourcePlanVersion:2,sourcePlanDigest:digest,subject:'human:development-admin',preparationDigest:preparation,executionStarted:true};
+ await page.route('**/planning-v2/original-plan/readonly-continuation*',route=>{
+  if(route.request().method()==='POST'){
+   posts++;expect(route.request().postDataJSON()).toEqual({version:2});
+   if(mode==='post-lost')return route.fulfill({status:503,json:{reasonCode:'RESPONSE_LOST'}});
+   return route.fulfill({json:{result:{receipt}}});
+  }
+  reads++;
+  if(mode==='denied'||mode==='other404')return route.fulfill({status:mode==='denied'?403:404,json:{reasonCode:'GRANT_REQUEST_NOT_FOUND'}});
+  if(mode==='absent'||mode==='post-lost'||(mode==='race'&&reads===1))return route.fulfill({status:404,json:{reasonCode:'READONLY_CONTINUATION_NOT_FOUND'}});
+  return route.fulfill({json:{result:{receipt:mode==='mismatch'?{...receipt,sourcePlanDigest:'f'.repeat(64)}:receipt}}});
+ });
+ await page.route('**/prepared-executions/**',route=>route.fulfill({status:404,json:{reasonCode:'ISOLATED_EXECUTION_VIEW_NOT_PROVIDED'}}));
+ await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'核对执行状态',exact:true})).toBeVisible();
+ await page.reload();await expect(page.getByRole('button',{name:'核对执行状态',exact:true})).toBeVisible();expect(posts).toBe(0);expect(reads).toBe(0);
+ await page.getByRole('button',{name:'核对执行状态',exact:true}).click();
+ if(['absent','race','post-lost'].includes(mode)){
+  await expect(page.getByRole('button',{name:'继续原方案执行',exact:true})).toBeVisible();expect(posts).toBe(0);expect(s.journal.version).toBe(8);
+  await page.getByRole('button',{name:'继续原方案执行',exact:true}).click();
+  if(mode==='post-lost'){
+   await expect(page.getByText('Error: RESPONSE_LOST',{exact:true})).toBeVisible();expect(s.journal.version).toBe(8);expect(s.journal.state?.pending).toBe('execute');
+   await page.reload();await expect(page.getByRole('button',{name:'核对执行状态',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'继续原方案执行',exact:true})).toHaveCount(0);expect(posts).toBe(1);
+  }else{await expect.poll(()=>s.journal.state?.phase).toBe('RUNNING');expect(posts).toBe(mode==='race'?0:1);expect(reads).toBe(2);}
+ }else if(mode==='existing'){
+  await expect.poll(()=>s.journal.state?.phase).toBe('RUNNING');expect(s.journal.state?.execution).toBe(preparation);expect(posts).toBe(0);
+ }else{
+  await expect(page.getByText('Error: '+(mode==='mismatch'?'READONLY_CONTINUATION_CONTEXT_MISMATCH':'GRANT_REQUEST_NOT_FOUND'),{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'继续原方案执行',exact:true})).toHaveCount(0);expect(s.journal.version).toBe(8);expect(posts).toBe(0);
+ }
+ expect(s.modelCalls).toBe(0);
 });

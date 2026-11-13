@@ -12,10 +12,10 @@ import {ConversationProgress} from './ConversationProgress';
 import {ConversationEvidenceRail} from './ConversationEvidenceRail';
 import {NativeLiveProgress} from './NativeLiveProgress';
 import {useEffect,useEffectEvent,useRef,useState} from 'react';
-import {readConversationUnderstandingCapability,readConversationUnderstandingResult,beginDraftAssistance,readDraftAssistance,createBusinessProblem,linkDraftAssistanceProblem,readBusinessProblem,readWorkbenchSession,writeCriterion,writeCriteriaSet,transitionBusinessProblem,type WorkbenchSession,type DraftAssistanceResult,type BusinessProblemRevision} from '../api/businessWorkspace';
+import {WorkbenchRequestError,readConversationUnderstandingCapability,readConversationUnderstandingResult,beginDraftAssistance,readDraftAssistance,createBusinessProblem,linkDraftAssistanceProblem,readBusinessProblem,readWorkbenchSession,writeCriterion,writeCriteriaSet,transitionBusinessProblem,type WorkbenchSession,type DraftAssistanceResult,type BusinessProblemRevision} from '../api/businessWorkspace';
 import {conversationRequest,readConversationHead,type PrivateConversation} from '../api/privateConversation';
 import {planningRequest,type Invocation,type PlanningBody} from '../planning/planningRequests';
-import {confirmPolicy,prepareResources,readResourcePreparation,continueReadonlyWork,selectAutomaticResources,readResourceCoverage,type ExactRef,type Confirmation} from '../planning/api';
+import {confirmPolicy,prepareResources,readResourcePreparation,readReadonlyContinuation,continueReadonlyWork,selectAutomaticResources,readResourceCoverage,type ExactRef,type Confirmation} from '../planning/api';
 import {preparedRequest,type ExecutionView} from '../api/preparedExecution';
 import {conversationUnderstandingContent,understandingContent,type UserFactMessage} from './problemUnderstandingModel';
 import {PreparedExecutionPanel} from './PreparedExecutionPanel';
@@ -31,6 +31,7 @@ const canRepair=(s:State)=>s.phase==='SELECT_RESOURCES'&&s.pending==='select-res
 export function ConversationJourney({conversation,session,onActive,onExecutionContext,onProgressVisible,onMessagesChanged,composerTarget,railTarget,returnTarget,contentHidden=false,separatePreparation=false,composerEnabled=true,onFocusComposer}:{contentHidden?:boolean;composerEnabled?:boolean;onFocusComposer?:()=>void;separatePreparation?:boolean;returnTarget?:HTMLElement|null;composerTarget?:HTMLElement|null;railTarget?:HTMLElement|null;conversation:string;session:WorkbenchSession;onActive:(active:boolean)=>void;onExecutionContext?:(value:ExecutionView|null)=>void;onProgressVisible?:(visible:boolean)=>void;onMessagesChanged?:()=>Promise<void>}){
  const [journal,setJournal]=useState<Journal|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[execution,setExecution]=useState<ExecutionView|null>(null);
  const [recoveryObservation,setRecoveryObservation]=useState<{key:string;state:string}|null>(null);
+ const [executionAbsent,setExecutionAbsent]=useState<string|null>(null);
  const [stream,setStream]=useState<ModelProgress|null>(null);
  const [sourceRefreshMessage,setSourceRefreshMessage]=useState('');
  const current=useRef<Journal|null>(null),flight=useRef(false),alive=useRef(true),recoveryAttempts=useRef(new Set<string>());
@@ -68,6 +69,29 @@ export function ConversationJourney({conversation,session,onActive,onExecutionCo
    if(!['READY','PARTIALLY_READY','BLOCKED'].includes(receipt.state))throw Error('RESOURCE_PREPARATION_OUTCOME_UNKNOWN');
    await save({...s,pending:undefined,error:undefined,phase:receipt.state==='READY'?'EXECUTE':'RESOURCES',resourceRetry:receipt.state==='READY'?s.resourceRetry:(s.resourceRetry??0)+1,log:[...s.log,'已核实上次准备结果且尚未启动执行，继续核对资源。']});setError('');
   }catch(e){setError(String(e))}finally{flight.current=false;setBusy(false)}
+ }
+ async function recoverExecution(resume=false){
+  if(flight.current||!current.current?.state)return;
+  const s=current.current.state,c=s.confirmation;
+  if(s.phase!=='EXECUTE'||s.pending!=='execute'||!c)return;
+  const token=JSON.stringify([s.key,c.plan.plan_id,c.plan.version,c.digest]);
+  if(resume&&executionAbsent!==token)return;
+  flight.current=true;setBusy(true);setExecutionAbsent(null);setError('');
+  try{
+   await verify();
+   let result;
+   try{result=await readReadonlyContinuation(c.plan.plan_id,c.plan.version)}catch(e){
+    if(!(e instanceof WorkbenchRequestError)||e.status!==404||e.reasonCode!=='READONLY_CONTINUATION_NOT_FOUND')throw e;
+   }
+   await verify();
+   if(!alive.current||current.current?.state!==s)throw Error('原会话状态已变化，请重新核对执行状态。');
+   if(!result&&!resume){setExecutionAbsent(token);return;}
+   if(!result){result=await continueReadonlyWork(c.plan.plan_id,c.plan.version,session.csrfToken);await verify();}
+   const r=result.receipt;
+   if(r.sourcePlanId!==c.plan.plan_id||r.sourcePlanVersion!==c.plan.version||r.sourcePlanDigest!==c.digest||r.subject!==session.principal.principalId||r.executionStarted!==true||!r.preparationDigest?.match(/^[a-f0-9]{64}$/))throw Error('READONLY_CONTINUATION_CONTEXT_MISMATCH');
+   if(!alive.current||current.current?.state!==s)throw Error('原会话状态已变化，请重新核对执行状态。');
+   await save({...s,pending:undefined,error:undefined,execution:r.preparationDigest,phase:'RUNNING',log:[...s.log,'已核实原执行回执，在本会话继续显示进展与结果。']});
+  }catch(e){setError(String(e))}finally{flight.current=false;if(alive.current)setBusy(false)}
  }
  async function recheckSelection(){
   if(flight.current||!current.current?.state)return;flight.current=true;setBusy(true);
@@ -218,7 +242,8 @@ export function ConversationJourney({conversation,session,onActive,onExecutionCo
  {unknownUnderstanding&&composerEnabled&&<ConversationPlacement target={composerTarget}><ConversationAnswer storageKey={conversationScope(session)+':'+conversation+':'+state.key+':'+state.messages.length} id="journey-reply" label="暂存补充" button="等待结果核实" disabled={busy} blockedReason="原请求结果尚未确认，暂不能提交或继续执行；你输入的内容会保留。" onAnswer={async()=>false}/></ConversationPlacement>}
  {recoveryObserved&&(error||state.error)&&<details><summary>上次处理详情与错误记录</summary><p>{error||state.error}</p><p>原请求结果尚待核实，历史记录保留，不会自动重发。</p></details>}
  {!recoveryObserved&&(error||state.error)&&<div role="alert"><p>{inputReadFailure??(sourceMismatch?'方案使用的资料与本次已确认的资料不一致，已停止继续处理。原问题、资料和调用记录均已保留，无需重新描述问题。':unknownUnderstanding?'暂时无法确认这次处理结果，已保留请求与已有回答。':'本次请求尚未完成或结果待核实，已有内容已保留。')}</p>{inputReadFailure||unknownUnderstanding||sourceMismatch?<details><summary>技术详情</summary><p>{error||state.error}</p></details>:<p>{error||state.error}</p>}<p>{inputReadFailure?'本轮在输入读取阶段停止，未派发模型请求；不会自动重发，原消息保留。':sourceMismatch?((error||state.error)?.includes('CONTEXT_ADMISSION_SOURCE_MISMATCH')?'本轮规划请求在资料核对时被拒绝，尚未调用模型或启动执行。':'模型已返回方案，但资料核对未通过，尚未进入执行。'):'不会自动重发可能已执行的请求。恢复后仍在本会话继续。'}</p></div>}
- {((state.phase==='PLAN'&&state.pending==='planning'&&state.error?.includes('（MODEL_AUTHORIZATION_INVALID）'))||(state.phase==='EXECUTE'&&state.pending==='execute'&&['Error: READONLY_RESOURCE_PREPARATION_REQUIRED','Error: READONLY_CONTINUATION_VALIDATION_FAILED'].includes(state.error??'')))&&<button disabled={busy} onClick={()=>{setError('');void save({...state,pending:undefined,error:undefined})}}>配置修复后继续分析</button>}
+ {state.phase==='EXECUTE'&&state.pending==='execute'&&state.confirmation&&<section aria-label="原执行状态核对"><p>先读取本次工作的执行记录；已启动的工作直接续接，不重复提交。</p><button disabled={busy} onClick={()=>void recoverExecution()}>核对执行状态</button>{executionAbsent===JSON.stringify([state.key,state.confirmation.plan.plan_id,state.confirmation.plan.version,state.confirmation.digest])&&<><p role="status">已核实原方案尚无已提交的执行记录。配置修复后，可继续同一项工作。</p><button disabled={busy} onClick={()=>void recoverExecution(true)}>继续原方案执行</button></>}</section>}
+ {(state.phase==='PLAN'&&state.pending==='planning'&&state.error?.includes('（MODEL_AUTHORIZATION_INVALID）'))&&<button disabled={busy} onClick={()=>{setError('');void save({...state,pending:undefined,error:undefined})}}>配置修复后继续分析</button>}
  {state.phase==='SELECT_RESOURCES'&&state.pending==='select-resources'&&[coverageFailure,'Error: 现有能力仍不能完成该方案，已保留资料与方案缺口。'].includes(state.error??'')&&<button disabled={busy} onClick={()=>void recheckSelection()}>能力补齐后继续分析</button>}
  {state.phase==='RESOURCES'&&state.pending==='resources'&&state.error?.startsWith('Error: 分析所需能力尚未全部就绪：')&&<button disabled={busy} onClick={()=>void recheckResources()}>重新核对可用能力</button>}
  {!recoveryObserved&&state.pending&&!busy&&!state.error&&<p role="status">上次请求尚未核实，已保留原记录，暂不重复执行。</p>}
