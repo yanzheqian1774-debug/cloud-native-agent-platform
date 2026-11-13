@@ -13,7 +13,7 @@ for (const kind of ['document','sales'] as const) {
    if(path.includes('/business-ontologies/')) return route.fulfill({json:{result:{ontology_id:kind,revision_id:'r1',version:5,digest:'a'.repeat(64),content,state:'PUBLISH',facts:kind==='document'?[{action:'TEST',actor:'fixture',result:{checks:[{schemaVersion:'document-rule-result.v1',documentTitle:'客户访谈纪要',rulesDigest:'b'.repeat(64),sourceDigest:'c'.repeat(64),findings:[{ruleCode:'owner',ruleName:'交接负责人',status:'UNKNOWN',evidence:[{documentId:'interview',line:3,text:'负责人：待确认'}]},{ruleCode:'scope',ruleName:'访谈范围',status:'SATISFIED',evidence:[{documentId:'interview',line:4,text:'范围：试用用户'}]},{ruleCode:'rollback',ruleName:'回退说明',status:'MISSING',evidence:[]},{ruleCode:'reviewer',ruleName:'接收人一致',status:'CONFLICT',evidence:[{documentId:'interview',line:5,text:'接收人：李明'},{documentId:'interview',line:6,text:'接收人：陈玲'}]}]}]}}]:[]}}});
    return route.fulfill({json:{result:{items:[],entries:[]}}});
   });
-  await page.goto('/ontology');await page.getByRole('button',{name:new RegExp(content.name)}).click();
+  await page.goto('/ontology');await page.getByRole('button',{name:new RegExp(content.name)}).click();await page.getByRole('button',{name:'规则与来源',exact:true}).click();
   if(kind==='document') {
    await expect(page.getByRole('region',{name:'文档核对规则',exact:true})).toContainText('访谈交接');
    await expect(page.getByRole('region',{name:'文档规则验证结果'})).toContainText('交接负责人 · 待确认');
