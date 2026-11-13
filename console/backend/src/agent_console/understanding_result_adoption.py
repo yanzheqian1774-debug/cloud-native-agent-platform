@@ -38,6 +38,23 @@ def require(condition, reason):
         raise DraftAssistanceError("UNDERSTANDING_ADOPTION_" + reason)
 
 
+def successful_cleanup(cleanup):
+    # Non-isolated/legacy providers have no cleanup receipt. An isolated Responses
+    # worker records RESULT_ACCEPTED on success; a reason is not itself a failure.
+    # Do not accept partial diagnostics, cancellation or killed/unreaped workers.
+    return (
+        cleanup is None
+        or cleanup == {}
+        or (
+            isinstance(cleanup, dict)
+            and cleanup.get("reason") == "RESULT_ACCEPTED"
+            and cleanup.get("reaped") is True
+            and cleanup.get("kill_requested") is False
+            and "cancellation_source" not in cleanup
+        )
+    )
+
+
 def target_identity(target):
     return {
         "kind": "UNDERSTANDING",
@@ -142,7 +159,7 @@ def reference(
         and result.last_observation_id == result.terminal_observation_id
         and result.profile_revision_id == expected_profile_revision
         and not result.owner_write_reason_code
-        and not (result.local_cleanup or {}).get("reason"),
+        and successful_cleanup(result.local_cleanup),
         "RESULT_NOT_ADOPTABLE",
     )
     require(

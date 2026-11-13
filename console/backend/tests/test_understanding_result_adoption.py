@@ -93,6 +93,63 @@ def test_adoption_references_real_result_without_rewriting_or_dispatch(case):
     assert first["target"]["original_invocation_id"] == case["original"].invocation_id
 
 
+def accepted_cleanup():
+    # Shape emitted by responses_deadline.supervise, not an empty transport stub.
+    return {
+        "reason": "RESULT_ACCEPTED",
+        "stage": "VALIDATE_RESPONSE",
+        "stage_seconds": {"CONNECT": 0.1, "VALIDATE_RESPONSE": 1.0},
+        "stream": {"events": 3},
+        "decision_seconds": 1.1,
+        "cleanup_seconds": 0.01,
+        "worker_pid": 42,
+        "reaped": True,
+        "kill_requested": False,
+    }
+
+
+def test_successful_responses_cleanup_remains_adoptable(case):
+    case["result"] = replace(case["result"], local_cleanup=accepted_cleanup())
+    before = copy.deepcopy(case)
+    assert (
+        reference(**case)["actualResult"]["invocationId"]
+        == case["result"].invocation_id
+    )
+    assert case == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"reason": "CANCELLED"},
+        {"reason": "CLEANUP_FAILURE"},
+        {"reason": "TOTAL_DEADLINE"},
+        {"reason": None},
+        {"reaped": False},
+        {"reaped": 1},
+        {"kill_requested": True},
+        {"kill_requested": 0},
+        {"cancellation_source": "STREAM_DELIVERY_CANCELLED"},
+        {"cancellation_source": None},
+    ],
+)
+def test_success_label_does_not_override_unsafe_cleanup(case, change):
+    case["result"] = replace(
+        case["result"], local_cleanup={**accepted_cleanup(), **change}
+    )
+    with pytest.raises(DraftAssistanceError, match="RESULT_NOT_ADOPTABLE"):
+        reference(**case)
+
+
+@pytest.mark.parametrize("missing", ["reason", "reaped", "kill_requested"])
+def test_partial_cleanup_receipt_cannot_be_treated_as_success(case, missing):
+    cleanup = accepted_cleanup()
+    cleanup.pop(missing)
+    case["result"] = replace(case["result"], local_cleanup=cleanup)
+    with pytest.raises(DraftAssistanceError, match="RESULT_NOT_ADOPTABLE"):
+        reference(**case)
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
