@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from hashlib import sha256
+from pathlib import Path
 
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,9 +21,12 @@ class RecoveryRequest(BaseModel):
 
 
 def migrate(service):
+    # The authority bootstrap may intentionally point at a historical install.
+    # This additive migration belongs to the currently installed code package.
     path = (
-        service.repository.migration_path.parent
-        / "0063_conversation_planning_recovery.sql"
+        Path(__file__).resolve().parents[2]
+        / "migrations"
+        / ("0063_conversation_planning_recovery.sql")
     )
     checksum = sha256(path.read_bytes()).hexdigest()
     with service.repository.connection_scope() as c:
