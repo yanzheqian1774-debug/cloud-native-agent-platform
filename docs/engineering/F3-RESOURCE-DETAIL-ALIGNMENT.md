@@ -118,3 +118,10 @@ code because its unchanged savedSourceFixture.open could not find the old conver
 button. Its subsequent test was interrupted; this is disclosed, not counted as passed,
 and that test file/helper are not modified in this follow-up. Installed acceptance and
 full pixel comparison remain coordinator gates.
+
+Final product-copy correction: overview revision labels retain the distinguishing ID
+suffix (extended on collisions) instead of a common prefix; complete publication,
+viewed and draft IDs remain in folded evidence. History uses the existing Beijing-time
+formatter. Input/output labels prefer supplied descriptions, while undeclared fields
+keep their original names without invented translations; raw schema remains folded.
+The return-conversation parameter remains navigation context, never binding evidence.

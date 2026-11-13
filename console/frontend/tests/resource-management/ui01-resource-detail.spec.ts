@@ -4,7 +4,7 @@ const scope={tenantId:principal.tenantId,securityDomain:principal.securityDomain
 const items=['skill','mcp'].map(kind=>({kind,identity:kind+':ui01',revisionId:'revision:1',digest:'a'.repeat(64),name:kind==='skill'?'准确销售技能':'准确连接配置',state:'PUBLISHED',enabled:true,isCurrentPublished:true,isCurrentDraft:false,createdAt:null,executionReady:false,policyReviewed:false}));
 async function fixture(page:Page,mode='normal'){
  const writes:string[]=[];
- const readable=mode.startsWith('history')?[...items,{...items[0],revisionId:'revision:old',digest:'c'.repeat(64),isCurrentPublished:false},{...items[0],identity:'skill:unrelated',revisionId:'revision:unrelated'}]:items;
+ const readable=mode==='product-copy'?[{...items[0],revisionId:'skill-revision-business-example-20261113-r1',createdAt:'2026-11-13T01:20:00Z'},{...items[0],revisionId:'skill-revision-business-example-20261113-r2',isCurrentPublished:false,isCurrentDraft:true}]:mode.startsWith('history')?[...items,{...items[0],revisionId:'revision:old',digest:'c'.repeat(64),isCurrentPublished:false},{...items[0],identity:'skill:unrelated',revisionId:'revision:unrelated'}]:items;
  await page.route('**/api/workbench/v1/**',async route=>{
   const r=route.request(),u=new URL(r.url());if(r.method()!=='GET'){writes.push(r.method()+u.pathname);return route.abort()}
   if(u.pathname.endsWith('/session'))return route.fulfill({json:session});
@@ -19,7 +19,7 @@ async function fixture(page:Page,mode='normal'){
    if(!item)return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
    if(mode==='history-denied'&&item.revisionId==='revision:old')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
    if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
-   return route.fulfill({json:{result:{...item,subject:mode==='identity'?'human:other':principal.principalId,scope,revision:{revisionId:item.revisionId,digest:mode==='version'?'b'.repeat(64):item.digest,state:'PUBLISHED',content:{description:'来自当前准确版本',instructions:(item.revisionId==='revision:old'?'历史独立规则':mode.startsWith('history')?'按已确认期间核对资料，返回摘要并保留异常。':'隔离长规则\n'.repeat(75)),capabilities:['READ_DATA'],inputSchema:{type:'object',properties:{period:{type:'string',description:'需要核对的期间'}},required:['period']},outputSchema:{type:'object',properties:{summary:{type:'string',description:'核对摘要'}}},endpoint:'http://127.0.0.1:8765/mcp',sideEffect:'READ',idempotency:'IDEMPOTENT',timeoutSeconds:5}},usage:[]}}});
+   return route.fulfill({json:{result:{...item,subject:mode==='identity'?'human:other':principal.principalId,scope,revision:{revisionId:item.revisionId,digest:mode==='version'?'b'.repeat(64):item.digest,state:'PUBLISHED',content:{description:'来自当前准确版本',instructions:(item.revisionId==='revision:old'?'历史独立规则':mode.startsWith('history')?'按已确认期间核对资料，返回摘要并保留异常。':'隔离长规则\n'.repeat(75)),capabilities:['READ_DATA'],inputSchema:{type:'object',properties:{period:{type:'string',description:'需要核对的期间'},object:{type:'object'}},required:['period']},outputSchema:{type:'object',properties:{summary:{type:'string',description:'核对摘要'}}},endpoint:'http://127.0.0.1:8765/mcp',sideEffect:'READ',idempotency:'IDEMPOTENT',timeoutSeconds:5}},usage:[]}}});
   }
   return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
  });return writes;
@@ -106,4 +106,18 @@ for(const mode of ['history','history-denied'])test('F3 reader exact authorized 
   await page.getByRole('button',{name:'历史记录',exact:true}).click();await page.getByRole('button',{name:'返回内容',exact:true}).click();await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('历史独立规则');
  }
  await expect(page.getByRole('link',{name:'返回原会话',exact:true})).toHaveAttribute('href','/work?conversation='+conversation);expect(writes).toEqual([]);
+});
+
+test('F3 reader distinguishes revisions and localizes history without inventing field labels',async({page})=>{
+ const writes=await fixture(page,'product-copy');
+ await page.goto(path().replace('revision%3A1','skill-revision-business-example-20261113-r1'));
+ const overview=page.getByRole('tabpanel',{name:'概览'});
+ await expect(overview.locator('.f3-detail-facts>div').filter({has:page.locator('dt').filter({hasText:/^当前发布$/})})).toContainText('20261113-r1');
+ await expect(overview.locator('.f3-detail-facts>div').filter({has:page.locator('dt').filter({hasText:/^修改草稿$/})})).toContainText('20261113-r2');
+ await expect(overview).toContainText('从原会话进入，未核对版本绑定');
+ await overview.getByText('查看准确版本依据',{exact:true}).click();await expect(overview.getByText('skill-revision-business-example-20261113-r1',{exact:true}).first()).toBeVisible();
+ await page.getByRole('button',{name:'历史记录',exact:true}).click();await expect(page.getByRole('region',{name:'历史记录'})).toContainText('2026-11-13 09:20（北京时间）');
+ await page.getByRole('button',{name:'返回内容',exact:true}).click();const content=page.getByRole('tabpanel',{name:'内容与定义'});
+ await expect(content.getByText('需要核对的期间',{exact:true})).toBeVisible();await expect(content.getByText('period',{exact:true})).toHaveCount(0);await expect(content.getByText('object',{exact:true})).toBeVisible();await expect(content).toContainText('未提供字段说明');
+ await content.getByText('本版本完整定义与准确依据',{exact:true}).click();await expect(content.locator('pre')).toContainText('"period"');expect(writes).toEqual([]);
 });
