@@ -53,11 +53,9 @@ def prepare(e, req):
     )
 
 
-@pytest.fixture
-def unknown(ordinary):  # noqa: F811
-    e = ordinary
+def make_unknown(e, original_request=None):
     migrate(e.planning)
-    first = prepare(e, request("old"))
+    first = prepare(e, original_request or request("old"))
     with e.repo.connection_scope() as c:
         root = Path(__file__).parents[1] / "migrations"
         for name in (
@@ -103,6 +101,11 @@ def unknown(ordinary):  # noqa: F811
             (e.planning.configuration["ledger_id"], "f" * 64),
         )
     return e
+
+
+@pytest.fixture
+def unknown(ordinary):  # noqa: F811
+    return make_unknown(ordinary)
 
 
 def spec(**changes):

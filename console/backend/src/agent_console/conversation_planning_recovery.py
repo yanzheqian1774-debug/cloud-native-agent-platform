@@ -475,15 +475,16 @@ def before_approve(admission, c, row, payload):
     ):
         raise AuthorityError("PLANNING_RECOVERY_SCOPE_DENIED")
     active(c, source, source["record"]["configuration"])
-    original_source = c.execute(
-        "SELECT record FROM draft_assistance.invocation_versions WHERE "
-        "namespace=%s AND security_domain=%s AND invocation_id=%s "
-        "ORDER BY aggregate_version DESC LIMIT 1",
-        (row["tenant_id"], row["security_domain"], source["first_invocation_id"]),
-    ).fetchone()
-    if not original_source or original_source["record"].get("state") != "SUCCEEDED":
+    from .conversation_planning_admission import bound_source_input
+
+    if (source["tenant_id"], source["security_domain"]) != (
+        row["tenant_id"],
+        row["security_domain"],
+    ) or source["record"].get("conversation_id") != recovery["conversation_id"]:
         raise AuthorityError("PLANNING_RECOVERY_SCOPE_DENIED")
-    source["understanding_input_source"] = original_source["record"].get("inputSource")
+    source["understanding_input_source"] = bound_source_input(
+        c, source, recovery["record"]["target"]["problem"]["resource_id"]
+    )
     validate(admission, c, row, recovery, source)
     from .provider_budget_allowance import require_context
 

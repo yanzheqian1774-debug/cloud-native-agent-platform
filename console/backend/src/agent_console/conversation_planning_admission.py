@@ -52,26 +52,7 @@ class ConversationPlanningAdmission:
         ):
             raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
         decision = active(c, source, self.understanding.configuration)
-        invocation = c.execute(
-            "SELECT record FROM draft_assistance.invocation_versions WHERE "
-            "namespace=%s AND security_domain=%s AND invocation_id=%s "
-            "ORDER BY aggregate_version DESC LIMIT 1",
-            (
-                source["tenant_id"],
-                source["security_domain"],
-                source["source_invocation"],
-            ),
-        ).fetchone()
-        value = invocation["record"] if invocation else {}
-        if (
-            value.get("state") != "SUCCEEDED"
-            or value.get("resultKind") != "DRAFT_READY"
-            or value.get("contextId") != source["context_id"]
-            or value.get("initiatingPrincipalId") != context.principal_id
-        ):
-            raise AuthorityError("CONTEXT_ADMISSION_DRAFT_INVALID")
-        require_resolved_source(c, source)
-        source["understanding_input_source"] = value.get("inputSource")
+        source["understanding_input_source"] = bound_source_input(c, source, problem)
         return source, account, now, min(expires, decision["expires_at"])
 
     def prepare(self, service, c, context, request, record):
@@ -359,3 +340,31 @@ def limits(c, row, budget):
     from .provider_budget_allowance import experience_limits
 
     return experience_limits(c, row, budget)
+
+
+def bound_source_input(c, source, problem):
+    """Read the exact Problem-bound draft, never the context's first/latest turn."""
+    binding = c.execute(
+        "SELECT invocation_id FROM authorization_admin.context_call_objects "
+        "WHERE tenant_id=%s AND security_domain=%s AND context_id=%s "
+        "AND owner='BUSINESS_PROBLEM' AND resource_id=%s",
+        (source["tenant_id"], source["security_domain"], source["context_id"], problem),
+    ).fetchone()
+    if not binding:
+        raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
+    invocation = c.execute(
+        "SELECT record FROM draft_assistance.invocation_versions WHERE "
+        "namespace=%s AND security_domain=%s AND invocation_id=%s "
+        "ORDER BY aggregate_version DESC LIMIT 1",
+        (source["tenant_id"], source["security_domain"], binding["invocation_id"]),
+    ).fetchone()
+    value = invocation["record"] if invocation else {}
+    if (
+        value.get("state") != "SUCCEEDED"
+        or value.get("resultKind") != "DRAFT_READY"
+        or value.get("contextId") != source["context_id"]
+        or value.get("initiatingPrincipalId") != source["subject_id"]
+    ):
+        raise AuthorityError("CONTEXT_ADMISSION_DRAFT_INVALID")
+    require_resolved_source(c, source)
+    return value.get("inputSource")
