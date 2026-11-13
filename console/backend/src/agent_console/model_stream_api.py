@@ -9,8 +9,10 @@ from datetime import UTC, datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .authority_contracts import AuthorityError
 from .response_stream import SINK
 from .responses_deadline import CANCEL, cancellable_request
+from .workbench_owner_authorization import WorkbenchOwnerError
 
 
 def stream_authorization(request, authenticate, require_csrf, read):
@@ -75,6 +77,35 @@ async def model_response(request, action, authorize):
 
         task = asyncio.create_task(asyncio.to_thread(execute))
         identity = None
+        failure = "STREAM_SERVICE_UNAVAILABLE"
+
+        async def check_read():
+            nonlocal failure
+            try:
+                await asyncio.to_thread(authorize, identity)
+            except Exception as exc:
+                validation = (
+                    isinstance(exc, PermissionError)
+                    or (
+                        isinstance(exc, AuthorityError)
+                        and exc.reason_code != "AUTHORITY_STORAGE_UNAVAILABLE"
+                    )
+                    or (
+                        isinstance(exc, WorkbenchOwnerError)
+                        and exc.status_code in {401, 403, 404}
+                    )
+                )
+                failure = (
+                    "STREAM_PROGRESS_VALIDATION_UNAVAILABLE"
+                    if validation
+                    else "STREAM_PROGRESS_READ_UNAVAILABLE"
+                )
+                raise
+
+        def cancel(source):
+            signal.cancellation_source = source
+            signal.set()
+
         try:
             yield frame("progress", {"kind": "accepted"})
             while not task.done():
@@ -84,29 +115,27 @@ async def model_response(request, action, authorize):
                     latest.clear()
                 if value:
                     identity = value.get("invocationId") or identity
-                    await asyncio.to_thread(authorize, identity)
+                    await check_read()
                     yield frame("progress", value)
                 else:
                     # Keepalive means only that the connection is still open.
                     yield ": keepalive\n\n"
             result = await task
-            await asyncio.to_thread(authorize, identity)
+            await check_read()
             if isinstance(result, JSONResponse):
                 status, body = result.status_code, json.loads(result.body)
             else:
                 status, body = 201, result
             yield frame("result", {"status": status, "body": body})
         except asyncio.CancelledError:
-            signal.set()
+            cancel("STREAM_DELIVERY_CANCELLED")
             await asyncio.shield(task)
             raise
         except Exception:
-            signal.set()
+            cancel(failure)
             with suppress(Exception):
                 await asyncio.shield(task)
-            yield frame(
-                "error", {"reasonCode": "STREAM_INTERRUPTED_READ_ORIGINAL_REQUEST"}
-            )
+            yield frame("error", {"reasonCode": failure})
         finally:
             signal.set()
             if not task.done():

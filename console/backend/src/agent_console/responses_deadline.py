@@ -250,6 +250,14 @@ def supervise(job, configuration, *, cancel=None, worker=_worker):
     if cancelled() and reason != "CLEANUP_FAILURE":
         diagnostic["reason"] = "CANCELLED"
         result = None
+    source = getattr(cancel, "cancellation_source", None)
+    if diagnostic["reason"] == "CANCELLED" and source in {
+        "STREAM_PROGRESS_VALIDATION_UNAVAILABLE",
+        "STREAM_PROGRESS_READ_UNAVAILABLE",
+        "STREAM_SERVICE_UNAVAILABLE",
+        "STREAM_DELIVERY_CANCELLED",
+    }:
+        diagnostic["cancellation_source"] = source
     diagnostic["cancellation_checks"] = cancellation_checks
     diagnostic["cancellation_seconds"] = cancellation_seconds
     if result is None:
