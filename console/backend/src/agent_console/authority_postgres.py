@@ -160,6 +160,24 @@ class PostgresAuthorityRepository:
             return rows == [schema_record(self)]
         if schema != "authorization_admin":
             return False
+        if rows and rows[-1]["version"] == 63:
+            # 0063 belongs to the installed recovery package, while legacy
+            # extension checks below retain their configured bootstrap location.
+            path = (
+                Path(__file__).resolve().parents[2]
+                / "migrations"
+                / ("0063_conversation_planning_recovery.sql")
+            )
+            if not path.is_file() or rows[-1] != {
+                "version": 63,
+                "adapter": "conversation-planning-recovery-v1",
+                "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }:
+                return False
+            rows = rows[:-1]
+            # Recovery extends the existing planning/context admission owners.
+            if not rows or rows[-1]["version"] < 38:
+                return False
         expected = []
         for version, name, adapter in (
             (28, "0028_task_delegation.sql", "task-delegation-v1"),
