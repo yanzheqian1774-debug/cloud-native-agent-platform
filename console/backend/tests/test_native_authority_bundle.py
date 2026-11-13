@@ -9,7 +9,7 @@ from agent_console.authority_contracts import AuthorityError, ExactGrant
 from agent_console.development_administrator import GRANT, PRINCIPAL, SCOPE
 
 
-def build(monkeypatch, bundle):
+def build(monkeypatch, bundle, subject=PRINCIPAL):
     captured = {}
     monkeypatch.setattr(
         module, "compose_governed_skill_invocation", lambda *args: NS(closeables=())
@@ -23,7 +23,7 @@ def build(monkeypatch, bundle):
 
     def runtime(*args, **kwargs):
         captured.update(kwargs)
-        return NS()
+        return NS(subject=subject)
 
     monkeypatch.setattr(native_loop_runtime, "NativeLoopRuntime", runtime)
     module.compose(
@@ -107,4 +107,49 @@ def test_optional_ontology_grant_is_not_lost_in_bundle(monkeypatch):
         ("SKILL", "INVOKE_SKILL"),
         ("BUSINESS_ONTOLOGY", "USE"),
         ("DEVELOPMENT_ADMIN", "USE"),
+    ]
+
+
+def test_ordinary_subject_keeps_exact_grants_and_fresh_denials(monkeypatch):
+    calls = []
+    allowed = True
+
+    def bundle(connection, command, grants):
+        calls.append(grants)
+        return allowed
+
+    check, command = build(monkeypatch, bundle, subject="human:ordinary")
+    command.principal_id = "human:ordinary"
+    assert check(object(), command)
+    assert [(grant.owner, grant.action) for grant in calls[-1]] == [
+        ("SKILL", "INVOKE_SKILL")
+    ]
+    allowed = False
+    assert not check(object(), command)
+    assert len(calls) == 2
+    command.principal_id = PRINCIPAL
+    assert not check(object(), command)
+    assert len(calls) == 2
+
+
+def test_ordinary_subject_still_requires_exact_ontology_use(monkeypatch):
+    calls = []
+    check, command = build(
+        monkeypatch,
+        lambda _, __, grants: calls.append(grants) or True,
+        subject="human:ordinary",
+    )
+    command.principal_id = "human:ordinary"
+    monkeypatch.setattr(
+        module,
+        "parse_preparation",
+        lambda _: NS(
+            digest="a" * 64,
+            business_semantics=NS(ontology=NS(resource_id="rules", revision_id="r1")),
+        ),
+    )
+    assert check(object(), command)
+    assert [(grant.owner, grant.action) for grant in calls[-1]] == [
+        ("SKILL", "INVOKE_SKILL"),
+        ("BUSINESS_ONTOLOGY", "USE"),
     ]

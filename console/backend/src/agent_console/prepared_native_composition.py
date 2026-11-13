@@ -183,12 +183,15 @@ def compose(
         from .development_administrator import GRANT, PRINCIPAL, SCOPE
 
         if (
-            command.principal_id != PRINCIPAL
+            not native_runtime
+            or command.principal_id != native_runtime[0].subject
             or (command.scope.namespace, command.scope.security_domain) != SCOPE
         ):
             return False
         _, grants = skill_grants(connection, command)
-        return authorization_bundle_check(connection, command, (*grants, GRANT))
+        if command.principal_id == PRINCIPAL:
+            grants = (*grants, GRANT)
+        return authorization_bundle_check(connection, command, grants)
 
     if native_loop_path:
         from .native_loop_runtime import NativeLoopRuntime
