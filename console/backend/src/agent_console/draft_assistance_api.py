@@ -162,7 +162,10 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
 
 
 def install_draft_assistance_routes(
-    service: DraftAssistanceService, routing_service=None
+    service: DraftAssistanceService,
+    routing_service=None,
+    *,
+    retained_routing_services=(),
 ):
     def install(app: FastAPI, authenticate, require_csrf, policy: WorkbenchBffPolicy):
         del policy
@@ -172,15 +175,22 @@ def install_draft_assistance_routes(
 
             value = service.repository.get(DraftScope.from_context(context), identity)
             if value and value.conversation_context:
-                if (
-                    routing_service is None
-                    or value.profile_revision_id
-                    != routing_service.profile.profile_revision_id
+                matches = [
+                    candidate
+                    for candidate in (routing_service, *retained_routing_services)
+                    if candidate
+                    and candidate.profile.profile_revision_id
+                    == value.profile_revision_id
+                ]
+                if len(matches) != 1 or (
+                    value.snapshot is not None
+                    and matches[0].profile.profile_digest
+                    != value.snapshot.profile_digest
                 ):
                     raise DraftAssistanceError(
                         "CONVERSATION_ROUTING_SERVICE_UNAVAILABLE"
                     )
-                return routing_service
+                return matches[0]
             return service
 
         app.state.conversation_draft_service_for = service_for
@@ -194,6 +204,10 @@ def install_draft_assistance_routes(
         install_relation_validation(
             app, authenticate, service, service_for, _payload, _status
         )
+
+        from .understanding_adoption_api import install as install_adoption
+
+        install_adoption(app, authenticate, require_csrf)
 
         def invoke(action, request: Request):
             session, context = authenticate(request)
@@ -216,6 +230,14 @@ def install_draft_assistance_routes(
                     "conversationUnderstanding": service.profile.adapter_revision
                     in {"v3", "v3-execution", "v3-relation"},
                     "conversationRelationRouting": available(routing_service, context),
+                    "initialUnderstandingAdoption": (
+                        routing_service is not None
+                        and routing_service.profile.adapter_revision
+                        == "v3-relation-adoption"
+                        and getattr(app.state, "understanding_adoption", None)
+                        is not None
+                        and available(routing_service, context)
+                    ),
                 }
             }
 
@@ -291,7 +313,8 @@ def install_draft_assistance_routes(
                 conversation = body.conversationId
                 if body.conversationRouting and (
                     active_service is None
-                    or active_service.profile.adapter_revision != "v3-relation"
+                    or active_service.profile.adapter_revision
+                    not in {"v3-relation", "v3-relation-adoption"}
                     or not conversation
                     or body.parentContextId
                     or body.parentTurnId
@@ -311,6 +334,7 @@ def install_draft_assistance_routes(
                         "v3",
                         "v3-execution",
                         "v3-relation",
+                        "v3-relation-adoption",
                     }:
                         raise DraftAssistanceError(
                             "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
@@ -351,14 +375,30 @@ def install_draft_assistance_routes(
                             context, conversation, body.conversationMessageId, service
                         )
 
+                    adoption = (
+                        body.conversationRouting
+                        and active_service.profile.adapter_revision
+                        == "v3-relation-adoption"
+                    )
                     reader = getattr(
-                        request.app.state, "conversation_source_input", None
+                        request.app.state,
+                        "conversation_adoption_source_input"
+                        if adoption
+                        else "conversation_source_input",
+                        None,
                     )
                     attachment = (
                         reader(context, conversation, body.conversationMessageId)
                         if conversation
                         and reader is not None
-                        and not body.conversationRouting
+                        and (
+                            not body.conversationRouting
+                            or (
+                                adoption
+                                and (snapshot.get("target") or {}).get("kind")
+                                == "UNDERSTANDING"
+                            )
+                        )
                         else None
                     )
                     with bind_attachment(attachment), bind_snapshot(snapshot):

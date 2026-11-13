@@ -70,3 +70,56 @@ test('identity change before prepare prevents submission under old context',asyn
   await expect(page.getByText('测试资源准备结果尚未核实。可以核对原请求，或继续使用已有权限。')).toBeVisible();
   expect(writes).toBe(0);
 });
+
+test('published selection is encoded in exact key and unknown never retargets after refresh',async({page},info)=>{
+  let selection='b'.repeat(64),fail=true;
+  const writes:{idempotencyKey:string;expectedSelectionDigest:string}[]=[];
+  await page.route('**/api/workbench/v1/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:tester',tenantId:'test',securityDomain:'isolated'},session:{},csrfToken:'test-token'}});
+    if(path.endsWith('/test-resource-access/status'))return route.fulfill({json:{result:{available:true,policyDigest:'a'.repeat(64),selectionDigest:selection}}});
+    if(path.endsWith('/test-resource-access/prepare')){
+      writes.push(route.request().postDataJSON());
+      if(fail)return route.abort('failed');
+      return route.fulfill({json:{result:{policyDigest:'a'.repeat(64),selectionDigest:selection,items:[{state:'APPROVED'}]}}});
+    }
+    return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+  });
+  await page.goto('/help');
+  await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();
+  expect(writes).toHaveLength(1);
+  const first=writes[0];
+  expect(first.idempotencyKey).toMatch(new RegExp('^published:'+first.expectedSelectionDigest+':'));
+  await page.getByRole('button',{name:'核对原请求'}).click();
+  await expect.poll(()=>writes.length).toBe(2);
+  expect(writes[1]).toEqual(first);
+  selection='c'.repeat(64);fail=false;
+  await page.reload();
+  await expect(page.getByText(/资料版本已更新。上次读取结果尚未核实/)).toBeVisible();
+  expect(writes).toHaveLength(2);
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:info.outputPath('updated-material-unknown-1440.png'),fullPage:true});
+  await page.getByRole('button',{name:'读取新版资料'}).click();
+  await expect.poll(()=>writes.length).toBe(3);
+  expect(writes[2].expectedSelectionDigest).toBe(selection);
+  expect(writes[2].idempotencyKey).not.toBe(first.idempotencyKey);
+  await expect(page.getByRole('button',{name:'读取新版资料'})).toHaveCount(0);
+  const saved=await page.evaluate(()=>Object.entries(sessionStorage));
+  expect(saved.some(([key,value])=>key.endsWith(':unresolved')&&value.includes(first.idempotencyKey))).toBe(true);
+});
+
+test('known completed publication can prepare new selection without changing prior key',async({page})=>{
+  let selection='b'.repeat(64);
+  const writes:{idempotencyKey:string;expectedSelectionDigest:string}[]=[];
+  await page.route('**/api/workbench/v1/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:tester',tenantId:'test',securityDomain:'isolated'},session:{},csrfToken:'test-token'}});
+    if(path.endsWith('/test-resource-access/status'))return route.fulfill({json:{result:{available:true,policyDigest:'a'.repeat(64),selectionDigest:selection}}});
+    if(path.endsWith('/test-resource-access/prepare')){writes.push(route.request().postDataJSON());return route.fulfill({json:{result:{policyDigest:'a'.repeat(64),selectionDigest:selection,items:[{state:'APPROVED'}]}}})}
+    return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+  });
+  await page.goto('/help');await expect(page.getByRole('heading',{name:'帮助中心',exact:true})).toBeVisible();
+  const first=writes[0];await page.reload();await expect.poll(()=>writes.length).toBe(2);expect(writes[1]).toEqual(first);
+  selection='c'.repeat(64);await page.reload();await expect.poll(()=>writes.length).toBe(3);
+  expect(writes[2].idempotencyKey).not.toBe(first.idempotencyKey);expect(writes[2].expectedSelectionDigest).toBe(selection);
+});

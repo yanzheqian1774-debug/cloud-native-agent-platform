@@ -100,14 +100,30 @@ def was_denied(connection, context, grant):
     )
 
 
-def prepare(policy, grants, context, connection, key):
+def prepare(policy, grants, context, connection, key, expected_selection_digest=None):
     """Caller owns transaction. Original keys recover decisions, never renew expiry."""
     grants._validate_idempotency_key(key)
     issuer, lifetime = policy.authenticate(grants, context)
+    from .ontology_published_read import lineage_block, resolve, validate_selection_key
+
+    selected = (
+        resolve(policy, context, connection) if policy.publishedOntologyIds else None
+    )
+    if selected:
+        validate_selection_key(key, expected_selection_digest, selected)
+    elif expected_selection_digest is not None:
+        raise AuthorityError("TEST_READ_SELECTION_KEY_MISMATCH")
+    dynamic = {t.resource for t in selected.targets} if selected else set()
+    targets = {t.grant: t for t in policy.targets}
+    for target in selected.targets if selected else ():
+        if target.grant in targets and targets[target.grant].digest != target.digest:
+            raise AuthorityError("TEST_READ_POLICY_SNAPSHOT_CHANGED")
+        targets[target.grant] = target
     bound = bound_grants(grants, connection)
-    eligible, results = [], []
+    eligible, results = [], list(selected.unavailable) if selected else []
     # No authority write before every configured snapshot is checked.
-    for target in policy.targets:
+    for target in targets.values():
+        grants._validate_requestable(target.purpose, (target.grant,))
         grant = target.grant
         if not snapshot_matches(connection, context, target):
             raise AuthorityError("TEST_READ_POLICY_SNAPSHOT_CHANGED")
@@ -118,6 +134,14 @@ def prepare(policy, grants, context, connection, key):
             )
         ):
             raise AuthorityError("TEST_READ_POLICY_TARGET_UNAVAILABLE")
+        blocked = (
+            lineage_block(connection, context, target.resource)
+            if target.resource in dynamic
+            else None
+        )
+        if blocked:
+            results.append({"resource": target.resource, "state": blocked})
+            continue
         state = current(bound, context, (grant,))
         if state == "UNAVAILABLE":
             raise AuthorityError("AUTHORITY_STORAGE_UNAVAILABLE")
@@ -190,6 +214,7 @@ def prepare(policy, grants, context, connection, key):
         "policyVersion": policy.policyVersion,
         "policyDigest": policy.digest,
         "items": results,
+        **({"selectionDigest": selected.digest} if selected else {}),
     }
 
 
@@ -203,6 +228,9 @@ def install_test_read_access(policy, grants, authorizer):
     class PrepareTestRead(BaseModel):
         model_config = ConfigDict(extra="forbid")
         idempotencyKey: str = Field(min_length=1, max_length=160)
+        expectedSelectionDigest: str | None = Field(
+            default=None, pattern="^[a-f0-9]{64}$"
+        )
 
     def install(app, authenticate, require_csrf, boundary_policy):
         def run(request, operation):
@@ -216,7 +244,20 @@ def install_test_read_access(policy, grants, authorizer):
                 if request.method != "GET":
                     require_csrf(request, session)
                 connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-                return {"result": operation(context, connection)}
+                try:
+                    return {"result": operation(context, connection)}
+                except AuthorityError as exc:
+                    if exc.reason_code in {
+                        "TEST_READ_SELECTION_CHANGED",
+                        "TEST_READ_SELECTION_KEY_MISMATCH",
+                    }:
+                        raise WorkbenchBoundaryError(
+                            exc.reason_code,
+                            409
+                            if exc.reason_code == "TEST_READ_SELECTION_CHANGED"
+                            else 422,
+                        ) from exc
+                    raise
 
         @app.get(PREFIX + "/test-resource-access/status")
         def status(request: Request):
@@ -224,11 +265,19 @@ def install_test_read_access(policy, grants, authorizer):
                 if not policy.enabled or context.principal_id not in policy.subjects:
                     return {"available": False}
                 policy.authenticate(grants, context)
+                from .ontology_published_read import resolve
+
+                selection = (
+                    resolve(policy, context, connection)
+                    if policy.publishedOntologyIds
+                    else None
+                )
                 return {
                     "available": True,
                     "policyDigest": policy.digest,
                     "policyVersion": policy.policyVersion,
                     "expiresAt": policy.expiresAt.isoformat(),
+                    **({"selectionDigest": selection.digest} if selection else {}),
                 }
 
             return run(request, read)
@@ -238,7 +287,12 @@ def install_test_read_access(policy, grants, authorizer):
             return run(
                 request,
                 lambda context, connection: prepare(
-                    policy, grants, context, connection, spec.idempotencyKey
+                    policy,
+                    grants,
+                    context,
+                    connection,
+                    spec.idempotencyKey,
+                    spec.expectedSelectionDigest,
                 ),
             )
 

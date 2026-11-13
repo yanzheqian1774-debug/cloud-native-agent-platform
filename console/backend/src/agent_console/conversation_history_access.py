@@ -63,7 +63,11 @@ def retained_policy(service, c, source, *, general):
         if general:
             raise AuthorityError("CONVERSATION_HISTORY_SOURCE_MISMATCH")
         return None
-    for candidate in (service, getattr(service, "conversation_relation", None)):
+    for candidate in (
+        service,
+        getattr(service, "conversation_relation", None),
+        *getattr(service, "retained_conversation_relations", ()),
+    ):
         if (
             candidate is not None
             and candidate.experience is not None
@@ -105,6 +109,10 @@ def prepare(service, records, context, conversation, c):
             )
             if grant:
                 targets[grant] = selected_policy or policy
+    from .conversation_work_history import targets as work_targets
+
+    work_reads = work_targets(service, records, c, context, conversation)
+    targets.update({grant: policy for grant in work_reads})
     grants = service.delegation.grants
     bound = bound_grants(grants, c)
     results = []
@@ -121,9 +129,12 @@ def prepare(service, records, context, conversation, c):
             results.append({"state": state})
             continue
         prior = c.execute(
-            "SELECT grant_id FROM authorization_admin.grants WHERE tenant_id=%s "
-            "AND security_domain=%s AND subject_principal_id=%s AND owner=%s "
-            "AND action=%s AND exact_resource=%s ORDER BY created_at DESC,grant_id "
+            "SELECT g.grant_id,r.purpose FROM authorization_admin.grants g "
+            "JOIN authorization_admin.grant_requests r USING(request_id) "
+            "WHERE g.tenant_id=%s "
+            "AND g.security_domain=%s AND g.subject_principal_id=%s AND g.owner=%s "
+            "AND g.action=%s AND g.exact_resource=%s "
+            "ORDER BY g.created_at DESC,g.grant_id "
             "LIMIT 1",
             (
                 context.scope.tenant_id,
@@ -153,7 +164,12 @@ def prepare(service, records, context, conversation, c):
             ]
         )
         request = bound.submit_request(
-            context, GrantRequestCommand("PROBLEM_DRAFT_ASSISTANCE", (grant,), key)
+            context,
+            GrantRequestCommand(
+                prior["purpose"] if grant in work_reads else "PROBLEM_DRAFT_ASSISTANCE",
+                (grant,),
+                key,
+            ),
         )
         if request.status.value != "PENDING":
             results.append({"state": request.status.value})

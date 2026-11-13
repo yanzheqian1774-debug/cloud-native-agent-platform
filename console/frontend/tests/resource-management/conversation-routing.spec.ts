@@ -2,7 +2,7 @@ import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64),problem={business_problem_id:'problem',revision_id:'revision',digest:'b'.repeat(64)},ref={resource_id:problem.business_problem_id,revision_id:problem.revision_id,digest:problem.digest};
 async function fixture(page:Page,phase='PLAN',enabled=true){
  const question={invocationId:'native-one',questionKey:'question-one',questionDigest:'c'.repeat(64),question:'请确认采用内部交接规范还是外部规范？',expiresAt:'2099-01-01T00:00:00Z',answer:null as string|null,expired:false};
- const state={question,phase,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
+ const state={question,phase,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
   messages:[{message_id:'original',content:'帮我检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED',request_key:'original'}] as Record<string,unknown>[],version:1,last:null as Record<string,unknown>|null,
   journal:{version:7,state:{key:'original-work',phase,pending:phase==='PLAN'?'planning':phase==='EXECUTE'?'execute':undefined,error:phase==='EXECUTE'?'上次执行结果尚待核实':undefined,question:'帮我检查交接材料',problem,messages:[{id:'user:original',text:'帮我检查交接材料'}],log:['原工作已保存'],...(phase==='RUNNING'?{execution:digest}:{})}}};
  await page.route('**/api/**',async route=>{
@@ -17,9 +17,10 @@ async function fixture(page:Page,phase='PLAN',enabled=true){
   if(path.endsWith('/conversations/routing/head'))return result({conversation:{conversation_id:'routing',title:'原业务工作',version:state.version}});
   if(path.endsWith('/conversations/routing'))return result({conversation:{conversation_id:'routing',title:'原业务工作',version:state.version},messages:state.messages,links:[]});
   if(path.endsWith('/route')){state.reads++;if(state.stale)return route.fulfill({status:409,json:{reasonCode:'CONVERSATION_ROUTE_STALE'}});const input=state.modelCalls.at(-1)!;const message=state.messages.find(m=>m.message_id===input.conversationMessageId)!;return result({relation:'CURRENT_QUESTION',originalText:message.content,messageId:message.message_id,target:{kind:'NATIVE',invocationId:question.invocationId,executionDigest:digest,questionKey:question.questionKey,questionDigest:question.questionDigest,journalVersion:7,journeyKey:'original-work',problemId:'problem'}})}
-  if(path.includes('/understanding-results/')){state.reads++;return result(state.last)}
+  if(path.includes('/understanding-results/')){state.reads++;if(state.readUnavailable)return route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}});if(!state.last)return route.fulfill({status:404,json:{reasonCode:'CONVERSATION_REQUEST_NOT_DISPATCHED'}});return result(state.last)}
   if(path.endsWith('/draft-assistance/invocations')){
    state.modelCalls.push(body);expect(body.conversationRouting).toBe(true);expect(body.parentContextId).toBeUndefined();expect(body.predecessorInvocationId).toBeUndefined();expect(body.conversationId).toBe('routing');
+   if(state.rejectBefore)return route.fulfill({status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
    if(state.hold)await state.hold;
    const relation=state.relation,kind=relation==='INDEPENDENT'||state.directCurrentWork?'DIRECT_ANSWER':relation==='CURRENT_QUESTION'?'CURRENT_QUESTION_ANSWER':'NEEDS_CLARIFICATION',n=state.modelCalls.length;
    const response={state:'SUCCEEDED',resultKind:kind,invocationId:'route-'+n,contextId:'route-context',turnId:'route-turn-'+n,turnVersion:1,aggregateVersion:2,answer:kind==='DIRECT_ANSWER'?'HTTP 是传输网页内容的协议。':null,clarificationQuestion:kind==='NEEDS_CLARIFICATION'?'你是补充当前交接检查，还是提出一个独立问题？':null,draft:null,conversationDelivery:{state:'SAVED',messageId:'answer-'+n},conversationRoute:{relation,currentQuestionToken:relation==='CURRENT_QUESTION'?'token':null,contextDigest:'d'.repeat(64)}};
@@ -47,13 +48,13 @@ test('exact Native answer is revalidated and submitted once to original owner',a
  const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';const before=JSON.stringify(s.journal);await page.goto('/work?conversation=routing');await expect(page.getByText(s.question.question,{exact:true})).toBeVisible();await send(page,'采用内部交接规范');await expect.poll(()=>s.ownerPosts.length).toBe(1);expect(s.reads).toBe(1);expect(s.modelCalls).toHaveLength(1);expect(s.messages.filter(m=>m.content==='采用内部交接规范')).toHaveLength(1);expect(JSON.stringify(s.journal)).toBe(before);await page.reload();await expect(input(page)).toBeVisible();expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
 });
 test('changed owner never receives a retargeted answer',async({page})=>{
- const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.stale=true;await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect(page.getByText(/CONVERSATION_ROUTE_STALE/)).toBeVisible();expect(s.ownerPosts).toHaveLength(0);expect(s.modelCalls).toHaveLength(1);await expect(input(page)).toHaveValue('采用内部交接规范');
+ const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.stale=true;await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect(page.getByText(/原工作已变化，这条回答未提交/)).toBeVisible();expect(s.ownerPosts).toHaveLength(0);expect(s.modelCalls).toHaveLength(1);await expect(input(page)).toHaveValue('采用内部交接规范');
 });
 test('ambiguous reply asks inline and retains real routing-thread context',async({page})=>{
  const s=await fixture(page,'EXECUTE');s.relation='AMBIGUOUS';const before=JSON.stringify(s.journal);await page.goto('/work?conversation=routing');await send(page,'这个应该怎么算？');await expect(page.getByText('你是补充当前交接检查，还是提出一个独立问题？',{exact:true})).toBeVisible();s.relation='INDEPENDENT';await send(page,'这是独立的问题，解释一下 HTTP');await expect(page.getByText('HTTP 是传输网页内容的协议。',{exact:true})).toBeVisible();const content=JSON.parse(s.modelCalls[1].content as string);expect(content.messages.map((m:{text:string})=>m.text)).toEqual(['这个应该怎么算？','这是独立的问题，解释一下 HTTP']);expect(content.previousQuestion).toBe('你是补充当前交接检查，还是提出一个独立问题？');expect(JSON.stringify(s.journal)).toBe(before);expect(s.ownerPosts).toHaveLength(0);await expect(page.getByRole('combobox')).toHaveCount(0);
 });
 test('recovered answer requires explicit same-request continuation without model replay',async({page})=>{
- const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.dropStream=true;await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect(page.getByText(/流式连接已断开/)).toBeVisible();expect(s.ownerPosts).toHaveLength(0);await page.reload();await expect(page.getByRole('button',{name:'继续提交这条回答'})).toBeVisible();expect(s.ownerPosts).toHaveLength(0);expect(s.modelCalls).toHaveLength(1);await page.getByRole('button',{name:'继续提交这条回答'}).click();await expect.poll(()=>s.ownerPosts.length).toBe(1);expect(s.modelCalls).toHaveLength(1);
+ const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.dropStream=true;await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect(page.getByText(/暂未确认这条回复的处理结果/)).toBeVisible();expect(s.ownerPosts).toHaveLength(0);await page.reload();await expect(page.getByRole('button',{name:'继续提交这条回答'})).toBeVisible();expect(s.ownerPosts).toHaveLength(0);expect(s.modelCalls).toHaveLength(1);await page.getByRole('button',{name:'继续提交这条回答'}).click();await expect.poll(()=>s.ownerPosts.length).toBe(1);expect(s.modelCalls).toHaveLength(1);
 });
 test('typing during a reply preserves new unsent text and cannot double-dispatch',async({page})=>{
  const s=await fixture(page,'PLAN');let release=()=>{};s.hold=new Promise<void>(resolve=>{release=resolve});await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect.poll(()=>s.modelCalls.length).toBe(1);await input(page).fill('另一条尚未发送的说明');await input(page).press('Enter');expect(s.modelCalls).toHaveLength(1);release();await expect(page.getByText('HTTP 是传输网页内容的协议。',{exact:true})).toBeVisible();await expect(input(page)).toHaveValue('另一条尚未发送的说明');expect(s.messages.filter(m=>m.content==='另一条尚未发送的说明')).toHaveLength(0);
@@ -73,7 +74,7 @@ test('new reply does not pull the user away from reading earlier messages',async
  const s=await fixture(page,'RUNNING');let release=()=>{};s.hold=new Promise<void>(resolve=>{release=resolve});await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect.poll(()=>s.modelCalls.length).toBe(1);const stream=page.locator('.px-message-stream');await stream.evaluate(n=>{n.scrollTop=0;n.dispatchEvent(new Event('wheel',{bubbles:true}))});const top=await stream.evaluate(n=>n.scrollTop);release();await expect(page.getByText('HTTP 是传输网页内容的协议。',{exact:true})).toBeVisible();await expect.poll(()=>stream.evaluate(n=>n.scrollTop)).toBeCloseTo(top,0);expect(s.ownerPosts).toHaveLength(0);
 });
 test('recovering an independent saved reply clears only its original submitted draft',async({page})=>{
- const s=await fixture(page,'PLAN');s.dropStream=true;await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect(page.getByText(/流式连接已断开/)).toBeVisible();await page.reload();await expect(page.getByText('回复已返回本会话，原任务保持不变。',{exact:true})).toBeVisible();await expect(input(page)).toHaveValue('');expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
+ const s=await fixture(page,'PLAN');s.dropStream=true;await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect(page.getByText(/暂未确认这条回复的处理结果/)).toBeVisible();await page.reload();await expect(page.getByText('回复已返回本会话，原任务保持不变。',{exact:true})).toBeVisible();await expect(input(page)).toHaveValue('');expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
 });
 
 test('current-work explanation is saved without owner adoption or stale clarification context',async({page})=>{
@@ -108,4 +109,18 @@ test('planning answer routes once to the exact original question and reuses its 
  expect(s.messages.filter(m=>m.content==='只核对生产环境')).toHaveLength(1);
  expect(s.journal.state.problem).toEqual(problem);expect(s.journal.state.question).toBe('帮我检查交接材料');
  await page.reload();await expect(input(page)).toBeVisible();expect(plans).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
+});
+
+test('confirmed unstarted question resumes with the same message and request only after an explicit click',async({page})=>{
+ const s=await fixture(page);s.rejectBefore=true;await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect.poll(()=>s.modelCalls.length).toBe(1);
+ await page.evaluate(()=>{const key=Object.keys(sessionStorage).find(k=>k.startsWith('conversation-routing.v1:'))!;const saved=JSON.parse(sessionStorage.getItem(key)!);delete saved.messageId;saved.phase='MESSAGE_PENDING';saved.thread=[];sessionStorage.setItem(key,JSON.stringify(saved))});
+ await page.reload();const resume=page.getByRole('button',{name:'继续处理这条问题',exact:true});await expect(resume).toBeVisible();
+ expect(s.modelCalls).toHaveLength(1);expect(s.messages.filter(m=>m.content==='HTTP 是什么？')).toHaveLength(1);
+ s.rejectBefore=false;await resume.click();await expect(page.getByText('HTTP 是传输网页内容的协议。',{exact:true})).toBeVisible();
+ expect(s.modelCalls).toHaveLength(2);expect(s.modelCalls[1]).toEqual(s.modelCalls[0]);expect(s.messages.filter(m=>m.content==='HTTP 是什么？')).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
+ await page.reload();await expect(input(page)).toBeVisible();expect(s.modelCalls).toHaveLength(2);
+});
+test('uncertain result read never offers redispatch',async({page})=>{
+ const s=await fixture(page);s.rejectBefore=true;s.readUnavailable=true;await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect.poll(()=>s.modelCalls.length).toBe(1);await page.reload();
+ await expect(page.getByText(/暂未确认这条回复的处理结果/)).toBeVisible();await expect(page.getByRole('button',{name:'继续处理这条问题',exact:true})).toHaveCount(0);expect(s.modelCalls).toHaveLength(1);
 });

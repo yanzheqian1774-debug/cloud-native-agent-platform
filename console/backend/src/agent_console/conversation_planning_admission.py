@@ -43,6 +43,27 @@ class ConversationPlanningAdmission:
             "AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s",
             (context.scope.tenant_id, context.scope.security_domain, problem),
         ).fetchone()
+        resolver = getattr(self.understanding, "understanding_adoption", None)
+        if (
+            source
+            and source["record"].get("owned_understanding_policy_digest")
+            and resolver
+        ):
+            from .draft_assistance import DraftAssistanceError
+
+            try:
+                result = resolver.business_source(
+                    c, context, source["source_invocation"]
+                )
+            except DraftAssistanceError as exc:
+                raise AuthorityError(exc.reason_code) from exc
+            adopted_source = result[0]
+            if adopted_source["context_id"] != source["context_id"]:
+                raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
+            adopted_source["understanding_input_source"] = bound_source_input(
+                c, adopted_source, problem
+            )
+            return result
         if not source or (
             source["subject_id"] != context.principal_id
             or source["record"].get("owned_understanding_policy_digest")

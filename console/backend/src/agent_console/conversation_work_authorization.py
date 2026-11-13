@@ -46,6 +46,14 @@ class ConversationWorkAuthorization:
         ).fetchone()
         value = invocation["record"] if invocation else {}
         row = request_row(c, value.get("contextId", ""))
+        resolver = getattr(self.understanding, "understanding_adoption", None)
+        if row and row["record"].get("owned_understanding_policy_digest") and resolver:
+            from .draft_assistance import DraftAssistanceError
+
+            try:
+                return resolver.business_source(c, context, invocation_id)
+            except DraftAssistanceError as exc:
+                raise AuthorityError(exc.reason_code) from exc
         if (
             not row
             or value.get("state") != "SUCCEEDED"

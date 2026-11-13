@@ -98,7 +98,7 @@ def read_selected(automation, call, selected):
     )
 
 
-def source_reader(automation, authorizer, records):
+def source_reader(automation, authorizer, records, *, adoption=False):
     def read(context, conversation, message_id):
         def resolve(call):
             records.owned(call.connection, context, conversation)
@@ -110,7 +110,16 @@ def source_reader(automation, authorizer, records):
             if not row or not row["state"].get("source"):
                 return None
             state = row["state"]
-            if state.get("userMessageId") != message_id:
+            if adoption:
+                if (
+                    state.get("phase") != "CLARIFY"
+                    or state.get("pending")
+                    or state.get("error")
+                    or state.get("problem")
+                    or not (state.get("draft") or {}).get("invocationId")
+                ):
+                    raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
+            elif state.get("userMessageId") != message_id:
                 raise ConversationError("CONVERSATION_REQUEST_MESSAGE_MISMATCH", 409)
             return read_selected(automation, call, state["source"])
 

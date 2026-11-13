@@ -23,6 +23,8 @@ class RelationPolicy(BaseModel):
 
 
 class RelationExperience(ConversationExperienceAdmission):
+    policy_model = RelationPolicy
+
     def __init__(self, root, path, configuration):
         if root is None or root.experience is None:
             raise AuthorityError("CONVERSATION_ROUTING_POLICY_INVALID")
@@ -33,7 +35,7 @@ class RelationExperience(ConversationExperienceAdmission):
             or self.routing_path.stat().st_mode & 0o077
         ):
             raise AuthorityError("CONVERSATION_ROUTING_POLICY_INVALID")
-        self.routing_document = RelationPolicy.model_validate_json(
+        self.routing_document = self.policy_model.model_validate_json(
             self.routing_path.read_text()
         )
         self.path = root.experience.path
@@ -67,7 +69,7 @@ class RelationExperience(ConversationExperienceAdmission):
 
     def _require(self, service, c, context):
         if (
-            RelationPolicy.model_validate_json(self.routing_path.read_text())
+            self.policy_model.model_validate_json(self.routing_path.read_text())
             != self.routing_document
             or self.routing_path.stat().st_mode & 0o077
             or service.configuration != self.routing_document.configuration.model_dump()
@@ -109,8 +111,12 @@ def available(service, context):
         return False
     admission = getattr(service.authorization, "context_admission", None)
     experience = getattr(admission, "experience", None)
-    if not isinstance(experience, RelationExperience) or not experience.matches(
-        context
+    if (
+        not isinstance(experience, RelationExperience)
+        or not experience.matches(context)
+        or service.profile.profile_revision_id
+        != admission.configuration["profile_revision_id"]
+        or service.profile.profile_digest != admission.configuration["profile_digest"]
     ):
         return False
     try:

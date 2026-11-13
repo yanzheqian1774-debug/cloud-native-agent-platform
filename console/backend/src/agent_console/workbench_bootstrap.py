@@ -90,6 +90,7 @@ def build_workbench_composition(
     workflows: WorkflowDefinitionService | None = None,
     draft_assistance: DraftAssistanceService | None = None,
     conversation_routing: DraftAssistanceService | None = None,
+    conversation_adoption: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     model_repository=None,
     planning_v2_enabled: bool = False,
@@ -545,6 +546,25 @@ def build_workbench_composition(
                         authorizer,
                         os.environ.get("F3_CONVERSATION_RELATION_POLICY", ""),
                     )
+                if conversation_adoption is not None:
+                    if conversation_routing is None:
+                        raise ValueError("UNDERSTANDING_ADOPTION_PREDECESSOR_REQUIRED")
+                    from .understanding_adoption_admission import (
+                        configure as configure_adoption,
+                    )
+                    from .understanding_adoption_postgres import (
+                        migrate as migrate_adoption,
+                    )
+
+                    configure_adoption(
+                        conversation_adoption,
+                        admission,
+                        conversation_routing.authorization.context_admission,
+                        foundation.grants,
+                        authorizer,
+                        os.environ.get("F3_UNDERSTANDING_ADOPTION_POLICY", ""),
+                    )
+                    migrate_adoption(conversation_adoption.repository)
                 from .conversation_history_access import install_history_access
 
                 delegation_routes += (
@@ -986,7 +1006,11 @@ def build_workbench_composition(
                         + (
                             (
                                 install_draft_assistance_routes(
-                                    draft_assistance, conversation_routing
+                                    draft_assistance,
+                                    conversation_adoption or conversation_routing,
+                                    retained_routing_services=(conversation_routing,)
+                                    if conversation_adoption is not None
+                                    else (),
                                 ),
                             )
                             if draft_assistance is not None
@@ -1050,6 +1074,53 @@ def build_workbench_composition(
                 authorizer,
                 application.state.conversation_actions.records,
             )
+            if conversation_adoption is not None:
+                from .draft_assistance_api import _payload
+                from .understanding_adoption_application import (
+                    UnderstandingAdoptionApplication,
+                )
+                from .understanding_adoption_reader import reader as initial_reader
+
+                application.state.conversation_relation_reader = initial_reader(
+                    application.state.conversation_relation_reader,
+                    application.state.conversation_actions.records,
+                    draft_assistance,
+                    conversation_adoption,
+                )
+                adoption_source = source_reader(
+                    resource_automation,
+                    authorizer,
+                    application.state.conversation_actions.records,
+                    adoption=True,
+                )
+                application.state.conversation_adoption_source_input = adoption_source
+
+                def source_metadata(ctx, conv, message):
+                    raw = adoption_source(ctx, conv, message)
+                    if raw is None:
+                        return None
+                    value = json.loads(raw)
+                    return {
+                        k: value[k]
+                        for k in (
+                            "source",
+                            "sourceContentDigest",
+                            "sourceSchema",
+                            "name",
+                        )
+                    }
+
+                application.state.understanding_adoption = (
+                    UnderstandingAdoptionApplication(
+                        application.state.conversation_actions,
+                        draft_assistance,
+                        conversation_adoption,
+                        application.state.conversation_draft_service_for,
+                        application.state.conversation_relation_reader,
+                        source_metadata,
+                        _payload,
+                    )
+                )
         if continuation_path:
             continuation.capability_contract_reader = getattr(
                 application.state, "capability_execution_contract_reader", None

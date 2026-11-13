@@ -215,7 +215,14 @@ def _profile(
     )
     if isinstance(document.get("adapter"), dict) and document["adapter"].get(
         "revision"
-    ) in {"v2", "v2-zh-CN", "v3", "v3-execution", "v3-relation"}:
+    ) in {
+        "v2",
+        "v2-zh-CN",
+        "v3",
+        "v3-execution",
+        "v3-relation",
+        "v3-relation-adoption",
+    }:
         expected = expected | {"policyDigest"}
     if (
         set(document) != expected
@@ -280,6 +287,10 @@ def _profile(
         in {
             ("v3-execution", "conversation-understanding-output.v3-execution"),
             ("v3-relation", "conversation-understanding-output.v3-relation"),
+            (
+                "v3-relation-adoption",
+                "conversation-understanding-output.v3-relation-adoption",
+            ),
         }
     )
     if (
@@ -365,7 +376,14 @@ def _profile(
             policy = policy_for(value.adapter_revision, value.output_schema_version)
             if (
                 policy.revision
-                in {"v2", "v2-zh-CN", "v3", "v3-execution", "v3-relation"}
+                in {
+                    "v2",
+                    "v2-zh-CN",
+                    "v3",
+                    "v3-execution",
+                    "v3-relation",
+                    "v3-relation-adoption",
+                }
                 and document["policyDigest"] != policy.digest
             ):
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")

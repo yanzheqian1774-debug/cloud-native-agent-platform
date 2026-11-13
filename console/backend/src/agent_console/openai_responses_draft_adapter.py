@@ -194,6 +194,10 @@ class ExactFileOpenAICredentialResolver:
                 ("v3", "conversation-understanding-output.v3"),
                 ("v3-execution", "conversation-understanding-output.v3-execution"),
                 ("v3-relation", "conversation-understanding-output.v3-relation"),
+                (
+                    "v3-relation-adoption",
+                    "conversation-understanding-output.v3-relation-adoption",
+                ),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -258,6 +262,10 @@ class OpenAIResponsesDraftTransport:
                 ("v3", "conversation-understanding-output.v3"),
                 ("v3-execution", "conversation-understanding-output.v3-execution"),
                 ("v3-relation", "conversation-understanding-output.v3-relation"),
+                (
+                    "v3-relation-adoption",
+                    "conversation-understanding-output.v3-relation-adoption",
+                ),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
@@ -271,12 +279,19 @@ class OpenAIResponsesDraftTransport:
                 "v3",
                 "v3-execution",
                 "v3-relation",
+                "v3-relation-adoption",
             }:
                 (
                     conversation_context_references
-                    if policy.revision in {"v3", "v3-execution", "v3-relation"}
+                    if policy.revision
+                    in {"v3", "v3-execution", "v3-relation", "v3-relation-adoption"}
                     else context_references
                 )(content)
+                if policy.revision == "v3-relation-adoption" and any(
+                    r.startswith("server-message:")
+                    for r in conversation_context_references(content)
+                ):
+                    raise PolicyValidationError("DRAFT_CONTEXT_INVALID")
             else:
                 content = legacy_content(content)
         except PolicyValidationError as exc:
@@ -311,18 +326,38 @@ class OpenAIResponsesDraftTransport:
 
         attachment = current_attachment()
         if attachment is not None:
-            if policy.revision not in {"v3", "v3-execution", "v3-relation"}:
+            if policy.revision not in {
+                "v3",
+                "v3-execution",
+                "v3-relation",
+                "v3-relation-adoption",
+            }:
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
+            if policy.revision == "v3-relation-adoption":
+                selected = json.loads(attachment)
+                attachment = json.dumps(
+                    {
+                        k: selected[k]
+                        for k in (
+                            "kind",
+                            "source",
+                            "sourceContentDigest",
+                            "sourceSchema",
+                            "name",
+                        )
+                    },
+                    ensure_ascii=False,
+                )
             document["input"].append(
                 {
                     "role": "user",
                     "content": [{"type": "input_text", "text": attachment}],
                 }
             )
-        if policy.revision == "v3-relation":
+        if policy.revision in {"v3-relation", "v3-relation-adoption"}:
             from .conversation_relation_context import provider_input
 
-            if attachment is not None:
+            if attachment is not None and policy.revision == "v3-relation":
                 raise DraftAssistanceError("CONVERSATION_ROUTING_SOURCE_CONFLICT")
             document["input"].append(
                 {
@@ -674,19 +709,29 @@ class OpenAIResponsesDraftTransport:
                 "v3",
                 "v3-execution",
                 "v3-relation",
+                "v3-relation-adoption",
             }:
                 sent = json.loads(request.payload)
                 refs = (
                     conversation_context_references
-                    if policy.revision in {"v3", "v3-execution", "v3-relation"}
+                    if policy.revision
+                    in {"v3", "v3-execution", "v3-relation", "v3-relation-adoption"}
                     else context_references
                 )(sent["input"][0]["content"][0]["text"])
+            if policy.revision == "v3-relation-adoption":
+                from .understanding_adoption_policy import server_references
+
+                refs |= server_references(request.payload)
             understanding = validate_result(result, policy, refs)
             route = None
             if policy.revision == "v3-relation":
                 from .conversation_relation_context import validated_route
 
                 route = validated_route(result, request.payload)
+            elif policy.revision == "v3-relation-adoption":
+                from .understanding_adoption_policy import route as adoption_route
+
+                route = adoption_route(result, request.payload)
         except (PolicyValidationError, ValueError, KeyError, TypeError):
             return self._failure(
                 invocation_id,
@@ -700,7 +745,10 @@ class OpenAIResponsesDraftTransport:
         question = result["clarificationQuestion"]
         title = result["title"]
         description = result["description"]
-        if kind == "CURRENT_QUESTION_ANSWER" and policy.revision == "v3-relation":
+        if kind == "CURRENT_QUESTION_ANSWER" and policy.revision in {
+            "v3-relation",
+            "v3-relation-adoption",
+        }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),
                 ObservationState.SUCCEEDED,
@@ -715,6 +763,7 @@ class OpenAIResponsesDraftTransport:
             "v3",
             "v3-execution",
             "v3-relation",
+            "v3-relation-adoption",
         }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),

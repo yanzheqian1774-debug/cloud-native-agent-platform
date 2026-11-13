@@ -10,7 +10,7 @@ from .private_conversation import ConversationError, digest
 from .workbench_bff import PREFIX
 
 
-def validated_target(invocation, value, current):
+def validated_target(invocation, value, current, *, initial_adoption=False):
     metadata = invocation.conversation_context
     route = invocation.conversation_route
     if (
@@ -23,8 +23,19 @@ def validated_target(invocation, value, current):
         raise ConversationError("CONVERSATION_ROUTING_RESULT_UNAVAILABLE", 409)
     if route["relation"] != "CURRENT_QUESTION":
         return None
+    # A full result is only eligible for the separately configured adoption owner.
+    # Returning this target does not consume the old question or authorize work.
+    initial = (
+        initial_adoption
+        and (metadata.get("target") or {}).get("kind") == "UNDERSTANDING"
+    )
+    allowed = (
+        {"DRAFT_READY", "NEEDS_DATA", "NEEDS_CLARIFICATION"}
+        if initial
+        else {"CURRENT_QUESTION_ANSWER"}
+    )
     if (
-        value.get("resultKind") != "CURRENT_QUESTION_ANSWER"
+        value.get("resultKind") not in allowed
         or not metadata.get("target")
         or route.get("currentQuestionToken") != metadata.get("currentQuestionToken")
         or current["contextDigest"] != metadata["contextDigest"]
@@ -79,7 +90,14 @@ def install(app, authenticate, service, service_for, payload, status):
                 == "CURRENT_QUESTION"
                 else {}
             )
-            target = validated_target(invocation, value, current)
+            target = validated_target(
+                invocation,
+                value,
+                current,
+                initial_adoption=active_service.profile.adapter_revision
+                == "v3-relation-adoption"
+                and getattr(app.state, "understanding_adoption", None) is not None,
+            )
             with actions.records.connect() as c:
                 actions.records.owned(c, context, conversation)
                 original = c.execute(

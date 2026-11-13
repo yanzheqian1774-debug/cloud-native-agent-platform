@@ -411,6 +411,20 @@ class PostgresDraftAssistanceRepository(_Pool):
                     if current is None:
                         raise DraftAssistanceError("DRAFT_STORAGE_UNAVAILABLE")
                     return current, False
+                if candidate.parent_turn_id is not None:
+                    from .understanding_adoption_postgres import (
+                        lock_context,
+                        require_unconsumed_parent,
+                    )
+
+                    lock_context(connection, candidate.scope, candidate.context_id)
+                    require_unconsumed_parent(connection, candidate)
+                if candidate.conversation_context:
+                    from .understanding_adoption_postgres import (
+                        require_unconsumed_question,
+                    )
+
+                    require_unconsumed_question(connection, candidate)
                 connection.execute(
                     "INSERT INTO draft_assistance.contexts"
                     "(namespace,security_domain,context_id,"

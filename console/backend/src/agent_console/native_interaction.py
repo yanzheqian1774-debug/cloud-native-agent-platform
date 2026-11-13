@@ -9,7 +9,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 
 from .authority_contracts import AuthorityError
-from .prepared_execution_resources import resource_read_grants
+from .native_progress_projection import projection_read_grants as resource_read_grants
 
 
 class NativeAnswer(BaseModel):

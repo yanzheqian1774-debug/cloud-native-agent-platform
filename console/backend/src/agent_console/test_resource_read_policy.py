@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -82,6 +82,16 @@ class TestReadPolicy(BaseModel):
     grantTTLSeconds: int = Field(default=3600, ge=60, le=28800)
     targets: tuple[TestReadTarget, ...] = Field(min_length=1, max_length=512)
 
+    publishedOntologyIds: tuple[
+        Annotated[
+            str,
+            Field(
+                min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            ),
+        ],
+        ...,
+    ] = Field(default=(), max_length=64)
+
     @model_validator(mode="after")
     def bounded(self):
         if (
@@ -93,6 +103,7 @@ class TestReadPolicy(BaseModel):
             or self.expiresAt.tzinfo is None
             or self.expiresAt.utcoffset() != UTC.utcoffset(None)
             or len({t.grant for t in self.targets}) != len(self.targets)
+            or len(set(self.publishedOntologyIds)) != len(self.publishedOntologyIds)
         ):
             raise ValueError("TEST_READ_POLICY_CONFIGURATION_INVALID")
         return self
@@ -106,7 +117,10 @@ class TestReadPolicy(BaseModel):
 
     @property
     def digest(self):
-        return canonical_digest(self.model_dump(mode="json"))
+        value = self.model_dump(mode="json")
+        if not self.publishedOntologyIds:
+            value.pop("publishedOntologyIds")
+        return canonical_digest(value)
 
     def authenticate(self, grants, subject):
         now = grants.clock()
