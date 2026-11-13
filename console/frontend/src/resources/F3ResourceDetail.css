@@ -55,3 +55,19 @@
 .resource-directory-detail .f3-read-business .f3-detail-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:10px 0 12px;color:#7486a3}
 .resource-directory-detail .f3-read-business .f3-detail-tabs button[aria-selected=true]{border-bottom-color:#4865d5;color:#4865d5}
 @media(max-width:700px){.resource-directory-detail .f3-read-business .f3-detail-card{padding:16px}}
+
+/* One F3 frame for content and existing maintenance operations. */
+.f3-resource-operations{min-width:0}.f3-resource-operations .rd-panel{margin-top:16px}
+.f3-resource-operations .rd-panel[hidden]{display:none}
+.f3-operation-selector{display:flex;align-items:center;gap:12px;color:#7486a3;font-size:13px;margin:0 0 18px}
+.f3-operation-selector select{font:inherit;border:1px solid #e0e6ef;border-radius:7px;background:#fff;color:#273851;padding:8px 12px;min-width:180px}
+.f3-detail-return{display:inline-flex;align-items:center;min-height:36px;box-sizing:border-box;border:1px solid #e0e6ef;border-radius:7px;padding:8px 12px;background:#fff;color:#273851;text-decoration:none}
+.f3-detail-directory-fallback{margin-top:20px;border-top:1px solid #e0e6ef;padding-top:12px}
+.f3-resource-operations .rd-card{border:1px solid #e0e6ef;border-radius:12px;background:#fff;padding:22px;min-width:0}
+.f3-resource-operations .rd-test-layout{grid-template-columns:minmax(180px,1fr) minmax(0,2fr)}
+@media(max-width:700px){.f3-resource-operations .rd-test-layout,.f3-resource-operations .rd-two-columns{display:block}.f3-resource-operations .rd-card{padding:16px;margin-bottom:16px}.f3-operation-selector{flex-wrap:wrap}}
+.resource-management .f3-resource-operations .f3-operation-selector{display:flex;justify-content:flex-start;text-align:left;gap:12px}
+.resource-management .f3-resource-operations .f3-operation-selector select{width:auto;max-width:100%;min-width:180px}
+.resource-management .f3-managed-resource .rd-card h2{font-size:14px;line-height:1.65;font-weight:650;margin:0 0 14px;color:#273851}
+.resource-management .f3-managed-resource .rd-card h3{font-size:13px;line-height:1.65;font-weight:650;color:#273851}
+.resource-management .f3-managed-resource .rd-card p{font-size:13px;line-height:1.8}

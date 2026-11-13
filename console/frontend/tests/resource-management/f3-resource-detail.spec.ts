@@ -5,7 +5,7 @@ const href='/skills?managedResource='+encodeURIComponent(skillId);
 test('F3 default detail reads publication and keeps exact technical identities below the business view',async({page},info)=>{
  const state=await published(page);await page.goto(href);
  await expect(page.getByRole('tab')).toHaveText(['概览','内容与定义','引用与影响']);
- await expect(page.locator('.f3-detail-banner')).toContainText('当前发布内容');
+ await expect(page.locator('.f3-detail-heading')).toContainText('当前发布内容');
  await expect(page.locator('.f3-detail-heading h1')).toHaveCSS('font-size','24px');
  await expect(page.getByRole('tab',{name:'概览',exact:true})).toHaveCSS('font-size','12px');
  await expect(page.getByRole('heading',{name:'用途与交付'})).toBeVisible();
@@ -31,11 +31,11 @@ test('modify published content creates one draft and opens editing without repla
 test('publication stays default when a draft exists and history selection performs no command',async({page})=>{
  const state=await published(page);state.resource.currentDraftRevisionId='revision:2';state.resource.revisions.push({...structuredClone(state.resource.revisions[0]),revisionId:'revision:2',digest:'b'.repeat(64),state:'DRAFT',content:{...state.resource.revisions[0].content,description:'未发布的新内容'}});
  await page.goto(href);await expect(page.getByRole('tabpanel',{name:'概览'})).toContainText('维护原用途');await expect(page.getByRole('tabpanel',{name:'概览'})).not.toContainText('未发布的新内容');
- await page.getByRole('button',{name:'查看修改草稿',exact:true}).click();await expect(page.getByRole('tabpanel',{name:'概览'})).toContainText('未发布的新内容');
- await page.getByRole('button',{name:'历史记录',exact:true}).click();await page.locator('.f3-detail-history-list li').filter({hasText:'当前发布内容'}).getByRole('button',{name:'查看内容'}).click();await expect(page.getByRole('tabpanel',{name:'概览'})).toContainText('维护原用途');expect(state.posts).toEqual([]);
+ await page.getByRole('button',{name:'查看修改草稿',exact:true}).click();await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('未发布的新内容');
+ await page.getByRole('button',{name:'历史记录',exact:true}).click();await page.locator('.f3-detail-history-list li').filter({hasText:'当前发布内容'}).getByRole('button',{name:'查看内容'}).click();await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('维护原用途');expect(state.posts).toEqual([]);
 });
-test('explicit professional detail preserves test operations and returns to business section',async({page})=>{
- await published(page);await page.goto(href);await page.getByRole('button',{name:'查看专业详情',exact:true}).click();await expect(page.getByRole('tab',{name:'业务规则',exact:true})).toBeVisible();await page.getByRole('tab',{name:'测试',exact:true}).click();await expect(page.getByRole('region',{name:'技能真实测试'})).toBeVisible();await page.getByRole('button',{name:'← 返回资源详情',exact:true}).click();await expect(page.getByRole('tab',{name:'概览',exact:true})).toHaveAttribute('aria-selected','true');await page.reload();await expect(page.getByRole('heading',{name:'用途与交付'})).toBeVisible();
+test('legacy maintenance link stays in three-tab F3 frame and retains test controls',async({page})=>{
+ const state=await published(page);await page.goto(href+'&resourceView=professional&resourceTab='+encodeURIComponent('测试'));await expect(page.getByRole('tab')).toHaveText(['概览','内容与定义','引用与影响']);await expect(page.getByRole('region',{name:'技能真实测试'})).toBeVisible();await expect(page.getByRole('combobox',{name:'查看配置内容'})).toHaveValue('测试');await page.getByRole('tab',{name:'概览',exact:true}).click();await page.reload();await expect(page.getByRole('heading',{name:'用途与交付'})).toBeVisible();expect(state.posts).toEqual([]);
 });
 test('F3 reference view returns from exact employee to same business tab and filter',async({page})=>{
  await published(page);await page.goto(href+'&resourceSection=impact&query='+encodeURIComponent('维护'));
@@ -64,4 +64,11 @@ test('impact counts distinct employees separately from version references',async
  const state=await published(page);
  await page.route('**/impact',route=>route.fulfill({json:{result:{current:{revisionId:'revision:1',digest:state.resource.revisions[0].digest},changes:[],authorizedUses:[],testCoverage:{ready:false,checks:[]},dependencies:{incoming:[1,2,3].map(i=>({kind:'EMPLOYEE',identity:i===3?'employee:other':'employee:same',revision:'revision:'+i,name:'同名员工',distance:1})),outgoing:[],limitations:[]}}}}));
  await page.goto(href+'&resourceSection=impact');const group=page.locator('.rd-impact-group').filter({hasText:'数字员工'});await expect(group.locator('h3 strong')).toHaveText('2');await expect(group).toContainText('3 条版本引用');expect(state.posts).toHaveLength(0);
+});
+
+test('history has no publication action and publication is an explicit content step',async({page})=>{
+ const state=await published(page);await page.goto(href);await page.getByRole('button',{name:'修改当前发布内容',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click();await page.getByRole('button',{name:'历史记录',exact:true}).click();await expect(page.getByRole('region',{name:'集中更新选定引用'})).toHaveCount(0);await expect(page.getByRole('button',{name:'验证全部操作后发布'})).toHaveCount(0);await page.getByRole('button',{name:'返回内容',exact:true}).click();await page.getByRole('tab',{name:'内容与定义'}).click();await page.getByRole('button',{name:'发布检查',exact:true}).click();await expect(page.getByRole('tabpanel',{name:'发布检查'})).toBeVisible();expect(state.posts.map(x=>x.action)).toEqual(['successor']);
+});
+test('single conversation return and directory fallback do not show duplicate primary returns',async({page})=>{
+ const state=await published(page);await page.goto(href+'&returnConversation=original-test');await expect(page.locator('.f3-detail-heading').getByRole('link',{name:'返回原会话'})).toHaveCount(1);await expect(page.getByRole('button',{name:'返回来源'})).toHaveCount(0);await expect(page.getByRole('button',{name:'返回目录',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'查看资源目录'})).toBeVisible();expect(state.posts).toEqual([]);
 });

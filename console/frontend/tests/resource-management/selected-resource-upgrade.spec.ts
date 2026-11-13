@@ -3,7 +3,7 @@ const principal={principalId:'human:upgrade',tenantId:'upgrade-test',securityDom
 const digest='d'.repeat(64),oldDigest='a'.repeat(64);
 const content={description:'明确标记的交互测试技能',capabilities:['READ_DATA'],instructions:'读取合成材料',operations:[],inputSchema:{},outputSchema:{}};
 const sourceResource={resourceId:'skill-definition:upgrade-ui',kind:'skill',name:'交互测试技能',aggregateVersion:7,lifecycleState:'PUBLISHED',enabled:true,currentDraftRevisionId:'revision:new',publishedRevisionId:'revision:old',revisions:[{revisionId:'revision:old',state:'PUBLISHED',digest:oldDigest,content},{revisionId:'revision:new',state:'DRAFT',digest,content}],testResults:[],relationships:[],healthObservations:[],discoverySnapshots:[],toolSelections:[]};
-const url='/skills?managedResource=skill-definition%3Aupgrade-ui&resourceTab='+encodeURIComponent('版本');
+const url='/skills?managedResource=skill-definition%3Aupgrade-ui&resourceTab='+encodeURIComponent('发布检查');
 async function setup(page:Page,mode:'success'|'unknown'|'conflict'|'detail-failure',incoming:Record<string,unknown>[]=[],kind:'skill'|'mcp'='skill',health:Record<string,unknown>[]=[]){
  const resource=kind==='skill'?sourceResource:{...sourceResource,kind:'mcp',name:'交互测试MCP连接',healthObservations:health};
  const commands:{action:string;body:Record<string,unknown>}[]=[];
