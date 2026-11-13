@@ -46,9 +46,47 @@ class OntologyManagement:
     def __init__(self, policy, grants):
         self.policy, self.grants = policy, grants
 
+    def creator(self, call, identity):
+        rows = call.connection.execute(
+            "SELECT p.result AS admission,p.actor_id AS creator_actor,f.command_digest FROM execution_authority.prepared_resource_commands p JOIN business_ontology.lifecycle_facts f ON f.namespace=p.namespace AND f.security_domain=p.security_domain AND f.actor=p.actor_id AND f.request_key=p.result->'ownerCommand'->>'request_key' AND f.ontology_id=p.result->>'ontologyId' AND f.revision_id=p.result->'ownerCommand'->>'revision_id' AND f.action='CREATE' WHERE p.namespace=%s AND p.security_domain=%s AND p.result->>'schemaVersion'=%s AND p.result->>'action'='CREATE' AND p.result->>'ontologyId'=%s LIMIT 2",
+            (
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+                SCHEMA,
+                identity,
+            ),
+        ).fetchall()
+        if len(rows) != 1:
+            return None
+        record = rows[0]["admission"]
+        expected = canonical_digest(
+            {
+                "identity": identity,
+                "action": "CREATE",
+                "command": record["ownerCommand"],
+            }
+        )
+        if (
+            record.get("actor") != rows[0]["creator_actor"]
+            or rows[0]["command_digest"] != expected
+            or record.get("scope")
+            != [
+                call.context.scope.tenant_id,
+                call.context.scope.security_domain,
+            ]
+        ):
+            return None
+        return record.get("actor")
+
     def scope(self, call, identity, action):
         issuer = self.policy.authenticate(self.grants, call.context)
-        work = self.policy.work(call.context, identity, action, self.grants.clock())
+        work = self.policy.work(
+            call.context,
+            identity,
+            action,
+            self.grants.clock(),
+            created_by=self.creator(call, identity),
+        )
         if self.grants.generation.generation != call.policy_generation:
             raise AuthorityError("ONTOLOGY_MANAGEMENT_GENERATION_CHANGED")
         return issuer, work
@@ -65,6 +103,7 @@ class OntologyManagement:
             if self.grants.generation.generation != call.policy_generation:
                 raise AuthorityError("ONTOLOGY_MANAGEMENT_GENERATION_CHANGED")
             now = self.grants.clock()
+            creator = self.creator(call, identity)
             creation_available = any(
                 s.namespace == call.context.scope.tenant_id
                 and s.securityDomain == call.context.scope.security_domain
@@ -78,7 +117,11 @@ class OntologyManagement:
             for action in get_args(Action):
                 try:
                     self.policy.work(
-                        call.context, identity, action, self.grants.clock()
+                        call.context,
+                        identity,
+                        action,
+                        self.grants.clock(),
+                        created_by=creator,
                     )
                     allowed.append(action)
                 except AuthorityError:

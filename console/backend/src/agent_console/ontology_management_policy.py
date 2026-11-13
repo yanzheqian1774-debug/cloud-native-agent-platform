@@ -23,6 +23,7 @@ class MaintenanceScope(BaseModel):
     subject: str
     ontologyIds: tuple[str, ...] = Field(default=(), max_length=128)
     createPrefix: str | None = Field(default=None, min_length=4, max_length=80)
+    createdBySubjects: tuple[str, ...] = Field(default=(), max_length=32)
     actions: tuple[Action, ...] = Field(min_length=1, max_length=7)
     expiresAt: datetime
 
@@ -47,7 +48,7 @@ class MaintenancePolicy(BaseModel):
     def authenticate(self, grants, subject):
         return AutomationPolicy.authenticate(self, grants, subject)
 
-    def work(self, subject, identity, action, now):
+    def work(self, subject, identity, action, now, *, created_by=None):
         matches = [
             s
             for s in self.workScopes
@@ -58,9 +59,18 @@ class MaintenancePolicy(BaseModel):
             and (
                 identity in s.ontologyIds
                 or (
-                    action == "CREATE"
-                    and s.createPrefix
+                    s.createPrefix
                     and identity.startswith(s.createPrefix)
+                    and (
+                        action == "CREATE"
+                        or (created_by == subject.principal_id and action != "REVIEW")
+                        or (
+                            action == "REVIEW"
+                            and created_by is not None
+                            and created_by != subject.principal_id
+                            and created_by in s.createdBySubjects
+                        )
+                    )
                 )
             )
             and s.expiresAt.tzinfo is not None

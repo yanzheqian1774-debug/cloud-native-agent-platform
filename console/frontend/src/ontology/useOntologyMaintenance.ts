@@ -38,6 +38,9 @@ export function useOntologyMaintenance(identity:string){
    }catch{if(active&&current.current===owner)setAllowed([])}finally{if(active&&current.current===owner){setReady(true);if(owner.pending)void recover()}}})();
   return()=>{active=false};
  },[identity,recover]);
+ useEffect(()=>{if(!receipt)return;const owner=current.current;if(!owner||receipt.ontologyId!==identity)return;let active=true;
+  void(async()=>{try{const response=await fetch(`${root}/capabilities/${encodeURIComponent(identity)}`,{credentials:'same-origin',headers:{Accept:'application/json'}});const body=await response.json();if(!active||current.current!==owner)return;if(response.ok&&body.result?.schemaVersion==='ontology-maintenance-capabilities.v1'&&Array.isArray(body.result.allowedActions)){setAllowed(actions.filter(a=>body.result.allowedActions.includes(a)));setCreationAvailable(body.result.creationAvailable===true||body.result.allowedActions.includes('CREATE'))}else{setAllowed([]);setCreationAvailable(false)}}catch{if(active&&current.current===owner){setAllowed([]);setCreationAvailable(false)}}})();return()=>{active=false};
+ },[receipt,identity]);
  async function submit(action:OntologyAction,payload:Record<string,unknown>){
   const owner=current.current;if(!owner||owner.identity!==identity||stateIdentity!==identity||!ready||!allowed.includes(action)||owner.pending||owner.posting||!owner.scope)return null;
   owner.posting=true;setChecking(true);setMessage('');

@@ -91,3 +91,42 @@ Validation: 16 controlled browser tests passed in 26.1s, production TypeScript/b
 passed. Actual PG HTTP capability/CSRF/history test passed after API extension.
 Same-size readonly/editor screenshots in ontology-maintenance-ui-final-r1. Parent owns
 actual ordinary-account activation and acceptance; no live calls performed here.
+
+## G1 follow-up: bounded newly created definitions
+
+Parent confirmed a missing lifecycle boundary: createPrefix currently permits only
+CREATE, so a new ID absent from ontologyIds cannot continue. Extend only internal
+maintenance policy scope, not frozen OntologyCommand or the database schema.
+
+For a prefix-scoped definition, derive creator solely from this scope's immutable
+ontology-maintenance CREATE admission joined to its successful ontology-owner CREATE
+fact and exact owner-command digest. A prefix alone, a failed admission, a legacy
+object without that admission, or another actor's object grants no follow-on scope.
+The current creator may use only actions listed by the current active policy; current
+issuer, generation, expiry, dependency/read grants and owner lifecycle checks remain.
+Historical creation is provenance, not a surviving permission lease.
+
+Add optional createdBySubjects (default empty) to a policy scope. It only participates
+in REVIEW, requires explicit same scope/createPrefix, a proven creator in that list,
+and reviewer != creator. It never gives REVISE/PUBLISH or generic ownership to the
+reviewer. Exact ontologyIds remains backward compatible. Scope eligibility drives
+both server admission and readonly capabilities so new definitions remain operable.
+
+Test actual isolated PG: generated new ID outside ontologyIds -> CREATE -> VALIDATE
+-> TEST -> independently scoped REVIEW -> original creator PUBLISH; same-prefix legacy
+object, other creator's object, self-review, wrong allowed creator and expired current
+policy all denied. Keep original lifecycle/authorization regressions. No real policy
+or account activation here. Full hook queues behind root integration.
+
+Follow-up implemented: creator proof joins immutable managed CREATE admission to
+successful owner CREATE fact and exact command digest, same actor/scope/definition.
+Capabilities and write admission share the same policy.work created_by predicate.
+Optional createdBySubjects participates only in independent REVIEW, default empty.
+Successful create/receipt recovery refreshes frontend readonly capabilities so the
+new object's VALIDATE action appears without per-ID operator reconfiguration.
+
+47 real isolated PG regression tests passed in 39.00s, including new-object full
+lifecycle, no exact READ for reviewer denial, same-prefix foreign/legacy rejection,
+uncommitted admission-shaped record rejection, expired current creator policy.
+17 controlled browser tests passed in 24.0s, including actual capability refresh
+from CREATE to VALIDATE; production build passed. No new graph/prototype redesign.

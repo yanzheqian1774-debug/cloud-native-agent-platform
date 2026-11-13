@@ -62,3 +62,5 @@ export function validateDraftImport(value: unknown, identity: string, revision: 
     throw new Error("方案包与当前口径版本不一致，请选择相应修订后重新导入。");
   }
 }
+
+export function ontologyRevisionLabel(revision:string):string{if(revision.length<=28)return revision;const value=revision.startsWith('managed-')?revision.slice(8):revision;return `${value.slice(0,8)}…${value.slice(-8)}`;}

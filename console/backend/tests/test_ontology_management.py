@@ -150,7 +150,7 @@ def payload(m, result, action, key):
     return dict(
         action=action,
         commandKey=key,
-        ontologyId="managed-sales",
+        ontologyId=v["ontology_id"],
         expectedVersion=v["version"],
         revision=v["revision_id"],
         digest=v["digest"],
@@ -168,10 +168,10 @@ def admission(m, key="create-command-1"):
         ).fetchone()["result"]
 
 
-def grant_read(m, subject, revision):
+def grant_read(m, subject, revision, identity="managed-sales"):
     # Explicit fixture-only static READ, independent of maintenance write grants.
     grant = StaticGrant(
-        ExactGrant("BUSINESS_ONTOLOGY", "READ", resource("managed-sales", revision)),
+        ExactGrant("BUSINESS_ONTOLOGY", "READ", resource(identity, revision)),
         GrantSource.SERVICE_ONLY,
     )
     m.gen = replace(
@@ -510,3 +510,206 @@ def test_concurrent_successors_use_same_head_cas_and_leave_no_orphan_admission(
             "SELECT count(*) AS count FROM execution_authority.prepared_resource_commands WHERE result->>'schemaVersion'='ontology-maintenance-admission.v1'"
         ).fetchone()["count"]
     assert facts == admissions == 2
+
+
+def controlled_creation_scopes(m):
+    user, reviewer = m.manager.policy.workScopes
+    m.manager.policy = m.manager.policy.model_copy(
+        update={
+            "workScopes": (
+                user.model_copy(
+                    update={
+                        "ontologyIds": (),
+                        "createPrefix": "managed-new-",
+                        "actions": (
+                            "CREATE",
+                            "REVISE",
+                            "VALIDATE",
+                            "TEST",
+                            "REVIEW",
+                            "PUBLISH",
+                        ),
+                    }
+                ),
+                reviewer.model_copy(
+                    update={
+                        "ontologyIds": (),
+                        "createPrefix": "managed-new-",
+                        "actions": ("REVIEW",),
+                        "createdBySubjects": (m.a.subject.principal_id,),
+                    }
+                ),
+            )
+        }
+    )
+    return replace(
+        m.a.subject,
+        principal_id=m.reviewer.principal_id,
+        session_id_or_service_credential_id=m.reviewer.credential_id,
+    )
+
+
+def test_controlled_new_definition_full_lifecycle_and_explicit_independent_review(
+    maintained,
+):
+    m = maintained
+    reviewer = controlled_creation_scopes(m)
+    result = run(
+        m,
+        dict(
+            action="CREATE",
+            commandKey="bounded-create-new-1",
+            ontologyId="managed-new-fresh",
+            expectedVersion=0,
+            content=m.content,
+            reason="new scoped definition",
+        ),
+    )
+    with m.a.authority.connection_scope() as c:
+        call = AuthorizedOwnerCall(
+            "READ",
+            m.a.subject,
+            c,
+            {},
+            {},
+            {},
+            (),
+            AuthorizedOwnerAuthority(m.a.adapter, m.a.subject, c, 1, ()),
+            1,
+            1,
+        )
+        caps = m.manager.capabilities(call, "managed-new-fresh")
+    assert "VALIDATE" in caps["allowedActions"] and "PUBLISH" in caps["allowedActions"]
+    assert "REVIEW" not in caps["allowedActions"]
+    for action in ("VALIDATE", "TEST"):
+        result = run(m, payload(m, result, action, "bounded-new-" + action))
+    with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+        run(m, payload(m, result, "REVIEW", "bounded-self-review"))
+    with pytest.raises(AuthorityError):
+        run(
+            m,
+            payload(m, result, "REVIEW", "review-missing-exact-read"),
+            subject=reviewer,
+        )
+    grant_read(
+        m, reviewer, result["outcome"]["revision_id"], identity="managed-new-fresh"
+    )
+    result = run(
+        m, payload(m, result, "REVIEW", "bounded-independent-review"), subject=reviewer
+    )
+    with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+        run(
+            m,
+            payload(m, result, "PUBLISH", "reviewer-cannot-publish"),
+            subject=reviewer,
+        )
+    result = run(m, payload(m, result, "PUBLISH", "bounded-original-publish"))
+    assert result["outcome"]["state"] == "PUBLISH"
+
+
+def test_prefix_never_takes_legacy_or_other_creators_definition_and_review_is_explicit(
+    maintained,
+):
+    m = maintained
+    reviewer = controlled_creation_scopes(m)
+    first = run(
+        m,
+        dict(
+            action="CREATE",
+            commandKey="bounded-other-create",
+            ontologyId="managed-new-owned",
+            expectedVersion=0,
+            content=m.content,
+            reason="proved original creator",
+        ),
+    )
+    original_scopes = m.manager.policy.workScopes
+    # A different subject with the same prefix and all actions cannot claim ownership.
+    other = original_scopes[1].model_copy(
+        update={"actions": ACTIONS, "createdBySubjects": ()}
+    )
+    m.manager.policy = m.manager.policy.model_copy(
+        update={"workScopes": (original_scopes[0], other)}
+    )
+    for action in ("VALIDATE", "REVIEW", "PUBLISH"):
+        with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+            run(
+                m, payload(m, first, action, "other-prefix-" + action), subject=reviewer
+            )
+    # Existing legacy CREATE has an actual owner fact, but no managed admission.
+    from agent_console.ontology_domain import OntologyCommand
+    from agent_console.ontology_postgres import PostgresOntologyRepository
+
+    with m.a.authority.connection_scope() as c:
+        PostgresOntologyRepository(c).command(
+            (m.a.subject.scope.tenant_id, m.a.subject.scope.security_domain),
+            m.a.subject.principal_id,
+            "managed-new-legacy",
+            "CREATE",
+            OntologyCommand(
+                request_key="legacy-create-fixture",
+                expected_version=0,
+                revision_id="legacy-r1",
+                content=m.content,
+                reason="explicit legacy owner fixture",
+            ),
+        )
+    with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+        run(
+            m,
+            dict(
+                action="VALIDATE",
+                commandKey="try-legacy-prefix",
+                ontologyId="managed-new-legacy",
+                expectedVersion=1,
+                revision="legacy-r1",
+                digest="a" * 64,
+                reason="not proven managed creator",
+            ),
+        )
+    # An admission-shaped row without a successful owner CREATE never proves ownership.
+    from agent_console.resource_use_domain import canonical_digest
+    from psycopg.types.json import Jsonb
+
+    fake = admission(m, "bounded-other-create")
+    fake = {**fake, "ontologyId": "managed-new-uncommitted"}
+    with m.a.authority.connection_scope() as c:
+        c.execute(
+            "INSERT INTO execution_authority.prepared_resource_commands(namespace,security_domain,actor_id,command_key,digest,result) VALUES(%s,%s,%s,%s,%s,%s)",
+            (
+                m.a.subject.scope.tenant_id,
+                m.a.subject.scope.security_domain,
+                m.a.subject.principal_id,
+                "isolated-uncommitted-fixture",
+                canonical_digest(fake),
+                Jsonb(fake),
+            ),
+        )
+    with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+        run(
+            m,
+            dict(
+                action="VALIDATE",
+                commandKey="uncommitted-proof-test",
+                ontologyId="managed-new-uncommitted",
+                expectedVersion=1,
+                revision="uncommitted",
+                digest="a" * 64,
+                reason="no successful owner fact",
+            ),
+        )
+    # Even proven creator cannot rely on a historical lease after current scope expires.
+    m.manager.policy = m.manager.policy.model_copy(
+        update={
+            "workScopes": tuple(
+                s.model_copy(
+                    update={
+                        "expiresAt": m.manager.grants.clock() - timedelta(seconds=1)
+                    }
+                )
+                for s in original_scopes
+            )
+        }
+    )
+    with pytest.raises(AuthorityError, match="SCOPE_DENIED"):
+        run(m, payload(m, first, "VALIDATE", "expired-creator-policy"))
