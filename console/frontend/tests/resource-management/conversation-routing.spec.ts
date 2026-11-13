@@ -1,8 +1,9 @@
+import {routingReceiptNotice} from '../../src/problems/conversationRoutingReceipt';
 import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64),problem={business_problem_id:'problem',revision_id:'revision',digest:'b'.repeat(64)},ref={resource_id:problem.business_problem_id,revision_id:problem.revision_id,digest:problem.digest};
 async function fixture(page:Page,phase='PLAN',enabled=true){
  const question={invocationId:'native-one',questionKey:'question-one',questionDigest:'c'.repeat(64),question:'请确认采用内部交接规范还是外部规范？',expiresAt:'2099-01-01T00:00:00Z',answer:null as string|null,expired:false};
- const state={question,phase,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
+ const state={question,phase,executionState:'RUNNING',failureReason:null as string|null,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
   messages:[{message_id:'original',content:'帮我检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED',request_key:'original'}] as Record<string,unknown>[],version:1,last:null as Record<string,unknown>|null,
   journal:{version:7,state:{key:'original-work',phase,pending:phase==='PLAN'?'planning':phase==='EXECUTE'?'execute':undefined,error:phase==='EXECUTE'?'上次执行结果尚待核实':undefined,question:'帮我检查交接材料',problem,messages:[{id:'user:original',text:'帮我检查交接材料'}],log:['原工作已保存'],...(phase==='RUNNING'?{execution:digest}:{})}}};
  await page.route('**/api/**',async route=>{
@@ -30,7 +31,7 @@ async function fixture(page:Page,phase='PLAN',enabled=true){
   }
   if(path.endsWith('/native-progress'))return result({steps:[],questions:[question],modelInFlight:false});
   if(path.endsWith('/native-answers')){state.ownerPosts.push(body);expect(body).toMatchObject({invocationId:question.invocationId,questionKey:question.questionKey,questionDigest:question.questionDigest,conversationId:'routing'});if(state.ownerReceipt==='rejected')return route.fulfill({status:422,json:{reasonCode:'INVALID_ANSWER'}});question.answer=body.answer;if(state.ownerReceipt==='lost')return route.abort();return result({accepted:true})}
-  if(path.includes('/prepared-executions/'))return result({digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'e'.repeat(64),approval_id:'approval',source_snapshot:{resource_id:'source',revision_id:'1',digest:'f'.repeat(64)},semantics:{title:'交接核对',target:{problem:ref},tasks:[]},participants:[]},progress:{state:'RUNNING',version:1,tasks:[]},resourceUses:[],artifacts:[],events:[],outcome:null,admission:{state:'ADMITTED',reason:null}});
+  if(path.includes('/prepared-executions/'))return result({digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'e'.repeat(64),approval_id:'approval',source_snapshot:{resource_id:'source',revision_id:'1',digest:'f'.repeat(64)},semantics:{title:'交接核对',target:{problem:ref},tasks:[]},participants:[]},progress:{state:state.executionState,version:1,tasks:state.executionState==='RUNNING'?[]:[{task_id:'analysis',state:state.executionState,attempt_ordinal:1,reason:state.failureReason}]},resourceUses:[],artifacts:[],events:[],outcome:null,admission:{state:'ADMITTED',reason:null}});
   if(path.endsWith('/problems'))return result({problems:[]});
   if(req.method()!=='GET')return route.fulfill({status:405,json:{reasonCode:'UNEXPECTED_WRITE'}});
   return result({items:[]});
@@ -67,7 +68,7 @@ test('known owner rejection keeps the original draft editable without automatic 
  const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.ownerReceipt='rejected';await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect(page.getByText('原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。',{exact:true})).toBeVisible();await expect(input(page)).toHaveValue('采用内部交接规范');await expect(page.getByRole('button',{name:'发送',exact:true})).toBeEnabled();expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
 });
 test('lost Native answer receipt is recovered by exact read without another POST',async({page})=>{
- const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.ownerReceipt='lost';await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect.poll(()=>s.ownerPosts.length).toBe(1);await page.reload();await expect(page.getByText('已从原问题记录核实回答已保存，没有再次提交。',{exact:true})).toBeVisible();await expect(input(page)).toHaveValue('');expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);expect(s.writes.some(p=>p.endsWith('/native-progress'))).toBe(false);
+ const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';s.ownerReceipt='lost';await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect.poll(()=>s.ownerPosts.length).toBe(1);await page.reload();await expect(page.getByText('补充“采用内部交接规范”已由当时的执行追问接收。已核对原记录，没有再次提交。后续问题请以当前工作中的提示为准。',{exact:true})).toBeVisible();await expect(input(page)).toHaveValue('');expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);expect(s.writes.some(p=>p.endsWith('/native-progress'))).toBe(false);
 });
 
 test('new reply does not pull the user away from reading earlier messages',async({page})=>{
@@ -123,4 +124,21 @@ test('confirmed unstarted question resumes with the same message and request onl
 test('uncertain result read never offers redispatch',async({page})=>{
  const s=await fixture(page);s.rejectBefore=true;s.readUnavailable=true;await page.goto('/work?conversation=routing');await send(page,'HTTP 是什么？');await expect.poll(()=>s.modelCalls.length).toBe(1);await page.reload();
  await expect(page.getByText(/暂未确认这条回复的处理结果/)).toBeVisible();await expect(page.getByRole('button',{name:'继续处理这条问题',exact:true})).toHaveCount(0);expect(s.modelCalls).toHaveLength(1);
+});
+
+
+test('accepted supplement stays bound to earlier question after a later question expires',async({page},info)=>{
+ await page.setViewportSize({width:1440,height:1000});
+ const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';await page.goto('/work?conversation=routing');await send(page,'采用内部交接规范');await expect.poll(()=>s.ownerPosts.length).toBe(1);
+ await expect(page.getByText('补充“采用内部交接规范”已由当时的执行追问接收。后续问题请以当前工作中的提示为准。',{exact:true})).toBeVisible();
+ const saved=await page.evaluate(()=>Object.entries(sessionStorage).filter(([k])=>k.startsWith('conversation-routing.v1:')).map(([,v])=>JSON.parse(v)));expect(saved[0].ownerTarget.questionKey).toBe('question-one');
+ s.question.questionKey='question-two';s.question.questionDigest='d'.repeat(64);s.question.question='请补充第二项依据';s.question.answer=null;s.question.expired=true;s.question.expiresAt='2020-01-01T00:00:00Z';
+ await expect(page.getByText('本次等待期限已到，原记录保留；不会自动重跑。',{exact:true})).toBeVisible();await expect(page.getByText('回答已提交到原问题，后续进展继续在本会话显示。',{exact:true})).toHaveCount(0);expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
+ await page.getByText('本次等待期限已到，原记录保留；不会自动重跑。',{exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:info.outputPath('prior-receipt-later-expired-1440.png'),fullPage:true});await page.reload();await expect(page.getByText('本次等待期限已到，原记录保留；不会自动重跑。',{exact:true})).toBeVisible();expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
+});
+for(const [state,reason,label] of [['FAILED','InternalError','本次执行已失败，已有进展保留'],['CANCELLED',null,'本次执行已取消'],['UNKNOWN',null,'执行结果尚待核实'],['FAILED','NATIVE_INPUT_EXPIRED','任务记录显示执行追问等待超时']] as const)test('formal execution status is precise '+state+' '+reason,async({page})=>{
+ const s=await fixture(page,'RUNNING');s.executionState=state;s.failureReason=reason;s.question.expired=true;s.question.expiresAt='2020-01-01T00:00:00Z';await page.goto('/work?conversation=routing');const progress=page.getByRole('region',{name:'全流程进展'});await expect(progress).toContainText(label);await expect(progress).not.toContainText('失败或取消');if(reason!=='NATIVE_INPUT_EXPIRED')await expect(progress).not.toContainText('等待超时');expect(s.modelCalls).toHaveLength(0);expect(s.ownerPosts).toHaveLength(0);
+});
+test('routing receipt names the accepting stage instead of the current question',()=>{
+ expect(routingReceiptNotice('选择交接资料',{kind:'UNDERSTANDING',invocationId:'old'})).toContain('补充“选择交接资料”已由资料理解接收');expect(routingReceiptNotice('补充计划',{kind:'PLANNING',invocationId:'old'})).toContain('方案准备接收');expect(routingReceiptNotice('原补充')).toContain('原处理阶段接收');
 });

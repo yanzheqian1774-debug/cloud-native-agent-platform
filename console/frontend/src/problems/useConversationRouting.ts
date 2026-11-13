@@ -1,3 +1,4 @@
+import {routingReceiptNotice} from './conversationRoutingReceipt';
 import {useCallback,useEffect,useEffectEvent,useMemo,useRef,useState} from 'react';
 import {beginDraftAssistance,readConversationUnderstandingResult,readWorkbenchSession,WorkbenchRequestError,type DraftAssistanceResult,type WorkbenchSession} from '../api/businessWorkspace';
 import {conversationRequest,readConversationHead,type PrivateConversation} from '../api/privateConversation';
@@ -95,7 +96,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   const receipt=await matches[0].onAnswer(route.originalText,route.messageId,{requestKey:request.key});
   if(typeof receipt==='object'&&receipt.state==='REJECTED'){persist({...request,phase:'REVIEW'});setNotice(receipt.notice??'原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。');return false}
   if(receipt!==true&&!(typeof receipt==='object'&&receipt.state==='ACCEPTED')){setNotice(typeof receipt==='object'&&receipt.notice?receipt.notice:'原回答的接收状态尚待核实，请查看原工作进展；不会自动重发。');return false}
-  persist({...request,phase:'DONE'});setNotice('回答已提交到原问题，后续进展继续在本会话显示。');await refresh.current();return true;
+  persist({...request,phase:'DONE',ownerTarget:route.target});setNotice(routingReceiptNotice(request.text,route.target));await refresh.current();return true;
  }
  async function readSaved(){
   const request=current.current;if(!conversation||!request)return false;if(flight.current)return true;
@@ -109,7 +110,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
      const response=await fetch('/api/workbench/v1/prepared-executions/'+encodeURIComponent(target.executionDigest!)+'/native-progress',{credentials:'same-origin',headers:{Accept:'application/json'}});const body=await response.json();if(!response.ok)throw new WorkbenchRequestError(body.reasonCode??'NATIVE_PROGRESS_UNAVAILABLE',response.status);await verify();
      const progress=body.result as {questions:{invocationId:string;questionKey:string;questionDigest:string;answer:string|null;expired:boolean}[]};
      const question=progress.questions?.find(q=>q.invocationId===target.invocationId&&q.questionKey===target.questionKey&&q.questionDigest===target.questionDigest);
-     if(question?.answer===request.text){persist({...request,phase:'DONE'});await refresh.current();setNotice('已从原问题记录核实回答已保存，没有再次提交。');return false;}
+     if(question?.answer===request.text){persist({...request,phase:'DONE'});await refresh.current();setNotice(routingReceiptNotice(request.text,target,true));return false;}
      setNotice('原回答的接收状态尚待核实，正在读取原记录；不会重发。');return Boolean(question&&!question.expired&&!question.answer);
     }
     if(request.ownerTarget?.kind==='UNDERSTANDING'){
@@ -124,7 +125,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
       persist({...request,phase:'READY_TO_APPLY',persistentRecovery:true});setNotice('已核对原回答与当前问题，尚未读到采用回执。可明确继续已有回答，不会重新调用模型。');return false;
      }
      const journal=await conversationRequest<{state:{draft?:{invocationId:string}}|null}>('/'+encodeURIComponent(conversation)+'/journey');await verify();
-     if(journal.state?.draft?.invocationId===receipt.adoption.actualResult.invocationId){persist({...request,phase:'DONE'});setNotice('已核实原会话接续记录，没有重复理解。');await refresh.current();return false;}
+     if(journal.state?.draft?.invocationId===receipt.adoption.actualResult.invocationId){persist({...request,phase:'DONE'});setNotice(routingReceiptNotice(request.text,request.ownerTarget,true));await refresh.current();return false;}
      persist({...request,phase:'READY_TO_APPLY'});setNotice('理解结果已采用。可继续把已保存结果接回原会话，不会重新调用模型。');return false;
     }
     await refresh.current();setNotice('正在查看原回答对应的工作记录；接收状态未确认前不会重发。');return false;
